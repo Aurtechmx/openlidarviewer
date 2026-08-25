@@ -82,7 +82,8 @@ function planFor(deviceMemoryGB: number, isMobile: boolean): E57DecodePlan {
   return planE57Decode({
     sourceCount: DECLARED.recordCount,
     fileBytes: CLAIMED_SIZE,
-    columnsPerRecord: DECLARED.columnsPerRecord,
+    decodeBytesPerRecord: DECLARED.decodeBytesPerRecord,
+    structuredGridBytes: DECLARED.structuredGridBytes,
     attributes: DECLARED.attributes,
     isMobile,
     deviceMemoryGB,
@@ -149,7 +150,7 @@ describe('the fixture and the device figures', () => {
   // the numbers are wrong, not the wiring that acts on them.
   it('declares eight records and four decode columns', () => {
     expect(DECLARED.recordCount).toBe(8);
-    expect(DECLARED.columnsPerRecord).toBe(4);
+    expect(DECLARED.decodeBytesPerRecord).toBe(4 * 8);
   });
 
   it('does not fit on the refusing device', () => {

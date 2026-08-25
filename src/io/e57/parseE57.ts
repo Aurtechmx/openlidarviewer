@@ -18,7 +18,11 @@ import { parseXml } from './xml';
 import { readE57Document } from './schema';
 import type { E57Field, E57Metadata, E57Pose, E57Scan, E57SourceMetadata } from './schema';
 import { decodeCompressedVector } from './compressedVector';
-import type { DecodedColumns } from './compressedVector';
+import type {
+  DecodedColumns,
+  E57StructuredColumnRequest,
+  E57StructuredSink,
+} from './compressedVector';
 
 /** One decoded scan. */
 export interface E57ScanData {
@@ -39,12 +43,29 @@ export interface E57ScanData {
   columns: DecodedColumns;
   /** The prototype fields, so callers know which columns exist and their kind. */
   fields: E57Field[];
+  /**
+   * The scan as the XML declared it. Carried so a caller can read the facts
+   * that live outside the prototype — `indexBounds`, the structured field
+   * declarations — without re-reading the document. A reference to the object
+   * the schema already built, not a copy.
+   *
+   * Optional only because test doubles construct this structure by hand;
+   * `parseE57` always sets it, and a consumer that finds it absent must treat
+   * the scan as declaring nothing rather than assuming a default.
+   */
+  declaration?: E57Scan;
   /** Rigid-body placement in the file's global frame, or null for identity. */
   pose: E57Pose | null;
   /** Declared colour maximum for 0–255 normalisation, or null. */
   colorMax: number | null;
   /** Declared intensity maximum, or null. */
   intensityMax: number | null;
+  /**
+   * The scan's structured columns, present only when the caller asked for them
+   * and this scan declared an acquisition grid. Kept apart from `columns` so
+   * the point decode neither sees them nor pays for them.
+   */
+  structured?: E57StructuredSink;
 }
 
 /** The full result of parsing an E57 file. */
@@ -85,6 +106,12 @@ export interface ParseE57Options {
    * jittered, and every column of every scan lands on the same records.
    */
   stride?: number;
+  /**
+   * The structured columns to decode for a scan, or nothing. Answered per scan
+   * because eligibility is per scan: one scan of a file may carry an
+   * acquisition grid while another carries none.
+   */
+  structuredFor?: (scan: E57Scan) => readonly E57StructuredColumnRequest[] | undefined;
 }
 
 /** Parse an E57 file into decoded scans and file metadata. */
@@ -129,26 +156,38 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
 
   const stride = Math.max(1, Math.floor(opts?.stride ?? 1));
   const keepField = opts?.keepField;
-  const scans: E57ScanData[] = document.scans.map((scan) => ({
-    name: scan.name,
-    guid: scan.guid,
-    // What the columns below will hold. `decodeCompressedVector` keeps one
-    // record per bucket, so the two counts diverge exactly when a stride is set.
-    recordCount: stride === 1 ? scan.recordCount : Math.ceil(scan.recordCount / stride),
-    declaredRecordCount: scan.recordCount,
-    fields: scan.prototype,
-    pose: scan.pose,
-    colorMax: scan.colorMax,
-    intensityMax: scan.intensityMax,
-    columns: decodeCompressedVector(
-      logical,
-      scan.fileOffset,
-      scan.recordCount,
-      scan.prototype,
-      header.pageSize,
-      { keepField: keepField && ((name: string) => keepField(name, scan)), stride },
-    ),
-  }));
+  const structuredFor = opts?.structuredFor;
+  const scans: E57ScanData[] = document.scans.map((scan) => {
+    const requests = structuredFor?.(scan) ?? [];
+    const sink: E57StructuredSink | undefined =
+      requests.length > 0 ? { columns: {}, contradiction: null } : undefined;
+    return {
+      name: scan.name,
+      guid: scan.guid,
+      // What the columns below will hold. `decodeCompressedVector` keeps one
+      // record per bucket, so the two counts diverge exactly when a stride is set.
+      recordCount: stride === 1 ? scan.recordCount : Math.ceil(scan.recordCount / stride),
+      declaredRecordCount: scan.recordCount,
+      fields: scan.prototype,
+      declaration: scan,
+      pose: scan.pose,
+      colorMax: scan.colorMax,
+      intensityMax: scan.intensityMax,
+      columns: decodeCompressedVector(
+        logical,
+        scan.fileOffset,
+        scan.recordCount,
+        scan.prototype,
+        header.pageSize,
+        {
+          keepField: keepField && ((name: string) => keepField(name, scan)),
+          stride,
+          ...(sink ? { structured: { requests, sink } } : {}),
+        },
+      ),
+      ...(sink ? { structured: sink } : {}),
+    };
+  });
 
   return {
     scans,

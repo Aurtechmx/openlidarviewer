@@ -28,6 +28,7 @@ import { describe, it, expect } from 'vitest';
 import {
   estimateMemoryBytes,
   e57BytesPerRecord,
+  E57_COLUMN_BYTES,
   planE57Decode,
   memoryCeilingBytes,
   E57_DECODE_CEILING_BYTES,
@@ -134,7 +135,7 @@ function planTimeEstimate(m: Measurement): number {
     attributes: m.attributes,
     fileBytes: m.fileBytes,
     format: 'e57',
-    decodeColumnsPerPoint: m.columnsPerRecord,
+    decodeBytesPerPoint: m.columnsPerRecord * E57_COLUMN_BYTES,
   });
 }
 
@@ -144,7 +145,7 @@ function planTimeEstimate(m: Measurement): number {
  * the merged arrays. This is the part that is meant to be exact.
  */
 function itemisedArrayBytes(m: Measurement): number {
-  const columnBytes = m.declaredRecords * 8 * m.columnsPerRecord;
+  const columnBytes = m.declaredRecords * E57_COLUMN_BYTES * m.columnsPerRecord;
   // `e57BytesPerRecord(0, …)` is exactly the non-column half: the merged
   // Float64 xyz, the merged attributes, and the Float32 cloud beside them.
   const mergedBytes = m.mergedPoints * e57BytesPerRecord(0, m.attributes);
@@ -216,10 +217,10 @@ describe('E57 memory model — fit against measured loads', () => {
 describe('e57BytesPerRecord', () => {
   it('counts the decode columns, the merged buffers and the Float32 cloud', () => {
     // 6 columns x 8 + Float64 xyz 24 + colour 3 + Float32 xyz 12.
-    expect(e57BytesPerRecord(6, COLOR)).toBe(6 * 8 + 24 + 3 + 12);
+    expect(e57BytesPerRecord(6 * 8, COLOR)).toBe(6 * 8 + 24 + 3 + 12);
     // Every attribute the merge can carry.
     expect(
-      e57BytesPerRecord(12, {
+      e57BytesPerRecord(12 * 8, {
         hasColor: true,
         hasIntensity: true,
         hasClassification: true,
@@ -229,7 +230,7 @@ describe('e57BytesPerRecord', () => {
   });
 
   it('a column-less estimate is a floor, not a peak', () => {
-    expect(e57BytesPerRecord(0, COLOR)).toBeLessThan(e57BytesPerRecord(6, COLOR));
+    expect(e57BytesPerRecord(0, COLOR)).toBeLessThan(e57BytesPerRecord(6 * 8, COLOR));
   });
 });
 
@@ -241,7 +242,7 @@ describe('e57BytesPerRecord', () => {
 const OPEN_PIT = {
   sourceCount: 26_910_771,
   fileBytes: 616_108_032,
-  columnsPerRecord: 6,
+  decodeBytesPerRecord: 6 * 8,
   attributes: COLOR,
   isMobile: false,
 };
@@ -251,7 +252,7 @@ describe('planE57Decode', () => {
     const plan = planE57Decode({
       sourceCount: 1_350_000,
       fileBytes: 25_765_888,
-      columnsPerRecord: 7,
+      decodeBytesPerRecord: 7 * 8,
       attributes: COLOR_INTENSITY,
       isMobile: false,
       deviceMemoryGB: 8,
@@ -282,7 +283,7 @@ describe('planE57Decode', () => {
       attributes: OPEN_PIT.attributes,
       fileBytes: OPEN_PIT.fileBytes,
       format: 'e57',
-      decodeColumnsPerPoint: OPEN_PIT.columnsPerRecord,
+      decodeBytesPerPoint: OPEN_PIT.decodeBytesPerRecord,
     });
     expect(estimateAtLooser).toBeGreaterThan(plan.ceilingBytes);
   });
@@ -293,7 +294,7 @@ describe('planE57Decode', () => {
     const plan = planE57Decode({
       sourceCount: 60_000_000,
       fileBytes: 1_500_000_000,
-      columnsPerRecord: 6,
+      decodeBytesPerRecord: 6 * 8,
       attributes: COLOR,
       isMobile: false,
       deviceMemoryGB: 8,
@@ -308,7 +309,7 @@ describe('planE57Decode', () => {
     const plan = planE57Decode({
       sourceCount: 40_000_000,
       fileBytes: 990_000_000,
-      columnsPerRecord: 8,
+      decodeBytesPerRecord: 8 * 8,
       attributes: COLOR_INTENSITY,
       isMobile: false,
       deviceMemoryGB: 8,
@@ -321,18 +322,18 @@ describe('planE57Decode', () => {
     // it rounds to 4 and keeps 225 k — under the floor even though the room was
     // not. Judging the room rather than the surviving sample let this through.
     const fileBytes = 10_000_000;
-    const perRecord = e57BytesPerRecord(6, COLOR);
+    const perRecord = e57BytesPerRecord(6 * 8, COLOR);
     const fixed = estimateMemoryBytes({
       pointCount: 0,
       attributes: COLOR,
       fileBytes,
       format: 'e57',
-      decodeColumnsPerPoint: 6,
+      decodeBytesPerPoint: 6 * 8,
     });
     const plan = planE57Decode({
       sourceCount: 900_000,
       fileBytes,
-      columnsPerRecord: 6,
+      decodeBytesPerRecord: 6 * 8,
       attributes: COLOR,
       isMobile: false,
       deviceMemoryGB: (fixed + 260_000 * perRecord) / (1_000_000_000 * 0.6),
@@ -344,18 +345,18 @@ describe('planE57Decode', () => {
     // The same shape one step wider: room for 500 k of 900 k records rounds to
     // a stride of 2 and keeps 450 k, which is a scan worth showing.
     const fileBytes = 10_000_000;
-    const perRecord = e57BytesPerRecord(6, COLOR);
+    const perRecord = e57BytesPerRecord(6 * 8, COLOR);
     const fixed = estimateMemoryBytes({
       pointCount: 0,
       attributes: COLOR,
       fileBytes,
       format: 'e57',
-      decodeColumnsPerPoint: 6,
+      decodeBytesPerPoint: 6 * 8,
     });
     const plan = planE57Decode({
       sourceCount: 900_000,
       fileBytes,
-      columnsPerRecord: 6,
+      decodeBytesPerRecord: 6 * 8,
       attributes: COLOR,
       isMobile: false,
       deviceMemoryGB: (fixed + 500_000 * perRecord) / (1_000_000_000 * 0.6),
@@ -369,7 +370,7 @@ describe('planE57Decode', () => {
     const plan = planE57Decode({
       sourceCount: 60_000_000,
       fileBytes: 1_500_000_000,
-      columnsPerRecord: 6,
+      decodeBytesPerRecord: 6 * 8,
       attributes: COLOR,
       isMobile: false,
       deviceMemoryGB: 8,
@@ -404,7 +405,7 @@ describe('planE57Decode', () => {
     const plan = planE57Decode({
       sourceCount: 0,
       fileBytes: 2048,
-      columnsPerRecord: 4,
+      decodeBytesPerRecord: 4 * 8,
       attributes: NONE,
       isMobile: false,
     });

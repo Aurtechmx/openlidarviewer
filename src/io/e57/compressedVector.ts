@@ -20,6 +20,52 @@ import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from '../strideSample';
 /** Decoded point data — one Float64 column per prototype field, by field name. */
 export type DecodedColumns = Record<string, Float64Array>;
 
+/**
+ * The storage a structured column decodes into. Chosen from the file's DECLARED
+ * bounds, never from the packed bit width — see `structuredSink.ts`.
+ */
+export type E57StructuredKind = 'u16' | 'u32' | 'f32';
+
+/** One structured column to decode, already sized from its declaration. */
+export interface E57StructuredColumnRequest {
+  /** Prototype field name, extension prefix included. */
+  readonly name: string;
+  /** The same name with any prefix removed, which is what callers switch on. */
+  readonly local: string;
+  readonly kind: E57StructuredKind;
+  /** Declared inclusive bounds. A decoded value outside them is a contradiction. */
+  readonly minimum: number;
+  readonly maximum: number;
+}
+
+/** Structured columns, keyed by prototype field name. */
+export type E57StructuredColumns = Record<string, Uint16Array | Uint32Array | Float32Array>;
+
+/**
+ * Where a structured decode puts its columns, and what it found wrong.
+ *
+ * `contradiction` is set when a decoded value falls outside the bounds the file
+ * itself declared for that field. The decode stops filling that column at the
+ * first one: the array is never completed, and the caller is expected to reject
+ * every column of the scan rather than read a partial one. Clamping the value
+ * into range would produce an index that is present, plausible and wrong, which
+ * is the one outcome the acquisition grid exists to avoid.
+ */
+export interface E57StructuredSink {
+  columns: E57StructuredColumns;
+  contradiction: string | null;
+}
+
+/** Allocate the array one request decodes into. */
+function allocStructured(
+  kind: E57StructuredKind,
+  length: number,
+): Uint16Array | Uint32Array | Float32Array {
+  if (kind === 'u16') return new Uint16Array(length);
+  if (kind === 'u32') return new Uint32Array(length);
+  return new Float32Array(length);
+}
+
 /** Section / packet type ids from the E57 standard. */
 const COMPRESSED_VECTOR_SECTION = 1;
 const DATA_PACKET = 1;
@@ -58,6 +104,16 @@ export interface DecodeCompressedVectorOptions {
    * with each other.
    */
   stride?: number;
+  /**
+   * Structured columns to decode into a SEPARATE sink, beside the Float64
+   * columns above and without touching how any of them decode. Omitted (the
+   * ordinary case, and every file that declares no acquisition grid), the walk
+   * below is byte for byte the one that ran before this option existed.
+   */
+  structured?: {
+    readonly requests: readonly E57StructuredColumnRequest[];
+    readonly sink: E57StructuredSink;
+  };
 }
 
 /**
@@ -173,7 +229,14 @@ export function decodeCompressedVector(
   }
 
   const columns: DecodedColumns = {};
+  const structured = options?.structured;
+  const requested = new Map<string, E57StructuredColumnRequest>();
+  if (structured) for (const r of structured.requests) requested.set(r.name, r);
   prototype.forEach((field, f) => {
+    const request = requested.get(field.name);
+    if (request && structured) {
+      decodeStructuredField(concat(chunks[f]), field, count, stride, request, structured.sink);
+    }
     if (keepField && !keepField(field.name)) return; // unconsumed column — skip decode
     columns[field.name] = decodeField(concat(chunks[f]), field, count, stride);
   });
@@ -274,6 +337,83 @@ function decodeField(
     out[b] = field.type === 'scaledInteger' ? value * scale + offset : value;
   }
   return out;
+}
+
+/**
+ * Decode one structured column into its own narrow array.
+ *
+ * Deliberately a second function rather than a widened `decodeField`: the
+ * Float64 path carries an E4 cross-implementation claim, and a shared body
+ * would put every future change to this decode inside it. What the two share is
+ * the format, not the code.
+ *
+ * The bounds check runs BEFORE the store, which is the whole reason it can be
+ * honest. Writing 70000 into a `Uint16Array` and checking afterwards reads back
+ * 4464, so the contradiction would be invisible exactly when it matters.
+ */
+function decodeStructuredField(
+  buffer: Uint8Array,
+  field: E57Field,
+  count: number,
+  stride: number,
+  request: E57StructuredColumnRequest,
+  sink: E57StructuredSink,
+): void {
+  const step = Math.max(1, Math.floor(stride));
+  const outCount = step === 1 ? count : Math.ceil(count / step);
+  const out = allocStructured(request.kind, outCount);
+  sink.columns[request.name] = out;
+  const rand = step === 1 ? null : makePrng(STRIDE_SAMPLE_SEED);
+  const recordAt = (b: number): number => (rand ? pickInBucket(b, step, count, rand) : b);
+
+  if (field.type === 'float') {
+    const bytes = field.floatBytes ?? 8;
+    if (buffer.byteLength < count * bytes) {
+      throw new Error('E57: truncated float bytestream.');
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    for (let b = 0; b < outCount; b++) {
+      const i = recordAt(b);
+      out[b] = bytes === 4 ? view.getFloat32(i * 4, true) : view.getFloat64(i * 8, true);
+    }
+    return;
+  }
+
+  const bitWidth = field.bitWidth ?? 0;
+  const minimum = field.minimum ?? 0;
+  const scale = field.scale ?? 1;
+  const offset = field.offset ?? 0;
+  const requiredBits = count * bitWidth;
+  if (requiredBits > buffer.length * 8) {
+    throw new Error(
+      `E57: truncated ${field.type} bytestream — ` +
+        `need ${requiredBits} bits for ${count} values at ${bitWidth} bpp, ` +
+        `have ${buffer.length * 8}.`,
+    );
+  }
+  for (let b = 0; b < outCount; b++) {
+    const bitPos = recordAt(b) * bitWidth;
+    let byteIndex = Math.floor(bitPos / 8);
+    let bitInByte = bitPos - byteIndex * 8;
+    let packed = 0;
+    for (let k = 0; k < bitWidth; k++) {
+      packed += ((buffer[byteIndex] >> bitInByte) & 1) * 2 ** k;
+      bitInByte++;
+      if (bitInByte === 8) {
+        bitInByte = 0;
+        byteIndex++;
+      }
+    }
+    const raw = packed + minimum;
+    const value = field.type === 'scaledInteger' ? raw * scale + offset : raw;
+    if (request.kind !== 'f32' && (value < request.minimum || value > request.maximum)) {
+      sink.contradiction =
+        `${field.name} record ${recordAt(b)} decodes to ${value}, outside the ` +
+        `${request.minimum}–${request.maximum} range the file declares for it`;
+      return;
+    }
+    out[b] = value;
+  }
 }
 
 /**

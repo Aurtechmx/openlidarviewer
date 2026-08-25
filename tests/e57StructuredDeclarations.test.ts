@@ -288,7 +288,9 @@ describe('the preflight estimate and the decode agree per scan', () => {
     const document = documentOf(PUMP);
     const pre = summariseE57Scans(document.scans);
     const decoded = Object.keys(parseE57(PUMP, { keepField: e57FieldIsConsumedForScan }).scans[0].columns);
-    expect(pre.columnsPerRecord).toBe(decoded.length);
+    // Eight bytes per Float64 point column, plus the two Uint16 index columns
+    // this scan's acquisition grid earns (see `e57StructuredRange.test.ts`).
+    expect(pre.decodeBytesPerRecord).toBe(decoded.length * 8 + 2 + 2);
   });
 
   it('derives both from one per-scan consumed set', () => {
