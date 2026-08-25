@@ -52,6 +52,23 @@ export interface ProfileWorkbenchRuntimeDeps {
     apply(pose: { position: [number, number, number]; target: [number, number, number] }): void;
   };
   /**
+   * Commit a new name for the measurement a dock is plotting.
+   *
+   * Wired to the SAME `renameMeasurement` the Measurements panel's name field
+   * calls, so the dock's title is a view of the measurement's name rather than
+   * a second name kept beside it. Absent leaves the title a caption.
+   */
+  rename?: (id: string, name: string) => void;
+  /**
+   * Build the profile PDF for one measurement.
+   *
+   * Handed in as the Measurements panel's own export, not rebuilt here. The
+   * sheet states its read scope and the classification basis of its heights,
+   * and a second assembly of the builder's inputs is precisely how a sheet
+   * comes to state neither. Absent means the dock renders no export control.
+   */
+  exportPdf?: (id: string) => Promise<void>;
+  /**
    * Told about a rejected panel chunk, or a fill that threw. Defaults to a
    * console record: the user already has the focus view, so nothing about the
    * failure is otherwise visible in the app.
@@ -102,6 +119,8 @@ export function createProfileWorkbenchRuntime(
   return createProfileWorkbenchLauncher({
     load: () => loadProfileWorkbench(),
     stage: createStageProfileWorkbench(deps.stage),
+    ...(deps.rename ? { rename: deps.rename } : {}),
+    ...(deps.exportPdf ? { exportPdf: deps.exportPdf } : {}),
     present: (handle, request) => presentWorkbenchSection(handle, request.id, scene),
     onLoadFailure:
       deps.onLoadFailure ??

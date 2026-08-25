@@ -79,6 +79,23 @@ export interface ProfileWorkbenchOptions {
   readonly title?: string;
   /** The section the plot covers, shown under the title. */
   readonly scope?: string;
+  /**
+   * Commit a new name for what the panel is plotting.
+   *
+   * Absent leaves the title a plain caption. When present the title becomes an
+   * editable field, and the name it commits goes wherever the host sends it —
+   * the panel keeps no name of its own, because a second copy is how the
+   * workbench, the Measurements panel and an exported sheet come to disagree.
+   */
+  readonly onRename?: (name: string) => void;
+  /**
+   * Build a PDF of what the panel is plotting.
+   *
+   * Absent means no export control is rendered at all. The panel neither
+   * builds the sheet nor knows what goes on it; it reports what the host's
+   * promise did, so a failure is visible on the control the user pressed.
+   */
+  readonly onExportPdf?: () => Promise<void>;
   /** Called when the user closes the panel. */
   readonly onClose?: () => void;
 }
@@ -109,6 +126,14 @@ export interface ProfileWorkbenchHandle {
    * than a description, and it earns its own space only when it applies.
    */
   setGroundBasis(note: string | null): void;
+  /**
+   * The name shown in the title, when the title is editable.
+   *
+   * OPTIONAL, so a handle built by an older double still satisfies the type.
+   * Writing here does NOT call `onRename`: this is the host telling the panel
+   * what the name now is, not the user asking for it to change.
+   */
+  setTitle?(text: string): void;
   /** Announce a status politely. */
   setStatus(text: string): void;
   /** The selected return's figures, as text. Null clears the selection. */
@@ -133,6 +158,14 @@ const CANVAS_DESCRIPTION =
 
 const NO_SELECTION = 'No return selected.';
 
+/** The export control's resting label, and the two states it passes through. */
+const EXPORT_LABEL = 'Export PDF';
+const EXPORT_WORKING_LABEL = 'Building\u2026';
+const EXPORT_FAILED_LABEL = 'Export failed';
+
+/** How long a failed export keeps saying so before the control resets. */
+const EXPORT_FAILED_MS = 1800;
+
 /**
  * Mount the workbench into the host's container.
  *
@@ -155,6 +188,9 @@ class ProfileWorkbench {
   private readonly _splitter: HTMLElement;
   private readonly _scope: HTMLElement;
   private readonly _groundNote: HTMLElement;
+  private readonly _title: HTMLElement;
+  private readonly _titleInput: HTMLInputElement | null;
+  private readonly _exportBtn: HTMLButtonElement | null;
   private readonly _status: HTMLElement;
   private readonly _detail: HTMLElement;
   private readonly _readout: HTMLElement;
@@ -165,11 +201,14 @@ class ProfileWorkbench {
   private _state: DockState;
   private _closed = false;
   private _dragFrom: number | null = null;
+  /** The last name something outside this panel is known to hold. */
+  private _committedName: string;
 
   constructor(host: ProfileWorkbenchHost, options: ProfileWorkbenchOptions) {
     this._host = host;
     this._options = options;
     const title = options.title ?? 'Profile workbench';
+    this._committedName = title;
 
     this._state = restoreDockState(
       host.storage ? host.storage.getItem(PROFILE_WORKBENCH_DOCK_KEY) : null,
@@ -203,13 +242,52 @@ class ProfileWorkbench {
       ariaLabel: 'Close the profile workbench',
     });
 
+    // Editable only where the host offered somewhere to commit a name to. A
+    // field that took a rename nothing recorded would look like it worked and
+    // leave the panel, the Measurements list and the next export disagreeing.
+    if (options.onRename) {
+      const input = el('input', {
+        className: 'olv-workbench-title olv-workbench-title-input',
+        title: 'Type to rename this profile',
+        ariaLabel: 'Profile name',
+      });
+      input.value = title;
+      // `change`, not `input`: a name is committed when the user is done
+      // typing it, and the Measurements panel's own name field commits on the
+      // same event. Renaming on every keystroke would push a half-typed name
+      // through the controller and out to everything reading it.
+      this._on(input, 'change', () => this._commitName(input));
+      this._titleInput = input;
+      this._title = input;
+    } else {
+      this._titleInput = null;
+      this._title = el('div', { className: 'olv-workbench-title', text: title });
+    }
+
+    // No export control where the host has nothing to build a sheet with.
+    this._exportBtn = options.onExportPdf
+      ? el('button', {
+          className: 'olv-workbench-btn',
+          type: 'button',
+          text: EXPORT_LABEL,
+          ariaLabel: 'Export this profile as a PDF sheet',
+        })
+      : null;
+    if (this._exportBtn) {
+      const btn = this._exportBtn;
+      this._on(btn, 'click', () => void this._exportPdf(btn));
+    }
+
+    const actions = this._exportBtn
+      ? [this._exportBtn, this._collapseBtn, closeBtn]
+      : [this._collapseBtn, closeBtn];
     const head = el('div', { className: 'olv-workbench-head' }, [
       el('div', { className: 'olv-workbench-titles' }, [
-        el('div', { className: 'olv-workbench-title', text: title }),
+        this._title,
         this._scope,
         this._groundNote,
       ]),
-      el('div', { className: 'olv-workbench-actions' }, [this._collapseBtn, closeBtn]),
+      el('div', { className: 'olv-workbench-actions' }, actions),
     ]);
 
     // Polite, never assertive: a status here reports on a plot the user is
@@ -291,6 +369,7 @@ class ProfileWorkbench {
         this._groundNote.textContent = note ?? '';
         this._groundNote.classList.toggle('olv-hidden', note == null);
       },
+      setTitle: (t: string) => this._showName(t),
       setStatus: (t: string) => {
         this._status.textContent = t;
       },
@@ -300,6 +379,72 @@ class ProfileWorkbench {
       },
       close: () => this.close(),
     };
+  }
+
+  /**
+   * Show `name` in the title without committing it.
+   *
+   * The write is skipped while the field has focus: a host refresh landing
+   * mid-edit would otherwise replace the characters the user is still typing
+   * with the name they are typing over.
+   */
+  private _showName(name: string): void {
+    if (this._titleInput) {
+      if (this._titleInput.ownerDocument?.activeElement === this._titleInput) return;
+      this._titleInput.value = name;
+      return;
+    }
+    this._title.textContent = name;
+  }
+
+  /**
+   * Hand a typed name to the host, and put back what the host kept.
+   *
+   * A blank or whitespace-only entry is not a name, and the controller that
+   * owns the measurement refuses it. The field is restored to the last name it
+   * carried rather than left empty, so what the panel shows is always a name
+   * something else also holds.
+   */
+  private _commitName(input: HTMLInputElement): void {
+    const next = input.value.trim();
+    if (!next) {
+      input.value = this._committedName;
+      return;
+    }
+    this._committedName = next;
+    input.value = next;
+    this._root.setAttribute('aria-label', next);
+    this._options.onRename?.(next);
+  }
+
+  /**
+   * Build the sheet the host offered, and say so on the control.
+   *
+   * The panel does not know what a profile sheet contains and does not
+   * assemble one: the promise it is given is the same export the Measurements
+   * panel runs, so the two sheets carry the same provenance because they are
+   * the same sheet. A rejection stops on the button rather than in the
+   * console, because the button is what the user pressed.
+   */
+  private async _exportPdf(btn: HTMLButtonElement): Promise<void> {
+    const run = this._options.onExportPdf;
+    if (!run || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = EXPORT_WORKING_LABEL;
+    try {
+      await run();
+    } catch {
+      btn.textContent = EXPORT_FAILED_LABEL;
+      setTimeout(() => {
+        if (this._closed) return;
+        btn.textContent = EXPORT_LABEL;
+        btn.disabled = false;
+      }, EXPORT_FAILED_MS);
+      return;
+    }
+    if (this._closed) return;
+    btn.textContent = EXPORT_LABEL;
+    btn.disabled = false;
   }
 
   setCollapsed(collapsed: boolean): void {
