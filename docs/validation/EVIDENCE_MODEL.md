@@ -110,6 +110,25 @@ ordering + parameters + tamper-evidence, not an execution recipe, no executor
 consumes it, and an op whose settings never reached the provenance says
 `params not captured in this slice` rather than fabricating them.
 
+When the cloud carried a source acquisition topology
+(`src/model/OrganizedRange.ts`), the manifest leads with one further op,
+`olv.topology.linkage-record`, derived by `src/science/sourceTopology.ts`. It
+binds the set's organization, its frame count, the least faithful linkage state
+across those frames (`exact`, `partial`, `unavailable`) and the reasons the
+frames in that state carry, with a note saying what the state means for a
+reader. It leads the chain because the topology describes the cloud that
+entered the recorded steps, and it is an ordinary op, so it folds into the same
+hashes and cannot be stripped or reworded while verification still passes. A
+reviewer holding only a DTM built from a voxel-reduced organized scan can
+therefore see that the display points feeding it were per-voxel centroids
+rather than source records.
+
+Absence is silence. A cloud that never carried an acquisition grid (an ordinary
+LAS or PLY) adds no op at all, so its manifest is byte-identical to what the
+same inputs produced before this record existed. Absent, `exact` and degraded
+are three distinguishable answers, and the schema stays at 1 because the op
+shape is unchanged.
+
 ## How to use it
 
 - When adding or changing a product, add/update its register entry in the same
