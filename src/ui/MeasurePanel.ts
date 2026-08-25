@@ -2019,13 +2019,20 @@ function renderProfileChart(
   const xLabelTop = (((plotBottom + 6) / H) * 100).toFixed(2);
   // Stride first as a density cap, then fit, because the two answer different
   // questions: the stride is how many labels an axis should carry, and the fit
-  // is which of those the axis has room for. The overlay is HTML at the
-  // chart's real width, which this string does not know, so the fit runs
-  // against a deliberately narrow nominal width: too narrow drops a tick, too
-  // wide lets two labels overprint, and only one of those is recoverable by
-  // reading the station table underneath.
-  const AXIS_LABEL_PX_PER_CHAR = 6.2;
-  const NOMINAL_CHART_PX = 236;
+  // is which of those the axis has room for.
+  //
+  // Both constants below are bounds, not measurements, and each is rounded the
+  // only way that fails safe. This string is built before the overlay is in a
+  // document, so neither the chart's width nor a label's width can be read
+  // here, and the two errors are not symmetric: believing the chart WIDER than
+  // it is, or a label NARROWER than it is, keeps a pair that then overprints,
+  // while the opposite direction costs a tick mark that the station table
+  // underneath still carries. So the width is the chart's CSS floor rather
+  // than its usual size, and the per-character figure is the widest measured
+  // rather than the mean. A wide chart therefore carries fewer labels than it
+  // could, which is the price of never overprinting at any width.
+  const AXIS_LABEL_PX_PER_CHAR = 6.8;
+  const MIN_CHART_PX = 180;
   const AXIS_LABEL_MIN_GAP_PX = 8;
   const candidates = stations
     .map((c, i) => ({ c, i }))
@@ -2036,7 +2043,7 @@ function renderProfileChart(
       at: xPct(c) / 100,
       width: texts[k].length * AXIS_LABEL_PX_PER_CHAR,
     })),
-    NOMINAL_CHART_PX,
+    MIN_CHART_PX,
     AXIS_LABEL_MIN_GAP_PX,
   );
   const xLabelHtml = candidates
