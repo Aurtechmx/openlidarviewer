@@ -92,6 +92,27 @@ export function isEptUrl(url: string): boolean {
 }
 
 /**
+ * True when `url` names a 3D Tiles entry point (a `tileset.json`), so the
+ * shell's URL router hands it to the tileset open instead of the COPC path.
+ *
+ * Here rather than imported from `tilesetUrl.ts` for the reason {@link isEptUrl}
+ * is here rather than imported from `eptDetect.ts`: routing runs in the eager
+ * shell, and reaching into the format's own module for one predicate would pull
+ * that module's graph into the startup bundle to answer a question about a
+ * string. The rule is the one `is3dTilesName` states — the last path segment,
+ * query and fragment ignored — and the tileset open re-validates the URL
+ * properly before it fetches anything, so this deciding wrongly costs a clear
+ * refusal rather than a bad fetch.
+ */
+export function isTilesetEntryUrl(url: string): boolean {
+  try {
+    return /(?:^|\/)tileset\.json$/i.test(new URL(url).pathname);
+  } catch {
+    return /(?:^|\/)tileset\.json(?:\?|#|$)/i.test(url);
+  }
+}
+
+/**
  * True when `err` is a user-initiated abort, in any of the shapes a cancel can
  * surface as on the remote-open path:
  *
