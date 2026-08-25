@@ -1,9 +1,42 @@
 import { describe, it, expect } from 'vitest';
 import { planPlacement, placeInProject } from '../src/geo/projectPlacement';
+import { spatialContextFrom } from '../src/geo/SpatialContext';
+import type { CrsInfo } from '../src/io/crs';
 import type { GlobalPoints } from '../src/convert/globalPoints';
 
+const US_SURVEY_FOOT = 1200 / 3937;
+
+function crs(over: Partial<CrsInfo> = {}): CrsInfo {
+  return {
+    source: 'wkt',
+    name: 'WGS 84 / UTM zone 12N',
+    epsg: 32612,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    isGeographic: false,
+    ...over,
+  };
+}
+
+/** A frame whose vertical side is fully declared: NAVD88 heights in metres. */
+const navd88Metres = () =>
+  spatialContextFrom(crs({ verticalEpsg: 5703, verticalDatum: 'NAVD88', verticalUnitToMetres: 1 }));
+
+/** The same datum, declared in US survey feet. */
+const navd88Feet = () =>
+  spatialContextFrom(
+    crs({ verticalEpsg: 5703, verticalDatum: 'NAVD88', verticalUnitToMetres: US_SURVEY_FOOT }),
+  );
+
+/** A different vertical surface, also fully declared, also in metres. */
+const egm2008Metres = () =>
+  spatialContextFrom(crs({ verticalEpsg: 3855, verticalDatum: 'EGM2008', verticalUnitToMetres: 1 }));
+
+/** Nothing declared vertically. */
+const noVertical = () => spatialContextFrom(crs());
+
 describe('planPlacement', () => {
-  const both = { layerVerticalKnown: true, projectVerticalKnown: true };
+  const both = { layerFrame: navd88Metres(), projectFrame: navd88Metres() };
 
   it('reprojects between two known projected CRSs, height comparable', () => {
     const p = planPlacement({ layerEpsg: 32611, projectEpsg: 32612, ...both });
@@ -29,10 +62,50 @@ describe('planPlacement', () => {
   });
 
   it('withholds height comparability when a vertical datum is unresolved', () => {
-    const p = planPlacement({ layerEpsg: 32611, projectEpsg: 32612, layerVerticalKnown: true, projectVerticalKnown: false });
+    const p = planPlacement({
+      layerEpsg: 32611,
+      projectEpsg: 32612,
+      layerFrame: navd88Metres(),
+      projectFrame: noVertical(),
+    });
     expect(p.horizontal).toBe('reproject'); // X/Y still placed
     expect(p.verticalComparable).toBe(false);
+    expect(p.reason).toContain('Vertical datum is unknown');
+  });
+
+  // Both sides fully declared is not the same question as both sides
+  // comparable. These two cases are the ones a "is it known?" test cannot see.
+  it('withholds height when two resolved datums sit on different surfaces', () => {
+    const p = planPlacement({
+      layerEpsg: 32612,
+      projectEpsg: 32612,
+      layerFrame: navd88Metres(),
+      projectFrame: egm2008Metres(),
+    });
+    expect(p.horizontal).toBe('identity');
+    expect(p.verticalComparable).toBe(false);
+    expect(p.reason).toContain('common surface');
+  });
+
+  it('withholds height when one resolved datum is in feet and the other in metres', () => {
+    const p = planPlacement({
+      layerEpsg: 32612,
+      projectEpsg: 32612,
+      layerFrame: navd88Feet(),
+      projectFrame: navd88Metres(),
+    });
+    expect(p.verticalComparable).toBe(false);
     expect(p.reason).toContain('withheld');
+  });
+
+  it('allows height when the datum and the vertical unit both match', () => {
+    const p = planPlacement({
+      layerEpsg: 32611,
+      projectEpsg: 32612,
+      layerFrame: navd88Metres(),
+      projectFrame: navd88Metres(),
+    });
+    expect(p.verticalComparable).toBe(true);
   });
 });
 

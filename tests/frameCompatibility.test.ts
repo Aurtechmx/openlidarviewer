@@ -123,6 +123,33 @@ describe('compareSpatialFrames — vertical permission is separate', () => {
   const navd88 = (over: Partial<CrsInfo> = {}) =>
     spatialContextFrom(crs({ verticalEpsg: 5703, verticalDatum: 'NAVD88', verticalUnitToMetres: 1, ...over }));
 
+  // Two orthometric datums are not one datum. NAVD88 and EGM2008 both classify
+  // as `orthometric`, so a comparison keyed on the reference class read them as
+  // the same surface. They differ by roughly a metre across North America, and
+  // a change study spanning the two would have reported that offset as ground
+  // movement.
+  it('separates two datums that share a reference surface', () => {
+    const navd = navd88();
+    const egm = spatialContextFrom(
+      crs({ verticalEpsg: 3855, verticalDatum: 'EGM2008', verticalUnitToMetres: 1 }),
+    );
+    expect(navd.verticalReference).toBe(egm.verticalReference); // both orthometric
+    const v = compareSpatialFrames(navd, egm);
+    expect(v.verticalFrameConflict).toBe(true);
+    expect(v.verticalComparable).toBe(false);
+    expect(v.notes.some((n) => n.includes('common surface'))).toBe(true);
+  });
+
+  it('still matches one datum declared by code against the same datum by name', () => {
+    // The identity is the resolved code, so a frame naming NAVD88 and a frame
+    // carrying 5703 are the same reference rather than two spellings.
+    const byCode = spatialContextFrom(crs({ verticalEpsg: 5703, verticalUnitToMetres: 1 }));
+    const byName = spatialContextFrom(crs({ verticalDatum: 'NAVD88', verticalUnitToMetres: 1 }));
+    const v = compareSpatialFrames(byCode, byName);
+    expect(v.verticalFrameConflict).toBe(false);
+    expect(v.verticalComparable).toBe(true);
+  });
+
   it('horizontal agreement does NOT imply vertical agreement', () => {
     const a = navd88();
     const b = spatialContextFrom(
