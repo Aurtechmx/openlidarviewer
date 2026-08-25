@@ -49,6 +49,7 @@ import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
   isEptUrl,
+  isTilesetEntryUrl,
   isAbortError,
   linkAbortSignals,
   type OpenStreamingDeps,
@@ -245,6 +246,7 @@ import {
   loadColorbarOverlay,
   loadAnalysePanel,
   loadObjectPanel,
+  loadTilesetOpen,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -5015,17 +5017,14 @@ async function handleRemoteUrl(url: string, signal?: AbortSignal): Promise<void>
   // the routing decision is synchronous and doesn't depend on the EPT lazy
   // chunk loading (a malformed URL still surfaces an error toast even when the
   // EPT or Viewer chunks aren't reachable). `isEptUrl` lives beside the handler.
-  if (isEptUrl(url)) return handleRemoteEpt(url, signal);
+  if (isEptUrl(url)) return runHandleRemoteEpt(url, signal, openStreamingDeps);
+  // 3D Tiles is not a streaming open: the tileset is read once, merged, and
+  // mounted as a static layer, so it takes `openScanDeps` and the same attach a
+  // dropped file does.
+  if (isTilesetEntryUrl(url)) {
+    return (await loadTilesetOpen()).openRemoteTileset(url, signal, openScanDeps);
+  }
   return handleRemoteCopc(url, signal);
-}
-
-/**
- * Open a remote EPT dataset by its `ept.json` URL — a thin caller over
- * `src/app/openStreaming.ts`, which owns the manifest fetch / validate / attach
- * pipeline and binds the shell's running state through `openStreamingDeps`.
- */
-function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void> {
-  return runHandleRemoteEpt(url, signal, openStreamingDeps);
 }
 
 /**

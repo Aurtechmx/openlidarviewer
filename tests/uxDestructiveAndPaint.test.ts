@@ -122,7 +122,7 @@ describe('the attach phase yields so its status lines can paint', () => {
     // decode's tail is dispatched inside the first gap. Hiding the empty state
     // on the way out of a cancelled load strands the user on a blank stage:
     // nothing outside `resetToEmptyState` puts it back.
-    const abortAt = lineOf('if (controller.signal.aborted) throw new LoadCancelledError();');
+    const abortAt = lineOf('if (source.signal.aborted) throw new LoadCancelledError();');
     const hideAt = lineOf('deps.stage.hideEmptyState();');
     expect(abortAt).toBeGreaterThan(uploadingAt);
     expect(hideAt).toBeGreaterThan(abortAt);

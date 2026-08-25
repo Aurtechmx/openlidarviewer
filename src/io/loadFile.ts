@@ -247,9 +247,10 @@ async function preflightFile(
     if (is3dTilesName(file.name)) {
       throw new LoadError(
         'unsupported-format',
-        `A 3D Tiles tileset isn't openable yet — streaming a tileset's tiles is ` +
-          `on the roadmap, not shipped. A single .pnts tile opens today; for a whole ` +
-          `dataset use COPC, EPT, or a LAS/LAZ/PLY export.`,
+        `A 3D Tiles tileset opens by URL, not as a dropped file: the document ` +
+          `names its .pnts tiles by relative path, and a file picked off disk ` +
+          `has no directory to resolve them against. Paste the tileset.json URL ` +
+          `into the URL field to open it.`,
       );
     }
     throw new LoadError(

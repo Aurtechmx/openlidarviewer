@@ -521,3 +521,13 @@ export const loadProfileWorkbenchRuntime = () => import('./app/profileWorkbenchR
  * have its specifier scrambled and its chunk never emitted.
  */
 export const loadRangeWorkbenchMount = () => import('./ui/rangeWorkbenchMount');
+
+/**
+ * The 3D Tiles open — the tileset parser, the traversal, the hardened tileset
+ * transport and the PNTS decoder, as one chunk behind the remote-URL router.
+ *
+ * A session that never types a `tileset.json` URL never fetches any of it, and
+ * the startup shell has 4 KiB of headroom, so this is the seam that keeps a
+ * whole second format's reader out of the eager index bundle.
+ */
+export const loadTilesetOpen = () => import('./app/openTilesetLayer');
