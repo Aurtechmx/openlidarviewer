@@ -9390,7 +9390,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-range-launcher-fact {
   margin-top: 2px;
-  font-family: var(--olv-mono, monospace);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   opacity: 0.85;
 }
@@ -9477,7 +9477,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-range-hover {
   min-height: 16px;
   margin-top: 6px;
-  font-family: var(--olv-mono, monospace);
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   opacity: 0.8;
 }
@@ -9554,7 +9554,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-range-table td {
   text-align: right;
-  font-family: var(--olv-mono, monospace);
+  font-variant-numeric: tabular-nums;
   padding: 2px 0;
 }
 
@@ -9581,7 +9581,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-range-band {
   padding: 2px 5px;
   border-radius: 4px;
-  font-family: var(--olv-mono, monospace);
+  font-variant-numeric: tabular-nums;
   background: var(--olv-surface-2, rgba(255, 255, 255, 0.06));
 }
 /* ═══════════════════════════════════════════════════════════════════════════
