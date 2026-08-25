@@ -48,6 +48,36 @@ interface RawTile {
   implicitTiling?: unknown;
 }
 
+/**
+ * Structural ceilings for a parsed tileset.
+ *
+ * A `tileset.json` declares its own shape, so every number that sizes work here
+ * comes from remote input. Depth bounds the recursion below (and with it the
+ * call stack); the tile count bounds the total allocation of a document whose
+ * bytes are already capped but whose node count is not proportional to them —
+ * a few hundred kilobytes of minified JSON can name a very large tree. Both are
+ * refusals, not truncations: a tileset that exceeds either is not partially
+ * mounted, because a silently pruned hierarchy renders as a plausible scene
+ * with geometry missing.
+ */
+export const DEFAULT_TILESET_MAX_DEPTH = 24;
+export const DEFAULT_TILESET_MAX_TILES = 200_000;
+
+/** Overrides for the structural ceilings {@link parseTileset} enforces. */
+export interface TilesetParseLimits {
+  /** Deepest tile below the root. Default {@link DEFAULT_TILESET_MAX_DEPTH}. */
+  readonly maxDepth?: number;
+  /** Total tiles in the tree. Default {@link DEFAULT_TILESET_MAX_TILES}. */
+  readonly maxTiles?: number;
+}
+
+/** The mutable budget threaded through one parse. */
+interface ParseBudget {
+  readonly maxDepth: number;
+  readonly maxTiles: number;
+  tiles: number;
+}
+
 /** Component counts the spec fixes for each bounding-volume form. */
 const BOUNDING_VOLUME_LENGTH = { box: 12, region: 6, sphere: 4 } as const;
 
@@ -123,7 +153,17 @@ function explicitRefine(v: unknown): Refine | null {
   return upper;
 }
 
-function parseTile(raw: RawTile, inheritedRefine: Refine): Tile {
+function parseTile(raw: RawTile, inheritedRefine: Refine, depth: number, budget: ParseBudget): Tile {
+  if (depth > budget.maxDepth) {
+    throw new Error(
+      `3D Tiles: tile hierarchy is deeper than ${budget.maxDepth} levels; refusing to parse it.`,
+    );
+  }
+  if (++budget.tiles > budget.maxTiles) {
+    throw new Error(
+      `3D Tiles: tileset declares more than ${budget.maxTiles} tiles; refusing to parse it.`,
+    );
+  }
   if (raw.implicitTiling !== undefined) {
     throw new Error('3D Tiles: implicit tiling is not supported yet — only an explicit tile hierarchy.');
   }
@@ -145,7 +185,7 @@ function parseTile(raw: RawTile, inheritedRefine: Refine): Tile {
   if (raw.children !== undefined && !Array.isArray(raw.children)) {
     throw new Error('3D Tiles: a tile children field is not an array.');
   }
-  const children = (raw.children ?? []).map((c) => parseTile(c, refine));
+  const children = (raw.children ?? []).map((c) => parseTile(c, refine, depth + 1, budget));
   return {
     boundingVolume: boundingVolume(raw.boundingVolume),
     geometricError: raw.geometricError,
@@ -157,7 +197,7 @@ function parseTile(raw: RawTile, inheritedRefine: Refine): Tile {
 }
 
 /** Parse a `tileset.json` (string or already-parsed object) into a typed tree. */
-export function parseTileset(input: string | object): Tileset {
+export function parseTileset(input: string | object, limits: TilesetParseLimits = {}): Tileset {
   const doc = (typeof input === 'string' ? JSON.parse(input) : input) as {
     asset?: { version?: string };
     geometricError?: number;
@@ -179,9 +219,14 @@ export function parseTileset(input: string | object): Tileset {
   if (!rootRefine) {
     throw new Error('3D Tiles: the root tile must declare refine ADD or REPLACE.');
   }
+  const budget: ParseBudget = {
+    maxDepth: limits.maxDepth ?? DEFAULT_TILESET_MAX_DEPTH,
+    maxTiles: limits.maxTiles ?? DEFAULT_TILESET_MAX_TILES,
+    tiles: 0,
+  };
   return {
     assetVersion,
     geometricError: doc.geometricError,
-    root: parseTile(doc.root, rootRefine),
+    root: parseTile(doc.root, rootRefine, 0, budget),
   };
 }
