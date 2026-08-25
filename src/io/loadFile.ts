@@ -26,6 +26,7 @@ import type { SourceMetadata } from './PointCloudSource';
 import { buildPreloadSummary } from './preloadSummary';
 import { LoadError } from './loadErrors';
 import type { LoadErrorCategory } from './loadErrors';
+import type { OrganizedRangeSet } from '../model/OrganizedRange';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
 export { POINT_BUDGET, MOBILE_POINT_BUDGET, pickLoader, parseBuffer } from './parseBuffer';
@@ -86,6 +87,7 @@ interface CloudPayload {
   returnCount?: Uint8Array;
   pointSourceId?: Uint16Array;
   gpsTime?: Float64Array;
+  organizedRange?: OrganizedRangeSet;
   origin: [number, number, number];
   sourceFormat: SourceFormat;
   name: string;

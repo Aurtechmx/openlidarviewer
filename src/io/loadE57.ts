@@ -14,7 +14,7 @@
 import { parseE57 } from './e57/parseE57';
 import type { E57ScanData } from './e57/parseE57';
 import type { E57Metadata, E57Pose, E57SourceMetadata } from './e57/schema';
-import { preflightE57, e57FieldIsConsumed, e57LocalFieldName } from './e57/preflight';
+import { preflightE57, e57FieldIsConsumedForScan, e57LocalFieldName } from './e57/preflight';
 import { planE57Decode, e57TooLargeMessage, e57NoPlanMessage } from './loadPlan';
 import type { E57DecodePlan } from './loadPlan';
 import { formatByteSize } from './formatByteSize';
@@ -260,10 +260,10 @@ export async function loadE57(
   // — a structured scan's rowIndex / columnIndex, spherical coordinates this
   // loader does not project — would otherwise be expanded into a full Float64
   // column and then immediately dropped: hundreds of MB of allocation and
-  // per-value conversion on a tens-of-millions-of-points scan. The predicate is
-  // shared with the preflight so the plan's column count and the decode's can
-  // never disagree.
-  const parsed = parseE57(buffer, { keepField: e57FieldIsConsumed, stride });
+  // per-value conversion on a tens-of-millions-of-points scan. The predicate
+  // resolves per scan, and the preflight resolves its column count through the
+  // same function, so the plan's count and the decode's cannot disagree.
+  const parsed = parseE57(buffer, { keepField: e57FieldIsConsumedForScan, stride });
 
   // Partition the scans FIRST: a scan without Cartesian X/Y/Z (spherical-only,
   // for example) contributes no points, so it must contribute nothing to the

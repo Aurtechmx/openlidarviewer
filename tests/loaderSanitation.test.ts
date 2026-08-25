@@ -1,4 +1,10 @@
-import { sanitizeAndRecenter, sanitizeLocalCloud } from '../src/io/sanitizeCloud';
+import {
+  sanitizeAndRecenter,
+  sanitizeLocalCloud,
+  outputRecordFor,
+  RECORD_DROPPED,
+  RECORD_NOT_WITNESSED,
+} from '../src/io/sanitizeCloud';
 import type { CloudAttributes } from '../src/io/sanitizeCloud';
 import { LoadError } from '../src/io/loadErrors';
 import { loadPly } from '../src/io/loadPly';
@@ -311,5 +317,69 @@ describe('loadLas — a header-scale overflow cannot ship a non-finite point', (
     const pc = await loadLas(buffer, 'las', 'clean.las');
     expect(pc.pointCount).toBe(2);
     expect(pc.metadata?.loadWarnings).toBeUndefined();
+  });
+});
+
+describe('the compaction witness', () => {
+  test('is absent unless it is asked for', () => {
+    // The witness is opt-in precisely so an ordinary load pays nothing for it.
+    const dirty = sanitizeAndRecenter(new Float64Array([0, 0, 0, Number.NaN, 1, 1, 2, 2, 2]), {});
+    expect(dirty.witness).toBeUndefined();
+    expect(sanitizeAndRecenter(new Float64Array([0, 0, 0]), {}).witness).toBeUndefined();
+    expect(sanitizeLocalCloud(new Float32Array([0, 0, 0]), {}).witness).toBeUndefined();
+  });
+
+  test('reports identity, without a table, when nothing was dropped', () => {
+    const result = sanitizeAndRecenter(new Float64Array([0, 0, 0, 1, 1, 1]), {}, { witness: true });
+    expect(result.witness).toEqual({ kind: 'identity', sourceCount: 2 });
+    expect(outputRecordFor(result.witness!, 1)).toBe(1);
+  });
+
+  test('maps every source record across a hole, and marks the hole dropped', () => {
+    const result = sanitizeAndRecenter(
+      new Float64Array([0, 0, 0, 1, Number.NaN, 1, 2, 2, 2, 3, 3, 3]),
+      {},
+      { witness: true },
+    );
+    expect(result.excludedCount).toBe(1);
+    const w = result.witness!;
+    expect(w.sourceCount).toBe(4);
+    expect(outputRecordFor(w, 0)).toBe(0);
+    expect(outputRecordFor(w, 1)).toBe(RECORD_DROPPED);
+    expect(outputRecordFor(w, 2)).toBe(1);
+    expect(outputRecordFor(w, 3)).toBe(2);
+  });
+
+  test('answers an empty cloud with an empty witness, not with nothing', () => {
+    // `undefined` would be indistinguishable from "the witness was not asked
+    // for", which is the one thing a caller must be able to tell apart.
+    const result = sanitizeAndRecenter(new Float64Array(0), {}, { witness: true });
+    expect(result.witness).toBeDefined();
+    expect(result.witness!.sourceCount).toBe(0);
+  });
+
+  test('carries through the already-local entry point too', () => {
+    const result = sanitizeLocalCloud(
+      new Float32Array([0, 0, 0, Number.NaN, 1, 1, 2, 2, 2]),
+      {},
+      { witness: true },
+    );
+    expect(outputRecordFor(result.witness!, 1)).toBe(RECORD_DROPPED);
+    expect(outputRecordFor(result.witness!, 2)).toBe(1);
+  });
+});
+
+describe('the witness distinguishes a dropped record from an unknown one', () => {
+  it('answers out of range with RECORD_NOT_WITNESSED, not RECORD_DROPPED', () => {
+    // These are different facts. "This record was removed" is a decoding
+    // outcome a caller can render as a cell state; "I was never asked about
+    // this index" is a bookkeeping mismatch that no cell state describes
+    // truthfully. Returning the same value for both let a caller mark a cell
+    // as discarded when the real problem was that two counts disagreed.
+    const witness = { kind: 'identity', sourceCount: 3 } as const;
+    expect(outputRecordFor(witness, 0)).toBe(0);
+    expect(outputRecordFor(witness, 3)).toBe(RECORD_NOT_WITNESSED);
+    expect(outputRecordFor(witness, -1)).toBe(RECORD_NOT_WITNESSED);
+    expect(RECORD_NOT_WITNESSED).not.toBe(RECORD_DROPPED);
   });
 });

@@ -57,9 +57,32 @@ export function e57LocalFieldName(key: string): string {
   return key.slice(key.indexOf(':') + 1);
 }
 
-/** True when `loadE57` decodes a prototype field of this name. */
+/** True when `loadE57` decodes a prototype field of this name, in any scan. */
 export function e57FieldIsConsumed(name: string): boolean {
   return E57_CONSUMED_FIELDS.has(e57LocalFieldName(name));
+}
+
+/**
+ * The fields `loadE57` decodes FOR ONE SCAN, by local name.
+ *
+ * Every scan currently yields {@link E57_CONSUMED_FIELDS} unchanged. The set is
+ * resolved per scan so that a scan whose declarations earn it extra columns can
+ * be given them WITHOUT every ordinary E57 paying for columns it never reads —
+ * the cost that keeps `rowIndex`, `columnIndex` and `sphericalRange` out of the
+ * global set in the first place. Widening the global set instead would expand a
+ * full Float64 column per unread field on every file.
+ *
+ * Both the byte estimate below and the decode resolve their answer through this
+ * one function, so a future scan-dependent set cannot make them disagree; the
+ * estimate is what the fail-closed memory ceiling rests on.
+ */
+export function e57ConsumedFieldsForScan(_scan: E57Scan): ReadonlySet<string> {
+  return E57_CONSUMED_FIELDS;
+}
+
+/** {@link e57ConsumedFieldsForScan} as the predicate shape `parseE57` takes. */
+export function e57FieldIsConsumedForScan(name: string, scan: E57Scan): boolean {
+  return e57ConsumedFieldsForScan(scan).has(e57LocalFieldName(name));
 }
 
 /** What an E57 declares, before any point is decoded. */
@@ -113,8 +136,11 @@ export function summariseE57Scans(scans: readonly E57Scan[]): E57Preflight {
   let columnValues = 0;
   for (const scan of scans) {
     const names = fieldNames(scan.prototype);
+    const consumedHere = e57ConsumedFieldsForScan(scan);
     let consumed = 0;
-    for (const field of scan.prototype) if (e57FieldIsConsumed(field.name)) consumed++;
+    for (const field of scan.prototype) {
+      if (consumedHere.has(e57LocalFieldName(field.name))) consumed++;
+    }
     columnValues += scan.recordCount * consumed;
     if (names.bare.has('cartesianX') && names.bare.has('cartesianY') && names.bare.has('cartesianZ')) {
       mergeable.push(names);

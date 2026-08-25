@@ -16,7 +16,7 @@ import { parseE57Header } from './header';
 import { depage, physicalToLogical } from './depage';
 import { parseXml } from './xml';
 import { readE57Document } from './schema';
-import type { E57Field, E57Metadata, E57Pose, E57SourceMetadata } from './schema';
+import type { E57Field, E57Metadata, E57Pose, E57Scan, E57SourceMetadata } from './schema';
 import { decodeCompressedVector } from './compressedVector';
 import type { DecodedColumns } from './compressedVector';
 
@@ -67,11 +67,17 @@ export interface E57ParseResult {
 /** Options for {@link parseE57}. */
 export interface ParseE57Options {
   /**
-   * Decode only the prototype columns this accepts (by field name). Omitted →
-   * every column decodes (the default; callers inspecting the full prototype
-   * rely on it). The loader passes a predicate to skip columns it never reads.
+   * Decode only the prototype columns this accepts. Omitted → every column
+   * decodes (the default; callers inspecting the full prototype rely on it).
+   * The loader passes a predicate to skip columns it never reads.
+   *
+   * The predicate answers PER SCAN: it receives the scan whose columns are
+   * being decided, so a file may decode a column for one scan and skip it for
+   * another. `parseE57` binds the scan before the decode rather than handing
+   * `decodeCompressedVector` a scan it has no other use for. A one-argument
+   * predicate stays valid and simply ignores the scan.
    */
-  keepField?: (name: string) => boolean;
+  keepField?: (name: string, scan: E57Scan) => boolean;
   /**
    * Read one record per bucket of `stride` rather than every record. 1 (the
    * default) reads every record. The loader sets this from its decode plan when
@@ -122,6 +128,7 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
   }
 
   const stride = Math.max(1, Math.floor(opts?.stride ?? 1));
+  const keepField = opts?.keepField;
   const scans: E57ScanData[] = document.scans.map((scan) => ({
     name: scan.name,
     guid: scan.guid,
@@ -139,7 +146,7 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
       scan.recordCount,
       scan.prototype,
       header.pageSize,
-      { keepField: opts?.keepField, stride },
+      { keepField: keepField && ((name: string) => keepField(name, scan)), stride },
     ),
   }));
 

@@ -20,6 +20,17 @@ export interface E57Field {
   floatBytes?: 4 | 8;
   /** Integer / scaledInteger fields: value added back to the packed integer. */
   minimum?: number;
+  /**
+   * Integer / scaledInteger fields: the declared upper bound, verbatim.
+   *
+   * Nothing reads this today — {@link bitWidthFor} consumes it and the decode
+   * needs only the width. It is retained because the bound, not the width, is
+   * what lets a later step choose an integer array wide enough for a declared
+   * index without guessing: a field packed in 11 bits still says 2047, and
+   * `2 ** bitWidth - 1 + minimum` is only the same number when the writer used
+   * a power-of-two range. Keeping it has no behavioural effect.
+   */
+  maximum?: number;
   /** Integer / scaledInteger fields: bit width of the packed integer. */
   bitWidth?: number;
   /** scaledInteger fields only. */
@@ -32,6 +43,50 @@ export interface E57Pose {
   /** Rotation quaternion, `[w, x, y, z]`. */
   rotation: [number, number, number, number];
   translation: [number, number, number];
+}
+
+/**
+ * One declared index range from a scan's `indexBounds`, inclusive at both ends.
+ *
+ * Present only when the file declared the axis. An EMPTY element is the E57
+ * type's default value (0), which is a declaration; an absent element is not,
+ * and an axis whose declared bound is unusable is reported as absent rather
+ * than repaired.
+ */
+export interface E57IndexRange {
+  minimum: number;
+  maximum: number;
+}
+
+/**
+ * A scan's `indexBounds`: the row, column and return ranges the writer used.
+ *
+ * Modelled per axis rather than as six loose numbers because the axes are
+ * declared independently — the pump fixture states row 0..1073 and column
+ * 0..344 while leaving both return elements empty — and a caller needs to know
+ * which axes it may rely on, not merely what number an absent one defaulted to.
+ */
+export interface E57IndexBounds {
+  row: E57IndexRange | null;
+  column: E57IndexRange | null;
+  return: E57IndexRange | null;
+}
+
+/**
+ * Which structured prototype fields a scan actually declares, by LOCAL name so
+ * an extension prefix does not hide one.
+ *
+ * A scan that declares `rowIndex` and `columnIndex` is structurally different
+ * from one that does not, and that difference has to be read from the file
+ * rather than inferred from the presence of `indexBounds` (a writer may state
+ * bounds for a scan whose records carry no indices, and the reverse).
+ */
+export interface E57StructuredFields {
+  rowIndex: boolean;
+  columnIndex: boolean;
+  returnIndex: boolean;
+  returnCount: boolean;
+  sphericalRange: boolean;
 }
 
 /** One scan (a `data3D` child). */
@@ -47,6 +102,10 @@ export interface E57Scan {
   colorMax: number | null;
   /** Declared intensity maximum; null if absent. */
   intensityMax: number | null;
+  /** The declared `indexBounds` structure, or null when the scan has none. */
+  indexBounds: E57IndexBounds | null;
+  /** Which structured fields this scan's prototype declares. */
+  structuredFields: E57StructuredFields;
 }
 
 /** File-level provenance metadata. */
@@ -202,20 +261,24 @@ function readField(node: XmlNode): E57Field {
   }
   if (type === 'Integer') {
     const min = attrIntStrict(node, 'minimum', 0);
+    const max = attrIntStrict(node, 'maximum', 0);
     return {
       name: node.name,
       type: 'integer',
       minimum: min,
-      bitWidth: bitWidthFor(min, attrIntStrict(node, 'maximum', 0)),
+      maximum: max,
+      bitWidth: bitWidthFor(min, max),
     };
   }
   if (type === 'ScaledInteger') {
     const min = attrIntStrict(node, 'minimum', 0);
+    const max = attrIntStrict(node, 'maximum', 0);
     return {
       name: node.name,
       type: 'scaledInteger',
       minimum: min,
-      bitWidth: bitWidthFor(min, attrIntStrict(node, 'maximum', 0)),
+      maximum: max,
+      bitWidth: bitWidthFor(min, max),
       scale: attrFloatStrict(node, 'scale', 1),
       offset: attrFloatStrict(node, 'offset', 0),
     };
@@ -304,6 +367,88 @@ function readRecordCount(points: XmlNode): number {
   return count;
 }
 
+/**
+ * A field's LOCAL name, after any extension `prefix:` — so `nor:normalX` and
+ * `x:rowIndex` resolve to `normalX` and `rowIndex`.
+ *
+ * Duplicated from `preflight.ts` rather than imported: preflight already
+ * imports this module, and the structured declarations are read here, at the
+ * point the prototype is interpreted.
+ */
+function localFieldName(name: string): string {
+  return name.slice(name.indexOf(':') + 1);
+}
+
+/**
+ * One `indexBounds` axis, or null when the file does not usably declare it.
+ *
+ * Both element names must be considered: an axis counts as declared when
+ * EITHER endpoint element is present, and a present-but-empty element is the
+ * E57 default value 0. A bound that is present and unreadable (non-finite, or
+ * beyond the safe-integer range) yields null rather than a throw — nothing
+ * consumes these bounds yet, and a file that decodes today must keep decoding.
+ */
+function readIndexRange(bounds: XmlNode, axis: string): E57IndexRange | null {
+  const minNode = child(bounds, `${axis}Minimum`);
+  const maxNode = child(bounds, `${axis}Maximum`);
+  if (!minNode && !maxNode) return null;
+  const read = (node: XmlNode | undefined): number | null => {
+    if (!node || node.text.trim() === '') return 0; // empty element = the default value
+    const v = Number(node.text);
+    return Number.isSafeInteger(v) ? v : null;
+  };
+  const minimum = read(minNode);
+  const maximum = read(maxNode);
+  if (minimum === null || maximum === null) return null;
+  return { minimum, maximum };
+}
+
+/** A scan's `indexBounds` structure, or null when it declares none. */
+function readIndexBounds(scan: XmlNode): E57IndexBounds | null {
+  const bounds = child(scan, 'indexBounds');
+  if (!bounds) return null;
+  return {
+    row: readIndexRange(bounds, 'row'),
+    column: readIndexRange(bounds, 'column'),
+    return: readIndexRange(bounds, 'return'),
+  };
+}
+
+/** Which structured fields a prototype declares, matched by local name. */
+function readStructuredFields(prototype: readonly E57Field[]): E57StructuredFields {
+  const local = new Set(prototype.map((f) => localFieldName(f.name)));
+  return {
+    rowIndex: local.has('rowIndex'),
+    columnIndex: local.has('columnIndex'),
+    returnIndex: local.has('returnIndex'),
+    returnCount: local.has('returnCount'),
+    sphericalRange: local.has('sphericalRange'),
+  };
+}
+
+/**
+ * Whether this scan could carry an acquisition grid, on the strength of what it
+ * DECLARES. Pure, and deliberately not wired into the decode: it is the seam a
+ * later step reads, and stating it separately keeps the eligibility rule
+ * reviewable on its own.
+ *
+ * All four facts are required together. Prototype indices without bounds leave
+ * the grid's extent unknown; bounds without indices state an extent no record
+ * can be placed in; and a range whose maximum sits below its minimum describes
+ * no grid at all. The cell count must stay a safe integer so a later allocation
+ * cannot be sized from arithmetic that has already lost precision.
+ */
+export function e57ScanSupportsStructuredRange(scan: E57Scan): boolean {
+  const { rowIndex, columnIndex } = scan.structuredFields;
+  if (!rowIndex || !columnIndex) return false;
+  const row = scan.indexBounds?.row;
+  const column = scan.indexBounds?.column;
+  if (!row || !column) return false;
+  if (row.maximum < row.minimum || column.maximum < column.minimum) return false;
+  const cells = (row.maximum - row.minimum + 1) * (column.maximum - column.minimum + 1);
+  return Number.isSafeInteger(cells) && cells > 0;
+}
+
 /** Interpret one `data3D` scan structure. */
 function readScan(scan: XmlNode, warnings: string[]): E57Scan {
   const points = child(scan, 'points');
@@ -323,12 +468,15 @@ function readScan(scan: XmlNode, warnings: string[]): E57Scan {
     : null;
   const intensityLimits = child(scan, 'intensityLimits');
 
+  const prototype = proto.children.map(readField);
   return {
     name,
     guid: child(scan, 'guid')?.text ?? '',
     recordCount: readRecordCount(points),
     fileOffset: attrNum(points, 'fileOffset', 0),
-    prototype: proto.children.map(readField),
+    prototype,
+    indexBounds: readIndexBounds(scan),
+    structuredFields: readStructuredFields(prototype),
     pose: readPose(scan, name, warnings),
     colorMax: colorMax && colorMax > 0 ? colorMax : null,
     intensityMax: intensityLimits

@@ -11,6 +11,7 @@ import type { LoadErrorCategory } from './loadErrors';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate, LoadStage } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
+import { organizedRangeTransferables } from '../model/OrganizedRange';
 
 interface ParseRequest {
   buffer: ArrayBuffer;
@@ -75,6 +76,14 @@ ctx.onmessage = (event: MessageEvent): void => {
       if (cloud.returnCount) transfer.push(cloud.returnCount.buffer as ArrayBuffer);
       if (cloud.pointSourceId) transfer.push(cloud.pointSourceId.buffer as ArrayBuffer);
       if (cloud.gpsTime) transfer.push(cloud.gpsTime.buffer as ArrayBuffer);
+      // The organized-range sidecar is several typed arrays PER FRAME, so it is
+      // transferred rather than cloned: a 10 M cell grid would otherwise be
+      // copied across the boundary, which is the cost this list exists to
+      // avoid. Derived from the frames rather than enumerated here, so a new
+      // array on a frame cannot quietly fall back to a clone.
+      if (cloud.organizedRange) {
+        transfer.push(...organizedRangeTransferables(cloud.organizedRange));
+      }
 
       ctx.postMessage(
         {
@@ -89,6 +98,7 @@ ctx.onmessage = (event: MessageEvent): void => {
             returnCount: cloud.returnCount,
             pointSourceId: cloud.pointSourceId,
             gpsTime: cloud.gpsTime,
+            organizedRange: cloud.organizedRange,
             origin: cloud.origin,
             sourceFormat: cloud.sourceFormat,
             name: cloud.name,

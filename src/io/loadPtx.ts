@@ -16,7 +16,84 @@
 
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
-import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
+import {
+  sanitizeAndRecenter,
+  withLoadWarning,
+  outputRecordFor,
+  RECORD_DROPPED,
+  RECORD_NOT_WITNESSED,
+  type CompactionWitness,
+} from './sanitizeCloud';
+import {
+  CellState,
+  NO_RECORD,
+  cellIndexOf,
+  ptxCellFromOrdinal,
+  tallyCellStates,
+  type AcquisitionPose,
+  withLinkageUnavailable,
+  type OrganizedRangeFrame,
+  type OrganizedRangeSet,
+} from '../model/OrganizedRange';
+
+/**
+ * Rewrite one frame's `cellToRecord` from pre-sanitation record indices to the
+ * indices the display cloud actually holds.
+ *
+ * Returns `null` when the witness cannot answer for a record the frame claims,
+ * which the caller turns into the honest degrade. Guessing here would be the
+ * one failure this whole sidecar exists to prevent: an index that is present,
+ * plausible, and points at another return.
+ *
+ * A cell whose record did not survive becomes NOT_DECODED. The scanner did get
+ * a return there — the geometric range still proves it — so NO_RETURN would
+ * report a decoding loss as an instrument observation. NOT_DECODED says what is
+ * true: a record exists in the file and this session did not carry it through.
+ */
+function remapFrame(
+  frame: OrganizedRangeFrame,
+  witness: CompactionWitness,
+): OrganizedRangeFrame | null {
+  const cellState = new Uint8Array(frame.cellState);
+  const cellToRecord = new Int32Array(frame.cellToRecord);
+  for (let ci = 0; ci < cellToRecord.length; ci++) {
+    const source = cellToRecord[ci];
+    if (source === NO_RECORD) continue;
+    const output = outputRecordFor(witness, source);
+    // The witness does not cover this index, so the grid and the sanitiser
+    // disagree about how many records existed. That is a bookkeeping fault,
+    // not a decoding outcome, and no cell state describes it truthfully.
+    // Abandon the remap and let the caller degrade the whole set.
+    if (output === RECORD_NOT_WITNESSED) return null;
+    if (output === RECORD_DROPPED) {
+      cellToRecord[ci] = NO_RECORD;
+      cellState[ci] = CellState.NOT_DECODED;
+      continue;
+    }
+    cellToRecord[ci] = output;
+  }
+  return { ...frame, cellState, cellToRecord, diagnostics: tallyCellStates(cellState) };
+}
+
+/**
+ * Remap every frame, or none of them.
+ *
+ * A set where one frame links exactly and another silently lost its identity
+ * would be read as uniformly trustworthy, so a single unanswerable frame sends
+ * the whole set down the degrade path.
+ */
+function remapFrames(
+  frames: readonly OrganizedRangeFrame[],
+  witness: CompactionWitness,
+): OrganizedRangeFrame[] | null {
+  const out: OrganizedRangeFrame[] = [];
+  for (const frame of frames) {
+    const next = remapFrame(frame, witness);
+    if (next === null) return null;
+    out.push(next);
+  }
+  return out;
+}
 
 /** A parsed 4×4 PTX transform — four rows of four numbers. */
 type Mat4 = [number[], number[], number[], number[]];
@@ -51,6 +128,17 @@ function parseRow4(line: string | undefined): number[] {
     row[i] = Number(tok[i]);
   }
   return row;
+}
+
+/**
+ * Parse three floats from a header line, NaN-seeded like `parseRow4` so a
+ * missing or non-numeric entry is detectable rather than silently zero. A
+ * zeroed scanner position is a plausible origin and would be indistinguishable
+ * from a real one at the coordinate system's centre.
+ */
+function parseRow3(line: string | undefined): number[] {
+  const tok = tokenize(line ?? '');
+  return [Number(tok[0] ?? Number.NaN), Number(tok[1] ?? Number.NaN), Number(tok[2] ?? Number.NaN)];
 }
 
 /** Whether every entry of a parsed transform is finite. */
@@ -123,6 +211,12 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   const blockWarnings: string[] = [];
   let blockIndex = 0;
 
+  // One frame per block. A PTX block is a SCANNER SETUP, not a temporal frame,
+  // so each keeps its own grid, its own pose and its own cell-to-record map.
+  // Flattening them into one grid would merge two instruments' views of
+  // different directions into a raster that means nothing.
+  const frames: OrganizedRangeFrame[] = [];
+
   let i = 0;
   while (i < lines.length) {
     // Skip blank lines between blocks and any trailing newline.
@@ -165,21 +259,95 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
           `and may not register with the rest of the cloud.`,
       );
     }
-    // The transform's 4th row is the scanner's registered world position.
-    scannerOrigin ??= [m[3][0], m[3][1], m[3][2]];
+    // PTX carries two positions in different frames, and the loader keeps both
+    // rather than choosing. The header line after the two counts is the scanner
+    // position in the SCANNER's own frame, which is `0 0 0` for ordinary
+    // scanner-local data. The transform's translation row is where that scanner
+    // sits once registered, which is what `metadata.scannerOrigin` has always
+    // meant and continues to mean.
+    const declared = parseRow3(lines.at(i + 2));
+    const declaredOk = declared.every((v) => Number.isFinite(v));
+    const blockOrigin: [number, number, number] = [m[3][0], m[3][1], m[3][2]];
+    const pose: AcquisitionPose = {
+      worldTranslation: blockOrigin,
+      localPosition: declaredOk ? [declared[0], declared[1], declared[2]] : undefined,
+      transform: m,
+      localPositionSource: declaredOk ? 'source-declared' : 'unreadable',
+    };
+    scannerOrigin ??= blockOrigin;
     i += HEADER_LINES;
 
     const total = cols * rows;
+    // A declared grid is a CLAIM, and the sidecar costs nine bytes per cell.
+    // Nothing above validates the claim against the file, so an 87-byte header
+    // reading `100000 1000` asked for 900 MB before a single point line was
+    // read, and a larger lie threw a bare RangeError out of the typed-array
+    // constructor rather than a categorised load error. `lines.length` is a
+    // sound upper bound: no block can hold more cells than the file has lines,
+    // so a grid larger than that is not backed by any record. A legitimately
+    // truncated block stays well inside it and keeps its topology.
+    const gridIsBacked = Number.isSafeInteger(total) && total <= lines.length;
+    if (!gridIsBacked) {
+      blockWarnings.push(
+        `Block ${blockIndex}: the header declares a ${cols}×${rows} grid ` +
+          `(${total} cells), which the file cannot supply from ${lines.length} ` +
+          `lines. The points are read, and no acquisition grid is recorded for ` +
+          `this block: a declaration the records contradict is not evidence.`,
+      );
+    }
+    // Seeded with SOURCE_RECORD_MISSING so a block that runs out of lines
+    // leaves its unread tail saying exactly that, with no second pass.
+    const cells = gridIsBacked ? total : 0;
+    const cellState = new Uint8Array(cells).fill(CellState.SOURCE_RECORD_MISSING);
+    const cellToRecord = new Int32Array(cells).fill(NO_RECORD);
+    const geometricRange = new Float32Array(cells).fill(Number.NaN);
     let p = 0;
     for (; p < total && i < lines.length; p++, i++) {
+      // The ordinal advances on every path below, including the skips, so the
+      // cell address is sound even for a line that produced no point.
+      const cell = ptxCellFromOrdinal(p, rows);
+      // `-1` when the grid was refused above, which every write below skips.
+      const ci = gridIsBacked ? cellIndexOf(cell.row, cell.column, cols) : -1;
+
       const tok = tokenize(lines.at(i));
-      if (tok.length < 4) continue; // malformed point line — skip it
+      if (tok.length < 4) {
+        // A malformed line is a defect in the file, not a statement about the
+        // scene. It is NOT a no-return, and collapsing the two would report a
+        // parse failure as an instrument observation.
+        if (ci >= 0) cellState[ci] = CellState.SOURCE_INVALID;
+        continue;
+      }
       const lx = Number(tok[0]);
       const ly = Number(tok[1]);
       const lz = Number(tok[2]);
-      if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(lz)) continue;
+      if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(lz)) {
+        if (ci >= 0) cellState[ci] = CellState.SOURCE_INVALID;
+        continue;
+      }
       // A 0 0 0 sample marks an empty grid cell (no laser return) — not a point.
-      if (lx === 0 && ly === 0 && lz === 0) continue;
+      if (lx === 0 && ly === 0 && lz === 0) {
+        if (ci >= 0) cellState[ci] = CellState.NO_RETURN;
+        continue;
+      }
+
+      // Geometric range in ACQUISITION-LOCAL coordinates, before the world
+      // transform below. Computing it after registration would subtract two
+      // large world coordinates and lose most of the precision to
+      // cancellation, and it would make the value depend on the registration
+      // being correct.
+      if (ci >= 0) {
+        // Computed in double, then stored as float32. A range beyond the
+        // float32 maximum saturates to Infinity, which is not a distance: the
+        // field's absent value is NaN, and leaving Infinity there would put a
+        // number that reads as a measurement next to a VALID_RETURN state.
+        // Float32 spacing is about 6e-5 m at 1 km and 5e-4 m at 10 km, below
+        // the ranging noise of any instrument writing PTX, so the narrowing
+        // itself costs nothing a reader could notice.
+        const r = Math.hypot(lx, ly, lz);
+        geometricRange[ci] = Math.fround(r) === Number.POSITIVE_INFINITY ? Number.NaN : r;
+        cellState[ci] = CellState.VALID_RETURN;
+        cellToRecord[ci] = xs.length;
+      }
 
       // world = [x y z 1] · M — points are row vectors in the scanner frame.
       const wx = lx * m[0][0] + ly * m[1][0] + lz * m[2][0] + m[3][0];
@@ -210,6 +378,22 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
           `of the scan was read.`,
       );
     }
+
+    if (!gridIsBacked) continue;
+    frames.push({
+      id: `setup-${blockIndex}`,
+      sourceKind: 'ptx-grid',
+      width: cols,
+      height: rows,
+      cellState,
+      cellToRecord,
+      geometricRange,
+      acquisitionPose: pose,
+      // Exact for now. Sanitation runs after every block is read and may drop
+      // records; the check after it downgrades every frame if it does.
+      linkage: { kind: 'exact' },
+      diagnostics: tallyCellStates(cellState),
+    });
   }
 
   const count = xs.length;
@@ -260,12 +444,39 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   // transform is applied after that check, so this is where a world coordinate
   // that overflowed the block's matrix is caught — and where the survivors get
   // their floored-min origin.
-  const clean = sanitizeAndRecenter(global, { colors, intensity });
+  const clean = sanitizeAndRecenter(global, { colors, intensity }, { witness: true });
+
+  // Sanitation compacts survivors, so any drop shifts every record index after
+  // the first casualty. The witness is what turns that shift into an answerable
+  // question: it says where each source record landed, or that it landed
+  // nowhere, so the grid can be rewritten instead of disowned.
+  //
+  // The degrade below stays. It is still the correct behaviour whenever the
+  // witness cannot cover what the frames claim, and it is what a future caller
+  // that does not ask for a witness would get.
+  const remapped =
+    clean.excludedCount === 0 || !clean.witness || clean.witness.sourceCount !== count
+      ? null
+      : remapFrames(frames, clean.witness);
+
+  const built: OrganizedRangeSet | undefined =
+    frames.length === 0
+      ? undefined
+      : {
+          kind: 'organized-range',
+          frames: remapped ?? frames,
+          organization: frames.length > 1 ? 'multi-grid' : 'organized-grid',
+        };
+  const organizedRange =
+    built === undefined || clean.excludedCount === 0 || remapped !== null
+      ? built
+      : withLinkageUnavailable(built, 'source-record-identity-unavailable');
 
   return new PointCloud({
     positions: clean.positions,
     colors: clean.attributes.colors,
     intensity: clean.attributes.intensity,
+    organizedRange,
     origin: clean.origin,
     sourceFormat: 'ptx',
     name,
