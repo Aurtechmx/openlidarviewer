@@ -4772,8 +4772,7 @@ async function exportSession(): Promise<void> {
             generatedAt: new Date(),
             softwareVersion: __APP_VERSION__,
             metricVersion: TERRAIN_METRIC_VERSION,
-          }),
-        );
+          }), cloud?.organizedRange);
       }
 
       // The GLOBAL live state and every saved view's bundle come from the same

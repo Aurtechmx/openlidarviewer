@@ -21,6 +21,8 @@ import {
   type ExportProvenance,
 } from '../src/terrain/export/exportProvenance';
 import { verifyProcessingManifest } from '../src/science/processingManifest';
+import { CellState, tallyCellStates } from '../src/model/OrganizedRange';
+import type { OrganizedRangeSet } from '../src/model/OrganizedRange';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 /** A complete, full-coverage, export-ready analysis result with everything known. */
@@ -389,5 +391,53 @@ describe('provenanceJson — the machine-readable accuracy block states its basi
     expect(acc.basis).toMatch(/not independent survey checkpoints/i);
     expect(acc.basis).toMatch(/not an ASPRS conformance/i);
     expect(acc.basis).toMatch(/not a USGS 3DEP determination/i);
+  });
+});
+
+describe('the export manifest records what happened to source identity', () => {
+  /** A minimal one-frame set whose linkage the caller chooses. */
+  function setWith(linkage: OrganizedRangeSet['frames'][number]['linkage']): OrganizedRangeSet {
+    const cellState = new Uint8Array(2).fill(CellState.VALID_RETURN);
+    return {
+      kind: 'organized-range',
+      organization: 'organized-grid',
+      frames: [
+        {
+          id: 'setup-1',
+          sourceKind: 'ptx-grid',
+          width: 2,
+          height: 1,
+          cellState,
+          cellToRecord: new Int32Array([0, 1]),
+          linkage,
+          diagnostics: tallyCellStates(cellState),
+        },
+      ],
+    };
+  }
+
+  it('says nothing at all for a cloud that never carried an acquisition grid', () => {
+    // An ordinary LAS has no cell-to-record identity to keep or to lose.
+    // Silence is the honest record: absent is not the same as intact.
+    const m = processingManifestFromProvenance(buildExportProvenance(readyResult(), OPTS), undefined);
+    expect(JSON.stringify(m)).not.toContain('linkage');
+  });
+
+  it('records the step that spent the identity, so the artifact carries it', () => {
+    // This is the whole point: a reviewer holding only the export can see that
+    // the points feeding it were centroids rather than source returns.
+    const m = processingManifestFromProvenance(
+      buildExportProvenance(readyResult(), OPTS),
+      setWith({ kind: 'unavailable', reason: 'voxel-centroids' }),
+    );
+    const s = JSON.stringify(m);
+    expect(s).toContain('voxel-centroids');
+    expect(verifyProcessingManifest(m).ok).toBe(true);
+  });
+
+  it('distinguishes intact identity from lost identity', () => {
+    const exact = JSON.stringify(processingManifestFromProvenance(buildExportProvenance(readyResult(), OPTS), setWith({ kind: 'exact' })));
+    expect(exact).toContain('exact');
+    expect(exact).not.toContain('voxel-centroids');
   });
 });

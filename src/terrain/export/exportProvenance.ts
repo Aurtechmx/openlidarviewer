@@ -67,6 +67,8 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
 import { NOT_SURVEY_GRADE_NOTE } from './exportNotes';
 import { verticalUnitLabel } from '../../units/units';
 import type { TransformProvenance } from '../../convert/transformProvenance';
+import type { OrganizedRangeSet } from '../../model/OrganizedRange';
+import { sourceTopologyRecord } from '../../science/sourceTopology';
 export { NOT_SURVEY_GRADE_NOTE };
 
 /**
@@ -511,7 +513,10 @@ export const PARAMS_NOT_CAPTURED_NOTE = 'params not captured in this slice';
  *     generalized method's tolerance band is not carried on this object, so
  *     that op honestly notes the gap instead.
  */
-export function processingManifestFromProvenance(p: ExportProvenance): ProcessingManifest {
+export function processingManifestFromProvenance(
+  p: ExportProvenance,
+  organizedRange?: OrganizedRangeSet,
+): ProcessingManifest {
   const tag = (id: string): string => methodTag(methodRef(id));
   const ops: ProcessingOpInput[] = terrainMethodIds(p).map((id): ProcessingOpInput => {
     switch (id) {
@@ -588,7 +593,14 @@ export function processingManifestFromProvenance(p: ExportProvenance): Processin
         : {}),
     });
   }
-  return buildProcessingManifest({ build: p.build, source: p.source, ops });
+  return buildProcessingManifest({
+    build: p.build,
+    source: p.source,
+    ops,
+    // A cloud that never carried an acquisition grid records nothing here, which
+    // is not the same as recording that its identity is intact.
+    sourceTopology: sourceTopologyRecord(organizedRange),
+  });
 }
 
 /** Format a metre value at 2 dp, or an em-dash when absent. */
