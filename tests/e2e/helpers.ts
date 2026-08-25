@@ -14,7 +14,7 @@
  *   empty-state copy changes.
  */
 
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -207,4 +207,27 @@ export async function expectHittable(locator: Locator, timeout = 15_000): Promis
       { timeout, message: 'the element at the target centre is still something else' },
     )
     .toBe('target');
+}
+
+/**
+ * Activate a control the way the running device actually would.
+ *
+ * The mobile specs run under two projects: `deterministic` (Desktop Chrome,
+ * no touch) and `webkit-mobile` (iPhone 15, touch). Those need different
+ * gestures, and picking the wrong one is quietly misleading in both
+ * directions. `tap()` throws where `hasTouch` is unset, so it cannot simply
+ * be used everywhere. `click()` synthesizes a mouse event, which a handler
+ * bound only to touch events can ignore, so a click-based mobile test can
+ * pass against a control that does nothing under a real thumb.
+ *
+ * Reading `hasTouch` off the project rather than sniffing the user agent
+ * keeps this honest: it reports what Playwright actually configured.
+ */
+export async function activate(locator: Locator): Promise<void> {
+  const hasTouch = test.info().project.use.hasTouch === true;
+  if (hasTouch) {
+    await locator.tap();
+    return;
+  }
+  await locator.click();
 }

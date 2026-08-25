@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly } from './helpers';
+import { activate, dropTinyPly } from './helpers';
 
 /**
  * Visuals Studio — mobile viewport contract.
@@ -40,7 +40,7 @@ async function loadOnPhoneAndOpenSheet(
   // the sheet and activates that tab's slot.
   const viewTab = page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="view"]');
   await expect(viewTab).toBeVisible({ timeout: 8_000 });
-  await viewTab.click();
+  await activate(viewTab);
   await expect(page.locator('.olv-msheet-slot[data-tab="view"].is-active')).toBeVisible({
     timeout: 4_000,
   });
@@ -55,7 +55,7 @@ async function loadOnPhoneAndOpenSheet(
       .first()
       .evaluate((el) => (el as HTMLDetailsElement).open);
     if (!isOpen) {
-      await visualsDetails.locator('summary').first().click();
+      await activate(visualsDetails.locator('summary').first());
     }
   }
 }

@@ -32,10 +32,15 @@
   box-shadow: var(--olv-cta-shadow);
   transition: box-shadow var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-open-btn:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.22) inset,
-    0 8px 30px rgba(0, 178, 255, 0.38);
+/* A tap fires :hover on a touch screen and it sticks until the next tap
+   elsewhere, leaving the control looking permanently pressed. Guarding the
+   rule keeps the affordance on pointers that can actually hover. */
+@media (hover: hover) {
+  .olv-open-btn:hover {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.22) inset,
+      0 8px 30px rgba(0, 178, 255, 0.38);
+  }
 }
 .olv-open-btn:active { transform: scale(0.96); }
 .olv-open-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -315,7 +320,7 @@
     font-size: 17px; line-height: 1;
     min-width: 44px; min-height: 44px;
   }
-  .olv-touch-hint-x:hover { color: var(--text); }
+  @media (hover: hover) { .olv-touch-hint-x:hover { color: var(--text); } }
 
   /* Scan Info launcher — kept hidden on phones now that the bottom
      sheet peeks. The peeked head bar IS the launcher (tap it to expand),
@@ -423,7 +428,7 @@
     min-width: 44px; min-height: 44px;
     margin: -8px -10px -8px 0;
   }
-  .olv-sheet-close:hover { color: var(--text); }
+  @media (hover: hover) { .olv-sheet-close:hover { color: var(--text); } }
   /* When peeked, hide the close button — there's nothing to close yet.
      It reappears once the sheet is open so the user has a familiar
      dismiss target. */
