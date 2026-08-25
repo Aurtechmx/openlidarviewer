@@ -49,6 +49,7 @@ import {
   BOX_EDGES,
   elevationDatumOffset,
 } from './geometry';
+import { resizeBoxByCorner, BOX_CORNER_INDICES, type BoxCornerIndex } from './boxEdit';
 import { areaBreakdown, lineBreakdown } from './measureBreakdown';
 import type { AreaBreakdown, LineBreakdown } from './measureBreakdown';
 import {
@@ -1683,7 +1684,24 @@ export class MeasureController {
     const point = this._picker(this._dragNdcX, this._dragNdcY);
     if (!point) return;
     const m = this._measurements.find((x) => x.id === drag.id);
-    if (m && drag.vi < m.points.length) {
+    if (!m) return;
+    if (m.kind === 'box' && m.points.length >= 2 && drag.vi >= 0 && drag.vi <= 7) {
+      // A box handle names a wireframe corner, not a stored point. Resizing
+      // keeps the diagonally opposite corner fixed and re-normalises, so the
+      // stored pair stays a valid min/max diagonal and every derived figure
+      // (dimensions, volume, surface area) recomputes from the edited box on
+      // the next model build.
+      const next = resizeBoxByCorner(
+        boxFromCorners(m.points[0], m.points[1]),
+        drag.vi as BoxCornerIndex,
+        [point[0], point[1], point[2]],
+        this._worldUp,
+      );
+      m.points[0] = [next.min[0], next.min[1], next.min[2]];
+      m.points[1] = [next.max[0], next.max[1], next.max[2]];
+      return;
+    }
+    if (drag.vi < m.points.length) {
       m.points[drag.vi] = [point[0], point[1], point[2]];
     }
   }
@@ -1926,13 +1944,19 @@ export class MeasureController {
     L: OverlayLabel[],
   ): void {
     const pts = m.points;
-    pts.forEach((p, i) => {
-      V.push({
-        p,
-        role: 'normal',
-        handle: this._active ? { mid: m.id, vi: i } : undefined,
+    // A box draws its handles on all 8 wireframe corners below, not on the two
+    // stored pick points: only two of a box's corners are stored, and offering
+    // a handle on just those two would leave six corners that look identical
+    // and behave differently.
+    if (m.kind !== 'box') {
+      pts.forEach((p, i) => {
+        V.push({
+          p,
+          role: 'normal',
+          handle: this._active ? { mid: m.id, vi: i } : undefined,
+        });
       });
-    });
+    }
 
     if (m.kind === 'distance' && pts.length >= 2) {
       E.push({ a: pts[0], b: pts[1], style: 'solid' });
@@ -2103,6 +2127,15 @@ export class MeasureController {
       // clipping uniform) read from one source of truth.
       const box = boxFromCorners(pts[0], pts[1]);
       const corners = boxCorners(box, this._worldUp);
+      // The handle index IS the corner index in `boxCorners` order, so the
+      // drag resolves the anchor from the same table the wireframe drew.
+      for (const ci of BOX_CORNER_INDICES) {
+        V.push({
+          p: corners[ci],
+          role: 'normal',
+          handle: this._active ? { mid: m.id, vi: ci } : undefined,
+        });
+      }
       for (const [aI, bI] of BOX_EDGES) {
         E.push({ a: corners[aI], b: corners[bI], style: 'solid' });
       }
