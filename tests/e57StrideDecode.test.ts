@@ -221,9 +221,9 @@ function deviceMemoryForAffordable(affordable: number): number {
     attributes: FILE_ATTRIBUTES,
     fileBytes: FILE.byteLength,
     format: 'e57',
-    decodeColumnsPerPoint: COLUMNS_PER_RECORD,
+    decodeBytesPerPoint: COLUMNS_PER_RECORD * 8,
   });
-  const ceiling = fixed + affordable * e57BytesPerRecord(COLUMNS_PER_RECORD, FILE_ATTRIBUTES);
+  const ceiling = fixed + affordable * e57BytesPerRecord(COLUMNS_PER_RECORD * 8, FILE_ATTRIBUTES);
   // `memoryCeilingBytes` returns deviceMemoryGB x 1e9 x 0.6 on desktop.
   return ceiling / (1_000_000_000 * 0.6);
 }
@@ -244,7 +244,7 @@ describe('the synthetic multi-packet fixture', () => {
     const pre = preflightE57(FILE);
     expect(pre.scanCount).toBe(1);
     expect(pre.recordCount).toBe(RECORDS);
-    expect(pre.columnsPerRecord).toBe(COLUMNS_PER_RECORD);
+    expect(pre.decodeBytesPerRecord).toBe(COLUMNS_PER_RECORD * 8);
     expect(pre.attributes.hasColor).toBe(true);
   });
 
@@ -318,7 +318,7 @@ describe('loadE57 — stride or refuse', () => {
     const plan = planE57Decode({
       sourceCount: RECORDS,
       fileBytes: FILE.byteLength,
-      columnsPerRecord: COLUMNS_PER_RECORD,
+      decodeBytesPerRecord: COLUMNS_PER_RECORD * 8,
       attributes: FILE_ATTRIBUTES,
       isMobile: false,
       deviceMemoryGB: STRIDE_TWO_GB,

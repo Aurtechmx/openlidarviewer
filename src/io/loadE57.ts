@@ -23,6 +23,11 @@ import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { declaredCaptureFromSourceMetadata } from '../diagnostics/declaredCapture';
 import { sanitizeAndRecenter } from './sanitizeCloud';
+import { remapFrames } from './organizedRangeRemap';
+import { E57GridBuilder } from './e57/structuredFrames';
+import { e57StructuredRequestsForScan } from './e57/structuredSink';
+import { withLinkageUnavailable } from '../model/OrganizedRange';
+import type { OrganizedRangeFrame, OrganizedRangeSet } from '../model/OrganizedRange';
 
 /** Clamp a value into the 0–255 byte range. */
 function clampByte(v: number): number {
@@ -205,7 +210,8 @@ function planFromDeclaration(
     return planE57Decode({
       sourceCount: declared.recordCount,
       fileBytes: buffer.byteLength,
-      columnsPerRecord: declared.columnsPerRecord,
+      decodeBytesPerRecord: declared.decodeBytesPerRecord,
+      structuredGridBytes: declared.structuredGridBytes,
       attributes: declared.attributes,
       isMobile: hints.isMobile ?? false,
       deviceMemoryGB: hints.deviceMemoryGB,
@@ -263,7 +269,18 @@ export async function loadE57(
   // per-value conversion on a tens-of-millions-of-points scan. The predicate
   // resolves per scan, and the preflight resolves its column count through the
   // same function, so the plan's count and the decode's cannot disagree.
-  const parsed = parseE57(buffer, { keepField: e57FieldIsConsumedForScan, stride });
+  //
+  // The structured columns ride a SEPARATE sink (`structuredFor`), decoded
+  // beside the Float64 point columns and never through them: the point decode
+  // is the cross-checked ingest path, and an acquisition index has different
+  // requirements — an integer width chosen from the declared bounds, and a
+  // decoded value outside those bounds treated as a contradiction rather than
+  // as a number to clamp.
+  const parsed = parseE57(buffer, {
+    keepField: e57FieldIsConsumedForScan,
+    stride,
+    structuredFor: (scan) => e57StructuredRequestsForScan(scan),
+  });
 
   // Partition the scans FIRST: a scan without Cartesian X/Y/Z (spherical-only,
   // for example) contributes no points, so it must contribute nothing to the
@@ -319,8 +336,24 @@ export async function loadE57(
   const classification = hasClassification ? new Uint8Array(total) : undefined;
   const normals = hasNormals ? new Float32Array(total * 3) : undefined;
 
+  // One grid per SCAN. E57 topology is per scan, and this loader emits one
+  // merged cloud with no scan boundary in it, so a single merged grid would
+  // raster two setups' views of different directions into one picture.
+  const builders = new Map<E57ScanData, E57GridBuilder>();
+  for (const scan of scans) {
+    if (!scan.declaration) continue;
+    const builder = E57GridBuilder.forScan(
+      scan.declaration,
+      scan.structured,
+      buffer.byteLength,
+      stride > 1,
+    );
+    if (builder) builders.set(scan, builder);
+  }
+
   let w = 0; // running point index across all merged scans
   for (const scan of scans) {
+    const grid = builders.get(scan);
     const col = scan.columns;
     // The partition above guarantees these columns exist on every merged scan.
     const cx = col.cartesianX;
@@ -337,7 +370,15 @@ export async function loadE57(
     const nZ = normals ? col[normalKey(col, 'Z')!] : undefined;
 
     for (let i = 0; i < scan.recordCount; i++) {
-      if (invalid && invalid[i] !== 0) continue;
+      // The invalid-state drop happens HERE, before sanitation, and it removes
+      // 58 % of the records of one real fixture. The grid is told about it as it
+      // happens, so a cell's record index is the index the merged cloud will
+      // hold rather than a position in the file that nothing preserves.
+      if (invalid && invalid[i] !== 0) {
+        grid?.place(i, null);
+        continue;
+      }
+      grid?.place(i, w);
 
       let px = cx[i];
       let py = cy[i];
@@ -394,11 +435,33 @@ export async function loadE57(
     );
   }
 
+  // A grid whose records contradict the file's own indexBounds is not built.
+  // The points are kept: the coordinates are still coordinates, and it is the
+  // topology that the declaration failed to describe.
+  const frames: OrganizedRangeFrame[] = [];
+  for (const [scan, grid] of builders) {
+    if (grid.contradiction !== null) {
+      warnings.push(
+        `Scan "${scan.name}" declares an acquisition grid its own records ` +
+          `contradict (${grid.contradiction}), so no acquisition grid is recorded ` +
+          `for it. The points are unaffected.`,
+      );
+      continue;
+    }
+    frames.push(grid.frame(`scan-${frames.length + 1}`));
+  }
+
   // Drop points the file marked valid but wrote non-finite — a truncated or
   // corrupt CompressedVector reaches here as a NaN — then recentre the
   // survivors about their floored-min origin. The exclusion joins the same
   // warning list the skipped-scan and normalised-pose notes already use.
-  const clean = sanitizeAndRecenter(global, { colors, intensity, classification, normals });
+  const clean = sanitizeAndRecenter(
+    global,
+    { colors, intensity, classification, normals },
+    // Asked for only when a grid depends on the answer, so a file with no
+    // acquisition grid allocates exactly what it allocated before.
+    { witness: frames.length > 0 },
+  );
   if (clean.warning) warnings.push(clean.warning);
 
   // A strided load is a SAMPLE of the scan, and this project does not let a
@@ -426,8 +489,28 @@ export async function loadE57(
     );
   }
 
+  // Sanitation compacts survivors, so a drop shifts every record index after
+  // the first casualty — the second of the two shifts a cell has to survive.
+  const remapped =
+    frames.length === 0 || clean.excludedCount === 0 || !clean.witness || clean.witness.sourceCount !== total
+      ? null
+      : remapFrames(frames, clean.witness);
+  const built: OrganizedRangeSet | undefined =
+    frames.length === 0
+      ? undefined
+      : {
+          kind: 'organized-range',
+          frames: remapped ?? frames,
+          organization: frames.length > 1 ? 'multi-grid' : 'organized-grid',
+        };
+  const organizedRange =
+    built === undefined || clean.excludedCount === 0 || remapped !== null
+      ? built
+      : withLinkageUnavailable(built, 'source-record-identity-unavailable');
+
   return new PointCloud({
     positions: clean.positions,
+    organizedRange,
     colors: clean.attributes.colors,
     intensity: clean.attributes.intensity,
     classification: clean.attributes.classification,

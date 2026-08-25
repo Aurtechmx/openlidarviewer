@@ -169,11 +169,12 @@ async function buildE57Preflight(
   const { e57XmlPageRunFromHead, preflightE57FromXmlPages } = await import('./e57/preflight');
   const run = e57XmlPageRunFromHead(headSlice, file.size);
   const pages = await file.slice(run.physicalStart, run.physicalEnd).arrayBuffer();
-  const declared = preflightE57FromXmlPages(new Uint8Array(pages), run);
+  const declared = preflightE57FromXmlPages(new Uint8Array(pages), run, file.size);
   const plan = planE57Decode({
     sourceCount: declared.recordCount,
     fileBytes: file.size,
-    columnsPerRecord: declared.columnsPerRecord,
+    decodeBytesPerRecord: declared.decodeBytesPerRecord,
+    structuredGridBytes: declared.structuredGridBytes,
     attributes: declared.attributes,
     isMobile: options.isMobile ?? false,
     deviceMemoryGB: options.deviceMemoryGB,

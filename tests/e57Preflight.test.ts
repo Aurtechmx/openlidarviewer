@@ -69,11 +69,11 @@ describe('E57 preflight — committed fixtures', () => {
   });
 
   it('counts only the columns the loader consumes', () => {
-    // This file declares rowIndex / columnIndex the loader never reads, so
-    // they must not be counted into the memory estimate: cartesian x/y/z +
-    // invalid state + colour x3 + intensity = 8.
+    // Eight Float64 point columns — cartesian x/y/z + invalid state + colour
+    // x3 + intensity — at eight bytes each, plus the two Uint16 index columns
+    // this scan's grid declaration earns it.
     const pre = preflightE57(read('./pumpARowColumnIndexNoInvalidPoints.e57'));
-    expect(pre.columnsPerRecord).toBe(8);
+    expect(pre.decodeBytesPerRecord).toBe(8 * 8 + 2 + 2);
   });
 
   it('recovers a bare Float scan with no attributes', () => {
@@ -211,7 +211,7 @@ describe('summariseE57Scans', () => {
   it('a file with no mergeable scan declares no attributes and no records', () => {
     const pre = summariseE57Scans([scan('spherical', 40, ['sphericalRange'])]);
     expect(pre.recordCount).toBe(0);
-    expect(pre.columnsPerRecord).toBe(0);
+    expect(pre.decodeBytesPerRecord).toBe(0);
     expect(pre.attributes).toEqual({
       hasColor: false,
       hasIntensity: false,
@@ -229,7 +229,7 @@ describe('summariseE57Scans', () => {
       scan('extra', 100, [...XYZ, 'intensity']),
     ]);
     const alone = summariseE57Scans([scan('cartesian', 100, XYZ)]);
-    expect(withSkipped.columnsPerRecord).toBeGreaterThan(alone.columnsPerRecord);
+    expect(withSkipped.decodeBytesPerRecord).toBeGreaterThan(alone.decodeBytesPerRecord);
   });
 
   it('averages a fractional column count over scans with different prototypes', () => {
@@ -237,7 +237,7 @@ describe('summariseE57Scans', () => {
       scan('a', 100, XYZ), // 3 consumed
       scan('b', 100, [...XYZ, 'intensity']), // 4 consumed
     ]);
-    expect(pre.columnsPerRecord).toBeCloseTo(3.5, 10);
+    expect(pre.decodeBytesPerRecord).toBeCloseTo(3.5 * 8, 10);
   });
 });
 

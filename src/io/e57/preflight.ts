@@ -26,6 +26,11 @@ import { parseXml } from './xml';
 import { readE57Document } from './schema';
 import type { E57Field, E57Scan } from './schema';
 import type { PointAttributes } from '../loadPlan';
+import { E57_COLUMN_BYTES } from '../loadPlan';
+import {
+  e57StructuredBytesPerRecordForScan,
+  e57StructuredGridBytes,
+} from './structuredSink';
 
 /**
  * The prototype fields `loadE57` actually reads. Every other declared field —
@@ -98,15 +103,27 @@ export interface E57Preflight {
   /** Attributes the merged cloud will carry, decided exactly as `loadE57` decides them. */
   attributes: PointAttributes;
   /**
-   * Float64 decode columns the parse materialises per merged record. The parse
-   * expands one `Float64Array` per CONSUMED prototype field per scan and holds
-   * every scan's columns at once, so this is the multiplier on the largest term
-   * in the E57 memory estimate. Fractional when scans declare different
-   * prototypes; counted over all scans (a skipped scan's columns are still
-   * decoded) and divided by the records that become points, so the estimate
-   * carries the skipped scan's cost rather than losing it.
+   * BYTES of decode column the parse materialises per merged record. The parse
+   * expands one `Float64Array` per CONSUMED prototype field per scan, plus the
+   * narrow integer columns an eligible structured scan earns, and holds every
+   * scan's columns at once — so this is the largest per-record term in the E57
+   * memory estimate. Fractional when scans declare different prototypes;
+   * counted over all scans (a skipped scan's columns are still decoded) and
+   * divided by the records that become points, so the estimate carries the
+   * skipped scan's cost rather than losing it.
+   *
+   * A BYTE figure, not a column count. Per-scan eligibility and mixed-width
+   * columns both break a scalar column count multiplied by a flat eight bytes:
+   * one scan may keep two `Uint16` index columns while another keeps none, and
+   * no average of columns can say that.
    */
-  columnsPerRecord: number;
+  decodeBytesPerRecord: number;
+  /**
+   * Bytes the acquisition grids of the structured scans will allocate, summed
+   * over the scans that earn one. Scales with grid cells rather than records,
+   * so the plan spends it as a fixed cost that no stride reduces.
+   */
+  structuredGridBytes: number;
 }
 
 /** Which prototype fields a scan declares, by both bare and local name. */
@@ -129,11 +146,15 @@ function fieldNames(prototype: readonly E57Field[]): { bare: Set<string>; local:
  * only when EVERY mergeable scan provides it. A divergence here would size the
  * estimate for arrays the merge never allocates, or miss ones it does.
  */
-export function summariseE57Scans(scans: readonly E57Scan[]): E57Preflight {
+export function summariseE57Scans(
+  scans: readonly E57Scan[],
+  fileBytes: number = Number.POSITIVE_INFINITY,
+): E57Preflight {
   const mergeable: { bare: Set<string>; local: Set<string> }[] = [];
   let recordCount = 0;
   let skippedRecordCount = 0;
-  let columnValues = 0;
+  let columnBytes = 0;
+  let structuredGridBytes = 0;
   for (const scan of scans) {
     const names = fieldNames(scan.prototype);
     const consumedHere = e57ConsumedFieldsForScan(scan);
@@ -141,7 +162,9 @@ export function summariseE57Scans(scans: readonly E57Scan[]): E57Preflight {
     for (const field of scan.prototype) {
       if (consumedHere.has(e57LocalFieldName(field.name))) consumed++;
     }
-    columnValues += scan.recordCount * consumed;
+    columnBytes +=
+      scan.recordCount * (consumed * E57_COLUMN_BYTES + e57StructuredBytesPerRecordForScan(scan, fileBytes));
+    structuredGridBytes += e57StructuredGridBytes(scan, fileBytes);
     if (names.bare.has('cartesianX') && names.bare.has('cartesianY') && names.bare.has('cartesianZ')) {
       mergeable.push(names);
       recordCount += scan.recordCount;
@@ -168,7 +191,8 @@ export function summariseE57Scans(scans: readonly E57Scan[]): E57Preflight {
     recordCount,
     skippedRecordCount,
     attributes,
-    columnsPerRecord: recordCount > 0 ? columnValues / recordCount : 0,
+    decodeBytesPerRecord: recordCount > 0 ? columnBytes / recordCount : 0,
+    structuredGridBytes,
   };
 }
 
@@ -238,18 +262,25 @@ export function e57XmlPageRunFromHead(head: ArrayBuffer, fileBytes: number): E57
 
 /**
  * Read the declared facts from an already-fetched XML page run. `pages` must be
- * exactly the bytes `run.physicalStart`–`run.physicalEnd` names. Every page in
+ * exactly the bytes `run.physicalStart`–`run.physicalEnd` names. `fileBytes` is
+ * the real file length, which bounds a declared acquisition grid to what the
+ * file can supply; omitted, a declared grid is believed in full, which
+ * over-states the estimate rather than under-stating it. Every page in
  * the run has its CRC-32C verified before its bytes are read, so a corrupt XML
  * region is refused here rather than parsed into a plausible-looking plan.
  */
-export function preflightE57FromXmlPages(pages: Uint8Array, run: E57XmlPageRun): E57Preflight {
+export function preflightE57FromXmlPages(
+  pages: Uint8Array,
+  run: E57XmlPageRun,
+  fileBytes: number = Number.POSITIVE_INFINITY,
+): E57Preflight {
   const logical = depagePages(pages, run.pageSize, run.firstPageIndex, run.totalPageCount);
   const end = run.logicalOffset + run.xmlLogicalLength;
   if (end > logical.length) {
     throw new Error('E57: the declared XML section extends past the file.');
   }
   const xml = new TextDecoder().decode(logical.subarray(run.logicalOffset, end));
-  return summariseE57Scans(readE57Document(parseXml(xml)).scans);
+  return summariseE57Scans(readE57Document(parseXml(xml)).scans, fileBytes);
 }
 
 /**
@@ -261,5 +292,5 @@ export function preflightE57(buffer: ArrayBuffer): E57Preflight {
   const header = parseE57Header(buffer);
   const run = e57XmlPageRun(header);
   const pages = new Uint8Array(buffer, run.physicalStart, run.physicalEnd - run.physicalStart);
-  return preflightE57FromXmlPages(pages, run);
+  return preflightE57FromXmlPages(pages, run, buffer.byteLength);
 }

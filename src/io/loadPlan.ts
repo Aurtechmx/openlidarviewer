@@ -147,12 +147,27 @@ export interface MemoryEstimateInput {
   fileBytes: number;
   format: SourceFormat;
   /**
-   * E57 only: Float64 decode columns the parse materialises per record, from
+   * E57 only: BYTES of decode column the parse materialises per record, from
    * the E57 preflight (`summariseE57Scans`). Omitted, the estimate still counts
    * the file copies and the merged arrays but not the columns, which is the
    * largest term — so an E57 estimate without it is a floor, not a peak.
+   *
+   * Bytes rather than a column count because the columns are no longer one
+   * width. A structured scan keeps its `rowIndex` as a `Uint16Array` while its
+   * `cartesianX` stays a `Float64Array`, and a scan-count multiplied by a flat
+   * eight bytes cannot express that — nor "scan 2 keeps two index columns and
+   * scan 5 keeps none", which per-scan eligibility makes an ordinary case.
    */
-  decodeColumnsPerPoint?: number;
+  decodeBytesPerPoint?: number;
+  /**
+   * E57 only: bytes the acquisition grids of the structured scans allocate.
+   *
+   * Its own term because it scales with GRID CELLS, not with records. The flat
+   * resident allowance below was fitted to temporaries that scale with neither,
+   * so folding a cells-sized array into it would leave the allowance describing
+   * something it was never measured against.
+   */
+  structuredGridBytes?: number;
 }
 
 // --- tuning constants ------------------------------------------------------
@@ -209,13 +224,20 @@ const LAZ_SCRATCH_BYTES = 16_000_000;
 //      merge starts. This is the largest term and the one the generic model has
 //      no expression for at all;
 //   4. the merged Float64 xyz buffer plus the merged attribute arrays;
-//   5. the Float32 positions the recentre produces, alive beside (4).
+//   5. the Float32 positions the recentre produces, alive beside (4);
+//   6. for a structured scan, the acquisition grid: per-cell state and record
+//      arrays plus the copy the identity remap holds beside them. This one
+//      scales with grid cells rather than records, so it is a separate term.
 //
 // Terms 1 and 2 give the two file-byte costs. Terms 3-5 give the per-record
 // cost below.
 
-/** Bytes one decoded E57 column value occupies (`Float64Array`, one per field). */
-const E57_COLUMN_BYTES = 8;
+/**
+ * Bytes one decoded E57 point-column value occupies (`Float64Array`, one per
+ * consumed prototype field). Exported so the preflight, which counts the
+ * columns, states their cost in the same number the estimate spends.
+ */
+export const E57_COLUMN_BYTES = 8;
 
 /** Bytes the merged global-coordinate buffer holds per point (Float64 x3). */
 const E57_MERGE_XYZ_BYTES = 24;
@@ -330,7 +352,8 @@ export function estimateMemoryBytes(input: MemoryEstimateInput): number {
     return (
       E57_FILE_COPIES * fileBytes +
       E57_RESIDENT_SLACK_BYTES +
-      count * e57BytesPerRecord(input.decodeColumnsPerPoint ?? 0, input.attributes)
+      Math.max(0, input.structuredGridBytes ?? 0) +
+      count * e57BytesPerRecord(input.decodeBytesPerPoint ?? 0, input.attributes)
     );
   }
   const points = count * perPointBytes(input.attributes);
@@ -346,12 +369,12 @@ export function estimateMemoryBytes(input: MemoryEstimateInput): number {
  * those is alive at the same moment (see the E57 decode cost note above).
  */
 export function e57BytesPerRecord(
-  columnsPerRecord: number,
+  decodeBytesPerRecord: number,
   attributes: PointAttributes,
 ): number {
   const attributeBytes = perPointBytes(attributes) - BYTES_POSITION;
   return (
-    E57_COLUMN_BYTES * Math.max(0, columnsPerRecord) +
+    Math.max(0, decodeBytesPerRecord) +
     E57_MERGE_XYZ_BYTES +
     attributeBytes +
     BYTES_POSITION
@@ -525,8 +548,10 @@ export interface E57DecodePlanInput {
   sourceCount: number;
   /** Size of the file, in bytes. */
   fileBytes: number;
-  /** Float64 decode columns the parse materialises per record. */
-  columnsPerRecord: number;
+  /** Bytes of decode column the parse materialises per record. */
+  decodeBytesPerRecord: number;
+  /** Bytes the structured scans' acquisition grids allocate, from the preflight. */
+  structuredGridBytes?: number;
   /** Attributes the merged cloud will carry. */
   attributes: PointAttributes;
   /** True on phones — tightens the ceiling. */
@@ -582,7 +607,8 @@ export interface E57DecodePlan {
 export function planE57Decode(input: E57DecodePlanInput): E57DecodePlan {
   const sourceCount = Math.max(0, Math.floor(input.sourceCount));
   const fileBytes = Math.max(0, input.fileBytes);
-  const perRecord = e57BytesPerRecord(input.columnsPerRecord, input.attributes);
+  const structuredGridBytes = Math.max(0, input.structuredGridBytes ?? 0);
+  const perRecord = e57BytesPerRecord(input.decodeBytesPerRecord, input.attributes);
   const ceilingBytes = Math.min(
     memoryCeilingBytes(input.deviceMemoryGB, input.isMobile),
     E57_DECODE_CEILING_BYTES,
@@ -593,7 +619,8 @@ export function planE57Decode(input: E57DecodePlanInput): E57DecodePlan {
       attributes: input.attributes,
       fileBytes,
       format: 'e57',
-      decodeColumnsPerPoint: input.columnsPerRecord,
+      decodeBytesPerPoint: input.decodeBytesPerRecord,
+      structuredGridBytes,
     });
 
   const fullDecodeEstimateBytes = estimate(sourceCount);
@@ -615,7 +642,7 @@ export function planE57Decode(input: E57DecodePlanInput): E57DecodePlan {
 
   // The file copies and the resident allowance are paid whatever the stride, so
   // what is left over is all a strided decode has to spend on records.
-  const fixed = E57_FILE_COPIES * fileBytes + E57_RESIDENT_SLACK_BYTES;
+  const fixed = E57_FILE_COPIES * fileBytes + E57_RESIDENT_SLACK_BYTES + structuredGridBytes;
   const affordable = perRecord > 0 ? Math.floor((ceilingBytes - fixed) / perRecord) : 0;
   const stride = affordable > 0 ? strideFor(sourceCount, affordable) : 0;
   // Test the SURVIVING sample, not the room. A stride is a whole number, so

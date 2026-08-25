@@ -16,14 +16,8 @@
 
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
-import {
-  sanitizeAndRecenter,
-  withLoadWarning,
-  outputRecordFor,
-  RECORD_DROPPED,
-  RECORD_NOT_WITNESSED,
-  type CompactionWitness,
-} from './sanitizeCloud';
+import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
+import { remapFrames } from './organizedRangeRemap';
 import {
   CellState,
   NO_RECORD,
@@ -35,65 +29,6 @@ import {
   type OrganizedRangeFrame,
   type OrganizedRangeSet,
 } from '../model/OrganizedRange';
-
-/**
- * Rewrite one frame's `cellToRecord` from pre-sanitation record indices to the
- * indices the display cloud actually holds.
- *
- * Returns `null` when the witness cannot answer for a record the frame claims,
- * which the caller turns into the honest degrade. Guessing here would be the
- * one failure this whole sidecar exists to prevent: an index that is present,
- * plausible, and points at another return.
- *
- * A cell whose record did not survive becomes NOT_DECODED. The scanner did get
- * a return there — the geometric range still proves it — so NO_RETURN would
- * report a decoding loss as an instrument observation. NOT_DECODED says what is
- * true: a record exists in the file and this session did not carry it through.
- */
-function remapFrame(
-  frame: OrganizedRangeFrame,
-  witness: CompactionWitness,
-): OrganizedRangeFrame | null {
-  const cellState = new Uint8Array(frame.cellState);
-  const cellToRecord = new Int32Array(frame.cellToRecord);
-  for (let ci = 0; ci < cellToRecord.length; ci++) {
-    const source = cellToRecord[ci];
-    if (source === NO_RECORD) continue;
-    const output = outputRecordFor(witness, source);
-    // The witness does not cover this index, so the grid and the sanitiser
-    // disagree about how many records existed. That is a bookkeeping fault,
-    // not a decoding outcome, and no cell state describes it truthfully.
-    // Abandon the remap and let the caller degrade the whole set.
-    if (output === RECORD_NOT_WITNESSED) return null;
-    if (output === RECORD_DROPPED) {
-      cellToRecord[ci] = NO_RECORD;
-      cellState[ci] = CellState.NOT_DECODED;
-      continue;
-    }
-    cellToRecord[ci] = output;
-  }
-  return { ...frame, cellState, cellToRecord, diagnostics: tallyCellStates(cellState) };
-}
-
-/**
- * Remap every frame, or none of them.
- *
- * A set where one frame links exactly and another silently lost its identity
- * would be read as uniformly trustworthy, so a single unanswerable frame sends
- * the whole set down the degrade path.
- */
-function remapFrames(
-  frames: readonly OrganizedRangeFrame[],
-  witness: CompactionWitness,
-): OrganizedRangeFrame[] | null {
-  const out: OrganizedRangeFrame[] = [];
-  for (const frame of frames) {
-    const next = remapFrame(frame, witness);
-    if (next === null) return null;
-    out.push(next);
-  }
-  return out;
-}
 
 /** A parsed 4×4 PTX transform — four rows of four numbers. */
 type Mat4 = [number[], number[], number[], number[]];
