@@ -2021,31 +2021,29 @@ function renderProfileChart(
   // questions: the stride is how many labels an axis should carry, and the fit
   // is which of those the axis has room for.
   //
-  // Both constants below are bounds, not measurements, and each is rounded the
-  // only way that fails safe. This string is built before the overlay is in a
-  // document, so neither the chart's width nor a label's width can be read
+  // The width below is a bound, not a measurement. This string is built before
+  // the overlay is in a document, so the chart's real width cannot be read
   // here, and the two errors are not symmetric: believing the chart WIDER than
-  // it is, or a label NARROWER than it is, keeps a pair that then overprints,
-  // while the opposite direction costs a tick mark that the station table
-  // underneath still carries. So the width is the chart's CSS floor rather
-  // than its usual size, and the per-character figure is the widest measured
-  // rather than the mean. A wide chart therefore carries fewer labels than it
-  // could, which is the price of never overprinting at any width.
-  const AXIS_LABEL_PX_PER_CHAR = 6.8;
+  // it is keeps a pair that then overprints, while believing it narrower costs
+  // a tick mark the station table underneath still carries. So the fit runs
+  // against the chart's CSS floor rather than its usual size. A wide chart
+  // therefore carries fewer labels than it could, which is the price of never
+  // overprinting at any width. `axisLabelWidth` errs wide for the same reason.
   const MIN_CHART_PX = 180;
-  const AXIS_LABEL_MIN_GAP_PX = 8;
+  const AXIS_FONT_PX = 11;
   const candidates = stations
     .map((c, i) => ({ c, i }))
     .filter(({ i }) => i === lastIdx || i % labelStride === 0);
   const texts = candidates.map(({ c }) => formatChainage(c));
-  const keep = fitAxisLabels(
-    candidates.map(({ c }, k) => ({
-      at: xPct(c) / 100,
-      width: texts[k].length * AXIS_LABEL_PX_PER_CHAR,
-    })),
-    MIN_CHART_PX,
-    AXIS_LABEL_MIN_GAP_PX,
-  );
+  const keep = fitAxisLabels({
+    labels: texts,
+    pixels: candidates.map(({ c }) => (xPct(c) / 100) * MIN_CHART_PX),
+    containerPx: MIN_CHART_PX,
+    fontPx: AXIS_FONT_PX,
+    // The overlay anchors its end labels inside the plot, so the fit has to
+    // judge them the same way or it drops the label carrying the extent.
+    ends: 'pulled-in',
+  });
   const xLabelHtml = candidates
     .map(({ c, i }, k) => {
       if (!keep[k]) return '';

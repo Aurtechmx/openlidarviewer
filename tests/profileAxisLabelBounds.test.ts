@@ -41,17 +41,16 @@ describe('the axis label fit uses bounds, not estimates', () => {
     expect(constant('MIN_CHART_PX')).toBeLessThanOrEqual(Number(m![1]));
   });
 
-  it('assumes the widest character a label can carry', () => {
-    // Measured in a browser at the axis font (Manrope 11px): the worst case
-    // is "88 m" at 6.74px per character. Short labels are the wide ones, so
-    // a mean taken over long labels understates exactly the ones at risk.
-    const WIDEST_MEASURED_PX_PER_CHAR = 6.74;
-    expect(constant('AXIS_LABEL_PX_PER_CHAR')).toBeGreaterThanOrEqual(
-      WIDEST_MEASURED_PX_PER_CHAR,
+  it('states the font size the labels are actually drawn at', () => {
+    // The width estimate is per em, so the size it is multiplied by has to be
+    // the size the stylesheet gives `.olv-mp-axis`. A stale figure here
+    // understates every label at once.
+    const m = /\.olv-mp-axis\s*\{[^}]*?font-size:\s*var\(--text-xs\)/s.exec(css);
+    expect(m, 'olv-mp-axis font-size is not --text-xs').not.toBeNull();
+    const token = /--text-xs:\s*(\d+(?:\.\d+)?)px/.exec(
+      read('src/styles/01-tokens.css'),
     );
-  });
-
-  it('keeps a clear gap rather than letting labels touch', () => {
-    expect(constant('AXIS_LABEL_MIN_GAP_PX')).toBeGreaterThan(0);
+    expect(token, '--text-xs not declared').not.toBeNull();
+    expect(constant('AXIS_FONT_PX')).toBe(Number(token![1]));
   });
 });

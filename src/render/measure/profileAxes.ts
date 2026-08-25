@@ -428,65 +428,143 @@ export function profileAxes(
 // Fitting labels along an axis
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** One candidate tick label, positioned along the axis. */
-export interface AxisLabelBox {
-  /** Position along the axis, as a fraction of its length. */
-  readonly at: number;
-  /** Rendered width of the text, in the same units as the axis length. */
-  readonly width: number;
+/**
+ * Width one character of a label occupies, as a fraction of the font size.
+ *
+ * A bound, not a measurement, and rounded the only way that fails safe.
+ * Overstating a label's width can only drop a label that would have fitted,
+ * which is legible. Understating it lets two labels overlap, which is not.
+ * Measured in a browser at the axis font, the widest case is a short label of
+ * wide digits: `88 m` runs 6.74px at 11px, or 0.613em. Short labels are the
+ * wide ones per character, so a mean taken over long labels understates
+ * exactly the ones at risk.
+ *
+ * Expressed per em rather than per pixel so it follows the font size instead
+ * of silently going stale when the axis type scale changes.
+ */
+export const AXIS_LABEL_CHAR_EM = 0.62;
+
+/**
+ * Least clear space between two kept labels, in CSS pixels.
+ *
+ * Clear space, not centre distance: two labels that merely fail to overlap
+ * still read as one run of digits, which is the failure being avoided.
+ */
+export const AXIS_LABEL_MIN_GAP_PX = 8;
+
+/** Width a label occupies at `fontPx`, erring wide. */
+export function axisLabelWidth(label: string, fontPx: number): number {
+  const size = Number.isFinite(fontPx) && fontPx > 0 ? fontPx : 0;
+  return label.length * size * AXIS_LABEL_CHAR_EM;
 }
 
 /**
- * Which labels along an axis can be drawn without touching.
+ * How a renderer places the labels at the two ends of the strip.
  *
- * Thinning by index is the obvious approach and it does not work: a label
- * collides in PIXELS, and equal index spacing is equal pixel spacing only
- * when every label is the same width and anchored the same way. Neither
- * holds here. The end labels are pulled inside the plot so they cannot
- * overhang it, so the first is left-aligned and the last right-aligned while
- * everything between is centred, and a label near the end sits closer to it
- * than its index suggests.
+ * `centred` draws every label centred on its tick, so an end label can hang
+ * past the strip and is dropped rather than clipped: half a number at the edge
+ * states a value the axis is not showing.
  *
- * The ends are kept because they carry the axis range, which is what a reader
- * takes from the axis first. Interior labels are then accepted left to right
- * only where the box clears both its accepted neighbour and the end, so a
- * dropped label costs a tick mark rather than the extent of the axis.
- *
- * `minGap` is clear space, not centre distance: two labels that merely touch
- * read as one longer label, which is the failure being avoided.
+ * `pulled-in` is for a renderer that anchors the ends inside the strip, the
+ * first flush left and the last flush right. Nothing can overhang, so the ends
+ * are kept and they carry the axis range, which is what a reader takes from an
+ * axis first. The two are not interchangeable: judging a pulled-in last label
+ * as though it were centred puts half its box past the end of the strip and
+ * drops it, and judging a centred one as pulled-in lets it overhang.
  */
-export function fitAxisLabels(
-  labels: readonly AxisLabelBox[],
-  axisLength: number,
-  minGap: number,
-): boolean[] {
-  const keep = labels.map(() => false);
-  if (labels.length === 0) return keep;
-  if (labels.length === 1) {
-    keep[0] = true;
-    return keep;
+export type AxisLabelEnds = 'centred' | 'pulled-in';
+
+/** What the fitter is told about the strip the labels are drawn in. */
+export interface AxisLabelFit {
+  /** Label text, one per tick, in the tick order. */
+  readonly labels: readonly string[];
+  /** Centre of each label along the strip, CSS pixels. */
+  readonly pixels: readonly number[];
+  /** Extent of the strip, CSS pixels. A smaller value is the safe direction. */
+  readonly containerPx: number;
+  /** Font size the labels will be drawn at, CSS pixels. */
+  readonly fontPx: number;
+  /**
+   * Extent of one label ACROSS the strip rather than along it. Absent, the
+   * text width is used, which is the horizontal axis; a vertical axis passes
+   * the line height, because its labels are stacked and their widths never
+   * collide with one another.
+   */
+  readonly extentPx?: (label: string) => number;
+  /** How the ends are anchored. Defaults to `centred`. */
+  readonly ends?: AxisLabelEnds;
+}
+
+/**
+ * Which labels may be drawn without two of them touching.
+ *
+ * WHY NOT EVERY SECOND ONE. Index-based thinning assumes the labels are evenly
+ * spaced in pixels and equally wide, and an axis satisfies neither: the
+ * transform that places a tick is not required to be uniform across the
+ * visible span, and `-1250.5` is more than twice the width of `0`. Thinning by
+ * index drops readable labels in the sparse part of an axis while leaving the
+ * crowded part still overlapping, which is the worst of both. This walks the
+ * strip and keeps a label only when the space it needs is actually free.
+ *
+ * Fitting from one end and never backtracking: the first label that fits is
+ * kept, and each later one only when its space is still free.
+ *
+ * Returns one flag per input label, in the input order.
+ */
+export function fitAxisLabels(fit: AxisLabelFit): boolean[] {
+  const n = Math.min(fit.labels.length, fit.pixels.length);
+  const keep = new Array<boolean>(fit.labels.length).fill(false);
+  if (n === 0) return keep;
+  const font = Number.isFinite(fit.fontPx) && fit.fontPx > 0 ? fit.fontPx : 0;
+  // A container of unknown or negative extent reads as zero, which keeps only
+  // the labels that need no room at all. Too narrow is the safe direction.
+  const container = Number.isFinite(fit.containerPx) && fit.containerPx > 0 ? fit.containerPx : 0;
+  const extent = fit.extentPx ?? ((label: string) => axisLabelWidth(label, font));
+  const pulledIn = fit.ends === 'pulled-in';
+
+  // Strip order, not tick order: a vertical axis places its first tick at the
+  // BOTTOM of the strip, and a walk in tick order would compare a label with
+  // one that is not its neighbour on screen.
+  const order: number[] = [];
+  for (let i = 0; i < n; i++) if (Number.isFinite(fit.pixels[i]!)) order.push(i);
+  order.sort((a, b) => fit.pixels[a]! - fit.pixels[b]!);
+  const firstIdx = order[0];
+  const lastIdx = order[order.length - 1];
+
+  /** The span a label occupies, given how its end is anchored. */
+  const spanOf = (i: number): readonly [number, number] => {
+    const w = extent(fit.labels[i] ?? '');
+    if (pulledIn && i === firstIdx) return [0, w];
+    if (pulledIn && i === lastIdx) return [container - w, container];
+    const half = w / 2;
+    return [fit.pixels[i]! - half, fit.pixels[i]! + half];
+  };
+
+  // A pulled-in strip reserves its far end before the walk, so an interior
+  // label cannot take the space the range label needs. The near end is the
+  // walk's own starting point and needs no reservation.
+  let reservedFrom = Infinity;
+  if (pulledIn && order.length > 1) {
+    const [lo, hi] = spanOf(lastIdx);
+    // The two ends can collide on a short strip. The far end wins, because a
+    // reader scanning for the extent looks at the end of the axis.
+    if (lo >= 0 && hi <= container) {
+      keep[lastIdx] = true;
+      reservedFrom = lo;
+    }
   }
-  if (!(axisLength > 0)) return keep;
 
-  const last = labels.length - 1;
-  // Left-aligned first, right-aligned last: the span each end label occupies.
-  const firstRight = labels[0].width;
-  const lastLeft = axisLength - labels[last].width;
-  keep[0] = true;
-  // The end labels themselves can collide on a short axis. The far end wins,
-  // because a reader scanning for the extent looks at the end of the axis.
-  keep[last] = lastLeft - firstRight >= minGap;
-  if (!keep[last]) return keep;
-
-  let occupiedTo = firstRight;
-  for (let i = 1; i < last; i++) {
-    const half = labels[i].width / 2;
-    const left = labels[i].at * axisLength - half;
-    const right = left + labels[i].width;
-    if (left - occupiedTo < minGap) continue;
-    if (lastLeft - right < minGap) continue;
+  let occupiedTo = -Infinity;
+  let anyKept = false;
+  for (const i of order) {
+    if (i === lastIdx && keep[lastIdx]) continue;
+    const [start, end] = spanOf(i);
+    if (start < 0 || end > container) continue;
+    if (anyKept && start < occupiedTo + AXIS_LABEL_MIN_GAP_PX) continue;
+    if (end > reservedFrom - AXIS_LABEL_MIN_GAP_PX) continue;
     keep[i] = true;
-    occupiedTo = right;
+    anyKept = true;
+    occupiedTo = end;
   }
   return keep;
 }
