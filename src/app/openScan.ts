@@ -18,38 +18,38 @@
  * v0.6 decomposition (see `docs/architecture/architecture-map.md`).
  */
 
-import { isSessionFile } from "../io/sessionFile";
-import { scanFactsFromStatic } from "./sessionIo";
-import { detectCopc } from "../io/copc/copcDetect";
-import { formatProgress } from "../io/loadProgress";
-import { describeLoadError } from "../io/loadErrors";
-import { formatTelemetry } from "../io/loadTelemetry";
-import { buildBenchmarkResult, formatBenchmarkResult } from "../io/benchmark";
-import { LoadCancelledError } from "../io/loadFile";
-import { availableModes } from "../render/colorModes";
-import { recommendColorMode } from "../render/colorModeRecommend";
-import { increment as recordUsage } from "../diagnostics/usageCounters";
+import { isSessionFile } from '../io/sessionFile';
+import { scanFactsFromStatic } from './sessionIo';
+import { detectCopc } from '../io/copc/copcDetect';
+import { formatProgress } from '../io/loadProgress';
+import { describeLoadError } from '../io/loadErrors';
+import { formatTelemetry } from '../io/loadTelemetry';
+import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
+import { LoadCancelledError } from '../io/loadFile';
+import { availableModes } from '../render/colorModes';
+import { recommendColorMode } from '../render/colorModeRecommend';
+import { increment as recordUsage } from '../diagnostics/usageCounters';
 
-import type { LoadResult, LoadCallbacks, LoadOptions } from "../io/loadFile";
-import type { ColorMode } from "../render/colorModes";
-import type { PointCloud } from "../model/PointCloud";
-import type { ShareState } from "../io/shareState";
-import type { ClassScope } from "../render/class/classScope";
-import type { AnalysisRow } from "../analysis/ModuleApi";
-import type { Viewer } from "../render/Viewer";
-import type { Inspector } from "../ui/Inspector";
-import type { ExportPanel } from "../ui/ExportPanel";
-import type { ToolDock } from "../ui/toolDock";
-import type { NavBar } from "../ui/NavBar";
-import type { DebugOverlay } from "../ui/DebugOverlay";
-import type { DropZone } from "../ui/DropZone";
-import type { Stage } from "../ui/Stage";
-import type { ScanService } from "./ScanService";
-import type { LayerService } from "./LayerService";
-import type { LayerIdentityService } from "./layerIdentityService";
-import type { InspectorCardRefreshers } from "./inspectorCardRefreshers";
-import type { CrsCoordinator } from "./crsCoordinator";
-import type { ViewBookmarksService } from "./viewBookmarks";
+import type { LoadResult, LoadCallbacks, LoadOptions } from '../io/loadFile';
+import type { ColorMode } from '../render/colorModes';
+import type { PointCloud } from '../model/PointCloud';
+import type { ShareState } from '../io/shareState';
+import type { ClassScope } from '../render/class/classScope';
+import type { AnalysisRow } from '../analysis/ModuleApi';
+import type { Viewer } from '../render/Viewer';
+import type { Inspector } from '../ui/Inspector';
+import type { ExportPanel } from '../ui/ExportPanel';
+import type { ToolDock } from '../ui/toolDock';
+import type { NavBar } from '../ui/NavBar';
+import type { DebugOverlay } from '../ui/DebugOverlay';
+import type { DropZone } from '../ui/DropZone';
+import type { Stage } from '../ui/Stage';
+import type { ScanService } from './ScanService';
+import type { LayerService } from './LayerService';
+import type { LayerIdentityService } from './layerIdentityService';
+import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
+import type { CrsCoordinator } from './crsCoordinator';
+import type { ViewBookmarksService } from './viewBookmarks';
 
 /**
  * The Layers chip names the FILE, so it shows the file total (the same count
@@ -103,11 +103,7 @@ export interface OpenScanDeps {
   /** The drop-zone status surface. */
   dropZone: Pick<
     DropZone,
-    | "setOpening"
-    | "setCancelHandler"
-    | "setProgress"
-    | "setPreload"
-    | "setError"
+    'setOpening' | 'setCancelHandler' | 'setProgress' | 'setPreload' | 'setError'
   >;
   /** Open a local COPC file through the streaming pipeline (wraps the range source + `openStreamingCopc`). */
   openLocalCopc: (file: File, signal: AbortSignal) => Promise<void>;
@@ -124,43 +120,37 @@ export interface OpenScanDeps {
   /** Reported device memory in GB, or undefined when the browser withholds it. */
   deviceMemoryGB: () => number | undefined;
   /** Hide the empty-state placeholder once a scan renders. */
-  stage: Pick<Stage, "hideEmptyState">;
+  stage: Pick<Stage, 'hideEmptyState'>;
   /** Tear down any open streaming scan (a static load replaces it; a failed streaming open tidies up). */
   closeStreaming: () => void;
   /** Active-scan selection + lookup. */
-  scans: Pick<ScanService, "setActive" | "activeId">;
+  scans: Pick<ScanService, 'setActive' | 'activeId'>;
   /**
    * The session's layer-identity owner. On load, the freshly attached cloud is
    * bound to a stable, name-independent id from its SOURCE facts; the work
    * stores are wired so new measurements/annotations record which layer they
    * belong to once more than one is open.
    */
-  layerIdentity: Pick<
-    LayerIdentityService,
-    "bindOnLoad" | "ensureStoresWired" | "stableIdFor"
-  >;
+  layerIdentity: Pick<LayerIdentityService, 'bindOnLoad' | 'ensureStoresWired' | 'stableIdFor'>;
   /** The Inspector panel. */
   inspector: Inspector;
   /** The Output panel — owns the image-export / report gating. */
-  exportPanel: Pick<
-    ExportPanel,
-    "setImageExportEnabled" | "setImageExportAvailability"
-  >;
+  exportPanel: Pick<ExportPanel, 'setImageExportEnabled' | 'setImageExportAvailability'>;
   /** Provenance / dataset-intelligence card refreshers. */
   inspectorCards: Pick<
     InspectorCardRefreshers,
-    "refreshProvenance" | "refreshDatasetIntelligenceFromStaticCloud"
+    'refreshProvenance' | 'refreshDatasetIntelligenceFromStaticCloud'
   >;
   /** CRS detection for the freshly loaded static cloud. */
-  crsCoordinator: Pick<CrsCoordinator, "refreshCrsForStaticCloud">;
+  crsCoordinator: Pick<CrsCoordinator, 'refreshCrsForStaticCloud'>;
   /** The tool dock. */
   dock: ToolDock;
   /** The navigation bar. */
   navBar: NavBar;
   /** Saved-view store — cleared only on a fresh project. */
-  bookmarks: Pick<ViewBookmarksService, "clear">;
+  bookmarks: Pick<ViewBookmarksService, 'clear'>;
   /** CRS-mismatch flag refresh across layers. */
-  layerService: Pick<LayerService, "refreshCrsFlags">;
+  layerService: Pick<LayerService, 'refreshCrsFlags'>;
   /** Record the per-layer visibility intent for a freshly attached cloud. */
   setLayerVisible: (id: string, visible: boolean) => void;
   /** Retain the source File so the Export panel can offer a full-resolution re-decode. */
@@ -205,10 +195,7 @@ export interface OpenScanDeps {
   /** `?benchmark=1` — emit a benchmark result on load. */
   readonly benchmark: boolean;
   /** The developer diagnostics overlay, or null when it hasn't loaded. */
-  getDebugOverlay: () => Pick<
-    DebugOverlay,
-    "setTelemetry" | "setBenchmark"
-  > | null;
+  getDebugOverlay: () => Pick<DebugOverlay, 'setTelemetry' | 'setBenchmark'> | null;
 }
 
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
@@ -225,7 +212,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   // whose NAME the host controls (main.ts), so a `x.olvsession` name could
   // otherwise reach the session loader unthrottled and stack repeated restores.
   if (deps.isLoading()) {
-    deps.showToast("Already loading — cancel the current load first.");
+    deps.showToast('Already loading — cancel the current load first.');
     return;
   }
   // Claim the flag SYNCHRONOUSLY — the `await`s below yield to the event loop,
@@ -266,8 +253,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     const result = await deps.loadLocalSource(
       file,
       {
-        onProgress: (u) =>
-          deps.dropZone.setProgress(formatProgress(u), u.fraction),
+        onProgress: (u) => deps.dropZone.setProgress(formatProgress(u), u.fraction),
         onPreload: (lines) => deps.dropZone.setPreload(lines),
       },
       {
@@ -288,7 +274,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     } else {
       // The toast shows a clear, categorised message; the raw error still
       // reaches the console for developers under ?debug=1.
-      if (deps.debug) console.error("OpenLiDARViewer — load error", err);
+      if (deps.debug) console.error('OpenLiDARViewer — load error', err);
       deps.dropZone.setError(describeLoadError(err));
       // A streaming open that failed mid-flight leaves no scan — tidy up.
       deps.closeStreaming();
@@ -340,7 +326,7 @@ export async function attachStaticCloud(
   // routes through removeCloud() and frees the same buffers. (Streaming opens
   // remain exclusive and still call clearOpenStaticLayers below.)
 
-  deps.dropZone.setProgress(formatProgress({ stage: "uploading" }));
+  deps.dropZone.setProgress(formatProgress({ stage: 'uploading' }));
   // PAINT YIELD. `await viewer.ready` above is the last await in this
   // function, so everything from here to the progress teardown runs in ONE
   // task: the "Preparing GPU buffers" and "Rendering" lines were written and
@@ -380,11 +366,7 @@ export async function attachStaticCloud(
   // the work stores — once — so new measurements/annotations record their
   // owning layer as soon as a second layer joins. Additive: a single-layer
   // scene keeps its exact byte shape, because the provider returns no owner.
-  deps.layerIdentity.bindOnLoad(
-    id,
-    scanFactsFromStatic(result.cloud),
-    result.cloud.name,
-  );
+  deps.layerIdentity.bindOnLoad(id, scanFactsFromStatic(result.cloud), result.cloud.name);
   deps.layerIdentity.ensureStoresWired(
     [viewer.measure, viewer.annotate],
     () => deps.scans.activeId,
@@ -399,30 +381,21 @@ export async function attachStaticCloud(
   if (source.file) deps.rememberSourceFile(id, source.file);
   deps.rememberReduced(id, result.downsampled);
   // Local-first counter — categorical source format only; never the file name.
-  try {
-    recordUsage("scan-open", result.cloud.sourceFormat);
-  } catch (err) {
-    if (deps.debug) console.warn("[usage] recordUsage threw", err);
-  }
+  try { recordUsage('scan-open', result.cloud.sourceFormat); }
+  catch (err) { if (deps.debug) console.warn('[usage] recordUsage threw', err); }
   // Provenance fingerprint — pure metadata classification, surfaced in
   // the Inspector's "Provenance" section. Wrapped because a malformed
   // input shape would have aborted the rest of the post-load setup
   // (including the navBar reveal further down).
-  try {
-    deps.inspectorCards.refreshProvenance(result.cloud, id);
-  } catch (err) {
-    if (deps.debug) console.warn("[provenance] refreshProvenance threw", err);
-  }
+  try { deps.inspectorCards.refreshProvenance(result.cloud, id); }
+  catch (err) { if (deps.debug) console.warn('[provenance] refreshProvenance threw', err); }
   // CRS — detected from the loaded cloud's metadata, merged with any
   // persisted user override. Wrapped because a malformed cloud
   // shape shouldn't break the rest of the load.
-  try {
-    deps.crsCoordinator.refreshCrsForStaticCloud(result.cloud);
-  } catch (err) {
-    if (deps.debug) console.warn("[crs] refreshCrsForStaticCloud threw", err);
-  }
+  try { deps.crsCoordinator.refreshCrsForStaticCloud(result.cloud); }
+  catch (err) { if (deps.debug) console.warn('[crs] refreshCrsForStaticCloud threw', err); }
 
-  deps.dropZone.setProgress(formatProgress({ stage: "rendering" }));
+  deps.dropZone.setProgress(formatProgress({ stage: 'rendering' }));
   // Second paint yield, same reason as the one above the GPU attach: framing
   // and the first colour pass are synchronous, so "Rendering" needs a frame
   // to reach the screen. No abort check here on purpose. This is past the
@@ -432,7 +405,7 @@ export async function attachStaticCloud(
   await new Promise((resolve) => setTimeout(resolve, 0));
   const renderStartedAt = performance.now();
   // A freshly opened scan starts in the orbit overview, then glides in.
-  viewer.setMode("orbit");
+  viewer.setMode('orbit');
   viewer.frameAll();
   const firstRenderMs = performance.now() - renderStartedAt;
 
@@ -462,18 +435,15 @@ export async function attachStaticCloud(
   deps.dock.setProbeEnabled(true);
   deps.dock.setAnnotateEnabled(true);
   deps.dock.setCloseEnabled(true);
-  deps.navBar.element.classList.remove("olv-hidden");
-  deps.navBar.setMode("orbit");
+  deps.navBar.element.classList.remove('olv-hidden');
+  deps.navBar.setMode('orbit');
   deps.navBar.flashHelp();
-  document.body.classList.add("olv-has-scan");
+  document.body.classList.add('olv-has-scan');
   if (deps.isPhone()) deps.navBar.flashTouchHint();
 
   // Only a fresh project resets saved work; an additive open keeps the layer
   // that is still on screen. tests/additiveOpenKeepsWork.test.ts pins this.
-  if (shouldResetSavedWork(viewer.clouds().length)) {
-    deps.bookmarks.clear();
-    viewer.annotate.clear();
-  }
+  if (shouldResetSavedWork(viewer.clouds().length)) { deps.bookmarks.clear(); viewer.annotate.clear(); }
   deps.refreshAnnotationPanel();
 
   // ── Inspector setup — wrapped in defensive try/catches so a single
@@ -484,27 +454,15 @@ export async function attachStaticCloud(
     // The Layers chip names the FILE, so it shows the file total (the same
     // count DETAIL renders as "loaded / total"), not the strided display
     // subset — consistent with the Scan Report's file-scale Point Count.
-    const layerCount = layerChipCount(
-      result.originalPointCount,
-      result.cloud.pointCount,
-    );
+    const layerCount = layerChipCount(result.originalPointCount, result.cloud.pointCount);
     // The stable id rides along so the Layers panel can persist a group's
     // membership under an identity that still names this scan next session;
     // a layer the registry refused a binding carries null and is left out.
-    deps.inspector.addCloud(
-      id,
-      result.cloud.name,
-      layerCount,
-      result.cloud.metadata?.crs?.name ?? null,
-      deps.layerIdentity.stableIdFor(id),
-    );
+    deps.inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null, deps.layerIdentity.stableIdFor(id));
     deps.setLayerVisible(id, true);
     deps.layerService.refreshCrsFlags();
     deps.inspector.setColorModes(availableModes(result.cloud), mode);
-    deps.inspector.setDetail(
-      result.cloud.pointCount,
-      result.originalPointCount,
-    );
+    deps.inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
     deps.inspector.setElevationExtent(viewer.elevationExtent());
     deps.inspector.setIntensityExtent(viewer.intensityExtent());
     deps.inspectorCards.refreshDatasetIntelligenceFromStaticCloud(result.cloud);
@@ -517,8 +475,7 @@ export async function attachStaticCloud(
     {
       const profileCloud = result.cloud;
       const targetId = id;
-      void deps
-        .loadApplyDisplayProfile()
+      void deps.loadApplyDisplayProfile()
         .then(({ applyDisplayProfile }) => {
           if (deps.scans.activeId !== targetId) return; // scan changed while we waited
           applyDisplayProfile(profileCloud, deps.inspector);
@@ -527,13 +484,11 @@ export async function attachStaticCloud(
         // derivation failure must not surface as an unhandled rejection (the
         // enclosing try/catch is synchronous and won't catch this promise).
         .catch((err) => {
-          if (deps.debug)
-            console.warn("[inspector] display-profile card threw", err);
+          if (deps.debug) console.warn('[inspector] display-profile card threw', err);
         });
     }
   } catch (err) {
-    if (deps.debug)
-      console.warn("[inspector] cloud + details setup threw", err);
+    if (deps.debug) console.warn('[inspector] cloud + details setup threw', err);
   }
   // Scan Report — deferred off the attach path (v0.5.3). The health-check
   // module walks EVERY point several times (duplicate-point set, median/MAD
@@ -548,24 +503,20 @@ export async function attachStaticCloud(
     const fillReport = (): void => {
       if (deps.scans.activeId !== reportForId) return; // scan changed while we waited
       try {
-        deps.inspector.setReport(
-          deps.runModules(result.cloud, deps.currentClassScope(result.cloud)),
-        );
+        deps.inspector.setReport(deps.runModules(result.cloud, deps.currentClassScope(result.cloud)));
       } catch (err) {
-        if (deps.debug)
-          console.warn("[inspector] runModules + setReport threw", err);
+        if (deps.debug) console.warn('[inspector] runModules + setReport threw', err);
       }
     };
     type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
-    const rIC = (window as unknown as { requestIdleCallback?: RIC })
-      .requestIdleCallback;
-    if (typeof rIC === "function") rIC(fillReport, { timeout: 1500 });
+    const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
+    if (typeof rIC === 'function') rIC(fillReport, { timeout: 1500 });
     else setTimeout(fillReport, 200);
   }
   try {
     deps.inspector.setViews([]);
   } catch (err) {
-    if (deps.debug) console.warn("[inspector] setViews threw", err);
+    if (deps.debug) console.warn('[inspector] setViews threw', err);
   }
   // Visual Export Studio — a scan is now loaded; turn on the image-
   // export buttons so the user can capture it. Pre-warm the lazy Studio
@@ -577,12 +528,9 @@ export async function attachStaticCloud(
     // Per-mode gating — disable buttons whose mode the loaded cloud can't
     // satisfy (Normal map on a LAZ, etc.) so the user sees the constraint
     // before clicking rather than as a post-click error toast.
-    deps.exportPanel.setImageExportAvailability(
-      viewer.availableImageExportModes(),
-    );
+    deps.exportPanel.setImageExportAvailability(viewer.availableImageExportModes());
   } catch (err) {
-    if (deps.debug)
-      console.warn("[inspector] setImageExportEnabled threw", err);
+    if (deps.debug) console.warn('[inspector] setImageExportEnabled threw', err);
   }
   deps.prewarmExportStudio();
 
@@ -592,7 +540,7 @@ export async function attachStaticCloud(
     try {
       deps.applyShareState(pending, result.cloud);
     } catch (err) {
-      if (deps.debug) console.warn("[share] applyShareState threw", err);
+      if (deps.debug) console.warn('[share] applyShareState threw', err);
     }
     deps.clearPendingShareState();
   }
@@ -607,14 +555,13 @@ export async function attachStaticCloud(
       pointSizeMode: viewer.pointSizeMode,
       antialiasing: viewer.antialiasing,
       twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
-      splatMode: viewer.splatMode,
+  splatMode: viewer.splatMode,
     });
   } catch (err) {
-    if (deps.debug) console.warn("[inspector] syncRendering threw", err);
+    if (deps.debug) console.warn('[inspector] syncRendering threw', err);
   }
 
-  if (!deps.bareMode)
-    deps.showProjectCard(result.cloud, result.originalPointCount);
+  if (!deps.bareMode) deps.showProjectCard(result.cloud, result.originalPointCount);
 
   // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
   deps.revealAnalysePanel(result.cloud.name);
@@ -636,7 +583,7 @@ export async function attachStaticCloud(
       declared: result.cloud.declaredPointCount,
     });
   } catch (err) {
-    if (deps.debug) console.warn("[class-legend] refresh threw", err);
+    if (deps.debug) console.warn('[class-legend] refresh threw', err);
   }
 
   // Developer diagnostics — the merged telemetry feeds the debug console
@@ -645,9 +592,9 @@ export async function attachStaticCloud(
     const telemetry = { ...result.telemetry, gpuUploadMs, firstRenderMs };
     if (deps.debug) {
       console.log(
-        "%cOpenLiDARViewer — load telemetry",
-        "font-weight:600;color:#22dcff",
-        "\n" + formatTelemetry(telemetry),
+        '%cOpenLiDARViewer — load telemetry',
+        'font-weight:600;color:#22dcff',
+        '\n' + formatTelemetry(telemetry),
       );
     }
     deps.getDebugOverlay()?.setTelemetry(telemetry);
@@ -666,11 +613,11 @@ export async function attachStaticCloud(
         ),
       );
       console.log(
-        "%cOpenLiDARViewer — benchmark",
-        "font-weight:600;color:#22dcff",
-        "\n" + text,
+        '%cOpenLiDARViewer — benchmark',
+        'font-weight:600;color:#22dcff',
+        '\n' + text,
       );
-      deps.getDebugOverlay()?.setBenchmark("benchmark\n" + text);
+      deps.getDebugOverlay()?.setBenchmark('benchmark\n' + text);
     }
   }
   deps.dropZone.setCancelHandler(null);
