@@ -21,6 +21,8 @@
  * the same coordinate space `Viewer.computeLassoVolume` expects.
  */
 
+import type { LassoSelectionBasis } from '../render/measure/lassoVolumeCompute';
+
 /** A 2D point in CSS-pixel coordinates relative to the canvas. */
 export interface LassoPoint {
   readonly x: number;
@@ -33,8 +35,12 @@ export interface LassoVolumeToolOptions {
    * Called when the user releases the pointer with a closed lasso of
    * at least 3 unique vertices. The tool stays enabled — call
    * `disable()` from inside the callback if you want a one-shot.
+   *
+   * `basis` is the selection basis armed at the moment of release, passed with
+   * the path rather than read separately so the figure and the basis it was
+   * measured on cannot be assembled from two different instants.
    */
-  onCommit: (lasso: ReadonlyArray<LassoPoint>) => void;
+  onCommit: (lasso: ReadonlyArray<LassoPoint>, basis: LassoSelectionBasis) => void;
   /** Called when the user hits Escape mid-draw. Defaults to a no-op. */
   onCancel?: () => void;
 }
@@ -58,6 +64,12 @@ export class LassoVolumeTool {
   private _pathD = '';
   /** True between pointerdown and pointerup. */
   private _drawing = false;
+  /**
+   * The selection basis every commit is taken on. Defaults to the basis every
+   * lasso volume was measured on before the depth test existed, so arming the
+   * tool and drawing the same shape gives the same number it always gave.
+   */
+  private _basis: LassoSelectionBasis = 'through-surfaces';
   /** Bound listeners so we can detach them on disable. */
   private readonly _onPointerDown: (e: PointerEvent) => void;
   private readonly _onPointerMove: (e: PointerEvent) => void;
@@ -80,6 +92,22 @@ export class LassoVolumeTool {
   /** Whether the tool is currently armed (SVG mounted, listeners attached). */
   get enabled(): boolean {
     return this._svg !== null;
+  }
+
+  /**
+   * The selection basis the next commit will be taken on.
+   *
+   * Held here rather than read at the call site because it decides what a
+   * measurement MEANS: `'occluded-excluded'` measures only surfaces the camera
+   * can see, `'through-surfaces'` measures every depth along the ray, and the
+   * two give different volumes for the same drawn shape.
+   */
+  get selectionBasis(): LassoSelectionBasis {
+    return this._basis;
+  }
+
+  set selectionBasis(basis: LassoSelectionBasis) {
+    this._basis = basis;
   }
 
   /**
@@ -184,7 +212,7 @@ export class LassoVolumeTool {
     // Clear the path on screen — the next selection re-uses the SVG.
     this._clearPath();
     this._points = [];
-    this._cb.onCommit(committed);
+    this._cb.onCommit(committed, this._basis);
   }
 
   private _abort(): void {

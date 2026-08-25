@@ -560,11 +560,10 @@ const viewerLoaded: Promise<Viewer> = (async () => {
 
 // ── Lasso volume tool — 3D volumetric pick via freehand draw ────────────
 //
-// Press `L` to arm the tool. Draw a freehand shape over the canvas;
-// every 3D point inside the projected shape is selected (volumetric —
-// all depths along the camera ray are captured). On pointer-up, the
-// pipeline computes cut / fill / footprint and surfaces it in a quick
-// toast. Press `L` again or `Escape` to disarm.
+// Press `L` to arm the tool. Draw a freehand shape over the canvas; the points
+// inside the projected shape are selected, on whichever selection basis is
+// armed. On pointer-up the pipeline computes cut / fill / footprint and
+// surfaces it, with its basis, in a quick toast. `L` or `Escape` disarms.
 /**
  * The most recent lasso volume result, retained so the toast's "Save"
  * button can promote it into the Measurements list. Cleared when the
@@ -577,7 +576,7 @@ let pendingLassoSave: {
 } | null = null;
 
 const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
-  onCommit: (lasso) => {
+  onCommit: (lasso, basis) => {
     if (!viewer) return;
     // Native→metre factor for the source CRS (feet for a state-plane-feet
     // cloud). Handed to computeLassoVolume so the stockpile band it returns is
@@ -589,7 +588,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // stockpile grade must not claim. One context answers both questions.
     const densityUnitKnown = ctx.linearUnitKnown;
     const vert = verticalMetresPerUnit(ctx, 'horizontal') ?? lin;
-    const out = viewer.computeLassoVolume(lasso, 0.05, lin, densityUnitKnown, vert);
+    const out = viewer.computeLassoVolume(lasso, 0.05, lin, densityUnitKnown, vert, basis);
     if (out === null) {
       pendingLassoSave = null;
       showLassoToast('Lasso volume — no points selected. Draw around a denser region.');
@@ -655,7 +654,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // there's nothing trustworthy to claim (too few points / degenerate).
     showLassoToast(
       `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat}.${out.stockpileSuffix}`,
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${out.stockpileSuffix}`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,

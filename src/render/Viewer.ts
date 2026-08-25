@@ -127,6 +127,8 @@ import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
 import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions } from './measure/lassoVolumeCompute';
+import type { LassoCloudEntry, LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
+import { makeLassoProjector } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -155,6 +157,8 @@ export interface LassoVolumeReturn {
   readonly stockpileSuffix: string;
   /** Number of cloud points that fell inside the lasso. */
   readonly selectedCount: number;
+  /** Which selection basis the figures were measured on, and what it cost. */
+  readonly selectionBasis: LassoSelectionBasisReport;
   /** The lasso path the user drew (echoed back for the report card). */
   readonly lasso: ReadonlyArray<{ readonly x: number; readonly y: number }>;
   /**
@@ -3185,15 +3189,11 @@ export class Viewer {
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return { changedCount: 0, pointCount: 0 };
     this._camera.updateMatrixWorld(true);
-    const projMatrix = this._activeCamera().projectionMatrix;
-    const viewMatrix = this._activeCamera().matrixWorldInverse;
+    const cam = this._activeCamera();
     const off = accumulatorOffset(entry.placement);
-    const tmp = new THREE.Vector3();
-    const project = (x: number, y: number, z: number): { x: number; y: number } | null => {
-      tmp.set(x + off[0], y + off[1], z + off[2]).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
-      if (tmp.z < -1 || tmp.z > 1) return null;
-      return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
-    };
+    const toScreen = makeLassoProjector(cam.matrixWorldInverse.elements, cam.projectionMatrix.elements, w, h);
+    // The buffer is source-local; the camera sees the project frame.
+    const project = (x: number, y: number, z: number) => toScreen(x + off[0], y + off[1], z + off[2]);
     const indices = selectByLasso({ lasso, positions: entry.cloud.positions, project });
     // An EDIT must only touch points the user can currently see. The lasso
     // projector already drops points behind the camera, but not points hidden
@@ -3901,11 +3901,9 @@ export class Viewer {
    * `VolumeResult` shape as `volumeCutFill` so the caller can render
    * fill / cut / net without a special case for the lasso path.
    *
-   * The lasso is 3D-volumetric by construction: a point at any depth
-   * along the camera ray through the lasso polygon is included. So a
-   * lasso around a tree picks up the trunk + branches + ground
-   * behind, producing a true volumetric pick rather than a screen
-   * snapshot.
+   * Which points along the camera ray count is the `basis` argument,
+   * and the answer rides back on {@link LassoVolumeReturn.selectionBasis}
+   * so a figure can say which one produced it.
    *
    * @param lasso - Lasso path in canvas CSS pixels (0..clientWidth,
    *   0..clientHeight). At least 3 vertices required.
@@ -3917,6 +3915,9 @@ export class Viewer {
    * @param densityUnitKnown - whether the horizontal unit is actually known, so
    *   the stockpile density can be claimed in points/m². Defaults to true; pass
    *   false for an unknown CRS so the density bar can't award HIGH confidence.
+   * @param basis - `'through-surfaces'` (the default, and what every lasso
+   *   volume predating this argument was measured on) takes every depth along
+   *   the ray; `'occluded-excluded'` takes only what the camera can see.
    */
   computeLassoVolume(
     lasso: ReadonlyArray<{ readonly x: number; readonly y: number }>,
@@ -3929,6 +3930,7 @@ export class Viewer {
      * needs both factors — one alone overstates the pile by 3.28×.
      */
     vert: number = lin,
+    basis: LassoSelectionBasis = 'through-surfaces',
   ): LassoVolumeReturn | null {
     const canvas = this._canvas;
     if (!canvas) return null;
@@ -3936,22 +3938,18 @@ export class Viewer {
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return null;
 
-    // Build the projector from the live camera. This is the only part of the
-    // walk that needs three.js, which is why it stays here and the rest moved
-    // to a module that can be tested without a WebGL context.
+    // The camera's matrices are the only three.js the walk needs, and the
+    // projector takes them as plain arrays, so it is testable without WebGL.
     this._camera.updateMatrixWorld(true);
-    const projMatrix = this._activeCamera().projectionMatrix;
-    const viewMatrix = this._activeCamera().matrixWorldInverse;
-    const tmp = new THREE.Vector3();
-    const project = (x: number, y: number, z: number) => {
-      tmp.set(x, y, z).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
-      if (tmp.z < -1 || tmp.z > 1) return null;
-      return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
-    };
+    const cam = this._activeCamera();
+    const project = makeLassoProjector(
+      cam.matrixWorldInverse.elements,
+      cam.projectionMatrix.elements,
+      w,
+      h,
+    );
 
-    const integrable: Array<
-      readonly [string, { readonly cloud: PointCloud; readonly placement?: LayerSpatialTransform | null }]
-    > = [];
+    const integrable: Array<readonly [string, LassoCloudEntry]> = [];
     for (const [id, entry] of this._clouds) {
       // Hidden and locked layers are skipped: the picker won't place vertices
       // on them, so the lasso must not select through them either.
@@ -3969,6 +3967,7 @@ export class Viewer {
       },
       lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
       referencePercentile: percentile,
+      basis,
     });
     if (!out) return null;
 
@@ -3988,6 +3987,7 @@ export class Viewer {
       budget: out.budget,
       polygon3D: out.polygon3D,
       referenceZ: out.referenceZ,
+      selectionBasis: out.selectionBasis,
     };
   }
 
