@@ -58,7 +58,7 @@ been exercised over, it can move a claim to E4 against an independent
 implementation, and it is how a weakness gets found. It sits at E4, and a
 register entry should say so.
 
-Of the 28 registered claims, 17 currently sit below their required level, and
+Of the 33 registered claims, 17 currently sit below their required level, and
 every one of those 17 requires E5. None of them is waiting on a download.
 
 ## Per-claim fields
