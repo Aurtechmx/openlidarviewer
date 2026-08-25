@@ -46,6 +46,7 @@ import { heightLabel } from '../geo/height';
 import type { VerticalReference } from '../geo/height';
 // Straight-polyline path builder shared with the profile PDF so the chart and
 // the sheet draw the same geometry. Pure string assembly, no dependencies.
+import { fitAxisLabels } from '../render/measure/profileAxes';
 import { profilePolylinePath } from '../render/measure/profilePath';
 // Δh in the chart tooltip goes through the shared formatter so it carries
 // its unit in BOTH systems (B9 — it used to print a hardcoded "m" even in
@@ -2016,20 +2017,34 @@ function renderProfileChart(
   // X labels sit just below the plot floor; expressed as a box-fraction so the
   // gap tracks the axis at any chart height.
   const xLabelTop = (((plotBottom + 6) / H) * 100).toFixed(2);
-  const xLabelHtml = stations
-    .map((c, i) => {
-      const isLast = i === lastIdx;
-      if (!isLast && i % labelStride !== 0) return '';
-      if (!isLast && lastIdx - i < labelStride / 2) return '';
-      let tx: string;
-      if (i === 0) {
-        tx = '0';
-      } else if (isLast) {
-        tx = '-100%';
-      } else {
-        tx = '-50%';
-      }
-      return `<span class="olv-mp-axis olv-mp-axis-x" style="left:${xPct(c).toFixed(2)}%;top:${xLabelTop}%;transform:translateX(${tx})">${formatChainage(c)}</span>`;
+  // Stride first as a density cap, then fit, because the two answer different
+  // questions: the stride is how many labels an axis should carry, and the fit
+  // is which of those the axis has room for. The overlay is HTML at the
+  // chart's real width, which this string does not know, so the fit runs
+  // against a deliberately narrow nominal width: too narrow drops a tick, too
+  // wide lets two labels overprint, and only one of those is recoverable by
+  // reading the station table underneath.
+  const AXIS_LABEL_PX_PER_CHAR = 6.2;
+  const NOMINAL_CHART_PX = 236;
+  const AXIS_LABEL_MIN_GAP_PX = 8;
+  const candidates = stations
+    .map((c, i) => ({ c, i }))
+    .filter(({ i }) => i === lastIdx || i % labelStride === 0);
+  const texts = candidates.map(({ c }) => formatChainage(c));
+  const keep = fitAxisLabels(
+    candidates.map(({ c }, k) => ({
+      at: xPct(c) / 100,
+      width: texts[k].length * AXIS_LABEL_PX_PER_CHAR,
+    })),
+    NOMINAL_CHART_PX,
+    AXIS_LABEL_MIN_GAP_PX,
+  );
+  const xLabelHtml = candidates
+    .map(({ c, i }, k) => {
+      if (!keep[k]) return '';
+      // The end labels are pulled inside the plot so neither overhangs it.
+      const tx = i === 0 ? '0' : i === lastIdx ? '-100%' : '-50%';
+      return `<span class="olv-mp-axis olv-mp-axis-x" style="left:${xPct(c).toFixed(2)}%;top:${xLabelTop}%;transform:translateX(${tx})">${texts[k]}</span>`;
     })
     .join('');
   const yLabelHtml = yTicks

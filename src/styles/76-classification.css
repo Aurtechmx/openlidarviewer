@@ -72,10 +72,12 @@
 .olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
 /* The "Filtered — showing N of M classes" banner — persistent while filtered. */
 .olv-cl-banner {
-  font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--accent);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
 }
 /* The provenance caption — a quiet amber note for a figure whose basis a
    reader would otherwise have to assume. One rule rather than one per panel:
@@ -86,10 +88,15 @@
 .olv-cl-samplenote,
 .olv-cl-streamnote,
 .olv-workbench-basis {
-  font-size: 10.5px; line-height: 1.35; color: var(--warn, #b8860b);
-  background: color-mix(in srgb, var(--warn, #b8860b) 12%, transparent);
-  border: 0.5px solid color-mix(in srgb, var(--warn, #b8860b) 35%, transparent);
-  border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
+  /* Same metrics as `.olv-cl-banner` above, on the token scale: the two sit
+     in one panel and read as one family, so a half-pixel apart in type size
+     is a difference the eye catches without being able to name. */
+  font-size: var(--text-xs); line-height: 1.35; color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
 }
 .olv-cl-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .olv-cl-row {

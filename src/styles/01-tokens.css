@@ -19,6 +19,7 @@
   --text: #eef3fb;
   --text-dim: #9aa6bd;
   --text-faint: #8a94ad; /* lightened from #6b768f to clear WCAG AA (≥4.5:1) on --bg */
+  --warn: #b8860b; /* the provenance-caption amber; 5.1:1 on its own 12% fill here */
   --accent: #00b2ff;      /* Electric Blue */
   --accent-soft: rgba(0, 178, 255, 0.16);
   /* Ink colour for text/glyphs ON a solid --accent fill (primary

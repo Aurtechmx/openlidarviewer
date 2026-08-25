@@ -423,3 +423,70 @@ export function profileAxes(
     },
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fitting labels along an axis
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One candidate tick label, positioned along the axis. */
+export interface AxisLabelBox {
+  /** Position along the axis, as a fraction of its length. */
+  readonly at: number;
+  /** Rendered width of the text, in the same units as the axis length. */
+  readonly width: number;
+}
+
+/**
+ * Which labels along an axis can be drawn without touching.
+ *
+ * Thinning by index is the obvious approach and it does not work: a label
+ * collides in PIXELS, and equal index spacing is equal pixel spacing only
+ * when every label is the same width and anchored the same way. Neither
+ * holds here. The end labels are pulled inside the plot so they cannot
+ * overhang it, so the first is left-aligned and the last right-aligned while
+ * everything between is centred, and a label near the end sits closer to it
+ * than its index suggests.
+ *
+ * The ends are kept because they carry the axis range, which is what a reader
+ * takes from the axis first. Interior labels are then accepted left to right
+ * only where the box clears both its accepted neighbour and the end, so a
+ * dropped label costs a tick mark rather than the extent of the axis.
+ *
+ * `minGap` is clear space, not centre distance: two labels that merely touch
+ * read as one longer label, which is the failure being avoided.
+ */
+export function fitAxisLabels(
+  labels: readonly AxisLabelBox[],
+  axisLength: number,
+  minGap: number,
+): boolean[] {
+  const keep = labels.map(() => false);
+  if (labels.length === 0) return keep;
+  if (labels.length === 1) {
+    keep[0] = true;
+    return keep;
+  }
+  if (!(axisLength > 0)) return keep;
+
+  const last = labels.length - 1;
+  // Left-aligned first, right-aligned last: the span each end label occupies.
+  const firstRight = labels[0].width;
+  const lastLeft = axisLength - labels[last].width;
+  keep[0] = true;
+  // The end labels themselves can collide on a short axis. The far end wins,
+  // because a reader scanning for the extent looks at the end of the axis.
+  keep[last] = lastLeft - firstRight >= minGap;
+  if (!keep[last]) return keep;
+
+  let occupiedTo = firstRight;
+  for (let i = 1; i < last; i++) {
+    const half = labels[i].width / 2;
+    const left = labels[i].at * axisLength - half;
+    const right = left + labels[i].width;
+    if (left - occupiedTo < minGap) continue;
+    if (lastLeft - right < minGap) continue;
+    keep[i] = true;
+    occupiedTo = right;
+  }
+  return keep;
+}
