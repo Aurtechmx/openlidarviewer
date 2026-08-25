@@ -45,6 +45,18 @@ import { classificationLabel } from '../render/pointInfo';
 /** A change the panel reports back to the host after a user interaction. */
 export type ClassLegendChange = (visibility: ClassVisibility) => void;
 
+/**
+ * The basis of the per-class counts: how many points are loaded, and how many
+ * the source file declares. `declared > loaded` means the counts describe a
+ * display sample rather than the whole scan.
+ */
+export interface ClassCountSample {
+  /** Points actually held in memory and counted. */
+  readonly loaded: number;
+  /** The source header's own total, when the format declares one. */
+  readonly declared?: number;
+}
+
 /** Fired after the user toggles the colourblind-safe class palette. */
 export type ClassPaletteChange = (colorblindSafe: boolean) => void;
 
@@ -84,6 +96,9 @@ export class ClassLegendPanel {
 
   /** "Counts accrue as the cloud streams" caption (hidden unless streaming). */
   private readonly _streamingNote: HTMLElement;
+
+  /** "Counts cover the loaded display sample" caption (hidden unless sampled). */
+  private readonly _sampleNote: HTMLElement;
 
   /** The "Show all" reset button. */
   private readonly _showAllBtn: HTMLButtonElement;
@@ -139,6 +154,17 @@ export class ClassLegendPanel {
     });
     this._streamingNote.setAttribute('role', 'note');
 
+    // Sampled caption — the loader strides a cloud too big to hold whole, so
+    // the per-class counts describe the display sample, not the survey. Shown
+    // only when the file declares more points than are loaded, so a fully
+    // resident scan carries no caveat that does not apply to it. Same wording
+    // basis as the Scan Report's "Loaded N (display sample)" row.
+    this._sampleNote = el('div', {
+      className: 'olv-cl-samplenote olv-hidden',
+      text: 'Counts cover the loaded display sample — not the full cloud.',
+    });
+    this._sampleNote.setAttribute('role', 'note');
+
     this._banner = el('div', { className: 'olv-cl-banner olv-hidden' });
     this._banner.setAttribute('role', 'status');
     this._banner.setAttribute('aria-live', 'polite');
@@ -185,6 +211,7 @@ export class ClassLegendPanel {
       head,
       this._provenance,
       this._streamingNote,
+      this._sampleNote,
       this._banner,
       this._list,
       this._empty,
@@ -252,7 +279,7 @@ export class ClassLegendPanel {
    * then renders its empty state. This does NOT emit `onChange`; the host
    * applies the (all-visible) mask itself on load.
    */
-  setClasses(counts: Map<number, number>): void {
+  setClasses(counts: Map<number, number>, sample?: ClassCountSample): void {
     this._counts = new Map(counts);
     this._hasChannel = this._presentCodes().length > 0;
     this._visibility = new ClassVisibility();
@@ -261,6 +288,7 @@ export class ClassLegendPanel {
     // onto a subsequently-loaded file-classified scan.
     this.setDerivedProvenance(false);
     this.setStreamingMode(false);
+    this.setSampledMode(sample);
     this._render();
   }
 
@@ -304,6 +332,24 @@ export class ClassLegendPanel {
    */
   setStreamingMode(on: boolean): void {
     this._streamingNote.classList.toggle('olv-hidden', !on);
+  }
+
+  /**
+   * Show or hide the "loaded display sample" caption from the loaded-versus-
+   * declared point counts. The caption appears only when the source declares
+   * MORE points than are loaded (the loader strided the cloud for display), so
+   * the counts are honestly scoped to the sample. A fully resident scan — no
+   * declared total, or a declared total the load matched — shows nothing, so
+   * the caveat keeps its meaning where it does apply.
+   */
+  setSampledMode(sample?: ClassCountSample): void {
+    const declared = sample?.declared;
+    const sampled =
+      sample !== undefined &&
+      typeof declared === 'number' &&
+      Number.isFinite(declared) &&
+      declared > sample.loaded;
+    this._sampleNote.classList.toggle('olv-hidden', !sampled);
   }
 
   /**

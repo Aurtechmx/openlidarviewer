@@ -497,12 +497,12 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
       // unbounded, it does not claim to resolve the overlap.
       if (signals.densityPerSqM > PHONE_LIDAR_MAX_DENSITY_PER_SQM) {
         return terrestrialFingerprint('medium', [
-          `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² footprint`,
+          `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² bounding-box footprint`,
           `Above the ${PHONE_LIDAR_MAX_DENSITY_PER_SQM} pts/m² a phone flash pattern reaches at its closest range`,
         ]);
       }
       return phoneLidarFingerprint('medium', [
-        `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² footprint`,
+        `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² bounding-box footprint`,
       ]);
     }
 
@@ -510,7 +510,7 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
     // & Ghosh §6). The bound covers the typical airborne range.
     if (signals.densityPerSqM > 0.5 && signals.densityPerSqM < 50 && footprintArea > 10000) {
       return aerialAlsFingerprint('medium', [
-        `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² over a ${(footprintArea / 10000).toFixed(1)} ha footprint`,
+        `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² over a ${(footprintArea / 10000).toFixed(1)} ha bounding-box footprint`,
       ]);
     }
 
@@ -529,7 +529,7 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
     if (signals.densityPerSqM >= 50 && footprintArea > 2000) {
       const veryDense = signals.densityPerSqM > 1000;
       return droneLidarFingerprint(veryDense ? 'high' : 'medium', [
-        `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${(footprintArea / 10000).toFixed(2)} ha mapping footprint`,
+        `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${(footprintArea / 10000).toFixed(2)} ha bounding-box mapping footprint`,
       ]);
     }
 
