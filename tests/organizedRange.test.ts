@@ -17,6 +17,8 @@ import {
   tallyCellStates,
   recordForCell,
   withLinkageUnavailable,
+  buildCellReturns,
+  returnsForCell,
   type OrganizedRangeFrame,
   type OrganizedRangeSet,
 } from '../src/model/OrganizedRange';
@@ -175,5 +177,164 @@ describe('worker transferables', () => {
     // This is the regression the hand-written list could not have caught: the
     // new array crosses by transfer rather than by a silent clone.
     expect(organizedRangeTransferables(set)).toHaveLength(3);
+  });
+});
+
+/**
+ * Multiple returns per cell.
+ *
+ * E57 lets one (row, column) carry several returns of the same pulse. The
+ * fixtures below are built so that the two classic prefix-sum defects cannot
+ * hide: the LAST cell of the grid is populated (an offsets array one entry
+ * short, or a sum shifted by one, resolves it wrongly or throws), and the
+ * returns of one cell arrive out of `returnIndex` order.
+ */
+describe('multiple returns per cell', () => {
+  /**
+   * A 3 by 2 grid. Cell (0,0) holds one return, cell (0,1) holds none, cell
+   * (1,2) — the LAST cell — holds three, and they are supplied 2, 0, 1 so a
+   * build that trusts arrival order is visible.
+   */
+  function multiReturnFixture(): OrganizedRangeFrame {
+    const width = 3;
+    const height = 2;
+    const cellState = new Uint8Array(width * height).fill(CellState.NO_RETURN);
+    cellState[cellIndexOf(0, 0, width)] = CellState.VALID_RETURN;
+    cellState[cellIndexOf(1, 2, width)] = CellState.VALID_RETURN;
+    const built = buildCellReturns(width, height, [
+      { row: 0, column: 0, record: 10, returnIndex: 0, returnCount: 1 },
+      { row: 1, column: 2, record: 22, returnIndex: 2, returnCount: 3 },
+      { row: 1, column: 2, record: 20, returnIndex: 0, returnCount: 3 },
+      { row: 1, column: 2, record: 21, returnIndex: 1, returnCount: 3 },
+    ]);
+    return {
+      id: 'setup-e57',
+      sourceKind: 'e57-structured',
+      width,
+      height,
+      cellState,
+      cellToRecord: new Int32Array(width * height).fill(NO_RECORD),
+      linkage: { kind: 'exact' },
+      diagnostics: tallyCellStates(cellState),
+      returnCellStart: built.returnCellStart,
+      returnRecord: built.returnRecord,
+      returnIndex: built.returnIndex,
+      returnCountDeclared: built.returnCountDeclared,
+      returnsSkipped: built.skippedCount,
+    };
+  }
+
+  it('describes a cell that produced exactly one return', () => {
+    const r = returnsForCell(multiReturnFixture(), 0, 0);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.returns).toEqual([{ record: 10, returnIndex: 0, returnCount: 1 }]);
+  });
+
+  it('reports zero returns as an empty list, not as a missing description', () => {
+    // A described cell that got nothing back is evidence about the scene. It
+    // must not read the same as a frame that never described its returns.
+    const r = returnsForCell(multiReturnFixture(), 0, 1);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.returns).toEqual([]);
+  });
+
+  it('separates "no returns" from "this frame never described returns"', () => {
+    const single = frameFixture();
+    const r = returnsForCell(single, 0, 1);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('not-described');
+  });
+
+  it('resolves the three returns of the LAST cell in the grid', () => {
+    // The off-by-one case. Reading only a middle cell passes with a prefix sum
+    // shifted by one and with a missing terminator entry alike.
+    const r = returnsForCell(multiReturnFixture(), 1, 2);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.returns).toEqual([
+        { record: 20, returnIndex: 0, returnCount: 3 },
+        { record: 21, returnIndex: 1, returnCount: 3 },
+        { record: 22, returnIndex: 2, returnCount: 3 },
+      ]);
+    }
+  });
+
+  it('carries the CSR terminator, so the last cell has an end offset', () => {
+    const f = multiReturnFixture();
+    expect(f.returnCellStart).toBeDefined();
+    expect(f.returnCellStart!.length).toBe(f.width * f.height + 1);
+    expect(f.returnCellStart![f.width * f.height]).toBe(4);
+    // The first cell starts at zero: the prefix sum is exclusive, and a sum
+    // shifted by one puts a non-zero value here.
+    expect(f.returnCellStart![0]).toBe(0);
+    expect(f.returnCellStart![1]).toBe(1);
+  });
+
+  it('orders each cell by returnIndex and moves the payload with it', () => {
+    // Returns arrived 2, 0, 1. The sort is ascending by returnIndex, and the
+    // record must travel with its own index rather than staying put.
+    const f = multiReturnFixture();
+    const start = f.returnCellStart![cellIndexOf(1, 2, 3)];
+    expect([...f.returnIndex!.slice(start, start + 3)]).toEqual([0, 1, 2]);
+    expect([...f.returnRecord!.slice(start, start + 3)]).toEqual([20, 21, 22]);
+  });
+
+  it('counts returns that fell outside the grid rather than placing them', () => {
+    const built = buildCellReturns(3, 2, [
+      { row: 0, column: 0, record: 1, returnIndex: 0, returnCount: 1 },
+      { row: 9, column: 0, record: 2, returnIndex: 0, returnCount: 1 },
+      { row: 0, column: -1, record: 3, returnIndex: 0, returnCount: 1 },
+    ]);
+    expect(built.skippedCount).toBe(2);
+    expect(built.returnRecord.length).toBe(1);
+    expect(built.returnCellStart[6]).toBe(1);
+  });
+
+  it('refuses every cell when linkage is unavailable', () => {
+    const f: OrganizedRangeFrame = {
+      ...multiReturnFixture(),
+      linkage: { kind: 'unavailable', reason: 'voxel-centroids' },
+    };
+    const r = returnsForCell(f, 1, 2);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('linkage-unavailable');
+  });
+
+  it('erases the per-return record indices on degrade, keeping the topology', () => {
+    // Same defect as cellToRecord: a stale index surviving a voxel reduction
+    // would claim a centroid IS a source return.
+    const set: OrganizedRangeSet = {
+      kind: 'organized-range',
+      frames: [multiReturnFixture()],
+      organization: 'organized-grid',
+    };
+    const out = withLinkageUnavailable(set, 'voxel-centroids');
+    expect([...out.frames[0].returnRecord!]).toEqual(new Array(4).fill(NO_RECORD));
+    // The grid of what was interrogated survives; only identity is spent.
+    expect([...out.frames[0].returnCellStart!]).toEqual([...set.frames[0].returnCellStart!]);
+    expect([...out.frames[0].returnIndex!]).toEqual([...set.frames[0].returnIndex!]);
+    expect(set.frames[0].returnRecord![0]).toBe(10);
+  });
+
+  it('leaves a single-return frame alone on degrade', () => {
+    const set: OrganizedRangeSet = {
+      kind: 'organized-range',
+      frames: [frameFixture()],
+      organization: 'organized-grid',
+    };
+    const out = withLinkageUnavailable(set, 'voxel-centroids');
+    expect(out.frames[0].returnRecord).toBeUndefined();
+  });
+
+  it('transfers the new arrays instead of cloning them', async () => {
+    const { organizedRangeTransferables } = await import('../src/model/OrganizedRange');
+    const set: OrganizedRangeSet = {
+      kind: 'organized-range',
+      frames: [multiReturnFixture()],
+      organization: 'organized-grid',
+    };
+    // cellState, cellToRecord, returnCellStart, returnRecord, returnIndex,
+    // returnCountDeclared. Counted, not listed, for the same reason as above.
+    expect(organizedRangeTransferables(set)).toHaveLength(6);
   });
 });
