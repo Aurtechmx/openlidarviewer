@@ -28,13 +28,13 @@ import {
   axisLabelWidth,
   axisTicks,
   chainageTickLabels,
+  DEFAULT_TARGET_TICKS,
   fitAxisLabels,
   heightAxisTitle,
   profileAxes,
 } from '../src/render/measure/profileAxes';
 import {
   AXIS_FONT_PX,
-  AXIS_TARGET_TICKS,
 } from '../src/app/profileWorkbenchSection';
 import { fitProfileView } from '../src/render/measure/profileViewTransform';
 import type { ProfileViewport } from '../src/render/measure/profileViewTransform';
@@ -66,7 +66,7 @@ describe('a tick is an exact multiple of its step', () => {
       [12.0000001, 12.0000009],
     ];
     for (const [lo, hi] of spans) {
-      const ticks = axisTicks(lo, hi, AXIS_TARGET_TICKS);
+      const ticks = axisTicks(lo, hi, DEFAULT_TARGET_TICKS);
       for (const v of ticks.values) {
         const q = v / ticks.step;
         expect(Math.abs(q - Math.round(q)), `${v} is not a multiple of ${ticks.step}`).toBeLessThan(
@@ -100,8 +100,8 @@ describe('the height axis states no more than the scan supports', () => {
       horizontalUnit: 'm',
       verticalUnit: 'm',
       units: NO_SCALE,
-      targetXTicks: AXIS_TARGET_TICKS,
-      targetYTicks: AXIS_TARGET_TICKS,
+      targetXTicks: DEFAULT_TARGET_TICKS,
+      targetYTicks: DEFAULT_TARGET_TICKS,
     });
     expect(axes.y.title).toContain('Height (datum unknown)');
     expect(axes.y.title).not.toContain('Elevation');
@@ -155,8 +155,8 @@ describe('axis labels do not overlap', () => {
       horizontalUnit: 'm',
       verticalUnit: 'm',
       units: NO_SCALE,
-      targetXTicks: AXIS_TARGET_TICKS,
-      targetYTicks: AXIS_TARGET_TICKS,
+      targetXTicks: DEFAULT_TARGET_TICKS,
+      targetYTicks: DEFAULT_TARGET_TICKS,
     });
     const spans = keptSpans(axes.x.labels, axes.x.pixels, NARROW.width, (l) =>
       axisLabelWidth(l, AXIS_FONT_PX),
@@ -180,8 +180,8 @@ describe('axis labels do not overlap', () => {
       horizontalUnit: 'm',
       verticalUnit: 'm',
       units: NO_SCALE,
-      targetXTicks: AXIS_TARGET_TICKS,
-      targetYTicks: AXIS_TARGET_TICKS,
+      targetXTicks: DEFAULT_TARGET_TICKS,
+      targetYTicks: DEFAULT_TARGET_TICKS,
     });
     const spans = keptSpans(axes.y.labels, axes.y.pixels, NARROW.height, () => AXIS_FONT_PX);
     expect(spans.length).toBeGreaterThan(0);
