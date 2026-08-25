@@ -637,6 +637,13 @@
   font-size: var(--text-xs); color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
+/* Styled with the provenance captions in 76; only the fit is set here. The
+   note wraps rather than truncating, because a caution the reader cannot
+   finish reading is not a caution. */
+.olv-workbench-basis {
+  margin: var(--space-2xs) 0 0; max-width: 62ch;
+  white-space: normal; overflow-wrap: break-word;
+}
 .olv-workbench-actions { display: flex; gap: var(--space-xs); flex-shrink: 0; }
 .olv-workbench-btn {
   font-size: var(--text-xs); color: var(--text-dim);

@@ -4999,6 +4999,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   font-size: var(--text-xs); color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
+/* Styled with the provenance captions in 76; only the fit is set here. The
+   note wraps rather than truncating, because a caution the reader cannot
+   finish reading is not a caution. */
+.olv-workbench-basis {
+  margin: var(--space-2xs) 0 0; max-width: 62ch;
+  white-space: normal; overflow-wrap: break-word;
+}
 .olv-workbench-actions { display: flex; gap: var(--space-xs); flex-shrink: 0; }
 .olv-workbench-btn {
   font-size: var(--text-xs); color: var(--text-dim);
@@ -5134,11 +5141,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border: 0.5px solid var(--hairline);
   border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
 }
-/* Derived-classification provenance caption — a quiet amber note so the
-   heuristic classes never read as an authoritative, file-supplied set. */
+/* The provenance caption — a quiet amber note for a figure whose basis a
+   reader would otherwise have to assume. One rule rather than one per panel:
+   a caption that looks the same everywhere is read the same everywhere, and
+   the profile workbench's ground-basis note means what this one means.
+   `.olv-workbench-basis` adds only its own spacing, in 74. */
 .olv-cl-derived,
 .olv-cl-samplenote,
-.olv-cl-streamnote {
+.olv-cl-streamnote,
+.olv-workbench-basis {
   font-size: 10.5px; line-height: 1.35; color: var(--warn, #b8860b);
   background: color-mix(in srgb, var(--warn, #b8860b) 12%, transparent);
   border: 0.5px solid color-mix(in srgb, var(--warn, #b8860b) 35%, transparent);

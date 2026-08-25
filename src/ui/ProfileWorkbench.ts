@@ -103,6 +103,12 @@ export interface ProfileWorkbenchHandle {
   setCollapsed(collapsed: boolean): void;
   /** Describe the section the plot covers. */
   setScope(text: string): void;
+  /**
+   * Show, or clear with null, the caution about what the heights were chosen
+   * from. Separate from the scope line because it is a consequence rather
+   * than a description, and it earns its own space only when it applies.
+   */
+  setGroundBasis(note: string | null): void;
   /** Announce a status politely. */
   setStatus(text: string): void;
   /** The selected return's figures, as text. Null clears the selection. */
@@ -148,6 +154,7 @@ class ProfileWorkbench {
   private readonly _root: HTMLElement;
   private readonly _splitter: HTMLElement;
   private readonly _scope: HTMLElement;
+  private readonly _groundNote: HTMLElement;
   private readonly _status: HTMLElement;
   private readonly _detail: HTMLElement;
   private readonly _readout: HTMLElement;
@@ -179,6 +186,11 @@ class ProfileWorkbench {
     this._splitter.setAttribute('tabindex', '0');
 
     this._scope = el('div', { className: 'olv-workbench-scope', text: options.scope ?? '' });
+    // `role="note"` rather than an alert: this is standing context about the
+    // plot, not an event, so it should be reachable in reading order without
+    // interrupting whatever the user is doing.
+    this._groundNote = el('div', { className: 'olv-workbench-basis olv-hidden' });
+    this._groundNote.setAttribute('role', 'note');
     this._collapseBtn = el('button', {
       className: 'olv-workbench-btn',
       type: 'button',
@@ -195,6 +207,7 @@ class ProfileWorkbench {
       el('div', { className: 'olv-workbench-titles' }, [
         el('div', { className: 'olv-workbench-title', text: title }),
         this._scope,
+        this._groundNote,
       ]),
       el('div', { className: 'olv-workbench-actions' }, [this._collapseBtn, closeBtn]),
     ]);
@@ -273,6 +286,10 @@ class ProfileWorkbench {
       setCollapsed: (v: boolean) => this.setCollapsed(v),
       setScope: (t: string) => {
         this._scope.textContent = t;
+      },
+      setGroundBasis: (note: string | null) => {
+        this._groundNote.textContent = note ?? '';
+        this._groundNote.classList.toggle('olv-hidden', note == null);
       },
       setStatus: (t: string) => {
         this._status.textContent = t;

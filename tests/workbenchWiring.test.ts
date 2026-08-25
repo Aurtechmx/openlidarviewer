@@ -230,6 +230,7 @@ function fakeModule(): { module: ProfileWorkbenchModule; mounts: ProfileWorkbenc
         collapsed: () => false,
         setCollapsed: () => {},
         setScope: () => {},
+            setGroundBasis: () => {},
         setStatus: () => {},
         setDetail: () => {},
         close: () => {
@@ -326,6 +327,7 @@ function sectionWithOutlierAtIndexOne(count: number): ProfileSectionResult {
     band: 2,
     scope: 'static' as never,
     scopeLabel: 'One loaded layer.',
+    classificationOnEverySource: true,
     streamingComplete: null,
     sources: [],
     generation: 1,
@@ -345,10 +347,12 @@ function sectionHandle(canvas: FakeCanvas): {
   const scope: string[] = [];
   const status: string[] = [];
   const detail: (readonly { label: string; value: string }[] | null)[] = [];
+  const basis: (string | null)[] = [];
   return {
     handle: {
       canvas: canvas as unknown as HTMLCanvasElement,
       setScope: (t) => scope.push(t),
+      setGroundBasis: (n: string | null) => basis.push(n),
       setStatus: (t) => status.push(t),
       setDetail: (rows) => detail.push(rows),
     },
@@ -591,6 +595,7 @@ describe('the presenter says why, rather than showing an empty plot', () => {
       handle: {
         canvas: new FakeEl('canvas') as unknown as HTMLCanvasElement,
         setScope: (t) => scope.push(t),
+        setGroundBasis: () => {},
         setStatus: (t) => status.push(t),
         setDetail: (rows) => detail.push(rows),
       },

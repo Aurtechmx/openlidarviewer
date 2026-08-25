@@ -49,6 +49,10 @@ import {
   type ProfileRenderingContext,
   type ProfileSurface,
 } from '../render/measure/profileSectionRenderer';
+import {
+  describeClassBasis,
+  GROUND_BASIS_UNVERIFIED_NOTE,
+} from '../render/measure/profileProvenance';
 import { axisSpanCaption } from '../render/measure/profileAxes';
 import {
   selectProfileSectionLod,
@@ -176,6 +180,13 @@ function boundsOf(
 export interface WorkbenchSectionView {
   /** The scope sentence the seam composed for this extraction. */
   readonly scope: string;
+  /**
+   * What a missing classification means for the heights, or null when every
+   * source carried one. The exported sheet has always stated this basis; the
+   * note exists so a reader working on screen is told the same thing without
+   * having to export a PDF to find it.
+   */
+  readonly groundBasisNote: string | null;
   /** One polite line about what was drawn. */
   readonly status: string;
   /** The figures behind the plot, as text. */
@@ -334,7 +345,18 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
         : `Showing ${section.points.count} returns.`;
 
   return {
-    view: { scope: section.scopeLabel, status, detail, drawn: indices.length },
+    view: {
+      // The class clause joins the scope sentence rather than standing apart,
+      // because both answer the one question a reader has about the plot:
+      // what was read, and what could be excluded from it.
+      scope: `${section.scopeLabel} · ${describeClassBasis(section.classificationOnEverySource)}`,
+      groundBasisNote: section.classificationOnEverySource
+        ? null
+        : GROUND_BASIS_UNVERIFIED_NOTE,
+      status,
+      detail,
+      drawn: indices.length,
+    },
     indices,
     draw,
     frame: () => lastFrame,
@@ -445,6 +467,7 @@ export function presentWorkbenchSection(
     canvas: HTMLCanvasElement;
     overlay?: HTMLCanvasElement;
     setScope(text: string): void;
+    setGroundBasis(note: string | null): void;
     setStatus(text: string): void;
     setDetail(rows: readonly ProfileWorkbenchDetailRow[] | null): void;
     setReadout?(text: string | null): void;
@@ -501,6 +524,7 @@ export function presentWorkbenchSection(
       unitScale: metres ?? 1,
     });
     handle.setScope(plot.view.scope);
+    handle.setGroundBasis(plot.view.groundBasisNote);
     handle.setStatus(plot.view.status);
     handle.setDetail(plot.view.detail);
     link = attachSectionPointLink({

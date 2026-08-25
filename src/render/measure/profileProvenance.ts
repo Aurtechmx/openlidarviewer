@@ -363,11 +363,35 @@ export function describeProfileProvenance(record: ProfileProvenance): string {
       : record.complete === false
         ? 'incomplete read'
         : 'coverage unknown';
-  const classes = record.classPolicy.availableOnEverySource
+  return `${base}, ${coverage}, ${describeClassBasis(record.classPolicy.availableOnEverySource)}`;
+}
+
+/**
+ * The clause naming what the class-exclusion policy could actually act on.
+ *
+ * Both the exported sheet and the on-screen workbench state this, from here,
+ * because a reader who is told the basis on paper and not on screen has to
+ * export a PDF to learn how the heights in front of them were chosen.
+ */
+export function describeClassBasis(availableOnEverySource: boolean): string {
+  return availableOnEverySource
     ? 'classification on every source'
     : 'classification missing on a source';
-  return `${base}, ${coverage}, ${classes}`;
 }
+
+/**
+ * What a missing classification means for the figures read off the surface.
+ *
+ * Vegetation and buildings are dropped before the percentile only where a
+ * source classifies them. Without that, the percentile still runs, over every
+ * return: on open ground it lands near the surface, and under canopy it lands
+ * in the canopy. Grade is a difference between two such heights, so it
+ * inherits whatever the surface followed.
+ */
+export const GROUND_BASIS_UNVERIFIED_NOTE =
+  'Heights here are a percentile of every return, because a source carries no ' +
+  'classification. Where vegetation hides the ground the surface follows the ' +
+  'canopy, and the grades follow it too.';
 
 // --- internals ---------------------------------------------------------------
 

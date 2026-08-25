@@ -339,6 +339,7 @@ describe('a rejected open is a refusal, not an unhandled rejection', () => {
               collapsed: () => false,
               setCollapsed: () => {},
               setScope: () => {},
+        setGroundBasis: () => {},
               setStatus: () => {},
               setDetail: () => {},
               close: () => element.remove(),

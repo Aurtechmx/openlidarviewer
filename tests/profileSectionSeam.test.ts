@@ -379,6 +379,45 @@ describe('profile section seam — the two products walk one corridor', () => {
     expect(profileSectionHas(section.points, 1, 'classification')).toBe(false);
   });
 
+  // The exclusion policy can only act on a source that classifies. "Every",
+  // not "any": one bare source means part of the read reached the percentile
+  // unfiltered, and a header claiming classification would overstate what
+  // shaped the heights.
+  it('reports the class basis as missing when only one of two sources classifies', () => {
+    const classed = layer({ id: 'classed', points: [2, 0, 5], classification: [2] });
+    const bare = layer({ id: 'bare', points: [4, 0, 6] });
+    const seam = createProfileSectionSeam(deps({ layers: () => [classed, bare] }));
+    const section = seam.section({ a: A, b: B, corridorWidth: 1 })!;
+    expect(section.classificationOnEverySource).toBe(false);
+  });
+
+  it('reports the class basis as present when every source classifies', () => {
+    const one = layer({ id: 'one', points: [2, 0, 5], classification: [2] });
+    const two = layer({ id: 'two', points: [4, 0, 6], classification: [2] });
+    const seam = createProfileSectionSeam(deps({ layers: () => [one, two] }));
+    const section = seam.section({ a: A, b: B, corridorWidth: 1 })!;
+    expect(section.classificationOnEverySource).toBe(true);
+  });
+
+  it('asserts no class basis over a read that contributed nothing', () => {
+    const seam = createProfileSectionSeam(deps({ layers: () => [] }));
+    const section = seam.section({ a: A, b: B, corridorWidth: 1 })!;
+    expect(section.classificationOnEverySource).toBe(false);
+  });
+
+  it('counts a misaligned classification as absent for the basis', () => {
+    // The same rule `viewOf` applies to the channel itself: an array that
+    // cannot be indexed alongside the points is not classification that was
+    // applied, so the basis must not claim it was.
+    const misaligned: ProfileSeamLayer = {
+      ...layer({ id: 'misaligned', points: [2, 0, 5, 4, 0, 6] }),
+      channels: { classification: new Uint8Array([2]) },
+    };
+    const seam = createProfileSectionSeam(deps({ layers: () => [misaligned] }));
+    const section = seam.section({ a: A, b: B, corridorWidth: 1 })!;
+    expect(section.classificationOnEverySource).toBe(false);
+  });
+
   it('drops a classification whose length disagrees with the point count', () => {
     const misaligned: ProfileSeamLayer = {
       ...layer({ id: 'misaligned', points: [2, 0, 5, 4, 0, 6] }),

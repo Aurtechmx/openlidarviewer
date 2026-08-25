@@ -214,6 +214,7 @@ function fixtureSection(): ProfileSectionResult {
     band: 2,
     scope: 'mixed' as never,
     scopeLabel: 'One layer and the streaming source.',
+    classificationOnEverySource: true,
     streamingComplete: true,
     sources,
     generation: 1,
