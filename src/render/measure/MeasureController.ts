@@ -558,9 +558,9 @@ export class MeasureController {
     const undoBtn = el('button', {
       className: 'olv-measure-undo olv-micon-btn',
       unsafeHtml: ICON_UNDO + '<span class="olv-mlabel">Undo</span>',
-      title: 'Remove the last point you placed (or press Backspace).',
-      tip: 'Undo last point · ⌫',
-      ariaLabel: 'Undo last point',
+      title: 'Remove the last point you placed (or press Backspace, or Ctrl/Cmd+Z).',
+      tip: 'Undo last point · ⌫ or Ctrl/⌘ Z',
+      ariaLabel: 'Undo last point (Backspace, or Ctrl+Z)',
     });
     undoBtn.addEventListener('click', () => {
       undoBtn.blur();
@@ -737,6 +737,11 @@ export class MeasureController {
   /** Whether measurement mode is currently on. */
   get active(): boolean {
     return this._active;
+  }
+
+  /** Whether a measurement is open for editing (at least one point placed). */
+  get drafting(): boolean {
+    return this._draft !== null;
   }
 
   /** The active measurement kind. */

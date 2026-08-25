@@ -147,7 +147,7 @@ import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
-import { bindShortcuts } from './ui/shortcuts';
+import { bindShortcuts, isEditableTarget, measureKeyAction } from './ui/shortcuts';
 import { LoadCancelledError } from './io/loadFile';
 import { LocalFileSource } from './io/LocalFileSource';
 import { deviceCaps } from './render/deviceProfile';
@@ -756,10 +756,8 @@ viewerLoaded.then((v) => {
 // this fallback ensures Esc always reads as "exit the active tool"
 // regardless of where focus is.
 window.addEventListener('keydown', (e) => {
-  const target = e.target as HTMLElement | null;
-  const tag = target?.tagName;
-  // Never hijack key events from form inputs.
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+  // Never hijack key events from a field the user is typing in.
+  if (isEditableTarget(e.target)) return;
 
   // Hold-Space re-orient: while a modal tool (measure / inspect / annotate) is
   // armed, holding Space hands pointer input back to camera navigation so the
@@ -772,18 +770,17 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Polygon-completion keyboard shortcuts — Enter commits the
-  // in-progress polygon (area/volume/polyline/profile), Backspace
-  // pops the most recent vertex. Both only fire while measure mode
-  // is armed, so they don't conflict with anything else.
+  // Polygon-completion keyboard shortcuts — Enter commits the in-progress
+  // polygon (area/volume/polyline/profile), Backspace and the platform undo
+  // chord pop the most recent vertex. All only fire while measure mode is
+  // armed. This listener is bound before the global shortcut handler, so
+  // consuming the chord here is what keeps a mid-draft Cmd/Ctrl+Z off the
+  // annotation stack.
   if (viewer?.measureMode) {
-    if (e.key === 'Enter') {
-      viewer.measure.finishCurrent();
-      e.preventDefault();
-      return;
-    }
-    if (e.key === 'Backspace') {
-      viewer.measure.undoLastPoint();
+    const action = measureKeyAction(e, viewer.measure.drafting);
+    if (action) {
+      if (action === 'finish') viewer.measure.finishCurrent();
+      else viewer.measure.undoLastPoint();
       e.preventDefault();
       return;
     }
