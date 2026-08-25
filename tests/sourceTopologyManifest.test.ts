@@ -30,7 +30,7 @@ import {
   type ProcessingManifest,
   type ProcessingOpInput,
 } from '../src/science/processingManifest';
-import { sourceTopologyRecord } from '../src/science/sourceTopology';
+import { sourceTopologyRecord, compareCodeUnits } from '../src/science/sourceTopology';
 import { methodRef, methodTag } from '../src/science/methodRegistry';
 import {
   CellState,
@@ -292,5 +292,42 @@ describe('wording discipline', () => {
     for (const banned of ['measured range', 'sensor accuracy', 'confidence', 'Flash LiDAR']) {
       expect(strings).not.toContain(banned);
     }
+  });
+});
+
+describe('the reason order cannot depend on the machine', () => {
+  it('sorts by code unit, so the digest is the same everywhere', () => {
+    // These strings are hashed into a tamper-evident chain. Ordering them with
+    // String.localeCompare would consult the runtime's locale and ICU data, so
+    // a developer's laptop, a CI runner and a reviewer's machine could each
+    // produce a different digest for identical input. The characters below are
+    // ones where a locale-aware collation and a code-unit comparison genuinely
+    // disagree: in several locales an accented letter sorts beside its base
+    // letter, while by code unit every ASCII letter precedes it.
+    // The comparator itself is pinned, not a sample of today's reason strings:
+    // the three reasons in use sort the same way under either comparator, so a
+    // test over them would pass with a locale-aware sort and only start failing
+    // once a future reason string had already changed a shipped digest.
+    const sample = ['Zebra', 'apple', 'ápple'];
+    expect([...sample].sort(compareCodeUnits)).toEqual(['Zebra', 'apple', 'ápple']);
+    expect(compareCodeUnits('Zebra', 'apple')).toBeLessThan(0);
+    // A locale-aware comparison of that same pair goes the other way in most
+    // locales, which is the divergence this comparator exists to refuse.
+    expect('Zebra'.localeCompare('apple')).toBeGreaterThan(0);
+  });
+
+  it('produces a byte-identical manifest for the same input, twice', () => {
+    const build = (): string => {
+      return JSON.stringify(
+        sourceTopologyRecord(
+          set([
+            { kind: 'unavailable', reason: 'voxel-centroids' },
+            { kind: 'unavailable', reason: 'invalid-source-topology' },
+            { kind: 'unavailable', reason: 'source-record-identity-unavailable' },
+          ]),
+        ),
+      );
+    };
+    expect(build()).toBe(build());
   });
 });

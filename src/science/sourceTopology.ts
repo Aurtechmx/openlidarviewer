@@ -38,6 +38,29 @@ const SEVERITY: Readonly<Record<RangeLinkage['kind'], number>> = {
   unavailable: 2,
 };
 
+/**
+ * Order two reason strings by UTF-16 code unit.
+ *
+ * Deliberately NOT `String.localeCompare`. These strings are hashed into the
+ * processing manifest's tamper-evident chain, so their order has to be the same
+ * on every machine that builds the same artifact. `localeCompare` consults the
+ * runtime's locale and ICU data, which differ between a developer's laptop, a
+ * CI runner and a reviewer's machine, and a different order would produce a
+ * different digest for identical input. A code-unit comparison has no such
+ * dependency.
+ *
+ * This is what the bare `.sort()` already did, since the default comparator
+ * compares string conversions by code unit. It is written out, and exported so
+ * a test can pin it, because the reason strings in use today happen to sort the
+ * same way under either comparator. The guard is therefore against a FUTURE
+ * reason string, and a rule that only fires once such a string exists would
+ * fire after the digests had already diverged.
+ */
+export function compareCodeUnits(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 /** The reason a linkage state carries, or null for `exact`, which carries none. */
 function reasonOf(linkage: RangeLinkage): string | null {
   return linkage.kind === 'exact' ? null : linkage.reason;
@@ -66,7 +89,7 @@ export function sourceTopologyRecord(
         .map((f) => reasonOf(f.linkage))
         .filter((r): r is string => r !== null),
     ),
-  ].sort();
+  ].sort(compareCodeUnits);
   return {
     organization: set.organization,
     frames: set.frames.length,
