@@ -147,7 +147,13 @@ export interface VerticalDatumRef {
 }
 
 /** Resolve a datum ref to its EPSG code, or `undefined` when none is recoverable. */
-function resolveVerticalEpsg(d: VerticalDatumRef): number | undefined {
+/**
+ * The EPSG code a declared vertical datum resolves to, from an explicit code, a
+ * known datum name, or an `EPSG:nnnn` string. Exported because the code is the
+ * only identity that separates two datums sharing a reference surface, and a
+ * caller comparing frames needs that separation rather than the surface class.
+ */
+export function resolveVerticalEpsg(d: VerticalDatumRef): number | undefined {
   if (d.verticalEpsg !== undefined && Number.isFinite(d.verticalEpsg) && d.verticalEpsg > 0) {
     return d.verticalEpsg;
   }

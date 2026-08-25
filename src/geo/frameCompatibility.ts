@@ -26,6 +26,7 @@
  * Pure — no DOM, no three.js, no proj4. Runs unchanged in Node tests.
  */
 
+import { resolveVerticalEpsg } from './height';
 import type { SpatialContext } from './SpatialContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,15 +104,24 @@ export function declaredFrameLabel(ctx: SpatialContext): string | null {
 }
 
 /**
- * The vertical identity a frame comparison keys on. The reference CLASS from
- * {@link SpatialContext.verticalReference} is authoritative (it already folds
- * EPSG and name into one answer), and `'unknown'` means no identity — so two
- * undeclared datums do not match each other.
+ * The vertical identity a frame comparison keys on, most specific first.
+ *
+ * The EPSG code comes first because the reference CLASS does not separate two
+ * datums that share a surface: NAVD88 and EGM2008 are both `orthometric`, and
+ * keying on the class alone reported them as the same reference. They differ by
+ * about a metre across North America, so a change comparison spanning the two
+ * would have attributed that offset to the ground.
+ *
+ * `undefined` means no identity, so two undeclared datums do not match each
+ * other. The class remains the last resort, for a frame that carries a surface
+ * with no datum specific enough to resolve.
  */
 function verticalIdentity(ctx: SpatialContext): string | undefined {
-  if (ctx.verticalReference !== 'unknown') return ctx.verticalReference;
+  const code = resolveVerticalEpsg(ctx);
+  if (code !== undefined) return `epsg:${code}`;
   const declared = ctx.verticalDatum?.trim().toLowerCase();
-  return declared && declared.length > 0 ? declared : undefined;
+  if (declared && declared.length > 0) return declared;
+  return ctx.verticalReference !== 'unknown' ? ctx.verticalReference : undefined;
 }
 
 /** Whether a metres-per-unit factor is a real measurement rather than a placeholder. */

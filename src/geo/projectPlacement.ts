@@ -17,6 +17,8 @@
 
 import type { GlobalPoints } from '../convert/globalPoints';
 import { reprojectGlobal, type ReprojectResult } from '../convert/reproject';
+import type { SpatialContext } from './SpatialContext';
+import { compareSpatialFrames, type FrameCompatibility } from './frameCompatibility';
 
 export type HorizontalPlacement = 'identity' | 'reproject' | 'needs-registration';
 
@@ -25,10 +27,10 @@ export interface PlacementInputs {
   readonly layerEpsg: number | null;
   /** The project's horizontal EPSG, or null when no project CRS is set. */
   readonly projectEpsg: number | null;
-  /** Whether the layer's vertical datum is resolved. */
-  readonly layerVerticalKnown: boolean;
-  /** Whether the project's vertical datum is resolved. */
-  readonly projectVerticalKnown: boolean;
+  /** The layer's frame, read for its vertical reference and vertical unit. */
+  readonly layerFrame: SpatialContext;
+  /** The project's frame, read the same way. */
+  readonly projectFrame: SpatialContext;
 }
 
 export interface PlacementPlan {
@@ -39,12 +41,30 @@ export interface PlacementPlan {
   readonly reason: string;
 }
 
+/**
+ * Why heights are withheld, in the words the frame comparison already used.
+ * Restating the reason here would let the two drift, and the note a user reads
+ * would stop matching the evidence the verdict was made on.
+ */
+function verticalWithheldNote(vertical: FrameCompatibility): string {
+  const stated = vertical.notes.find((n) => n.startsWith('Vertical'));
+  return (
+    stated ??
+    'Heights are not on a confirmed common reference, so height and change claims are withheld.'
+  );
+}
+
 /** Decide how a layer enters the project frame, without moving any points. */
 export function planPlacement(inp: PlacementInputs): PlacementPlan {
-  const verticalComparable = inp.layerVerticalKnown && inp.projectVerticalKnown;
-  const vNote = verticalComparable
-    ? ''
-    : ' Vertical datum is unresolved on one side, so the layer mounts in X/Y and height/change claims are withheld.';
+  // Delegated rather than decided here. Two vertical datums can both be
+  // resolved and still not be comparable: NAVD88 in feet and EGM2008 in metres
+  // are each fully declared, sit on different surfaces, and carry different
+  // unit scales. `compareSpatialFrames` already weighs reference identity and
+  // unit scale together, and a second opinion on the same question is a second
+  // answer to maintain.
+  const vertical = compareSpatialFrames(inp.layerFrame, inp.projectFrame);
+  const verticalComparable = vertical.verticalComparable;
+  const vNote = verticalComparable ? '' : ` ${verticalWithheldNote(vertical)}`;
 
   if (inp.projectEpsg == null) {
     return {
