@@ -43,4 +43,8 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'UNCERTAINTY-BAND': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'REPORT-DIGEST': { current: 'E1_UNIT_VERIFIED', required: 'E1_UNIT_VERIFIED', exportAllowed: true },
   'PROVENANCE-INFERENCE': { current: 'E1_UNIT_VERIFIED', required: 'E1_UNIT_VERIFIED', exportAllowed: true },
+  'ORG-TOPOLOGY-IDENTITY': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: false },
+  'ORG-RANGE-GEOMETRIC': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E2_ANALYTICALLY_VERIFIED', exportAllowed: false },
+  'ORG-PTX-SETUP-TOPOLOGY': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: false },
+  'ORG-PCD-ORGANIZATION': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: false },
 };

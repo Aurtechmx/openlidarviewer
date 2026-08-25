@@ -1035,3 +1035,126 @@ claims:
         - "Measured accuracy of this scan. The literature ranges are context for a capture type, not measurements of this dataset."
         - "Any input to readiness or uncertainty calculations."
         - "Capture types outside the metadata and density cues the heuristic reads."
+
+  # ── Source acquisition topology (organized range) ───────────────────────────
+  - claimId: ORG-TOPOLOGY-IDENTITY
+    product: Grid-cell to display-record identity
+    algorithm: Loader-recorded cell-to-record index with a linkage state that degrades to unavailable
+    algorithmVersion: v0.6.6
+    claim: "A grid cell whose frame reports exact linkage resolves to the display record the loader decoded it from, and resolution is refused whenever sanitation, stride or voxelization can no longer prove the correspondence."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidenceNote: "E3 is the ceiling, permanently, and not a slot awaiting data. The quantity is an index into OLV's own decoded record stream. No other implementation holds that stream, so there is nothing for a second implementation to agree with and no external observation that could confirm or refute a record number. Unlike the claims whose required level is E5, this one is not waiting on a dataset."
+    supportingTests: [tests/organizedRange.test.ts, tests/ptxOrganizedRange.test.ts, tests/pcdOrganizedRange.test.ts]
+    supportingDatasets: []
+    units: [record-index, cell-index]
+    crsDatum: "None. A record index carries no coordinate and no frame."
+    assumptions: ["the loader that wrote the index is the loader that produced the record stream", "a reduction that changes record order or identity reports itself through linkage"]
+    failureModes: ["a future decode path that reorders records without degrading linkage", "a caller that reads cellToRecord directly instead of through recordForCell"]
+    exportAllowed: false
+    userLabel: "Source-record identity, or an explicit refusal"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: none
+    approvedClaim: "On constructed PTX and PCD fixtures, every cell reported as exactly linked resolves to the record decoded from it, checked by reading that record's coordinates back; a record dropped by sanitation in the middle of a grid leaves its own cell reading not decoded while the cells after it still resolve correctly, and voxel centroids and an unwalked PCD body erase the indices rather than leaving a stale one readable."
+    prohibitedClaim: ["a measured range", "sensor accuracy", "Flash LiDAR support", "positional correspondence, since a cell links to a record only because the loader recorded it and never because a coordinate was nearby", "identity across a reduction whose linkage reads partial or unavailable"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any cross-implementation check. The value is an index into OLV's own record stream, which no other tool holds, so no second implementation can agree or disagree with it. This is a permanent ceiling and not a pending slot."
+        - "The stride linkage state. `partial` with reason `stride` is defined in the model and exercised only through a hand-built frame; no decode path in the tree produces it today, so nothing here says how a strided decode would behave."
+        - "E57. The reader records what a structured scan declares and decodes no row or column column, so no E57 file produces a frame and no identity is claimed for one."
+        - "Real scanner files. Every fixture behind this claim is constructed in the test."
+    scopeNote: "The rule under test is identity, not position: `recordForCell` answers with a record only when the loader recorded which record the cell produced, and answers with a reason in every other case, including a cell outside the grid, a cell in a non-valid state and a frame whose linkage is unavailable. `withLinkageUnavailable` overwrites the index arrays rather than leaving them for a direct reader, and the tests assert both the erasure and the survival of the topology beside it."
+
+  - claimId: ORG-RANGE-GEOMETRIC
+    product: Geometric range per grid cell
+    algorithm: Three-term hypot of acquisition-local coordinates, taken before the registration transform and before recentring
+    algorithmVersion: v0.6.6
+    claim: "Geometric range is the Euclidean norm of a return's coordinates in the acquisition frame, computed before the block transform is applied."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidenceNote: "E2 is the ceiling, permanently. The evidence a higher rung would add is a second implementation of a closed form that is one line long, which would be a second copy of the expression under test rather than an independent measurement of it. The closed form itself is the reference."
+    supportingTests: [tests/ptxOrganizedRange.test.ts]
+    supportingDatasets: []
+    units: [source-units]
+    crsDatum: "The scanner's own acquisition frame. The value is never expressed in a world or project frame, and no unit conversion is applied to it."
+    assumptions: ["the source writes its samples in the scanner frame, which is what the block transform then registers"]
+    failureModes: ["a range beyond the float32 maximum, stored as absent rather than as infinity", "a source whose samples are already registered, where the acquisition frame and the world frame coincide"]
+    exportAllowed: false
+    userLabel: "Geometric range in the acquisition frame"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "The stored range reproduces the closed form on a 3-4-5 triangle, where the answer is exactly 5 by construction, and is invariant under registration: the same acquisition-local point in two files differing only by a translation of 1000, 2000 and 3000 units gives the same range to 1e-9, which a range derived from world coordinates could not. A cell with no return carries an absent range rather than a zero distance, and a range that overflows float32 is stored as absent rather than as infinity."
+    prohibitedClaim: ["a measured range", "sensor accuracy", "Flash LiDAR support", "agreement with a range the source itself declared", "a distance in metres, since the value stays in the source's own units"]
+    scope:
+      supported: []
+      unsupported:
+        - "The range a source declares for itself. The frame carries a separate `sourceRange` field, no loader populates it, and nothing here compares the computed value against a declared one."
+        - "Any accuracy figure. The norm is exact for the coordinates given and says nothing about how well the instrument placed the return."
+        - "Ranging error, beam divergence and incidence effects, none of which is modelled."
+        - "PCD and E57. Only the PTX loader computes a range; a PCD frame carries topology and pose and no range at all."
+        - "Float32 spacing as a source of error at long range, which is stated in the loader as about 6e-5 m at 1 km and is not measured against an instrument."
+    scopeNote: "Two legs, and neither is a second copy of the expression. The 3-4-5 case fixes the answer by construction rather than by evaluating a hypot, and the pose-invariance case tests the ORDER of operations rather than the arithmetic: it distinguishes a range taken before the transform from one taken after it, which is the property the loader comment is about and the one an implementation is most likely to get wrong."
+
+  - claimId: ORG-PTX-SETUP-TOPOLOGY
+    product: PTX per-setup acquisition topology
+    algorithm: Per-block grid decode with column-major ordinal mapping, five-state cell validity and a per-block acquisition pose
+    algorithmVersion: v0.6.6
+    claim: "Each PTX block yields its own grid, its own cell states and its own acquisition pose, with a malformed record recorded as source-invalid and never as a no-return."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidenceNote: "E3 is the ceiling for now because no registered oracle reads PTX. It is a scope limit rather than a decided permanent one: a tool that decodes PTX grids and poses could arbitrate this, and none is registered in validation/external-oracles/oracle-registry.json today."
+    supportingTests: [tests/ptxOrganizedRange.test.ts, tests/organizedRange.test.ts]
+    supportingDatasets: []
+    units: [cell-index, source-units]
+    crsDatum: "The pose keeps two positions in two named frames: the transform's translation row in the registered world frame, and the format's own scanner-position header line in the scanner frame."
+    assumptions: ["PTX orders samples down each column, so the row is the fast axis", "a 0 0 0 sample is the format's no-return marker"]
+    failureModes: ["a writer that orders samples across rows instead of down columns", "a block header declaring more cells than the file can supply, which is refused rather than allocated"]
+    exportAllowed: false
+    userLabel: "PTX acquisition grid and per-setup pose"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: none
+    approvedClaim: "On constructed PTX files the decoded grid matches the declared shape, each ordinal lands at the cell the column-major convention predicts on a non-square grid where a transposition cannot hide, a malformed line and a non-finite coordinate are tallied as source-invalid while a 0 0 0 sample is tallied as a no-return, a truncated block leaves its unread tail reading source-record-missing, a grid the file cannot supply is refused with a warning and no allocation, and a two-block file keeps a distinct pose per block with the declared scanner position held separately from the registered one."
+    prohibitedClaim: ["a measured range", "sensor accuracy", "Flash LiDAR support", "agreement with an independent PTX reader, since none is registered as an oracle", "that a registration transform is CORRECT, since no fixture carries independent registration truth"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any independent reader of the format. No entry in validation/external-oracles/oracle-registry.json decodes PTX, so the column-major convention, the no-return marker and the pose frames rest on the format's own documentation and on this project's fixtures."
+        - "Real scanner output. Every fixture is written by the test, so no vendor's PTX dialect is exercised."
+        - "Whether a block's registration transform is correct. The transform is carried as the raw row-major rows and never checked against an independent registration."
+        - "Intensity and colour semantics, which the loader reads positionally and assigns no meaning to."
+    scopeNote: "The five cell states are the point of the claim, so the tests separate them rather than counting emptiness: a short line and a non-finite coordinate are file defects, a 0 0 0 sample is an instrument observation, an unread tail is a shortfall of the file, and a record removed by sanitation is a decision of this pipeline. Collapsing any pair would let one of those read as another. The two PTX positions are kept in named fields for the same reason, because an ordinary file writes 0 0 0 on the scanner-position line and a single merged origin would report every such scanner at the world origin."
+
+  - claimId: ORG-PCD-ORGANIZATION
+    product: PCD declared organization
+    algorithm: Header grid validated against the decoded record count, with identity claimed only for bodies OLV walks itself
+    algorithmVersion: v0.6.6
+    claim: "A declared WIDTH by HEIGHT grid is recorded only when it equals the number of records decoded from the file, and cell-to-record identity is claimed only for the encodings OLV walks record by record."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidenceNote: "E3 is the ceiling. The identity half of this claim is an index into OLV's own record stream, which no external reader holds, so the strongest available evidence is end-to-end validation against constructed files."
+    supportingTests: [tests/pcdOrganizedRange.test.ts, tests/organizedRange.test.ts]
+    supportingDatasets: []
+    units: [cell-index, record-index]
+    crsDatum: "The pose is the file's VIEWPOINT, a translation and a w-first quaternion in the file's own frame."
+    assumptions: ["PCL's own test for an organized dataset is HEIGHT greater than 1", "an organized PCD stores records row by row, so the column is the fast axis"]
+    failureModes: ["a header whose grid contradicts the body, which is refused with a warning", "an encoding whose record order comes from the vendored loader, where no identity is claimed"]
+    exportAllowed: false
+    userLabel: "PCD acquisition grid, with identity only where the records were walked"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: none
+    approvedClaim: "On constructed PCD files an ascii grid decodes row-major across a non-square grid where a transposition cannot hide, a HEIGHT of 1 records no grid, and a grid is refused with a warning when its cell count contradicts the decoded record count, when POINTS and WIDTH times HEIGHT disagree with the body, and when the product is not a safe integer. A non-finite record is tallied as source-invalid and never as a no-return, surviving cells stay linked after a dropped record shifts the rest, an absent VIEWPOINT stays distinguishable from an explicitly declared default, and a 4-byte float binary body keeps its grid and its pose while every cell reads not decoded and resolution is refused."
+    prohibitedClaim: ["a measured range", "sensor accuracy", "Flash LiDAR support", "cell-to-record identity for a binary_compressed or 4-byte float binary body", "that a declared grid describes the scene, since the header is a claim the records have to back"]
+    scope:
+      supported: []
+      unsupported:
+        - "Cell-to-record identity for `binary_compressed` and 4-byte float binary bodies. For those encodings both the record COUNT and the record ORDER come from the vendored three.js PCDLoader, which this project does not test record for record, so those files keep the topology and the pose and the frame reports identity as unavailable rather than inferring an order."
+        - "Geometric range. The PCD loader computes none, so a PCD frame carries topology and pose only."
+        - "Any independent reader of the format. No registered oracle decodes PCD, so the row-major convention and the HEIGHT test rest on PCL's own documentation and on this project's fixtures."
+        - "Real sensor output. Every fixture is written by the test."
+        - "Whether the VIEWPOINT is correct. It is carried as declared, with its w-first quaternion in named components, and no file here holds independent pose truth."
+    scopeNote: "The refusal is the load-bearing half. A declared grid sizes an allocation of about nine bytes per cell, so the decoded record count is what bounds it, and a header reading 100000 by 1000 over a short body records no grid at all rather than allocating from the claim. The identity line follows the same rule one level down: ascii and 8-byte float binary bodies are re-read here in double precision, and returning that array is the only evidence in the module that OLV walked the stream itself, so it is exactly what gates the exact linkage."
