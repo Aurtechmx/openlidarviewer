@@ -20,6 +20,8 @@
 
 export type Vec3 = readonly [number, number, number];
 
+import { tiePointGeometryOf, describeTiePointDefect } from './tiePointGeometry';
+
 export interface RigidTransform {
   /** Row-major 3×3 rotation, a proper rotation (determinant +1). */
   readonly rotation: readonly [number, number, number, number, number, number, number, number, number];
@@ -96,6 +98,17 @@ export function registerTiePoints(src: readonly Vec3[], dst: readonly Vec3[]): R
   }
   if (src.length < 3) {
     throw new Error('tie-point registration: at least three correspondences are required.');
+  }
+  // Shape before fit. Horn's method answers even where the answer is not
+  // determined, and reports a residual near zero for it, so a caller who
+  // trusted the residual would trust the least determined input most. See
+  // `tiePointGeometry.ts`.
+  for (const [which, points] of [
+    ['source', src],
+    ['destination', dst],
+  ] as const) {
+    const { defect } = tiePointGeometryOf(points);
+    if (defect) throw new Error(describeTiePointDefect(which, defect));
   }
 
   const cs = centroid(src);
