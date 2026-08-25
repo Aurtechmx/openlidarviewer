@@ -70,14 +70,15 @@ describe('large static LAS/LAZ memory caution', () => {
   });
 });
 
-describe('3D Tiles / PNTS — honest "on the roadmap" rejection', () => {
+describe('3D Tiles — a tileset is refused, a tile is not', () => {
   it('rejects a tileset.json with a roadmap message, not a generic error', async () => {
     const f = fakeFile('tileset.json', 1024, '{"asset":{"version":"1.0"}}');
-    await expect(fileMetadata(f)).rejects.toThrow(/3D Tiles|PNTS|roadmap/i);
+    await expect(fileMetadata(f)).rejects.toThrow(/3D Tiles|tileset|roadmap/i);
   });
 
-  it('rejects a .pnts the same way', async () => {
+  it('accepts a .pnts tile, which the roadmap message no longer covers', async () => {
     const f = fakeFile('points.pnts', 4096, 'pnts');
-    await expect(fileMetadata(f)).rejects.toThrow(/3D Tiles|PNTS|roadmap/i);
+    const meta = await fileMetadata(f);
+    expect(meta.format).toBe('pnts');
   });
 });

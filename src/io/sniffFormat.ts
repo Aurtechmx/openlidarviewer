@@ -17,6 +17,7 @@ export type DetectedFormat =
   | 'pcd'
   | 'ptx'
   | 'pts'
+  | 'pnts'
   | 'unknown';
 
 /** A concrete, loadable source format — `DetectedFormat` minus `unknown`. */
@@ -25,7 +26,7 @@ export type SourceFormat = Exclude<DetectedFormat, 'unknown'>;
 /**
  * Every loadable format, as a value — THE registry the UI's "supported
  * formats" copy is generated from. The splash used to hand-maintain a
- * "Supports 10 formats" line beside this 11-entry type, and it drifted
+ * "Supports 10 formats" line beside an 11-entry type, and it drifted
  * exactly as a typed number does: the visible list omitted `.xyz`. The
  * `satisfies` + the exhaustiveness assertion below make that impossible —
  * adding a format to `DetectedFormat` without listing it here is a type
@@ -40,6 +41,7 @@ export const SOURCE_FORMATS = [
   'pcd',
   'ptx',
   'pts',
+  'pnts',
   'ply',
   'obj',
   'glb',
@@ -71,7 +73,11 @@ export function isZUpFormat(format: SourceFormat): boolean {
     format === 'e57' ||
     format === 'pcd' ||
     format === 'ptx' ||
-    format === 'pts'
+    format === 'pts' ||
+    // A PNTS tile's POSITION lives in the local frame its tileset's transform
+    // maps into ECEF, and that local frame is z-up. A standalone tile keeps
+    // that frame, so z is up here for the same reason it is in a survey format.
+    format === 'pnts'
   );
 }
 
@@ -153,6 +159,10 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
   }
   // glTF binary: 0x67 0x6C 0x54 0x46 == 'glTF'.
   if (magic.startsWith('glTF')) return 'glb';
+  // A 3D Tiles PNTS tile opens with the four ASCII bytes 'pnts'. Checked here,
+  // with the other magic bytes, so a tile saved under another name still opens
+  // as the binary format it is.
+  if (magic.startsWith('pnts')) return 'pnts';
 
   // PCD has no fixed magic byte, but its header is ASCII and always carries a
   // `VERSION` line and a `FIELDS` line — together a near-certain PCD signal.
@@ -193,22 +203,35 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
       return 'ptx';
     case 'pts':
       return 'pts';
+    // `.pnts` is a binary format, so the magic above is the real signal and
+    // this is only the fallback for a buffer too short to carry it. A file
+    // that reaches the decoder without the magic is refused there, by name,
+    // rather than being read as a tile it is not.
+    case 'pnts':
+      return 'pnts';
     default:
       return 'unknown';
   }
 }
 
 /**
- * True when a filename is a 3D Tiles / PNTS asset (`*.pnts` or a `tileset.json`).
- * These sniff as `unknown` today — the format is detected by name only and
- * user-facing loading is not enabled (see docs/supported-formats.md); there is
- * no tileset parser. The loader uses this to give an honest "on the roadmap"
- * message instead of a generic "unrecognised format" dead-end.
+ * True when a filename names a 3D Tiles TILESET (`tileset.json`).
+ *
+ * A tileset is the one 3D Tiles entry point that still has no user-facing
+ * open: `src/io/tiles3d/tileset.ts` parses the document and
+ * `src/io/tiles3d/tilesetTraversal.ts` walks it, but nothing mounts the result
+ * as a layer, so a tileset sniffs as `unknown` and the loader uses this to give
+ * an honest "on the roadmap" message rather than a generic dead-end.
+ *
+ * A single `.pnts` tile is deliberately NOT named here. It sniffs as `pnts`,
+ * opens through `loadPnts`, and a file that only borrows the extension is
+ * refused by the decoder's magic check — a path that never reaches the
+ * roadmap message.
  */
 export function is3dTilesName(filename: string): boolean {
   const lower = filename.toLowerCase().split(/[?#]/)[0]; // drop any query/hash
   const base = lower.split('/').pop() ?? lower;
-  return base.endsWith('.pnts') || base === 'tileset.json';
+  return base === 'tileset.json';
 }
 
 /**

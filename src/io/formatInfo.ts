@@ -44,6 +44,10 @@ const FORMAT_INFO: Record<SourceFormat, FormatInfo> = {
   // is decoded whole rather than through the chunked line reader.
   ptx: { label: 'PTX scan', isText: false, hasHeaderCount: false },
   pts: { label: 'PTS scan', isText: true, hasHeaderCount: false },
+  // A PNTS tile states POINTS_LENGTH in its feature table, but that JSON sits
+  // behind a header whose section lengths have to be read first, which is more
+  // than the head-slice preflight does — so no header count is claimed here.
+  pnts: { label: '3D Tiles PNTS tile', isText: false, hasHeaderCount: false },
 };
 
 /** The facts for a format. Throws on an unregistered format. */

@@ -2890,11 +2890,12 @@ export class AnalysePanel {
     // classification, DSM, slope/hillshade, 3D overlay, terrain report) has all
     // shipped — leaving them here advertised done work as "planned", which
     // contradicts the buttons in this very panel. These three are the real,
-    // not-yet-shipped roadmap (3D Tiles is documented as planned in
-    // supported-formats.md; out-of-core loading and co-registered change
-    // detection are the open engineering items).
+    // not-yet-shipped roadmap. A single .pnts tile opens today, so what
+    // remains planned is streaming a whole tileset (see supported-formats.md);
+    // out-of-core loading and co-registered change detection are the open
+    // engineering items.
     for (const item of [
-      '3D Tiles / PNTS streaming',
+      '3D Tiles tileset streaming',
       'Out-of-core large-file loading',
       'Co-registered change detection',
     ]) {

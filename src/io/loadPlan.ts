@@ -138,6 +138,7 @@ export const NON_STREAMING_FORMATS: ReadonlySet<SourceFormat> = new Set<SourceFo
   'glb',
   'gltf',
   'xyz',
+  'pnts',
 ]);
 
 /** A point count plus the attributes and file context the estimate needs. */
