@@ -90,6 +90,54 @@ export async function dropTinyLas(page: Page): Promise<void> {
 }
 
 /**
+ * Drop a synthesised PTX — a scanner file that carries its ACQUISITION GRID.
+ *
+ * PTX is one of the two formats whose loader builds an `OrganizedRangeFrame`,
+ * so this is the drop that must reveal the Range Frame Workbench launcher.
+ * The grid is 6 columns by 4 rows and NON-SQUARE on purpose, and PTX orders its
+ * samples down each column, so the body is written column by column.
+ *
+ * One sample is the format's `0 0 0` no-return marker, so the validity view has
+ * something other than one flat colour to draw and the launcher is exercised on
+ * a grid that is not uniformly valid.
+ */
+export async function dropTinyPtx(page: Page): Promise<void> {
+  const cols = 6;
+  const rows = 4;
+  const lines: string[] = [
+    String(cols),
+    String(rows),
+    '0 0 0',
+    '1 0 0',
+    '0 1 0',
+    '0 0 1',
+    '1 0 0 0',
+    '0 1 0 0',
+    '0 0 1 0',
+    '0 0 0 1',
+  ];
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      if (c === 2 && r === 1) {
+        lines.push('0 0 0 0'); // the scanner looked and nothing came back
+        continue;
+      }
+      const x = (c - cols / 2) * 0.9;
+      const y = (r - rows / 2) * 0.9;
+      const z = Math.sin(c * 0.7) * Math.cos(r * 0.7) * 1.2;
+      lines.push(`${x.toFixed(4)} ${y.toFixed(4)} ${z.toFixed(4)} 0.5`);
+    }
+  }
+  const text = lines.join('\n');
+  const dataTransfer = await page.evaluateHandle((t) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([t], 'setup.ptx'));
+    return dt;
+  }, text);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+}
+
+/**
  * Drop a denser synthesised PLY — a 60×60 grid of 3 600 points across a small
  * 3D surface (sinusoidal Z) so the framing puts the cloud in an orbit-friendly
  * pose and the picker has a dense canopy to hit. Built inline so the bundled

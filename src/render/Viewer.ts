@@ -237,6 +237,14 @@ import type { SavedCameraState } from './annotate/types';
 import { LiveProbe } from './LiveProbe';
 import { downsampleToBudget } from '../process/voxelDownsample';
 import { makePointInfo } from './pointInfo';
+import {
+  applySelectionHighlight,
+  bindOrganizedRangeLink,
+  revertSelectionHighlight,
+  type HighlightSnapshot,
+  type HighlightTarget,
+} from './recordSelection';
+
 import type { PointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
 import {
@@ -1111,6 +1119,12 @@ export class Viewer {
   private readonly _canvas: HTMLCanvasElement;
   private readonly _measure: MeasureController;
   private readonly _inspect: InspectTool;
+  /** The acquisition-grid identity link, both directions. See recordSelection. */
+  private readonly _organized = bindOrganizedRangeLink({
+    cloudEntries: () => this._clouds,
+    setHighlight: (m) => this.setSelectionHighlight(m),
+    clearHighlight: () => this.clearSelectionHighlight(),
+  });
   private readonly _annotate: AnnotationController;
   private readonly _probe: LiveProbe;
 
@@ -1718,6 +1732,8 @@ export class Viewer {
     this._scene.add(mesh);
 
     this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
+    // Publish the acquisition grid this layer carries, keyed by the renderer's own id.
+    this._organized.register(id, cloud);
     // A new frame-sharing cloud changes the shared elevation window when on.
     this.refreshProjectSharedElevation();
     this._configureForClouds(cloud);
@@ -2285,6 +2301,7 @@ export class Viewer {
     entry.mesh.geometry.dispose();
     entry.material.dispose();
     this._clouds.delete(id);
+    this._organized.forget(id);
     // Drop the per-cloud undo / highlight snapshots too — without this the
     // maps retain full-size buffers for every cloud ever removed (leak).
     this._classHistory.delete(id);
@@ -2728,10 +2745,7 @@ export class Viewer {
    * to the exact bytes the cloud carried before the highlight
    * landed. Keyed by static-cloud id; cleared on `clearSelectionHighlight`.
    */
-  private readonly _selectionSnapshots = new Map<
-    string,
-    { indices: readonly number[]; saved: Float32Array }
-  >();
+  private readonly _selectionSnapshots = new Map<string, HighlightSnapshot>();
 
   /**
    * Apply an RGB appearance bundle to every RGB-mode cloud in place.
@@ -3993,41 +4007,19 @@ export class Viewer {
     // Revert any prior highlight first so the user sees only the
     // latest selection.
     this.clearSelectionHighlight();
-    for (const [id, indices] of perCloud) {
-      const entry = this._clouds.get(id);
-      if (!entry) continue;
-      const arr = entry.colorAttr.array as Float32Array;
-      const saved = new Float32Array(indices.length * 3);
-      for (let i = 0; i < indices.length; i++) {
-        const k = indices[i] * 3;
-        saved[i * 3] = arr[k];
-        saved[i * 3 + 1] = arr[k + 1];
-        saved[i * 3 + 2] = arr[k + 2];
-        arr[k] = color[0];
-        arr[k + 1] = color[1];
-        arr[k + 2] = color[2];
-      }
-      this._selectionSnapshots.set(id, { indices: indices.slice(), saved });
-      entry.colorAttr.needsUpdate = true;
-    }
+    applySelectionHighlight(perCloud, this._highlightTarget, color, this._selectionSnapshots);
   }
 
   /** Revert any active selection highlight back to the original colours. */
   clearSelectionHighlight(): void {
-    for (const [id, snap] of this._selectionSnapshots) {
-      const entry = this._clouds.get(id);
-      if (!entry) continue;
-      const arr = entry.colorAttr.array as Float32Array;
-      for (let i = 0; i < snap.indices.length; i++) {
-        const k = snap.indices[i] * 3;
-        arr[k] = snap.saved[i * 3];
-        arr[k + 1] = snap.saved[i * 3 + 1];
-        arr[k + 2] = snap.saved[i * 3 + 2];
-      }
-      entry.colorAttr.needsUpdate = true;
-    }
-    this._selectionSnapshots.clear();
+    revertSelectionHighlight(this._highlightTarget, this._selectionSnapshots);
   }
+
+  /** A mounted layer's colour buffer, for the highlight helpers. */
+  private readonly _highlightTarget = (id: string): HighlightTarget | null => {
+    const entry = this._clouds.get(id);
+    return entry ? (entry.colorAttr as unknown as HighlightTarget) : null;
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Picking tools — measurement & point inspection
@@ -5037,6 +5029,7 @@ export class Viewer {
    * ResizeObserver subscriptions across the cycle.
    */
   dispose(): void {
+    this._organized.dispose();
     if (this._rafId !== null) {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
@@ -6046,16 +6039,21 @@ export class Viewer {
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
     const hit = this._pickDetailed(ndcX, ndcY);
     if (hit) {
-      this._inspect.showPoint(this._infoForHit(hit), hit.point);
+      const info = this._infoForHit(hit);
+      this._inspect.showPoint(info, hit.point);
+      // Publish the inspected record as an IDENTITY, never a coordinate.
+      this._organized.publishPick(info.layerId, info.index);
       return;
     }
     // Fall back to the resident streaming nodes — COPC point inspection.
     const streamHit = this._pickStreamingDetailed(ndcX, ndcY);
     if (streamHit) {
       this._inspect.showPoint(this._infoForStreamingHit(streamHit), streamHit.point);
+      this._organized.publishPick(undefined, 0);
       return;
     }
     this._inspect.showPoint(null, null);
+    this._organized.publishPick(undefined, 0);
   }
 
   /**
@@ -6076,6 +6074,7 @@ export class Viewer {
     return makePointInfo({
       geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud.name,
+      layerId: this._organized.layerIdOf(cloud),
       index,
       // `point` is the PLACED pick; for a non-anchor mounted layer it would
       // double-count the origin. `worldXYZ` folds each cloud's own source origin.

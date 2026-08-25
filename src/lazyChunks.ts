@@ -506,3 +506,18 @@ export const loadProfileWorkbench = () => import('./ui/ProfileWorkbench');
  * shell-isolation guard forbids there.
  */
 export const loadProfileWorkbenchRuntime = () => import('./app/profileWorkbenchRuntime');
+
+/**
+ * The Range Frame Workbench — the launcher, the 2D raster, the acquisition-grid
+ * diagnostics and the identity link, as one chunk.
+ *
+ * Reached only when a loaded layer is found to carry an acquisition grid, which
+ * only PTX and organized PCD produce. A session that opens a LAS file never
+ * loads a byte of it, and that is the whole reason this seam exists rather than
+ * a static import in the Analyse panel.
+ *
+ * Held here for the reason the module exists: the panel that reaches it is
+ * rewritten by the live source transform, so an inline `import()` there would
+ * have its specifier scrambled and its chunk never emitted.
+ */
+export const loadRangeWorkbenchMount = () => import('./ui/rangeWorkbenchMount');

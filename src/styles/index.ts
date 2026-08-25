@@ -41,5 +41,6 @@ import './96-phone-sheet-story.css'; // Phone bottom-sheet, landscape-phone canv
 import './97-contour-studio.css'; // Contour Studio: launcher, workspace, evidence ladder, export section.
 import './98-layer-health.css'; // Colorbar legend overlay and Layer Health card: spatial facts and compatibility.
 import './98b-process-studio.css'; // Process Studio panel: adaptive stages, product eligibility and QA checks.
+import './98c-range-workbench.css'; // Range Frame Workbench: structured-data launcher, acquisition-grid raster, legend and per-frame diagnostics.
 import './99-mobile-gui-refresh.css'; // Mobile GUI refresh (v0.6.x) and the landscape-phone left rail.
 import './99z-forced-colors.css'; // Windows High Contrast / forced-colors — the final override block.

@@ -1,0 +1,223 @@
+
+/* ============================================================
+   Range Frame Workbench — the acquisition grid a scanner sampled.
+   Launcher card in the Analyse surface, then the 2D raster, its
+   legend and the per-frame diagnostics.
+   ============================================================ */
+
+.olv-range-launcher {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--olv-border, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+  background: var(--olv-surface-2, rgba(255, 255, 255, 0.03));
+}
+
+.olv-range-launcher-head {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.olv-range-launcher-title {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.olv-range-launcher-fact {
+  margin-top: 2px;
+  font-family: var(--olv-mono, monospace);
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.olv-range-launcher-message {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.olv-range-workbench {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--olv-border, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+}
+
+.olv-range-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.olv-range-frame-label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.olv-range-modes {
+  display: flex;
+  gap: 6px;
+}
+
+.olv-range-mode {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--olv-border, rgba(255, 255, 255, 0.16));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.olv-range-mode.is-active {
+  background: var(--olv-accent, #2f7fd8);
+  border-color: var(--olv-accent, #2f7fd8);
+  color: #fff;
+}
+
+.olv-range-linkage {
+  margin: 8px 0 6px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.olv-range-stage {
+  position: relative;
+  line-height: 0;
+}
+
+.olv-range-canvas {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  border-radius: 6px;
+  cursor: crosshair;
+}
+
+.olv-range-marker {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  margin: -6px 0 0 -6px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}
+
+.olv-range-hover {
+  min-height: 16px;
+  margin-top: 6px;
+  font-family: var(--olv-mono, monospace);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.olv-range-readout {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--olv-surface-2, rgba(255, 255, 255, 0.04));
+}
+
+.olv-range-readout-head {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.olv-range-readout-detail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.olv-range-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.olv-range-key {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.olv-range-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.olv-range-note {
+  flex: 1 1 100%;
+  margin: 4px 0 0;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.olv-range-stats {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.olv-range-stat-block h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.olv-range-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.olv-range-table th {
+  text-align: left;
+  font-weight: 400;
+  opacity: 0.8;
+  padding: 2px 0;
+}
+
+.olv-range-table td {
+  text-align: right;
+  font-family: var(--olv-mono, monospace);
+  padding: 2px 0;
+}
+
+.olv-range-total th,
+.olv-range-total td {
+  border-top: 1px solid var(--olv-border, rgba(255, 255, 255, 0.12));
+  opacity: 1;
+}
+
+.olv-range-bands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 10px;
+}
+
+.olv-range-bands-name {
+  width: 52px;
+  opacity: 0.75;
+}
+
+.olv-range-band {
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: var(--olv-mono, monospace);
+  background: var(--olv-surface-2, rgba(255, 255, 255, 0.06));
+}
