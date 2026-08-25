@@ -174,6 +174,25 @@ export interface OrganizedRangeFrame {
   readonly cellState: Uint8Array;
   /** Length `width * height`. Display record index, or `NO_RECORD`. */
   readonly cellToRecord: Int32Array;
+  /**
+   * Multi-return description, as four parallel arrays in CSR form.
+   *
+   * Present TOGETHER or not at all. Their absence is not "this frame has no
+   * returns"; it means this frame never described returns per cell, which is
+   * the ordinary case for PTX and PCD, where a cell holds at most one. A
+   * single-return frame therefore allocates nothing here and every existing
+   * accessor keeps its cost.
+   */
+  /** Length `width * height + 1`. Returns of cell `c` live in `[s[c], s[c+1])`. */
+  readonly returnCellStart?: Uint32Array;
+  /** Length `returnCellStart[cells]`, in cell order. Record index, or `NO_RECORD`. */
+  readonly returnRecord?: Int32Array;
+  /** Length as `returnRecord`. The source's own `returnIndex` for each return. */
+  readonly returnIndex?: Uint16Array;
+  /** Length as `returnRecord`. The `returnCount` the source declared for the pulse. */
+  readonly returnCountDeclared?: Uint16Array;
+  /** Returns the build was handed that addressed no cell of this grid. */
+  readonly returnsSkipped?: number;
   /** Length `width * height`. Range in acquisition-local coordinates, NaN where absent. */
   readonly geometricRange?: Float32Array;
   /** Length `width * height`. Range the source itself declared, NaN where absent. */
@@ -304,6 +323,10 @@ export function withLinkageUnavailable(
     frames: set.frames.map((f) => ({
       ...f,
       cellToRecord: new Int32Array(f.cellToRecord.length).fill(NO_RECORD),
+      // The per-return indices are exactly the same defect one level down, so
+      // they are erased on the same terms. The offsets, the return indices and
+      // the declared counts survive: they are topology, not identity.
+      ...(f.returnRecord ? { returnRecord: new Int32Array(f.returnRecord.length).fill(NO_RECORD) } : {}),
       linkage: { kind: 'unavailable', reason } as const,
     })),
   };
@@ -330,4 +353,176 @@ export function organizedRangeTransferables(set: OrganizedRangeSet): ArrayBuffer
     }
   }
   return out;
+}
+
+/** One return of one pulse, as the source described it. */
+export interface CellReturn {
+  /** Display record index, or `NO_RECORD` when identity was never established. */
+  readonly record: number;
+  /** Which return of the pulse this is, as the source declared it. */
+  readonly returnIndex: number;
+  /** How many returns the source declared for that pulse. */
+  readonly returnCount: number;
+}
+
+/** One return on its way in, addressed by grid cell. */
+export interface CellReturnInput extends CellReturn {
+  readonly row: number;
+  readonly column: number;
+}
+
+/** The arrays a frame carries, plus what the build could not place. */
+export interface BuiltCellReturns {
+  readonly returnCellStart: Uint32Array;
+  readonly returnRecord: Int32Array;
+  readonly returnIndex: Uint16Array;
+  readonly returnCountDeclared: Uint16Array;
+  readonly skippedCount: number;
+}
+
+/**
+ * Build the CSR return description for a grid.
+ *
+ * The shape here is deliberately the same as the profile hit-test's spatial
+ * index build — a per-cell count pass, an exclusive prefix sum into a
+ * `cellStart` array carrying a terminator entry, a placement cursor copied from
+ * it, payloads stored in cell order, and an explicit count of the items that
+ * fell outside — so a reader who knows one recognises the other. It is
+ * reimplemented rather than imported because `src/model` must not depend on
+ * `src/render`.
+ *
+ * The alternative, a dense `width * height * maxReturns` array, is mostly empty
+ * whenever returns are sparse, which is the normal case.
+ *
+ * ORDERING: returns are NOT assumed to arrive in `returnIndex` order, and they
+ * are sorted ascending by `returnIndex` within each cell. That is a real
+ * reordering and it is stated because it is one: `returnIndex` is a physical
+ * fact about the pulse, so it travels with its own record and count rather than
+ * being inferred from a position. Ties keep source order, and the placement
+ * pass is stable, so equal indices are not shuffled.
+ */
+export function buildCellReturns(
+  width: number,
+  height: number,
+  entries: readonly CellReturnInput[],
+): BuiltCellReturns {
+  const cellCount = width * height;
+  const counts = new Uint32Array(cellCount);
+  const cellOf = new Int32Array(entries.length).fill(-1);
+  let live = 0;
+  for (let k = 0; k < entries.length; k++) {
+    const e = entries[k]!;
+    if (e.row < 0 || e.column < 0 || e.row >= height || e.column >= width) continue;
+    const cell = cellIndexOf(e.row, e.column, width);
+    cellOf[k] = cell;
+    counts[cell]!++;
+    live++;
+  }
+
+  // Terminator entry: `cellStart[cellCount]` is the total, so the LAST cell has
+  // an end offset like every other. Without it the last span is unreadable.
+  const returnCellStart = new Uint32Array(cellCount + 1);
+  let running = 0;
+  for (let c = 0; c < cellCount; c++) {
+    running += counts[c]!;
+    returnCellStart[c + 1] = running;
+  }
+
+  const cursor = new Uint32Array(cellCount);
+  cursor.set(returnCellStart.subarray(0, cellCount));
+
+  const returnRecord = new Int32Array(live);
+  const returnIndex = new Uint16Array(live);
+  const returnCountDeclared = new Uint16Array(live);
+  for (let k = 0; k < entries.length; k++) {
+    const cell = cellOf[k]!;
+    if (cell < 0) continue;
+    const e = entries[k]!;
+    const at = cursor[cell]!++;
+    returnRecord[at] = e.record;
+    returnIndex[at] = e.returnIndex;
+    returnCountDeclared[at] = e.returnCount;
+  }
+
+  // Stable insertion sort inside each span. Spans are a handful of returns, and
+  // stability is what keeps two returns declaring the same index in the order
+  // the source wrote them.
+  for (let c = 0; c < cellCount; c++) {
+    const start = returnCellStart[c]!;
+    const end = returnCellStart[c + 1]!;
+    for (let i = start + 1; i < end; i++) {
+      const ri = returnIndex[i]!;
+      const rec = returnRecord[i]!;
+      const rc = returnCountDeclared[i]!;
+      let j = i - 1;
+      while (j >= start && returnIndex[j]! > ri) {
+        returnIndex[j + 1] = returnIndex[j]!;
+        returnRecord[j + 1] = returnRecord[j]!;
+        returnCountDeclared[j + 1] = returnCountDeclared[j]!;
+        j--;
+      }
+      returnIndex[j + 1] = ri;
+      returnRecord[j + 1] = rec;
+      returnCountDeclared[j + 1] = rc;
+    }
+  }
+
+  return {
+    returnCellStart,
+    returnRecord,
+    returnIndex,
+    returnCountDeclared,
+    skippedCount: entries.length - live,
+  };
+}
+
+/**
+ * Resolve every return of a cell.
+ *
+ * Zero, one and many are all `ok: true`: a described cell that produced nothing
+ * answers with an empty list, which is evidence about the scene. A frame that
+ * never described returns at all answers `ok: false` with `not-described`,
+ * because that says nothing about the scene and must not be readable as "none".
+ */
+export function returnsForCell(
+  frame: OrganizedRangeFrame,
+  row: number,
+  column: number,
+):
+  | { readonly ok: true; readonly returns: readonly CellReturn[] }
+  | {
+      readonly ok: false;
+      readonly why: string;
+      readonly reason: 'linkage-unavailable' | 'outside-grid' | 'not-described';
+    } {
+  if (frame.linkage.kind === 'unavailable') {
+    return {
+      ok: false,
+      reason: 'linkage-unavailable',
+      why: `Exact linking unavailable: ${frame.linkage.reason}.`,
+    };
+  }
+  if (row < 0 || column < 0 || row >= frame.height || column >= frame.width) {
+    return { ok: false, reason: 'outside-grid', why: 'Cell is outside the acquisition grid.' };
+  }
+  const { returnCellStart, returnRecord, returnIndex, returnCountDeclared } = frame;
+  if (!returnCellStart || !returnRecord || !returnIndex || !returnCountDeclared) {
+    return {
+      ok: false,
+      reason: 'not-described',
+      why: 'This frame does not describe returns per cell.',
+    };
+  }
+  const cell = cellIndexOf(row, column, frame.width);
+  const start = returnCellStart[cell]!;
+  const end = returnCellStart[cell + 1]!;
+  const out: CellReturn[] = [];
+  for (let i = start; i < end; i++) {
+    out.push({
+      record: returnRecord[i]!,
+      returnIndex: returnIndex[i]!,
+      returnCount: returnCountDeclared[i]!,
+    });
+  }
+  return { ok: true, returns: out };
 }
