@@ -20,6 +20,7 @@
  * Usage:
  *   node scripts/test-bucket.mjs <unit|terrain|ui|slow> [extra vitest args]
  *   node scripts/test-bucket.mjs --verify
+ *   node scripts/test-bucket.mjs --list
  *
  * Playwright specs under tests/e2e/ are not touched here — they run via
  * `npm run test:e2e`.
@@ -121,8 +122,18 @@ if (arg === '--verify') {
   process.exit(ok ? 0 : 1);
 }
 
+// `--list` prints one `<bucket>\t<file>` line per test file. It exists so a
+// checker can ask WHICH bucket regenerates a given evidence record without
+// re-implementing the classification above; tests/releaseEvidenceOrder.test.ts
+// is that caller, and a second copy of these regexes is exactly the drift the
+// rest of this file is written to avoid.
+if (arg === '--list') {
+  for (const f of allTestFiles().sort()) console.log(`${bucketOf(f)}\ttests/${f}`);
+  process.exit(0);
+}
+
 if (!BUCKETS.includes(arg)) {
-  console.error(`usage: test-bucket.mjs <${BUCKETS.join('|')}|--verify> [vitest args]`);
+  console.error(`usage: test-bucket.mjs <${BUCKETS.join('|')}|--verify|--list> [vitest args]`);
   process.exit(2);
 }
 
