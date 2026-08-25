@@ -30,9 +30,7 @@
  *
  * The frames that need arithmetic already have their boundary and are not
  * duplicated here: `PointCloud.worldXYZ` and `PointCloud.projectXYZ` for a
- * single point, `forEachPlacedPoint` / `iteratePlacedPoints` in
- * `src/geo/placementIterator.ts` for a placement-aware walk, and
- * `copyPlacedPositions` in `src/render/measure/lassoVolumeCompute.ts` for a
+ * single point and `copyPlacedPositions` in `src/render/measure/lassoVolumeCompute.ts` for a
  * placed copy.
  *
  * `scripts/lint-position-access.mjs` classifies every remaining raw read
@@ -42,7 +40,7 @@
  * Pure: no DOM, no three.js, safe in a worker.
  */
 
-import type { PointCloud } from './PointCloud';
+import type { PointCloud } from "./PointCloud";
 
 /**
  * A decoded streaming chunk as a position reader sees it.
@@ -84,6 +82,8 @@ export function sourcePositions(cloud: PointCloud): Float32Array {
  *
  * Returns the SAME array instance, not a copy.
  */
-export function renderLocalPositions(chunk: DecodedChunkPositions): Float32Array {
+export function renderLocalPositions(
+  chunk: DecodedChunkPositions,
+): Float32Array {
   return chunk.positions;
 }
