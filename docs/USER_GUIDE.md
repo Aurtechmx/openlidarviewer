@@ -99,6 +99,29 @@ The grade is honest about gaps. A scan that only measured part of the ground wil
 
 ---
 
+## Inspect the scanner grid
+
+A terrestrial scan does not arrive as a bare cloud. It arrives as a grid: for
+each row and column the instrument fired along a direction and recorded a
+return, or recorded that nothing came back. When a scan carries that grid, a
+**Range Frame QA** entry appears in the Analyse panel.
+
+The workbench shows one setup at a time, coloured by range or by validity, with
+the counts beside it. Click a cell and the viewer highlights the point it
+produced. Inspect a point and the workbench highlights the cell it came from.
+
+A cell with no return is not a gap in the data. It means the scanner looked that
+way and nothing came back, which is worth knowing when a surface has holes in
+it. The viewer will not tell you why, because the file does not say: dark
+asphalt, glass and open sky all look the same from here.
+
+If the scan was reduced to fit in memory, the grid survives and the link to
+individual points does not. The workbench says so rather than pointing at the
+nearest point, and an export made from that scan records where the link was
+lost.
+
+---
+
 ## Compare two scans
 
 Open a second scan of the same place — a "before" and an "after" — and the viewer offers a comparison. It lines the two up, differences their surfaces, and reports the cut and fill volumes, with a noise floor so small changes below the survey's own precision aren't reported as real movement. You can export the difference grid for use elsewhere.

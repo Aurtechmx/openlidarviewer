@@ -8,14 +8,14 @@ Format support is still evolving. This page separates what works today from what
 |---|---|---|
 | `LAS` | Drone / aerial LiDAR | Georeferenced; coordinate bridge applied |
 | `LAZ` | Drone / aerial LiDAR | Compressed LAS, decoded in-browser (laz-perf WASM) |
-| `E57` | Terrestrial laser scanners | ASTM E2807; coordinates, RGB, intensity, classification, normals; multi-scan files merged |
+| `E57` | Terrestrial laser scanners | ASTM E2807; coordinates, RGB, intensity, classification, normals; multi-scan files merged; acquisition grid preserved for structured scans |
 | `PLY` | iPhone / mobile scans | Point clouds and meshes; RGB supported |
 | `OBJ` | Mesh scans, 3D tools | Mesh vertices used as points |
 | `GLB` / `GLTF` | AR tools, mobile scans | Mesh vertices used as points |
 | `XYZ` | Survey / generic export | Whitespace-delimited text; optional RGB; chunked decoding over the in-memory file |
 | `CSV` | Survey / generic export | Comma-delimited text; optional RGB; chunked decoding over the in-memory file |
-| `PCD` | Point Cloud Library | ASCII, binary, and binary-compressed; position, RGB, intensity, normals, labels |
-| `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded |
+| `PCD` | Point Cloud Library | ASCII, binary, and binary-compressed; position, RGB, intensity, normals, labels; acquisition grid preserved when the header declares one |
+| `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded; acquisition grid preserved per block |
 | `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
 | `PNTS` | 3D Tiles point tile | A single tile; magic-byte detected; `RTC_CENTER` applied; Draco refused |
 | `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming — see [streaming.md](streaming.md) |
