@@ -26,7 +26,8 @@ export type MethodCategory =
   | 'validation'
   | 'registration'
   | 'volume'
-  | 'dtm';
+  | 'dtm'
+  | 'provenance';
 
 /** A lightweight reference to a registered method at its current version. */
 export interface MethodRef {
@@ -181,6 +182,19 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'propagated 1σ volume uncertainty of area·σ(thickness)/√N.',
     citation: 'Internal composition (prismatic cut-fill); standard earthworks method.',
     category: 'volume',
+  },
+  'olv.topology.linkage-record': {
+    id: 'olv.topology.linkage-record',
+    version: 1,
+    name: 'Source acquisition topology linkage record',
+    summary:
+      'Records, for a cloud that carried a source acquisition grid, whether a grid ' +
+      'cell still resolves to the display record the loader decoded it from, and ' +
+      'names the reason when it no longer does. A record about the pipeline, not a ' +
+      'computation over the scene: it produces no figure.',
+    citation:
+      'Internal composition (provenance record over the loader-recorded cell-to-record index); no single source method.',
+    category: 'provenance',
   },
 };
 

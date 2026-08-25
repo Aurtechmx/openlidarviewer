@@ -32,6 +32,7 @@
  */
 
 import { canonicalize, sha256 } from '../render/measure/auditLog';
+import { methodRef, methodTag } from './methodRegistry';
 
 /** The schema version of {@link ProcessingManifest}. Bump on shape change. */
 export const PROCESSING_MANIFEST_SCHEMA = 1;
@@ -65,6 +66,87 @@ export interface ProcessingOpInput {
   readonly note?: string;
 }
 
+/**
+ * How faithfully a cloud's source acquisition topology still reaches the
+ * display records at the moment the artifact was produced, in the plain shape
+ * the manifest binds. Deliberately structural rather than an import of the
+ * model type: this module stays free of any dependency on the point-cloud
+ * layer, and the derivation from an `OrganizedRangeSet` lives beside that type
+ * in `sourceTopology.ts`.
+ *
+ * ABSENCE IS NOT A VALUE HERE. A cloud that never carried an acquisition grid
+ * supplies no record at all, so the manifest gains no op and says nothing —
+ * an ordinary LAS had no cell-to-record identity to keep or to lose, and a
+ * manifest that reported one would be inventing the grid.
+ */
+export interface SourceTopologyRecord {
+  /** The set's own organization token, e.g. `'organized-grid'`. */
+  readonly organization: string;
+  /** How many frames the set carried. */
+  readonly frames: number;
+  /** The LEAST faithful state across those frames. */
+  readonly linkage: 'exact' | 'partial' | 'unavailable';
+  /**
+   * The distinct reasons carried by the frames in that least-faithful state,
+   * sorted. Empty when the state is `exact`, which carries no reason.
+   */
+  readonly reasons: readonly string[];
+}
+
+/** The registered method the topology op is stamped with. */
+export const SOURCE_TOPOLOGY_METHOD_ID = 'olv.topology.linkage-record';
+
+/**
+ * What each linkage state means for a reader holding only the artifact. Spelled
+ * out rather than left to the reason token, because the token names a cause and
+ * the reader needs the consequence.
+ */
+const LINKAGE_MEANING: Readonly<Record<SourceTopologyRecord['linkage'], string>> = {
+  exact: 'Every frame still resolves a grid cell to the display record the loader decoded it from.',
+  partial:
+    'Some source records were never decoded; the records that were decoded still resolve to their own cell.',
+  unavailable:
+    'No cell resolves to a source record any more; the reason names the step that spent that identity.',
+};
+
+/** Plain-language gloss for each reason token the model defines. */
+const REASON_MEANING: Readonly<Record<string, string>> = {
+  stride: 'a stride decoded a subset of the source records',
+  'voxel-centroids':
+    'voxel reduction replaced source records with one centroid per occupied voxel',
+  'invalid-source-topology': 'the source declared a grid its own records do not address',
+  'source-record-identity-unavailable':
+    'the decode path never established which record each cell produced',
+};
+
+/**
+ * The manifest op for a source acquisition topology's linkage state.
+ *
+ * One op, stamped with a registered method id, rather than a new field on the
+ * op shape: the fact belongs to a step of the pipeline, not to any of the ops
+ * the terrain producer emits, and there is no existing op it could honestly
+ * hang on (the reduction that spends the identity is not itself a terrain
+ * method). Being an ordinary op also means every reader and verifier already
+ * built for schema 1 handles it with no new parsing, and its contents fold
+ * into the chain like any other op — a reader cannot strip the degradation
+ * record and still verify.
+ */
+export function sourceTopologyOp(record: SourceTopologyRecord): ProcessingOpInput {
+  const glosses = record.reasons.map((r) => REASON_MEANING[r] ?? r);
+  return {
+    method: methodTag(methodRef(SOURCE_TOPOLOGY_METHOD_ID)),
+    params: {
+      organization: record.organization,
+      frames: record.frames,
+      linkage: record.linkage,
+      ...(record.reasons.length > 0 ? { reasons: [...record.reasons] } : {}),
+    },
+    note:
+      LINKAGE_MEANING[record.linkage] +
+      (glosses.length > 0 ? ` Reason: ${glosses.join('; ')}.` : ''),
+  };
+}
+
 /** One chained op inside a built manifest. */
 export interface ProcessingManifestOp extends ProcessingOpInput {
   /** Position in the chain, 0-based — the pipeline order. */
@@ -90,6 +172,18 @@ export interface ProcessingManifestInput {
   readonly build: string;
   readonly source: string | null;
   readonly ops: ReadonlyArray<ProcessingOpInput>;
+  /**
+   * The source acquisition topology the recorded steps ran on, when the cloud
+   * carried one. Supplied here rather than pre-pended by each producer so that
+   * every manifest words the fact identically and places it identically: the
+   * op leads the chain, because the topology describes the cloud that entered
+   * the recorded pipeline, before the first step listed in `ops`.
+   *
+   * Omitted (or null) means the cloud carried no acquisition grid. That adds
+   * no op, so a manifest for an ordinary LAS or PLY export is byte-identical
+   * to the one the same inputs produced before this field existed.
+   */
+  readonly sourceTopology?: SourceTopologyRecord | null;
 }
 
 /** Result of {@link verifyProcessingManifest}. */
@@ -140,7 +234,10 @@ function foldOp(prevHash: string, seq: number, op: ProcessingOpInput): string {
  */
 export function buildProcessingManifest(input: ProcessingManifestInput): ProcessingManifest {
   let prev = envelopeGenesis(PROCESSING_MANIFEST_SCHEMA, input.build, input.source);
-  const ops: ProcessingManifestOp[] = input.ops.map((op, seq) => {
+  const inputOps: ProcessingOpInput[] = input.sourceTopology
+    ? [sourceTopologyOp(input.sourceTopology), ...input.ops]
+    : [...input.ops];
+  const ops: ProcessingManifestOp[] = inputOps.map((op, seq) => {
     const hash = foldOp(prev, seq, op);
     prev = hash;
     // The optional note is only materialised when present so the built object
