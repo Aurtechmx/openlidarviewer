@@ -73,6 +73,27 @@ export interface ProfileWorkbenchLauncherDeps {
     handle: ProfileWorkbenchHandle,
     request: ProfileWorkbenchLaunchRequest,
   ) => void | (() => void);
+  /**
+   * Commit a new name for the measurement a dock is plotting.
+   *
+   * Routed straight through to whatever the host wired, which is the same
+   * rename the Measurements panel's own name field calls. The launcher holds
+   * no name: the request it was opened with carries the name at open time, and
+   * the one authority on it afterwards is the host.
+   *
+   * Absent leaves the dock's title a caption rather than a field.
+   */
+  rename?: (id: string, name: string) => void;
+  /**
+   * Build the profile PDF for one measurement.
+   *
+   * The SAME export the Measurements panel's Export PDF control runs, handed
+   * over rather than reimplemented: a second builder would be a second set of
+   * inputs, and the read scope and classification basis a sheet states are
+   * exactly what a second set gets wrong. Absent means the dock renders no
+   * export control.
+   */
+  exportPdf?: (id: string) => Promise<void>;
   /** Told about a rejected import, so a silent fallback still leaves a trace. */
   onLoadFailure?: (error: unknown) => void;
   /** Told about a `present` that threw, for the same reason. */
@@ -136,9 +157,16 @@ export function createProfileWorkbenchLauncher(
     // the stage the outgoing dock is still holding.
     close();
     const token = ++generation;
+    // The measurement's own name is the title, so the dock, the Measurements
+    // row and the exported sheet are three views of one name. The scope line
+    // under it is filled by the presenter with what the section actually read.
+    const rename = deps.rename;
+    const exportPdf = deps.exportPdf;
     const mounted = module.mountProfileWorkbench(host, {
-      title: 'Profile workbench',
+      title: request.name,
       scope: request.name,
+      ...(rename ? { onRename: (name: string) => rename(request.id, name) } : {}),
+      ...(exportPdf ? { onExportPdf: () => exportPdf(request.id) } : {}),
       onClose: () => {
         // Only for the dock that is still the live one: a panel closed by the
         // mount that replaced it must not hand back the successor's height.

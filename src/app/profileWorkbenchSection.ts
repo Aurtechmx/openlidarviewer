@@ -53,7 +53,11 @@ import {
   describeClassBasis,
   GROUND_BASIS_UNVERIFIED_NOTE,
 } from '../render/measure/profileProvenance';
-import { axisSpanCaption } from '../render/measure/profileAxes';
+import {
+  axisSpanCaption,
+  fitAxisLabels,
+  profileAxes,
+} from '../render/measure/profileAxes';
 import {
   selectProfileSectionLod,
   selectProfileSectionLodChunks,
@@ -77,6 +81,8 @@ import { createProfileLinkController } from './profileLinkController';
 import type { ProfileWorkbenchDetailRow } from '../ui/ProfileWorkbench';
 import type { ProfileHitTestIndex } from '../render/measure/profileHitTest';
 import type { ProfileView, ProfileViewport } from '../render/measure/profileViewTransform';
+import type { ProfileAxesModel } from '../render/measure/profileAxes';
+import type { VerticalReference } from '../geo/height';
 import type { ProfileLinkOverlayContext } from '../render/measure/profileLinkOverlay2d';
 import type { ProfileLinkController, ProfileLinkMarker } from './profileLinkController';
 import type {
@@ -129,6 +135,144 @@ const SECTION_STYLE = {
   stationColour: 'rgb(255, 214, 102)',
   stationAlpha: 0.55,
 } as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Axis indicators
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tick label size, CSS pixels.
+ *
+ * Fixed rather than read from the stylesheet: the labels are drawn into a
+ * canvas, and a canvas has no cascade to read a token out of. The value is the
+ * one `--text-xs` resolves to for the panel around it, so the plot's numbers
+ * and the detail list's numbers are the same size on screen.
+ */
+export const AXIS_FONT_PX = 11;
+
+/** How far a label sits from the edge of the plot it labels, CSS pixels. */
+export const AXIS_LABEL_INSET_PX = 4;
+
+/**
+ * Rule, label and title inks.
+ *
+ * The axes are drawn OVER the plot rather than in a gutter carved out of it.
+ * Carving would change the box `fitProfileView` is given, so the picture a
+ * reader has been looking at would shift the moment an axis appeared. Drawing
+ * over it means the ink has to stay quieter than the returns underneath: the
+ * rules read as a grid behind the section, not as another series in it.
+ */
+const AXIS_RULE_COLOUR = 'rgba(255, 255, 255, 0.10)';
+const AXIS_TEXT_COLOUR = 'rgba(255, 255, 255, 0.62)';
+const AXIS_TITLE_COLOUR = 'rgba(255, 255, 255, 0.45)';
+
+/** Target major ticks per axis. Fewer than the plot could hold, so labels fit. */
+export const AXIS_TARGET_TICKS = 6;
+
+/**
+ * The 2D context, with the text calls the axis needs.
+ *
+ * Separate from `ProfileRenderingContext` because that one is the splat
+ * renderer's contract and states only what the splats use. Every text member
+ * is feature-detected before it is called, so a context without them (an
+ * older test double, a stub surface) draws the rules and skips the words
+ * rather than throwing on the way.
+ */
+export interface AxisTextContext extends ProfileRenderingContext {
+  font: string;
+  textAlign: string;
+  textBaseline: string;
+  fillText(text: string, x: number, y: number): void;
+}
+
+function canDrawText(ctx: ProfileRenderingContext): ctx is AxisTextContext {
+  return typeof (ctx as Partial<AxisTextContext>).fillText === 'function';
+}
+
+/**
+ * Draw both axes over a plot that has already been rendered.
+ *
+ * The ticks come from `profileAxes`, so a rule here falls exactly where the
+ * same transform put the returns beside it, and every tick is an exact
+ * multiple of its step. Which labels are actually printed comes from
+ * `fitAxisLabels`, so a narrow dock loses labels rather than stacking them
+ * into an unreadable smear.
+ *
+ * The height axis is titled by what the scan supports and nothing more: a
+ * section with no declared datum reads "Height (datum unknown)" here for the
+ * same reason it does in the point inspector and on the exported sheet.
+ */
+export function drawWorkbenchAxes(
+  ctx: ProfileRenderingContext,
+  axes: ProfileAxesModel,
+  viewport: ProfileViewport,
+): void {
+  const width = viewport.width;
+  const height = viewport.height;
+  if (!(width > 0) || !(height > 0)) return;
+
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = AXIS_RULE_COLOUR;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const x of axes.x.pixels) {
+    if (!Number.isFinite(x) || x < 0 || x > width) continue;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+  }
+  for (const y of axes.y.pixels) {
+    if (!Number.isFinite(y) || y < 0 || y > height) continue;
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+  }
+  ctx.stroke();
+
+  if (!canDrawText(ctx)) return;
+  const text = ctx;
+  text.font = `${AXIS_FONT_PX}px system-ui, sans-serif`;
+
+  // Chainage labels run along the bottom edge; the strip they compete for is
+  // the plot's width.
+  const keepX = fitAxisLabels({
+    labels: axes.x.labels,
+    pixels: axes.x.pixels,
+    containerPx: width,
+    fontPx: AXIS_FONT_PX,
+  });
+  text.fillStyle = AXIS_TEXT_COLOUR;
+  text.textAlign = 'center';
+  text.textBaseline = 'bottom';
+  for (let i = 0; i < axes.x.labels.length; i++) {
+    if (!keepX[i]) continue;
+    text.fillText(axes.x.labels[i]!, axes.x.pixels[i]!, height - AXIS_LABEL_INSET_PX);
+  }
+
+  // Height labels are stacked down the left edge, so what one of them can
+  // collide with is the LINE HEIGHT of its neighbour, never its width.
+  const keepY = fitAxisLabels({
+    labels: axes.y.labels,
+    pixels: axes.y.pixels,
+    containerPx: height,
+    fontPx: AXIS_FONT_PX,
+    extentPx: () => AXIS_FONT_PX,
+  });
+  text.textAlign = 'left';
+  text.textBaseline = 'middle';
+  for (let i = 0; i < axes.y.labels.length; i++) {
+    if (!keepY[i]) continue;
+    text.fillText(axes.y.labels[i]!, AXIS_LABEL_INSET_PX, axes.y.pixels[i]!);
+  }
+
+  // The titles carry the units, because a tick label is a bare number and an
+  // axis holds one unit down its whole column.
+  text.fillStyle = AXIS_TITLE_COLOUR;
+  text.textAlign = 'right';
+  text.textBaseline = 'bottom';
+  text.fillText(axes.x.title, width - AXIS_LABEL_INSET_PX, height - AXIS_LABEL_INSET_PX);
+  text.textAlign = 'left';
+  text.textBaseline = 'top';
+  text.fillText(axes.y.title, AXIS_LABEL_INSET_PX, AXIS_LABEL_INSET_PX);
+}
 
 /** The canvas the dock hands over, reduced to what is read from it. */
 export interface WorkbenchCanvas {
@@ -243,6 +387,14 @@ export interface ComposeSectionOptions {
    * Absent, this composes the same selection in one pass.
    */
   readonly indices?: Uint32Array;
+  /**
+   * Vertical reference of the section's heights, for the height-axis title.
+   *
+   * Absent reads as `unknown`, which titles the axis "Height (datum unknown)".
+   * That is the honest default for a caller that has not resolved a CRS: the
+   * axis must never promise a datum the section cannot show one for.
+   */
+  readonly reference?: VerticalReference;
 }
 
 /**
@@ -261,6 +413,8 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
     Number.isFinite(options.unitScale) && (options.unitScale as number) > 0
       ? (options.unitScale as number)
       : 1;
+  const reference: VerticalReference = options.reference ?? 'unknown';
+  const axisUnit = scale === 1 ? unit : null;
   const indices = options.indices ?? drawIndices(section);
   const colours = new Uint8Array(indices.length * 3);
   const colouring = colourProfileSection(
@@ -293,7 +447,7 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
   let lastFrame: WorkbenchPlotFrame | null = null;
 
   function draw(): void {
-    if (!renderer) return;
+    if (!renderer || !ctx) return;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     // A collapsed dock's body is `display: none`, so its canvas reads 0x0.
@@ -316,6 +470,24 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
       style: SECTION_STYLE,
     });
     renderer.renderNow();
+    // After the returns, so the grid sits over the section rather than under
+    // splats that would hide the rules the reader is measuring against.
+    drawWorkbenchAxes(
+      ctx,
+      profileAxes(view, viewport, {
+        reference,
+        // Ticks are read off the section in the scan's OWN render units, so a
+        // unit is named only where those units already ARE that unit. On a
+        // frame whose scale is not 1 the detail rows still carry the converted
+        // spans; the axis prints bare numbers rather than metres it is not in.
+        horizontalUnit: axisUnit,
+        verticalUnit: axisUnit,
+        units: { horizontalToMetres: null, verticalToMetres: null },
+        targetXTicks: AXIS_TARGET_TICKS,
+        targetYTicks: AXIS_TARGET_TICKS,
+      }),
+      viewport,
+    );
     lastFrame = { view, viewport };
   }
 
@@ -522,6 +694,9 @@ export function presentWorkbenchSection(
       devicePixelRatio: scene.devicePixelRatio(),
       unitSuffix: metres === null ? null : 'm',
       unitScale: metres ?? 1,
+      // The SAME reference the detail card's height row is worded from, so the
+      // axis title and the row beside it cannot name two different surfaces.
+      reference: pointVerticalReference(scene.crs?.()),
     });
     handle.setScope(plot.view.scope);
     handle.setGroundBasis(plot.view.groundBasisNote);

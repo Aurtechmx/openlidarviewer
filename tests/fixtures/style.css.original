@@ -4998,6 +4998,22 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-workbench-titles { min-width: 0; }
 .olv-workbench-title { font-size: var(--text-sm); color: var(--text); }
+/* The title as a field, where the host wired somewhere to commit a name to.
+   Dashed until it is reached, so it reads as a caption that can be typed over
+   rather than as another control competing with the buttons beside it. The
+   padding is what gives it a hit area a pointer can actually land on. */
+.olv-workbench-title-input {
+  width: 100%; min-width: 0;
+  background: transparent;
+  border: 0.5px dashed var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  cursor: text;
+}
+.olv-workbench-title-input:hover { border-style: solid; border-color: var(--accent); }
+.olv-workbench-title-input:focus-visible {
+  outline: none; border-style: solid; border-color: var(--accent);
+}
 .olv-workbench-scope {
   font-size: var(--text-xs); color: var(--text-faint);
   font-variant-numeric: tabular-nums;
@@ -5019,6 +5035,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-sm);
 }
 .olv-workbench-btn:hover { color: var(--text); }
+.olv-workbench-btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.olv-workbench-btn:disabled { opacity: 0.6; cursor: default; }
 .olv-workbench-status {
   padding: 0 var(--space-md) var(--space-2xs);
   font-size: var(--text-xs); color: var(--text-faint);

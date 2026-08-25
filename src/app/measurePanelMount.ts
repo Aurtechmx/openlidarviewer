@@ -161,6 +161,21 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           pose: () => deps.getViewer().getCameraPose(),
           apply: (pose) => deps.getViewer().applyCameraPose(pose),
         },
+        // The dock's title field commits through the SAME controller call the
+        // Measurements panel's own name field does, then refreshes the panel,
+        // so a rename made in either surface is the one name both show.
+        rename: (id, name) => {
+          deps.getViewer().measure.renameMeasurement(id, name);
+          refresh();
+        },
+        // The panel's own export, not a second one. It is the single place the
+        // sheet's inputs are assembled, which is what keeps the read scope and
+        // the classification basis on a sheet exported from the dock.
+        exportPdf: (id) => {
+          const live = panel;
+          if (!live) return Promise.reject(new Error('The measurements panel is not mounted.'));
+          return live.exportProfilePdf(id);
+        },
       });
       return launcher;
     });
@@ -271,6 +286,14 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         if (newest) deps.recordUsage('measurement', newest.kind);
       }
       lastMeasurementCount = measurements.length;
+      // A rename made in the Measurements list belongs on the open dock's
+      // title too: one name, two views of it. Pushed rather than polled, and
+      // the panel drops the write while its field has focus, so a refresh
+      // cannot overwrite a name someone is still typing into the dock.
+      if (dockedId !== null) {
+        const docked = measurements.find((m) => m.id === dockedId);
+        if (docked) launcher?.handle?.setTitle?.(docked.name);
+      }
     } else {
       // Panel not mounted yet (pre-first-scan, or the chunk is still loading) —
       // kick the lazy mount; `hydrate()` re-runs this once it lands.

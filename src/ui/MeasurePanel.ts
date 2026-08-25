@@ -18,6 +18,7 @@ import { storageGet, storageSet } from './safeStorage';
 // lazyChunks.ts (excluded from the live source-transform) so its literal is
 // never scrambled. Importing the thunk pulls nothing heavy into the shell.
 import { loadProfilePdf } from '../lazyChunks';
+import { profilePdfInputFor } from './profilePdfInput';
 import type { MeasurementSummary, ProfileResampleParams } from '../render/measure/MeasureController';
 import {
   DIMENSION_LABEL,
@@ -733,6 +734,24 @@ export class MeasurePanel {
    * initial bundle; the button shows progress and a failure state rather
    * than failing silently.
    */
+  /**
+   * Export one profile by id, for a surface that has no summary in hand.
+   *
+   * The docked workbench's own Export PDF control comes through here rather
+   * than assembling the builder's inputs a second time. A sheet states its
+   * read scope and the classification basis of the heights on it, and those
+   * are exactly the parameters a second call site drops; there is one
+   * assembly, and both controls run it.
+   *
+   * Rejects when the id names nothing this panel is showing, so the control
+   * that called it can report a failure instead of appearing to succeed.
+   */
+  async exportProfilePdf(id: string): Promise<void> {
+    const s = this._summaries.find((x) => x.id === id);
+    if (!s) throw new Error(`No measurement ${id} to export.`);
+    await this._buildProfileSheet(s);
+  }
+
   private async _exportProfilePdf(
     s: MeasurementSummary,
     btn: HTMLButtonElement,
@@ -742,39 +761,7 @@ export class MeasurePanel {
     btn.disabled = true;
     btn.textContent = 'Building…';
     try {
-      const { buildProfilePdf } = await loadProfilePdf();
-      // B4 — pass everything the app actually knows. The builder has carried
-      // these parameters since v0.4.0; this call site discarding them was why
-      // every sheet printed "auto (5 % of length)" / "p25" /
-      // "not georeferenced" even when the CRS service had resolved the frame.
-      const ctx = this._cb.getProfileExportContext
-        ? this._cb.getProfileExportContext()
-        : null;
-      const bytes = await buildProfilePdf({
-        name: s.name,
-        samples: s.profileChart,
-        residentOnly: s.profileChartResidentOnly,
-        corridorWidthM: s.profileCorridorWidthM ?? null,
-        groundPercentile: s.profileGroundPercentile ?? null,
-        crs: ctx?.crs ?? null,
-        verticalDatum: ctx?.verticalDatum ?? null,
-        // B9 — the builder has honoured the unit system since the imperial
-        // sweep, but this call site never passed it, so every sheet printed
-        // metric regardless of the toggle. Same source the chart/CSV read.
-        unitSystem: this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
-        datumKnown: s.profileDatumKnown !== false,
-        // What shaped the estimate. A reader of the exported file cannot see
-        // the app state that produced it, so the sources, the class policy and
-        // the read scope go on the page.
-        provenance: s.profileProvenance ?? null,
-        // The clock is read HERE, at the app boundary. The builder takes the
-        // stamp as a parameter so the same sheet is the same bytes.
-        generatedAt: new Date(),
-      });
-      triggerDownload(
-        new Blob([bytes as BlobPart], { type: 'application/pdf' }),
-        `${safeFileName(s.name)}-profile.pdf`,
-      );
+      await this._buildProfileSheet(s);
     } catch (err) {
       console.error('OpenLiDARViewer: profile PDF export failed.', err);
       btn.textContent = 'Export failed';
@@ -786,6 +773,34 @@ export class MeasurePanel {
     }
     btn.textContent = label;
     btn.disabled = false;
+  }
+
+  /**
+   * Assemble the sheet's inputs and download it. THE one assembly.
+   *
+   * Throws on failure rather than reporting it, so each control that calls it
+   * shows the failure in its own vocabulary.
+   */
+  private async _buildProfileSheet(s: MeasurementSummary): Promise<void> {
+    if (!s.profileChart || s.profileChart.length < 2) return;
+    const { buildProfilePdf } = await loadProfilePdf();
+    // Assembled in ONE place, shared with the docked workbench's own export
+    // control. What a second assembly drops is the CRS, the unit system and
+    // the provenance record, which is exactly what a reader of the file
+    // cannot recover from anywhere else.
+    const bytes = await buildProfilePdf(
+      profilePdfInputFor(s, {
+        context: this._cb.getProfileExportContext ? this._cb.getProfileExportContext() : null,
+        unitSystem: this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
+        // The clock is read HERE, at the app boundary. The builder takes the
+        // stamp as a parameter so the same sheet is the same bytes.
+        generatedAt: new Date(),
+      }),
+    );
+    triggerDownload(
+      new Blob([bytes as BlobPart], { type: 'application/pdf' }),
+      `${safeFileName(s.name)}-profile.pdf`,
+    );
   }
 
   /**
