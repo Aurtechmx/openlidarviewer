@@ -21,6 +21,7 @@ body.olv-theme-light {
   --text: #0a1430;
   --text-dim: #46546e;
   --text-faint: #5d6a87; /* darkened from #7682a0 to clear WCAG AA (≥4.5:1) on the light --bg */
+  --warn: #7d5b07; /* darkened from #b8860b, which read 2.9:1 on the near-white caption fill */
   --accent: #0088c8;
   --accent-soft: rgba(0, 136, 200, 0.18);
   /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
@@ -54,6 +55,7 @@ body.olv-theme-high-contrast {
   --text: #ffffff;
   --text-dim: #d9d9d9;
   --text-faint: #b3b3b3;
+  --warn: #f0b429; /* brightened for this rail: 8.8:1 on the caption fill, 10.6:1 on --panel */
   --accent: #5cd7ff;
   --accent-soft: rgba(92, 215, 255, 0.28);
   /* Bright violet — high luminance against pure black, holds WCAG AA. */

@@ -239,6 +239,7 @@ function tinySection(count = 32): ProfileSectionResult {
     band: 1.5,
     scope: 'static' as never,
     scopeLabel: 'One loaded layer.',
+    classificationOnEverySource: true,
     streamingComplete: null,
     sources: [],
     generation: 1,

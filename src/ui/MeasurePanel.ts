@@ -46,6 +46,7 @@ import { heightLabel } from '../geo/height';
 import type { VerticalReference } from '../geo/height';
 // Straight-polyline path builder shared with the profile PDF so the chart and
 // the sheet draw the same geometry. Pure string assembly, no dependencies.
+import { fitAxisLabels } from '../render/measure/profileAxes';
 import { profilePolylinePath } from '../render/measure/profilePath';
 // Δh in the chart tooltip goes through the shared formatter so it carries
 // its unit in BOTH systems (B9 — it used to print a hardcoded "m" even in
@@ -2016,20 +2017,39 @@ function renderProfileChart(
   // X labels sit just below the plot floor; expressed as a box-fraction so the
   // gap tracks the axis at any chart height.
   const xLabelTop = (((plotBottom + 6) / H) * 100).toFixed(2);
-  const xLabelHtml = stations
-    .map((c, i) => {
-      const isLast = i === lastIdx;
-      if (!isLast && i % labelStride !== 0) return '';
-      if (!isLast && lastIdx - i < labelStride / 2) return '';
-      let tx: string;
-      if (i === 0) {
-        tx = '0';
-      } else if (isLast) {
-        tx = '-100%';
-      } else {
-        tx = '-50%';
-      }
-      return `<span class="olv-mp-axis olv-mp-axis-x" style="left:${xPct(c).toFixed(2)}%;top:${xLabelTop}%;transform:translateX(${tx})">${formatChainage(c)}</span>`;
+  // Stride first as a density cap, then fit, because the two answer different
+  // questions: the stride is how many labels an axis should carry, and the fit
+  // is which of those the axis has room for.
+  //
+  // The width below is a bound, not a measurement. This string is built before
+  // the overlay is in a document, so the chart's real width cannot be read
+  // here, and the two errors are not symmetric: believing the chart WIDER than
+  // it is keeps a pair that then overprints, while believing it narrower costs
+  // a tick mark the station table underneath still carries. So the fit runs
+  // against the chart's CSS floor rather than its usual size. A wide chart
+  // therefore carries fewer labels than it could, which is the price of never
+  // overprinting at any width. `axisLabelWidth` errs wide for the same reason.
+  const MIN_CHART_PX = 180;
+  const AXIS_FONT_PX = 11;
+  const candidates = stations
+    .map((c, i) => ({ c, i }))
+    .filter(({ i }) => i === lastIdx || i % labelStride === 0);
+  const texts = candidates.map(({ c }) => formatChainage(c));
+  const keep = fitAxisLabels({
+    labels: texts,
+    pixels: candidates.map(({ c }) => (xPct(c) / 100) * MIN_CHART_PX),
+    containerPx: MIN_CHART_PX,
+    fontPx: AXIS_FONT_PX,
+    // The overlay anchors its end labels inside the plot, so the fit has to
+    // judge them the same way or it drops the label carrying the extent.
+    ends: 'pulled-in',
+  });
+  const xLabelHtml = candidates
+    .map(({ c, i }, k) => {
+      if (!keep[k]) return '';
+      // The end labels are pulled inside the plot so neither overhangs it.
+      const tx = i === 0 ? '0' : i === lastIdx ? '-100%' : '-50%';
+      return `<span class="olv-mp-axis olv-mp-axis-x" style="left:${xPct(c).toFixed(2)}%;top:${xLabelTop}%;transform:translateX(${tx})">${texts[k]}</span>`;
     })
     .join('');
   const yLabelHtml = yTicks

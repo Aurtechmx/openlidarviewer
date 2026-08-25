@@ -141,6 +141,17 @@ export interface ProfileSectionResult {
   readonly scope: ProfileSectionScope;
   /** The sentence a header shows for {@link scope}. */
   readonly scopeLabel: string;
+  /**
+   * True only when every contributing source carried a usable classification
+   * channel, so the class exclusion could act on all of them. The same
+   * question `ProfileClassPolicy.availableOnEverySource` answers for the
+   * exported record, decided here by the same channel-alignment rule, so the
+   * screen and the sheet cannot disagree about what shaped the heights.
+   *
+   * False when nothing contributed: no availability can be asserted over an
+   * empty read.
+   */
+  readonly classificationOnEverySource: boolean;
   /** Null when the streaming source's node count is not known. */
   readonly streamingComplete: boolean | null;
   readonly sources: readonly ProfileSectionSourceRef[];
@@ -381,9 +392,14 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     const { statics, residents } = walkScene(deps);
     const sources: ProfileSectionSourceView[] = [];
     const refs: ProfileSectionSourceRef[] = [];
+    // Tallied while the views are built, from the same `alignedClassification`
+    // decision `viewOf` makes, so a channel rejected for misalignment counts as
+    // absent here too rather than as classification that was never applied.
+    let classifiedSources = 0;
     for (const { layer, pos } of statics) {
       const slot = sources.length;
       sources.push(viewOf(slot, pos, layer.channels, layer.bounds, layer.placement));
+      if (alignedClassification(layer.channels, pos.length) !== undefined) classifiedSources++;
       refs.push({ slot, kind: 'static', id: layer.id, pointCount: pos.length / 3 });
     }
     for (const { node, pos } of residents) {
@@ -392,6 +408,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       // render origin, and the terms it was admitted on are what say that
       // origin is the project's.
       sources.push(viewOf(slot, pos, node.channels, null, null));
+      if (alignedClassification(node.channels, pos.length) !== undefined) classifiedSources++;
       refs.push({ slot, kind: 'resident', id: node.key, pointCount: pos.length / 3 });
     }
     const extraction = extractProfileSectionChunks({
@@ -422,6 +439,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       band,
       scope,
       scopeLabel: describeSectionScope(scope, complete),
+      classificationOnEverySource: sources.length > 0 && classifiedSources === sources.length,
       streamingComplete: complete,
       sources: refs,
       generation: token,
