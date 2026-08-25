@@ -6,12 +6,16 @@
  * depends on: the index is a pyramid (interior nodes hold points AND children,
  * which is what lets a coarse view draw before the fine tiles arrive), a node's
  * VoxelKey agrees with the octant path the ancestor walk derives by shifting, a
- * node's declared bounds contain the points its tile decodes to, and the cube
+ * node's declared bounds contain the points its tile decodes to once localised
+ * against the render origin the way the scheduler localises them, and the cube
  * and the data extent stay separate figures.
  *
  * The bytes come from a memory store, so the whole path runs in Node.
  */
 import { describe, it, expect } from 'vitest';
+import { StreamingScheduler } from '../src/render/streaming/StreamingScheduler';
+import { streamingBudgets } from '../src/render/streaming/streamingBudget';
+import type { Box6 } from '../src/io/copc/copcTypes';
 import { writeLas14 } from '../src/convert/writeLas';
 import type { GlobalPoints } from '../src/convert/globalPoints';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
@@ -107,6 +111,30 @@ function makeSource(reader: TileStoreReader, tiles: TileBytesReader) {
   return new OlvTileSource({ id: 'tile-scan-1', name: 'field.las', store: reader, tiles });
 }
 
+/**
+ * A column-major orthographic view-projection that maps `box` onto the clip
+ * cube — the whole box is inside the frustum, so nothing is culled for being
+ * off-screen and a `visible` of zero can only mean the box is in the wrong
+ * frame.
+ */
+function framing(box: Box6): number[] {
+  const half = Math.max(box[3] - box[0], box[4] - box[1], box[5] - box[2]) / 2;
+  const s = 1 / half;
+  const cx = (box[0] + box[3]) / 2;
+  const cy = (box[1] + box[4]) / 2;
+  const cz = (box[2] + box[5]) / 2;
+  return [s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, -cx * s, -cy * s, -cz * s, 1];
+}
+
+/** Wait until the scheduler has no queued or in-flight work. */
+async function drain(scheduler: StreamingScheduler): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    const s = scheduler.stats();
+    if (s.queued === 0 && s.loading === 0) return;
+    await new Promise((r) => setTimeout(r, 0));
+  }
+}
+
 describe('OlvTileSource', () => {
   it('reports a frame that agrees with its render origin', async () => {
     const { reader, tiles } = await buildReader(2000);
@@ -191,7 +219,7 @@ describe('OlvTileSource', () => {
     }
   });
 
-  it('reads and decodes a node chunk into the points its bounds claim', async () => {
+  it('reads and decodes a node chunk into the points its localised bounds claim', async () => {
     const { reader, tiles } = await buildReader(5000);
     const source = makeSource(reader, tiles);
     const decoder = new TileChunkDecoder(reader.schema, reader.recordBytes);
@@ -208,11 +236,16 @@ describe('OlvTileSource', () => {
 
     const decoded = await decoder.decode(chunk, meta);
     expect(decoded.pointCount).toBe(node.record.pointCount);
+    // Decoded positions are render-space; a record's bounds are world. The
+    // scheduler bridges the two with exactly this subtraction, so a containment
+    // check has to apply it too.
     let outside = 0;
     for (let i = 0; i < decoded.pointCount; i++) {
       for (let a = 0; a < 3; a++) {
         const v = decoded.positions[i * 3 + a];
-        if (v < node.record.bounds[a] || v > node.record.bounds[a + 3]) outside++;
+        const lo = node.record.bounds[a] - source.renderOrigin[a];
+        const hi = node.record.bounds[a + 3] - source.renderOrigin[a];
+        if (v < lo || v > hi) outside++;
       }
     }
     expect(outside).toBe(0);
@@ -226,6 +259,15 @@ describe('OlvTileSource', () => {
     const decoder = new TileChunkDecoder(reader.schema, reader.recordBytes);
 
     expect(source.renderOrigin).toEqual(origin);
+    // Node records are world, so the scheduler's `bounds - renderOrigin` lands
+    // in the same render space as the decoded positions and as localBounds().
+    const cube = source.localBounds();
+    const root = source.octree.nodes().find((n) => n.record.key.depth === 0)!;
+    for (let a = 0; a < 3; a++) {
+      expect(root.record.bounds[a]).toBeCloseTo(cube[a] + origin[a], 6);
+      expect(root.record.bounds[a + 3]).toBeCloseTo(cube[a + 3] + origin[a], 6);
+    }
+
     // The build already recentred, so the decoder must not shift again.
     const node = source.octree.nodes().find((n) => n.record.pointCount > 0)!;
     const meta = source.decodeMeta(node.record);
@@ -284,5 +326,38 @@ describe('OlvTileSource', () => {
     // The orphan's own points are still offered — dropping the node would lose
     // them on top of losing the parent.
     expect(source.octree.store.get(tileNodeId(orphan.key))).toBeDefined();
+  });
+
+  it('streams through the scheduler with the camera framing the cube', async () => {
+    // The scheduler localises a node as `record.bounds - renderOrigin`, so the
+    // records and the render origin must be in the same frame. When the records
+    // held build-local numbers while the origin was the build's UTM recentring
+    // origin, the subtraction ran twice: every node landed a whole origin from
+    // the camera, `boxInFrustum` culled the entire hierarchy, and the scan
+    // streamed nothing with no error anywhere.
+    const { reader, tiles } = await buildReader(5000);
+    const source = makeSource(reader, tiles);
+    const decoder = new TileChunkDecoder(reader.schema, reader.recordBytes);
+    const scheduler = new StreamingScheduler(
+      source,
+      decoder,
+      { onNodeReady: () => {}, onNodeEvicted: () => {} },
+      streamingBudgets('balanced', false),
+    );
+
+    const cube = source.localBounds();
+    const side = cube[5] - cube[2];
+    const camera: [number, number, number] = [
+      (cube[0] + cube[3]) / 2,
+      (cube[1] + cube[4]) / 2,
+      cube[5] + side,
+    ];
+    scheduler.update({ viewProjection: framing(cube), cameraPosition: camera });
+
+    expect(scheduler.stats().visible).toBeGreaterThan(0);
+    await drain(scheduler);
+    expect(source.counts().resident).toBeGreaterThan(0);
+    expect(source.residentPointCount).toBeGreaterThan(0);
+    scheduler.stop();
   });
 });
