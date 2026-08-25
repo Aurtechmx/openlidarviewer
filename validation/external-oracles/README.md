@@ -113,6 +113,6 @@ What it does not show. Binning is not interpolation: agreement on a per-cell
 mean says nothing about an inverse-distance, spline or TIN surface, and nothing
 here touches inpainting or the confidence layer. Neither side applies a search
 radius, which is what makes them comparable and also what puts a radius-based
-estimator out of scope. Median, percentile and robust aggregation are not
+estimator out of scope. No median, percentile or trimmed aggregation is
 exercised. One cell size, one grid origin, one planar frame. And agreement with
 GRASS is not accuracy against surveyed ground.
