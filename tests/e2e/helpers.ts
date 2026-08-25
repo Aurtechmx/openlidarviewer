@@ -14,7 +14,7 @@
  *   empty-state copy changes.
  */
 
-import type { Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -131,4 +131,80 @@ export async function dropDenseGridPly(page: Page): Promise<void> {
     return dt;
   }, [...bytes]);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
+}
+
+/**
+ * Wait until the desktop rail chrome has finished its mount animation.
+ *
+ * Two rules in 72-panel-rails.css keep the rail moving after a scan mounts:
+ * `.olv-left-panels:not(.olv-rail-collapsed) > *` runs the 380ms
+ * `olv-rail-panel-in` entrance, and each grabber tab transitions its `left` /
+ * `right` offset over 420ms on `--ease-spring`. `.olv-ws-body` is a direct
+ * child of the rail, so the whole scroller and every control inside it is
+ * still translating while that entrance plays.
+ *
+ * Only those two are awaited. The rail also hosts decorative animations that
+ * never end (status-dot pulse, the Analyse shimmer, the reclassify spinner),
+ * so a blanket "nothing is running" wait would never return.
+ */
+export async function railChromeSettled(page: Page, timeout = 15_000): Promise<void> {
+  // A style change queued in this frame has no running animation yet, so a
+  // check made straight away would pass before the entrance even starts. Let
+  // two frames go by first: that is a frame boundary, not a duration.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+  await page.waitForFunction(
+    () => {
+      const SETTLING = new Set(['left', 'right', 'width', 'transform', 'opacity']);
+      return document.getAnimations().every((a) => {
+        if (a.playState !== 'running') return true;
+        const anim = a as Animation & { animationName?: string; transitionProperty?: string };
+        if (anim.animationName === 'olv-rail-panel-in') return false;
+        if (anim.transitionProperty === undefined) return true;
+        const target = (a.effect as KeyframeEffect | null)?.target ?? null;
+        if (target === null) return true;
+        const inRail =
+          target.closest('.olv-left-panels, .olv-right-rail, .olv-rail-tab, .olv-right-rail-tab') !==
+          null;
+        return !(inRail && SETTLING.has(anim.transitionProperty));
+      });
+    },
+    undefined,
+    { timeout },
+  );
+}
+
+/**
+ * Wait until `locator` is the element the browser actually hits at its own
+ * centre, then assert it. The layer row's rightmost control clears the
+ * `.olv-ws-body` client edge by 4px, so a few pixels of un-settled transform
+ * put that centre inside the scroller's reserved scrollbar gutter and
+ * `.olv-ws-body` wins the hit test. This waits for the condition the click
+ * needs rather than for a duration, and it keeps the interception check that
+ * `{ force: true }` would switch off.
+ */
+export async function expectHittable(locator: Locator, timeout = 15_000): Promise<void> {
+  await locator.waitFor({ state: 'visible', timeout });
+  await expect
+    .poll(
+      async () => {
+        // A click scrolls its target into view before it hits anything, and the
+        // rail scrolls, so do the same here. Without it the centre of a control
+        // below the fold is outside the viewport and nothing is hit at all.
+        await locator.scrollIntoViewIfNeeded({ timeout: 5_000 });
+        return locator.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          if (hit === null) return 'nothing';
+          if (hit === el || el.contains(hit)) return 'target';
+          return hit.className || hit.tagName;
+        });
+      },
+      { timeout, message: 'the element at the target centre is still something else' },
+    )
+    .toBe('target');
 }

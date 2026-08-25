@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { suppressOnboardingTour, dropTinyPly } from './helpers';
+import { suppressOnboardingTour, dropTinyPly, railChromeSettled, expectHittable } from './helpers';
 
 /**
  * tests/e2e/rightRail.spec.ts
@@ -27,7 +27,7 @@ async function loadSample(page: Page, url = '/'): Promise<void> {
   await page.goto(url);
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(800);
+  await railChromeSettled(page);
 }
 
 test('the Inspector handle is hidden in the empty state (no scan)', async ({ page }) => {
@@ -47,15 +47,18 @@ test('the Inspector handle mounts, is visible, and starts expanded', async ({ pa
 
 test('the Inspector handle sits against the column, not the viewport centre', async ({ page }) => {
   await loadSample(page);
-  const inspBox = await page.locator(INSPECTOR).boundingBox();
-  const tabBox = await page.locator(TAB).boundingBox();
-  expect(inspBox).not.toBeNull();
-  expect(tabBox).not.toBeNull();
-  if (inspBox && tabBox) {
-    const tabRight = tabBox.x + tabBox.width;
-    expect(tabRight).toBeGreaterThanOrEqual(inspBox.x - 8);
-    expect(tabRight).toBeLessThanOrEqual(inspBox.x + 8);
-  }
+  // The handle's `right` offset is transitioned over 420ms on a spring easing
+  // (72-panel-rails.css), so this reads the geometry until it settles rather
+  // than once after a fixed wait. The bound is unchanged.
+  const offset = async (): Promise<number | null> => {
+    const inspBox = await page.locator(INSPECTOR).boundingBox();
+    const tabBox = await page.locator(TAB).boundingBox();
+    if (!inspBox || !tabBox) return null;
+    return tabBox.x + tabBox.width - inspBox.x;
+  };
+  await expect.poll(offset, { timeout: 15_000 }).not.toBeNull();
+  await expect.poll(offset, { timeout: 15_000 }).toBeGreaterThanOrEqual(-8);
+  expect(await offset()).toBeLessThanOrEqual(8);
 });
 
 test('clicking the Inspector handle collapses, then restores, the Inspector', async ({ page }) => {
@@ -63,10 +66,13 @@ test('clicking the Inspector handle collapses, then restores, the Inspector', as
   const tab = page.locator(TAB);
   const inspector = page.locator(INSPECTOR);
 
+  await expectHittable(tab);
   await tab.click();
   await expect(inspector).toHaveClass(/olv-right-collapsed/);
   await expect(tab).toHaveAttribute('aria-expanded', 'false');
 
+  await railChromeSettled(page);
+  await expectHittable(tab);
   await tab.click();
   await expect(inspector).not.toHaveClass(/olv-right-collapsed/);
   await expect(tab).toHaveAttribute('aria-expanded', 'true');
@@ -74,6 +80,7 @@ test('clicking the Inspector handle collapses, then restores, the Inspector', as
 
 test('the Inspector collapsed choice persists across a reload', async ({ page }) => {
   await loadSample(page);
+  await expectHittable(page.locator(TAB));
   await page.locator(TAB).click();
   await expect(page.locator(INSPECTOR)).toHaveClass(/olv-right-collapsed/);
 
@@ -83,7 +90,7 @@ test('the Inspector collapsed choice persists across a reload', async ({ page })
   await page.reload();
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(600);
+  await railChromeSettled(page);
   await expect(page.locator(INSPECTOR)).toHaveClass(/olv-right-collapsed/);
   await expect(page.locator(TAB)).toHaveAttribute('aria-expanded', 'false');
 });
