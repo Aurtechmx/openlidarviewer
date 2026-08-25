@@ -8,6 +8,15 @@
  * approximation to a catenary. It reports the span, the sag (maximum deflection
  * below the straight chord between the ends), and the fit residual.
  *
+ * The vertical is the caller's `up` axis, not index 2. A source whose frame is
+ * not Z-up would otherwise have its sag read off an axis that is not up, and the
+ * span read across one that is; the section-line frame in profileGeometry is the
+ * same seam, and this module reuses it rather than restating the shortcut.
+ *
+ * Span and sag are in the INPUT'S OWN unit, whatever that is, which is why the
+ * fields carry no metric name. The metric twin is emitted one layer up, and only
+ * when the linear unit is known.
+ *
  * It refuses non-linear inputs: a blob of vegetation or a wall is not a
  * conductor, so a low linearity (from the shared covariance descriptors) returns
  * ok:false rather than a plausible-looking sag. The sag is a MEASURED profile,
@@ -16,6 +25,11 @@
  */
 
 import { covarianceEigen, descriptorsFromEigen } from '../classification/geometryDescriptors';
+import {
+  buildProfileFrame,
+  projectPointToProfile,
+  DEGENERATE_HORIZONTAL_LENGTH,
+} from '../render/measure/profileGeometry';
 
 export type Vec3 = readonly [number, number, number];
 
@@ -25,23 +39,37 @@ export interface ConductorFit {
   /** Unit principal (span) direction. */
   readonly centerlineDir: Vec3;
   readonly linearity: number;
-  /** Along-span length covered by the points. */
-  readonly spanM: number;
-  /** Maximum deflection below the straight chord between the span ends. */
-  readonly sagM: number;
-  /** RMS residual of the vertical profile fit. */
-  readonly residualRms: number;
+  /** Along-span length covered by the points, in the input's own unit. */
+  readonly spanSource: number;
+  /**
+   * Maximum deflection below the straight chord between the span ends, measured
+   * along `up`, in the input's own unit.
+   */
+  readonly sagSource: number;
+  /** RMS residual of the vertical profile fit, in the input's own unit. */
+  readonly residualRmsSource: number;
   readonly n: number;
 }
 
 const ZERO_DIR: Vec3 = [0, 0, 0];
 
-/** Fit a conductor; `minLinearity` (default 0.9) is the floor below which the
- *  points are not accepted as a wire. */
-export function fitConductor(points: readonly Vec3[], minLinearity = 0.9): ConductorFit {
+/**
+ * Fit a conductor. `up` is the frame's vertical axis and is required: a wrong
+ * vertical turns sag into a number that is not sag, so there is no default worth
+ * guessing. `minLinearity` (default 0.9) is the floor below which the points are
+ * not accepted as a wire.
+ */
+export function fitConductor(points: readonly Vec3[], up: Vec3, minLinearity = 0.9): ConductorFit {
   const n = points.length;
-  const base = { centerlineDir: ZERO_DIR, linearity: 0, spanM: 0, sagM: 0, residualRms: Number.NaN, n };
+  const base = {
+    centerlineDir: ZERO_DIR, linearity: 0, spanSource: 0, sagSource: 0,
+    residualRmsSource: Number.NaN, n,
+  };
   if (n < 5) return { ...base, ok: false, reason: 'TOO_FEW_POINTS' };
+  // A zero / non-finite up axis has no vertical to project onto. Refuse it here
+  // rather than let it normalise to [0,0,0] and report a flat, sagless wire.
+  const upLen = Math.hypot(up[0], up[1], up[2]);
+  if (!Number.isFinite(upLen) || upLen === 0) return { ...base, ok: false, reason: 'DEGENERATE_UP' };
 
   const flat: number[] = new Array(n * 3);
   let mx = 0, my = 0, mz = 0;
@@ -56,17 +84,37 @@ export function fitConductor(points: readonly Vec3[], minLinearity = 0.9): Condu
   if (linearity < minLinearity) return { ...base, linearity, ok: false, reason: 'NOT_LINEAR' };
 
   const dir = eig.vectors[0]; // principal (span) direction
-  // Along-span parameter s and vertical z per point.
+  // The two extreme points along the principal direction are the span's ends;
+  // they define the section line the profile is measured against.
+  let tMin = Infinity, tMax = -Infinity, iMin = 0, iMax = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = points[i][0] - mx, dy = points[i][1] - my, dz = points[i][2] - mz;
+    const t = dx * dir[0] + dy * dir[1] + dz * dir[2];
+    if (t < tMin) { tMin = t; iMin = i; }
+    if (t > tMax) { tMax = t; iMax = i; }
+  }
+  const end0 = points[iMin], end1 = points[iMax];
+  const frame = buildProfileFrame(
+    [end0[0], end0[1], end0[2]],
+    [end1[0], end1[1], end1[2]],
+    [up[0], up[1], up[2]],
+  );
+  // A span with no plan extent is a vertical drop, not a conductor run: there is
+  // no chainage axis to fit a profile against.
+  if (!(frame.horizontalLength > DEGENERATE_HORIZONTAL_LENGTH)) {
+    return { ...base, linearity, ok: false, reason: 'NO_HORIZONTAL_EXTENT' };
+  }
+  // Chainage along the section line and height along `up`, per point.
   const s = new Array<number>(n), z = new Array<number>(n);
   let sMin = Infinity, sMax = -Infinity;
   for (let i = 0; i < n; i++) {
-    const dx = points[i][0] - mx, dy = points[i][1] - my, dz = points[i][2] - mz;
-    s[i] = dx * dir[0] + dy * dir[1] + dz * dir[2];
-    z[i] = points[i][2];
+    const proj = projectPointToProfile(frame, [points[i][0], points[i][1], points[i][2]]);
+    s[i] = proj.chainage;
+    z[i] = proj.height;
     if (s[i] < sMin) sMin = s[i];
     if (s[i] > sMax) sMax = s[i];
   }
-  const spanM = sMax - sMin;
+  const spanSource = sMax - sMin;
 
   // Least-squares quadratic z ≈ A s² + B s + C.
   const q = fitQuadratic(s, z);
@@ -74,22 +122,25 @@ export function fitConductor(points: readonly Vec3[], minLinearity = 0.9): Condu
   const [A, B, C] = q;
   let sse = 0;
   for (let i = 0; i < n; i++) { const e = A * s[i] * s[i] + B * s[i] + C - z[i]; sse += e * e; }
-  const residualRms = Math.sqrt(sse / n);
+  const residualRmsSource = Math.sqrt(sse / n);
 
   // Sag: max gap between the straight chord (ends) and the fitted curve.
   const zEnd0 = A * sMin * sMin + B * sMin + C;
   const zEnd1 = A * sMax * sMax + B * sMax + C;
-  let sagM = 0;
+  let sagSource = 0;
   const K = 64;
   for (let k = 0; k <= K; k++) {
     const ss = sMin + ((sMax - sMin) * k) / K;
-    const chord = zEnd0 + ((zEnd1 - zEnd0) * (ss - sMin)) / (spanM || 1);
+    const chord = zEnd0 + ((zEnd1 - zEnd0) * (ss - sMin)) / (spanSource || 1);
     const curve = A * ss * ss + B * ss + C;
     const gap = chord - curve; // positive where the wire dips below the chord
-    if (gap > sagM) sagM = gap;
+    if (gap > sagSource) sagSource = gap;
   }
 
-  return { ok: true, centerlineDir: [dir[0], dir[1], dir[2]], linearity, spanM, sagM, residualRms, n };
+  return {
+    ok: true, centerlineDir: [dir[0], dir[1], dir[2]], linearity,
+    spanSource, sagSource, residualRmsSource, n,
+  };
 }
 
 /** Solve least-squares [A,B,C] for z ≈ A x² + B x + C via 3×3 normal equations. */

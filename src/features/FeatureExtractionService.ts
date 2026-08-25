@@ -140,15 +140,21 @@ export function extractBuildingCandidates(
  * Fit a single conductor candidate to a set of points, or null when the points
  * are not linear enough to be a conductor span (the core's own gate).
  *
+ * `up` is the frame's vertical axis, passed through to the core: sag is measured
+ * along it, and span across the plane perpendicular to it. It is required for
+ * the same reason `unit` is — assuming index 2 is up is the geometric twin of
+ * assuming the source unit is metres.
+ *
  * The id is derived from the span's own midpoint, so re-running over the same
  * span keeps the same candidate rather than minting a fresh one.
  */
 export function extractConductorCandidate(
   points: readonly Vec3[],
   unit: LinearUnitScale,
+  up: Vec3,
   minLinearity = 0.9,
 ): ConductorCandidate | null {
-  const fit = fitConductor(points, minLinearity);
+  const fit = fitConductor(points, up, minLinearity);
   if (!fit.ok) return null;
   const toM = (v: number): number | null => {
     const m = toMetresIfKnown(sourceUnits(v), unit);
@@ -164,18 +170,18 @@ export function extractConductorCandidate(
   }
   cx /= points.length;
   cy /= points.length;
-  const token = positionToken(cx, cy, fit.spanM / 8 || 1);
+  const token = positionToken(cx, cy, fit.spanSource / 8 || 1);
   return {
     id: `conductor-${token}`,
     kind: 'conductor',
     confidence: 'derived',
     linearity: fit.linearity,
-    spanSource: fit.spanM,
-    spanM: toM(fit.spanM),
-    sagSource: fit.sagM,
-    sagM: toM(fit.sagM),
-    residualRmsSource: fit.residualRms,
-    residualRmsM: toM(fit.residualRms),
+    spanSource: fit.spanSource,
+    spanM: toM(fit.spanSource),
+    sagSource: fit.sagSource,
+    sagM: toM(fit.sagSource),
+    residualRmsSource: fit.residualRmsSource,
+    residualRmsM: toM(fit.residualRmsSource),
     pointCount: fit.n,
   };
 }
