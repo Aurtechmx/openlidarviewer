@@ -22,6 +22,8 @@ import { knownUnit, unknownUnit } from '../src/units/units';
 import { footprintsToGeoJson } from '../src/features/footprintGeoJson';
 
 const METRE = knownUnit(1);
+const Z_UP: Vec3 = [0, 0, 1];
+const Y_UP: Vec3 = [0, 1, 0];
 const FOOT = knownUnit(0.3048);
 
 /** A solid 10x10 block of building points. */
@@ -54,7 +56,7 @@ describe('FeatureExtractionService — extraction', () => {
   });
 
   it('fits a straight span as a conductor candidate', () => {
-    const c = extractConductorCandidate(span(), METRE);
+    const c = extractConductorCandidate(span(), METRE, Z_UP);
     expect(c).not.toBeNull();
     expect(c!.kind).toBe('conductor');
     expect(c!.linearity).toBeGreaterThan(0.9);
@@ -65,7 +67,7 @@ describe('FeatureExtractionService — extraction', () => {
   it('rejects a non-linear blob as not a conductor', () => {
     const pts: Vec3[] = [];
     for (let x = 0; x < 6; x++) for (let y = 0; y < 6; y++) pts.push([x, y, 0]);
-    expect(extractConductorCandidate(pts, METRE)).toBeNull();
+    expect(extractConductorCandidate(pts, METRE, Z_UP)).toBeNull();
   });
 });
 
@@ -75,7 +77,7 @@ describe('FeatureExtractionService — unit honesty', () => {
     expect(b.areaSource).toBeGreaterThan(0); // the source measure still stands
     expect(b.areaM2).toBeNull();
 
-    const c = extractConductorCandidate(span(), unknownUnit())!;
+    const c = extractConductorCandidate(span(), unknownUnit(), Z_UP)!;
     expect(c.spanSource).toBeGreaterThan(30);
     expect(c.spanM).toBeNull();
     expect(c.sagM).toBeNull();
@@ -93,11 +95,29 @@ describe('FeatureExtractionService — unit honesty', () => {
     expect(inFeet.areaM2).toBeLessThan(inFeet.areaSource * 0.3048);
   });
 
+  it('a KNOWN unit converts a span whose length is known by construction', () => {
+    // 39 units end to end, in feet: 39 x 0.3048 = 11.8872 m, and nothing else.
+    const c = extractConductorCandidate(span(), FOOT, Z_UP)!;
+    expect(c.spanSource).toBeCloseTo(39, 6);
+    expect(c.spanM).toBeCloseTo(11.8872, 6);
+  });
+
+  it('the up axis reaches the core: a Y-up span measures the same as a Z-up one', () => {
+    const zUp = extractConductorCandidate(span(), METRE, Z_UP)!;
+    const rotated = span().map((p) => [p[0], p[2], -p[1]] as Vec3);
+    const yUp = extractConductorCandidate(rotated, METRE, Y_UP)!;
+    expect(yUp.spanSource).toBeCloseTo(zUp.spanSource, 9);
+    expect(yUp.sagSource).toBeCloseTo(zUp.sagSource, 9);
+    expect(yUp.spanM).toBeCloseTo(zUp.spanM!, 9);
+  });
+
   it('LENGTH converts by the scale once (span, sag and residual alike)', () => {
-    const c = extractConductorCandidate(span(), FOOT)!;
+    const c = extractConductorCandidate(span(), FOOT, Z_UP)!;
     expect(c.spanM).toBeCloseTo(c.spanSource * 0.3048, 9);
     expect(c.sagM).toBeCloseTo(c.sagSource * 0.3048, 9);
     expect(c.residualRmsM).toBeCloseTo(c.residualRmsSource * 0.3048, 9);
+    // A squared conversion would be ~0.093x, not 0.3048x — pin that it is not.
+    expect(c.spanM).toBeGreaterThan(c.spanSource * 0.3048 * 0.3048 * 2);
   });
 
   it('a metre unit leaves the numbers unchanged', () => {
@@ -136,8 +156,8 @@ describe('FeatureExtractionService — stable identity', () => {
   });
 
   it('a conductor id is stable for the same span', () => {
-    const a = extractConductorCandidate(span(), METRE)!;
-    const b = extractConductorCandidate(span(), METRE)!;
+    const a = extractConductorCandidate(span(), METRE, Z_UP)!;
+    const b = extractConductorCandidate(span(), METRE, Z_UP)!;
     expect(b.id).toBe(a.id);
   });
 });
