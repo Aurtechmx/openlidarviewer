@@ -26,6 +26,19 @@
  * origin would present source-local numbers as world ones, and a non-zero decode
  * origin would subtract the shift twice.
  *
+ * That leaves one frame the manifest does NOT store: a node's `bounds`. The
+ * scheduler localises every node as `record.bounds - renderOrigin` (see
+ * `StreamingScheduler._localBoundsFor`), the same subtraction it applies to COPC
+ * and EPT records, so node bounds are WORLD — the stored cube plus the origin.
+ * Handing it the build-local cube instead ran the subtraction a second time and
+ * put every node one whole origin from the camera: for a UTM build that is
+ * hundreds of kilometres, so the frustum culled the entire hierarchy, every node
+ * scored 0, and the scan streamed nothing with no error anywhere. The figures
+ * this class reports for framing — {@link OlvTileSource.localBounds} and
+ * {@link OlvTileSource.dataBounds} — are the local ones, matching COPC's
+ * `localBounds`, which is `world - renderOrigin`; they read the manifest
+ * unshifted because the build already stored them local.
+ *
  * Pure — no DOM, no three.js, no OPFS. Tile bytes arrive through an injected
  * {@link TileBytesReader}, so the whole path runs in Node against a memory map.
  */
@@ -110,6 +123,10 @@ export class OlvTileOctree implements StreamingOctreeView {
       .sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0));
     const present = new Set(keys);
     const rootSize = reader.manifest.root.size;
+    // World = stored + origin: the scheduler subtracts `renderOrigin` from
+    // these bounds to get render space, so they have to start in the same frame
+    // that origin is expressed in. See the frames note at the top of the file.
+    const [ox, oy, oz] = reader.manifest.origin;
 
     for (const key of keys) {
       const parentKey = key.length > 0 ? key.slice(0, -1) : null;
@@ -120,12 +137,12 @@ export class OlvTileOctree implements StreamingOctreeView {
       }
       const cube = reader.cubeFor(key);
       const bounds: Box6 = [
-        cube.min[0],
-        cube.min[1],
-        cube.min[2],
-        cube.min[0] + cube.size,
-        cube.min[1] + cube.size,
-        cube.min[2] + cube.size,
+        cube.min[0] + ox,
+        cube.min[1] + oy,
+        cube.min[2] + oz,
+        cube.min[0] + cube.size + ox,
+        cube.min[1] + cube.size + oy,
+        cube.min[2] + cube.size + oz,
       ];
       this.store.add({
         id: tileNodeId(key),
@@ -241,13 +258,18 @@ export class OlvTileSource implements StreamingSource {
     return depth;
   }
 
-  /** The octree root cube — equal-sided, for framing the camera. */
+  /**
+   * The octree root cube in LOCAL render space — equal-sided, for framing the
+   * camera. The manifest stores the cube already recentred, so this is the
+   * stored figure unshifted; the node records carry the world form.
+   */
   localBounds(): Box6 {
     const { min, size } = this._store.manifest.root;
     return [min[0], min[1], min[2], min[0] + size, min[1] + size, min[2] + size];
   }
 
-  /** The tight data extent the build measured in its bounds pass. */
+  /** The tight data extent the build measured in its bounds pass, local like
+   * {@link localBounds}. */
   dataBounds(): Box6 {
     const { min, max } = this._store.manifest.bounds;
     return [min[0], min[1], min[2], max[0], max[1], max[2]];

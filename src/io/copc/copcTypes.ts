@@ -81,7 +81,12 @@ export interface StreamingNodeRecord {
   /** Deterministic id — the string `"depth-x-y-z"`. */
   id: string;
   key: VoxelKey;
-  /** Node bounds, derived from the COPC octree cube. */
+  /**
+   * Node bounds in WORLD space, derived from the COPC octree cube. Every
+   * source's records use that frame: `StreamingScheduler._localBoundsFor`
+   * localises a node as `bounds - source.renderOrigin`, so a record built in
+   * an already-recentred frame is shifted twice and culls to nothing.
+   */
   bounds: Box6;
   /** Number of points in this node's chunk. */
   pointCount: number;
