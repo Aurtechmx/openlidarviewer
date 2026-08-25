@@ -110,7 +110,14 @@ import {
   loadContourDeliverableBuild,
   loadContourStudioMount,
   loadContourExportAdapter,
+  loadRangeWorkbenchMount,
 } from '../lazyChunks';
+import {
+  organizedRangeFor,
+  subscribeOrganizedRange,
+  type OrganizedLayerEntry,
+} from '../model/organizedRangeLink';
+import type { MountedRangeWorkbench } from './rangeWorkbenchMount';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
 import type { Annotation } from '../render/annotate/types';
@@ -416,6 +423,12 @@ export class AnalysePanel {
    * shows a noticed "Terrain Products" launcher; the export controls live in
    * `_contourDeliverable`, hidden until the launcher's action is invoked.
    */
+  private readonly _rangeLauncher: HTMLElement;
+  private readonly _rangeWorkbench: HTMLElement;
+  private _rangeMounted: MountedRangeWorkbench | null = null;
+  private _rangeLayerId: string | null = null;
+  private _rangeToken = 0;
+  private _rangeUnsubscribe: (() => void) | null = null;
   private readonly _contourLauncher: HTMLElement;
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
   private readonly _contourLayerControls: HTMLElement;
@@ -554,6 +567,14 @@ export class AnalysePanel {
     // are still built (below) but kept detached as the backing click-targets the
     // Studio export section dispatches to, so every exporter's guards, provenance
     // and busy-state are reused verbatim rather than re-implemented.
+    // Structured data (v0.6.6). A context-sensitive launcher for the Range
+    // Frame Workbench: rendered ONLY when the active layer actually carries an
+    // acquisition grid, and mounted from its own lazy chunk. It sits OUTSIDE
+    // `_resultsRegion` because a scanner grid exists the moment the file is
+    // decoded and has nothing to do with whether a terrain analysis has run.
+    this._rangeLauncher = el('div', { className: 'olv-analyse-range-launcher' });
+    this._rangeWorkbench = el('div', { className: 'olv-analyse-range-workbench olv-hidden' });
+
     this._contourLauncher = el('div', { className: 'olv-analyse-contour-launcher' });
     this._contourLayerControls = el('div', { className: 'olv-analyse-layer-controls olv-hidden' });
     this._contourDeliverable = el('div', {
@@ -616,6 +637,8 @@ export class AnalysePanel {
       subtitle,
       this._runBtn,
       this._status,
+      this._rangeLauncher,
+      this._rangeWorkbench,
       this._resultsRegion,
       this._roadmap,
       this._scanTypeControl.element,
@@ -626,6 +649,65 @@ export class AnalysePanel {
     // runs an analysis.
     this.element.classList.add('olv-collapsed');
     this.setVisible(false);
+
+    // The registry is written where a layer is mounted and dropped, both behind
+    // lazy boundaries, so the panel subscribes rather than being pushed to from
+    // the startup shell. Reading it once here covers the case where the layer
+    // was mounted before this panel was.
+    this._rangeUnsubscribe = subscribeOrganizedRange(() => this._refreshRangeLauncher());
+    this._refreshRangeLauncher();
+  }
+
+  /**
+   * Show, replace, or remove the Range Frame Workbench launcher for whichever
+   * layer is active.
+   *
+   * The gate is the presence of an acquisition grid on that layer and nothing
+   * else. No grid means no card at all — not a disabled one — so the panel
+   * carries no entry point to a surface that would have nothing to show.
+   */
+  private _refreshRangeLauncher(): void {
+    const layerId = this._cb.getActiveScanId?.() ?? null;
+    const entry: OrganizedLayerEntry | null = organizedRangeFor(layerId);
+    if (!entry) {
+      this._teardownRange();
+      return;
+    }
+    if (this._rangeLayerId === entry.layerId && this._rangeMounted) return;
+    this._teardownRange();
+    this._rangeLayerId = entry.layerId;
+    const token = ++this._rangeToken;
+    void loadRangeWorkbenchMount()
+      .then((m) => {
+        if (token !== this._rangeToken) return;
+        this._rangeMounted = m.mountRangeWorkbench({
+          set: entry.set,
+          layerId: entry.layerId,
+          launcherHost: this._rangeLauncher,
+          workbenchHost: this._rangeWorkbench,
+          onLaunch: () => this._rangeWorkbench.classList.remove('olv-hidden'),
+        });
+      })
+      .catch(() => {
+        /* An optional inspection surface: omit it rather than break the panel. */
+      });
+  }
+
+  private _teardownRange(): void {
+    this._rangeToken++;
+    this._rangeMounted?.dispose();
+    this._rangeMounted = null;
+    this._rangeLayerId = null;
+    this._rangeLauncher.replaceChildren();
+    this._rangeWorkbench.replaceChildren();
+    this._rangeWorkbench.classList.add('olv-hidden');
+  }
+
+  /** Drop the registry subscription. Call when the panel is discarded. */
+  destroy(): void {
+    this._rangeUnsubscribe?.();
+    this._rangeUnsubscribe = null;
+    this._teardownRange();
   }
 
   private _runLabel(): string {
@@ -1957,6 +2039,10 @@ export class AnalysePanel {
     detectionCommitted?: boolean,
   ): void {
     this._scanTypeControl.set(override, effective, disabled, detectionCommitted);
+    // Opening a scan routes through here, and the active layer is what the
+    // launcher is gated on, so this is where a newly opened structured file
+    // gets its entry point.
+    this._refreshRangeLauncher();
   }
 
   /**

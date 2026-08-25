@@ -234,6 +234,19 @@ export function classificationLabel(code: number): string {
 export interface PointInfo {
   /** Source layer / file name. */
   layer: string;
+  /**
+   * The renderer's own id for the layer this point belongs to.
+   *
+   * ADDED for the Range Frame Workbench's identity link, and kept as small as
+   * it can be: one optional string, set only on the static-cloud pick path
+   * where the renderer knows the id. It exists because {@link PointInfo.layer}
+   * is a display NAME read from the file, so two layers opened from two
+   * directories with the same basename are indistinguishable by it and a rename
+   * would break a link that is supposed to be about identity. Nothing displays
+   * this field; it keys the link and nothing else. A streaming pick carries no
+   * id, and a consumer that has none must refuse the link rather than guess.
+   */
+  layerId?: string;
   /** Point index within the cloud's buffer. */
   index: number;
   /**
@@ -277,6 +290,8 @@ export interface PointInfo {
 /** Inputs for {@link makePointInfo} — local coordinates plus the load origin. */
 export interface RawPointInfo {
   layer: string;
+  /** See {@link PointInfo.layerId}. Null and undefined both mean "no id". */
+  layerId?: string | null;
   index: number;
   /** Local (recentred) coordinates straight from the render buffer. */
   local: [number, number, number];
@@ -349,6 +364,9 @@ export function makePointInfo(raw: RawPointInfo): PointInfo {
     ];
   }
   if (raw.streamingRefining) info.streamingRefining = true;
+  // Carried only when the renderer supplied one, so a picked point either has a
+  // real layer id or has none — never an empty string a caller could key on.
+  if (raw.layerId) info.layerId = raw.layerId;
   return info;
 }
 
