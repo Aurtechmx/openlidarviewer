@@ -171,6 +171,14 @@ function scan(name: string, recordCount: number, fields: string[]): E57Scan {
     pose: null,
     colorMax: null,
     intensityMax: null,
+    indexBounds: null,
+    structuredFields: {
+      rowIndex: fields.includes('rowIndex'),
+      columnIndex: fields.includes('columnIndex'),
+      returnIndex: fields.includes('returnIndex'),
+      returnCount: fields.includes('returnCount'),
+      sphericalRange: fields.includes('sphericalRange'),
+    },
   };
 }
 
