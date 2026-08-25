@@ -17,6 +17,7 @@ Format support is still evolving. This page separates what works today from what
 | `PCD` | Point Cloud Library | ASCII, binary, and binary-compressed; position, RGB, intensity, normals, labels |
 | `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded |
 | `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
+| `PNTS` | 3D Tiles point tile | A single tile; magic-byte detected; `RTC_CENTER` applied; Draco refused |
 | `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming — see [streaming.md](streaming.md) |
 | `EPT` | Entwine Point Tile | `ept.json` manifest + hierarchy + tiles; binary and laszip tile decode; local and remote — see [streaming.md](streaming.md) |
 
@@ -50,7 +51,9 @@ Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large
 
 `EPT` (Entwine Point Tile) joins COPC as a first-class streaming source in v0.3.3 — a `ept.json` URL opens an EPT dataset progressively. Both `binary` and `laszip` tile dataTypes are supported; the laz-perf WASM module is shared with the COPC path so a session that touches both formats pays the WASM cost only once. Remote EPT carries the same URL-validation + error-classification polish as remote COPC. See [streaming.md](streaming.md).
 
-`3D Tiles` / `PNTS` (tiled, streamable point clouds): detected but not supported. The loader recognises a `.pnts` file or a `tileset.json` URL by name and returns an honest "on the roadmap, not shipped" message rather than opening it; there is no tileset parser today. Treat the format as planned, not shipped, until the user-facing path is announced in the release notes.
+`3D Tiles` / `PNTS`: a single `.pnts` tile opens today. It is detected by its `pnts` magic bytes (so a tile saved under another name still opens, and a file that only borrows the extension is refused rather than read as a tile), decoded through the viewer's PNTS reader — uncompressed `POSITION` and `POSITION_QUANTIZED`, RGBA/RGB/RGB565/CONSTANT_RGBA colour — and placed by adding the feature table's `RTC_CENTER` back to every position. Draco-compressed tiles are refused.
+
+A whole `tileset.json` does not open yet. The tileset document is parsed and its hierarchy can be traversed (`src/io/tiles3d/`), but nothing mounts a tileset as a streaming layer, so opening one returns an honest "on the roadmap, not shipped" message. Treat tileset streaming as planned, not shipped, until it is announced in the release notes.
 
 ## Mobile Scan Exports
 

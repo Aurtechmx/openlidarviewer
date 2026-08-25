@@ -1,11 +1,14 @@
 import { sniffFormat, verticalAxisHintForSources, is3dTilesName } from '../src/io/sniffFormat';
 
-describe('is3dTilesName — 3D Tiles / PNTS detection', () => {
-  test('matches .pnts and tileset.json (any case, with path / query)', () => {
-    expect(is3dTilesName('points.pnts')).toBe(true);
+describe('is3dTilesName — 3D Tiles tileset detection', () => {
+  test('matches tileset.json (any case, with path / query)', () => {
     expect(is3dTilesName('TILESET.JSON')).toBe(true);
     expect(is3dTilesName('https://host/tiles/tileset.json?v=2')).toBe(true);
-    expect(is3dTilesName('/a/b/c.PNTS')).toBe(true);
+    expect(is3dTilesName('/a/b/tileset.json')).toBe(true);
+  });
+  test('does not match a .pnts tile, which opens through the pnts loader', () => {
+    expect(is3dTilesName('points.pnts')).toBe(false);
+    expect(is3dTilesName('/a/b/c.PNTS')).toBe(false);
   });
   test('does not match other JSON or point formats', () => {
     expect(is3dTilesName('scan.las')).toBe(false);

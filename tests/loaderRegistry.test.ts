@@ -17,7 +17,7 @@ test('every format resolves to a loader function', () => {
 
 test('registeredFormats lists exactly the registered formats', () => {
   expect(registeredFormats().sort()).toEqual(
-    ['e57', 'glb', 'gltf', 'las', 'laz', 'obj', 'pcd', 'ply', 'pts', 'ptx', 'xyz'],
+    ['e57', 'glb', 'gltf', 'las', 'laz', 'obj', 'pcd', 'ply', 'pnts', 'pts', 'ptx', 'xyz'],
   );
 });
 

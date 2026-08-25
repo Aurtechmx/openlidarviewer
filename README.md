@@ -63,7 +63,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 
 - COPC streaming: a `.copc.laz` file, on disk or hosted at a URL, opens through progressive, octree-based, view-dependent streaming with worker-based decoding and bounded memory, never a full-file load. A remote scan opens from the start screen's open-from-URL field or a shareable `?copc=<url>` deep link
 - EPT (Entwine Point Tile) streaming: local and remote, `binary` and `laszip` tiles
-- 3D Tiles / `.pnts` (not yet user-facing): a `.pnts` file or a `tileset.json` URL is detected by filename and reported as not-yet-supported rather than opened. v0.6.6 adds `tileset.json` and uncompressed PNTS parsing, but nothing mounts a 3D Tiles set as a streaming layer yet, so treat runtime loading as planned, not shipped
+- 3D Tiles / `.pnts`: a single `.pnts` tile opens as a point cloud — detected by its magic bytes, decoded from uncompressed or quantised positions with colour, and placed by its `RTC_CENTER`. A `tileset.json` is detected by name and reported as not-yet-supported: the tileset document parses and traverses, but nothing mounts a 3D Tiles set as a streaming layer yet, so treat tileset streaming as planned, not shipped
 - A curated catalog of 12 hand-vetted public COPC / EPT datasets
 
 See [`docs/streaming.md`](docs/streaming.md) and [`docs/copc.md`](docs/copc.md).

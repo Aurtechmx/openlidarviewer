@@ -50,6 +50,7 @@ const LOADERS: Record<SourceFormat, LoaderFn> = {
   ptx: async (buffer, name) => (await import('./loadPtx')).loadPtx(buffer, name),
   pts: async (buffer, name, onProgress) =>
     (await import('./loadPts')).loadPts(buffer, name, onProgress),
+  pnts: async (buffer, name) => (await import('./loadPnts')).loadPnts(buffer, name),
 };
 
 /** The decoder for a format. Throws on an unregistered format. */
