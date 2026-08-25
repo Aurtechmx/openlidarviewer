@@ -13,7 +13,11 @@
  *   1. states a DIFFERENT count word next to an E4 / cross-implementation claim
  *      (e.g. "three products … E4" when the register has four), or
  *   2. carries an obsolete absolute the register now contradicts
- *      ("every reference slot ships pending" once any slot is supplied).
+ *      ("every reference slot ships pending" once any slot is supplied), or
+ *   3. states a DIFFERENT TOTAL of registered claims ("Of the 28 registered
+ *      claims" while the register holds 29). Rule 1 counts claims AT a rung and
+ *      never reads how many are registered at all, which is how that sentence
+ *      sat in EVIDENCE_MODEL.md unnoticed.
  *
  * It does not try to rewrite prose or parse arbitrary sentences; it pins the two
  * concrete drift classes the audit found. The durable fix — generating the E4
@@ -78,6 +82,88 @@ const COUNT_ALTERNATION = NUMBER_WORDS.join('|');
  * deliberately narrower than the word form.
  */
 const COUNT_DIGITS = '(?<![\\d.×⁻-])\\d{1,3}(?=\\s+products?\\b)';
+
+const TENS_WORDS = ['twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+/**
+ * A spelled number up to ninety-nine. NUMBER_WORDS stops at twenty, which is
+ * enough for a rung count but not for a register total: the register passed
+ * twenty long ago, so a total written "twenty-nine" needs the tens.
+ */
+const WORD_NUMBER = `(?:(?:${TENS_WORDS.join('|')})(?:[- ](?:${NUMBER_WORDS.slice(1, 10).join('|')}))?`
+  + `|${NUMBER_WORDS.join('|')})`;
+
+/** A number token, spelled or written, as the total constructions may carry either. */
+const TOTAL_NUMBER = `(?:${WORD_NUMBER}|(?<![\\d.×⁻-])\\d{1,3})`;
+
+/** The value a matched number token stands for, or null when it is not one. */
+export function numberTokenValue(token) {
+  const t = String(token ?? '').toLowerCase().trim();
+  if (/^\d+$/.test(t)) return Number(t);
+  const [head, tail] = t.split(/[- ]/);
+  const plain = NUMBER_WORDS.indexOf(head);
+  if (plain !== -1) return tail === undefined ? plain : null;
+  const tens = TENS_WORDS.indexOf(head);
+  if (tens === -1) return null;
+  const base = (tens + 2) * 10;
+  if (tail === undefined) return base;
+  const ones = NUMBER_WORDS.indexOf(tail);
+  return ones >= 1 && ones <= 9 ? base + ones : null;
+}
+
+/**
+ * A count of claims AT a rung is rule 1's business, not this one's. "Of the 29
+ * registered claims at E4" is a rung count wearing the total's noun phrase, so
+ * a rung qualifier immediately after the phrase disqualifies the match.
+ */
+const RUNG_TAIL = '(?!\\s+(?:at|carrying|with|holding|reaching)\\s+(?:E\\d|cross-implement))';
+
+/**
+ * The constructions that actually state a register TOTAL.
+ *
+ * Each one marks the WHOLE set: the partitive "of the N …", the universal
+ * "all N …", or the register itself as the subject holding N. The looser rule
+ * — any number next to the word "claims" — was rejected because the v0.6.6
+ * release notes say "Twelve registered claims are now at E4", which shares the
+ * exact noun phrase and is a rung count. Flagging that would make the rule
+ * wrong on shipped, correct prose, and a rule that is wrong gets switched off.
+ */
+const TOTAL_FORMS = [
+  `\\bof\\s+the\\s+(${TOTAL_NUMBER})\\s+(?:currently\\s+)?registered\\s+claims\\b${RUNG_TAIL}`,
+  `\\bof\\s+the\\s+(${TOTAL_NUMBER})\\s+claims\\s+in\\s+the\\s+(?:claim\\s+)?register\\b${RUNG_TAIL}`,
+  `\\ball\\s+(${TOTAL_NUMBER})\\s+registered\\s+claims\\b${RUNG_TAIL}`,
+  `\\bthe\\s+(?:claim\\s+)?register\\s+(?:holds|contains|lists|has)\\s+(${TOTAL_NUMBER})\\s+claims\\b${RUNG_TAIL}`,
+];
+
+/**
+ * Every prose statement of the register total in `text` that disagrees with
+ * `expectedTotal`, named by document and line and told what the register says.
+ */
+export function totalCountProblemsIn(rel, text, expectedTotal, basis) {
+  const problems = [];
+  if (expectedTotal === null || expectedTotal === undefined) return problems;
+  const lines = String(text).split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const re = new RegExp(TOTAL_FORMS.join('|'), 'gi');
+    let m;
+    while ((m = re.exec(lines[i])) !== null) {
+      const token = m.slice(1).find((g) => g !== undefined);
+      const stated = numberTokenValue(token);
+      if (stated === null || stated === expectedTotal) continue;
+      problems.push(
+        `${rel}:${i + 1} states ${stated} registered claim(s) ("${token}"), but ${basis} holds `
+        + `${expectedTotal}. Update the prose to match it.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** How many claims the register holds (the single source). */
+function totalFromRegister() {
+  const yaml = readFileSync(resolve(ROOT, 'docs/validation/claim-register.yaml'), 'utf8');
+  return parseRegister(yaml).length;
+}
 
 /** The E4+ claim ids and their count, from the register (the single source). */
 function e4FromRegister() {
@@ -149,6 +235,18 @@ export function e4CountAtTag(tag, cwd = ROOT) {
   }
 }
 
+/** How many claims the register held at `tag`, or null when unreadable. */
+export function totalClaimsAtTag(tag, cwd = ROOT) {
+  try {
+    const yaml = execFileSync('git', ['show', `${tag}:docs/validation/claim-register.yaml`], {
+      cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 24,
+    });
+    return parseRegister(yaml).length;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The count a document must agree with, and why.
  *
@@ -163,9 +261,8 @@ export function e4CountAtTag(tag, cwd = ROOT) {
  * When git cannot answer, a tagged document is skipped rather than failed. An
  * extracted archive has no history, and the release gate runs there.
  */
-export function expectedCountFor(rel, liveCount, deps = {}) {
+function scopedExpectation(rel, liveCount, atTag, deps) {
   const hasTag = deps.tagExists ?? tagExists;
-  const atTag = deps.e4CountAtTag ?? e4CountAtTag;
   const hasGit = deps.gitUsable ?? gitUsable;
   const version = releaseVersionOf(rel);
   if (version === null) return { count: liveCount, basis: 'the register' };
@@ -184,7 +281,22 @@ export function expectedCountFor(rel, liveCount, deps = {}) {
   return { count: tagged, basis: `the register at tag ${version}` };
 }
 
-function collectProseProblems(count) {
+/** The E4 count a document must agree with, and why. */
+export function expectedCountFor(rel, liveCount, deps = {}) {
+  return scopedExpectation(rel, liveCount, deps.e4CountAtTag ?? e4CountAtTag, deps);
+}
+
+/**
+ * The register TOTAL a document must agree with, and why. Same scoping as the
+ * E4 count: a shipped release note stating the total at its own release is a
+ * historical record and is read against its own tag, so adding a claim does not
+ * make every archived document wrong.
+ */
+export function expectedTotalFor(rel, liveTotal, deps = {}) {
+  return scopedExpectation(rel, liveTotal, deps.totalClaimsAtTag ?? totalClaimsAtTag, deps);
+}
+
+function collectProseProblems(count, total) {
   const problems = [];
   const skipped = [];
   // A count word paired with an E4 / cross-implementation claim in one sentence.
@@ -210,6 +322,10 @@ function collectProseProblems(count) {
 
     const text = readFileSync(abs, 'utf8');
     const lines = text.split('\n');
+
+    // 3. A stated total of registered claims that the register contradicts.
+    const { count: docTotal, basis: totalBasis } = expectedTotalFor(rel, total);
+    problems.push(...totalCountProblemsIn(rel, text, docTotal, totalBasis));
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       // 1. Wrong count word next to an E4/cross-implementation claim.
@@ -239,17 +355,20 @@ function collectProseProblems(count) {
 }
 
 const { ids: e4Ids, count } = e4FromRegister();
-const { problems, skipped } = collectProseProblems(count);
+const total = totalFromRegister();
+const { problems, skipped } = collectProseProblems(count, total);
 
 if (problems.length > 0) {
   console.error('lint:claim-prose-sync FAILED — truth documents disagree with the claim register:\n');
   for (const p of problems) console.error(`  • ${p}`);
   console.error(
-    `\nThe register is the source of truth: ${count} product(s) at E4 (${e4Ids.join(', ')}).`,
+    `\nThe register is the source of truth: ${total} registered claim(s), `
+      + `${count} product(s) at E4 (${e4Ids.join(', ')}).`,
   );
   process.exit(1);
 }
 
 console.log(
-  `lint:claim-prose-sync OK — ${TRUTH_DOCS.length} truth documents agree with the register (${count} E4 product(s): ${e4Ids.join(', ')}).`,
+  `lint:claim-prose-sync OK — ${TRUTH_DOCS.length} truth documents agree with the register `
+    + `(${total} registered claim(s); ${count} E4 product(s): ${e4Ids.join(', ')}).`,
 );
