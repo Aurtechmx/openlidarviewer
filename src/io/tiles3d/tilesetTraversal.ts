@@ -116,6 +116,24 @@ export function distanceToAabb(aabb: Aabb, p: readonly [number, number, number])
   return Math.sqrt(sum);
 }
 
+/**
+ * Screen-space error of one tile under one camera.
+ *
+ * Exported because the detail search in `tilesetDetail.ts` has to measure the
+ * SAME quantity `selectTiles` refines on, over tiles a selection does not
+ * return: under REPLACE refinement a refined parent is absent from the
+ * selection, and its error is exactly the threshold at which it stops refining.
+ * A second implementation of this arithmetic would be a second definition of
+ * what a level is.
+ */
+export function tileScreenSpaceError(
+  camera: ViewCamera,
+  geometricError: number,
+  distance: number,
+): number {
+  return screenSpaceError(sseInputFor(camera, geometricError, distance));
+}
+
 /** The SSE input for one tile under one camera. */
 function sseInputFor(camera: ViewCamera, geometricError: number, distance: number): CameraSseInput {
   if (camera.kind === 'orthographic') {
@@ -167,7 +185,7 @@ export function selectTiles(
     if (!aabb) return;
 
     const distance = distanceToAabb(aabb, camera.positionEcef as [number, number, number]);
-    const sse = screenSpaceError(sseInputFor(camera, placed.geometricError, distance));
+    const sse = tileScreenSpaceError(camera, placed.geometricError, distance);
 
     const hasChildren = tile.children.length > 0;
     const refine = hasChildren && placed.depth < maxDepth && shouldRefine(sse, options.maxScreenSpaceErrorPx);

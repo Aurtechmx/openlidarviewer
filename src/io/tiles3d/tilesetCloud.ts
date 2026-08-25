@@ -3,8 +3,9 @@
  *
  * This is the caller `tilesetOpen.ts` was written for, and it is deliberately
  * the SMALL half of what a tileset could eventually be. A one-shot load opens
- * the entry document, selects the finest representation the tree offers,
- * fetches those `.pnts` bodies, and merges them into a single cloud that then
+ * the entry document, selects the finest representation the tree offers THAT
+ * FITS THE SELECTION CEILING (see `tilesetDetail.ts`), fetches those `.pnts`
+ * bodies, and merges them into a single cloud that then
  * lives in the viewer exactly like a decoded LAS: no scheduler, no eviction, no
  * camera feedback. The streaming alternative is not what this is a step toward
  * being — it needs a node store keyed by octree records and LAS-shaped decode
@@ -18,6 +19,15 @@
  * Every one of those refuses. So does this module: a selection that reaches an
  * external `tileset.json`, or a total past the point ceiling, fails the load
  * with a message naming the reason.
+ *
+ * DETAIL IS CHOSEN, COMPLETENESS IS NOT. Asking unconditionally for the leaves
+ * meant a tileset whose finest level is wider than the selection ceiling could
+ * not be opened at all, however coarse a level of it would have fitted, so the
+ * level is resolved first and the read then runs at that level. Coarser is a
+ * different sampling of the same scene, not a partial one: the chosen level
+ * still loads completely or fails. A cloud opened below the tileset's finest
+ * detail SAYS SO, in a load warning, because nothing about a coarser tileset
+ * looks coarse once it is on screen.
  *
  * WHY IT NEVER PARTIALLY SUCCEEDS. A merged cloud carries no record of which
  * tiles are in it. Dropping one that failed, or stopping at a ceiling and
@@ -36,7 +46,18 @@
 
 import { PointCloud } from '../../model/PointCloud';
 import { sanitizeAndRecenter, withLoadWarning } from '../sanitizeCloud';
-import { openTileset, selectTileContents, fetchTileContent } from './tilesetOpen';
+import {
+  openTileset,
+  selectTileContents,
+  fetchTileContent,
+  MAX_SELECTED_TILES,
+} from './tilesetOpen';
+import {
+  describeTilesetDetail,
+  resolveTilesetDetail,
+  FULL_DETAIL_SSE_PX,
+  type TilesetDetail,
+} from './tilesetDetail';
 import type { TilesetTransport } from './tilesetTransport';
 import type { ViewCamera } from './tilesetTraversal';
 
@@ -56,14 +77,15 @@ export const MAX_TILESET_POINTS = 8_000_000;
  * error.
  *
  * A one-shot load has no camera to be relative to: it wants every tile the tree
- * bottoms out in, not the subset one viewpoint would need. `shouldRefine`
- * treats a threshold of zero (or less) as "never refine", so the smallest
- * positive double is what asks for unconditional descent. The traversal still
+ * bottoms out in, not the subset one viewpoint would need. The traversal still
  * stops where a tileset says to: an interior tile declaring a geometric error
  * of zero states that it already represents its children exactly, and refining
  * past it would fetch detail the document says is not there.
+ *
+ * Defined in `tilesetDetail.ts`, which is where the ladder it is the finest
+ * rung of lives, and re-exported here because this is where callers met it.
  */
-export const FULL_DETAIL_SSE_PX = Number.MIN_VALUE;
+export { FULL_DETAIL_SSE_PX };
 
 /**
  * The camera the full read selects against.
@@ -91,6 +113,17 @@ export interface TilesetCloudOptions {
   readonly maxDepth?: number;
   /** Called after each tile is read, for a "3 of 40 tiles" progress line. */
   readonly onTile?: (done: number, total: number) => void;
+  /**
+   * Called once with the detail level the read settled on, before any tile is
+   * fetched.
+   *
+   * The COARSER case is also recorded on the cloud, as a load warning, because
+   * that is the claim a reader has to be able to find later. The finest case is
+   * reported here and nowhere else: a cloud at its source's finest detail has
+   * nothing to warn about, and a warnings channel carrying good news stops
+   * being read as warnings.
+   */
+  readonly onDetail?: (detail: TilesetDetail) => void;
 }
 
 /** The directory a tileset lives in, which is the name a user recognises it by. */
@@ -124,8 +157,17 @@ export async function loadTilesetCloud(
 ): Promise<PointCloud> {
   const maxPoints = options.maxPoints ?? MAX_TILESET_POINTS;
   const opened = await openTileset(url, transport, signal);
+  const choice = resolveTilesetDetail(opened.tileset, FULL_DETAIL_CAMERA, {
+    maxSelectedTiles: options.maxSelectedTiles ?? MAX_SELECTED_TILES,
+    ...(options.maxDepth !== undefined && { maxDepth: options.maxDepth }),
+  });
+  // No level of this tileset fits one read. A refusal is the outcome here, not
+  // a fallback: there is nothing coarser left to fall back to.
+  if (!choice.ok) throw new Error(`3D Tiles: ${choice.reason}`);
+  const detail = choice.detail;
+  options.onDetail?.(detail);
   const selection = selectTileContents(opened, FULL_DETAIL_CAMERA, {
-    maxScreenSpaceErrorPx: FULL_DETAIL_SSE_PX,
+    maxScreenSpaceErrorPx: detail.maxScreenSpaceErrorPx,
     ...(options.maxDepth !== undefined && { maxDepth: options.maxDepth }),
     ...(options.maxSelectedTiles !== undefined && { maxSelectedTiles: options.maxSelectedTiles }),
   });
@@ -151,9 +193,17 @@ export async function loadTilesetCloud(
     const tile = await fetchTileContent(content, transport, signal);
     total += tile.pointCount;
     if (total > maxPoints) {
+      // The point ceiling cannot steer the detail choice the way the tile
+      // ceiling does. A `.pnts` point count is stated in the tile's own header,
+      // so it is knowable only once the tile has been transferred, and reading
+      // a coarser level after this would mean discarding what was fetched and
+      // fetching it all again. So this stays a refusal at whatever level was
+      // chosen, and it names that level rather than implying full detail.
       throw new Error(
         `3D Tiles: this tileset holds more than ${maxPoints.toLocaleString('en-US')} points ` +
-          `across its ${selection.contents.length} tiles; refusing to open it in one read.`,
+          `across the ${selection.contents.length} tiles of the ` +
+          `${detail.atFinestDetail ? 'finest' : 'coarser'} level it was opened at; ` +
+          `refusing to open it in one read.`,
       );
     }
     // Destructured rather than read through the dot: the position-access gate
@@ -190,6 +240,7 @@ export async function loadTilesetCloud(
   const mixedWarning = mixedColour
     ? 'Some tiles in this tileset carry colour and others do not, so the merged layer is uncoloured.'
     : undefined;
+  const detailWarning = detail.atFinestDetail ? undefined : describeTilesetDetail(detail);
   return new PointCloud({
     positions,
     colors: attributes.colors,
@@ -199,6 +250,9 @@ export async function loadTilesetCloud(
     // it is; the tileset is how they were found, not what they are.
     sourceFormat: 'pnts',
     name: options.name ?? tilesetDisplayName(opened.entryUrl),
-    metadata: withLoadWarning(withLoadWarning(undefined, warning), mixedWarning),
+    metadata: withLoadWarning(
+      withLoadWarning(withLoadWarning(undefined, warning), mixedWarning),
+      detailWarning,
+    ),
   });
 }

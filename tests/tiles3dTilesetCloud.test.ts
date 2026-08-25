@@ -253,10 +253,13 @@ describe('loadTilesetCloud — placement', () => {
 
 describe('loadTilesetCloud — refusals stay refusals', () => {
   test('a selection past the tile ceiling refuses, and fetches no tile', async () => {
+    // These bounding volumes contain the camera a full read selects against, so
+    // every tile's screen-space error is unbounded and no threshold prunes one.
+    // The coarsest level is the finest, and there is nothing to fall back to.
     const fixture = twoLeafTileset();
     const t = fakeTransport(fixture.json, fixture.tiles);
     await expect(loadTilesetCloud(ENTRY, t, { maxSelectedTiles: 1 })).rejects.toThrow(
-      /selects 2 tiles, past the 1-tile ceiling/,
+      /selects 2 tiles even at its coarsest level, past the 1-tile ceiling/,
     );
     // Nothing was mounted AND nothing was even read: a cap that truncated would
     // have fetched its one tile and returned a cloud.
@@ -297,5 +300,106 @@ describe('loadTilesetCloud — refusals stay refusals', () => {
       [ENTRY]: doc({ boundingVolume: { box: BOX }, geometricError: 100, refine: 'REPLACE' }),
     });
     await expect(loadTilesetCloud(ENTRY, t)).rejects.toThrow(/names no \.pnts tiles/);
+  });
+});
+
+/**
+ * A tileset placed away from the origin, so the camera a full read selects
+ * against sits outside every bounding volume and each tile's screen-space error
+ * is finite. Inside the volume the error is unbounded and no threshold prunes
+ * anything, which is a real refusal but not the case these tests are about.
+ *
+ * Full detail is the four leaves, eight points. One level coarser is the root,
+ * one point, at a coordinate no leaf carries: the two levels are numerically
+ * different, so a test that claims to distinguish them can.
+ */
+function detailFixture(): { json: Record<string, string>; tiles: Record<string, ArrayBuffer> } {
+  const FAR_BOX = [1_000_000, 0, 0, 1000, 0, 0, 0, 1000, 0, 0, 0, 1000];
+  const tiles: Record<string, ArrayBuffer> = {
+    [`${BASE}root.pnts`]: makePnts([[1_000_000, 0, 0]]),
+  };
+  for (let i = 0; i < 4; i++) {
+    tiles[`${BASE}${i}.pnts`] = makePnts([
+      [1_000_100 + i, 0, 0],
+      [1_000_200 + i, 0, 0],
+    ]);
+  }
+  return {
+    json: {
+      [ENTRY]: doc({
+        boundingVolume: { box: FAR_BOX },
+        geometricError: 100,
+        refine: 'REPLACE',
+        content: { uri: 'root.pnts' },
+        children: Array.from({ length: 4 }, (_, i) => ({
+          boundingVolume: { box: FAR_BOX },
+          geometricError: 0,
+          content: { uri: `${i}.pnts` },
+        })),
+      }),
+    },
+    tiles,
+  };
+}
+
+describe('loadTilesetCloud — detail level', () => {
+  test('a tileset past the tile ceiling opens coarser instead of refusing', async () => {
+    const fixture = detailFixture();
+    const t = fakeTransport(fixture.json, fixture.tiles);
+    const cloud = await loadTilesetCloud(ENTRY, t, { maxSelectedTiles: 2 });
+
+    // The root's own content, not the four leaves: the level chosen is the
+    // finest one whose selection fits two tiles.
+    expect(cloud.pointCount).toBe(1);
+    expect(t.requests).toContain(`${BASE}root.pnts`);
+    expect(t.requests).not.toContain(`${BASE}0.pnts`);
+  });
+
+  test('a cloud opened coarser says so', async () => {
+    const fixture = detailFixture();
+    const detail: { atFinestDetail: boolean; selectedTiles: number; finestTiles: number }[] = [];
+    const cloud = await loadTilesetCloud(ENTRY, fakeTransport(fixture.json, fixture.tiles), {
+      maxSelectedTiles: 2,
+      onDetail: (d) => detail.push(d),
+    });
+    expect(detail).toHaveLength(1);
+    expect(detail[0]!.atFinestDetail).toBe(false);
+    expect(detail[0]!.selectedTiles).toBe(1);
+    expect(detail[0]!.finestTiles).toBe(4);
+    // On the cloud itself, because that is where a reader who did not watch the
+    // load can still find it.
+    const warnings = cloud.metadata?.loadWarnings ?? [];
+    expect(warnings.join(' ')).toContain("coarser than this tileset's finest detail");
+    expect(warnings.join(' ')).toContain('full detail names 4 tiles');
+  });
+
+  test('a tileset that fits opens at full detail and says it is the finest level', async () => {
+    const fixture = detailFixture();
+    const detail: { atFinestDetail: boolean; selectedTiles: number }[] = [];
+    const t = fakeTransport(fixture.json, fixture.tiles);
+    const cloud = await loadTilesetCloud(ENTRY, t, { onDetail: (d) => detail.push(d) });
+
+    // Eight points, not the root's one: full detail and one level coarser are
+    // different numbers here, which is what makes this assertion mean anything.
+    expect(cloud.pointCount).toBe(8);
+    expect(t.requests).not.toContain(`${BASE}root.pnts`);
+    expect(detail[0]!.atFinestDetail).toBe(true);
+    expect(detail[0]!.selectedTiles).toBe(4);
+    // Nothing about detail reaches a cloud that is at its source's finest
+    // level: the warnings channel carries what went wrong, and nothing did.
+    const warnings = (cloud.metadata?.loadWarnings ?? []).join(' ');
+    expect(warnings).not.toContain('detail');
+  });
+
+  test('a tileset that already fits selects exactly what it selected before', async () => {
+    // The pin on "unchanged": the fixture the rest of this file loads at full
+    // detail still fetches the same tiles and merges the same points, with no
+    // detail warning attached to it.
+    const fixture = twoLeafTileset();
+    const t = fakeTransport(fixture.json, fixture.tiles);
+    const cloud = await loadTilesetCloud(ENTRY, t);
+    expect(cloud.pointCount).toBe(5);
+    expect(t.requests).toEqual([ENTRY, `${BASE}0.pnts`, `${BASE}1.pnts`]);
+    expect(cloud.metadata?.loadWarnings).toBeUndefined();
   });
 });
