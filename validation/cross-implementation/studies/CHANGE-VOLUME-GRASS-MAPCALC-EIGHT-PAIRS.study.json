@@ -7,7 +7,7 @@
   "The tolerance is relative because the candidate stores elevations as Float32. It was derived from that representation and not fitted to the result; the protocol states the derivation.",
   "GRASS reproduces all eight closed-form volumes to within 1e-6 m3, so the residual is the candidate's alone and is bounded at 7e-6 relative.",
   "Truth is scored first. Two programs summing the same wrong cells would agree perfectly, so agreement between implementations is reported second.",
-  "This study is complete and its claim is NOT promoted. lint:claim-prose-sync requires the v0.6.6 release documents to state the live E4 count, so a promotion here would rewrite what a shipped release said its evidence was. Twelve was true for v0.6.6. Scoping a versioned release document to the register at its own tag is a separate change, and making it inside the change that benefits from it is the wrong order."
+  "The freeze is adopted-with-result rather than a preregistration: the protocol landed in the same commit as the first result, and the witness commit carries the fixture matrix, the level of detection and the tolerance basis."
  ],
  "protocolRef": {
   "protocolId": "PROTO-CHANGE-GRASS-MAPCALC",
