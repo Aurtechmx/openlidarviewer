@@ -109,7 +109,7 @@ describe('capture type — a registered multi-station terrestrial scan', () => {
     const fp = classify(signalsForStaticCloud(mineCloud({})));
     expect(fp.captureType).toBe('aerial-als');
     expect(fp.confidence).toBe('medium');
-    expect(fp.signals).toContain('Density: 1.9 pts/m² over a 1434.0 ha footprint');
+    expect(fp.signals).toContain('Density: 1.9 pts/m² over a 1434.0 ha bounding-box footprint');
   });
 
   it('does not assert airborne when the declared instrument is an unrecognised make', () => {
@@ -126,7 +126,7 @@ describe('capture type — a registered multi-station terrestrial scan', () => {
     expect(fp.label).toBe('Ground-based scan — capture method not determined');
     expect(fp.bounds).toEqual([]);
     // The density evidence stays visible, with the reason it was not enough.
-    expect(fp.signals).toContain('Density: 1.9 pts/m² over a 1434.0 ha footprint');
+    expect(fp.signals).toContain('Density: 1.9 pts/m² over a 1434.0 ha bounding-box footprint');
     const why = fp.signals.join(' ');
     expect(why).toMatch(/10 registered scan stations/);
     expect(why).toMatch(/per-scan temperature \/ relativeHumidity \/ atmosphericPressure/);
@@ -259,7 +259,7 @@ describe('capture type — the other bands are unchanged', () => {
     expect(s.declaredGroundInstrument).toBeUndefined();
     expect(fp.captureType).toBe('aerial-als');
     expect(fp.confidence).toBe('medium');
-    expect(fp.signals).toContain('Density: 2.0 pts/m² over a 320.0 ha footprint');
+    expect(fp.signals).toContain('Density: 2.0 pts/m² over a 320.0 ha bounding-box footprint');
   });
 
   it('a spaceborne sensor string still wins outright', () => {

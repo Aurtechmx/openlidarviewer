@@ -186,7 +186,10 @@ export interface OpenScanDeps {
   /** Surface the instant analysis-on-drop entry point. */
   showInstantAnswer: (name: string) => void;
   /** Repopulate the classification legend from the cloud's per-point class buffer. */
-  refreshClassLegend: (classification?: ArrayLike<number>) => void;
+  refreshClassLegend: (
+    classification?: ArrayLike<number>,
+    sample?: { readonly loaded: number; readonly declared?: number },
+  ) => void;
   /** `?debug=1` — console diagnostics + overlay telemetry. */
   readonly debug: boolean;
   /** `?benchmark=1` — emit a benchmark result on load. */
@@ -524,7 +527,12 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // channel renders the panel's empty state. DISPLAY-ONLY; the all-visible
     // default mask is applied so nothing is hidden on load.
     try {
-      deps.refreshClassLegend(result.cloud.classification);
+      // Counts come from the points actually loaded, so hand the legend the
+      // loaded-versus-declared basis: a strided load labels them as a sample.
+      deps.refreshClassLegend(result.cloud.classification, {
+        loaded: result.cloud.pointCount,
+        declared: result.cloud.declaredPointCount,
+      });
     } catch (err) {
       if (deps.debug) console.warn('[class-legend] refresh threw', err);
     }

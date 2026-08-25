@@ -1637,7 +1637,7 @@ async function runDeriveClassification(): Promise<void> {
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes));
+    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount });
     // Surface the run's honest confidence + caveats in the legend caption, not
     // just a flat "derived" tag — so the user sees WHEN to trust it.
     const confPct = Number.isFinite(result.confidence)
@@ -1723,7 +1723,7 @@ async function runFillUnclassified(): Promise<void> {
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes));
+    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount });
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
     classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
     classLegendPanel.show();
@@ -3446,11 +3446,11 @@ function revealAnalysePanel(name: string, settled = true): void {
  * the legend's fresh state is all-visible, so the GPU mask is applied as a
  * no-op identity mask to keep the unfiltered experience unchanged. v0.4.1.
  */
-function refreshClassLegend(classification?: ArrayLike<number>): void {
+function refreshClassLegend(classification?: ArrayLike<number>, sample?: { readonly loaded: number; readonly declared?: number }): void {
   if (classification && classification.length > 0) {
-    classLegendPanel.setClasses(countClasses(toClassBuffer(classification)));
+    classLegendPanel.setClasses(countClasses(toClassBuffer(classification)), sample);
   } else {
-    classLegendPanel.setClasses(new Map());
+    classLegendPanel.setClasses(new Map(), sample);
   }
   // Apply the (all-visible) mask so a previously-filtered scan can't leak its
   // hidden classes onto the freshly loaded one. No-op for the common case.

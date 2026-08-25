@@ -80,6 +80,7 @@
 /* Derived-classification provenance caption — a quiet amber note so the
    heuristic classes never read as an authoritative, file-supplied set. */
 .olv-cl-derived,
+.olv-cl-samplenote,
 .olv-cl-streamnote {
   font-size: 10.5px; line-height: 1.35; color: var(--warn, #b8860b);
   background: color-mix(in srgb, var(--warn, #b8860b) 12%, transparent);
