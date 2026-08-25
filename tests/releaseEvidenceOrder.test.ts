@@ -26,47 +26,49 @@
  * nothing and are deliberately skipped rather than silently treated as fresh.
  */
 
-import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import { resolve, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { describe, it, expect } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { resolve, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8")) as {
   scripts: Record<string, string>;
 };
 
 /** The release chain, as npm script names, in the order the chain runs them. */
 function chainSteps(): string[] {
-  const chain = pkg.scripts['test:release:execute'];
-  expect(typeof chain, 'package.json has no test:release:execute').toBe('string');
+  const chain = pkg.scripts["test:release:execute"];
+  expect(typeof chain, "package.json has no test:release:execute").toBe(
+    "string",
+  );
   return chain
-    .split('&&')
+    .split("&&")
     .map((s) => s.trim())
-    .map((s) => /^npm run ([\w:.-]+)/.exec(s)?.[1] ?? '')
-    .filter((s) => s !== '');
+    .map((s) => /^npm run ([\w:.-]+)/.exec(s)?.[1] ?? "")
+    .filter((s) => s !== "");
 }
 
 /** bucket name -> the npm script in the chain that runs it. */
 const BUCKET_SCRIPT: Record<string, string> = {
-  unit: 'test:unit',
-  export: 'test:export',
-  terrain: 'test:terrain',
-  ui: 'test:ui',
-  slow: 'test:slow',
+  unit: "test:unit",
+  export: "test:export",
+  terrain: "test:terrain",
+  ui: "test:ui",
+  slow: "test:slow",
 };
 
 /** `tests/foo.test.ts` -> bucket, from the single source of that classification. */
 function bucketOfTestFile(): Map<string, string> {
-  const out = spawnSync('node', ['scripts/test-bucket.mjs', '--list'], {
+  const out = spawnSync("node", ["scripts/test-bucket.mjs", "--list"], {
     cwd: ROOT,
-    encoding: 'utf8',
+    encoding: "utf8",
   });
   expect(out.status, `test-bucket.mjs --list failed: ${out.stderr}`).toBe(0);
   const map = new Map<string, string>();
-  for (const line of out.stdout.split('\n')) {
-    const [bucket, file] = line.split('\t');
+  for (const line of out.stdout.split("\n")) {
+    const [bucket, file] = line.split("\t");
     if (bucket && file) map.set(file.trim(), bucket.trim());
   }
   expect(map.size).toBeGreaterThan(0);
@@ -75,9 +77,10 @@ function bucketOfTestFile(): Map<string, string> {
 
 /** Every `validation/...` path a verifier script names in its own source. */
 function declaredPaths(scriptFile: string): string[] {
-  const src = readFileSync(resolve(ROOT, scriptFile), 'utf8');
+  const src = readFileSync(resolve(ROOT, scriptFile), "utf8");
   const found = new Set<string>();
-  for (const m of src.matchAll(/['"`](validation\/[^'"`\s${}]+)['"`]/g)) found.add(m[1]);
+  for (const m of src.matchAll(/['"`](validation\/[^'"`\s${}]+)['"`]/g))
+    found.add(m[1]);
   return [...found].sort();
 }
 
@@ -88,26 +91,32 @@ interface Record_ {
 
 /** Read one JSON file, or null when it is absent or not JSON. */
 function readJson(rel: string): unknown {
-  const abs = resolve(ROOT, rel);
-  if (!existsSync(abs) || !statSync(abs).isFile()) return null;
   try {
-    return JSON.parse(readFileSync(abs, 'utf8'));
+    return JSON.parse(readFileSync(resolve(ROOT, rel), "utf8"));
   } catch {
+    // Absent, a directory, or not JSON. Reading and catching rather than
+    // testing first keeps the answer to "can this be read" and the read
+    // itself in one step, so nothing can change between them.
     return null;
   }
 }
 
 /** The JSON files a declared path covers: the file itself, or a directory of them. */
 function expand(rel: string): string[] {
-  const abs = resolve(ROOT, rel);
-  if (!existsSync(abs)) return [];
-  if (statSync(abs).isDirectory()) {
-    return readdirSync(abs)
-      .filter((n) => n.endsWith('.json'))
+  // Same one-step rule as readJson: attempt the listing and let the failure
+  // classify the path, rather than asking about it first. The code matters:
+  // ENOTDIR means the path is a file, ENOENT means nothing is there, and
+  // conflating them would report a missing artifact as a present one.
+  try {
+    return readdirSync(resolve(ROOT, rel))
+      .filter((n) => n.endsWith(".json"))
       .sort()
       .map((n) => join(rel, n));
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOTDIR") return rel.endsWith(".json") ? [rel] : [];
+    return [];
   }
-  return rel.endsWith('.json') ? [rel] : [];
 }
 
 /**
@@ -128,30 +137,38 @@ function generatedRecordsRead(scriptFile: string): Record_[] {
   // them would report an inversion that is not one. The manifest's artifact
   // list is followed only for a verifier whose own source works with it.
   const followsArtifacts = /rawArtifacts|derivedArtifacts/.test(
-    readFileSync(resolve(ROOT, scriptFile), 'utf8'),
+    readFileSync(resolve(ROOT, scriptFile), "utf8"),
   );
   const consider = (rel: string): void => {
     if (seen.has(rel)) return;
     seen.add(rel);
     const doc = readJson(rel);
-    if (doc === null || typeof doc !== 'object') return;
+    if (doc === null || typeof doc !== "object") return;
     const o = doc as Record<string, unknown>;
-    if (typeof o.generatedBy === 'string' && /^tests\/.+\.test\.ts$/.test(o.generatedBy)) {
+    if (
+      typeof o.generatedBy === "string" &&
+      /^tests\/.+\.test\.ts$/.test(o.generatedBy)
+    ) {
       out.push({ path: rel, generatedBy: o.generatedBy });
     }
     if (!followsArtifacts) return;
-    for (const key of ['rawArtifacts', 'derivedArtifacts']) {
+    for (const key of ["rawArtifacts", "derivedArtifacts"]) {
       const list = o[key];
       if (!Array.isArray(list)) continue;
       for (const entry of list) {
         const p = (entry as { path?: unknown })?.path;
-        if (typeof p === 'string' && p.startsWith('validation/') && p.endsWith('.json')) {
+        if (
+          typeof p === "string" &&
+          p.startsWith("validation/") &&
+          p.endsWith(".json")
+        ) {
           consider(p);
         }
       }
     }
   };
-  for (const declared of declaredPaths(scriptFile)) for (const f of expand(declared)) consider(f);
+  for (const declared of declaredPaths(scriptFile))
+    for (const f of expand(declared)) consider(f);
   return out;
 }
 
@@ -171,7 +188,7 @@ function pairs(): Pair[] {
   const found: Pair[] = [];
   steps.forEach((name, index) => {
     const body = pkg.scripts[name];
-    const script = /^node (scripts\/[\w-]+\.mjs)/.exec(body ?? '')?.[1];
+    const script = /^node (scripts\/[\w-]+\.mjs)/.exec(body ?? "")?.[1];
     if (script === undefined) return;
     for (const rec of generatedRecordsRead(script)) {
       const bucket = buckets.get(rec.generatedBy);
@@ -191,8 +208,8 @@ function pairs(): Pair[] {
   return found;
 }
 
-describe('release chain evidence order', () => {
-  it('finds the verifier/producer pairs by walking the chain, not a hardcoded list', () => {
+describe("release chain evidence order", () => {
+  it("finds the verifier/producer pairs by walking the chain, not a hardcoded list", () => {
     const found = pairs();
     // A discovery that silently stops finding anything would make every
     // assertion below vacuously true, which is the same false green this file
@@ -200,15 +217,17 @@ describe('release chain evidence order', () => {
     // that discovery still works, not that the list is closed.
     const keys = found.map((p) => `${p.verifier} <- ${p.generatedBy}`);
     expect(keys).toContain(
-      'validation:classifier-corpus:verify <- tests/classifierCorpusEval.test.ts',
+      "validation:classifier-corpus:verify <- tests/classifierCorpusEval.test.ts",
     );
     expect(keys).toContain(
-      'validation:ground-metrics:verify <- tests/groundFilterPdalAgreement.test.ts',
+      "validation:ground-metrics:verify <- tests/groundFilterPdalAgreement.test.ts",
     );
-    expect(keys).toContain('validation:study:verify <- tests/groundFilterPdalAgreement.test.ts');
+    expect(keys).toContain(
+      "validation:study:verify <- tests/groundFilterPdalAgreement.test.ts",
+    );
   });
 
-  it('runs every producing bucket before the verifier that grades its record', () => {
+  it("runs every producing bucket before the verifier that grades its record", () => {
     const inversions = pairs()
       .filter((p) => !(p.producerAt >= 0 && p.producerAt < p.verifierAt))
       .map(
@@ -222,6 +241,6 @@ describe('release chain evidence order', () => {
             : `, which the chain never runs. Add ${p.producer} to test:release:execute before ` +
               `${p.verifier}, or the record is never recomputed at all.`),
       );
-    expect(inversions, inversions.join('\n')).toEqual([]);
+    expect(inversions, inversions.join("\n")).toEqual([]);
   });
 });
