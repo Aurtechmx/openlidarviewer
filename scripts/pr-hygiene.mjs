@@ -64,6 +64,62 @@ const list = (files) =>
  *   linearHistoryRequired, commitsBehind, openPrCount, generatedFiles[]
  * }
  */
+
+/**
+ * Wording that describes how the change was produced rather than what it does.
+ *
+ * A pull request body and a commit message are read by people deciding whether
+ * to trust and merge software. An account of the author's attempts, doubts or
+ * instructions is noise there, and it survives in the permanent record long
+ * after the session that produced it is gone. Nothing else in the pipeline
+ * catches it: the prose gate looks for AI-writing tells and the archive gate
+ * never reads a commit message at all.
+ *
+ * The patterns are deliberately narrow. A rule that fires on the word "I"
+ * would be argued with and then disabled, which is worse than no rule, so
+ * each one targets a construction that is hard to write by accident when
+ * describing software.
+ */
+export const NARRATION_PATTERNS = [
+  { id: 'first-person-process',
+    // Allows up to two intervening adverbs ("I then quickly realised"), because
+    // the construction is what matters and the adverb is incidental.
+    re: /\b(?:I|we)\s+(?:\w+ly\s+|then\s+|first\s+|initially\s+|also\s+|originally\s+){0,2}(?:tried|realized|realised|noticed|decided|thought|discovered|found|started|began|went\s+with|opted|assumed|expected)\b/i,
+    why: 'first-person process narration' },
+  { id: 'deliberation', re: /(?:^|\n)\s*(?:Actually|Wait|Hmm|Let me|Let's see|On reflection|Turns out|It turns out)\b/i,
+    why: 'thinking-aloud opener' },
+  { id: 'instruction-echo', re: /\b(?:as\s+(?:you\s+)?(?:requested|asked)|per\s+your\s+(?:request|instruction)|the\s+user\s+(?:asked|wants|requested))\b/i,
+    why: 'echo of the instruction that prompted the work' },
+  { id: 'agent-self-reference', re: /\b(?:sub-?agents?|the\s+agent|Claude|Co-Authored-By|my\s+(?:analysis|reasoning|plan))\b/i,
+    why: 'reference to the authoring process rather than the software' },
+  { id: 'session-artifact', re: /\b(?:in\s+this\s+session|this\s+conversation|the\s+transcript|scratchpad|TODO|FIXME|XXX)\b/,
+    why: 'working-note artifact' },
+  { id: 'try-fail-narrative', re: /\b(?:at\s+first|initially,|my\s+first\s+attempt|that\s+did\s?n[o']t\s+work|second\s+attempt)\b/i,
+    why: 'account of attempts rather than the result' },
+];
+
+/**
+ * Find process narration in a body of authored text.
+ *
+ * Fenced code blocks and quoted lines are exempt: a diff, a log excerpt or a
+ * quoted error legitimately contains any wording at all, and flagging those
+ * would push authors to stop pasting the evidence that makes a PR reviewable.
+ */
+export function collectNarrationProblems(text, label = 'text') {
+  if (!text) return [];
+  const stripped = String(text)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*>.*$/gm, ' ')
+    .replace(/`[^`\n]*`/g, ' ');
+  const found = [];
+  for (const { id, re, why } of NARRATION_PATTERNS) {
+    const m = re.exec(stripped);
+    if (m) found.push(`[H7 narration] ${label} contains ${why} ("${m[0].trim()}"). ` +
+      'Say what the software does now, not how the change was arrived at.');
+  }
+  return found;
+}
+
 export function collectHygieneProblems(observation) {
   const {
     baseRef = 'main',
@@ -188,6 +244,23 @@ if (isCli) {
 
   const observation = observeBranch(base, head, { openPrCount, allowedBases: [base] });
   const { errors, warnings } = collectHygieneProblems(observation);
+
+  // The authored text: the PR body, supplied by the workflow, and every commit
+  // message on the branch. Both outlive the session that wrote them, so both
+  // are checked. A missing PR_BODY means the check simply has less to read; it
+  // is not treated as a pass or as a failure.
+  errors.push(...collectNarrationProblems(process.env.PR_BODY ?? '', 'the PR body'));
+  try {
+    const mergeBase = execFileSync('git', ['merge-base', base, head], {
+      cwd: ROOT, encoding: 'utf8',
+    }).trim();
+    const log = execFileSync('git', ['log', '--format=%B', `${mergeBase}..${head}`], {
+      cwd: ROOT, encoding: 'utf8',
+    });
+    errors.push(...collectNarrationProblems(log, 'a commit message on this branch'));
+  } catch {
+    // No git history to read. The PR body check above still applies.
+  }
 
   for (const w of warnings) console.log(`  note: ${w}`);
 
