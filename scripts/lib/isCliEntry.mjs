@@ -1,5 +1,5 @@
 /**
- * isCliEntry.mjs — decide whether this module is the program Node was asked to run.
+ * isCliEntry.mjs: decide whether this module is the program Node was asked to run.
  *
  * The usual form of that check compares two paths:
  *
@@ -8,9 +8,9 @@
  * Those two sides are not produced the same way. `import.meta.url` comes from
  * the ESM loader, which has already followed every symlink on the way to the
  * file, so it always names the real path. `process.argv[1]` is whatever the
- * caller typed. Invoke a script through a path that crosses a symlink — a
- * checkout linked from elsewhere, a tool that hands Node a link — and the two
- * strings differ, the comparison is false, and the CLI body never runs.
+ * caller typed. Invoke a script through a path that crosses a symlink, such as
+ * a checkout linked from elsewhere or a tool that hands Node a link, and the
+ * two strings differ, the comparison is false, and the CLI body never runs.
  *
  * The failure is silent and reads as success: no output, exit 0. A guard that
  * exits 0 without running is worse than one that crashes, because a caller

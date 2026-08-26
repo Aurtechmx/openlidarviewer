@@ -6,7 +6,7 @@
  * way: the ESM loader has already resolved symlinks by the time it fills in
  * import.meta.url, while argv[1] is the path the caller typed. A comparison
  * that does not resolve both sides is false whenever the invoking path crosses
- * a symlink, and the script then exits 0 having done nothing — a pass that
+ * a symlink, and the script then exits 0 having done nothing, a pass that
  * looks identical to a real one.
  *
  * So this spawns a representative gate through a symlinked checkout path and
