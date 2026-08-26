@@ -106,7 +106,13 @@ export interface ProfileDisplayMode {
 
 /** The legend: machine-readable facts plus the sentences that state them. */
 export interface DerivedSurfaceLegend {
-  /** The series name. Never a terrain-class claim. */
+  /**
+   * The series name with no method in it, for a key beside the drawn line on
+   * a sheet that states the method once somewhere else. Never a terrain-class
+   * claim, and never used where the method has not been stated.
+   */
+  readonly seriesName: string;
+  /** The series name with the operation that made it. Never a terrain-class claim. */
   readonly seriesLabel: string;
   /** The percentile that actually ran, resolved and clamped as the sampler does. */
   readonly percentileUsed: number;
@@ -308,7 +314,8 @@ export function buildDerivedSurfaceLegend(input: DerivedSurfaceLegendInput): Der
       : null;
 
   const pct = num(percentileUsed, 1);
-  const seriesLabel = `Derived surface (${pct}th percentile of corridor returns)`;
+  const seriesName = 'Derived surface';
+  const seriesLabel = `${seriesName} (${pct}th percentile of corridor returns)`;
 
   const geometryLine =
     halfWidth == null
@@ -334,6 +341,7 @@ export function buildDerivedSurfaceLegend(input: DerivedSurfaceLegendInput): Der
   )}, ${gapStationCount} ${plural(gapStationCount, 'gap', 'gaps')}. Estimated, not measured.`;
 
   return {
+    seriesName,
     seriesLabel,
     percentileUsed,
     percentileWasDefault,
@@ -360,6 +368,7 @@ export function buildDerivedSurfaceLegend(input: DerivedSurfaceLegendInput): Der
  */
 export function derivedSurfaceLegendStrings(legend: DerivedSurfaceLegend): readonly string[] {
   return [
+    legend.seriesName,
     legend.seriesLabel,
     legend.caption,
     ...legend.lines,

@@ -215,7 +215,10 @@ describe('provenance metadata (v0.4.5, B4)', () => {
     expect(text).toContain('EPSG:2225'); // header line + summary row
     expect(text).toContain('NAVD88');
     expect(text).toContain('12.500 m'); // the real corridor, not "auto" (5 sig figs)
-    expect(text).toContain('p25 of corridor'); // header provenance line
+    // The percentile that ran, in the words the legend states it in. It is
+    // stated once, in general note 1, rather than a second time as a header
+    // provenance line the title block and the KPI band already answer.
+    expect(text).toContain('25th percentile of corridor returns');
     expect(text).not.toContain('auto (5% of length)');
     expect(text).not.toContain('not georeferenced');
   });
@@ -275,9 +278,12 @@ describe('the derived series is named as the legend names it', () => {
       }),
     );
     expect(text).toContain(legend.seriesLabel);
-    expect(text).toContain(legend.caption);
     // And every sentence the legend states about it.
     for (const line of legend.lines) expect(text).toContain(line);
+    // The key beside the drawn line carries the legend's own series name and
+    // points at the note that states the method, rather than restating the
+    // method within an inch of it.
+    expect(text).toContain(`${legend.seriesName} - see general note 1`);
   });
 
   it('never names the series after a terrain class', async () => {
@@ -541,10 +547,13 @@ describe('unit system (v0.4.5, B9) — the sheet honours the active toggle end-t
     // figs); the corridor 12.5 m = 41.0105 ft → "41.010 ft".
     expect(text).toContain('98.425 ft');
     expect(text).toContain('41.010 ft');
-    // Station table: header names the unit; heights convert per station
-    // (station 0 sits at exactly 100 m = 328.0840 ft → "328.08").
-    expect(text).toContain('Elevation (ft), grade to next');
+    // Station table: the column head names the unit and the reference (drawn
+    // as tracked caps, so the spacing is stripped before matching); heights
+    // convert per station (station 0 sits at exactly 100 m = 328.0840 ft →
+    // "328.08"); and the sheet says what its GRADE column means.
+    expect(text.replace(/\s+/g, '')).toContain('ELEV(ft)');
     expect(text).toContain('328.08');
+    expect(text).toContain('GRADE = SLOPE FROM CURRENT STATION TO NEXT STATION');
   });
 
   it('metric stays the default sheet when no unit system is passed', async () => {
@@ -557,7 +566,7 @@ describe('unit system (v0.4.5, B9) — the sheet honours the active toggle end-t
     const text = drawnPdfProse(bytes);
     expect(text).toContain('Elevation (m)');
     expect(text).toContain('Chainage (station km+m)');
-    expect(text).toContain('Elevation (m), grade to next');
+    expect(text.replace(/\s+/g, '')).toContain('ELEV(m)');
     expect(text).not.toContain('Elevation (ft)');
   });
 });
