@@ -315,7 +315,9 @@
 }
 .olv-mp-summary-row { display: contents; }
 .olv-mp-summary-label {
-  font-size: var(--text-2xs); color: var(--text-faint); white-space: nowrap;
+  /* Wraps rather than holding the label column open: at the panel's default
+     width a long label would otherwise take the room its own value needs. */
+  font-size: var(--text-2xs); color: var(--text-faint); overflow-wrap: anywhere;
 }
 .olv-mp-summary-value {
   margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-2xs);
@@ -445,7 +447,15 @@
 .olv-mp-stations[open] .olv-mp-stations-summary::before {
   transform: rotate(90deg);
 }
-.olv-mp-stations-wrap { max-height: 220px; overflow-y: auto; }
+/* The station cells do not wrap, so the table's own width is whatever its
+   widest row needs. Without a horizontal scroll of its own that width becomes
+   the panel's, and every other child of the panel is then clipped at the
+   panel's edge: the chart, the corridor caption and the summary values all
+   lose their right-hand end to a table that is not even open. The table
+   scrolls inside itself instead. */
+.olv-mp-stations-wrap {
+  max-height: 220px; overflow-y: auto; overflow-x: auto; max-width: 100%;
+}
 .olv-mp-stations-table {
   width: 100%; border-collapse: collapse;
   font-variant-numeric: tabular-nums; font-size: var(--text-2xs);

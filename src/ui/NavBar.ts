@@ -486,6 +486,38 @@ export class NavBar {
       modesGroup,
       metaGroup,
     ]);
+    // While the user is dragging the scan the panel is in the way of the thing
+    // being looked at, so it yields: it fades and stops taking pointer events
+    // for the duration of the drag, then comes back. Nothing is dismissed and
+    // nothing is written down, because the Camera and Views rows inside it are
+    // the only surface in the app for orthographic projection and the standard
+    // views. A panel that hid them across sessions would take the controls
+    // with it, which is the failure `navViewControlsPersist.test.ts` exists to
+    // prevent. Yielding is not dismissing.
+    //
+    // The listener is on the window and ignores presses that begin inside the
+    // navigation bar, so reaching for a control in the panel does not make the
+    // panel retreat from the cursor on its way there.
+    const yieldWhileDragging = (down: boolean): void => {
+      this._hud.classList.toggle('olv-nav-hud-yielding', down);
+    };
+    // Guarded because the panel is constructed in Node by the tests that hold
+    // its DOM shape, where there is no window to listen on.
+    if (typeof window !== 'undefined') {
+      window.addEventListener(
+        'pointerdown',
+        (e) => {
+          const target = e.target as Element | null;
+          if (target?.closest?.('.olv-navbar') != null) return;
+          yieldWhileDragging(true);
+        },
+        { capture: true },
+      );
+      for (const end of ['pointerup', 'pointercancel'] as const) {
+        window.addEventListener(end, () => yieldWhileDragging(false), { capture: true });
+      }
+    }
+
     this._hud = el('div', { className: 'olv-nav-hud' }, [
       hudHeader,
       this._legend,

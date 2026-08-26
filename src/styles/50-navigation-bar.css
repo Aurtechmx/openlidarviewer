@@ -266,6 +266,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* Collapsed: the legend is hidden, so the panel shrinks to the title row plus
    the camera and view controls. Those are controls rather than help and stay
    reachable, which is why the panel does not disappear outright. */
+/* While the scan is being dragged the panel yields: it is the thing standing
+   over what the user is looking at. Opacity and pointer-events only, so no
+   control is dismissed and nothing is written down; the panel is back the
+   moment the drag ends. Reduced motion gets the same result without the
+   fade, because the point is the yielding rather than the transition. */
+.olv-nav-hud { transition: opacity 140ms var(--ease-standard, ease-out); }
+.olv-nav-hud-yielding { opacity: 0.12; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .olv-nav-hud { transition: none; }
+}
+
 .olv-nav-hud-collapsed { padding-bottom: var(--space-sm); }
 .olv-nav-hud-collapsed .olv-nav-hud-header { margin-bottom: var(--space-xs); }
 
