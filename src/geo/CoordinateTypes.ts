@@ -51,6 +51,10 @@ export type CrsSource =
   | 'las-vlr'
   | 'copc-meta'
   | 'ept-srs'
+  // A 3D Tiles `region` bounding volume, which the spec fixes as EPSG:4979.
+  // It is the only in-spec place a tileset states a frame; a box- or
+  // sphere-bounded tileset declares none and must not be given one.
+  | 'tileset-region'
   | 'catalog-tile'
   | 'user-override'
   | 'default-assumption';

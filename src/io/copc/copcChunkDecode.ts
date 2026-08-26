@@ -70,13 +70,16 @@ export interface DecodedChunk {
   rgbEightBit?: boolean;
 }
 
-/** Decodes a compressed COPC node chunk into local-space attributes. */
-export interface ChunkDecoder {
-  decode(
-    chunk: ArrayBuffer,
-    meta: ChunkDecodeMetadata,
-    signal?: AbortSignal,
-  ): Promise<DecodedChunk>;
+/**
+ * Decodes one node's bytes into local-space attributes.
+ *
+ * The metadata type is a parameter because the scheduler never inspects it: it
+ * takes whatever the source returns and hands it to the decoder that source was
+ * built with. A LAZ decoder keeps the default and is unchanged; a decoder for
+ * another body, such as a `.pnts` tile, names its own metadata instead.
+ */
+export interface ChunkDecoder<TMeta = ChunkDecodeMetadata> {
+  decode(chunk: ArrayBuffer, meta: TMeta, signal?: AbortSignal): Promise<DecodedChunk>;
 }
 
 /** Point source id offset in PDRF 6, 7, and 8. */

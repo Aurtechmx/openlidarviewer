@@ -31,6 +31,8 @@ function crsSourceForKind(kind: StreamingSourceKind): CrsSource {
       return 'ept-srs';
     case 'tiles':
       return 'las-vlr';
+    case '3dtiles':
+      return 'tileset-region';
     case 'copc':
       return 'copc-meta';
   }

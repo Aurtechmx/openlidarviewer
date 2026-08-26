@@ -23,8 +23,9 @@
  */
 
 import type { StreamingNode } from './StreamingNode';
+import type { NodeDecodeMetadata } from './StreamingSource';
 import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
-import type { ChunkDecodeMetadata, ChunkDecoder } from '../../io/copc/copcChunkDecode';
+import type { ChunkDecoder } from '../../io/copc/copcChunkDecode';
 import { renderLocalPositions } from '../../model/pointFrames';
 import type { SamplingPlanOptions, SampleNode } from './samplingPlan';
 import {
@@ -58,7 +59,7 @@ export interface GradeNodeSource {
     readonly errors: readonly string[];
   };
   readNodeChunk(record: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer>;
-  decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata;
+  decodeMeta(record: StreamingNodeRecord): NodeDecodeMetadata;
 }
 
 /**
@@ -93,7 +94,7 @@ export function sampleNodesFromSource(source: GradeNodeSource): SampleNode[] {
  */
 export function makeDecodeNode(
   source: GradeNodeSource,
-  decoder: ChunkDecoder,
+  decoder: ChunkDecoder<NodeDecodeMetadata>,
 ): DecodeNodeFn {
   return async (id: string, signal?: AbortSignal): Promise<Float32Array> => {
     const node = source.octree.store.get(id);
@@ -134,7 +135,7 @@ export function makeDecodeNode(
  */
 export function gradeFullCloud<G>(args: {
   readonly source: GradeNodeSource;
-  readonly decoder: ChunkDecoder;
+  readonly decoder: ChunkDecoder<NodeDecodeMetadata>;
   readonly grade: GradeFn<G>;
   readonly options?: SamplingPlanOptions;
   readonly signal?: AbortSignal;

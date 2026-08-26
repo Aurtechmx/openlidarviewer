@@ -2229,6 +2229,7 @@ export class Inspector {
       'las-vlr': 'LAS / LAZ georeference VLR',
       'copc-meta': 'COPC metadata',
       'ept-srs': 'EPT srs.wkt',
+      'tileset-region': '3D Tiles region bounding volume',
       'catalog-tile': 'Public-catalog tile',
       'user-override': 'User override',
       'default-assumption': 'No metadata',

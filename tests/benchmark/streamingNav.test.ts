@@ -42,6 +42,7 @@ import {
   StreamingScheduler,
   decodedChunkBytes,
 } from '../../src/render/streaming/StreamingScheduler';
+import type { NodeDecodeMetadata } from '../../src/render/streaming/StreamingSource';
 import type { StreamingSource } from '../../src/render/streaming/StreamingSource';
 import { streamingBudgets } from '../../src/render/streaming/streamingBudget';
 import type {
@@ -263,7 +264,7 @@ export async function runStreamingNavigation(opts: NavRunOptions): Promise<NavRu
   // wrapped source hands the decoder — the seam that lets a decode be tied
   // back to the node that dispatched it, without touching the scheduler.
   const firstQueuedAt = new Map<string, number>();
-  const metaToNode = new Map<ChunkDecodeMetadata, { id: string; est: number }>();
+  const metaToNode = new Map<NodeDecodeMetadata, { id: string; est: number }>();
   const evictedAt = new Map<string, number>();
   let inFlightBytes = 0;
   let decodedNotResidentBytes = 0;
@@ -275,7 +276,7 @@ export async function runStreamingNavigation(opts: NavRunOptions): Promise<NavRu
   const wrappedSource = new Proxy(cloud as StreamingSource, {
     get(target, prop, _receiver) {
       if (prop === 'decodeMeta') {
-        return (record: Parameters<StreamingSource['decodeMeta']>[0]): ChunkDecodeMetadata => {
+        return (record: Parameters<StreamingSource['decodeMeta']>[0]): NodeDecodeMetadata => {
           const meta = target.decodeMeta(record);
           const id = record.id;
           const est = record.pointCount * EST_BYTES_PER_POINT;
@@ -298,12 +299,15 @@ export async function runStreamingNavigation(opts: NavRunOptions): Promise<NavRu
 
   // --- Decoder wrapper: time the real decode, and account decoded bytes as a
   //     not-yet-resident backlog until onNodeReady clears them. ---
-  const decoder: ChunkDecoder = {
+  const decoder: ChunkDecoder<NodeDecodeMetadata> = {
     decode: async (
       _chunk: ArrayBuffer,
-      meta: ChunkDecodeMetadata,
+      meta: NodeDecodeMetadata,
       _signal?: AbortSignal,
     ): Promise<DecodedChunk> => {
+      // This benchmark drives a COPC source. Point-tile metadata reaching it
+      // would mean the harness was rewired, not that the decode should guess.
+      if ('format' in meta) throw new Error('streamingNav drives COPC, not point tiles.');
       const started = now();
       const decoded = representativeDecode(meta);
       samples.pushDecodeMs(now() - started);
