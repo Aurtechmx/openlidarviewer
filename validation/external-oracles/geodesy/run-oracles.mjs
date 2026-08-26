@@ -45,16 +45,34 @@ const run = (exe, args, input) => {
 /** `which`, resolved once so the exact path lands in the record. */
 const resolveExe = (name) => run('/usr/bin/which', [name], undefined);
 
+/**
+ * The oracle binaries, resolved through `which` once each, for the reason
+ * given on {@link PROJINFO}: a spawn that names a bare command asks PATH at
+ * the moment it runs, so the binary that answered and the binary the record
+ * names are two separate lookups that a PATH change between them can
+ * separate. An oracle whose provenance can drift from its own numbers is not
+ * an oracle. Resolving once and spawning the absolute path everywhere makes
+ * the recorded path the one that produced the figures by construction.
+ */
+const CS2CS = resolveExe('cs2cs');
+const GEOCONVERT = resolveExe('GeoConvert');
+
 const versionOf = {
   // PROJ has no --version. Every CLI prints its release banner to stderr as the
   // first line of usage, and `-h` reaches it without consuming stdin.
   'proj-9.8.1': () => {
-    const r = spawnSync('cs2cs', ['-h'], { encoding: 'utf8' });
+    const r = spawnSync(CS2CS, ['-h'], { encoding: 'utf8' });
     const banner = `${r.stderr ?? ''}${r.stdout ?? ''}`.split('\n')[0].trim();
     if (!/\d/.test(banner)) throw new Error(`cs2cs printed no version banner: ${JSON.stringify(banner)}`);
     return banner;
   },
-  'geographiclib-2.7': () => run('GeoConvert', ['--version'], undefined),
+  // GeoConvert prints its own argv[0] ahead of the version, so spawning the
+  // absolute path would put this machine's install prefix into a committed
+  // fixture and make it disagree with every other machine's. The binary that
+  // answered is recorded separately as `executablePath`; what belongs in the
+  // banner is the version.
+  'geographiclib-2.7': () =>
+    run(GEOCONVERT, ['--version'], undefined).replace(/^\S*GeoConvert:/, 'GeoConvert:'),
 };
 
 /**
@@ -128,11 +146,11 @@ const results = [];
 for (const f of fixtures) {
   const line = `${f.lat.toFixed(DEGREE_DIGITS)} ${f.lon.toFixed(DEGREE_DIGITS)}`;
 
-  const geoRaw = run('GeoConvert', ['-u', '-p', String(METRE_DIGITS)], `${line}\n`);
+  const geoRaw = run(GEOCONVERT, ['-u', '-p', String(METRE_DIGITS)], `${line}\n`);
   const geo = parseGeoConvert(geoRaw);
 
   const epsg = (geo.hemisphere === 'S' ? 32700 : 32600) + geo.zone;
-  const projRaw = run('cs2cs', ['-f', `%.${METRE_DIGITS}f`, 'EPSG:4326', `EPSG:${epsg}`], `${line}\n`);
+  const projRaw = run(CS2CS, ['-f', `%.${METRE_DIGITS}f`, 'EPSG:4326', `EPSG:${epsg}`], `${line}\n`);
   const parts = projRaw.split(/\s+/);
   const proj = {
     easting: Number(parts[0]),
@@ -178,7 +196,7 @@ const record = {
     {
       oracleId: 'geographiclib-2.7',
       role: 'independent-same-quantity-implementation',
-      executablePath: resolveExe('GeoConvert'),
+      executablePath: GEOCONVERT,
       versionOutput: versionOf['geographiclib-2.7'](),
       commandLine: `GeoConvert -u -p ${METRE_DIGITS}`,
       zoneSource: 'oracle',
@@ -186,7 +204,7 @@ const record = {
     {
       oracleId: 'proj-9.8.1',
       role: 'independent-same-quantity-implementation',
-      executablePath: resolveExe('cs2cs'),
+      executablePath: CS2CS,
       versionOutput: versionOf['proj-9.8.1'](),
       commandLine: `cs2cs -f %.${METRE_DIGITS}f EPSG:4326 EPSG:<326|327><zone>`,
       zoneSource: 'geographiclib-2.7',
