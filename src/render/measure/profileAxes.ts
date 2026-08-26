@@ -131,7 +131,16 @@ function niceStepNearest(raw: number, span: number, target: number): NiceStep {
         };
   if (!(down.step > MIN_STEP)) return up;
   const missBy = (s: number): number => Math.abs(span / s - target);
-  return missBy(down.step) < missBy(up.step) ? down : up;
+  // The finer rung is taken only when it is nearer AND still respects the
+  // upper bound an axis is entitled to: a caller asking for eight ticks has
+  // said what it has room for, and eleven is not a closer answer to that
+  // question, it is a different one. Without this the nearest rule trades one
+  // failure for its mirror image, drawing a crowded axis instead of a coarse
+  // one.
+  // Ticks, not intervals: a range spanning n steps carries n + 1 of them when
+  // its ends land on step boundaries, which is the crowded case worth bounding.
+  const withinCeiling = Math.floor(span / down.step) + 1 <= target + 1;
+  return withinCeiling && missBy(down.step) < missBy(up.step) ? down : up;
 }
 
 /**
