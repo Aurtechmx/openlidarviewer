@@ -50,6 +50,7 @@
 import { el } from './dom';
 import {
   CURATED_LOCATIONS,
+  curatedSizeBytes,
   curatedUsageCategory,
   getCuratedLocation,
 } from '../io/catalog/curatedLocations';
@@ -57,8 +58,15 @@ import type { PcStacItem } from '../io/catalog/planetaryComputer';
 import type { Sample } from './Stage';
 import { loadPlanetaryComputerCatalog } from '../lazyChunks';
 
-/** The curated entry the start screen promotes as its one-click demo. */
-export const DEMO_SAMPLE_ID = 'flai-ch-swisssurface3d-2022';
+/**
+ * The curated entry the start screen promotes as its one-click demo.
+ *
+ * It must be a record whose licence the tree actually records. The Swiss
+ * tile held this slot while its licence was only ever written down as
+ * "Swiss OGD", which names a family of terms rather than an instrument.
+ * It stays in the catalog with that licence marked unrecorded.
+ */
+export const DEMO_SAMPLE_ID = 'flai-si-clss-2023';
 
 /**
  * The "Try a sample scan" dataset, built from its catalog record.
@@ -77,13 +85,11 @@ export function buildCuratedDemoSample(): Sample | undefined {
   if (!loc) return undefined;
   return {
     id: loc.id,
-    label: 'Switzerland · swisstopo, 84 MB',
-    detail: 'swissSURFACE3D (2022), via FLAI · streams over your network, nothing uploaded',
+    label: `${loc.label}, ${loc.sizeLabel}`,
+    detail: `${loc.displayName}, via ${loc.mirrorProvider} · streams over your network, nothing uploaded`,
     url: loc.streamUrl,
     name: loc.displayName,
-    // Bytes behind the record's '83.8 MB' size label. The cellular-data
-    // gate needs a number, and the label is written for a reader.
-    sizeBytes: 83_800_000,
+    sizeBytes: curatedSizeBytes(loc),
   };
 }
 

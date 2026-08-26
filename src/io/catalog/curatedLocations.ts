@@ -382,3 +382,19 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
 export function getCuratedLocation(id: string): CuratedLocation | undefined {
   return CURATED_LOCATIONS.find((c) => c.id === id);
 }
+
+/**
+ * Bytes behind a record's `sizeLabel`, when that label states a file size.
+ *
+ * The cellular-data gate needs a number and the label is written for a
+ * reader, so one of the two has to be derived from the other. Deriving
+ * the number means a corrected label cannot leave a stale threshold
+ * behind. Catalogue entries measured in points, not bytes, have no file
+ * size to report and return undefined.
+ */
+export function curatedSizeBytes(loc: CuratedLocation): number | undefined {
+  const m = /^([\d.]+)\s*(MB|GB)$/.exec(loc.sizeLabel.trim());
+  if (!m) return undefined;
+  const scale = m[2] === 'GB' ? 1_000_000_000 : 1_000_000;
+  return Math.round(Number(m[1]) * scale);
+}

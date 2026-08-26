@@ -12,8 +12,8 @@ email **info@aurtech.mx** and we'll act on it.
 | Dataset | Provider | Terms |
 | --- | --- | --- |
 | SF Coast · Los Angeles · Denver · Golden Gate · Grand Canyon NP · San Francisco · Denver Metro (DRCOG) | **USGS 3DEP** | Public domain |
-| Switzerland — swisssurface3D (2022) | **swisstopo**, via FLAI | Swiss open data |
-| Slovenia — GURS CLSS (2023) | **GURS**, via FLAI | Open data — attribution |
+| Switzerland — swisssurface3D (2022) | **swisstopo**, via FLAI | Swiss OGD — © swisstopo; licence instrument not recorded |
+| Slovenia — GURS CLSS (2023) | **GURS**, via FLAI | CC BY 4.0 (© GURS) |
 
 USGS 3DEP streams from the AWS Registry of Open Data bucket and asks for the
 courtesy citation: "Data available from U.S. Geological Survey, National
@@ -28,13 +28,13 @@ to each dataset's own licence.
 
 | Field | Value |
 | --- | --- |
-| Object | `data/CH/Swiss_federal_authorities/swisssurface3d_2022/copc/2485_1109.copc.laz` |
+| Object | `data/SI/GURS/CLSS_2023/copc/GKOT_433_100.copc.laz` |
 | Bucket | `open-lidar-data` (eu-central-1), FLAI Open LiDAR Data |
-| Dataset | swissSURFACE3D (2022) |
-| Original publisher | swisstopo (Swiss Federal Office of Topography) |
-| Terms | Swiss open government data; consult swisstopo's own licence for the dataset |
-| Approx. size | 83.8 MB (streamed progressively — the viewer fetches only the resident set) |
-| Transport verified | HTTP 206 partial content, `Accept-Ranges: bytes`, `Access-Control-Allow-Origin: *` (checked 2026-07-19) |
+| Dataset | Slovenia GURS CLSS 2023 |
+| Original publisher | GURS (Surveying and Mapping Authority of the Republic of Slovenia) |
+| Terms | CC BY 4.0, © GURS |
+| Approx. size | 202 MB (streamed progressively — the viewer fetches only the resident set) |
+| Record verified | 2026-05-29, the `verifiedAt` its catalog record carries. No range-request check against this object is recorded in this repository. |
 
 Nothing is uploaded: the object is fetched by range request straight into the
 browser, and the same consent gate that covers any remote scan applies before the

@@ -9,9 +9,11 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { buildCuratedDemoSample, DEMO_SAMPLE_ID } from '../src/ui/CatalogPanel';
 import {
   CURATED_LICENSE_IDS,
   CURATED_LOCATIONS,
+  curatedSizeBytes,
   curatedUsageCategory,
   getCuratedLocation,
 } from '../src/io/catalog/curatedLocations';
@@ -246,5 +248,41 @@ describe('curatedUsageCategory', () => {
     const main = readFileSync(resolve(REPO_ROOT, 'src/main.ts'), 'utf8');
     expect(main).toMatch(/recordUsage\('scan-open', usageCategory\)/);
     expect(main).not.toMatch(/'curated:[a-z-]+'/);
+  });
+});
+
+describe('the one-click demo record', () => {
+  it('carries a licence the tree actually records', () => {
+    const demo = getCuratedLocation(DEMO_SAMPLE_ID);
+    expect(demo, `DEMO_SAMPLE_ID "${DEMO_SAMPLE_ID}" names no curated record`).toBeDefined();
+    expect(
+      demo?.licenseId,
+      `the start screen promotes ${demo?.displayName} as its one-click demo, so its ` +
+        `licence cannot be unrecorded. Point DEMO_SAMPLE_ID at a record with a licence.`,
+    ).not.toBe('unknown');
+  });
+});
+
+describe('the demo sample is built from its record', () => {
+  it('reports the size the record states, not a constant', () => {
+    const loc = getCuratedLocation(DEMO_SAMPLE_ID)!;
+    const bytes = curatedSizeBytes(loc);
+    expect(bytes, `${loc.sizeLabel} is not a file size the cellular gate can use`).toBeDefined();
+    const sample = buildCuratedDemoSample();
+    if (!sample) throw new Error('buildCuratedDemoSample() returned nothing');
+    expect(
+      sample.sizeBytes,
+      'the cellular-data gate would warn against the wrong download size',
+    ).toBe(bytes);
+  });
+
+  it('names the record it streams', () => {
+    const loc = getCuratedLocation(DEMO_SAMPLE_ID)!;
+    const sample = buildCuratedDemoSample();
+    if (!sample) throw new Error('buildCuratedDemoSample() returned nothing');
+    expect(sample.label).toContain(loc.sizeLabel);
+    expect(sample.detail).toContain(loc.displayName);
+    expect(sample.detail).toContain(loc.mirrorProvider);
+    expect(sample.url).toBe(loc.streamUrl);
   });
 });
