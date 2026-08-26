@@ -181,18 +181,37 @@ interface Pair {
   readonly generatedBy: string;
 }
 
+/**
+ * Records this walk saw but could not turn into a pair, and why.
+ *
+ * A discovery that drops a record silently fails as `expected [ Array(1) ] to
+ * include ...`, which names what is missing and nothing about the reason. That
+ * is unreadable anywhere the tree differs from the machine the test was
+ * written on, which is exactly where this test earns its keep. Every drop is
+ * recorded so the failure can say what it could not resolve.
+ */
+const dropped: string[] = [];
+
 /** Every (verifier, producer) pair the release chain actually contains. */
 function pairs(): Pair[] {
   const steps = chainSteps();
   const buckets = bucketOfTestFile();
   const found: Pair[] = [];
+  dropped.length = 0;
   steps.forEach((name, index) => {
     const body = pkg.scripts[name];
     const script = /^node (scripts\/[\w-]+\.mjs)/.exec(body ?? '')?.[1];
     if (script === undefined) return;
-    for (const rec of generatedRecordsRead(script)) {
+    const records = generatedRecordsRead(script);
+    if (records.length === 0) dropped.push(`${name}: ${script} named no readable generated record`);
+    for (const rec of records) {
       const bucket = buckets.get(rec.generatedBy);
-      if (bucket === undefined) continue;
+      if (bucket === undefined) {
+        dropped.push(
+          `${name}: ${rec.path} says generatedBy ${rec.generatedBy}, which no bucket claims`,
+        );
+        continue;
+      }
       const producer = BUCKET_SCRIPT[bucket];
       const producerAt = producer === undefined ? -1 : steps.indexOf(producer);
       found.push({
@@ -216,13 +235,17 @@ describe('release chain evidence order', () => {
     // exists to prevent. These three are the pairs known to exist; the check is
     // that discovery still works, not that the list is closed.
     const keys = found.map((p) => `${p.verifier} <- ${p.generatedBy}`);
-    expect(keys).toContain(
+    // The drops are attached to the message rather than asserted on: a record
+    // this walk cannot resolve is not itself a failure, but it is always the
+    // explanation when one of the three below goes missing.
+    const why = dropped.length === 0 ? '' : `\nunresolved:\n  ${dropped.join('\n  ')}`;
+    expect(keys, `found ${keys.length} pair(s): ${keys.join(', ')}${why}`).toContain(
       'validation:classifier-corpus:verify <- tests/classifierCorpusEval.test.ts',
     );
-    expect(keys).toContain(
+    expect(keys, why).toContain(
       'validation:ground-metrics:verify <- tests/groundFilterPdalAgreement.test.ts',
     );
-    expect(keys).toContain(
+    expect(keys, why).toContain(
       'validation:study:verify <- tests/groundFilterPdalAgreement.test.ts',
     );
   });
