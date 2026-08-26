@@ -30,6 +30,7 @@ function record(id: string, depth: number, pointCount: number, byteSize: number)
   return {
     id,
     key: { depth, x: 0, y: 0, z: 0 },
+    depth,
     bounds: [0, 0, 0, 1, 1, 1],
     pointCount,
     byteOffset: 0,

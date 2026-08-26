@@ -14,7 +14,7 @@ import type { StreamingNodeRecord } from '../src/io/copc/copcTypes';
 function rec(id: string): StreamingNodeRecord {
   return {
     id,
-    key: { depth: 0, x: 0, y: 0, z: 0 },
+    key: { depth: 0, x: 0, y: 0, z: 0 }, depth: 0,
     bounds: [0, 0, 0, 1, 1, 1],
     pointCount: 100,
     byteOffset: 0,

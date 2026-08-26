@@ -981,7 +981,7 @@ test('nodes ingested AFTER scheduler construction still stream (late hierarchy)'
   const base = cloud.octree.nodes().find((n) => n.record.id === '2-0-0-0')!;
   cloud.octree.store.add({
     id: '3-0-0-0',
-    key: { depth: 3, x: 0, y: 0, z: 0 },
+    key: { depth: 3, x: 0, y: 0, z: 0 }, depth: 3,
     bounds: [-128, -128, -128, -96, -96, -96],
     pointCount: 200,
     byteOffset: base.record.byteOffset,

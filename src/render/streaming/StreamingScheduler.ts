@@ -953,7 +953,7 @@ export class StreamingScheduler {
         if (boxInFrustum(box, planes)) {
           score = nodeScore({
             bounds: box,
-            depth: node.record.key.depth,
+            depth: node.record.depth,
             cameraPos: view.cameraPosition,
             depthCap,
           });
@@ -1101,7 +1101,7 @@ export class StreamingScheduler {
       lapsed.push({
         id,
         pointCount: node.residentPointCount,
-        depth: node.record.key.depth,
+        depth: node.record.depth,
         distance: distance(centre, view.cameraPosition),
         visible: node.score > 0,
         // Everything here has been out of the selection for a whole defer
@@ -1158,7 +1158,7 @@ export class StreamingScheduler {
         candidates.push({
           id: node.record.id,
           pointCount: node.residentPointCount,
-          depth: node.record.key.depth,
+          depth: node.record.depth,
           distance: distance(centre, view.cameraPosition),
           // `score` is this tick's cull result: > 0 means inside the frustum.
           // On the stable-camera fast path it is the previous rescore's value,
