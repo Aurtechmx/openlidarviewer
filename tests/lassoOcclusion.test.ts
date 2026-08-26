@@ -214,3 +214,107 @@ describe('rejectOccluded — refuses to guess', () => {
     expect(describeLassoSelectionBasis('through-surfaces')).toBe('all depths along the ray');
   });
 });
+
+describe('rejectOccluded — a selection too thin to grid', () => {
+  /**
+   * The cell comes from the bounding box AREA, so a wide, near-flat selection
+   * sends the cell towards zero while the width stays long, and the column count
+   * grows as the square root of the aspect ratio with nothing in the geometry to
+   * stop it. These pin the grid to the point count instead: a handful of points
+   * may not ask for a grid larger than itself, whatever shape they arrive in.
+   */
+  function ribbon(n: number, width: number, height: number): Sample[] {
+    const out: Sample[] = [];
+    for (let i = 0; i < n; i++) {
+      out.push({ x: (i / (n - 1)) * width, y: i % 2 === 0 ? 0 : height, d: 10 + (i % 3) });
+    }
+    return out;
+  }
+
+  /** Cells the grid would hold at the cell size the decision reports. */
+  function gridCells(cellSizePx: number, width: number, height: number): number {
+    return (Math.floor(width / cellSizePx) + 1) * (Math.floor(height / cellSizePx) + 1);
+  }
+
+  it('does not build a grid larger than the candidate set', () => {
+    // 1000 px of width, 32 points, a height at the noise floor of a projected
+    // coordinate. The unbounded cell size here is about 1.7e-4 px, which is
+    // about 6e6 columns: five Float64 slots each, so gigabytes of typed array
+    // for 32 returns. Measured as bytes of array buffer rather than as elapsed
+    // time, which would be a machine-speed assertion and not a bound.
+    const samples = ribbon(32, 1000, 1e-10);
+    expect(gridCells(3 * Math.sqrt((1000 * 1e-10) / 32), 1000, 1e-10)).toBeGreaterThan(1e6);
+
+    const before = process.memoryUsage().arrayBuffers;
+    const decision = rejectOccluded(field(samples));
+    const grown = process.memoryUsage().arrayBuffers - before;
+
+    expect(grown).toBeLessThan(4 * 1024 * 1024);
+    expect(decision.applied).toBe(false);
+    expect(decision.outcome).toBe('degenerate-aspect');
+  });
+
+  it('declines rather than returning a quietly degraded selection', () => {
+    const samples = ribbon(64, 1000, 1e-6);
+    const decision = rejectOccluded(field(samples));
+
+    expect(decision.applied).toBe(false);
+    expect(decision.outcome).toBe('degenerate-aspect');
+    expect(decision.keptCount).toBe(samples.length);
+    for (let i = 0; i < samples.length; i++) expect(decision.keep[i]).toBe(1);
+    // An unapplied outcome must read as a through-surfaces figure in the clause,
+    // exactly as the other refusals do.
+    expect(describeLassoSelectionBasis('occluded-excluded', decision.outcome)).toContain(
+      'all depths taken',
+    );
+  });
+
+  it('holds the bound to the point count, not to a fixed grid size', () => {
+    // Same shape, 64× the points. A fixed cell cap would decline both or accept
+    // both; the bound is the candidate count, so the denser ribbon is the one
+    // that gets a grid.
+    const shape = (n: number) => ribbon(n, 1000, 0.5);
+    const sparse = rejectOccluded(field(shape(32)));
+    const dense = rejectOccluded(field(shape(2048)));
+
+    expect(gridCells(sparse.cellSizePx, 1000, 0.5)).toBeGreaterThan(32);
+    expect(sparse.applied).toBe(false);
+    expect(sparse.outcome).toBe('degenerate-aspect');
+    expect(gridCells(dense.cellSizePx, 1000, 0.5)).toBeLessThanOrEqual(2048);
+    expect(dense.outcome).not.toBe('degenerate-aspect');
+  });
+
+  it('leaves an ordinary selection on exactly the path it took before', () => {
+    // The bound must not touch what a normal lasso selects: a well-shaped
+    // selection spends about N / 9 cells, far under one cell per point. Both
+    // ends of the module's behaviour are pinned here, point for point.
+    const near = surface(24, 480, () => 10, 0.02, 1);
+    const far = surface(24, 480, () => 25, 0.02, 2);
+    const both = [...near, ...far];
+    const decision = rejectOccluded(field(both));
+
+    expect(decision.outcome).toBe('applied');
+    expect(gridCells(decision.cellSizePx, 480, 480)).toBeLessThan(both.length);
+    expect(decision.keptCount).toBe(near.length);
+    for (let i = 0; i < both.length; i++) {
+      expect(decision.keep[i]).toBe(i < near.length ? 1 : 0);
+    }
+
+    const steep = surface(40, 800, (u, v) => 5 + u * 120 + v * 80, 0.3, 5);
+    const uncarved = rejectOccluded(field(steep));
+    expect(uncarved.outcome).toBe('applied');
+    expect(uncarved.keptCount).toBe(steep.length);
+  });
+
+  it('still reports an exactly-zero extent as a degenerate extent', () => {
+    // The zero case was handled before the bound existed and keeps its own
+    // reason: no extent at all is not the same finding as an extent so thin the
+    // grid outruns the points.
+    const line: Sample[] = [];
+    for (let i = 0; i < 200; i++) line.push({ x: i, y: 10, d: i });
+    const decision = rejectOccluded(field(line));
+    expect(decision.applied).toBe(false);
+    expect(decision.outcome).toBe('degenerate-extent');
+    expect(decision.keptCount).toBe(line.length);
+  });
+});

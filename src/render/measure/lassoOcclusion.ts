@@ -69,10 +69,10 @@
  * basis produced a number rather than to claim a separation the geometry does
  * not support.
  *
- * The rejection never runs on a candidate set too small or too structureless to
- * estimate from. It reports `applied: false` with a reason instead of guessing,
- * because a guessed tolerance silently deletes part of a real surface and the
- * volume that comes out still looks plausible.
+ * The rejection never runs on a candidate set too small, too structureless or
+ * too oddly shaped to estimate from. It reports `applied: false` with a reason
+ * instead of guessing, because a guessed tolerance silently deletes part of a
+ * real surface and the volume that comes out still looks plausible.
  */
 
 /**
@@ -99,6 +99,7 @@ export type OcclusionOutcome =
   | 'applied'
   | 'too-few-points'
   | 'degenerate-extent'
+  | 'degenerate-aspect'
   | 'too-few-adjacent-cells';
 
 /** The keep decision, with the scales it was taken at. */
@@ -139,6 +140,29 @@ const MIN_CANDIDATES = 32;
 
 /** Fewest adjacent occupied cell pairs the step estimate needs. */
 const MIN_ADJACENT_PAIRS = 8;
+
+/**
+ * Most cells the grid may hold, per usable candidate.
+ *
+ * The cell is built from the bounding box AREA, so a selection that is wide and
+ * very thin drives the area, and with it the cell, towards zero while the width
+ * stays long: the column count is `width / cell`, which grows as the square root
+ * of the aspect ratio and is bounded by nothing in the geometry. A thousand
+ * pixels of width holding thirty-two points spread over a hundredth of a pixel
+ * of height already asks for more cells than there are points, and a height near
+ * the floating-point noise of a projection asks for tens of millions of them,
+ * which is tens of millions of Float64 slots for a handful of returns.
+ *
+ * One cell per point is the loosest bound that still means something. The whole
+ * estimate rests on a cell holding about nine points, so a grid finer than one
+ * cell per point cannot produce a nearest-SURFACE depth: every cell minimum is a
+ * single return, the adjacent-cell step is point-to-point noise rather than the
+ * step a surface makes, and the tolerance built on it would be a guess. The
+ * bound therefore fires only where the estimate was already meaningless, and a
+ * selection of any ordinary shape stays far below it: a square-ish box spends
+ * about `N / 9` cells, an eighth of the bound.
+ */
+const MAX_CELLS_PER_POINT = 1;
 
 /**
  * Decide which candidates the camera can see.
@@ -188,6 +212,16 @@ export function rejectOccluded(field: LassoDepthField): OcclusionRejection {
   }
   const cols = Math.floor(width / cell) + 1;
   const rows = Math.floor(height / cell) + 1;
+
+  // Refuse before allocating, not after. An extreme aspect ratio is a real
+  // geometry the polygon test can hand over, and the answer to it is the same
+  // answer this module gives to any candidate set it cannot estimate from: say
+  // the tolerance could not be found and let the caller report a through-
+  // surfaces figure. Declining costs the caller nothing it had before, and the
+  // grid it would have built cannot separate surfaces anyway.
+  if (!(cols * rows <= usable * MAX_CELLS_PER_POINT)) {
+    return { keep, keptCount: n, applied: false, outcome: 'degenerate-aspect', cellSizePx: cell, depthTolerance: 0 };
+  }
 
   // The three nearest depths per cell, in one pass. The smallest is the depth
   // buffer; the third is the scatter probe. Infinity marks "no such return".
