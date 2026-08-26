@@ -1,13 +1,25 @@
 /**
  * tileset.ts — a `tileset.json` parser for the 3D Tiles point-cloud subset.
  *
- * OLV already streams COPC and EPT through one format-agnostic `StreamingSource`
- * + scheduler, so opening 3D Tiles is a matter of turning a tileset into the same
- * node shape. This is the first half: parse an explicit `tileset.json` tree into
- * typed tiles (bounding volume, geometric error, refine, transform, content URI),
- * inheriting `refine` down the tree as the spec requires. It deliberately refuses
- * what this subset does not cover — implicit tiling — with a clear error rather
- * than mis-reading it. Pure: no fetch, no DOM.
+ * This parses an explicit `tileset.json` tree into typed tiles (bounding volume,
+ * geometric error, refine, transform, content URI), inheriting `refine` down the
+ * tree as the spec requires. It is the document half of the static one-shot open
+ * in `tilesetCloud.ts`, which reads a whole tileset once and merges it into a
+ * single cloud. It is not a streaming reader, and nothing here refines against a
+ * camera over time.
+ *
+ * The subset is bounded on purpose, and what falls outside it is refused with a
+ * clear error rather than mis-read: implicit tiling, and any `asset.version`
+ * outside {@link SUPPORTED_ASSET_VERSIONS}.
+ *
+ * Two compatibility limits of this subset are known and not yet addressed. The
+ * selection downstream identifies content by the URI extension, while 1.1 does
+ * not require a content URI to carry one: content may be identified by its magic
+ * header, or be JSON. And a tile here carries a single `content`, while 1.1
+ * allows `contents[]` with several contents on one tile. Both are documented in
+ * docs/supported-formats.md as limits of what opens.
+ *
+ * Pure: no fetch, no DOM.
  */
 
 export type Refine = 'ADD' | 'REPLACE';
@@ -77,6 +89,18 @@ interface ParseBudget {
   readonly maxTiles: number;
   tiles: number;
 }
+
+/**
+ * The `asset.version` values this reader claims to understand.
+ *
+ * `asset.version` names the schema the rest of the document is written in, and
+ * with it the base set of tile formats a reader is expected to handle. This
+ * reader implements a bounded subset of 1.0 and 1.1, so a document declaring
+ * anything else is refused rather than read as though the fields below meant
+ * what they mean in those two versions. A future 3.0 that renames or reuses a
+ * field would otherwise parse into a tree that looks valid and is wrong.
+ */
+export const SUPPORTED_ASSET_VERSIONS = ['1.0', '1.1'] as const;
 
 /** Component counts the spec fixes for each bounding-volume form. */
 const BOUNDING_VOLUME_LENGTH = { box: 12, region: 6, sphere: 4 } as const;
@@ -206,6 +230,12 @@ export function parseTileset(input: string | object, limits: TilesetParseLimits 
   const assetVersion = doc.asset?.version;
   if (typeof assetVersion !== 'string') {
     throw new Error('3D Tiles: tileset.json has no asset.version.');
+  }
+  if (!(SUPPORTED_ASSET_VERSIONS as readonly string[]).includes(assetVersion)) {
+    throw new Error(
+      `3D Tiles: tileset.json declares asset.version "${assetVersion}", which is not ` +
+        `${SUPPORTED_ASSET_VERSIONS.join(' or ')}.`,
+    );
   }
   if (typeof doc.geometricError !== 'number' || !Number.isFinite(doc.geometricError)) {
     throw new Error('3D Tiles: tileset.json has no finite geometricError.');

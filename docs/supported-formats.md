@@ -18,6 +18,7 @@ Format support is still evolving. This page separates what works today from what
 | `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded; acquisition grid preserved per block |
 | `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
 | `PNTS` | 3D Tiles point tile | A single tile; magic-byte detected; `RTC_CENTER` applied; Draco refused |
+| `tileset.json` | 3D Tiles 1.0 / 1.1 | Opened by URL; read once in full and merged into one cloud; PNTS content only; other `asset.version` values refused |
 | `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming — see [streaming.md](streaming.md) |
 | `EPT` | Entwine Point Tile | `ept.json` manifest + hierarchy + tiles; binary and laszip tile decode; local and remote — see [streaming.md](streaming.md) |
 
@@ -53,7 +54,16 @@ Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large
 
 `3D Tiles` / `PNTS`: a single `.pnts` tile opens today. It is detected by its `pnts` magic bytes (so a tile saved under another name still opens, and a file that only borrows the extension is refused rather than read as a tile), decoded through the viewer's PNTS reader — uncompressed `POSITION` and `POSITION_QUANTIZED`, RGBA/RGB/RGB565/CONSTANT_RGBA colour — and placed by adding the feature table's `RTC_CENTER` back to every position. Draco-compressed tiles are refused.
 
-A whole `tileset.json` does not open yet. The tileset document is parsed and its hierarchy can be traversed (`src/io/tiles3d/`), but nothing mounts a tileset as a streaming layer, so opening one returns an honest "on the roadmap, not shipped" message. Treat tileset streaming as planned, not shipped, until it is announced in the release notes.
+A whole `tileset.json` opens by URL, and it is worth being exact about what that is and what it is not.
+
+What opens: a static, bounded, one-shot read of a 3D Tiles 1.0 or 1.1 tileset whose content is PNTS. The entry document is fetched and parsed, the finest representation the explicit tile hierarchy offers is selected, those `.pnts` bodies are fetched and placed in the tileset root frame, and the result is merged into a single point cloud that then behaves exactly like a decoded LAS file. A document declaring any other `asset.version` is refused by name, because that value fixes the schema the rest of the document is written in. Every ceiling on the read is a refusal rather than a truncation: tile count, tree depth, per-body size and merged point total each fail the open with a message, because a partially assembled tileset would look complete on screen and measure wrong.
+
+What does not open: hierarchical streaming, dynamic screen-space-error refinement against the camera, and the wider 3D Tiles ecosystem (B3DM, I3DM, CMPT, glTF content, implicit tiling, or a selection that reaches a nested external `tileset.json`). Nothing about this open is incremental: the whole tileset is read before anything appears, so it suits a bounded dataset and not a city-scale one. Tileset streaming remains planned, not shipped.
+
+Two further limits of the supported subset are known:
+
+- Content is selected by the URI extension. 3D Tiles 1.1 does not require a content URI to have a file extension, and permits content to be identified by its magic header or to be JSON, so a tileset that names its tiles without an extension is not opened even when every tile in it is PNTS.
+- A tile is read as carrying a single `content`. 3D Tiles 1.1 allows `contents[]`, several contents on one tile, and only the single-content form is read here.
 
 ## Mobile Scan Exports
 

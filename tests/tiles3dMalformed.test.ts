@@ -1,9 +1,9 @@
 /**
  * tiles3dMalformed.test.ts — what the 3D Tiles parsers must refuse.
  *
- * Neither parser is user-facing in v0.6.6, so nothing routes untrusted bytes
- * into them yet. That is exactly when a format boundary is cheap to make
- * strict: `parseTileset` also accepts an already-parsed object, which can carry
+ * A remote `tileset.json` URL now routes untrusted bytes into both, so this is
+ * a live format boundary rather than a precautionary one. `parseTileset` also
+ * accepts an already-parsed object, which can carry
  * NaN where JSON text cannot, and a PNTS tile declares its own length that the
  * decoder should honour instead of reading to the end of whatever buffer it was
  * handed. Every case below was accepted before this suite existed.

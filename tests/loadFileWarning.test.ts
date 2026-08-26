@@ -70,13 +70,13 @@ describe('large static LAS/LAZ memory caution', () => {
   });
 });
 
-describe('3D Tiles — a tileset is refused, a tile is not', () => {
-  it('rejects a tileset.json with a roadmap message, not a generic error', async () => {
+describe('3D Tiles — a dropped tileset is refused, a tile is not', () => {
+  it('rejects a dropped tileset.json by pointing at the URL field, not a generic error', async () => {
     const f = fakeFile('tileset.json', 1024, '{"asset":{"version":"1.0"}}');
-    await expect(fileMetadata(f)).rejects.toThrow(/3D Tiles|tileset|roadmap/i);
+    await expect(fileMetadata(f)).rejects.toThrow(/opens by URL/i);
   });
 
-  it('accepts a .pnts tile, which the roadmap message no longer covers', async () => {
+  it('accepts a .pnts tile, which the URL-only message does not cover', async () => {
     const f = fakeFile('points.pnts', 4096, 'pnts');
     const meta = await fileMetadata(f);
     expect(meta.format).toBe('pnts');

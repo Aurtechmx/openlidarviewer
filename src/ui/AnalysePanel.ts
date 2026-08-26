@@ -2976,8 +2976,10 @@ export class AnalysePanel {
     // classification, DSM, slope/hillshade, 3D overlay, terrain report) has all
     // shipped — leaving them here advertised done work as "planned", which
     // contradicts the buttons in this very panel. These three are the real,
-    // not-yet-shipped roadmap. A single .pnts tile opens today, so what
-    // remains planned is streaming a whole tileset (see supported-formats.md);
+    // not-yet-shipped roadmap. A single .pnts tile opens today, and so does a
+    // whole tileset as a static one-shot read, so what remains planned is
+    // streaming one: hierarchical, camera-driven refinement over time rather
+    // than a bounded read of the whole set (see supported-formats.md);
     // out-of-core loading and co-registered change detection are the open
     // engineering items.
     for (const item of [
