@@ -23,6 +23,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY = resolve(ROOT, 'validation/external-oracles/oracle-registry.json');
@@ -100,7 +101,7 @@ function* walk(dir) {
   }
 }
 
-const isCli = resolve(process.argv[1] ?? '') === resolve(fileURLToPath(import.meta.url));
+const isCli = isCliEntry(import.meta.url);
 
 if (isCli) {
   const registry = JSON.parse(readFileSync(REGISTRY, 'utf8'));

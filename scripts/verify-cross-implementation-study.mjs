@@ -44,6 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, isAbsolute, sep } from 'node:path';
 
 import { binaryOnPath } from './lib/binaryOnPath.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -923,7 +924,7 @@ export function verifyStudies(opts = {}) {
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 function isMain() {
-  return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  return isCliEntry(import.meta.url);
 }
 
 if (isMain()) {

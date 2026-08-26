@@ -37,6 +37,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 
 import { validateAgainstSchema, isIsoDate, compareCodeUnits } from './lib/recordSchema.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -298,7 +299,7 @@ export function verifyReproductionRecords(opts = {}) {
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 function isMain() {
-  return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  return isCliEntry(import.meta.url);
 }
 
 if (isMain()) {

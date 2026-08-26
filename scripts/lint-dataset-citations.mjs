@@ -34,6 +34,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname, join, relative, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTER = resolve(ROOT, 'validation/datasets/dataset-register.yaml');
@@ -114,7 +115,7 @@ function* walk(dir) {
 }
 
 /** True when this module is the entry point rather than an import. */
-const isCli = resolve(process.argv[1] ?? '') === resolve(fileURLToPath(import.meta.url));
+const isCli = isCliEntry(import.meta.url);
 
 if (isCli) {
   const registerText = readFileSync(REGISTER, 'utf8');

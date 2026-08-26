@@ -33,6 +33,7 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 import {
   byCodeUnit,
@@ -162,7 +163,7 @@ export function selfCheckProblems(summary) {
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 function isMain() {
-  return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  return isCliEntry(import.meta.url);
 }
 
 if (isMain()) {

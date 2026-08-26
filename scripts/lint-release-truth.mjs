@@ -32,6 +32,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 /**
  * Collect every truth-drift problem. `read(relPath)` returns the file's text or
@@ -298,7 +299,7 @@ export function collectReleaseTruthProblems(read) {
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 function isMain() {
-  return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  return isCliEntry(import.meta.url);
 }
 
 if (isMain()) {
