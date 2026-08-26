@@ -4,13 +4,20 @@
  * Full-page PDF export of a Profile measurement — a deliverable an
  * engineer can print and take measurements off. It renders:
  *
- *   - A large, box-filling section chart with a survey grid, labelled
- *     chainage (X) and height (Y) axes, and the profile drawn as a
- *     straight polyline between adjacent samples, so no plotted height
- *     falls outside the two stations bracketing it (gaps stay breaks).
- *   - The stated horizontal and vertical scales (1:N each) and the
- *     resulting vertical exaggeration, so distances/grades read off the
- *     print are unambiguous — a true civil section convention.
+ *   - A framed section chart with a survey grid, a height (Y) axis, and the
+ *     profile drawn as a straight polyline between adjacent samples, so no
+ *     plotted height falls outside the two stations bracketing it (gaps stay
+ *     breaks).
+ *   - A station data band ruled under the section, carrying partial distance,
+ *     chainage and ground height per station. Its columns come from the plot's
+ *     own x mapping, so a vertical dropped from the curve lands on the figures
+ *     for that station; where the stations are too dense to label, the band
+ *     thins them and says how many it is showing.
+ *   - The stated horizontal and vertical scales (1:N each) and the resulting
+ *     vertical exaggeration, so distances/grades read off the print are
+ *     unambiguous — a true civil section convention. The exaggeration is the
+ *     horizontal denominator over the vertical one, because a smaller
+ *     denominator is a larger drawing.
  *   - A summary block: length, relief, min/max height, mean & max grade,
  *     coverage, sample count, corridor width, CRS/datum.
  *   - A method-and-provenance page: the derived series named exactly as the
@@ -77,6 +84,15 @@ import type { ProfileProvenance } from './profileProvenance';
 import { heightLabel, heightReferenceNote, verticalReferenceFromDatum } from '../../geo/height';
 import type { VerticalReference } from '../../geo/height';
 import { pdfInfoDate } from '../../pdfInfoDate';
+// Where the station band's columns and the summary's value column land. Pure
+// arithmetic over measured text, kept out of the builder so the geometry of
+// the sheet can be asserted without reading a PDF back.
+import {
+  buildStationBand,
+  layoutSummaryRows,
+  wideValueDx,
+  type SummaryRow,
+} from './profileSheetLayout';
 
 /** Same constant the format/summary modules keep module-local. */
 const FEET_PER_METRE = 3.280839895013123;
@@ -137,6 +153,34 @@ const INK_DIM = rgb(0.42, 0.46, 0.52);
 const GRID = rgb(0.82, 0.85, 0.89);
 const GRID_MINOR = rgb(0.92, 0.94, 0.96);
 const CURVE = rgb(0.05, 0.55, 0.78);
+const RULE = rgb(0.68, 0.72, 0.78);
+
+/**
+ * Left stub of the station band, and so the left margin of the plot: the band
+ * rules under the section and its row headings sit beside them, so one number
+ * fixes both. Wide enough for the longest height heading `heightLabel` can
+ * return, because a heading that has to be trimmed loses the qualification it
+ * was printed to carry.
+ */
+const STUB_W = 118;
+/**
+ * Strip between the plot's bottom edge and the top of the station band, for
+ * the grid's own round-interval stationing. The band's stations fall where the
+ * samples fall, which is not on round numbers, so the two rows answer
+ * different questions and both are wanted.
+ */
+const GRID_LABEL_STRIP = 11;
+/** Height of one station-band row, and the size its figures are set at. */
+const BAND_ROW_H = 11;
+const BAND_FONT = 6;
+/** Clear space either side of a band figure before it counts as a collision. */
+const BAND_PAD = 4;
+/** Clear space between a summary label and its value. */
+const SUMMARY_GAP = 8;
+const SUMMARY_ROW_H = 13;
+const SUMMARY_FONT = 8.5;
+/** Inset of the sheet border from the page edge. */
+const BORDER_INSET = 18;
 
 /**
  * pdf-lib's StandardFonts use WinAnsi (CP1252) encoding, which throws on
@@ -249,6 +293,60 @@ function clipText(s: string, font: PDFFont, size: number, maxW: number): string 
   return `${cut}...`;
 }
 
+/**
+ * A stroked box, drawn as four independent segments.
+ *
+ * Not `drawRectangle`, which emits one closed four-segment path. The profile
+ * polyline is the only run of consecutive linetos this sheet is supposed to
+ * contain - it is how a reader of the file, and the gap tests, tell a
+ * continuous section from one broken at a station with no returns - and a
+ * rectangle anywhere on any page adds a three-lineto run that is
+ * indistinguishable from a drawn profile.
+ */
+function strokeBox(
+  p: PDFPage,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: ReturnType<typeof rgb>,
+  thickness: number,
+): void {
+  const corners = [
+    [x, y],
+    [x + w, y],
+    [x + w, y + h],
+    [x, y + h],
+  ] as const;
+  for (let i = 0; i < corners.length; i++) {
+    const a = corners[i];
+    const b = corners[(i + 1) % corners.length];
+    p.drawLine({
+      start: { x: a[0], y: a[1] },
+      end: { x: b[0], y: b[1] },
+      thickness,
+      color,
+    });
+  }
+}
+
+/**
+ * The border that makes a page read as a drawing sheet rather than as a page
+ * of text. Drawn on every page of the export, because a sheet that is bordered
+ * on its first page and not its later ones reads as two documents.
+ */
+function drawSheetBorder(p: PDFPage): void {
+  strokeBox(
+    p,
+    BORDER_INSET,
+    BORDER_INSET,
+    PAGE_W - 2 * BORDER_INSET,
+    PAGE_H - 2 * BORDER_INSET,
+    RULE,
+    0.8,
+  );
+}
+
 /** The one-line form of the class-exclusion policy, for the summary block. */
 function exclusionSummary(legend: DerivedSurfaceLegend): string {
   const classes = legend.excludedClasses.join(',');
@@ -315,6 +413,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
 
   // ── Page 1: chart + summary ────────────────────────────────────────────
   const page = doc.addPage([PAGE_W, PAGE_H]);
+  drawSheetBorder(page);
   const text = (
     p: PDFPage,
     s: string,
@@ -372,12 +471,18 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   }
 
   // Plot box (pdf coords, y up). Top edge below the header.
-  const plotLeft = M + 52;
+  const plotLeft = M + STUB_W;
   const plotRight = PAGE_W - M - 6;
   const plotW = plotRight - plotLeft;
   const plotTopY = PAGE_H - M - 44; // y-up coordinate of the TOP edge
-  const plotH = 300;
+  // The section keeps the upper half of the sheet; the rest is spent on the
+  // station band, which is only useful directly under the curve it belongs to.
+  const plotH = 220;
   const plotBotY = plotTopY - plotH;
+  // The band hangs off the bottom edge of the plot and shares its rules, so
+  // the two read as one drawing rather than as a chart above a table.
+  const bandTop = plotBotY - GRID_LABEL_STRIP;
+  const bandBot = bandTop - 3 * BAND_ROW_H;
 
   const len = stats.length;
   const minEl = stats.minElevation;
@@ -408,7 +513,11 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     for (let cD = 0, n = 0; cD <= len * k + 1e-9 && n < 64; cD += hInt, n++) {
       const x = mapX(cD / k);
       page.drawLine({ start: { x, y: plotTopY }, end: { x, y: plotBotY }, thickness: 0.5, color: GRID });
-      text(page, formatStation(cD / k, system), x - 14, plotBotY - 12, 7, mono, INK_DIM);
+      // Round-interval stationing under the grid. The band below carries the
+      // stations the samples actually fall on, which are not round numbers;
+      // this row is what lets a reader take a chainage off the grid itself.
+      const tick = formatStation(cD / k, system);
+      text(page, tick, x - mono.widthOfTextAtSize(tick, 7) / 2, plotBotY - 8, 7, mono, INK_DIM);
     }
     const vInt = niceInterval(elSpan * k);
     for (
@@ -418,21 +527,16 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     ) {
       const y = plotTopY - mapYdown(eD / k);
       page.drawLine({ start: { x: plotLeft, y }, end: { x: plotRight, y }, thickness: 0.5, color: GRID_MINOR });
-      text(page, `${eD.toFixed(1)}`, M, y - 3, 7, mono, INK_DIM);
+      // Right-aligned against the axis: a column of heights is read down its
+      // last digit, and a left-aligned column of different-width numbers puts
+      // the units, tens and hundreds places in three different columns.
+      const tick = `${eD.toFixed(1)}`;
+      text(page, tick, plotLeft - 4 - mono.widthOfTextAtSize(tick, 7), y - 3, 7, mono, INK_DIM);
     }
-    // Axis frame.
-    page.drawLine({ start: { x: plotLeft, y: plotTopY }, end: { x: plotLeft, y: plotBotY }, thickness: 1, color: INK_DIM });
-    page.drawLine({ start: { x: plotLeft, y: plotBotY }, end: { x: plotRight, y: plotBotY }, thickness: 1, color: INK_DIM });
+    // The plot frame. A full rectangle rather than two axis lines: the section
+    // is a drawing, and a drawing is bounded on all four sides.
+    strokeBox(page, plotLeft, plotBotY, plotW, plotH, INK_DIM, 1);
     text(page, `${heightWord} (${unit})`, M, plotTopY + 6, 8, bold, INK_DIM);
-    text(
-      page,
-      system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)',
-      plotRight - 130,
-      plotBotY - 26,
-      8,
-      bold,
-      INK_DIM,
-    );
 
     // Profile runs (break on gaps), drawn as straight segments between
     // adjacent samples so no plotted height falls outside the two stations
@@ -458,14 +562,100 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     }
     drawRun();
 
+    // ── Station data band (the civil "guitarra") ───────────────────────
+    // One ruled row per quantity, columns dropped from the same x mapping the
+    // polyline was drawn with, so a vertical from the curve lands on its own
+    // figures. Row headings sit in the fixed stub at the left.
+    const partialStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(1));
+    const bandHeightStr = (m: number | null) => (m == null ? 'gap' : (m * k).toFixed(2));
+    const bandMeasure = (t: string) => mono.widthOfTextAtSize(winAnsiSafe(t), BAND_FONT) + BAND_PAD;
+    const band = buildStationBand({
+      stations: stats.stations.map((st) => ({ chainage: st.chainage, height: st.elevation })),
+      mapX,
+      plotLeft,
+      plotW,
+      // The column is as wide as its widest figure: thinning against the
+      // chainage alone would let a long height overlap its neighbour.
+      widest: (st) => {
+        const cells = [formatStation(st.chainage, system), bandHeightStr(st.height)];
+        return cells.reduce((a, b) => (bandMeasure(b) > bandMeasure(a) ? b : a), cells[0]);
+      },
+      measure: bandMeasure,
+      fontSize: BAND_FONT,
+    });
+
+    const bandRows: Array<[string, (i: number) => string]> = [
+      [`Partial dist. (${unit})`, (i) => partialStr(band.columns[i].partial)],
+      ['Chainage', (i) => formatStation(band.columns[i].chainage, system)],
+      [`${heightWord} (${unit})`, (i) => bandHeightStr(band.columns[i].height)],
+    ];
+    for (let r = 0; r <= bandRows.length; r++) {
+      const y = bandTop - r * BAND_ROW_H;
+      page.drawLine({ start: { x: M, y }, end: { x: plotRight, y }, thickness: 0.5, color: RULE });
+    }
+    for (const x of [M, plotLeft, plotRight]) {
+      page.drawLine({ start: { x, y: bandTop }, end: { x, y: bandBot }, thickness: 0.5, color: RULE });
+    }
+    bandRows.forEach(([head], r) => {
+      const y = bandTop - (r + 1) * BAND_ROW_H + 3.5;
+      text(page, clipText(head, bold, BAND_FONT, STUB_W - 8), M + 4, y, BAND_FONT, bold, INK_DIM);
+    });
+    band.columns.forEach((c, i) => {
+      // The column rule runs up through the label strip to the plot's own
+      // bottom edge, so the figures stay visibly tied to the curve above them.
+      page.drawLine({
+        start: { x: c.x, y: plotBotY },
+        end: { x: c.x, y: bandBot },
+        thickness: 0.4,
+        color: GRID,
+      });
+      bandRows.forEach(([, cell], r) => {
+        const t = winAnsiSafe(cell(i));
+        const y = bandTop - (r + 1) * BAND_ROW_H + 3.5;
+        // Courier throughout, so the figures of one row line up digit under
+        // digit whatever their magnitude.
+        text(page, t, c.x - mono.widthOfTextAtSize(t, BAND_FONT) / 2, y, BAND_FONT, mono, INK);
+      });
+    });
+    // Thinning stated, not silent: a band showing one station in nine looks
+    // exactly like a band showing every station the section has.
+    text(
+      page,
+      band.shown >= band.total
+        ? `Station data band - all ${band.total} stations shown`
+        : `Station data band - ${band.shown} of ${band.total} stations shown (thinned to fit)`,
+      M,
+      bandBot - 10,
+      7,
+      bold,
+      INK_DIM,
+    );
+
     // Stated scales + VEX (the bit that makes the print measurable).
     const hScale = scaleRatio(len, plotW);
     const vScale = scaleRatio(elSpan, plotH);
-    const vex = hScale > 0 ? vScale / hScale : 1;
+    // `scaleRatio` returns the DENOMINATOR of a 1:N scale, so a SMALLER value
+    // is a LARGER drawing. Vertical 1:73 beside horizontal 1:386 means the
+    // relief is drawn 386/73 times taller than the run, which is the
+    // exaggeration. The reciprocal would report a compression on a sheet whose
+    // relief is stretched, and every grade read off it would be wrong by the
+    // square of the error the reader was told to correct for.
+    const vex = vScale > 0 ? hScale / vScale : 1;
     const scaleLine =
       `Horizontal 1:${Math.round(hScale)}   ·   Vertical 1:${Math.round(vScale)}   ·   ` +
       `Vertical exaggeration ${vex.toFixed(1)}:1`;
-    text(page, scaleLine, plotLeft, plotBotY - 26, 9, bold, INK);
+    text(page, scaleLine, M, bandBot - 24, 9, bold, INK);
+    const axisTitle =
+      system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';
+    text(
+      page,
+      axisTitle,
+      plotRight - font.widthOfTextAtSize(axisTitle, 8),
+      bandBot - 24,
+      8,
+      bold,
+      INK_DIM,
+    );
   } else {
     text(page, 'No covered samples — nothing to plot.', plotLeft, plotTopY - 20, 11, font, INK_DIM);
   }
@@ -473,18 +663,18 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   // Chart legend swatch. The caption is the legend's own, so the plotted
   // series is named on the print exactly as it is named on screen.
   page.drawLine({
-    start: { x: plotLeft, y: plotBotY - 38 },
-    end: { x: plotLeft + 16, y: plotBotY - 38 },
+    start: { x: M, y: bandBot - 37 },
+    end: { x: M + 16, y: bandBot - 37 },
     thickness: 1.4,
     color: CURVE,
   });
-  text(page, legend.caption, plotLeft + 22, plotBotY - 41, 8, font, INK);
+  text(page, legend.caption, M + 22, bandBot - 40, 8, font, INK);
 
   // Summary block (two columns of label:value). The Profile Intelligence
   // rows (gain/loss, steepest station range, located extremes — v0.4.5) come
   // from the shared pure module so they match the panel's summary exactly.
   const intel = computeProfileSummary(input.samples);
-  const sumTop = plotBotY - 52;
+  const sumTop = bandBot - 62;
   const contributing = record == null ? 0 : record.sources.filter((s) => s.contributed).length;
   const rows: Array<[string, string]> = [
     ['Length (horizontal)', lenStr(len)],
@@ -540,30 +730,76 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       datumKnown ? (input.verticalDatum ?? '—') : DATUM_CONFLICT_MEASURE_NOTICE,
     ],
   ];
-  const colW = (PAGE_W - 2 * M) / 2;
-  rows.forEach((r, i) => {
-    const col = i % 2;
-    const line = Math.floor(i / 2);
-    const x = M + col * colW;
-    const y = sumTop - line * 14;
-    text(page, r[0], x, y, 8.5, bold, INK_DIM);
-    text(page, r[1], x + 130, y, 8.5, font, INK);
+  const summaryW = PAGE_W - 2 * M;
+  const colW = summaryW / 2;
+  // The label is set bold and the value regular, so each is measured in the
+  // font it will actually be drawn in. Both are measured AFTER the WinAnsi
+  // transliteration, because that is the string the page receives.
+  const measureLabel = (t: string) => bold.widthOfTextAtSize(winAnsiSafe(t), SUMMARY_FONT);
+  const measureValue = (t: string) => font.widthOfTextAtSize(winAnsiSafe(t), SUMMARY_FONT);
+  // The gutter keeps the left column's value clear of the right column's
+  // label; without it a full-width value would run into the next heading.
+  const layout = layoutSummaryRows({
+    rows: rows.map(([label, value]) => ({ label, value })),
+    measureLabel,
+    measureValue,
+    cellW: colW - 16,
+    wideW: summaryW,
+    gap: SUMMARY_GAP,
   });
 
   // Three statements too long for a half-width cell, and too load-bearing to
   // abbreviate: what the drawn series is, how far the class policy reached,
   // and what the read is entitled to claim. The page that expands them is
-  // page 2; these are the one-line forms.
-  const wideRows: Array<[string, string]> = [
-    ['Derived series', legend.seriesLabel],
-    ['Class exclusion', exclusionSummary(legend)],
-    ['Read scope', record == null ? 'Not recorded' : describeProfileProvenance(record)],
+  // page 2; these are the one-line forms. Any summary row whose label and
+  // value could not share a cell joins them, ahead of them, because it is a
+  // measurement and they are qualifications.
+  const wideRows: SummaryRow[] = [
+    ...layout.promoted,
+    { label: 'Derived series', value: legend.seriesLabel },
+    { label: 'Class exclusion', value: exclusionSummary(legend) },
+    {
+      label: 'Read scope',
+      value: record == null ? 'Not recorded' : describeProfileProvenance(record),
+    },
   ];
-  const wideTop = sumTop - Math.ceil(rows.length / 2) * 14;
+  const wideDx = wideValueDx(wideRows, measureLabel, SUMMARY_GAP, summaryW);
+  const pairLines = Math.ceil(layout.pairs.length / 2);
+  const wideTop = sumTop - pairLines * SUMMARY_ROW_H - 4;
+  const panelBot = wideTop - (wideRows.length - 1) * SUMMARY_ROW_H - 7;
+
+  // A light panel, so the summary reads as one block of findings rather than
+  // as loose lines under the drawing.
+  strokeBox(page, M - 8, panelBot, summaryW + 16, sumTop + 10 - panelBot, RULE, 0.6);
+  page.drawLine({
+    start: { x: M - 8, y: wideTop + 9 },
+    end: { x: PAGE_W - M + 8, y: wideTop + 9 },
+    thickness: 0.5,
+    color: GRID,
+  });
+
+  layout.pairs.forEach((r, i) => {
+    const col = i % 2;
+    const line = Math.floor(i / 2);
+    const x = M + col * colW;
+    const y = sumTop - line * SUMMARY_ROW_H;
+    text(page, r.label, x, y, SUMMARY_FONT, bold, INK_DIM);
+    text(page, r.value, x + layout.valueDx, y, SUMMARY_FONT, font, INK);
+  });
   wideRows.forEach((r, i) => {
-    const y = wideTop - i * 14;
-    text(page, r[0], M, y, 8.5, bold, INK_DIM);
-    text(page, r[1], M + 130, y, 8.5, font, INK);
+    const y = wideTop - i * SUMMARY_ROW_H;
+    text(page, r.label, M, y, SUMMARY_FONT, bold, INK_DIM);
+    // Nothing is wider to move to, so a value that overruns even the full
+    // width is trimmed with the trim marked rather than drawn over the margin.
+    text(
+      page,
+      clipText(r.value, font, SUMMARY_FONT, summaryW - wideDx),
+      M + wideDx,
+      y,
+      SUMMARY_FONT,
+      font,
+      INK,
+    );
   });
 
   // Provenance footer.
@@ -620,6 +856,7 @@ function renderProvenancePage(
   const bottom = M + 16;
   const usableW = PAGE_W - 2 * M;
   let page = doc.addPage([PAGE_W, PAGE_H]);
+  drawSheetBorder(page);
   let y = PAGE_H - M - 4;
 
   const put = (s: string, x: number, yy: number, size: number, f: PDFFont, color = INK) =>
@@ -627,6 +864,7 @@ function renderProvenancePage(
 
   const newPage = () => {
     page = doc.addPage([PAGE_W, PAGE_H]);
+    drawSheetBorder(page);
     y = PAGE_H - M - 4;
     put('Method and provenance (continued)', M, y, 12, bold);
     y -= 20;
@@ -785,6 +1023,7 @@ function renderStationTable(
   let idx = 0;
   while (idx < stations.length) {
     const page = doc.addPage([PAGE_W, PAGE_H]);
+    drawSheetBorder(page);
     const put = (s: string, x: number, y: number, size: number, f: PDFFont, color = INK) =>
       page.drawText(winAnsiSafe(s), { x, y, size, font: f, color });
     put('Station table', M, PAGE_H - M - 4, 14, bold);
