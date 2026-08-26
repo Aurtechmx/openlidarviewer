@@ -5,7 +5,9 @@ Runs OLV's terrain outputs against **real airborne LiDAR** — public, DOI-cited
 ## What runs where
 
 - `datasets/manifest.json` — the source clouds (USGS 3DEP White Sands; VT StREAM Lab; Hyytiälä UAV), each with its DOI/source, CRS, vertical datum, and the sha256 of the file the crops were cut from. The raw clouds are **not** committed (they are 36 MB–1.7 GB); the crops are.
-- `crops/*.crop.json` + `crops/*.f32` — a frozen boundary crop: its UTM bounds, the grid, and the packed ground points OLV consumes.
+- `crops/*.crop.json` + `crops/*.f32` — a frozen boundary crop: its UTM bounds, the grid, and the packed ground points OLV consumes. Each crop names the acquisition it was cut from with the manifest's `sourceId`.
+
+`sourceId` is a handle local to this harness. It names an acquisition as its publisher distributes it, and it is **not** a `datasetId` in `validation/datasets/dataset-register.yaml`; nothing here resolves there. The register demands a named licence and a digest for bytes that were fetched, and three of these acquisitions have neither recorded: the raw StREAM Lab, Hyytiälä and Pangandaran clouds carry no sha256, and the Zenodo terms behind the last two were never resolved to a named licence. Registering them would mean writing provenance nobody measured, so the harness keeps a name that claims nothing. `scripts/lint-terrain-field-ids.mjs` (`npm run lint:terrain-field-ids`, in the release gate) fails if the `datasetId` name returns or if a crop cites a handle no manifest record declares.
 - `references/*.asc` — the independent reference grids over the same crop.
 - `tests/terrainFieldValidation.test.ts` — drives OLV's real terrain core headless and compares. Skips when a reference is absent; the references are committed, so it runs in CI with no PDAL/GDAL/scipy and no raw cloud present.
 - `scripts/terrain-field/generate-*.mjs` — the reproduction record (exact PDAL/scipy/GDAL commands). Not run in CI.

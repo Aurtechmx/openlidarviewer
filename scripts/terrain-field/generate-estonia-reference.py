@@ -82,7 +82,7 @@ def main():
 
     crop = {
         "id": "estonia-tava",
-        "dataset": "EST-ELB-TAVA-2020",
+        "sourceId": "EST-ELB-TAVA-2020",
         "crs": {"horizontalEpsg": 3301, "name": "L-EST97 / Lambert Conformal Conic", "verticalDatum": "EH2000"},
         "originH1": ORIGIN_X, "originH2": ORIGIN_Y, "cols": COLS, "rows": ROWS, "cellSizeM": CELL,
         "groundPoints": int(xyz.shape[0]),

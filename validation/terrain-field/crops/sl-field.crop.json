@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "cropId": "sl-field",
-  "datasetId": "VT-STREAM-LAB-2026",
+  "sourceId": "VT-STREAM-LAB-2026",
   "description": "A 40 x 40 m riparian crop of the StREAM Lab drone survey, decimated 1:160 from ~1295 to ~8 pts/m2 (deterministic filters.decimation, so the crop is reproducible). Survey-classified: ground, high vegetation and unclassified all present, so it carries real above-ground truth the White Sands desert lacks.",
   "boundsUTM": { "minx": 549240, "miny": 4118390, "maxx": 549280, "maxy": 4118430 },
   "decimationStep": 160,
