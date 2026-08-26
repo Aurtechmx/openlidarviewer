@@ -100,6 +100,73 @@ function allProse(bytes: Uint8Array): string {
     .join(' ');
 }
 
+/**
+ * Every drawn string in the file, whatever text matrix drew it.
+ *
+ * `drawnIn` only matches the upright `1 0 0 1 x y Tm` form, so a rotated
+ * string - the height-axis title reads up the left edge of the plot - is
+ * invisible to it. The axis title is exactly where a claim about what the
+ * figures beside it mean would do the most damage, so the wording assertions
+ * read the raw strings instead.
+ */
+function rawProse(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  for (const stream of streamsOf(bytes)) {
+    for (const m of stream.matchAll(/<([0-9A-Fa-f]+)> Tj/g)) {
+      parts.push(Buffer.from(m[1], 'hex').toString('latin1'));
+    }
+  }
+  return parts.join(' ');
+}
+
+/** One drawn string with the fill colour it was painted in. */
+interface Painted {
+  readonly fill: string;
+  readonly base: string;
+  readonly size: number;
+  readonly text: string;
+}
+
+/**
+ * The drawn strings of a page with their fill colour.
+ *
+ * pdf-lib restates the fill inside each text block, right before the font, so
+ * a cell carries the colour it was actually painted in rather than whatever
+ * the graphics state happened to hold.
+ */
+const PAINT_RE =
+  /((?:[\d.]+ ){3})rg\s*\/([A-Za-z-]+)-\d+ ([\d.]+) Tf[\s\S]{0,80}?<([0-9A-Fa-f]+)> Tj/g;
+
+function paintedIn(stream: string): Painted[] {
+  const out: Painted[] = [];
+  for (const m of stream.matchAll(PAINT_RE)) {
+    out.push({
+      fill: m[1].trim(),
+      base: m[2],
+      size: Number(m[3]),
+      text: Buffer.from(m[4], 'hex').toString('latin1'),
+    });
+  }
+  return out;
+}
+
+/** Every page content stream, in page order. */
+function pageStreams(bytes: Uint8Array): string[] {
+  return streamsOf(bytes).filter((s) => s.includes(' Tj'));
+}
+
+/** The page carrying a given untracked title string. */
+function pageWith(bytes: Uint8Array, title: string): { stream: string; drawn: Drawn[] } {
+  for (const stream of pageStreams(bytes)) {
+    const drawn = drawnIn(stream);
+    if (drawn.some((d) => d.text === title)) return { stream, drawn };
+  }
+  throw new Error(`no page carrying "${title}"`);
+}
+
+/** The gap colour, as `GAP_MARK` is declared in the builder. */
+const GAP_FILL = '0.72 0.31 0.02';
+
 /** One stroked straight segment, with the pen it was drawn with. */
 interface Segment {
   readonly x1: number;
@@ -215,11 +282,11 @@ describe('profile sheet: vertical exaggeration', () => {
   });
 });
 
-describe('profile sheet: no overprinting in the summary', () => {
-  it('draws every value clear of the right edge of its own label', async () => {
+describe('profile sheet: no overprinting in the notes table', () => {
+  it('keeps every cell inside its own ruled column', async () => {
     const { regular, bold } = await fonts();
     // No declared datum, so the height headings take their longest form -
-    // the case a fixed label-width offset gets wrong.
+    // the case a column sized for a short heading gets wrong.
     const bytes = await buildProfilePdf({
       name: 'Overprint',
       samples: rollingSection(),
@@ -227,29 +294,32 @@ describe('profile sheet: no overprinting in the summary', () => {
       verticalDatum: null,
       generatedAt: FIXED_DATE,
     });
-    const drawn = sheetPage(bytes).drawn;
+    const drawn = pageWith(bytes, 'Technical notes').drawn;
 
-    // The summary is the block set at 8.5pt: labels bold, values regular.
-    const labels = drawn.filter((d) => d.size === 8.5 && d.base === 'Helvetica-Bold');
-    const values = drawn.filter((d) => d.size === 8.5 && d.base === 'Helvetica');
-    expect(labels.length).toBeGreaterThan(10);
+    // The three column origins the builder lays the table out on. Recovered
+    // from the drawing by clustering the x of the body cells rather than
+    // restated, so a column that moved without its neighbour is still caught.
+    // The table only: the sheet furniture below it (general notes, title
+    // block, issue strip) is set at the same sizes and has its own columns.
+    const body = drawn.filter((d) => (d.size === 9 || d.size === 8.5) && d.y > 260);
+    expect(body.length).toBeGreaterThan(30);
+    const origins = [...new Set(body.map((d) => Math.round(d.x)))]
+      .sort((a, b) => a - b)
+      .filter((x, i, all) => i === 0 || x - all[i - 1] > 40);
+    expect(origins).toHaveLength(3);
 
-    for (const label of labels) {
-      const right = label.x + bold.widthOfTextAtSize(label.text, label.size);
-      // The value on the same baseline, to the right of this label. Two-column
-      // rows put another label further right; the value is the nearest one.
-      const value = values
-        .filter((v) => Math.abs(v.y - label.y) < 0.01 && v.x > label.x)
-        .sort((a, b) => a.x - b.x)[0];
-      expect(value, `no value drawn for "${label.text}"`).toBeDefined();
+    for (const cell of body) {
+      const col = origins.findIndex((x) => Math.abs(x - cell.x) < 1);
+      if (col === -1) continue;
+      const face = cell.base === 'Helvetica-Bold' ? bold : regular;
+      const right = cell.x + face.widthOfTextAtSize(cell.text, cell.size);
+      // The next column's origin, or the right margin for the last column.
+      const limit = col + 1 < origins.length ? origins[col + 1] : 1190.55 - 48;
       expect(
         right,
-        `"${label.text}" ends at ${right.toFixed(1)} but its value starts at ${value.x.toFixed(1)}`,
-      ).toBeLessThanOrEqual(value.x);
-      // And the value must not run off its own page either.
-      expect(value.x + regular.widthOfTextAtSize(value.text, value.size)).toBeLessThanOrEqual(
-        792 - 18,
-      );
+        `"${cell.text}" runs from ${cell.x.toFixed(1)} to ${right.toFixed(1)}, ` +
+          `past the column boundary at ${limit.toFixed(1)}`,
+      ).toBeLessThanOrEqual(limit);
     }
   });
 });
@@ -267,11 +337,11 @@ describe('profile sheet: station data band', () => {
     // The mapping is recovered from the drawing itself rather than assumed.
     const plot = plotBoxIn(stream);
 
-    // Length, as the summary prints it, is the mapping's domain.
-    const lengthRow = drawn.find((d) => /^\d+\.\d+ m$/.test(d.text) && d.size === 8.5);
-    expect(lengthRow).toBeDefined();
+    // Length, as the KPI band prints it, is the mapping's domain.
+    const lengthCell = drawn.find((d) => d.base === 'Helvetica-Bold' && /^\d+\.\d+$/.test(d.text));
+    expect(lengthCell).toBeDefined();
     const length = 900;
-    expect(Number(lengthRow!.text.replace(' m', ''))).toBeCloseTo(length, 2);
+    expect(Number(lengthCell!.text)).toBeCloseTo(length, 2);
 
     // The band's chainage cells: Courier, drawn centred on the column.
     const cells = drawn
@@ -345,6 +415,100 @@ describe('profile sheet: height wording', () => {
     expect(prose).toContain('Height (datum unknown)');
     expect(prose).not.toContain('Elevation');
     expect(prose).not.toContain('ELEV');
+
+    // The rotated height-axis title too. It is drawn with a rotation matrix,
+    // so the upright scan above cannot see it, and it is the one label on the
+    // sheet a reader takes the meaning of every plotted figure from.
+    const raw = rawProse(bytes);
+    expect(raw).toContain('Height (datum unknown) (m)');
+    expect(raw).not.toContain('Elevation');
+    expect(raw).not.toContain('ELEV');
+  });
+});
+
+describe('profile sheet: the title block', () => {
+  /**
+   * A set that says 1 of 3 while emitting four sheets has lost a sheet and
+   * the reader has no way to know. The total is read back off every sheet and
+   * checked against the page count the document actually reached.
+   */
+  it('numbers every sheet against the page count actually emitted', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Sheet numbering',
+      samples: rollingSection(),
+      crs: 'EPSG:32613',
+      generatedAt: FIXED_DATE,
+    });
+    const total = (await PDFDocument.load(bytes)).getPageCount();
+    expect(total).toBeGreaterThan(3);
+
+    const streams = pageStreams(bytes);
+    expect(streams).toHaveLength(total);
+    streams.forEach((stream, i) => {
+      const numbers = drawnIn(stream)
+        .map((d) => d.text)
+        .filter((t) => /^\d+ \/ \d+$/.test(t));
+      expect(numbers, `sheet ${i + 1} states ${numbers.join(', ')}`).toEqual([
+        `${i + 1} / ${total}`,
+      ]);
+    });
+  });
+
+  /**
+   * The issue strip is a form, not data. A DATE filled from the clock would
+   * both break the byte reproducibility the rest of this builder is built
+   * around and record an issue nobody made.
+   */
+  it('leaves the issue strip DATE column empty', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Issue strip',
+      samples: rollingSection(),
+      generatedAt: FIXED_DATE,
+    });
+    for (const stream of pageStreams(bytes)) {
+      const drawn = drawnIn(stream);
+      const head = drawn.find((d) => d.text === 'DATE');
+      expect(head, 'no DATE column header on a sheet').toBeDefined();
+      // Everything drawn in that column, below its own header baseline.
+      const inColumn = drawn.filter(
+        (d) => d.y < head!.y - 1 && d.x >= head!.x - 8 && d.x < head!.x + 100,
+      );
+      expect(inColumn.map((d) => d.text)).toEqual([]);
+    }
+  });
+});
+
+describe('profile sheet: the gap colour', () => {
+  /**
+   * The one place a second colour is spent: a cell that says a station
+   * returned nothing. A reader scanning a schedule of 181 rows finds the
+   * holes at a glance. The word carries the same fact, so the sheet survives
+   * a mono printer, which is why this asserts the word AND the colour.
+   */
+  it('paints gap cells in the gap colour and ordinary heights in the ink', async () => {
+    const gapped: ProfileChartSample[] = [];
+    for (let i = 0; i <= 12; i++) {
+      gapped.push({ distance: i * 10, height: i === 4 || i === 9 ? Number.NaN : 100 + i });
+    }
+    const bytes = await buildProfilePdf({
+      name: 'Gap colour',
+      samples: gapped,
+      generatedAt: FIXED_DATE,
+    });
+    const cells = pageStreams(bytes).flatMap((stream) => paintedIn(stream));
+    const gaps = cells.filter((c) => c.text === 'gap');
+    // Two gaps, each printed on the profile sheet's band and on the schedule.
+    expect(gaps.length).toBeGreaterThanOrEqual(2);
+    for (const g of gaps) expect(g.fill).toBe(GAP_FILL);
+
+    // And nothing else on the sheet wears it. A schedule that painted every
+    // cell would look exactly as deliberate and mean nothing.
+    const wearingIt = cells.filter((c) => c.fill === GAP_FILL).map((c) => c.text);
+    expect([...new Set(wearingIt)]).toEqual(['gap']);
+    // The heights that DID return are set in the ordinary ink.
+    const heights = cells.filter((c) => c.base === 'Courier' && /^1\d\d\.\d\d$/.test(c.text));
+    expect(heights.length).toBeGreaterThan(4);
+    for (const h of heights) expect(h.fill).not.toBe(GAP_FILL);
   });
 });
 
@@ -371,44 +535,80 @@ describe('profile sheet: determinism', () => {
   });
 });
 
-describe('profile sheet: typographic hierarchy', () => {
+describe('profile sheet: typographic hierarchy and the readable floor', () => {
   /**
-   * The critique this design pass answers was that the sheet set nearly
-   * everything at one size in one weight, so a reader scanning it found no
-   * entry point. The fix is a real ratio between the headline figures and the
-   * reference block, and this pins it: anything under 2.5:1 is the flat sheet
-   * coming back.
+   * The critique this design answers was that the sheet set nearly everything
+   * at one size in one weight, so a reader scanning it found no entry point,
+   * and then bought its hierarchy by shrinking the lower half until the
+   * schedule was unreadable. Both halves are pinned here: a real ratio
+   * between the KPI figures and the table body, AND a floor nothing on any
+   * sheet may go under.
    */
-  it('sets the headline figures at least 2.5x the reference block', async () => {
+  it('sets the KPI figures well above the table body', async () => {
     const bytes = await buildProfilePdf({
       name: 'Hierarchy',
       samples: rollingSection(),
       crs: 'EPSG:32613',
       generatedAt: FIXED_DATE,
     });
-    const drawn = sheetPage(bytes).drawn;
+    const { stream, drawn } = pageWith(bytes, 'Terrain Profile');
+    const floor = plotBoxIn(stream).bottom;
 
-    // The reference block: label/value pairs, the smallest thing that is
-    // still a measurement rather than a caption.
-    const referenceSize = Math.min(
-      ...drawn.filter((d) => d.text === 'Length (horizontal)').map((d) => d.size),
-    );
-    expect(referenceSize).toBeGreaterThan(0);
+    // The KPI band: eight ruled cells, each a bold figure, between the plot's
+    // floor and the sheet furniture. Nothing else in that strip is set bold
+    // at that size - the sheet title above it is larger and is not a figure.
+    const strip = drawn.filter((d) => d.base === 'Helvetica-Bold' && d.y > 260 && d.y < floor);
+    const biggestBold = Math.max(...strip.map((d) => d.size));
+    const kpi = strip.filter((d) => d.size === biggestBold);
+    expect(kpi).toHaveLength(8);
+    expect(biggestBold).toBeGreaterThanOrEqual(16);
 
-    // The headline figures: bold, numeric, and nothing else on the page is
-    // set that large except the sheet title, which is not a number.
-    const headline = drawn.filter(
-      (d) => d.base === 'Helvetica-Bold' && /^[+-]?\d[\d.]*$/.test(d.text),
+    // Against the body of the notes table, which is the smallest thing on the
+    // set that is still a measurement rather than a caption.
+    const bodySize = Math.max(
+      ...pageWith(bytes, 'Technical notes')
+        .drawn.filter((d) => d.text === 'Length (horizontal)')
+        .map((d) => d.size),
     );
-    const biggest = Math.max(...headline.map((d) => d.size));
-    expect(headline.filter((d) => d.size === biggest)).toHaveLength(5);
-    expect(biggest / referenceSize).toBeGreaterThanOrEqual(2.5);
+    expect(bodySize).toBeGreaterThanOrEqual(8);
+    expect(biggestBold / bodySize).toBeGreaterThanOrEqual(1.7);
+  });
+
+  /**
+   * Drawings get printed, and a figure a reader has to lean in for is a
+   * figure they read wrong. Nothing on any sheet goes under 6.5pt (which is
+   * reserved for the tracked title-block field labels), and nothing that
+   * carries a measurement - every monospaced figure on the set - goes under
+   * 8pt.
+   */
+  it('sets nothing below the readable floor', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Readable floor',
+      samples: rollingSection(),
+      crs: 'EPSG:32613',
+      generatedAt: FIXED_DATE,
+      verticalDatum: 'NAVD88',
+    });
+    const drawn = pageStreams(bytes).flatMap((stream) => drawnIn(stream));
+    expect(drawn.length).toBeGreaterThan(200);
+    for (const d of drawn) {
+      expect(d.size, `"${d.text}" is set at ${d.size}pt`).toBeGreaterThanOrEqual(6.5);
+      if (d.base === 'Courier') {
+        expect(d.size, `tabular figure "${d.text}" is set at ${d.size}pt`).toBeGreaterThanOrEqual(
+          8,
+        );
+      }
+    }
   });
 
   /**
    * Figures read down a column have to line up under one another, and only a
    * monospaced face does that: in Helvetica a `1` is narrower than a `0`, so
    * two heights of the same magnitude start in different places.
+   *
+   * The band is found by where it sits - hung off the plot's own bottom edge
+   * - rather than by a font size only it uses, so the assertion survives the
+   * band being set at a readable size shared with the rest of the sheet.
    */
   it('sets every figure in the station band monospaced', async () => {
     const bytes = await buildProfilePdf({
@@ -416,10 +616,11 @@ describe('profile sheet: typographic hierarchy', () => {
       samples: rollingSection(),
       generatedAt: FIXED_DATE,
     });
-    const drawn = sheetPage(bytes).drawn;
-    // The band is the only thing on the sheet set at its own small size, and
-    // its cells are the strings that carry digits.
-    const bandCells = drawn.filter((d) => d.size === 6 && /\d/.test(d.text));
+    const { stream, drawn } = sheetPage(bytes);
+    const floor = plotBoxIn(stream).bottom;
+    const bandCells = drawn.filter(
+      (d) => d.y < floor - 5 && d.y > floor - 72 && /\d/.test(d.text),
+    );
     expect(bandCells.length).toBeGreaterThan(20);
     for (const cell of bandCells) {
       expect(cell.base, `band cell "${cell.text}" is set in ${cell.base}`).toBe('Courier');

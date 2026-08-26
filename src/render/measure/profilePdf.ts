@@ -1,32 +1,40 @@
 /**
  * profilePdf.ts
  *
- * Full-page PDF export of a Profile measurement — a deliverable an
- * engineer can print and take measurements off. It renders:
+ * Full-page PDF export of a Profile measurement, laid out as an engineering
+ * drawing set rather than as a report. Four kinds of sheet, all A3 landscape,
+ * all carrying the same border, general notes, title block and issue strip so
+ * they read as one set:
  *
- *   - A framed section chart with a survey grid, a height (Y) axis, and the
- *     profile drawn as a straight polyline between adjacent samples, so no
- *     plotted height falls outside the two stations bracketing it (gaps stay
- *     breaks).
- *   - A station data band ruled under the section, carrying partial distance,
- *     chainage and ground height per station. Its columns come from the plot's
- *     own x mapping, so a vertical dropped from the curve lands on the figures
- *     for that station; where the stations are too dense to label, the band
- *     thins them and says how many it is showing.
- *   - The stated horizontal and vertical scales (1:N each) and the resulting
- *     vertical exaggeration, so distances/grades read off the print are
- *     unambiguous — a true civil section convention. The exaggeration is the
- *     horizontal denominator over the vertical one, because a smaller
- *     denominator is a larger drawing.
- *   - A summary block: length, relief, min/max height, mean & max grade,
- *     coverage, sample count, corridor width, CRS/datum.
- *   - A method-and-provenance page: the derived series named exactly as the
- *     on-screen legend names it, the contributing sources by stable layer id
- *     with their classification kind and read kind, the class-exclusion
- *     policy and how far it reached, and the read scope.
- *   - A station table (chainage · height · grade) so values are exact,
- *     not eyeballed off the graph.
- *   - A provenance footer carrying the canonical NOT_SURVEY_GRADE_NOTE.
+ *   - LONGITUDINAL PROFILE. A framed section chart with a survey grid, a
+ *     rotated height axis, and the profile drawn as a straight polyline
+ *     between adjacent samples, so no plotted height falls outside the two
+ *     stations bracketing it (gaps stay breaks). Under it the station data
+ *     band, and under that a ruled KPI band carrying the eight figures a
+ *     reader takes off a section. The maximum grade is called out on the plot
+ *     itself with a leader, because it is the figure that decides whether an
+ *     alignment is buildable and it is invisible in a curve.
+ *   - TECHNICAL NOTES. Every recorded quantity as a three-column table: what
+ *     was recorded, the value, and an engineering remark saying how to read
+ *     it. The remark column is the half a reader who did not build the export
+ *     cannot reconstruct.
+ *   - METHOD AND SOURCES. The derived series named exactly as the on-screen
+ *     legend names it, the height reference, the contributing sources by
+ *     stable layer id with their classification kind and read kind, the
+ *     class-exclusion policy and how far it reached, and the read scope.
+ *   - STATION SCHEDULE. Chainage, height and grade per station in four column
+ *     groups, so values are exact rather than eyeballed off the graph, with a
+ *     legend stating what a gap and a dash mean.
+ *
+ * Any of the last three continues onto further sheets when the data needs
+ * them. The title block's SHEET n / m takes m from the page count the
+ * document actually reached, so the set always states its own size.
+ *
+ * The stated horizontal and vertical scales (1:N each), the resulting vertical
+ * exaggeration and the print instruction sit in the plot header, so distances
+ * and grades read off the print are unambiguous — a true civil section
+ * convention. The exaggeration is the horizontal denominator over the vertical
+ * one, because a smaller denominator is a larger drawing.
  *
  * Three vocabularies are borrowed rather than restated, because a printed
  * sheet that disagrees with the screen is two answers to one question:
@@ -37,7 +45,9 @@
  *     `ProfileProvenance` record, which the reader of an exported file cannot
  *     otherwise recover;
  *   - every height heading comes from `heightLabel`, so only an orthometric
- *     reference is ever printed as an elevation.
+ *     reference is ever printed as an elevation. The rotated axis title is
+ *     that same string: the axis is where a reader decides what the numbers
+ *     beside it mean, so it is the last place a claim may be upgraded.
  *
  * pdf-lib is imported here so this whole module lands in its own lazy
  * chunk — the panel dynamic-imports it only when the user clicks Export.
@@ -46,7 +56,14 @@
  * No clock: `generatedAt` is required, so the same input is the same bytes.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import {
+  PDFDocument,
+  StandardFonts,
+  degrees,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from 'pdf-lib';
 import type { ProfileChartSample, UnitSystem } from './types';
 import {
   computeCivilProfileStats,
@@ -84,15 +101,10 @@ import type { ProfileProvenance } from './profileProvenance';
 import { heightLabel, heightReferenceNote, verticalReferenceFromDatum } from '../../geo/height';
 import type { VerticalReference } from '../../geo/height';
 import { pdfInfoDate } from '../../pdfInfoDate';
-// Where the station band's columns and the summary's value column land. Pure
-// arithmetic over measured text, kept out of the builder so the geometry of
-// the sheet can be asserted without reading a PDF back.
-import {
-  buildStationBand,
-  layoutSummaryRows,
-  wideValueDx,
-  type SummaryRow,
-} from './profileSheetLayout';
+// Where the station band's columns land. Pure arithmetic over measured text,
+// kept out of the builder so the geometry of the sheet can be asserted
+// without reading a PDF back.
+import { buildStationBand } from './profileSheetLayout';
 
 /** Same constant the format/summary modules keep module-local. */
 const FEET_PER_METRE = 3.280839895013123;
@@ -124,7 +136,7 @@ export interface ProfilePdfInput {
   readonly generatedAt: Date;
   /**
    * Active unit system (v0.4.5, B9): imperial sheets print feet on the
-   * height axis + summary + station table and US 100-ft stationing on
+   * height axis + summary + station schedule and US 100-ft stationing on
    * the chainage axis. Defaults to metric (the pre-v0.4.5 sheet).
    */
   readonly unitSystem?: UnitSystem;
@@ -145,81 +157,166 @@ export interface ProfilePdfInput {
   readonly provenance?: ProfileProvenance | null;
 }
 
-const PAGE_W = 792; // US Letter landscape
-const PAGE_H = 612;
-const M = 46;
+/**
+ * A3 landscape, in points, and the sheet designation that names it.
+ *
+ * A3 rather than the US Letter this sheet used to be, because the readable
+ * minimums this drawing is set at — 8pt in every table, 9pt in the schedule —
+ * do not fit a Letter sheet alongside a title block, general notes and an
+ * issue strip, and the answer to a crowded drawing is a larger sheet, never
+ * smaller type. The designation is printed in the corner, and it is the size
+ * actually emitted: a sheet that claims a size it is not is a sheet that
+ * prints at the wrong scale.
+ */
+const PAGE_W = 1190.55;
+const PAGE_H = 841.89;
+const SHEET_SIZE = 'A3';
+const M = 48;
 
 /**
- * One ink, one accent, and neutrals mixed toward the ink rather than toward
- * pure grey, so nothing on the sheet reads as a second hue.
+ * One ink, two colours, and neutrals mixed toward the ink rather than toward
+ * pure grey, so nothing on the sheet reads as a third hue.
  *
  * `INK_DIM` is the plot frame's pen and is deliberately left at the value it
  * has always had: `profileSheet.test.ts` recovers the plot box out of the
  * content stream by that stroke colour, and the mapping it then checks the
  * station band against is only as trustworthy as the frame it was read from.
- * Reference-block labels moved to `INK_MUTED` instead, which is what actually
- * wanted demoting.
+ * Nothing else on the sheet may be a 1pt horizontal line in this colour.
  */
 const INK = rgb(0.09, 0.11, 0.15);
 const INK_DIM = rgb(0.42, 0.46, 0.52);
+/**
+ * Secondary table text: the item column, the engineering remarks, the grade
+ * column of the schedule. Darker than `INK_DIM`, which is a pen for hairlines
+ * and captions and is too light to set a column of 8.5pt prose a reader is
+ * expected to actually read.
+ */
+const INK_SOFT = rgb(0.3, 0.34, 0.4);
 const INK_MUTED = rgb(0.53, 0.57, 0.63);
 const GRID = rgb(0.83, 0.86, 0.9);
 const GRID_MINOR = rgb(0.91, 0.93, 0.95);
 /**
- * The single accent. Darker than a screen blue on purpose: engineering sheets
- * are printed on mono devices, and this converts to roughly 31% luminance,
- * which still separates from the ground tint (84%) and from paper.
+ * The first of the two colours: the section itself. Darker than a screen blue
+ * on purpose: engineering sheets are printed on mono devices, and this
+ * converts to roughly 31% luminance, which still separates from the ground
+ * tint (84%) and from paper.
  */
 const CURVE = rgb(0.05, 0.36, 0.56);
 /**
- * The ground under the section: a desaturated tint of the accent, not the
- * accent itself. It sits behind the data and must never compete with the line
- * drawn on top of it. About a 16% tint in greyscale, which every printer
- * renders as an unambiguous fill rather than as almost-paper.
+ * The ground under the section: a desaturated tint of the section colour, not
+ * a colour of its own. It sits behind the data and must never compete with
+ * the line drawn on top of it. About a 16% tint in greyscale, which every
+ * printer renders as an unambiguous fill rather than as almost-paper.
  */
 const GROUND = rgb(0.78, 0.85, 0.91);
+/**
+ * The second colour, and its only job: a cell of the station schedule, or of
+ * the station band, that says `gap` — a station where nothing returned.
+ *
+ * A reader scanning sixty-four rows for the holes in the data finds them at a
+ * glance instead of reading every cell. It is coding a fact that is ALSO
+ * carried by the word in the cell, which is what keeps the sheet whole in
+ * greyscale: the colour is the fast path, the word is the answer. Dark enough
+ * (about 38% luminance) to stay a legible mark on a mono printer rather than
+ * fading toward the paper the way a bright orange would.
+ */
+const GAP_MARK = rgb(0.72, 0.31, 0.02);
 const RULE = rgb(0.7, 0.74, 0.8);
+
+/**
+ * Type sizes, one constant per role, because a drawing that is readable in
+ * its headline and unreadable in its schedule is not readable.
+ *
+ * Nothing on any sheet is set below 6.5pt, and nothing that carries a
+ * measurement is set below 8pt: table bodies, schedule cells, band figures,
+ * general notes and legend lines all sit at 8.5 or 9. Hierarchy is bought
+ * with size, weight, case and tracking rather than by shrinking the lower
+ * half of the sheet, which is what the previous pass did.
+ *
+ * Bold is spent deliberately and is reserved for: the sheet title, the sheet
+ * name in the title block, section and table column headers, the KPI values,
+ * the title-block values a reader is looking for, and any value that states a
+ * limitation (`unknown`, `Not recorded`, `PRELIMINARY`). Everything else is
+ * regular, the tracked labels included - a label set in caps at half the size
+ * of its value already reads as a label, and bolding it spends the weight on
+ * the word rather than on the figure. Bold runs to roughly a sixth of the
+ * words on a sheet; past about a fifth it stops meaning anything.
+ */
+const T_TITLE = 18; // sheet title, bold
+const T_SUBTITLE = 10.5; // measurement name under the title
+const T_STAMP = 9; // generation stamp, top right
+const T_META = 8.5; // CRS / corridor / percentile line under the stamp
+const T_SCALE = 10; // the scale + exaggeration + print statement, bold
+const T_AXIS = 9; // axis titles
+const T_TICK = 8; // grid tick figures, monospaced
+const T_BAND = 8.5; // station band figures, monospaced
+const T_CAPTION = 8.5; // band caption and chart legend
+const T_KPI_LABEL = 7.5; // KPI cell label, tracked caps, bold
+const T_KPI_VALUE = 16; // KPI cell value, bold
+const T_CALLOUT = 9; // the leader-line callout headline, bold
+const T_CALLOUT_SUB = 8; // the station range under it
+const T_NOTE_HEAD = 8; // GENERAL NOTES heading, tracked caps, bold
+const T_NOTE = 8.5; // a numbered general note
+const T_TB_LABEL = 6.5; // title-block field label, tracked caps, bold
+const T_TB_VALUE = 9.5; // title-block field value
+const T_TB_EYEBROW = 7; // TERRAIN PROFILE over the sheet name, tracked, bold
+const T_TB_NAME = 15; // the sheet name, bold
+const T_TB_DESC = 8.5; // the one-line descriptor under it
+const T_ISSUE_HEAD = 8.5; // issue strip column headers, bold
+const T_TABLE_HEAD = 8.5; // table column headers, tracked caps, bold
+const T_TABLE = 9; // table body
+const T_REMARK = 8.5; // the engineering remark column
+const T_SECTION = 8; // a section heading on sheet 2, tracked caps, bold
+const T_PARA = 9; // body prose on sheet 2
+const T_SOURCE = 8.5; // the source table, monospaced
+const T_SCHED = 9; // station schedule cells, monospaced
+const T_SHEET_SIZE = 8; // the sheet-size designation in the corner
+
+/** Extra space inserted between letters of an uppercase tracked label. */
+const TRACK = 0.9;
+/** Inset of the sheet border from the page edge. */
+const BORDER_INSET = 22;
+
+/**
+ * The sheet furniture reserves the bottom of every page: the issue strip
+ * along the very bottom, and the general notes and title block above it.
+ * Drawing content below this is drawing content over the title block.
+ */
+const ISSUE_BOT = 36;
+const ISSUE_ROW_H = 16;
+/** Header row plus three blank rows: a form, sized to be written in by hand. */
+const ISSUE_ROWS = 4;
+const ISSUE_TOP = ISSUE_BOT + ISSUE_ROWS * ISSUE_ROW_H;
+const FURNITURE_BOT = ISSUE_TOP + 10;
+const FURNITURE_TOP = FURNITURE_BOT + 136;
+/** The lowest y any page may draw content at. */
+const CONTENT_BOT = FURNITURE_TOP + 12;
+
+/** Width of the title block, and the gutter between it and the notes. */
+const TITLE_BLOCK_W = 470;
+const TITLE_BLOCK_GUTTER = 26;
 
 /**
  * Left stub of the station band, and so the left margin of the plot: the band
  * rules under the section and its row headings sit beside them, so one number
  * fixes both. Wide enough for the longest height heading `heightLabel` can
- * return, because a heading that has to be trimmed loses the qualification it
- * was printed to carry.
+ * return at the size the band is set at, because a heading that has to be
+ * trimmed loses the qualification it was printed to carry.
  */
-const STUB_W = 118;
+const STUB_W = 152;
+/** Column reserved at the far left for the rotated height-axis title. */
+const AXIS_COL = 22;
 /**
  * Strip between the plot's bottom edge and the top of the station band, for
  * the grid's own round-interval stationing. The band's stations fall where the
  * samples fall, which is not on round numbers, so the two rows answer
  * different questions and both are wanted.
  */
-const GRID_LABEL_STRIP = 14;
-/** Height of one station-band row, and the size its figures are set at. */
-const BAND_ROW_H = 11;
-const BAND_FONT = 6;
+const GRID_LABEL_STRIP = 20;
+/** Height of one station-band row. */
+const BAND_ROW_H = 16;
 /** Clear space either side of a band figure before it counts as a collision. */
-const BAND_PAD = 4;
-/** Clear space between a summary label and its value. */
-const SUMMARY_GAP = 8;
-const SUMMARY_ROW_H = 12;
-const SUMMARY_FONT = 8.5;
-/**
- * The headline figures, and the size the sheet's title is set at.
- *
- * The ratio to `SUMMARY_FONT` is the whole point: at 22 over 8.5 it is a
- * little over 2.5:1, which is enough that a reader's eye lands on the five
- * figures before it lands on anything else. The previous sheet set the title,
- * the summary and the provenance within a point of each other, so it offered
- * no entry point at all.
- */
-const HEADLINE_FONT = 22;
-/** The quiet label over a headline figure, and the sheet's eyebrow labels. */
-const HEADLINE_LABEL_FONT = 6.5;
-/** Extra space inserted between letters of an uppercase eyebrow label. */
-const TRACK = 0.9;
-/** Inset of the sheet border from the page edge. */
-const BORDER_INSET = 24;
+const BAND_PAD = 5;
 
 /**
  * pdf-lib's StandardFonts use WinAnsi (CP1252) encoding, which throws on
@@ -236,6 +333,19 @@ function winAnsiSafe(s: string): string {
     '’': "'", '‘': "'", '“': '"', '”': '"', '…': '...',
   };
   return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => map[ch] ?? '?');
+}
+
+/** Draw one WinAnsi-safe string. Every string on this sheet goes through it. */
+function put(
+  p: PDFPage,
+  s: string,
+  x: number,
+  y: number,
+  size: number,
+  f: PDFFont,
+  color = INK,
+): void {
+  p.drawText(winAnsiSafe(s), { x, y, size, font: f, color });
 }
 
 /** "Nice" station interval keeping ≤ ~12 gridlines across the span. */
@@ -272,7 +382,7 @@ function resolveVerticalReference(input: ProfilePdfInput): VerticalReference {
 }
 
 /**
- * A column head short enough for the station table, and true for the
+ * A column head short enough for the station schedule, and true for the
  * reference it describes. `HEIGHT` is honest for an ellipsoidal, local or
  * undeclared reference; only an orthometric one gets `ELEV`.
  */
@@ -332,6 +442,19 @@ function clipText(s: string, font: PDFFont, size: number, maxW: number): string 
   return `${cut}...`;
 }
 
+/** One straight ruled segment. Every rule on this sheet is drawn through it. */
+function rule(
+  p: PDFPage,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  color: ReturnType<typeof rgb>,
+  thickness: number,
+): void {
+  p.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness, color });
+}
+
 /**
  * A stroked box, drawn as four independent segments.
  *
@@ -340,7 +463,10 @@ function clipText(s: string, font: PDFFont, size: number, maxW: number): string 
  * contain - it is how a reader of the file, and the gap tests, tell a
  * continuous section from one broken at a station with no returns - and a
  * rectangle anywhere on any page adds a three-lineto run that is
- * indistinguishable from a drawn profile.
+ * indistinguishable from a drawn profile. This sheet is now full of ruled
+ * tables - the title block, the issue strip, the KPI band - and every one of
+ * their cells is ruled through this helper or through `rule` for the same
+ * reason.
  */
 function strokeBox(
   p: PDFPage,
@@ -378,7 +504,7 @@ function strokeBox(
  * genuine convention on an engineering drawing. Hierarchy is bought with
  * size, weight, case and spacing instead, and this is the spacing part —
  * tracked small caps read as a label rather than as a short sentence, which
- * is what lets the label sit quietly over a figure four times its size.
+ * is what lets a 7.5pt label sit quietly over a figure twice its size.
  *
  * Spaces are advanced over rather than drawn: an empty glyph carries no ink
  * and drawing it only grows the content stream.
@@ -484,7 +610,7 @@ function drawSheetBorder(p: PDFPage): void {
   );
 }
 
-/** The one-line form of the class-exclusion policy, for the summary block. */
+/** The one-line form of the class-exclusion policy, for the notes table. */
 function exclusionSummary(legend: DerivedSurfaceLegend): string {
   const classes = legend.excludedClasses.join(',');
   if (legend.exclusionScope === 'none') {
@@ -496,6 +622,256 @@ function exclusionSummary(legend: DerivedSurfaceLegend): string {
     return `Classes ${classes} on every source (${legend.sourcesWithClassification} of ${legend.sourceCount})`;
   }
   return `Classes ${classes} on only ${legend.sourcesWithClassification} of ${legend.sourceCount} sources: partial`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sheet furniture: title block, issue strip, general notes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The three standard fonts, passed around as one bag. */
+interface Faces {
+  readonly font: PDFFont;
+  readonly bold: PDFFont;
+  readonly mono: PDFFont;
+}
+
+/** What the title block on one sheet states, beyond the set-wide fields. */
+interface SheetIdentity {
+  /** The large name of this sheet: LONGITUDINAL PROFILE, TECHNICAL NOTES, … */
+  readonly sheetName: string;
+  /** One line saying what is on it. */
+  readonly descriptor: string;
+}
+
+/** The set-wide title-block fields, the same on every sheet. */
+interface SetIdentity {
+  /** The measurement name; the closest thing this export has to a project. */
+  readonly project: string;
+  /** Horizontal CRS as declared, or null when the scan is not georeferenced. */
+  readonly crs: string | null;
+  /** The numbered general notes, already composed. */
+  readonly notes: readonly string[];
+}
+
+/**
+ * The title block, bottom right, ruled into cells.
+ *
+ * Two rows of three fields over a name block, which is the arrangement a
+ * reader of drawings already knows: the fields that identify the sheet within
+ * the set on top, the name of the sheet itself set large underneath.
+ *
+ * `SHEET n / m` takes `total` from the page count the document actually
+ * reached, never from a constant — a sheet that says 1 of 3 in a four-sheet
+ * set has lost a sheet and the reader has no way to know.
+ *
+ * Three of the values state a limitation rather than a fact, and each is set
+ * bold for the same reason a measured value is: `PRELIMINARY` because nothing
+ * here is issued for construction, `Not recorded` where the export carries no
+ * CRS, and `Not assigned` because a drawing number belongs to whoever files
+ * the drawing and inventing one here would be a fabricated identity.
+ */
+function drawTitleBlock(
+  p: PDFPage,
+  f: Faces,
+  set: SetIdentity,
+  sheet: SheetIdentity,
+  index: number,
+  total: number,
+): void {
+  const x0 = PAGE_W - M - TITLE_BLOCK_W;
+  const x1 = PAGE_W - M;
+  const top = FURNITURE_TOP;
+  const bot = FURNITURE_BOT;
+  const rowA = top - 30; // bottom of the PROJECT / STATUS / SHEET row
+  const rowB = rowA - 30; // bottom of the CRS / DRAWING NO. / REV. row
+  // Two thirds of the block to the first field, then two quarter fields: a
+  // project name is long and a revision is one character.
+  const c1 = x0 + 235;
+  const c2 = x0 + 352.5;
+
+  strokeBox(p, x0, bot, TITLE_BLOCK_W, top - bot, INK, 1.2);
+  rule(p, x0, rowA, x1, rowA, INK, 0.6);
+  rule(p, x0, rowB, x1, rowB, INK, 0.6);
+  for (const y of [rowA, rowB]) {
+    rule(p, c1, y, c1, y + 30, INK, 0.6);
+    rule(p, c2, y, c2, y + 30, INK, 0.6);
+  }
+
+  const cell = (
+    x: number,
+    w: number,
+    yTop: number,
+    label: string,
+    value: string,
+    strong: boolean,
+  ) => {
+    trackedText(p, label, x + 7, yTop - 11, T_TB_LABEL, f.font, INK_MUTED, 0.7);
+    const face = strong ? f.bold : f.font;
+    put(p, clipText(value, face, T_TB_VALUE, w - 14), x + 7, yTop - 25, T_TB_VALUE, face, INK);
+  };
+
+  cell(x0, 235, top, 'PROJECT', set.project.trim() !== '' ? set.project : 'Unnamed', true);
+  cell(c1, 117.5, top, 'STATUS', 'PRELIMINARY', true);
+  cell(c2, TITLE_BLOCK_W - 352.5, top, 'SHEET', `${index} / ${total}`, true);
+  cell(x0, 235, rowA, 'HORIZONTAL CRS', set.crs ?? 'Not recorded', set.crs == null);
+  cell(c1, 117.5, rowA, 'DRAWING NO.', 'Not assigned', true);
+  cell(c2, TITLE_BLOCK_W - 352.5, rowA, 'REV.', '-', false);
+
+  trackedText(p, 'TERRAIN PROFILE', x0 + 7, rowB - 14, T_TB_EYEBROW, f.font, INK_MUTED, 1.1);
+  put(
+    p,
+    clipText(sheet.sheetName, f.bold, T_TB_NAME, TITLE_BLOCK_W - 14),
+    x0 + 7,
+    rowB - 36,
+    T_TB_NAME,
+    f.bold,
+    INK,
+  );
+  const desc = wrapText(sheet.descriptor, f.font, T_TB_DESC, TITLE_BLOCK_W - 14);
+  desc.slice(0, 2).forEach((line, i) => {
+    put(p, line, x0 + 7, rowB - 52 - i * 11, T_TB_DESC, f.font, INK_DIM);
+  });
+}
+
+/**
+ * The issue / revision strip along the very bottom of every sheet.
+ *
+ * Ruled and empty. It is a form, not data: an issue is something a person or
+ * a later revision of this drawing records, and a fresh export has had none.
+ *
+ * The DATE cells stay blank in particular. Filling one from the clock would
+ * be the one thing this builder refuses to do anywhere else — the sheet is
+ * byte-reproducible precisely because no part of it reads the time — and a
+ * date against an issue nobody made would also be a record of an event that
+ * did not happen.
+ */
+function drawIssueStrip(p: PDFPage, f: Faces): void {
+  const x0 = M;
+  const x1 = PAGE_W - M;
+  const w = x1 - x0;
+  const cols = [
+    { head: 'ISSUE', w: 66 },
+    { head: 'DESCRIPTION', w: w - 66 - 110 - 78 - 78 },
+    { head: 'DATE', w: 110 },
+    { head: 'BY', w: 78 },
+    { head: 'CHK', w: 78 },
+  ];
+  strokeBox(p, x0, ISSUE_BOT, w, ISSUE_TOP - ISSUE_BOT, INK, 1.2);
+  for (let r = 1; r < ISSUE_ROWS; r++) {
+    const y = ISSUE_BOT + r * ISSUE_ROW_H;
+    rule(p, x0, y, x1, y, RULE, 0.5);
+  }
+  // The header row's own baseline rule is heavier than the blank-row rules:
+  // it separates a heading from a form, and the blank rows are ruled only
+  // enough to write between.
+  rule(p, x0, ISSUE_TOP - ISSUE_ROW_H, x1, ISSUE_TOP - ISSUE_ROW_H, INK, 0.6);
+  let x = x0;
+  for (const c of cols) {
+    if (x > x0) rule(p, x, ISSUE_BOT, x, ISSUE_TOP, INK, 0.6);
+    put(p, c.head, x + 7, ISSUE_TOP - 11, T_ISSUE_HEAD, f.bold, INK);
+    x += c.w;
+  }
+}
+
+/**
+ * The general notes, bottom left, numbered.
+ *
+ * Numbered because a note on a drawing is referred to by its number, and
+ * because a numbered list is read as a list of separate statements while a
+ * paragraph is read as one. Every caveat the sheet carries is here in full:
+ * what the surface is and that it is estimated rather than measured, what the
+ * heights are measured from, what was read, and what the sheet is suitable
+ * for.
+ */
+function drawGeneralNotes(p: PDFPage, f: Faces, notes: readonly string[]): void {
+  const x0 = M;
+  const w = PAGE_W - M - TITLE_BLOCK_W - TITLE_BLOCK_GUTTER - M;
+  trackedText(p, 'GENERAL NOTES', x0, FURNITURE_TOP - 11, T_NOTE_HEAD, f.bold, INK, 1.0);
+  rule(p, x0, FURNITURE_TOP - 17, x0 + w, FURNITURE_TOP - 17, RULE, 0.6);
+  let y = FURNITURE_TOP - 30;
+  notes.forEach((note, i) => {
+    const lines = wrapText(note, f.font, T_NOTE, w - 18);
+    lines.forEach((line, li) => {
+      if (y < FURNITURE_BOT + 2) return;
+      if (li === 0) put(p, `${i + 1}.`, x0, y, T_NOTE, f.font, INK_DIM);
+      put(p, line, x0 + 18, y, T_NOTE, f.font, INK);
+      y -= 11.5;
+    });
+    y -= 2.5;
+  });
+}
+
+/** Everything that is on every sheet of the set, drawn after the content. */
+function drawFurniture(
+  p: PDFPage,
+  f: Faces,
+  set: SetIdentity,
+  sheet: SheetIdentity,
+  index: number,
+  total: number,
+): void {
+  drawSheetBorder(p);
+  drawGeneralNotes(p, f, set.notes);
+  drawTitleBlock(p, f, set, sheet, index, total);
+  drawIssueStrip(p, f);
+  // The sheet size, in the corner, so a reader who prints this knows what
+  // paper the stated scales are true on.
+  trackedText(
+    p,
+    SHEET_SIZE,
+    BORDER_INSET + 8,
+    BORDER_INSET + 7,
+    T_SHEET_SIZE,
+    f.bold,
+    INK_MUTED,
+    1.2,
+  );
+}
+
+/** The header every sheet opens with: title left, stamp right, closing rule. */
+function drawSheetHeader(
+  p: PDFPage,
+  f: Faces,
+  title: string,
+  subtitle: string,
+  stamp: string,
+  meta: string | null,
+): number {
+  const top = PAGE_H - M;
+  put(p, title, M, top - T_TITLE, T_TITLE, f.bold, INK);
+  put(p, subtitle, M, top - 36, T_SUBTITLE, f.font, INK_DIM);
+  put(
+    p,
+    stamp,
+    PAGE_W - M - f.font.widthOfTextAtSize(winAnsiSafe(stamp), T_STAMP),
+    top - T_TITLE,
+    T_STAMP,
+    f.font,
+    INK_MUTED,
+  );
+  if (meta != null) {
+    put(
+      p,
+      meta,
+      PAGE_W - M - f.font.widthOfTextAtSize(winAnsiSafe(meta), T_META),
+      top - 33,
+      T_META,
+      f.font,
+      INK_MUTED,
+    );
+  }
+  rule(p, M, top - 46, PAGE_W - M, top - 46, RULE, 0.6);
+  return top - 46;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The builder
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One emitted page, with what its title block should say about it. */
+interface EmittedSheet {
+  readonly page: PDFPage;
+  readonly identity: SheetIdentity;
 }
 
 /** Build the profile PDF and return its bytes. */
@@ -518,9 +894,11 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const infoStamp = pdfInfoDate(input.generatedAt);
   doc.setCreationDate(infoStamp);
   doc.setModificationDate(infoStamp);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const mono = await doc.embedFont(StandardFonts.Courier);
+  const f: Faces = {
+    font: await doc.embedFont(StandardFonts.Helvetica),
+    bold: await doc.embedFont(StandardFonts.HelveticaBold),
+    mono: await doc.embedFont(StandardFonts.Courier),
+  };
 
   const stats = computeCivilProfileStats(input.samples);
   const when = input.generatedAt;
@@ -547,89 +925,62 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const lenStr = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
   // A datum reading is not a magnitude — see `formatElevation`.
   const elevStr = (m: number | null): string => (m == null ? '—' : formatElevation(m, system));
+  const intel = computeProfileSummary(input.samples);
+  const gapCount = stats.stations.filter((s) => s.elevation == null).length;
 
-  // ── Page 1: chart + summary ────────────────────────────────────────────
+  // The notes are the sheet's honesty, and they are on every sheet of the set
+  // because a sheet that leaves the set carries its caveats with it.
+  const notes: string[] = [
+    `${legend.seriesLabel}. Estimated, not measured.`,
+    `Vertical reference: ${heightWord}. ${heightReferenceNote(reference)}`,
+    record == null
+      ? 'Provenance: no record of the sources read was attached to this export, so the ' +
+        'contributing sources and the read scope are not recorded on this drawing.'
+      : `Provenance: ${describeProfileProvenance(record)}`,
+    NOT_SURVEY_GRADE_NOTE +
+      (residentOnly
+        ? ' Sampled from streaming-resident points only - may refine as more data loads.'
+        : ''),
+  ];
+  const set: SetIdentity = { project: input.name, crs: input.crs ?? null, notes };
+  const sheets: EmittedSheet[] = [];
+
+  // ── Sheet 1: the longitudinal profile ──────────────────────────────────
   const page = doc.addPage([PAGE_W, PAGE_H]);
-  drawSheetBorder(page);
-  const text = (
-    p: PDFPage,
-    s: string,
-    x: number,
-    y: number,
-    size: number,
-    f: PDFFont = font,
-    color = INK,
-  ) => p.drawText(winAnsiSafe(s), { x, y, size, font: f, color });
-
-  // Header. The title carries the sheet; the measurement name sits under it
-  // as a subtitle, and everything on the right is stamp material set small
-  // and quiet. `Terrain Profile` is drawn as one string, untracked: it is how
-  // the sheet's own tests find page one.
-  text(page, 'Terrain Profile', M, PAGE_H - M - 8, HEADLINE_FONT, bold);
-  text(page, input.name, M, PAGE_H - M - 27, 10, font, INK_DIM);
-  {
-    const stamp = `Generated ${when.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
-    text(
-      page,
-      stamp,
-      PAGE_W - M - font.widthOfTextAtSize(winAnsiSafe(stamp), 8),
-      PAGE_H - M - 8,
-      8,
-      font,
-      INK_MUTED,
-    );
-  }
-  // Provenance header line (v0.4.5, B4) — the CRS, corridor width and
-  // percentile the section was actually computed with, right-aligned under the
-  // timestamp so a printed sheet is self-describing at a glance (the summary
-  // block repeats them in full lower down). Omitted entirely when the caller
-  // knows none of them — no row of dashes.
-  {
-    const meta = [
-      input.crs ? `CRS ${input.crs}` : null,
-      input.corridorWidthM != null
-        ? `corridor +/-${lenStr(input.corridorWidthM)}`
-        : null,
-      input.groundPercentile != null
-        ? `p${Math.round(input.groundPercentile)} of corridor`
-        : null,
-    ].filter((s): s is string => s !== null);
-    if (meta.length > 0) {
-      // Measure the WinAnsi-safe text — the raw string may hold glyphs the
-      // standard font cannot even measure without throwing.
-      const line = winAnsiSafe(meta.join('  ·  '));
-      text(
-        page,
-        line,
-        PAGE_W - M - font.widthOfTextAtSize(line, 7.5),
-        PAGE_H - M - 20,
-        7.5,
-        font,
-        INK_MUTED,
-      );
-    }
-  }
-
-  // A rule closing the header, so the title block reads as a block rather
-  // than as the first three lines of the sheet. Generous air under it: the
-  // spacing on this sheet is deliberately uneven — tight inside a group, open
-  // between groups — because equal spacing everywhere is what made the
-  // previous version read as a data dump.
-  page.drawLine({
-    start: { x: M, y: PAGE_H - M - 40 },
-    end: { x: PAGE_W - M, y: PAGE_H - M - 40 },
-    thickness: 0.6,
-    color: RULE,
+  sheets.push({
+    page,
+    identity: {
+      sheetName: 'LONGITUDINAL PROFILE',
+      descriptor: 'Section along the measured alignment, with the station data band beneath it.',
+    },
   });
 
-  // Plot box (pdf coords, y up). Top edge below the header.
-  const plotLeft = M + STUB_W;
+  const metaLine = (() => {
+    const meta = [
+      input.crs ? `CRS ${input.crs}` : null,
+      input.corridorWidthM != null ? `corridor +/-${lenStr(input.corridorWidthM)}` : null,
+      input.groundPercentile != null ? `p${Math.round(input.groundPercentile)} of corridor` : null,
+    ].filter((s): s is string => s !== null);
+    return meta.length > 0 ? winAnsiSafe(meta.join('  ·  ')) : null;
+  })();
+  // `Terrain Profile` is drawn as one string, untracked: it is how the
+  // sheet's own tests find sheet one.
+  const headerBot = drawSheetHeader(
+    page,
+    f,
+    'Terrain Profile',
+    input.name,
+    `Generated ${when.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
+    metaLine,
+  );
+
+  // Plot box (pdf coords, y up).
+  const plotLeft = M + AXIS_COL + STUB_W;
   const plotRight = PAGE_W - M - 6;
   const plotW = plotRight - plotLeft;
-  const plotTopY = PAGE_H - M - 58; // y-up coordinate of the TOP edge
-  // The section keeps the upper half of the sheet; the rest is spent on the
-  // station band, which is only useful directly under the curve it belongs to.
-  const plotH = 196;
+  const scaleLineY = headerBot - 18;
+  const plotTopY = scaleLineY - 16; // y-up coordinate of the TOP edge
+  const plotH = 300;
   const plotBotY = plotTopY - plotH;
   // The band hangs off the bottom edge of the plot and shares its rules, so
   // the two read as one drawing rather than as a chart above a table.
@@ -664,12 +1015,20 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     const hInt = niceInterval(len * k);
     for (let cD = 0, n = 0; cD <= len * k + 1e-9 && n < 64; cD += hInt, n++) {
       const x = mapX(cD / k);
-      page.drawLine({ start: { x, y: plotTopY }, end: { x, y: plotBotY }, thickness: 0.5, color: GRID });
+      rule(page, x, plotTopY, x, plotBotY, GRID, 0.5);
       // Round-interval stationing under the grid. The band below carries the
       // stations the samples actually fall on, which are not round numbers;
       // this row is what lets a reader take a chainage off the grid itself.
       const tick = formatStation(cD / k, system);
-      text(page, tick, x - mono.widthOfTextAtSize(tick, 7) / 2, plotBotY - 11, 7, mono, INK_MUTED);
+      put(
+        page,
+        tick,
+        x - f.mono.widthOfTextAtSize(tick, T_TICK) / 2,
+        plotBotY - 13,
+        T_TICK,
+        f.mono,
+        INK_MUTED,
+      );
     }
     const vInt = niceInterval(elSpan * k);
     for (
@@ -678,12 +1037,20 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       eD += vInt, n++
     ) {
       const y = plotTopY - mapYdown(eD / k);
-      page.drawLine({ start: { x: plotLeft, y }, end: { x: plotRight, y }, thickness: 0.5, color: GRID_MINOR });
+      rule(page, plotLeft, y, plotRight, y, GRID_MINOR, 0.5);
       // Right-aligned against the axis: a column of heights is read down its
       // last digit, and a left-aligned column of different-width numbers puts
       // the units, tens and hundreds places in three different columns.
       const tick = `${eD.toFixed(1)}`;
-      text(page, tick, plotLeft - 4 - mono.widthOfTextAtSize(tick, 7), y - 3, 7, mono, INK_DIM);
+      put(
+        page,
+        tick,
+        plotLeft - 5 - f.mono.widthOfTextAtSize(tick, T_TICK),
+        y - 3,
+        T_TICK,
+        f.mono,
+        INK_DIM,
+      );
     }
     // Profile runs (break on gaps), drawn as straight segments between
     // adjacent samples so no plotted height falls outside the two stations
@@ -718,7 +1085,36 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // sides. Last, because the ground fill reaches the floor and would
     // otherwise erase the edge it is standing on.
     strokeBox(page, plotLeft, plotBotY, plotW, plotH, INK_DIM, 1);
-    text(page, `${heightWord} (${unit})`, M, plotTopY + 8, 7.5, bold, INK_DIM);
+
+    // The height axis title, rotated to read up the left edge of the plot.
+    // It is `heightLabel`'s own string and nothing else: the axis is where a
+    // reader decides what the figures beside it mean, so an undeclared datum
+    // says so here rather than three blocks away.
+    {
+      const title = `${heightWord} (${unit})`;
+      const w = f.bold.widthOfTextAtSize(winAnsiSafe(title), T_AXIS);
+      page.drawText(winAnsiSafe(title), {
+        x: M + 12,
+        y: plotBotY + (plotH - w) / 2,
+        size: T_AXIS,
+        font: f.bold,
+        color: INK_DIM,
+        rotate: degrees(90),
+      });
+    }
+
+    // The maximum grade, called out on the drawing where it happens.
+    drawMaxGradeCallout(page, f, {
+      steepest: intel.steepest,
+      stations: stats.stations,
+      mapX,
+      mapYdown,
+      plotTopY,
+      plotBotY,
+      plotLeft,
+      plotRight,
+      system,
+    });
 
     // ── Station data band (the civil "guitarra") ───────────────────────
     // One ruled row per quantity, columns dropped from the same x mapping the
@@ -726,7 +1122,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // figures. Row headings sit in the fixed stub at the left.
     const partialStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(1));
     const bandHeightStr = (m: number | null) => (m == null ? 'gap' : (m * k).toFixed(2));
-    const bandMeasure = (t: string) => mono.widthOfTextAtSize(winAnsiSafe(t), BAND_FONT) + BAND_PAD;
+    const bandMeasure = (t: string) => f.mono.widthOfTextAtSize(winAnsiSafe(t), T_BAND) + BAND_PAD;
     const band = buildStationBand({
       stations: stats.stations.map((st) => ({ chainage: st.chainage, height: st.elevation })),
       mapX,
@@ -739,9 +1135,10 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         return cells.reduce((a, b) => (bandMeasure(b) > bandMeasure(a) ? b : a), cells[0]);
       },
       measure: bandMeasure,
-      fontSize: BAND_FONT,
+      fontSize: T_BAND,
     });
 
+    const stubX = M + AXIS_COL;
     const bandRows: Array<[string, (i: number) => string]> = [
       [`Partial dist. (${unit})`, (i) => partialStr(band.columns[i].partial)],
       ['Chainage', (i) => formatStation(band.columns[i].chainage, system)],
@@ -749,21 +1146,16 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     ];
     for (let r = 0; r <= bandRows.length; r++) {
       const y = bandTop - r * BAND_ROW_H;
-      page.drawLine({ start: { x: M, y }, end: { x: plotRight, y }, thickness: 0.5, color: RULE });
+      rule(page, stubX, y, plotRight, y, RULE, 0.5);
     }
     // Horizontal rules, and the single vertical that separates the stub from
     // the figures. Not a border per cell: a full grid of cell borders is more
     // ink than the figures it is meant to organise, and the columns are
     // already tied to the curve by their own drop lines.
-    page.drawLine({
-      start: { x: plotLeft, y: bandTop },
-      end: { x: plotLeft, y: bandBot },
-      thickness: 0.5,
-      color: RULE,
-    });
+    rule(page, plotLeft, bandTop, plotLeft, bandBot, RULE, 0.5);
     bandRows.forEach(([head], r) => {
-      const y = bandTop - (r + 1) * BAND_ROW_H + 3.5;
-      text(page, clipText(head, bold, BAND_FONT, STUB_W - 10), M, y, BAND_FONT, bold, INK_MUTED);
+      const y = bandTop - (r + 1) * BAND_ROW_H + 5;
+      put(page, clipText(head, f.bold, T_BAND, STUB_W - 10), stubX, y, T_BAND, f.bold, INK_MUTED);
     });
     band.columns.forEach((c, i) => {
       // A tick hung off the plot's own bottom edge, at the column's x. It
@@ -771,18 +1163,23 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       // continued through three rows of centred figures crosses every one of
       // them through the middle, and a hairline drawn over a digit is a
       // hairline drawn over a digit however light it is.
-      page.drawLine({
-        start: { x: c.x, y: plotBotY },
-        end: { x: c.x, y: plotBotY - 5 },
-        thickness: 0.5,
-        color: INK_DIM,
-      });
+      rule(page, c.x, plotBotY, c.x, plotBotY - 5, INK_DIM, 0.5);
       bandRows.forEach(([, cell], r) => {
         const t = winAnsiSafe(cell(i));
-        const y = bandTop - (r + 1) * BAND_ROW_H + 3.5;
+        const y = bandTop - (r + 1) * BAND_ROW_H + 5;
         // Courier throughout, so the figures of one row line up digit under
-        // digit whatever their magnitude.
-        text(page, t, c.x - mono.widthOfTextAtSize(t, BAND_FONT) / 2, y, BAND_FONT, mono, INK);
+        // digit whatever their magnitude. A cell that says `gap` takes the
+        // gap colour, the same mark the station schedule uses for the same
+        // fact, and the word carries it on a mono printer.
+        put(
+          page,
+          t,
+          c.x - f.mono.widthOfTextAtSize(t, T_BAND) / 2,
+          y,
+          T_BAND,
+          f.mono,
+          t === 'gap' ? GAP_MARK : INK,
+        );
       });
     });
     // Thinning stated, not silent: a band showing one station in nine looks
@@ -795,18 +1192,19 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         band.shown >= band.total
           ? `Station data band - all ${band.total} stations shown`
           : `Station data band - ${band.shown} of ${band.total} stations shown (thinned to fit)`;
-      text(
+      put(
         page,
         caption,
-        plotRight - font.widthOfTextAtSize(winAnsiSafe(caption), 7),
-        bandBot - 13,
-        7,
-        font,
+        plotRight - f.font.widthOfTextAtSize(winAnsiSafe(caption), T_CAPTION),
+        bandBot - 16,
+        T_CAPTION,
+        f.font,
         INK_MUTED,
       );
     }
 
-    // Stated scales + VEX (the bit that makes the print measurable).
+    // Stated scales + VEX + the print instruction, in the plot header where a
+    // reader looks before taking a measurement off the paper.
     const hScale = scaleRatio(len, plotW);
     const vScale = scaleRatio(elSpan, plotH);
     // `scaleRatio` returns the DENOMINATOR of a 1:N scale, so a SMALLER value
@@ -816,251 +1214,185 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // relief is stretched, and every grade read off it would be wrong by the
     // square of the error the reader was told to correct for.
     const vex = vScale > 0 ? hScale / vScale : 1;
+    // The print instruction is part of the scale statement, not a footnote:
+    // every ratio on this line is false on a sheet scaled to fit.
     const scaleLine =
       `Horizontal 1:${Math.round(hScale)}   ·   Vertical 1:${Math.round(vScale)}   ·   ` +
-      `Vertical exaggeration ${vex.toFixed(1)}:1`;
-    text(page, scaleLine, M, bandBot - 30, 9.5, bold, INK);
+      `Vertical exaggeration ${vex.toFixed(1)}:1   |   PRINT AT 100% ON ${SHEET_SIZE}`;
+    put(page, scaleLine, M, scaleLineY, T_SCALE, f.bold, INK);
     const axisTitle =
       system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';
-    text(
+    put(
       page,
       axisTitle,
-      plotRight - font.widthOfTextAtSize(winAnsiSafe(axisTitle), 8),
-      bandBot - 30,
-      8,
-      font,
+      plotRight - f.font.widthOfTextAtSize(winAnsiSafe(axisTitle), T_AXIS),
+      scaleLineY,
+      T_AXIS,
+      f.font,
       INK_MUTED,
     );
   } else {
-    text(page, 'No covered samples — nothing to plot.', plotLeft, plotTopY - 20, 11, font, INK_DIM);
+    put(page, 'No covered samples — nothing to plot.', plotLeft, plotTopY - 20, 11, f.font, INK_DIM);
   }
 
   // Chart legend swatch. The caption is the legend's own, so the plotted
   // series is named on the print exactly as it is named on screen. Clipped
   // against the space the band caption leaves on the same line, so a long
   // series name cannot print over it.
-  page.drawLine({
-    start: { x: M, y: bandBot - 11 },
-    end: { x: M + 16, y: bandBot - 11 },
-    thickness: 1.6,
-    color: CURVE,
-  });
-  text(
+  rule(page, M, bandBot - 13, M + 18, bandBot - 13, CURVE, 1.6);
+  put(
     page,
-    clipText(legend.caption, font, 8, plotRight - M - 22 - 190),
-    M + 22,
-    bandBot - 13.5,
-    8,
-    font,
+    clipText(legend.caption, f.font, T_CAPTION, plotRight - M - 26 - 240),
+    M + 26,
+    bandBot - 16,
+    T_CAPTION,
+    f.font,
     INK,
   );
 
-  // Summary block (two columns of label:value). The Profile Intelligence
-  // rows (gain/loss, steepest station range, located extremes — v0.4.5) come
-  // from the shared pure module so they match the panel's summary exactly.
-  const intel = computeProfileSummary(input.samples);
-  const sumTop = bandBot - 103;
+  // ── The KPI band ───────────────────────────────────────────────────────
+  // The magnitude only: the unit is stated once, in the cell's label. The
+  // length formatter is still the one that produces the figure, so the KPI
+  // and the notes table cannot round the same quantity two ways.
+  const bare = (s: string) => s.replace(/\s+(m|ft)$/, '').replace(/%$/, '');
+  drawKpiBand(page, f, bandBot - 32, [
+    [`LENGTH (${unit})`, bare(lenStr(len))],
+    [`RELIEF (${unit})`, stats.reliefSpan == null ? '-' : bare(lenStr(stats.reliefSpan))],
+    [
+      `MIN / MAX (${unit})`,
+      minEl == null || maxEl == null ? '-' : `${(minEl * k).toFixed(2)} / ${(maxEl * k).toFixed(2)}`,
+    ],
+    ['MEAN GRADE (%)', bare(formatGradePercent(stats.meanGrade))],
+    ['MAX GRADE (%)', bare(formatGradePercent(stats.maxGrade))],
+    ['COVERAGE (%)', `${(stats.coverage * 100).toFixed(0)}`],
+    ['GAPS', `${gapCount}`],
+    [
+      `CORRIDOR +/- (${unit})`,
+      input.corridorWidthM != null ? (input.corridorWidthM * k).toFixed(2) : 'auto',
+    ],
+  ]);
 
-  // ── Headline figures ───────────────────────────────────────────────────
-  // Five, deliberately: the two that dimension the drawing (length and
-  // relief), the two an earthworks or alignment reader sizes cut and fill
-  // from and cannot recover by eye from a curve (gain and loss, which differ
-  // from relief exactly when the section rolls), and the one that decides
-  // whether an alignment is buildable at all (max grade). Everything else the
-  // sheet knows is reference material and is set as reference material below.
-  //
-  // The value is large and bold and the label small and quiet above it, so
-  // the figure is what a reader lands on. The unit carries the accent: it is
-  // the same ink as the section line, which ties the strip to the drawing,
-  // and it leaves the digits themselves in the dominant ink, where they stay
-  // the strongest thing on the page in colour and in greyscale alike.
-  {
-    const headline: Array<[string, string]> = [
-      ['LENGTH', lenStr(len)],
-      ['RELIEF', stats.reliefSpan == null ? '-' : lenStr(stats.reliefSpan)],
-      ['HEIGHT GAIN', intel.gainM == null ? '-' : `+${lenStr(intel.gainM)}`],
-      ['HEIGHT LOSS', intel.lossM == null ? '-' : `-${lenStr(intel.lossM)}`],
-      ['MAX GRADE', formatGradePercent(stats.maxGrade)],
-    ];
-    const cellW = (PAGE_W - 2 * M) / headline.length;
-    // The accent rule that opens the strip. Used here and on the section line
-    // and nowhere else on the page, which is what keeps it an accent.
-    page.drawLine({
-      start: { x: M, y: sumTop + 58 },
-      end: { x: PAGE_W - M, y: sumTop + 58 },
-      thickness: 0.9,
-      color: CURVE,
-    });
-    headline.forEach(([label, value], i) => {
-      const x = M + i * cellW;
-      trackedText(page, label, x, sumTop + 46, HEADLINE_LABEL_FONT, bold, INK_MUTED);
-      // Split the trailing unit off the magnitude so the two can be set
-      // differently. `formatGradePercent` puts the unit hard against the
-      // digits; the length formatters space it.
-      const safe = winAnsiSafe(value);
-      const cut = safe.lastIndexOf(' ');
-      const num = cut > 0 ? safe.slice(0, cut) : safe.replace(/%$/, '');
-      const suffix = cut > 0 ? safe.slice(cut + 1) : safe.endsWith('%') ? '%' : '';
-      const numW = bold.widthOfTextAtSize(num, HEADLINE_FONT);
-      page.drawText(num, { x, y: sumTop + 22, size: HEADLINE_FONT, font: bold, color: INK });
-      if (suffix !== '') {
-        page.drawText(suffix, {
-          x: x + numW + 3,
-          y: sumTop + 22,
-          size: 10,
-          font: bold,
-          color: CURVE,
-        });
-      }
-    });
-  }
+  // ── Sheet 2: technical notes ───────────────────────────────────────────
   const contributing = record == null ? 0 : record.sources.filter((s) => s.contributed).length;
-  // Reference material, not headlines. Relief, gain/loss and max grade are
-  // NOT repeated here: they are set large in the headline strip from the same
-  // formatters, and a figure printed twice on one sheet is a figure a reader
-  // has to check against itself. Length stays, because it is the domain the
-  // whole drawing is mapped over and the row a reader confirms the sheet by.
-  // Mean and max grade share one row, so the pair reads as one comparison.
-  const rows: Array<[string, string]> = [
-    ['Length (horizontal)', lenStr(len)],
-    [
-      `${heightWord} min / max`,
-      `${elevStr(stats.minElevation)}  /  ${elevStr(stats.maxElevation)}`,
-    ],
-    [
-      'Mean grade',
-      `${formatGradePercent(stats.meanGrade)}  (${formatGradeRatio(stats.meanGrade)}, ${formatGradeDegrees(stats.meanGrade)})`,
-    ],
-    [
-      'Max grade (ratio, angle)',
-      `${formatGradeRatio(stats.maxGrade)}, ${formatGradeDegrees(stats.maxGrade)}`,
-    ],
-    [
-      'Steepest section',
-      intel.steepest == null
-        ? '—'
-        : `${formatStation(intel.steepest.fromChainage, system)} -> ` +
-          `${formatStation(intel.steepest.toChainage, system)}  ` +
-          `(${formatGradePercent(intel.steepest.grade)})`,
-    ],
-    [
-      `Highest / Lowest ${heightWord.toLowerCase()}`,
-      intel.highest == null || intel.lowest == null
-        ? '—'
-        : `${formatProfileExtreme(intel.highest, system)}  /  ` +
-          `${formatProfileExtreme(intel.lowest, system)}`,
-    ],
-    ['Samples · coverage', `${stats.sampleCount}  ·  ${(stats.coverage * 100).toFixed(0)}%`],
-    [
-      'Corridor half-width',
-      input.corridorWidthM != null ? lenStr(input.corridorWidthM) : 'auto (5% of length)',
-    ],
-    [
-      'Sources read',
-      record == null
-        ? 'Not recorded'
-        : `${record.sources.length} (${contributing} contributing)`,
-    ],
-    ['Vertical reference', reference],
-    ['Horizontal CRS', input.crs ?? '— (not georeferenced)'],
-    [
-      'Vertical datum',
-      datumKnown ? (input.verticalDatum ?? '—') : DATUM_CONFLICT_MEASURE_NOTICE,
-    ],
-  ];
-  const summaryW = PAGE_W - 2 * M;
-  const colW = summaryW / 2;
-  // The label is set bold and the value regular, so each is measured in the
-  // font it will actually be drawn in. Both are measured AFTER the WinAnsi
-  // transliteration, because that is the string the page receives.
-  const measureLabel = (t: string) => bold.widthOfTextAtSize(winAnsiSafe(t), SUMMARY_FONT);
-  const measureValue = (t: string) => font.widthOfTextAtSize(winAnsiSafe(t), SUMMARY_FONT);
-  // The gutter keeps the left column's value clear of the right column's
-  // label; without it a full-width value would run into the next heading.
-  const layout = layoutSummaryRows({
-    rows: rows.map(([label, value]) => ({ label, value })),
-    measureLabel,
-    measureValue,
-    cellW: colW - 16,
-    wideW: summaryW,
-    gap: SUMMARY_GAP,
-  });
-
-  // Three statements too long for a half-width cell, and too load-bearing to
-  // abbreviate: what the drawn series is, how far the class policy reached,
-  // and what the read is entitled to claim. The page that expands them is
-  // page 2; these are the one-line forms. Any summary row whose label and
-  // value could not share a cell joins them, ahead of them, because it is a
-  // measurement and they are qualifications.
-  const wideRows: SummaryRow[] = [
-    ...layout.promoted,
-    { label: 'Derived series', value: legend.seriesLabel },
-    { label: 'Class exclusion', value: exclusionSummary(legend) },
+  // ITEM / RECORDED INFORMATION / ENGINEERING REMARK. The remark column is
+  // what makes the sheet readable by someone who did not build the export:
+  // the value alone does not say what it governs or how far it can be
+  // trusted. `limit` marks a value that states a limitation rather than a
+  // measurement, which is set bold for the same reason a measurement is.
+  const notesRows: Array<{ item: string; value: string; remark: string; limit?: boolean }> = [
     {
-      label: 'Read scope',
+      item: 'Length (horizontal)',
+      value: lenStr(len),
+      remark: 'Chainage along the alignment. Not slope distance over the terrain surface.',
+    },
+    {
+      item: `${heightWord} min / max`,
+      value: `${elevStr(stats.minElevation)}  /  ${elevStr(stats.maxElevation)}`,
+      remark: 'Extremes of the plotted surface, read against the vertical reference below.',
+    },
+    {
+      item: 'Relief',
+      value: stats.reliefSpan == null ? '—' : lenStr(stats.reliefSpan),
+      remark: 'Max minus min. Smaller than the total climb wherever the section rolls.',
+    },
+    {
+      item: 'Height gain / loss',
+      value:
+        intel.gainM == null || intel.lossM == null
+          ? '—'
+          : `+${lenStr(intel.gainM)}  /  -${lenStr(intel.lossM)}`,
+      remark: 'Summed rise and fall over every station pair. What cut and fill is sized from.',
+    },
+    {
+      item: 'Mean grade',
+      value: `${formatGradePercent(stats.meanGrade)}  (${formatGradeRatio(stats.meanGrade)}, ${formatGradeDegrees(stats.meanGrade)})`,
+      remark: 'Net grade end to end. Local grades reach the maximum below.',
+    },
+    {
+      item: 'Max grade (ratio, angle)',
+      value: `${formatGradeRatio(stats.maxGrade)}, ${formatGradeDegrees(stats.maxGrade)}`,
+      remark: 'The steepest station pair. Governs whether an alignment is buildable.',
+    },
+    {
+      item: 'Steepest section',
+      value:
+        intel.steepest == null
+          ? '—'
+          : `${formatStation(intel.steepest.fromChainage, system)} -> ` +
+            `${formatStation(intel.steepest.toChainage, system)}  ` +
+            `(${formatGradePercent(intel.steepest.grade)})`,
+      remark: 'Where that maximum was measured. Called out on the profile sheet.',
+    },
+    {
+      item: `Highest / Lowest ${heightWord.toLowerCase()}`,
+      value:
+        intel.highest == null || intel.lowest == null
+          ? '—'
+          : `${formatProfileExtreme(intel.highest, system)}  /  ` +
+            `${formatProfileExtreme(intel.lowest, system)}`,
+      remark: 'Located at a sampled station, never interpolated between two of them.',
+    },
+    {
+      item: 'Samples · coverage',
+      value: `${stats.sampleCount}  ·  ${(stats.coverage * 100).toFixed(0)}%`,
+      remark:
+        gapCount === 0
+          ? 'Every station returned. No part of the section is interpolated.'
+          : `${gapCount} station(s) had no return in the corridor and are drawn as breaks.`,
+      limit: gapCount > 0,
+    },
+    {
+      item: 'Corridor half-width',
+      value: input.corridorWidthM != null ? lenStr(input.corridorWidthM) : 'auto (5% of length)',
+      remark: 'Returns further from the line than this were not sampled into the section.',
+    },
+    {
+      item: 'Sources read',
+      value: record == null ? 'Not recorded' : `${record.sources.length} (${contributing} contributing)`,
+      remark: 'A source that contributed nothing also filtered nothing from the section.',
+      limit: record == null,
+    },
+    {
+      item: 'Vertical reference',
+      value: reference,
+      remark: heightReferenceNote(reference),
+      limit: reference === 'unknown' || reference === 'local',
+    },
+    {
+      item: 'Horizontal CRS',
+      value: input.crs ?? '— (not georeferenced)',
+      remark: 'Chainage is measured in this frame. Without one, distances are frame-local.',
+      limit: input.crs == null,
+    },
+    {
+      item: 'Vertical datum',
+      value: datumKnown ? (input.verticalDatum ?? '—') : DATUM_CONFLICT_MEASURE_NOTICE,
+      remark: 'A datum the tables do not recognise is not upgraded to a sea-level elevation.',
+      limit: !datumKnown || input.verticalDatum == null,
+    },
+    {
+      item: 'Derived series',
+      value: legend.seriesLabel,
+      remark: 'The series is never named after a terrain class the sources cannot certify.',
+    },
+    {
+      item: 'Class exclusion',
+      value: exclusionSummary(legend),
+      remark: 'Partial means the exclusion did not reach every source under the section.',
+      limit: legend.exclusionScope !== 'every-source',
+    },
+    {
+      item: 'Read scope',
       value: record == null ? 'Not recorded' : describeProfileProvenance(record),
+      remark: 'A resident snapshot may refine as more of the source streams in.',
+      limit: record == null || residentOnly,
     },
   ];
-  const wideDx = wideValueDx(wideRows, measureLabel, SUMMARY_GAP, summaryW);
-  const pairLines = Math.ceil(layout.pairs.length / 2);
-  const wideTop = sumTop - pairLines * SUMMARY_ROW_H - 4;
-  const panelBot = wideTop - (wideRows.length - 1) * SUMMARY_ROW_H - 7;
 
-  // Horizontal rules only. A box around every cell is more ink than the
-  // figures it is meant to organise; two rules and a divider group the block
-  // just as well and leave the reader's eye on the values. The top rule also
-  // closes the headline strip above it, so one line does two jobs.
-  page.drawLine({
-    start: { x: M, y: sumTop + 10 },
-    end: { x: PAGE_W - M, y: sumTop + 10 },
-    thickness: 0.6,
-    color: RULE,
-  });
-  page.drawLine({
-    start: { x: M, y: wideTop + 8 },
-    end: { x: PAGE_W - M, y: wideTop + 8 },
-    thickness: 0.5,
-    color: GRID,
-  });
-  page.drawLine({
-    start: { x: M, y: panelBot },
-    end: { x: PAGE_W - M, y: panelBot },
-    thickness: 0.6,
-    color: RULE,
-  });
+  renderTechnicalNotes(doc, f, sheets, { name: input.name, rows: notesRows });
 
-  layout.pairs.forEach((r, i) => {
-    const col = i % 2;
-    const line = Math.floor(i / 2);
-    const x = M + col * colW;
-    const y = sumTop - line * SUMMARY_ROW_H;
-    text(page, r.label, x, y, SUMMARY_FONT, bold, INK_MUTED);
-    text(page, r.value, x + layout.valueDx, y, SUMMARY_FONT, font, INK);
-  });
-  wideRows.forEach((r, i) => {
-    const y = wideTop - i * SUMMARY_ROW_H;
-    text(page, r.label, M, y, SUMMARY_FONT, bold, INK_MUTED);
-    // Nothing is wider to move to, so a value that overruns even the full
-    // width is trimmed with the trim marked rather than drawn over the margin.
-    text(
-      page,
-      clipText(r.value, font, SUMMARY_FONT, summaryW - wideDx),
-      M + wideDx,
-      y,
-      SUMMARY_FONT,
-      font,
-      INK,
-    );
-  });
-
-  // Provenance footer.
-  const prov =
-    NOT_SURVEY_GRADE_NOTE +
-    (residentOnly ? '  Sampled from streaming-resident points only — may refine as more data loads.' : '');
-  text(page, prov, M, M - 13, 7.5, font, INK_MUTED);
-
-  // ── Page 2: method and provenance ──────────────────────────────────────
-  renderProvenancePage(doc, font, bold, mono, {
+  // ── Sheet 3: method and sources ────────────────────────────────────────
+  renderMethodSheet(doc, f, sheets, {
     name: input.name,
     legend,
     record,
@@ -1071,13 +1403,134 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     residentOnly,
   });
 
-  // ── Page 3+: station table ─────────────────────────────────────────────
-  renderStationTable(doc, font, bold, mono, stats.stations, input.name, system, reference);
+  // ── Sheet 4+: the station schedule ─────────────────────────────────────
+  renderStationSchedule(doc, f, sheets, stats.stations, input.name, system, reference);
+
+  // The furniture is stamped LAST, once every page exists, so `SHEET n / m`
+  // takes its total from the page count the document actually reached.
+  const total = doc.getPageCount();
+  sheets.forEach((s, i) => drawFurniture(s.page, f, set, s.identity, i + 1, total));
 
   return doc.save();
 }
 
-interface ProvenancePageInput {
+/**
+ * The ruled KPI band under the section: the eight figures a reader takes off
+ * a profile, each in its own cell with a quiet tracked label over it.
+ *
+ * Ruled into cells rather than set as a row of headings, because a cell is
+ * what tells a reader that the label above a figure belongs to that figure
+ * and not to the one beside it. Every rule is an independent segment: a
+ * cell drawn as a rectangle would add a three-lineto run to the content
+ * stream, which is the one thing this document may not contain outside the
+ * profile itself.
+ *
+ * The unit rides in the label rather than beside the figure, so the cells
+ * read as one row of magnitudes. A band that spells the unit out beside some
+ * values and hides it in the label of others makes a reader check each cell
+ * for which convention it followed.
+ */
+function drawKpiBand(
+  p: PDFPage,
+  f: Faces,
+  top: number,
+  cells: ReadonlyArray<readonly [string, string]>,
+): void {
+  const x0 = M;
+  const x1 = PAGE_W - M;
+  const h = 56;
+  const cellW = (x1 - x0) / cells.length;
+  // The accent rule that opens the band, used here and on the section line
+  // and nowhere else on the sheet, which is what keeps it an accent.
+  rule(p, x0, top, x1, top, CURVE, 1);
+  rule(p, x0, top - h, x1, top - h, RULE, 0.6);
+  cells.forEach(([label, value], i) => {
+    const x = x0 + i * cellW;
+    if (i > 0) rule(p, x, top - h, x, top, RULE, 0.5);
+    trackedText(p, label, x + 8, top - 16, T_KPI_LABEL, f.font, INK_MUTED);
+    put(p, clipText(value, f.bold, T_KPI_VALUE, cellW - 16), x + 8, top - 44, T_KPI_VALUE, f.bold, INK);
+  });
+}
+
+interface CalloutInput {
+  readonly steepest: ReturnType<typeof computeProfileSummary>['steepest'];
+  readonly stations: ReturnType<typeof computeCivilProfileStats>['stations'];
+  readonly mapX: (chainage: number) => number;
+  readonly mapYdown: (elevation: number) => number;
+  readonly plotTopY: number;
+  readonly plotBotY: number;
+  readonly plotLeft: number;
+  readonly plotRight: number;
+  readonly system: UnitSystem;
+}
+
+/**
+ * The maximum grade, marked on the drawing with a leader.
+ *
+ * A grade is the one quantity on a section that a reader cannot recover by
+ * eye: on a sheet with a stated vertical exaggeration the steepest place does
+ * not even look steepest by the ratio it is. Naming it in a table leaves the
+ * reader to find it on the drawing; a leader puts the figure where it
+ * happens.
+ *
+ * The leader is a diagonal and a horizontal shoulder, each an independent
+ * stroke, and the marker at the point is a cross of two more. Nothing here
+ * closes a path.
+ *
+ * The label flips to whichever side of the point has room, so a maximum near
+ * the right edge of the plot does not print over the frame.
+ */
+function drawMaxGradeCallout(p: PDFPage, f: Faces, input: CalloutInput): void {
+  const s = input.steepest;
+  if (s == null) return;
+  const from = input.stations.find((st) => st.chainage === s.fromChainage);
+  const to = input.stations.find((st) => st.chainage === s.toChainage);
+  if (from?.elevation == null || to?.elevation == null) return;
+
+  const midChainage = (s.fromChainage + s.toChainage) / 2;
+  const midElevation = (from.elevation + to.elevation) / 2;
+  const px = input.mapX(midChainage);
+  const py = input.plotTopY - input.mapYdown(midElevation);
+
+  const line1 = `MAX GRADE ${formatGradePercent(s.grade)}`;
+  const line2 =
+    `STA. ${formatStation(s.fromChainage, input.system)} TO ` +
+    `${formatStation(s.toChainage, input.system)}`;
+  const labelW = Math.max(
+    f.bold.widthOfTextAtSize(winAnsiSafe(line1), T_CALLOUT),
+    f.font.widthOfTextAtSize(winAnsiSafe(line2), T_CALLOUT_SUB),
+  );
+
+  // Out to the side with room, and up unless the point is already near the
+  // top of the frame.
+  const sx = px + 32 + labelW + 8 <= input.plotRight ? 1 : -1;
+  const sy = py + 46 <= input.plotTopY ? 1 : -1;
+  const elbowX = px + sx * 32;
+  const elbowY = py + sy * 34;
+  const textX = sx > 0 ? elbowX + 4 : elbowX - labelW - 4;
+
+  // A cross at the point, then the leader out to the shoulder the label sits
+  // on. Four independent strokes.
+  rule(p, px - 3, py, px + 3, py, INK, 0.8);
+  rule(p, px, py - 3, px, py + 3, INK, 0.8);
+  rule(p, px, py, elbowX, elbowY, INK, 0.7);
+  rule(p, elbowX, elbowY, sx > 0 ? textX + labelW : textX, elbowY, INK, 0.7);
+
+  put(p, line1, textX, elbowY + 16, T_CALLOUT, f.bold, INK);
+  put(p, line2, textX, elbowY + 5, T_CALLOUT_SUB, f.font, INK_DIM);
+}
+
+interface TechnicalNotesInput {
+  readonly name: string;
+  readonly rows: ReadonlyArray<{
+    item: string;
+    value: string;
+    remark: string;
+    limit?: boolean;
+  }>;
+}
+
+interface MethodSheetInput {
   readonly name: string;
   readonly legend: DerivedSurfaceLegend;
   readonly record: ProfileProvenance | null;
@@ -1089,83 +1542,153 @@ interface ProvenancePageInput {
 }
 
 /**
- * The page a reader of an exported file needs and cannot reconstruct: what
- * the drawn series is, which sources it was read from, and what the read is
- * entitled to claim.
+ * Sheet 2: what was recorded, what it says, and how to read it.
  *
- * Every sentence about the series is the legend's own. The source table is
- * keyed on the stable layer id, because a display name is user-editable and
- * so is human context rather than identity.
+ * The three-column table is the whole sheet. A two-column list of label and
+ * value is only readable by whoever built the export: it states that coverage
+ * is 96% without saying that the missing 4% is drawn as breaks in the line on
+ * the sheet before. The remark column carries that, in the same plain
+ * register as the rest of the drawing, and never adds a claim the value does
+ * not support.
  */
-function renderProvenancePage(
+function renderTechnicalNotes(
   doc: PDFDocument,
-  font: PDFFont,
-  bold: PDFFont,
-  mono: PDFFont,
-  input: ProvenancePageInput,
+  f: Faces,
+  sheets: EmittedSheet[],
+  input: TechnicalNotesInput,
 ): void {
-  const bottom = M + 16;
   const usableW = PAGE_W - 2 * M;
-  // Prose wraps to a shorter measure than the source table needs. A line of
-  // 8.5pt Helvetica across the full landscape width runs to about 140
-  // characters, which is roughly twice a comfortable measure, and the reader
-  // loses the start of the next line. The table keeps the full width because
-  // its columns are what set it.
-  const proseW = Math.round(usableW * 0.72);
-  let page = doc.addPage([PAGE_W, PAGE_H]);
-  drawSheetBorder(page);
-  let y = PAGE_H - M - 4;
+  const COL_ITEM = 250;
+  const COL_VALUE = 350;
+  const COL_REMARK = usableW - COL_ITEM - COL_VALUE - 32;
+  const xItem = M;
+  const xValue = M + COL_ITEM + 16;
+  const xRemark = xValue + COL_VALUE + 16;
 
-  const put = (s: string, x: number, yy: number, size: number, f: PDFFont, color = INK) =>
-    page.drawText(winAnsiSafe(s), { x, y: yy, size, font: f, color });
+  let page = doc.addPage([PAGE_W, PAGE_H]);
+  let continued = false;
+  const identity = (): SheetIdentity => ({
+    sheetName: 'TECHNICAL NOTES',
+    descriptor: continued
+      ? 'Recorded information and how to read it (continued).'
+      : 'Recorded information, its value, and the engineering remark that qualifies it.',
+  });
+  sheets.push({ page, identity: identity() });
+  let y = drawSheetHeader(page, f, 'Technical notes', input.name, '', null) - 22;
 
   const newPage = () => {
+    continued = true;
     page = doc.addPage([PAGE_W, PAGE_H]);
-    drawSheetBorder(page);
-    y = PAGE_H - M - 4;
-    put('Method and provenance (continued)', M, y - 4, 13, bold);
-    y -= 24;
-  };
-  const need = (h: number) => {
-    if (y - h < bottom) newPage();
-  };
-  // Section headings on the provenance page: tracked small caps in the
-  // dominant ink, over an accent hairline. Small, but unmistakably a heading,
-  // which is what the run of same-size paragraphs underneath needs.
-  const heading = (s: string) => {
-    need(30);
-    y -= 12;
-    trackedText(page, s.toUpperCase(), M, y, 7.5, bold, INK);
-    page.drawLine({
-      start: { x: M, y: y - 4 },
-      end: { x: M + usableW, y: y - 4 },
-      thickness: 0.7,
-      color: CURVE,
-    });
-    y -= 15;
-  };
-  const para = (s: string, size = 8.5, color = INK) => {
-    for (const line of wrapText(s, font, size, proseW)) {
-      need(13);
-      put(line, M, y, size, font, color);
-      y -= 11.5;
-    }
-    y -= 2.5;
+    sheets.push({ page, identity: identity() });
+    y = drawSheetHeader(page, f, 'Technical notes (continued)', input.name, '', null) - 22;
   };
 
-  put('Method and provenance', M, y - 4, 18, bold);
-  y -= 21;
-  put(input.name, M, y, 10, font, INK_MUTED);
-  y -= 16;
+  const tableHead = () => {
+    trackedText(page, 'ITEM', xItem, y, T_TABLE_HEAD, f.bold, INK, 0.8);
+    trackedText(page, 'RECORDED INFORMATION', xValue, y, T_TABLE_HEAD, f.bold, INK, 0.8);
+    trackedText(page, 'ENGINEERING REMARK', xRemark, y, T_TABLE_HEAD, f.bold, INK, 0.8);
+    rule(page, M, y - 5, M + usableW, y - 5, INK, 0.7);
+    y -= 18;
+  };
+  tableHead();
+  for (const row of input.rows) {
+    // A value that states a limitation is set bold for the same reason a
+    // measurement is: it is the thing on the row a reader must not miss.
+    const valueFace = row.limit === true ? f.bold : f.font;
+    const valueLines = wrapText(row.value, valueFace, T_TABLE, COL_VALUE);
+    const remarkLines = wrapText(row.remark, f.font, T_REMARK, COL_REMARK);
+    const lines = Math.max(1, valueLines.length, remarkLines.length);
+    if (y - (lines * 12 + 7) < CONTENT_BOT) {
+      newPage();
+      tableHead();
+    }
+    put(page, clipText(row.item, f.font, T_TABLE, COL_ITEM), xItem, y, T_TABLE, f.font, INK_SOFT);
+    valueLines.forEach((line, i) => {
+      put(page, line, xValue, y - i * 12, T_TABLE, valueFace, INK);
+    });
+    remarkLines.forEach((line, i) => {
+      put(page, line, xRemark, y - i * 12, T_REMARK, f.font, INK_SOFT);
+    });
+    y -= lines * 12 + 3;
+    rule(page, M, y + 1, M + usableW, y + 1, GRID, 0.4);
+    y -= 4;
+  }
+}
+
+/**
+ * The method sheet: what the drawn series is, what the heights are measured
+ * from, which sources were read, and what the read is entitled to claim.
+ *
+ * Its own sheet rather than the tail of the notes table, because the two
+ * answer different questions and a page break that lands wherever the table
+ * happened to end leaves a reader holding half of one answer. Every sentence
+ * about the series is the legend's own. The source table is keyed on the
+ * stable layer id, because a display name is user-editable and so is human
+ * context rather than identity.
+ */
+function renderMethodSheet(
+  doc: PDFDocument,
+  f: Faces,
+  sheets: EmittedSheet[],
+  input: MethodSheetInput,
+): void {
+  const usableW = PAGE_W - 2 * M;
+  // Prose wraps to a shorter measure than the source table needs. A line of
+  // 9pt Helvetica across the full A3 width runs to about 200 characters,
+  // which is nearly three times a comfortable measure, and the reader loses
+  // the start of the next line. The table keeps the full width because its
+  // columns are what set it.
+  const proseW = Math.round(usableW * 0.6);
+
+  let page = doc.addPage([PAGE_W, PAGE_H]);
+  let continued = false;
+  const identity = (): SheetIdentity => ({
+    sheetName: 'METHOD AND SOURCES',
+    descriptor: continued
+      ? 'How the section was derived and what was read (continued).'
+      : 'How the section was derived, what the heights are measured from, and what was read.',
+  });
+  sheets.push({ page, identity: identity() });
+  let y =
+    drawSheetHeader(page, f, 'Method and sources', input.name, '', null) - 22;
+
+  const newPage = () => {
+    continued = true;
+    page = doc.addPage([PAGE_W, PAGE_H]);
+    sheets.push({ page, identity: identity() });
+    y = drawSheetHeader(page, f, 'Method and sources (continued)', input.name, '', null) - 22;
+  };
+  const need = (h: number) => {
+    if (y - h < CONTENT_BOT) newPage();
+  };
+
+  // Section headings: tracked small caps in the dominant ink, over an accent
+  // hairline. Small, but unmistakably a heading, which is what the run of
+  // same-size paragraphs underneath needs.
+  const heading = (s: string) => {
+    need(36);
+    y -= 14;
+    trackedText(page, s.toUpperCase(), M, y, T_SECTION, f.bold, INK);
+    rule(page, M, y - 5, M + usableW, y - 5, CURVE, 0.7);
+    y -= 17;
+  };
+  const para = (s: string, size = T_PARA, color = INK) => {
+    for (const line of wrapText(s, f.font, size, proseW)) {
+      need(14);
+      put(page, line, M, y, size, f.font, color);
+      y -= 12;
+    }
+    y -= 3;
+  };
 
   heading('Derived series');
   for (const line of input.legend.lines) para(line);
 
   heading('Height reference');
   para(`${heightLabel(input.reference)}. ${heightReferenceNote(input.reference)}`);
-  para(`Vertical datum: ${input.verticalDatum ?? 'not declared'}`, 8.5, INK_DIM);
-  para(`Horizontal CRS: ${input.crs ?? 'not georeferenced'}`, 8.5, INK_DIM);
-  if (!input.datumKnown) para(DATUM_CONFLICT_MEASURE_NOTICE, 8.5, INK_DIM);
+  para(`Vertical datum: ${input.verticalDatum ?? 'not declared'}`, T_PARA, INK_SOFT);
+  para(`Horizontal CRS: ${input.crs ?? 'not georeferenced'}`, T_PARA, INK_SOFT);
+  if (!input.datumKnown) para(DATUM_CONFLICT_MEASURE_NOTICE, T_PARA, INK_SOFT);
 
   heading('Sources read');
   if (input.record == null) {
@@ -1175,28 +1698,23 @@ function renderProvenancePage(
     );
   } else {
     const cols: Array<{ head: string; x: number; w: number }> = [
-      { head: 'LAYER ID', x: M, w: 128 },
-      { head: 'NAME', x: M + 132, w: 128 },
-      { head: 'CLASSIFICATION', x: M + 264, w: 90 },
-      { head: 'READ', x: M + 358, w: 72 },
-      { head: 'ACCEPTED', x: M + 434, w: 70 },
-      { head: 'CONTRIBUTED', x: M + 508, w: 78 },
-      { head: 'RESIDENCY', x: M + 590, w: 82 },
+      { head: 'LAYER ID', x: M, w: 190 },
+      { head: 'NAME', x: M + 200, w: 190 },
+      { head: 'CLASSIFICATION', x: M + 400, w: 120 },
+      { head: 'READ', x: M + 530, w: 90 },
+      { head: 'ACCEPTED', x: M + 630, w: 90 },
+      { head: 'CONTRIBUTED', x: M + 730, w: 100 },
+      { head: 'RESIDENCY', x: M + 840, w: 100 },
     ];
     const drawHead = () => {
-      need(22);
-      for (const c of cols) trackedText(page, c.head, c.x, y, 7, bold, INK_MUTED, 0.6);
-      page.drawLine({
-        start: { x: M, y: y - 3 },
-        end: { x: M + usableW, y: y - 3 },
-        thickness: 0.5,
-        color: GRID,
-      });
-      y -= 13;
+      need(28);
+      for (const c of cols) trackedText(page, c.head, c.x, y, T_TABLE_HEAD, f.bold, INK, 0.8);
+      rule(page, M, y - 5, M + usableW, y - 5, INK, 0.6);
+      y -= 16;
     };
     drawHead();
     for (const s of input.record.sources) {
-      if (y - 11 < bottom) {
+      if (y - 13 < CONTENT_BOT) {
         newPage();
         drawHead();
       }
@@ -1217,12 +1735,12 @@ function renderProvenancePage(
       ];
       cells.forEach((cell, i) => {
         const c = cols[i];
-        put(clipText(cell, mono, 7.5, c.w), c.x, y, 7.5, mono, INK);
+        put(page, clipText(cell, f.mono, T_SOURCE, c.w), c.x, y, T_SOURCE, f.mono, INK);
       });
-      y -= 11;
+      y -= 13;
     }
-    y -= 4;
-    para(`Total accepted returns: ${String(input.record.acceptedCount)}.`, 8.5, INK_DIM);
+    y -= 5;
+    para(`Total accepted returns: ${String(input.record.acceptedCount)}.`, T_PARA, INK_SOFT);
 
     heading('Read scope');
     para(describeProfileProvenance(input.record));
@@ -1230,15 +1748,15 @@ function renderProvenancePage(
       `Method ${input.record.method}, corridor definition version ` +
         `${String(input.record.corridorVersion)}, record version ` +
         `${String(input.record.recordVersion)}, captured ${input.record.capturedAt}.`,
-      8.5,
-      INK_DIM,
+      T_PARA,
+      INK_SOFT,
     );
     if (input.record.upDegenerate) {
       para(
         'The scene up axis was degenerate when this sample was taken, so the heights ' +
           'were not measured along a usable vertical.',
-        8.5,
-        INK_DIM,
+        T_PARA,
+        INK_SOFT,
       );
     }
   }
@@ -1246,87 +1764,108 @@ function renderProvenancePage(
   if (input.residentOnly) {
     para(
       'Sampled from streaming-resident points only - may refine as more data loads.',
-      8.5,
-      INK_DIM,
+      T_PARA,
+      INK_SOFT,
     );
-  }
-
-  need(20);
-  y -= 6;
-  for (const line of wrapText(NOT_SURVEY_GRADE_NOTE, font, 7.5, proseW)) {
-    need(11);
-    put(line, M, y, 7.5, font, INK_MUTED);
-    y -= 10;
   }
 }
 
-/** Lay out the station/height/grade table across as many pages as needed. */
-function renderStationTable(
+/**
+ * The station schedule, in four column groups across the page.
+ *
+ * Four groups because a schedule read down a single column wastes an A3 sheet
+ * and spills to pages a reader then has to hold side by side. Set in Courier
+ * so a chainage, a height and a grade line up digit under digit down each
+ * group whatever their magnitude.
+ *
+ * A station with no return prints `gap` in the gap colour. The word is the
+ * answer and the colour is the fast path to it, which is why the schedule
+ * still works printed mono. The legend under the table says what a gap and a
+ * dash mean, because a reader who joined at this sheet has not read the rest.
+ */
+function renderStationSchedule(
   doc: PDFDocument,
-  font: PDFFont,
-  bold: PDFFont,
-  mono: PDFFont,
+  f: Faces,
+  sheets: EmittedSheet[],
   stations: ReturnType<typeof computeCivilProfileStats>['stations'],
   name: string,
   system: UnitSystem,
   reference: VerticalReference,
 ): void {
-  // B9: the table prints in the display unit; geometry stays metres.
+  // B9: the schedule prints in the display unit; geometry stays metres.
   const k = system === 'metric' ? 1 : FEET_PER_METRE;
   const unit = system === 'metric' ? 'm' : 'ft';
   const colCount = 4;
-  const colGap = 14;
+  const colGap = 22;
   const usableW = PAGE_W - 2 * M;
   const colW = (usableW - colGap * (colCount - 1)) / colCount;
-  const rowH = 12;
-  const topY = PAGE_H - M - 48;
-  const bottomY = M + 14;
-  const rowsPerCol = Math.floor((topY - bottomY) / rowH) - 1; // minus header
+  const rowH = 14;
+  const legendTop = CONTENT_BOT + 28;
+  const bottomY = legendTop + 16;
 
   const fmtGrade = (g: number | null) => (g == null ? '—' : `${(g * 100).toFixed(2)}%`);
   const fmtEl = (e: number | null) => (e == null ? 'gap' : (e * k).toFixed(2));
   const columnHead = heightColumnHead(reference);
 
   let idx = 0;
+  let continued = false;
   while (idx < stations.length) {
     const page = doc.addPage([PAGE_W, PAGE_H]);
-    drawSheetBorder(page);
-    const put = (s: string, x: number, y: number, size: number, f: PDFFont, color = INK) =>
-      page.drawText(winAnsiSafe(s), { x, y, size, font: f, color });
-    put('Station table', M, PAGE_H - M - 8, 18, bold);
-    put(
-      `${name} - STA, ${heightLabel(reference)} (${unit}), grade to next`,
-      M,
-      PAGE_H - M - 25,
-      9,
-      font,
-      INK_MUTED,
-    );
-    page.drawLine({
-      start: { x: M, y: PAGE_H - M - 36 },
-      end: { x: PAGE_W - M, y: PAGE_H - M - 36 },
-      thickness: 0.6,
-      color: RULE,
+    sheets.push({
+      page,
+      identity: {
+        sheetName: 'STATION SCHEDULE',
+        descriptor: continued
+          ? 'Chainage, height and grade per sampled station (continued).'
+          : 'Chainage, height and grade at every sampled station, in draw order.',
+      },
     });
+    continued = true;
+    const topY =
+      drawSheetHeader(
+        page,
+        f,
+        'Station schedule',
+        `${name} - STA, ${heightLabel(reference)} (${unit}), grade to next`,
+        '',
+        null,
+      ) - 22;
+    const rowsPerCol = Math.max(1, Math.floor((topY - bottomY) / rowH) - 1);
 
     for (let col = 0; col < colCount && idx < stations.length; col++) {
       const x = M + col * (colW + colGap);
-      trackedText(page, 'STA', x, topY, 7, bold, INK_MUTED, 0.6);
-      trackedText(page, columnHead, x + 78, topY, 7, bold, INK_MUTED, 0.6);
-      trackedText(page, 'GRADE', x + 122, topY, 7, bold, INK_MUTED, 0.6);
-      page.drawLine({
-        start: { x, y: topY - 3 },
-        end: { x: x + colW, y: topY - 3 },
-        thickness: 0.5,
-        color: GRID,
-      });
+      trackedText(page, 'STA', x, topY, T_TABLE_HEAD, f.bold, INK, 0.8);
+      trackedText(page, `${columnHead} (${unit})`, x + 108, topY, T_TABLE_HEAD, f.bold, INK, 0.8);
+      trackedText(page, 'GRADE', x + 200, topY, T_TABLE_HEAD, f.bold, INK, 0.8);
+      rule(page, x, topY - 5, x + colW, topY - 5, INK, 0.7);
       for (let r = 0; r < rowsPerCol && idx < stations.length; r++, idx++) {
         const st = stations[idx];
-        const y = topY - 12 - r * rowH;
-        put(formatStation(st.chainage, system), x, y, 7.5, mono, INK);
-        put(fmtEl(st.elevation), x + 78, y, 7.5, mono, INK);
-        put(fmtGrade(st.gradeToNext), x + 122, y, 7.5, mono, INK_DIM);
+        const y = topY - 16 - r * rowH;
+        const height = fmtEl(st.elevation);
+        put(page, formatStation(st.chainage, system), x, y, T_SCHED, f.mono, INK);
+        put(page, height, x + 108, y, T_SCHED, f.mono, height === 'gap' ? GAP_MARK : INK);
+        put(page, fmtGrade(st.gradeToNext), x + 200, y, T_SCHED, f.mono, INK_SOFT);
       }
     }
+
+    rule(page, M, legendTop + 12, M + usableW, legendTop + 12, RULE, 0.5);
+    put(
+      page,
+      'GAP = NO RETURN AT STATION. DASH = GRADE NOT AVAILABLE.',
+      M,
+      legendTop,
+      T_CAPTION,
+      f.font,
+      INK,
+    );
+    put(
+      page,
+      'GRADE = SLOPE FROM CURRENT STATION TO NEXT STATION',
+      M,
+      legendTop - 12,
+      T_CAPTION,
+      f.font,
+      INK_DIM,
+    );
   }
 }
