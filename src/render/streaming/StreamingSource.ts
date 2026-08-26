@@ -24,6 +24,7 @@
 import type { Box6, StreamingNodeRecord } from '../../io/copc/copcTypes';
 import type { SpatialFrame } from '../../geo/frame/spatialFrame';
 import type { ChunkDecodeMetadata } from '../../io/copc/copcChunkDecode';
+import type { PntsDecodeMetadata } from '../../io/tiles3d/pntsDecode';
 import type { StreamingNode } from './StreamingNode';
 import type { NodeCounts, StreamingNodeStore } from './StreamingNodeStore';
 
@@ -71,8 +72,19 @@ export interface StreamingOctreeView {
   readonly errors: readonly string[];
 }
 
+/**
+ * What a decoder is handed alongside a node's bytes.
+ *
+ * The scheduler never reads a field of this: it obtains it from the source and
+ * passes it to the decoder the source was built with. So the union only has to
+ * be wide enough for every body a source can serve. LAS metadata carries no
+ * `format` field, which is what lets a decoder narrow with an `in` check
+ * without a single existing metadata site changing.
+ */
+export type NodeDecodeMetadata = ChunkDecodeMetadata | PntsDecodeMetadata;
+
 /** The on-disk format a streaming source is backed by. */
-export type StreamingSourceKind = 'copc' | 'ept' | 'tiles';
+export type StreamingSourceKind = 'copc' | 'ept' | 'tiles' | '3dtiles';
 
 /**
  * The name to show a user for a source kind. Kept beside the union so a new
@@ -86,6 +98,8 @@ export function streamingSourceLabel(kind: StreamingSourceKind): string {
       return 'EPT (Entwine Point Tile)';
     case 'tiles':
       return 'OLV tile store (out-of-core index)';
+    case '3dtiles':
+      return '3D Tiles (point tiles)';
     case 'copc':
       return 'COPC (Cloud Optimized Point Cloud)';
   }
@@ -101,6 +115,8 @@ export function streamingFormatToken(kind: StreamingSourceKind): string {
       return 'EPT';
     case 'tiles':
       return 'OLV tiles';
+    case '3dtiles':
+      return '3D Tiles';
     case 'copc':
       return 'COPC';
   }
@@ -226,7 +242,7 @@ export interface StreamingSource {
    * etc. The scheduler hands this to the {@link ChunkDecoder} along with
    * the chunk bytes, and the worker uses it to produce a {@link DecodedChunk}.
    */
-  decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata;
+  decodeMeta(record: StreamingNodeRecord): NodeDecodeMetadata;
   /**
    * Record the RGB bit-depth decision the first decoded chunk made, so the
    * source can hand it back through {@link ChunkDecodeMetadata.rgbEightBit} and

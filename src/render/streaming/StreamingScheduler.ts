@@ -20,6 +20,7 @@ import {
 } from './streamingHierarchy';
 import { GpuUploadQueue } from '../gpuUploadQueue';
 import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
+import type { NodeDecodeMetadata } from './StreamingSource';
 import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
 import {
@@ -432,7 +433,7 @@ export function decodedChunkBytes(decoded: DecodedChunk): number {
  */
 export class StreamingScheduler {
   private readonly _cloud: StreamingSource;
-  private readonly _decoder: ChunkDecoder;
+  private readonly _decoder: ChunkDecoder<NodeDecodeMetadata>;
   private readonly _callbacks: SchedulerCallbacks;
   private readonly _localBounds = new Map<string, Box6>();
   /** The cloud's render origin, captured once for lazy bounds computation. */
@@ -556,7 +557,7 @@ export class StreamingScheduler {
 
   constructor(
     cloud: StreamingSource,
-    decoder: ChunkDecoder,
+    decoder: ChunkDecoder<NodeDecodeMetadata>,
     callbacks: SchedulerCallbacks,
     budgets: StreamingBudgets,
     options: SchedulerOptions = {},
