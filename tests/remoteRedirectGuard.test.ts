@@ -73,6 +73,7 @@ describe('runtime remote reads refuse redirects (SSRF hardening)', () => {
     } as unknown as Awaited<ReturnType<OpenStreamingDeps['loadEpt']>>;
     const deps = {
       isLoading: () => false, setLoading: () => {}, prewarmForUrl: () => {},
+      streamingPanel: { setSourceUrl: () => {}, setPhase: () => {}, show: () => {} },
       loadEpt: async () => eptMod, viewerReady: Promise.resolve(), getViewer: () => ({}) as never,
       debug: false, showToast: () => {}, closeStreaming: () => {},
       dropZone: { setError: () => {}, setOpening: () => {}, setCancelHandler: () => {}, setProgress: () => {} },

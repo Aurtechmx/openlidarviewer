@@ -13,6 +13,7 @@ import { buildCuratedDemoSample, DEMO_SAMPLE_ID } from '../src/ui/CatalogPanel';
 import {
   CURATED_LICENSE_IDS,
   CURATED_LOCATIONS,
+  curatedCreditFor,
   curatedSizeBytes,
   curatedUsageCategory,
   getCuratedLocation,
@@ -284,5 +285,42 @@ describe('the demo sample is built from its record', () => {
     expect(sample.detail).toContain(loc.displayName);
     expect(sample.detail).toContain(loc.mirrorProvider);
     expect(sample.url).toBe(loc.streamUrl);
+  });
+});
+
+describe('crediting a streamed source', () => {
+  it('every record names who to credit', () => {
+    for (const loc of CURATED_LOCATIONS) {
+      expect(loc.attribution.trim(), `${loc.id} records no attribution`).not.toBe('');
+    }
+  });
+
+  it('resolves the credit from the URL being streamed', () => {
+    const loc = getCuratedLocation('flai-ch-swisssurface3d-2022')!;
+    const credit = curatedCreditFor(loc.streamUrl);
+    expect(credit?.attribution).toBe('© swisstopo');
+    expect(credit?.licenseId).toBe('swisstopo-free-geodata');
+    expect(credit?.licenseUrl).toContain('swisstopo.admin.ch');
+  });
+
+  it('credits nothing for a URL this catalog does not serve', () => {
+    expect(curatedCreditFor('https://example.invalid/a.copc.laz')).toBeUndefined();
+  });
+
+  it('can credit the one-click demo', () => {
+    const loc = getCuratedLocation(DEMO_SAMPLE_ID)!;
+    expect(
+      curatedCreditFor(loc.streamUrl),
+      'the demo streams a source the credit line cannot name',
+    ).toBeDefined();
+  });
+
+  it('both streaming open paths tell the panel what is playing', () => {
+    const src = readFileSync(resolve(REPO_ROOT, 'src/app/openStreaming.ts'), 'utf8');
+    const calls = src.match(/setSourceUrl\(/g) ?? [];
+    expect(
+      calls.length,
+      'the COPC and EPT opens each need to set the source, or one of them streams uncredited',
+    ).toBe(2);
   });
 });

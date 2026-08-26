@@ -412,3 +412,19 @@ export function curatedSizeBytes(loc: CuratedLocation): number | undefined {
   const scale = m[2] === 'GB' ? 1_000_000_000 : 1_000_000;
   return Math.round(Number(m[1]) * scale);
 }
+
+/**
+ * The credit line a curated source requires, for a URL being streamed.
+ *
+ * Several of these licences make crediting the source a condition of use,
+ * so the attribution has to reach the screen while the data is on it. A
+ * record whose licence this tree does not know still returns its
+ * attribution: naming the publisher is right regardless.
+ */
+export function curatedCreditFor(
+  url: string,
+): { attribution: string; licenseId: CuratedLicenseId; licenseUrl: string } | undefined {
+  const loc = CURATED_LOCATIONS.find((l) => l.streamUrl === url);
+  if (!loc) return undefined;
+  return { attribution: loc.attribution, licenseId: loc.licenseId, licenseUrl: loc.licenseUrl };
+}

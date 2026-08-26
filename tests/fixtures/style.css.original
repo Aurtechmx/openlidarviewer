@@ -1753,6 +1753,11 @@ body.olv-theme-light .olv-empty::before {
 }
 .olv-streaming-title { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
 .olv-streaming-phase { font-size: var(--text-xs); color: var(--accent); margin: var(--space-xs) 0 var(--space-md); }
+/* Publisher credit for a streamed curated source. Quiet, but present for as
+   long as the data is: several of these licences require the attribution. */
+.olv-streaming-credit { font-size: var(--text-xs); color: var(--muted); margin-top: var(--space-md); padding-top: var(--space-sm); border-top: 1px solid var(--rule); }
+.olv-streaming-credit a { color: var(--muted); }
+.olv-streaming-credit a:hover { color: var(--fg); }
 /*
  * Determinate streaming-progress treatment (v0.4.7). A thin brand-gradient bar
  * (resident/known node fraction) over a faint track, with a tabular nodes/pts

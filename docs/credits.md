@@ -28,13 +28,13 @@ to each dataset's own licence.
 
 | Field | Value |
 | --- | --- |
-| Object | `data/SI/GURS/CLSS_2023/copc/GKOT_433_100.copc.laz` |
+| Object | `data/CH/Swiss_federal_authorities/swisssurface3d_2022/copc/2485_1109.copc.laz` |
 | Bucket | `open-lidar-data` (eu-central-1), FLAI Open LiDAR Data |
-| Dataset | Slovenia GURS CLSS 2023 |
-| Original publisher | GURS (Surveying and Mapping Authority of the Republic of Slovenia) |
-| Terms | CC BY 4.0, © GURS |
-| Approx. size | 202 MB (streamed progressively — the viewer fetches only the resident set) |
-| Record verified | 2026-05-29, the `verifiedAt` its catalog record carries. No range-request check against this object is recorded in this repository. |
+| Dataset | swissSURFACE3D (2022) |
+| Original publisher | swisstopo (Swiss Federal Office of Topography) |
+| Terms | [swisstopo free geodata terms](https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices), © swisstopo |
+| Approx. size | 83.8 MB (streamed progressively — the viewer fetches only the resident set) |
+| Transport verified | HTTP 206 partial content, `Accept-Ranges: bytes`, `Access-Control-Allow-Origin: *` (checked 2026-07-19) |
 
 Nothing is uploaded: the object is fetched by range request straight into the
 browser, and the same consent gate that covers any remote scan applies before the

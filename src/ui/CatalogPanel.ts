@@ -61,12 +61,12 @@ import { loadPlanetaryComputerCatalog } from '../lazyChunks';
 /**
  * The curated entry the start screen promotes as its one-click demo.
  *
- * It must be a record whose licence the tree actually records. The Swiss
- * tile held this slot while its licence was only ever written down as
- * "Swiss OGD", which names a family of terms rather than an instrument.
- * It stays in the catalog with that licence marked unrecorded.
+ * It must be a record whose licence the tree actually records, which a
+ * test enforces. Everything the button shows is derived from that record
+ * rather than restated here, so the size the cellular-data gate checks
+ * cannot drift from the object being fetched.
  */
-export const DEMO_SAMPLE_ID = 'flai-si-clss-2023';
+export const DEMO_SAMPLE_ID = 'flai-ch-swisssurface3d-2022';
 
 /**
  * The "Try a sample scan" dataset, built from its catalog record.
