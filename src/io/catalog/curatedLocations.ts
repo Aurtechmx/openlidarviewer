@@ -54,7 +54,21 @@ export type CuratedFormat = 'copc' | 'ept';
  * licence, and cannot be checked. `unknown` is the honest value whenever
  * this tree records no identifiable licence for the dataset.
  */
-export const CURATED_LICENSE_IDS = ['CC-BY-4.0', 'public-domain', 'unknown'] as const;
+/**
+ * Closed vocabulary of licence identities.
+ *
+ * `swisstopo-free-geodata` is not an SPDX id because the instrument has
+ * none: swisstopo publishes its own terms under the Federal Act on
+ * Geoinformation rather than adopting a Creative Commons licence. It is
+ * named here rather than mapped onto CC-BY, which it resembles but is
+ * not.
+ */
+export const CURATED_LICENSE_IDS = [
+  'CC-BY-4.0',
+  'public-domain',
+  'swisstopo-free-geodata',
+  'unknown',
+] as const;
 export type CuratedLicenseId = (typeof CURATED_LICENSE_IDS)[number];
 
 /** Sentinel for a field this tree records no value for. */
@@ -154,7 +168,7 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
     id: 'flai-ch-swisssurface3d-2022',
     label: 'Switzerland — swisssurface3D (2022)',
     sizeLabel: '83.8 MB',
-    hint: 'FLAI Open LiDAR Data · © swisstopo · see swisstopo for the licence terms.',
+    hint: 'FLAI Open LiDAR Data · swissSURFACE3D · © swisstopo, free geodata terms.',
     bbox: [6.10, 46.20, 6.15, 46.25],
     displayName: 'swisssurface3D 2022',
     streamUrl:
@@ -164,12 +178,12 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
     nativeEpsg: 2056,
     publisher: 'swisstopo (Swiss Federal Office of Topography)',
     mirrorProvider: 'FLAI Open LiDAR Data',
-    // The credits page records the terms as "Swiss OGD" and sends the
-    // reader to swisstopo for the licence itself. That names a family of
-    // terms, not an instrument, so no licence identity is recorded here
-    // and none is guessed from it.
-    licenseId: 'unknown',
-    licenseUrl: 'unknown',
+    // swisstopo's own terms for free geodata and geoservices. Not a
+    // Creative Commons licence and it carries no SPDX id, so it is named
+    // on its own terms. Use, redistribution and commercial use are
+    // permitted where the source is credited.
+    licenseId: 'swisstopo-free-geodata',
+    licenseUrl: 'https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices',
     attribution: '© swisstopo',
     provenanceUrl: 'public/credits.html',
     verifiedAt: '2026-07-19',

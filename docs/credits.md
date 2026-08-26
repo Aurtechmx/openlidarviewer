@@ -12,7 +12,7 @@ email **info@aurtech.mx** and we'll act on it.
 | Dataset | Provider | Terms |
 | --- | --- | --- |
 | SF Coast · Los Angeles · Denver · Golden Gate · Grand Canyon NP · San Francisco · Denver Metro (DRCOG) | **USGS 3DEP** | Public domain |
-| Switzerland — swisssurface3D (2022) | **swisstopo**, via FLAI | Swiss OGD — © swisstopo; licence instrument not recorded |
+| Switzerland — swisssurface3D (2022) | **swisstopo**, via FLAI | [swisstopo free geodata terms](https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices), © swisstopo |
 | Slovenia — GURS CLSS (2023) | **GURS**, via FLAI | CC BY 4.0 (© GURS) |
 
 USGS 3DEP streams from the AWS Registry of Open Data bucket and asks for the
