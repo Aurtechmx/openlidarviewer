@@ -678,12 +678,17 @@ export class NavBar {
     // are visible by default; pressing H or clicking the X in the
     // title row toggles it off. The Help button in the dock and the
     // command palette surface H as the re-open shortcut.
-    // Only the legend follows the pin. The camera and view rows are controls,
-    // not help, so they stay reachable once the legend is dismissed.
-    this._legend.classList.toggle('olv-hidden', !this._helpPinned);
-    this._hud.classList.toggle('olv-nav-hud-collapsed', !this._helpPinned);
-    this._legendToggle.textContent = this._helpPinned ? '\u00d7' : '?';
-    const legendLabel = this._helpPinned ? 'Hide navigation help' : 'Show navigation help';
+    // The close control dismisses the whole panel. That was not safe while the
+    // Camera and Views rows lived only here: dismissal is persisted, so hiding
+    // them took the only route to orthographic projection and the standard
+    // views away for good, which is what `navViewControlsPersist.test.ts`
+    // caught. They are in the command palette now, so the panel can close the
+    // way a panel is expected to, and H or the dock's Help button reopens it.
+    this._hud.classList.toggle('olv-hidden', !this._helpPinned);
+    this._legend.classList.remove('olv-hidden');
+    this._hud.classList.remove('olv-nav-hud-collapsed');
+    this._legendToggle.textContent = '\u00d7';
+    const legendLabel = 'Hide navigation panel';
     this._legendToggle.title = `${legendLabel} (H)`;
     this._legendToggle.setAttribute('aria-label', legendLabel);
     this._legendToggle.setAttribute('aria-expanded', this._helpPinned ? 'true' : 'false');
