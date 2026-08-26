@@ -50,18 +50,55 @@
 import { el } from './dom';
 import {
   CURATED_LOCATIONS,
+  curatedUsageCategory,
   getCuratedLocation,
 } from '../io/catalog/curatedLocations';
 import type { PcStacItem } from '../io/catalog/planetaryComputer';
+import type { Sample } from './Stage';
 import { loadPlanetaryComputerCatalog } from '../lazyChunks';
+
+/** The curated entry the start screen promotes as its one-click demo. */
+export const DEMO_SAMPLE_ID = 'flai-ch-swisssurface3d-2022';
+
+/**
+ * The "Try a sample scan" dataset, built from its catalog record.
+ *
+ * main.ts used to declare this object itself, with its own copy of the
+ * URL and display name, so a correction to the catalog left the start
+ * screen streaming the old object and nothing could see the divergence.
+ * It lives beside the picker because the two surface the same record and
+ * must not be able to disagree about it. Only the button copy is local.
+ *
+ * Undefined when the catalog no longer carries the entry: Stage then
+ * hides the button rather than offering a dead URL.
+ */
+export function buildCuratedDemoSample(): Sample | undefined {
+  const loc = getCuratedLocation(DEMO_SAMPLE_ID);
+  if (!loc) return undefined;
+  return {
+    id: loc.id,
+    label: 'Switzerland · swisstopo, 84 MB',
+    detail: 'swissSURFACE3D (2022), via FLAI · streams over your network, nothing uploaded',
+    url: loc.streamUrl,
+    name: loc.displayName,
+    // Bytes behind the record's '83.8 MB' size label. The cellular-data
+    // gate needs a number, and the label is written for a reader.
+    sizeBytes: 83_800_000,
+  };
+}
 
 export interface CatalogPanelOptions {
   /**
    * Called when the user picks a curated dataset. The caller is
    * responsible for routing the dataset's `streamUrl` into the EPT /
    * COPC streaming pipeline — typically `handleRemoteUrl(url)` in main.
+   * `usageCategory` is the counter suffix for this pick, computed here
+   * from the record that was picked. The caller records what it is
+   * handed: it has the URL but not the entry behind it, and the
+   * previous arrangement had it guess, filing every pick — European
+   * COPC tiles included — as a US EPT dataset.
    */
-  readonly onPickUrl: (url: string, displayName: string) => void;
+  readonly onPickUrl: (url: string, displayName: string, usageCategory: string) => void;
   /**
    * Optional pre-warm hook. Fired when the user changes the dropdown
    * selection (signalling intent), letting main.ts kick off the lazy
@@ -97,7 +134,7 @@ export class CatalogPanel {
   private readonly _hint: HTMLElement;
   private readonly _status: HTMLElement;
   private readonly _results: HTMLElement;
-  private readonly _onPickUrl: (url: string, displayName: string) => void;
+  private readonly _onPickUrl: (url: string, displayName: string, usageCategory: string) => void;
   private readonly _onPickIntent?: (url: string) => void;
   private readonly _onPickPcItem?: (item: PcStacItem) => void;
   private readonly _suppressed: boolean;
@@ -381,7 +418,7 @@ export class CatalogPanel {
           if (this._onPickPcItem) {
             this._onPickPcItem(item);
           } else {
-            this._onPickUrl(item.assetUrl, title);
+            this._onPickUrl(item.assetUrl, title, 'pc-stac');
           }
         });
         results.append(btn);
@@ -456,8 +493,8 @@ export class CatalogPanel {
     // Direct handoff — main.ts wires this into `handleRemoteUrl` which
     // detects the EPT manifest by URL pattern and routes to the EPT
     // streaming path. No catalog query, no geocoder, no bbox-vs-COPC
-    // mismatch — the URL is verified-working at build time.
-    this._onPickUrl(loc.streamUrl, loc.displayName);
+    // mismatch.
+    this._onPickUrl(loc.streamUrl, loc.displayName, curatedUsageCategory(loc.streamUrl));
   }
 
   /**

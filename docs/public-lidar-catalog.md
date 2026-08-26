@@ -42,11 +42,19 @@ GURS, each on a verified open licence) on a public EU S3 bucket. The US datasets
 west-coast buckets. Sizes run from an 84 MB single COPC file up to
 multi-billion-point EPT scans.
 
-Every entry was probed before shipping, with a CORS preflight, a HEAD for size,
-and a ranged read of the LAS header, and it ships only if it still returns a
-parseable stream. `tests/curatedLocations.test.ts` asserts the shape of each
-entry, and the FLAI re-probe script is `tools/verify-flai.sh`. The list itself is
-the source of truth: `src/io/catalog/curatedLocations.ts`.
+Every entry was checked before shipping, with a CORS preflight, a HEAD for size,
+and a ranged read of the LAS header. Each record carries the date of that check
+in `verifiedAt`, and that date is the whole of the claim: no script in this
+repository re-runs it, so a record says when the URL last answered and not that
+it answers now. `tests/curatedLocations.test.ts` asserts the shape of each entry.
+The list itself is the source of truth: `src/io/catalog/curatedLocations.ts`.
+
+Each record also states who published the data, who mirrors it, its licence as a
+normalized identity, its format, its native EPSG where one is recorded, and the
+document those values were transcribed from. Fields the repository has no record
+for read `unknown`, including the licence of the Swiss tile: the credits page
+names the terms as Swiss OGD and refers the reader to swisstopo, which is not an
+identity the catalog can compare, so it records none.
 
 ## Privacy contract
 
