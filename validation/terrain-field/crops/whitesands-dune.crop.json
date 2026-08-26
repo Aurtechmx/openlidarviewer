@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "cropId": "whitesands-dune",
-  "datasetId": "USGS-3DEP-WHITESANDS-2020",
+  "sourceId": "USGS-3DEP-WHITESANDS-2020",
   "description": "A 100 x 100 m interior crop of bare-earth gypsum-dune terrain, class-2 ground returns only. Interior of the 1 km tile, so no tile-edge effects; open bare earth, so ground coverage is high without vegetation to filter.",
   "boundsUTM": { "minx": 360100, "miny": 3636100, "maxx": 360200, "maxy": 3636200 },
   "classFilter": [2],

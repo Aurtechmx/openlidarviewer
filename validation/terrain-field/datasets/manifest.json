@@ -1,9 +1,9 @@
 {
  "schemaVersion": 1,
- "description": "Real airborne LiDAR datasets the terrain field-validation harness runs OLV terrain outputs against. All are public and citable. Raw clouds are NOT committed (too large); each records its DOI/source, spatial reference, and the sha256 of the source file the committed crops were cut from.",
+ "description": "Real airborne LiDAR datasets the terrain field-validation harness runs OLV terrain outputs against. All are public and citable. Raw clouds are NOT committed (too large); each records its DOI/source, spatial reference, and the sha256 of the source file the committed crops were cut from. `sourceId` is a handle local to this harness: it names an acquisition as the publisher distributes it (a tile, a survey, a release), and the crops under `crops/` cite it to say which bytes they were cut from. It is NOT a `datasetId` in validation/datasets/dataset-register.yaml and does not resolve there. Three of these acquisitions cannot meet that register's contract: the raw StREAM Lab, Hyytiala and Pangandaran clouds have no recorded sha256, and the Zenodo terms for the latter two were never resolved to a named licence, which the register rejects rather than records as unknown. The field was called `datasetId` until the rename, which asserted a foreign key none of these values ever had. scripts/lint-terrain-field-ids.mjs keeps the name from coming back and keeps every crop citation resolving here.",
  "datasets": [
   {
-   "datasetId": "USGS-3DEP-WHITESANDS-2020",
+   "sourceId": "USGS-3DEP-WHITESANDS-2020",
    "title": "USGS 3DEP LPC, White Sands NM 2020, tile w3597n3635",
    "source": "USGS 3D Elevation Program (3DEP) Lidar Point Cloud",
    "sourceFile": "USGS_LPC_NM_WhiteSandsNM_2020_D20_w3597n3635.laz",
@@ -24,7 +24,7 @@
    "role": "primary bare-earth DTM + ground-classification reference"
   },
   {
-   "datasetId": "VT-STREAM-LAB-2026",
+   "sourceId": "VT-STREAM-LAB-2026",
    "title": "Virginia Tech StREAM Lab Spring 2026 Drone Lidar Survey",
    "source": "OpenTopography",
    "doi": "10.5069/G9NZ85W7",
@@ -39,7 +39,7 @@
    "role": "high-density DTM/CHM real-reference leg; crop to open-field ground away from the stream (bathymetry is interpolated in the published DTM)"
   },
   {
-   "datasetId": "HYYTIALA-UAV-2025",
+   "sourceId": "HYYTIALA-UAV-2025",
    "title": "Hyyti\u00e4l\u00e4 UAV Point Cloud Demo Dataset 2025",
    "source": "Zenodo (Atherton, J. & Miettinen, I. E., 2026)",
    "doi": "10.5281/zenodo.20793895",
@@ -53,7 +53,7 @@
    "role": "stress case: ground extraction / DTM under dense forest canopy (source cloud is unclassified, so it validates OLV's classifier, not against one)"
   },
   {
-   "datasetId": "PANGANDARAN-COASTAL-2025",
+   "sourceId": "PANGANDARAN-COASTAL-2025",
    "title": "Drone LiDAR of Pangandaran coastal tourism hotspots (tsunami/climate risk)",
    "source": "Zenodo (Syamsuddin et al., 2025)",
    "doi": "10.5281/zenodo.17073404",
@@ -66,7 +66,7 @@
    "role": "future leg: coastal ground + building/structure classification"
   },
   {
-   "datasetId": "EST-ELB-TAVA-2020",
+   "sourceId": "EST-ELB-TAVA-2020",
    "title": "Estonian Land Board National LiDAR, 2020 (tile 568539, Tava area)",
    "source": "Estonian Land and Spatial Development Board (Maa-amet)",
    "doi": "10.5281/zenodo.19232743",
@@ -88,7 +88,7 @@
    "role": "third projection family \u2014 Lambert Conformal Conic gridding correctness leg"
   },
   {
-   "datasetId": "USGS-MARSH-ISLAND-2024",
+   "sourceId": "USGS-MARSH-ISLAND-2024",
    "title": "USGS Marsh Island / New Bedford MA UAS survey, 2024 (site 2025-009-FA)",
    "source": "U.S. Geological Survey data release",
    "doi": "10.5066/P19TLXVG",
@@ -107,7 +107,7 @@
    "role": "absolute vertical accuracy vs INDEPENDENT surveyed RTK checkpoints (same NAVD88 datum as the cloud; no reconciliation)"
   },
   {
-   "datasetId": "USGS-COCONINO-B1-2019",
+   "sourceId": "USGS-COCONINO-B1-2019",
    "title": "USGS AZ Coconino B1 2019 airborne LiDAR (Atlantic project 19049; task order AZ_CoconinoUSFS_2019_B19)",
    "source": "U.S. Geological Survey 3D Elevation Program (3DEP) / The National Map",
    "citation": "U.S. Geological Survey, 2020, USGS Lidar Point Cloud AZ_CoconinoUSFS_2019_B19 (USGS project 19049; NGTOC task order 140G0219F0247, contract G16PC00042): U.S. Geological Survey 3D Elevation Program (3DEP). Public domain.",
