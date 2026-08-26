@@ -119,6 +119,7 @@ export function parseHierarchyPage(
     nodes.push({
       id: keyId(key),
       key,
+      depth: key.depth,
       bounds,
       pointCount,
       byteOffset: offset,

@@ -147,6 +147,7 @@ export class OlvTileOctree implements StreamingOctreeView {
       this.store.add({
         id: tileNodeId(key),
         key: tileVoxelKey(key),
+        depth: tileVoxelKey(key).depth,
         bounds,
         pointCount: reader.pointCountOf(key),
         // A tile is addressed by key, not by a file range, so there is no offset

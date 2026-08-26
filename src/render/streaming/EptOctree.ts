@@ -283,6 +283,7 @@ export class EptOctree implements StreamingOctreeView {
     const record: StreamingNodeRecord = {
       id: eptKeyToString(entry.key),
       key: this._toVoxelKey(entry.key),
+      depth: this._toVoxelKey(entry.key).depth,
       bounds: this._boundsForKey(entry.key),
       pointCount: entry.value,
       // EPT tiles are SEPARATE FILES, not byte ranges within one file.

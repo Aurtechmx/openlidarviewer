@@ -82,6 +82,16 @@ export interface StreamingNodeRecord {
   id: string;
   key: VoxelKey;
   /**
+   * How deep this node sits in its source's refinement tree, root = 0.
+   *
+   * The scheduler throttles refinement by depth under camera velocity and
+   * memory pressure, and used to read `key.depth` for it. That tied the
+   * policy to an octree voxel key, which only an octree-organised source can
+   * supply. Carrying the number itself lets a source that refines on some
+   * other measure state its depth without inventing voxel coordinates.
+   */
+  depth: number;
+  /**
    * Node bounds in WORLD space, derived from the COPC octree cube. Every
    * source's records use that frame: `StreamingScheduler._localBoundsFor`
    * localises a node as `bounds - source.renderOrigin`, so a record built in
