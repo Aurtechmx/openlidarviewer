@@ -24,7 +24,7 @@
  * `npm run lint:digest-manifests`.
  */
 
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -96,12 +96,28 @@ export function collectDigestProblems({ listFiles, readText, digestOf }) {
   return { problems, summary };
 }
 
+/** File contents, or null when nothing is there. Other IO failures still throw. */
+function readOr(abs, encoding) {
+  try {
+    return encoding ? readFileSync(abs, encoding) : readFileSync(abs);
+  } catch (err) {
+    const code = err && err.code;
+    if (code === 'ENOENT' || code === 'EISDIR' || code === 'ENOTDIR') return null;
+    throw err;
+  }
+}
+
 if (isCliEntry(import.meta.url)) {
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const walk = (dir) => {
-    const abs = resolve(ROOT, dir);
-    if (!existsSync(abs)) return [];
-    return readdirSync(abs, { withFileTypes: true }).flatMap((e) =>
+    let entries;
+    try {
+      entries = readdirSync(resolve(ROOT, dir), { withFileTypes: true });
+    } catch (err) {
+      if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return [];
+      throw err;
+    }
+    return entries.flatMap((e) =>
       e.isDirectory()
         ? walk(join(dir, e.name))
         : isManifestName(e.name)
@@ -111,11 +127,16 @@ if (isCliEntry(import.meta.url)) {
   };
   const { problems, summary } = collectDigestProblems({
     listFiles: walk,
-    readText: (p) => (existsSync(resolve(ROOT, p)) ? readFileSync(resolve(ROOT, p), 'utf8') : null),
+    // Read first and classify the failure, rather than asking whether the file
+    // exists and then reading it. The two answers can disagree, and a check
+    // that is separately true is not a guarantee at the moment of the read.
+    // Only "there is no such file" means absent. Anything else, a permissions
+    // failure or a truncated read, is a real problem and is not reported as a
+    // regenerated output that happens to be missing.
+    readText: (p) => readOr(resolve(ROOT, p), 'utf8'),
     digestOf: (p) => {
-      const abs = resolve(ROOT, p);
-      if (!existsSync(abs) || !statSync(abs).isFile()) return null;
-      return createHash('sha256').update(readFileSync(abs)).digest('hex');
+      const bytes = readOr(resolve(ROOT, p), null);
+      return bytes == null ? null : createHash('sha256').update(bytes).digest('hex');
     },
   });
 
