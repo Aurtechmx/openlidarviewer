@@ -23,7 +23,8 @@
 
 import { expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+// @ts-expect-error - plain .mjs script, no types
+import { bucketOf } from '../../scripts/lib/testBuckets.mjs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,21 +58,34 @@ export function chainOf(scriptId: string): string[] {
     .filter((s) => s !== '');
 }
 
-/** `tests/foo.test.ts` -> bucket, from the single source of that classification. */
+/**
+ * `tests/foo.test.ts` -> bucket, from the single source of that classification.
+ *
+ * The rule is imported, not read back from a spawned `--list`. Parsing a
+ * subprocess's stdout made the answer depend on the environment the spawn ran
+ * in: a CI shard read a list that named no terrain file, so a record whose
+ * producer is a terrain test looked as though no bucket claimed it, and the
+ * walk found no pairs at all. A function cannot disagree with itself.
+ */
 export function bucketOfTestFile(): Map<string, string> {
-  const out = spawnSync(process.execPath, ['scripts/test-bucket.mjs', '--list'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-  });
-  expect(out.status, `test-bucket.mjs --list failed: ${out.stderr}`).toBe(0);
+  const files = readdirSync(resolve(ROOT, 'tests'), { withFileTypes: true });
   const map = new Map<string, string>();
-  for (const line of out.stdout.split('\n')) {
-    const [bucket, file] = line.split('\t');
-    if (bucket && file) map.set(file.trim(), bucket.trim());
+  for (const e of files) {
+    if (e.isFile() && /\.(test|spec)\.ts$/.test(e.name)) {
+      map.set(`tests/${e.name}`, bucketOf(e.name) as string);
+    }
+    if (!e.isDirectory()) continue;
+    // Nested test directories route explicitly; bucketOf takes the same
+    // `dir/file.test.ts` shape the script's own walk hands it.
+    for (const n of readdirSync(resolve(ROOT, 'tests', e.name))) {
+      if (!/\.(test|spec)\.ts$/.test(n)) continue;
+      map.set(`tests/${e.name}/${n}`, bucketOf(`${e.name}/${n}`) as string);
+    }
   }
-  expect(map.size).toBeGreaterThan(0);
+  expect(map.size, 'no test files found under tests/').toBeGreaterThan(0);
   return map;
 }
+
 
 /** Every `validation/...` path a verifier script names in its own source. */
 export function declaredPaths(scriptFile: string): string[] {
