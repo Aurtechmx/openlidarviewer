@@ -26,6 +26,8 @@ const CLAIMS = 'docs/validation/claim-register.yaml';
 const DEPS = 'docs/project/DEPENDENCIES.md';
 const NOTICES = 'docs/project/THIRD_PARTY_NOTICES.md';
 const RELEASE_ASSETS = 'docs/release/RELEASE_ASSETS.md';
+const RELEASE_NOTES = `docs/releases/RELEASE_NOTES_v${VERSION}.md`;
+const DOCS_SITE = `docs-site/releases/v${VERSION}.md`;
 
 /** A reader over the real tree with a single-file override. */
 function withOverride(path: string, text: string) {
@@ -121,5 +123,41 @@ describe('lint:release-truth', () => {
     );
     const problems = problemsFor(withOverride(SERVICE, svc));
     expect(problems.some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED = false'))).toBe(true);
+  });
+
+  // The two phrases below are the wording v0.6.6 actually shipped with before
+  // PR #438 corrected it, not invented examples. The rule guards the direction
+  // a correction can be lost in: a release that lists what it added while a
+  // surface still claims the application came forward untouched.
+  describe('rule 6b — a blanket "unchanged" claim beside a populated Added list', () => {
+    it('fails when the release notes claim the application came forward unchanged', () => {
+      const doc = realRead(RELEASE_NOTES)! + '\n\nIt carries the v0.6.5 application forward unchanged.\n';
+      const problems = problemsFor(withOverride(RELEASE_NOTES, doc));
+      expect(problems.some((p) => p.includes('application forward unchanged'))).toBe(true);
+    });
+
+    it('fails when the changelog claims the algorithms are inherited unchanged', () => {
+      const text = realRead('CHANGELOG.md')!.replace(
+        '- The terrain and measurement algorithms changed in this cycle.',
+        '- The terrain and measurement algorithms are inherited from v0.6.5 unchanged.',
+      );
+      const problems = problemsFor(withOverride('CHANGELOG.md', text));
+      expect(problems.some((p) => p.includes('inherited from v0.6.5'))).toBe(true);
+    });
+
+    it('fails when the public release page carries the claim', () => {
+      const doc = (realRead(DOCS_SITE) ?? '') + '\n\nThis is the v0.6.5 application, unchanged.\n';
+      const problems = problemsFor(withOverride(DOCS_SITE, doc));
+      expect(problems.some((p) => p.includes(DOCS_SITE))).toBe(true);
+    });
+
+    it('leaves a scoped "unchanged" statement alone', () => {
+      // "contour geometry is unchanged ... unless the mode is selected" is true
+      // and must stay sayable, or the rule would push writers toward vaguer prose.
+      const doc =
+        realRead(RELEASE_NOTES)! +
+        '\n\nContour geometry is unchanged for every existing purpose unless the mode is selected.\n';
+      expect(problemsFor(withOverride(RELEASE_NOTES, doc))).toEqual([]);
+    });
   });
 });

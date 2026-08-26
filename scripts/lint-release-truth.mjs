@@ -219,6 +219,44 @@ export function collectReleaseTruthProblems(read) {
     }
   }
 
+  // ── 6b. No blanket "carried forward unchanged" claim while the release adds ─
+  // The three public surfaces each carry their own copy of this claim and drift
+  // apart. Scoped statements ("contour geometry is unchanged unless the mode is
+  // selected", "Unchanged from vX" under Compatibility) are true and are
+  // deliberately not matched; only claims whose subject is the whole
+  // application or its algorithms are.
+  //
+  // Scope, stated plainly: this compares a release's prose against its own
+  // Added list. It cannot see a feature that merged and was never written down
+  // anywhere, which is how v0.6.6 first drifted. That needs release history,
+  // which an extracted archive does not carry.
+  {
+    const BLANKET = [
+      /carries the v[\d.]+ application forward unchanged/i,
+      /(?:terrain and measurement )?algorithms are inherited from v[\d.]+,? unchanged/i,
+      /is the v[\d.]+ application,? unchanged/i,
+    ];
+    const changelog = read('CHANGELOG.md') ?? '';
+    const section = changelog.split(`## [${version}]`)[1]?.split('\n## [')[0] ?? '';
+    const added = section.split('### Added')[1]?.split('\n### ')[0] ?? '';
+    const addedCount = (added.match(/^- /gm) ?? []).length;
+    if (addedCount > 0) {
+      for (const doc of [RELEASE_NOTES, `docs-site/releases/v${version}.md`, 'CHANGELOG.md']) {
+        const text = doc === 'CHANGELOG.md' ? section : read(doc);
+        if (text == null) continue;
+        for (const re of BLANKET) {
+          const hit = re.exec(text);
+          if (!hit) continue;
+          problems.push(
+            `${doc} says "${hit[0]}" while CHANGELOG.md lists ${addedCount} addition(s) ` +
+              `under v${version}. Say what changed, or scope the claim to the part that ` +
+              `genuinely did not.`,
+          );
+        }
+      }
+    }
+  }
+
   // ── 7. The shipped asset index documents the full asset set ───────────────
   // docs/project/RELEASE_CHECKLIST.md is an internal process aid and is export-ignored, so
   // the source archive cannot depend on it. The public, shipped index of what a
