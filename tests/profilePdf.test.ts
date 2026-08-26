@@ -725,3 +725,76 @@ describe('the sheet refuses a datum it cannot assert', () => {
     expect(text).not.toContain('Height (local frame) (m)');
   });
 });
+
+/**
+ * The ground fill: the area under the section, filled to the plot floor so
+ * the drawing reads as terrain rather than as a line on a chart.
+ *
+ * It is drawn as abutting vertical strokes in the ground tint, one `m … l S`
+ * each, because a filled polygon emits a lineto per vertex and would be
+ * indistinguishable in the content stream from a drawn profile. Both halves
+ * are asserted here: that the fill is actually on the page, and that adding
+ * it left the document's longest lineto run alone.
+ */
+const GROUND_STROKE = '0.78 0.85 0.91 RG';
+
+describe('profile sheet: the ground under the section', () => {
+  it('fills to the plot floor without lengthening any lineto run', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Ground',
+      samples: ramp(24),
+      generatedAt: FIXED_DATE,
+    });
+    const raw = drawnPdfText(bytes);
+    const lines = raw.split('\n');
+
+    // The file still says what it said before: the longest run of consecutive
+    // linetos anywhere in it is the profile's own longest unbroken run, 23
+    // segments across 24 stations with no gaps. A polygon fill would make
+    // this the vertex count of the fill instead.
+    expect(longestRun(lines)).toBe(23);
+
+    // And the fill is there, as many strokes rather than as one shape.
+    const bars = raw.split(GROUND_STROKE).length - 1;
+    expect(bars).toBeGreaterThan(100);
+  });
+
+  it('leaves a coverage gap unfilled', async () => {
+    const gapped: ProfileChartSample[] = [
+      { distance: 0, height: 1, count: 4 },
+      { distance: 10, height: 2, count: 4 },
+      { distance: 20, height: Number.NaN, count: 0 },
+      { distance: 30, height: 2, count: 4 },
+      { distance: 40, height: 1, count: 4 },
+    ];
+    const bytes = await buildProfilePdf({
+      name: 'Gap ground',
+      samples: gapped,
+      generatedAt: FIXED_DATE,
+    });
+    const raw = drawnPdfText(bytes);
+    // Absent ground is absent, not flat: the fill breaks where the line
+    // breaks, so the two runs stay two runs.
+    expect(longestRun(raw.split('\n'))).toBe(1);
+
+    // Every ground stroke's x, in draw order. A bar is one `m … l` pair at a
+    // single x, so the moveto carries the column the bar stands in.
+    const xs = [
+      ...raw.matchAll(
+        new RegExp(`${GROUND_STROKE}[^]*?(-?[\\d.]+) -?[\\d.]+ m`, 'g'),
+      ),
+    ]
+      .map((m) => Number(m[1]))
+      .sort((a, b) => a - b);
+    expect(xs.length).toBeGreaterThan(10);
+
+    // The section is 40 m long with its middle station empty, so the middle
+    // half of the drawing carries no ground at all. The widest hole between
+    // adjacent bars is that gap; a fill that bridged it would leave nothing
+    // wider than the pitch the bars are placed at.
+    let widest = 0;
+    for (let i = 1; i < xs.length; i++) widest = Math.max(widest, xs[i] - xs[i - 1]);
+    const span = xs[xs.length - 1] - xs[0];
+    expect(widest / span).toBeGreaterThan(0.4);
+  });
+});
