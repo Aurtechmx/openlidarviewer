@@ -18,7 +18,10 @@ import {
   recordForCell,
   withLinkageUnavailable,
   buildCellReturns,
+  cellIndexForRecord,
   returnsForCell,
+  aggregateCellState,
+  RETURN_VALUE_MAX,
   type OrganizedRangeFrame,
   type OrganizedRangeSet,
 } from '../src/model/OrganizedRange';
@@ -202,10 +205,10 @@ describe('multiple returns per cell', () => {
     cellState[cellIndexOf(0, 0, width)] = CellState.VALID_RETURN;
     cellState[cellIndexOf(1, 2, width)] = CellState.VALID_RETURN;
     const built = buildCellReturns(width, height, [
-      { row: 0, column: 0, record: 10, returnIndex: 0, returnCount: 1 },
-      { row: 1, column: 2, record: 22, returnIndex: 2, returnCount: 3 },
-      { row: 1, column: 2, record: 20, returnIndex: 0, returnCount: 3 },
-      { row: 1, column: 2, record: 21, returnIndex: 1, returnCount: 3 },
+      { row: 0, column: 0, record: 10, returnIndex: 0, returnCount: 1, sourceRange: null },
+      { row: 1, column: 2, record: 22, returnIndex: 2, returnCount: 3, sourceRange: null },
+      { row: 1, column: 2, record: 20, returnIndex: 0, returnCount: 3, sourceRange: null },
+      { row: 1, column: 2, record: 21, returnIndex: 1, returnCount: 3, sourceRange: null },
     ]);
     return {
       id: 'setup-e57',
@@ -227,7 +230,7 @@ describe('multiple returns per cell', () => {
   it('describes a cell that produced exactly one return', () => {
     const r = returnsForCell(multiReturnFixture(), 0, 0);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.returns).toEqual([{ record: 10, returnIndex: 0, returnCount: 1 }]);
+    if (r.ok) expect(r.returns).toEqual([{ record: 10, returnIndex: 0, returnCount: 1, sourceRange: null }]);
   });
 
   it('reports zero returns as an empty list, not as a missing description', () => {
@@ -252,9 +255,9 @@ describe('multiple returns per cell', () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.returns).toEqual([
-        { record: 20, returnIndex: 0, returnCount: 3 },
-        { record: 21, returnIndex: 1, returnCount: 3 },
-        { record: 22, returnIndex: 2, returnCount: 3 },
+        { record: 20, returnIndex: 0, returnCount: 3, sourceRange: null },
+        { record: 21, returnIndex: 1, returnCount: 3, sourceRange: null },
+        { record: 22, returnIndex: 2, returnCount: 3, sourceRange: null },
       ]);
     }
   });
@@ -281,9 +284,9 @@ describe('multiple returns per cell', () => {
 
   it('counts returns that fell outside the grid rather than placing them', () => {
     const built = buildCellReturns(3, 2, [
-      { row: 0, column: 0, record: 1, returnIndex: 0, returnCount: 1 },
-      { row: 9, column: 0, record: 2, returnIndex: 0, returnCount: 1 },
-      { row: 0, column: -1, record: 3, returnIndex: 0, returnCount: 1 },
+      { row: 0, column: 0, record: 1, returnIndex: 0, returnCount: 1, sourceRange: null },
+      { row: 9, column: 0, record: 2, returnIndex: 0, returnCount: 1, sourceRange: null },
+      { row: 0, column: -1, record: 3, returnIndex: 0, returnCount: 1, sourceRange: null },
     ]);
     expect(built.skippedCount).toBe(2);
     expect(built.returnRecord.length).toBe(1);
@@ -336,5 +339,182 @@ describe('multiple returns per cell', () => {
     // cellState, cellToRecord, returnCellStart, returnRecord, returnIndex,
     // returnCountDeclared. Counted, not listed, for the same reason as above.
     expect(organizedRangeTransferables(set)).toHaveLength(6);
+  });
+});
+
+describe('return column values the source declared', () => {
+  /** Every boundary of a 16-bit store, and four values that clear it. */
+  const BOUNDARIES = [0, 1, 65534, 65535, 65536, 70000, 4294967294];
+
+  it('stores a declared returnIndex above 65535 as the source declared it', () => {
+    // A `Uint16Array` took each of these modulo 65536 in silence: 65536 became
+    // 0, 70000 became 4464, and 4294967294 became 65534. Nothing in the frame
+    // could tell the wrapped value from a measured one afterwards.
+    const built = buildCellReturns(
+      BOUNDARIES.length,
+      1,
+      BOUNDARIES.map((v, k) => ({
+        row: 0,
+        column: k,
+        record: k,
+        returnIndex: v,
+        returnCount: v,
+        sourceRange: null,
+      })),
+    );
+    expect([...built.returnIndex]).toEqual(BOUNDARIES);
+    expect([...built.returnCountDeclared!]).toEqual(BOUNDARIES);
+  });
+
+  it('keeps the sort honest for indices that a 16-bit store would reorder', () => {
+    // 65536 wraps to 0 and 70000 wraps to 4464, so a narrowed build sorted this
+    // cell as 0, 4464, 65535 and handed back the records in the wrong order.
+    const built = buildCellReturns(1, 1, [
+      { row: 0, column: 0, record: 7, returnIndex: 70000, returnCount: 3, sourceRange: null },
+      { row: 0, column: 0, record: 8, returnIndex: 65535, returnCount: 3, sourceRange: null },
+      { row: 0, column: 0, record: 9, returnIndex: 65536, returnCount: 3, sourceRange: null },
+    ]);
+    expect([...built.returnIndex]).toEqual([65535, 65536, 70000]);
+    expect([...built.returnRecord]).toEqual([8, 9, 7]);
+  });
+
+  it('orders a returnIndex tie by record, so arrival order cannot decide it', () => {
+    // Two returns declaring the same index used to keep the order the caller
+    // supplied, so the same records read at a different stride produced a
+    // different frame. The pair (returnIndex, record) is a total order and does
+    // not have that freedom.
+    const entries = [
+      { row: 0, column: 0, record: 42, returnIndex: 1, returnCount: 2, sourceRange: null },
+      { row: 0, column: 0, record: 17, returnIndex: 1, returnCount: 2, sourceRange: null },
+    ];
+    const forward = buildCellReturns(1, 1, entries);
+    const backward = buildCellReturns(1, 1, [...entries].reverse());
+    expect([...forward.returnRecord]).toEqual([17, 42]);
+    expect([...backward.returnRecord]).toEqual([...forward.returnRecord]);
+  });
+
+  it('refuses a value no return column can hold rather than wrapping it', () => {
+    // Widening covers everything the E57 sink can hand over, which is `u32`.
+    // Past that there is no honest store, so the build stops and says so.
+    expect(() =>
+      buildCellReturns(1, 1, [
+        {
+          row: 0,
+          column: 0,
+          record: 0,
+          returnIndex: RETURN_VALUE_MAX + 1,
+          returnCount: 1,
+          sourceRange: null,
+        },
+      ]),
+    ).toThrow(/returnIndex 4294967296 at entry 0 is outside 0\.\.4294967295/);
+  });
+});
+
+describe('reversing a record back to its cell', () => {
+  /** One cell holding two returns, the case a single primary cannot describe. */
+  function twoReturnFrame(): OrganizedRangeFrame {
+    const width = 3;
+    const height = 2;
+    const cellState = new Uint8Array(width * height).fill(CellState.NO_RETURN);
+    cellState[cellIndexOf(1, 2, width)] = CellState.VALID_RETURN;
+    const built = buildCellReturns(width, height, [
+      { row: 1, column: 2, record: 100, returnIndex: 0, returnCount: 2, sourceRange: 12.5 },
+      { row: 1, column: 2, record: 101, returnIndex: 1, returnCount: 2, sourceRange: 30.25 },
+    ]);
+    const cellToRecord = new Int32Array(width * height).fill(NO_RECORD);
+    cellToRecord[cellIndexOf(1, 2, width)] = 100;
+    return {
+      id: 'setup-two',
+      sourceKind: 'e57-structured',
+      width,
+      height,
+      cellState,
+      cellToRecord,
+      linkage: { kind: 'exact' },
+      diagnostics: tallyCellStates(cellState),
+      returnCellStart: built.returnCellStart,
+      returnRecord: built.returnRecord,
+      returnIndex: built.returnIndex,
+      returnCountDeclared: built.returnCountDeclared,
+      returnSourceRange: built.returnSourceRange,
+      returnsSkipped: built.skippedCount,
+    };
+  }
+
+  it('reverses EVERY record the cell lists, not only the primary', () => {
+    // The forward and reverse directions must agree about which records exist.
+    // Searching `cellToRecord` alone answered null for record 101 while
+    // `returnsForCell` listed it, so the second return of a pulse was reachable
+    // in one direction only.
+    const frame = twoReturnFrame();
+    const cell = cellIndexOf(1, 2, frame.width);
+    const listed = returnsForCell(frame, 1, 2);
+    expect(listed.ok).toBe(true);
+    if (!listed.ok) throw new Error(listed.why);
+    expect(listed.returns.map((r) => r.record)).toEqual([100, 101]);
+    for (const r of listed.returns) {
+      expect(cellIndexForRecord(frame, r.record)).toBe(cell);
+    }
+  });
+
+  it('still answers null for a record the frame never produced', () => {
+    expect(cellIndexForRecord(twoReturnFrame(), 9999)).toBeNull();
+  });
+
+  it('answers null for every record once linkage is unavailable', () => {
+    const set: OrganizedRangeSet = {
+      kind: 'organized-range',
+      frames: [twoReturnFrame()],
+      organization: 'organized-grid',
+    };
+    const gone = withLinkageUnavailable(set, 'voxel-centroids').frames[0];
+    expect(cellIndexForRecord(gone, 101)).toBeNull();
+  });
+
+  it('keeps both distances of a two-return pulse', () => {
+    // 12.5 m and 30.25 m are two measurements, and one cell-level number
+    // described whichever the traversal reached last.
+    const listed = returnsForCell(twoReturnFrame(), 1, 2);
+    expect(listed.ok).toBe(true);
+    if (!listed.ok) throw new Error(listed.why);
+    expect(listed.returns.map((r) => r.sourceRange)).toEqual([12.5, 30.25]);
+  });
+});
+
+describe('aggregating what several records say about one cell', () => {
+  it('gives the same state for either order of a valid and an invalid record', () => {
+    const forward = aggregateCellState(
+      aggregateCellState(CellState.SOURCE_RECORD_MISSING, CellState.VALID_RETURN),
+      CellState.SOURCE_INVALID,
+    );
+    const backward = aggregateCellState(
+      aggregateCellState(CellState.SOURCE_RECORD_MISSING, CellState.SOURCE_INVALID),
+      CellState.VALID_RETURN,
+    );
+    expect(forward).toBe(CellState.VALID_RETURN);
+    expect(backward).toBe(CellState.VALID_RETURN);
+  });
+
+  it('keeps SOURCE_INVALID when no record of the cell was usable', () => {
+    expect(
+      aggregateCellState(CellState.SOURCE_RECORD_MISSING, CellState.SOURCE_INVALID),
+    ).toBe(CellState.SOURCE_INVALID);
+  });
+});
+
+describe('a source that declared no return count', () => {
+  it('is distinguishable from a source that declared zero', () => {
+    const silent = buildCellReturns(1, 1, [
+      { row: 0, column: 0, record: 0, returnIndex: 0, returnCount: null, sourceRange: null },
+    ]);
+    const declaredZero = buildCellReturns(1, 1, [
+      { row: 0, column: 0, record: 0, returnIndex: 0, returnCount: 0, sourceRange: null },
+    ]);
+    // Absence is the missing array, never a zero written into one whose name
+    // asserts the source declared it.
+    expect(silent.returnCountDeclared).toBeUndefined();
+    expect(declaredZero.returnCountDeclared).toBeDefined();
+    expect([...declaredZero.returnCountDeclared!]).toEqual([0]);
   });
 });

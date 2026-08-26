@@ -144,17 +144,36 @@ export function e57StructuredBytesPerRecord(
 export const E57_GRID_BYTES_PER_CELL = 2 * (1 + 4);
 /** `sourceRange`, allocated only when the scan declares `sphericalRange`. */
 export const E57_GRID_RANGE_BYTES_PER_CELL = 4;
-/** `returnCellStart`, allocated only when the scan describes returns per cell. */
-export const E57_GRID_RETURN_BYTES_PER_CELL = 4;
+/**
+ * Per-cell cost of the CSR build, when the scan describes returns per cell.
+ *
+ * PEAK, not the finished frame. `buildCellReturns` allocates `counts` and
+ * `cursor`, both `Uint32` over the cells, and both are still live while
+ * `returnCellStart` exists, because the cursor is copied FROM it. Counting only the
+ * surviving array under-stated the moment that actually decides whether the
+ * decode fits, which is the moment a ceiling exists to catch.
+ */
+export const E57_GRID_RETURN_BYTES_PER_CELL = 4 + 4 + 4;
 
 /**
- * Bytes one return costs while the CSR description is built: the `Int32` record,
- * the two `Uint16` source values, and the plain object it arrives in. Object
- * headers are not a typed-array cost and are not covered by the resident
- * allowance, and there is one per return, so they are counted rather than
- * hoped over.
+ * Bytes one return costs at the PEAK of the CSR build.
+ *
+ * Three terms, all live together:
+ *
+ *   72  the plain `CellReturnInput` object the entry arrives in. Object headers
+ *       are not a typed-array cost and are not covered by the resident
+ *       allowance, and there is one per return.
+ *    4  `cellOf`, the `Int32` cell address the count pass records per entry so
+ *       the placement pass does not re-derive it.
+ *   16  the finished arrays: `Int32` record, `Uint32` returnIndex, `Uint32`
+ *       returnCountDeclared, `Float32` returnSourceRange. These are allocated
+ *       while the entry array is still held, so they add rather than replace.
+ *
+ * The two `Uint32` columns were `Uint16`, and the widening is what closed a
+ * silent modulo wrap on a declared index above 65535. Four bytes per return is
+ * the price, and it is counted here so the ceiling sees it.
  */
-export const E57_RETURN_ENTRY_BYTES = 72;
+export const E57_RETURN_ENTRY_BYTES = 72 + 4 + 16;
 
 /**
  * Cells the grid of an eligible scan holds, bounded by what the file can supply.
