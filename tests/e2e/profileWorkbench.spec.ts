@@ -145,15 +145,19 @@ test.describe('profile workbench', () => {
     await expect(detail).toBeVisible();
     await expect(detail).toHaveAttribute('aria-label', 'Selected return');
 
+    // The panel is in the document before its rows are, because the section is
+    // measured after the dock opens. `count()` and `textContent()` read once
+    // and do not wait, so on a slow machine they saw the empty panel and read
+    // it as a panel that carries nothing. These wait for the rows to arrive.
     const rows = page.locator('.olv-workbench-detail-row');
-    expect(await rows.count(), 'the detail panel carries rows on open').toBeGreaterThan(0);
+    await expect(rows.first(), 'the detail panel carries rows on open').toBeVisible();
 
     // Each row is a key and a value, so the text is readable as a pair rather
     // than as a number with no name attached to it.
     const firstKey = page.locator('.olv-workbench-detail-key').first();
     const firstValue = page.locator('.olv-workbench-detail-value').first();
-    expect((await firstKey.textContent())?.trim().length).toBeGreaterThan(0);
-    expect((await firstValue.textContent())?.trim().length).toBeGreaterThan(0);
+    await expect(firstKey).not.toBeEmpty();
+    await expect(firstValue).not.toBeEmpty();
   });
 
   test('status is announced politely rather than only drawn', async ({ page }) => {
