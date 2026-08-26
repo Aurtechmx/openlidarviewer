@@ -9,12 +9,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-// @ts-expect-error — plain .mjs script, no types
-import {
-  collectDigestProblems,
-  parseManifest,
-  isManifestName,
-} from '../scripts/lint-digest-manifests.mjs';
+// @ts-expect-error - plain .mjs script, no types
+import { collectDigestProblems, parseManifest, isManifestName } from '../scripts/lint-digest-manifests.mjs';
 
 const A = 'a'.repeat(64);
 const B = 'b'.repeat(64);
