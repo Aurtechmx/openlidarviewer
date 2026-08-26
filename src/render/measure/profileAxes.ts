@@ -99,6 +99,51 @@ function niceStepAtLeast(raw: number): NiceStep {
 }
 
 /**
+ * The nice step whose tick count comes CLOSEST to what was asked for.
+ *
+ * Rounding the raw step up to the next nice value can only ever produce fewer
+ * ticks than the target, and with a 1-2-5 ladder the shortfall reaches a factor
+ * of two and a half: a span of 13.5 asking for six ticks yields a raw step of
+ * 2.25, which rounds to 5 and draws three. An axis that quietly halves the
+ * detail it was asked for is not reporting a limit, it is just coarse.
+ *
+ * Both neighbours are real nice steps, so choosing between them by the count
+ * they produce cannot land on an unreadable number. The step BELOW is only
+ * taken when its count is strictly closer, so a tie keeps the coarser axis and
+ * the choice stays deterministic.
+ */
+function niceStepNearest(raw: number, span: number, target: number): NiceStep {
+  const up = niceStepAtLeast(raw);
+  if (!(span > 0) || !(target > 0)) return up;
+  // One rung down the 1-2-5 ladder: 1 falls to 5 of the decade below.
+  const i = NICE_MANTISSAS.indexOf(up.mantissa);
+  const down: NiceStep =
+    i > 0
+      ? {
+          step: NICE_MANTISSAS[i - 1]! * Math.pow(10, up.exponent),
+          mantissa: NICE_MANTISSAS[i - 1]!,
+          exponent: up.exponent,
+        }
+      : {
+          step: NICE_MANTISSAS[NICE_MANTISSAS.length - 1]! * Math.pow(10, up.exponent - 1),
+          mantissa: NICE_MANTISSAS[NICE_MANTISSAS.length - 1]!,
+          exponent: up.exponent - 1,
+        };
+  if (!(down.step > MIN_STEP)) return up;
+  const missBy = (s: number): number => Math.abs(span / s - target);
+  // The finer rung is taken only when it is nearer AND still respects the
+  // upper bound an axis is entitled to: a caller asking for eight ticks has
+  // said what it has room for, and eleven is not a closer answer to that
+  // question, it is a different one. Without this the nearest rule trades one
+  // failure for its mirror image, drawing a crowded axis instead of a coarse
+  // one.
+  // Ticks, not intervals: a range spanning n steps carries n + 1 of them when
+  // its ends land on step boundaries, which is the crowded case worth bounding.
+  const withinCeiling = Math.floor(span / down.step) + 1 <= target + 1;
+  return withinCeiling && missBy(down.step) < missBy(up.step) ? down : up;
+}
+
+/**
  * Minor divisions per major step, keyed on the step's leading digit: a 1 step
  * splits into 5 (0.2 each), a 2 step into 4 (0.5 each), a 5 step into 5 (1
  * each). Every rule puts the minor lines on a round decimal fraction of the
@@ -144,6 +189,37 @@ function clampTarget(n: number): number {
  * multiple of `step`; every tick lies inside the range whenever the range has
  * width.
  */
+/**
+ * Comfortable spacing between labelled ticks, in CSS pixels.
+ *
+ * The two axes differ because their labels do. A chainage label lies ALONG its
+ * axis and is as wide as its digits, so it needs room for the widest reading
+ * plus a gap. A height label is stacked beside the plot, where what one label
+ * can run into is the line height of its neighbour, which is far smaller than
+ * the text is wide.
+ *
+ * These size the ASK. What actually gets drawn is settled by `fitAxisLabels`,
+ * which drops any label the strip cannot hold, so asking for slightly too many
+ * costs a tick rather than an overlap.
+ */
+export const CHAINAGE_TICK_SPACING_PX = 100;
+export const HEIGHT_TICK_SPACING_PX = 50;
+
+/**
+ * How many ticks a strip of this length can carry.
+ *
+ * A tick target that ignores the plot size gives a wall-sized workbench the
+ * same six ticks as a panel thumbnail, which reads as a coarse axis on the one
+ * surface with room to be precise. Two ticks is the floor because an axis
+ * showing one value states a position without a scale.
+ */
+export function targetTicksForLength(lengthPx: number, spacingPx: number): number {
+  if (!Number.isFinite(lengthPx) || !Number.isFinite(spacingPx) || spacingPx <= 0) {
+    return DEFAULT_TARGET_TICKS;
+  }
+  return Math.min(MAX_TARGET_TICKS, Math.max(2, Math.round(lengthPx / spacingPx)));
+}
+
 export function axisTicks(min: number, max: number, targetCount: number): AxisTicks {
   const a = Number.isFinite(min) ? min : 0;
   const b = Number.isFinite(max) ? max : 0;
@@ -156,7 +232,7 @@ export function axisTicks(min: number, max: number, targetCount: number): AxisTi
   // step below that cannot separate two ticks and would emit a duplicate list.
   const floorStep = Math.max(MIN_STEP, magnitude * Number.EPSILON * 8);
   const raw = span > 0 ? span / target : magnitude > 0 ? magnitude / target : 1;
-  const nice = niceStepAtLeast(Math.max(raw, floorStep));
+  const nice = niceStepNearest(Math.max(raw, floorStep), span, target);
   const decimals = Math.min(MAX_DECIMALS, Math.max(0, -nice.exponent));
   const step = nice.step;
 

@@ -55,8 +55,11 @@ import {
 } from '../render/measure/profileProvenance';
 import {
   axisSpanCaption,
+  CHAINAGE_TICK_SPACING_PX,
   fitAxisLabels,
+  HEIGHT_TICK_SPACING_PX,
   profileAxes,
+  targetTicksForLength,
 } from '../render/measure/profileAxes';
 import {
   selectProfileSectionLod,
@@ -165,9 +168,6 @@ export const AXIS_LABEL_INSET_PX = 4;
 const AXIS_RULE_COLOUR = 'rgba(255, 255, 255, 0.10)';
 const AXIS_TEXT_COLOUR = 'rgba(255, 255, 255, 0.62)';
 const AXIS_TITLE_COLOUR = 'rgba(255, 255, 255, 0.45)';
-
-/** Target major ticks per axis. Fewer than the plot could hold, so labels fit. */
-export const AXIS_TARGET_TICKS = 6;
 
 /**
  * The 2D context, with the text calls the axis needs.
@@ -483,8 +483,11 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
         horizontalUnit: axisUnit,
         verticalUnit: axisUnit,
         units: { horizontalToMetres: null, verticalToMetres: null },
-        targetXTicks: AXIS_TARGET_TICKS,
-        targetYTicks: AXIS_TARGET_TICKS,
+        // Derived from the plot, not fixed: this canvas is often ten times the
+        // width of the panel thumbnail, and a constant target spends that room
+        // on whitespace.
+        targetXTicks: targetTicksForLength(viewport.width, CHAINAGE_TICK_SPACING_PX),
+        targetYTicks: targetTicksForLength(viewport.height, HEIGHT_TICK_SPACING_PX),
       }),
       viewport,
     );
