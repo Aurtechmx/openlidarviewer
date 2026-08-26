@@ -21,11 +21,16 @@ import { traceOccupancyBoundary, type Pt2 } from './footprintTrace';
 export interface FootprintGrid {
   readonly originX: number;
   readonly originY: number;
-  readonly cellSizeM: number;
+  /**
+   * Grid cell size in the INPUT's own unit, matching the point coordinates.
+   * Not metres: the caller grids in whatever frame the scan arrived in, and
+   * naming it so let a foot-unit cell size be read as a metric one.
+   */
+  readonly cellSizeSource: number;
   /** At least this many building points make a cell occupied. Default 1. */
   readonly minPointsPerCell?: number;
-  /** Components below this area (m²) are dropped as noise. Default 4. */
-  readonly minAreaM2?: number;
+  /** Components below this area, in the input's own unit squared, are dropped as noise. Default 4. */
+  readonly minAreaSource?: number;
 }
 
 export interface Footprint {
@@ -40,7 +45,8 @@ export interface Footprint {
    */
   readonly ring: readonly Pt2[];
   readonly cellCount: number;
-  readonly areaM2: number;
+  /** Cell-count area, in the input's own unit squared. */
+  readonly areaSource: number;
   readonly centroidX: number;
   readonly centroidY: number;
   readonly minX: number;
@@ -56,7 +62,7 @@ export interface BuildingPoint {
 
 /** Extract footprints from building points over the given grid. */
 export function extractBuildingFootprints(points: readonly BuildingPoint[], grid: FootprintGrid): Footprint[] {
-  const cell = grid.cellSizeM;
+  const cell = grid.cellSizeSource;
   // cell must be a positive, FINITE size. `Number.isFinite` rejects NaN AND
   // Infinity in one check — an Infinity cell would bin every point into one
   // cell and report an Infinity area.
@@ -66,7 +72,7 @@ export function extractBuildingFootprints(points: readonly BuildingPoint[], grid
   // false), which would admit noise as a building. Fall back to the defaults.
   const rawMinPts = grid.minPointsPerCell ?? 1;
   const minPts = Number.isFinite(rawMinPts) && rawMinPts >= 1 ? rawMinPts : 1;
-  const rawMinArea = grid.minAreaM2 ?? 4;
+  const rawMinArea = grid.minAreaSource ?? 4;
   const minArea = Number.isFinite(rawMinArea) && rawMinArea >= 0 ? rawMinArea : 4;
 
   // Bin points to integer cell coordinates and count per cell.
@@ -111,8 +117,8 @@ export function extractBuildingFootprints(points: readonly BuildingPoint[], grid
         }
       }
     }
-    const areaM2 = cells.length * cell * cell;
-    if (areaM2 < minArea) continue;
+    const areaSource = cells.length * cell * cell;
+    if (areaSource < minArea) continue;
     // Footprint geometry from the cell block (cell centres in world coords).
     let sx = 0, sy = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const [cx, cy] of cells) {
@@ -128,12 +134,12 @@ export function extractBuildingFootprints(points: readonly BuildingPoint[], grid
     // Trace the block's outline once, here, where the cells still exist.
     const ring = traceOccupancyBoundary(cells, cell, grid.originX, grid.originY);
     footprints.push({
-      ring, cellCount: cells.length, areaM2,
+      ring, cellCount: cells.length, areaSource,
       centroidX: sx / cells.length, centroidY: sy / cells.length,
       minX, minY, maxX, maxY,
     });
   }
   // Deterministic order: largest footprint first, then by centroid.
-  footprints.sort((a, b) => b.areaM2 - a.areaM2 || a.centroidX - b.centroidX || a.centroidY - b.centroidY);
+  footprints.sort((a, b) => b.areaSource - a.areaSource || a.centroidX - b.centroidX || a.centroidY - b.centroidY);
   return footprints;
 }

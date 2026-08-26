@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { extractBuildingFootprints, type BuildingPoint, type FootprintGrid } from '../src/features/buildingFootprints';
 
-const GRID: FootprintGrid = { originX: 0, originY: 0, cellSizeM: 1, minPointsPerCell: 1, minAreaM2: 4 };
+const GRID: FootprintGrid = { originX: 0, originY: 0, cellSizeSource: 1, minPointsPerCell: 1, minAreaSource: 4 };
 
 /** Fill an axis-aligned rectangle [x0,x1)×[y0,y1) with points at ~0.4 m spacing. */
 function rect(x0: number, y0: number, x1: number, y1: number): BuildingPoint[] {
@@ -22,11 +22,11 @@ describe('extractBuildingFootprints', () => {
     const fps = extractBuildingFootprints([...a, ...b, ...c], GRID);
     expect(fps).toHaveLength(3);
     // Largest first (deterministic order).
-    expect(fps[0].areaM2).toBeGreaterThan(fps[1].areaM2);
+    expect(fps[0].areaSource).toBeGreaterThan(fps[1].areaSource);
     // The 10×10 building's area and centroid.
     const big = fps[0];
-    expect(big.areaM2).toBeGreaterThan(90);
-    expect(big.areaM2).toBeLessThan(115);
+    expect(big.areaSource).toBeGreaterThan(90);
+    expect(big.areaSource).toBeLessThan(115);
     expect(big.centroidX).toBeCloseTo(35, 0);
     expect(big.centroidY).toBeCloseTo(35, 0);
   });
@@ -39,19 +39,19 @@ describe('extractBuildingFootprints', () => {
 
   it('drops sub-threshold noise clusters (honest: a stray point is not a building)', () => {
     const building = rect(0, 0, 10, 10);
-    const noise: BuildingPoint[] = [{ x: 50, y: 50 }, { x: 51, y: 51 }]; // < minAreaM2
+    const noise: BuildingPoint[] = [{ x: 50, y: 50 }, { x: 51, y: 51 }]; // < minAreaSource
     const fps = extractBuildingFootprints([...building, ...noise], GRID);
     expect(fps).toHaveLength(1); // only the real building survives
   });
 
   it('empty input and non-positive cell size yield no footprints', () => {
     expect(extractBuildingFootprints([], GRID)).toEqual([]);
-    expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeM: 0 })).toEqual([]);
+    expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeSource: 0 })).toEqual([]);
   });
 
   it('rejects a non-finite (NaN / Infinity) cell size fail-closed', () => {
-    expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeM: Number.NaN })).toEqual([]);
-    expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeM: Infinity })).toEqual([]);
+    expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeSource: Number.NaN })).toEqual([]);
+    expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeSource: Infinity })).toEqual([]);
   });
 
   it('skips non-finite XY points without corrupting the footprint', () => {
@@ -71,7 +71,7 @@ describe('extractBuildingFootprints', () => {
     const noise: BuildingPoint[] = [{ x: 50, y: 50 }, { x: 51, y: 51 }];
     // NaN thresholds must not silently admit the noise cluster.
     const fps = extractBuildingFootprints([...building, ...noise], {
-      ...GRID, minAreaM2: Number.NaN, minPointsPerCell: Number.NaN,
+      ...GRID, minAreaSource: Number.NaN, minPointsPerCell: Number.NaN,
     });
     expect(fps).toHaveLength(1);
   });

@@ -19,7 +19,7 @@ import type { BuildingPoint } from '../src/features/buildingFootprints';
 import { knownUnit } from '../src/units/units';
 
 const METRE = knownUnit(1);
-const GRID = { originX: 0, originY: 0, cellSizeM: 1, minPointsPerCell: 1, minAreaM2: 4 };
+const GRID = { originX: 0, originY: 0, cellSizeSource: 1, minPointsPerCell: 1, minAreaSource: 4 };
 
 function block(ox = 0, oy = 0, n = 10): BuildingPoint[] {
   const pts: BuildingPoint[] = [];
