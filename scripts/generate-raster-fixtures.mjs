@@ -49,6 +49,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -733,6 +734,6 @@ function main() {
 }
 
 // Only write files when run directly; the test imports the surface definitions.
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   main();
 }

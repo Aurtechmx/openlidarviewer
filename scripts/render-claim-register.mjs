@@ -24,6 +24,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const YAML = resolve(ROOT, 'docs/validation/claim-register.yaml');
@@ -123,7 +124,7 @@ const cell = (s) => String(s ?? '—').replace(/\\/g, '\\\\').replace(/\|/g, '\\
 }
 
 // CLI entry — only when run directly, not when imported by the test.
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   const parsed = parseClaimRegister(readFileSync(YAML, 'utf8'));
   const missing = parsed.claims.filter(
     (c) => !c.product || !c.algorithm || !c.current || !c.required || !c.approvedClaim,

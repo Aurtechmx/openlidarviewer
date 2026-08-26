@@ -115,6 +115,7 @@ import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -537,6 +538,6 @@ export function readFixture(id) {
   return { points: parseFixtureCsv(csv), truth: parseTruth(tru) };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   main();
 }

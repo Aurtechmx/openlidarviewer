@@ -55,6 +55,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, relative, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { binaryOnPath } from './lib/binaryOnPath.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const VALIDATION = resolve(ROOT, 'validation');
@@ -355,6 +356,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   main();
 }
