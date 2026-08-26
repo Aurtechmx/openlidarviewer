@@ -21,6 +21,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 import { releaseDocPaths } from './lib/releaseDocs.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
@@ -103,7 +104,7 @@ export function validateReleaseRef({ env = {}, git = {}, files = {}, requireTag 
 }
 
 function isMain() {
-  return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  return isCliEntry(import.meta.url);
 }
 
 if (isMain()) {

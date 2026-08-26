@@ -25,6 +25,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY = join(ROOT, 'validation/reachability/claims.json');
@@ -150,6 +151,6 @@ function main() {
   process.exit(failed === 0 ? 0 : 1);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) main();
+if (isCliEntry(import.meta.url)) main();
 
 export { REGISTRY, LEDGER_DIR };

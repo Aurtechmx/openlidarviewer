@@ -31,6 +31,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
@@ -312,6 +313,6 @@ async function main() {
   return report.verdict === 'PASS' ? 0 : 1;
 }
 
-if (process.argv[1] && process.argv[1].endsWith('publication-battery.mjs')) {
+if (isCliEntry(import.meta.url)) {
   process.exit(await main());
 }

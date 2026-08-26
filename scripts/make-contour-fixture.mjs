@@ -34,6 +34,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(HERE, '../tests/fixtures/reference/contour');
@@ -91,7 +92,7 @@ function writeAsc(path) {
 
 // Run as a script: write the DEM. The GDAL reference is produced separately by
 // the documented `gdal_contour` command (see docs/validation/cross-implementation.md).
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isCliEntry(import.meta.url)) {
   mkdirSync(OUT_DIR, { recursive: true });
   const demPath = resolve(OUT_DIR, 'input-dem.asc');
   writeAsc(demPath);

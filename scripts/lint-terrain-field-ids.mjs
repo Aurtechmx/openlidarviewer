@@ -43,6 +43,7 @@
 import { readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
 import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FIELD_DIR = resolve(ROOT, 'validation/terrain-field');
@@ -138,7 +139,7 @@ export function collectTerrainFieldProblems(manifest, crops, registerIds) {
 
 /** True when this module is the entry point rather than an import. */
 const real = (p) => { try { return realpathSync(resolve(p)); } catch { return resolve(p); } };
-const isCli = real(process.argv[1] ?? '') === real(fileURLToPath(import.meta.url));
+const isCli = isCliEntry(import.meta.url);
 
 if (isCli) {
   const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));

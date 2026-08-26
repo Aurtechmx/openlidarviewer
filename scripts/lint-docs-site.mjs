@@ -27,6 +27,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, relative, sep } from 'node:path';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 /**
  * Every FORBIDDEN pattern below is anchored on `/`. A path from
@@ -137,6 +138,6 @@ function run() {
 // Import-safe: the checks run only when invoked as a script, so the unit test
 // can import htmlShowsEscapedComment without triggering a lint pass (the same
 // guard lint-unsafe-html.mjs uses).
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   run();
 }

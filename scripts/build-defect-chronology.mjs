@@ -27,6 +27,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
@@ -467,4 +468,4 @@ function main() {
   process.exit(check && stale > 0 ? 1 : 0);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (isCliEntry(import.meta.url)) main();

@@ -51,10 +51,10 @@ import {
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { platform, arch } from 'node:process';
 import { FIXTURES, MATRIX_DIR, FIXTURE_DIR, SUNS, cellMetres } from './generate-raster-fixtures.mjs';
 import { binaryOnPath } from './lib/binaryOnPath.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const OUT_DIR = resolve(MATRIX_DIR, 'gdal');
 const GDALDEM = 'gdaldem';
@@ -264,6 +264,6 @@ function main() {
 
 export { buildArgs };
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   main();
 }

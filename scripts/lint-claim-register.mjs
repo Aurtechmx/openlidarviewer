@@ -54,6 +54,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, relative, resolve, dirname } from 'node:path';
 import { loadStudies, STUDIES_DIR } from './verify-cross-implementation-study.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -384,7 +385,7 @@ export function readStudies(dir) {
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 function isMain() {
-  return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  return isCliEntry(import.meta.url);
 }
 
 if (isMain()) {

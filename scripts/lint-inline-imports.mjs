@@ -40,6 +40,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, relative } from 'node:path';
 import { parseSync } from 'vite';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(HERE, '..', 'src');
@@ -125,8 +126,7 @@ export function findRuntimeRelativeImports(source, fileName = 'file.ts') {
 // Run the scan only when invoked as a command. Importing this module (the
 // regression tests import `findRuntimeRelativeImports`) must not scan the tree
 // or call process.exit.
-const INVOKED_DIRECTLY =
-  process.argv[1] != null && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const INVOKED_DIRECTLY = isCliEntry(import.meta.url);
 
 if (INVOKED_DIRECTLY) {
   const offenders = [];

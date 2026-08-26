@@ -55,11 +55,17 @@ const run = (
 /** A scaffold the real CLI can be pointed at: it resolves paths from its own location. */
 function scaffold(manifestDoc: unknown, crops: Record<string, unknown>): string {
   const dir = mkdtempSync(join(tmpdir(), 'olv-field-ids-'));
-  mkdirSync(join(dir, 'scripts'), { recursive: true });
+  mkdirSync(join(dir, 'scripts/lib'), { recursive: true });
   mkdirSync(join(dir, 'validation/terrain-field/datasets'), { recursive: true });
   mkdirSync(join(dir, 'validation/terrain-field/crops'), { recursive: true });
   mkdirSync(join(dir, 'validation/datasets'), { recursive: true });
   copyFileSync(LINT, join(dir, 'scripts/lint-terrain-field-ids.mjs'));
+  // The CLI imports the shared entry guard by relative path, so the scaffold
+  // needs it beside the script or the spawn fails before any rule runs.
+  copyFileSync(
+    resolve(ROOT, 'scripts/lib/isCliEntry.mjs'),
+    join(dir, 'scripts/lib/isCliEntry.mjs'),
+  );
   writeFileSync(
     join(dir, 'validation/terrain-field/datasets/manifest.json'),
     JSON.stringify(manifestDoc),

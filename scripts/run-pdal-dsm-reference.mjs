@@ -57,6 +57,7 @@ import { fileURLToPath } from 'node:url';
 import { platform, arch } from 'node:process';
 import { FIXTURES, PIPELINE_DIR, EXTENT_M, DTM_CELL_M } from './generate-point-cloud-fixtures.mjs';
 import { binaryOnPath } from './lib/binaryOnPath.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = resolve(PIPELINE_DIR, 'pdal');
@@ -258,6 +259,6 @@ function main() {
   process.exit(0);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   main();
 }

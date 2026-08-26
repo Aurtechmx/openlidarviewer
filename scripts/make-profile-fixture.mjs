@@ -44,6 +44,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 import {
   RAMP_A, RAMP_B, RAMP_SAMPLES, RAMP_BAND, RAMP_BIN_STEP,
   RAMP_T_START, RAMP_T_STEP, RAMP_T_COUNT, RAMP_CROSS,
@@ -301,7 +302,7 @@ function writeEndcap() {
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isCliEntry(import.meta.url)) {
   mkdirSync(OUT_DIR, { recursive: true });
   const ramp = writeRamp();
   const scatter = writeScatter();

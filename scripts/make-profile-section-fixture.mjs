@@ -21,6 +21,7 @@
  * Orientation beyond Z-up is covered by the metamorphic relations, not here.
  */
 import { writeFileSync } from 'node:fs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 /** Section endpoints. Oblique, and dyadic so the length is exact. */
 export const SECTION_A = [-8, 6];
@@ -196,7 +197,7 @@ export function writeExpected(path) {
   return rows.length;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isCliEntry(import.meta.url)) {
   const base = 'validation/cross-implementation/profile';
   const a = writeSectionFixture(`${base}/profile-section.csv`);
   writeExpected(`${base}/profile-section__expected.csv`);

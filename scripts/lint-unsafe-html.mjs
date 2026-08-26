@@ -21,6 +21,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, relative } from 'node:path';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(HERE, '..', 'src');
@@ -88,7 +89,7 @@ function walk(dir) {
 }
 
 // CLI entry — only when run directly, not when imported by the test.
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   const offenders = [];
   for (const file of walk(SRC)) {
     offenders.push(...scanSource(readFileSync(file, 'utf8'), relative(resolve(HERE, '..'), file)));

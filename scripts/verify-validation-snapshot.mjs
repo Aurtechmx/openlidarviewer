@@ -43,6 +43,7 @@ import {
 } from './validation-snapshot-lib.mjs';
 import { evidenceReader, writeManifest } from './build-validation-snapshot.mjs';
 import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_DIR = join(ROOT, 'validation/snapshot');
@@ -449,7 +450,7 @@ function main() {
   return ok ? 0 : 1;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+if (isCliEntry(import.meta.url)) {
   try {
     process.exit(main());
   } catch (err) {

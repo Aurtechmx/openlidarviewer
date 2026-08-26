@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 import { platform, arch } from 'node:process';
 import { binaryOnPath } from './lib/binaryOnPath.mjs';
 import { N, CELL, TPI_C, VRM_A, VRM_C, coord } from './descriptor-fixture-params.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, 'validation/cross-implementation/descriptor');
@@ -144,4 +145,4 @@ function main() {
   process.stdout.write(`descriptor fixtures + references written to ${rel(OUT)} (tpi exit ${tpiRun.code}, vrm saga exit ${sagaRun.code})\n`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) main();
+if (isCliEntry(import.meta.url)) main();

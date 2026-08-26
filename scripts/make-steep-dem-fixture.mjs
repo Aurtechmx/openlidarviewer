@@ -60,6 +60,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = resolve(ROOT, 'tests/fixtures/dem-steep');
@@ -159,4 +160,4 @@ function main() {
   console.log(`  analytic slope range: ${min.toFixed(3)}deg .. ${max.toFixed(3)}deg`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (isCliEntry(import.meta.url)) main();

@@ -45,6 +45,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -138,7 +139,7 @@ export function collectMetricRegressions(record, baseline = FROZEN_BASELINE, tol
 }
 
 function isMain() {
-  return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  return isCliEntry(import.meta.url);
 }
 
 if (isMain()) {

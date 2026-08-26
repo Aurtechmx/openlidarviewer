@@ -36,6 +36,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_REGISTER = 'validation/datasets/dataset-register.yaml';
@@ -420,7 +421,7 @@ function arg(name, fallback) {
 }
 
 function isMain() {
-  return process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  return isCliEntry(import.meta.url);
 }
 
 if (isMain()) {

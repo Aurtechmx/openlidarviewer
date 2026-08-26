@@ -35,6 +35,7 @@
 import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -235,7 +236,7 @@ export function observeBranch(baseRef, headRef, extra = {}, cwd = ROOT) {
   return { baseRef, surface, redundant, realCount, mergeCommits, commitsBehind, ...extra };
 }
 
-const isCli = resolve(process.argv[1] ?? '') === resolve(fileURLToPath(import.meta.url));
+const isCli = isCliEntry(import.meta.url);
 
 if (isCli) {
   const base = process.env.PR_BASE_REF ? `origin/${process.env.PR_BASE_REF}` : 'origin/main';
