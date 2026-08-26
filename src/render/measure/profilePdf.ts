@@ -18,10 +18,11 @@
  *     was recorded, the value, and an engineering remark saying how to read
  *     it. The remark column is the half a reader who did not build the export
  *     cannot reconstruct.
- *   - METHOD AND SOURCES. The derived series named exactly as the on-screen
- *     legend names it, the height reference, the contributing sources by
- *     stable layer id with their classification kind and read kind, the
- *     class-exclusion policy and how far it reached, and the read scope.
+ *   - METHOD AND SOURCES. How the series was derived, in the on-screen
+ *     legend's own sentences, the declared height reference and CRS, the
+ *     contributing sources by stable layer id with their classification kind
+ *     and read kind, the class-exclusion policy and how far it reached, and
+ *     the identity of the provenance record itself.
  *   - STATION SCHEDULE. Chainage, height and grade per station in four column
  *     groups, so values are exact rather than eyeballed off the graph, with a
  *     legend stating what a gap and a dash mean.
@@ -29,6 +30,26 @@
  * Any of the last three continues onto further sheets when the data needs
  * them. The title block's SHEET n / m takes m from the page count the
  * document actually reached, so the set always states its own size.
+ *
+ * Each fact is stated ONCE per sheet, in the one place a reader of a drawing
+ * goes looking for it, because a sheet that answers a question twice makes
+ * the reader check whether the two answers agree:
+ *
+ *   - identity and reference - the measurement name, the horizontal CRS, the
+ *     sheet number, the status, the revision - belong to the title block, so
+ *     no sheet header repeats them;
+ *   - the headline figures of the section - length, relief, extremes, grades,
+ *     coverage, gaps, corridor half width - belong to the KPI band;
+ *   - the standing qualifications belong to the numbered general notes, which
+ *     repeat on every sheet of the set on purpose, because a sheet that
+ *     leaves the set carries its caveats with it;
+ *   - the key beside the plotted line names the series and points at the note
+ *     that states the method, rather than restating it a second time within
+ *     an inch of it.
+ *
+ * A disclosure is not a repetition: the station band says how many of the
+ * section's stations it had room to label, because a band showing one station
+ * in twelve looks exactly like a band showing every one of them.
  *
  * The stated horizontal and vertical scales (1:N each), the resulting vertical
  * exaggeration and the print instruction sit in the plot header, so distances
@@ -110,7 +131,11 @@ import { buildStationBand } from './profileSheetLayout';
 const FEET_PER_METRE = 3.280839895013123;
 
 export interface ProfilePdfInput {
-  /** Measurement name, shown as the sheet subtitle. */
+  /**
+   * Measurement name. It is the PROJECT field of the title block, on every
+   * sheet of the set, and it is printed nowhere else: a name repeated in a
+   * sheet header is the same identity given twice on one sheet.
+   */
   readonly name: string;
   /** Height-vs-distance samples (metres). */
   readonly samples: ReadonlyArray<ProfileChartSample>;
@@ -243,9 +268,7 @@ const RULE = rgb(0.7, 0.74, 0.8);
  * words on a sheet; past about a fifth it stops meaning anything.
  */
 const T_TITLE = 18; // sheet title, bold
-const T_SUBTITLE = 10.5; // measurement name under the title
 const T_STAMP = 9; // generation stamp, top right
-const T_META = 8.5; // CRS / corridor / percentile line under the stamp
 const T_SCALE = 10; // the scale + exaggeration + print statement, bold
 const T_AXIS = 10; // axis titles
 const T_TICK = 9; // grid tick figures, monospaced
@@ -830,18 +853,18 @@ function drawFurniture(
   );
 }
 
-/** The header every sheet opens with: title left, stamp right, closing rule. */
-function drawSheetHeader(
-  p: PDFPage,
-  f: Faces,
-  title: string,
-  subtitle: string,
-  stamp: string,
-  meta: string | null,
-): number {
+/**
+ * The header every sheet opens with: the sheet's own title left, the
+ * generation stamp right, a closing rule under both.
+ *
+ * It carries no measurement name, no CRS and no sampler settings. Every one
+ * of those is a field of the title block or a cell of the KPI band, which is
+ * where a reader of a drawing goes looking for them, and a header that
+ * repeats them makes a reader check whether the two copies agree.
+ */
+function drawSheetHeader(p: PDFPage, f: Faces, title: string, stamp: string): number {
   const top = PAGE_H - M;
   put(p, title, M, top - T_TITLE, T_TITLE, f.bold, INK);
-  put(p, subtitle, M, top - 36, T_SUBTITLE, f.font, INK_DIM);
   put(
     p,
     stamp,
@@ -851,17 +874,6 @@ function drawSheetHeader(
     f.font,
     INK_MUTED,
   );
-  if (meta != null) {
-    put(
-      p,
-      meta,
-      PAGE_W - M - f.font.widthOfTextAtSize(winAnsiSafe(meta), T_META),
-      top - 33,
-      T_META,
-      f.font,
-      INK_MUTED,
-    );
-  }
   rule(p, M, top - 46, PAGE_W - M, top - 46, RULE, 0.6);
   return top - 46;
 }
@@ -958,23 +970,13 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     },
   });
 
-  const metaLine = (() => {
-    const meta = [
-      input.crs ? `CRS ${input.crs}` : null,
-      input.corridorWidthM != null ? `corridor +/-${lenStr(input.corridorWidthM)}` : null,
-      input.groundPercentile != null ? `p${Math.round(input.groundPercentile)} of corridor` : null,
-    ].filter((s): s is string => s !== null);
-    return meta.length > 0 ? winAnsiSafe(meta.join('  ·  ')) : null;
-  })();
   // `Terrain Profile` is drawn as one string, untracked: it is how the
   // sheet's own tests find sheet one.
   const headerBot = drawSheetHeader(
     page,
     f,
     'Terrain Profile',
-    input.name,
     `Generated ${when.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
-    metaLine,
   );
 
   // Plot box (pdf coords, y up).
@@ -1242,14 +1244,22 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     put(page, 'No covered samples — nothing to plot.', plotLeft, plotTopY - 20, 11, f.font, INK_DIM);
   }
 
-  // Chart legend swatch. The caption is the legend's own, so the plotted
-  // series is named on the print exactly as it is named on screen. Clipped
-  // against the space the band caption leaves on the same line, so a long
-  // series name cannot print over it.
+  // Chart legend swatch: the pen, the name of the series it draws, and the
+  // number of the note that says what the series is.
+  //
+  // The name is the legend's own, so the plotted series is named on the print
+  // exactly as it is named on screen. What the name does NOT carry here is
+  // the method, the station count or the gap count: general note 1 states the
+  // method in full on this sheet and on every other sheet of the set, the
+  // band caption below states how many stations are drawn, and the KPI band
+  // states how many returned nothing. A key that restated all three would put
+  // the same three facts twice on one sheet and give a reader two wordings to
+  // reconcile. Clipped against the space the band caption leaves on the same
+  // line, so a long series name cannot print over it.
   rule(page, M, bandBot - 13, M + 18, bandBot - 13, CURVE, 1.6);
   put(
     page,
-    clipText(legend.caption, f.font, T_CAPTION, plotRight - M - 26 - 240),
+    clipText(`${legend.seriesName} - see general note 1`, f.font, T_CAPTION, plotRight - M - 26 - 240),
     M + 26,
     bandBot - 16,
     T_CAPTION,
@@ -1263,20 +1273,30 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   // and the notes table cannot round the same quantity two ways.
   const bare = (s: string) => s.replace(/\s+(m|ft)$/, '').replace(/%$/, '');
   drawKpiBand(page, f, bandBot - 32, [
-    [`LENGTH (${unit})`, bare(lenStr(len))],
-    [`RELIEF (${unit})`, stats.reliefSpan == null ? '-' : bare(lenStr(stats.reliefSpan))],
-    [
-      `MIN / MAX (${unit})`,
-      minEl == null || maxEl == null ? '-' : `${(minEl * k).toFixed(2)} / ${(maxEl * k).toFixed(2)}`,
-    ],
-    ['MEAN GRADE (%)', bare(formatGradePercent(stats.meanGrade))],
-    ['MAX GRADE (%)', bare(formatGradePercent(stats.maxGrade))],
-    ['COVERAGE (%)', `${(stats.coverage * 100).toFixed(0)}`],
-    ['GAPS', `${gapCount}`],
-    [
-      `CORRIDOR +/- (${unit})`,
-      input.corridorWidthM != null ? (input.corridorWidthM * k).toFixed(2) : 'auto',
-    ],
+    { label: `LENGTH (${unit})`, value: bare(lenStr(len)) },
+    {
+      label: `RELIEF (${unit})`,
+      value: stats.reliefSpan == null ? '-' : bare(lenStr(stats.reliefSpan)),
+    },
+    {
+      label: `MIN / MAX (${unit})`,
+      value:
+        minEl == null || maxEl == null
+          ? '-'
+          : `${(minEl * k).toFixed(2)} / ${(maxEl * k).toFixed(2)}`,
+      // Two figures and a separator in one cell, so it is given two cells of
+      // width. A pair set in a cell sized for a single figure is a pair with
+      // its second half trimmed off, and a trimmed height is a wrong height.
+      span: 2,
+    },
+    { label: 'MEAN GRADE (%)', value: bare(formatGradePercent(stats.meanGrade)) },
+    { label: 'MAX GRADE (%)', value: bare(formatGradePercent(stats.maxGrade)) },
+    { label: 'COVERAGE (%)', value: `${(stats.coverage * 100).toFixed(0)}` },
+    { label: 'GAPS', value: `${gapCount}` },
+    {
+      label: `CORRIDOR +/- (${unit})`,
+      value: input.corridorWidthM != null ? (input.corridorWidthM * k).toFixed(2) : 'auto',
+    },
   ]);
 
   // ── Sheet 2: technical notes ───────────────────────────────────────────
@@ -1396,22 +1416,20 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     },
   ];
 
-  renderTechnicalNotes(doc, f, sheets, { name: input.name, rows: notesRows });
+  renderTechnicalNotes(doc, f, sheets, { rows: notesRows });
 
   // ── Sheet 3: method and sources ────────────────────────────────────────
   renderMethodSheet(doc, f, sheets, {
-    name: input.name,
     legend,
     record,
     reference,
     crs: input.crs ?? null,
     verticalDatum: datumKnown ? (input.verticalDatum ?? null) : null,
     datumKnown,
-    residentOnly,
   });
 
   // ── Sheet 4+: the station schedule ─────────────────────────────────────
-  renderStationSchedule(doc, f, sheets, stats.stations, input.name, system, reference);
+  renderStationSchedule(doc, f, sheets, stats.stations, system, reference);
 
   // The furniture is stamped LAST, once every page exists, so `SHEET n / m`
   // takes its total from the page count the document actually reached.
@@ -1421,9 +1439,21 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   return doc.save();
 }
 
+/** One cell of the KPI band. `span` buys a cell the width of two. */
+interface KpiCell {
+  readonly label: string;
+  readonly value: string;
+  readonly span?: number;
+}
+
 /**
  * The ruled KPI band under the section: the eight figures a reader takes off
  * a profile, each in its own cell with a quiet tracked label over it.
+ *
+ * This band is where the headline figures of the section live, and it is the
+ * only place on the sheet that states them: the corridor half width, the
+ * coverage and the gap count are cells here rather than a line of small print
+ * in the sheet header.
  *
  * Ruled into cells rather than set as a row of headings, because a cell is
  * what tells a reader that the label above a figure belongs to that figure
@@ -1437,26 +1467,32 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
  * values and hides it in the label of others makes a reader check each cell
  * for which convention it followed.
  */
-function drawKpiBand(
-  p: PDFPage,
-  f: Faces,
-  top: number,
-  cells: ReadonlyArray<readonly [string, string]>,
-): void {
+function drawKpiBand(p: PDFPage, f: Faces, top: number, cells: ReadonlyArray<KpiCell>): void {
   const x0 = M;
   const x1 = PAGE_W - M;
   const h = 56;
-  const cellW = (x1 - x0) / cells.length;
+  const units = cells.reduce((n, c) => n + (c.span ?? 1), 0);
+  const unitW = (x1 - x0) / units;
   // The accent rule that opens the band, used here and on the section line
   // and nowhere else on the sheet, which is what keeps it an accent.
   rule(p, x0, top, x1, top, CURVE, 1);
   rule(p, x0, top - h, x1, top - h, RULE, 0.6);
-  cells.forEach(([label, value], i) => {
-    const x = x0 + i * cellW;
+  let x = x0;
+  for (const [i, cell] of cells.entries()) {
+    const w = unitW * (cell.span ?? 1);
     if (i > 0) rule(p, x, top - h, x, top, RULE, 0.5);
-    trackedText(p, label, x + 8, top - 16, T_KPI_LABEL, f.font, INK_MUTED);
-    put(p, clipText(value, f.bold, T_KPI_VALUE, cellW - 16), x + 8, top - 44, T_KPI_VALUE, f.bold, INK);
-  });
+    trackedText(p, cell.label, x + 8, top - 16, T_KPI_LABEL, f.font, INK_MUTED);
+    put(
+      p,
+      clipText(cell.value, f.bold, T_KPI_VALUE, w - 16),
+      x + 8,
+      top - 44,
+      T_KPI_VALUE,
+      f.bold,
+      INK,
+    );
+    x += w;
+  }
 }
 
 interface CalloutInput {
@@ -1528,7 +1564,6 @@ function drawMaxGradeCallout(p: PDFPage, f: Faces, input: CalloutInput): void {
 }
 
 interface TechnicalNotesInput {
-  readonly name: string;
   readonly rows: ReadonlyArray<{
     item: string;
     value: string;
@@ -1538,14 +1573,12 @@ interface TechnicalNotesInput {
 }
 
 interface MethodSheetInput {
-  readonly name: string;
   readonly legend: DerivedSurfaceLegend;
   readonly record: ProfileProvenance | null;
   readonly reference: VerticalReference;
   readonly crs: string | null;
   readonly verticalDatum: string | null;
   readonly datumKnown: boolean;
-  readonly residentOnly: boolean;
 }
 
 /**
@@ -1581,13 +1614,13 @@ function renderTechnicalNotes(
       : 'Recorded information, its value, and the engineering remark that qualifies it.',
   });
   sheets.push({ page, identity: identity() });
-  let y = drawSheetHeader(page, f, 'Technical notes', input.name, '', null) - 22;
+  let y = drawSheetHeader(page, f, 'Technical notes', '') - 22;
 
   const newPage = () => {
     continued = true;
     page = doc.addPage([PAGE_W, PAGE_H]);
     sheets.push({ page, identity: identity() });
-    y = drawSheetHeader(page, f, 'Technical notes (continued)', input.name, '', null) - 22;
+    y = drawSheetHeader(page, f, 'Technical notes (continued)', '') - 22;
   };
 
   const tableHead = () => {
@@ -1629,9 +1662,11 @@ function renderTechnicalNotes(
  * Its own sheet rather than the tail of the notes table, because the two
  * answer different questions and a page break that lands wherever the table
  * happened to end leaves a reader holding half of one answer. Every sentence
- * about the series is the legend's own. The source table is keyed on the
- * stable layer id, because a display name is user-editable and so is human
- * context rather than identity.
+ * about the series is the legend's own, less the ones the general notes at
+ * the foot of this same sheet already carry, which are pointed at by number
+ * instead. The source table is keyed on the stable layer id, because a
+ * display name is user-editable and so is human context rather than
+ * identity.
  */
 function renderMethodSheet(
   doc: PDFDocument,
@@ -1656,14 +1691,13 @@ function renderMethodSheet(
       : 'How the section was derived, what the heights are measured from, and what was read.',
   });
   sheets.push({ page, identity: identity() });
-  let y =
-    drawSheetHeader(page, f, 'Method and sources', input.name, '', null) - 22;
+  let y = drawSheetHeader(page, f, 'Method and sources', '') - 22;
 
   const newPage = () => {
     continued = true;
     page = doc.addPage([PAGE_W, PAGE_H]);
     sheets.push({ page, identity: identity() });
-    y = drawSheetHeader(page, f, 'Method and sources (continued)', input.name, '', null) - 22;
+    y = drawSheetHeader(page, f, 'Method and sources (continued)', '') - 22;
   };
   const need = (h: number) => {
     if (y - h < CONTENT_BOT) newPage();
@@ -1689,10 +1723,18 @@ function renderMethodSheet(
   };
 
   heading('Derived series');
-  for (const line of input.legend.lines) para(line);
+  // The legend's own sentences, from the second: its first one names the
+  // series and states that it is estimated, which is general note 1, which
+  // is printed at the foot of this sheet and of every other sheet of the set.
+  // Printing it here as well would put one sentence on one sheet twice.
+  for (const line of input.legend.lines.slice(1)) para(line);
 
   heading('Height reference');
-  para(`${heightLabel(input.reference)}. ${heightReferenceNote(input.reference)}`);
+  // The reference is named, and what it entitles a reader to read into a
+  // height is general note 2 at the foot of this sheet. The two lines under
+  // it are what this section is FOR: the datum and CRS strings as declared,
+  // which are nowhere else on the sheet.
+  para(`${heightLabel(input.reference)}. See general note 2.`);
   para(`Vertical datum: ${input.verticalDatum ?? 'not declared'}`, T_PARA, INK_SOFT);
   para(`Horizontal CRS: ${input.crs ?? 'not georeferenced'}`, T_PARA, INK_SOFT);
   if (!input.datumKnown) para(DATUM_CONFLICT_MEASURE_NOTICE, T_PARA, INK_SOFT);
@@ -1750,7 +1792,9 @@ function renderMethodSheet(
     para(`Total accepted returns: ${String(input.record.acceptedCount)}.`, T_PARA, INK_SOFT);
 
     heading('Read scope');
-    para(describeProfileProvenance(input.record));
+    // The scope sentence is general note 3, on this sheet and on every other.
+    // What follows it is the record's own identity, which no note carries.
+    para('See general note 3.');
     para(
       `Method ${input.record.method}, corridor definition version ` +
         `${String(input.record.corridorVersion)}, record version ` +
@@ -1768,13 +1812,6 @@ function renderMethodSheet(
     }
   }
 
-  if (input.residentOnly) {
-    para(
-      'Sampled from streaming-resident points only - may refine as more data loads.',
-      T_PARA,
-      INK_SOFT,
-    );
-  }
 }
 
 /**
@@ -1795,7 +1832,6 @@ function renderStationSchedule(
   f: Faces,
   sheets: EmittedSheet[],
   stations: ReturnType<typeof computeCivilProfileStats>['stations'],
-  name: string,
   system: UnitSystem,
   reference: VerticalReference,
 ): void {
@@ -1828,15 +1864,7 @@ function renderStationSchedule(
       },
     });
     continued = true;
-    const topY =
-      drawSheetHeader(
-        page,
-        f,
-        'Station schedule',
-        `${name} - STA, ${heightLabel(reference)} (${unit}), grade to next`,
-        '',
-        null,
-      ) - 22;
+    const topY = drawSheetHeader(page, f, 'Station schedule', '') - 22;
     const rowsPerCol = Math.max(1, Math.floor((topY - bottomY) / rowH) - 1);
 
     for (let col = 0; col < colCount && idx < stations.length; col++) {

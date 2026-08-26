@@ -656,3 +656,74 @@ describe('profile sheet: typographic hierarchy and the readable floor', () => {
     }
   });
 });
+
+/**
+ * The sheet must not answer one question twice.
+ *
+ * A drawing that states the measurement name in its header AND in its title
+ * block, or the sampler percentile in a header line AND in the key beside the
+ * line AND in a general note, makes a reader check whether the copies agree.
+ * Each of these pins one fact to the single place a reader of a drawing goes
+ * looking for it. None of them asserts that a caveat was dropped: the notes
+ * block is unchanged, and every qualification it carries is asserted
+ * elsewhere in this file and in profilePdf.test.ts.
+ */
+describe('profile sheet: one fact, one place', () => {
+  const NAME = 'Levee section A';
+  const build = () =>
+    buildProfilePdf({
+      name: NAME,
+      samples: rollingSection(),
+      crs: 'EPSG:32613',
+      corridorWidthM: 4,
+      groundPercentile: 15,
+      generatedAt: FIXED_DATE,
+    });
+
+  /** Every drawn string of one page, joined, so a wrapped note reads whole. */
+  const prose = (stream: string): string =>
+    drawnIn(stream)
+      .map((d) => d.text)
+      .join(' ');
+
+  it('paints the measurement name once per sheet, in the title block', async () => {
+    const bytes = await build();
+    const streams = pageStreams(bytes);
+    expect(streams.length).toBeGreaterThan(3);
+    streams.forEach((stream, i) => {
+      const hits = drawnIn(stream).filter((d) => d.text === NAME);
+      expect(
+        hits.length,
+        `sheet ${i + 1} paints the measurement name ${hits.length} times`,
+      ).toBe(1);
+      // And where the title block is: the right-hand half of the sheet, below
+      // its content. A name in the sheet header would land top left.
+      expect(hits[0].x).toBeGreaterThan(1190.55 / 2);
+      expect(hits[0].y).toBeLessThan(841.89 / 2);
+    });
+  });
+
+  it('states the derived-series method once on the profile sheet', async () => {
+    const bytes = await build();
+    const text = prose(sheetPage(bytes).stream);
+    // General note 1 owns it, in full, and nothing else on the sheet repeats
+    // the operation that made the series.
+    expect(text).toContain('Derived surface (15th percentile of corridor returns).');
+    expect(text.match(/percentile/g) ?? []).toHaveLength(1);
+    // The key beside the drawn line names the series and points at the note.
+    expect(text).toContain('Derived surface - see general note 1');
+    // The qualification itself survives, on this sheet, in the note.
+    expect(text).toContain('Estimated, not measured.');
+  });
+
+  it('states the horizontal CRS and the corridor once each, off the header', async () => {
+    const bytes = await build();
+    const text = prose(sheetPage(bytes).stream);
+    // The CRS is a title-block field, so the sheet header does not repeat it.
+    expect(text.match(/EPSG:32613/g) ?? []).toHaveLength(1);
+    // The corridor half width is a KPI cell, so the header does not carry a
+    // provenance line stating it a second time.
+    expect(text).not.toMatch(/corridor \+\/-/i);
+    expect(text).not.toMatch(/\bCRS EPSG/);
+  });
+});
