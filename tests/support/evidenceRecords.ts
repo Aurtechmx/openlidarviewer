@@ -59,7 +59,7 @@ export function chainOf(scriptId: string): string[] {
 
 /** `tests/foo.test.ts` -> bucket, from the single source of that classification. */
 export function bucketOfTestFile(): Map<string, string> {
-  const out = spawnSync('node', ['scripts/test-bucket.mjs', '--list'], {
+  const out = spawnSync(process.execPath, ['scripts/test-bucket.mjs', '--list'], {
     cwd: ROOT,
     encoding: 'utf8',
   });
@@ -79,7 +79,9 @@ export function declaredPaths(scriptFile: string): string[] {
   const found = new Set<string>();
   for (const m of src.matchAll(/['"`](validation\/[^'"`\s${}]+)['"`]/g))
     found.add(m[1]);
-  return [...found].sort();
+  // Explicit ASCII comparator, not localeCompare: this ordering feeds an
+  // evidence-determinism check, so it must not vary with the runner's locale.
+  return [...found].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 export interface EvidenceRecord {
