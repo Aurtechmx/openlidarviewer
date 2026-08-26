@@ -1,5 +1,6 @@
 import type { SourceFormat } from '../io/sniffFormat';
 import type { CrsInfo } from '../io/crs';
+import type { CloudFrameProvenance } from '../geo/frame/frameProvenance';
 import type { OrganizedRangeSet } from './OrganizedRange';
 
 /**
@@ -60,6 +61,22 @@ export interface CloudMetadata {
    * rely on this for distance-in-true-metres and CRS provenance display.
    */
   crs?: CrsInfo | null;
+  /**
+   * What the source declared about the frame these coordinates sit in, and
+   * therefore whether a height taken from them is measured along a known up.
+   *
+   * Distinct from {@link crs}, which is a CRS a header named. A format can fix
+   * the frame without naming a CRS — a 3D Tiles tileset whose bounding volumes
+   * are geographic regions is placed in WGS84 geocentric coordinates and
+   * carries no CRS string anywhere — and the reader that rotated such a cloud
+   * into a local east-north-up frame records the tangent point here so the
+   * rotation stays reversible.
+   *
+   * Absent for the formats that do not resolve a frame at all. A basis of
+   * `unknown` is a stronger statement than absence: it says a reader looked and
+   * the source declared nothing.
+   */
+  frame?: CloudFrameProvenance;
   /**
    * Non-fatal anomalies the loader worked around rather than failing on —
    * e.g. an E57 scan skipped because it carries no Cartesian X/Y/Z, or a
