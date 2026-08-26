@@ -370,3 +370,59 @@ describe('profile sheet: determinism', () => {
     for (const d of dates) expect(d).toBe('D:20260101000000Z');
   });
 });
+
+describe('profile sheet: typographic hierarchy', () => {
+  /**
+   * The critique this design pass answers was that the sheet set nearly
+   * everything at one size in one weight, so a reader scanning it found no
+   * entry point. The fix is a real ratio between the headline figures and the
+   * reference block, and this pins it: anything under 2.5:1 is the flat sheet
+   * coming back.
+   */
+  it('sets the headline figures at least 2.5x the reference block', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Hierarchy',
+      samples: rollingSection(),
+      crs: 'EPSG:32613',
+      generatedAt: FIXED_DATE,
+    });
+    const drawn = sheetPage(bytes).drawn;
+
+    // The reference block: label/value pairs, the smallest thing that is
+    // still a measurement rather than a caption.
+    const referenceSize = Math.min(
+      ...drawn.filter((d) => d.text === 'Length (horizontal)').map((d) => d.size),
+    );
+    expect(referenceSize).toBeGreaterThan(0);
+
+    // The headline figures: bold, numeric, and nothing else on the page is
+    // set that large except the sheet title, which is not a number.
+    const headline = drawn.filter(
+      (d) => d.base === 'Helvetica-Bold' && /^[+-]?\d[\d.]*$/.test(d.text),
+    );
+    const biggest = Math.max(...headline.map((d) => d.size));
+    expect(headline.filter((d) => d.size === biggest)).toHaveLength(5);
+    expect(biggest / referenceSize).toBeGreaterThanOrEqual(2.5);
+  });
+
+  /**
+   * Figures read down a column have to line up under one another, and only a
+   * monospaced face does that: in Helvetica a `1` is narrower than a `0`, so
+   * two heights of the same magnitude start in different places.
+   */
+  it('sets every figure in the station band monospaced', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Band face',
+      samples: rollingSection(),
+      generatedAt: FIXED_DATE,
+    });
+    const drawn = sheetPage(bytes).drawn;
+    // The band is the only thing on the sheet set at its own small size, and
+    // its cells are the strings that carry digits.
+    const bandCells = drawn.filter((d) => d.size === 6 && /\d/.test(d.text));
+    expect(bandCells.length).toBeGreaterThan(20);
+    for (const cell of bandCells) {
+      expect(cell.base, `band cell "${cell.text}" is set in ${cell.base}`).toBe('Courier');
+    }
+  });
+});
