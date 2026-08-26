@@ -9,6 +9,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 // @ts-expect-error - plain .mjs script, no types
 import { collectDigestProblems, parseManifest, isManifestName } from '../scripts/lint-digest-manifests.mjs';
 
@@ -96,5 +99,17 @@ describe('rules', () => {
   it('reports a malformed line', () => {
     const p = problemsOf(seed('validation/x/SHA256SUMS', 'garbage\n', {}));
     expect(p.some((s) => s.includes('is not a "<sha256>  <path>" line'))).toBe(true);
+  });
+});
+
+describe('wiring', () => {
+  it('the release chain runs it', () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+    const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+    expect(pkg.scripts['lint:digest-manifests']).toBe('node scripts/lint-digest-manifests.mjs');
+    expect(
+      pkg.scripts['test:release:execute'].indexOf('npm run lint:digest-manifests'),
+      'a lint outside the release chain guards nothing at release time',
+    ).toBeGreaterThan(-1);
   });
 });
