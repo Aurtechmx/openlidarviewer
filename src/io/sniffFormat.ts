@@ -217,11 +217,10 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
 /**
  * True when a filename names a 3D Tiles TILESET (`tileset.json`).
  *
- * A tileset is the one 3D Tiles entry point that still has no user-facing
- * open: `src/io/tiles3d/tileset.ts` parses the document and
- * `src/io/tiles3d/tilesetTraversal.ts` walks it, but nothing mounts the result
- * as a layer, so a tileset sniffs as `unknown` and the loader uses this to give
- * an honest "on the roadmap" message rather than a generic dead-end.
+ * A tileset opens by URL, not from disk: the document names its tiles by
+ * relative path, and a file picked off disk has no directory to resolve them
+ * against. So a tileset sniffs as `unknown` and the loader uses this to say
+ * where to paste the URL rather than give a generic dead-end.
  *
  * A single `.pnts` tile is deliberately NOT named here. It sniffs as `pnts`,
  * opens through `loadPnts`, and a file that only borrows the extension is
