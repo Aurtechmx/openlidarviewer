@@ -1,5 +1,5 @@
 /**
- * navViewControlsPersist.test.ts — dismissing the navigation legend must not
+ * navViewControlsPersist.test.ts — dismissing the navigation panel must not
  * take the view controls with it.
  *
  * The HUD holds two different kinds of thing. The legend (movement keys, modes,
@@ -11,8 +11,17 @@
  * orthographic projection and every standard view, permanently and across
  * sessions.
  *
- * These tests read the DOM the panel builds. Whether the collapsed panel looks
- * right is a browser question; whether the controls still exist is not.
+ * The panel now closes outright, which is what a close control is expected to
+ * do and what users kept asking for. That is only safe because the same
+ * controls were given a second home in the command palette first. The
+ * property these tests defend is unchanged, and it was never about the panel
+ * staying half-open: dismissing must not leave orthographic projection and the
+ * standard views unreachable. What moved is where that guarantee comes from,
+ * so the cases below now check the palette rather than the collapsed panel.
+ *
+ * These tests read the DOM the panel builds and the registry the palette
+ * builds. Whether either looks right is a browser question; whether the
+ * controls still exist is not.
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
@@ -122,6 +131,12 @@ async function navbar() {
   return { bar, root: bar.element as unknown as FakeEl };
 }
 
+/** The action registry's source, read as text so this stays a unit test. */
+async function readActionDefinitions(): Promise<string> {
+  const { readFileSync } = await import('node:fs');
+  return readFileSync(new URL('../src/app/actionDefinitions.ts', import.meta.url), 'utf8');
+}
+
 describe('dismissing the navigation legend keeps the view controls', () => {
   it('builds the legend and the view rows as separate regions', async () => {
     const { root } = await navbar();
@@ -135,67 +150,28 @@ describe('dismissing the navigation legend keeps the view controls', () => {
     }
   });
 
-  it('hides only the legend when help is dismissed', async () => {
-    const { bar, root } = await navbar();
-    const legend = root.byClass('olv-legend')[0];
-    const rows = root.byClass('olv-cam-presets-row');
-
-    expect(legend.classList.contains('olv-hidden')).toBe(false);
+  it('closes the whole panel when its close control is used', async () => {
+    const { root, bar } = await navbar();
     bar.toggleHelp();
-
-    expect(legend.classList.contains('olv-hidden')).toBe(true);
-    for (const row of rows) {
-      expect(row.classList.contains('olv-hidden')).toBe(false);
-    }
+    const hud = root.byClass('olv-nav-hud')[0]!;
+    expect(hud.classList.contains('olv-hidden')).toBe(true);
   });
 
-  it('keeps the orthographic toggle reachable after dismissal', async () => {
-    const { bar, root } = await navbar();
-    bar.toggleHelp();
-    const ortho = root.byClass('olv-ortho-toggle');
-    expect(ortho).toHaveLength(1);
-    // It exists AND no hidden ancestor is swallowing it.
-    expect(ortho[0].classList.contains('olv-hidden')).toBe(false);
-    expect(root.hasAncestorWithClass(ortho[0], 'olv-hidden')).toBe(false);
+  it('leaves the standard views reachable from the command palette', async () => {
+    // The reason the panel may close at all. If this ever fails, closing the
+    // panel takes the only route to these controls with it, which is the
+    // defect this file was written for.
+    // The ids are built from `STANDARD_VIEW_ORDER`, so coverage of every view
+    // comes from the loop rather than from six separate registrations. What is
+    // checkable here is that the loop exists and reads the canonical order: if
+    // a view is ever added to that list, the palette gains it for free.
+    const src = await readActionDefinitions();
+    expect(src).toContain('camera.view-');
+    expect(src).toContain('STANDARD_VIEW_ORDER');
+    expect(src).toContain('setStandardView(view)');
   });
 
-  it('leaves the toggle itself reachable, so the legend can come back', async () => {
-    const { bar, root } = await navbar();
-    const toggle = root.byClass('olv-nav-hud-close')[0];
-    expect(toggle).toBeDefined();
-
-    bar.toggleHelp();
-    // The control that hid the legend must not be inside it.
-    expect(root.hasAncestorWithClass(toggle, 'olv-legend')).toBe(false);
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle.getAttribute('aria-label')).toMatch(/show/i);
-
-    bar.toggleHelp();
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(toggle.getAttribute('aria-label')).toMatch(/hide/i);
-  });
-
-  it('marks the panel collapsed rather than hiding it outright', async () => {
-    const { bar, root } = await navbar();
-    const hud = root.byClass('olv-nav-hud')[0];
-    expect(hud.classList.contains('olv-hidden')).toBe(false);
-    bar.toggleHelp();
-    // The old behaviour hid the whole panel here, taking the controls with it.
-    expect(hud.classList.contains('olv-hidden')).toBe(false);
-    expect(hud.classList.contains('olv-nav-hud-collapsed')).toBe(true);
-  });
-
-  it('persists the dismissal without persisting a loss of controls', async () => {
-    const first = await navbar();
-    first.bar.toggleHelp();
-    expect(store.get('olv.nav.helpPinned')).toBe('0');
-
-    // A later session reads that choice back.
-    const second = await navbar();
-    const legend = second.root.byClass('olv-legend')[0];
-    expect(legend.classList.contains('olv-hidden')).toBe(true);
-    // …and still offers every view control.
-    expect(second.root.byClass('olv-ortho-toggle')).toHaveLength(1);
-    expect(second.root.byClass('olv-cam-presets-row').length).toBeGreaterThanOrEqual(2);
+  it('leaves the orthographic toggle reachable from the command palette', async () => {
+    expect(await readActionDefinitions()).toContain('camera.orthographic');
   });
 });

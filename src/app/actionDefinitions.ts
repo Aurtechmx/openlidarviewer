@@ -22,6 +22,8 @@ import {
   CAMERA_PRESET_KEY,
   CAMERA_PRESET_LABEL,
   CAMERA_PRESET_ORDER,
+  STANDARD_VIEW_LABEL,
+  STANDARD_VIEW_ORDER,
   type CameraPresetName,
 } from '../render/camera/cameraPresets';
 import { buildScanStory, buildExportHealth, type ScanStoryInputs } from '../intelligence/scanStory';
@@ -113,6 +115,39 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     keywords: ['plan', 'top', 'ortho', 'orthographic', 'parallel', '2d', 'map', 'pan'],
     run: () => deps.planView.togglePlanView(),
   });
+  // The six axis-aligned views and the orthographic toggle, which until now
+  // lived only on the navigation panel. That made the panel undismissable in
+  // practice: closing it would have taken the only route to them, and the
+  // dismissal is persisted, so the loss would have outlived the session. A
+  // second home is what lets the panel be closed at all.
+  for (const view of STANDARD_VIEW_ORDER) {
+    const label = STANDARD_VIEW_LABEL[view];
+    actions.push({
+      id: `camera.view-${view}`,
+      title: `${label} view (axis aligned)`,
+      section: 'Camera',
+      hint: `Look straight along the ${label.toLowerCase()} axis.`,
+      keywords: ['view', 'axis', 'square', 'face', 'elevation', 'plan'],
+      run: () => {
+        if (!deps.getViewer().setStandardView(view)) return;
+        deps.showLassoToast(`Camera · ${label} view.`);
+      },
+    });
+  }
+  actions.push({
+    id: 'camera.orthographic',
+    title: 'Orthographic projection',
+    section: 'Camera',
+    hint: 'Parallel projection, so equal lengths measure equal on screen.',
+    keywords: ['ortho', 'parallel', 'projection', 'perspective', '2d'],
+    run: () => {
+      const viewer = deps.getViewer();
+      const on = !viewer.orthographic;
+      if (!viewer.setOrthographic(on)) return;
+      deps.showLassoToast(`Camera · orthographic ${on ? 'on' : 'off'}.`);
+    },
+  });
+
   // Reset / Frame All — exposed alongside the named presets.
   actions.push({
     id: 'camera.frame-all',

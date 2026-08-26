@@ -304,10 +304,17 @@ describe('buildActionRegistry — registry shape', () => {
 
   it('registers one Camera entry per preset, in preset order', () => {
     const { actions } = harness();
-    // The section also holds two entries that are not poses: Frame all, and the
-    // Plan-view toggle (a composed mode, covered by planViewWiring.test.ts).
-    const notAPreset = new Set(['camera.frame-all', 'camera.plan-view']);
-    const cameras = actions.filter((a) => a.id.startsWith('camera.') && !notAPreset.has(a.id));
+    // The section also holds entries that are not poses: Frame all, the
+    // Plan-view toggle (a composed mode, covered by planViewWiring.test.ts),
+    // the orthographic toggle, and the six axis-aligned views. The last two
+    // groups are the panel's own controls given a second home, which is what
+    // lets the navigation panel be closed at all (navViewControlsPersist).
+    // Matched by shape rather than listed, so adding a view does not have to
+    // be remembered here.
+    const notAPreset = (id: string): boolean =>
+      id === 'camera.frame-all' || id === 'camera.plan-view' ||
+      id === 'camera.orthographic' || id.startsWith('camera.view-');
+    const cameras = actions.filter((a) => a.id.startsWith('camera.') && !notAPreset(a.id));
     expect(cameras.map((a) => a.id)).toEqual(CAMERA_PRESET_ORDER.map((n) => `camera.${n}`));
   });
 
