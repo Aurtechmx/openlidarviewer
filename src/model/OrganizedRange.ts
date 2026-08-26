@@ -172,30 +172,85 @@ export interface OrganizedRangeFrame {
   readonly height: number;
   /** Length `width * height`, indexed by `cellIndex`. */
   readonly cellState: Uint8Array;
-  /** Length `width * height`. Display record index, or `NO_RECORD`. */
+  /**
+   * Length `width * height`. The cell's PRIMARY display record, or `NO_RECORD`.
+   *
+   * A cell that produced several returns produced several records, and one
+   * `Int32` cannot hold them. This array holds the primary and nothing else:
+   * the SMALLEST merged record index the cell produced. Smallest rather than
+   * last-written because the merge numbers records in file order, so the
+   * smallest is the one the file wrote first, and because a rule stated over
+   * the SET of a cell's records gives the same answer whatever order the
+   * loader walked them in. Last-written gave a different primary for the same
+   * file read at a different stride.
+   *
+   * It is a convenience for the single-return case and for the UI, never the
+   * frame's record of identity. Every surviving record is reachable through
+   * `returnRecord`, and {@link cellIndexForRecord} is the reverse direction for
+   * all of them, not only for the primaries.
+   */
   readonly cellToRecord: Int32Array;
   /**
-   * Multi-return description, as four parallel arrays in CSR form.
+   * Multi-return description, as parallel arrays in CSR form.
    *
-   * Present TOGETHER or not at all. Their absence is not "this frame has no
-   * returns"; it means this frame never described returns per cell, which is
-   * the ordinary case for PTX and PCD, where a cell holds at most one. A
-   * single-return frame therefore allocates nothing here and every existing
-   * accessor keeps its cost.
+   * The first three are present TOGETHER or not at all. Their absence is not
+   * "this frame has no returns"; it means this frame never described returns
+   * per cell, which is the ordinary case for PTX and PCD, where a cell holds at
+   * most one. A single-return frame therefore allocates nothing here and every
+   * existing accessor keeps its cost.
+   *
+   * `returnCountDeclared` and `returnSourceRange` are independent of that trio,
+   * because a source can describe its returns while declaring neither. Their
+   * absence is the frame saying the source was silent, which is why neither is
+   * back-filled with a stand-in value.
    */
   /** Length `width * height + 1`. Returns of cell `c` live in `[s[c], s[c+1])`. */
   readonly returnCellStart?: Uint32Array;
   /** Length `returnCellStart[cells]`, in cell order. Record index, or `NO_RECORD`. */
   readonly returnRecord?: Int32Array;
-  /** Length as `returnRecord`. The source's own `returnIndex` for each return. */
-  readonly returnIndex?: Uint16Array;
-  /** Length as `returnRecord`. The `returnCount` the source declared for the pulse. */
-  readonly returnCountDeclared?: Uint16Array;
+  /**
+   * Length as `returnRecord`. The source's own `returnIndex` for each return.
+   *
+   * `Uint32Array`, not `Uint16Array`, because the E57 structured sink sizes
+   * this column from the file's DECLARED maximum and legitimately hands back a
+   * `Uint32Array` when that maximum exceeds 65535. A narrower store took the
+   * value modulo 65536 in silence, so a declared index of 70001 arrived as
+   * 4465 and sorted into the wrong place in its own cell. Two extra bytes per
+   * return is the price of never doing that.
+   */
+  readonly returnIndex?: Uint32Array;
+  /**
+   * Length as `returnRecord`, and ABSENT when the source declared no count.
+   *
+   * A zero here is the source declaring zero. The absence of the array is the
+   * source saying nothing, which used to be written as a zero into an array
+   * whose name asserts a declaration. In E57 the count is a prototype field
+   * that either exists for the whole scan or does not, so absence is a
+   * property of the frame and needs no per-return mask.
+   */
+  readonly returnCountDeclared?: Uint32Array;
+  /**
+   * Length as `returnRecord`. Source-declared range per RETURN, NaN where absent.
+   *
+   * Two returns of one pulse are at two distances, and no single cell-level
+   * number describes both. `sourceRange` keeps a per-cell value for the raster,
+   * defined against the primary record; this array is where the measurement
+   * itself lives.
+   */
+  readonly returnSourceRange?: Float32Array;
   /** Returns the build was handed that addressed no cell of this grid. */
   readonly returnsSkipped?: number;
   /** Length `width * height`. Range in acquisition-local coordinates, NaN where absent. */
   readonly geometricRange?: Float32Array;
-  /** Length `width * height`. Range the source itself declared, NaN where absent. */
+  /**
+   * Length `width * height`. Range the source declared for the cell's PRIMARY
+   * record, NaN where absent.
+   *
+   * Named against `cellToRecord`'s primary rule on purpose. A cell-level range
+   * is a summary, and a summary needs a stated rule or it is whatever the
+   * traversal happened to write last. Callers that need the distances of a
+   * multi-return pulse read `returnSourceRange`, which loses nothing.
+   */
   readonly sourceRange?: Float32Array;
   readonly acquisitionPose?: AcquisitionPose;
   readonly linkage: RangeLinkage;
@@ -361,8 +416,15 @@ export interface CellReturn {
   readonly record: number;
   /** Which return of the pulse this is, as the source declared it. */
   readonly returnIndex: number;
-  /** How many returns the source declared for that pulse. */
-  readonly returnCount: number;
+  /**
+   * How many returns the source declared for that pulse, or null when the
+   * source declared no count at all. Null rather than 0: a source that says
+   * "zero returns" and a source that says nothing are different evidence, and
+   * only one of them is about the pulse.
+   */
+  readonly returnCount: number | null;
+  /** Range the source declared for this return, or null when it declared none. */
+  readonly sourceRange: number | null;
 }
 
 /** One return on its way in, addressed by grid cell. */
@@ -371,13 +433,71 @@ export interface CellReturnInput extends CellReturn {
   readonly column: number;
 }
 
+/**
+ * Aggregate one record's state into the state its CELL already holds.
+ *
+ * Order-independent by construction, which is the whole reason it exists as a
+ * function. `place()` used to assign, so a cell holding a valid record and an
+ * invalid one ended VALID_RETURN or SOURCE_INVALID depending on which record
+ * the loader reached last, and the same file read at a different stride
+ * disagreed with itself.
+ *
+ * VALID_RETURN dominates because the question the cell answers is whether it
+ * produced a usable display record, and one usable return is enough for that.
+ * The invalid siblings are not lost: they are records the merge dropped, so
+ * they never had an identity for the return list to carry either. Anything the
+ * source actually said about the cell beats the fill value the grid started
+ * with, and NOT_DECODED never wins over evidence.
+ */
+export function aggregateCellState(
+  current: CellStateValue,
+  incoming: CellStateValue,
+): CellStateValue {
+  if (current === CellState.VALID_RETURN || incoming === CellState.VALID_RETURN) {
+    return CellState.VALID_RETURN;
+  }
+  if (current === CellState.SOURCE_INVALID || incoming === CellState.SOURCE_INVALID) {
+    return CellState.SOURCE_INVALID;
+  }
+  return incoming;
+}
+
 /** The arrays a frame carries, plus what the build could not place. */
 export interface BuiltCellReturns {
   readonly returnCellStart: Uint32Array;
   readonly returnRecord: Int32Array;
-  readonly returnIndex: Uint16Array;
-  readonly returnCountDeclared: Uint16Array;
+  readonly returnIndex: Uint32Array;
+  /** Absent when no entry declared a count. */
+  readonly returnCountDeclared?: Uint32Array;
+  /** Absent when no entry declared a range. */
+  readonly returnSourceRange?: Float32Array;
   readonly skippedCount: number;
+}
+
+/**
+ * Widest value the return columns can hold. The E57 structured sink sizes an
+ * index column at `u32` when the file declares a maximum this large, so this is
+ * the width the model must accept, not a generous margin.
+ */
+export const RETURN_VALUE_MAX = 4294967295;
+
+/**
+ * Refuse a return column value the store cannot hold, naming what was supplied.
+ *
+ * Refusal, not clamping and not a wrap. Both of those return a number, and a
+ * number returned from here is indistinguishable from a measurement. A value
+ * outside `0..RETURN_VALUE_MAX`, or one that is not an integer, is not a
+ * `returnIndex` any source declared through a supported column, so the build
+ * that produced it is wrong and stops rather than storing a plausible answer.
+ */
+function checkedReturnValue(field: string, value: number, at: number): number {
+  if (!Number.isInteger(value) || value < 0 || value > RETURN_VALUE_MAX) {
+    throw new RangeError(
+      `${field} ${value} at entry ${at} is outside 0..${RETURN_VALUE_MAX}, ` +
+        'so it cannot be stored without changing it',
+    );
+  }
+  return value;
 }
 
 /**
@@ -395,11 +515,16 @@ export interface BuiltCellReturns {
  * whenever returns are sparse, which is the normal case.
  *
  * ORDERING: returns are NOT assumed to arrive in `returnIndex` order, and they
- * are sorted ascending by `returnIndex` within each cell. That is a real
- * reordering and it is stated because it is one: `returnIndex` is a physical
- * fact about the pulse, so it travels with its own record and count rather than
- * being inferred from a position. Ties keep source order, and the placement
- * pass is stable, so equal indices are not shuffled.
+ * are sorted within each cell by `returnIndex` ascending, then by `record`
+ * ascending. That is a real reordering and it is stated because it is one:
+ * `returnIndex` is a physical fact about the pulse, so it travels with its own
+ * record, count and range rather than being inferred from a position.
+ *
+ * The record tie-break is what makes the result a function of the ENTRIES
+ * rather than of their arrival order. Two returns declaring the same index
+ * previously kept the order the caller happened to supply, so the same records
+ * read at a different stride, or merged in a different scan order, produced a
+ * different frame. A total order over the values themselves cannot do that.
  */
 export function buildCellReturns(
   width: number,
@@ -431,39 +556,60 @@ export function buildCellReturns(
   const cursor = new Uint32Array(cellCount);
   cursor.set(returnCellStart.subarray(0, cellCount));
 
+  // Whether the source declared these at all is a property of the whole build,
+  // so it is decided before anything is allocated and an undeclared column
+  // costs no bytes rather than a run of stand-in zeroes.
+  let declaresCount = false;
+  let declaresRange = false;
+  for (let k = 0; k < entries.length; k++) {
+    if (cellOf[k]! < 0) continue;
+    const e = entries[k]!;
+    if (e.returnCount !== null && e.returnCount !== undefined) declaresCount = true;
+    if (e.sourceRange !== null && e.sourceRange !== undefined) declaresRange = true;
+  }
+
   const returnRecord = new Int32Array(live);
-  const returnIndex = new Uint16Array(live);
-  const returnCountDeclared = new Uint16Array(live);
+  const returnIndex = new Uint32Array(live);
+  const returnCountDeclared = declaresCount ? new Uint32Array(live) : undefined;
+  const returnSourceRange = declaresRange ? new Float32Array(live).fill(Number.NaN) : undefined;
   for (let k = 0; k < entries.length; k++) {
     const cell = cellOf[k]!;
     if (cell < 0) continue;
     const e = entries[k]!;
     const at = cursor[cell]!++;
     returnRecord[at] = e.record;
-    returnIndex[at] = e.returnIndex;
-    returnCountDeclared[at] = e.returnCount;
+    returnIndex[at] = checkedReturnValue('returnIndex', e.returnIndex, k);
+    if (returnCountDeclared && e.returnCount !== null && e.returnCount !== undefined) {
+      returnCountDeclared[at] = checkedReturnValue('returnCount', e.returnCount, k);
+    }
+    if (returnSourceRange && e.sourceRange !== null && e.sourceRange !== undefined) {
+      returnSourceRange[at] = e.sourceRange;
+    }
   }
 
-  // Stable insertion sort inside each span. Spans are a handful of returns, and
-  // stability is what keeps two returns declaring the same index in the order
-  // the source wrote them.
+  // Insertion sort inside each span, on the pair (returnIndex, record). Spans
+  // are a handful of returns. The pair is a total order over distinct records,
+  // so the sorted span depends on the entries and not on how they arrived.
   for (let c = 0; c < cellCount; c++) {
     const start = returnCellStart[c]!;
     const end = returnCellStart[c + 1]!;
     for (let i = start + 1; i < end; i++) {
       const ri = returnIndex[i]!;
       const rec = returnRecord[i]!;
-      const rc = returnCountDeclared[i]!;
+      const rc = returnCountDeclared ? returnCountDeclared[i]! : 0;
+      const rr = returnSourceRange ? returnSourceRange[i]! : 0;
       let j = i - 1;
-      while (j >= start && returnIndex[j]! > ri) {
+      while (j >= start && (returnIndex[j]! > ri || (returnIndex[j]! === ri && returnRecord[j]! > rec))) {
         returnIndex[j + 1] = returnIndex[j]!;
         returnRecord[j + 1] = returnRecord[j]!;
-        returnCountDeclared[j + 1] = returnCountDeclared[j]!;
+        if (returnCountDeclared) returnCountDeclared[j + 1] = returnCountDeclared[j]!;
+        if (returnSourceRange) returnSourceRange[j + 1] = returnSourceRange[j]!;
         j--;
       }
       returnIndex[j + 1] = ri;
       returnRecord[j + 1] = rec;
-      returnCountDeclared[j + 1] = rc;
+      if (returnCountDeclared) returnCountDeclared[j + 1] = rc;
+      if (returnSourceRange) returnSourceRange[j + 1] = rr;
     }
   }
 
@@ -471,9 +617,52 @@ export function buildCellReturns(
     returnCellStart,
     returnRecord,
     returnIndex,
-    returnCountDeclared,
+    ...(returnCountDeclared ? { returnCountDeclared } : {}),
+    ...(returnSourceRange ? { returnSourceRange } : {}),
     skippedCount: entries.length - live,
   };
+}
+
+/**
+ * The cell index a display record was decoded from, or null when this frame
+ * produced no such record.
+ *
+ * EVERY surviving record answers here, not only the cell primaries. The CSR
+ * arrays are consulted first because they list every return the frame kept,
+ * while `cellToRecord` keeps one record per cell and so cannot answer for the
+ * second and later returns of a multi-return pulse. Answering null for a record
+ * that `returnsForCell` will happily hand back is the reverse direction
+ * disagreeing with the forward one about which records exist.
+ *
+ * A frame whose linkage is unavailable answers null without scanning, because
+ * `withLinkageUnavailable` has already erased the indices and a match against
+ * the erased sentinel would be meaningless.
+ */
+export function cellIndexForRecord(frame: OrganizedRangeFrame, record: number): number | null {
+  if (frame.linkage.kind === 'unavailable') return null;
+  if (record < 0) return null;
+  const { returnCellStart, returnRecord } = frame;
+  if (returnCellStart && returnRecord) {
+    for (let i = 0; i < returnRecord.length; i++) {
+      if (returnRecord[i] !== record) continue;
+      // The offset is inside exactly one cell's half-open span. Binary search
+      // for the last start that does not exceed it, which is that cell.
+      let low = 0;
+      let high = returnCellStart.length - 1;
+      while (low < high) {
+        const mid = (low + high + 1) >> 1;
+        if (returnCellStart[mid]! <= i) low = mid;
+        else high = mid - 1;
+      }
+      return low;
+    }
+    return null;
+  }
+  const map = frame.cellToRecord;
+  for (let i = 0; i < map.length; i++) {
+    if (map[i] === record) return i;
+  }
+  return null;
 }
 
 /**
@@ -505,8 +694,9 @@ export function returnsForCell(
   if (row < 0 || column < 0 || row >= frame.height || column >= frame.width) {
     return { ok: false, reason: 'outside-grid', why: 'Cell is outside the acquisition grid.' };
   }
-  const { returnCellStart, returnRecord, returnIndex, returnCountDeclared } = frame;
-  if (!returnCellStart || !returnRecord || !returnIndex || !returnCountDeclared) {
+  const { returnCellStart, returnRecord, returnIndex, returnCountDeclared, returnSourceRange } =
+    frame;
+  if (!returnCellStart || !returnRecord || !returnIndex) {
     return {
       ok: false,
       reason: 'not-described',
@@ -518,10 +708,15 @@ export function returnsForCell(
   const end = returnCellStart[cell + 1]!;
   const out: CellReturn[] = [];
   for (let i = start; i < end; i++) {
+    // Absence stays absence on the way out. The count array is missing when the
+    // source declared none, and a 0 substituted here would read as a pulse the
+    // source described as empty.
+    const range = returnSourceRange ? returnSourceRange[i]! : Number.NaN;
     out.push({
       record: returnRecord[i]!,
       returnIndex: returnIndex[i]!,
-      returnCount: returnCountDeclared[i]!,
+      returnCount: returnCountDeclared ? returnCountDeclared[i]! : null,
+      sourceRange: Number.isFinite(range) ? range : null,
     });
   }
   return { ok: true, returns: out };

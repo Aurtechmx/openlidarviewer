@@ -36,7 +36,8 @@ import {
 } from '../src/io/e57/structuredSink';
 import { planE57Decode } from '../src/io/loadPlan';
 import type { E57DecodePlan } from '../src/io/loadPlan';
-import { CellState, recordForCell, returnsForCell } from '../src/model/OrganizedRange';
+import { CellState, NO_RECORD, recordForCell, returnsForCell } from '../src/model/OrganizedRange';
+import { cellForRecord } from '../src/diagnostics/rangeRaster';
 
 function bufferOf(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(name, import.meta.url)));
@@ -87,6 +88,8 @@ interface SyntheticOptions {
   /** Prototype maxima, deliberately wider than the bounds. */
   proto?: { row: number; column: number };
   withReturns?: boolean;
+  /** Whether the returnCount column exists. Only meaningful with `withReturns`. */
+  withReturnCount?: boolean;
   withRange?: boolean;
 }
 
@@ -149,10 +152,12 @@ function fieldsOf(opts: SyntheticOptions): FieldSpec[] {
       xml: '<returnIndex type="Integer" minimum="0" maximum="3"/>',
       stream: packIntegers(r.map((p) => p.returnIndex ?? 0), 0, bitWidthFor(0, 3)),
     });
-    specs.push({
-      xml: '<returnCount type="Integer" minimum="0" maximum="3"/>',
-      stream: packIntegers(r.map((p) => p.returnCount ?? 1), 0, bitWidthFor(0, 3)),
-    });
+    if (opts.withReturnCount !== false) {
+      specs.push({
+        xml: '<returnCount type="Integer" minimum="0" maximum="3"/>',
+        stream: packIntegers(r.map((p) => p.returnCount ?? 1), 0, bitWidthFor(0, 3)),
+      });
+    }
   }
   if (opts.withRange) {
     specs.push({
@@ -586,6 +591,133 @@ describe('the range the source declares', () => {
     expect(returns.map((r) => r.returnIndex)).toEqual([0, 1]);
     expect(returns.every((r) => r.returnCount === 2)).toBe(true);
     expect(frame.returnRecord!.length).toBe(3);
+  });
+
+  it('keeps BOTH distances of the two-return pulse, not the one written last', async () => {
+    // 12.5 m and 30.25 m are two measurements of two surfaces. A single
+    // cell-level number reported whichever record the merge walked last, so the
+    // near surface disappeared from a cell that had recorded it.
+    const frame = (await loadE57(WITH_RANGE, 'range.e57')).organizedRange!.frames[0];
+    const cell = returnsForCell(frame, 0, 0);
+    expect(cell.ok).toBe(true);
+    if (!cell.ok) throw new Error(cell.why);
+    expect(cell.returns.map((r) => r.sourceRange)).toEqual([12.5, 30.25]);
+    // The cell-level value is the PRIMARY record's, named rather than left to
+    // the traversal: the primary is the smallest merged record the cell made.
+    expect(frame.sourceRange![0]).toBeCloseTo(12.5, 4);
+  });
+
+  it('reverses every record of a multi-return cell, not only the primary', async () => {
+    const frame = (await loadE57(WITH_RANGE, 'range.e57')).organizedRange!.frames[0];
+    const cell = returnsForCell(frame, 0, 0);
+    expect(cell.ok).toBe(true);
+    if (!cell.ok) throw new Error(cell.why);
+    expect(cell.returns).toHaveLength(2);
+    for (const r of cell.returns) {
+      expect(cellForRecord(frame, r.record)).toEqual({ row: 0, column: 0 });
+    }
+  });
+
+  it('says nothing about the count when the source declared no count column', async () => {
+    // A `returnCount` of 0 is the source declaring zero returns. A source with
+    // no such column declared nothing, and the two carried the same value.
+    const silent = buildStructuredE57({
+      records: [{ x: 1, y: 2, z: 3, row: 0, column: 0, returnIndex: 0 }],
+      bounds: { row: [0, 3], column: [0, 4] },
+      withReturns: true,
+      withReturnCount: false,
+    });
+    const frame = (await loadE57(silent, 'silent.e57')).organizedRange!.frames[0];
+    expect(frame.returnIndex).toBeDefined();
+    expect(frame.returnCountDeclared).toBeUndefined();
+    const cell = returnsForCell(frame, 0, 0);
+    expect(cell.ok).toBe(true);
+    if (!cell.ok) throw new Error(cell.why);
+    expect(cell.returns[0].returnCount).toBeNull();
+
+    const declared = buildStructuredE57({
+      records: [{ x: 1, y: 2, z: 3, row: 0, column: 0, returnIndex: 0, returnCount: 0 }],
+      bounds: { row: [0, 3], column: [0, 4] },
+      withReturns: true,
+    });
+    const zero = (await loadE57(declared, 'zero.e57')).organizedRange!.frames[0];
+    const zeroCell = returnsForCell(zero, 0, 0);
+    expect(zeroCell.ok).toBe(true);
+    if (!zeroCell.ok) throw new Error(zeroCell.why);
+    expect(zeroCell.returns[0].returnCount).toBe(0);
+  });
+});
+
+describe('a cell that received both a valid and an invalid record', () => {
+  /** The same two records of cell (0,0), in each order, and nothing else moved. */
+  function fileWith(order: 'valid-first' | 'invalid-first'): ArrayBuffer {
+    const good = { x: 1, y: 2, z: 3, row: 0, column: 0, range: 12.5, returnIndex: 0, returnCount: 2 };
+    const bad = { x: 0, y: 0, z: 0, row: 0, column: 0, invalid: 1, range: 30.25, returnIndex: 1, returnCount: 2 };
+    return buildStructuredE57({
+      records: order === 'valid-first' ? [good, bad] : [bad, good],
+      bounds: { row: [0, 1], column: [0, 1] },
+      withRange: true,
+      withReturns: true,
+    });
+  }
+
+  it('reports the same cell state whichever record the file wrote first', async () => {
+    // `place` assigned rather than aggregated, so the last record to arrive
+    // decided the cell. The same two records in the other order disagreed.
+    const a = (await loadE57(fileWith('valid-first'), 'a.e57')).organizedRange!.frames[0];
+    const b = (await loadE57(fileWith('invalid-first'), 'b.e57')).organizedRange!.frames[0];
+    expect([...a.cellState]).toEqual([...b.cellState]);
+    expect(a.cellState[0]).toBe(CellState.VALID_RETURN);
+  });
+
+  it('never claims a cell is invalid while still pointing at a valid record', async () => {
+    for (const order of ['valid-first', 'invalid-first'] as const) {
+      const frame = (await loadE57(fileWith(order), `${order}.e57`)).organizedRange!.frames[0];
+      for (let i = 0; i < frame.cellState.length; i++) {
+        if (frame.cellState[i] === CellState.VALID_RETURN) continue;
+        expect(frame.cellToRecord[i]).toBe(NO_RECORD);
+      }
+    }
+  });
+
+  it('names the same primary record for two VALID returns in either file order', async () => {
+    // Both records survive the merge here, so the cell has a real choice of
+    // primary. Assigning on every placement made it the last one walked, which
+    // is a property of the traversal rather than of the file.
+    const first = { x: 1, y: 2, z: 3, row: 0, column: 0, range: 12.5, returnIndex: 0, returnCount: 2 };
+    const second = { x: 4, y: 5, z: 6, row: 0, column: 0, range: 30.25, returnIndex: 1, returnCount: 2 };
+    const load = async (records: SyntheticRecord[]) =>
+      (
+        await loadE57(
+          buildStructuredE57({
+            records,
+            bounds: { row: [0, 1], column: [0, 1] },
+            withRange: true,
+            withReturns: true,
+          }),
+          'pair.e57',
+        )
+      ).organizedRange!.frames[0];
+    const a = await load([first, second]);
+    const b = await load([second, first]);
+    expect(a.cellToRecord[0]).toBe(0);
+    expect(b.cellToRecord[0]).toBe(0);
+    // The return list is the same SET either way, ordered by what the source
+    // declared rather than by arrival.
+    const listA = returnsForCell(a, 0, 0);
+    const listB = returnsForCell(b, 0, 0);
+    expect(listA.ok && listB.ok).toBe(true);
+    if (!listA.ok || !listB.ok) throw new Error('cell not described');
+    expect(listA.returns.map((r) => r.returnIndex)).toEqual([0, 1]);
+    expect(listB.returns.map((r) => r.returnIndex)).toEqual([0, 1]);
+  });
+
+  it('resolves the same record for the cell whichever order the file used', async () => {
+    const a = (await loadE57(fileWith('valid-first'), 'a.e57')).organizedRange!.frames[0];
+    const b = (await loadE57(fileWith('invalid-first'), 'b.e57')).organizedRange!.frames[0];
+    expect([...a.cellToRecord]).toEqual([...b.cellToRecord]);
+    expect(recordForCell(a, 0, 0)).toEqual(recordForCell(b, 0, 0));
+    expect(recordForCell(a, 0, 0).ok).toBe(true);
   });
 });
 

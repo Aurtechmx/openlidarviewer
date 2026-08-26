@@ -26,10 +26,13 @@
 import {
   CellState,
   NO_RECORD,
+  RETURN_VALUE_MAX,
+  aggregateCellState,
   buildCellReturns,
   cellIndexOf,
   tallyCellStates,
   type CellReturnInput,
+  type CellStateValue,
   type OrganizedRangeFrame,
   type RangeLinkage,
 } from '../../model/OrganizedRange';
@@ -154,22 +157,43 @@ export class E57GridBuilder {
       return;
     }
     const cell = cellIndexOf(row - this.rowMinimum, column - this.columnMinimum, this.width);
+    const prior = this.cellState[cell] as CellStateValue;
     if (merged === null) {
       // The file itself says this record is unusable. That is evidence about
-      // the record, not about this session, so it is not NOT_DECODED.
-      this.cellState[cell] = CellState.SOURCE_INVALID;
+      // the record, not about this session, so it is not NOT_DECODED. It is
+      // AGGREGATED rather than assigned, so it cannot overwrite a valid sibling
+      // return and leave the cell claiming invalid while `cellToRecord` still
+      // points at a record the merge kept.
+      this.cellState[cell] = aggregateCellState(prior, CellState.SOURCE_INVALID);
       return;
     }
-    this.cellState[cell] = CellState.VALID_RETURN;
-    this.cellToRecord[cell] = merged;
-    if (this.sourceRange && this.range) this.sourceRange[cell] = this.range[i]!;
+    this.cellState[cell] = aggregateCellState(prior, CellState.VALID_RETURN);
+    // The primary is the smallest merged record the cell produced, and the
+    // cell-level range follows it. Comparing rather than overwriting is what
+    // makes both answers the same for any order the merge walks the records in.
+    const held = this.cellToRecord[cell]!;
+    if (held === NO_RECORD || merged < held) {
+      this.cellToRecord[cell] = merged;
+      if (this.sourceRange && this.range) this.sourceRange[cell] = this.range[i]!;
+    }
     if (this.returns && this.returnIndex) {
+      const declaredIndex = this.returnIndex[i]!;
+      if (!Number.isInteger(declaredIndex) || declaredIndex < 0 || declaredIndex > RETURN_VALUE_MAX) {
+        // Same shape as the out-of-bounds row and column above: the file said
+        // something the store cannot hold, so the scan loses its grid rather
+        // than keeping one whose return order was decided by a wrapped value.
+        this.contradiction =
+          `record ${i} declares returnIndex ${declaredIndex}, outside the ` +
+          `0–${RETURN_VALUE_MAX} range a return column can hold`;
+        return;
+      }
       this.returns.push({
         row: row - this.rowMinimum,
         column: column - this.columnMinimum,
         record: merged,
-        returnIndex: this.returnIndex[i]!,
-        returnCount: this.returnCount ? this.returnCount[i]! : 0,
+        returnIndex: declaredIndex,
+        returnCount: this.returnCount ? this.returnCount[i]! : null,
+        sourceRange: this.range ? this.range[i]! : null,
       });
     }
   }
@@ -195,7 +219,10 @@ export class E57GridBuilder {
             returnCellStart: built.returnCellStart,
             returnRecord: built.returnRecord,
             returnIndex: built.returnIndex,
-            returnCountDeclared: built.returnCountDeclared,
+            ...(built.returnCountDeclared
+              ? { returnCountDeclared: built.returnCountDeclared }
+              : {}),
+            ...(built.returnSourceRange ? { returnSourceRange: built.returnSourceRange } : {}),
             returnsSkipped: built.skippedCount,
           }
         : {}),

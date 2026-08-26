@@ -29,6 +29,7 @@
 import {
   CELL_STATES,
   CellState,
+  cellIndexForRecord,
   cellIndexOf,
   type CellStateValue,
   type OrganizedRangeFrame,
@@ -265,30 +266,26 @@ export function displayPixelOf(
 }
 
 /**
- * The grid cell a display record was decoded from, or null when this frame
- * produced no such record.
+ * The grid cell a display record was decoded from, as a row and column, or null
+ * when this frame produced no such record.
  *
- * A linear scan of `cellToRecord`, which is the only honest way to answer it:
- * the array is the loader's own record of what each cell produced, and there is
- * no second index. The scan is one pass over the grid and runs on an inspection
- * click, not on a repaint.
+ * The search itself is {@link cellIndexForRecord}, in the model, because which
+ * array can answer for which record is a fact about the frame's own storage and
+ * not about drawing. This wrapper only turns a cell index into the row and
+ * column a raster addresses.
  *
- * A frame whose linkage is unavailable answers null without scanning, because
- * `withLinkageUnavailable` has already erased the indices and a match against
- * the erased sentinel would be meaningless.
+ * Searching `cellToRecord` alone was wrong for a multi-return cell: that array
+ * keeps one record per cell, so the second return of a pulse resolved to null
+ * here while `returnsForCell` listed it, and the pointer that landed on the
+ * cell could not be inverted from the record the inspector was showing.
  */
 export function cellForRecord(
   frame: OrganizedRangeFrame,
   record: number,
 ): { readonly row: number; readonly column: number } | null {
-  if (frame.linkage.kind === 'unavailable') return null;
-  if (record < 0) return null;
-  const map = frame.cellToRecord;
-  for (let i = 0; i < map.length; i++) {
-    if (map[i] !== record) continue;
-    return { row: Math.floor(i / frame.width), column: i % frame.width };
-  }
-  return null;
+  const i = cellIndexForRecord(frame, record);
+  if (i === null) return null;
+  return { row: Math.floor(i / frame.width), column: i % frame.width };
 }
 
 /** Every state in value order, re-exported so a legend needs one import. */
