@@ -15,7 +15,7 @@
 
 import { clamp01 } from '../numeric';
 import { el, formatCount } from './dom';
-import { curatedCreditFor } from '../io/catalog/curatedLocations';
+import { CURATED_LICENSE_LABELS, curatedCreditFor } from '../io/catalog/curatedLocations';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
@@ -460,7 +460,7 @@ export class StreamingPanel {
     this._credit.classList.remove('olv-hidden');
     this._credit.append(credit.attribution);
     if (credit.licenseUrl !== 'unknown') {
-      const a = el('a', { text: credit.licenseId, href: credit.licenseUrl });
+      const a = el('a', { text: CURATED_LICENSE_LABELS[credit.licenseId], href: credit.licenseUrl });
       a.target = '_blank';
       a.rel = 'noreferrer';
       this._credit.append(' · ', a);

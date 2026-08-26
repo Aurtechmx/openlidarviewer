@@ -71,6 +71,20 @@ export const CURATED_LICENSE_IDS = [
 ] as const;
 export type CuratedLicenseId = (typeof CURATED_LICENSE_IDS)[number];
 
+/**
+ * How each licence identity is written for a reader.
+ *
+ * The ids are machine handles; a credit line shows the licence the way the
+ * licensor writes it. Typed against the id union so adding an identity
+ * without a label does not compile.
+ */
+export const CURATED_LICENSE_LABELS: Record<CuratedLicenseId, string> = {
+  'CC-BY-4.0': 'CC BY 4.0',
+  'public-domain': 'public domain',
+  'swisstopo-free-geodata': 'swisstopo terms',
+  unknown: 'licence not recorded',
+};
+
 /** Sentinel for a field this tree records no value for. */
 export const UNKNOWN = 'unknown';
 

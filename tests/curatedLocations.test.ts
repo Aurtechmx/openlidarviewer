@@ -12,6 +12,7 @@ import { resolve } from 'node:path';
 import { buildCuratedDemoSample, DEMO_SAMPLE_ID } from '../src/ui/CatalogPanel';
 import {
   CURATED_LICENSE_IDS,
+  CURATED_LICENSE_LABELS,
   CURATED_LOCATIONS,
   curatedCreditFor,
   curatedSizeBytes,
@@ -322,5 +323,15 @@ describe('crediting a streamed source', () => {
       calls.length,
       'the COPC and EPT opens each need to set the source, or one of them streams uncredited',
     ).toBe(2);
+  });
+});
+
+describe('licence labels', () => {
+  it('every identity is written for a reader', () => {
+    for (const id of CURATED_LICENSE_IDS) {
+      const label = CURATED_LICENSE_LABELS[id];
+      expect(label, `${id} has no reader-facing label`).toBeTruthy();
+      expect(label, `${id} is shown as its own machine handle`).not.toBe(id);
+    }
   });
 });
