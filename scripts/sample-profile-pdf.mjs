@@ -9,7 +9,9 @@
  *
  * Usage: npx vite-node scripts/sample-profile-pdf.mjs [outPath]
  */
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildProfilePdf } from '../src/render/measure/profilePdf.ts';
 
 const samples = [];
@@ -30,6 +32,10 @@ const bytes = await buildProfilePdf({
   verticalDatum: null,
   generatedAt: new Date('2026-01-01T00:00:00.000Z'),
 });
-const out = process.argv[2] ?? '/tmp/profile-sample.pdf';
+// A fixed path under the shared temp directory is predictable, so another
+// user on the same machine can pre-create it and decide where these bytes
+// land. Without an explicit destination this makes its own private directory
+// instead, and prints where it went.
+const out = process.argv[2] ?? join(mkdtempSync(join(tmpdir(), 'olv-profile-')), 'profile-sample.pdf');
 writeFileSync(out, bytes);
 console.log(`wrote ${out} (${bytes.byteLength} bytes)`);
