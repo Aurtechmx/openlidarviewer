@@ -27,8 +27,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   BUCKET_SCRIPT,
+  ROOT,
   bucketOfTestFile,
   chainOf,
   generatedRecordsRead,
@@ -127,5 +130,23 @@ describe('release chain evidence order', () => {
               `${p.verifier}, or the record is never recomputed at all.`),
       );
     expect(inversions, inversions.join('\n')).toEqual([]);
+  });
+});
+
+describe('the bucket lookup is not read back from a subprocess', () => {
+  it('imports the rule rather than parsing a spawned --list', () => {
+    const src = readFileSync(resolve(ROOT, 'tests/support/evidenceRecords.ts'), 'utf8');
+    expect(
+      src.includes('spawnSync'),
+      'spawning test-bucket.mjs made the answer depend on the environment the ' +
+        'spawn ran in: a CI shard read back a list naming no terrain file, so a ' +
+        'record whose producer is a terrain test looked unclaimed and the walk ' +
+        'found no pairs at all.',
+    ).toBe(false);
+    expect(src).toContain("from '../../scripts/lib/testBuckets.mjs'");
+  });
+
+  it('claims a terrain test as terrain, which is the case CI got wrong', () => {
+    expect(bucketOfTestFile().get('tests/groundFilterPdalAgreement.test.ts')).toBe('terrain');
   });
 });
