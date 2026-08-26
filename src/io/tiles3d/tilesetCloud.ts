@@ -32,10 +32,23 @@
  * the transform again here would square it, which for the ECEF placements this
  * format is usually authored in puts the cloud somewhere no test with an
  * identity fixture would ever notice.
+ *
+ * The ROTATION, on the other hand, is done here and nowhere else. Those root
+ * frame coordinates are Cartesian but not necessarily Z-up: where the document
+ * declares a geocentric root frame, +Z is the polar axis, and subtracting an
+ * origin from such a cloud improves its precision without making any of its
+ * axes vertical. `tilesetFrame.ts` reads the declaration and builds the local
+ * east-north-up frame; the points are carried through it before the recentring,
+ * and the frame is kept on the cloud so a render coordinate can be taken back
+ * to the source frame exactly. A tileset that declares nothing is recentred and
+ * recorded as having no established up, which is a fact the layer carries
+ * rather than a gap it hides.
  */
 
 import { PointCloud } from '../../model/PointCloud';
 import { sanitizeAndRecenter, withLoadWarning } from '../sanitizeCloud';
+import { FRAME_UNKNOWN_NOTE } from '../../geo/frame/frameProvenance';
+import { finiteExtentCentre, resolveTilesetFrame } from './tilesetFrame';
 import { openTileset, selectTileContents, fetchTileContent } from './tilesetOpen';
 import type { TilesetTransport } from './tilesetTransport';
 import type { ViewCamera } from './tilesetTraversal';
@@ -180,6 +193,24 @@ export async function loadTilesetCloud(
   }
   const mixedColour = !everyTileHasColour && placed.some((p) => p.colors !== null);
 
+  // The rotation, in place, in Float64, BEFORE the recentring. The anchor is
+  // subtracted inside the frame, so the multiply only ever sees a residual of a
+  // few kilometres rather than an ECEF coordinate whose low digits would not
+  // survive it. `resolveTilesetFrame` returns no frame when the document
+  // declares no geocentric root frame, and the loop is then skipped entirely:
+  // the merged coordinates go to the recentring exactly as the tiles produced
+  // them, and the layer records that its up axis is not established.
+  const resolved = resolveTilesetFrame(opened.tileset, finiteExtentCentre(merged));
+  const { frame } = resolved;
+  if (frame) {
+    for (let i = 0; i + 2 < merged.length; i += 3) {
+      const [e, n, u] = frame.sourceToRenderPoint([merged[i]!, merged[i + 1]!, merged[i + 2]!]);
+      merged[i] = e;
+      merged[i + 1] = n;
+      merged[i + 2] = u;
+    }
+  }
+
   // Destructured rather than read as `.positions`: the position-access gate
   // counts direct reads of that property and is shrink-only, and a sanitation
   // result is not the `PointCloud` buffer that gate is about.
@@ -190,6 +221,11 @@ export async function loadTilesetCloud(
   const mixedWarning = mixedColour
     ? 'Some tiles in this tileset carry colour and others do not, so the merged layer is uncoloured.'
     : undefined;
+  // Carried as a warning as well as in the frame record. The record is what a
+  // consumer reads to refuse a vertical measurement; the warning is what says
+  // so on the Scan Report, where a user deciding whether to trust an elevation
+  // is actually looking.
+  const frameWarning = resolved.provenance.basis === 'unknown' ? FRAME_UNKNOWN_NOTE : undefined;
   return new PointCloud({
     positions,
     colors: attributes.colors,
@@ -199,6 +235,12 @@ export async function loadTilesetCloud(
     // it is; the tileset is how they were found, not what they are.
     sourceFormat: 'pnts',
     name: options.name ?? tilesetDisplayName(opened.entryUrl),
-    metadata: withLoadWarning(withLoadWarning(undefined, warning), mixedWarning),
+    metadata: {
+      ...withLoadWarning(
+        withLoadWarning(withLoadWarning(undefined, warning), mixedWarning),
+        frameWarning,
+      ),
+      frame: resolved.provenance,
+    },
   });
 }
