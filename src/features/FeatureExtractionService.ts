@@ -12,7 +12,7 @@
  *
  * 1. UNITS. The cores measure in whatever unit their input carries — the grid's
  *    cell size and the point coordinates are SOURCE units, not metres (the
- *    terrain pipeline's own `cellSizeM` is likewise source units: it is
+ *    terrain pipeline's own `cellSizeSource` is likewise source units: it is
  *    `0.25 / metresPerUnit`). A field called `areaM2` fed from a foot or degree
  *    CRS would therefore be a number labelled m² that is not m². So a candidate
  *    always carries its SOURCE-unit measure, and the metric twin is present only
@@ -110,7 +110,7 @@ export function extractBuildingCandidates(
 ): BuildingCandidate[] {
   // Half a cell: fine enough that two distinct footprints never share a token,
   // coarse enough that a re-run's sub-cell centroid drift keeps the same id.
-  const quantum = grid.cellSizeM / 2;
+  const quantum = grid.cellSizeSource / 2;
   const seen = new Map<string, number>();
   return extractBuildingFootprints(points, grid).map((f) => {
     const token = positionToken(f.centroidX, f.centroidY, quantum);
@@ -119,7 +119,7 @@ export function extractBuildingCandidates(
     const n = (seen.get(token) ?? 0) + 1;
     seen.set(token, n);
     const id = n === 1 ? `building-${token}` : `building-${token}-${n}`;
-    const areaSource = f.areaM2; // core value: cells x cell^2, in SOURCE units^2
+    const areaSource = f.areaSource;
     return {
       id,
       kind: 'building',

@@ -2,7 +2,7 @@
  * footprintGeoJson.ts — export building footprints as RFC 7946 GeoJSON.
  *
  * Each footprint's traced ring becomes a Polygon feature carrying its area,
- * centroid and — honestly — its DERIVED status: these are candidates extracted
+ * centroid and, honestly, its DERIVED status: these are candidates extracted
  * from classified points, not surveyed building outlines, and the property set
  * says so. Coordinates are written in the source projected frame (the same
  * frame the points were gridded in); the CRS is recorded in a `metadata` member
@@ -15,7 +15,17 @@ import type { Pt2 } from './footprintTrace';
 export interface FootprintFeatureInput {
   /** Closed outer ring in projected coordinates (first vertex not repeated). */
   readonly ring: readonly Pt2[];
-  readonly areaM2: number;
+  /** Cell-count area in the source frame's own unit squared. Always present. */
+  readonly areaSource: number;
+  /**
+   * The same area in m², or null when the source's linear unit is not known.
+   *
+   * Callers used to collapse these two with `areaM2 ?? areaSource`, which wrote
+   * a foot-unit magnitude into a property named for metres, in a file that
+   * leaves the application. A reader cannot tell that apart from a real m²
+   * value, so the metric property is omitted entirely when it is not known.
+   */
+  readonly areaM2: number | null;
   readonly centroidX: number;
   readonly centroidY: number;
   /** Optional stable id for the footprint. */
@@ -54,7 +64,9 @@ export function footprintsToGeoJson(
         id: f.id ?? i,
         geometry: { type: 'Polygon', coordinates: [coords] },
         properties: {
-          areaM2: round(f.areaM2, 3),
+          areaSource: round(f.areaSource, 3),
+          // Present only when the linear unit is known. See FootprintFeatureInput.
+          ...(f.areaM2 == null ? {} : { areaM2: round(f.areaM2, 3) }),
           centroidX: round(f.centroidX, 3),
           centroidY: round(f.centroidY, 3),
           // Honesty: what this feature actually is.

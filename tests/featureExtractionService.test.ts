@@ -32,7 +32,7 @@ function block(ox = 0, oy = 0, n = 10): BuildingPoint[] {
   for (let x = 0; x < n; x++) for (let y = 0; y < n; y++) pts.push({ x: ox + x, y: oy + y });
   return pts;
 }
-const GRID = { originX: 0, originY: 0, cellSizeM: 1, minPointsPerCell: 1, minAreaM2: 4 };
+const GRID = { originX: 0, originY: 0, cellSizeSource: 1, minPointsPerCell: 1, minAreaSource: 4 };
 
 /** A near-straight span with a slight sag. */
 function span(len = 40): Vec3[] {
@@ -194,7 +194,8 @@ describe('FeatureExtractionService — the traced ring', () => {
     const fc = footprintsToGeoJson(
       cands.map((c) => ({
         ring: c.ring,
-        areaM2: c.areaM2 ?? c.areaSource,
+        areaSource: c.areaSource,
+        areaM2: c.areaM2,
         centroidX: c.centroid[0],
         centroidY: c.centroid[1],
         id: c.id,
