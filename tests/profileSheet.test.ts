@@ -253,6 +253,24 @@ function stationToMetres(label: string): number | null {
   return m == null ? null : Number(m[1]) * 1000 + Number(m[2]);
 }
 
+/**
+ * A type size the builder declares, read from its source.
+ *
+ * Restating a size here is how a raised type scale quietly empties a filter
+ * and passes the test on an empty set. Reading it means the scale can move
+ * and these cases keep pointing at the same text.
+ */
+function sizeOf(name: string): number {
+  const { readFileSync } = require('node:fs') as typeof import('node:fs');
+  const src = readFileSync(
+    new URL('../src/render/measure/profilePdf.ts', import.meta.url),
+    'utf8',
+  );
+  const m = new RegExp(`const ${name} = ([0-9.]+);`).exec(src);
+  if (m == null) throw new Error(`profilePdf declares no ${name}`);
+  return Number(m[1]);
+}
+
 describe('profile sheet: vertical exaggeration', () => {
   it('states the exaggeration as horizontal over vertical, not its reciprocal', async () => {
     const bytes = await buildProfilePdf({
@@ -301,7 +319,11 @@ describe('profile sheet: no overprinting in the notes table', () => {
     // restated, so a column that moved without its neighbour is still caught.
     // The table only: the sheet furniture below it (general notes, title
     // block, issue strip) is set at the same sizes and has its own columns.
-    const body = drawn.filter((d) => (d.size === 9 || d.size === 8.5) && d.y > 260);
+    // Sizes are read from the builder rather than restated: a type-scale
+    // change should not silently empty this filter and pass the test on an
+    // empty set, which is what happened when the scale was last raised.
+    const bodySizes = new Set([sizeOf('T_TABLE'), sizeOf('T_REMARK')]);
+    const body = drawn.filter((d) => bodySizes.has(d.size) && d.y > 260);
     expect(body.length).toBeGreaterThan(30);
     const origins = [...new Set(body.map((d) => Math.round(d.x)))]
       .sort((a, b) => a - b)
@@ -506,7 +528,9 @@ describe('profile sheet: the gap colour', () => {
     const wearingIt = cells.filter((c) => c.fill === GAP_FILL).map((c) => c.text);
     expect([...new Set(wearingIt)]).toEqual(['gap']);
     // The heights that DID return are set in the ordinary ink.
-    const heights = cells.filter((c) => c.base === 'Courier' && /^1\d\d\.\d\d$/.test(c.text));
+    const heights = cells.filter(
+      (c) => c.base.startsWith('Courier') && /^1\d\d\.\d\d$/.test(c.text),
+    );
     expect(heights.length).toBeGreaterThan(4);
     for (const h of heights) expect(h.fill).not.toBe(GAP_FILL);
   });
@@ -623,7 +647,12 @@ describe('profile sheet: typographic hierarchy and the readable floor', () => {
     );
     expect(bandCells.length).toBeGreaterThan(20);
     for (const cell of bandCells) {
-      expect(cell.base, `band cell "${cell.text}" is set in ${cell.base}`).toBe('Courier');
+      // Courier or Courier-Bold: the measured row carries weight, and both
+      // faces are monospaced, which is the property the band needs so that
+      // digits of one row line up under each other.
+      expect(cell.base, `band cell "${cell.text}" is set in ${cell.base}`).toMatch(
+        /^Courier(-Bold)?$/,
+      );
     }
   });
 });

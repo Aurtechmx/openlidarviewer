@@ -247,30 +247,30 @@ const T_SUBTITLE = 10.5; // measurement name under the title
 const T_STAMP = 9; // generation stamp, top right
 const T_META = 8.5; // CRS / corridor / percentile line under the stamp
 const T_SCALE = 10; // the scale + exaggeration + print statement, bold
-const T_AXIS = 9; // axis titles
-const T_TICK = 8; // grid tick figures, monospaced
-const T_BAND = 8.5; // station band figures, monospaced
-const T_CAPTION = 8.5; // band caption and chart legend
-const T_KPI_LABEL = 7.5; // KPI cell label, tracked caps, bold
-const T_KPI_VALUE = 16; // KPI cell value, bold
+const T_AXIS = 10; // axis titles
+const T_TICK = 9; // grid tick figures, monospaced
+const T_BAND = 9.5; // station band figures, monospaced
+const T_CAPTION = 9.5; // band caption and chart legend
+const T_KPI_LABEL = 8.5; // KPI cell label, tracked caps, bold
+const T_KPI_VALUE = 18; // KPI cell value, bold
 const T_CALLOUT = 9; // the leader-line callout headline, bold
-const T_CALLOUT_SUB = 8; // the station range under it
-const T_NOTE_HEAD = 8; // GENERAL NOTES heading, tracked caps, bold
-const T_NOTE = 8.5; // a numbered general note
-const T_TB_LABEL = 6.5; // title-block field label, tracked caps, bold
-const T_TB_VALUE = 9.5; // title-block field value
-const T_TB_EYEBROW = 7; // TERRAIN PROFILE over the sheet name, tracked, bold
+const T_CALLOUT_SUB = 9; // the station range under it
+const T_NOTE_HEAD = 9; // GENERAL NOTES heading, tracked caps, bold
+const T_NOTE = 9.5; // a numbered general note
+const T_TB_LABEL = 7.5; // title-block field label, tracked caps, bold
+const T_TB_VALUE = 10.5; // title-block field value
+const T_TB_EYEBROW = 8; // TERRAIN PROFILE over the sheet name, tracked, bold
 const T_TB_NAME = 15; // the sheet name, bold
-const T_TB_DESC = 8.5; // the one-line descriptor under it
-const T_ISSUE_HEAD = 8.5; // issue strip column headers, bold
-const T_TABLE_HEAD = 8.5; // table column headers, tracked caps, bold
-const T_TABLE = 9; // table body
-const T_REMARK = 8.5; // the engineering remark column
-const T_SECTION = 8; // a section heading on sheet 2, tracked caps, bold
-const T_PARA = 9; // body prose on sheet 2
-const T_SOURCE = 8.5; // the source table, monospaced
-const T_SCHED = 9; // station schedule cells, monospaced
-const T_SHEET_SIZE = 8; // the sheet-size designation in the corner
+const T_TB_DESC = 9.5; // the one-line descriptor under it
+const T_ISSUE_HEAD = 9.5; // issue strip column headers, bold
+const T_TABLE_HEAD = 9.5; // table column headers, tracked caps, bold
+const T_TABLE = 10; // table body
+const T_REMARK = 9.5; // the engineering remark column
+const T_SECTION = 9; // a section heading on sheet 2, tracked caps, bold
+const T_PARA = 10; // body prose on sheet 2
+const T_SOURCE = 9.5; // the source table, monospaced
+const T_SCHED = 10; // station schedule cells, monospaced
+const T_SHEET_SIZE = 9; // the sheet-size designation in the corner
 
 /** Extra space inserted between letters of an uppercase tracked label. */
 const TRACK = 0.9;
@@ -633,6 +633,8 @@ interface Faces {
   readonly font: PDFFont;
   readonly bold: PDFFont;
   readonly mono: PDFFont;
+  /** Courier-Bold, for the measured figure in a row of otherwise quiet cells. */
+  readonly monoBold: PDFFont;
 }
 
 /** What the title block on one sheet states, beyond the set-wide fields. */
@@ -898,6 +900,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     font: await doc.embedFont(StandardFonts.Helvetica),
     bold: await doc.embedFont(StandardFonts.HelveticaBold),
     mono: await doc.embedFont(StandardFonts.Courier),
+    monoBold: await doc.embedFont(StandardFonts.CourierBold),
   };
 
   const stats = computeCivilProfileStats(input.samples);
@@ -1167,6 +1170,10 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       bandRows.forEach(([, cell], r) => {
         const t = winAnsiSafe(cell(i));
         const y = bandTop - (r + 1) * BAND_ROW_H + 5;
+        // The height row is the measured one, so it carries the weight the way
+        // the schedule's height column does. Partial distance and chainage
+        // describe WHERE the station is rather than what was found there.
+        const measured = r === bandRows.length - 1 && t !== 'gap';
         // Courier throughout, so the figures of one row line up digit under
         // digit whatever their magnitude. A cell that says `gap` takes the
         // gap colour, the same mark the station schedule uses for the same
@@ -1174,10 +1181,10 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         put(
           page,
           t,
-          c.x - f.mono.widthOfTextAtSize(t, T_BAND) / 2,
+          c.x - (measured ? f.monoBold : f.mono).widthOfTextAtSize(t, T_BAND) / 2,
           y,
           T_BAND,
-          f.mono,
+          measured ? f.monoBold : f.mono,
           t === 'gap' ? GAP_MARK : INK,
         );
       });
@@ -1843,7 +1850,10 @@ function renderStationSchedule(
         const y = topY - 16 - r * rowH;
         const height = fmtEl(st.elevation);
         put(page, formatStation(st.chainage, system), x, y, T_SCHED, f.mono, INK);
-        put(page, height, x + 108, y, T_SCHED, f.mono, height === 'gap' ? GAP_MARK : INK);
+        // The height is what the row is FOR: chainage is an address and grade is
+        // derived from two heights, so the weight goes on the measured figure.
+        put(page, height, x + 108, y, T_SCHED, height === 'gap' ? f.mono : f.monoBold,
+          height === 'gap' ? GAP_MARK : INK);
         put(page, fmtGrade(st.gradeToNext), x + 200, y, T_SCHED, f.mono, INK_SOFT);
       }
     }
