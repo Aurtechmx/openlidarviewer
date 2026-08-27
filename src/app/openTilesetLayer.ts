@@ -30,6 +30,12 @@ import { validateRemoteTilesetUrl } from '../io/tiles3d/tilesetUrl';
 import { PntsChunkDecoder } from '../io/tiles3d/pntsDecode';
 import { TilesetStreamingSource } from '../render/streaming/TilesetStreamingSource';
 import {
+  describeCloudFrame,
+  FRAME_UNKNOWN_NOTE,
+  type CloudFrameProvenance,
+} from '../geo/frame/frameProvenance';
+import type { AnalysisRow } from '../analysis/ModuleApi';
+import {
   activateCommittedStreamingCloud,
   isAbortError,
   linkAbortSignals,
@@ -69,6 +75,45 @@ export function tilesetDisplayName(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * The Scan Report rows that state what the tileset established about up.
+ *
+ * A tileset declaring no geocentric root frame draws exactly like one that
+ * does: it recentres, it fits the camera, it looks like a scene. The only place
+ * the difference can appear is in words, so it is said here, on the surface a
+ * user consults before trusting an elevation — the same place the COPC and EPT
+ * opens put their honesty rows.
+ *
+ * The established case is stated no more strongly than the document allows. A
+ * `region` fixes the root frame as WGS84 geocentric, which makes a height an
+ * ELLIPSOIDAL height; 3D Tiles carries no vertical datum, so naming an
+ * orthometric one here would be a different lie from the one this fixes.
+ *
+ * Pure — no DOM, no viewer — so the wording is testable without an open.
+ */
+export function tilesetFrameReportRows(
+  provenance: CloudFrameProvenance | undefined,
+): AnalysisRow[] {
+  // A source that states nothing gets no row. Inventing "unknown" on its behalf
+  // would report a determination that was never made.
+  if (provenance === undefined) return [];
+  const established = provenance.basis !== 'unknown';
+  const rows: AnalysisRow[] = [
+    {
+      label: 'Vertical frame',
+      value: describeCloudFrame(provenance),
+      status: established ? 'info' : 'warn',
+    },
+  ];
+  if (established && provenance.declaredBy !== null) {
+    rows.push({ label: 'Frame declared by', value: provenance.declaredBy, status: 'info' });
+  }
+  if (!established) {
+    rows.push({ label: 'Vertical reference', value: FRAME_UNKNOWN_NOTE, status: 'warn' });
+  }
+  return rows;
 }
 
 /**
@@ -190,6 +235,14 @@ export async function openRemoteTileset(
     deps.streamingPanel.setQuality(deps.getStreamingQuality());
     deps.streamingPanel.setSourceUrl(url);
     deps.streamingPanel.setPhase('Streaming coarse geometry…');
+    // The frame statement, on the Scan Report. Wrapped the way the COPC and EPT
+    // paths wrap their report calls: a panel that throws must not tear down a
+    // scene that is already committed and drawing.
+    try {
+      deps.inspector.setReport(tilesetFrameReportRows(cloud.frameProvenance));
+    } catch (err) {
+      if (deps.debug) console.warn('[inspector] setReport (tileset) threw', err);
+    }
     deps.dropZone.setProgress(null);
     deps.dropZone.setCancelHandler(null);
     deps.startStreamingStatusPolling();
