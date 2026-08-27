@@ -33,6 +33,15 @@
  * — the file still opens by the existing whole-file route, and COPC or EPT
  * streams it without a cache at all. Proceeding wrongly costs them their disk.
  *
+ * STILL RIGHT AFTER THE PARTIAL-STORE CHANGE. `opfsSpillStore.ts` builds into
+ * `<name>.partial` and promotes that directory to `<name>` once the manifest is
+ * written. The figures below do not move: the same tiles, hierarchy and
+ * manifest are written once each, and promotion RENAMES files where the engine
+ * offers `FileSystemFileHandle.move`. Where it does not, promotion copies one
+ * file at a time and deletes each source immediately, so the transient excess
+ * is the largest tile rather than a second store, which the reserve below
+ * already covers many times over.
+ *
  * Nothing in the application calls this yet. It is the check that has to exist
  * before any file is routed to local indexing, not the routing itself.
  */
