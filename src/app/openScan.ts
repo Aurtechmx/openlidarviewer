@@ -26,6 +26,7 @@ import { describeLoadError } from '../io/loadErrors';
 import { formatTelemetry } from '../io/loadTelemetry';
 import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
 import { LoadCancelledError } from '../io/loadFile';
+import { openLocalHeavyLas } from './openLocalHeavyLas';
 import { availableModes } from '../render/colorModes';
 import { recommendColorMode } from '../render/colorModeRecommend';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
@@ -245,6 +246,41 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     const headSlice = await file.slice(0, 4096).arrayBuffer();
     if (detectCopc(headSlice).isCopc) {
       await deps.openLocalCopc(file, controller.signal);
+      return;
+    }
+    // A large uncompressed LAS whose whole-file load would exceed the memory
+    // ceiling is built into an out-of-core OPFS tile store and streamed, rather
+    // than materialised as one ArrayBuffer. The bridge reads only the header
+    // first and decides: it returns `attached` only when a streaming scan is on
+    // screen, and every other outcome — the plan does not route out of core,
+    // OPFS or workers are absent, the storage preflight refuses, or the build
+    // failed before commit — falls through to the whole-file loader below
+    // unchanged, so the out-of-core path can never make a working open worse.
+    const heavy = await openLocalHeavyLas(file, controller.signal, {
+      viewerReady: deps.viewerReady,
+      getViewer: deps.getViewer,
+      isPhone: deps.isPhone,
+      renderBudget: deps.renderBudget,
+      deviceMemoryGB: deps.deviceMemoryGB,
+      dock: deps.dock,
+      inspector: deps.inspector,
+      navBar: deps.navBar,
+      stage: deps.stage,
+      body:
+        typeof document !== 'undefined' && document.body
+          ? document.body
+          : { classList: { add: () => {} } },
+      setPhase: (phase) => deps.dropZone.setProgress(phase),
+      debug: deps.debug,
+    });
+    if (heavy.status === 'attached') {
+      deps.dropZone.setCancelHandler(null);
+      deps.dropZone.setProgress(null);
+      return;
+    }
+    if (heavy.status === 'cancelled') {
+      deps.dropZone.setCancelHandler(null);
+      deps.dropZone.setProgress(null);
       return;
     }
     // Phones get a tighter point budget — limited GPU memory and fill-rate.

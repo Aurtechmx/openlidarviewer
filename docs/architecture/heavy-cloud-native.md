@@ -135,14 +135,27 @@ store and its parsers, the tile decoder, `buildTileStoreFromLas`, and
 `OlvTileSource`. `loadPlan` sets `buildThenStream` for an uncompressed LAS
 whose whole-file buffer would exceed the memory ceiling.
 
-What is not built is the browser half of phase 3. Nothing in the app yet calls
-`buildTileStoreFromLas`, mounts an OPFS directory as the spill store and
-artifact sink, or attaches the resulting `OlvTileSource` to the Viewer. Until
-that lands, a large plain LAS still takes the strided fallback the plan keeps
-populated, and the phase-3 gate (a multi-GB file streaming with residency
-under the budget) has not been run. The pieces it needs all exist and are
-storage-agnostic by construction, so the remaining work is wiring and the
-browser evidence to go with it, not new machinery.
+The browser half of phase 3 is now wired for uncompressed LAS.
+`src/app/openScan.ts` calls `openLocalHeavyLas`, which reads only the header
+first, acts on the plan's `buildThenStream` verdict, runs `storagePreflight`,
+and dispatches the index to `localOocIndexerWorker`. The worker wraps the
+`File` in a `LocalFileRangeSource`, opens an OPFS spill build, runs
+`buildTileStoreFromLas`, and posts back the manifest and hierarchy. The main
+thread reopens the promoted store from OPFS, constructs an `OlvTileSource`, and
+hands it to `Viewer.attachStreamingCloud` with the shared streaming-scan reveal
+(`streamingScanReveal.ts`). Any non-attach outcome falls back to the whole-file
+loader, so the path never makes a working open worse. The non-attach cases are:
+the plan does not route out of core, OPFS or workers are absent, the preflight
+refuses, or the build fails before commit. A Node test drives the whole decision
+and dispatch against a fake OPFS and an in-process build. It asserts the largest
+single read is a bounded batch far smaller than the file and that the streamed
+cloud reports the source point count.
+
+What remains is compressed LAZ, which stays on the strided whole-file path until
+the chunked-LAZ builder is wired, plus preview-first rendering before the index
+finishes, cross-session cache reuse, and the multi-GB browser evidence for the
+phase-3 gate. The worker message boundary and the real OPFS and real streaming
+attach run only in the browser. The Node coverage stops at the fake seams.
 
 Phase 0 is independently shippable: chunk-parallel decode alone improves
 today's in-memory loads (every chunk still decodes, but on all cores), and the

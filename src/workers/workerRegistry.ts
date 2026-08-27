@@ -88,6 +88,12 @@ export const WORKER_REGISTRY: readonly WorkerDeclaration[] = [
     asyncBridgeModule: 'src/io/loadLas.ts',
     pinClientChunk: true,
   },
+  {
+    id: 'localOocIndexer',
+    workerModule: 'src/io/heavy/worker/localOocIndexerWorker.ts',
+    workerChunk: 'localOocIndexerWorker',
+    clientModule: 'src/io/heavy/worker/localOocIndexerWorkerClient.ts',
+  },
 ] as const;
 
 /** Escape a string for safe embedding inside a `RegExp`. */
