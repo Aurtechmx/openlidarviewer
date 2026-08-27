@@ -236,6 +236,11 @@ const TREE = parseTileset(
 
 const transport = (): TilesetTransport => ({
   fetchTilesetJson: async () => '{}',
+  // An explicit hierarchy asks for no subtree, so a request for one here would
+  // be the reader inventing work rather than a case this test set up.
+  fetchSubtreeBytes: async () => {
+    throw new Error('this tileset states an explicit hierarchy; no subtree exists');
+  },
   fetchTileBytes: async () => new ArrayBuffer(8),
 });
 

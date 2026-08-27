@@ -9,8 +9,11 @@
  * camera over time.
  *
  * The subset is bounded on purpose, and what falls outside it is refused with a
- * clear error rather than mis-read: implicit tiling, and any `asset.version`
- * outside {@link SUPPORTED_ASSET_VERSIONS}.
+ * clear error rather than mis-read: an unexpanded implicit hierarchy, and any
+ * `asset.version` outside {@link SUPPORTED_ASSET_VERSIONS}. Implicit tiling is
+ * resolved before this function rather than inside it: `implicitExpand.ts`
+ * fetches the `.subtree` availability files and rewrites the document into an
+ * explicit one, which this parser then checks like any other.
  *
  * Two compatibility limits of this subset are known and not yet addressed. The
  * selection downstream identifies content by the URI extension, while 1.1 does
@@ -190,8 +193,20 @@ function parseTile(raw: RawTile, inheritedRefine: Refine, depth: number, budget:
       `3D Tiles: tileset declares more than ${budget.maxTiles} tiles; refusing to parse it.`,
     );
   }
+  // This parser is synchronous and pure, and an implicit tree cannot be resolved
+  // without the network: which of its tiles exist is stated by `.subtree` files
+  // the document names. `expandImplicitTileset` fetches those and rewrites the
+  // document into an equivalent explicit one, which then arrives here and is
+  // checked by every rule below exactly as an authored hierarchy is. So this
+  // stays a refusal rather than becoming a branch: a document that reaches the
+  // parser still carrying `implicitTiling` was not expanded, and reading it as
+  // a childless tile would drop its whole tree in silence.
   if (raw.implicitTiling !== undefined) {
-    throw new Error('3D Tiles: implicit tiling is not supported yet — only an explicit tile hierarchy.');
+    throw new Error(
+      '3D Tiles: a tile declares implicit tiling, which this parser does not resolve. ' +
+        'Expand the document with expandImplicitTileset first; it reads the .subtree ' +
+        'availability files and rewrites the tree explicitly.',
+    );
   }
   // 1.1 lets a tile carry `contents` (an array) instead of `content`. Only the
   // single form is read below, so such a tile used to yield a null URI, which

@@ -45,6 +45,18 @@ export const MAX_TILESET_JSON_BYTES = 8 * 1024 * 1024;
  * from a writer that produced unusually large tiles.
  */
 export const MAX_PNTS_TILE_BYTES = 128 * 1024 * 1024;
+/**
+ * Ceiling for one `.subtree` body.
+ *
+ * A subtree carries three availability bitstreams and nothing else: one bit per
+ * tile over the levels it covers. The widest subtree this reader will read at
+ * all is bounded by `MAX_TILES_PER_SUBTREE`, which at about a million tiles is
+ * 128 KB per bitstream, so a legitimate document is orders of magnitude below
+ * this. It is separate from the tile ceiling because a `.subtree` is metadata,
+ * not geometry, and reading it at the 128 MiB a point tile is allowed would
+ * make availability the largest allocation in an implicit open.
+ */
+export const MAX_SUBTREE_BYTES = 8 * 1024 * 1024;
 /** Maximum retries beyond the initial attempt (so up to 4 total). */
 const DEFAULT_MAX_RETRIES = 3;
 /** Base backoff before the first retry — doubled each attempt, jittered. */
@@ -74,6 +86,17 @@ export interface TilesetTransport {
   fetchTilesetJson(url: string, signal?: AbortSignal): Promise<string>;
   /** One `.pnts` body, capped at {@link MAX_PNTS_TILE_BYTES}. */
   fetchTileBytes(url: string, signal?: AbortSignal): Promise<ArrayBuffer>;
+  /**
+   * One `.subtree` body, or one external availability buffer it names, capped
+   * at {@link MAX_SUBTREE_BYTES}.
+   *
+   * A required member rather than an optional one. An implicit tileset's
+   * availability is fetched from the same untrusted origin its tiles are, so it
+   * needs the same per-attempt deadline, the same refused redirects and the
+   * same bounded read; an optional method is one a caller can be missing
+   * without noticing, and the fallback would be a plain fetch with none of them.
+   */
+  fetchSubtreeBytes(url: string, signal?: AbortSignal): Promise<ArrayBuffer>;
 }
 
 /** Tunables for {@link createTilesetTransport}. Defaulted; injected for tests. */
@@ -94,10 +117,12 @@ export interface TilesetTransportOptions {
   maxTilesetJsonBytes?: number;
   /** Override the `.pnts` ceiling. Tests use a tiny one. */
   maxTileBytes?: number;
+  /** Override the `.subtree` ceiling. Tests use a tiny one. */
+  maxSubtreeBytes?: number;
 }
 
 /** What kind of resource a request is reading, for the error vocabulary. */
-type ReadLabel = 'tileset' | 'tile';
+type ReadLabel = 'tileset' | 'tile' | 'subtree';
 
 /**
  * Build a hardened 3D Tiles transport: per-attempt timeout, bounded retry with
@@ -114,6 +139,7 @@ export function createTilesetTransport(
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const maxJsonBytes = options.maxTilesetJsonBytes ?? MAX_TILESET_JSON_BYTES;
   const maxTileBytes = options.maxTileBytes ?? MAX_PNTS_TILE_BYTES;
+  const maxSubtreeBytes = options.maxSubtreeBytes ?? MAX_SUBTREE_BYTES;
 
   /**
    * One GET with a hard deadline, composed with the caller's outer signal.
@@ -203,6 +229,22 @@ export function createTilesetTransport(
         `3D Tiles tileset at ${sanitizeUrlForDisplay(url)}`,
         { signal },
       );
+    },
+    fetchSubtreeBytes: async (url, signal) => {
+      const response = await fetchWithRetry(url, 'subtree', signal);
+      const bytes = await readAtMostBounded(
+        response,
+        maxSubtreeBytes,
+        `3D Tiles subtree at ${sanitizeUrlForDisplay(url)}`,
+        { signal },
+      );
+      // Exact-size, for the same reason the tile read below is: the subtree
+      // reader indexes chunk offsets against the buffer length, so a pooled
+      // backing buffer would present trailing bytes as part of the document.
+      return bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer;
     },
     fetchTileBytes: async (url, signal) => {
       const response = await fetchWithRetry(url, 'tile', signal);
