@@ -29,7 +29,8 @@ import { alignEpochClouds } from '../src/terrain/change/alignEpochs';
 import type { EpochCloud } from '../src/terrain/change/compareEpochs';
 import { stockpileVolume, type StockpileInput } from '../src/render/measure/stockpileVolume';
 import { buildReportManifest, verifyReportManifest } from '../src/render/measure/reportManifest';
-import { computeTPI, computeVRM, TPI_CLASS } from '../src/terrain/complexity';
+import { computeTPI, TPI_CLASS } from '../src/terrain/complexity/terrainPositionIndex';
+import { computeVRM } from '../src/terrain/complexity/vectorRuggedness';
 import { hornSlope, hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
 
 /** Deterministic LCG so every metric is reproducible from a fixed seed. */
