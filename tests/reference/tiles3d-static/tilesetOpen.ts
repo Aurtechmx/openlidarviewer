@@ -1,4 +1,20 @@
 /**
+ * SUPERSEDED REFERENCE. Not the code the product runs.
+ *
+ * The fetch/decode half of the one-shot tileset read in `tilesetCloud.ts`
+ * beside it. A `tileset.json` now opens through `src/app/openTilesetLayer.ts`
+ * into `src/render/streaming/TilesetStreamingSource.ts`, which reaches the same
+ * parser, transport and URL guards directly and builds its node index with
+ * `src/io/tiles3d/tilesetNodes.ts`. Nothing in `src/` imports this file.
+ *
+ * `MAX_SELECTED_TILES` below has no streaming equivalent: it capped the fetch
+ * list ONE camera position produced, and the streaming path has no such list.
+ * What bounds the streaming reader is `DEFAULT_TILESET_MAX_TILES` at parse plus
+ * the scheduler's point-pressure budget.
+ *
+ * Do not import this from `src/`.
+ */
+/**
  * tilesetOpen.ts — opening a remote 3D Tiles tileset, selecting what a view
  * needs from it, and decoding the tiles that selection names.
  *
@@ -24,16 +40,9 @@
  * failure mode that is hardest to notice and worst to ship.
  *
  * WHAT IS NOT HERE. Nothing mounts. There is no `StreamingSource` implementation
- * in this module and no viewer wiring, because the streaming contract is built
- * around a node store keyed by octree records and LAS-shaped decode metadata,
- * which a PNTS content tree does not have. This module is the fetch/decode half
- * that such a source would sit on; the source itself is not written.
- *
- * Nothing static imports this file, so none of it reaches the initial bundle.
- * There is deliberately no `loadTiles3d` seam in `lazyChunks.ts` yet either: the
- * build's chunk-emission guard requires every module named by a dynamic import
- * literal there to actually emit a chunk, and a seam with no caller is tree-
- * shaken away and fails that guard. The seam lands with the mount that uses it.
+ * in this module and no viewer wiring. That source was later written directly
+ * against the parser and the node index instead, which is what left this file
+ * with no caller.
  *
  * EXTERNAL TILESETS. A `content.uri` naming another `tileset.json` is reported,
  * not followed. Following one is a second recursion over remote input with its
@@ -41,17 +50,17 @@
  * cap above would be escaped one document at a time.
  */
 
-import { parseTileset, type Tileset, type TilesetParseLimits } from './tileset';
-import { selectTiles, type SelectedTile, type ViewCamera } from './tilesetTraversal';
-import { transformPoint } from './tileTransform';
-import { parsePnts } from './pnts';
+import { parseTileset, type Tileset, type TilesetParseLimits } from '../../../src/io/tiles3d/tileset';
+import { selectTiles, type SelectedTile, type ViewCamera } from '../../../src/io/tiles3d/tilesetTraversal';
+import { transformPoint } from '../../../src/io/tiles3d/tileTransform';
+import { parsePnts } from '../../../src/io/tiles3d/pnts';
 import {
   resolveTilesetContentUrl,
   tilesetBaseUrl,
   tilesetUrlSearch,
   validateRemoteTilesetUrl,
-} from './tilesetUrl';
-import type { TilesetTransport } from './tilesetTransport';
+} from '../../../src/io/tiles3d/tilesetUrl';
+import type { TilesetTransport } from '../../../src/io/tiles3d/tilesetTransport';
 
 /**
  * Ceiling on how many tiles ONE view may select.

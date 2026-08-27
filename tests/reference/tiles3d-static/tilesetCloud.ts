@@ -1,4 +1,31 @@
 /**
+ * SUPERSEDED REFERENCE. Not the code the product runs.
+ *
+ * A `tileset.json` opens through `src/app/openTilesetLayer.ts` into
+ * `src/render/streaming/TilesetStreamingSource.ts`. Nothing in `src/` imports
+ * this file and nothing in `src/lazyChunks.ts` names it, so it is out of every
+ * build. It is kept here, out of `src/`, because two of its rules have no
+ * equivalent on the streaming path and are written down nowhere else:
+ *
+ *   - colour survives the load only when EVERY tile carries it, and a tileset
+ *     that mixes coloured and uncoloured tiles says so in a load warning. The
+ *     streaming path colours each tile on its own and falls back to the
+ *     elevation ramp per node, with no warning that the scene mixes two
+ *     colour semantics.
+ *   - a tileset that declares no geocentric root frame records
+ *     `frame.basis = 'unknown'` and carries FRAME_UNKNOWN_NOTE as a load
+ *     warning, so a Scan Report says which way is up was never established.
+ *     The streaming source records no frame provenance at all.
+ *
+ * `MAX_TILESET_POINTS` below is the whole-tileset ceiling this reader applied.
+ * The streaming path bounds a SINGLE tile instead, at
+ * `MAX_PNTS_TILE_POINTS` in `src/io/tiles3d/pnts.ts`, plus the scheduler's
+ * resident budget. There is no whole-tileset equivalent.
+ *
+ * Do not import this from `src/`. Restoring a rule means implementing it on
+ * the streaming path, not reviving this reader.
+ */
+/**
  * tilesetCloud.ts — a 3D Tiles tileset read once, in full, as one `PointCloud`.
  *
  * This is the caller `tilesetOpen.ts` was written for, and it is deliberately
@@ -6,10 +33,9 @@
  * the entry document, selects the finest representation the tree offers,
  * fetches those `.pnts` bodies, and merges them into a single cloud that then
  * lives in the viewer exactly like a decoded LAS: no scheduler, no eviction, no
- * camera feedback. The streaming alternative is not what this is a step toward
- * being — it needs a node store keyed by octree records and LAS-shaped decode
- * metadata that a PNTS content tree has none of, so it is a different reader
- * rather than this one with more code.
+ * camera feedback. The streaming reader that replaced it is a different reader
+ * rather than this one with more code: it needs a node store keyed by octree
+ * records and LAS-shaped decode metadata that a PNTS content tree has none of.
  *
  * WHAT MAKES IT SAFE TO READ EVERYTHING AT ONCE. Nothing here is sized by what
  * the document declares. The transport caps each body, `parseTileset` caps the
@@ -45,13 +71,13 @@
  * rather than a gap it hides.
  */
 
-import { PointCloud } from '../../model/PointCloud';
-import { sanitizeAndRecenter, withLoadWarning } from '../sanitizeCloud';
-import { FRAME_UNKNOWN_NOTE } from '../../geo/frame/frameProvenance';
-import { finiteExtentCentre, resolveTilesetFrame } from './tilesetFrame';
+import { PointCloud } from '../../../src/model/PointCloud';
+import { sanitizeAndRecenter, withLoadWarning } from '../../../src/io/sanitizeCloud';
+import { FRAME_UNKNOWN_NOTE } from '../../../src/geo/frame/frameProvenance';
+import { finiteExtentCentre, resolveTilesetFrame } from '../../../src/io/tiles3d/tilesetFrame';
 import { openTileset, selectTileContents, fetchTileContent } from './tilesetOpen';
-import type { TilesetTransport } from './tilesetTransport';
-import type { ViewCamera } from './tilesetTraversal';
+import type { TilesetTransport } from '../../../src/io/tiles3d/tilesetTransport';
+import type { ViewCamera } from '../../../src/io/tiles3d/tilesetTraversal';
 
 /**
  * Ceiling on the merged point total, checked as the tiles decode.

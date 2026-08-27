@@ -180,22 +180,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/io/tiles3d/tilesetOpen.ts",
-      "status": "staged",
-      "why": "The one-shot open/select/fetch composition over the 3D Tiles pure modules. The parsers it composes ARE now reachable: src/app/openTilesetLayer.ts and src/render/streaming/TilesetStreamingSource.ts reach tileset.ts, pnts.ts, tilesetUrl.ts and tilesetTraversal.ts through src/lazyChunks.ts, so the v0.6.6 statement that the parsers are unreachable no longer holds. What is still unreachable is this whole-tileset read path beside the streaming one.",
-      "graduation": "An open route reads a tileset in full rather than streaming it, and calls openTileset/selectTileContents/fetchTileContent.",
-      "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
-    },
-    {
-      "path": "src/io/tiles3d/tilesetCloud.ts",
-      "status": "staged",
-      "why": "Merges a whole tileset into one PointCloud. Its only non-test importer is tilesetOpen.ts, which is itself unreachable; the streaming path builds its cloud through TilesetStreamingSource instead.",
-      "graduation": "tilesetOpen graduates and a caller asks for the merged one-shot cloud.",
-      "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
-    },
-    {
       "path": "src/process/ProductExecutorRegistry.ts",
       "status": "staged",
       "why": "Named in the v0.6.6 release notes: \"a product executor registry foundation that invokes a registered compute core through ProcessService.runIfAuthorized ... production product routes do not pass through it yet\".",
