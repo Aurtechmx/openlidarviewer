@@ -267,13 +267,16 @@ export interface SchedulerOptions {
  * appears in this set is a parent of at least one resident node, and it is
  * protected from eviction until its descendants leave too.
  *
- * Ancestry comes from each record's `parentId`, not from shifting its voxel
- * key. The two agree exactly on a regular octree, which is what COPC, EPT and
- * the OLV tile store are; the difference is that a hierarchy which is not an
- * octree still answers. The one behavioural distinction is that the key walk
- * climbed to depth 0 through cells that may hold no node, while this one stops
- * where the hierarchy stops. Only ids of nodes that exist are ever tested
- * against the set, so the phantom entries the key walk added were never read.
+ * Ancestry comes from each record's `parentId` rather than from shifting its
+ * voxel key, so a hierarchy that is not an octree still answers. On a regular
+ * octree the two agree, and where the store has no record `parentLookupFromStore`
+ * derives the parent from a key-shaped id so the walk crosses a gap.
+ *
+ * That fallback is load-bearing, not a tidy-up. A COPC entry with no points is
+ * skipped at parse time and never reaches the store, so a chain can have a hole
+ * with real ancestors above it. Reading `parentId` alone stopped at the hole and
+ * dropped every ancestor beyond, which cost those nodes their eviction
+ * protection while their descendants were still resident.
  */
 function buildAncestorProtection(
   nodes: readonly StreamingNode[],
