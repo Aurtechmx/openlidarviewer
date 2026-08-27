@@ -99,6 +99,12 @@ function deps() {
       revealStreamingChrome: () => {},
       stage: { hideEmptyState: () => {} },
       inspector: { setReport },
+      // Added by the scan-detection work after this fake was written. The open
+      // calls all three before it publishes the report, so a fake without them
+      // throws and the report never reaches the Inspector at all.
+      setLastStreamingReportCloud: vi.fn(),
+      runStreamingModules: () => [],
+      classLegendPanel: { getVisibility: () => ({ isFiltered: false }) },
       inspectorCards: { refreshProvenanceFromStreaming: () => {} },
       crsCoordinator: { refreshCrsForStreamingCloud: () => {} },
       streamingPanel: {

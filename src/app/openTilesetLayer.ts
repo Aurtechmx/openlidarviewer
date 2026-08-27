@@ -223,10 +223,26 @@ export async function openRemoteTileset(
       octree: { nodes: () => cloud.octree.nodes() },
     };
     deps.setLastStreamingReportCloud(reportCloud);
+    // One report, built once. `setReport` replaces the Inspector's rows rather
+    // than appending, so two calls would leave only whatever the second one
+    // published. The streaming rows are gathered separately from the frame rows
+    // for a different reason: the frame statement says whether which way is up
+    // was ever established, and losing it because an unrelated module threw
+    // would leave a user reading heights with nothing to warn them.
+    let streamingRows: AnalysisRow[] = [];
     try {
-      deps.inspector.setReport(
-        deps.runStreamingModules(reportCloud, deps.classLegendPanel.getVisibility().isFiltered()),
+      streamingRows = deps.runStreamingModules(
+        reportCloud,
+        deps.classLegendPanel.getVisibility().isFiltered(),
       );
+    } catch (err) {
+      if (deps.debug) console.warn('[inspector] runStreamingModules (tileset) threw', err);
+    }
+    try {
+      deps.inspector.setReport([
+        ...streamingRows,
+        ...tilesetFrameReportRows(cloud.frameProvenance),
+      ]);
     } catch (err) {
       if (deps.debug) console.warn('[inspector] setReport (tileset) threw', err);
     }
@@ -235,14 +251,6 @@ export async function openRemoteTileset(
     deps.streamingPanel.setQuality(deps.getStreamingQuality());
     deps.streamingPanel.setSourceUrl(url);
     deps.streamingPanel.setPhase('Streaming coarse geometry…');
-    // The frame statement, on the Scan Report. Wrapped the way the COPC and EPT
-    // paths wrap their report calls: a panel that throws must not tear down a
-    // scene that is already committed and drawing.
-    try {
-      deps.inspector.setReport(tilesetFrameReportRows(cloud.frameProvenance));
-    } catch (err) {
-      if (deps.debug) console.warn('[inspector] setReport (tileset) threw', err);
-    }
     deps.dropZone.setProgress(null);
     deps.dropZone.setCancelHandler(null);
     deps.startStreamingStatusPolling();
