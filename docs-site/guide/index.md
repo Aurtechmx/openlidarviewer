@@ -8,7 +8,7 @@ OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser —
 
 ## Try it in 10 seconds
 
-Open **[lidar.aurtech.mx](https://lidar.aurtech.mx/)**, then drag a `.las`, `.laz`, or `.copc.laz` file (or paste a remote COPC / `ept.json` URL) onto the page. You're navigating the cloud in your browser, and the file never leaves your device.
+Open **[lidar.aurtech.mx](https://lidar.aurtech.mx/)**, then drag a `.las`, `.laz`, or `.copc.laz` file (or paste a remote COPC, `ept.json`, or 3D Tiles `tileset.json` URL) onto the page. You're navigating the cloud in your browser, and the file never leaves your device.
 
 From there, the **[User guide](./user-guide)** walks through opening a scan, finding your way around, measuring, analysing terrain, comparing two scans, and sharing your work — assuming no GIS background.
 
