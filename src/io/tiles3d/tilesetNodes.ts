@@ -28,6 +28,7 @@ import type { Box6, StreamingNodeRecord } from '../copc/copcTypes';
 import type { Mat4 } from './tileTransform';
 import { walkTilePlacements } from './tileTransform';
 import { volumeToAabb } from './tilesetTraversal';
+import { resolveTilesetContentUrl, tilesetBaseUrl, tilesetUrlSearch } from './tilesetUrl';
 import type { Tileset } from './tileset';
 
 /**
@@ -60,7 +61,17 @@ export function contentKind(uri: string): 'pnts' | 'tileset' | 'other' | 'unknow
 export interface TilesetNodeIndex {
   /** One record per tile that has content, in walk order. */
   readonly records: readonly StreamingNodeRecord[];
-  /** Node id to the content URI to fetch, as authored, relative to the tileset. */
+  /**
+   * Node id to the ABSOLUTE, validated URL to fetch.
+   *
+   * Resolved here rather than at fetch time so a document naming a URL this
+   * reader must not request is refused before a single tile is fetched. The
+   * authored URI is never handed to the transport: `resolveTilesetContentUrl`
+   * refuses a non-http scheme, embedded credentials, a private-network host, a
+   * different origin from the tileset, and a path escaping the tileset's own
+   * directory. A `tileset.json` is an untrusted document that names URLs the
+   * viewer will request, so those are not optional.
+   */
   readonly contentUri: ReadonlyMap<string, string>;
   /** Node id to the cumulative root-to-tile transform the decoder must apply. */
   readonly transform: ReadonlyMap<string, Mat4>;
@@ -79,7 +90,16 @@ function toBox6(min: readonly number[], max: readonly number[]): Box6 {
  * `rootTransform` places the whole tileset, which is how a geocentric tileset
  * is brought into a local ENU frame before anything is bounded or culled.
  */
-export function tilesetNodes(tileset: Tileset, rootTransform?: Mat4): TilesetNodeIndex {
+export function tilesetNodes(
+  tileset: Tileset,
+  rootTransform?: Mat4,
+  entryUrl?: string,
+): TilesetNodeIndex {
+  // Without an entry URL there is nothing to resolve against, which is the
+  // shape the pure unit tests use. A caller that fetches MUST pass one; the
+  // streaming source does.
+  const base = entryUrl === undefined ? null : tilesetBaseUrl(entryUrl);
+  const search = entryUrl === undefined ? '' : tilesetUrlSearch(entryUrl);
   const records: StreamingNodeRecord[] = [];
   const contentUri = new Map<string, string>();
   const transform = new Map<string, Mat4>();
@@ -121,6 +141,18 @@ export function tilesetNodes(tileset: Tileset, rootTransform?: Mat4): TilesetNod
     }
     seen.add(uri);
 
+    // Refused before anything is fetched, and named, so the open can say which
+    // tile it would have had to request.
+    let target = uri;
+    if (base !== null) {
+      const resolved = resolveTilesetContentUrl(base, uri, search);
+      if (!resolved.ok) {
+        skipped.push(`${uri}: ${resolved.reason}`);
+        continue;
+      }
+      target = resolved.url;
+    }
+
     // Nearest ANCESTOR that produced a node, which may be several levels up:
     // a chain of structural tiles leaves those depths unset, and looking only
     // one level up left such a leaf parentless.
@@ -148,7 +180,7 @@ export function tilesetNodes(tileset: Tileset, rootTransform?: Mat4): TilesetNod
       spacing: placed.geometricError,
       parentId,
     });
-    contentUri.set(uri, uri);
+    contentUri.set(uri, target);
     transform.set(uri, placed.transform);
     contentParent[placed.depth] = uri;
   }
