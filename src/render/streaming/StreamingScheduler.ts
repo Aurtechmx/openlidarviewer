@@ -486,6 +486,7 @@ export function decodedChunkBytes(decoded: DecodedChunk): number {
     channelBytes(decoded.returnCount, 1) +
     channelBytes(decoded.gpsTime, 1) +
     channelBytes(decoded.rgb, 3) +
+    channelBytes(decoded.normals, 3) +
     channelBytes(decoded.pointSourceId, 1);
   return n * perPoint;
 }
@@ -1557,6 +1558,13 @@ export class StreamingScheduler {
       .then((decoded) => {
         this._inFlight.delete(id);
         this._inFlightGraceAt.delete(id);
+        // Which channels this chunk actually carried, recorded BEFORE the abort
+        // check and whether or not the node is still wanted. A format that
+        // states a channel per node settles the layer's answer inside the
+        // decoder as each tile is read, so a source that skipped an aborted
+        // chunk would answer `availableColorModes()` from a different set of
+        // tiles than the one the decoder settled on.
+        this._cloud.noteDecodedChannels?.(decoded);
         if (controller.signal.aborted) {
           store.setState(node, 'unloaded');
         } else {

@@ -83,6 +83,10 @@ export function buildResidentSnapshot(
   const pointSourceId = everyChunkHas((c) => c.pointSourceId, 1)
     ? new Uint16Array(total)
     : undefined;
+  // Surface normals, from a `.pnts` tileset. Same all-or-nothing rule: a
+  // half-filled array would report a measured direction for points that state
+  // none, and nothing downstream could tell which half was which.
+  const normals = everyChunkHas((c) => c.normals, 3) ? new Float32Array(total * 3) : undefined;
 
   let p = 0; // running point offset
   for (const c of chunks) {
@@ -97,6 +101,7 @@ export function buildResidentSnapshot(
     if (gpsTime && c.gpsTime) gpsTime.set(c.gpsTime.subarray(0, n), p);
     if (colors && c.rgb) colors.set(c.rgb.subarray(0, n * 3), p * 3);
     if (pointSourceId && c.pointSourceId) pointSourceId.set(c.pointSourceId.subarray(0, n), p);
+    if (normals && c.normals) normals.set(c.normals.subarray(0, n * 3), p * 3);
     p += n;
   }
 
@@ -109,6 +114,7 @@ export function buildResidentSnapshot(
     ...(gpsTime ? { gpsTime } : {}),
     ...(colors ? { colors } : {}),
     ...(pointSourceId ? { pointSourceId } : {}),
+    ...(normals ? { normals } : {}),
     origin: [opts.origin[0], opts.origin[1], opts.origin[2]],
     sourceFormat: opts.sourceFormat,
     name: opts.name,

@@ -31,7 +31,16 @@ import { createTranslatedFrame } from '../../geo/frame/spatialFrame';
 import type { CloudFrameProvenance } from '../../geo/frame/frameProvenance';
 import type { Mat4 } from '../../io/tiles3d/tileTransform';
 import type { TilesetTransport } from '../../io/tiles3d/tilesetTransport';
-import { PNTS_COLOR_MODES, type PntsDecodeMetadata } from '../../io/tiles3d/pntsDecode';
+import {
+  NO_TILE_DECODED,
+  NO_TILE_DECODED_NORMALS,
+  noteTileColour,
+  noteTileNormals,
+  PNTS_COLOR_MODES,
+  type PntsDecodeMetadata,
+  type TilesetColourConsensus,
+  type TilesetNormalsConsensus,
+} from '../../io/tiles3d/pntsDecode';
 import { tilesetNodes, type TilesetNodeIndex } from '../../io/tiles3d/tilesetNodes';
 import { volumeToAabb } from '../../io/tiles3d/tilesetTraversal';
 import {
@@ -43,6 +52,7 @@ import { StreamingNodeStore } from './StreamingNodeStore';
 import type { NodeCounts } from './StreamingNodeStore';
 import type { StreamingNode } from './StreamingNode';
 import type {
+  DecodedChunk,
   NodeDecodeMetadata,
   StreamingColorMode,
   StreamingOctreeView,
@@ -158,6 +168,9 @@ export class TilesetStreamingSource implements StreamingSource {
   private readonly _bounds: Box6;
   private readonly _transport: TilesetTransport;
   private readonly _crs: CrsInfo | null;
+  /** What the tiles served so far have stated about colour and about normals. */
+  private _colour: TilesetColourConsensus = NO_TILE_DECODED;
+  private _normals: TilesetNormalsConsensus = NO_TILE_DECODED_NORMALS;
 
   constructor(
     id: string,
@@ -232,16 +245,55 @@ export class TilesetStreamingSource implements StreamingSource {
     return [...this._bounds] as Box6;
   }
 
-  defaultColorMode(): StreamingColorMode {
-    return 'rgb';
+  /**
+   * Fold one served chunk into this layer's answer about colour and normals.
+   *
+   * The decoder holds the same two answers and uses them to decide what to
+   * serve; this holds them to decide what to OFFER, and folds them from the
+   * chunks that actually arrived so the two cannot describe different tilesets.
+   * Both use the same rule and the same pure fold: the first tile with points
+   * settles the answer and it never moves.
+   */
+  noteDecodedChannels(chunk: DecodedChunk): void {
+    this._colour = noteTileColour(this._colour, {
+      pointCount: chunk.pointCount,
+      hasColour: chunk.rgb !== undefined,
+    });
+    this._normals = noteTileNormals(this._normals, {
+      pointCount: chunk.pointCount,
+      hasNormals: chunk.normals !== undefined,
+    });
   }
 
   /**
-   * Only what a point tile can carry. Intensity, classification and returns are
-   * absent from the format, so nothing offers to paint a scan by them.
+   * Elevation until a tile has stated colour, which is what the layer will
+   * actually be drawn by.
+   *
+   * It used to return `'rgb'` unconditionally. A tileset whose tiles state no
+   * colour therefore opened on a mode that fell through to the elevation ramp,
+   * so the scan was painted by height under a Color chip — the same defect as
+   * offering a Normal chip for a layer with no normals, one step earlier.
+   */
+  defaultColorMode(): StreamingColorMode {
+    return this._colour.settled === 'colour' ? 'rgb' : 'elevation';
+  }
+
+  /**
+   * Only what this layer's tiles have actually stated.
+   *
+   * Intensity, classification and returns are absent from the format, so
+   * nothing offers to paint a scan by them. Colour and normals are stated per
+   * TILE rather than per document, so neither is offered before a tile has been
+   * read, and neither is offered for a layer whose tiles carry none: a chip
+   * that silently resolves to another channel says the scan holds a reading it
+   * does not.
    */
   availableColorModes(): readonly StreamingColorMode[] {
-    return PNTS_COLOR_MODES;
+    const modes: StreamingColorMode[] = PNTS_COLOR_MODES.filter(
+      (mode) => mode !== 'rgb' || this._colour.settled === 'colour',
+    );
+    if (this._normals.settled === 'normals') modes.push('normal');
+    return modes;
   }
 
   crs(): CrsInfo | null {

@@ -62,9 +62,20 @@ describe('what the source refuses to invent', () => {
 
   it('offers only the colour modes a point tile can fill', () => {
     const modes = source().availableColorModes();
-    expect(modes).toContain('rgb');
     expect(modes).not.toContain('intensity');
     expect(modes).not.toContain('classification');
+  });
+
+  it('offers no colour mode for a channel no tile has stated yet', () => {
+    // This used to answer `['rgb', 'elevation']` from the format alone, and
+    // `defaultColorMode()` used to answer `'rgb'` unconditionally. A tileset
+    // whose tiles carry no colour therefore opened on an RGB chip that fell
+    // through to the elevation ramp: the scan was painted by height and
+    // labelled Color. Colour is stated per TILE, so the honest answer before
+    // any tile has been read is that nothing states it.
+    // `tests/tilesetStreamingNormals.test.ts` covers the answer after a read.
+    expect(source().availableColorModes()).toEqual(['elevation']);
+    expect(source().defaultColorMode()).toBe('elevation');
   });
 });
 

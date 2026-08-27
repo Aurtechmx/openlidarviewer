@@ -18,6 +18,12 @@
  * colour modes the format actually carries, so nothing offers to paint a scan
  * by a channel that holds no information. `tests/pntsDecode.test.ts` pins both.
  *
+ * WHAT IT CAN CARRY, beyond position and colour: surface normals, from either a
+ * float32 `NORMAL` or an oct-encoded `NORMAL_OCT16P` accessor. `parsePnts` has
+ * always read them; they now cross into the chunk, so the normals shading path,
+ * the point inspector and the resident-snapshot export reach a streamed tileset
+ * the same way they reach a static cloud.
+ *
  * Positions arrive tile-local. The tile's own `RTC_CENTER`, then its cumulative
  * placement down the tileset tree, then the render origin are applied in
  * float64 before the float32 store, which is the same order the LAS path uses
@@ -87,6 +93,39 @@ function applyMatrix(
 /** What one decoded tile said about colour. */
 export type TileColourState = 'colour' | 'no-colour';
 
+/** What one decoded tile said about surface normals. */
+export type TileNormalsState = 'normals' | 'no-normals';
+
+/**
+ * One layer's answer about one channel, folded from the tiles decoded so far.
+ *
+ * Colour and normals both need it and must not drift apart, so the rule is
+ * written once and read at two states. See {@link TilesetColourConsensus} for
+ * why `settled` is fixed by the first tile with points.
+ */
+interface ChannelConsensus<S extends string> {
+  readonly settled: S | null;
+  readonly disagreeing: number;
+}
+
+/**
+ * Fold one decoded tile into a layer's consensus about one channel. Pure.
+ *
+ * An empty tile leaves the consensus alone: it states nothing either way, and
+ * letting one settle the meaning would hand every tile after it a decision made
+ * from no points.
+ */
+function noteTileChannel<S extends string>(
+  state: ChannelConsensus<S>,
+  pointCount: number,
+  seen: S,
+): ChannelConsensus<S> {
+  if (pointCount <= 0) return state;
+  if (state.settled === null) return { settled: seen, disagreeing: 0 };
+  if (state.settled === seen) return state;
+  return { settled: state.settled, disagreeing: state.disagreeing + 1 };
+}
+
 /**
  * One tileset layer's colour meaning, folded from the tiles decoded so far.
  *
@@ -118,11 +157,40 @@ export function noteTileColour(
   state: TilesetColourConsensus,
   tile: { readonly pointCount: number; readonly hasColour: boolean },
 ): TilesetColourConsensus {
-  if (tile.pointCount <= 0) return state;
-  const seen: TileColourState = tile.hasColour ? 'colour' : 'no-colour';
-  if (state.settled === null) return { settled: seen, disagreeing: 0 };
-  if (state.settled === seen) return state;
-  return { settled: state.settled, disagreeing: state.disagreeing + 1 };
+  return noteTileChannel(state, tile.pointCount, tile.hasColour ? 'colour' : 'no-colour');
+}
+
+/**
+ * One tileset layer's answer about surface normals, folded the same way its
+ * colour meaning is: the first tile with points settles it and it never moves.
+ *
+ * Normals vary per tile exactly as colour does, and the same two failures
+ * follow from letting a layer hold both answers at once. Half a layer painted
+ * by measured direction and half by an elevation ramp is two meanings under one
+ * legend; half a layer carrying normals into the inspector, the profile section
+ * and the resident-snapshot export, from a layer that states it has none, is a
+ * measurement that appears for some points and not others with nothing saying
+ * which is which.
+ */
+export interface TilesetNormalsConsensus {
+  /** The layer's one answer, or null before any tile with points. */
+  readonly settled: TileNormalsState | null;
+  /** How many tiles disagreed with it. */
+  readonly disagreeing: number;
+}
+
+/** No tile decoded yet, so the layer's normals answer is not established. */
+export const NO_TILE_DECODED_NORMALS: TilesetNormalsConsensus = {
+  settled: null,
+  disagreeing: 0,
+};
+
+/** Fold one decoded tile into a layer's normals consensus. Pure. */
+export function noteTileNormals(
+  state: TilesetNormalsConsensus,
+  tile: { readonly pointCount: number; readonly hasNormals: boolean },
+): TilesetNormalsConsensus {
+  return noteTileChannel(state, tile.pointCount, tile.hasNormals ? 'normals' : 'no-normals');
 }
 
 /**
@@ -155,6 +223,35 @@ export function tilesetColourNotice(state: TilesetColourConsensus): string | nul
 }
 
 /**
+ * What a user is told when the layer carries surface normals and some tiles
+ * state none. Those tiles keep no normals and are drawn flat under the Normal
+ * mode, so the absence is visible rather than filled in with a direction.
+ */
+export const MIXED_TILE_NORMALS_KEPT_NOTICE =
+  'Some tiles in this tileset carry surface normals and others do not. The ' +
+  'tiles that state none are drawn flat grey under Normal colouring, and no ' +
+  'direction is reported for their points.';
+
+/**
+ * What a user is told when the layer's first tile stated no normals and a later
+ * one does. Those normals are withheld, so the layer holds one answer: the
+ * Normal colour mode is not offered, and no part of the scan reports a
+ * direction the rest of it cannot.
+ */
+export const MIXED_TILE_NORMALS_DROPPED_NOTICE =
+  'Some tiles in this tileset carry surface normals and others do not. The ' +
+  'layer states none, so no tile normals are used and Normal colouring is not ' +
+  'offered for this scan.';
+
+/** The normals notice for a mixed tileset, or null while every tile has agreed. */
+export function tilesetNormalsNotice(state: TilesetNormalsConsensus): string | null {
+  if (state.disagreeing === 0) return null;
+  return state.settled === 'normals'
+    ? MIXED_TILE_NORMALS_KEPT_NOTICE
+    : MIXED_TILE_NORMALS_DROPPED_NOTICE;
+}
+
+/**
  * A decoded tile that states no colour, inside a layer whose colour meaning IS
  * the colour tiles state.
  *
@@ -176,6 +273,13 @@ export interface PntsChunkDecoderOptions {
    * nothing says why.
    */
   readonly onColourNotice?: (message: string) => void;
+  /**
+   * Called once, with the notice text, the first time a tile disagrees with the
+   * layer's settled answer about surface normals. Same contract as {@link
+   * onColourNotice}: without it the layer still holds one answer, and nothing
+   * says why a Normal chip is missing or a patch is drawn flat.
+   */
+  readonly onNormalsNotice?: (message: string) => void;
 }
 
 /**
@@ -190,11 +294,15 @@ export interface PntsChunkDecoderOptions {
  */
 export class PntsChunkDecoder implements ChunkDecoder {
   private readonly _onColourNotice: ((message: string) => void) | undefined;
+  private readonly _onNormalsNotice: ((message: string) => void) | undefined;
   private _colour: TilesetColourConsensus = NO_TILE_DECODED;
+  private _normals: TilesetNormalsConsensus = NO_TILE_DECODED_NORMALS;
   private _noticed = false;
+  private _normalsNoticed = false;
 
   constructor(options: PntsChunkDecoderOptions = {}) {
     this._onColourNotice = options.onColourNotice;
+    this._onNormalsNotice = options.onNormalsNotice;
   }
 
   /** The layer's colour meaning as the tiles decoded so far have settled it. */
@@ -205,6 +313,16 @@ export class PntsChunkDecoder implements ChunkDecoder {
   /** The mixed-tileset notice, or null while every tile has agreed. */
   get colourNotice(): string | null {
     return tilesetColourNotice(this._colour);
+  }
+
+  /** The layer's normals answer as the tiles decoded so far have settled it. */
+  get normalsConsensus(): TilesetNormalsConsensus {
+    return this._normals;
+  }
+
+  /** The mixed-normals notice, or null while every tile has agreed. */
+  get normalsNotice(): string | null {
+    return tilesetNormalsNotice(this._normals);
   }
 
   async decode(chunk: ArrayBuffer, meta: unknown): Promise<DecodedChunk> {
@@ -243,11 +361,31 @@ export class PntsChunkDecoder implements ChunkDecoder {
     });
     this._raiseColourNoticeOnce();
 
+    // The layer's normals answer, settled the same way and for the same reason.
+    // A tile that disagrees never has its normals re-interpreted: either the
+    // layer carries them and this tile simply states none, or the layer states
+    // none and this tile's normals are withheld.
+    this._normals = noteTileNormals(this._normals, {
+      pointCount: n,
+      hasNormals: tile.normals !== null,
+    });
+    this._raiseNormalsNoticeOnce();
+
     // Intensity, classification, return number, return count and GPS time are
     // simply absent — see the note at the top of this file. Nothing is
     // allocated for them, so a reader is told the channel is missing rather
     // than handed `pointCount` zeros that look like readings.
-    const decoded: DecodedChunk = { pointCount: n, positions };
+    //
+    // Normals are the one channel a point tile CAN state, so they are carried
+    // through as the tile wrote them — never re-normalised, never invented for
+    // a tile that has none.
+    const decoded: DecodedChunk = {
+      pointCount: n,
+      positions,
+      ...(this._normals.settled === 'normals' && tile.normals !== null
+        ? { normals: tile.normals }
+        : {}),
+    };
     if (this._colour.settled !== 'colour') {
       // The layer is drawn by the elevation ramp. A tile that does carry colour
       // has it withheld rather than painted beside ramped neighbours, because
@@ -270,14 +408,27 @@ export class PntsChunkDecoder implements ChunkDecoder {
     this._noticed = true;
     this._onColourNotice?.(notice);
   }
+
+  /** Report a normals mixture the first time one appears, and only then. */
+  private _raiseNormalsNoticeOnce(): void {
+    if (this._normalsNoticed) return;
+    const notice = tilesetNormalsNotice(this._normals);
+    if (notice === null) return;
+    this._normalsNoticed = true;
+    this._onNormalsNotice?.(notice);
+  }
 }
 
 /**
  * The colour modes a point tile can honestly drive.
  *
  * Intensity and classification are absent from the format, so they are absent
- * here. Elevation is derived from position and is always available. Normals
- * appear only when the tile carried them, which varies per tile, so a source
- * decides that from what it read rather than from the format alone.
+ * here. Elevation is derived from position and is always available.
+ *
+ * This is the format's CEILING, not any one layer's offer. Colour and normals
+ * are stated per tile, so a source narrows this list to what its tiles have
+ * actually stated: RGB leaves it for a tileset whose tiles carry none, and
+ * `normal` joins it once a tile has stated normals. See
+ * `TilesetStreamingSource.availableColorModes`.
  */
 export const PNTS_COLOR_MODES = ['rgb', 'elevation'] as const;

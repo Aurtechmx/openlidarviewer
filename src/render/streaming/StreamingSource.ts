@@ -24,7 +24,7 @@
 import type { Box6, StreamingNodeRecord } from '../../io/copc/copcTypes';
 import type { CloudFrameProvenance } from '../../geo/frame/frameProvenance';
 import type { SpatialFrame } from '../../geo/frame/spatialFrame';
-import type { ChunkDecodeMetadata } from '../../io/copc/copcChunkDecode';
+import type { ChunkDecodeMetadata, DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { PntsDecodeMetadata } from '../../io/tiles3d/pntsDecode';
 import type { StreamingNode } from './StreamingNode';
 import type { NodeCounts, StreamingNodeStore } from './StreamingNodeStore';
@@ -277,6 +277,21 @@ export interface StreamingSource {
    * future source without the ambiguity can omit it.
    */
   noteDecodedRgbDepth?(eightBit: boolean | undefined): void;
+  /**
+   * Record which measured channels a decoded chunk actually carried.
+   *
+   * COPC and EPT state their channels once, in a header or a schema, so both
+   * omit this and answer {@link availableColorModes} from the document. A 3D
+   * Tiles tileset states them PER TILE: whether it carries colour, or surface
+   * normals, is not knowable until tiles have been read, and reading every tile
+   * to find out is the one thing a streaming source must not do to open.
+   *
+   * So the answer is folded from what has actually been served. Before the
+   * first chunk a source that needs this offers neither channel, because a mode
+   * offered ahead of any tile is a promise about tiles nobody has seen; and it
+   * never offers one that would resolve to a different channel underneath.
+   */
+  noteDecodedChannels?(chunk: DecodedChunk): void;
   /**
    * Release any resource the source holds open — a file handle, a range
    * reader, a decode worker. Called by the Viewer when the streaming cloud is
