@@ -45,6 +45,23 @@ export interface StreamingStatus {
   cacheBytes: number;
 }
 
+/** The streaming formats the panel labels a scan with. */
+export type StreamingSummaryFormat = 'copc' | 'ept' | '3dtiles';
+
+/**
+ * The card title, per format. It is rebuilt on every `setSummary`, so a scan
+ * opened over another one cannot keep the previous format's name, and
+ * {@link DEFAULT_TITLE} is what `hide()` returns it to when no scan is
+ * streaming. A format missing from this table falls back to the neutral title
+ * rather than to whichever entry happened to be the else-branch.
+ */
+const DEFAULT_TITLE = 'Streaming scan';
+const FORMAT_TITLE: Record<StreamingSummaryFormat, string> = {
+  copc: 'Streaming COPC',
+  ept: 'Streaming EPT',
+  '3dtiles': 'Streaming 3D Tiles',
+};
+
 /**
  * The one-time scan summary, derived from the source's metadata.
  *
@@ -62,11 +79,17 @@ export interface StreamingScanSummary {
   width: number;
   depth: number;
   height: number;
-  spacing: number;
+  /**
+   * The source's own resolution figure: COPC's root-node spacing, EPT's node
+   * budget. Absent where the format states neither — a 3D Tiles tileset
+   * declares no point spacing, and the resolution row is omitted rather than
+   * shown as a dash a future number could appear in.
+   */
+  spacing?: number;
   octreeDepth: number;
   nodeCount: number;
   /** which streaming format the source is. */
-  format?: 'copc' | 'ept';
+  format?: StreamingSummaryFormat;
   /** EPT-only: schema summary string for the Format row. */
   schemaSummary?: string;
   /**
@@ -139,7 +162,7 @@ function formatDim(n: number): string {
  * Pure + DOM-free so the decision is unit-tested without standing up the panel.
  */
 export function spacingRowFor(
-  format: 'copc' | 'ept' | undefined,
+  format: StreamingSummaryFormat | undefined,
   spacing: number,
   crs?: SpacingCrs | null,
 ): { readonly label: string; readonly value: string; readonly title: string } {
@@ -352,9 +375,10 @@ export class StreamingPanel {
     this._gradeResult.style.display = 'none';
 
     // The title's text is rebuilt from setSummary's `format` field so it
-    // tracks the actual streaming source (COPC vs. EPT) rather than the
-    // initial hardcoded label.
-    this._title = el('div', { className: 'olv-streaming-title', text: 'Streaming scan' });
+    // tracks the actual streaming source rather than the initial hardcoded
+    // label, and `hide()` puts it back so a closed scan's format does not name
+    // the next one.
+    this._title = el('div', { className: 'olv-streaming-title', text: DEFAULT_TITLE });
     // v0.3.6 mobile collapse — chevron toggle in the head row. Hidden on
     // desktop (CSS handles the gate); on mobile, tapping it collapses the
     // panel body so the user can reclaim canvas with one tap. Tapping
@@ -421,6 +445,13 @@ export class StreamingPanel {
   /** Hide and reset the panel. */
   hide(): void {
     this.element.classList.add('olv-hidden');
+    // The Scan section describes the scan that was streaming. It is not reset
+    // anywhere else, so leaving it here carried a closed scan's File, Format,
+    // Source, Extent and Octree rows — and its format title — into the next
+    // open, where they read as that scan's figures until a `setSummary` for the
+    // new one replaced them.
+    this._title.textContent = DEFAULT_TITLE;
+    this._summary.replaceChildren();
     this._paused = false;
     this._pause.textContent = 'Pause';
     // Reset the progress treatment for the next scan.
@@ -485,18 +516,23 @@ export class StreamingPanel {
   /** Populate the one-time scan summary from the streaming source's metadata. */
   setSummary(summary: StreamingScanSummary): void {
     // Title tracks the actual streaming source. Was hardcoded "Streaming
-    // COPC", which lied during an EPT load.
-    this._title.textContent = summary.format === 'ept' ? 'Streaming EPT' : 'Streaming COPC';
+    // COPC", then a two-way EPT-or-COPC branch, which named a third format's
+    // scan "Streaming COPC" for the same reason the hardcode did.
+    this._title.textContent =
+      summary.format === undefined ? DEFAULT_TITLE : FORMAT_TITLE[summary.format];
     const file = this._statRow('File', this._value(summary.fileName, summary.fileName));
-    // format-aware Format row. COPC shows the LAS PDRF; EPT shows
-    // the schema summary (when supplied) or just "EPT".
+    // format-aware Format row. COPC shows the LAS PDRF; EPT shows the schema
+    // summary (when supplied) or just "EPT"; 3D Tiles carries no LAS header, so
+    // it states the format and the tile type it serves and no record format.
     let formatText: string;
     if (summary.format === 'ept') {
       formatText = summary.schemaSummary ? `EPT · ${summary.schemaSummary}` : 'EPT';
+    } else if (summary.format === '3dtiles') {
+      formatText = '3D Tiles · pnts';
     } else {
       formatText = `COPC LAZ · PDRF ${summary.pointFormat}`;
     }
-    this._summary.replaceChildren(
+    const rows = [
       file,
       this._statRow('Format', this._value(formatText)),
       this._statRow('Source', this._value(
@@ -510,18 +546,23 @@ export class StreamingPanel {
           `${formatDim(summary.width)} × ${formatDim(summary.depth)} × ${formatDim(summary.height)}`,
         ),
       ),
-      // COPC `spacing` is a metric distance; EPT `span` is a points-per-tile
-      // budget. `spacingRowFor` labels + units each correctly so neither is
-      // misread (see its doc-comment for the label-vs-value drift it fixes).
-      (() => {
-        const r = spacingRowFor(summary.format, summary.spacing, summary.crs);
-        return this._statRow(r.label, this._value(r.value, r.title));
-      })(),
+    ];
+    // COPC `spacing` is a metric distance; EPT `span` is a points-per-tile
+    // budget. `spacingRowFor` labels + units each correctly so neither is
+    // misread (see its doc-comment for the label-vs-value drift it fixes). A
+    // format that states neither gets no row at all — a dash here would be a
+    // slot a number could later appear in without a source having stated one.
+    if (summary.spacing !== undefined) {
+      const r = spacingRowFor(summary.format, summary.spacing, summary.crs);
+      rows.push(this._statRow(r.label, this._value(r.value, r.title)));
+    }
+    rows.push(
       this._statRow(
         'Octree',
         this._value(`depth ${summary.octreeDepth} · ${summary.nodeCount} nodes`),
       ),
     );
+    this._summary.replaceChildren(...rows);
   }
 
   /** Populate the colour-mode chips and select the active one. */

@@ -18,6 +18,14 @@
  * candidate only if a cancel lands before the static layers are retired, and
  * publish CRS and provenance to global state ONLY after the commit.
  *
+ * The reveals after the commit are the same ones, minus the ones this format
+ * cannot honestly fill. A tileset states no point total, so nothing here prints
+ * one; it carries no LAS classification, so the class legend and the reclassify
+ * panel are hidden rather than offered empty; and its colour modes come from
+ * what the tiles carried rather than from the format. Everything else a
+ * committed streaming scan reveals — the streaming panel, the streaming
+ * Inspector layout, image export, the left rail — applies unchanged.
+ *
  * Held behind `lazyChunks.loadTilesetOpen` — the tileset parser, traversal,
  * transport and PNTS decoder are a chunk nothing in the startup shell needs.
  */
@@ -37,8 +45,10 @@ import {
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import {
   activateCommittedStreamingCloud,
+  enterStreamingInspectorMode,
   isAbortError,
   linkAbortSignals,
+  resetClassificationUi,
   shouldDropCandidateOnPostCommitCancel,
   type OpenStreamingDeps,
   type StreamingReportInput,
@@ -208,6 +218,30 @@ export async function openRemoteTileset(
     viewer.setMode('orbit');
     viewer.frameAll();
 
+    // A point tile carries no LAS classification, so the legend and the
+    // reclassify panel are not empty-and-waiting here the way they are on a
+    // COPC stream: they are inapplicable, and they live in the left rail this
+    // open is about to reveal, so a previously opened COPC's legend would
+    // otherwise surface class filters over a scan that has no classes. Before
+    // the report, which is scoped by the legend's filter state. Wrapped for the
+    // same reason the report calls below are: the frame-honesty rows are what a
+    // user consults before trusting an elevation, and a throw in the class
+    // surfaces must not be what stops them being published.
+    try {
+      resetClassificationUi(deps);
+    } catch (err) {
+      if (deps.debug) console.warn('[class-legend] reset (tileset) threw', err);
+    }
+    // Streaming layout for the Inspector and the Export panel, plus the image
+    // export gate. Wrapped because the availability map is read off the live
+    // viewer: a throw there would otherwise cost the panel, the status poll and
+    // the chrome reveal below, none of which depend on it.
+    try {
+      enterStreamingInspectorMode(deps, viewer.availableImageExportModes());
+    } catch (err) {
+      if (deps.debug) console.warn('[inspector] streaming mode (tileset) threw', err);
+    }
+
     // The Scan Report for THIS scan. Nothing set it on this path, so the
     // Inspector kept whichever streaming scan was open before: a tileset opened
     // over a COPC read as that COPC, point count included. A tileset carries no
@@ -247,10 +281,59 @@ export async function openRemoteTileset(
       if (deps.debug) console.warn('[inspector] setReport (tileset) threw', err);
     }
 
+    // The left rail. `revealAnalysePanel` is the only call that reaches the
+    // shell's mobile-sheet sync and through it `workspace.setAvailable`, which
+    // is what puts `olv-ws-ready` on the rail; without it
+    // `.olv-left-panels:not(.olv-ws-ready) .olv-ws-body` hid Process Studio,
+    // the Export panel and the Measure panel, and the Measure panel was never
+    // even mounted. `false` for `settled`: a streaming open's route verdict runs
+    // on a sparse coarse frame, so the soft commit waits for the settle
+    // one-shot, exactly as the COPC and EPT opens pass it.
+    try {
+      deps.prewarmExportStudio();
+      deps.revealAnalysePanel(cloud.name, false);
+    } catch (err) {
+      if (deps.debug) console.warn('[workspace] revealAnalysePanel (tileset) threw', err);
+    }
+
     deps.streamingPanel.setColorModes([...cloud.availableColorModes()], cloud.defaultColorMode());
     deps.streamingPanel.setQuality(deps.getStreamingQuality());
     deps.streamingPanel.setSourceUrl(url);
     deps.streamingPanel.setPhase('Streaming coarse geometry…');
+    // The panel's Scan section, written BEFORE the panel becomes visible. The
+    // path populated everything else on the panel and never showed it; showing
+    // it without a summary would have exposed the previously opened scan's
+    // section instead, because `hide()` runs only on close and a
+    // streaming→streaming swap never passes through it. What a tileset states
+    // is its format, its extent and its octree; the point total stays null, so
+    // the Source row reads as absent rather than as a figure.
+    const bounds = cloud.dataBounds();
+    deps.streamingPanel.setSummary({
+      fileName: cloud.name,
+      // No LAS header, so no point-data record format; the panel's 3dtiles
+      // branch states the format and never renders this sentinel.
+      pointFormat: -1,
+      sourcePoints: cloud.sourcePointCount,
+      width: bounds[3] - bounds[0],
+      depth: bounds[4] - bounds[1],
+      height: bounds[5] - bounds[2],
+      // No `spacing`: a tileset declares neither COPC's root-node spacing nor
+      // EPT's node budget, and the panel omits the row rather than dashing it.
+      octreeDepth: cloud.maxDepth(),
+      nodeCount: cloud.octree.nodes().length,
+      format: '3dtiles',
+      crs: cloud.crs(),
+    });
+    deps.streamingPanel.show();
+
+    // A fresh saved-views list for the new scan.
+    try {
+      deps.bookmarks.clear();
+      deps.refreshViewsUI();
+    } catch (err) {
+      if (deps.debug) console.warn('[views] saved-views refresh (tileset) threw', err);
+    }
+
     deps.dropZone.setProgress(null);
     deps.dropZone.setCancelHandler(null);
     deps.startStreamingStatusPolling();

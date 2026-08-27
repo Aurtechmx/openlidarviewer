@@ -79,6 +79,7 @@ function deps() {
     attachStreamingCloud: vi.fn(async () => {}),
     setMode: vi.fn(),
     frameAll: vi.fn(),
+    availableImageExportModes: () => new Map(),
   };
   const setReport = vi.fn();
   return {
@@ -98,13 +99,28 @@ function deps() {
       startStreamingStatusPolling: () => {},
       revealStreamingChrome: () => {},
       stage: { hideEmptyState: () => {} },
-      inspector: { setReport },
+      inspector: { setReport, setStreamingMode: vi.fn() },
       // Added by the scan-detection work after this fake was written. The open
       // calls all three before it publishes the report, so a fake without them
       // throws and the report never reaches the Inspector at all.
       setLastStreamingReportCloud: vi.fn(),
       runStreamingModules: () => [],
-      classLegendPanel: { getVisibility: () => ({ isFiltered: false }) },
+      classLegendPanel: {
+        getVisibility: () => ({ isFiltered: false }),
+        setClasses: vi.fn(),
+        hide: vi.fn(),
+      },
+      hideReclassifyUi: vi.fn(),
+      syncInspectClassScope: vi.fn(),
+      exportPanel: {
+        setImageExportEnabled: vi.fn(),
+        setImageExportAvailability: vi.fn(),
+        setStreamingMode: vi.fn(),
+      },
+      bookmarks: { clear: vi.fn() },
+      revealAnalysePanel: vi.fn(),
+      prewarmExportStudio: vi.fn(),
+      refreshViewsUI: vi.fn(),
       inspectorCards: { refreshProvenanceFromStreaming: () => {} },
       crsCoordinator: { refreshCrsForStreamingCloud: () => {} },
       streamingPanel: {
@@ -112,6 +128,8 @@ function deps() {
         setQuality: () => {},
         setSourceUrl: () => {},
         setPhase: () => {},
+        setSummary: vi.fn(),
+        show: vi.fn(),
       },
       dropZone: {
         setOpening: () => {},
