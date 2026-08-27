@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { openRemoteTileset, tilesetDisplayName } from '../src/app/openTilesetLayer';
+import { openRemoteTileset, tilesetDisplayName, TilesetRefusal } from '../src/app/openTilesetLayer';
 
 const BOX = { box: [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10] };
 const DOC = JSON.stringify({
@@ -150,5 +150,67 @@ describe('the scan name', () => {
 
   it('falls back to the input when it is not a URL', () => {
     expect(tilesetDisplayName('not a url')).toBe('not a url');
+  });
+});
+
+describe('a refusal reaches the user', () => {
+  const BOX2 = { box: [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10] };
+
+  /** The message actually shown on the drop zone for a given document. */
+  async function shownFor(doc: string): Promise<string> {
+    const t = deps(doc);
+    await withTransport(doc, () =>
+      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+    );
+    const calls = t.d.dropZone.setError.mock.calls;
+    return calls.length ? String(calls[0][0]) : '';
+  }
+
+  it('says what was wrong, not that the file is corrupt', async () => {
+    // A valid 1.1 document using a form this subset does not serve. Reporting
+    // it as corrupt is both false and unactionable.
+    const shown = await shownFor(
+      JSON.stringify({
+        asset: { version: '1.1' },
+        geometricError: 100,
+        root: {
+          boundingVolume: BOX2,
+          geometricError: 50,
+          refine: 'REPLACE',
+          content: { uri: 'a.pnts' },
+          children: [
+            { boundingVolume: BOX2, geometricError: 10, contents: [{ uri: 'b.pnts' }] },
+          ],
+        },
+      }),
+    );
+    expect(shown).not.toContain('corrupt');
+    expect(shown).toContain('contents');
+  });
+
+  it('names the tile it cannot serve', async () => {
+    const shown = await shownFor(
+      JSON.stringify({
+        asset: { version: '1.1' },
+        geometricError: 100,
+        root: {
+          boundingVolume: BOX2,
+          geometricError: 50,
+          refine: 'REPLACE',
+          content: { uri: 'a.pnts' },
+          children: [
+            { boundingVolume: BOX2, geometricError: 10, content: { uri: 'sub/tileset.json' } },
+          ],
+        },
+      }),
+    );
+    expect(shown).toContain('sub/tileset.json');
+    expect(shown).not.toContain('corrupt');
+  });
+
+  it('still classifies a failure that is not a refusal', () => {
+    // A transport or decode failure has no reason worth quoting, and the
+    // category is the useful thing to say. Nothing here should bypass that.
+    expect(new TilesetRefusal('x') instanceof Error).toBe(true);
   });
 });
