@@ -20,7 +20,7 @@ import {
   readStorageEstimate,
 } from '../io/heavy/storagePreflight';
 import { openTileStore, tileBytesReader } from '../io/heavy/tileStoreBuilder';
-import { opfsSpillStore, type OpfsDirHandle } from '../io/heavy/opfsSpillStore';
+import { opfsSpillStore, removeOpfsStore, type OpfsDirHandle } from '../io/heavy/opfsSpillStore';
 import { OlvTileSource } from '../io/heavy/OlvTileSource';
 import { TileChunkDecoder } from '../io/heavy/tileChunkDecoder';
 import { revealStreamingScanChrome } from '../ui/streamingScanReveal';
@@ -111,7 +111,22 @@ export async function executeHeavyLasBuild(
       name: file.name,
       store: reader,
       tiles: tileBytesReader(spill),
-      close: () => spill.close(),
+      // The out-of-core store is TEMPORARY for this release: nothing reuses it
+      // on a later open, so a persisted `ooc-<name>-<size>` directory is pure
+      // cost. On close, release the open tile handles FIRST (so a close racing
+      // a read unlocks before anything is deleted), THEN remove the store. The
+      // removal is fired without letting a rejection escape the close — a store
+      // the browser cannot delete because a read still holds it is left stale
+      // and rebuilt on the next open, which is the honest fallback. Persistent
+      // cross-session reuse via a source fingerprint is the future direction.
+      close: async () => {
+        await spill.close();
+        try {
+          await removeOpfsStore(root, built.storeName);
+        } catch (err) {
+          if (deps.debug) console.warn('[heavy-las] out-of-core store removal failed', err);
+        }
+      },
     });
     const decoder = new TileChunkDecoder(reader.schema, reader.recordBytes);
 

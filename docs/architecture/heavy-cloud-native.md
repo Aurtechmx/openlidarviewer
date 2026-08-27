@@ -190,8 +190,9 @@ exists.
   long-term answer.
 - **Two-pass build time** (phase 1): the indexer reads the file twice; for
   LAZ that is two decompression passes, though both are chunk-parallel. The
-  build shows progress, cancels cleanly, and its output is cached in OPFS so
-  reopening the same file skips the build.
+  build shows progress and cancels cleanly. Its OPFS store is temporary: it is
+  removed when the streaming source closes, so a session does not accumulate
+  multi-GB caches. Cross-session reuse that skips the build is future work.
 - **Native decoder conformance** (phase 0): a round-trip test proves the
   decoder against its own mirror encoder, which cannot catch a shared
   misreading of the laszip stream format. The invariant checks catch gross
