@@ -442,26 +442,51 @@ function boxCentre(b: Box6): [number, number, number] {
 }
 
 /**
+ * Per-point bytes one channel contributes, or 0 when the chunk omits it.
+ *
+ * The width comes from the array's own `BYTES_PER_ELEMENT` rather than a
+ * repeated literal, so the figure cannot drift from the element type a decoder
+ * actually allocates. `perPoint` is the element count per point: 1 for a
+ * scalar channel, 3 for an interleaved triple.
+ */
+function channelBytes(
+  channel: { readonly BYTES_PER_ELEMENT: number } | undefined,
+  perPoint: number,
+): number {
+  return channel === undefined ? 0 : channel.BYTES_PER_ELEMENT * perPoint;
+}
+
+/**
  * Bytes a decoded chunk occupies.
  *
- * Derived from `pointCount` and the chunk's fixed layout rather than by
- * reading each array's `byteLength`. Reading `.positions` here would raise the
- * direct-position-access ratchet, and this needs no coordinate at all: the
- * decoder sizes every array to `pointCount`, so the arithmetic is exact.
- * `decodedChunkBytes matches the allocated arrays` in the integration suite
- * asserts that against real arrays, where reading them is permitted.
+ * Derived from `pointCount` and the channels the chunk ACTUALLY carries, not
+ * from a fixed LAS-shaped layout. Every measured channel is optional on
+ * {@link DecodedChunk}, so a per-point constant would over-count a source that
+ * fills fewer of them: a `.pnts` tile carries positions alone, and charging it
+ * for intensity, classification, both return fields and GPS time would tell the
+ * queue's byte budget that 13 bytes per point exist which do not. The budget
+ * bounds what the next frame absorbs, so an inflated figure throttles a stream
+ * that had room and a deflated one lets through more than the guard allows.
  *
- * A guessed per-point constant would defeat the queue's byte budget, which
- * exists to bound what the next frame absorbs — chunks differ by which
- * optional attributes the source supplied.
+ * Array lengths are not read here: `pointCount` plus each present channel's
+ * element width is exact, because a decoder sizes every array it produces to
+ * the chunk's point count. Reading `.positions` would additionally raise the
+ * direct-position-access ratchet for no gain. `decodedChunkBytes matches the
+ * allocated arrays` in the integration suite asserts the arithmetic against
+ * real arrays, where reading them is permitted.
  */
 export function decodedChunkBytes(decoded: DecodedChunk): number {
   const n = Math.max(0, decoded.pointCount);
-  // positions Float32x3, intensity Uint16, classification/returnNumber/
-  // returnCount Uint8, gpsTime Float64.
-  let perPoint = 12 + 2 + 1 + 1 + 1 + 8;
-  if (decoded.rgb) perPoint += 3;
-  if (decoded.pointSourceId) perPoint += 2;
+  // Positions are the one required channel — Float32, three per point.
+  const perPoint =
+    3 * Float32Array.BYTES_PER_ELEMENT +
+    channelBytes(decoded.intensity, 1) +
+    channelBytes(decoded.classification, 1) +
+    channelBytes(decoded.returnNumber, 1) +
+    channelBytes(decoded.returnCount, 1) +
+    channelBytes(decoded.gpsTime, 1) +
+    channelBytes(decoded.rgb, 3) +
+    channelBytes(decoded.pointSourceId, 1);
   return n * perPoint;
 }
 

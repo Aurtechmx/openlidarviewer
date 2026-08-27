@@ -8,15 +8,15 @@
  * metadata. A `.pnts` body carries none of that, so this module supplies its
  * own metadata shape and its own decoder.
  *
- * WHAT A PNTS TILE DOES NOT CARRY, and why the chunk still has those fields:
- * `DecodedChunk` was written for LAS-derived data and requires intensity,
- * classification, return number, return count and GPS time. A point tile has
- * none of them. They are filled with zeros here because the type requires an
- * array of the right length, NOT because a zero is a reading: zero
- * classification is "never classified" and zero intensity is not a measured
- * zero. A source backed by these tiles therefore advertises only the colour
- * modes the format actually carries, so nothing offers to paint a scan by a
- * channel that holds no information. `tests/pntsDecode.test.ts` pins that.
+ * WHAT A PNTS TILE DOES NOT CARRY, and what the chunk therefore omits:
+ * intensity, classification, return number, return count and GPS time. A point
+ * tile has none of them, and `DecodedChunk` makes every measured channel
+ * optional, so this decoder allocates nothing for them. A zero is not a
+ * reading: zero classification is "never classified" and zero intensity is not
+ * a measured zero, so an absent channel and a zero-filled one must stay
+ * distinguishable. A source backed by these tiles also advertises only the
+ * colour modes the format actually carries, so nothing offers to paint a scan
+ * by a channel that holds no information. `tests/pntsDecode.test.ts` pins both.
  *
  * Positions arrive tile-local. The tile's own `RTC_CENTER`, then its cumulative
  * placement down the tileset tree, then the render origin are applied in
@@ -243,17 +243,11 @@ export class PntsChunkDecoder implements ChunkDecoder {
     });
     this._raiseColourNoticeOnce();
 
-    const decoded: DecodedChunk = {
-      pointCount: n,
-      positions,
-      // Not readings. See the note at the top of this file: the chunk type
-      // requires these arrays, and a point tile carries none of them.
-      intensity: new Uint16Array(n),
-      classification: new Uint8Array(n),
-      returnNumber: new Uint8Array(n),
-      returnCount: new Uint8Array(n),
-      gpsTime: new Float64Array(n),
-    };
+    // Intensity, classification, return number, return count and GPS time are
+    // simply absent — see the note at the top of this file. Nothing is
+    // allocated for them, so a reader is told the channel is missing rather
+    // than handed `pointCount` zeros that look like readings.
+    const decoded: DecodedChunk = { pointCount: n, positions };
     if (this._colour.settled !== 'colour') {
       // The layer is drawn by the elevation ramp. A tile that does carry colour
       // has it withheld rather than painted beside ramped neighbours, because

@@ -46,16 +46,35 @@ let _rgbWorkFloat: Float32Array | null = null;
 let _rgbWorkOut: Uint8Array | null = null;
 
 /**
- * The grey a node is drawn in when its tile states no colour and the rest of
- * the layer does.
+ * The grey a node is drawn in when the channel the active mode reads is not
+ * something the node states: its tile carries no colour while the rest of the
+ * layer does, or the chunk carries no array for the requested scalar at all.
  *
- * Mid grey is achromatic, and the elevation ramp (Turbo) is not: nothing the
- * ramp produces looks like this, so a flat patch cannot be misread as a height
- * reading. It is a display value only. `rgb` stays absent on the chunk, so the
- * point inspector, the resident-snapshot export and the patch view all keep
- * reporting that these points state no colour.
+ * Mid grey is achromatic, and every ramp the viewer paints (Turbo for
+ * elevation and the scalars, the ASPRS palette for classes) is not: nothing a
+ * ramp produces looks like this, so a flat patch cannot be misread as a
+ * reading. It is a display value only. The chunk keeps saying the channel is
+ * absent, so the point inspector, the resident-snapshot export and the patch
+ * view all keep reporting that these points state nothing.
  */
 export const UNSTATED_COLOUR_GREY = 128;
+
+/**
+ * The flat buffer for a mode whose channel the chunk does not carry.
+ *
+ * Substituting another channel would put a second reading under the first
+ * one's legend: an elevation ramp under an "Intensity" label is a height map a
+ * user would read as intensity. A ramp over a zero-filled stand-in would be
+ * worse still, since it looks like a measurement of zero everywhere. Flat grey
+ * states nothing, which is exactly what the node has to say.
+ *
+ * A source only offers the modes its format can fill (`colorModes()`, which is
+ * `PNTS_COLOR_MODES` for point tiles), so this is the backstop for a mode
+ * arriving from a restored view state rather than a path the UI walks.
+ */
+function channelAbsentColors(pointCount: number): Uint8Array {
+  return new Uint8Array(pointCount * 3).fill(UNSTATED_COLOUR_GREY);
+}
 
 /**
  * Whether a decoded node is one a `.pnts` decoder marked as stating no colour
@@ -132,15 +151,30 @@ export function scalarRangeOf(
   return finiteMinMax(values, count);
 }
 
-/** The intensity `[min, max]` of a decoded chunk — used to seed the global range. */
-export function intensityRangeOf(decoded: DecodedChunk): { min: number; max: number } {
+/**
+ * The intensity `[min, max]` of a decoded chunk — used to seed the global
+ * range — or null when the chunk carries no intensity.
+ *
+ * Null rather than `{ 0, 0 }`: a seeded window of zero width would be a claim
+ * about the cloud's intensity, and a source with no intensity channel has no
+ * such claim to make. The caller leaves the global range untouched instead.
+ */
+export function intensityRangeOf(
+  decoded: DecodedChunk,
+): { min: number; max: number } | null {
+  if (!decoded.intensity) return null;
   return scalarRangeOf(decoded.intensity, decoded.pointCount);
 }
 
 /**
  * Per-point interleaved RGB (3 bytes/point) for one decoded streaming node in
- * the active mode, using the cloud-global ranges. A mode the node cannot
- * satisfy (RGB on a format without it, normals) falls back to elevation.
+ * the active mode, using the cloud-global ranges.
+ *
+ * A mode whose meaning the whole source lacks (RGB on a format without it,
+ * normals) falls back to the elevation ramp, which is the layer's one meaning
+ * in that case rather than a second one. A mode whose per-point channel this
+ * CHUNK does not carry is drawn flat instead — see {@link
+ * channelAbsentColors}; no other channel stands in for it.
  *
  * **Buffer-reuse contract.** When `mode === 'rgb'` and an `rgbAppearance`
  * is passed, the returned `Uint8Array` is a `subarray` view of a shared
@@ -204,6 +238,7 @@ export function streamingNodeColors(
       return out.subarray(0, len);
     }
     case 'intensity':
+      if (!decoded.intensity) return channelAbsentColors(n);
       return colorByIntensity(
         decoded.intensity,
         n,
@@ -211,6 +246,7 @@ export function streamingNodeColors(
         ranges.maxIntensity,
       );
     case 'classification':
+      if (!decoded.classification) return channelAbsentColors(n);
       return colorByClassification(decoded.classification, n);
     // The scalar modes colour against the cloud-GLOBAL window (never a
     // node-local one) for the same reason elevation and intensity do:
@@ -219,8 +255,10 @@ export function streamingNodeColors(
     // magnitude is handled inside `colorByScalar` — the min subtraction
     // happens in double precision, so sub-second deltas survive the ramp.
     case 'gpsTime':
+      if (!decoded.gpsTime) return channelAbsentColors(n);
       return colorByScalar(decoded.gpsTime, n, ranges.minGpsTime, ranges.maxGpsTime);
     case 'returnNumber':
+      if (!decoded.returnNumber) return channelAbsentColors(n);
       return colorByScalar(
         decoded.returnNumber,
         n,

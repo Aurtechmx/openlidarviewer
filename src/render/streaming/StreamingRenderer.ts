@@ -302,18 +302,26 @@ export class StreamingRenderer {
       // return ordinals are a handful of small integers, so percentile
       // clipping would merge real ordinals into an endpoint colour instead
       // of guarding against anything.
-      const gpsTime = computeScalarRange(decoded.gpsTime, { count: decoded.pointCount });
-      const returns = scalarRangeOf(decoded.returnNumber, decoded.pointCount);
+      //
+      // A channel the chunk does not carry seeds NOTHING. Its window keeps
+      // whatever it held, because a window derived from an absent array would
+      // be a statement about a measurement the source never made. Elevation is
+      // derived from positions, which every chunk has, so it always seeds.
+      const gpsTime = decoded.gpsTime
+        ? computeScalarRange(decoded.gpsTime, { count: decoded.pointCount })
+        : null;
+      const returns = decoded.returnNumber
+        ? scalarRangeOf(decoded.returnNumber, decoded.pointCount)
+        : null;
       this._ranges = {
         ...this._ranges,
-        minIntensity: intensity.min,
-        maxIntensity: intensity.max,
+        ...(intensity ? { minIntensity: intensity.min, maxIntensity: intensity.max } : {}),
         minZ: elevation.minZ,
         maxZ: elevation.maxZ,
-        minGpsTime: gpsTime.min,
-        maxGpsTime: gpsTime.max,
-        minReturnNumber: returns.min,
-        maxReturnNumber: returns.max,
+        ...(gpsTime ? { minGpsTime: gpsTime.min, maxGpsTime: gpsTime.max } : {}),
+        ...(returns
+          ? { minReturnNumber: returns.min, maxReturnNumber: returns.max }
+          : {}),
       };
       this._rangeSeedDepth = seedDepth;
       // Every mode that colours against a seeded range must repaint the
@@ -329,9 +337,13 @@ export class StreamingRenderer {
     }
     const colors = streamingNodeColors(this._mode, decoded, this._ranges, this._rgbAppearance);
     // Pass the node's decoded per-point classification so the shared class
-    // mask applies to streaming nodes too. A DecodedChunk always carries a
-    // `classification` array (zero-filled when the source lacked the field),
-    // so streaming meshes always get an `aClass` attribute.
+    // mask applies to streaming nodes too. A chunk from a format that carries
+    // no classification passes null, exactly as a static cloud without the
+    // channel does: `buildPointMesh` then skips the `aClass` attribute
+    // entirely and the size graph's guarded mask lookup leaves the mesh fully
+    // visible, instead of every point reading as class 0 and disappearing the
+    // moment someone unticks "Never classified". Intensity is the same story
+    // for the intensity filter.
     //
     // `buildPointMesh` wires every material's size graph to the Viewer's ONE
     // shared `_classMaskUniform` node (not a per-node copy), so a node decoded
@@ -340,8 +352,8 @@ export class StreamingRenderer {
     const handle: PointMeshHandle = this._host.buildPointMesh(
       renderLocalPositions(decoded),
       colors,
-      decoded.classification,
-      decoded.intensity,
+      decoded.classification ?? null,
+      decoded.intensity ?? null,
     );
     this._host.addStreamingMesh(handle.mesh, decoded, node.record.key.depth, node.record.id);
     this._meshes.set(node.record.id, {
@@ -409,10 +421,12 @@ export class StreamingRenderer {
 
   /**
    * The decoded chunk of every resident node — for a resident-snapshot export.
-   * Each chunk carries the full attribute set (positions, intensity, class,
-   * returns, GPS time, optional RGB) kept CPU-side for recolouring, so the
-   * snapshot needs no GPU readback or re-decode. Positions are in local
-   * (render-origin-shifted) space, matching the picking arrays above.
+   * Each chunk carries whatever attributes its format states (positions always;
+   * intensity, class, returns, GPS time and RGB when the source has them) kept
+   * CPU-side for recolouring, so the snapshot needs no GPU readback or
+   * re-decode. The snapshot builder writes a channel only when every chunk has
+   * it. Positions are in local (render-origin-shifted) space, matching the
+   * picking arrays above.
    */
   residentChunks(): DecodedChunk[] {
     const out: DecodedChunk[] = [];

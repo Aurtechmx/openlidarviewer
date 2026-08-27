@@ -118,9 +118,11 @@ export function buildSchedulerCallbacks(deps: {
     onNodeReady: (node: StreamingNode, decoded: DecodedChunk): void => {
       renderer.onNodeReady(node, decoded);
       // DISPLAY-ONLY class legend hook — hand the host the node's decoded
-      // per-point classification so the legend can fold its histogram in. A
-      // DecodedChunk always carries a `classification` array (zero-filled when
-      // the source lacked the field). Pure read; never touches the GPU mask.
+      // per-point classification so the legend can fold its histogram in. The
+      // channel is optional on a DecodedChunk, and a node from a format that
+      // carries none is skipped: folding zeros in would build a histogram
+      // claiming every point is "never classified". Pure read; never touches
+      // the GPU mask.
       const classesHook = nodeClassesHook();
       if (classesHook && decoded.classification) {
         try {

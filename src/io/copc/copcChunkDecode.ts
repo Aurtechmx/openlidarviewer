@@ -41,22 +41,40 @@ export interface ChunkDecodeMetadata {
   rgbEightBit?: boolean;
 }
 
-/** A decoded COPC node chunk — local-space attributes ready for the GPU. */
+/**
+ * A decoded node chunk — local-space attributes ready for the GPU.
+ *
+ * Only `pointCount` and `positions` are required. Every measured channel is
+ * optional because the chunk shape serves more than the LAS family: a `.pnts`
+ * tile carries none of intensity, classification, returns or GPS time, and
+ * allocating zero-filled arrays for them would spend 13 bytes per point saying
+ * something false. An ABSENT channel and a channel of zeros are different
+ * claims — zero classification means "never classified" and zero intensity is
+ * not a measured zero — so a reader must be able to tell them apart.
+ *
+ * A consumer that needs a channel checks for it. Colour modes are gated by the
+ * source's `colorModes()`, so a mode is never offered for a channel the format
+ * cannot fill; the derived products (resident snapshot, profile section, point
+ * inspector) report absence rather than substituting a default.
+ *
+ * The LAS-family decoders — COPC, EPT and the out-of-core tile store — fill all
+ * five on every chunk and are unaffected by the optionality.
+ */
 export interface DecodedChunk {
   /** Points actually decoded (≤ the requested count if the input was short). */
   pointCount: number;
   /** Local-space positions, length `3 · pointCount`. */
   positions: Float32Array;
-  /** Per-point intensity. */
-  intensity: Uint16Array;
-  /** Per-point classification. */
-  classification: Uint8Array;
-  /** Per-point return number. */
-  returnNumber: Uint8Array;
-  /** Per-point total returns. */
-  returnCount: Uint8Array;
-  /** Per-point GPS time. */
-  gpsTime: Float64Array;
+  /** Per-point intensity — absent when the format carries none. */
+  intensity?: Uint16Array;
+  /** Per-point classification — absent when the format carries none. */
+  classification?: Uint8Array;
+  /** Per-point return number — absent when the format carries none. */
+  returnNumber?: Uint8Array;
+  /** Per-point total returns — absent when the format carries none. */
+  returnCount?: Uint8Array;
+  /** Per-point GPS time — absent when the format carries none. */
+  gpsTime?: Float64Array;
   /** Per-point point source id — produced by `decodeRecords`, absent on fakes. */
   pointSourceId?: Uint16Array;
   /** Per-point RGB (0-255), length `3 · pointCount` — only for PDRF 7/8. */
@@ -187,17 +205,19 @@ export function decodeRecords(
 /**
  * The transferable buffers of a decoded chunk — for zero-copy `postMessage`.
  * Each attribute array is created fresh in {@link decodeRecords}, so its
- * backing buffer is always a real `ArrayBuffer`.
+ * backing buffer is always a real `ArrayBuffer`. Channels the chunk does not
+ * carry contribute nothing.
  */
 export function chunkTransferables(decoded: DecodedChunk): ArrayBuffer[] {
-  const out: ArrayBuffer[] = [
-    decoded.positions.buffer as ArrayBuffer,
-    decoded.intensity.buffer as ArrayBuffer,
-    decoded.classification.buffer as ArrayBuffer,
-    decoded.returnNumber.buffer as ArrayBuffer,
-    decoded.returnCount.buffer as ArrayBuffer,
-    decoded.gpsTime.buffer as ArrayBuffer,
-  ];
+  const out: ArrayBuffer[] = [decoded.positions.buffer as ArrayBuffer];
+  // Every measured channel is optional on the chunk, so each is transferred
+  // only when the decoder produced it. Listing an absent one would post a
+  // buffer that is not there.
+  if (decoded.intensity) out.push(decoded.intensity.buffer as ArrayBuffer);
+  if (decoded.classification) out.push(decoded.classification.buffer as ArrayBuffer);
+  if (decoded.returnNumber) out.push(decoded.returnNumber.buffer as ArrayBuffer);
+  if (decoded.returnCount) out.push(decoded.returnCount.buffer as ArrayBuffer);
+  if (decoded.gpsTime) out.push(decoded.gpsTime.buffer as ArrayBuffer);
   if (decoded.pointSourceId) out.push(decoded.pointSourceId.buffer as ArrayBuffer);
   if (decoded.rgb) out.push(decoded.rgb.buffer as ArrayBuffer);
   return out;
