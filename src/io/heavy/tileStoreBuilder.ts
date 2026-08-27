@@ -55,6 +55,12 @@ export interface BuildTileStoreOptions {
   readonly sink?: TileArtifactSink;
   /** Passed through to the sliced LAS reader (batch size, explicit origin). */
   readonly las?: SlicedLasOptions;
+  /**
+   * Force the two-pass index build even when the LAS header would allow one
+   * pass. The store is identical either way for a valid header; this exists so a
+   * test can build one fixture both ways and compare, and as an escape hatch.
+   */
+  readonly forceSlowPath?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -92,6 +98,7 @@ export async function buildTileStoreFromLas(
     pointsPerLeaf: options.pointsPerLeaf,
     memoryBudgetBytes: options.memoryBudgetBytes,
     maxDepth: options.maxDepth,
+    forceSlowPath: options.forceSlowPath,
     signal: options.signal,
   });
   const { manifestJson, hierarchy } = buildTileStore(index, las.schema, las.origin);

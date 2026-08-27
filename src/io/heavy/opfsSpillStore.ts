@@ -233,6 +233,28 @@ export function opfsSpillStore(dir: OpfsDirHandle): OpfsSpillStore {
       }
       return out;
     },
+    async clear() {
+      // The single-pass path spills before it can prove the header, so it needs
+      // a pristine store to fall back into: remove every tile. Only the `.tile`
+      // files are the store's spill; the manifest and hierarchy are written
+      // later by the builder and are left untouched. Close each tile's handle
+      // first so the removal is not racing an exclusive lock, then delete the
+      // file. `removeEntry` on an absent name races nothing here (the names come
+      // from the directory), but a handle closed above may leave the entry, so a
+      // NotFoundError is swallowed as a no-op.
+      const names: string[] = [];
+      for await (const name of dir.keys()) {
+        if (name.endsWith(TILE_SUFFIX)) names.push(name);
+      }
+      for (const name of names) {
+        await closeTile(name);
+        try {
+          await dir.removeEntry(name);
+        } catch (err) {
+          if ((err as { name?: string } | null)?.name !== 'NotFoundError') throw err;
+        }
+      }
+    },
     async close() {
       for (const name of [...open.keys()]) await closeTile(name);
     },
