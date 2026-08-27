@@ -413,20 +413,20 @@ async function openTileScenario(): Promise<StreamingSource> {
     memoryBudgetBytes: 64 * 1024,
   });
   const { manifestJson, hierarchy } = buildTileStore(index, las.schema, las.origin);
-  // The build origin is folded to zero for this fixture. `OlvTileOctree` records
-  // each node's cube in the store's own local frame, while `OlvTileSource`
-  // reports the build's world recentring origin as its `renderOrigin`, and the
-  // scheduler subtracts `renderOrigin` from every record's bounds. With a UTM
-  // build origin that subtraction moves the whole hierarchy hundreds of
-  // kilometres from the camera, every node scores zero, and the fixture records
-  // an empty scheduler instead of a tile-store one. Zeroing the origin makes the
-  // two frames agree, which is the state the scheduler is written against. The
-  // adapter has no construction site in `src/`, so this is a fixture choice, not
-  // a workaround for live behaviour.
-  const manifest = JSON.parse(manifestJson) as { origin: number[] };
-  manifest.origin = [0, 0, 0];
+  // The build origin is carried through as the build measured it. It used to be
+  // folded to zero here, from a time when `OlvTileOctree` recorded each node's
+  // cube in the store's own local frame while `OlvTileSource` reported the world
+  // recentring origin as its `renderOrigin`: the scheduler subtracted the origin
+  // from bounds that had never had it added, so a UTM build moved the hierarchy
+  // hundreds of kilometres and every node scored zero. Zeroing hid that by making
+  // the two frames agree by accident.
+  //
+  // Node bounds are world now, so the frames agree on their own and the recorded
+  // document is byte-identical either way. Keeping a real origin is what makes
+  // this fixture able to fail: with it zeroed, local and world are the same
+  // numbers and a reintroduced double-shift records an identical scheduler.
   const reader = new TileStoreReader(
-    parseTileManifest(manifest),
+    parseTileManifest(JSON.parse(manifestJson)),
     parseHierarchy(hierarchy),
   );
   const tiles: TileBytesReader = { read: (key) => spill.read(key) };
