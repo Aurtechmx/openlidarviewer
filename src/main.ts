@@ -4999,8 +4999,8 @@ function openStreamingCopc(
  * URL is an `ept.json` entry-point, otherwise routes to COPC. This is the
  * single seam every URL-loading code path goes through (the dropzone's
  * onOpenUrl callback, the `?copc=` query-param bootstrap, the embed-bridge
- * url-open message). Keeps format dispatch in one place so adding 3D
- * Tiles support in a future format here is a one-line addition.
+ * url-open message). Keeps format dispatch in one place, so a new format is
+ * one branch here rather than a change at every URL entry point.
  */
 async function handleRemoteUrl(url: string, signal?: AbortSignal): Promise<void> {
   // EPT detection is URL-pattern only — fast, no network, no schema fetch, so
@@ -5008,9 +5008,9 @@ async function handleRemoteUrl(url: string, signal?: AbortSignal): Promise<void>
   // chunk loading (a malformed URL still surfaces an error toast even when the
   // EPT or Viewer chunks aren't reachable). `isEptUrl` lives beside the handler.
   if (isEptUrl(url)) return runHandleRemoteEpt(url, signal, openStreamingDeps);
-  // 3D Tiles is not a streaming open: the tileset is read once, merged, and
-  // mounted as a static layer, so it takes `openScanDeps` and the same attach a
-  // dropped file does.
+  // 3D Tiles is a streaming open, so it takes `openStreamingDeps`. The tileset
+  // is a `TilesetStreamingSource`, whose nodes the scheduler admits and evicts
+  // like COPC and EPT ones; it is not read once and merged into a static layer.
   if (isTilesetEntryUrl(url)) {
     return (await loadTilesetOpen()).openRemoteTileset(url, signal, openStreamingDeps);
   }
