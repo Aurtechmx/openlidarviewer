@@ -143,10 +143,16 @@ and dispatches the index to `localOocIndexerWorker`. The worker wraps the
 `buildTileStoreFromLas`, and posts back the manifest and hierarchy. The main
 thread reopens the promoted store from OPFS, constructs an `OlvTileSource`, and
 hands it to `Viewer.attachStreamingCloud` with the shared streaming-scan reveal
-(`streamingScanReveal.ts`). Any non-attach outcome falls back to the whole-file
-loader, so the path never makes a working open worse. The non-attach cases are:
-the plan does not route out of core, OPFS or workers are absent, the preflight
-refuses, or the build fails before commit. A Node test drives the whole decision
+(`streamingScanReveal.ts`). Heaviness is decided first, from the header peek and
+the plan, independently of capability. A file the plan does NOT route out of core
+returns `not-heavy` and the whole-file loader takes it unchanged. But once a file
+is confirmed heavy, the whole-file loader is not a safe fallback: its single
+`new Uint8Array(total)` is the allocation that made the file heavy. So a heavy
+file whose out-of-core path cannot complete — OPFS or workers absent, the
+preflight refuses, or the build fails before commit — returns a `heavy: true`
+status and the open REFUSES with a named reason that points at COPC/EPT, rather
+than falling through into an out-of-memory crash. Only `attached` and `cancelled`
+are terminal otherwise. A Node test drives the whole decision
 and dispatch against a fake OPFS and an in-process build. It asserts the largest
 single read is a bounded batch far smaller than the file and that the streamed
 cloud reports the source point count.

@@ -89,17 +89,30 @@ export interface LasHeaderFacts {
   readonly fileBytes: number;
 }
 
-/** The outcome of an out-of-core open attempt. */
+/**
+ * The outcome of an out-of-core open attempt.
+ *
+ * The `heavy` flag on `unavailable`, `refused` and `failed` is the fail-closed
+ * discriminator the router reads. It records whether the file was CONFIRMED
+ * heavy (the header peek parsed and {@link planLoad} set `buildThenStream`)
+ * before the out-of-core path could not complete. `heavy: true` means the
+ * whole-file loader would face the very allocation that made the file heavy, so
+ * the caller must REFUSE rather than fall through. `heavy: false` means the file
+ * was never routed out of core and the whole-file loader is the correct answer,
+ * so the caller falls through as before. This is why heaviness is decided
+ * independently of capability: an `unavailable` result alone cannot say whether
+ * a fall-through is safe; the flag can.
+ */
 export type HeavyOpenResult =
   /** A streaming source was attached — the file is open. */
   | { readonly status: 'attached'; readonly source: OlvTileSource; readonly decoder: TileChunkDecoder }
   /** The plan did not route this file out of core; the caller loads it whole. */
   | { readonly status: 'not-heavy' }
-  /** OPFS or workers were unavailable; the caller loads the file whole. */
-  | { readonly status: 'unavailable'; readonly reason: string }
-  /** The storage preflight refused; the caller may surface the named message. */
-  | { readonly status: 'refused'; readonly error: LoadError }
+  /** OPFS or workers were unavailable. Fall through only when `heavy` is false. */
+  | { readonly status: 'unavailable'; readonly heavy: boolean; readonly reason: string }
+  /** The storage preflight refused. Fall through only when `heavy` is false. */
+  | { readonly status: 'refused'; readonly heavy: boolean; readonly error: LoadError }
   /** The build or attach was cancelled before commit. */
   | { readonly status: 'cancelled' }
-  /** The build or attach failed before commit; the caller loads the file whole. */
-  | { readonly status: 'failed'; readonly error: unknown };
+  /** The build or attach failed before commit. Fall through only when `heavy` is false. */
+  | { readonly status: 'failed'; readonly heavy: boolean; readonly error: unknown };
