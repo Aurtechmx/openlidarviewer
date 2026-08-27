@@ -25,8 +25,20 @@ export interface QaCheck {
   readonly reason: string;
 }
 
-/** File integrity: is there actually any point data to work with? */
+/**
+ * File integrity: is there actually any point data to work with?
+ *
+ * Three answers, because there are three facts. A stated positive total passes.
+ * A stated ZERO blocks — the scan is empty, and saying so is a measurement. An
+ * UNSTATED total (a 3D Tiles tileset states none) is neither: it is a check that
+ * could not be run, which is `review`, the same verdict cloud quality gives an
+ * unmeasured spacing. Blocking on it would report an empty scan that is drawn on
+ * screen; passing it would quote a figure nothing measured.
+ */
 function fileIntegrity(f: ScanFacts): QaCheck {
+  if (f.pointCount == null) {
+    return { id: 'FILE_INTEGRITY', label: 'File integrity', status: 'review', reason: "The source states no point total, so the scan's size could not be checked." };
+  }
   if (f.pointCount <= 0) {
     return { id: 'FILE_INTEGRITY', label: 'File integrity', status: 'block', reason: 'No points are present in the scan.' };
   }

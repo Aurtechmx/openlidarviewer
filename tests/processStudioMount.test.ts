@@ -9,6 +9,7 @@ import type { RawScanSignals } from '../src/process/scanFacts';
 import type { CrsInfo } from '../src/io/crs';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import { preflightSnapshot } from '../src/app/toolPreflightInput';
+import { evaluateCapabilities, capabilityFor } from '../src/process/processCapabilities';
 
 const noScan: LiveScanAccessors = {
   hasStreamingSource: () => false,
@@ -164,6 +165,22 @@ describe('a streaming source with no stated point total', () => {
     expect(preflights.length).toBeGreaterThan(0);
     const codes = preflights.flatMap((p) => p.reasons.map((r) => r.code));
     expect(codes).not.toContain('NO_SCAN_LOADED');
+  });
+
+  it('never tells the user a scan on screen has no points', () => {
+    // The end of the live path: accessors → signals → facts → the capability
+    // model. With the total omitted the shell used to hand the evaluator a zero,
+    // and DTM, DSM and classify-gaps each refused a drawn scan with "The scan
+    // has no points to grid."
+    const facts = resolveActiveScanFacts({ getSignals: () => signalsFromLive(tilesetScan) })!;
+    const plan = evaluateCapabilities({ scans: [facts] });
+    for (const product of ['classify-gaps', 'dtm', 'dsm'] as const) {
+      const v = capabilityFor(plan, product)!;
+      expect(v.reasonCode, product).toBe('POINT_TOTAL_UNSTATED');
+      expect(v.reason, product).not.toMatch(/no points/i);
+      expect(v.readiness, product).toBe('review');
+    }
+    expect(capabilityFor(plan, 'contours')!.readiness).not.toBe('blocked');
   });
 
   it('lets a measurement be armed over the scan on screen', () => {

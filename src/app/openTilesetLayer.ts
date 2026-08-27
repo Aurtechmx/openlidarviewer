@@ -165,11 +165,9 @@ export async function openRemoteTileset(
     const reportCloud: StreamingReportInput = {
       kind: cloud.kind,
       name: cloud.name,
-      // The one cast here. `StreamingReportInput` types this as a number
-      // because COPC and EPT both declare one; a tileset declares none, and it
-      // is that null which must reach the report, where the row reads "not
+      // Null, and typed null all the way through: the report row reads "not
       // stated by the source" instead of a figure nothing measured.
-      sourcePointCount: cloud.sourcePointCount as unknown as number,
+      sourcePointCount: cloud.sourcePointCount,
       maxDepth: () => cloud.maxDepth(),
       octree: { nodes: () => cloud.octree.nodes() },
     };

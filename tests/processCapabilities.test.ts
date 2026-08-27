@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import type { CrsInfo } from '../src/io/crs';
 import type { ScanFacts, ProductId } from '../src/process/ProcessPlan';
 import { evaluateCapabilities, capabilityFor } from '../src/process/processCapabilities';
+import { deriveScanFacts } from '../src/process/scanFacts';
 
 function crs(overrides: Partial<CrsInfo> = {}): CrsInfo {
   return {
@@ -211,5 +212,110 @@ describe('plan shape', () => {
       expect(c.reasonCode).toMatch(/^[A-Z][A-Z0-9_]*$/);
       expect(c.reason.length).toBeGreaterThan(10);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A source that states no point total
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A 3D Tiles tileset states no point total: `tileset.json` carries no count and
+ * the per-tile figures are decode-admission estimates, so summing them would
+ * report a measurement nobody made. `deriveScanFacts` carries that absence
+ * through as a null `pointCount`.
+ *
+ * ZERO and UNSTATED are different facts. Zero is a stated measurement and
+ * "the scan has no points" is true of it. An unstated total says nothing about
+ * whether the scan has points, and the tileset that produces one is drawn,
+ * pickable and gridded from the points the source actually delivers — the count
+ * is a readiness signal, never an input to the raster. Refusing it with
+ * NO_POINTS trades a true generic refusal for a false specific one.
+ */
+describe('a scan that states no point total', () => {
+  /** Signals from a mounted tileset: streaming, no total stated. */
+  const unstated = deriveScanFacts({ kind: 'streaming', coverage: 'full', crs: crs() });
+
+  it('carries the absence through instead of collapsing it to zero', () => {
+    expect(unstated.pointCount).toBeNull();
+  });
+
+  for (const product of ['classify-gaps', 'dtm', 'dsm'] as ProductId[]) {
+    it(`does not tell ${product} the scan has no points`, () => {
+      const v = verdict([unstated], product);
+      expect(v.reasonCode).not.toBe('NO_POINTS');
+      expect(v.reason).not.toMatch(/no points/i);
+    });
+
+    it(`does not refuse ${product} outright over an absent count`, () => {
+      expect(verdict([unstated], product).readiness).not.toBe('blocked');
+    });
+
+    it(`names the absent total as the condition on ${product}`, () => {
+      const v = verdict([unstated], product);
+      expect(v.readiness).toBe('review');
+      expect(v.reasonCode).toBe('POINT_TOTAL_UNSTATED');
+    });
+  }
+
+  it('leaves contours reachable rather than blocked behind a missing DTM', () => {
+    const v = verdict([unstated], 'contours');
+    expect(v.readiness).not.toBe('blocked');
+    expect(v.reasonCode).not.toBe('NO_DTM');
+  });
+
+  it('keeps the metric gates ahead of it: an unknown unit still blocks footprints', () => {
+    const noUnit = deriveScanFacts({ kind: 'streaming', coverage: 'full', crs: crs({ linearUnit: 'unknown' }) });
+    const v = verdict([noUnit], 'building-footprints');
+    expect(v.readiness).toBe('blocked');
+    expect(v.reasonCode).toBe('UNIT_UNKNOWN');
+  });
+});
+
+describe('a scan that states ZERO points', () => {
+  it('keeps the original refusal on classify-gaps', () => {
+    const v = verdict([scan({ pointCount: 0 })], 'classify-gaps');
+    expect(v.readiness).toBe('blocked');
+    expect(v.reasonCode).toBe('NO_POINTS');
+    expect(v.reason).toBe('The scan has no points to classify.');
+  });
+
+  for (const product of ['dtm', 'dsm'] as ProductId[]) {
+    it(`keeps the original refusal on ${product}`, () => {
+      const v = verdict([scan({ pointCount: 0 })], product);
+      expect(v.readiness).toBe('blocked');
+      expect(v.reasonCode).toBe('NO_POINTS');
+      expect(v.reason).toBe('The scan has no points to grid.');
+    });
+  }
+
+  it('still blocks contours behind the missing DTM', () => {
+    const v = verdict([scan({ pointCount: 0 })], 'contours');
+    expect(v.readiness).toBe('blocked');
+    expect(v.reasonCode).toBe('NO_DTM');
+  });
+
+  it('reaches the same refusal through deriveScanFacts', () => {
+    const facts = deriveScanFacts({ kind: 'static', coverage: 'full', crs: crs(), pointCount: 0 });
+    expect(facts.pointCount).toBe(0);
+    expect(verdict([facts], 'dtm').reasonCode).toBe('NO_POINTS');
+  });
+});
+
+describe('a scan that states a real point total', () => {
+  it('is unaffected: every verdict matches the pre-existing plan', () => {
+    const healthy = scan({ groundClassified: true, classificationProvenance: 'producer', classification: 'partial', hasBuildingClass: true });
+    const plan = evaluateCapabilities({ scans: [healthy] });
+    expect(capabilityFor(plan, 'classify-gaps')).toMatchObject({ readiness: 'ready', reasonCode: 'GAPS_CLASSIFIABLE' });
+    expect(capabilityFor(plan, 'dtm')).toMatchObject({ readiness: 'ready', reasonCode: 'GROUND_TRUSTED' });
+    expect(capabilityFor(plan, 'dsm')).toMatchObject({ readiness: 'ready', reasonCode: 'SURFACE_READY' });
+    expect(capabilityFor(plan, 'contours')).toMatchObject({ readiness: 'ready', reasonCode: 'DTM_READY' });
+    expect(capabilityFor(plan, 'building-footprints')).toMatchObject({ readiness: 'ready', reasonCode: 'BUILDING_CLASS_PRESENT' });
+  });
+
+  it('keeps every other single-scan verdict it had before', () => {
+    expect(verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'dtm').reasonCode).toBe('RESIDENT_ONLY');
+    expect(verdict([scan({ crs: null })], 'dsm').reasonCode).toBe('UNIT_UNKNOWN');
+    expect(verdict([scan()], 'dtm').reasonCode).toBe('GROUND_DERIVED');
   });
 });

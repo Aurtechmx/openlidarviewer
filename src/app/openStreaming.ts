@@ -260,7 +260,10 @@ export function linkAbortSignals(
 export type StreamingReportInput = {
   readonly kind: StreamingSourceKind;
   readonly name: string;
-  readonly sourcePointCount: number;
+  /** The total the source states, or null where the format states none: COPC and
+   *  EPT both declare one, a 3D Tiles tileset declares none. The report renders
+   *  the absence as an absence rather than as a figure. */
+  readonly sourcePointCount: number | null;
   readonly localBounds?: () => readonly [number, number, number, number, number, number];
   readonly metadata?: {
     readonly header?: {
