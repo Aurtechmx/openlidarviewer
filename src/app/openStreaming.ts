@@ -331,7 +331,10 @@ export interface OpenStreamingDeps {
   stage: Pick<Stage, 'hideEmptyState'>;
   inspector: Inspector;
   exportPanel: Pick<ExportPanel, 'setImageExportEnabled' | 'setImageExportAvailability' | 'setStreamingMode'>;
-  streamingPanel: Pick<StreamingPanel, 'setPhase' | 'show' | 'setColorModes' | 'setQuality' | 'setSummary'>;
+  streamingPanel: Pick<
+    StreamingPanel,
+    'setPhase' | 'show' | 'setColorModes' | 'setQuality' | 'setSummary' | 'setSourceUrl'
+  >;
   classLegendPanel: Pick<ClassLegendPanel, 'setClasses' | 'hide' | 'getVisibility'>;
   inspectorCards: Pick<
     InspectorCardRefreshers,
@@ -399,6 +402,9 @@ export async function openStreamingCopc(
   // the viewer warms up, so the user gets immediate confirmation that the
   // file was recognised as COPC instead of staring at the empty state.
   deps.streamingPanel.setPhase('Loading metadata…');
+  // A remote source identifies itself by URL, which is what the credit
+  // lookup keys on. A local file has no publisher to credit.
+  if (range.kind() === 'http-range') deps.streamingPanel.setSourceUrl(range.id());
   deps.streamingPanel.show();
 
   const viewer = deps.getViewer();
@@ -587,6 +593,7 @@ export async function handleRemoteEpt(
   // import is one HTTP fetch + parse; running them in parallel with
   // the manifest GET below cuts cold-start by 200–700 ms.
   deps.prewarmForUrl(url);
+  deps.streamingPanel.setSourceUrl(url);
   // Declared outside the try so the catch can use the module's error
   // classifier when the module loaded, and a plain classifier when the
   // chunk fetch itself was the failure.

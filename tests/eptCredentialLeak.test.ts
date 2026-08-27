@@ -139,6 +139,7 @@ describe('openStreaming manifest timeout — the signed URL never reaches the de
       isLoading: () => false,
       setLoading: () => {},
       prewarmForUrl: () => {},
+      streamingPanel: { setSourceUrl: () => {}, setPhase: () => {}, show: () => {} },
       loadEpt: async () => fakeEptModule(),
       viewerReady: Promise.resolve(),
       getViewer: () => ({}) as never,

@@ -15,6 +15,7 @@
 
 import { clamp01 } from '../numeric';
 import { el, formatCount } from './dom';
+import { CURATED_LICENSE_LABELS, curatedCreditFor } from '../io/catalog/curatedLocations';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
@@ -244,6 +245,7 @@ export class StreamingPanel {
   private readonly _callbacks: StreamingPanelCallbacks;
   private readonly _title: HTMLElement;
   private readonly _phase: HTMLElement;
+  private readonly _credit: HTMLElement;
   // Determinate load-progress treatment under the phase line: a thin
   // brand-gradient bar (resident/known node fraction) + a tabular pts readout.
   private readonly _progress: HTMLElement;
@@ -274,6 +276,10 @@ export class StreamingPanel {
     this._callbacks = callbacks;
 
     this._phase = el('div', { className: 'olv-streaming-phase', text: 'Detecting COPC…' });
+    // Several curated sources make crediting the publisher a condition of
+    // use, so the credit belongs on screen while their data is, not only
+    // on the credits page. Hidden until a source that needs one loads.
+    this._credit = el('div', { className: 'olv-streaming-credit olv-hidden' });
 
     // ── Determinate progress treatment ──
     // The bar fill is a real ARIA progressbar; its value/text track the
@@ -397,6 +403,7 @@ export class StreamingPanel {
       this._gradeResult,
       el('div', { className: 'olv-streaming-actions' }, [this._pause]),
       el('div', { className: 'olv-streaming-actions' }, [clearCache]),
+      this._credit,
     ]);
   }
 
@@ -437,6 +444,29 @@ export class StreamingPanel {
    * (`_streamReady`) so the determinate fill reads full and stops reacting to
    * late counter jitter; any earlier phase un-latches it.
    */
+  /**
+   * Show the credit a curated source requires, for the URL being streamed.
+   *
+   * A URL this catalog does not know carries no credit obligation here, so
+   * the line hides rather than inventing one.
+   */
+  setSourceUrl(url: string): void {
+    const credit = curatedCreditFor(url);
+    this._credit.replaceChildren();
+    if (!credit) {
+      this._credit.classList.add('olv-hidden');
+      return;
+    }
+    this._credit.classList.remove('olv-hidden');
+    this._credit.append(credit.attribution);
+    if (credit.licenseUrl !== 'unknown') {
+      const a = el('a', { text: CURATED_LICENSE_LABELS[credit.licenseId], href: credit.licenseUrl });
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+      this._credit.append(' · ', a);
+    }
+  }
+
   setPhase(phase: string): void {
     this._phase.textContent = phase;
     const ready = phase === 'Streaming ready';

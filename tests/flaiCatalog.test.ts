@@ -7,25 +7,27 @@
  *   - Use the COPC extension (so the streaming pipeline routes it
  *     through HttpRangeSource, not the static-file decode path)
  *   - Carry attribution in the hint string (license accountability)
- *   - Have its native EPSG registered in CrsRegistry so the Inspector
- *     override panel reads as a named projection, not a bare number
+ *   - Have the native EPSG on its own record registered in CrsRegistry,
+ *     so the Inspector override panel reads as a named projection rather
+ *     than a bare number
  *
- * Network probing lives in `tools/verify-flai-urls.sh` — that script
- * is the live-data verifier and is intended to run before each
- * release. This file is the static contract on the manifest itself.
+ * The EPSG for each entry is read from the catalog record. This file used
+ * to keep its own mapping, which meant the assertion compared two copies
+ * of the same claim and passed whenever they agreed, wrong or not.
+ *
+ * Nothing here reaches the network. Reachability is a dated claim on each
+ * record; this file is the static contract on the manifest itself.
  */
 
 import { describe, it, expect } from 'vitest';
-import { CURATED_LOCATIONS } from '../src/io/catalog/curatedLocations';
+import {
+  CURATED_LICENSE_IDS,
+  CURATED_LOCATIONS,
+} from '../src/io/catalog/curatedLocations';
 import { getCrsEntry } from '../src/geo/CrsRegistry';
 
 const FLAI_BUCKET_PREFIX =
   'https://open-lidar-data.s3.eu-central-1.amazonaws.com/';
-
-const FLAI_EPSG_BY_ID: Readonly<Record<string, number>> = {
-  'flai-ch-swisssurface3d-2022': 2056,
-  'flai-si-clss-2023': 3794,
-};
 
 const flaiEntries = CURATED_LOCATIONS.filter((c) => c.id.startsWith('flai-'));
 
@@ -55,17 +57,19 @@ describe('FLAI Open LiDAR Data catalog entries', () => {
     expect(loc.hint).toMatch(/FLAI Open LiDAR Data/);
   });
 
-  it.each(flaiEntries)('$id has a hint that names the license', (loc) => {
-    // Permissive licences only — CC BY 4.0, CC0, "public domain" or
-    // "open data" must appear in the hint so a user knows the terms.
-    expect(loc.hint).toMatch(/CC BY 4\.0|CC0|public domain|open data/i);
+  it.each(flaiEntries)('$id states its licence as an identity, not prose', (loc) => {
+    // The terms live in `licenseId`, drawn from a closed vocabulary, so
+    // they can be compared. A hint reading "open data" satisfied the
+    // older assertion while naming no licence at all.
+    expect(CURATED_LICENSE_IDS as readonly string[]).toContain(loc.licenseId);
+    expect(loc.publisher).not.toBe('unknown');
   });
 
   it.each(flaiEntries)('$id native EPSG is registered in CrsRegistry', (loc) => {
-    const expectedEpsg = FLAI_EPSG_BY_ID[loc.id];
-    expect(expectedEpsg, `EPSG mapping missing for ${loc.id}`).toBeDefined();
-    const entry = getCrsEntry(expectedEpsg);
-    expect(entry, `EPSG ${expectedEpsg} not in registry for ${loc.id}`).toBeDefined();
+    expect(loc.nativeEpsg, `native EPSG not recorded for ${loc.id}`).not.toBe('unknown');
+    if (loc.nativeEpsg === 'unknown') return;
+    const entry = getCrsEntry(loc.nativeEpsg);
+    expect(entry, `EPSG ${loc.nativeEpsg} not in registry for ${loc.id}`).toBeDefined();
     expect(entry?.region).toBe('europe');
     expect(entry?.kind).toBe('projected');
   });

@@ -263,7 +263,7 @@ import type { CaptureType } from './diagnostics/provenance';
 // pipeline via handleRemoteUrl(). No catalog query, no geocoder, no
 // bbox-vs-COPC mismatch — the previous TNM Products API path was
 // removed in v0.3.6 because TNM doesn't surface COPC URLs anywhere.
-import { CatalogPanel } from './ui/CatalogPanel';
+import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // CRS detection + override — feeds the Inspector's Coordinate System
 // section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
 // streaming clouds expose `.crs()` returning the same shape.
@@ -384,23 +384,16 @@ const testApi = urlParams.has('test');
 // surfaced as user-facing entry points.
 // No bundled "demo" sample. The start screen's only streaming entry points are
 // the curated public-LiDAR picker (CURATED_LOCATIONS) and the open-from-URL
-// field — both of which surface only datasets with a confirmed open licence.
-// The previous Entwine "Public streaming demo" pointed at a bucket whose data
-// carried no stated open licence, so it was removed.
+// field. Each curated record carries its publisher and licence identity, and
+// says `unknown` where this tree records none. The previous Entwine "Public
+// streaming demo" pointed at a bucket with no stated licence, so it was removed.
 const SAMPLES: Sample[] = [];
 
-// The "Try a sample scan" ghost button under the primary CTA — the first
-// curated location (smallest, confirmed open licence, streams in seconds)
-// exposed as the one-click demo path. Same approval gate + streaming path
-// as the curated picker; only the entry point is promoted.
-const DEMO_SAMPLE: Sample = {
-  id: 'flai-ch-swisssurface3d-2022',
-  label: 'Switzerland · swisstopo, 84 MB',
-  detail: 'swissSURFACE3D (2022), via FLAI · streams over your network, nothing uploaded',
-  url: 'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/CH/Swiss_federal_authorities/swisssurface3d_2022/copc/2485_1109.copc.laz',
-  name: 'swisssurface3D 2022',
-  sizeBytes: 83_800_000,
-};
+// The "Try a sample scan" ghost button under the primary CTA — one
+// curated location built from its catalog record and exposed as the
+// one-click demo path. Same approval gate + streaming path as the
+// curated picker; only the entry point is promoted.
+const DEMO_SAMPLE = buildCuratedDemoSample();
 
 /**
  * Public-LiDAR picker for the empty-state. The picker is a curated
@@ -411,10 +404,11 @@ const DEMO_SAMPLE: Sample = {
  */
 const catalogPanel = new CatalogPanel({
   suppressed: usageIsSuppressed(),
-  onPickUrl: (url: string) => {
-    // The picker maps to a single categorical event suffix in the
-    // local-first usage counter. The URL itself never leaves the device.
-    recordUsage('scan-open', 'curated:usgs-ept');
+  onPickUrl: (url: string, _displayName: string, usageCategory: string) => {
+    // The panel computes the counter's suffix from the record it picked,
+    // so a European COPC tile is not filed as a US EPT dataset. The URL
+    // itself never leaves the device.
+    recordUsage('scan-open', usageCategory);
     handleRemoteUrl(url).then(
       // Success transition: clear the "Opening …" pulse once the scan attaches,
       // so the catalog status doesn't keep pulsing after a successful load.

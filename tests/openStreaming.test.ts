@@ -195,7 +195,7 @@ function makeDeps(
     stage: { hideEmptyState: vi.fn() },
     inspector: {} as unknown as OpenStreamingDeps['inspector'],
     exportPanel: { setImageExportEnabled: () => {}, setImageExportAvailability: () => {}, setStreamingMode: () => {} } as unknown as OpenStreamingDeps['exportPanel'],
-    streamingPanel: {} as unknown as OpenStreamingDeps['streamingPanel'],
+    streamingPanel: { setSourceUrl: vi.fn() } as unknown as OpenStreamingDeps['streamingPanel'],
     classLegendPanel: {} as unknown as OpenStreamingDeps['classLegendPanel'],
     inspectorCards: {} as unknown as OpenStreamingDeps['inspectorCards'],
     crsCoordinator: {} as unknown as OpenStreamingDeps['crsCoordinator'],
@@ -473,6 +473,7 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
       setColorModes: vi.fn(),
       setQuality: vi.fn(),
       setSummary: vi.fn(),
+      setSourceUrl: vi.fn(),
     } as unknown as OpenStreamingDeps['streamingPanel'],
     classLegendPanel: {
       setClasses: vi.fn(),
@@ -508,7 +509,7 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
   it('leaves the prior streaming scene intact when the candidate fails to open', async () => {
     const { deps, calls } = makeCopcDeps({ openRejects: true, priorStreamingCloud: true });
     await expect(
-      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+      openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
     ).rejects.toThrow(/malformed COPC/i);
 
     // The open was reached (so we're past the range probe) …
@@ -523,7 +524,7 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
 
   it('tears down (attaches the replacement, clears static layers) only once the candidate opens', async () => {
     const { deps, calls } = makeCopcDeps({ openRejects: false, priorStreamingCloud: true });
-    await openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps);
+    await openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', new AbortController().signal, deps);
 
     // A candidate that DOES open reaches the exclusive-scene teardown: static
     // layers cleared and the replacement attached (attach's own detach retires
@@ -539,7 +540,7 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     // a failed attach must leave the static scene intact — not a blank viewer.
     const { deps, calls } = makeCopcDeps({ attachRejects: true, priorStreamingCloud: true });
     await expect(
-      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+      openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
     ).rejects.toThrow(/GPU mesh build failed/);
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
     // The attach threw BEFORE the clear ran, so the static layers survive.
@@ -549,7 +550,7 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
   it('hands the load-cancel signal to attachStreamingCloud so it can gate its own commit (#4C)', async () => {
     const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true });
     const signal = new AbortController().signal;
-    await openStreamingCopc({} as RangeSource, 'scan.copc.laz', signal, deps);
+    await openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', signal, deps);
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
     // The 6th positional argument is the AbortSignal — the seam the pre-commit
     // gate reads to keep the previous scene on a streaming→streaming cancel.
@@ -561,7 +562,7 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     const ac = new AbortController();
     ac.abort();
     await expect(
-      openStreamingCopc({} as RangeSource, 'scan.copc.laz', ac.signal, deps),
+      openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', ac.signal, deps),
     ).rejects.toThrow();
     // Cancelled before the exclusive-scene teardown: no attach, no close, no clear.
     expect(calls.attachStreamingCloud).not.toHaveBeenCalled();
@@ -592,7 +593,7 @@ describe('activateCommittedStreamingCloud — the shared publish seam', () => {
 describe('openStreamingCopc — metadata is published only AFTER commit (blocker #3)', () => {
   it('a successful open publishes CRS + provenance exactly once', async () => {
     const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true });
-    await openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps);
+    await openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', new AbortController().signal, deps);
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
     expect(calls.refreshCrs).toHaveBeenCalledTimes(1);
     expect(calls.refreshProvenance).toHaveBeenCalledTimes(1);
@@ -603,7 +604,7 @@ describe('openStreamingCopc — metadata is published only AFTER commit (blocker
     // become authoritative — that was the silent visible-A / CRS-B corruption.
     const { deps, calls } = makeCopcDeps({ attachRejects: true, priorStreamingCloud: true });
     await expect(
-      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+      openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
     ).rejects.toThrow(/GPU mesh build failed/);
     expect(calls.refreshCrs).not.toHaveBeenCalled();
     expect(calls.refreshProvenance).not.toHaveBeenCalled();
@@ -613,7 +614,7 @@ describe('openStreamingCopc — metadata is published only AFTER commit (blocker
   it('an OPEN failure (before attach) never publishes candidate metadata', async () => {
     const { deps, calls } = makeCopcDeps({ openRejects: true, priorStreamingCloud: true });
     await expect(
-      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+      openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
     ).rejects.toThrow(/malformed COPC/i);
     expect(calls.refreshCrs).not.toHaveBeenCalled();
     expect(calls.refreshProvenance).not.toHaveBeenCalled();
