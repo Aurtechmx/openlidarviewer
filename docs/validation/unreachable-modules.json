@@ -1,0 +1,454 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Every module under src/ that the running application does not reach, with the reason it does not and what would change that. scripts/lint-unreachable-modules.mjs fails when an unreachable module is ABSENT from this file. Unreachable is allowed here; unclassified is not. This register makes no claim that a listed module is right, only that its absence from the product is a decision somebody made and can be re-examined.",
+  "whyThisExists": "docs/releases/RELEASE_NOTES_v0.6.6.md declares staged code publicly, under \"Foundations added for a later release, not reachable in v0.6.6\": implemented, tested, and not passed through by the running application, listed so the source is not mistaken for dead code. Nothing enforced that practice. A module staged deliberately in one release and forgotten in the next leave the same tree behind, and a superseded module is indistinguishable from one waiting to be wired. The register is where those cases are told apart.",
+  "method": "Breadth-first closure from the module scripts index.html loads, over static value imports, static type-only imports, dynamic import() with a literal specifier, and new Worker(new URL(...)). Dynamic edges are counted, which is why src/lazyChunks.ts is not a leaf: it holds this repository's dynamic import() literals and most lazy features hang off it. Type-only edges are counted too, so a module reached only by an erased import is NOT listed here; that widening keeps the register about modules nothing in the product refers to at all. It is a file-level graph, so it cannot see an unused export, and reachable is not executed.",
+  "measuredAt": {
+    "commit": "origin/main at the branch point of feat/staged-module-registry",
+    "modulesUnderSrc": 751,
+    "reachable": 691,
+    "unreachable": 60,
+    "unreachableCountingRuntimeEdgesOnly": 146,
+    "note": "The runtime-only figure drops type-only edges and is recorded for context. It is larger because 86 modules are reached from production solely through an `import type`, which is erased at build time. The register is keyed on the wider graph."
+  },
+  "statuses": {
+    "staged": "Implemented and tested, deliberately not wired, intended to be reached later. The graduation gate names the wiring that would do it.",
+    "validation-only": "Produces or checks evidence about the product. It runs in tests, studies and gate scripts and must stay out of the application graph; becoming reachable would be the defect.",
+    "reference-only": "Consumed by something outside the application entry graph, such as the build configuration or a lint, rather than by the running application.",
+    "orphan": "Superseded or abandoned. Nothing outside its own test consumes it and nothing is expected to. The graduation gate names the removal or the replacement it lost to.",
+    "unclassified": "The intent could not be determined from the source. This records the fact rather than guessing a status, and the review date is short."
+  },
+  "reviewDates": "Reported by the lint when they pass, never enforced. A gate that turns red on a date with no change to the tree teaches people to edit the date rather than the code.",
+  "modules": [
+    {
+      "path": "src/features/FeatureExtractionService.ts",
+      "status": "staged",
+      "why": "Named in the v0.6.6 release notes under \"Also in this release\" as a foundation: \"a feature-extraction service over the building and conductor cores ... Nothing in the running application passes through either\". It is the product-side entry over the two cores; no UI or DerivedLayer calls it.",
+      "graduation": "A candidate-review surface or a DerivedLayer producer calls extractFeatures, reached from src/main.ts or src/lazyChunks.ts.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/features/buildingFootprints.ts",
+      "status": "staged",
+      "why": "A pure core under FeatureExtractionService. Its only non-test importer is that service, which is itself unreachable, so the whole cluster is off the production graph together.",
+      "graduation": "FeatureExtractionService graduates; this arrives with it.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/features/conductors.ts",
+      "status": "staged",
+      "why": "A pure core under FeatureExtractionService, in the same cluster and unreachable for the same reason.",
+      "graduation": "FeatureExtractionService graduates; this arrives with it.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/features/footprintTrace.ts",
+      "status": "staged",
+      "why": "The trace/simplify/orthogonalise step the footprint core and the GeoJSON writer share. Both importers are inside the same unreachable cluster.",
+      "graduation": "FeatureExtractionService graduates; this arrives with it.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/features/footprintGeoJson.ts",
+      "status": "staged",
+      "why": "Writes extracted footprints as RFC 7946 GeoJSON. No export route offers footprints, so nothing in the export layer imports it.",
+      "graduation": "The export layer offers a footprint product and routes it through this writer.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/features/candidateReview.ts",
+      "status": "staged",
+      "why": "Holds accept/reject/pending state over extracted candidates. There is no candidate-review UI, so nothing holds the state.",
+      "graduation": "A review surface exists and reads this store.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/classification/classificationEvidence.ts",
+      "status": "staged",
+      "why": "The per-point evidence record for a classification decision. The derived classifier that ships does not attach one, so no production module constructs or reads the record.",
+      "graduation": "The derived classifier emits this record and a consumer (export, report or the classification editor) reads it.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/geo/projectPlacement.ts",
+      "status": "staged",
+      "why": "Named in the v0.6.6 release notes as \"a cross-CRS project placement planner\", listed under \"Foundations added for a later release, not reachable in v0.6.6\". It plans a placement; the multi-layer mount still refuses a CRS mismatch rather than asking this planner.",
+      "graduation": "The multi-layer mount consults planLayerPlacement before refusing a mismatched CRS.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/geo/tiePointRegister.ts",
+      "status": "staged",
+      "why": "Named in the v0.6.6 release notes as \"tie-point rigid registration with control-network validation\". Horn absolute orientation over labelled correspondences; no UI collects the correspondences.",
+      "graduation": "A tie-point capture surface exists and calls registerFromTiePoints.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/geo/tiePointGeometry.ts",
+      "status": "staged",
+      "why": "The control-network validation half of the same release-notes entry: it decides whether a correspondence set can determine a rigid transform at all. Its only non-test importer is tiePointRegister.ts, which is itself unreachable.",
+      "graduation": "tiePointRegister graduates; this arrives with it.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/geo/cursorReadout.ts",
+      "status": "staged",
+      "why": "The truth model for a persistent coordinate banner. Its own header states the gap it fills: a coordinate is visible only inside the Probe tool today. The banner was never built, so no UI module renders from this model.",
+      "graduation": "A location banner exists in src/ui and derives its text from this module.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/LocalOutOfCoreSource.ts",
+      "status": "staged",
+      "why": "Named in the v0.6.6 release notes as \"a local out-of-core read planner\", listed under \"Foundations added for a later release, not reachable in v0.6.6\". It inspects a LAS/LAZ header and picks a read strategy; src/io/loadFile.ts still routes every local file down the whole-file path.",
+      "graduation": "The local open path asks planLocalOutOfCoreRead before choosing a reader.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/io/heavy/slicedLasReader.ts",
+      "status": "staged",
+      "why": "Reads an uncompressed LAS as bounded record slices. It is one of the two strategies the planner would pick, and the planner is not called.",
+      "graduation": "LocalOutOfCoreSource graduates and its sliced branch executes.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/slicedLasSource.ts",
+      "status": "staged",
+      "why": "Adapts the sliced reader into the re-iterable point source the out-of-core indexer consumes. Both ends of the adapter are unreachable.",
+      "graduation": "The out-of-core build runs in the browser.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/octreeGrid.ts",
+      "status": "staged",
+      "why": "The fixed-depth octree the out-of-core indexer buckets into. Imported only by oocIndexer and tileStore, both unreachable.",
+      "graduation": "The out-of-core build runs in the browser.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/oocIndexer.ts",
+      "status": "staged",
+      "why": "The two-pass out-of-core octree build. Nothing in the application starts a build; the whole cluster is exercised in Node tests against an in-memory spill store.",
+      "graduation": "A local open of a file the planner routes out-of-core starts this build.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/opfsSpillStore.ts",
+      "status": "staged",
+      "why": "The browser OPFS backing for the indexer spill store. Only the indexer would construct it, and the indexer is unreachable.",
+      "graduation": "The out-of-core build runs in the browser and passes a real FileSystemDirectoryHandle.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/tileRecord.ts",
+      "status": "staged",
+      "why": "The fixed-length per-point record an out-of-core tile stores. Its importers are all inside the same unreachable cluster.",
+      "graduation": "The out-of-core build runs in the browser.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/tileStore.ts",
+      "status": "staged",
+      "why": "The manifest and hierarchy that make an out-of-core index durable and navigable. No production caller writes or parses one.",
+      "graduation": "The out-of-core build runs in the browser.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/tileStoreBuilder.ts",
+      "status": "staged",
+      "why": "The one call from a LAS file to a streamable tile store. It is the top of the out-of-core cluster and has no non-test importer at all.",
+      "graduation": "The local open path calls buildTileStoreFromLas for a file the planner routes out-of-core.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/tileChunkDecoder.ts",
+      "status": "staged",
+      "why": "The ChunkDecoder that lets the streaming scheduler render out-of-core tiles. The scheduler ships with the COPC, EPT and PNTS decoders wired; this one has no source to decode for.",
+      "graduation": "OlvTileSource graduates and is attached to the scheduler.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/heavy/OlvTileSource.ts",
+      "status": "staged",
+      "why": "Presents a built tile store to the streaming scheduler as a StreamingSource. src/app/openStreaming.ts wires COPC, EPT and 3D Tiles sources and has no tile-store branch.",
+      "graduation": "openStreaming gains a tile-store branch that attaches this source.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/tiles3d/tilesetOpen.ts",
+      "status": "staged",
+      "why": "The one-shot open/select/fetch composition over the 3D Tiles pure modules. The parsers it composes ARE now reachable: src/app/openTilesetLayer.ts and src/render/streaming/TilesetStreamingSource.ts reach tileset.ts, pnts.ts, tilesetUrl.ts and tilesetTraversal.ts through src/lazyChunks.ts, so the v0.6.6 statement that the parsers are unreachable no longer holds. What is still unreachable is this whole-tileset read path beside the streaming one.",
+      "graduation": "An open route reads a tileset in full rather than streaming it, and calls openTileset/selectTileContents/fetchTileContent.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/io/tiles3d/tilesetCloud.ts",
+      "status": "staged",
+      "why": "Merges a whole tileset into one PointCloud. Its only non-test importer is tilesetOpen.ts, which is itself unreachable; the streaming path builds its cloud through TilesetStreamingSource instead.",
+      "graduation": "tilesetOpen graduates and a caller asks for the merged one-shot cloud.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/process/ProductExecutorRegistry.ts",
+      "status": "staged",
+      "why": "Named in the v0.6.6 release notes: \"a product executor registry foundation that invokes a registered compute core through ProcessService.runIfAuthorized ... production product routes do not pass through it yet\".",
+      "graduation": "A production product route resolves its core through this registry instead of calling the core directly.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/process/dualCompleteness.ts",
+      "status": "staged",
+      "why": "Names the subject/support completeness pair over facts processCapabilities already reads. Nothing displays or gates on the named pair, so no production module imports it.",
+      "graduation": "A capability or product surface states subject and support completeness separately, reading them from here.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/qa/QaService.ts",
+      "status": "staged",
+      "why": "Per-product QA gating over the independent runQaChecks diagnostics. The checks themselves are reachable; this product-scoped wrapper is not called by any product route.",
+      "graduation": "A product route asks gateFor before offering the product.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/model/acquisitionCoverage.ts",
+      "status": "staged",
+      "why": "Separates an interrogated-but-empty cell from one nobody looked at, over the acquisition grid of an organized cloud. No terrain or coverage surface consults it; nothing in src/ imports it.",
+      "graduation": "The void/coverage reporting path reads acquisition coverage instead of treating every absence alike.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/registration/registrationModel.ts",
+      "status": "staged",
+      "why": "Named in the v0.6.6 release notes as the model that \"selects [a planar ICP solver] directly instead of refusing the planar case\". It chooses mount / planar ICP / general ICP / tie-point; no caller asks it to choose.",
+      "graduation": "The multi-layer mount or a registration surface asks chooseRegistrationModel before placing two clouds.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/registration/planarIcp.ts",
+      "status": "staged",
+      "why": "Named in the same release-notes line: the seam that re-exports the tested terrain/change planar solver under the registration layer's vocabulary. Only registrationModel imports it, and that is unreachable.",
+      "graduation": "registrationModel graduates; this arrives with it.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/registration/generalIcp.ts",
+      "status": "staged",
+      "why": "Trimmed 6-DOF ICP, one of the models registrationModel selects. No caller reaches the selector, so no caller reaches the solver.",
+      "graduation": "registrationModel graduates and its general-ICP branch executes.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/registration/rigidSolve.ts",
+      "status": "staged",
+      "why": "The closed-form Kabsch/Horn spine the ICP and tie-point flows build on. Every one of its non-test importers is inside this same unreachable cluster.",
+      "graduation": "Any registration flow above it graduates.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/registration/tiePointAlignment.ts",
+      "status": "staged",
+      "why": "The manual tie-point fallback over rigidSolve. Nothing collects tie points in the application.",
+      "graduation": "A tie-point capture surface exists and calls alignFromTiePoints.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/registration/transformStore.ts",
+      "status": "staged",
+      "why": "Holds a layer's placement transform non-destructively in Float64. The mount places layers directly and keeps no separate transform, so nothing constructs a store.",
+      "graduation": "A registration result is applied as a held transform rather than by placing the layer directly.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/hillshadeColors.ts",
+      "status": "staged",
+      "why": "Sun-direction shading over the elevation ramp. src/render/inspectionPresets.ts states the matching fact from the other side: the preset it belongs to has \"no runtime setter behind\" it and \"there is no live hillshade renderer to switch\".",
+      "graduation": "A hillshade colour mode exists in colorModes and the Viewer can switch it on.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/localDensitySize.ts",
+      "status": "staged",
+      "why": "Per-point size from local neighbourhood density. No point-size path in the Viewer reads a per-point size array from here.",
+      "graduation": "The Viewer offers density-scaled point size and computes it through this module.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/paletteCatalog.ts",
+      "status": "staged",
+      "why": "The user-facing palette catalogue plus a registry for custom palettes from the Palette Editor. The editor was never built; colorModes.ts and confidenceOverlay.ts cite this file in prose but import nothing from it.",
+      "graduation": "A palette picker or the Palette Editor reads the catalogue.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/measure/sessionFindings.ts",
+      "status": "staged",
+      "why": "The session ledger of measurements with their uncertainty bands, written to be handed to buildReportManifest. The measurement flow shows results in toasts and collects them nowhere.",
+      "graduation": "The measurement flow appends findings here and the report export reads them.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/measure/profileCorridorOutline.ts",
+      "status": "staged",
+      "why": "Drawable geometry for the capsule corridor profileCorridor.ts tests membership against. The scene draws no corridor outline.",
+      "graduation": "The section overlay draws the corridor from this outline.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/measure/profileRawFilter.ts",
+      "status": "staged",
+      "why": "Chooses which accepted corridor returns the raw scatter draws, and describes the choice. The section view draws its scatter without this selection layer.",
+      "graduation": "The section view routes its raw scatter through this filter and shows the descriptor.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/measure/profileSectionImage.ts",
+      "status": "unclassified",
+      "why": "It composes a section into a PNG-ready raster with axes, legend, scope and counts, and nothing outside its own test imports it. Two readings fit the tree equally well and the source settles neither: it is a staged image-export path with no export route yet, or it was overtaken by profileSectionRenderer.ts (the live canvas, reachable) plus profilePdf.ts and profileSheetLayout.ts (the PDF sheet, reachable through src/lazyChunks.ts). Whoever wrote it knows which; the file does not say, so this entry records the question instead of guessing an answer.",
+      "graduation": "Answer the question first: if it is staged, name the export route that would call composeSectionImage and re-file it as staged; if the PDF sheet path replaced it, re-file it as orphan.",
+      "review": "2026-11-30"
+    },
+    {
+      "path": "src/render/streaming/pipelineLimits.ts",
+      "status": "staged",
+      "why": "Its own header states the position: the P8 fetch/decode/upload separation is evidence-gated, so this is \"the policy math only ... NOT wired into the live scheduler\", and wiring waits on device profiling that shows the P7 upload queue did not already resolve the stalls.",
+      "graduation": "On-device profiling shows remaining value and the scheduler adopts these limits.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/streaming/streamingDiagnostics.ts",
+      "status": "staged",
+      "why": "A flat record of everything the streaming path knows about itself. The ?debug=1 overlay still formats its own counters rather than building this record.",
+      "graduation": "The debug overlay, or a metrics export, builds its numbers from this record.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/streaming/streamingProfile.ts",
+      "status": "unclassified",
+      "why": "It maps a device tier onto a full bundle of streaming session defaults, but the two pieces it composes are reachable and are used without it: deviceProfile.ts and streamingBudget.ts are both imported straight from src/main.ts, and streamingAttach.ts and Viewer.ts call streamingBudgets(quality, isMobile) directly. So the bundle is either staged for an attach path that adopts it whole, or the direct calls settled the question and left it behind. Nothing in the source says which.",
+      "graduation": "Answer the question first: if the attach path is meant to adopt the bundle, re-file as staged with that wiring named; if the direct streamingBudgets calls are the decision, re-file as orphan.",
+      "review": "2026-11-30"
+    },
+    {
+      "path": "src/render/streaming/tierAdaptation.ts",
+      "status": "staged",
+      "why": "Runtime FPS-driven tier stepping with hysteresis, written to layer on top of streamingProfile. Nothing feeds it FPS samples.",
+      "graduation": "The render loop feeds FPS samples in and applies the tier it returns.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/terrain/contourStudio/contourAdaptiveGeneralize.ts",
+      "status": "staged",
+      "why": "The staged source-unit product pipeline for terrain-aware generalization. src/terrain/contour/terrainAwareTolerance.ts names it as exactly that and is the shared policy both readers use; the live honesty-gated styler is what v0.6.6 shipped.",
+      "graduation": "The Contour Studio product pipeline runs a generalization pass and calls this module.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/terrain/complexity/index.ts",
+      "status": "orphan",
+      "why": "A barrel re-exporting the four complexity leaves. Production imports the leaves directly (src/terrain/contour/analyseContours.ts reaches complexitySummary.ts, which reaches terrainPositionIndex.ts), so the barrel itself is on nobody's path. Its own header claims it is \"Imported ONLY by the lazily-loaded analysis pipeline\", which describes the leaves rather than this file.",
+      "graduation": "Remove the barrel and point its one importer, tests/reproPack.test.ts, at the leaves; or give it a production importer, which would also make its header true again.",
+      "review": "2026-11-30"
+    },
+    {
+      "path": "src/validation/crossCheck.ts",
+      "status": "validation-only",
+      "why": "The cross-implementation agreement harness behind the E4 evidence grade. Fourteen tests and three gate scripts consume it; the viewer must not, because agreement is measured about the product, not inside it.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/gridAgreement.ts",
+      "status": "validation-only",
+      "why": "Cell-by-cell comparison of two rasters, used by the grid agreement and PDAL ground-filter tests.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/terrainMetrics.ts",
+      "status": "validation-only",
+      "why": "Shared comparison numerics for the terrain validation harness. Its own header says so: \"validation-only; imported by studies and tests, not by the viewer\".",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/terrainPerturbation.ts",
+      "status": "validation-only",
+      "why": "Seeded perturbations for the terrain harness. Its own header says \"Validation-only; nothing here runs in the viewer\".",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/terrainReport.ts",
+      "status": "validation-only",
+      "why": "The result schema the terrain harness reports in, and the rollup scripts/validate-terrain.mjs reimplements against.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/evidenceMonotonicity.ts",
+      "status": "validation-only",
+      "why": "The authority-tier monotonicity invariant. Its own header says \"validation-only; imported by studies and tests, not by the viewer\".",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/checkpointAccuracy.ts",
+      "status": "validation-only",
+      "why": "Statistics over independent checkpoints, with the leakage refusal. Consumed by the field-study tests and scripts/verify-field-study.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/accuracyEnvelope.ts",
+      "status": "validation-only",
+      "why": "Carries the validation envelope with an accuracy claim and refuses a scan outside it. Exercised by its own test.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/classificationAgreement.ts",
+      "status": "validation-only",
+      "why": "Label-agreement statistics for ground filtering, consumed by the classification and PDAL agreement tests and scripts/verify-ground-filter-metrics.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/classifierCorpus.ts",
+      "status": "validation-only",
+      "why": "The frozen synthetic corpus the derived classifier is measured on, plus its reducer. Consumed by three tests and scripts/verify-classifier-corpus.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/spatialBootstrap.ts",
+      "status": "validation-only",
+      "why": "Block resampling that respects spatial correlation, so an interval reflects independent places rather than cells.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/authorizationBenchmark.ts",
+      "status": "validation-only",
+      "why": "A frozen adversarial benchmark over the existing authorization machinery. It consumes the production decision and must never be part of it.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/workers/workerRegistry.ts",
+      "status": "reference-only",
+      "why": "The single source of truth for every Web Worker the app ships, consumed at BUILD time by vite.config.ts (live-transform excludes and chunk-emission pins) and by scripts/lint-worker-registry.mjs. The application graph reaches the workers by new Worker(new URL(...)) from their clients, never through this file, so a walk from index.html cannot see it.",
+      "graduation": "None expected. It is reachable from the build configuration by design; this entry records that the application entry graph is not where to look for it.",
+      "review": "2027-08-27"
+    }
+  ]
+}
