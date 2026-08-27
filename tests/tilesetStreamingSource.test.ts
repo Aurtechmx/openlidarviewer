@@ -23,10 +23,14 @@ function ts(root: unknown) {
   return parseTileset(JSON.stringify({ asset: { version: '1.0' }, geometricError: 100, root }));
 }
 
+// ADD, not REPLACE: these cases are about the shape the scheduler reads, and
+// additive refinement is the mode where a parent and its children are both
+// served. A REPLACE parent that refines into content is refused separately, so
+// using it here would make every case in this file test that refusal instead.
 const TREE = ts({
   boundingVolume: BOX,
   geometricError: 50,
-  refine: 'REPLACE',
+  refine: 'ADD',
   content: { uri: 'root.pnts' },
   children: [{ boundingVolume: BOX, geometricError: 10, content: { uri: 'sub/a.pnts' } }],
 });

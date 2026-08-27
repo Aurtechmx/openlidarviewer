@@ -60,6 +60,8 @@ What opens: a streamed 3D Tiles 1.0 or 1.1 tileset whose content is PNTS. The en
 
 A streamed tileset reports no source point total. A `tileset.json` never states one, and the per-tile figures the scheduler admits on are decode-admission estimates rather than counts, so a sum of them would read as a measurement it is not. The colour modes offered are the ones a point tile can fill: intensity, classification and returns are absent from the format and are not offered.
 
+A tile that refines by REPLACE into tiles with their own content is refused. REPLACE means the parent's content is replaced by its children, and the streaming scheduler draws every resident node, which is right for ADD and would draw the coarse parent alongside the fine children for REPLACE. Refusing is preferred to a scene that is quietly doubled. A REPLACE tile that refines into nothing cannot duplicate anything and is served.
+
 What does not open: the wider 3D Tiles ecosystem. B3DM, I3DM, CMPT and glTF content are refused by name, because mesh tiles need a renderer this viewer does not have. Implicit tiling is refused at parse, and a selection cannot reach a nested external `tileset.json`. Draco-compressed tiles are refused rather than partially read.
 
 Two further limits of the supported subset are known:
