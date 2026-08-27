@@ -3,11 +3,18 @@
  * fake of the file-system handles.
  *
  * OPFS is a browser API, so the real handles are exercised in the browser; here
- * a small fake stands in for `FileSystemDirectoryHandle` so the store's own logic
+ * a fake stands in for `FileSystemDirectoryHandle` so the store's own logic
  * — append-concatenation, the key-to-file-name mapping, and text artifacts — is
  * unit-tested in Node. A second case runs the whole build into the fake store and
  * reads it back through the tile-store reader, proving the OPFS backing is a drop-
  * in for the memory store used elsewhere.
+ *
+ * The build case runs TWICE, once with sync access handles available and once
+ * without, because the store picks its write path from what the handle offers
+ * and a suite that only ever saw one of them would not notice the other break.
+ * `tests/opfsSpillCost.test.ts` is where the two are separated by cost; here
+ * they only have to agree on the result. The fake itself lives in
+ * `tests/support/fakeOpfs.ts`, shared by both files.
  */
 import { describe, it, expect } from 'vitest';
 import { writeLas14 } from '../src/convert/writeLas';
@@ -20,59 +27,8 @@ import {
   opfsSpillStore,
   readOpfsText,
   writeOpfsText,
-  type OpfsDirHandle,
 } from '../src/io/heavy/opfsSpillStore';
-
-/** An in-memory fake of the OPFS directory/file/writable handles. */
-function fakeOpfsDir(): OpfsDirHandle {
-  const files = new Map<string, Uint8Array>();
-  return {
-    async getFileHandle(name, options) {
-      if (!files.has(name)) {
-        if (!options?.create) throw new Error(`NotFoundError: ${name}`);
-        files.set(name, new Uint8Array(0));
-      }
-      return {
-        async getFile() {
-          const data = files.get(name)!;
-          return {
-            size: data.length,
-            async arrayBuffer() {
-              return data.slice().buffer;
-            },
-            async text() {
-              return new TextDecoder().decode(data);
-            },
-          };
-        },
-        async createWritable(opts) {
-          let buf = opts?.keepExistingData ? files.get(name)!.slice() : new Uint8Array(0);
-          let pos = 0;
-          return {
-            async seek(offset) {
-              pos = offset;
-            },
-            async write(bytes) {
-              if (pos + bytes.length > buf.length) {
-                const grown = new Uint8Array(Math.max(pos + bytes.length, buf.length));
-                grown.set(buf);
-                buf = grown;
-              }
-              buf.set(bytes, pos);
-              pos += bytes.length;
-            },
-            async close() {
-              files.set(name, buf);
-            },
-          };
-        },
-      };
-    },
-    async *keys() {
-      for (const k of files.keys()) yield k;
-    },
-  };
-}
+import { fakeOpfsDir } from './support/fakeOpfs';
 
 describe('OPFS spill store', () => {
   it('appends, reads, maps keys, and round-trips text', async () => {
@@ -90,7 +46,10 @@ describe('OPFS spill store', () => {
     expect(await readOpfsText(dir, 'manifest.json')).toBe('{"ok":true}');
   });
 
-  it('holds a whole build and reads it back through the tile store', async () => {
+  it.each([
+    ['with sync access handles', { syncAccess: true }],
+    ['with only a writable stream', {}],
+  ])('holds a whole build and reads it back through the tile store, %s', async (_label, capabilities) => {
     const n = 3000;
     const x = new Float64Array(n);
     const y = new Float64Array(n);
@@ -106,7 +65,7 @@ describe('OPFS spill store', () => {
     const bytes = writeLas14(cloud);
     const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 
-    const dir = fakeOpfsDir();
+    const dir = fakeOpfsDir(capabilities);
     const store = opfsSpillStore(dir);
     const las = await openSlicedLasSource(new ArrayBufferRangeSource(ab));
     const index = await indexOutOfCore(las.source, store, { pointsPerLeaf: 600, memoryBudgetBytes: 16 * 1024 });
