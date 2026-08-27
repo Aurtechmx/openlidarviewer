@@ -82,7 +82,13 @@ export interface IndexOptions {
   readonly signal?: AbortSignal;
 }
 
-const DEFAULT_POINTS_PER_LEAF = 100_000;
+/**
+ * Target points per leaf when a caller names none. Exported so the storage
+ * preflight sizes a prospective index against the same figure the build will
+ * actually use; a preflight holding its own copy would go quietly wrong the day
+ * this one changed.
+ */
+export const DEFAULT_POINTS_PER_LEAF = 100_000;
 const DEFAULT_MEMORY_BUDGET = 64 * 1024 * 1024;
 /** The record when the source carries no attributes: three float32 xyz. */
 const POSITION_RECORD_BYTES = 12;

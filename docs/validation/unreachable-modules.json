@@ -159,6 +159,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/io/heavy/storagePreflight.ts",
+      "status": "staged",
+      "why": "The disk guard that must run before any file is routed to local indexing: it sizes the tile cache an out-of-core build would write from the declared point count and the record schema, then asks navigator.storage.estimate() whether that fits. Nothing routes a file to the indexer yet, so nothing calls it. It was added ahead of the routing on purpose, because a routing that lands without it fills a user's disk and then fails part-way through.",
+      "graduation": "The local open path calls storagePreflight before buildTileStoreFromLas and refuses on the verdict, arriving with tileStoreBuilder.",
+      "review": "2027-02-28"
+    },
+    {
       "path": "src/io/heavy/tileStoreBuilder.ts",
       "status": "staged",
       "why": "The one call from a LAS file to a streamable tile store. It is the top of the out-of-core cluster and has no non-test importer at all.",
