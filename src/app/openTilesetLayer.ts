@@ -32,6 +32,7 @@
 
 import { LoadCancelledError } from '../io/loadFile';
 import { describeLoadError } from '../io/loadErrors';
+import { expandImplicitTileset } from '../io/tiles3d/implicitExpand';
 import { parseTileset } from '../io/tiles3d/tileset';
 import { createTilesetTransport } from '../io/tiles3d/tilesetTransport';
 import { validateRemoteTilesetUrl } from '../io/tiles3d/tilesetUrl';
@@ -166,9 +167,22 @@ export async function openRemoteTileset(
     const json = await transport.fetchTilesetJson(url, controller.signal);
     let tileset;
     try {
-      tileset = parseTileset(json);
+      // Expand before parsing. `parseTileset` refuses an implicit document by
+      // design, so the expander has to rewrite it into the equivalent explicit
+      // one first; every existing refusal then applies to the result. A
+      // document that declares no implicit tiling comes back untouched, so this
+      // is safe to run unconditionally and costs an explicit tileset nothing.
+      const expanded = await expandImplicitTileset(JSON.parse(json) as object, {
+        entryUrl: url,
+        fetchSubtreeBytes: (subtreeUrl, signal) =>
+          transport.fetchSubtreeBytes(subtreeUrl, signal),
+        signal: controller.signal,
+      });
+      tileset = parseTileset(expanded);
     } catch (err) {
-      // The parser's refusals are all deliberate and already say why.
+      // The parser's and the expander's refusals are all deliberate and already
+      // say why. A cancel is not a refusal and has to keep its own identity.
+      if (err instanceof LoadCancelledError) throw err;
       throw new TilesetRefusal(err instanceof Error ? err.message : String(err));
     }
     if (controller.signal.aborted) throw new LoadCancelledError();
