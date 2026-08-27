@@ -29,9 +29,13 @@ function crs(o: Partial<CrsInfo> = {}): CrsInfo {
   return { source: 'epsg', linearUnit: 'metre', linearUnitToMetres: 1, verticalDatum: 'NAVD88', verticalUnitToMetres: 1, ...o } as CrsInfo;
 }
 
+/** BASE's stated point total, named so a case can vary it without re-reading a
+ *  field that is nullable for sources which state no total. */
+const BASE_POINT_COUNT = 1_000_000;
+
 /** A fully-supported single scan: full coverage, known unit, trusted ground. */
 const BASE: ScanFacts = {
-  kind: 'static', coverage: 'full', crs: crs(), pointCount: 1_000_000,
+  kind: 'static', coverage: 'full', crs: crs(), pointCount: BASE_POINT_COUNT,
   hasRgb: true, hasIntensity: true, hasGpsTime: true, hasReturnNumber: true, hasPointSourceId: false,
   classification: 'full', groundClassified: true, hasBuildingClass: true,
   classificationProvenance: 'producer', medianSpacing: 0.2,
@@ -155,7 +159,7 @@ export const AUTHORIZATION_CASES: readonly BenchmarkCase[] = [
   },
   {
     id: 'A14', title: 'authentic token reused for another dataset', kind: 'adversarial', product: 'dtm', staleCase: true,
-    run: () => reuseAcross([BASE], [{ ...BASE, pointCount: BASE.pointCount - 1 }], 'dtm'),
+    run: () => reuseAcross([BASE], [{ ...BASE, pointCount: BASE_POINT_COUNT - 1 }], 'dtm'),
   },
   {
     id: 'A15', title: 'subject completeness full → partial (coverage)', kind: 'adversarial', product: 'dtm', staleCase: true,

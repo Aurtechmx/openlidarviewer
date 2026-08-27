@@ -35,6 +35,7 @@ import {
   linkAbortSignals,
   shouldDropCandidateOnPostCommitCancel,
   type OpenStreamingDeps,
+  type StreamingReportInput,
 } from './openStreaming';
 
 /**
@@ -155,6 +156,29 @@ export async function openRemoteTileset(
     activateCommittedStreamingCloud(cloud, deps);
     viewer.setMode('orbit');
     viewer.frameAll();
+
+    // The Scan Report for THIS scan. Nothing set it on this path, so the
+    // Inspector kept whichever streaming scan was open before: a tileset opened
+    // over a COPC read as that COPC, point count included. A tileset carries no
+    // LAS header, so the report is what a tileset does state — its format, its
+    // octree depth and node count — and an explicitly unstated point total.
+    const reportCloud: StreamingReportInput = {
+      kind: cloud.kind,
+      name: cloud.name,
+      // Null, and typed null all the way through: the report row reads "not
+      // stated by the source" instead of a figure nothing measured.
+      sourcePointCount: cloud.sourcePointCount,
+      maxDepth: () => cloud.maxDepth(),
+      octree: { nodes: () => cloud.octree.nodes() },
+    };
+    deps.setLastStreamingReportCloud(reportCloud);
+    try {
+      deps.inspector.setReport(
+        deps.runStreamingModules(reportCloud, deps.classLegendPanel.getVisibility().isFiltered()),
+      );
+    } catch (err) {
+      if (deps.debug) console.warn('[inspector] setReport (tileset) threw', err);
+    }
 
     deps.streamingPanel.setColorModes([...cloud.availableColorModes()], cloud.defaultColorMode());
     deps.streamingPanel.setQuality(deps.getStreamingQuality());

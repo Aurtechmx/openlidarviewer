@@ -63,8 +63,15 @@ export interface ScanFacts {
   readonly coverage: Coverage;
   /** Detected CRS, or null when none is recoverable. */
   readonly crs: CrsInfo | ResolvedCrs | null;
-  /** Total points in the source (not the resident count). */
-  readonly pointCount: number;
+  /**
+   * Total points the SOURCE STATES (not the resident count), or `null` when it
+   * states none. Absent is not zero: a 3D Tiles tileset carries no count in
+   * `tileset.json` and its per-tile figures are decode-admission estimates, so
+   * a total summed from them would be a measurement nobody made. Zero is a
+   * stated measurement and means the scan is empty; null means the size is
+   * unknown, which is a weaker fact and never evidence of emptiness.
+   */
+  readonly pointCount: number | null;
   readonly hasRgb: boolean;
   readonly hasIntensity: boolean;
   readonly hasGpsTime: boolean;
