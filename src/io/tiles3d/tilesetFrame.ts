@@ -36,7 +36,12 @@
  * Pure: no fetch, no DOM, no renderer types. Float64 throughout.
  */
 
-import { createLocalEnuFrame, type SpatialFrame, type Vec3 } from '../../geo/frame/spatialFrame';
+import {
+  createLocalEnuFrame,
+  ecefToGeodeticAngles,
+  type SpatialFrame,
+  type Vec3,
+} from '../../geo/frame/spatialFrame';
 import type { CloudFrameProvenance } from '../../geo/frame/frameProvenance';
 import type { Tile, Tileset } from './tileset';
 
@@ -169,4 +174,37 @@ export function finiteExtentCentre(xyz: Float64Array): Vec3 | null {
   }
   if (!seen) return null;
   return [(min[0]! + max[0]!) / 2, (min[1]! + max[1]!) / 2, (min[2]! + max[2]!) / 2];
+}
+
+/**
+ * The ENU frame as a column-major 4x4, for a reader that composes transforms
+ * rather than mapping points one at a time.
+ *
+ * `SpatialFrame.sourceToRenderPoint` maps a single point, which suits a reader
+ * that has already merged every tile into one buffer. A streaming reader never
+ * holds that buffer: it places each tile by composing matrices down the tree,
+ * so it needs the same rotation as a matrix it can put at the root.
+ *
+ * The frame is `R · (p − anchor)` with the rows of `R` being east, north and
+ * up, so the matrix is `R` with a translation of `−R·anchor`. Applying this at
+ * the root gives every tile the same rotation the merged reader applies to
+ * every point, which is what keeps the two paths agreeing.
+ */
+export function enuFrameMatrix(anchor: Vec3): number[] {
+  const { lat, lon } = ecefToGeodeticAngles(anchor);
+  const sLat = Math.sin(lat), cLat = Math.cos(lat);
+  const sLon = Math.sin(lon), cLon = Math.cos(lon);
+  // Rows of R: east, north, up. Same construction as createLocalEnuFrame.
+  const e: Vec3 = [-sLon, cLon, 0];
+  const n: Vec3 = [-sLat * cLon, -sLat * sLon, cLat];
+  const u: Vec3 = [cLat * cLon, cLat * sLon, sLat];
+  const dot = (r: Vec3) => r[0] * anchor[0] + r[1] * anchor[1] + r[2] * anchor[2];
+  // Column-major: the rotation occupies the first three columns as R's COLUMNS,
+  // which for a row-listed R means transposing here.
+  return [
+    e[0], n[0], u[0], 0,
+    e[1], n[1], u[1], 0,
+    e[2], n[2], u[2], 0,
+    -dot(e), -dot(n), -dot(u), 1,
+  ];
 }

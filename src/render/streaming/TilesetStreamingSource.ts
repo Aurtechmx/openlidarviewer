@@ -32,6 +32,8 @@ import type { Mat4 } from '../../io/tiles3d/tileTransform';
 import type { TilesetTransport } from '../../io/tiles3d/tilesetTransport';
 import { PNTS_COLOR_MODES, type PntsDecodeMetadata } from '../../io/tiles3d/pntsDecode';
 import { tilesetNodes, type TilesetNodeIndex } from '../../io/tiles3d/tilesetNodes';
+import { volumeToAabb } from '../../io/tiles3d/tilesetTraversal';
+import { declaredTilesetFrame, enuFrameMatrix } from '../../io/tiles3d/tilesetFrame';
 import type { Tileset } from '../../io/tiles3d/tileset';
 import { StreamingNodeStore } from './StreamingNodeStore';
 import type { NodeCounts } from './StreamingNodeStore';
@@ -43,6 +45,33 @@ import type {
   StreamingSource,
   StreamingSourceKind,
 } from './StreamingSource';
+
+/**
+ * The root transform that puts a geocentric tileset in a local ENU frame, or
+ * null when the document declares no such frame.
+ *
+ * A merged reader anchors on the extent centre of every point it loaded. A
+ * streaming reader has no such buffer and its resident set changes as the
+ * camera moves, so it anchors on the ROOT BOUNDING VOLUME's centre instead:
+ * that is fixed by the document, so the rotation, and with it every render
+ * coordinate, is the same on every run and at every camera position.
+ *
+ * Without this the points arrive in ECEF, where +Z is the polar axis rather
+ * than local up. The scene still frames and still draws; only the heights and
+ * the verticals read off it are wrong, which is a failure with no visual trace.
+ */
+export function tilesetRootFrameMatrix(tileset: Tileset): Mat4 | null {
+  if (!declaredTilesetFrame(tileset).geocentric) return null;
+  const aabb = volumeToAabb(tileset.root.boundingVolume);
+  if (aabb == null) return null;
+  const anchor: [number, number, number] = [
+    (aabb.min[0] + aabb.max[0]) / 2,
+    (aabb.min[1] + aabb.max[1]) / 2,
+    (aabb.min[2] + aabb.max[2]) / 2,
+  ];
+  if (!anchor.every(Number.isFinite) || Math.hypot(...anchor) === 0) return null;
+  return enuFrameMatrix(anchor) as Mat4;
+}
 
 /** Resolve a tile's authored content URI against the tileset document. */
 export function resolveTileUrl(baseUrl: string, uri: string): string {
@@ -121,7 +150,9 @@ export class TilesetStreamingSource implements StreamingSource {
     this._baseUrl = baseUrl;
     this._transport = transport;
     this._crs = crs;
-    this._index = tilesetNodes(tileset, rootTransform);
+    // Resolved here rather than by the caller: a caller that forgets leaves a
+    // geocentric tileset in ECEF, and nothing on screen says so.
+    this._index = tilesetNodes(tileset, rootTransform ?? tilesetRootFrameMatrix(tileset) ?? undefined);
     this._bounds = unionBounds(this._index.records) ?? [0, 0, 0, 0, 0, 0];
     this.renderOrigin = centreOf(this._bounds);
     this.frame = createTranslatedFrame(this.renderOrigin);
