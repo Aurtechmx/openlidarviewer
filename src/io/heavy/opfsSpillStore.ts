@@ -318,6 +318,26 @@ export interface OpfsSpillBuild {
   discard(): Promise<void>;
 }
 
+/**
+ * Delete a named store directory from `root`, swallowing the NotFoundError a
+ * removal of an absent store raises (a store already gone is not an error).
+ *
+ * The out-of-core heavy-LAS store is TEMPORARY for this release: it is built,
+ * streamed from, and removed when its source closes, because nothing reuses it
+ * on a later open. Cross-session reuse — detecting "I already indexed this file"
+ * from a stable source fingerprint and reopening the store instead of rebuilding
+ * it — is the better long-term answer and the future direction here; it needs
+ * source-identity work and is out of scope for this change.
+ *
+ * This is deliberately tolerant: it must never throw out of a close path. A
+ * store the browser cannot remove because a read still holds it stays on disk,
+ * stale, and is rebuilt on the next open, so a failure is logged by the caller
+ * rather than crashing the close.
+ */
+export async function removeOpfsStore(root: OpfsDirHandle, name: string): Promise<void> {
+  await removeIfPresent(root, name);
+}
+
 /** Swallow the NotFoundError a removal of an absent entry raises. */
 async function removeIfPresent(dir: OpfsDirHandle, name: string): Promise<void> {
   try {
