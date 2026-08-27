@@ -76,8 +76,8 @@ import type { WorkOwnership } from '../model/workOwnership';
  * transform into the project frame, CRS, up axis), and per-item ownership on
  * measurements and annotations. Through v7 a session described one scan with
  * one origin, so saved work had no way to say which layer it belonged to,
- * which is why multi-layer mounting is disabled. v8 is the persistence half of
- * removing that block; the mount flag itself stays off (see `LayerService.ts`).
+ * which is what blocked multi-layer mounting. v8 is the persistence half of
+ * removing that block, and the mount is now on (see `LayerService.ts`).
  *
  * The per-annotation inspection workflow (`annotation.issue` — severity,
  * open/resolved status, observation date) is additive WITHIN v8 and carries no

@@ -59,6 +59,22 @@ import type { Sample } from './Stage';
 import { loadPlanetaryComputerCatalog } from '../lazyChunks';
 
 /**
+ * The default hint under the dropdown, shown until a location is picked.
+ *
+ * It used to read "Verified-working public USGS EPT datasets — each URL was
+ * probed at build time", and each of those three claims was false against the
+ * catalog: two entries are European (swisstopo, GURS), two are COPC rather than
+ * EPT, and no script here re-runs the reachability check, so `verifiedAt` is a
+ * date somebody recorded and nothing more. One constant, because the string is
+ * rendered from two places and a second copy is a second thing to correct.
+ */
+const CATALOG_HINT =
+  'Curated public COPC and EPT datasets: USGS 3DEP and European national '
+  + 'programmes. Each entry records its publisher, licence and the date its URL '
+  + 'was last checked; nothing re-checks it, so that date is the whole claim. '
+  + 'For other locations or your own COPC URL, use the URL field above.';
+
+/**
  * The curated entry the start screen promotes as its one-click demo.
  *
  * It must be a record whose licence the tree actually records, which a
@@ -192,9 +208,7 @@ export class CatalogPanel {
 
     this._hint = el('span', {
       className: 'olv-catalog-hint',
-      text: 'Verified-working public USGS EPT datasets — each URL was ' +
-        'probed at build time. For other locations or your own COPC URL, ' +
-        'use the URL field above.',
+      text: CATALOG_HINT,
     });
 
     this._status = el('div', { className: 'olv-catalog-status' });
@@ -231,11 +245,7 @@ export class CatalogPanel {
       const id = this._select.value;
       const loc = id ? getCuratedLocation(id) : undefined;
       this._submit.disabled = loc === undefined;
-      this._hint.textContent = loc
-        ? loc.hint
-        : 'Verified-working public USGS EPT datasets — each URL was ' +
-          'probed at build time. For other locations or your own COPC URL, ' +
-          'use the URL field above.';
+      this._hint.textContent = loc ? loc.hint : CATALOG_HINT;
       if (loc && this._onPickIntent) {
         try { this._onPickIntent(loc.streamUrl); } catch { /* fire-and-forget */ }
       }

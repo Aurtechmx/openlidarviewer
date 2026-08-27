@@ -288,7 +288,7 @@ import { writeFloatColorsInto } from './colorEncode';
 // synchronous `setStreamingQuality` path.
 import type { StreamingScheduler } from './streaming/StreamingScheduler';
 import { buildResidentSnapshot } from './streaming/residentSnapshot';
-import type { StreamingSource } from './streaming/StreamingSource';
+import type { StreamingSource, StreamingSourceKind } from './streaming/StreamingSource';
 import { streamingBudgets, estimateGpuBytes } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
 import type { StreamingBenchmark } from './streaming/streamingBenchmark';
@@ -2057,7 +2057,6 @@ export class Viewer {
     this.requestFrame();
   }
 
-
   /**
    * Record what a layer has proven about the project frame. Combined
    * estimators — terrain, profile, cut/fill volume, lasso — read this and
@@ -2114,11 +2113,9 @@ export class Viewer {
    * `staticCount` static clouds the walk has already accepted.
    */
   private _streamingMayCombine(staticCount: number): boolean {
-    // Streaming sources are never mounted into the project frame in this
-    // alpha — `MULTI_LAYER_MOUNT_ENABLED` is off and no mount path exists for
-    // resident nodes at all — so this is `false` today and the predicate
-    // refuses. It is passed rather than hardcoded so that turning mounting on
-    // does not silently re-open the gap.
+    // Mounting is ON (`MULTI_LAYER_MOUNT_ENABLED`), but it reaches static layers
+    // only: `setLayerPlacement` places `_clouds` entries and a stream is not
+    // one, so no resident node is ever in the project frame and this is `false`.
     return streamingMayCombine(staticCount, this._streamingCompatibility(), false);
   }
 
@@ -3607,14 +3604,6 @@ export class Viewer {
   }
 
   /**
-   * A PointCloud built from the streaming cloud's resident (decoded-so-far)
-   * nodes — the honest display-resolution snapshot the Export / Convert panel
-   * writes when a streaming scan is open. Returns null when no streaming cloud
-   * is attached or nothing is resident yet. Full-resolution re-read isn't
-   * available for a range-read streaming source, so this snapshot is exactly
-   * what the viewer holds; positions carry the render origin as their shift.
-   */
-  /**
    * The resident nodes an export would actually write: the deterministic leaf
    * frontier (Gate 5) — the deepest resident node per octree path, with
    * ancestors that have a resident descendant and anything mid-fade dropped, so
@@ -3657,16 +3646,27 @@ export class Viewer {
     return total;
   }
 
+  /**
+   * A PointCloud built from the streaming cloud's resident (decoded-so-far)
+   * nodes — what the Export / Convert panel writes, a range-read source having
+   * no full-resolution re-read. Positions carry the render origin as their
+   * shift. Null when nothing is streaming or resident, or the kind names no
+   * format: `laz` was stamped on every snapshot, so a 3D Tiles deliverable
+   * claimed bytes it never read. COPC is a LAZ file, EPT decodes LAS records, a
+   * point tile is `pnts`, and an OLV tile store's manifest names none.
+   */
   snapshotResidentCloud(): PointCloud | null {
     const s = this._streaming;
     if (!s) return null;
+    const sourceFormat = ({ copc: 'laz', ept: 'laz', '3dtiles': 'pnts', tiles: null } satisfies Record<StreamingSourceKind, SourceFormat | null>)[s.cloud.kind];
+    if (sourceFormat === null) return null;
     const chunks = this._exportFrontierChunks();
     if (chunks.length === 0) return null;
     const crs = s.cloud.crs();
     return buildResidentSnapshot(chunks, {
       origin: s.cloud.renderOrigin,
       name: s.cloud.name,
-      sourceFormat: 'laz', // COPC and EPT both decode LAZ point records
+      sourceFormat,
       sourcePointCount: s.cloud.sourcePointCount ?? undefined,
       ...(crs ? { metadata: { crs } } : {}),
     });
