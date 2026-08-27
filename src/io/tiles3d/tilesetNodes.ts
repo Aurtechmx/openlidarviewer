@@ -28,6 +28,7 @@ import type { Box6, StreamingNodeRecord } from '../copc/copcTypes';
 import type { Mat4 } from './tileTransform';
 import { walkTilePlacements } from './tileTransform';
 import { volumeToAabb } from './tilesetTraversal';
+import type { Aabb } from './boundingVolume';
 import { resolveTilesetContentUrl, tilesetBaseUrl, tilesetUrlSearch } from './tilesetUrl';
 import type { Tileset } from './tileset';
 
@@ -77,6 +78,39 @@ export interface TilesetNodeIndex {
   readonly transform: ReadonlyMap<string, Mat4>;
   /** Tiles skipped, and why. Never silent: a dropped tile is missing data. */
   readonly skipped: readonly string[];
+}
+
+/**
+ * A region's bounds put in the same frame as the points that fill them.
+ *
+ * `volumeToAabb` converts a `region` DIRECTLY to ECEF, because a region is
+ * EPSG:4979 and absolute; a box or a sphere arrives already carried through the
+ * tile transform by the walk. The points of a geocentric tileset, though, are
+ * decoded through that transform, root frame included, so they land in the
+ * local ENU frame while a region's box stayed 6,000 km away at the ECEF radius.
+ * The scheduler culls node bounds against the camera, so bounds in one frame
+ * and points in another means it culls against nothing the user is looking at.
+ *
+ * All eight corners are carried across and re-bounded, which is conservative:
+ * a rotated box's axis-aligned bound is larger than the original, never smaller,
+ * so a tile can be admitted that need not have been but none is culled that
+ * should have been drawn.
+ */
+function aabbThroughMatrix(aabb: Aabb, m: readonly number[]): Aabb {
+  const xs: number[] = [], ys: number[] = [], zs: number[] = [];
+  for (const cx of [aabb.min[0], aabb.max[0]]) {
+    for (const cy of [aabb.min[1], aabb.max[1]]) {
+      for (const cz of [aabb.min[2], aabb.max[2]]) {
+        xs.push(m[0] * cx + m[4] * cy + m[8] * cz + m[12]);
+        ys.push(m[1] * cx + m[5] * cy + m[9] * cz + m[13]);
+        zs.push(m[2] * cx + m[6] * cy + m[10] * cz + m[14]);
+      }
+    }
+  }
+  return {
+    min: [Math.min(...xs), Math.min(...ys), Math.min(...zs)],
+    max: [Math.max(...xs), Math.max(...ys), Math.max(...zs)],
+  };
 }
 
 /** An AABB as the streaming model's flat six-number box. */
@@ -130,7 +164,13 @@ export function tilesetNodes(
       continue;
     }
 
-    const aabb = volumeToAabb(placed.boundingVolume);
+    const raw = volumeToAabb(placed.boundingVolume);
+    // A region skipped the walk's transform, so it needs the root frame applied
+    // here or its bounds describe a different place from its points.
+    const aabb =
+      raw !== null && placed.boundingVolume.region !== undefined && rootTransform !== undefined
+        ? aabbThroughMatrix(raw, rootTransform)
+        : raw;
     if (aabb == null) {
       skipped.push(`${uri}: bounding volume carries none of box, region or sphere.`);
       continue;
