@@ -118,3 +118,76 @@ test('decodeEptLaszipTile refuses a tile whose scale overflows a coordinate', as
     /non-finite coordinate at point/,
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GPS time is the one channel a LAS point record can genuinely lack.
+//
+// A LAZ-backed EPT tile is a complete LAS file, so intensity, the return bits,
+// classification and point source id are structurally in every supported
+// record (PDRF 0-3 and 6-8) and are always readings. GPS time is not: PDRF 0
+// and 2 carry no GPS field at all. The decoder used to allocate a full-length
+// Float64Array regardless, so every point of such a tile reported a GPS time of
+// exactly zero — a measurement the file never made.
+//
+// `tiny-pdrf0.laz` and `tiny-pdrf1.laz` are the A/B pair: 8 points of identical
+// data, written with laspy at point_format 0 and 1, version 1.2, scales
+// [0.001, 0.001, 0.001] and zero offsets:
+//   x = i·1.0, y = i·2.0, z = i·0.5, intensity = i·100 + 7,
+//   classification = [2,2,5,5,1,1,6,6], return_number = [1,2]·4,
+//   number_of_returns = 2 for every point
+// PDRF 1 additionally carries gps_time = 100.5 + i·0.25. Same points, one
+// format with a GPS field and one without, so the only difference the tests can
+// see is the one the fix is about.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function tileBuffer(name: string): ArrayBuffer {
+  const bytes = readFileSync(join(__dirname, 'fixtures', name));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+
+const PDRF0_LAZ_BUF = tileBuffer('tiny-pdrf0.laz');
+const PDRF1_LAZ_BUF = tileBuffer('tiny-pdrf1.laz');
+
+test('a PDRF 0 tile carries no gpsTime channel', async () => {
+  const decoded = await decodeEptLaszipTile(PDRF0_LAZ_BUF, [0, 0, 0]);
+  expect(decoded.pointCount).toBe(8);
+  expect(decoded.gpsTime).toBeUndefined();
+});
+
+test('a PDRF 0 tile still carries the channels its records do hold', async () => {
+  // The fields above are in every PDRF 0 record, so dropping them alongside
+  // GPS time would lose real readings. Values are the ones written into the
+  // fixture, read back exactly.
+  const decoded = await decodeEptLaszipTile(PDRF0_LAZ_BUF, [0, 0, 0]);
+  expect([...decoded.intensity!]).toEqual([7, 107, 207, 307, 407, 507, 607, 707]);
+  expect([...decoded.classification!]).toEqual([2, 2, 5, 5, 1, 1, 6, 6]);
+  expect([...decoded.returnNumber!]).toEqual([1, 2, 1, 2, 1, 2, 1, 2]);
+  expect([...decoded.returnCount!]).toEqual([2, 2, 2, 2, 2, 2, 2, 2]);
+  expect(decoded.pointSourceId).toHaveLength(8);
+  // x = i·1.0, y = i·2.0, z = i·0.5 for i in 0..7.
+  for (let i = 0; i < 8; i++) {
+    expect(decoded.positions[i * 3]).toBeCloseTo(i, 3);
+    expect(decoded.positions[i * 3 + 1]).toBeCloseTo(i * 2, 3);
+    expect(decoded.positions[i * 3 + 2]).toBeCloseTo(i * 0.5, 3);
+  }
+});
+
+test('the same points at PDRF 1 keep gpsTime, with the times the file stores', async () => {
+  // The counterpart the fix must not touch. Same eight points as the PDRF 0
+  // fixture; the only change is a format whose records carry GPS time, and the
+  // channel comes back with the written values rather than a run of zeroes.
+  const decoded = await decodeEptLaszipTile(PDRF1_LAZ_BUF, [0, 0, 0]);
+  expect([...decoded.gpsTime!]).toEqual([
+    100.5, 100.75, 101, 101.25, 101.5, 101.75, 102, 102.25,
+  ]);
+  expect([...decoded.intensity!]).toEqual([7, 107, 207, 307, 407, 507, 607, 707]);
+  expect([...decoded.classification!]).toEqual([2, 2, 5, 5, 1, 1, 6, 6]);
+});
+
+test('a PDRF 6 tile keeps its gpsTime channel', async () => {
+  // tiny.laz is PDRF 6, whose records carry a GPS field. Every time it stores
+  // is 0.0, and those zeroes are readings the file made — which is exactly what
+  // a PDRF 0 tile's absent channel is not.
+  const decoded = await decodeEptLaszipTile(TINY_LAZ_BUF, [0, 0, 0]);
+  expect(decoded.gpsTime).toHaveLength(12);
+});

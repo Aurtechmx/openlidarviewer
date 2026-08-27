@@ -34,6 +34,8 @@
  * **Supported point formats:** PDRF 0-3 (legacy, no GPS time / GPS time)
  * and PDRF 6-8 (extended). Other formats throw a typed error so the
  * Studio gates surface a clear message instead of producing garbage.
+ * PDRF 0 and 2 have no GPS field, so a tile in either leaves the chunk's
+ * `gpsTime` absent rather than reporting a time of zero at every point.
  *
  * Pure of three.js. Async only through the laz-perf WASM initialisation
  * promise (cached after the first call across the entire session).
@@ -219,7 +221,14 @@ export function decodeEptLaszipTileWith(
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);
   const pointSourceId = new Uint16Array(n);
-  const gpsTime = new Float64Array(n);  // always allocated (cheap) — see DecodedChunk
+  // GPS time is the one measured channel a supported LAS record can genuinely
+  // lack: PDRF 0 and 2 carry no GPS field, which is what a null `gpsTimeOffset`
+  // means. Allocating regardless gave every point of such a tile a GPS time of
+  // exactly zero — a reading the file never took. Gated on the same offset the
+  // loop reads from, so the two cannot drift apart. Intensity, the return bits,
+  // classification and point source id are structural in every record of every
+  // supported format (PDRF 0-3, 6-8), so they stay unconditional.
+  const gpsTime = ctx.gpsTimeOffset !== null ? new Float64Array(n) : undefined;
   let rgb: Uint8Array | undefined;
   if (ctx.hasRgb) rgb = new Uint8Array(n * 3);
   // Stage raw 16-bit colour so the 8-bit-in-low-byte vs true-16-bit narrowing
@@ -272,7 +281,7 @@ export function decodeEptLaszipTileWith(
 
       pointSourceId[i] = heap.getUint16(pointPtr + ctx.pointSourceOffset, true);
 
-      if (ctx.gpsTimeOffset !== null) {
+      if (gpsTime && ctx.gpsTimeOffset !== null) {
         gpsTime[i] = heap.getFloat64(pointPtr + ctx.gpsTimeOffset, true);
       }
 
