@@ -245,6 +245,21 @@ export class EptStreamingPointCloud implements StreamingSource {
   }
 
   /**
+   * Whether the tiles carry GPS time, from the `ept.json` schema — the same
+   * declaration {@link availableColorModes} reads for every other channel.
+   *
+   * X, Y and Z are the only dimensions an EPT must declare, so a pyramid that
+   * names no `GpsTime` has none. The answer covers both `dataType`s: the schema
+   * describes the point layout the writer produced, so a laszip pyramid whose
+   * tiles are PDRF 0 or 2 declares no `GpsTime` either. This is metadata, not a
+   * decode, so it is available before the first tile lands, which is when the
+   * export panel has to decide what to offer.
+   */
+  hasGpsTime(): boolean {
+    return this._schemaHas('GpsTime');
+  }
+
+  /**
    * the CRS extracted from `ept.json`'s `srs` object. Prefers the WKT (richest),
    * then falls back to the authority codes (`horizontal` / `vertical`). When the
    * WKT carries no vertical datum but the codes name one, the vertical datum is

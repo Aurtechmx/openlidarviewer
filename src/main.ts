@@ -166,7 +166,7 @@ import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 // Type-only: the overlay itself rides a lazy chunk (loadColorbarOverlay).
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
 import { estimateDecodedBytes, estimateGpuBytes, type StreamingQuality } from './render/streaming/streamingBudget';
-import { streamingSourceLabel, type StreamingSourceKind } from './render/streaming/StreamingSource';
+import { streamingHasGpsTime, streamingSourceLabel, type StreamingSourceKind } from './render/streaming/StreamingSource';
 import { isZUpFormat } from './io/sniffFormat';
 // `exportCloud` is dynamically imported via `loadExporters` in the onExport
 // callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
@@ -2956,8 +2956,8 @@ const exportPanel = new ExportPanel({
       // promised roughly twice the points and bytes the write delivered.
       pointCount: viewer.exportFrontierPointTotal(),
       hasRgb: sc.availableColorModes().includes('rgb'),
-      // COPC/EPT point records (PDRF 6/7/8) carry GPS time.
-      hasGpsTime: true,
+      // Only what THIS source's metadata establishes; see streamingHasGpsTime.
+      hasGpsTime: streamingHasGpsTime(sc),
       crsName: rc.name,
       hasWkt: rc.wkt != null,
       // Streaming classification is read straight from the source records — a
