@@ -29,7 +29,9 @@ import type { RangeSource } from '../src/io/range/RangeSource';
 import { fakeOpfs } from './support/fakeOpfs';
 import { buildLocalOocStore } from '../src/io/heavy/localOocBuild';
 import { OlvTileSource } from '../src/io/heavy/OlvTileSource';
+import { LoadError } from '../src/io/loadErrors';
 import {
+  describeHeavyRefusal,
   openLocalHeavyLas,
   type HeavyLasBridgeDeps,
   type HeavyLasBridgeEnv,
@@ -260,7 +262,7 @@ describe('openLocalHeavyLas — the out-of-core local LAS bridge', () => {
     expect(attachStreamingCloud).not.toHaveBeenCalled();
   });
 
-  it('falls back (unavailable) when OPFS or workers are absent', async () => {
+  it('refuses fail-closed (heavy) when a HEAVY file finds OPFS or workers absent', async () => {
     const buffer = lasBytes(160_000);
     const { range } = counting(new ArrayBufferRangeSource(buffer));
     const { file } = spyFile('heavy.las', buffer.byteLength);
@@ -269,7 +271,26 @@ describe('openLocalHeavyLas — the out-of-core local LAS bridge', () => {
 
     const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
 
+    // The file IS heavy, so an absent out-of-core platform is a fail-closed
+    // refusal, NOT a fall-through: `heavy` is true so the caller must not reach
+    // the whole-file loader that would hit the same too-large allocation.
     expect(result.status).toBe('unavailable');
+    if (result.status === 'unavailable') expect(result.heavy).toBe(true);
+    expect(attachStreamingCloud).not.toHaveBeenCalled();
+  });
+
+  it('leaves a NOT-heavy file on the whole-file path even when OPFS or workers are absent', async () => {
+    // Heaviness is decided BEFORE capability: a small LAS on a browser without
+    // OPFS still opens whole. The capability probe never refuses a small file.
+    const buffer = lasBytes(40_000);
+    const { range } = counting(new ArrayBufferRangeSource(buffer));
+    const { file } = spyFile('small.las', buffer.byteLength);
+    const { deps, attachStreamingCloud } = makeDeps({ deviceMemoryGB: 8 });
+    const { env } = makeEnv({ range, capable: false });
+
+    const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
+
+    expect(result.status).toBe('not-heavy');
     expect(attachStreamingCloud).not.toHaveBeenCalled();
   });
 
@@ -287,10 +308,40 @@ describe('openLocalHeavyLas — the out-of-core local LAS bridge', () => {
 
     expect(result.status).toBe('refused');
     if (result.status === 'refused') {
+      expect(result.heavy).toBe(true);
       expect(result.error.message).toContain('heavy.las');
     }
     // Nothing was attached and nothing was written to OPFS.
     expect(attachStreamingCloud).not.toHaveBeenCalled();
     expect(opfs.topLevel()).toEqual([]);
+  });
+});
+
+describe('describeHeavyRefusal — the named, actionable refusal sentence', () => {
+  it('names no browser storage and points to COPC/EPT when unavailable', () => {
+    const msg = describeHeavyRefusal({
+      status: 'unavailable',
+      heavy: true,
+      reason: 'OPFS or Web Workers unavailable',
+    });
+    expect(msg).toMatch(/storage/i);
+    expect(msg).toContain('OPFS or Web Workers unavailable');
+    expect(msg).toMatch(/COPC or EPT/);
+  });
+
+  it('names a failed index build and points to COPC/EPT when the build threw', () => {
+    const msg = describeHeavyRefusal({
+      status: 'failed',
+      heavy: true,
+      error: new Error('worker crashed'),
+    });
+    expect(msg).toMatch(/could not be built/);
+    expect(msg).toMatch(/COPC or EPT/);
+  });
+
+  it('passes the preflight sentence through unchanged when refused', () => {
+    const error = new LoadError('memory-constraint', 'big.las: needs 9 GB, 2 GB free. Convert to COPC or EPT.');
+    const msg = describeHeavyRefusal({ status: 'refused', heavy: true, error });
+    expect(msg).toBe(error.message);
   });
 });

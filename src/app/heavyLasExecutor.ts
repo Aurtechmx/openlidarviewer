@@ -58,8 +58,10 @@ function heavyStoreName(file: File): string {
 /**
  * Build the tile store, reopen it from OPFS, and attach it as a streaming scan.
  * Called only when the decision half has confirmed the plan routes this file out
- * of core. Every failure path returns a non-`attached` status the caller reads
- * as "fall back to the whole-file loader", so this can never leave a blank scene.
+ * of core, so every failure path here is a CONFIRMED-heavy failure: it returns a
+ * non-`attached`, `heavy: true` status the caller reads as "refuse, do not fall
+ * back", because the whole-file loader would face the same too-large allocation.
+ * `cancelled` is the one non-heavy tag: the user stopped the open on purpose.
  */
 export async function executeHeavyLasBuild(
   file: File,
@@ -73,19 +75,21 @@ export async function executeHeavyLasBuild(
   const runIndex = env.runIndex ?? ((request) => new LocalOocIndexerClient().run(request));
 
   const root = await getOpfsRoot();
-  if (root === null) return { status: 'unavailable', reason: 'no OPFS root' };
+  if (root === null) return { status: 'unavailable', heavy: true, reason: 'no OPFS root' };
 
   // The disk guard. Sized from the declared point count and the record schema,
-  // it refuses BEFORE any byte is written when the tile cache would not fit —
-  // the fail-closed answer when storage cannot even be read.
+  // it refuses BEFORE any byte is written when the tile cache would not fit, or
+  // when storage cannot even be read. The file is already confirmed heavy, so
+  // this refusal reaches the user rather than falling through to a whole-file
+  // load that would hit the same ceiling.
   const verdict = await storagePreflight(
     { pointCount: facts.declaredPointCount, schema: facts.schema },
     readStorage,
   );
   if (!verdict.proceed) {
     const error = storagePreflightRefusal(verdict, file.name);
-    if (error) return { status: 'refused', error };
-    return { status: 'unavailable', reason: 'preflight refused without a message' };
+    if (error) return { status: 'refused', heavy: true, error };
+    return { status: 'unavailable', heavy: true, reason: 'preflight refused without a message' };
   }
 
   try {
@@ -117,8 +121,8 @@ export async function executeHeavyLasBuild(
     if (err instanceof LoadCancelledError || (err as { name?: string })?.name === 'AbortError') {
       return { status: 'cancelled' };
     }
-    if (deps.debug) console.warn('[heavy-las] out-of-core open failed; falling back', err);
-    return { status: 'failed', error: err };
+    if (deps.debug) console.warn('[heavy-las] out-of-core open failed; refusing', err);
+    return { status: 'failed', heavy: true, error: err };
   }
 }
 

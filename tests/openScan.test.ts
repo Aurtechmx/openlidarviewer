@@ -1,10 +1,26 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// The out-of-core LAS bridge is mocked so this suite can drive `openScan`'s
+// routing against every bridge outcome without a real header peek, worker or
+// OPFS. It defaults to `not-heavy` so the pre-existing static-loader tests below
+// keep reaching `loadLocalSource` exactly as before; individual tests override
+// `heavyResult` to return `attached`, `cancelled`, or a fail-closed heavy status.
+let heavyResult: HeavyOpenResult = { status: 'not-heavy' };
+vi.mock('../src/app/openLocalHeavyLas', async (importActual) => ({
+  // Keep the REAL `describeHeavyRefusal` (a pure string builder `openScan` calls
+  // to phrase the refusal); only the async bridge decision is stubbed.
+  ...(await importActual<typeof import('../src/app/openLocalHeavyLas')>()),
+  openLocalHeavyLas: vi.fn(async () => heavyResult),
+}));
+
 import {
   openScan,
   layerChipCount,
   shouldResetSavedWork,
   type OpenScanDeps,
 } from '../src/app/openScan';
+import type { HeavyOpenResult } from '../src/app/heavyLasTypes';
+import { LoadError } from '../src/io/loadErrors';
 import { COPC_DETECT_MIN_BYTES } from '../src/io/copc/copcDetect';
 import type { Viewer } from '../src/render/Viewer';
 import type { ClassScope } from '../src/render/class/classScope';
@@ -156,6 +172,10 @@ function makeDeps(over: { loading?: boolean } = {}) {
   return { deps, calls };
 }
 
+beforeEach(() => {
+  heavyResult = { status: 'not-heavy' };
+});
+
 describe('openScan — the file router', () => {
   it('routes an .olvsession to the session loader UNDER the load guard, never the cloud worker', async () => {
     const { deps, calls } = makeDeps();
@@ -213,5 +233,87 @@ describe('openScan — the file router', () => {
     expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
     expect(calls.setLoading).toHaveBeenNthCalledWith(1, true);
     expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The fail-CLOSED contract for heavy LAS. The out-of-core architecture is
+// fail-SAFE: a heavy file whose out-of-core index could not be built must NOT
+// fall through to the whole-file loader, whose `new Uint8Array(total)` is the
+// very allocation that made the file heavy. It must refuse instead. A file that
+// is NOT heavy keeps falling through, so this is a fail-closed for heavy files
+// only, never a blanket refusal.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('openScan — heavy-LAS fail-closed routing', () => {
+  const refusalPreflight = new LoadError(
+    'memory-constraint',
+    'big.las: not enough storage for the streaming index. Convert it to COPC or EPT.',
+  );
+
+  it('NEVER calls loadLocalSource for a KNOWN-HEAVY LAS when the bridge is unavailable', async () => {
+    heavyResult = { status: 'unavailable', heavy: true, reason: 'OPFS or Web Workers unavailable' };
+    const { deps, calls } = makeDeps();
+    await openScan(fakeFile('big.las', new ArrayBuffer(0)), deps);
+    expect(calls.loadLocalSource).not.toHaveBeenCalled();
+    // The refusal is surfaced to the user on the drop zone.
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+    expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it('NEVER calls loadLocalSource for a KNOWN-HEAVY LAS when the bridge refused (preflight)', async () => {
+    heavyResult = { status: 'refused', heavy: true, error: refusalPreflight };
+    const { deps, calls } = makeDeps();
+    await openScan(fakeFile('big.las', new ArrayBuffer(0)), deps);
+    expect(calls.loadLocalSource).not.toHaveBeenCalled();
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('NEVER calls loadLocalSource for a KNOWN-HEAVY LAS when the bridge build failed', async () => {
+    heavyResult = { status: 'failed', heavy: true, error: new Error('index build threw') };
+    const { deps, calls } = makeDeps();
+    await openScan(fakeFile('big.las', new ArrayBuffer(0)), deps);
+    expect(calls.loadLocalSource).not.toHaveBeenCalled();
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('STILL calls loadLocalSource for a NOT-heavy file on the same bridge statuses', async () => {
+    for (const status of [
+      { status: 'unavailable', heavy: false, reason: 'OPFS or Web Workers unavailable' },
+      { status: 'failed', heavy: false, error: new Error('x') },
+    ] as HeavyOpenResult[]) {
+      heavyResult = status;
+      const { deps, calls } = makeDeps();
+      await openScan(fakeFile('small.las', new ArrayBuffer(0)), deps);
+      // Not heavy → the whole-file loader is free to take it (it rejects here,
+      // which is the loader-not-exercised stub, proving it WAS reached).
+      expect(calls.loadLocalSource).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('surfaces a refusal message that names the reason and points to COPC/EPT', async () => {
+    heavyResult = { status: 'refused', heavy: true, error: refusalPreflight };
+    const { deps, calls } = makeDeps();
+    await openScan(fakeFile('big.las', new ArrayBuffer(0)), deps);
+    const message = calls.setError.mock.calls[0][0] as string;
+    expect(message).toContain('storage');
+    expect(message).toMatch(/COPC|EPT/);
+  });
+
+  it('surfaces a named reason for an unavailable heavy file and points to COPC/EPT', async () => {
+    heavyResult = { status: 'unavailable', heavy: true, reason: 'OPFS or Web Workers unavailable' };
+    const { deps, calls } = makeDeps();
+    await openScan(fakeFile('big.las', new ArrayBuffer(0)), deps);
+    const message = calls.setError.mock.calls[0][0] as string;
+    expect(message).toMatch(/storage|browser/i);
+    expect(message).toMatch(/COPC|EPT/);
+  });
+
+  it('stops on attached and cancelled without calling the whole-file loader', async () => {
+    heavyResult = { status: 'cancelled' };
+    const cancelled = makeDeps();
+    await openScan(fakeFile('big.las', new ArrayBuffer(0)), cancelled.deps);
+    expect(cancelled.calls.loadLocalSource).not.toHaveBeenCalled();
+    expect(cancelled.calls.setError).not.toHaveBeenCalled();
   });
 });

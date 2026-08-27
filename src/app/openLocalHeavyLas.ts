@@ -16,12 +16,18 @@
  * delegates there only after the plan has already routed the file out of core,
  * so a small LAS, any LAZ, or a non-capable environment never loads that chunk.
  *
- * FAIL SAFE, ALWAYS. This wires into the live file-open path, so it must never
- * make a working open worse. Every way the out-of-core path can decline — the
- * plan says no, OPFS or workers are absent, the preflight refuses, the build or
- * the attach throws before the commit — returns a status the caller reads as
- * "fall back to the whole-file loader". A crash or a blank scene where the file
- * used to open is the one outcome this function exists to prevent.
+ * FAIL SAFE FOR SMALL FILES, FAIL CLOSED FOR HEAVY ONES. This wires into the
+ * live file-open path. Heaviness is decided FIRST, independently of capability:
+ * the cheap header peek and the same {@link planLoad} the loader runs. A file
+ * the plan does NOT route out of core returns `not-heavy` and the caller loads
+ * it whole, exactly as before — a browser without OPFS still opens every small
+ * LAS. But once a file is CONFIRMED heavy, the whole-file loader is not a safe
+ * answer: its single `new Uint8Array(total)` is the very allocation that made
+ * the file heavy, so for a heavy file every way the out-of-core path can decline
+ * — OPFS or workers absent, the preflight refuses, the build throws — returns a
+ * `heavy: true` status the caller reads as "refuse and tell the user", never
+ * "fall back". Falling a heavy file through to the whole-file loader would trade
+ * a clean refusal for an out-of-memory crash; that is the outcome this guards.
  */
 import type { RangeSource } from '../io/range/RangeSource';
 import { LocalFileRangeSource } from '../io/range/LocalFileRangeSource';
@@ -47,6 +53,36 @@ export type {
   HeavyOpenResult,
   LasHeaderFacts,
 } from './heavyLasTypes';
+
+/**
+ * The user-facing sentence for a heavy file the out-of-core path could not open.
+ * Every branch names why the file could not stream AND points at the real way
+ * out — converting to COPC or EPT, which stream from the file and write no local
+ * cache. Never generic: the whole point of the fail-closed change is that the
+ * user learns the true reason instead of watching the tab run out of memory.
+ *
+ * Only `unavailable`, `refused` and `failed` reach here, and only when `heavy`
+ * is true; the router guarantees that before calling it.
+ */
+export function describeHeavyRefusal(
+  result: Extract<HeavyOpenResult, { status: 'unavailable' | 'refused' | 'failed' }>,
+): string {
+  const convert =
+    'Convert it to COPC or EPT (with PDAL or untwine) and open that instead, which streams ' +
+    'from the file and writes no local cache.';
+  if (result.status === 'refused') {
+    // The preflight already built a precise sentence (the file name, the bytes
+    // it needed against what was free, and the same convert advice); keep it.
+    return result.error.message;
+  }
+  if (result.status === 'unavailable') {
+    return (
+      'This LAS is too large to open in one piece, and this browser has no storage for the ' +
+      `streaming index (${result.reason}). ${convert}`
+    );
+  }
+  return `This LAS is too large to open in one piece, and its streaming index could not be built. ${convert}`;
+}
 
 /** How many header bytes to peek. The LAS public header is 375 bytes; this is
  *  generous slack, and always far smaller than a file that routes out of core. */
@@ -116,8 +152,9 @@ function defaultOpenRange(file: File): RangeSource {
 
 /**
  * Attempt to open `file` through the out-of-core build. See the module header
- * for the fail-safe contract: any non-`attached` result is the caller's cue to
- * fall back to the whole-file loader (or, for `refused`, to surface the message).
+ * for the contract: a `not-heavy` result is the caller's cue to load the file
+ * whole; a `heavy: true` `unavailable` / `refused` / `failed` is its cue to
+ * refuse and surface the message; `attached` / `cancelled` are terminal.
  */
 export async function openLocalHeavyLas(
   file: File,
@@ -128,12 +165,11 @@ export async function openLocalHeavyLas(
   const capable = env.capable ?? defaultCapable;
   const openRange = env.openRange ?? defaultOpenRange;
 
-  // Capability probe first, before any read: without OPFS and workers the
-  // out-of-core path cannot run, and the whole-file loader is the answer. In a
-  // Node/JSDOM harness neither exists, so this returns immediately and the live
-  // open path behaves exactly as it did before this module.
-  if (!capable()) return { status: 'unavailable', reason: 'OPFS or Web Workers unavailable' };
-
+  // Heaviness FIRST, before the capability probe. The header peek is a small
+  // ranged read that is cheap even where the out-of-core path cannot run, and it
+  // is what tells us whether a fall-through to the whole-file loader is safe. A
+  // file whose header does not parse as an uncompressed LAS is not one this path
+  // handles, so it is not-heavy and the whole-file loader takes it.
   const facts = await peekLasHeaderFacts(openRange(file), signal);
   if (facts === null) return { status: 'not-heavy' };
 
@@ -151,9 +187,20 @@ export async function openLocalHeavyLas(
   });
   if (!plan.buildThenStream) return { status: 'not-heavy' };
 
-  // Only now, with the file confirmed heavy, load the out-of-core execution
-  // chunk. The decision path above never triggers this import, so the eager
-  // shell never pays for the cluster.
+  // The file is CONFIRMED heavy from here on. Now the capability probe: without
+  // OPFS and workers the out-of-core path cannot run, and the whole-file loader
+  // is NOT a safe fall-back for a heavy file — it faces the same too-large
+  // allocation. So this refuses (`heavy: true`) rather than falling through. In
+  // a Node/JSDOM harness neither Worker nor OPFS exists, but a test injects
+  // `env.capable`, so this branch is exercised deliberately, not by the harness.
+  if (!capable()) {
+    return { status: 'unavailable', heavy: true, reason: 'OPFS or Web Workers unavailable' };
+  }
+
+  // With the file confirmed heavy and the platform capable, load the out-of-core
+  // execution chunk. The decision path above never triggers this import, so the
+  // eager shell never pays for the cluster. Every non-`attached`/`cancelled`
+  // result it returns is a confirmed-heavy failure the caller must surface.
   const { executeHeavyLasBuild } = await loadHeavyLasExecutor();
   return executeHeavyLasBuild(file, signal, facts, deps, env);
 }

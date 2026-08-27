@@ -26,7 +26,7 @@ import { describeLoadError } from '../io/loadErrors';
 import { formatTelemetry } from '../io/loadTelemetry';
 import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
 import { LoadCancelledError } from '../io/loadFile';
-import { openLocalHeavyLas } from './openLocalHeavyLas';
+import { openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
 import type { OpenStreamingDeps } from './openStreaming';
 import { availableModes } from '../render/colorModes';
 import { recommendColorMode } from '../render/colorModeRecommend';
@@ -259,11 +259,13 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // A large uncompressed LAS whose whole-file load would exceed the memory
     // ceiling is built into an out-of-core OPFS tile store and streamed, rather
     // than materialised as one ArrayBuffer. The bridge reads only the header
-    // first and decides: it returns `attached` only when a streaming scan is on
-    // screen, and every other outcome — the plan does not route out of core,
-    // OPFS or workers are absent, the storage preflight refuses, or the build
-    // failed before commit — falls through to the whole-file loader below
-    // unchanged, so the out-of-core path can never make a working open worse.
+    // first and decides. It returns `attached` when a streaming scan is on
+    // screen and `cancelled` when the user stopped; `not-heavy` means the file
+    // was never routed out of core, so the whole-file loader below takes it
+    // unchanged. But a `heavy: true` `unavailable` / `refused` / `failed` means
+    // the file IS heavy and the out-of-core path could not run: the whole-file
+    // loader would face the same too-large allocation, so this REFUSES with a
+    // named reason instead of falling through into an out-of-memory crash.
     const heavy = await openLocalHeavyLas(file, controller.signal, {
       viewerReady: deps.viewerReady,
       getViewer: deps.getViewer,
@@ -290,6 +292,20 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     if (heavy.status === 'cancelled') {
       deps.dropZone.setCancelHandler(null);
       deps.dropZone.setProgress(null);
+      return;
+    }
+    // A CONFIRMED-heavy file whose out-of-core index could not be built must NOT
+    // reach the whole-file loader. Surface the named reason on the drop zone the
+    // same way a load failure is surfaced, and stop. `not-heavy` (and a
+    // defensive `heavy: false`) still falls through to the loader below.
+    if (heavy.status !== 'not-heavy' && heavy.heavy) {
+      deps.dropZone.setCancelHandler(null);
+      deps.dropZone.setProgress(null);
+      const message = describeHeavyRefusal(heavy);
+      if (deps.debug) {
+        console.error('OpenLiDARViewer — heavy LAS refused (out-of-core unavailable)', heavy);
+      }
+      deps.dropZone.setError(message);
       return;
     }
     // Phones get a tighter point budget — limited GPU memory and fill-rate.
