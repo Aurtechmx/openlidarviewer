@@ -34,6 +34,18 @@ describe('runQaChecks', () => {
     expect(worstStatus(checks)).toBe('block');
   });
 
+  it('a source that states no point total reviews file integrity rather than blocking it', () => {
+    // A stated zero means the scan is empty. An unstated total (a 3D Tiles
+    // tileset states none) means the check could not be run, so it reviews:
+    // blocking would report an empty scan that is drawn on screen.
+    const checks = runQaChecks(facts({ kind: 'streaming', pointCount: null }));
+    const integrity = byId(checks, 'FILE_INTEGRITY');
+    expect(integrity.status).toBe('review');
+    expect(integrity.reason).not.toMatch(/no points/i);
+    // Independence holds: the other axes answer on their own evidence.
+    expect(byId(checks, 'SPATIAL_REFERENCE').status).toBe('pass');
+  });
+
   it('a missing CRS blocks only the spatial-reference check (fail closed)', () => {
     const checks = runQaChecks(facts({ crs: null }));
     expect(byId(checks, 'SPATIAL_REFERENCE').status).toBe('block');

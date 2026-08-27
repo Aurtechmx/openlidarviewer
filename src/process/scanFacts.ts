@@ -22,7 +22,9 @@ export interface RawScanSignals {
   readonly kind?: 'static' | 'streaming';
   readonly coverage?: Coverage;
   readonly crs?: CrsInfo | ResolvedCrs | null;
-  readonly pointCount?: number;
+  /** The total the source STATES. Omitted (or null) when it states none —
+   *  a format without a point total, not a scan that is empty. */
+  readonly pointCount?: number | null;
   readonly hasRgb?: boolean;
   readonly hasIntensity?: boolean;
   readonly hasGpsTime?: boolean;
@@ -46,6 +48,11 @@ export interface RawScanSignals {
  *   shell did not report is `resident-only` (the honest floor — we cannot claim
  *   to have seen more than the resident set). An explicit coverage is kept.
  * - `crs` defaults to null — an unknown CRS is never assumed to be anything.
+ * - `pointCount` is null when the caller states none. It is NOT defaulted to 0:
+ *   zero is a stated measurement ("this scan is empty") and inventing it for a
+ *   source that simply carries no total is a false claim about the data. A
+ *   stated but non-finite figure still falls to 0, unchanged — garbage in is
+ *   fail-closed, silence is not.
  * - feature flags default to false; `classification` defaults to `none`.
  * - `groundClassified` is true only when it is explicitly true AND some
  *   classification is present, so "trusted ground" can never sit on an
@@ -71,7 +78,10 @@ export function deriveScanFacts(raw: RawScanSignals): ScanFacts {
     kind,
     coverage,
     crs: raw.crs ?? null,
-    pointCount: Number.isFinite(raw.pointCount) ? Math.max(0, raw.pointCount as number) : 0,
+    pointCount:
+      raw.pointCount == null
+        ? null
+        : (Number.isFinite(raw.pointCount) ? Math.max(0, raw.pointCount) : 0),
     hasRgb: raw.hasRgb === true,
     hasIntensity: raw.hasIntensity === true,
     hasGpsTime: raw.hasGpsTime === true,

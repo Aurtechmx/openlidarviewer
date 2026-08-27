@@ -291,6 +291,17 @@ describe('the streaming Scan Report in the shell', () => {
     expect(main.match(/cloud\.sourcePointCount\.toLocaleString/g) ?? []).toHaveLength(1);
   });
 
+  it('carries the absent total by type, with no cast to paper over it', () => {
+    // `StreamingReportInput.sourcePointCount` is `number | null`, so the tileset
+    // path assigns the null directly. A cast here would let a future `number`
+    // field silently accept a null again and reach `.toLocaleString`.
+    const open = readFileSync(resolve(ROOT, 'src/app/openTilesetLayer.ts'), 'utf8');
+    expect(open).toContain('sourcePointCount: cloud.sourcePointCount,');
+    expect(open).not.toMatch(/sourcePointCount[^\n]*as unknown as/);
+    const streaming = readFileSync(resolve(ROOT, 'src/app/openStreaming.ts'), 'utf8');
+    expect(streaming).toMatch(/readonly sourcePointCount: number \| null;/);
+  });
+
   it("drops the previous scan's report cloud when a streaming open commits", () => {
     // `clearOpenStaticLayers` runs on every streaming attach once it has
     // committed, including a streaming→streaming swap, which never passes

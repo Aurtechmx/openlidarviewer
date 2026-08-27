@@ -37,6 +37,48 @@ function cap(
   return { product, readiness, reasonCode, reason };
 }
 
+/**
+ * The condition a scan's point total puts on a product, or null when the total
+ * is stated and positive.
+ *
+ * ZERO and UNSTATED are different facts and get different answers. A stated
+ * zero is a measurement — the scan is empty, and "the scan has no points" is
+ * true of it, so the product is refused. An unstated total says nothing about
+ * whether points exist: a 3D Tiles tileset carries no count in `tileset.json`
+ * and its per-tile figures are decode-admission estimates, yet the scan it
+ * mounts is drawn, picked and measured like any other.
+ *
+ * An unstated total is therefore REVIEW, not blocked. The count is a readiness
+ * signal here, never an input: the surface is gridded, and the classifier runs,
+ * over the points the source actually delivers, so refusing would withhold a
+ * product that genuinely works. What it cannot back is the graded deliverable,
+ * whose provenance would have to state a size nobody measured — which is what
+ * `review` already means everywhere else in this model for a fact that is
+ * unverified rather than known-bad.
+ *
+ * It keeps the slot the count check already held, at the head of each product's
+ * chain, so no other verdict moves: a scan that states a total reads exactly as
+ * it did before.
+ */
+function pointTotalCondition(
+  scan: ScanFacts,
+  product: ProductId,
+  verb: 'classify' | 'grid',
+): ProductCapability | null {
+  if (scan.pointCount == null) {
+    return cap(
+      product,
+      'review',
+      'POINT_TOTAL_UNSTATED',
+      `The source states no point total, so the scan's size is unconfirmed; it can be ${verb === 'grid' ? 'gridded' : 'classified'} for inspection over the points the source delivers, and a graded whole-dataset product is withheld.`,
+    );
+  }
+  if (scan.pointCount <= 0) {
+    return cap(product, 'blocked', 'NO_POINTS', `The scan has no points to ${verb}.`);
+  }
+  return null;
+}
+
 /** True when the scan can back a full-dataset product (not resident-only). */
 function isFullCoverage(scan: ScanFacts): boolean {
   return scan.coverage === 'full';
@@ -105,9 +147,8 @@ function compareVerticalReference(a: ScanFacts, b: ScanFacts): VerticalReference
  */
 function classifyGaps(scan: ScanFacts): ProductCapability {
   const p: ProductId = 'classify-gaps';
-  if (scan.pointCount <= 0) {
-    return cap(p, 'blocked', 'NO_POINTS', 'The scan has no points to classify.');
-  }
+  const points = pointTotalCondition(scan, p, 'classify');
+  if (points !== null) return points;
   if (scan.classification === 'full') {
     return cap(p, 'review', 'ALREADY_CLASSIFIED', 'Every point already carries a class; reclassifying would overwrite producer values, so it is an explicit action rather than a default.');
   }
@@ -123,9 +164,8 @@ function classifyGaps(scan: ScanFacts): ProductCapability {
 /** Bare-earth DTM — needs ground and full coverage; unit gates georeferenced use. */
 function dtm(scan: ScanFacts): ProductCapability {
   const p: ProductId = 'dtm';
-  if (scan.pointCount <= 0) {
-    return cap(p, 'blocked', 'NO_POINTS', 'The scan has no points to grid.');
-  }
+  const points = pointTotalCondition(scan, p, 'grid');
+  if (points !== null) return points;
   if (!isFullCoverage(scan)) {
     return cap(p, 'review', 'RESIDENT_ONLY', 'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.');
   }
@@ -141,9 +181,8 @@ function dtm(scan: ScanFacts): ProductCapability {
 /** Upper-surface DSM — needs full coverage; no ground requirement. */
 function dsm(scan: ScanFacts): ProductCapability {
   const p: ProductId = 'dsm';
-  if (scan.pointCount <= 0) {
-    return cap(p, 'blocked', 'NO_POINTS', 'The scan has no points to grid.');
-  }
+  const points = pointTotalCondition(scan, p, 'grid');
+  if (points !== null) return points;
   if (!isFullCoverage(scan)) {
     return cap(p, 'review', 'RESIDENT_ONLY', 'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.');
   }
