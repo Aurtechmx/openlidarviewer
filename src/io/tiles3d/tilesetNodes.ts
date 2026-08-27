@@ -40,6 +40,22 @@ import type { Tileset } from './tileset';
  */
 export const ASSUMED_TILE_POINTS = 500_000;
 
+/**
+ * How a content URI's filename classifies. Query and fragment are ignored.
+ *
+ * Extension-based, and cheap on purpose: a `.b3dm` or `.glb` is a real 3D Tiles
+ * content type this viewer has no decoder for, and fetching one to discover
+ * that wastes the transfer. 3D Tiles 1.1 does not require an extension, so a
+ * URI carrying none is `unknown` rather than assumed to be a point tile.
+ */
+export function contentKind(uri: string): 'pnts' | 'tileset' | 'other' | 'unknown' {
+  const path = uri.split(/[?#]/)[0]!.toLowerCase();
+  if (path.endsWith('.pnts')) return 'pnts';
+  if (path.endsWith('.json')) return 'tileset';
+  const last = path.split('/').pop() ?? '';
+  return last.includes('.') ? 'other' : 'unknown';
+}
+
 /** What a streaming source needs to serve a tileset's tiles. */
 export interface TilesetNodeIndex {
   /** One record per tile that has content, in walk order. */
@@ -77,6 +93,22 @@ export function tilesetNodes(tileset: Tileset, rootTransform?: Mat4): TilesetNod
     contentParent.length = Math.min(contentParent.length, placed.depth);
     const uri = placed.tile.contentUri;
     if (uri == null) continue;
+
+    // Only a point tile becomes a node. Everything else would be fetched and
+    // handed to the point-tile decoder, which is a runtime failure on bytes
+    // that were never point data. A skip is recorded so the caller can refuse
+    // the open rather than draw a scene with pieces silently absent.
+    const kind = contentKind(uri);
+    if (kind !== 'pnts') {
+      skipped.push(
+        kind === 'tileset'
+          ? `${uri}: an external tileset, which this reader does not follow.`
+          : kind === 'unknown'
+            ? `${uri}: names no file extension, so its content type is undeclared.`
+            : `${uri}: not a point tile, and this viewer decodes no other content.`,
+      );
+      continue;
+    }
 
     const aabb = volumeToAabb(placed.boundingVolume);
     if (aabb == null) {

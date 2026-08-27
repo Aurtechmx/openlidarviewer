@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { tilesetNodes, ASSUMED_TILE_POINTS } from '../src/io/tiles3d/tilesetNodes';
+import { tilesetNodes, ASSUMED_TILE_POINTS, contentKind } from '../src/io/tiles3d/tilesetNodes';
 import { parseTileset } from '../src/io/tiles3d/tileset';
 
 /** A tileset document with the given root tile tree. */
@@ -131,5 +131,48 @@ describe('what the scheduler and decoder are handed', () => {
     const b = tilesetNodes(t).records[0].bounds;
     expect(b).toHaveLength(6);
     expect(b[3] - b[0]).toBeGreaterThan(0);
+  });
+});
+
+describe('what may become a node', () => {
+  const tree = (uri: string) =>
+    ts({
+      boundingVolume: BOX,
+      geometricError: 50,
+      refine: 'REPLACE',
+      content: { uri: 'root.pnts' },
+      children: [{ boundingVolume: BOX, geometricError: 10, content: { uri } }],
+    });
+
+  it('refuses to make a node from a nested tileset', () => {
+    const idx = tilesetNodes(tree('sub/tileset.json'));
+    expect(
+      idx.records.map((r) => r.id),
+      'a .json fetched and handed to the point-tile decoder fails on bytes that ' +
+        'were never point data',
+    ).toEqual(['root.pnts']);
+    expect(idx.skipped.join(' ')).toContain('external tileset');
+  });
+
+  it('refuses mesh content by name rather than fetching it', () => {
+    const idx = tilesetNodes(tree('b.b3dm'));
+    expect(idx.records.map((r) => r.id)).toEqual(['root.pnts']);
+    expect(idx.skipped.join(' ')).toContain('not a point tile');
+  });
+
+  it('does not assume an extensionless content URI is a point tile', () => {
+    // 3D Tiles 1.1 permits content with no extension, identified by its magic
+    // header. Guessing would decode whatever arrived as points.
+    const idx = tilesetNodes(tree('tile-00417'));
+    expect(idx.records.map((r) => r.id)).toEqual(['root.pnts']);
+    expect(idx.skipped.join(' ')).toContain('undeclared');
+  });
+
+  it('classifies the three named forms and the undeclared one', () => {
+    expect(contentKind('a.pnts')).toBe('pnts');
+    expect(contentKind('a.PNTS?v=2')).toBe('pnts');
+    expect(contentKind('sub/tileset.json#x')).toBe('tileset');
+    expect(contentKind('a.b3dm')).toBe('other');
+    expect(contentKind('tile-1')).toBe('unknown');
   });
 });
