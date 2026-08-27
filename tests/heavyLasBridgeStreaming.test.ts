@@ -85,12 +85,42 @@ function fakeViewer() {
     ready: Promise.resolve(),
     attachStreamingCloud,
     activeBackend: () => 'webgl2' as const,
+    availableImageExportModes: () => new Map(),
     setMode: vi.fn(),
     frameAll: vi.fn(),
     hasStreamingCloud: false,
     clouds: () => [],
   };
   return { viewer, attachStreamingCloud, getAttached };
+}
+
+/** A no-op streaming-reveal deps stub for the tests here, whose focus is the
+ *  build + attach rather than the surfaces the full reveal turns on. */
+function fakeStreaming(viewer: unknown) {
+  return {
+    getViewer: () => viewer,
+    getStreamingQuality: () => 'balanced',
+    debug: false,
+    stage: { hideEmptyState: vi.fn() },
+    streamingPanel: {
+      setPhase: vi.fn(), show: vi.fn(), setColorModes: vi.fn(),
+      setQuality: vi.fn(), setSummary: vi.fn(), setSourceUrl: vi.fn(),
+    },
+    exportPanel: { setImageExportEnabled: vi.fn(), setImageExportAvailability: vi.fn(), setStreamingMode: vi.fn() },
+    inspector: { setStreamingMode: vi.fn(), setDetail: vi.fn(), setReport: vi.fn(), element: { classList: { remove: vi.fn() } } },
+    classLegendPanel: { setClasses: vi.fn(), hide: vi.fn(), getVisibility: () => ({ isFiltered: () => false }) },
+    inspectorCards: { refreshProvenanceFromStreaming: vi.fn(), refreshDatasetIntelligenceFromStreamingCloud: vi.fn() },
+    crsCoordinator: { refreshCrsForStreamingCloud: vi.fn() },
+    bookmarks: { clear: vi.fn() },
+    hideReclassifyUi: vi.fn(),
+    syncInspectClassScope: vi.fn(),
+    prewarmExportStudio: vi.fn(),
+    revealAnalysePanel: vi.fn(),
+    startStreamingStatusPolling: vi.fn(),
+    refreshViewsUI: vi.fn(),
+    runStreamingModules: vi.fn(() => []),
+    setLastStreamingReportCloud: vi.fn(),
+  } as unknown as HeavyLasBridgeDeps['streaming'];
 }
 
 function fakeDock() {
@@ -124,6 +154,7 @@ function makeDeps(over: { deviceMemoryGB?: number } = {}) {
     body: { classList: { add: vi.fn() } },
     setPhase: (p) => phases.push(p),
     debug: false,
+    streaming: fakeStreaming(viewer),
   };
   return { deps, viewer, attachStreamingCloud, getAttached, dock, navBar, inspector, phases };
 }

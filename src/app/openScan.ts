@@ -27,6 +27,7 @@ import { formatTelemetry } from '../io/loadTelemetry';
 import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
 import { LoadCancelledError } from '../io/loadFile';
 import { openLocalHeavyLas } from './openLocalHeavyLas';
+import type { OpenStreamingDeps } from './openStreaming';
 import { availableModes } from '../render/colorModes';
 import { recommendColorMode } from '../render/colorModeRecommend';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
@@ -197,6 +198,13 @@ export interface OpenScanDeps {
   readonly benchmark: boolean;
   /** The developer diagnostics overlay, or null when it hasn't loaded. */
   getDebugOverlay: () => Pick<DebugOverlay, 'setTelemetry' | 'setBenchmark'> | null;
+  /**
+   * The streaming open collaborators, read at call time. An out-of-core LAS
+   * commits a streaming scan, so it reveals the same surfaces the COPC / EPT /
+   * tileset opens do, through their shared helpers. A getter, not a snapshot:
+   * `openStreamingDeps` is constructed after `openScanDeps` in the shell.
+   */
+  getStreamingDeps: () => OpenStreamingDeps;
 }
 
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
@@ -272,6 +280,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
           : { classList: { add: () => {} } },
       setPhase: (phase) => deps.dropZone.setProgress(phase),
       debug: deps.debug,
+      streaming: deps.getStreamingDeps(),
     });
     if (heavy.status === 'attached') {
       deps.dropZone.setCancelHandler(null);
