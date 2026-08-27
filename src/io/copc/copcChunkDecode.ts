@@ -80,6 +80,20 @@ export interface DecodedChunk {
   /** Per-point RGB (0-255), length `3 · pointCount` — only for PDRF 7/8. */
   rgb?: Uint8Array;
   /**
+   * Per-point surface normals, interleaved xyz, length `3 · pointCount`.
+   *
+   * Absent for the whole LAS family: a PDRF 6/7/8 record reserves no field for
+   * one. A `.pnts` tile can state them, through either a float32 `NORMAL` or an
+   * oct-encoded `NORMAL_OCT16P` accessor, and that is the only source that
+   * fills this today.
+   *
+   * A normal is a MEASUREMENT, so this is never synthesised, defaulted or
+   * zero-filled. A zero triple is not "no normal": it is a degenerate direction,
+   * and a consumer cannot tell the two apart once one has been written. Absence
+   * is the only honest way to say the surface was never measured.
+   */
+  normals?: Float32Array;
+  /**
    * The RGB bit-depth decision this chunk used (true = 8-bit-in-low-byte copied
    * verbatim, false = 16-bit high-byte). Undefined when the chunk carries no
    * RGB. The source reads it off the first RGB chunk and feeds it back as
@@ -220,5 +234,7 @@ export function chunkTransferables(decoded: DecodedChunk): ArrayBuffer[] {
   if (decoded.gpsTime) out.push(decoded.gpsTime.buffer as ArrayBuffer);
   if (decoded.pointSourceId) out.push(decoded.pointSourceId.buffer as ArrayBuffer);
   if (decoded.rgb) out.push(decoded.rgb.buffer as ArrayBuffer);
+  if (decoded.normals) out.push(decoded.normals.buffer as ArrayBuffer);
   return out;
 }
+

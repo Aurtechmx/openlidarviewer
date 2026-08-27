@@ -522,6 +522,35 @@ export function colorByIntensity(
   return out;
 }
 
+/**
+ * RGB-encode `count` interleaved xyz normals: each component −1…+1 → 0…255.
+ *
+ * The vector is normalised first, so un-normalised file normals still map into
+ * range; a zero-length vector is left at the neutral centre rather than divided
+ * by zero. Range-explicit and cloud-free, so the streaming pipeline paints a
+ * decoded node through THIS function rather than a second copy of the encoding
+ * — a drifting copy would give the same surface two colours depending on
+ * whether the scan was streamed or loaded whole.
+ */
+export function colorByNormal(normals: ArrayLike<number>, count: number): Uint8Array {
+  const out = new Uint8Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    let nx = normals[i * 3];
+    let ny = normals[i * 3 + 1];
+    let nz = normals[i * 3 + 2];
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (len > 0) {
+      nx /= len;
+      ny /= len;
+      nz /= len;
+    }
+    out[i * 3] = Math.round((nx + 1) * 0.5 * 255);
+    out[i * 3 + 1] = Math.round((ny + 1) * 0.5 * 255);
+    out[i * 3 + 2] = Math.round((nz + 1) * 0.5 * 255);
+  }
+  return out;
+}
+
 /** Colour `count` points by ASPRS classification code. */
 export function colorByClassification(
   classification: ArrayLike<number>,
@@ -845,27 +874,7 @@ export function colorForMode(
       if (!cloud.normals) {
         throw new Error(`colorForMode('normal'): cloud "${cloud.name}" has no normals attribute`);
       }
-      const src = cloud.normals;
-      const out = new Uint8Array(n * 3);
-
-      // Encode each unit normal direction as RGB: component −1…+1 → 0…255.
-      // The vector is normalised first so un-normalised file normals still map
-      // into range.
-      for (let i = 0; i < n; i++) {
-        let nx = src[i * 3];
-        let ny = src[i * 3 + 1];
-        let nz = src[i * 3 + 2];
-        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-        if (len > 0) {
-          nx /= len;
-          ny /= len;
-          nz /= len;
-        }
-        out[i * 3]     = Math.round((nx + 1) * 0.5 * 255);
-        out[i * 3 + 1] = Math.round((ny + 1) * 0.5 * 255);
-        out[i * 3 + 2] = Math.round((nz + 1) * 0.5 * 255);
-      }
-      return out;
+      return colorByNormal(cloud.normals, n);
     }
 
     // ── classification ──────────────────────────────────────────────────────

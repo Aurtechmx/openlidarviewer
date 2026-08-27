@@ -16,6 +16,7 @@ import {
   colorByElevation,
   colorByIntensity,
   colorByClassification,
+  colorByNormal,
   colorByScalar,
   finiteMinMax,
 } from '../colorModes';
@@ -170,11 +171,10 @@ export function intensityRangeOf(
  * Per-point interleaved RGB (3 bytes/point) for one decoded streaming node in
  * the active mode, using the cloud-global ranges.
  *
- * A mode whose meaning the whole source lacks (RGB on a format without it,
- * normals) falls back to the elevation ramp, which is the layer's one meaning
- * in that case rather than a second one. A mode whose per-point channel this
- * CHUNK does not carry is drawn flat instead — see {@link
- * channelAbsentColors}; no other channel stands in for it.
+ * RGB on a format without it falls back to the elevation ramp, which is the
+ * layer's one meaning in that case rather than a second one. A mode whose
+ * per-point channel this CHUNK does not carry is drawn flat instead — see
+ * {@link channelAbsentColors}; no other channel stands in for it.
  *
  * **Buffer-reuse contract.** When `mode === 'rgb'` and an `rgbAppearance`
  * is passed, the returned `Uint8Array` is a `subarray` view of a shared
@@ -282,8 +282,17 @@ export function streamingNodeColors(
           (ranges as { spacing?: number }).spacing ?? 0,
         ),
       }).colors;
-    case 'elevation':
     case 'normal':
+      // A chunk with no normals is drawn flat, never ramped by height: an
+      // elevation ramp under a Normal legend is a second reading wearing the
+      // first one's label. A source only offers this mode once a node has
+      // actually stated normals, so a chunk reaching here without them is the
+      // mixed-tileset case (or a restored view state), not the common path.
+      if (!decoded.normals) return channelAbsentColors(n);
+      // The static pipeline's own encoding, not a copy of it, so a surface gets
+      // the same colour whether the scan was streamed or loaded whole.
+      return colorByNormal(decoded.normals, n);
+    case 'elevation':
     default:
       return colorByElevation(renderLocalPositions(decoded), n, ranges.minZ, ranges.maxZ);
   }

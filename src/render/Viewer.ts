@@ -6112,6 +6112,7 @@ export class Viewer {
     const rgb: [number, number, number] | null = decoded.rgb
       ? [decoded.rgb[index * 3], decoded.rgb[index * 3 + 1], decoded.rgb[index * 3 + 2]]
       : null;
+    const nrm = decoded.normals; // a `.pnts` tile can state them; LAS never does
     return makePointInfo({
       geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud ? cloud.name : 'COPC',
@@ -6126,8 +6127,7 @@ export class Viewer {
       returnCount: decoded.returnCount ? decoded.returnCount[index] : undefined,
       pointSourceId: decoded.pointSourceId ? decoded.pointSourceId[index] : undefined,
       gpsTime: decoded.gpsTime ? decoded.gpsTime[index] : undefined,
-      // COPC PDRF 6/7/8 carry no surface normals.
-      normal: undefined,
+      normal: nrm ? [nrm[index * 3], nrm[index * 3 + 1], nrm[index * 3 + 2]] : undefined,
       streamingRefining,
     });
   }
