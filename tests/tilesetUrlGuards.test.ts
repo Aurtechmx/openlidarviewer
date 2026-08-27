@@ -57,7 +57,9 @@ describe('a content URI this viewer must not request', () => {
     expect(targets).not.toContain('169.254');
     expect(targets).not.toContain('attacker');
     expect(targets).not.toContain('file:');
-    expect(built.skipped.length).toBe(1);
+    // The fixture's root refines by REPLACE, which is refused separately, so
+    // assert the URL refusal specifically rather than counting skips.
+    expect(built.skipped.some((r) => r.startsWith(uri))).toBe(true);
   });
 
   it('serves an ordinary relative URI, resolved to an absolute URL', () => {
