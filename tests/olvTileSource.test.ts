@@ -255,7 +255,7 @@ describe('OlvTileSource', () => {
       }
     }
     expect(outside).toBe(0);
-    expect(decoded.classification[0]).toBe(2);
+    expect(decoded.classification?.[0]).toBe(2);
     expect(decoded.rgb?.[2]).toBe(9);
   });
 

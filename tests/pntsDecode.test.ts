@@ -104,13 +104,17 @@ describe('attributes the format does not carry', () => {
     expect(PNTS_COLOR_MODES).not.toContain('classification');
   });
 
-  it('sizes the required arrays without claiming they are readings', async () => {
+  it('allocates no array for a channel the format does not carry', async () => {
     const out = await decoder.decode(makePnts([[0, 0, 0], [1, 1, 1]]), meta());
     expect(out.pointCount).toBe(2);
-    for (const a of [out.intensity, out.classification, out.returnNumber, out.returnCount]) {
-      expect(a).toHaveLength(2);
-      expect([...a].every((v) => v === 0)).toBe(true);
-    }
+    // Absent, not zero-filled. A zero classification means "never classified"
+    // and a zero intensity is not a measured zero, so the chunk must be able to
+    // say the channel is missing rather than hand a reader 2 fake readings.
+    expect(out.intensity, 'a point tile carries no intensity').toBeUndefined();
+    expect(out.classification, 'a point tile carries no classification').toBeUndefined();
+    expect(out.returnNumber, 'a point tile carries no return number').toBeUndefined();
+    expect(out.returnCount, 'a point tile carries no return count').toBeUndefined();
+    expect(out.gpsTime, 'a point tile carries no GPS time').toBeUndefined();
   });
 
   it('carries RGB through when the tile has it, and omits it when it does not', async () => {

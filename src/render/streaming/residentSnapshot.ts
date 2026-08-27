@@ -43,9 +43,16 @@ export interface ResidentSnapshotOptions {
 
 /**
  * Concatenate the decoded resident chunks into one PointCloud, or return null
- * when nothing is resident yet. Optional channels (RGB, point-source id) are
- * emitted only when EVERY chunk carries them, so a partially-attributed set
- * never produces a half-filled array the writers would misread.
+ * when nothing is resident yet.
+ *
+ * EVERY per-point channel is emitted only when EVERY chunk carries it, so a
+ * partially-attributed set never produces a half-filled array the writers would
+ * misread. That rule used to cover only RGB and point-source id; it now covers
+ * intensity, classification, returns and GPS time too, because a chunk from a
+ * format that carries none of them (a `.pnts` tile) would otherwise contribute
+ * zeros an exported LAS would present as real classifications and readings.
+ * `PointCloud` already treats each of these as optional, so the writers omit
+ * the field rather than write a fabricated one.
  */
 export function buildResidentSnapshot(
   chunks: readonly DecodedChunk[],
@@ -56,28 +63,38 @@ export function buildResidentSnapshot(
   if (total === 0) return null;
 
   const positions = new Float32Array(total * 3);
-  const intensity = new Uint16Array(total);
-  const classification = new Uint8Array(total);
-  const returnNumber = new Uint8Array(total);
-  const returnCount = new Uint8Array(total);
-  const gpsTime = new Float64Array(total);
 
-  const allRgb = chunks.every((c) => c.rgb !== undefined && c.rgb.length >= c.pointCount * 3);
-  const allPsid = chunks.every(
-    (c) => c.pointSourceId !== undefined && c.pointSourceId.length >= c.pointCount,
-  );
-  const colors = allRgb ? new Uint8Array(total * 3) : undefined;
-  const pointSourceId = allPsid ? new Uint16Array(total) : undefined;
+  /** Whether every chunk carries this channel at full length. */
+  const everyChunkHas = (
+    pick: (c: DecodedChunk) => ArrayLike<number> | undefined,
+    perPoint: number,
+  ): boolean => chunks.every((c) => (pick(c)?.length ?? -1) >= c.pointCount * perPoint);
+
+  const intensity = everyChunkHas((c) => c.intensity, 1) ? new Uint16Array(total) : undefined;
+  const classification = everyChunkHas((c) => c.classification, 1)
+    ? new Uint8Array(total)
+    : undefined;
+  const returnNumber = everyChunkHas((c) => c.returnNumber, 1)
+    ? new Uint8Array(total)
+    : undefined;
+  const returnCount = everyChunkHas((c) => c.returnCount, 1) ? new Uint8Array(total) : undefined;
+  const gpsTime = everyChunkHas((c) => c.gpsTime, 1) ? new Float64Array(total) : undefined;
+  const colors = everyChunkHas((c) => c.rgb, 3) ? new Uint8Array(total * 3) : undefined;
+  const pointSourceId = everyChunkHas((c) => c.pointSourceId, 1)
+    ? new Uint16Array(total)
+    : undefined;
 
   let p = 0; // running point offset
   for (const c of chunks) {
     const n = c.pointCount;
     positions.set(renderLocalPositions(c).subarray(0, n * 3), p * 3);
-    intensity.set(c.intensity.subarray(0, n), p);
-    classification.set(c.classification.subarray(0, n), p);
-    returnNumber.set(c.returnNumber.subarray(0, n), p);
-    returnCount.set(c.returnCount.subarray(0, n), p);
-    gpsTime.set(c.gpsTime.subarray(0, n), p);
+    if (intensity && c.intensity) intensity.set(c.intensity.subarray(0, n), p);
+    if (classification && c.classification) {
+      classification.set(c.classification.subarray(0, n), p);
+    }
+    if (returnNumber && c.returnNumber) returnNumber.set(c.returnNumber.subarray(0, n), p);
+    if (returnCount && c.returnCount) returnCount.set(c.returnCount.subarray(0, n), p);
+    if (gpsTime && c.gpsTime) gpsTime.set(c.gpsTime.subarray(0, n), p);
     if (colors && c.rgb) colors.set(c.rgb.subarray(0, n * 3), p * 3);
     if (pointSourceId && c.pointSourceId) pointSourceId.set(c.pointSourceId.subarray(0, n), p);
     p += n;
@@ -85,11 +102,11 @@ export function buildResidentSnapshot(
 
   return new PointCloud({
     positions,
-    intensity,
-    classification,
-    returnNumber,
-    returnCount,
-    gpsTime,
+    ...(intensity ? { intensity } : {}),
+    ...(classification ? { classification } : {}),
+    ...(returnNumber ? { returnNumber } : {}),
+    ...(returnCount ? { returnCount } : {}),
+    ...(gpsTime ? { gpsTime } : {}),
     ...(colors ? { colors } : {}),
     ...(pointSourceId ? { pointSourceId } : {}),
     origin: [opts.origin[0], opts.origin[1], opts.origin[2]],

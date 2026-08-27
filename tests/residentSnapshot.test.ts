@@ -71,6 +71,36 @@ describe('buildResidentSnapshot', () => {
     expect(mixedPsid.pointSourceId).toBeUndefined();
   });
 
+  /**
+   * A `.pnts` tile carries no intensity, classification, returns or GPS time,
+   * so its chunk omits them. An export must omit them too: writing zeros would
+   * put "never classified" and a measured intensity of nought into a LAS file
+   * as if the source had said so. Same all-or-nothing rule RGB and point-source
+   * id already followed.
+   */
+  it('omits a channel no chunk carries rather than exporting zeros', () => {
+    const positionsOnly: DecodedChunk = { pointCount: 3, positions: new Float32Array(9) };
+    const cloud = buildResidentSnapshot([positionsOnly], OPTS)!;
+    expect(cloud.pointCount).toBe(3);
+    expect(cloud.intensity).toBeUndefined();
+    expect(cloud.classification).toBeUndefined();
+    expect(cloud.returnNumber).toBeUndefined();
+    expect(cloud.returnCount).toBeUndefined();
+    expect(cloud.gpsTime).toBeUndefined();
+  });
+
+  it('drops a channel only some chunks carry, keeping the ones every chunk has', () => {
+    const positionsOnly: DecodedChunk = { pointCount: 2, positions: new Float32Array(6) };
+    const mixed = buildResidentSnapshot([chunk(2, 0), positionsOnly], OPTS)!;
+    expect(mixed.pointCount).toBe(4);
+    // Half the points would have been fabricated, so none of it is written.
+    expect(mixed.intensity).toBeUndefined();
+    expect(mixed.classification).toBeUndefined();
+    expect(mixed.gpsTime).toBeUndefined();
+    // Positions are on every chunk, so they survive the mixture.
+    expect(mixed.positions).toHaveLength(12);
+  });
+
   it('stamps the declared count to equal the decoded count (not a lossy read)', () => {
     const cloud = buildResidentSnapshot([chunk(4, 0)], OPTS)!;
     expect(cloud.declaredPointCount).toBe(4);

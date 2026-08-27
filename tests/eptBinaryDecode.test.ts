@@ -95,7 +95,7 @@ test('a uint64 value beyond 2^53 − 1 throws; one within range converts exactly
     view.setBigUint64(off('GpsTime'), (1n << 53n) - 1n, true);
   });
   const decoded = decodeEptBinaryTile(ok, 1, schema, [0, 0, 0]);
-  expect(decoded.gpsTime[0]).toBe(9007199254740991);
+  expect(decoded.gpsTime?.[0]).toBe(9007199254740991);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -176,5 +176,48 @@ test('a declared float64 attribute still reads as Float64 (unchanged path)', () 
   });
   const decoded = decodeEptBinaryTile(tile, 1, schema, [0, 0, 0]);
   expect(decoded.positions[0]).toBe(7);
-  expect(decoded.gpsTime[0]).toBe(123456.75);
+  expect(decoded.gpsTime?.[0]).toBe(123456.75);
+});
+
+/**
+ * The mirror of `a COPC chunk carries all five LAS channels` in
+ * `copcChunkDecode.test.ts`. `DecodedChunk` makes the measured channels
+ * optional for formats that carry none of them; EPT is not one of those, so an
+ * EPT tile must keep producing all five and this pins that it does.
+ */
+test('an EPT binary chunk carries all five LAS channels', () => {
+  const schema: EptSchemaField[] = [
+    { name: 'X', size: 4, type: 'signed', scale: 1 },
+    { name: 'Y', size: 4, type: 'signed', scale: 1 },
+    { name: 'Z', size: 4, type: 'signed', scale: 1 },
+    { name: 'Intensity', size: 2, type: 'unsigned', scale: 1 },
+    { name: 'Classification', size: 1, type: 'unsigned', scale: 1 },
+    { name: 'ReturnNumber', size: 1, type: 'unsigned', scale: 1 },
+    { name: 'NumberOfReturns', size: 1, type: 'unsigned', scale: 1 },
+    { name: 'GpsTime', size: 8, type: 'float', scale: 1 },
+  ];
+  const tile = tileFor(schema, (view, off) => {
+    view.setInt32(off('X'), 1, true);
+    view.setUint16(off('Intensity'), 4321, true);
+    view.setUint8(off('Classification'), 6);
+    view.setUint8(off('ReturnNumber'), 2);
+    view.setUint8(off('NumberOfReturns'), 3);
+    view.setFloat64(off('GpsTime'), 55.25, true);
+  });
+  const decoded = decodeEptBinaryTile(tile, 1, schema, [0, 0, 0]);
+  for (const [name, channel] of [
+    ['intensity', decoded.intensity],
+    ['classification', decoded.classification],
+    ['returnNumber', decoded.returnNumber],
+    ['returnCount', decoded.returnCount],
+    ['gpsTime', decoded.gpsTime],
+  ] as const) {
+    expect(channel, `an EPT chunk must carry ${name}`).toBeDefined();
+    expect(channel, `${name} must be one value per point`).toHaveLength(1);
+  }
+  expect(decoded.intensity?.[0]).toBe(4321);
+  expect(decoded.classification?.[0]).toBe(6);
+  expect(decoded.returnNumber?.[0]).toBe(2);
+  expect(decoded.returnCount?.[0]).toBe(3);
+  expect(decoded.gpsTime?.[0]).toBe(55.25);
 });

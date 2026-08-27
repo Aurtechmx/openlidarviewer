@@ -6097,8 +6097,8 @@ export class Viewer {
 
   /**
    * Build display-ready point info for a streaming-node pick hit — the COPC
-   * equivalent of {@link _infoForHit}. The decoded chunk carries every
-   * per-point attribute, so a streaming scan inspects exactly like a static one.
+   * equivalent of {@link _infoForHit}. Each channel is read only when the chunk
+   * carries it, so a format without intensity or classes shows no row for them.
    */
   private _infoForStreamingHit(hit: {
     decoded: DecodedChunk;
@@ -6119,13 +6119,13 @@ export class Viewer {
       local: [point.x, point.y, point.z],
       origin,
       distance: this._camera.position.distanceTo(point),
-      intensity: decoded.intensity[index],
-      classification: decoded.classification[index],
+      intensity: decoded.intensity ? decoded.intensity[index] : null,
+      classification: decoded.classification ? decoded.classification[index] : null,
       rgb,
-      returnNumber: decoded.returnNumber[index],
-      returnCount: decoded.returnCount[index],
+      returnNumber: decoded.returnNumber ? decoded.returnNumber[index] : undefined,
+      returnCount: decoded.returnCount ? decoded.returnCount[index] : undefined,
       pointSourceId: decoded.pointSourceId ? decoded.pointSourceId[index] : undefined,
-      gpsTime: decoded.gpsTime[index],
+      gpsTime: decoded.gpsTime ? decoded.gpsTime[index] : undefined,
       // COPC PDRF 6/7/8 carry no surface normals.
       normal: undefined,
       streamingRefining,

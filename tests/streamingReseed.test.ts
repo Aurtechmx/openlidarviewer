@@ -58,11 +58,23 @@ describe('shouldReseedColorRange', () => {
  * colours handed to `buildPointMesh` are captured so the test can assert on
  * the exact bytes a real mesh would upload.
  */
-function viewerCapture(): { viewer: Viewer; captured: Uint8Array[] } {
+function viewerCapture(): {
+  viewer: Viewer;
+  captured: Uint8Array[];
+  /** The class / intensity arguments each `buildPointMesh` call received. */
+  channels: { classification: unknown; intensity: unknown }[];
+} {
   const captured: Uint8Array[] = [];
+  const channels: { classification: unknown; intensity: unknown }[] = [];
   const viewer = {
-    buildPointMesh: (_positions: Float32Array, colors: Uint8Array): PointMeshHandle => {
+    buildPointMesh: (
+      _positions: Float32Array,
+      colors: Uint8Array,
+      classification?: ArrayLike<number> | null,
+      intensity?: ArrayLike<number> | null,
+    ): PointMeshHandle => {
       captured.push(colors.slice());
+      channels.push({ classification, intensity });
       return {
         mesh: {},
         material: {},
@@ -72,7 +84,7 @@ function viewerCapture(): { viewer: Viewer; captured: Uint8Array[] } {
     },
     addStreamingMesh: () => undefined,
   } as unknown as Viewer;
-  return { viewer, captured };
+  return { viewer, captured, channels };
 }
 
 function sourceStub(): StreamingSource {
@@ -138,5 +150,52 @@ describe('StreamingRenderer elevation seed', () => {
     expect(r.maxZ).toBe(dataZ[1]);
     // The cube would have made the window ~85x too tall — assert we didn't.
     expect(r.maxZ - r.minZ).toBeLessThan(2000);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Channels the chunk does not carry
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('onNodeReady with a positions-only chunk', () => {
+  /** A `.pnts`-shaped chunk: positions and nothing else. */
+  const positionsOnly = (zs: number[]): DecodedChunk => {
+    const positions = new Float32Array(zs.length * 3);
+    zs.forEach((z, i) => {
+      positions[i * 3 + 2] = z;
+    });
+    return { pointCount: zs.length, positions };
+  };
+
+  it('leaves a scalar window untouched rather than seeding it from nothing', () => {
+    const { viewer } = viewerCapture();
+    const renderer = new StreamingRenderer(viewer, sourceStub(), 'elevation');
+    const before = renderer.colorRanges;
+    renderer.onNodeReady(nodeAt(0, 'root'), positionsOnly([0, 5, 10]));
+    const after = renderer.colorRanges;
+    // Intensity, GPS time and return number have no chunk data behind them, so
+    // their windows must read exactly as they did before the node arrived. A
+    // window seeded off an absent array would be a claim about a measurement
+    // the source never made.
+    expect(after.minIntensity).toBe(before.minIntensity);
+    expect(after.maxIntensity).toBe(before.maxIntensity);
+    expect(after.minGpsTime).toBe(before.minGpsTime);
+    expect(after.maxGpsTime).toBe(before.maxGpsTime);
+    expect(after.minReturnNumber).toBe(before.minReturnNumber);
+    expect(after.maxReturnNumber).toBe(before.maxReturnNumber);
+    // Elevation comes from positions, which the chunk does carry, so it seeds.
+    expect(after.maxZ).toBe(10);
+  });
+
+  it('passes null class and intensity to the mesh, so no filter reads a fake zero', () => {
+    const { viewer, channels } = viewerCapture();
+    const renderer = new StreamingRenderer(viewer, sourceStub(), 'elevation');
+    renderer.onNodeReady(nodeAt(0, 'root'), positionsOnly([0, 1]));
+    // Not a zero-filled array. `buildPointMesh` skips the `aClass` attribute
+    // for null, which keeps the mesh fully visible; an array of zeros would
+    // make every point read as class 0 and vanish the moment a user unticks
+    // "Never classified" in a scan that was never classified at all.
+    expect(channels[0].classification).toBeNull();
+    expect(channels[0].intensity).toBeNull();
   });
 });

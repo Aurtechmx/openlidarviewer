@@ -56,12 +56,12 @@ test('decodeRecords applies the coordinate bridge and extracts PDRF 6 fields', (
   expect(d.positions[0]).toBeCloseTo(100);
   expect(d.positions[1]).toBeCloseTo(200);
   expect(d.positions[2]).toBeCloseTo(30);
-  expect(d.intensity[0]).toBe(555);
-  expect(d.returnNumber[0]).toBe(1);
-  expect(d.returnCount[0]).toBe(2);
-  expect(d.classification[0]).toBe(5);
-  expect(d.gpsTime[0]).toBeCloseTo(12345.5);
-  expect(d.gpsTime[1]).toBeCloseTo(7.25);
+  expect(d.intensity?.[0]).toBe(555);
+  expect(d.returnNumber?.[0]).toBe(1);
+  expect(d.returnCount?.[0]).toBe(2);
+  expect(d.classification?.[0]).toBe(5);
+  expect(d.gpsTime?.[0]).toBeCloseTo(12345.5);
+  expect(d.gpsTime?.[1]).toBeCloseTo(7.25);
   expect(d.pointSourceId?.[0]).toBe(4242);
   expect(d.pointSourceId?.[1]).toBe(7);
   expect(d.rgb).toBeUndefined();
@@ -187,4 +187,50 @@ test('chunkTransferables lists every backing buffer (and RGB only when present)'
   });
   // The seven PDRF-6 buffers plus RGB.
   expect(chunkTransferables(d7)).toHaveLength(8);
+});
+
+test('chunkTransferables lists only the buffers a positions-only chunk has', () => {
+  // A chunk from a format with no measured channels (a `.pnts` tile) transfers
+  // one buffer. Listing the five absent ones would post buffers that are not
+  // there, and the worker boundary would throw rather than the decode failing
+  // where the mistake is.
+  expect(chunkTransferables({ pointCount: 4, positions: new Float32Array(12) })).toHaveLength(1);
+});
+
+/**
+ * `DecodedChunk` makes intensity, classification, both return fields and GPS
+ * time optional so a format that carries none of them (a `.pnts` tile) can say
+ * so instead of shipping zeros. That optionality is not permission for the LAS
+ * decoders to drop them: a LAS point record carries all five in every PDRF the
+ * COPC spec allows, so a COPC chunk that omitted one would be losing data the
+ * file holds. Pinned here, and for EPT in `eptBinaryDecode.test.ts`, so the
+ * change stays a widening of the contract rather than a removal.
+ */
+test('a COPC chunk carries all five LAS channels — the optionality is not a removal', () => {
+  const raw = buildRecords(30, [
+    { x: 1, y: 2, z: 3, intensity: 77, returnNum: 1, returnCount: 2, classification: 6, gps: 4.5 },
+    { x: 4, y: 5, z: 6, intensity: 88, returnNum: 2, returnCount: 2, classification: 2, gps: 9.5 },
+  ]);
+  const d = decodeRecords(raw, {
+    pointDataRecordFormat: 6,
+    pointRecordLength: 30,
+    pointCount: 2,
+    scale: [1, 1, 1],
+    offset: [0, 0, 0],
+    renderOrigin: [0, 0, 0],
+  });
+  for (const [name, channel] of [
+    ['intensity', d.intensity],
+    ['classification', d.classification],
+    ['returnNumber', d.returnNumber],
+    ['returnCount', d.returnCount],
+    ['gpsTime', d.gpsTime],
+  ] as const) {
+    expect(channel, `a COPC chunk must carry ${name}`).toBeDefined();
+    expect(channel, `${name} must be one value per point`).toHaveLength(2);
+  }
+  // Real readings, not an array of zeros that happens to be the right length.
+  expect([...d.intensity!]).toEqual([77, 88]);
+  expect([...d.classification!]).toEqual([6, 2]);
+  expect([...d.gpsTime!]).toEqual([4.5, 9.5]);
 });

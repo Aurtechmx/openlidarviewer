@@ -107,7 +107,7 @@ test('decodeEptBinaryTile decodes the synthetic fixture cleanly', () => {
 
   // Classification values come from the fixture's choice set {1,2,5,6,9}.
   for (let i = 0; i < 100; i++) {
-    expect([1, 2, 5, 6, 9]).toContain(decoded.classification[i]);
+    expect([1, 2, 5, 6, 9]).toContain(decoded.classification?.[i]);
   }
 });
 

@@ -34,7 +34,23 @@ function metadata(hasRgb: boolean, hasGpsTime = true): CopcMetadata {
   };
 }
 
-function chunk(n: number, withRgb: boolean): DecodedChunk {
+/**
+ * A LAS-family chunk: every measured channel present, which is exactly what the
+ * COPC, EPT and tile-store decoders produce. `DecodedChunk` makes those five
+ * optional so a format that carries none of them (a `.pnts` tile) can say so,
+ * but this helper always fills them, and the type says so — a test that seeds
+ * one reads it back without a null check, and the helper cannot quietly stop
+ * producing them.
+ */
+type FullChunk = DecodedChunk &
+  Required<
+    Pick<
+      DecodedChunk,
+      'intensity' | 'classification' | 'returnNumber' | 'returnCount' | 'gpsTime'
+    >
+  >;
+
+function chunk(n: number, withRgb: boolean): FullChunk {
   return {
     pointCount: n,
     positions: new Float32Array(n * 3),
@@ -169,6 +185,46 @@ test('returnNumber mode colours against the GLOBAL return range', () => {
   const out = streamingNodeColors('returnNumber', c, global);
   expect([out[0], out[1], out[2]]).toEqual(CIVIDIS_LO);
   expect([out[6], out[7], out[8]]).toEqual(CIVIDIS_HI);
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Channels the chunk does not carry
+// ────────────────────────────────────────────────────────────────────────────
+
+/** A chunk from a format that carries positions and nothing else — a `.pnts` tile. */
+function positionsOnly(n: number): DecodedChunk {
+  return { pointCount: n, positions: new Float32Array(n * 3) };
+}
+
+test('intensityRangeOf returns null for a chunk with no intensity', () => {
+  // Not { 0, 0 }. A zero-width window is a claim about the cloud's intensity,
+  // and a source with no intensity has no such claim to make — the caller
+  // leaves the cloud-global range alone instead of seeding it from nothing.
+  expect(intensityRangeOf(positionsOnly(4))).toBeNull();
+});
+
+test('a mode whose channel the chunk lacks is drawn flat, never ramped', () => {
+  // The grey stand-in, not a ramp. Substituting elevation would put a height
+  // map under the intensity legend; ramping a zero-filled stand-in would look
+  // like a measurement of nought at every point. Both read as data.
+  const c = positionsOnly(3);
+  const r = ranges({ maxZ: 10, maxIntensity: 255, maxGpsTime: 100, maxReturnNumber: 5 });
+  for (const mode of ['intensity', 'classification', 'gpsTime', 'returnNumber'] as const) {
+    const out = streamingNodeColors(mode, c, r);
+    expect(out, `${mode} must still produce 3 bytes per point`).toHaveLength(9);
+    expect([...out], `${mode} must be flat achromatic grey`).toEqual(new Array(9).fill(128));
+  }
+});
+
+test('elevation still ramps a positions-only chunk — it is derived, not measured', () => {
+  // The counterweight to the test above: elevation comes from positions, which
+  // every chunk carries, so it must NOT be greyed out.
+  const c = positionsOnly(2);
+  c.positions[2] = 0;
+  c.positions[5] = 10;
+  const out = streamingNodeColors('elevation', c, ranges({ maxZ: 10 }));
+  expect(out).toHaveLength(6);
+  expect([out[0], out[1], out[2]]).not.toEqual([out[3], out[4], out[5]]);
 });
 
 test('availableStreamingModes gates gpsTime on the header flag, always offers returnNumber', () => {

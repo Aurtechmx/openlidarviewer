@@ -219,6 +219,40 @@ describe('decodedChunkBytes', () => {
     const withRgb = decodedChunkBytes({ ...base, rgb: new Uint8Array(n * 3) });
     expect(withRgb - decodedChunkBytes(base)).toBe(30);
   });
+
+  /**
+   * The figure the queue's byte budget is spent against. It used to be a fixed
+   * LAS-shaped per-point constant, which charged a chunk for intensity,
+   * classification, both return fields and GPS time whether or not it carried
+   * them. A `.pnts` tile carries none of the five, so the budget was told 13
+   * bytes per point existed that did not, and the guard bounded the wrong
+   * number. These two pin that the accounting now follows the chunk.
+   */
+  it('charges a positions-only chunk for positions alone', () => {
+    const n = 250;
+    const positionsOnly = { pointCount: n, positions: new Float32Array(n * 3) };
+    // Float32 × 3 and nothing else.
+    expect(decodedChunkBytes(positionsOnly)).toBe(n * 12);
+  });
+
+  it('differs by exactly the five channels between a LAS chunk and one without', () => {
+    const n = 64;
+    const positionsOnly = { pointCount: n, positions: new Float32Array(n * 3) };
+    const lasShaped = {
+      ...positionsOnly,
+      intensity: new Uint16Array(n),
+      classification: new Uint8Array(n),
+      returnNumber: new Uint8Array(n),
+      returnCount: new Uint8Array(n),
+      gpsTime: new Float64Array(n),
+    };
+    const difference = decodedChunkBytes(lasShaped) - decodedChunkBytes(positionsOnly);
+    // Uint16 + three Uint8 + Float64 = 13 bytes per point, the storage a
+    // format without those channels no longer spends.
+    expect(difference).toBe(n * 13);
+    expect(decodedChunkBytes(lasShaped)).toBe(n * 25);
+    expect(decodedChunkBytes(positionsOnly)).toBe(n * 12);
+  });
 });
 
 /**
