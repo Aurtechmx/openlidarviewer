@@ -320,6 +320,78 @@ describe('the colour modes a tileset layer offers', () => {
   });
 });
 
+describe('the signal a layer raises when its offer moves', () => {
+  it('fires once, when the first tile with points settles the answer', async () => {
+    const s = source();
+    const fired: string[][] = [];
+    s.onColorModesChanged(() => fired.push([...s.availableColorModes()]));
+    await serve(s, new PntsChunkDecoder(), [
+      makePnts(LOW_AND_HIGH, { rgb: STATED_RGB, normals: STATED_NORMALS }),
+      makePnts(LOW_AND_HIGH, { rgb: STATED_RGB, normals: STATED_NORMALS }),
+      makePnts(LOW_AND_HIGH, { rgb: STATED_RGB, normals: STATED_NORMALS }),
+    ]);
+    expect(
+      fired,
+      'the answer settles on the first tile with points and never moves, so every ' +
+        'later chunk would ask a surface to redraw the row it already has',
+    ).toEqual([['rgb', 'elevation', 'normal']]);
+  });
+
+  it('stays silent when the answer settles without moving what is offered', async () => {
+    const s = source();
+    const fired: number[] = [];
+    s.onColorModesChanged(() => fired.push(1));
+    await serve(s, new PntsChunkDecoder(), [makePnts(LOW_AND_HIGH), makePnts(LOW_AND_HIGH)]);
+    expect(s.availableColorModes()).toEqual(['elevation']);
+    expect(fired, 'nothing a user can see changed').toEqual([]);
+  });
+
+  it('stays silent for a chunk with no points, which settles nothing', () => {
+    const s = source();
+    const fired: number[] = [];
+    s.onColorModesChanged(() => fired.push(1));
+    // Built rather than decoded: `parsePnts` refuses a zero POINTS_LENGTH, so
+    // an empty chunk can only reach the fold from somewhere other than a tile
+    // body. The fold ignores it either way, and the signal must too.
+    s.noteDecodedChannels({
+      pointCount: 0,
+      positions: new Float32Array(0),
+      normals: new Float32Array(0),
+    });
+    expect(fired).toEqual([]);
+    expect(s.availableColorModes()).toEqual(['elevation']);
+  });
+
+  it('stops telling a listener that unsubscribed', async () => {
+    const s = source();
+    const fired: number[] = [];
+    const off = s.onColorModesChanged(() => fired.push(1));
+    off();
+    await serve(s, new PntsChunkDecoder(), [
+      makePnts(LOW_AND_HIGH, { normals: STATED_NORMALS }),
+    ]);
+    expect(fired).toEqual([]);
+  });
+
+  it('folds the answer even when a listener throws', async () => {
+    const s = source();
+    const seen: string[] = [];
+    s.onColorModesChanged(() => {
+      throw new Error('a panel blew up');
+    });
+    s.onColorModesChanged(() => seen.push('second'));
+    await serve(s, new PntsChunkDecoder(), [
+      makePnts(LOW_AND_HIGH, { normals: STATED_NORMALS }),
+    ]);
+    expect(
+      s.availableColorModes(),
+      'the notification rides the scheduler’s decode continuation: a throw there ' +
+        'records a cleanly decoded node as failed and backs it off',
+    ).toContain('normal');
+    expect(seen).toEqual(['second']);
+  });
+});
+
 describe('a tileset that mixes tiles with and without normals', () => {
   it('keeps the stated normals and draws the tiles without them flat', async () => {
     const decoder = new PntsChunkDecoder();
