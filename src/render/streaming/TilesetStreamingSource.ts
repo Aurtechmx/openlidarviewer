@@ -73,11 +73,6 @@ export function tilesetRootFrameMatrix(tileset: Tileset): Mat4 | null {
   return enuFrameMatrix(anchor) as Mat4;
 }
 
-/** Resolve a tile's authored content URI against the tileset document. */
-export function resolveTileUrl(baseUrl: string, uri: string): string {
-  return new URL(uri, baseUrl).toString();
-}
-
 /** The union of every node's bounds, or null when there are no nodes. */
 function unionBounds(records: readonly StreamingNodeRecord[]): Box6 | null {
   if (records.length === 0) return null;
@@ -132,7 +127,6 @@ export class TilesetStreamingSource implements StreamingSource {
 
   private readonly _index: TilesetNodeIndex;
   private readonly _bounds: Box6;
-  private readonly _baseUrl: string;
   private readonly _transport: TilesetTransport;
   private readonly _crs: CrsInfo | null;
 
@@ -147,12 +141,18 @@ export class TilesetStreamingSource implements StreamingSource {
   ) {
     this.id = id;
     this.name = name;
-    this._baseUrl = baseUrl;
     this._transport = transport;
     this._crs = crs;
     // Resolved here rather than by the caller: a caller that forgets leaves a
     // geocentric tileset in ECEF, and nothing on screen says so.
-    this._index = tilesetNodes(tileset, rootTransform ?? tilesetRootFrameMatrix(tileset) ?? undefined);
+    // The entry URL is passed so every content URI is resolved and VALIDATED
+    // before a tile is fetched. Without it the index would hand the transport
+    // whatever the document wrote.
+    this._index = tilesetNodes(
+      tileset,
+      rootTransform ?? tilesetRootFrameMatrix(tileset) ?? undefined,
+      baseUrl,
+    );
     this._bounds = unionBounds(this._index.records) ?? [0, 0, 0, 0, 0, 0];
     this.renderOrigin = centreOf(this._bounds);
     this.frame = createTranslatedFrame(this.renderOrigin);
@@ -210,9 +210,11 @@ export class TilesetStreamingSource implements StreamingSource {
   }
 
   async readNodeChunk(record: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> {
-    const uri = this._index.contentUri.get(record.id);
-    if (uri == null) throw new Error(`No content URI for tile ${record.id}.`);
-    return this._transport.fetchTileBytes(resolveTileUrl(this._baseUrl, uri), signal);
+    // Already absolute and already validated by the index. Re-resolving here
+    // against the base would undo that check for an authored absolute URL.
+    const url = this._index.contentUri.get(record.id);
+    if (url == null) throw new Error(`No content URL for tile ${record.id}.`);
+    return this._transport.fetchTileBytes(url, signal);
   }
 
   decodeMeta(record: StreamingNodeRecord): NodeDecodeMetadata {
