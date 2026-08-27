@@ -43,8 +43,15 @@ export interface OctreeGrid {
  */
 export const DEFAULT_MAX_DEPTH = 16;
 
-/** `ceil(log8(ratio))`, i.e. the octree depth whose `8 ** depth` leaves cover `ratio`. */
-function depthForRatio(ratio: number): number {
+/**
+ * `ceil(log8(ratio))`, i.e. the octree depth whose `8 ** depth` leaves cover
+ * `ratio`.
+ *
+ * Exported so a caller that has to predict the shape of a build BEFORE running
+ * it — the storage preflight, which sizes the cache an index would write —
+ * derives the depth from the same rule the build uses instead of restating it.
+ */
+export function depthForRatio(ratio: number): number {
   if (ratio <= 1) return 0;
   return Math.ceil(Math.log2(ratio) / 3);
 }
