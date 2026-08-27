@@ -139,7 +139,13 @@ export async function openRemoteTileset(
     const replacingStatic = viewer.clouds().length > 0;
     await viewer.attachStreamingCloud(
       cloud,
-      new PntsChunkDecoder(),
+      // The decoder settles this layer's colour meaning on its first tile with
+      // points, so a mixed tileset stays honest on screen without this. What the
+      // sink adds is the reason: a user who dropped a coloured tileset and sees a
+      // grey patch is owed the explanation rather than left to guess at it. It
+      // fires at most once per layer, on the first disagreeing tile, which can be
+      // long after this function has returned.
+      new PntsChunkDecoder({ onColourNotice: (message) => deps.showToast(message) }),
       deps.getStreamingQuality(),
       deps.isPhone(),
       deps.getStreamingBenchmark(),

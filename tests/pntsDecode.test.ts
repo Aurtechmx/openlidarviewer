@@ -114,12 +114,15 @@ describe('attributes the format does not carry', () => {
   });
 
   it('carries RGB through when the tile has it, and omits it when it does not', async () => {
-    const withRgb = await decoder.decode(
+    // A decoder instance serves ONE tileset layer and holds that layer's colour
+    // meaning across the tiles it decodes (see tilesetMixedColour.test.ts), so
+    // each of these two tilesets gets its own.
+    const withRgb = await new PntsChunkDecoder().decode(
       makePnts([[0, 0, 0]], undefined, [[10, 20, 30]]),
       meta(),
     );
     expect([...(withRgb.rgb ?? [])]).toEqual([10, 20, 30]);
-    const without = await decoder.decode(makePnts([[0, 0, 0]]), meta());
+    const without = await new PntsChunkDecoder().decode(makePnts([[0, 0, 0]]), meta());
     expect(without.rgb).toBeUndefined();
   });
 });
