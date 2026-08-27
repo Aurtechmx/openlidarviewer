@@ -44,6 +44,12 @@ export interface OpfsFile {
   readonly size: number;
   arrayBuffer(): Promise<ArrayBuffer>;
   text(): Promise<string>;
+  /**
+   * A byte range as its own file, without reading the rest. A real `File` is a
+   * `Blob`, whose `slice` returns a `Blob` that satisfies this same shape, so
+   * the promotion fallback can copy a large tile a bounded window at a time.
+   */
+  slice(start: number, end: number): OpfsFile;
 }
 /**
  * The worker-only random-access handle. Its methods are synchronous in the
@@ -393,16 +399,32 @@ export async function openOpfsSpillBuild(root: OpfsDirHandle, name: string): Pro
  * degenerate that every point settles in one node, where the largest tile IS
  * the store; such a cloud has no usable octree either way.
  */
+/**
+ * Window size for the `move`-absent promotion copy. 16 MiB bounds the transient
+ * RAM of a promotion to one chunk while keeping the number of OPFS writes small
+ * for an ordinary multi-megabyte tile; the exact figure is not load-bearing.
+ */
+export const PROMOTION_COPY_CHUNK_BYTES = 16 * 1024 * 1024;
+
 async function relocate(from: OpfsDirHandle, to: OpfsDirHandle, name: string): Promise<void> {
   const source = await from.getFileHandle(name);
   if (typeof source.move === 'function') {
     await source.move(to, name);
     return;
   }
-  const bytes = new Uint8Array(await (await source.getFile()).arrayBuffer());
+  // No `move`: copy the bytes ourselves, but never materialise the whole tile.
+  // A degenerate cloud can settle almost the entire dataset in one node, and
+  // `arrayBuffer()` on such a tile would defeat the out-of-core guarantee at the
+  // final step. Copy in a fixed window so promotion RAM is one chunk regardless
+  // of tile size, then delete the source, preserving the move path's invariant
+  // that at most one tile is briefly duplicated.
+  const file = await source.getFile();
   const handle = await to.getFileHandle(name, { create: true });
   const writable = await handle.createWritable();
-  await writable.write(bytes);
+  for (let offset = 0; offset < file.size; offset += PROMOTION_COPY_CHUNK_BYTES) {
+    const end = Math.min(offset + PROMOTION_COPY_CHUNK_BYTES, file.size);
+    await writable.write(new Uint8Array(await file.slice(offset, end).arrayBuffer()));
+  }
   await writable.close();
   await from.removeEntry(name);
 }

@@ -40,6 +40,12 @@ export interface FakeOpfsStats {
   movedNames: string[];
   /** Most tile files holding an open sync access handle at any one moment. */
   peakOpenSyncHandles: number;
+  /**
+   * Byte length returned by every `arrayBuffer()` call, whole-file or slice, in
+   * order. A promotion that reads a whole tile at once shows one read the size
+   * of the tile; a bounded copy shows only reads no larger than its window.
+   */
+  arrayBufferReads: number[];
 }
 
 export interface FakeOpfsOptions {
@@ -98,7 +104,27 @@ export function fakeOpfs(options: FakeOpfsOptions = {}): FakeOpfs {
     fileMoves: 0,
     movedNames: [],
     peakOpenSyncHandles: 0,
+    arrayBufferReads: [],
   };
+
+  // A read-only view over a byte range that records what it hands out and can
+  // slice itself further, so the real `File`/`Blob` `slice(...).arrayBuffer()`
+  // chain the store relies on is modelled, cost included.
+  function makeFileView(data: Uint8Array): import('../../src/io/heavy/opfsSpillStore').OpfsFile {
+    return {
+      size: data.length,
+      async arrayBuffer() {
+        stats.arrayBufferReads.push(data.length);
+        return data.slice().buffer;
+      },
+      async text() {
+        return new TextDecoder().decode(data);
+      },
+      slice(start, end) {
+        return makeFileView(data.subarray(start, end));
+      },
+    };
+  }
   let openSyncHandles = 0;
 
   function totalBytes(node: FakeDir = rootNode): number {
@@ -136,16 +162,7 @@ export function fakeOpfs(options: FakeOpfsOptions = {}): FakeOpfs {
 
     const handle: OpfsFileHandle = {
       async getFile() {
-        const data = file().data;
-        return {
-          size: data.length,
-          async arrayBuffer() {
-            return data.slice().buffer;
-          },
-          async text() {
-            return new TextDecoder().decode(data);
-          },
-        };
+        return makeFileView(file().data);
       },
       async createWritable(opts) {
         const f = file();
