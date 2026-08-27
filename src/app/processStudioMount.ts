@@ -52,7 +52,19 @@ const CLASS_BUILDING = 6;
  * viewer or GPU directly.
  */
 export interface LiveScanAccessors {
-  /** Source point count when a streaming source is mounted; null/undefined otherwise (its presence marks the scan as streaming). */
+  /**
+   * True when a streaming source is MOUNTED, whatever it can say about its size.
+   * This, not a point total, is what makes the active scan a streaming one: a
+   * 3D Tiles tileset states no total (its per-tile figures are decode-admission
+   * estimates, so summing them would report a measurement that does not exist),
+   * and reading that absence as "no scan" hid a scan that is drawn, pickable
+   * and measurable from the capability model.
+   */
+  hasStreamingSource(): boolean;
+  /**
+   * The streaming source's SOURCE point total, or null/undefined when the
+   * format states none. Never consulted to decide whether a scan is present.
+   */
   getStreamingPointCount(): number | null | undefined;
   /** Point count of the active static cloud; null/undefined when none is loaded. */
   getActivePointCount(): number | null | undefined;
@@ -71,11 +83,16 @@ export interface LiveScanAccessors {
  * null when nothing is loaded. Classification is reported as `partial` whenever
  * any class code is present — the conservative floor, never `full` — and ground
  * / building trust follows only from the actual class-2 / class-6 codes.
+ *
+ * PRESENCE AND SIZE ARE SEPARATE. Whether a scan is loaded comes from the
+ * mounted source; how many points it has comes from the format. A format that
+ * states no total contributes no `pointCount`, and the signal set carries that
+ * absence rather than a stand-in figure.
  */
 export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
-  const streamPts = a.getStreamingPointCount();
+  const isStreaming = a.hasStreamingSource();
+  const streamPts = isStreaming ? a.getStreamingPointCount() : null;
   const staticPts = a.getActivePointCount();
-  const isStreaming = streamPts != null;
   if (!isStreaming && staticPts == null) return null;
   const codes = a.getPresentClassCodes();
   const hasClasses = codes.length > 0;
@@ -85,9 +102,12 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
   const classificationProvenance = !hasClasses
     ? 'none'
     : (a.getClassificationDerived() ? 'derived' : 'producer');
+  const pointCount = isStreaming ? streamPts : staticPts;
   return {
     kind: isStreaming ? 'streaming' : 'static',
-    pointCount: isStreaming ? (streamPts as number) : (staticPts as number),
+    // Omitted, not zeroed, when the source states no total: `RawScanSignals`
+    // leaves `pointCount` optional precisely so an unstated size stays unstated.
+    ...(pointCount == null ? {} : { pointCount }),
     crs: a.getResolvedCrs() ?? null,
     classification: hasClasses ? 'partial' : 'none',
     classificationProvenance,
@@ -200,7 +220,12 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
  * this module never imports the Viewer (and stays Node-testable with a fake).
  */
 export interface StudioViewer {
-  /** The mounted streaming source, or null for a static / empty scene. */
+  /**
+   * The mounted streaming source, or null for a static / empty scene. Its
+   * PRESENCE is what says a streaming scan is loaded; `sourcePointCount` is
+   * null for a format that states no total and is never read as an answer to
+   * that question.
+   */
   readonly streamingCloud: { readonly sourcePointCount: number | null } | null;
   /** Every loaded static layer's id. */
   clouds(): readonly string[];
@@ -280,6 +305,7 @@ function companionSignals(shell: ProcessStudioShell): readonly RawScanSignals[] 
  */
 export function createProcessStudioFromShell(shell: ProcessStudioShell): MountedProcessStudio {
   const accessors: LiveScanAccessors = {
+    hasStreamingSource: () => shell.getViewer().streamingCloud != null,
     getStreamingPointCount: () => shell.getViewer().streamingCloud?.sourcePointCount ?? null,
     getActivePointCount: () => shell.getActiveCloud()?.pointCount ?? null,
     // Resolved CRS (override applied), not raw metadata — Studio agrees with the Inspector (C7).

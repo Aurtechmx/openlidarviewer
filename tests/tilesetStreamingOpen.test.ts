@@ -9,7 +9,12 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { openRemoteTileset, tilesetDisplayName, TilesetRefusal } from '../src/app/openTilesetLayer';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const BOX = { box: [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10] };
 const DOC = JSON.stringify({
@@ -21,6 +26,8 @@ const DOC = JSON.stringify({
 /** Deps that record the order of the calls the commit sequence makes. */
 function deps(doc = DOC) {
   const order: string[] = [];
+  const reported: { kind?: string; sourcePointCount?: number | null }[] = [];
+  const setReport = vi.fn();
   const viewer = {
     clouds: () => [],
     attachStreamingCloud: vi.fn(async () => {
@@ -32,8 +39,19 @@ function deps(doc = DOC) {
   return {
     order,
     viewer,
+    reported,
+    setReport,
     attached: viewer.attachStreamingCloud,
     d: {
+      setLastStreamingReportCloud: (c: { kind?: string; sourcePointCount?: number | null }) => {
+        reported.push(c);
+        order.push('report');
+      },
+      runStreamingModules: (c: { sourcePointCount?: number | null }) => [
+        { label: 'Source point count', value: String(c.sourcePointCount), status: 'info' },
+      ],
+      inspector: { setReport },
+      classLegendPanel: { getVisibility: () => ({ isFiltered: () => false }) },
       isLoading: () => false,
       setLoading: () => {},
       viewerReady: Promise.resolve(),
@@ -128,6 +146,36 @@ describe('the open path', () => {
     expect(modes).not.toContain('classification');
   });
 
+  it("hands the Inspector this scan's report, not the previous scan's", async () => {
+    // Nothing set the report on this path, so a tileset opened over a COPC left
+    // the COPC's Scan Report on screen: its format, its extent, its point count.
+    const t = deps();
+    await withTransport(DOC, () =>
+      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+    );
+    expect(t.reported).toHaveLength(1);
+    expect(t.reported[0].kind).toBe('3dtiles');
+    expect(t.setReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the point total as absent rather than as a number', async () => {
+    const t = deps();
+    await withTransport(DOC, () =>
+      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+    );
+    // A tileset states no total and its per-tile figures are decode-admission
+    // estimates. Anything but null here is a figure nothing measured.
+    expect(t.reported[0].sourcePointCount).toBeNull();
+  });
+
+  it('sets the report only after the attach has committed', async () => {
+    const t = deps();
+    await withTransport(DOC, () =>
+      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+    );
+    expect(t.order.indexOf('report')).toBeGreaterThan(t.order.indexOf('attach'));
+  });
+
   it('refuses a tileset that declares no tile with point content', async () => {
     const empty = JSON.stringify({
       asset: { version: '1.0' },
@@ -212,5 +260,43 @@ describe('a refusal reaches the user', () => {
     // A transport or decode failure has no reason worth quoting, and the
     // category is the useful thing to say. Nothing here should bypass that.
     expect(new TilesetRefusal('x') instanceof Error).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The shell's side of the same report
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `runStreamingModules` and the report cloud it is called with both live in the
+ * shell, which cannot be imported here: `src/main.ts` boots the application on
+ * load. The two facts below are read off its source, the way
+ * `streamingScanReveal.test.ts` reads the attach paths, because a report that
+ * crashes on a null total or that survives a scan swap is not visible from the
+ * open path alone.
+ */
+describe('the streaming Scan Report in the shell', () => {
+  const main = readFileSync(resolve(ROOT, 'src/main.ts'), 'utf8');
+
+  it('accepts a source that states no point total', () => {
+    expect(main).toMatch(/readonly sourcePointCount: number \| null;/);
+  });
+
+  it('never formats that total without checking for it first', () => {
+    const guard = main.indexOf("cloud.sourcePointCount === null ? info('Source point count'");
+    const format = main.indexOf('cloud.sourcePointCount.toLocaleString');
+    expect(guard, 'the null total reaches .toLocaleString and throws').toBeGreaterThan(-1);
+    expect(format).toBeGreaterThan(guard);
+    // One formatting site only, so a second unguarded one cannot hide behind it.
+    expect(main.match(/cloud\.sourcePointCount\.toLocaleString/g) ?? []).toHaveLength(1);
+  });
+
+  it("drops the previous scan's report cloud when a streaming open commits", () => {
+    // `clearOpenStaticLayers` runs on every streaming attach once it has
+    // committed, including a streaming→streaming swap, which never passes
+    // through `closeStreaming`.
+    const body = main.slice(main.indexOf('function clearOpenStaticLayers()'));
+    const end = body.indexOf('\n}');
+    expect(body.slice(0, end)).toContain('lastStreamingReportCloud = null');
   });
 });

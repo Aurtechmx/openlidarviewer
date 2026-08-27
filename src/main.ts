@@ -4249,7 +4249,7 @@ function syncInspectClassScope(): void {
 function runStreamingModules(cloud: {
   readonly kind: StreamingSourceKind;
   readonly name: string;
-  readonly sourcePointCount: number;
+  readonly sourcePointCount: number | null; // null where the format states no total: a tileset declares none, and its per-tile figures are decode-admission estimates rather than counts
   readonly localBounds?: () => readonly [number, number, number, number, number, number];
   readonly metadata?: {
     readonly header?: {
@@ -4280,10 +4280,9 @@ function runStreamingModules(cloud: {
   };
 
   rows.push(info('Source', streamingSourceLabel(cloud.kind)));
-  if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) {
-    rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
-  }
-  rows.push(headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
+  if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
+  // An absent total is reported as absent: a zero, or a summed per-tile estimate, would each read as a figure the source stands behind.
+  rows.push(cloud.sourcePointCount === null ? info('Source point count', 'not stated by the source') : headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
 
   // Bounds — the header's source-coordinate min/max is the TIGHT data extent
   // (a 1000×1000×138 m scan reports 138 m here). Do NOT use `localBounds`: for
@@ -5603,6 +5602,7 @@ function removeCloud(id: string): void {
  */
 function clearOpenStaticLayers(): void {
   lastDerivedConfidence = null;
+  lastStreamingReportCloud = null; // every streaming open commits before calling this, so a streaming→streaming swap retires the previous scan's report here too; that path never reaches `closeStreaming`
   for (const id of viewer.clouds()) {
     viewer.removeCloud(id);
     inspector.removeCloud(id);
