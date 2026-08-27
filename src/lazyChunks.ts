@@ -531,3 +531,15 @@ export const loadRangeWorkbenchMount = () => import('./ui/rangeWorkbenchMount');
  * whole second format's reader out of the eager index bundle.
  */
 export const loadTilesetOpen = () => import('./app/openTilesetLayer');
+
+/**
+ * The out-of-core LAS executor. The bridge's decision half
+ * (`src/app/openLocalHeavyLas.ts`) stays in the eager shell and is light; the
+ * execution half pulls the whole out-of-core cluster — the storage preflight,
+ * the tile store builder, the OPFS spill store, `OlvTileSource`, the tile
+ * decoder and the indexer worker glue — which is +24 KiB the index bundle must
+ * not carry for a session that opens a small LAS, a LAZ, or nothing. This split
+ * is why the decision path can inspect the header and refuse without ever
+ * loading any of that weight.
+ */
+export const loadHeavyLasExecutor = () => import('./app/heavyLasExecutor');
