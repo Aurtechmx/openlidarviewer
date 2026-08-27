@@ -16,6 +16,12 @@
  *      coverage fraction — so a full-cloud grade never implies a completeness it
  *      doesn't have.
  *
+ * A third case sits above both: a source that states NO point total at all
+ * ({@link StreamingSource.sourcePointCount} null). Its per-node counts are
+ * decode-admission estimates, so every figure this module derives from them
+ * would be fabricated. {@link UNSTATED_POINT_TOTAL} is what the grade shows
+ * instead, and it carries no number.
+ *
  * "Exact" needs TWO independent facts, because the sampling plan can only ever
  * see the nodes the octree actually LOADED. `plan.exhaustive` means "the sample
  * covered every loaded node"; it says nothing about a hierarchy that stopped
@@ -34,6 +40,44 @@ import { formatPointCount } from '../../io/loadPlan';
 
 /** Whether a full-cloud grade is exact (all nodes) or estimated from a sample. */
 export type GradeScope = 'exhaustive' | 'sampled';
+
+/**
+ * What the grade shows in place of figures when the source states no point
+ * total. Same two slots the panel already renders for a graded run (a headline
+ * where the coverage label goes, and the note beneath it), so a refusal reads
+ * as a result rather than an error.
+ */
+export interface UnstatedPointTotal {
+  /** Stands in for the coverage label. */
+  readonly headline: string;
+  /** Why no figure is shown. */
+  readonly note: string;
+}
+
+/**
+ * The refusal for a source whose `sourcePointCount` is null.
+ *
+ * A 3D Tiles `tileset.json` states content URIs and no point counts, so every
+ * node record the reader builds carries one assumed figure that exists to
+ * govern decode admission. Summing those yields (tiles x assumed), which tracks
+ * how the tileset is subdivided and not how many points it holds. The streaming
+ * source already refuses to add them up; the grade refuses for the same reason,
+ * because a coverage label, a coverage percent and a density back-scale are all
+ * built on that sum.
+ *
+ * Deliberately carries no number of any kind. Showing the sum with a caveat, or
+ * showing zero, would each put a figure in front of a user that the file never
+ * stated.
+ */
+export const UNSTATED_POINT_TOTAL: UnstatedPointTotal = {
+  headline: 'Full-cloud grade unavailable: this format states no point total',
+  note:
+    "This scan's index says where its tiles are, not how many points they hold. " +
+    'The per-tile counts a grade would add up are decode-admission estimates, so a ' +
+    'point total, a coverage percent, or a density scaled by them would be a ' +
+    'fabricated figure rather than a measurement. COPC and EPT scans state a real ' +
+    'total and grade normally.',
+};
 
 /** The honesty + scaling facts derived from a {@link SamplingPlan}. */
 export interface FullCloudGradeCoverage {

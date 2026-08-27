@@ -6,7 +6,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildSamplingPlan, type SampleNode } from '../src/render/streaming/samplingPlan';
-import { fullCloudGradeCoverage } from '../src/render/streaming/fullCloudGrade';
+import {
+  fullCloudGradeCoverage,
+  UNSTATED_POINT_TOTAL,
+} from '../src/render/streaming/fullCloudGrade';
 
 function nodes(spec: Array<[depth: number, points: number]>): SampleNode[] {
   return spec.map(([depth, pointCount], i) => ({ id: `${depth}-${i}-0-0`, depth, pointCount, byteSize: pointCount * 4 }));
@@ -136,5 +139,26 @@ describe('fullCloudGradeCoverage — completeness gating (a short hierarchy is n
     expect(cov.scope).toBe('sampled'); // driven by the budget, not completeness
     expect(cov.label).toMatch(/sampled/);
     expect(cov.note).toMatch(/representative octree sample/i);
+  });
+});
+
+describe('UNSTATED_POINT_TOTAL — what replaces the figures when a format states no total', () => {
+  it('carries no number of any kind', () => {
+    // The whole point: the sum of the per-node estimates, a percent of it, or a
+    // zero standing in for it would each be a figure the file never stated.
+    expect(UNSTATED_POINT_TOTAL.headline).not.toMatch(/\d/);
+    expect(UNSTATED_POINT_TOTAL.note).not.toMatch(/\d/);
+  });
+
+  it('says the counts are estimates and that no total was stated', () => {
+    expect(UNSTATED_POINT_TOTAL.headline).toMatch(/no point total/i);
+    expect(UNSTATED_POINT_TOTAL.note).toMatch(/decode-admission estimates/i);
+  });
+
+  it('leaves the plan-driven coverage labels untouched', () => {
+    // The refusal is a separate value, not a mutation of the honest labels a
+    // COPC/EPT plan still produces.
+    const plan = buildSamplingPlan(nodes([[0, 500_000], [1, 1_300_000]]), { maxPoints: 10_000_000 });
+    expect(fullCloudGradeCoverage(plan).label).toBe('all 1.8M points (exact)');
   });
 });
