@@ -164,6 +164,26 @@ describe('a geocentric tileset gets a local frame', () => {
     ).toBeNull();
   });
 
+  it('APPLIES the frame to the tiles it serves, not merely computes it', () => {
+    // The regression this guards: the source computed a frame and handed
+    // tilesetNodes nothing, so a geocentric tileset stayed in ECEF.
+    const s = new TilesetStreamingSource(
+      'id', 'n', 'https://h/d/tileset.json', transport(), geocentric,
+    );
+    const meta = s.decodeMeta(s.octree.nodes()[0].record);
+    if (!('format' in meta)) throw new Error('expected point-tile metadata');
+    const m = meta.tileTransform;
+    const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    expect(
+      m.every((v, i) => Math.abs(v - identity[i]) < 1e-9),
+      'the tile transform is identity, so the tileset is still in ECEF and its ' +
+        'heights are measured along the polar axis',
+    ).toBe(false);
+    // And it must be the ENU matrix specifically, not any old transform.
+    const expected = tilesetRootFrameMatrix(geocentric)!;
+    for (let i = 0; i < 16; i++) expect(m[i]).toBeCloseTo(expected[i], 9);
+  });
+
   it('leaves the tileset unrotated when no frame is declared', () => {
     const t = transport();
     const s = new TilesetStreamingSource('id', 'n', 'https://h/d/tileset.json', t, TREE);
