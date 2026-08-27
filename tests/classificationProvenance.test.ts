@@ -64,6 +64,7 @@ describe('the capability model demotes derived ground to review', () => {
 
 describe('signalsFromLive maps the derived flag to provenance', () => {
   const base: LiveScanAccessors = {
+    hasStreamingSource: () => false,
     getStreamingPointCount: () => null, getActivePointCount: () => 1000, getResolvedCrs: () => metreCrs,
     getPresentClassCodes: () => [2, 6], getClassificationDerived: () => false,
   };
