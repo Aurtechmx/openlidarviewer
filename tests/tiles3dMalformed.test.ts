@@ -329,10 +329,16 @@ describe('PNTS perimeter', () => {
       /POINTS_LENGTH is not a positive uint32/,
     );
     // The upper bound is inclusive, so the refusal above is about the value and
-    // not about uint32 generally.
+    // not about uint32 generally. A valid uint32 clears this check and is
+    // refused by the decoded-point ceiling instead.
     expect(() => parsePnts(withPointsLength(4294967295))).toThrow(
-      /POSITION extends past the feature-table binary section/,
+      /exceeds the 8000000 point ceiling/,
     );
+    // Lifting the ceiling past it shows what catches it next, which is the
+    // section bounds the accessor reads against.
+    expect(() =>
+      parsePnts(withPointsLength(4294967295), { maxPoints: 4294967295 }),
+    ).toThrow(/POSITION extends past the feature-table binary section/);
   });
 
   it('refuses a POSITION that is not an accessor object', () => {

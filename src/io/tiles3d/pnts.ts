@@ -462,8 +462,29 @@ function decodeBatchIds(
   return batchIds;
 }
 
+/**
+ * The most points this viewer will decode from one PNTS tile.
+ *
+ * Matches the ceiling the superseded merged read applied to a whole tileset
+ * (`MAX_TILESET_POINTS`), which the streaming replacement did not carry over.
+ * At the channels {@link PntsTile} expands into, eight million points is about
+ * 200 MB of typed arrays before the renderer sees any of it.
+ */
+export const MAX_PNTS_TILE_POINTS = 8_000_000;
+
+/** Options for {@link parsePnts}. */
+export interface ParsePntsOptions {
+  /**
+   * Ceiling on `POINTS_LENGTH`. Defaults to {@link MAX_PNTS_TILE_POINTS}. A
+   * caller on a constrained device can lower it; raising it past what the
+   * device can hold moves the failure from a named refusal to an allocation
+   * crash.
+   */
+  readonly maxPoints?: number;
+}
+
 /** Decode a PNTS tile's header, feature table, positions, and per-point attributes. */
-export function parsePnts(buffer: ArrayBuffer): PntsTile {
+export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): PntsTile {
   if (buffer.byteLength < HEADER_BYTES) {
     throw new Error('PNTS: buffer shorter than the 28-byte header.');
   }
@@ -529,6 +550,24 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
     pointsLength > UINT32_MAX
   ) {
     throw new Error('PNTS: POINTS_LENGTH is not a positive uint32.');
+  }
+
+  // The magnitude ceiling, before the first allocation. The checks above bound
+  // where an accessor may READ; this one bounds what the decode will HOLD, and
+  // they are not the same limit. A tile body is capped at 128 MiB, but
+  // POSITION_QUANTIZED costs six bytes a point, so that cap admits roughly 22.4
+  // million of them, and each becomes a Float32 position plus the intensity,
+  // classification, return and GPS channels the generic chunk contract carries.
+  // The scheduler cannot pre-empt it either: every tile is admitted as
+  // ASSUMED_TILE_POINTS, so a 22-million-point tile is dispatched as though it
+  // were 500,000 and the real figure is only known once the arrays exist.
+  // Refusing names the tile; truncating would render a silently partial one.
+  const maxPoints = options.maxPoints ?? MAX_PNTS_TILE_POINTS;
+  if (pointsLength > maxPoints) {
+    throw new Error(
+      `PNTS: POINTS_LENGTH ${pointsLength} exceeds the ${maxPoints} point ceiling this ` +
+        `viewer decodes in one tile.`,
+    );
   }
 
   // RTC_CENTER is optional, but a present one cannot be dropped when it is
