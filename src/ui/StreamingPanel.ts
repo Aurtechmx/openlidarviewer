@@ -293,6 +293,8 @@ export class StreamingPanel {
   /** True while a grade is running — flips the grade button into a Cancel control. */
   private _gradeRunning = false;
   private _modeButtons = new Map<ColorMode, HTMLButtonElement>();
+  /** The mode whose chip carries `olv-chip-active`, or null when none does. */
+  private _activeMode: ColorMode | null = null;
   private _paused = false;
 
   constructor(callbacks: StreamingPanelCallbacks) {
@@ -565,8 +567,21 @@ export class StreamingPanel {
     this._summary.replaceChildren(...rows);
   }
 
-  /** Populate the colour-mode chips and select the active one. */
-  setColorModes(modes: ColorMode[], active: ColorMode): void {
+  /**
+   * Populate the colour-mode chips and select one.
+   *
+   * `keepActive` is for a REPUBLISH of the SAME scan's row. A 3D Tiles layer
+   * states its channels per tile, so its offer is the empty one at open and
+   * grows once a tile has been read; republishing it with the layer's default
+   * would throw away whatever the user had selected in between. With the flag
+   * set, a selection that is still offered is kept and `active` is only the
+   * fallback. It defaults to false so a FRESH scan's row still opens on that
+   * scan's own default rather than inheriting the previous scan's mode — the
+   * panel is never hidden on a streaming-to-streaming swap, so the previous
+   * selection is still here to inherit.
+   */
+  setColorModes(modes: ColorMode[], active: ColorMode, keepActive = false): void {
+    const previous = this._activeMode;
     this._modeRow.replaceChildren();
     this._modeButtons = new Map();
     for (const mode of modes) {
@@ -578,7 +593,28 @@ export class StreamingPanel {
       this._modeButtons.set(mode, chip);
       this._modeRow.append(chip);
     }
-    this._selectMode(active);
+    const kept = keepActive && previous !== null && this._modeButtons.has(previous);
+    this._selectMode(kept ? previous : active);
+    // The user's mode is no longer on offer, so the row now says something the
+    // renderer is not doing. Moving the renderer to the mode the row does offer
+    // is the only resolution that leaves one meaning on screen: leaving it
+    // painting under a chip that no longer exists is the silent mismatch this
+    // surface exists to prevent, and nothing here may invent the channel back.
+    if (keepActive && !kept && previous !== null && this._activeMode !== null) {
+      this._callbacks.onColorMode(this._activeMode);
+    }
+  }
+
+  /**
+   * The colour mode the chip row currently shows as active, or null when no
+   * offered chip is selected.
+   *
+   * Null rather than a guess: a row asked to select a mode it does not offer
+   * highlights nothing, and reporting the unoffered mode as active would be the
+   * panel claiming a chip a user cannot see.
+   */
+  activeColorMode(): ColorMode | null {
+    return this._activeMode;
   }
 
   /** Reflect the active quality preset. */
@@ -690,6 +726,9 @@ export class StreamingPanel {
   }
 
   private _selectMode(mode: ColorMode): void {
+    // Recorded from what the row can actually show, not from what was asked
+    // for, so `activeColorMode()` and the highlighted chip cannot disagree.
+    this._activeMode = this._modeButtons.has(mode) ? mode : null;
     for (const [m, chip] of this._modeButtons) {
       chip.classList.toggle('olv-chip-active', m === mode);
     }

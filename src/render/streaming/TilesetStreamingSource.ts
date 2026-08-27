@@ -171,6 +171,8 @@ export class TilesetStreamingSource implements StreamingSource {
   /** What the tiles served so far have stated about colour and about normals. */
   private _colour: TilesetColourConsensus = NO_TILE_DECODED;
   private _normals: TilesetNormalsConsensus = NO_TILE_DECODED_NORMALS;
+  /** Who wants to be told when the OFFER below moves. See {@link onColorModesChanged}. */
+  private readonly _offerListeners = new Set<() => void>();
 
   constructor(
     id: string,
@@ -255,6 +257,7 @@ export class TilesetStreamingSource implements StreamingSource {
    * settles the answer and it never moves.
    */
   noteDecodedChannels(chunk: DecodedChunk): void {
+    const before = this._offer();
     this._colour = noteTileColour(this._colour, {
       pointCount: chunk.pointCount,
       hasColour: chunk.rgb !== undefined,
@@ -263,6 +266,61 @@ export class TilesetStreamingSource implements StreamingSource {
       pointCount: chunk.pointCount,
       hasNormals: chunk.normals !== undefined,
     });
+    if (this._offer() === before) return;
+    for (const listener of this._offerListeners) {
+      // A listener that throws must not reach the scheduler's decode
+      // continuation: the throw lands in its `.catch`, which records a cleanly
+      // decoded node as failed and backs it off. Who was told is a UI concern;
+      // what the layer answers is not, and it is already folded above.
+      try {
+        listener();
+      } catch {
+        /* the layer's answer is unaffected */
+      }
+    }
+  }
+
+  /**
+   * The two facts {@link availableColorModes} and {@link defaultColorMode} read,
+   * as one integer.
+   *
+   * The consensus carries more than the offer does — a disagreeing count that
+   * moves with every mismatched tile and changes nothing a user can see. Folding
+   * the offer to a scalar is what lets `noteDecodedChannels` fire on the change
+   * a surface would have to redraw for and stay silent on the rest, without
+   * building an array on a path that runs once per decoded chunk.
+   */
+  private _offer(): number {
+    return (
+      (this._colour.settled === 'colour' ? 1 : 0) |
+      (this._normals.settled === 'normals' ? 2 : 0)
+    );
+  }
+
+  /**
+   * Be told when the set of colour modes this layer offers CHANGES.
+   *
+   * A tileset states colour and normals per tile, so its answer is not knowable
+   * at open: it is folded from the chunks the scheduler served, and the first
+   * tile with points settles it. A consumer that read the answer once, at open,
+   * therefore read the empty one and kept it for the session, which is how a
+   * tileset whose tiles state normals never offered a Normal chip.
+   *
+   * A CHANGE signal rather than a per-chunk one, because the answer moves at
+   * most once and then stops: `settled` is fixed by the first tile with points
+   * and never moves after it, so every later chunk would ask a surface to
+   * redraw the row it already has. Nothing polls, and the notification runs on
+   * the decode continuation, so a listener belongs to the surface it updates
+   * and does no work of its own.
+   *
+   * Returns the unsubscribe. The source holds the listener, so one that is
+   * never removed lives exactly as long as the layer does.
+   */
+  onColorModesChanged(listener: () => void): () => void {
+    this._offerListeners.add(listener);
+    return () => {
+      this._offerListeners.delete(listener);
+    };
   }
 
   /**

@@ -296,7 +296,47 @@ export async function openRemoteTileset(
       if (deps.debug) console.warn('[workspace] revealAnalysePanel (tileset) threw', err);
     }
 
-    deps.streamingPanel.setColorModes([...cloud.availableColorModes()], cloud.defaultColorMode());
+    // The chip row, and the image-export gate that reads the same answer.
+    //
+    // Published here it is the EMPTY answer: a tileset states colour and
+    // normals per tile, nothing has been read yet, and reading every tile to
+    // find out is the one thing a streaming open must not do. Published once,
+    // that empty answer was the whole session's offer, so a tileset whose tiles
+    // state normals could never show a Normal chip and its Normal Map export
+    // stayed shut. The source folds the answer from the chunks the scheduler
+    // served and signals when the OFFER moves, which happens at most once per
+    // layer, so the row is republished on that signal rather than polled or
+    // redrawn per chunk.
+    //
+    // Registered before the first publish so a chunk that lands in between
+    // still moves the row. `published` is what makes that ordering safe: the
+    // first call through here always establishes this layer's own selection,
+    // and only the calls after it may keep one.
+    let published = false;
+    const publishColorModes = (): void => {
+      deps.streamingPanel.setColorModes(
+        [...cloud.availableColorModes()],
+        cloud.defaultColorMode(),
+        published,
+      );
+      published = true;
+    };
+    cloud.onColorModesChanged(() => {
+      // This notification rides a decode continuation, which can land after a
+      // second scan has replaced this one. A layer that is no longer open must
+      // not repaint the surfaces the layer that replaced it owns.
+      const live = deps.getViewer();
+      if (live.streamingCloud !== cloud) return;
+      try {
+        publishColorModes();
+        // `hasNormals()` answers from the source, so the Normal Map gate moves
+        // with the offer. Read off the LIVE viewer, exactly as the open read it.
+        deps.exportPanel.setImageExportAvailability(live.availableImageExportModes());
+      } catch (err) {
+        if (deps.debug) console.warn('[streaming] colour-mode republish (tileset) threw', err);
+      }
+    });
+    publishColorModes();
     deps.streamingPanel.setQuality(deps.getStreamingQuality());
     deps.streamingPanel.setSourceUrl(url);
     deps.streamingPanel.setPhase('Streaming coarse geometry…');

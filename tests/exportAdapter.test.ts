@@ -283,6 +283,27 @@ describe('export adapter — streaming capability gates', () => {
     expect(buildExportAdapter(streamingHost(['rgb', 'elevation'])).hasIntensity()).toBe(false);
     expect(buildExportAdapter(streamingHost(['rgb', 'intensity'])).hasIntensity()).toBe(true);
   });
+
+  it('reports normals from the source, not from the format', () => {
+    // `hasNormals` used to answer false for EVERY streaming source, on the
+    // grounds that COPC and EPT carry none. A 3D Tiles tileset states a NORMAL
+    // accessor per tile, so its source offers the `normal` mode once a tile has
+    // stated one — and the Normal Map export was refused on a claim about the
+    // format rather than about the data.
+    expect(buildExportAdapter(streamingHost(['elevation', 'normal'])).hasNormals()).toBe(true);
+  });
+
+  it('keeps the Normal Map gate shut for a source that offers no normals', () => {
+    // The COPC and EPT rows, and a tileset whose tiles state none: all three
+    // report no `normal` mode, so all three stay exactly as shut as before.
+    for (const modes of [
+      ['rgb', 'intensity', 'elevation', 'classification'],
+      ['rgb', 'elevation'],
+      ['elevation'],
+    ]) {
+      expect(buildExportAdapter(streamingHost(modes)).hasNormals()).toBe(false);
+    }
+  });
 });
 
 describe('export adapter — combined bounds', () => {

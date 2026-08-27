@@ -38,6 +38,12 @@ export interface PntsOptions {
   readonly rtc?: Point3;
   /** One `RGB` triple per point, or omitted for a tile that states no colour. */
   readonly rgb?: readonly Rgb[];
+  /**
+   * One float32 `NORMAL` triple per point, or omitted for a tile that states
+   * none. Stated per TILE, exactly as `RGB` is, which is why a tileset's answer
+   * about normals cannot be read off the entry document.
+   */
+  readonly normals?: readonly Point3[];
 }
 
 /**
@@ -50,16 +56,25 @@ export interface PntsOptions {
  */
 export function makePnts(points: readonly Point3[], options: PntsOptions = {}): Uint8Array {
   const positionBytes = points.length * 3 * 4;
+  const rgbBytes = options.rgb ? points.length * 3 : 0;
+  // NORMAL is float32 and must start on a 4-byte boundary inside the binary
+  // section. The RGB block is byte-wide and a multiple of three long, so it can
+  // leave the cursor off a word; this pads it back on.
+  const normalPad = options.normals ? (4 - ((positionBytes + rgbBytes) % 4)) % 4 : 0;
+  const normalBytes = options.normals ? points.length * 3 * 4 : 0;
   const featureTable: Record<string, unknown> = {
     POINTS_LENGTH: points.length,
     POSITION: { byteOffset: 0 },
   };
   if (options.rtc) featureTable.RTC_CENTER = options.rtc;
   if (options.rgb) featureTable.RGB = { byteOffset: positionBytes };
+  if (options.normals) {
+    featureTable.NORMAL = { byteOffset: positionBytes + rgbBytes + normalPad };
+  }
   let json = JSON.stringify(featureTable);
   while (json.length % 8 !== 0) json += ' ';
   const jsonBytes = new TextEncoder().encode(json);
-  const binaryBytes = positionBytes + (options.rgb ? points.length * 3 : 0);
+  const binaryBytes = positionBytes + rgbBytes + normalPad + normalBytes;
   const total = 28 + jsonBytes.length + binaryBytes;
   const buffer = new ArrayBuffer(total);
   const view = new DataView(buffer);
@@ -78,6 +93,11 @@ export function makePnts(points: readonly Point3[], options: PntsOptions = {}): 
     const bytes = new Uint8Array(buffer, binaryStart + positionBytes, points.length * 3);
     let j = 0;
     for (const c of options.rgb) for (const v of c) bytes[j++] = v;
+  }
+  if (options.normals) {
+    const at = binaryStart + positionBytes + rgbBytes + normalPad;
+    let j = 0;
+    for (const n of options.normals) for (const v of n) view.setFloat32(at + j++ * 4, v, true);
   }
   return new Uint8Array(buffer);
 }
@@ -100,6 +120,23 @@ export function gridPoints(side: number, half: number, offset: Point3 = [0, 0, 0
     }
   }
   return points;
+}
+
+/**
+ * One unit normal per point, cycling through the three axes.
+ *
+ * Real directions rather than a constant: the `normal` colour mode encodes
+ * `n` as `(n + 1) / 2`, so a single repeated direction would paint the whole
+ * tile one colour and a chip that resolved to something else would look the
+ * same.
+ */
+export function unitNormals(count: number): Point3[] {
+  const axes: Point3[] = [
+    [0, 0, 1],
+    [1, 0, 0],
+    [0, 1, 0],
+  ];
+  return Array.from({ length: count }, (_, i) => axes[i % 3]);
 }
 
 /** One grey per point, so a tile "carries colour" without carrying meaning. */
@@ -147,6 +184,12 @@ export interface BoxTilesetOptions {
   readonly assetVersion?: string;
   /** Whether the tiles carry `RGB`. */
   readonly colour?: SceneColour;
+  /**
+   * Whether every tile carries a float32 `NORMAL` accessor. Off by default,
+   * because a tileset that states no normals is the common case and the one
+   * that must keep offering no Normal chip and no Normal Map.
+   */
+  readonly normals?: boolean;
   /** Directory the dataset is served from, so two scenes can coexist on one page. */
   readonly path?: string;
   /**
@@ -206,8 +249,12 @@ export function boxTileset(options: BoxTilesetOptions = {}): TilesetScene {
   // `mixed` is the case the colour consensus exists for: the root states RGB
   // and the children state none, so whichever tile decodes first settles the
   // layer's one colour meaning and the other disagrees with it.
+  const withNormals = options.normals === true;
   const withColour = (points: readonly Point3[], carries: boolean): Uint8Array =>
-    makePnts(points, carries ? { rgb: flatRgb(points.length) } : {});
+    makePnts(points, {
+      ...(carries ? { rgb: flatRgb(points.length) } : {}),
+      ...(withNormals ? { normals: unitNormals(points.length) } : {}),
+    });
   const rootCarries = colour !== 'none';
   const childCarries = colour === 'all';
 

@@ -329,11 +329,23 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       return total > 0 ? assigned / total : null;
     },
     hasNormals(): boolean {
-      // COPC + EPT streaming sources never carry normals in
-      // production (LAS reserves no field for them; EPT writers rarely
-      // emit Normal X/Y/Z attrs). Static loaders (PCD, PTX, GLTF)
-      // sometimes do — check the field explicitly.
-      if (host.streaming()) return false;
+      // Dispatch on the abstract `availableColorModes()` for streaming, exactly
+      // as hasRgb / hasIntensity / hasClassification do.
+      //
+      // This used to answer `false` for every streaming source, on the grounds
+      // that COPC and EPT carry no normals: LAS reserves no field for them and
+      // EPT writers rarely emit Normal X/Y/Z attributes. That is still true of
+      // those two formats, and both still report no `normal` mode, so the gate
+      // stays shut exactly where it was shut before. It is not true of a 3D
+      // Tiles tileset, whose tiles state a NORMAL accessor per tile and whose
+      // source offers `normal` once a tile has stated one — a measurement that
+      // reaches the renderer, the resident snapshot and the profile, and was
+      // then refused an export by a claim about the format rather than about
+      // the data. Static loaders (PCD, PTX, GLTF) still check the field.
+      const streaming = host.streaming();
+      if (streaming) {
+        return streaming.cloud.availableColorModes().includes('normal');
+      }
       for (const { cloud } of visibleEntries()) {
         if (cloud.normals) return true;
       }

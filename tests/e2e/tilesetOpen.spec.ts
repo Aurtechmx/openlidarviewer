@@ -299,6 +299,61 @@ test.describe('3D Tiles — opening a tileset from a URL', () => {
     expect(requested).toEqual([scene.entryUrl]);
   });
 
+  test('offers the Normal chip and the Normal Map export once a tile has stated normals', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    // A tileset states its channels PER TILE, so the chip row and the image
+    // export gate are both published at open, before any tile exists, from an
+    // answer that offers neither colour nor normals. Published once, that empty
+    // answer was the whole session's offer: the tiles here carry a float32
+    // NORMAL accessor that reaches the renderer, and nothing a user could click
+    // ever said so.
+    const scene = boxTileset({ normals: true, colour: 'none' });
+    await serveTilesets(page, scene);
+    await openTilesetUrl(page, scene);
+    await expectAttached(page);
+
+    const chips = page.locator('.olv-streaming-panel .olv-streaming-chips').first();
+    await expect(chips.locator('.olv-chip', { hasText: /^Normal$/ })).toBeVisible({
+      timeout: 40_000,
+    });
+    // The user's mode survives the republish: the row opened on Height, which
+    // is what the layer could serve before a tile had been read, and the chip
+    // that arrives beside it must not steal the selection.
+    await expect(chips.locator('.olv-chip-active')).toHaveText('Height');
+
+    // And the export that reads the same answer. `hasNormals()` returned false
+    // for every streaming source, so this button was dark over a scan whose
+    // tiles carry measured directions.
+    const normalMap = page.locator('.olv-export-btn', { hasText: /^Normal map$/ });
+    await expect(normalMap).toBeEnabled({ timeout: 40_000 });
+  });
+
+  test('offers neither, for a tileset whose tiles state no normals', async ({ page }) => {
+    test.setTimeout(90_000);
+    // The half that matters as much: a chip that resolves to another channel,
+    // or an export that renders a uniform grey image, says the scan holds a
+    // reading it does not.
+    const scene = boxTileset();
+    await serveTilesets(page, scene);
+    await openTilesetUrl(page, scene);
+    await expectAttached(page);
+
+    // Waited on through a surface that DOES move, so this is not asserting an
+    // absence before anything could have appeared: Points only reaches the
+    // total once every tile has been decoded and reported to the source.
+    await expect
+      .poll(async () => (await streamingRow(page, 'Points').textContent()) ?? '', {
+        timeout: 40_000,
+      })
+      .toContain(`${scene.totalPoints} / Unknown`);
+
+    const chips = page.locator('.olv-streaming-panel .olv-streaming-chips').first();
+    await expect(chips.locator('.olv-chip', { hasText: /^Normal$/ })).toHaveCount(0);
+    await expect(page.locator('.olv-export-btn', { hasText: /^Normal map$/ })).toBeDisabled();
+  });
+
   test('tells the user why a tileset whose tiles disagree about colour keeps one meaning', async ({
     page,
   }) => {
