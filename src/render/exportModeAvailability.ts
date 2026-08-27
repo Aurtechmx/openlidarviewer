@@ -67,7 +67,7 @@ export function imageExportModeAvailability(
     out.set('normal', {
       available: false,
       reason:
-        'This cloud has no per-point normals. LiDAR captures rarely include them; PCD / PTX / GLTF scans with normals are supported.',
+        'This cloud has no per-point normals. LiDAR captures rarely include them; PCD, PTX and GLTF scans and 3D Tiles point tiles that carry normals are supported.',
     });
   } else {
     out.set('normal', { available: true });

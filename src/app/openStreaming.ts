@@ -244,9 +244,11 @@ export function activateCommittedStreamingCloud(
  *
  * `imageExportModes` is the map the caller reads off the LIVE viewer
  * (`availableImageExportModes()`), not a constant: it is what disables the
- * per-mode buttons a given scene cannot fill. A tileset carries no intensity,
- * classification or normals, so passing the live map is what keeps those modes
- * dark rather than offering an export that would render nothing.
+ * per-mode buttons a given scene cannot fill. A tileset carries no intensity or
+ * classification, so those modes stay dark; it carries normals only when its
+ * tiles state them, and the same live map reflects that per layer. Passing the
+ * live map is what keeps a mode dark rather than offering an export that would
+ * render nothing.
  */
 export function enterStreamingInspectorMode(
   deps: Pick<OpenStreamingDeps, 'inspector' | 'exportPanel'>,
