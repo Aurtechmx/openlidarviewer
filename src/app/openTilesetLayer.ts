@@ -84,6 +84,16 @@ export async function openRemoteTileset(
     if (cloud.octree.nodes().length === 0) {
       throw new Error('This tileset declares no tile with point content.');
     }
+    // A tile this reader cannot serve is a piece of the scene that would be
+    // missing from a viewer that looked complete. Refuse the open and say which
+    // tiles, rather than drawing the rest.
+    if (!cloud.octree.isComplete) {
+      const first = cloud.octree.errors[0] ?? 'a tile could not be served';
+      throw new Error(
+        `This tileset has ${cloud.octree.errors.length} tile(s) this reader cannot ` +
+          `serve, so opening it would leave part of the scene missing. First: ${first}`,
+      );
+    }
 
     const viewer = deps.getViewer();
     // Captured BEFORE the attach commits, so the post-commit cancel handling
