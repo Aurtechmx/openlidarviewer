@@ -66,3 +66,36 @@ describe('PNTS decoded-point ceiling', () => {
     expect(() => parsePnts(tile)).toThrow(/past the feature-table binary section/);
   });
 });
+
+describe('CONSTANT_RGBA amplification', () => {
+  /**
+   * CONSTANT_RGBA lives in the feature-table JSON, not the binary, so unlike
+   * RGBA, RGB and RGB565 it has no backing bytes for `arrayStart` to bound it
+   * against. Colours are resolved before the positions branch, so a tile of a
+   * few hundred bytes reached `new Uint8Array(pointsLength * 3)` before any
+   * accessor was range-checked. At a uint32 POINTS_LENGTH that is a 12.9 GB
+   * allocation from a file that fits in a packet.
+   */
+  it('refuses a tiny tile that declares a huge constant-coloured cloud', () => {
+    const ft = JSON.stringify({
+      POINTS_LENGTH: 4_294_967_295,
+      CONSTANT_RGBA: [255, 0, 0, 255],
+      POSITION: { byteOffset: 0 },
+    });
+    const padded = ft.padEnd(Math.ceil(ft.length / 4) * 4, ' ');
+    const jsonBytes = new TextEncoder().encode(padded);
+    const buffer = new ArrayBuffer(28 + jsonBytes.length);
+    const view = new DataView(buffer);
+    view.setUint32(0, 0x73746e70, true);
+    view.setUint32(4, 1, true);
+    view.setUint32(8, buffer.byteLength, true);
+    view.setUint32(12, jsonBytes.length, true);
+    view.setUint32(16, 0, true);
+    view.setUint32(20, 0, true);
+    view.setUint32(24, 0, true);
+    new Uint8Array(buffer, 28).set(jsonBytes);
+
+    expect(buffer.byteLength).toBeLessThan(300);
+    expect(() => parsePnts(buffer)).toThrow(/exceeds the 8000000 point ceiling/);
+  });
+});
