@@ -29,7 +29,7 @@ import {
   nodeScore,
   depthCapForVelocity,
 } from './streamingScore';
-import { selectWithinBudget } from './streamingBudget';
+import { selectWithinBudget, DECODED_BYTES_PER_POINT } from './streamingBudget';
 import type { StreamingBudgets, ScoredCandidate } from './streamingBudget';
 import { CompressedChunkCache } from './StreamingCache';
 import {
@@ -219,6 +219,43 @@ const FORCED_RESCORE_INTERVAL_TICKS = 60;
 const MAX_DECODE_RETRIES = 4;
 const RETRY_BACKOFF_BASE_MS = 500;
 const RETRY_BACKOFF_MAX_MS = 30_000;
+
+/**
+ * Decoded bytes a single node may claim through the empty-viewer bypass in
+ * `_dispatch`.
+ *
+ * That bypass exists because the pressure gate has nothing to push back
+ * against while the resident set is empty: deferring the only node that could
+ * ever become resident is a deadlock the eviction pass cannot break, and the
+ * viewer stays blank. It has to stay. What it does not have to be is
+ * unbounded, and the node it waves through is the largest single allocation a
+ * session can make.
+ *
+ * Half a gigabyte is the line. It is a judgement, and the trade it makes is
+ * worth naming: above the ceiling the node is refused, and if every visible
+ * node is above it the viewer really does end up empty. That is the intended
+ * outcome, because a node this size is not renderable on the devices this
+ * viewer targets either way, and an empty viewer carrying a named error is a
+ * better failure than an allocation that takes the tab with it.
+ *
+ * The number is set so no legitimate node can reach it. The largest resident
+ * budget configured anywhere is desktop `high` at 8 M points, whose pressure
+ * cap is 12 M for the WHOLE resident set; this admits roughly 21.5 M in one
+ * node. A 3D Tiles tile cannot reach it at all — `MAX_PNTS_TILE_POINTS`
+ * refuses at 8 M in the parser. What it does cover is the COPC and EPT path,
+ * where `record.pointCount` is the hierarchy's real figure and the only
+ * downstream ceiling is the decompressor's 50 M `MAX_NODE_POINTS`: between
+ * those two numbers sits a node that decodes and cannot be held.
+ *
+ * Deliberately absolute rather than a multiple of the point budget. A
+ * budget-relative ceiling would refuse on a mobile `low` preset (600 k budget)
+ * a node that a desktop renders, which turns a memory guard into a
+ * device-dependent blank screen.
+ */
+const FIRST_ADMISSION_MAX_DECODED_BYTES = 512 * 1024 * 1024;
+const FIRST_ADMISSION_MAX_POINTS = Math.floor(
+  FIRST_ADMISSION_MAX_DECODED_BYTES / DECODED_BYTES_PER_POINT,
+);
 
 /** Per-scheduler tunables — defaulted, injected for unit tests. */
 export interface SchedulerOptions {
@@ -465,6 +502,20 @@ export class StreamingScheduler {
   private readonly _decodeFailures = new Map<string, number>();
   /** Node id → wall-clock time before which a failed node must not retry. */
   private readonly _retryReadyAt = new Map<string, number>();
+  /**
+   * Nodes refused by the first-admission ceiling (see
+   * {@link FIRST_ADMISSION_MAX_POINTS}). Held separately from
+   * `_decodeFailures`, which counts transient decode errors that a retry can
+   * clear: this refusal reads a declared count off an immutable hierarchy
+   * record, so it is settled for the session and re-deciding it is waste.
+   *
+   * Kept, rather than derived from the `error` state each tick, because the
+   * scoring pass reads it: a node nothing can admit must not go on holding a
+   * slice of the point budget, or the selector spends the whole budget on it
+   * and the admissible nodes underneath are never wanted. That is the
+   * difference between refusing one node and blanking the viewer.
+   */
+  private readonly _refusedOversized = new Set<string>();
 
   /** Hysteresis state — node id → wall-clock deadline (ms) past which it may evict. */
   private readonly _deferredEvictAt = new Map<string, number>();
@@ -952,6 +1003,10 @@ export class StreamingScheduler {
       // Walk the store's zero-allocation node iterator rather than `nodes()`,
       // which materialises a 28 k-element array on every rescore.
       for (const node of store.iterate()) {
+        // A node the admission ceiling refused can never become resident, so
+        // it must not be scored: a candidate in the list takes budget in
+        // `selectWithinBudget`, and the coarsest node takes it first.
+        if (this._refusedOversized.has(node.record.id)) continue;
         const box = this._localBoundsFor(node);
         let score = 0;
         if (boxInFrustum(box, planes)) {
@@ -1295,6 +1350,10 @@ export class StreamingScheduler {
     this._deferredEvictAt.clear();
     this._decodeFailures.clear();
     this._retryReadyAt.clear();
+    // Cleared with the rest of the per-session failure state. The ids are
+    // octree keys, which a re-seeded store reuses for different records, so a
+    // refusal carried across a stop could exclude a node that never earned it.
+    this._refusedOversized.clear();
     // Free the compressed-chunk cache eagerly (tens of MB of ArrayBuffers)
     // instead of waiting for the stopped scheduler to be GC'd — so detaching or
     // replacing a streaming scan doesn't leave stale chunks resident exactly
@@ -1412,13 +1471,45 @@ export class StreamingScheduler {
       // tick's eviction pass evicts deferred nodes that the pressure pass
       // and lapsed pass would normally drop. Bypass when nothing is resident
       // yet — only then can a single oversized node truly block forward
-      // progress.
+      // progress. The bypass is bounded by the branch below rather than
+      // removed: nothing can evict to make room for the first node, so the
+      // check it escapes has to be an absolute one, not a relative one.
       const projected =
         store.residentPointCount + store.decodedPendingPointCount + inFlightEstimate + node.record.pointCount;
       if (projected > pressureCap && store.residentPointCount > 0) {
         // Put it back at the head of the queue — same state, same priority.
         this._queue.unshift(node);
         break;
+      }
+      if (
+        store.residentPointCount === 0 &&
+        node.record.pointCount > FIRST_ADMISSION_MAX_POINTS
+      ) {
+        // Bounded bypass. The branch above waves this node through because
+        // nothing is resident; that is not a reason to admit any size. A node
+        // past `FIRST_ADMISSION_MAX_POINTS` is refused by name here, before the
+        // range read and before the decoder sizes anything from it.
+        //
+        // `continue`, not `break`: skipping one node leaves the rest of this
+        // tick's queue to dispatch, so a coarse root nobody can hold does not
+        // take its admissible children down with it.
+        //
+        // The refusal is recorded and the cached selection dropped, so the
+        // next tick rescores without this node and hands its share of the
+        // budget to the nodes below it. Without that the selector keeps
+        // spending the whole budget on a node dispatch will never take, the
+        // children stay unwanted, and the screen stays empty — the outcome
+        // the bypass exists to prevent, arrived at from the other side.
+        this._refusedOversized.add(node.record.id);
+        this._lastWanted = null;
+        this._lastScored = null;
+        store.setError(
+          node,
+          `streaming: first node ${node.record.id} declares ${node.record.pointCount} points, ` +
+            `past the ${FIRST_ADMISSION_MAX_POINTS} point ceiling for a decode admitted ` +
+            `before anything is resident.`,
+        );
+        continue;
       }
       inFlightEstimate += node.record.pointCount;
       this._startDecode(node);
