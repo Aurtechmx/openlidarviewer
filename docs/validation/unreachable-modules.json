@@ -187,6 +187,27 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/io/tiles3d/implicitExpand.ts",
+      "status": "staged",
+      "why": "The resource half of 3D Tiles 1.1 implicit tiling: it fetches the .subtree availability files a document names and rewrites the tree into the explicit document parseTileset already reads. The application's only tileset entry, src/app/openTilesetLayer.ts, still calls parseTileset on the fetched body directly, so nothing in the running viewer passes through this. parseTileset therefore still refuses an unexpanded implicit document, and docs/supported-formats.md still states that implicit tiling does not open.",
+      "graduation": "src/app/openTilesetLayer.ts parses the fetched body, passes it through expandImplicitTileset with the transport's fetchSubtreeBytes and the open's abort signal, and hands the result to parseTileset.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/tiles3d/implicitTiling.ts",
+      "status": "staged",
+      "why": "The pure half of the same feature: the implicitTiling descriptor and the {level}/{x}/{y}/{z} template substitution. Its only non-test importer is implicitExpand.ts, which is itself unreachable, so the pair is off the production graph together.",
+      "graduation": "implicitExpand.ts graduates; this arrives with it.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/io/tiles3d/subtree.ts",
+      "status": "staged",
+      "why": "The .subtree binary reader under the same feature: the 24-byte container, the JSON and binary chunks, and the three availability bitstreams. Imported only by implicitExpand.ts, which the application does not reach.",
+      "graduation": "implicitExpand.ts graduates; this arrives with it.",
+      "review": "2027-02-28"
+    },
+    {
       "path": "src/process/ProductExecutorRegistry.ts",
       "status": "staged",
       "why": "Named in the v0.6.6 release notes: \"a product executor registry foundation that invokes a registered compute core through ProcessService.runIfAuthorized ... production product routes do not pass through it yet\".",

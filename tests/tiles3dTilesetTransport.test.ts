@@ -105,6 +105,37 @@ describe('createTilesetTransport — bounds and cancellation', () => {
     );
   });
 
+  test('refuses a subtree body past the ceiling, in its own vocabulary', async () => {
+    const h = scriptedFetch([{ status: 200, body: 'x'.repeat(4096) }]);
+    const t = createTilesetTransport({ fetchImpl: h.fn, sleep: NOW, maxSubtreeBytes: 64 });
+    await expect(
+      t.fetchSubtreeBytes('https://tiles.example.org/scan/a/subtrees/0/0/0.subtree'),
+    ).rejects.toThrow(/3D Tiles subtree/);
+  });
+
+  test('a subtree read refuses a redirect and retries a transient status', async () => {
+    // The same discipline the tile read gets: availability is fetched from the
+    // same untrusted origin the tiles are, and a 3xx could send it to a host no
+    // block-list ever resolved.
+    const h = scriptedFetch([{ status: 503 }, { status: 200, body: 'ok' }]);
+    const t = createTilesetTransport({ fetchImpl: h.fn, sleep: NOW });
+    const bytes = await t.fetchSubtreeBytes(
+      'https://tiles.example.org/scan/a/subtrees/0/0/0.subtree',
+    );
+    expect(bytes.byteLength).toBe(2);
+    expect(h.calls).toBe(2);
+    expect(h.init.every((i) => i.redirect === 'error')).toBe(true);
+  });
+
+  test('a subtree body arrives in an exact-size buffer', async () => {
+    const h = scriptedFetch([{ status: 200, body: 'subtree-bytes' }]);
+    const t = createTilesetTransport({ fetchImpl: h.fn, sleep: NOW });
+    const bytes = await t.fetchSubtreeBytes(
+      'https://tiles.example.org/scan/a/subtrees/0/0/0.subtree',
+    );
+    expect(bytes.byteLength).toBe('subtree-bytes'.length);
+  });
+
   test('a stalled request surfaces as a timeout, not as a cancel', async () => {
     const h = neverAnsweringFetch();
     const t = createTilesetTransport({

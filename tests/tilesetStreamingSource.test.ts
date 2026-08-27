@@ -41,6 +41,11 @@ function transport(): TilesetTransport & { readonly asked: string[] } {
   return {
     asked,
     fetchTilesetJson: async () => '{}',
+    // An explicit hierarchy asks for no subtree, so a request for one here would
+    // be the reader inventing work rather than a case this test set up.
+    fetchSubtreeBytes: async () => {
+      throw new Error('this tileset states an explicit hierarchy; no subtree exists');
+    },
     fetchTileBytes: async (url: string) => {
       asked.push(url);
       return new ArrayBuffer(8);

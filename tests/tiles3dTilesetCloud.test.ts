@@ -84,6 +84,11 @@ function fakeTransport(
       if (body === undefined) throw new Error(`3D Tiles tileset fetch failed (404) for ${url}`);
       return body;
     },
+    // An explicit hierarchy asks for no subtree, so a request for one here would
+    // be the reader inventing work rather than a case this test set up.
+    fetchSubtreeBytes: async () => {
+      throw new Error('this tileset states an explicit hierarchy; no subtree exists');
+    },
     fetchTileBytes: async (url) => {
       requests.push(url);
       const body = tiles[url];
