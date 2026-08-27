@@ -465,16 +465,10 @@ function decodeBatchIds(
 /**
  * The most points this viewer will decode from one PNTS tile.
  *
- * The 3D Tiles sibling of COPC's `MAX_NODE_POINTS`: every other streaming path
- * refuses a node above a magnitude it will not hold, and this one did not. It
- * also restores the ceiling the superseded merged read applied to a whole
- * tileset (`MAX_TILESET_POINTS`), which the streaming replacement dropped.
- *
- * Distinct from `validateDeclaredPointCount`, which asks whether the bytes
- * present could back the declared count. For PNTS `arrayStart` already settles
- * that, and a count backed by real bytes can still be one the device cannot
- * hold. Eight million points is roughly 300 MB across the position copies and
- * the channels {@link PntsTile} expands into.
+ * Matches the ceiling the superseded merged read applied to a whole tileset
+ * (`MAX_TILESET_POINTS`), which the streaming replacement did not carry over.
+ * At the channels {@link PntsTile} expands into, eight million points is about
+ * 200 MB of typed arrays before the renderer sees any of it.
  */
 export const MAX_PNTS_TILE_POINTS = 8_000_000;
 
