@@ -26,6 +26,7 @@ import { LoadCancelledError } from '../io/loadFile';
 import { describeLoadError } from '../io/loadErrors';
 import { parseTileset } from '../io/tiles3d/tileset';
 import { createTilesetTransport } from '../io/tiles3d/tilesetTransport';
+import { validateRemoteTilesetUrl } from '../io/tiles3d/tilesetUrl';
 import { PntsChunkDecoder } from '../io/tiles3d/pntsDecode';
 import { TilesetStreamingSource } from '../render/streaming/TilesetStreamingSource';
 import {
@@ -98,6 +99,13 @@ export async function openRemoteTileset(
   let committed = false;
   try {
     await deps.viewerReady;
+    // The entry URL is the ROOT of every trust decision below it. Tile URLs are
+    // validated against a base derived from this one, and part of that check is
+    // that a tile stays on the entry's own origin, so an unchecked entry lets
+    // every tile inherit whatever origin it named. Nothing upstream validates:
+    // the router only pattern-matches a path ending in tileset.json.
+    const entry = validateRemoteTilesetUrl(url);
+    if (!entry.ok) throw new TilesetRefusal(entry.reason);
     const transport = createTilesetTransport();
     const json = await transport.fetchTilesetJson(url, controller.signal);
     let tileset;
