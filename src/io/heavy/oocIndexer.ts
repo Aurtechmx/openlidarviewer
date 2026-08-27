@@ -202,6 +202,48 @@ function usableHeader(header: SourceHeader | undefined): SourceHeader | undefine
   return extent > 0 ? header : undefined;
 }
 
+/** A 32-bit avalanche mix; each output bit depends on every input bit. */
+function mix32(a: number): number {
+  a = Math.imul(a ^ (a >>> 16), 0x45d9f3b);
+  a = Math.imul(a ^ (a >>> 16), 0x45d9f3b);
+  return (a ^ (a >>> 16)) >>> 0;
+}
+
+/**
+ * A point's LOD priority in `[0, 1)`, a deterministic hash of its position bits
+ * alone. Two runs hash a point to the same value, and the value does not depend
+ * on where the point sits in the file — the two properties that make coarse-node
+ * membership order-independent. The raw 32-bit float bit patterns are the stable
+ * identity; a point's source index is NOT used because it changes with file
+ * order, which is exactly the bias this replaces.
+ */
+function lodPriority(bits: Uint32Array): number {
+  const h = mix32(mix32(bits[0]) ^ mix32(bits[1]) ^ Math.imul(mix32(bits[2]), 0x9e3779b1));
+  return h / 4294967296;
+}
+
+/**
+ * The LOD level a point of priority `u` settles at, given the grid `depth`.
+ *
+ * A point settles at the COARSEST level whose keep-fraction admits it. The grid
+ * picks `depth` so a leaf holds about `pointsPerLeaf` points, i.e. `8 ** depth`
+ * leaves cover the cloud, so a level-`d` cell covers about `8 ** (depth - d)`
+ * leaves. Keeping the fraction `8 ** (d - depth)` of a cell's points at level
+ * `d` therefore lands about one leaf's worth — one node's worth — at every
+ * interior node, a coarse budget on the order of `pointsPerLeaf`, but chosen by
+ * the point's own hash rather than by which points arrived first.
+ *
+ * The thresholds increase with `d`, so the first level whose threshold `u`
+ * clears is the coarsest that admits it; the deepest level keeps everything
+ * (fraction 1), so no point is ever dropped and conservation is exact.
+ */
+function lodLevelFor(u: number, depth: number, thresholds: readonly number[]): number {
+  for (let d = 0; d < depth; d++) {
+    if (u < thresholds[d]) return d;
+  }
+  return depth;
+}
+
 /** Two grids place points identically iff their root cube and depth match. */
 function gridsMatch(a: OctreeGrid, b: OctreeGrid): boolean {
   return (
@@ -283,17 +325,20 @@ export async function indexOutOfCore(
     buffered = 0;
   }
 
-  // Per-cell occupancy across EVERY level, so a point can find the coarsest
-  // cell with room. Counts (one number per occupied cell) must survive a spill,
-  // unlike the staging bytes, but they are orders of magnitude smaller than the
-  // points they describe, so the pass stays inside its budget.
-  const occupancy = new Map<string, number>();
-  const nodeCapacity = pointsPerLeaf;
+  // Per-level keep-fraction thresholds for the pyramid. A point settles at the
+  // coarsest level whose threshold its position hash clears, so membership is a
+  // pure function of the point and the grid — order-independent and holding no
+  // per-cell state at all, unlike an occupancy fill that depends on arrival.
+  const thresholds: number[] = [];
+  for (let d = 0; d < grid.depth; d++) thresholds.push(Math.pow(8, d - grid.depth));
 
   // Scratch for the position-only path, so packing an xyz record allocates once
   // rather than per point.
   const scratch = new Float32Array(3);
   const scratchBytes = new Uint8Array(scratch.buffer);
+  // A view of the position bits, reused per point to hash the position without
+  // allocating. `scratch` is packed with x,y,z before reading `scratchU32`.
+  const scratchU32 = new Uint32Array(scratch.buffer);
   let recordBytes = -1; // set from the first batch; every batch must agree
 
   // The root cube the fast path holds every point to.
@@ -334,27 +379,25 @@ export async function indexOutOfCore(
           }
         }
         // PYRAMID PLACEMENT. A point does not go straight to its leaf: it settles
-        // at the COARSEST level whose cell still has room. That is what gives the
-        // scheduler something to draw before the fine tiles arrive — with every
-        // point at max depth there is no coarse representation, so showing the
-        // whole scan would mean loading the whole scan, which is the memory wall
-        // this indexer exists to remove.
+        // at the COARSEST level whose keep-fraction its position hash clears. That
+        // is what gives the scheduler something to draw before the fine tiles
+        // arrive — with every point at max depth there is no coarse representation,
+        // so showing the whole scan would mean loading the whole scan, which is the
+        // memory wall this indexer exists to remove.
         //
-        // The octant path makes the ancestor walk free: the level-d cell of a leaf
-        // path is its first d characters, so no extra geometry is computed. When
-        // every level is full the deepest takes the overflow, so no point is ever
-        // dropped and conservation holds exactly.
+        // WHICH points represent a coarse node is decided by a hash of the point's
+        // position, not by which points the file happened to deliver first. A
+        // flightline-ordered LAS therefore no longer biases the first low-res view
+        // toward the start of the file: the coarse sample is spatially even and the
+        // same in any order. The octant path makes the ancestor walk free: the
+        // level-d cell of a leaf path is its first d characters. The deepest level
+        // keeps every remaining point, so none is dropped and conservation is exact.
         const leafKey = grid.leafKeyFor(x, y, z);
-        let key = leafKey;
-        for (let d = 0; d <= grid.depth; d++) {
-          const candidate = d === grid.depth ? leafKey : leafKey.slice(0, d);
-          const filled = occupancy.get(candidate) ?? 0;
-          if (filled < nodeCapacity || d === grid.depth) {
-            occupancy.set(candidate, filled + 1);
-            key = candidate;
-            break;
-          }
-        }
+        scratch[0] = x;
+        scratch[1] = y;
+        scratch[2] = z;
+        const level = lodLevelFor(lodPriority(scratchU32), grid.depth, thresholds);
+        const key = level === grid.depth ? leafKey : leafKey.slice(0, level);
         let buf = buffers.get(key);
         if (buf === undefined) {
           buf = new LeafBuffer();
