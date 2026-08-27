@@ -38,12 +38,32 @@ export interface PositionBatch {
 }
 
 /**
+ * What a trusted source header declares up front: the point count and the
+ * axis-aligned bounds. Both MUST be expressed in the same frame and numeric
+ * precision as the `positions` the batches yield (for the LAS path that is the
+ * origin-relative, Float32-rounded frame), so the grid a header builds is the
+ * grid a measuring pass would build. A header that is off by any amount that
+ * changes the grid is caught and the build falls back to the two-pass path, so
+ * an honest-but-imprecise or malformed header is still correct, only slower.
+ */
+export interface SourceHeader {
+  readonly pointCount: number;
+  readonly min: readonly [number, number, number];
+  readonly max: readonly [number, number, number];
+}
+
+/**
  * A point source the indexer can read TWICE. `batches()` must yield the same
  * points on every call — the bounds pass and the bucketing pass both consume it,
  * and a source that changed between them would place points against stale bounds.
+ *
+ * A source that also exposes a trusted {@link SourceHeader} lets the indexer skip
+ * the bounds pass and build in ONE pass; see {@link indexOutOfCore}.
  */
 export interface PointSource {
   batches(signal?: AbortSignal): AsyncGenerator<PositionBatch>;
+  /** Optional trusted count and bounds that enable a single-pass build. */
+  readonly header?: SourceHeader;
 }
 
 /** Where leaf tiles are spilled. A memory map in tests, an OPFS directory in the browser. */
@@ -54,6 +74,13 @@ export interface SpillStore {
   read(key: string): Promise<Uint8Array>;
   /** Every key written so far. */
   keys(): Promise<string[]>;
+  /**
+   * Drop every spilled tile, returning the store to empty. Optional: the
+   * single-pass fast path only runs on a store that can be cleared, because a
+   * header it later finds untrustworthy has to be rolled back before the two-pass
+   * path re-spills. A store without `clear` always takes the two-pass path.
+   */
+  clear?(): Promise<void>;
 }
 
 export interface OocLeaf {
@@ -80,6 +107,12 @@ export interface IndexOptions {
   readonly memoryBudgetBytes?: number;
   readonly maxDepth?: number;
   readonly signal?: AbortSignal;
+  /**
+   * Force the two-pass path even when the source header would allow one pass.
+   * The build is identical either way for a valid header; this exists so a test
+   * can run both paths on one fixture and compare, and as an escape hatch.
+   */
+  readonly forceSlowPath?: boolean;
 }
 
 /**
@@ -146,6 +179,64 @@ class LeafBuffer {
   }
 }
 
+/** Raised inside the fast pass when a point escapes the header's declared root. */
+class HeaderBoundsExceeded extends Error {}
+
+/**
+ * A header is usable for the single-pass build only if it names a finite count
+ * of at least one point and a finite, non-degenerate box. A zero-extent box (a
+ * single point, or an empty cloud) has no grid to build, so it takes two passes.
+ */
+function usableHeader(header: SourceHeader | undefined): SourceHeader | undefined {
+  if (!header) return undefined;
+  if (!Number.isFinite(header.pointCount) || header.pointCount < 1) return undefined;
+  for (let a = 0; a < 3; a++) {
+    if (!Number.isFinite(header.min[a]) || !Number.isFinite(header.max[a])) return undefined;
+    if (header.max[a] < header.min[a]) return undefined;
+  }
+  const extent = Math.max(
+    header.max[0] - header.min[0],
+    header.max[1] - header.min[1],
+    header.max[2] - header.min[2],
+  );
+  return extent > 0 ? header : undefined;
+}
+
+/** Two grids place points identically iff their root cube and depth match. */
+function gridsMatch(a: OctreeGrid, b: OctreeGrid): boolean {
+  return (
+    a.depth === b.depth &&
+    a.root.size === b.root.size &&
+    a.root.min[0] === b.root.min[0] &&
+    a.root.min[1] === b.root.min[1] &&
+    a.root.min[2] === b.root.min[2]
+  );
+}
+
+/**
+ * Index a point source into a spilled octree.
+ *
+ * The default build reads the source twice: pass one takes the bounds and count
+ * that fix the {@link OctreeGrid}, pass two buckets every point into its leaf.
+ * When the source exposes a trusted {@link PointSource.header} — a finite count
+ * and a non-degenerate box — and the store can be cleared, the bounds pass is
+ * skipped and the grid is built from the header, halving the decode work on a
+ * large file.
+ *
+ * The fast path is fenced so a wrong header can never ship a wrong index. It
+ * tracks the bounds it actually sees; a point outside the declared root aborts
+ * the pass at once, and even a box that merely contains the cloud is rejected
+ * unless the grid it builds is the same grid the measured bounds would build. On
+ * any rejection the spilled tiles are cleared and the build re-enters its own
+ * two-pass path from the start, so a malformed or imprecise header is still
+ * correct, only slower. For a header that is exact, the one-pass and two-pass
+ * indexes are byte-for-byte identical: same nodes, per-node counts, tile bytes,
+ * and manifest.
+ *
+ * The bucketing loop lives inline here, and the fallback is a re-entry with
+ * {@link IndexOptions.forceSlowPath}, so the single `.positions` read stays one
+ * classified source-local site rather than splitting across a helper.
+ */
 export async function indexOutOfCore(
   source: PointSource,
   store: SpillStore,
@@ -155,8 +246,28 @@ export async function indexOutOfCore(
   const pointsPerLeaf = Math.max(1, options.pointsPerLeaf ?? DEFAULT_POINTS_PER_LEAF);
   const budget = Math.max(POSITION_RECORD_BYTES, options.memoryBudgetBytes ?? DEFAULT_MEMORY_BUDGET);
 
-  const { min, max, count } = await scanBounds(source, signal);
-  const grid = octreeGridFor(min, max, count, pointsPerLeaf, options.maxDepth);
+  // The fast path spills before it can prove the header, so it must be able to
+  // undo that if the header proves false: it runs only on a clearable store.
+  const header = options.forceSlowPath ? undefined : usableHeader(source.header);
+  const track = !!(header && typeof store.clear === 'function');
+
+  // The grid is fixed up front: from the header on the fast path, from a bounds
+  // pass otherwise. `bounds`/`count` are what the slow path returns; the fast
+  // path overwrites them with what it observes, which for an exact header equals
+  // these anyway.
+  let grid: OctreeGrid;
+  let min: [number, number, number];
+  let max: [number, number, number];
+  let count: number;
+  if (track && header) {
+    grid = octreeGridFor(header.min, header.max, header.pointCount, pointsPerLeaf, options.maxDepth);
+    min = [Infinity, Infinity, Infinity];
+    max = [-Infinity, -Infinity, -Infinity];
+    count = 0;
+  } else {
+    ({ min, max, count } = await scanBounds(source, signal));
+    grid = octreeGridFor(min, max, count, pointsPerLeaf, options.maxDepth);
+  }
 
   const buffers = new Map<string, LeafBuffer>();
   const counts = new Map<string, number>();
@@ -185,66 +296,125 @@ export async function indexOutOfCore(
   const scratchBytes = new Uint8Array(scratch.buffer);
   let recordBytes = -1; // set from the first batch; every batch must agree
 
-  for await (const batch of source.batches(signal)) {
-    signal?.throwIfAborted();
-    const p = batch.positions;
-    const rb = batch.records ? batch.recordBytes ?? 0 : POSITION_RECORD_BYTES;
-    if (batch.records && rb <= 0) throw new Error('oocIndexer: a records batch must set a positive recordBytes');
-    if (recordBytes === -1) recordBytes = rb;
-    else if (rb !== recordBytes) throw new Error('oocIndexer: recordBytes changed between batches');
+  // The root cube the fast path holds every point to.
+  const loX = grid.root.min[0];
+  const loY = grid.root.min[1];
+  const loZ = grid.root.min[2];
+  const hiX = loX + grid.root.size;
+  const hiY = loY + grid.root.size;
+  const hiZ = loZ + grid.root.size;
+  let escaped = false; // a fast-path point left the declared root
 
-    for (let i = 0; i < batch.count; i++) {
-      const x = p[i * 3];
-      const y = p[i * 3 + 1];
-      const z = p[i * 3 + 2];
-      // PYRAMID PLACEMENT. A point does not go straight to its leaf: it settles
-      // at the COARSEST level whose cell still has room. That is what gives the
-      // scheduler something to draw before the fine tiles arrive — with every
-      // point at max depth there is no coarse representation, so showing the
-      // whole scan would mean loading the whole scan, which is the memory wall
-      // this indexer exists to remove.
-      //
-      // The octant path makes the ancestor walk free: the level-d cell of a leaf
-      // path is its first d characters, so no extra geometry is computed. When
-      // every level is full the deepest takes the overflow, so no point is ever
-      // dropped and conservation holds exactly.
-      const leafKey = grid.leafKeyFor(x, y, z);
-      let key = leafKey;
-      for (let d = 0; d <= grid.depth; d++) {
-        const candidate = d === grid.depth ? leafKey : leafKey.slice(0, d);
-        const filled = occupancy.get(candidate) ?? 0;
-        if (filled < nodeCapacity || d === grid.depth) {
-          occupancy.set(candidate, filled + 1);
-          key = candidate;
-          break;
+  try {
+    for await (const batch of source.batches(signal)) {
+      signal?.throwIfAborted();
+      const p = batch.positions;
+      const rb = batch.records ? batch.recordBytes ?? 0 : POSITION_RECORD_BYTES;
+      if (batch.records && rb <= 0) throw new Error('oocIndexer: a records batch must set a positive recordBytes');
+      if (recordBytes === -1) recordBytes = rb;
+      else if (rb !== recordBytes) throw new Error('oocIndexer: recordBytes changed between batches');
+
+      for (let i = 0; i < batch.count; i++) {
+        const x = p[i * 3];
+        const y = p[i * 3 + 1];
+        const z = p[i * 3 + 2];
+        if (track) {
+          count++;
+          if (x < min[0]) min[0] = x;
+          if (x > max[0]) max[0] = x;
+          if (y < min[1]) min[1] = y;
+          if (y > max[1]) max[1] = y;
+          if (z < min[2]) min[2] = z;
+          if (z > max[2]) max[2] = z;
+          // The header promised this box. A point outside it means the header
+          // lied; do not let leafKeyFor clamp it into an edge leaf and ship a
+          // silently misplaced point. Abort now and let the rebuild take over.
+          if (x < loX || x > hiX || y < loY || y > hiY || z < loZ || z > hiZ) {
+            throw new HeaderBoundsExceeded();
+          }
         }
+        // PYRAMID PLACEMENT. A point does not go straight to its leaf: it settles
+        // at the COARSEST level whose cell still has room. That is what gives the
+        // scheduler something to draw before the fine tiles arrive — with every
+        // point at max depth there is no coarse representation, so showing the
+        // whole scan would mean loading the whole scan, which is the memory wall
+        // this indexer exists to remove.
+        //
+        // The octant path makes the ancestor walk free: the level-d cell of a leaf
+        // path is its first d characters, so no extra geometry is computed. When
+        // every level is full the deepest takes the overflow, so no point is ever
+        // dropped and conservation holds exactly.
+        const leafKey = grid.leafKeyFor(x, y, z);
+        let key = leafKey;
+        for (let d = 0; d <= grid.depth; d++) {
+          const candidate = d === grid.depth ? leafKey : leafKey.slice(0, d);
+          const filled = occupancy.get(candidate) ?? 0;
+          if (filled < nodeCapacity || d === grid.depth) {
+            occupancy.set(candidate, filled + 1);
+            key = candidate;
+            break;
+          }
+        }
+        let buf = buffers.get(key);
+        if (buf === undefined) {
+          buf = new LeafBuffer();
+          buffers.set(key, buf);
+        }
+        let record: Uint8Array;
+        if (batch.records) {
+          record = batch.records.subarray(i * rb, i * rb + rb);
+        } else {
+          scratch[0] = x;
+          scratch[1] = y;
+          scratch[2] = z;
+          record = scratchBytes;
+        }
+        buf.append(record);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        buffered += rb;
+        if (buffered > peakBufferedBytes) peakBufferedBytes = buffered;
+        // Bound residency to the budget: spill everything once it is reached, so
+        // the high-water mark is the budget plus at most the record that tipped it.
+        if (buffered >= budget) await flush();
       }
-      let buf = buffers.get(key);
-      if (buf === undefined) {
-        buf = new LeafBuffer();
-        buffers.set(key, buf);
-      }
-      let record: Uint8Array;
-      if (batch.records) {
-        record = batch.records.subarray(i * rb, i * rb + rb);
-      } else {
-        scratch[0] = x;
-        scratch[1] = y;
-        scratch[2] = z;
-        record = scratchBytes;
-      }
-      buf.append(record);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-      buffered += rb;
-      if (buffered > peakBufferedBytes) peakBufferedBytes = buffered;
-      // Bound residency to the budget: spill everything once it is reached, so
-      // the high-water mark is the budget plus at most the record that tipped it.
-      if (buffered >= budget) await flush();
     }
+    await flush();
+  } catch (err) {
+    if (!(err instanceof HeaderBoundsExceeded)) throw err;
+    escaped = true;
   }
-  await flush();
-  if (recordBytes === -1) recordBytes = POSITION_RECORD_BYTES;
 
+  if (track) {
+    // Keep the fast build only if the box held every point AND the grid the
+    // observed bounds and count would build is the SAME grid — only then is this
+    // layout the two-pass path's layout. A looser box or an off count builds a
+    // different, still-valid tree, which is not identity, so rebuild instead.
+    const measuredGrid = escaped
+      ? grid
+      : octreeGridFor(min, max, count, pointsPerLeaf, options.maxDepth);
+    if (!escaped && gridsMatch(measuredGrid, grid)) {
+      if (recordBytes === -1) recordBytes = POSITION_RECORD_BYTES;
+      return assembleIndex(grid, count, min, max, counts, recordBytes, peakBufferedBytes);
+    }
+    // Untrustworthy header: drop the fast tiles and rebuild in two passes.
+    await store.clear!();
+    return indexOutOfCore(source, store, { ...options, forceSlowPath: true });
+  }
+
+  if (recordBytes === -1) recordBytes = POSITION_RECORD_BYTES;
+  return assembleIndex(grid, count, min, max, counts, recordBytes, peakBufferedBytes);
+}
+
+/** Assemble the sorted leaf list and the returned index from a finished pass. */
+function assembleIndex(
+  grid: OctreeGrid,
+  count: number,
+  min: [number, number, number],
+  max: [number, number, number],
+  counts: Map<string, number>,
+  recordBytes: number,
+  peakBufferedBytes: number,
+): OocIndex {
   const leaves: OocLeaf[] = [...counts.entries()]
     .map(([key, pointCount]) => ({ key, pointCount }))
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
