@@ -142,6 +142,18 @@ export class StreamingPointCloud implements StreamingSource {
   }
 
   /**
+   * Whether the point records carry GPS time. Read off the LAS header flag
+   * rather than asserted from the format: the header parser rejects any point
+   * data record format outside 6/7/8, all of which carry the field, so the flag
+   * and the format agree here — but the flag is the thing the file states, and
+   * a reader that asserts what a format usually does is how the claim went
+   * wrong for the other sources in the first place.
+   */
+  hasGpsTime(): boolean {
+    return this.metadata.header.hasGpsTime;
+  }
+
+  /**
    * the CRS the COPC public-header parser pulled out of the
    * LASF_Projection VLRs (see `src/io/crs.ts`). Already cached on the
    * header; we re-expose it through the abstract `StreamingSource`

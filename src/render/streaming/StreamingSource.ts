@@ -245,6 +245,26 @@ export interface StreamingSource {
    */
   availableColorModes(): readonly StreamingColorMode[];
   /**
+   * Whether the source's OWN metadata establishes that its point records carry
+   * GPS time — read before a single chunk is decoded, because the export panel
+   * has to decide what to offer while the cloud is still filling in.
+   *
+   * Every implementation answers from something the document states, never from
+   * the format's usual habits: COPC from the LAS header flag (its point format
+   * is validated as 6/7/8, all of which carry the field), EPT from the
+   * `ept.json` schema (X/Y/Z are the only required dimensions, so an EPT that
+   * declares no `GpsTime` has none, whether its tiles are binary or laszip),
+   * 3D Tiles from the format (a `pnts` tile has no GPS time to carry).
+   *
+   * Optional only because the OLV tile store predates it. Absent is not `false`
+   * in meaning: it says this source has not been taught to answer, which is why
+   * {@link streamingHasGpsTime} resolves it conservatively rather than callers
+   * each picking a default. `tests/streamingGpsTimeClaim.test.ts` holds the
+   * shrink-only list of sources still omitting it, so a NEW source cannot join
+   * them silently.
+   */
+  hasGpsTime?(): boolean;
+  /**
    * the source CRS, when the cloud carries projection metadata.
    * COPC clouds get this from the LAS VLRs the public-header parser walks
    * (see `src/io/crs.ts`); EPT clouds get it from `ept.json`'s `srs.wkt`
@@ -299,6 +319,29 @@ export interface StreamingSource {
    * nothing to release and omits it; a COPC source closes its range reader.
    */
   close?(): Promise<void>;
+}
+
+/**
+ * Whether a streaming cloud carries GPS time, as its own metadata states it.
+ *
+ * This is what the export panel offers a GPS time field on, and what the LAS
+ * writers size their records against, so it is a claim about the data rather
+ * than a hint. The shell used to answer it with a literal `true` on the grounds
+ * that COPC mandates point format 6, 7 or 8. That holds for COPC and reaches
+ * none of the other three: an EPT schema need only declare X, Y and Z, a laszip
+ * EPT tile at PDRF 0 or 2 carries no GPS time, a `pnts` tile has none at all,
+ * and an OLV tile store carries it only when the source it was built from did.
+ *
+ * A source that has not been taught {@link StreamingSource.hasGpsTime} resolves
+ * to `false`, which is the conservative direction and not a claim of absence:
+ * the panel declines to offer a field it cannot establish, rather than promising
+ * a column the writer may have to fill with zeros. The cost of being wrong that
+ * way is an unoffered field; the cost of the other way is an export whose GPS
+ * time column is fabricated. Sources still in that position are listed in
+ * `tests/streamingGpsTimeClaim.test.ts`, and the list is shrink-only.
+ */
+export function streamingHasGpsTime(source: StreamingSource): boolean {
+  return source.hasGpsTime?.() === true;
 }
 
 // Re-export `DecodedChunk` so consumers that import `StreamingSource` need

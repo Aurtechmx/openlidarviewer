@@ -296,6 +296,17 @@ export class TilesetStreamingSource implements StreamingSource {
     return modes;
   }
 
+  /**
+   * Never. A `pnts` tile has no GPS time semantic to carry: its feature table
+   * defines positions, colours and normals, and a batch table holds authored
+   * per-feature properties whose meaning the format does not fix. Nothing in a
+   * tileset promises an acquisition timestamp per point, so there is no time to
+   * export and no reading of any tile that could produce one.
+   */
+  hasGpsTime(): boolean {
+    return false;
+  }
+
   crs(): CrsInfo | null {
     return this._crs;
   }
