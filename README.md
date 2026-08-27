@@ -64,7 +64,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - COPC streaming: a `.copc.laz` file, on disk or hosted at a URL, opens through progressive, octree-based, view-dependent streaming with worker-based decoding and bounded memory, never a full-file load. A remote scan opens from the start screen's open-from-URL field or a shareable `?copc=<url>` deep link
 - EPT (Entwine Point Tile) streaming: local and remote, `binary` and `laszip` tiles
 - 3D Tiles / `.pnts`: a single `.pnts` tile opens as a point cloud — detected by its magic bytes, decoded from uncompressed or quantised positions with colour, and placed by its `RTC_CENTER`
-- 3D Tiles / `tileset.json`: a 3D Tiles 1.0 or 1.1 tileset whose content is PNTS opens from a URL and streams the way COPC and EPT do. The scheduler culls against the camera, selects what fits the point budget, and fetches and decodes tile bodies as they are needed; each tile is placed by its own cumulative transform, after its `RTC_CENTER` and before the render origin, in float64. A streamed tileset reports no source point total, because a `tileset.json` never states one and the per-tile figures are decode-admission estimates rather than counts. Mesh content (B3DM, I3DM, CMPT, glTF), implicit tiling, nested external tilesets and Draco are refused by name, as is a tile that refines by REPLACE into tiles with their own content. See [`docs/supported-formats.md`](docs/supported-formats.md) for the limits of the subset
+- 3D Tiles / `tileset.json`: a 3D Tiles 1.0 or 1.1 tileset whose content is PNTS opens from a URL and streams the way COPC and EPT do. The scheduler culls against the camera, selects what fits the point budget, and fetches and decodes tile bodies as they are needed; each tile is placed by its own cumulative transform, after its `RTC_CENTER` and before the render origin, in float64. A streamed tileset reports no source point total, because a `tileset.json` never states one and the per-tile figures are decode-admission estimates rather than counts. A tileset whose hierarchy is implicit, a quadtree or octree of subtree files rather than a written-out tree, opens too: it is expanded to the equivalent explicit tileset before parsing, so the same refusals apply. Mesh content (B3DM, I3DM, CMPT, glTF), nested external tilesets and Draco are refused by name, as is a tile that refines by REPLACE into tiles with their own content. See [`docs/supported-formats.md`](docs/supported-formats.md) for the limits of the subset
 - A curated catalog of 12 hand-vetted public COPC / EPT datasets
 
 See [`docs/streaming.md`](docs/streaming.md) and [`docs/copc.md`](docs/copc.md).
@@ -359,10 +359,10 @@ Yes. Drag a `.las`, `.laz`, or `.copc.laz` onto [lidar.aurtech.mx](https://lidar
 No. Files are read and rendered locally. The only network calls are for remote datasets you choose to open; your local files never leave your device.
 
 **What's the largest scan it can open?**
-Local files are bounded by browser memory and GPU. For very large datasets, stream them as COPC (local or remote) or convert with PDAL / Entwine; streaming only loads the resident set the camera needs.
+Most local files are bounded by browser memory and GPU. A very large uncompressed LAS is the exception: it is indexed out of core into browser storage and streamed through the same scheduler, when the browser provides that storage and enough space; the index is temporary and removed when the scan closes. If storage is unavailable or too small the file is refused with guidance rather than loaded whole. For anything else that is too large, stream it as COPC or EPT (local or remote) or convert with PDAL / Entwine. Streaming only loads the resident set the camera needs.
 
 **Which formats are supported?**
-LAS / LAZ, PLY, XYZ / CSV, E57, and glTF / GLB for static loads; COPC and EPT for streaming. See [Formats & requirements](#formats--requirements).
+LAS / LAZ, PLY, XYZ / CSV, E57, and glTF / GLB for static loads; for streaming: COPC, EPT, a 3D Tiles PNTS tileset, and a very large uncompressed LAS indexed out of core. See [Formats & requirements](#formats--requirements).
 
 **Is it survey-grade?**
 No. Measurements and quality grades describe the data you loaded; they are not a survey-grade certification. Validate against ground control where accuracy matters.
