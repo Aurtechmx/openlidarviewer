@@ -161,3 +161,9 @@ __pycache__/
 # Coconino validation tile cache (multi-GB USGS LAZ, re-fetchable via the ingest script)
 _coconino_tiles/
 coconino-next-*-tiles.csv
+
+# Editor and tool backups. `sed -i.bak` writes these beside the source;
+# one reached a release archive before this rule existed.
+*.bak
+*.orig
+*.rej
