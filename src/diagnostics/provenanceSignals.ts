@@ -88,7 +88,9 @@ export interface StaticCloudShape {
 /** The subset of a streaming cloud the streaming-cloud signal helper uses. */
 export interface StreamingCloudShape {
   readonly kind: StreamingSourceKind;
-  readonly sourcePointCount?: number;
+  // `null` where the format states no total. Read truthily below, so a null
+  // leaves the density signal unset instead of deriving one from a guess.
+  readonly sourcePointCount?: number | null;
   /**
    * The TIGHT data extent — preferred for the aspect-ratio + density signals.
    * `localBounds` (the octree cube) reports a 1:1:1 aspect and a cube-area

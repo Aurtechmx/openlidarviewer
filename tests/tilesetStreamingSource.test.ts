@@ -9,7 +9,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { TilesetStreamingSource, resolveTileUrl } from '../src/render/streaming/TilesetStreamingSource';
+import {
+  TilesetStreamingSource,
+  resolveTileUrl,
+  tilesetRootFrameMatrix,
+} from '../src/render/streaming/TilesetStreamingSource';
+import { geodeticToEcef } from '../src/io/tiles3d/boundingVolume';
 import { parseTileset } from '../src/io/tiles3d/tileset';
 import type { TilesetTransport } from '../src/io/tiles3d/tilesetTransport';
 
@@ -106,5 +111,83 @@ describe('the shape the scheduler reads', () => {
 
   it('says it is complete only when the walk dropped nothing', () => {
     expect(source().octree.isComplete).toBe(true);
+  });
+});
+
+describe('a geocentric tileset gets a local frame', () => {
+  const DEG = Math.PI / 180;
+  // Monterrey: the polar axis and local up are 64.3 degrees apart here.
+  const C = geodeticToEcef(-100.3161 * DEG, 25.6866 * DEG, 540);
+  const HALF = 400;
+  // `region` is the only in-spec declaration of geocentricity.
+  const REGION = {
+    region: [-100.32 * DEG, 25.68 * DEG, -100.31 * DEG, 25.69 * DEG, 500, 580],
+  };
+
+  const geocentric = parseTileset(
+    JSON.stringify({
+      asset: { version: '1.0' },
+      geometricError: 100,
+      root: {
+        boundingVolume: REGION,
+        geometricError: 50,
+        refine: 'REPLACE',
+        content: { uri: 'r.pnts' },
+      },
+    }),
+  );
+
+  it('builds a root frame matrix for a region-bounded tileset', () => {
+    expect(
+      tilesetRootFrameMatrix(geocentric),
+      'a region declares geocentricity, so the reader must rotate into local ENU',
+    ).not.toBeNull();
+  });
+
+  it('declares none for a box-bounded tileset, rather than guessing one', () => {
+    const boxed = parseTileset(
+      JSON.stringify({
+        asset: { version: '1.0' },
+        geometricError: 100,
+        root: {
+          boundingVolume: { box: [C[0], C[1], C[2], HALF, 0, 0, 0, HALF, 0, 0, 0, HALF] },
+          geometricError: 50,
+          refine: 'REPLACE',
+          content: { uri: 'r.pnts' },
+        },
+      }),
+    );
+    expect(
+      tilesetRootFrameMatrix(boxed),
+      'a box declares nothing about geocentricity; inventing a frame would place ' +
+        'the scene by guess',
+    ).toBeNull();
+  });
+
+  it('APPLIES the frame to the tiles it serves, not merely computes it', () => {
+    // The regression this guards: the source computed a frame and handed
+    // tilesetNodes nothing, so a geocentric tileset stayed in ECEF.
+    const s = new TilesetStreamingSource(
+      'id', 'n', 'https://h/d/tileset.json', transport(), geocentric,
+    );
+    const meta = s.decodeMeta(s.octree.nodes()[0].record);
+    if (!('format' in meta)) throw new Error('expected point-tile metadata');
+    const m = meta.tileTransform;
+    const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    expect(
+      m.every((v, i) => Math.abs(v - identity[i]) < 1e-9),
+      'the tile transform is identity, so the tileset is still in ECEF and its ' +
+        'heights are measured along the polar axis',
+    ).toBe(false);
+    // And it must be the ENU matrix specifically, not any old transform.
+    const expected = tilesetRootFrameMatrix(geocentric)!;
+    for (let i = 0; i < 16; i++) expect(m[i]).toBeCloseTo(expected[i], 9);
+  });
+
+  it('leaves the tileset unrotated when no frame is declared', () => {
+    const t = transport();
+    const s = new TilesetStreamingSource('id', 'n', 'https://h/d/tileset.json', t, TREE);
+    const m = s.decodeMeta(s.octree.nodes()[0].record);
+    expect('format' in m && m.format).toBe('pnts');
   });
 });

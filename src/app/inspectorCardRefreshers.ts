@@ -42,7 +42,8 @@ export interface InspectorCardRefreshers {
   /** Record a freshly attached streaming cloud as the scan the provenance store describes. */
   refreshProvenanceFromStreaming(cloud: {
     readonly kind: StreamingSourceKind;
-    readonly sourcePointCount?: number;
+    // `null` where the format states no total, which leaves density unset.
+    readonly sourcePointCount?: number | null;
   }): void;
   /** Push a cheap Dataset Intelligence summary from a static cloud's header. */
   refreshDatasetIntelligenceFromStaticCloud(cloud: {
@@ -169,7 +170,9 @@ export function createInspectorCardRefreshers(
 
   function refreshProvenanceFromStreaming(cloud: {
     readonly kind: StreamingSourceKind;
-    readonly sourcePointCount?: number;
+    // `null` where the format states no total, which leaves the density signal
+    // unset rather than deriving one from an invented number.
+    readonly sourcePointCount?: number | null;
   }): void {
     // A streaming open closes the static layers, so the streaming source is the
     // whole scene and carries no static layer id.

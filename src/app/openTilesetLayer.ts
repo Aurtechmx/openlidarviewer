@@ -1,41 +1,63 @@
 /**
- * openTilesetLayer.ts — opening a remote 3D Tiles tileset as a static layer.
+ * openTilesetLayer.ts — opening a remote 3D Tiles tileset as a streaming scan.
  *
  * The shell's URL router dispatches here for a `tileset.json`, the way it
- * dispatches to `handleRemoteEpt` for an `ept.json`. What happens after that is
- * deliberately the STATIC path, not the streaming one: `loadTilesetCloud`
- * returns one merged `PointCloud`, and `attachStaticCloud` mounts it through
- * the same attach every dropped file goes through, so the layer row, the
- * Inspector, the CRS pass and the Analyse panel all behave as they do for a
- * decoded LAS. Nothing in the viewer needs to know a tileset was involved.
+ * dispatches to `handleRemoteEpt` for an `ept.json`, and what happens after is
+ * now the same STREAMING path those take. The entry document is fetched and
+ * walked into a flat node store, and the scheduler fetches and decodes tile
+ * bodies as the camera needs them.
  *
- * A tileset that is too large for one read is refused by the loader rather than
- * partially opened here (see `tilesetCloud.ts`). This module's whole job around
- * that is the surface: claim the one-load-at-a-time flag, wire Cancel to the
- * fetch, report a refusal as an error the user can read, and release the flag.
+ * It used to read the whole tileset first and merge it into one static cloud.
+ * That was honest but bounded to what one read could hold: nothing appeared
+ * until every tile had been fetched, so a city-scale tileset was refused rather
+ * than opened. Streaming removes that ceiling, and the refusals that remain are
+ * about documents this subset cannot read rather than about size.
+ *
+ * The commit sequence below is the EPT path's, reusing its helpers rather than
+ * a second copy: attach first because the attach is transactional, drop the
+ * candidate only if a cancel lands before the static layers are retired, and
+ * publish CRS and provenance to global state ONLY after the commit.
  *
  * Held behind `lazyChunks.loadTilesetOpen` — the tileset parser, traversal,
  * transport and PNTS decoder are a chunk nothing in the startup shell needs.
  */
 
-import { attachStaticCloud, type OpenScanDeps } from './openScan';
 import { LoadCancelledError } from '../io/loadFile';
 import { describeLoadError } from '../io/loadErrors';
-import { loadTilesetCloud } from '../io/tiles3d/tilesetCloud';
+import { parseTileset } from '../io/tiles3d/tileset';
 import { createTilesetTransport } from '../io/tiles3d/tilesetTransport';
-import { isAbortError, linkAbortSignals } from './openStreaming';
+import { PntsChunkDecoder } from '../io/tiles3d/pntsDecode';
+import { TilesetStreamingSource } from '../render/streaming/TilesetStreamingSource';
+import {
+  activateCommittedStreamingCloud,
+  isAbortError,
+  linkAbortSignals,
+  shouldDropCandidateOnPostCommitCancel,
+  type OpenStreamingDeps,
+} from './openStreaming';
+
+/** The name shown for the scan, taken from the document's own URL. */
+export function tilesetDisplayName(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const last = path.split('/').filter(Boolean).pop();
+    return last ?? url;
+  } catch {
+    return url;
+  }
+}
 
 /**
- * Open a remote tileset by its `tileset.json` URL and mount the merged cloud.
+ * Open a remote tileset by its `tileset.json` URL and stream it.
  *
- * `deps` is the shell's existing `openScanDeps`: the attach is the same one a
- * local file gets, so it takes the same collaborators rather than a parallel
- * set that could drift from it.
+ * `deps` is the shell's `openStreamingDeps`: this is a streaming scan, so it
+ * takes the same collaborators the COPC and EPT opens take rather than a
+ * parallel set that could drift from them.
  */
 export async function openRemoteTileset(
   url: string,
   signal: AbortSignal | undefined,
-  deps: OpenScanDeps,
+  deps: OpenStreamingDeps,
 ): Promise<void> {
   if (deps.isLoading()) {
     deps.showToast('Already loading — cancel the current load first.');
@@ -51,27 +73,50 @@ export async function openRemoteTileset(
   const unlinkAbort = linkAbortSignals(signal, controller);
   deps.dropZone.setOpening('Opening tileset…');
   deps.dropZone.setCancelHandler(() => controller.abort());
+  let committed = false;
   try {
     await deps.viewerReady;
-    const cloud = await loadTilesetCloud(
-      url,
-      createTilesetTransport(),
-      {
-        onTile: (done, total) =>
-          deps.dropZone.setProgress(`Reading tile ${done} of ${total}…`, done / total),
-      },
+    const transport = createTilesetTransport();
+    const tileset = parseTileset(await transport.fetchTilesetJson(url, controller.signal));
+    if (controller.signal.aborted) throw new LoadCancelledError();
+
+    const cloud = new TilesetStreamingSource(url, tilesetDisplayName(url), url, transport, tileset);
+    if (cloud.octree.nodes().length === 0) {
+      throw new Error('This tileset declares no tile with point content.');
+    }
+
+    const viewer = deps.getViewer();
+    // Captured BEFORE the attach commits, so the post-commit cancel handling
+    // below knows which scene the user would still have.
+    const replacingStatic = viewer.clouds().length > 0;
+    await viewer.attachStreamingCloud(
+      cloud,
+      new PntsChunkDecoder(),
+      deps.getStreamingQuality(),
+      deps.isPhone(),
+      deps.getStreamingBenchmark(),
       controller.signal,
     );
-    if (controller.signal.aborted) throw new LoadCancelledError();
-    await attachStaticCloud(
-      // A tileset is read in full, so what is on screen IS the source total and
-      // there is no reduced display cloud to declare.
-      { cloud, originalPointCount: cloud.pointCount, downsampled: false },
-      // No source file: the layer came from many fetched tiles, so the Export
-      // panel has nothing to re-decode at full resolution.
-      { file: null, signal: controller.signal },
-      deps,
-    );
+    if (shouldDropCandidateOnPostCommitCancel(replacingStatic, controller.signal.aborted)) {
+      deps.closeStreaming();
+      throw new LoadCancelledError();
+    }
+    deps.clearOpenStaticLayers();
+    // The candidate is the sole committed scene now, so a later throw must not
+    // tear it down in the catch.
+    committed = true;
+    activateCommittedStreamingCloud(cloud, deps);
+    viewer.setMode('orbit');
+    viewer.frameAll();
+
+    deps.streamingPanel.setColorModes([...cloud.availableColorModes()], cloud.defaultColorMode());
+    deps.streamingPanel.setQuality(deps.getStreamingQuality());
+    deps.streamingPanel.setSourceUrl(url);
+    deps.streamingPanel.setPhase('Streaming coarse geometry…');
+    deps.dropZone.setProgress(null);
+    deps.dropZone.setCancelHandler(null);
+    deps.startStreamingStatusPolling();
+    deps.revealStreamingChrome();
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
     if (err instanceof LoadCancelledError || isAbortError(err)) {
@@ -79,6 +124,9 @@ export async function openRemoteTileset(
     } else {
       if (deps.debug) console.error('OpenLiDARViewer — tileset open error', err);
       deps.dropZone.setError(describeLoadError(err));
+      // Only tear down when nothing was committed: after the commit this scene
+      // is the valid one, and a later failure must not blank the viewer.
+      if (!committed) deps.closeStreaming();
     }
   } finally {
     unlinkAbort();
