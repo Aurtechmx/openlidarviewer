@@ -195,7 +195,10 @@ export function activateCommittedStreamingCloud(
   cloud: {
     readonly kind: StreamingSourceKind;
     readonly name: string;
-    readonly sourcePointCount?: number;
+    // `null` where the format states no total. A tileset does not declare one,
+    // and its per-node numbers are decode-admission estimates rather than
+    // counts, so it reports null instead of a sum that would read as measured.
+    readonly sourcePointCount?: number | null;
     crs(): CrsInfo | null | undefined;
   },
   deps: OpenStreamingDeps,

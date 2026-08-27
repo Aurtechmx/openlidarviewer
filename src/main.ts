@@ -5012,7 +5012,7 @@ async function handleRemoteUrl(url: string, signal?: AbortSignal): Promise<void>
   // mounted as a static layer, so it takes `openScanDeps` and the same attach a
   // dropped file does.
   if (isTilesetEntryUrl(url)) {
-    return (await loadTilesetOpen()).openRemoteTileset(url, signal, openScanDeps);
+    return (await loadTilesetOpen()).openRemoteTileset(url, signal, openStreamingDeps);
   }
   return handleRemoteCopc(url, signal);
 }
