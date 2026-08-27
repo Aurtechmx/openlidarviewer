@@ -15,8 +15,7 @@
     "staged": "Implemented and tested, deliberately not wired, intended to be reached later. The graduation gate names the wiring that would do it.",
     "validation-only": "Produces or checks evidence about the product. It runs in tests, studies and gate scripts and must stay out of the application graph; becoming reachable would be the defect.",
     "reference-only": "Consumed by something outside the application entry graph, such as the build configuration or a lint, rather than by the running application.",
-    "orphan": "Superseded or abandoned. Nothing outside its own test consumes it and nothing is expected to. The graduation gate names the removal or the replacement it lost to.",
-    "unclassified": "The intent could not be determined from the source. This records the fact rather than guessing a status, and the review date is short."
+    "orphan": "Superseded or abandoned. Nothing outside its own test consumes it and nothing is expected to. The graduation gate names the removal or the replacement it lost to."
   },
   "reviewDates": "Reported by the lint when they pass, never enforced. A gate that turns red on a date with no change to the tree teaches people to edit the date rather than the code.",
   "modules": [
@@ -104,8 +103,8 @@
     {
       "path": "src/io/heavy/LocalOutOfCoreSource.ts",
       "status": "staged",
-      "why": "Named in the v0.6.6 release notes as \"a local out-of-core read planner\", listed under \"Foundations added for a later release, not reachable in v0.6.6\". It inspects a LAS/LAZ header and picks a read strategy; src/io/loadFile.ts still routes every local file down the whole-file path.",
-      "graduation": "The local open path asks planLocalOutOfCoreRead before choosing a reader.",
+      "why": "Named in the v0.6.6 release notes as \"a local out-of-core read planner\", listed under \"Foundations added for a later release, not reachable in v0.6.6\". The claim that local files use the whole-file path is no longer true: src/app/openScan.ts now routes a large uncompressed LAS through openLocalHeavyLas.ts and src/io/heavy/localOocBuild.ts, a separate heavy-LAS bridge that peeks the header and streams tiles instead of materialising one ArrayBuffer. That bridge superseded the LAS half of the role this planner was staged for. LAZ still stays on the whole-file strided path until a chunked-LAZ builder is wired. The planner itself remains unreachable: only its own test imports planOutOfCore.",
+      "graduation": "Either this becomes the shared LAS-plus-future-LAZ read planner the open path consults before choosing a reader, or, if the heavy-LAS bridge covers the need and the LAZ builder lands separately, it is removed. Decide when the chunked-LAZ path is designed.",
       "review": "2027-02-28",
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
@@ -226,10 +225,10 @@
     },
     {
       "path": "src/render/measure/profileSectionImage.ts",
-      "status": "unclassified",
-      "why": "It composes a section into a PNG-ready raster with axes, legend, scope and counts, and nothing outside its own test imports it. Two readings fit the tree equally well and the source settles neither: it is a staged image-export path with no export route yet, or it was overtaken by profileSectionRenderer.ts (the live canvas, reachable) plus profilePdf.ts and profileSheetLayout.ts (the PDF sheet, reachable through src/lazyChunks.ts). Whoever wrote it knows which; the file does not say, so this entry records the question instead of guessing an answer.",
-      "graduation": "Answer the question first: if it is staged, name the export route that would call composeSectionImage and re-file it as staged; if the PDF sheet path replaced it, re-file it as orphan.",
-      "review": "2026-11-30"
+      "status": "staged",
+      "why": "It composes a section into a PNG-ready raster with axes, legend, scope and counts by driving the live ProfileSectionRenderer through an offsetting proxy, so the exported pixels come off the same splat loop as the on-screen view. The PDF sheet path did not replace it: profilePdf.ts and profileSheetLayout.ts draw the section as a straight vector polyline with a station data band, a different product from a raster scatter PNG, and neither imports this module. No export route calls composeSectionImage yet, so the raster path stays off the production graph. MeasurePanel offers only PDF and JSON session export, no PNG.",
+      "graduation": "The profile export UI in src/ui/MeasurePanel.ts offers a section-image (PNG) product and routes it through composeSectionImage.",
+      "review": "2027-02-28"
     },
     {
       "path": "src/render/streaming/pipelineLimits.ts",
@@ -247,10 +246,10 @@
     },
     {
       "path": "src/render/streaming/streamingProfile.ts",
-      "status": "unclassified",
-      "why": "It maps a device tier onto a full bundle of streaming session defaults, but the two pieces it composes are reachable and are used without it: deviceProfile.ts and streamingBudget.ts are both imported straight from src/main.ts, and streamingAttach.ts and Viewer.ts call streamingBudgets(quality, isMobile) directly. So the bundle is either staged for an attach path that adopts it whole, or the direct calls settled the question and left it behind. Nothing in the source says which.",
-      "graduation": "Answer the question first: if the attach path is meant to adopt the bundle, re-file as staged with that wiring named; if the direct streamingBudgets calls are the decision, re-file as orphan.",
-      "review": "2026-11-30"
+      "status": "staged",
+      "why": "It maps a device tier onto a full bundle of streaming-session defaults: quality preset, EDL default and fade-in. The direct calls did not settle its question, they left its value unrealised. src/main.ts hardcodes the initial streamingQuality to 'balanced' and never derives it from deviceCapsValue.tier; streamingBudgets(quality, isMobile) is called with that fixed quality. So no path yet turns a device tier into these session defaults as a whole. tierAdaptation.ts, itself staged, is written to layer runtime FPS stepping on top of this bundle, which marks it as intended future work rather than a superseded module. Wiring it would edit src/main.ts, held off here because concurrent work owns that file.",
+      "graduation": "The attach path in src/main.ts derives its initial streaming quality, EDL and fade-in defaults from streamingProfileForTier(deviceCapsValue.tier, isPhone()) instead of the hardcoded 'balanced'.",
+      "review": "2027-02-28"
     },
     {
       "path": "src/render/streaming/tierAdaptation.ts",
@@ -265,13 +264,6 @@
       "why": "The staged source-unit product pipeline for terrain-aware generalization. src/terrain/contour/terrainAwareTolerance.ts names it as exactly that and is the shared policy both readers use; the live honesty-gated styler is what v0.6.6 shipped.",
       "graduation": "The Contour Studio product pipeline runs a generalization pass and calls this module.",
       "review": "2027-02-28"
-    },
-    {
-      "path": "src/terrain/complexity/index.ts",
-      "status": "orphan",
-      "why": "A barrel re-exporting the four complexity leaves. Production imports the leaves directly (src/terrain/contour/analyseContours.ts reaches complexitySummary.ts, which reaches terrainPositionIndex.ts), so the barrel itself is on nobody's path. Its own header claims it is \"Imported ONLY by the lazily-loaded analysis pipeline\", which describes the leaves rather than this file.",
-      "graduation": "Remove the barrel and point its one importer, tests/reproPack.test.ts, at the leaves; or give it a production importer, which would also make its header true again.",
-      "review": "2026-11-30"
     },
     {
       "path": "src/validation/crossCheck.ts",

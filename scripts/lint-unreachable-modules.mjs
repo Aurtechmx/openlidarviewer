@@ -88,7 +88,11 @@ const REGISTRY = resolve(ROOT, 'docs/validation/unreachable-modules.json');
 const posix = (p) => p.split(sep).join('/');
 const rel = (abs) => posix(relative(ROOT, abs));
 
-const STATUSES = new Set(['staged', 'validation-only', 'reference-only', 'orphan', 'unclassified']);
+// `unclassified` is deliberately NOT a permitted status. The register's purpose
+// states it: unreachable is allowed here, unclassified is not. An entry whose
+// intent could not be determined is a hole to close, not a state to record, so
+// this gate rejects it as an error rather than letting one sit silently.
+const STATUSES = new Set(['staged', 'validation-only', 'reference-only', 'orphan']);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ── source scanning ─────────────────────────────────────────────────────────
