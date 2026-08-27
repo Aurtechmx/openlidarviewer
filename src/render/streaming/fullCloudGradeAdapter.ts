@@ -20,6 +20,13 @@
  *
  * Everything format-specific (COPC chunk records vs. EPT tile URLs) is already
  * behind the `StreamingSource` interface, so one adapter serves both formats.
+ *
+ * One thing it does NOT do is sum the records' point counts for a source that
+ * states no total of its own. A format that names tiles without counting their
+ * points (3D Tiles) leaves the reader stamping one assumed figure per record to
+ * govern decode admission; adding those up here would print a total the file
+ * never stated. `gradeFullCloud` refuses instead, which is the same call the
+ * streaming source makes when it returns null from `sourcePointCount`.
  */
 
 import type { StreamingNode } from './StreamingNode';
@@ -35,6 +42,7 @@ import {
   type GradeFn,
   type GradeProgress,
 } from './fullCloudGradeRunner';
+import { UNSTATED_POINT_TOTAL, type UnstatedPointTotal } from './fullCloudGrade';
 
 /**
  * The minimal slice of a {@link StreamingSource} the grade adapter reads — node
@@ -44,6 +52,16 @@ import {
  * satisfies it without any cast.
  */
 export interface GradeNodeSource {
+  /**
+   * What the SOURCE states as its point total, or null when the format does not
+   * state one. Read for one decision only: whether the per-node `pointCount`
+   * values this adapter projects are measurements or decode-admission
+   * estimates. COPC reads its total from the LAS header and EPT from
+   * `ept.json`, so their node counts sum to a stated figure; a 3D Tiles
+   * tileset states neither, and `TilesetStreamingSource` returns null rather
+   * than summing the assumed per-tile counts it stamped on its records.
+   */
+  readonly sourcePointCount: number | null;
   readonly octree: {
     /** Every known node in the octree. */
     nodes(): StreamingNode[];
@@ -122,16 +140,43 @@ export function makeDecodeNode(
 }
 
 /**
+ * What {@link gradeFullCloud} returns: either a grade, or the reason there
+ * cannot be one. A union rather than a nullable run, so a caller that renders
+ * the result has to decide what the refusal says instead of falling through to
+ * a figure.
+ */
+export type FullCloudGradeOutcome<G> =
+  | { readonly kind: 'graded'; readonly run: FullCloudGradeRun<G> }
+  | ({ readonly kind: 'unavailable' } & UnstatedPointTotal);
+
+/**
+ * Whether this source's per-node counts are measurements. A source that states
+ * no point total stamped its records with a decode-admission estimate, so every
+ * figure the grade derives from them (the coverage label, the coverage percent,
+ * the density back-scale) would be fabricated.
+ *
+ * Null only. Zero is a real answer meaning an empty source and grades normally.
+ */
+function statesPointTotal(source: GradeNodeSource): boolean {
+  return source.sourcePointCount != null;
+}
+
+/**
  * The full live grade in one call: enumerate the source's octree, plan a
  * representative sample within budget, decode it through `decoder`, and grade
  * the assembled points with `grade` (the terrain pipeline at the call site).
  *
  * This is the single entry the "Grade full cloud" UI action invokes — it owns
  * the adapter glue (enumerate + decode) so the panel only has to supply the
- * source, a decoder, the grade, and an optional progress/abort. The returned
- * {@link FullCloudGradeRun} carries the honest coverage label
- * (`run.coverage.label`, e.g. "1.8M of 18.2M points (10%, sampled)") to render
- * next to the verdict.
+ * source, a decoder, the grade, and an optional progress/abort. A graded
+ * outcome carries the honest coverage label (`run.coverage.label`, e.g.
+ * "1.8M of 18.2M points (10%, sampled)") to render next to the verdict.
+ *
+ * A source that states no point total is refused BEFORE any node is read: its
+ * record counts are decode-admission estimates, and this function is where they
+ * would otherwise be summed into a printed total. Refusing here rather than at
+ * the panel keeps the decision with the one module that reads the source
+ * contract, and spares a decode whose result could not be reported.
  */
 export function gradeFullCloud<G>(args: {
   readonly source: GradeNodeSource;
@@ -140,8 +185,11 @@ export function gradeFullCloud<G>(args: {
   readonly options?: SamplingPlanOptions;
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: GradeProgress) => void;
-}): Promise<FullCloudGradeRun<G>> {
+}): Promise<FullCloudGradeOutcome<G>> {
   const { source, decoder, grade, options, signal, onProgress } = args;
+  if (!statesPointTotal(source)) {
+    return Promise.resolve({ kind: 'unavailable', ...UNSTATED_POINT_TOTAL });
+  }
   return runFullCloudGrade({
     nodes: sampleNodesFromSource(source),
     decodeNode: makeDecodeNode(source, decoder),
@@ -158,5 +206,5 @@ export function gradeFullCloud<G>(args: {
       complete: source.octree.isComplete,
       errorCount: source.octree.errors.length,
     },
-  });
+  }).then((run) => ({ kind: 'graded', run }) as const);
 }

@@ -17,12 +17,14 @@ import {
   sampleNodesFromSource,
   makeDecodeNode,
   gradeFullCloud,
+  type FullCloudGradeOutcome,
   type GradeNodeSource,
 } from '../src/render/streaming/fullCloudGradeAdapter';
 import { runFullCloudGrade } from '../src/render/streaming/fullCloudGradeRunner';
 import { createStreamingNode } from '../src/render/streaming/StreamingNode';
 import type { StreamingNode } from '../src/render/streaming/StreamingNode';
 import type { StreamingNodeRecord } from '../src/io/copc/copcTypes';
+import type { StreamingSource } from '../src/render/streaming/StreamingSource';
 import type { ChunkDecodeMetadata, ChunkDecoder, DecodedChunk } from '../src/io/copc/copcChunkDecode';
 
 /** A minimal-but-valid node record; only id/depth/pointCount/byteSize matter here. */
@@ -57,11 +59,17 @@ function fakeSource(
   // existing exhaustive/sampled tests are unaffected; the truncation test sets
   // it false to prove the grade never claims exact over a short hierarchy.
   completeness: { isComplete?: boolean; errors?: readonly string[] } = {},
+  // What the SOURCE states as its point total. Defaults to the sum of the node
+  // records, which is what a COPC/EPT header states and what those formats'
+  // per-node counts add up to. `null` is the 3D Tiles case: the format states
+  // no total and the per-node counts are decode-admission estimates.
+  sourcePointCount: number | null = nodes.reduce((s, n) => s + n.record.pointCount, 0),
 ): GradeNodeSource {
   const byId = new Map(nodes.map((n) => [n.record.id, n]));
   // Reverse-lookup a record's id from the marker we'll stash, so readNodeChunk
   // can encode it. (We key the marker by id directly.)
   return {
+    sourcePointCount,
     octree: {
       nodes: () => nodes,
       store: { get: (id: string) => byId.get(id) },
@@ -98,6 +106,21 @@ function fakeDecoder(seen?: { signals: (AbortSignal | undefined)[] }): ChunkDeco
       };
     },
   };
+}
+
+// Compile-time contract: a real streaming source (COPC's StreamingPointCloud,
+// EPT's, the tileset's) satisfies GradeNodeSource without a cast. The gate the
+// adapter applies reads `sourcePointCount` straight off it, so narrowing that
+// member out of the source interface has to break here rather than at runtime.
+const _sourceSatisfiesAdapter: (s: StreamingSource) => GradeNodeSource = (s) => s;
+void _sourceSatisfiesAdapter;
+
+/** Unwrap a graded outcome, failing the test if the grade was refused. */
+async function graded<G>(outcome: Promise<FullCloudGradeOutcome<G>>) {
+  const settled = await outcome;
+  expect(settled.kind).toBe('graded');
+  if (settled.kind !== 'graded') throw new Error('expected a graded outcome');
+  return settled.run;
 }
 
 describe('sampleNodesFromSource — octree → SampleNode[]', () => {
@@ -196,12 +219,12 @@ describe('adapter ∘ runner — end-to-end with fakes', () => {
 describe('gradeFullCloud — one-call composition + progress', () => {
   it('enumerates, decodes, and grades the source in one call', async () => {
     const src = fakeSource(nodeList(), { '0-0-0-0': 1, '1-0-0-0': 2, '1-1-0-0': 3 });
-    const run = await gradeFullCloud({
+    const run = await graded(gradeFullCloud({
       source: src,
       decoder: fakeDecoder(),
       grade: (pos) => pos.length / 3,
       options: { maxPoints: 10_000 },
-    });
+    }));
     expect(run.coverage.scope).toBe('exhaustive');
     expect(run.grade).toBe(3); // 3 nodes → 3 marker points
     expect(run.coverage.label).toMatch(/exact/);
@@ -246,17 +269,90 @@ describe('gradeFullCloud — one-call composition + progress', () => {
       isComplete: false,
       errors: ['failed to load hierarchy page at 4096: network down'],
     });
-    const run = await gradeFullCloud({
+    const run = await graded(gradeFullCloud({
       source: src,
       decoder: fakeDecoder(),
       grade: (pos) => pos.length / 3,
       options: { maxPoints: 10_000 }, // budget covers every loaded node
-    });
+    }));
     expect(run.coverage.scope).toBe('sampled');
     expect(run.coverage.label).not.toMatch(/exact/);
     expect(run.coverage.label).toMatch(/partial/i);
     // The reason and the (previously write-only) error count reach the user.
     expect(run.coverage.note).toMatch(/did not fully load/i);
     expect(run.coverage.note).toMatch(/1 load error/);
+  });
+});
+
+describe('gradeFullCloud — a source that states no point total', () => {
+  /**
+   * Three tiles, each carrying the SAME flat per-node count. That is exactly
+   * what a 3D Tiles index looks like: `tileset.json` states content URIs and no
+   * point counts anywhere, so every node record is stamped with one assumed
+   * figure that governs decode admission. Summing those is (tiles x assumed),
+   * a number with no relationship to the points in the file, and the streaming
+   * source says so by returning `null` from `sourcePointCount` rather than
+   * adding them up.
+   */
+  const ASSUMED = 500_000;
+  function estimatedNodes(): StreamingNode[] {
+    return [
+      createStreamingNode(record('0-0-0-0', 0, ASSUMED, 1000)),
+      createStreamingNode(record('1-0-0-0', 1, ASSUMED, 1000)),
+      createStreamingNode(record('1-1-0-0', 1, ASSUMED, 1000)),
+    ];
+  }
+  const markers = { '0-0-0-0': 1, '1-0-0-0': 2, '1-1-0-0': 3 };
+
+  it('refuses instead of printing a total summed from per-node estimates', async () => {
+    const src = fakeSource(estimatedNodes(), markers, {}, {}, null);
+    const outcome = await gradeFullCloud({
+      source: src,
+      decoder: fakeDecoder(),
+      grade: (pos) => pos.length / 3,
+      options: { maxPoints: 10_000_000 },
+    });
+    expect(outcome.kind).toBe('unavailable');
+    if (outcome.kind !== 'unavailable') return;
+    // Nothing it hands the panel carries a point figure: not the 1.5M sum, not
+    // a coverage percent over it, not the assumed per-tile count.
+    const shown = `${outcome.headline} ${outcome.note}`;
+    expect(shown).not.toMatch(/\d/);
+    expect(outcome.headline).toMatch(/point total/i);
+    expect(outcome.note).toMatch(/estimate/i);
+  });
+
+  it('does not decode anything for a grade it cannot report', async () => {
+    const reads: string[] = [];
+    const src = fakeSource(estimatedNodes(), markers, { onRead: (id) => reads.push(id) }, {}, null);
+    await gradeFullCloud({ source: src, decoder: fakeDecoder(), grade: () => null });
+    expect(reads).toEqual([]);
+  });
+
+  it('still grades a source that DOES state a total (not a blanket removal)', async () => {
+    // Same octree, same per-node counts. The one difference is that the source
+    // states the total, which is what makes those counts measurements.
+    const src = fakeSource(estimatedNodes(), markers, {}, {}, 3 * ASSUMED);
+    const outcome = await gradeFullCloud({
+      source: src,
+      decoder: fakeDecoder(),
+      grade: (pos) => pos.length / 3,
+      options: { maxPoints: 10_000_000 },
+    });
+    expect(outcome.kind).toBe('graded');
+    if (outcome.kind !== 'graded') return;
+    expect(outcome.run.coverage.scope).toBe('exhaustive');
+    expect(outcome.run.coverage.label).toBe('all 1.5M points (exact)');
+    expect(outcome.run.grade).toBe(3);
+  });
+
+  it('grades a source that states a total of ZERO (null is not zero)', async () => {
+    // An empty source is a real answer, not a missing one, so it grades and
+    // says "no points" rather than being refused with the unstated-total note.
+    const src = fakeSource([], {}, {}, {}, 0);
+    const outcome = await gradeFullCloud({ source: src, decoder: fakeDecoder(), grade: () => null });
+    expect(outcome.kind).toBe('graded');
+    if (outcome.kind !== 'graded') return;
+    expect(outcome.run.coverage.label).toBe('no points available to grade');
   });
 });

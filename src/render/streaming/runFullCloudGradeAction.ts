@@ -62,7 +62,7 @@ export async function runFullCloudGrade(deps: {
     ? (verticalMetresPerUnit(ctx, 'horizontal') ?? metresPerUnit)
     : 1;
   try {
-    const run = await gradeFullCloud({
+    const outcome = await gradeFullCloud({
       source,
       decoder,
       signal,
@@ -84,6 +84,15 @@ export async function runFullCloudGrade(deps: {
     // it silently rather than paint a stale grade over a different (or absent)
     // cloud's panel.
     if (viewer.streamingCloud !== source) return;
+    // A source that states no point total is refused by the adapter before any
+    // node is read, because its record counts are decode-admission estimates.
+    // Render the reason where the coverage label goes and show no figures: the
+    // refusal is a result, not an error, so it keeps the neutral styling.
+    if (outcome.kind === 'unavailable') {
+      panel.setGradeResult(outcome.headline, [], outcome.note);
+      return;
+    }
+    const run = outcome.run;
     panel.setGradeResult(
       run.coverage.label,
       summarizeSampleGrade(run.grade, unitConfirmed),

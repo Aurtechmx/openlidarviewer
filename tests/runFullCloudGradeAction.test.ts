@@ -6,6 +6,10 @@
  * result describes a scan that's no longer shown and must NOT paint over the
  * new (or absent) cloud's panel. gradeFullCloud is mocked so the test can mutate
  * the viewer's active cloud mid-grade without a real GPU/decoder.
+ *
+ * Also pins how the panel renders the adapter's refusal for a source that
+ * states no point total: the reason where the coverage label goes, and no
+ * summary lines at all.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -31,6 +35,7 @@ function makePanel() {
 const sourceA = { crs: () => null };
 const sourceB = { crs: () => null };
 const RUN = { coverage: { label: 'L', note: 'N' }, grade: {} };
+const GRADED = { kind: 'graded', run: RUN };
 
 type FakeViewer = { streamingCloud: { crs: () => null } | null; streamingDecoder: unknown };
 const mkViewer = (cloud: FakeViewer['streamingCloud'], decoder: unknown = {}): FakeViewer => ({
@@ -45,7 +50,7 @@ describe('runFullCloudGrade — stale-cloud guard', () => {
 
   it('paints the result when the active cloud is unchanged', async () => {
     const viewer = mkViewer(sourceA);
-    gradeFullCloud.mockResolvedValue(RUN);
+    gradeFullCloud.mockResolvedValue(GRADED);
     const panel = makePanel();
     await run(viewer, panel);
     expect(panel.setGradeResult).toHaveBeenCalledTimes(1);
@@ -55,7 +60,7 @@ describe('runFullCloudGrade — stale-cloud guard', () => {
     const viewer = mkViewer(sourceA);
     gradeFullCloud.mockImplementation(async () => {
       viewer.streamingCloud = sourceB; // user opened a different scan
-      return RUN;
+      return GRADED;
     });
     const panel = makePanel();
     await run(viewer, panel);
@@ -66,7 +71,7 @@ describe('runFullCloudGrade — stale-cloud guard', () => {
     const viewer = mkViewer(sourceA);
     gradeFullCloud.mockImplementation(async () => {
       viewer.streamingCloud = null; // scan closed
-      return RUN;
+      return GRADED;
     });
     const panel = makePanel();
     await run(viewer, panel);
@@ -84,7 +89,7 @@ describe('runFullCloudGrade — stale-cloud guard', () => {
 describe('runFullCloudGrade — unit-confirmation gate', () => {
   beforeEach(() => {
     gradeFullCloud.mockReset();
-    gradeFullCloud.mockResolvedValue(RUN);
+    gradeFullCloud.mockResolvedValue(GRADED);
     vi.mocked(summarizeSampleGrade).mockClear();
   });
 
@@ -118,5 +123,46 @@ describe('runFullCloudGrade — unit-confirmation gate', () => {
   it('summarises confirmed for a foot CRS', async () => {
     await runWithCrs({ ...CRS_BASE, linearUnit: 'foot', linearUnitToMetres: 0.3048 });
     expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(true);
+  });
+});
+
+describe('runFullCloudGrade — a source that states no point total', () => {
+  beforeEach(() => {
+    gradeFullCloud.mockReset();
+    vi.mocked(summarizeSampleGrade).mockClear();
+  });
+
+  const UNAVAILABLE = {
+    kind: 'unavailable',
+    headline: 'Full-cloud grade unavailable: this format states no point total',
+    note: 'The per-tile counts a grade would add up are decode-admission estimates.',
+  };
+
+  it('shows the reason in place of a coverage label, with no figures', async () => {
+    gradeFullCloud.mockResolvedValue(UNAVAILABLE);
+    const panel = makePanel();
+    await run(mkViewer(sourceA), panel);
+    expect(panel.setGradeResult).toHaveBeenCalledWith(UNAVAILABLE.headline, [], UNAVAILABLE.note);
+    // No density/extent lines are summarised: there is no grade behind them.
+    expect(vi.mocked(summarizeSampleGrade)).not.toHaveBeenCalled();
+  });
+
+  it('is a result, not an error (the refusal is deliberate, nothing failed)', async () => {
+    gradeFullCloud.mockResolvedValue(UNAVAILABLE);
+    const panel = makePanel();
+    await run(mkViewer(sourceA), panel);
+    expect(panel.setGradeError).not.toHaveBeenCalled();
+    expect(panel.setGradeCancelled).not.toHaveBeenCalled();
+  });
+
+  it('discards the refusal too when the cloud is swapped mid-grade', async () => {
+    const viewer = mkViewer(sourceA);
+    gradeFullCloud.mockImplementation(async () => {
+      viewer.streamingCloud = sourceB;
+      return UNAVAILABLE;
+    });
+    const panel = makePanel();
+    await run(viewer, panel);
+    expect(panel.setGradeResult).not.toHaveBeenCalled();
   });
 });
