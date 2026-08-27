@@ -8,12 +8,13 @@
  * attribute laid out in the order declared by `ept.json`'s `schema` array.
  * The schema tells us the byte size + signed/unsigned/float interpretation
  * + optional scale + offset of each attribute. We materialise:
- *   • positions    — Float32Array (recentred against the render origin)
- *   • intensity    — Uint16Array
- *   • classification — Uint8Array
- *   • returnNumber, returnCount, gpsTime, rgb — filled with safe defaults
- *     when the schema doesn't carry them (EPT writers are permitted to
- *     omit attributes the source format lacked)
+ *   • positions — Float32Array (recentred against the render origin), from
+ *     the X/Y/Z the schema is required to declare
+ *   • intensity, classification, returnNumber, returnCount, gpsTime, rgb —
+ *     each ONLY when the schema declares it. An EPT writer is permitted to
+ *     omit an attribute the source format lacked, and an omitted attribute
+ *     leaves its channel absent on the chunk rather than zero-filled: a zero
+ *     return number or GPS time is a reading, and the dataset took none.
  *
  * For real-world EPT datasets the dominant `dataType` is `laszip`, not
  * binary; that path goes through the existing copcChunkDecode worker.
@@ -171,15 +172,6 @@ export function decodeEptBinaryTile(
   }
 
   const view = new DataView(buffer);
-  const positions = new Float32Array(pointCount * 3);
-  const intensity = new Uint16Array(pointCount);
-  const classification = new Uint8Array(pointCount);
-  // EPT writers can omit return / GPS — the COPC decoder fills zero-sized
-  // arrays in the same case and the renderer treats absence gracefully.
-  const returnNumber = new Uint8Array(pointCount);
-  const returnCount = new Uint8Array(pointCount);
-  const gpsTime = new Float64Array(pointCount);
-  let rgb: Uint8Array | undefined;
 
   const xAttr = findAttr(attrs, 'X');
   const yAttr = findAttr(attrs, 'Y');
@@ -196,9 +188,31 @@ export function decodeEptBinaryTile(
   );
   const intensityAttr = findAttr(attrs, 'Intensity');
   const classAttr = findAttr(attrs, 'Classification');
+  const retNumAttr = findAttr(attrs, 'ReturnNumber');
+  const retCntAttr = findAttr(attrs, 'NumberOfReturns');
+  const gpsAttr = findAttr(attrs, 'GpsTime');
   const rAttr = findAttr(attrs, 'Red');
   const gAttr = findAttr(attrs, 'Green');
   const bAttr = findAttr(attrs, 'Blue');
+
+  const positions = new Float32Array(pointCount * 3);
+  // Only X/Y/Z are required of an EPT schema; every measured attribute below is
+  // one an EPT writer is free to omit because the source format lacked it, and
+  // `findAttr` returning undefined is how this decoder learns that. Each array
+  // is allocated ONLY when the schema declares its attribute, so an omitted
+  // attribute leaves the channel absent on the chunk. Filling `pointCount`
+  // zeroes instead would state a measurement: return number 0 and GPS time 0 at
+  // every point, classification 0 meaning "never classified". `DecodedChunk`
+  // makes each channel optional precisely so absence can be said out loud, and
+  // the consumers read it that way — an absent scalar draws flat grey rather
+  // than a ramp, the intensity range seeds nothing, and the resident snapshot
+  // omits a channel no chunk carries.
+  const intensity = intensityAttr ? new Uint16Array(pointCount) : undefined;
+  const classification = classAttr ? new Uint8Array(pointCount) : undefined;
+  const returnNumber = retNumAttr ? new Uint8Array(pointCount) : undefined;
+  const returnCount = retCntAttr ? new Uint8Array(pointCount) : undefined;
+  const gpsTime = gpsAttr ? new Float64Array(pointCount) : undefined;
+  let rgb: Uint8Array | undefined;
   if (rAttr && gAttr && bAttr) rgb = new Uint8Array(pointCount * 3);
   // 16-bit RGB is ambiguous: LAS-heritage writers store full-range 0–65535
   // (narrow with >> 8), but some stuff 8-bit values into the low byte —
@@ -213,9 +227,6 @@ export function decodeEptBinaryTile(
       ? new Uint16Array(pointCount * 3)
       : undefined;
   let maxRgb = 0;
-  const retNumAttr = findAttr(attrs, 'ReturnNumber');
-  const retCntAttr = findAttr(attrs, 'NumberOfReturns');
-  const gpsAttr = findAttr(attrs, 'GpsTime');
 
   const [rx, ry, rz] = renderOrigin;
 
@@ -233,19 +244,22 @@ export function decodeEptBinaryTile(
     positions[i * 3 + 1] = yRaw * yAttr.scale + yAttr.offsetVal - ry;
     positions[i * 3 + 2] = zRaw * zAttr.scale + zAttr.offsetVal - rz;
 
-    if (intensityAttr) {
+    // Each pair is allocated together with its schema attribute above, so the
+    // array exists exactly when the attribute does; the values a declared
+    // attribute produces are unchanged.
+    if (intensity && intensityAttr) {
       intensity[i] = readAttr(view, base + intensityAttr.offset, intensityAttr);
     }
-    if (classAttr) {
+    if (classification && classAttr) {
       classification[i] = readAttr(view, base + classAttr.offset, classAttr);
     }
-    if (retNumAttr) {
+    if (returnNumber && retNumAttr) {
       returnNumber[i] = readAttr(view, base + retNumAttr.offset, retNumAttr);
     }
-    if (retCntAttr) {
+    if (returnCount && retCntAttr) {
       returnCount[i] = readAttr(view, base + retCntAttr.offset, retCntAttr);
     }
-    if (gpsAttr) {
+    if (gpsTime && gpsAttr) {
       gpsTime[i] = readAttr(view, base + gpsAttr.offset, gpsAttr);
     }
     if (rgb && rAttr && gAttr && bAttr) {

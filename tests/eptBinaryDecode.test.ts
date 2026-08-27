@@ -221,3 +221,68 @@ test('an EPT binary chunk carries all five LAS channels', () => {
   expect(decoded.returnCount?.[0]).toBe(3);
   expect(decoded.gpsTime?.[0]).toBe(55.25);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Absent schema attributes. `DecodedChunk` declares every measured channel
+// optional, so a channel the EPT schema does not declare has to arrive as
+// absent. A full-length zero-filled array would be a reading — return number 0
+// and GPS time 0 at every point — for a quantity the dataset never recorded.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** X/Y/Z only — the minimum schema `parseEptMetadata` accepts. */
+const XYZ_ONLY: EptSchemaField[] = [
+  { name: 'X', size: 4, type: 'signed', scale: 0.01 },
+  { name: 'Y', size: 4, type: 'signed', scale: 0.01 },
+  { name: 'Z', size: 4, type: 'signed', scale: 0.01 },
+];
+
+test('an EPT schema without GpsTime decodes to no gpsTime channel', () => {
+  const tile = tileFor(XYZ_ONLY, (view, off) => {
+    view.setInt32(off('X'), 100, true);
+    view.setInt32(off('Y'), 200, true);
+    view.setInt32(off('Z'), 300, true);
+  });
+  const decoded = decodeEptBinaryTile(tile, 1, XYZ_ONLY, [0, 0, 0]);
+  expect(decoded.gpsTime).toBeUndefined();
+});
+
+test('every measured channel the schema omits is absent, not zero-filled', () => {
+  const tile = tileFor(XYZ_ONLY, (view, off) => {
+    view.setInt32(off('X'), 100, true);
+    view.setInt32(off('Y'), 200, true);
+    view.setInt32(off('Z'), 300, true);
+  });
+  const decoded = decodeEptBinaryTile(tile, 1, XYZ_ONLY, [0, 0, 0]);
+  expect(decoded.intensity).toBeUndefined();
+  expect(decoded.classification).toBeUndefined();
+  expect(decoded.returnNumber).toBeUndefined();
+  expect(decoded.returnCount).toBeUndefined();
+  expect(decoded.gpsTime).toBeUndefined();
+  // The positions the schema does declare are unaffected.
+  expect(decoded.positions[0]).toBeCloseTo(1, 6);
+  expect(decoded.positions[1]).toBeCloseTo(2, 6);
+  expect(decoded.positions[2]).toBeCloseTo(3, 6);
+});
+
+test('a partial schema keeps the attributes it declares and drops the rest', () => {
+  // Classification and ReturnNumber are declared; Intensity, NumberOfReturns
+  // and GpsTime are not. The declared pair must carry real values while the
+  // undeclared three stay absent — a per-attribute decision, not all-or-nothing.
+  const schema: EptSchemaField[] = [
+    { name: 'X', size: 4, type: 'signed', scale: 1 },
+    { name: 'Y', size: 4, type: 'signed', scale: 1 },
+    { name: 'Z', size: 4, type: 'signed', scale: 1 },
+    { name: 'Classification', size: 1, type: 'unsigned' },
+    { name: 'ReturnNumber', size: 1, type: 'unsigned' },
+  ];
+  const tile = tileFor(schema, (view, off) => {
+    view.setUint8(off('Classification'), 2);
+    view.setUint8(off('ReturnNumber'), 3);
+  });
+  const decoded = decodeEptBinaryTile(tile, 1, schema, [0, 0, 0]);
+  expect(decoded.classification?.[0]).toBe(2);
+  expect(decoded.returnNumber?.[0]).toBe(3);
+  expect(decoded.intensity).toBeUndefined();
+  expect(decoded.returnCount).toBeUndefined();
+  expect(decoded.gpsTime).toBeUndefined();
+});
