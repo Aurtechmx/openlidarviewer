@@ -11,6 +11,9 @@
  *   • COPC + EPT streaming sources don't carry normals — LAS reserves
  *     no field for them, and EPT writers rarely emit Normal X/Y/Z
  *     schema attributes.
+ *   • 3D Tiles point tiles DO carry normals when the tileset wrote them
+ *     (PNTS `NORMAL` or `NORMAL_OCT16P`), so a streamed tileset answers
+ *     yes or no per layer from what its tiles stated.
  *   • Static loaders DO sometimes carry normals: PCD with `_normal_`
  *     fields, PTX (from terrestrial scanners), some GLTF + PLY files.
  *
