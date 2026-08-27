@@ -11,10 +11,18 @@
  * axes are 64.3° apart. A fixture on the equator at longitude zero has them
  * coincide, and every assertion below would pass against a reader that only
  * subtracts an origin.
+ *
+ * MIXED SUBJECT. `declaredTilesetFrame`, `resolveTilesetFrame`,
+ * `finiteExtentCentre` and `createLocalEnuFrame` are live modules. The four
+ * cases that call `loadTilesetCloud` read the superseded one-shot reader under
+ * `tests/reference/tiles3d-static/`, because the frame-provenance record they
+ * assert (`frame.basis`, `verticalReference`, `anchor`, the not-established
+ * load warning) exists only there. `TilesetStreamingSource` applies a root ENU
+ * rotation but records no provenance, so nothing on the live path pins it.
  */
 
 import { describe, expect, test } from 'vitest';
-import { loadTilesetCloud } from '../src/io/tiles3d/tilesetCloud';
+import { loadTilesetCloud } from './reference/tiles3d-static/tilesetCloud';
 import {
   declaredTilesetFrame,
   finiteExtentCentre,

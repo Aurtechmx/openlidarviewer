@@ -13,10 +13,19 @@
  * coordinates are three different numbers, because a fixture where they
  * coincide proves nothing about the composition. The third is that every
  * refusal stays a refusal rather than becoming a partial cloud.
+ *
+ * WHAT THIS COVERS. The superseded one-shot reader under
+ * `tests/reference/tiles3d-static/`, not the code the product runs. A
+ * `tileset.json` opens through `src/app/openTilesetLayer.ts` into
+ * `src/render/streaming/TilesetStreamingSource.ts`; that path is covered by
+ * `tilesetStreamingOpen.test.ts`, `tilesetStreamingSource.test.ts`,
+ * `tilesetNodes.test.ts`, `tilesetCeilings.test.ts` and `pntsDecode.test.ts`.
+ * A pass here says the reference still behaves as its header describes. It says
+ * nothing about what the viewer does.
  */
 
 import { describe, expect, test } from 'vitest';
-import { loadTilesetCloud } from '../src/io/tiles3d/tilesetCloud';
+import { loadTilesetCloud } from './reference/tiles3d-static/tilesetCloud';
 import type { TilesetTransport } from '../src/io/tiles3d/tilesetTransport';
 
 const ENTRY = 'https://tiles.example.org/scan/a/tileset.json';

@@ -12,6 +12,15 @@
  * gets a test that the cap REFUSES rather than truncates, and the caps are the
  * mutation targets: removing the depth cap must fail a test here, and so must
  * transposing the column-major transform composition.
+ *
+ * WHAT THIS COVERS. The superseded one-shot reader under
+ * `tests/reference/tiles3d-static/`, not the code the product runs. A
+ * `tileset.json` opens through `src/app/openTilesetLayer.ts` into
+ * `src/render/streaming/TilesetStreamingSource.ts`; that path is covered by
+ * `tilesetStreamingOpen.test.ts`, `tilesetStreamingSource.test.ts`,
+ * `tilesetNodes.test.ts`, `tilesetCeilings.test.ts` and `pntsDecode.test.ts`.
+ * A pass here says the reference still behaves as its header describes. It says
+ * nothing about what the viewer does.
  */
 
 import { describe, expect, test } from 'vitest';
@@ -20,7 +29,7 @@ import {
   selectTileContents,
   fetchTileContent,
   MAX_SELECTED_TILES,
-} from '../src/io/tiles3d/tilesetOpen';
+} from './reference/tiles3d-static/tilesetOpen';
 import { DEFAULT_TILESET_MAX_DEPTH } from '../src/io/tiles3d/tileset';
 import type { TilesetTransport } from '../src/io/tiles3d/tilesetTransport';
 import type { ViewCamera } from '../src/io/tiles3d/tilesetTraversal';
