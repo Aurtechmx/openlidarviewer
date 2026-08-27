@@ -23,6 +23,10 @@ import { densityForChunk, defaultCellSizeForSpacing } from '../densityColors';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import { renderLocalPositions } from '../../model/pointFrames';
 import type { CopcMetadata } from '../../io/copc/copcTypes';
+// Type-only: the shape a `.pnts` decoder marks a colourless node with. No
+// runtime import, so the streaming colour chunk does not pull in the tileset
+// parser, and the io layer keeps its own definition of what it produced.
+import type { ColourUnstatedChunk } from '../../io/tiles3d/pntsDecode';
 import { applyRgbAppearance, type RgbAppearance } from '../rgbAppearance';
 
 /**
@@ -40,6 +44,29 @@ import { applyRgbAppearance, type RgbAppearance } from '../rgbAppearance';
  */
 let _rgbWorkFloat: Float32Array | null = null;
 let _rgbWorkOut: Uint8Array | null = null;
+
+/**
+ * The grey a node is drawn in when its tile states no colour and the rest of
+ * the layer does.
+ *
+ * Mid grey is achromatic, and the elevation ramp (Turbo) is not: nothing the
+ * ramp produces looks like this, so a flat patch cannot be misread as a height
+ * reading. It is a display value only. `rgb` stays absent on the chunk, so the
+ * point inspector, the resident-snapshot export and the patch view all keep
+ * reporting that these points state no colour.
+ */
+export const UNSTATED_COLOUR_GREY = 128;
+
+/**
+ * Whether a decoded node is one a `.pnts` decoder marked as stating no colour
+ * inside a layer whose colour meaning is the colour tiles state.
+ *
+ * Read through the marker type rather than a loose string, so renaming the mark
+ * breaks the build instead of silently turning this back into a height ramp.
+ */
+function colourUnstated(decoded: DecodedChunk): boolean {
+  return (decoded as Partial<ColourUnstatedChunk>).colourUnstated === true;
+}
 
 /** Cloud-global colour ranges, so every streaming node colours consistently. */
 export interface StreamingColorRanges {
@@ -132,6 +159,17 @@ export function streamingNodeColors(
     case 'rgb': {
       const src = decoded.rgb;
       if (!src) {
+        // A node marked as stating no colour belongs to a layer whose other
+        // nodes ARE painted from their stated RGB. Ramping it by height would
+        // put a second colour meaning in the same scene, reading as the first.
+        // It is drawn flat instead, and the reader says why (see the mixed
+        // tileset notices in `pntsDecode.ts`).
+        if (colourUnstated(decoded)) {
+          return new Uint8Array(n * 3).fill(UNSTATED_COLOUR_GREY);
+        }
+        // Otherwise the whole source lacks RGB (a COPC/EPT format flag says so,
+        // or every tile of a tileset stated none), so the elevation ramp is the
+        // layer's one meaning rather than a second one.
         return colorByElevation(renderLocalPositions(decoded), n, ranges.minZ, ranges.maxZ);
       }
       // When an appearance bundle is active, apply it in sRGB float
