@@ -30,6 +30,12 @@ import { validateRemoteTilesetUrl } from '../io/tiles3d/tilesetUrl';
 import { PntsChunkDecoder } from '../io/tiles3d/pntsDecode';
 import { TilesetStreamingSource } from '../render/streaming/TilesetStreamingSource';
 import {
+  describeCloudFrame,
+  FRAME_UNKNOWN_NOTE,
+  type CloudFrameProvenance,
+} from '../geo/frame/frameProvenance';
+import type { AnalysisRow } from '../analysis/ModuleApi';
+import {
   activateCommittedStreamingCloud,
   isAbortError,
   linkAbortSignals,
@@ -69,6 +75,45 @@ export function tilesetDisplayName(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * The Scan Report rows that state what the tileset established about up.
+ *
+ * A tileset declaring no geocentric root frame draws exactly like one that
+ * does: it recentres, it fits the camera, it looks like a scene. The only place
+ * the difference can appear is in words, so it is said here, on the surface a
+ * user consults before trusting an elevation — the same place the COPC and EPT
+ * opens put their honesty rows.
+ *
+ * The established case is stated no more strongly than the document allows. A
+ * `region` fixes the root frame as WGS84 geocentric, which makes a height an
+ * ELLIPSOIDAL height; 3D Tiles carries no vertical datum, so naming an
+ * orthometric one here would be a different lie from the one this fixes.
+ *
+ * Pure — no DOM, no viewer — so the wording is testable without an open.
+ */
+export function tilesetFrameReportRows(
+  provenance: CloudFrameProvenance | undefined,
+): AnalysisRow[] {
+  // A source that states nothing gets no row. Inventing "unknown" on its behalf
+  // would report a determination that was never made.
+  if (provenance === undefined) return [];
+  const established = provenance.basis !== 'unknown';
+  const rows: AnalysisRow[] = [
+    {
+      label: 'Vertical frame',
+      value: describeCloudFrame(provenance),
+      status: established ? 'info' : 'warn',
+    },
+  ];
+  if (established && provenance.declaredBy !== null) {
+    rows.push({ label: 'Frame declared by', value: provenance.declaredBy, status: 'info' });
+  }
+  if (!established) {
+    rows.push({ label: 'Vertical reference', value: FRAME_UNKNOWN_NOTE, status: 'warn' });
+  }
+  return rows;
 }
 
 /**
@@ -178,10 +223,26 @@ export async function openRemoteTileset(
       octree: { nodes: () => cloud.octree.nodes() },
     };
     deps.setLastStreamingReportCloud(reportCloud);
+    // One report, built once. `setReport` replaces the Inspector's rows rather
+    // than appending, so two calls would leave only whatever the second one
+    // published. The streaming rows are gathered separately from the frame rows
+    // for a different reason: the frame statement says whether which way is up
+    // was ever established, and losing it because an unrelated module threw
+    // would leave a user reading heights with nothing to warn them.
+    let streamingRows: AnalysisRow[] = [];
     try {
-      deps.inspector.setReport(
-        deps.runStreamingModules(reportCloud, deps.classLegendPanel.getVisibility().isFiltered()),
+      streamingRows = deps.runStreamingModules(
+        reportCloud,
+        deps.classLegendPanel.getVisibility().isFiltered(),
       );
+    } catch (err) {
+      if (deps.debug) console.warn('[inspector] runStreamingModules (tileset) threw', err);
+    }
+    try {
+      deps.inspector.setReport([
+        ...streamingRows,
+        ...tilesetFrameReportRows(cloud.frameProvenance),
+      ]);
     } catch (err) {
       if (deps.debug) console.warn('[inspector] setReport (tileset) threw', err);
     }

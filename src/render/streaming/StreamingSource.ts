@@ -22,6 +22,7 @@
  */
 
 import type { Box6, StreamingNodeRecord } from '../../io/copc/copcTypes';
+import type { CloudFrameProvenance } from '../../geo/frame/frameProvenance';
 import type { SpatialFrame } from '../../geo/frame/spatialFrame';
 import type { ChunkDecodeMetadata } from '../../io/copc/copcChunkDecode';
 import type { PntsDecodeMetadata } from '../../io/tiles3d/pntsDecode';
@@ -160,6 +161,30 @@ export interface StreamingSource {
    * so refuses rather than reporting a coordinate off by hundreds of metres.
    */
   readonly frame: SpatialFrame;
+  /**
+   * What the SOURCE DOCUMENT established about the frame, as opposed to the
+   * conversion {@link frame} performs.
+   *
+   * The two answer different questions. `frame` always exists, because every
+   * source has to put its points somewhere; this says whether the document ever
+   * stated which way is up. A 3D Tiles tileset with only a `box` bounding
+   * volume declares nothing, so it records `basis: 'unknown'` and no vertical
+   * reference, and the Scan Report can say so. Absent that record, a tileset
+   * whose up axis was never established is indistinguishable from one whose
+   * was: both recentre, both fit the camera, both draw.
+   *
+   * UNKNOWN IS A VALUE, NOT AN ABSENT ONE. A source that asked and could not
+   * establish the frame records `basis: 'unknown'`. Omitting the property is a
+   * different statement — "this source has not been taught to answer yet" —
+   * and consumers must not read one as the other.
+   *
+   * Optional only because the COPC, EPT and OLV-tile sources predate it and
+   * settling what those three declare is a separate question (a projected-CRS
+   * COPC has a known up that this record's two-value basis cannot yet express).
+   * `tests/streamingFrameProvenance.test.ts` holds the shrink-only list of
+   * sources still omitting it, so a NEW source cannot join them silently.
+   */
+  readonly frameProvenance?: CloudFrameProvenance;
   /** The runtime octree — nodes, state, scoring inputs. */
   readonly octree: StreamingOctreeView;
   /**

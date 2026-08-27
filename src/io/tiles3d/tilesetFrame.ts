@@ -112,34 +112,99 @@ export function resolveTilesetFrame(
   tileset: Tileset,
   anchor: Vec3 | null,
 ): ResolvedTilesetFrame {
+  const established = establishedTilesetFrame(tileset, anchor);
+  return {
+    frame: established === null ? null : createLocalEnuFrame(established.anchor),
+    provenance: frameProvenanceOf(established),
+  };
+}
+
+/**
+ * The anchor an ENU frame may be built on, or `null` when the tileset gave no
+ * grounds to build one.
+ *
+ * The single place the question is decided, because two callers ask it: the
+ * merged reader below, and the streaming reader that needs the same rotation as
+ * a matrix. A second copy of the guard is how a document ends up ROTATED by one
+ * path and recorded as unrotated by the other, or the reverse: recorded as
+ * levelled while its tiles were left in ECEF. Either way the scene draws and
+ * only the numbers are wrong.
+ *
+ * The anchor is refused when it is not finite, and at the geocentre, where the
+ * ellipsoid normal is not defined and any rotation would be arbitrary.
+ */
+function establishedTilesetFrame(
+  tileset: Tileset,
+  anchor: Vec3 | null,
+): { readonly anchor: Vec3; readonly declaredBy: string } | null {
   const declaration = declaredTilesetFrame(tileset);
   const usable =
     anchor !== null &&
     anchor.every((v) => Number.isFinite(v)) &&
     Math.hypot(anchor[0], anchor[1], anchor[2]) > 0;
-  if (!declaration.geocentric || !usable) {
+  if (!declaration.geocentric || !usable || declaration.declaredBy === null) return null;
+  return { anchor, declaredBy: declaration.declaredBy };
+}
+
+/** The record kept beside a cloud, for an established frame and for none. */
+function frameProvenanceOf(
+  established: { readonly anchor: Vec3; readonly declaredBy: string } | null,
+): CloudFrameProvenance {
+  if (established === null) {
     return {
-      frame: null,
-      provenance: {
-        basis: 'unknown',
-        declaredBy: null,
-        verticalReference: 'unknown',
-        linearUnit: 'metre',
-      },
+      basis: 'unknown',
+      declaredBy: null,
+      verticalReference: 'unknown',
+      linearUnit: 'metre',
     };
   }
+  const [x, y, z] = established.anchor;
   return {
-    frame: createLocalEnuFrame(anchor),
-    provenance: {
-      basis: 'local-enu',
-      declaredBy: declaration.declaredBy,
-      anchor: [anchor[0], anchor[1], anchor[2]],
-      // Heights in an ENU frame tangent to the WGS84 ellipsoid are heights
-      // above that ellipsoid. 3D Tiles carries no vertical datum, so this is
-      // the only reference available and never becomes an orthometric one.
-      verticalReference: 'ellipsoidal',
-      linearUnit: 'metre',
-    },
+    basis: 'local-enu',
+    declaredBy: established.declaredBy,
+    anchor: [x, y, z],
+    // Heights in an ENU frame tangent to the WGS84 ellipsoid are heights
+    // above that ellipsoid. 3D Tiles carries no vertical datum, so this is
+    // the only reference available and never becomes an orthometric one.
+    verticalReference: 'ellipsoidal',
+    linearUnit: 'metre',
+  };
+}
+
+/** A frame for a STREAMED tileset: the root transform, and how it was arrived at. */
+export interface StreamingTilesetFrame {
+  /**
+   * The rotation to put at the root of the tile tree, or `null` when the frame
+   * was not established. A matrix rather than a `SpatialFrame` because a
+   * streaming reader never holds every point: it places each tile by composing
+   * transforms down the tree.
+   */
+  readonly rootTransform: readonly number[] | null;
+  readonly provenance: CloudFrameProvenance;
+}
+
+/**
+ * Resolve the frame a STREAMED tileset's tiles should be placed in.
+ *
+ * The same decision `resolveTilesetFrame` makes, expressed as the matrix the
+ * streaming path needs, so the transform that is APPLIED and the provenance
+ * that is RECORDED come out of one call and cannot disagree. A caller that
+ * asked for them separately could rotate without recording it, or record a
+ * levelled frame it never applied.
+ *
+ * `anchor` is the centre of the ROOT bounding volume rather than of the loaded
+ * points: a streaming resident set changes as the camera moves, and an anchor
+ * that moved with it would give the same tile different render coordinates on
+ * different frames.
+ */
+export function resolveStreamingTilesetFrame(
+  tileset: Tileset,
+  anchor: Vec3 | null,
+): StreamingTilesetFrame {
+  const established = establishedTilesetFrame(tileset, anchor);
+  return {
+    rootTransform: established === null ? null : enuFrameMatrix(established.anchor),
+    provenance: frameProvenanceOf(established),
   };
 }
 

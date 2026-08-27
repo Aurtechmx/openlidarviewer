@@ -26,14 +26,18 @@
 
 import type { Box6, StreamingNodeRecord } from '../../io/copc/copcTypes';
 import type { CrsInfo } from '../../io/crs';
-import type { SpatialFrame } from '../../geo/frame/spatialFrame';
+import type { SpatialFrame, Vec3 } from '../../geo/frame/spatialFrame';
 import { createTranslatedFrame } from '../../geo/frame/spatialFrame';
+import type { CloudFrameProvenance } from '../../geo/frame/frameProvenance';
 import type { Mat4 } from '../../io/tiles3d/tileTransform';
 import type { TilesetTransport } from '../../io/tiles3d/tilesetTransport';
 import { PNTS_COLOR_MODES, type PntsDecodeMetadata } from '../../io/tiles3d/pntsDecode';
 import { tilesetNodes, type TilesetNodeIndex } from '../../io/tiles3d/tilesetNodes';
 import { volumeToAabb } from '../../io/tiles3d/tilesetTraversal';
-import { declaredTilesetFrame, enuFrameMatrix } from '../../io/tiles3d/tilesetFrame';
+import {
+  resolveStreamingTilesetFrame,
+  type StreamingTilesetFrame,
+} from '../../io/tiles3d/tilesetFrame';
 import type { Tileset } from '../../io/tiles3d/tileset';
 import { StreamingNodeStore } from './StreamingNodeStore';
 import type { NodeCounts } from './StreamingNodeStore';
@@ -61,16 +65,31 @@ import type {
  * the verticals read off it are wrong, which is a failure with no visual trace.
  */
 export function tilesetRootFrameMatrix(tileset: Tileset): Mat4 | null {
-  if (!declaredTilesetFrame(tileset).geocentric) return null;
+  return (tilesetRootFrame(tileset).rootTransform as Mat4 | null) ?? null;
+}
+
+/**
+ * The root transform AND the record of how it was arrived at, from one call.
+ *
+ * Asking for the two separately is how a tileset ends up rotated and recorded
+ * as unrotated, or recorded as levelled while its tiles stayed in ECEF. The
+ * resolver decides once and returns both.
+ *
+ * The anchor is the centre of the ROOT bounding volume, fixed by the document,
+ * so the rotation is the same on every run and at every camera position — a
+ * streaming reader's resident set is not.
+ */
+export function tilesetRootFrame(tileset: Tileset): StreamingTilesetFrame {
   const aabb = volumeToAabb(tileset.root.boundingVolume);
-  if (aabb == null) return null;
-  const anchor: [number, number, number] = [
-    (aabb.min[0] + aabb.max[0]) / 2,
-    (aabb.min[1] + aabb.max[1]) / 2,
-    (aabb.min[2] + aabb.max[2]) / 2,
-  ];
-  if (!anchor.every(Number.isFinite) || Math.hypot(...anchor) === 0) return null;
-  return enuFrameMatrix(anchor) as Mat4;
+  const anchor: Vec3 | null =
+    aabb == null
+      ? null
+      : [
+          (aabb.min[0] + aabb.max[0]) / 2,
+          (aabb.min[1] + aabb.max[1]) / 2,
+          (aabb.min[2] + aabb.max[2]) / 2,
+        ];
+  return resolveStreamingTilesetFrame(tileset, anchor);
 }
 
 /** The union of every node's bounds, or null when there are no nodes. */
@@ -120,6 +139,16 @@ export class TilesetStreamingSource implements StreamingSource {
   readonly kind: StreamingSourceKind = '3dtiles';
   readonly renderOrigin: [number, number, number];
   readonly frame: SpatialFrame;
+  /**
+   * What this document actually said about its root frame.
+   *
+   * A tileset carrying only a `box` or a `sphere` declares nothing, so `basis`
+   * is `unknown` and there is no vertical reference. That is a fact the source
+   * states rather than one a consumer has to re-derive, and it is the only
+   * thing separating a tileset whose up axis was established from one whose was
+   * not — the two draw identically.
+   */
+  readonly frameProvenance: CloudFrameProvenance;
   readonly octree: StreamingOctreeView;
 
   readonly id: string;
@@ -145,12 +174,22 @@ export class TilesetStreamingSource implements StreamingSource {
     this._crs = crs;
     // Resolved here rather than by the caller: a caller that forgets leaves a
     // geocentric tileset in ECEF, and nothing on screen says so.
+    const resolved = tilesetRootFrame(tileset);
+    // An injected transform is not something the document declared, so the
+    // document's declaration no longer describes the render coordinates and the
+    // frame goes back to unestablished. Recording the document's answer beside
+    // somebody else's transform is the mismatch this whole record exists to
+    // prevent.
+    this.frameProvenance =
+      rootTransform === undefined
+        ? resolved.provenance
+        : { basis: 'unknown', declaredBy: null, verticalReference: 'unknown', linearUnit: 'metre' };
     // The entry URL is passed so every content URI is resolved and VALIDATED
     // before a tile is fetched. Without it the index would hand the transport
     // whatever the document wrote.
     this._index = tilesetNodes(
       tileset,
-      rootTransform ?? tilesetRootFrameMatrix(tileset) ?? undefined,
+      rootTransform ?? (resolved.rootTransform as Mat4 | null) ?? undefined,
       baseUrl,
     );
     this._bounds = unionBounds(this._index.records) ?? [0, 0, 0, 0, 0, 0];
