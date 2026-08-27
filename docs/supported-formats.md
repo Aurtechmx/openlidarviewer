@@ -62,7 +62,9 @@ A streamed tileset reports no source point total. A `tileset.json` never states 
 
 A tile that refines by REPLACE into tiles with their own content is refused. REPLACE means the parent's content is replaced by its children, and the streaming scheduler draws every resident node, which is right for ADD and would draw the coarse parent alongside the fine children for REPLACE. Refusing is preferred to a scene that is quietly doubled. A REPLACE tile that refines into nothing cannot duplicate anything and is served.
 
-What does not open: the wider 3D Tiles ecosystem. B3DM, I3DM, CMPT and glTF content are refused by name, because mesh tiles need a renderer this viewer does not have. Implicit tiling is refused at parse, and a selection cannot reach a nested external `tileset.json`. Draco-compressed tiles are refused rather than partially read.
+Implicit tiling opens. A tileset that describes its hierarchy with a subdivision scheme and subtree files rather than a written-out tree is expanded into the equivalent explicit document before it is parsed, so every refusal the explicit path makes applies to it unchanged. Quadtree and octree schemes are read, availability arrives as a constant or as a bitstream in an internal or external buffer, and subtree and buffer URLs pass the same origin and credential checks as tile content, including the directory-escape rule. The expansion is bounded: subtree levels, tiles per subtree, external buffers, available levels, subtree count, total expanded tiles and subtree bytes each have a ceiling that refuses by name rather than truncating. A sphere bounding volume on an implicit tile is refused, as is a tile declaring both `implicitTiling` and `children`. The older extension spellings are refused by name.
+
+What does not open: the wider 3D Tiles ecosystem. B3DM, I3DM, CMPT and glTF content are refused by name, because mesh tiles need a renderer this viewer does not have. A selection cannot reach a nested external `tileset.json`. Draco-compressed tiles are refused rather than partially read.
 
 Two further limits of the supported subset are known:
 
