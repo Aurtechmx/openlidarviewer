@@ -156,16 +156,24 @@ describe('out-of-core indexer — the LOD pyramid', () => {
     expect(index.depth).toBeGreaterThan(0);
   });
 
-  it('fills the COARSEST levels first, so a preview exists before the leaves', async () => {
+  it('populates the coarse levels, so a preview exists before the leaves', async () => {
     const capacity = 10_000;
     const { index } = await build(200_000, capacity);
     const byKey = new Map(index.leaves.map((l) => [l.key, l.pointCount]));
-    // The root holds a full node's worth: something is drawable immediately.
-    expect(byKey.get('')).toBe(capacity);
-    // Every level-1 cell that exists is filled to capacity before level 2 is used.
+    // The root holds a coarse sample of the whole cloud: something is drawable
+    // immediately. Its size is a hash-selected fraction of the cloud, bounded by
+    // the node capacity, not the arrival-order fill of the old build.
+    const root = byKey.get('') ?? 0;
+    expect(root).toBeGreaterThan(0);
+    expect(root).toBeLessThanOrEqual(capacity);
+    // Level-1 cells exist and carry a coarse sample too, so the pyramid draws
+    // coarse-before-fine. Each stays within capacity.
     const levelOne = [...byKey.entries()].filter(([k]) => k.length === 1);
     expect(levelOne.length).toBeGreaterThan(0);
-    for (const [, n] of levelOne) expect(n).toBe(capacity);
+    for (const [, n] of levelOne) {
+      expect(n).toBeGreaterThan(0);
+      expect(n).toBeLessThanOrEqual(capacity);
+    }
   });
 
   it('never exceeds the node capacity except at the deepest level, which takes the overflow', async () => {
