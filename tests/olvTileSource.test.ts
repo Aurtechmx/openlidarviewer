@@ -317,6 +317,24 @@ describe('OlvTileSource', () => {
     expect(mono.decodeMeta(mono.octree.nodes()[0].record).rgbEightBit).toBeUndefined();
   });
 
+  it('answers the GPS time claim from the stored schema, not from the format', async () => {
+    // The export summary picks a LAS record width from this, so a wrong answer
+    // is a wrong file size in front of a user, not just a missing column.
+    const { reader, tiles } = await buildReader(2000);
+
+    const withGps = new TileStoreReader(
+      { ...reader.manifest, schema: { hasGps: true, hasRgb: reader.schema.hasRgb } },
+      reader.leaves(),
+    );
+    expect(new OlvTileSource({ id: 'a', name: 'b', store: withGps, tiles }).hasGpsTime()).toBe(true);
+
+    const withoutGps = new TileStoreReader(
+      { ...reader.manifest, schema: { hasGps: false, hasRgb: reader.schema.hasRgb } },
+      reader.leaves(),
+    );
+    expect(new OlvTileSource({ id: 'c', name: 'd', store: withoutGps, tiles }).hasGpsTime()).toBe(false);
+  });
+
   it('refuses to claim completeness when the hierarchy has a hole', async () => {
     const { reader, tiles } = await buildReader(5000);
     const full = reader.leaves();

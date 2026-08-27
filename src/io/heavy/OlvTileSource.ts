@@ -289,6 +289,14 @@ export class OlvTileSource implements StreamingSource {
    * two and elevation are always drivable; colour depends on whether the source
    * had any.
    */
+  /**
+   * The build wrote a GPS time field only when its source carried one, so the
+   * manifest schema is the answer rather than a property of the format.
+   */
+  hasGpsTime(): boolean {
+    return this._store.schema.hasGps;
+  }
+
   availableColorModes(): readonly StreamingColorMode[] {
     const out: StreamingColorMode[] = [];
     if (this._store.schema.hasRgb) out.push('rgb');
