@@ -230,6 +230,62 @@ export function activateCommittedStreamingCloud(
 }
 
 /**
+ * Switch the Inspector and the Export panel into STREAMING layout and open the
+ * image-export gate for the freshly attached cloud.
+ *
+ * The same four calls, in the same order, ran written out in the COPC path and
+ * again in the EPT one, and were then not written at all in the tileset one —
+ * which is the failure `streamingScanReveal.ts` already exists to stop, one
+ * surface over. A streaming cloud never goes through `inspector.addCloud`, so
+ * nothing else flips the image-export gate; without these calls the Inspector
+ * keeps its static-cloud layout (Layers, Color by) over a scan that has no
+ * resident layer to drive them, the Export panel keeps offering the file
+ * formats a streaming cloud cannot write, and image export stays dark.
+ *
+ * `imageExportModes` is the map the caller reads off the LIVE viewer
+ * (`availableImageExportModes()`), not a constant: it is what disables the
+ * per-mode buttons a given scene cannot fill. A tileset carries no intensity,
+ * classification or normals, so passing the live map is what keeps those modes
+ * dark rather than offering an export that would render nothing.
+ */
+export function enterStreamingInspectorMode(
+  deps: Pick<OpenStreamingDeps, 'inspector' | 'exportPanel'>,
+  imageExportModes: Parameters<OpenStreamingDeps['exportPanel']['setImageExportAvailability']>[0],
+): void {
+  deps.exportPanel.setImageExportEnabled(true);
+  deps.exportPanel.setImageExportAvailability(imageExportModes);
+  deps.inspector.setStreamingMode(true);
+  deps.exportPanel.setStreamingMode(true);
+}
+
+/**
+ * Return the classification surfaces to their fresh-scan state for a streaming
+ * open: an empty legend, hidden, no reclassify panel, and no class-scope stamp.
+ *
+ * The reset matters for two different reasons depending on the format. A COPC
+ * stream refills the legend lazily as nodes carrying classification become
+ * resident, so this is the empty starting point that refinement builds on. A
+ * 3D Tiles stream never refills it — a point tile carries no LAS
+ * classification — so for a tileset this is not an empty legend waiting to
+ * fill but a control the format cannot support, hidden rather than offered.
+ *
+ * Either way it must run BEFORE the Scan Report is built: the report is scoped
+ * with `classLegendPanel.getVisibility().isFiltered()`, so a previously
+ * filtered scan would otherwise stamp the new one as class-scoped.
+ */
+export function resetClassificationUi(
+  deps: Pick<
+    OpenStreamingDeps,
+    'classLegendPanel' | 'hideReclassifyUi' | 'syncInspectClassScope'
+  >,
+): void {
+  deps.classLegendPanel.setClasses(new Map());
+  deps.classLegendPanel.hide();
+  deps.hideReclassifyUi();
+  deps.syncInspectClassScope();
+}
+
+/**
  * Wire an optional outer abort signal (the Stage URL field's Cancel button) into
  * a load's own AbortController (the progress toast's Cancel) so EITHER cancel
  * aborts the in-flight fetches. Returns a cleanup that detaches the listener —
@@ -505,26 +561,16 @@ export async function openStreamingCopc(
   // The legend is seeded + revealed lazily by `viewer.onStreamingNodeClasses`
   // as nodes carrying classification become resident, and refines as deeper
   // nodes stream in. A streaming source without a classification channel simply
-  // never seeds the legend, so it stays hidden.
-  deps.classLegendPanel.setClasses(new Map());
-  deps.classLegendPanel.hide();
-  deps.hideReclassifyUi();
-  // Clear any prior filtered scan's inspector copy/JSON scope stamp.
-  deps.syncInspectClassScope();
-  // Visual Export Studio — a streaming COPC cloud is now attached;
-  // the image-export buttons in the Inspector can light up. The streaming
-  // path doesn't go through `inspector.addCloud`, so the gate has to flip
-  // here too. Pre-warm the Studio chunk for the same reason as above.
-  deps.exportPanel.setImageExportEnabled(true);
-  // Per-mode gating — streaming COPC / EPT rarely carry normals or
-  // classification; disable the corresponding buttons at the source.
-  deps.exportPanel.setImageExportAvailability(viewer.availableImageExportModes());
-  // Switch the Inspector into streaming layout — hides Layers / Color by
-  // / Point size / Rendering / Export (their streaming-equivalents are
-  // in the StreamingPanel) and pins the panel to the lower-right so
-  // both panels coexist on desktop.
-  deps.inspector.setStreamingMode(true);
-  deps.exportPanel.setStreamingMode(true);
+  // never seeds the legend, so it stays hidden. Shared with the tileset open,
+  // where the same reset means the opposite thing (see the helper).
+  resetClassificationUi(deps);
+  // Streaming layout for the Inspector and the Export panel, plus the
+  // image-export gate: a streaming cloud never goes through
+  // `inspector.addCloud`, so nothing else flips it. Per-mode gating comes off
+  // the live viewer — streaming COPC / EPT rarely carry normals or
+  // classification, so those buttons stay dark at the source. Shared with the
+  // EPT and tileset opens.
+  enterStreamingInspectorMode(deps, viewer.availableImageExportModes());
   try { deps.inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
   catch (err) { if (deps.debug) console.warn('[inspector] setDetail (streaming) threw', err); }
   deps.setLastStreamingReportCloud(cloud);
@@ -802,13 +848,10 @@ export async function handleRemoteEpt(
     );
     deps.streamingPanel.setQuality(deps.getStreamingQuality());
     deps.streamingPanel.setPhase('Streaming coarse geometry…');
-    deps.exportPanel.setImageExportEnabled(true);
-    // Per-mode gating — EPT streams almost never carry normals.
-    deps.exportPanel.setImageExportAvailability(viewer.availableImageExportModes());
-    // Same streaming-mode layout the COPC path uses — hide Inspector's
-    // static-cloud sections and populate the streaming Scan Report.
-    deps.inspector.setStreamingMode(true);
-    deps.exportPanel.setStreamingMode(true);
+    // Same streaming-mode layout and image-export gate the COPC path uses.
+    // Per-mode gating comes off the live viewer — EPT streams almost never
+    // carry normals.
+    enterStreamingInspectorMode(deps, viewer.availableImageExportModes());
     try { deps.inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
     catch (err) { if (deps.debug) console.warn('[inspector] setDetail (streaming) threw', err); }
     try {

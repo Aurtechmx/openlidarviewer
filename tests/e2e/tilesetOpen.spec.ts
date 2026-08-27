@@ -72,14 +72,22 @@ function scanReport(page: Page): Locator {
 /**
  * Points currently drawn, from the `?debug=1` overlay's rendering block.
  *
- * The Streaming panel carries the same counter and would be the natural place
- * to read it, but this open never shows that panel, so the overlay is the
- * surface that actually reports what the renderer drew.
+ * The overlay counts what the RENDERER put on screen this frame, which is not
+ * the same claim as the Streaming panel's resident counter below: one says the
+ * tiles were drawn, the other says they were decoded and admitted. Both are
+ * asserted, because either alone would leave the other unproven.
  */
 async function pointsShown(page: Page): Promise<number> {
   const text = (await page.locator('.olv-debug').textContent()) ?? '';
   const match = /points\s+([\d,]+)\s+shown/.exec(text);
   return match ? Number(match[1].replace(/,/g, '')) : -1;
+}
+
+/** One labelled row of the Streaming panel — its Scan section or its counters. */
+function streamingRow(page: Page, key: string): Locator {
+  return page
+    .locator('.olv-streaming-panel .olv-streaming-row')
+    .filter({ has: page.locator('.olv-streaming-key', { hasText: new RegExp(`^${key}$`) }) });
 }
 
 test.describe('3D Tiles — opening a tileset from a URL', () => {
@@ -99,6 +107,28 @@ test.describe('3D Tiles — opening a tileset from a URL', () => {
     await expect
       .poll(() => pointsShown(page), { timeout: 40_000 })
       .toBe(scene.totalPoints);
+
+    // The Streaming panel is the surface that reports the load, and this open
+    // populated it — colour modes, quality, source URL, phase — and then never
+    // showed it, so none of it was reachable and the ~4 Hz counters below ran
+    // into a hidden panel. It names this format, and its Scan section states
+    // the point total as absent rather than carrying a previous scan's figure.
+    const panel = page.locator('.olv-streaming-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.olv-streaming-title')).toHaveText('Streaming 3D Tiles');
+    await expect(streamingRow(page, 'Source')).toContainText('Unknown from source metadata');
+    await expect(streamingRow(page, 'Format')).toContainText('3D Tiles');
+    // The live counter, against the same total the renderer drew. `Unknown` is
+    // the right-hand side because the source states no total.
+    await expect
+      .poll(async () => (await streamingRow(page, 'Points').textContent()) ?? '', {
+        timeout: 40_000,
+      })
+      .toContain(`${scene.totalPoints} / Unknown`);
+    // The controls that ride with the panel: Pause, Clear cache, the full-cloud
+    // grade and the colour / quality chips were all unreachable with it hidden.
+    await expect(panel.locator('.olv-streaming-btn', { hasText: 'Pause' })).toBeVisible();
+    await expect(panel.locator('.olv-streaming-btn', { hasText: 'Clear cache' })).toBeVisible();
 
     // And they are really in the scene, not merely counted: Inspect raycasts the
     // resident nodes, so a card with per-point rows means a click landed on a
@@ -151,20 +181,37 @@ test.describe('3D Tiles — opening a tileset from a URL', () => {
     await expect(page.locator('.olv-measure-bar')).toBeVisible();
     await expect(page.locator('.olv-mkind', { hasText: /^Distance$/ })).toBeVisible();
 
+    // The left rail is available: `.olv-left-panels:not(.olv-ws-ready)
+    // .olv-ws-body { display: none }` hid the whole mode body until a scan
+    // opened, and only the Analyse-panel reveal flips that flag. Without it
+    // every panel below was present in the DOM and invisible on screen.
+    const rail = page.locator('.olv-left-panels');
+    await expect(rail).toHaveClass(/olv-ws-ready/, { timeout: 20_000 });
+    await expect(rail.locator('.olv-ws-tabs')).toBeVisible();
+
     // Process Studio is where a withheld tool says WHY, so it carries the
-    // preflight verdict this regression was about. Its rows are read as content
-    // rather than asserted visible: this open leaves the left rail's mode body
-    // hidden, which is a separate defect and not what this test is pinning.
+    // preflight verdict this regression was about. Its rows are asserted
+    // VISIBLE, which is what the rail reveal makes possible: the Analyse mode
+    // is one tab away rather than behind a body nothing displays.
+    await rail.locator('.olv-ws-tab', { hasText: 'Analyse' }).click();
     const studio = page.locator('.olv-process-studio');
+    await expect(studio).toBeVisible();
     const tools = studio.locator('.olv-ps-tool');
     await expect(tools).toHaveCount(4, { timeout: 20_000 });
     const distance = studio.locator('.olv-ps-tool', { hasText: 'Distance' });
-    await expect(distance).toHaveCount(1);
+    await expect(distance).toBeVisible();
     await expect(distance).not.toHaveClass(/olv-ps-blocked/);
     // The exact sentence the refusal used to carry, on any tool row.
     await expect(
       studio.locator('.olv-ps-tool', { hasText: 'No scan is loaded' }),
     ).toHaveCount(0);
+
+    // The class legend rides in the Data mode next door. A point tile carries no
+    // LAS classification, so it must not be offering class filters here — least
+    // of all a previous scan's, which is what a rail reveal without the reset
+    // would have surfaced.
+    await rail.locator('.olv-ws-tab', { hasText: 'Data' }).click();
+    await expect(page.locator('.olv-class-panel')).toBeHidden();
   });
 
   test('publishes a Scan Report for the tileset, and says up was never established', async ({

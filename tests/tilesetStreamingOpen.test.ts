@@ -27,6 +27,8 @@ const DOC = JSON.stringify({
 function deps(doc = DOC) {
   const order: string[] = [];
   const reported: { kind?: string; sourcePointCount?: number | null }[] = [];
+  const summaries: unknown[] = [];
+  const revealed: { name: string; settled?: boolean }[] = [];
   const setReport = vi.fn();
   const viewer = {
     clouds: () => [],
@@ -35,11 +37,17 @@ function deps(doc = DOC) {
     }),
     setMode: vi.fn(),
     frameAll: vi.fn(),
+    // The per-mode image-export gating the streaming opens read off the live
+    // scene. A tileset carries no intensity / classification / normals, so the
+    // map a real viewer returns for one disables those modes at the source.
+    availableImageExportModes: vi.fn(() => new Map([['rgb', { available: true }]])),
   };
   return {
     order,
     viewer,
     reported,
+    summaries,
+    revealed,
     setReport,
     attached: viewer.attachStreamingCloud,
     d: {
@@ -50,8 +58,34 @@ function deps(doc = DOC) {
       runStreamingModules: (c: { sourcePointCount?: number | null }) => [
         { label: 'Source point count', value: String(c.sourcePointCount), status: 'info' },
       ],
-      inspector: { setReport },
-      classLegendPanel: { getVisibility: () => ({ isFiltered: () => false }) },
+      inspector: {
+        setReport,
+        setStreamingMode: vi.fn(),
+        setDetail: vi.fn(),
+        element: { classList: { remove: vi.fn(), add: vi.fn() } },
+      },
+      classLegendPanel: {
+        getVisibility: () => ({ isFiltered: () => false }),
+        setClasses: vi.fn(() => order.push('classes')),
+        hide: vi.fn(() => order.push('legendHide')),
+        show: vi.fn(),
+      },
+      inspectorCards: { refreshProvenanceFromStreaming: () => order.push('provenance'),
+        refreshDatasetIntelligenceFromStreamingCloud: vi.fn() },
+      exportPanel: {
+        setImageExportEnabled: vi.fn(),
+        setImageExportAvailability: vi.fn(),
+        setStreamingMode: vi.fn(),
+      },
+      bookmarks: { clear: vi.fn() },
+      revealAnalysePanel: vi.fn((name: string, settled?: boolean) => {
+        order.push('analyse');
+        revealed.push({ name, settled });
+      }),
+      prewarmExportStudio: vi.fn(),
+      refreshViewsUI: vi.fn(),
+      hideReclassifyUi: vi.fn(() => order.push('reclassifyHide')),
+      syncInspectClassScope: vi.fn(),
       isLoading: () => false,
       setLoading: () => {},
       viewerReady: Promise.resolve(),
@@ -66,13 +100,14 @@ function deps(doc = DOC) {
       startStreamingStatusPolling: () => order.push('poll'),
       revealStreamingChrome: () => order.push('reveal'),
       stage: { hideEmptyState: () => {} },
-      inspectorCards: { refreshProvenanceFromStreaming: () => order.push('provenance') },
       crsCoordinator: { refreshCrsForStreamingCloud: () => order.push('crs') },
       streamingPanel: {
         setColorModes: vi.fn(),
         setQuality: () => {},
         setSourceUrl: () => {},
         setPhase: () => {},
+        setSummary: vi.fn((s: unknown) => { order.push('summary'); summaries.push(s); }),
+        show: vi.fn(() => order.push('panelShow')),
       },
       dropZone: {
         setOpening: () => {},
@@ -188,6 +223,131 @@ describe('the open path', () => {
     );
     expect(t.attached).not.toHaveBeenCalled();
     expect(t.d.dropZone.setError).toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// What a committed tileset reveals
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Open the fixture tileset and hand back the recorded deps. */
+async function opened(doc = DOC) {
+  const t = deps(doc);
+  await withTransport(doc, () =>
+    openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+  );
+  return t;
+}
+
+describe('the workspace a committed tileset reveals', () => {
+  it('makes the left rail available', async () => {
+    // `revealAnalysePanel` is the only call that reaches the shell's
+    // `syncMobileSheet()` -> `workspace.setAvailable(hasScan())`, and
+    // `.olv-left-panels:not(.olv-ws-ready) .olv-ws-body { display: none }` hides
+    // the whole rail body until that flips. Without it a tileset draws points
+    // with Process Studio, the Export panel and the Measure panel all invisible.
+    const t = await opened();
+    expect(t.d.revealAnalysePanel).toHaveBeenCalledTimes(1);
+    expect(t.revealed[0].name).toBe('tileset.json');
+    // `false` — a streaming open's route verdict runs on a sparse coarse frame,
+    // so the soft commit waits for the settle one-shot, as COPC and EPT pass.
+    expect(t.revealed[0].settled).toBe(false);
+  });
+
+  it('shows the streaming panel it has been populating', async () => {
+    // The path already fills the panel (colour modes, quality, source URL,
+    // phase) and polls it four times a second. None of it was reachable.
+    const t = await opened();
+    expect(t.d.streamingPanel.show).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches the Inspector and Export panel into streaming layout', async () => {
+    const t = await opened();
+    expect(t.d.inspector.setStreamingMode).toHaveBeenCalledWith(true);
+    expect(t.d.exportPanel.setStreamingMode).toHaveBeenCalledWith(true);
+  });
+
+  it('lights up image export and gates it on what the scene actually has', async () => {
+    const t = await opened();
+    expect(t.d.exportPanel.setImageExportEnabled).toHaveBeenCalledWith(true);
+    expect(t.viewer.availableImageExportModes).toHaveBeenCalled();
+    expect(t.d.exportPanel.setImageExportAvailability).toHaveBeenCalledTimes(1);
+    expect(t.d.prewarmExportStudio).toHaveBeenCalled();
+  });
+
+  it('gives the scan a fresh saved-views list', async () => {
+    const t = await opened();
+    expect(t.d.bookmarks.clear).toHaveBeenCalled();
+    expect(t.d.refreshViewsUI).toHaveBeenCalled();
+  });
+
+  it('reveals the rail only after the attach has committed', async () => {
+    const t = await opened();
+    expect(t.order.indexOf('analyse')).toBeGreaterThan(t.order.indexOf('attach'));
+  });
+});
+
+describe('the streaming panel a tileset shows', () => {
+  it('states this tileset before the panel becomes visible', async () => {
+    // `hide()` does not clear the summary and a streaming->streaming swap never
+    // calls it, so showing the panel without writing a summary first leaves the
+    // previously opened scan's Scan section and title on screen.
+    const t = await opened();
+    expect(t.d.streamingPanel.setSummary).toHaveBeenCalledTimes(1);
+    expect(t.order.indexOf('summary')).toBeLessThan(t.order.indexOf('panelShow'));
+  });
+
+  it('tags the summary as 3D Tiles, not as COPC', async () => {
+    const t = await opened();
+    const s = t.summaries[0] as { format?: string; fileName?: string };
+    expect(s.format).toBe('3dtiles');
+    expect(s.fileName).toBe('tileset.json');
+  });
+
+  it('keeps the point total absent in the panel too', async () => {
+    const t = await opened();
+    const s = t.summaries[0] as { sourcePoints?: number | null };
+    expect(s.sourcePoints).toBeNull();
+  });
+});
+
+describe('controls a tileset cannot support are not presented', () => {
+  it('never prints a point count the format does not state', async () => {
+    // `inspector.setDetail(n, n)` renders "N / N points" with a percentage bar.
+    // A tileset states no total, so both arguments would be null: the bar reads
+    // 100% and the text is a figure nothing measured. COPC and EPT call it
+    // because they declare a total; this path must not.
+    const t = await opened();
+    expect(t.d.inspector.setDetail).not.toHaveBeenCalled();
+  });
+
+  it('does not push a density and coverage card built from a total of zero', async () => {
+    // `refreshDatasetIntelligenceFromStreamingCloud` buckets points per cubic
+    // metre and coerces a missing total to `sourcePointCount: 0` for the
+    // coverage classifier. Neither input exists here.
+    const t = await opened();
+    expect(t.d.inspectorCards.refreshDatasetIntelligenceFromStreamingCloud).not.toHaveBeenCalled();
+  });
+
+  it('hides the class legend and the reclassify panel rather than revealing them', async () => {
+    // 3D Tiles point tiles carry no LAS classification, so the legend is not an
+    // empty legend waiting to fill: it is inapplicable. It lives in the rail
+    // body this fix reveals, so a previous COPC's legend would otherwise become
+    // visible offering class filters over a scan that has no classes.
+    const t = await opened();
+    expect(t.d.classLegendPanel.hide).toHaveBeenCalledTimes(1);
+    expect(t.d.classLegendPanel.show).not.toHaveBeenCalled();
+    expect(t.d.hideReclassifyUi).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the previous scan's class filter before the report is scoped", async () => {
+    // The report is stamped with `classLegendPanel.getVisibility().isFiltered()`.
+    // A prior filtered COPC would otherwise mark a tileset's Scan Report as
+    // class-scoped when the format has no classes to scope by.
+    const t = await opened();
+    expect(t.d.classLegendPanel.setClasses).toHaveBeenCalledTimes(1);
+    expect(t.d.syncInspectClassScope).toHaveBeenCalledTimes(1);
+    expect(t.order.indexOf('classes')).toBeLessThan(t.order.indexOf('report'));
   });
 });
 
