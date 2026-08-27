@@ -150,6 +150,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     debug: false,
     benchmark: false,
     getDebugOverlay: () => null,
+    getStreamingDeps: () => ({}) as unknown as ReturnType<OpenScanDeps["getStreamingDeps"]>,
   };
 
   return { deps, calls };

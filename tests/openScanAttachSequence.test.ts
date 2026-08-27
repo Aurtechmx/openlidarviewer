@@ -242,6 +242,7 @@ function harness(opts: HarnessOptions = {}) {
     debug: false,
     benchmark: false,
     getDebugOverlay: () => null,
+    getStreamingDeps: () => ({}) as unknown as ReturnType<OpenScanDeps["getStreamingDeps"]>,
   };
 
   return {

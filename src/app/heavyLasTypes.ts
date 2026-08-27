@@ -26,6 +26,7 @@ import type {
 } from '../ui/streamingScanReveal';
 import type { LoadError } from '../io/loadErrors';
 import type { Viewer } from '../render/Viewer';
+import type { OpenStreamingDeps } from './openStreaming';
 
 /** The collaborators the bridge writes through once a build produces a store. */
 export interface HeavyLasBridgeDeps {
@@ -46,6 +47,17 @@ export interface HeavyLasBridgeDeps {
   /** A basic phase string for the drop-zone / streaming panel. */
   setPhase(phase: string): void;
   readonly debug: boolean;
+  /**
+   * The streaming surfaces a committed scan reveals — the same
+   * {@link OpenStreamingDeps} the COPC, EPT and 3D Tiles opens write through.
+   * The executor routes the out-of-core reveal through their shared helpers
+   * (`activateCommittedStreamingCloud`, `resetClassificationUi`,
+   * `enterStreamingInspectorMode`) rather than a fourth hand-copied block, so a
+   * built tile store opens with the streaming panel, the streaming Inspector
+   * layout, image export, the Analyse rail and the streaming Scan Report, not
+   * just the dock and inspector `revealStreamingScanChrome` turns on.
+   */
+  readonly streaming: OpenStreamingDeps;
 }
 
 /** The light seams the decision half needs — no out-of-core weight. */

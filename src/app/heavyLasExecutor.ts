@@ -24,6 +24,13 @@ import { opfsSpillStore, type OpfsDirHandle } from '../io/heavy/opfsSpillStore';
 import { OlvTileSource } from '../io/heavy/OlvTileSource';
 import { TileChunkDecoder } from '../io/heavy/tileChunkDecoder';
 import { revealStreamingScanChrome } from '../ui/streamingScanReveal';
+import {
+  activateCommittedStreamingCloud,
+  enterStreamingInspectorMode,
+  resetClassificationUi,
+  type OpenStreamingDeps,
+  type StreamingReportInput,
+} from './openStreaming';
 import { LocalOocIndexerClient } from '../io/heavy/worker/localOocIndexerWorkerClient';
 import type { LocalOocPhase } from '../io/heavy/localOocBuild';
 import { LoadCancelledError } from '../io/loadFile';
@@ -145,6 +152,84 @@ async function attachHeavyStream(
     backend: viewer.activeBackend(),
     body: deps.body,
   });
+  revealHeavyStreamingSurfaces(source, deps.streaming);
+}
+
+/**
+ * Reveal the streaming surfaces a committed out-of-core scan supports, the same
+ * ones COPC, EPT and 3D Tiles reveal after their commit, routed through their
+ * shared helpers so a fourth format is a call, not a transcription (PR #648's
+ * `openTilesetLayer` reveal is the model for judging each call on its merits).
+ *
+ * KEEP, because an `OlvTileSource` genuinely supports them:
+ *  - the streaming panel (`show`, `setColorModes`, `setQuality`, `setPhase`):
+ *    the colour modes come from the tile store's own schema — rgb only when the
+ *    source LAS carried it, plus intensity / elevation / classification, which
+ *    every tile record holds by layout — not from the format.
+ *  - `resetClassificationUi`: classification IS a real channel here, so this is
+ *    the empty-and-waiting COPC reset (the legend seeds lazily as classified
+ *    nodes become resident), NOT the inapplicable-hidden tileset case.
+ *  - the streaming Inspector / Export layout and the image-export gate
+ *    (`enterStreamingInspectorMode`), off the live viewer's availability.
+ *  - `inspector.setDetail` and the streaming Scan Report with the REAL total:
+ *    the store states its tile total, so both show a measured count rather than
+ *    the tileset's "not stated by the source".
+ *  - `activateCommittedStreamingCloud` (usage, provenance, CRS), the Analyse
+ *    rail, the export pre-warm, a fresh saved-views list, the status poll.
+ *
+ * SKIP, because the source cannot honestly fill them:
+ *  - `setSourceUrl`: the store is built from a LOCAL file with no publisher to
+ *    credit (COPC guards the same call behind `http-range`).
+ *  - `setSummary`: the panel's format vocabulary is `copc | ept | 3dtiles`, none
+ *    of which names a decoded out-of-core LAS store; mislabelling it is worse
+ *    than omitting the row, and the real point total still reaches the user
+ *    through the Scan Report and the Inspector detail row.
+ */
+function revealHeavyStreamingSurfaces(source: OlvTileSource, s: OpenStreamingDeps): void {
+  // Publish the committed scan's usage, provenance and CRS — never before the
+  // commit — exactly as the COPC / EPT / tileset opens do.
+  activateCommittedStreamingCloud(source, s);
+
+  const viewer = s.getViewer();
+  s.streamingPanel.setColorModes([...source.availableColorModes()], source.defaultColorMode());
+  s.streamingPanel.setQuality(s.getStreamingQuality());
+  s.streamingPanel.setPhase('Streaming coarse geometry…');
+  resetClassificationUi(s);
+  enterStreamingInspectorMode(s, viewer.availableImageExportModes());
+
+  try {
+    s.inspector.setDetail(source.sourcePointCount, source.sourcePointCount);
+  } catch (err) {
+    if (s.debug) console.warn('[inspector] setDetail (heavy) threw', err);
+  }
+  const reportCloud: StreamingReportInput = {
+    kind: source.kind,
+    name: source.name,
+    sourcePointCount: source.sourcePointCount,
+    maxDepth: () => source.maxDepth(),
+    octree: { nodes: () => source.octree.nodes() },
+    crs: () => source.crs(),
+  };
+  s.setLastStreamingReportCloud(reportCloud);
+  try {
+    s.inspector.setReport(
+      s.runStreamingModules(reportCloud, s.classLegendPanel.getVisibility().isFiltered()),
+    );
+  } catch (err) {
+    if (s.debug) console.warn('[inspector] setReport (heavy) threw', err);
+  }
+
+  s.prewarmExportStudio();
+  s.revealAnalysePanel(source.name, false);
+  s.streamingPanel.show();
+
+  try {
+    s.bookmarks.clear();
+    s.refreshViewsUI();
+  } catch (err) {
+    if (s.debug) console.warn('[views] saved-views refresh (heavy) threw', err);
+  }
+  s.startStreamingStatusPolling();
 }
 
 /** The live OPFS root, or null where the platform has no OPFS. */
