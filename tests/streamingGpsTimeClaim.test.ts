@@ -158,7 +158,7 @@ describe('the shell reads the answer off the source', () => {
  * a source whose export field is decided by a default rather than by its data,
  * so this list may shrink and never grow.
  */
-const WITHOUT_ANSWER = ['io/heavy/OlvTileSource.ts'];
+const WITHOUT_ANSWER: string[] = [];
 
 function tsFiles(dir: string): string[] {
   const out: string[] = [];
