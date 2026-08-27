@@ -92,6 +92,27 @@ test('parseHierarchyPage extracts data nodes, empty nodes, and child pages', () 
   expect(page.childPages[0].key).toEqual({ depth: 1, x: 1, y: 0, z: 0 });
 });
 
+test('parseHierarchyPage marks every COPC node additive', () => {
+  // A COPC octree partitions the file: the LAS header point count is the SUM of
+  // every hierarchy node's count across every depth, so a point lives in exactly
+  // one node and a parent's points are its own. `synthCopc` builds the header
+  // count that way, which is the invariant read back here. A parent is therefore
+  // never redundant once its children arrive, and dropping it from an export
+  // deletes points nothing else carries.
+  const fixture = buildSyntheticCopc({
+    center: [0, 0, 0],
+    halfsize: 128,
+    spacing: 32,
+    nodes: [
+      { key: [0, 0, 0, 0], pointCount: 1000 },
+      { key: [1, 0, 0, 0], pointCount: 400 },
+    ],
+  });
+  const page = parseHierarchyPage(rootPageBytes(fixture), CUBE, 32);
+  expect(page.nodes.map((n) => n.refine)).toEqual(['add', 'add']);
+  expect(page.nodes.reduce((s, n) => s + n.pointCount, 0)).toBe(fixture.pointCount);
+});
+
 test('parseHierarchyPage collects malformed entries instead of throwing', () => {
   const fixture = buildSyntheticCopc({
     corrupt: 'bad-hierarchy-entry',

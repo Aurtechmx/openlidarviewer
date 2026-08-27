@@ -109,7 +109,13 @@ interface TickRecord {
   refinedAwayPending: string[];
   refinedAway: string[];
   refiningCandidates: string[];
-  /** Export frontier over the resident set as it stands. */
+  /**
+   * Export frontier over the resident set as it stands, with every node stated
+   * REPLACING. The three fixtures are additive octrees, so their own records
+   * would make the frontier the whole resident set and record nothing about the
+   * ancestor-dropping walk; stating the replacing mode is what keeps this
+   * column exercising it.
+   */
   frontierPlain: string[];
   /** Export frontier with a fixed fade / additive-refinement pattern applied. */
   frontierMixed: string[];
@@ -459,7 +465,10 @@ async function recordFixture(fixture: ScenarioFixture): Promise<FixtureRecord> {
       refinedAway: sorted(buildRefinedAwayIds(wanted, cloud)),
       refiningCandidates: sorted(buildRefiningCandidateIds(scoredCandidates, parentOf)),
       frontierPlain: sorted(
-        computeExportFrontier(residentIds.map((id) => ({ id })), parentOf),
+        computeExportFrontier(
+          residentIds.map((id) => ({ id, refine: 'replace' as const })),
+          parentOf,
+        ),
       ),
       frontierMixed: sorted(computeExportFrontier(mixedFrontierNodes(residentIds), parentOf)),
       residentIds,

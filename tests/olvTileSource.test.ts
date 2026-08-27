@@ -168,6 +168,12 @@ describe('OlvTileSource', () => {
     expect(interior.length).toBeGreaterThan(0);
     expect(source.maxDepth()).toBeGreaterThan(0);
 
+    // The same property, read as refinement: the per-node counts sum to the
+    // file total above, so an interior node's points are its own rather than a
+    // coarser copy of its children's. Every record says so, and an export that
+    // drops such a node loses points held nowhere else.
+    expect(nodes.every((n) => n.record.refine === 'add')).toBe(true);
+
     // Every non-root node's parent is present and lists it as a child.
     for (const node of nodes) {
       const parentId = node.record.parentId;

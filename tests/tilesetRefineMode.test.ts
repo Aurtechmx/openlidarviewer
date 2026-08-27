@@ -20,6 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseTileset } from '../src/io/tiles3d/tileset';
 import { tilesetNodes } from '../src/io/tiles3d/tilesetNodes';
+import { computeExportFrontier } from '../src/render/streaming/exportFrontier';
 
 const BOX = { box: [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10] };
 
@@ -58,6 +59,29 @@ describe('refinement mode', () => {
         'inflates the displayed point count',
     ).toContain('REPLACE');
     expect(idx.skipped.join(' ')).toContain('root.pnts');
+  });
+
+  it('carries the tile\'s own refinement onto the node record', () => {
+    const idx = tilesetNodes(parseTileset(doc('ADD', true)));
+    expect(idx.records.map((r) => r.refine)).toEqual(['add', 'add']);
+    // A REPLACE tile only survives the walk when it refines into nothing, so it
+    // is a content leaf and can never be an ancestor of another record. Its
+    // record still states the mode the document declared.
+    expect(tilesetNodes(parseTileset(doc('REPLACE', false))).records[0].refine).toBe('replace');
+  });
+
+  it('keeps an ADD parent in the export frontier beside its resident child', () => {
+    // The data-loss case. An additive parent's points are its own, so an export
+    // that drops it for having a resident child is missing the coarse level of
+    // every tileset this reader can open.
+    const idx = tilesetNodes(parseTileset(doc('ADD', true)));
+    const parentOf = (id: string): string | undefined =>
+      idx.records.find((r) => r.id === id)?.parentId;
+    const keep = computeExportFrontier(
+      idx.records.map((r) => ({ id: r.id, refine: r.refine })),
+      parentOf,
+    );
+    expect([...keep].sort()).toEqual(['child.pnts', 'root.pnts']);
   });
 
   it('serves a REPLACE tile that refines into nothing', () => {

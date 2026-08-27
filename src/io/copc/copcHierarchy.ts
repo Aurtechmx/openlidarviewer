@@ -126,6 +126,11 @@ export function parseHierarchyPage(
       byteSize,
       spacing: nodeSpacing(key.depth, rootSpacing),
       parentId: parent ? keyId(parent) : undefined,
+      // A COPC octree partitions the file: every point sits in exactly one
+      // node, which is why the LAS header's point count equals the sum of the
+      // hierarchy's counts across all depths. A parent's points are its own, so
+      // its children add to them rather than replace them.
+      refine: 'add',
     });
   }
 

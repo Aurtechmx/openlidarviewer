@@ -241,6 +241,13 @@ export function tilesetNodes(
       byteSize: 0,
       spacing: placed.geometricError,
       parentId,
+      // The document's own value, resolved by the parser (a child inherits its
+      // parent's when it declares none). Only ADD, and REPLACE that refines
+      // into nothing, get this far — a REPLACE tile with content below it is
+      // named in `replacing` and refuses the open — so a served node is never a
+      // replaced ancestor of another. Carrying the value anyway keeps the
+      // export frontier reading the tile rather than a default.
+      refine: placed.tile.refine === 'REPLACE' ? 'replace' : 'add',
     });
     contentUri.set(uri, target);
     transform.set(uri, placed.transform);

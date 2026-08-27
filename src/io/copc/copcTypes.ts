@@ -73,6 +73,23 @@ export interface CopcMetadata {
 }
 
 /**
+ * How a node's children relate to the points the node itself holds.
+ *
+ * `'add'` — the children carry ADDITIONAL points and the parent's are its own,
+ * so both belong in any complete reading of the hierarchy. Every source this
+ * viewer opens is additive: a COPC octree partitions the file (the LAS header
+ * count is the sum of every hierarchy node's count), an EPT octree is the same
+ * layout by another name, the OLV tile store settles each point at the coarsest
+ * cell with room (`oocIndexer` PYRAMID PLACEMENT), and 3D Tiles refinement is
+ * only served when it is ADD — `tilesetNodes` refuses a REPLACE tile that
+ * refines into content, so the open fails before a node is fetched.
+ *
+ * `'replace'` — the children are a finer representation of the same points, so
+ * the parent is redundant once they are all present.
+ */
+export type NodeRefinement = 'add' | 'replace';
+
+/**
  * An immutable octree node record, as parsed from a COPC hierarchy page.
  * Runtime streaming state (loading / resident / evicted) lives on the separate
  * runtime `StreamingNode`, never here.
@@ -108,6 +125,19 @@ export interface StreamingNodeRecord {
   spacing: number;
   /** Id of the parent node, when known. */
   parentId?: string;
+  /**
+   * How this node's children refine it. See {@link NodeRefinement}.
+   *
+   * Optional rather than required, and the omission is deliberate: EPT builds
+   * its records in `render/streaming/EptOctree.ts`, outside this module's io
+   * layer, so a required field could not be filled at every construction site
+   * in one change. A record that omits it is read as `'add'` — the SAFE
+   * direction, because treating an additive node as replacing DELETES its
+   * points from an export, while treating a replacing node as additive only
+   * exports a coarse sample twice. It is also the correct value for EPT, so
+   * nothing is currently reading the default in place of a wrong answer.
+   */
+  refine?: NodeRefinement;
 }
 
 /** A reference to a child hierarchy page (an entry with `pointCount === -1`). */

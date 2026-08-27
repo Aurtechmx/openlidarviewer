@@ -156,6 +156,10 @@ export class OlvTileOctree implements StreamingOctreeView {
         byteSize: 0,
         spacing: rootSize / 2 ** key.length,
         parentId: parentKey === null ? undefined : tileNodeId(parentKey),
+        // Pyramid placement puts each point at the coarsest cell with room, so
+        // an interior node holds points its children do not repeat: the stored
+        // counts sum to the source total. Its children add to it.
+        refine: 'add',
       });
     }
 

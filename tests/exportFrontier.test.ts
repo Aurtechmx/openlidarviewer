@@ -1,17 +1,19 @@
 /**
  * exportFrontier.test.ts
  *
- * Pins the deterministic export frontier (v0.5.7 Gate 5): keep the deepest
- * resident node per hierarchy path, drop ancestors that have a resident
- * descendant, and exclude fading-out nodes — so a resident-snapshot export never
- * carries overlapping LOD samples of the same region. Also covers the
- * `keyFromId` parser, which the octree formats still use to name their nodes.
+ * Pins the deterministic export frontier (v0.5.7 Gate 5): under REPLACING
+ * refinement keep the deepest resident node per hierarchy path and drop
+ * ancestors that have a resident descendant; under ADDITIVE refinement keep the
+ * ancestor too, because its points are its own and exist nowhere else; and
+ * exclude fading-out nodes either way. Also covers the `keyFromId` parser, which
+ * the octree formats still use to name their nodes.
  *
  * Every octree case below is unchanged from when the frontier derived ancestry
  * by shifting a `VoxelKey`. It now takes an explicit parent lookup instead, and
  * these are the fixtures that prove the two agree: the lookup here IS the octree
  * shift, so any keep-set that moved would be a regression rather than a
- * generalization.
+ * generalization. Those cases now STATE `refine: 'replace'` rather than relying
+ * on a default: the keep-sets are identical, the mode is no longer implied.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -20,7 +22,7 @@ import { keyId, keyFromId } from '../src/io/copc/voxelKey';
 import type { VoxelKey } from '../src/io/copc/copcTypes';
 
 function node(depth: number, x: number, y: number, z: number, fadingOut = false): FrontierNode {
-  return { id: keyId({ depth, x, y, z }), fadingOut };
+  return { id: keyId({ depth, x, y, z }), fadingOut, refine: 'replace' };
 }
 
 /** The octree parent of an id, which is what the frontier used to derive itself. */
@@ -133,8 +135,10 @@ describe('keyFromId', () => {
 
 describe('computeExportFrontier over a hierarchy that is not an octree', () => {
   /**
-   * The irregular tree the 3D Tiles adapter produces: mixed child counts, mixed
-   * depths, ids that carry no coordinate at all.
+   * An irregular tree of the shape the 3D Tiles adapter produces: mixed child
+   * counts, mixed depths, ids that carry no coordinate at all. The refinement
+   * here is stated as replacing to exercise the ancestor-dropping branch over a
+   * non-octree hierarchy; a served tileset is additive (see below).
    *
    *   root
    *    ├─ A ─ A1
@@ -148,10 +152,12 @@ describe('computeExportFrontier over a hierarchy that is not an octree', () => {
     C: 'root',
   };
   const parentOf = (id: string): string | undefined => PARENTS[id];
+  /** A replacing node in that tree. */
+  const r = (id: string): FrontierNode => ({ id, refine: 'replace' });
 
   it('drops an ancestor with a resident descendant and keeps unrefined siblings', () => {
     const keep = computeExportFrontier(
-      [{ id: 'root' }, { id: 'A' }, { id: 'A1' }, { id: 'C' }],
+      [r('root'), r('A'), r('A1'), r('C')],
       parentOf,
     );
     expect([...keep].sort()).toEqual(['A1', 'C']);
@@ -159,7 +165,7 @@ describe('computeExportFrontier over a hierarchy that is not an octree', () => {
 
   it('keeps every child of a node with three children', () => {
     const keep = computeExportFrontier(
-      [{ id: 'B' }, { id: 'B1' }, { id: 'B2' }, { id: 'B3' }],
+      [r('B'), r('B1'), r('B2'), r('B3')],
       parentOf,
     );
     expect([...keep].sort()).toEqual(['B1', 'B2', 'B3']);
@@ -183,9 +189,9 @@ describe('computeExportFrontier under additive refinement', () => {
     expect([...keep].sort()).toEqual(['child', 'parent']);
   });
 
-  it('still drops a replacing parent, so the default is unchanged', () => {
+  it('drops a parent its children replace', () => {
     const keep = computeExportFrontier(
-      [{ id: 'parent', refine: 'replace' }, { id: 'child' }],
+      [{ id: 'parent', refine: 'replace' }, { id: 'child', refine: 'replace' }],
       parentOf,
     );
     expect([...keep]).toEqual(['child']);
@@ -195,10 +201,35 @@ describe('computeExportFrontier under additive refinement', () => {
     // `child` is additive, so it is kept; it is also a descendant of `parent`,
     // which replaces, so `parent` goes.
     const keep = computeExportFrontier(
-      [{ id: 'parent' }, { id: 'child', refine: 'add' }, { id: 'grandchild' }],
+      [{ id: 'parent', refine: 'replace' }, { id: 'child', refine: 'add' }, { id: 'grandchild', refine: 'replace' }],
       parentOf,
     );
     expect([...keep].sort()).toEqual(['child', 'grandchild']);
+  });
+
+  it('keeps an additive parent whose node states no refinement', () => {
+    // The defect this pins: `refine` used to default to 'replace', so a node
+    // that never stated a mode was dropped for having a resident descendant.
+    // Every source this viewer opens is additive, so an unstated mode must keep
+    // the node — dropping it deletes points held nowhere else in the export.
+    const keep = computeExportFrontier([{ id: 'parent' }, { id: 'child' }], parentOf);
+    expect([...keep].sort()).toEqual(['child', 'parent']);
+  });
+
+  it('keeps a whole unstated chain, coarse levels included', () => {
+    const keep = computeExportFrontier(
+      [{ id: 'parent' }, { id: 'child' }, { id: 'grandchild' }],
+      parentOf,
+    );
+    expect([...keep].sort()).toEqual(['child', 'grandchild', 'parent']);
+  });
+
+  it('still excludes a fading-out additive parent', () => {
+    const keep = computeExportFrontier(
+      [{ id: 'parent', fadingOut: true }, { id: 'child' }],
+      parentOf,
+    );
+    expect([...keep]).toEqual(['child']);
   });
 });
 
@@ -207,7 +238,10 @@ describe('computeExportFrontier on a malformed hierarchy', () => {
     // A names B as its parent and B names A. A real tileset cannot produce
     // this; a hostile or corrupt one can.
     const parentOf = (id: string): string | undefined => (id === 'A' ? 'B' : 'A');
-    const keep = computeExportFrontier([{ id: 'A' }, { id: 'B' }], parentOf);
+    const keep = computeExportFrontier(
+      [{ id: 'A', refine: 'replace' }, { id: 'B', refine: 'replace' }],
+      parentOf,
+    );
     // Each is an ancestor of the other, so neither survives. The property under
     // test is that the call returns.
     expect(keep.size).toBe(0);
