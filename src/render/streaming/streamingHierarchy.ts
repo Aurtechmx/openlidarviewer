@@ -24,6 +24,8 @@
  * Pure — no DOM, no three.js, no I/O.
  */
 
+import { keyFromId, keyId, parentKey } from '../../io/copc/voxelKey';
+
 /** A node's parent id, or `undefined` at a root or for an unknown node. */
 export type ParentLookup = (id: string) => string | undefined;
 
@@ -66,5 +68,28 @@ export function forEachAncestorId(
 export function parentLookupFromStore(store: {
   get(id: string): { readonly record: { readonly parentId?: string } } | undefined;
 }): ParentLookup {
-  return (id) => store.get(id)?.record.parentId;
+  return (id) => {
+    const recorded = store.get(id)?.record.parentId;
+    if (recorded !== undefined) return recorded;
+    // The store has no record for this id, and there are two reasons for that.
+    //
+    // A hierarchy page that has not arrived yet genuinely leaves its ancestors
+    // unknown, and stopping is right: inventing ids above it would protect
+    // nodes that may not exist.
+    //
+    // A COPC entry with a point count of zero is different. It is skipped when
+    // the hierarchy is parsed (`copcHierarchy` collects it as an empty key and
+    // adds no node), so it leaves a HOLE in the middle of a chain whose upper
+    // ids are perfectly well known: an octree id encodes its own key, so the
+    // parent is a shift away. Truncating there loses every real ancestor above
+    // the hole, which drops an ancestor's eviction protection, leaves a coarse
+    // node marked as not superseded once its replacement is resident, and lets
+    // the export frontier keep that ancestor alongside its own descendants.
+    //
+    // So a key-shaped id falls back to the key, and anything else still stops.
+    const key = keyFromId(id);
+    if (key === null) return undefined;
+    const parent = parentKey(key);
+    return parent === null ? undefined : keyId(parent);
+  };
 }
