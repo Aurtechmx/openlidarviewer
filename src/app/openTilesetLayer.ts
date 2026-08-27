@@ -36,6 +36,28 @@ import {
   type OpenStreamingDeps,
 } from './openStreaming';
 
+/**
+ * A refusal this reader raised on purpose, as opposed to a transport or decode
+ * failure.
+ *
+ * `describeLoadError` maps anything it is handed to one of six canned category
+ * messages, and every tileset refusal classified to `decode-failure`. So a
+ * valid 1.1 document using a form this subset does not serve was reported to
+ * the user as "Decoding failed, the file may be corrupt or truncated", which is
+ * both wrong and unactionable: the file is fine, and the reason it was refused
+ * was already written down and then discarded.
+ *
+ * Carrying the refusals as their own type lets the catch below show what was
+ * actually wrong, while a genuine transport or decode failure still goes
+ * through the classifier, where the category IS the useful thing to say.
+ */
+export class TilesetRefusal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TilesetRefusal';
+  }
+}
+
 /** The name shown for the scan, taken from the document's own URL. */
 export function tilesetDisplayName(url: string): string {
   try {
@@ -77,19 +99,26 @@ export async function openRemoteTileset(
   try {
     await deps.viewerReady;
     const transport = createTilesetTransport();
-    const tileset = parseTileset(await transport.fetchTilesetJson(url, controller.signal));
+    const json = await transport.fetchTilesetJson(url, controller.signal);
+    let tileset;
+    try {
+      tileset = parseTileset(json);
+    } catch (err) {
+      // The parser's refusals are all deliberate and already say why.
+      throw new TilesetRefusal(err instanceof Error ? err.message : String(err));
+    }
     if (controller.signal.aborted) throw new LoadCancelledError();
 
     const cloud = new TilesetStreamingSource(url, tilesetDisplayName(url), url, transport, tileset);
     if (cloud.octree.nodes().length === 0) {
-      throw new Error('This tileset declares no tile with point content.');
+      throw new TilesetRefusal('This tileset declares no tile with point content.');
     }
     // A tile this reader cannot serve is a piece of the scene that would be
     // missing from a viewer that looked complete. Refuse the open and say which
     // tiles, rather than drawing the rest.
     if (!cloud.octree.isComplete) {
       const first = cloud.octree.errors[0] ?? 'a tile could not be served';
-      throw new Error(
+      throw new TilesetRefusal(
         `This tileset has ${cloud.octree.errors.length} tile(s) this reader cannot ` +
           `serve, so opening it would leave part of the scene missing. First: ${first}`,
       );
@@ -133,7 +162,12 @@ export async function openRemoteTileset(
       deps.dropZone.setProgress(null);
     } else {
       if (deps.debug) console.error('OpenLiDARViewer — tileset open error', err);
-      deps.dropZone.setError(describeLoadError(err));
+      // A deliberate refusal already says what is wrong and what would be lost.
+      // Everything else goes through the classifier, where the category is the
+      // useful thing to say.
+      deps.dropZone.setError(
+        err instanceof TilesetRefusal ? err.message : describeLoadError(err),
+      );
       // Only tear down when nothing was committed: after the commit this scene
       // is the valid one, and a later failure must not blank the viewer.
       if (!committed) deps.closeStreaming();

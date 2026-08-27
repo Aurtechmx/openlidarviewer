@@ -56,6 +56,8 @@ interface RawTile {
   refine?: unknown;
   transform?: number[];
   content?: { uri?: string; url?: string };
+  /** 1.1 multi-content. Refused in `parseTile`; see the note there. */
+  contents?: unknown;
   children?: RawTile[];
   implicitTiling?: unknown;
 }
@@ -190,6 +192,19 @@ function parseTile(raw: RawTile, inheritedRefine: Refine, depth: number, budget:
   }
   if (raw.implicitTiling !== undefined) {
     throw new Error('3D Tiles: implicit tiling is not supported yet — only an explicit tile hierarchy.');
+  }
+  // 1.1 lets a tile carry `contents` (an array) instead of `content`. Only the
+  // single form is read below, so such a tile used to yield a null URI, which
+  // the node walk treats as a structural tile: no node, and no skip recorded.
+  // The reader then called itself complete while serving none of that tile's
+  // data. Refusing here is what keeps `isComplete` honest until the array form
+  // is actually served.
+  if (raw.contents !== undefined) {
+    throw new Error(
+      '3D Tiles: a tile declares `contents`, the 1.1 multi-content form, which this ' +
+        'reader does not serve yet. Opening it would leave that tile out of a scene ' +
+        'that reported itself complete.',
+    );
   }
   if (typeof raw.geometricError !== 'number' || !Number.isFinite(raw.geometricError)) {
     throw new Error('3D Tiles: a tile has no finite geometricError.');
