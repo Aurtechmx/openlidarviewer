@@ -4513,7 +4513,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   height: 280px;
   min-height: 160px;
   max-height: 640px;
-  min-width: 180px;
+  /* min-width:0 so the chart fills its measurement-row column instead of being
+     forced to 180px and overflowing (clipping the curve tail and last x label)
+     when the row's bullet and gap make that column narrower than the panel. */
+  min-width: 0;
   max-width: 100%;
   resize: vertical;
   overflow: hidden;
