@@ -90,19 +90,23 @@ describe('the profile chart offers a working way into the focus view', () => {
     expect(CSS).not.toMatch(/olv-mp-chart-expand-btn/);
   });
 
-  it('sizes the panel from the widest row it has to hold', () => {
-    // Measured in the running app: widest row 193px, chrome 26px. 218 left the
-    // content box at 192 and clipped the last label by a pixel.
-    expect(rule('.olv-measure-panel')).toMatch(/width:\s*222px/);
-    expect(rule('.olv-measure-panel')).toMatch(/min-width:\s*222px/);
+  it('fills the rail rather than carrying its own fixed width', () => {
+    // The panel used to be a fixed 222px, narrower than the workspace tabs and
+    // the cards above it, so its right edge did not line up with theirs. It now
+    // fills the rail (width:100%) and can never force a horizontal scrollbar.
+    expect(rule('.olv-measure-panel')).toMatch(/width:\s*100%/);
+    expect(rule('.olv-measure-panel')).toMatch(/min-width:\s*0/);
+    expect(rule('.olv-measure-panel')).toMatch(/max-width:\s*100%/);
+    expect(rule('.olv-measure-panel')).toMatch(/overflow-x:\s*hidden/);
   });
 
-  it('keeps the left stack aligned', () => {
-    // Annotations, Export/Convert and Clip box sit under Measurements in one
-    // column. A panel 4px wider than its neighbours reads as broken, so the
-    // width change is a stack-wide change or it is a new defect.
-    for (const sel of ['.olv-anno-panel', '.olv-export-panel', '.olv-clip-panel']) {
-      expect(rule(sel), `${sel} must match the measure panel width`).toMatch(/width:\s*222px/);
-    }
+  it('keeps the left stack aligned by making every rail card fill the column', () => {
+    // Alignment no longer depends on each panel declaring the same fixed width.
+    // The open rail forces every child to width:100%, so the workspace tabs, the
+    // Clip box card and the Measurements panel share one width and one right
+    // edge. This rule is the guarantee; losing it reopens the misalignment.
+    expect(CSS).toMatch(
+      /\.olv-left-panels:not\(\.olv-rail-collapsed\)\s*>\s*\*\s*\{[^}]*width:\s*100%/,
+    );
   });
 });

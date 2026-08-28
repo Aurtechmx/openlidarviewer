@@ -41,7 +41,8 @@
    each panel's own legacy width (Analyse 285 / Classes 248 / Export·Clip·
    Annotate·Measure 218) without editing them one by one. Desktop only — the
    mobile bottom-sheet reparents these panels and owns their sizing. The Measure
-   panel stays user-resizable: a drag writes an inline width that wins over this. */
+   panel stays user-resizable, but its SE grip widens the RAIL (`--olv-rail-width`)
+   rather than the panel alone, so every card widens together and stays flush. */
 @media (min-width: 768px) {
   .olv-left-panels:not(.olv-rail-collapsed) > * {
     width: 100%;
