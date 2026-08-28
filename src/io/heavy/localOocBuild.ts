@@ -24,6 +24,7 @@ import { buildTileStoreFromLas, buildTileStoreFromLaz } from './tileStoreBuilder
 import {
   openOpfsSpillBuild,
   writeOpfsText,
+  STORE_LEASE_FILE,
   type OpfsDirHandle,
 } from './opfsSpillStore';
 
@@ -77,6 +78,16 @@ export async function buildLocalOocStore(
   let peakBufferedBytes: number;
   let pointCount: number;
   try {
+    // Stamp the build's start so a startup janitor can tell an abandoned store
+    // from a live one by age. It rides through promotion with the manifest and
+    // tiles, so both the `.partial` and the promoted store carry it. Best
+    // effort: a lease that will not write only makes this store a non-candidate
+    // for the sweep, never a failed build. Written here rather than in
+    // `openOpfsSpillBuild` so the low-level spill primitive stays lease-free for
+    // the callers (and tests) that use it directly.
+    await writeOpfsText(build.dir, STORE_LEASE_FILE, JSON.stringify({ createdAt: Date.now() })).catch(
+      () => {},
+    );
     // The manifest and hierarchy go into the partial directory alongside the
     // tiles, so promotion moves the whole store as one directory.
     const sink = { write: (name: string, text: string) => writeOpfsText(build.dir, name, text) };
@@ -102,13 +113,20 @@ export async function buildLocalOocStore(
     hierarchy = built.hierarchy;
     peakBufferedBytes = built.peakBufferedBytes;
     pointCount = built.reader.manifest.pointCount;
+    // Promotion is inside the SAME guard as the build. A quota, write or rename
+    // failure while moving the finished tiles into place must discard the
+    // partial exactly as a build fault does; promoting outside the catch left a
+    // whole scan-sized partial stranded on any promotion failure. `discard()`
+    // is a no-op once `promote()` has settled the build, so a clean promotion
+    // costs nothing here.
+    options.onPhase?.('finishing');
+    await build.promote();
   } catch (err) {
-    // Cancel, decode fault and quota failure all arrive as a throw; every one
-    // must delete the partial store rather than strand its bytes on disk.
+    // Cancel, decode fault, quota failure and a promotion failure all arrive as
+    // a throw; every one must delete the partial store rather than strand its
+    // bytes on disk.
     await build.discard().catch(() => {});
     throw err;
   }
-  options.onPhase?.('finishing');
-  await build.promote();
   return { manifestJson, hierarchy, peakBufferedBytes, pointCount, storeName };
 }

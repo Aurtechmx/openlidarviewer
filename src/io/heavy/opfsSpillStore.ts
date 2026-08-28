@@ -39,6 +39,13 @@ export interface OpfsWritable {
   write(data: Uint8Array): Promise<void>;
   seek(offset: number): Promise<void>;
   close(): Promise<void>;
+  /**
+   * Discard the swap file without committing it, releasing the lock. Present on
+   * a real `FileSystemWritableFileStream`; optional here so a fake that only
+   * models `close` still satisfies the type. The relocate teardown calls it
+   * where available and falls back to `close` where it is not.
+   */
+  abort?(): Promise<void>;
 }
 export interface OpfsFile {
   readonly size: number;
@@ -94,6 +101,18 @@ const ROOT_TILE = 'root';
 export const PARTIAL_SUFFIX = '.partial';
 
 /**
+ * A tiny lease marker written into every build directory at creation, carrying
+ * the wall-clock time the build began. It rides through promotion with the rest
+ * of the entries, so both a `<name>.partial` and a promoted `ooc-…` store carry
+ * one. A startup janitor (see `opfsStoreJanitor.ts`) reads it to tell a store
+ * abandoned by a crashed tab from one a live session still owns: only a store
+ * older than a safe threshold, and not in the live-owned set, is swept. The
+ * `.tile` scan, the manifest and the reader all ignore it — it is not a
+ * `.tile`, and `openTileStore` reads only the manifest and hierarchy.
+ */
+export const STORE_LEASE_FILE = '.olv-lease';
+
+/**
  * How many tile files may hold an open sync access handle at once. A handle is
  * an OS file descriptor and an exclusive lock, and a build touches thousands of
  * nodes, so they cannot all stay open; the least recently appended is closed to
@@ -109,6 +128,30 @@ function tileFileName(key: string): string {
 function keyFromFileName(name: string): string {
   const base = name.slice(0, -TILE_SUFFIX.length);
   return base === ROOT_TILE ? '' : base;
+}
+
+/**
+ * Append `bytes` to a sync-access tile at its running end, tolerating a short
+ * `write()`. The spec allows `write()` to store fewer bytes than it was handed
+ * and to REPORT that count; advancing the cursor by the full length on such a
+ * write leaves a gap the reader later decodes as garbage. So this loops on the
+ * returned count and advances `tile.size` by exactly what landed, and refuses a
+ * non-positive or non-numeric result rather than spinning or silently gapping.
+ */
+async function writeAllSync(tile: OpenTile, bytes: Uint8Array): Promise<void> {
+  let written = 0;
+  while (written < bytes.length) {
+    const chunk = written === 0 ? bytes : bytes.subarray(written);
+    const stored = await tile.handle.write(chunk, { at: tile.size });
+    if (typeof stored !== 'number' || !Number.isFinite(stored) || stored <= 0) {
+      throw new Error(
+        `opfsSpillStore: sync write reported ${String(stored)} of ${bytes.length - written} bytes`,
+      );
+    }
+    const advance = Math.min(stored, bytes.length - written);
+    tile.size += advance;
+    written += advance;
+  }
 }
 
 /** A store that also owns file handles, so a caller can release them. */
@@ -195,9 +238,11 @@ export function opfsSpillStore(dir: OpfsDirHandle): OpfsSpillStore {
   }
 
   /**
-   * The fallback append. Kept verbatim from the writable-stream version this
-   * module started as, so a platform without sync access handles gets exactly
-   * the behaviour it had before, whole-file copy included.
+   * The fallback append. A platform without sync access handles gets the same
+   * whole-file-copy writable path it always had, now with a size check: a
+   * writable `write()` returns no count, so a short write cannot be seen at the
+   * call, but the committed file must have grown by exactly `bytes.length`. A
+   * shortfall is a corrupt tile and is refused rather than left as a silent gap.
    */
   async function appendViaWritable(name: string, bytes: Uint8Array): Promise<void> {
     const handle = await dir.getFileHandle(name, { create: true });
@@ -208,6 +253,12 @@ export function opfsSpillStore(dir: OpfsDirHandle): OpfsSpillStore {
     await writable.seek(size);
     await writable.write(bytes);
     await writable.close();
+    const grown = (await handle.getFile()).size;
+    if (grown !== size + bytes.length) {
+      throw new Error(
+        `opfsSpillStore: short append on ${name} — expected ${size + bytes.length} bytes, got ${grown}`,
+      );
+    }
   }
 
   return {
@@ -215,10 +266,13 @@ export function opfsSpillStore(dir: OpfsDirHandle): OpfsSpillStore {
       const name = tileFileName(key);
       const tile = await acquire(name);
       if (tile !== undefined) {
-        // One write at the running end. Nothing already in the tile is read,
-        // rewritten or copied, so the cost is the length of `bytes`.
-        await tile.handle.write(bytes, { at: tile.size });
-        tile.size += bytes.length;
+        // Writes at the running end. `write()` MAY report fewer bytes stored
+        // than were handed in, and taking that count on faith while advancing
+        // the cursor by the full length leaves an unwritten gap the reader
+        // later decodes as garbage. So loop on the RETURNED count, advance by
+        // exactly what landed, and refuse a zero/invalid result rather than
+        // spin. Nothing already in the tile is read, rewritten or copied.
+        await writeAllSync(tile, bytes);
         return;
       }
       await appendViaWritable(name, bytes);
@@ -441,11 +495,28 @@ async function relocate(from: OpfsDirHandle, to: OpfsDirHandle, name: string): P
   const file = await source.getFile();
   const handle = await to.getFileHandle(name, { create: true });
   const writable = await handle.createWritable();
-  for (let offset = 0; offset < file.size; offset += PROMOTION_COPY_CHUNK_BYTES) {
-    const end = Math.min(offset + PROMOTION_COPY_CHUNK_BYTES, file.size);
-    await writable.write(new Uint8Array(await file.slice(offset, end).arrayBuffer()));
+  try {
+    for (let offset = 0; offset < file.size; offset += PROMOTION_COPY_CHUNK_BYTES) {
+      const end = Math.min(offset + PROMOTION_COPY_CHUNK_BYTES, file.size);
+      await writable.write(new Uint8Array(await file.slice(offset, end).arrayBuffer()));
+    }
+    await writable.close();
+  } catch (err) {
+    // A quota or IO failure mid-copy must not strand the open writable (its
+    // lock would block a retry) nor leave a half-written destination that a
+    // later pass could mistake for a copied tile. Abort where the platform
+    // supports it, else close to release the lock, then delete the incomplete
+    // target. The original failure is what the caller must see, so any teardown
+    // fault is swallowed and the original error is re-thrown.
+    try {
+      if (typeof writable.abort === 'function') await writable.abort();
+      else await writable.close();
+    } catch {
+      // The copy already failed; a teardown fault adds nothing worth surfacing.
+    }
+    await removeIfPresent(to, name).catch(() => {});
+    throw err;
   }
-  await writable.close();
   await from.removeEntry(name);
 }
 
