@@ -210,9 +210,11 @@ describe('openLocalHeavyLas — the out-of-core local LAS bridge', () => {
 
     const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
 
-    // The bridge took the OOC path and attached a streaming source.
+    // The bridge took the OOC path and attached a streaming source. It attaches
+    // twice: a preview sample first, then the full index that replaces it. The
+    // source it settles on is the full OlvTileSource.
     expect(result.status).toBe('attached');
-    expect(attachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(attachStreamingCloud).toHaveBeenCalledTimes(2);
     const attached = getAttached() as OlvTileSource;
     expect(attached).toBeInstanceOf(OlvTileSource);
     expect(result.status === 'attached' && result.source).toBe(attached);

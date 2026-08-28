@@ -158,7 +158,8 @@ describe('openLocalHeavyLas — chunked LAZ routing', () => {
     expect(result.status).toBe('attached');
     expect(runIndex).toHaveBeenCalledTimes(1);
     expect(runIndex.mock.calls[0][0].kind).toBe('laz');
-    expect(attachStreamingCloud).toHaveBeenCalledTimes(1);
+    // A preview sample attaches first, then the full index replaces it.
+    expect(attachStreamingCloud).toHaveBeenCalledTimes(2);
     const attached = getAttached() as OlvTileSource;
     expect(attached).toBeInstanceOf(OlvTileSource);
     expect(attached.sourcePointCount).toBe(120_000);

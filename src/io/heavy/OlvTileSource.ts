@@ -55,6 +55,7 @@ import type {
 } from '../../render/streaming/StreamingSource';
 import type { TileStoreReader } from './tileStore';
 import { createTranslatedFrame, type SpatialFrame } from '../../geo/frame/spatialFrame';
+import type { PreviewSample } from './previewSampler';
 
 /**
  * Node ids carry a one-character prefix because the root's octant path is the
@@ -343,5 +344,195 @@ export class OlvTileSource implements StreamingSource {
 
   async close(): Promise<void> {
     await this._close?.();
+  }
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * PreviewCloudSource — a stratified sample as a lightweight streaming source.
+ *
+ * Co-located with {@link OlvTileSource} because it is the same kind of adapter:
+ * tile records presented as a {@link StreamingSource} over a single
+ * {@link StreamingNodeStore}. Keeping it here reuses that one io->render value
+ * edge rather than opening a second one from a new file (the module-graph
+ * ratchet is shrink-only). The heavy out-of-core build blocks for a long time on
+ * a multi-gigabyte file; {@link buildPreviewSample} reads a bounded, spatially
+ * spread SAMPLE, and this wraps it so it attaches through the exact same
+ * `attachStreamingCloud` path the real source uses and renders immediately.
+ *
+ * It is deliberately a SINGLE-LEVEL cloud: one root node holding every sampled
+ * record, decoded once through the shared {@link TileChunkDecoder}. It exists
+ * only until the full index replaces it, so there is no hierarchy to refine.
+ *
+ * HONESTY. A preview must never be mistaken for the complete cloud:
+ *  - {@link PreviewCloudSource.sourcePointCount} is the SAMPLE size, not the
+ *    file's declared count, so every count a report or the Inspector derives is
+ *    the number of points actually on screen.
+ *  - the octree's `isComplete` is false, with a recorded reason, so the
+ *    full-cloud grade and any completeness-sensitive consumer refuse to present
+ *    the sample as a finished scan through the shared capability model.
+ * The framing figures come from the file's own header extent, so the camera
+ * frames the whole scene the sample is spread across.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
+/** The single root node's id — the tile-key prefix keeps it distinct in logs. */
+const PREVIEW_NODE_ID = 'p';
+
+/** The reason a preview's octree records for being incomplete, so no consumer
+ *  reads a sampled view as a whole cloud. */
+export const PREVIEW_INCOMPLETE_REASON =
+  'preview sample: a spread of the cloud, the full index is still building';
+
+/**
+ * A one-node octree over the sample. `isComplete` is false by construction: this
+ * is a sample, never the whole cloud, and the recorded reason says so.
+ */
+class PreviewOctree implements StreamingOctreeView {
+  readonly store = new StreamingNodeStore();
+  readonly errors: readonly string[] = [PREVIEW_INCOMPLETE_REASON];
+  readonly isComplete = false;
+
+  constructor(bounds: Box6, pointCount: number, spacing: number) {
+    this.store.add({
+      id: PREVIEW_NODE_ID,
+      key: { depth: 0, x: 0, y: 0, z: 0 },
+      depth: 0,
+      bounds,
+      pointCount,
+      byteOffset: 0,
+      byteSize: 0,
+      spacing,
+      refine: 'replace',
+    });
+  }
+
+  nodes() {
+    return this.store.all();
+  }
+}
+
+export interface PreviewCloudSourceOptions {
+  readonly id: string;
+  readonly name: string;
+  readonly sample: PreviewSample;
+  readonly crs?: CrsInfo | null;
+}
+
+/** A {@link StreamingSource} over a bounded, stratified preview sample. */
+export class PreviewCloudSource implements StreamingSource {
+  readonly id: string;
+  readonly kind = 'tiles' as const;
+  readonly name: string;
+  readonly renderOrigin: [number, number, number];
+  readonly frame: SpatialFrame;
+  readonly octree: PreviewOctree;
+
+  private readonly _sample: PreviewSample;
+  private readonly _crs: CrsInfo | null;
+  private readonly _localCube: Box6;
+
+  constructor(options: PreviewCloudSourceOptions) {
+    this.id = options.id;
+    this.name = options.name;
+    this._sample = options.sample;
+    this._crs = options.crs ?? null;
+    const o = options.sample.origin;
+    this.renderOrigin = [o[0], o[1], o[2]];
+    this.frame = createTranslatedFrame(this.renderOrigin);
+
+    // An equal-sided cube over the file's data extent, for framing the camera.
+    const { localMin, localMax } = options.sample;
+    const size = Math.max(
+      1e-3,
+      localMax[0] - localMin[0],
+      localMax[1] - localMin[1],
+      localMax[2] - localMin[2],
+    );
+    const cx = (localMin[0] + localMax[0]) / 2;
+    const cy = (localMin[1] + localMax[1]) / 2;
+    const cz = (localMin[2] + localMax[2]) / 2;
+    const half = size / 2;
+    this._localCube = [cx - half, cy - half, cz - half, cx + half, cy + half, cz + half];
+    // Node bounds are WORLD (local cube + origin): the scheduler subtracts
+    // `renderOrigin` from them to reach render space, so they must start in the
+    // frame the origin is expressed in. See OlvTileSource's frames note.
+    const worldBounds: Box6 = [
+      this._localCube[0] + o[0],
+      this._localCube[1] + o[1],
+      this._localCube[2] + o[2],
+      this._localCube[3] + o[0],
+      this._localCube[4] + o[1],
+      this._localCube[5] + o[2],
+    ];
+    this.octree = new PreviewOctree(worldBounds, options.sample.pointCount, size);
+  }
+
+  /** THE SAMPLE SIZE — never the file's declared count. See the class note. */
+  get sourcePointCount(): number {
+    return this._sample.pointCount;
+  }
+
+  get residentPointCount(): number {
+    return this.octree.store.residentPointCount;
+  }
+
+  counts(): NodeCounts {
+    return this.octree.store.counts();
+  }
+
+  maxDepth(): number {
+    return 0;
+  }
+
+  localBounds(): Box6 {
+    return [...this._localCube];
+  }
+
+  dataBounds(): Box6 {
+    const { localMin, localMax } = this._sample;
+    return [localMin[0], localMin[1], localMin[2], localMax[0], localMax[1], localMax[2]];
+  }
+
+  defaultColorMode(): StreamingColorMode {
+    return this._sample.schema.hasRgb ? 'rgb' : 'elevation';
+  }
+
+  availableColorModes(): readonly StreamingColorMode[] {
+    const out: StreamingColorMode[] = [];
+    if (this._sample.schema.hasRgb) out.push('rgb');
+    out.push('intensity', 'elevation', 'classification');
+    return out;
+  }
+
+  hasGpsTime(): boolean {
+    return this._sample.schema.hasGps;
+  }
+
+  crs(): CrsInfo | null {
+    return this._crs;
+  }
+
+  async readNodeChunk(_record: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> {
+    signal?.throwIfAborted();
+    // The scheduler transfers the buffer to a worker, so hand it a copy that
+    // owns its bytes rather than a view over the retained sample.
+    return this._sample.records.slice().buffer;
+  }
+
+  decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata {
+    return {
+      pointDataRecordFormat: -1,
+      pointRecordLength: this._sample.recordBytes,
+      pointCount: record.pointCount,
+      scale: [1, 1, 1],
+      offset: [0, 0, 0],
+      renderOrigin: [0, 0, 0],
+      rgbEightBit: this._sample.schema.hasRgb ? true : undefined,
+    };
+  }
+
+  async close(): Promise<void> {
+    // In-memory: nothing to release.
   }
 }

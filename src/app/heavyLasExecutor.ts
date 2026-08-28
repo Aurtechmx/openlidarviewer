@@ -21,7 +21,8 @@ import {
 } from '../io/heavy/storagePreflight';
 import { openTileStore, tileBytesReader } from '../io/heavy/tileStoreBuilder';
 import { opfsSpillStore, removeOpfsStore, type OpfsDirHandle } from '../io/heavy/opfsSpillStore';
-import { OlvTileSource } from '../io/heavy/OlvTileSource';
+import { OlvTileSource, PreviewCloudSource } from '../io/heavy/OlvTileSource';
+import { buildPreviewSample } from '../io/heavy/previewSampler';
 import { TileChunkDecoder } from '../io/heavy/tileChunkDecoder';
 import { revealStreamingScanChrome } from '../ui/streamingScanReveal';
 import {
@@ -31,6 +32,7 @@ import {
   type OpenStreamingDeps,
   type StreamingReportInput,
 } from './openStreaming';
+import type { StreamingSource } from '../render/streaming/StreamingSource';
 import { LocalOocIndexerClient } from '../io/heavy/worker/localOocIndexerWorkerClient';
 import type { LocalOocPhase } from '../io/heavy/localOocBuild';
 import { readLazChunkTable } from '../io/heavy/lazChunkTable';
@@ -52,6 +54,13 @@ const PHASE_LABELS: Record<LocalOocPhase, string> = {
   indexing: 'Indexing for streaming…',
   finishing: 'Finishing the index…',
 };
+
+/**
+ * The status shown WHILE the preview sample is up. It has to say two things at
+ * once: what is on screen is a sample, and the full index is still building — so
+ * the user cannot mistake a spread of the cloud for the finished scan.
+ */
+const PREVIEW_PHASE_LABEL = 'Preview sample, building the full index…';
 
 /**
  * The refusal sentence for a heavy LAZ the chunked out-of-core path cannot
@@ -135,17 +144,54 @@ export async function executeHeavyLasBuild(
     return { status: 'unavailable', heavy: true, reason: 'preflight refused without a message' };
   }
 
+  // PREVIEW FIRST. Before the long index build, put a bounded, stratified
+  // sample on screen through the SAME streaming attach the real source uses, so
+  // a multi-gigabyte file is not a blank wait. Best effort: any sampling fault
+  // means no preview, never a failed open. The sample is honest — it reports its
+  // own point count and its octree is incomplete — and it is attached WITHOUT
+  // the committed-scan reveal, so nothing presents it as a finished scan. If the
+  // build then completes, `attachStreamingCloud` replaces (and disposes) it.
+  let previewAttached = false;
   try {
-    deps.setPhase(PHASE_LABELS.indexing);
+    const sample = await buildPreviewSample(openRange(file), facts, { signal });
+    if (sample && !signal.aborted) {
+      const previewSource = new PreviewCloudSource({
+        id: `preview-${heavyStoreName(file)}`,
+        name: file.name,
+        sample,
+      });
+      const previewDecoder = new TileChunkDecoder(sample.schema, sample.recordBytes);
+      await attachStreamingScan(previewSource, previewDecoder, deps, signal);
+      deps.setPhase(PREVIEW_PHASE_LABEL);
+      previewAttached = true;
+    }
+  } catch (err) {
+    if (signal.aborted || isCancel(err)) {
+      teardownPreview(previewAttached, deps);
+      return { status: 'cancelled' };
+    }
+    if (deps.debug) console.warn('[heavy-las] preview sample skipped', err);
+  }
+
+  try {
+    // While a preview is on screen the phase must keep saying it is a sample and
+    // the full index is still building, so the user never reads the preview as
+    // the finished cloud. Without a preview it is the plain build phase.
+    const phaseFor = (phase: LocalOocPhase): string =>
+      previewAttached ? PREVIEW_PHASE_LABEL : PHASE_LABELS[phase];
+    deps.setPhase(phaseFor('indexing'));
     const built = await runIndex({
       file,
       storeName: heavyStoreName(file),
       kind: facts.format,
       memoryBudgetBytes: BUILD_MEMORY_BUDGET_BYTES,
-      onPhase: (phase) => deps.setPhase(PHASE_LABELS[phase]),
+      onPhase: (phase) => deps.setPhase(phaseFor(phase)),
       signal,
     });
-    if (signal.aborted) return { status: 'cancelled' };
+    if (signal.aborted) {
+      teardownPreview(previewAttached, deps);
+      return { status: 'cancelled' };
+    }
 
     const dir = await root.getDirectoryHandle(built.storeName);
     const spill = opfsSpillStore(dir);
@@ -177,11 +223,42 @@ export async function executeHeavyLasBuild(
     await attachHeavyStream(source, decoder, deps, signal);
     return { status: 'attached', source, decoder };
   } catch (err) {
-    if (err instanceof LoadCancelledError || (err as { name?: string })?.name === 'AbortError') {
+    // A cancel or a build fault must not leave the preview stranded on screen
+    // labelled "building the full index" when nothing is building any more.
+    teardownPreview(previewAttached, deps);
+    if (signal.aborted || isCancel(err)) {
       return { status: 'cancelled' };
     }
     if (deps.debug) console.warn('[heavy-las] out-of-core open failed; refusing', err);
     return { status: 'failed', heavy: true, error: err };
+  }
+}
+
+/**
+ * Whether a thrown error is a cancellation on its own terms. A user cancel
+ * surfaces as a {@link LoadCancelledError} or a DOM `AbortError`. An aborted read
+ * can also surface as a `RangeReadError`, which is ambiguous (a genuine read
+ * failure raises the same type), so that case is decided by the `signal.aborted`
+ * check at the call site rather than here, and is not folded in.
+ */
+function isCancel(err: unknown): boolean {
+  const name = (err as { name?: string })?.name;
+  return err instanceof LoadCancelledError || name === 'AbortError';
+}
+
+/**
+ * Detach a still-attached preview scan. Called on every non-`attached` exit
+ * after a preview went up: a successful full attach already replaced and
+ * disposed it through `attachStreamingCloud`, but a cancel or a fault never
+ * reaches that swap, so the preview would otherwise stay on screen. Detaching
+ * disposes the (in-memory) preview session; a viewer with no preview is a no-op.
+ */
+function teardownPreview(previewAttached: boolean, deps: HeavyLasBridgeDeps): void {
+  if (!previewAttached) return;
+  try {
+    deps.getViewer().detachStreamingCloud();
+  } catch (err) {
+    if (deps.debug) console.warn('[heavy-las] preview teardown failed', err);
   }
 }
 
@@ -197,13 +274,35 @@ async function attachHeavyStream(
   deps: HeavyLasBridgeDeps,
   signal: AbortSignal,
 ): Promise<void> {
+  await attachStreamingScan(source, decoder, deps, signal);
+  revealHeavyStreamingSurfaces(source, deps.streaming);
+}
+
+/**
+ * Attach a streaming source and reveal the scan CHROME (dock, nav bar,
+ * inspector), stopping short of the committed-scan reveal. Shared by the full
+ * out-of-core open and the preview: the preview needs the cloud on screen and
+ * the chrome to orbit it, but NOT `revealHeavyStreamingSurfaces`, which
+ * publishes the scan report, provenance, CRS and the Analyse rail as a finished
+ * scan — a claim a sample must not make. The full open calls this and then adds
+ * that reveal.
+ *
+ * `attachStreamingCloud` is transactional: it builds the new session first and
+ * aborts before its commit if `signal` fired, and on a streaming→streaming swap
+ * it detaches and disposes the previous cloud only after the replacement is
+ * built. So attaching the real source over the preview replaces it with no leak,
+ * and a cancel mid-build keeps whatever scene was already up.
+ */
+async function attachStreamingScan(
+  source: StreamingSource,
+  decoder: TileChunkDecoder,
+  deps: HeavyLasBridgeDeps,
+  signal: AbortSignal,
+): Promise<void> {
   await deps.viewerReady;
   const viewer = deps.getViewer();
   await viewer.ready;
   if (signal.aborted) throw new LoadCancelledError();
-  // `attachStreamingCloud` is transactional: it builds the new session first and
-  // aborts before its commit if `signal` fired, so a cancel here keeps whatever
-  // scene the user already had rather than blanking the viewer.
   await viewer.attachStreamingCloud(source, decoder, 'balanced', deps.isPhone(), null, signal);
   deps.stage.hideEmptyState();
   viewer.setMode('orbit');
@@ -215,7 +314,6 @@ async function attachHeavyStream(
     backend: viewer.activeBackend(),
     body: deps.body,
   });
-  revealHeavyStreamingSurfaces(source, deps.streaming);
 }
 
 /**
