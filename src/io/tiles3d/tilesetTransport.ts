@@ -24,7 +24,7 @@
  */
 
 import { sanitizeUrlForDisplay } from '../range/RangeSource';
-import { readAtMostBounded, readTextAtMost } from '../range/boundedRead';
+import { ownedExactBuffer, readAtMostBounded, readTextAtMost } from '../range/boundedRead';
 
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
@@ -241,10 +241,8 @@ export function createTilesetTransport(
       // Exact-size, for the same reason the tile read below is: the subtree
       // reader indexes chunk offsets against the buffer length, so a pooled
       // backing buffer would present trailing bytes as part of the document.
-      return bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ) as ArrayBuffer;
+      // `ownedExactBuffer` skips the copy when the body already owns its buffer.
+      return ownedExactBuffer(bytes);
     },
     fetchTileBytes: async (url, signal) => {
       const response = await fetchWithRetry(url, 'tile', signal);
@@ -257,10 +255,8 @@ export function createTilesetTransport(
       // An exact-size ArrayBuffer: a pooled or oversized backing buffer would
       // hand the PNTS decoder trailing bytes that are not part of the tile, and
       // the decoder reads its header offsets against the buffer length.
-      return bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ) as ArrayBuffer;
+      // `ownedExactBuffer` avoids the copy when the body already owns its buffer.
+      return ownedExactBuffer(bytes);
     },
   };
 }

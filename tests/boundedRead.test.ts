@@ -14,6 +14,7 @@ import {
   readExactlyBounded,
   readAtMostBounded,
   readTextAtMost,
+  ownedExactBuffer,
   BoundedReadError,
 } from '../src/io/range/boundedRead';
 import { RangeReadError } from '../src/io/range/RangeSource';
@@ -128,6 +129,68 @@ describe('readAtMostBounded', () => {
 
   it('rejects an invalid ceiling', async () => {
     await expect(readAtMostBounded(streamingResponse([]), 0, 'x')).rejects.toBeInstanceOf(BoundedReadError);
+  });
+
+  it('preallocates ONE exact target for a declared length and streams into it', async () => {
+    // A valid identity Content-Length at or below the ceiling must drive the
+    // single-allocation path: no chunk list, no second full-size buffer. We
+    // count constructions of `Uint8Array(declared)` and assert exactly one,
+    // proving chunks stream directly into the preallocated target.
+    const chunks = [bytes(40), bytes(40), bytes(20)];
+    const declared = 100;
+    const RealU8 = globalThis.Uint8Array;
+    let targetAllocs = 0;
+    class SpyU8 extends RealU8 {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(...args: any[]) {
+        super(...(args as [number]));
+        if (typeof args[0] === 'number' && args[0] === declared) targetAllocs += 1;
+      }
+    }
+    (globalThis as { Uint8Array: typeof Uint8Array }).Uint8Array = SpyU8;
+    try {
+      const resp = streamingResponse(chunks, { 'content-length': String(declared) });
+      const out = await readAtMostBounded(resp, 256, 'EPT tile');
+      expect(out.byteLength).toBe(declared);
+      // Exact ownership: whole-buffer view, no trailing bytes past the payload.
+      expect(out.byteOffset).toBe(0);
+      expect(out.buffer.byteLength).toBe(declared);
+    } finally {
+      (globalThis as { Uint8Array: typeof Uint8Array }).Uint8Array = RealU8;
+    }
+    expect(targetAllocs).toBe(1);
+  });
+
+  it('trims a body shorter than its declared length to what arrived', async () => {
+    const resp = streamingResponse([bytes(30)], { 'content-length': '100' });
+    const out = await readAtMostBounded(resp, 256, 'EPT tile');
+    expect(out.byteLength).toBe(30);
+    expect(out.buffer.byteLength).toBe(30);
+  });
+
+  it('refuses a body that runs past its declared length', async () => {
+    const resp = streamingResponse([bytes(60), bytes(60)], { 'content-length': '100' });
+    await expect(readAtMostBounded(resp, 256, 'EPT tile')).rejects.toMatchObject({
+      name: 'BoundedReadError',
+      what: 'EPT tile',
+    });
+  });
+});
+
+describe('ownedExactBuffer', () => {
+  it('returns the same underlying buffer for an already-exact view (no clone)', () => {
+    const src = bytes(64);
+    const ab = ownedExactBuffer(src);
+    expect(ab).toBe(src.buffer);
+  });
+
+  it('copies out only the viewed span for a partial view', () => {
+    const backing = new Uint8Array(64).fill(7);
+    const view = backing.subarray(8, 24);
+    const ab = ownedExactBuffer(view);
+    expect(ab).not.toBe(backing.buffer);
+    expect(ab.byteLength).toBe(16);
+    expect(new Uint8Array(ab).every((b) => b === 7)).toBe(true);
   });
 });
 

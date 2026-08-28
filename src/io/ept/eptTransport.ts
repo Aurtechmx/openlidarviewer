@@ -44,7 +44,7 @@
 
 import type { EptTransport } from '../../render/streaming/EptStreamingPointCloud';
 import { sanitizeUrlForDisplay } from '../range/RangeSource';
-import { readAtMostBounded, readTextAtMost } from '../range/boundedRead';
+import { ownedExactBuffer, readAtMostBounded, readTextAtMost } from '../range/boundedRead';
 
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
@@ -233,13 +233,10 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
         { signal },
       );
       // Hand back an exact-size ArrayBuffer; a pooled/oversized backing buffer
-      // would hand the decoder trailing bytes that aren't part of the tile. The
-      // cast is sound — a fetch body is never a SharedArrayBuffer — and mirrors
-      // the fixture transport's own slice.
-      return bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ) as ArrayBuffer;
+      // would hand the decoder trailing bytes that aren't part of the tile.
+      // `ownedExactBuffer` clones only when the view is partial — an
+      // already-exact body (the common case) passes through with no copy.
+      return ownedExactBuffer(bytes);
     },
   };
 }

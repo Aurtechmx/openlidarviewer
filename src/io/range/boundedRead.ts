@@ -420,10 +420,63 @@ export async function readAtMostBounded(
     }
     return new Uint8Array(buffer);
   }
-  const chunks: Uint8Array[] = [];
-  let total = 0;
   const reader = body.getReader();
   const clock = startClock(options);
+  // Declared-length fast path: an identity-encoded body with a valid
+  // Content-Length at or below the ceiling lets us allocate the ONE exact
+  // target up front and stream chunks straight into it. That avoids the
+  // chunk-list + second full-size allocation the unknown-length path needs,
+  // which peaks at ~2x the body size during concatenation. `declared` here is
+  // already known to be `<= maxBytes` (the over-cap refusal above ran first),
+  // and `declaredBodyLength` returns null under any non-identity
+  // content-encoding, so a compressed length can never drive this branch.
+  if (declared !== null) {
+    const out = new Uint8Array(declared);
+    let filled = 0;
+    try {
+      for (;;) {
+        const { done, value } = await readChunkRacing(
+          reader,
+          options.signal,
+          options.timeoutSignal,
+          clock.idleTimeoutMs,
+          clock.totalTimeoutMs,
+          clock.msLeftOfTotal,
+        );
+        if (done) break;
+        if (!value || value.byteLength === 0) continue;
+        if (filled + value.byteLength > declared) {
+          // The body ran past its own declared length. Refuse rather than
+          // grow a second buffer: a Content-Length that undercounts the body
+          // is exactly the lie the ceiling exists to contain.
+          throw new BoundedReadError(
+            what,
+            maxBytes,
+            `${what} sent more than its declared ${declared} bytes — refusing to read further.`,
+          );
+        }
+        out.set(value, filled);
+        filled += value.byteLength;
+      }
+    } catch (err) {
+      await cancelQuietly(reader);
+      if (err instanceof BoundedReadStall) {
+        throw new BoundedReadError(
+          what,
+          maxBytes,
+          `${what} stalled — ${err.message}. The server sent headers but stopped sending data.`,
+          'stalled',
+        );
+      }
+      throw err;
+    }
+    // A body shorter than its declared length leaves trailing zeros in `out`.
+    // Trim to what actually arrived so no phantom bytes reach the decoder; the
+    // exact-length common case returns `out` untouched (still one allocation).
+    return filled === declared ? out : out.slice(0, filled);
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
   try {
     for (;;) {
       const { done, value } = await readChunkRacing(
@@ -458,6 +511,10 @@ export async function readAtMostBounded(
     }
     throw err;
   }
+  // Unknown-length path only: no Content-Length was available, so the size is
+  // discovered by reading. This is the branch that peaks at ~2x during the
+  // join below (chunk buffers still live while `out` fills). It is bounded by
+  // `maxBytes` and, for a single chunk, avoids the copy entirely.
   if (chunks.length === 1) return chunks[0];
   const out = new Uint8Array(total);
   let at = 0;
@@ -466,6 +523,25 @@ export async function readAtMostBounded(
     at += chunk.byteLength;
   }
   return out;
+}
+
+/**
+ * Return an ArrayBuffer that owns exactly `bytes` and nothing more.
+ *
+ * A `Uint8Array` can be a window onto a larger backing buffer (non-zero
+ * `byteOffset`, or a `byteLength` shorter than the buffer). Handing such a view
+ * to a consumer that indexes the raw `ArrayBuffer` — a decoder reading header
+ * offsets against `buffer.byteLength`, `new Blob([buffer])` — would leak the
+ * trailing bytes. When the view already spans its whole buffer this returns
+ * that buffer with no copy; otherwise it copies out just the viewed span. The
+ * cast is sound because these buffers are never `SharedArrayBuffer`.
+ *
+ * Mirrors the inline form in `io/download.ts` so both sites share one rule.
+ */
+export function ownedExactBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+    ? (bytes.buffer as ArrayBuffer)
+    : (bytes.slice().buffer as ArrayBuffer);
 }
 
 /** {@link readAtMostBounded}, decoded as UTF-8. For JSON documents. */

@@ -9,6 +9,8 @@
  * releases the memory.
  */
 
+import { ownedExactBuffer } from './range/boundedRead';
+
 /** Trigger a browser download of `blob` as `filename`, deferring the URL revoke. */
 export function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -29,13 +31,9 @@ export function triggerDownload(blob: Blob, filename: string): void {
 export function downloadBytes(filename: string, bytes: Uint8Array, mime: string): void {
   // Only copy when `bytes` is a partial view: `new Blob([typedArray])` serialises
   // the WHOLE backing ArrayBuffer, so a subarray (non-zero offset or shorter
-  // length) must be sliced to its own bytes. A typed array that owns its whole
+  // length) must be copied to its own bytes. A typed array that owns its whole
   // buffer passes straight through — no copy of a multi-MB export payload.
-  const ab =
-    bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
-      ? (bytes.buffer as ArrayBuffer)
-      : (bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
-  triggerDownload(new Blob([ab], { type: mime }), filename);
+  triggerDownload(new Blob([ownedExactBuffer(bytes)], { type: mime }), filename);
 }
 
 /** Download UTF-8 text (defaults to `text/plain`). */
