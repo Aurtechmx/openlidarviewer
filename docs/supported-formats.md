@@ -18,7 +18,7 @@ Format support is still evolving. This page separates what works today from what
 | `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded; acquisition grid preserved per block |
 | `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
 | `PNTS` | 3D Tiles point tile | A single tile; magic-byte detected; `RTC_CENTER` applied; Draco refused |
-| `tileset.json` | 3D Tiles 1.0 / 1.1 | Opened by URL; streamed against the camera like COPC and EPT; PNTS content only; explicit hierarchy only; other `asset.version` values refused |
+| `tileset.json` | 3D Tiles 1.0 / 1.1 | Opened by URL; streamed against the camera like COPC and EPT; PNTS content only; explicit or implicit (quadtree / octree subtree) hierarchy; other `asset.version` values refused |
 | `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming — see [streaming.md](streaming.md) |
 | `EPT` | Entwine Point Tile | `ept.json` manifest + hierarchy + tiles; binary and laszip tile decode; local and remote — see [streaming.md](streaming.md) |
 

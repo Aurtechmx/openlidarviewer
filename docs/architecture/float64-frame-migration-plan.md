@@ -93,7 +93,7 @@ The gate's number is the larger one because it also counts the reads inside
 frame mistake there is wrong everywhere at once, so the gate has to see it. This
 plan's number is the migration surface, which is consumers only.
 
-Measured, `outside-model`: 129 direct `.positions` reads across 39 files. Both
+Measured, `outside-model`: 130 direct `.positions` reads across 40 files. Both
 numbers are regenerated from the tree rather than quoted from memory, because
 they drift as code moves — they rose to 162 across 43 files while the placement
 architecture was landing, and have since fallen as consumers moved onto the
