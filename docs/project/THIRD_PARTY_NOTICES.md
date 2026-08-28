@@ -6,6 +6,13 @@ runtime dependency, its upstream project, and its license. The full
 text of every license referenced here is reproduced or linked at the
 end of the file.
 
+OpenLiDARViewer itself is licensed under AGPL-3.0-only from v0.6.7 (MIT through
+v0.6.6). The project license does not change the license of any component listed
+here. Each component keeps its own license and notice. Every runtime component
+is compatible with AGPL-3.0-only: the runtime libraries are MIT or Apache-2.0
+and the fonts are under the SIL Open Font License. See
+[../../LICENSING.md](../../LICENSING.md).
+
 ## Runtime dependencies (bundled into the shipped build)
 
 | Package | Declared range | Resolved | License | Upstream |
