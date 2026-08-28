@@ -46,15 +46,87 @@ const MOBILE_POINT_BUDGET: Record<StreamingQuality, number> = {
 export const BYTES_PER_STREAMING_POINT = 24;
 
 /**
- * CPU-side bytes per decoded point — the shape produced by the worker before
- * GPU upload. Summed: positions (3 × f32 = 12 B), intensity (u16 = 2 B),
- * classification (u8 = 1 B), returnNumber (u8 = 1 B), returnCount (u8 = 1 B),
- * gpsTime (f64 = 8 B) → 25 B / point. Used by the three-tier debug-overlay
- * metric (decoded-tier accounting): in this architecture decoded data is transferred to the
- * GPU atomically, so the decoded tier reports a CPU-residency estimate that
- * mirrors the GPU estimate but with the full decoded attribute set.
+ * CPU-side worst-case bytes per decoded point — the widest shape a LAS-family
+ * source produces before GPU upload. Summed: positions (3 × f32 = 12 B),
+ * intensity (u16 = 2 B), classification (u8 = 1 B), returnNumber (u8 = 1 B),
+ * returnCount (u8 = 1 B), gpsTime (f64 = 8 B), rgb (3 × u8 = 3 B),
+ * pointSourceId (u16 = 2 B) → 30 B / point (PDRF 7/8). The earlier figure of 25
+ * dropped rgb and pointSourceId and so undercounted a coloured point by 5 B.
+ * Used by the debug-overlay decoded-tier estimate and to convert the
+ * first-admission byte ceiling into a point ceiling; a per-channel figure for a
+ * known chunk is {@link decodedBytesPerPoint}.
  */
-export const DECODED_BYTES_PER_POINT = 25;
+export const DECODED_BYTES_PER_POINT = 30;
+
+/** Which optional channels a decoded chunk carries, for a byte estimate. */
+export interface DecodedChannelPresence {
+  readonly intensity?: boolean;
+  readonly classification?: boolean;
+  readonly returnNumber?: boolean;
+  readonly returnCount?: boolean;
+  readonly gpsTime?: boolean;
+  readonly rgb?: boolean;
+  readonly normals?: boolean;
+  readonly pointSourceId?: boolean;
+}
+
+/**
+ * Decoded CPU bytes per point for a chunk carrying exactly `channels`.
+ * Positions (3 × f32) are always present; every other channel is charged only
+ * when present, so a positions-only `.pnts` tile is not billed for LAS
+ * attributes it never carries. Pure — the schema-aware counterpart to the flat
+ * {@link DECODED_BYTES_PER_POINT} worst case.
+ */
+export function decodedBytesPerPoint(channels: DecodedChannelPresence = {}): number {
+  let b = 3 * Float32Array.BYTES_PER_ELEMENT; // positions f32 × 3
+  if (channels.intensity) b += Uint16Array.BYTES_PER_ELEMENT;
+  if (channels.classification) b += Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.returnNumber) b += Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.returnCount) b += Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.gpsTime) b += Float64Array.BYTES_PER_ELEMENT;
+  if (channels.rgb) b += 3 * Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.normals) b += 3 * Float32Array.BYTES_PER_ELEMENT;
+  if (channels.pointSourceId) b += Uint16Array.BYTES_PER_ELEMENT;
+  return b;
+}
+
+/** First-admission decoded-byte ceiling per device class. */
+const DESKTOP_FIRST_ADMISSION_BYTES = 512 * 1024 * 1024;
+const MOBILE_FIRST_ADMISSION_BYTES = 128 * 1024 * 1024;
+const LOW_MEMORY_FIRST_ADMISSION_BYTES = 64 * 1024 * 1024;
+/** `navigator.deviceMemory` at or below this (GiB) counts as low-memory. */
+const LOW_MEMORY_GIB = 2;
+
+/**
+ * Decoded-byte ceiling for the empty-viewer first-admission bypass. Device
+ * aware: a phone or a low-memory machine gets a far smaller ceiling than a
+ * desktop, so the "nothing resident yet, admit any size" path cannot commit a
+ * half-gigabyte decode on a device that has no headroom for it. Pure.
+ */
+export function firstAdmissionMaxDecodedBytes(
+  isMobile: boolean,
+  deviceMemoryGiB?: number,
+): number {
+  let bytes = isMobile ? MOBILE_FIRST_ADMISSION_BYTES : DESKTOP_FIRST_ADMISSION_BYTES;
+  if (deviceMemoryGiB !== undefined && deviceMemoryGiB <= LOW_MEMORY_GIB) {
+    bytes = Math.min(bytes, LOW_MEMORY_FIRST_ADMISSION_BYTES);
+  }
+  return bytes;
+}
+
+/**
+ * Point ceiling for the first-admission bypass — the byte ceiling divided by
+ * the worst-case per-point cost, so the estimate never admits more bytes than
+ * {@link firstAdmissionMaxDecodedBytes} allows. Pure.
+ */
+export function firstAdmissionMaxPoints(
+  isMobile: boolean,
+  deviceMemoryGiB?: number,
+): number {
+  return Math.floor(
+    firstAdmissionMaxDecodedBytes(isMobile, deviceMemoryGiB) / DECODED_BYTES_PER_POINT,
+  );
+}
 
 /** Compressed-chunk cache byte budget — smaller on mobile. */
 const DESKTOP_CHUNK_CACHE_BYTES = 48 * 1024 * 1024;

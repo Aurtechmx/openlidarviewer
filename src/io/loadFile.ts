@@ -13,8 +13,10 @@ import {
   e57TooLargeMessage,
   e57NoPlanMessage,
   NON_STREAMING_FORMATS,
+  BOUNDED_DECODE_FORMATS,
   LARGE_NON_LAS_THRESHOLD_BYTES,
   LARGE_STATIC_LAS_THRESHOLD_BYTES,
+  memoryCeilingBytes,
 } from './loadPlan';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { E57Preflight } from './e57/preflight';
@@ -312,6 +314,40 @@ function e57Refusal(file: File, preflight: FilePreflight): LoadError | undefined
 }
 
 /**
+ * The refusal an over-ceiling non-streaming format with NO bounded decode
+ * justifies, or `undefined` when the file may be read.
+ *
+ * LAS/LAZ route an over-ceiling file to the out-of-core tile build, and E57 has
+ * its own {@link e57Refusal}. Every other non-streaming format (PLY, PCD, PTX,
+ * PTS, XYZ, OBJ, GLB/GLTF, PNTS) materialises the whole point set at parse time
+ * with no bounded fallback. When the RAW FILE alone already exceeds the device
+ * memory ceiling, the fully decoded set cannot possibly fit, so the load is
+ * refused BEFORE the whole-file read rather than warned about and then run — a
+ * warning that proceeds still takes the tab with it (compare `e57Refusal`: a
+ * verdict known before the read must refuse before the read).
+ */
+function nonStreamingOverCeilingRefusal(
+  file: File,
+  preflight: FilePreflight,
+  options: LoadOptions,
+): LoadError | undefined {
+  const { format } = preflight;
+  if (!NON_STREAMING_FORMATS.has(format) || BOUNDED_DECODE_FORMATS.has(format)) {
+    return undefined;
+  }
+  const ceiling = memoryCeilingBytes(options.deviceMemoryGB, options.isMobile ?? false);
+  if (file.size <= ceiling) return undefined;
+  return new LoadError(
+    'memory-constraint',
+    `${formatInfo(format).label} too large for this device — the file is ` +
+      `${formatByteSize(file.size)}, already past the ${formatByteSize(ceiling)} this tab ` +
+      `can be given, and this format is decoded in full before it can be downsampled, so ` +
+      `the open would run the tab out of memory. Convert to COPC/EPT (PDAL or untwine) to ` +
+      `stream it instead.`,
+  );
+}
+
+/**
  * Assemble the source metadata — the cheap preflight result the UI shows — from
  * a finished preflight. Shared by `fileMetadata` and `loadFile` so both surface
  * exactly the same facts without a second head-slice read.
@@ -522,7 +558,8 @@ export async function loadFile(
   // below materialises the WHOLE file in one ArrayBuffer. Leaving the refusal
   // to the worker meant a 600 MB file already known not to fit was pulled into
   // memory first, on the device least able to hold it, and only then rejected.
-  const refusal = e57Refusal(file, preflight);
+  const refusal =
+    e57Refusal(file, preflight) ?? nonStreamingOverCeilingRefusal(file, preflight, options);
   if (refusal) throw refusal;
 
   // --- Now read the whole file — only once the format is known. ---

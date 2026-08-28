@@ -9,8 +9,73 @@ import { describe, it, expect } from 'vitest';
 import {
   streamingBudgets,
   selectWithinBudget,
+  decodedBytesPerPoint,
+  firstAdmissionMaxDecodedBytes,
+  firstAdmissionMaxPoints,
+  DECODED_BYTES_PER_POINT,
   type ScoredCandidate,
 } from '../src/render/streaming/streamingBudget';
+
+describe('decodedBytesPerPoint — schema-aware decoded byte estimate', () => {
+  it('charges positions only for a positions-only chunk', () => {
+    expect(decodedBytesPerPoint()).toBe(12);
+    expect(decodedBytesPerPoint({})).toBe(12);
+  });
+
+  it('charges each present channel at its element width', () => {
+    // Full LAS-family PDRF 7/8 shape: positions 12 + intensity 2 + class 1 +
+    // returnNumber 1 + returnCount 1 + gpsTime 8 + rgb 3 + pointSourceId 2.
+    const full = decodedBytesPerPoint({
+      intensity: true,
+      classification: true,
+      returnNumber: true,
+      returnCount: true,
+      gpsTime: true,
+      rgb: true,
+      pointSourceId: true,
+    });
+    expect(full).toBe(30);
+    // The flat worst-case constant matches this widest LAS-family shape.
+    expect(full).toBe(DECODED_BYTES_PER_POINT);
+    // The earlier flat figure of 25 undercounted a coloured point by rgb (3) +
+    // pointSourceId (2) = 5 bytes.
+    expect(full).toBeGreaterThan(25);
+  });
+
+  it('adds normals as three f32 when present', () => {
+    expect(decodedBytesPerPoint({ normals: true })).toBe(12 + 12);
+  });
+});
+
+describe('first-admission ceiling — device aware', () => {
+  it('gives a desktop the full half-gigabyte byte ceiling', () => {
+    expect(firstAdmissionMaxDecodedBytes(false)).toBe(512 * 1024 * 1024);
+  });
+
+  it('lowers the byte ceiling on mobile and lower still on low memory', () => {
+    const desktop = firstAdmissionMaxDecodedBytes(false);
+    const mobile = firstAdmissionMaxDecodedBytes(true);
+    const lowMem = firstAdmissionMaxDecodedBytes(true, 2);
+    expect(mobile).toBeLessThan(desktop);
+    expect(lowMem).toBeLessThan(mobile);
+    // A low-memory desktop is also clamped, not just phones.
+    expect(firstAdmissionMaxDecodedBytes(false, 2)).toBeLessThan(desktop);
+  });
+
+  it('a plentiful deviceMemory does not raise the ceiling above the class default', () => {
+    expect(firstAdmissionMaxDecodedBytes(false, 32)).toBe(firstAdmissionMaxDecodedBytes(false));
+    expect(firstAdmissionMaxDecodedBytes(true, 32)).toBe(firstAdmissionMaxDecodedBytes(true));
+  });
+
+  it('derives the point ceiling from the byte ceiling and worst-case per point', () => {
+    expect(firstAdmissionMaxPoints(false)).toBe(
+      Math.floor(firstAdmissionMaxDecodedBytes(false) / DECODED_BYTES_PER_POINT),
+    );
+    expect(firstAdmissionMaxPoints(false)).toBe(17_895_697);
+    // A phone admits far fewer points than a desktop through the empty-viewer bypass.
+    expect(firstAdmissionMaxPoints(true)).toBeLessThan(firstAdmissionMaxPoints(false));
+  });
+});
 
 describe('streamingBudgets — desktop resident-point budgets', () => {
   it('resolves the trimmed balanced default and the unchanged low/high', () => {

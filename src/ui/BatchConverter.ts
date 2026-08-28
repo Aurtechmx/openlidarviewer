@@ -17,11 +17,24 @@ import { el } from './dom';
 import { downloadBytes } from '../io/download';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { decodeFull } from '../convert/decodeFull';
-import { runBatch, summariseBatch, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
+import { runBatch, summariseBatch, guardedBatchInput, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
+import { memoryCeilingBytes } from '../io/loadPlan';
 import { buildZip, assessZipDownload } from '../convert/zipStore';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
 
 const ACCEPT = '.las,.laz,.xyz,.asc,.txt,.csv,.pts,.ptx,.ply,.pcd,.e57';
+
+/**
+ * The hard per-file byte ceiling for a batch read. The converter decodes one
+ * file at a time, but a single over-ceiling file still crashes the tab the
+ * moment `arrayBuffer()` materialises it, so each file is gated by the same
+ * device memory ceiling the loader uses. `navigator.deviceMemory` is optional
+ * (absent on Safari/Firefox); `memoryCeilingBytes` falls back to its default.
+ */
+function singleFileCeilingBytes(): number {
+  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return memoryCeilingBytes(typeof mem === 'number' && mem > 0 ? mem : undefined, false);
+}
 
 export class BatchConverter {
   readonly element: HTMLElement;
@@ -175,7 +188,7 @@ export class BatchConverter {
       // multi-GB files no longer loads them all into memory at once. An
       // unreadable file now surfaces a per-file error at convert time instead of
       // silently vanishing here.
-      this._files.push({ name: f.name, sizeBytes: f.size, bytes: () => f.arrayBuffer() });
+      this._files.push(guardedBatchInput(f, singleFileCeilingBytes()));
     }
     this._renderFileList();
     this._refresh();

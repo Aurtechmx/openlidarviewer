@@ -106,6 +106,16 @@ export interface LoadPlan {
    * backward-compat — treat `undefined` as `false`.
    */
   buildThenStream?: boolean;
+  /**
+   * True when the file is an over-ceiling non-streaming format with NO bounded
+   * decode (PLY, PCD, PTX, PTS, XYZ, OBJ, GLB/GLTF, PNTS). Unlike LAS/LAZ
+   * (`buildThenStream`) and E57 (its own preflight plan), these have no way to
+   * decode within the ceiling, so the load must be REFUSED before the whole
+   * file is materialised — a warning that still proceeds crashes the tab. The
+   * loader turns this into a `memory-constraint` refusal with guidance to
+   * stream as COPC/EPT or convert. Optional — treat `undefined` as `false`.
+   */
+  refuseOverCeiling?: boolean;
 }
 
 /**
@@ -126,6 +136,18 @@ export const LARGE_NON_LAS_THRESHOLD_BYTES = 300 * 1024 * 1024;
  * huge files that belong in COPC/EPT.
  */
 export const LARGE_STATIC_LAS_THRESHOLD_BYTES = 1024 * 1024 * 1024;
+
+/**
+ * Formats with a bounded decode for an over-ceiling file: LAS/LAZ route to the
+ * out-of-core tile build, and E57 has its own preflight verdict plus stride
+ * plan. Any other format materialises the whole point set at parse time, so an
+ * over-ceiling estimate for it is a hard refusal (see `refuseOverCeiling`).
+ */
+export const BOUNDED_DECODE_FORMATS: ReadonlySet<SourceFormat> = new Set<SourceFormat>([
+  'las',
+  'laz',
+  'e57',
+]);
 
 /** Non-LAS/LAZ formats that decode the whole point set up front. */
 export const NON_STREAMING_FORMATS: ReadonlySet<SourceFormat> = new Set<SourceFormat>([
@@ -531,6 +553,16 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
   // fallback for a caller that does not act on this flag.
   const buildThenStream = (format === 'las' || format === 'laz') && mayExceedCeiling;
 
+  // Fail closed for a non-streaming format with no bounded decode. LAS/LAZ has
+  // the out-of-core build (`buildThenStream`) and E57 has its own preflight
+  // verdict and stride plan; both can survive an over-ceiling file. Everything
+  // else (PLY, PCD, PTX, PTS, XYZ, OBJ, GLB/GLTF, PNTS) materialises the whole
+  // point set at parse time with no bounded fallback, so an over-ceiling
+  // estimate means the decode cannot fit and must be refused, not merely warned
+  // about — a warning that lets the read proceed still takes the tab with it.
+  const refuseOverCeiling =
+    mayExceedCeiling && !BOUNDED_DECODE_FORMATS.has(format);
+
   return {
     mode: plan.mode,
     sourceCount,
@@ -542,6 +574,7 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     mayExceedCeiling,
     largeNonLasFormat,
     buildThenStream,
+    refuseOverCeiling,
   };
 }
 

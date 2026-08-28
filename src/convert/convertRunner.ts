@@ -14,6 +14,45 @@
 import type { PointCloud } from '../model/PointCloud';
 import { convertCloud } from './convertCloud';
 import type { ConvertOptions, ConvertedFile, ConvertReport } from './types';
+import { formatByteSize } from '../io/formatByteSize';
+
+/** A file handle a batch input reads from — the subset {@link guardedBatchInput} needs. */
+export interface BatchFileSource {
+  readonly name: string;
+  readonly size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+/** The message an over-ceiling single file is refused with. */
+export function oversizeBatchFileMessage(
+  name: string,
+  sizeBytes: number,
+  ceilingBytes: number,
+): string {
+  return (
+    `${name} is ${formatByteSize(sizeBytes)}, larger than the ${formatByteSize(ceilingBytes)} ` +
+    `a single file can be read into memory here. Convert it with PDAL or untwine, or split ` +
+    `it, before adding it.`
+  );
+}
+
+/**
+ * Build a {@link BatchInput} whose byte read is gated by a hard per-file memory
+ * ceiling. A file larger than the ceiling is refused BEFORE its ArrayBuffer is
+ * materialised: reading a multi-gigabyte file into one ArrayBuffer takes the
+ * tab down, so the reader rejects up front and {@link runBatch} records a
+ * per-file error instead of crashing the page. Pure and DOM-free.
+ */
+export function guardedBatchInput(file: BatchFileSource, ceilingBytes: number): BatchInput {
+  return {
+    name: file.name,
+    sizeBytes: file.size,
+    bytes: () =>
+      file.size > ceilingBytes
+        ? Promise.reject(new RangeError(oversizeBatchFileMessage(file.name, file.size, ceilingBytes)))
+        : file.arrayBuffer(),
+  };
+}
 
 /**
  * One file to convert: a name, its size (for display without a read), and a

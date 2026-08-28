@@ -88,3 +88,43 @@ describe('LoadPlan.largeNonLasFormat — pre-decode warning', () => {
     expect(plan.largeNonLasFormat).toBe(true);
   });
 });
+
+describe('LoadPlan.refuseOverCeiling — fail closed for unbounded formats', () => {
+  // Well past the 1.5 GB desktop fallback ceiling, so fixed cost alone exceeds
+  // it and no point-budget reshape can bring the estimate down.
+  const OVER = 4_000_000_000;
+
+  it('refuses an over-ceiling PLY — no bounded decode exists for it', () => {
+    const plan = planLoad(input({ fileBytes: OVER, sourceCount: 200_000_000, format: 'ply' }));
+    expect(plan.mayExceedCeiling).toBe(true);
+    expect(plan.refuseOverCeiling).toBe(true);
+    // It is NOT routed to the out-of-core build — that path is LAS/LAZ only.
+    expect(plan.buildThenStream).toBeFalsy();
+  });
+
+  it('refuses every unbounded non-streaming format over the ceiling', () => {
+    for (const fmt of ['ply', 'pcd', 'pts', 'ptx', 'obj', 'glb', 'xyz'] as const) {
+      const plan = planLoad(input({ fileBytes: OVER, sourceCount: 200_000_000, format: fmt }));
+      expect(plan.refuseOverCeiling).toBe(true);
+    }
+  });
+
+  it('does NOT refuse LAS/LAZ — they route to the out-of-core build instead', () => {
+    for (const fmt of ['las', 'laz'] as const) {
+      const plan = planLoad(input({ fileBytes: OVER, sourceCount: 200_000_000, format: fmt }));
+      expect(plan.refuseOverCeiling).toBe(false);
+      expect(plan.buildThenStream).toBe(true);
+    }
+  });
+
+  it('does NOT refuse E57 here — it has its own preflight verdict and stride plan', () => {
+    const plan = planLoad(input({ fileBytes: OVER, sourceCount: 200_000_000, format: 'e57' }));
+    expect(plan.refuseOverCeiling).toBe(false);
+  });
+
+  it('is false when the file fits under the ceiling', () => {
+    const plan = planLoad(input({ fileBytes: 10_000_000, sourceCount: 100_000, format: 'ply' }));
+    expect(plan.mayExceedCeiling).toBe(false);
+    expect(plan.refuseOverCeiling).toBe(false);
+  });
+});

@@ -30,12 +30,22 @@ import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
 import type { StreamingBenchmark } from './streamingBenchmark';
 import type { StreamingQuality } from './streamingBudget';
-import { streamingBudgets } from './streamingBudget';
+import { streamingBudgets, firstAdmissionMaxPoints } from './streamingBudget';
 import { makeStreamingCommit, type StreamingCommit } from './meteredCommit';
 import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
 import { renderLocalPositions } from '../../model/pointFrames';
 import { loadStreamingRenderer, loadStreamingScheduler } from '../../lazyChunks';
 import { readDevFlags } from '../../perf/devFlags';
+
+/**
+ * `navigator.deviceMemory` in GiB, or undefined when the browser does not
+ * expose it (Safari, Firefox). A coarse, spec-rounded hint — used only to lower
+ * the first-admission ceiling on low-memory devices, never to raise it.
+ */
+function deviceMemoryGiB(): number | undefined {
+  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return typeof mem === 'number' && mem > 0 ? mem : undefined;
+}
 
 /**
  * The live streaming subsystem — present only while a COPC OR EPT cloud is
@@ -208,6 +218,9 @@ export async function buildStreamingSession(
       // flag reads, so the scheduler stays free of lookups; 0 keeps the plain
       // greedy fill that ships today.
       stickyMargin: readDevFlags().residentStickiness ? RESIDENT_STICKY_MARGIN : 0,
+      // Device-aware first-admission ceiling: a phone or a low-memory machine
+      // gets a smaller "admit any size while empty" limit than a desktop.
+      firstAdmissionMaxPoints: firstAdmissionMaxPoints(isMobile, deviceMemoryGiB()),
     },
   );
   return { cloud, scheduler, renderer, decoder, benchmark, commit };

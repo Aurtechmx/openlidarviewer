@@ -63,6 +63,15 @@ export type LocalOocResponseMessage =
  */
 export class LocalOocIndexerClient {
   run(request: LocalOocIndexRequest): Promise<LocalOocBuildResult> {
+    // If cancellation already happened before run(), no 'abort' event will ever
+    // fire, so a plain listener would let the worker index gigabytes for a build
+    // nobody is waiting on. Refuse up front without creating the worker.
+    if (request.signal?.aborted) {
+      return Promise.reject(
+        Object.assign(new Error('out-of-core index build aborted'), { name: 'AbortError' }),
+      );
+    }
+
     const worker = new Worker(new URL('./localOocIndexerWorker.ts', import.meta.url), {
       type: 'module',
     });

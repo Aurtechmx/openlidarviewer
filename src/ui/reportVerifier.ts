@@ -116,8 +116,38 @@ export function showReportVerification(result: VerifyReportResult): void {
   document.body.append(backdrop);
 }
 
+/**
+ * Whole-file ceiling for a report the verifier reads into a single string. A
+ * verifiable report is a small JSON-with-signature document; anything in the
+ * tens of megabytes is not one, and reading it in full would exhaust memory
+ * before the verifier could reject it. Mirrors the `.olvsession` read cap.
+ */
+export const MAX_REPORT_TEXT_BYTES = 32 * 1024 * 1024;
+
+/**
+ * The verification result an over-ceiling file justifies, or `undefined` when
+ * the file is small enough to read. Pure and DOM-free so the size gate can be
+ * tested without standing up the modal.
+ */
+export function oversizeReportResult(sizeBytes: number): VerifyReportResult | undefined {
+  if (sizeBytes <= MAX_REPORT_TEXT_BYTES) return undefined;
+  return {
+    recognised: false,
+    valid: false,
+    reason:
+      `This file is too large to be a report ` +
+      `(${Math.round(sizeBytes / (1024 * 1024))} MB; limit ` +
+      `${Math.round(MAX_REPORT_TEXT_BYTES / (1024 * 1024))} MB).`,
+  };
+}
+
 /** Read a report file, verify it, and show the result. Never throws. */
 export async function verifyAndShow(file: File): Promise<void> {
+  const oversize = oversizeReportResult(file.size);
+  if (oversize) {
+    showReportVerification(oversize);
+    return;
+  }
   let text: string;
   try {
     text = await file.text();
