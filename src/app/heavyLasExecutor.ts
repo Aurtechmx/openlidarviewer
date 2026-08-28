@@ -79,10 +79,40 @@ function describeUnchunkableLaz(fileName: string, reason: string): string {
   );
 }
 
-/** A filesystem-safe store name derived from the file, stable for one file. */
-function heavyStoreName(file: File): string {
+/**
+ * A filesystem-safe store name for ONE open of ONE file.
+ *
+ * The name carries a per-open random id, so two opens never share a store —
+ * not two tabs opening the same file, not a rapid close-then-reopen of the same
+ * name and size. A shared name was a real hazard: two builds would write the
+ * same `<name>.partial` and promote over each other, and closing one source
+ * would delete the other's store, because the close removes the store by name.
+ * The id makes each build's `.partial`, its promoted directory, the reader id
+ * and the close-time removal all refer to the same private store and no other.
+ */
+function heavyStoreName(file: File, uniqueId: string): string {
   const base = file.name.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80);
-  return `ooc-${base}-${file.size}`;
+  return `ooc-${base}-${file.size}-${uniqueId}`;
+}
+
+let openIdCounter = 0;
+
+/**
+ * A per-open id that keeps two concurrent opens on distinct store names. It is
+ * a temporary directory label, not a security token, but it draws from Web
+ * Crypto so its randomness is not the pseudorandom generator a scanner flags:
+ * `randomUUID` where present, else `getRandomValues`. The final branch (no Web
+ * Crypto at all, unreachable where OPFS exists) uses time plus a monotonic
+ * counter rather than a pseudorandom source.
+ */
+function newOpenId(): string {
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  if (c && typeof c.getRandomValues === 'function') {
+    const bytes = c.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  return `${Date.now().toString(36)}-${(openIdCounter++).toString(36)}`;
 }
 
 /**
@@ -104,6 +134,10 @@ export async function executeHeavyLasBuild(
   const readStorage = env.readStorage ?? readStorageEstimate;
   const runIndex = env.runIndex ?? ((request) => new LocalOocIndexerClient().run(request));
   const openRange = env.openRange ?? ((f: File): RangeSource => new LocalFileRangeSource(f));
+  // One random id for this open, threaded through the preview id, the build's
+  // store name and the reopen, so the whole lifecycle owns one private store.
+  const openId = newOpenId();
+  const storeName = heavyStoreName(file, openId);
 
   // For a heavy LAZ, decide chunkability from a bounded chunk-table read BEFORE
   // any heavy work. The out-of-core LAZ builder decodes one window of chunks at a
@@ -156,7 +190,7 @@ export async function executeHeavyLasBuild(
     const sample = await buildPreviewSample(openRange(file), facts, { signal });
     if (sample && !signal.aborted) {
       const previewSource = new PreviewCloudSource({
-        id: `preview-${heavyStoreName(file)}`,
+        id: `preview-${storeName}`,
         name: file.name,
         sample,
       });
@@ -182,14 +216,21 @@ export async function executeHeavyLasBuild(
     deps.setPhase(phaseFor('indexing'));
     const built = await runIndex({
       file,
-      storeName: heavyStoreName(file),
+      storeName,
       kind: facts.format,
       memoryBudgetBytes: BUILD_MEMORY_BUDGET_BYTES,
       onPhase: (phase) => deps.setPhase(phaseFor(phase)),
       signal,
     });
+    // The worker has already PROMOTED the store by the time it resolves, so an
+    // abort here is not free: the promoted store is on disk and nothing owns it
+    // yet. Delete it before returning, or a cancel right after promotion leaks
+    // the whole scan-sized store.
     if (signal.aborted) {
       teardownPreview(previewAttached, deps);
+      await removeOpfsStore(root, built.storeName).catch((err) => {
+        if (deps.debug) console.warn('[heavy-las] store cleanup after abort failed', err);
+      });
       return { status: 'cancelled' };
     }
 
@@ -220,7 +261,21 @@ export async function executeHeavyLasBuild(
     });
     const decoder = new TileChunkDecoder(reader.schema, reader.recordBytes);
 
-    await attachHeavyStream(source, decoder, deps, signal);
+    // Between here and a successful attach the promoted store is owned by
+    // `source` and by nothing else: if the attach aborts or faults, the source
+    // never becomes the committed viewer cloud, so its `close()` — which
+    // releases the tile handles and removes the store — is the only thing that
+    // will free it. `close()` on a source that never attached is safe. Once the
+    // attach resolves, ownership passes to the committed streaming session and
+    // its own teardown removes the store, so this guard steps aside.
+    try {
+      await attachHeavyStream(source, decoder, deps, signal);
+    } catch (err) {
+      await source.close().catch((closeErr) => {
+        if (deps.debug) console.warn('[heavy-las] store cleanup after attach failure failed', closeErr);
+      });
+      throw err;
+    }
     return { status: 'attached', source, decoder };
   } catch (err) {
     // A cancel or a build fault must not leave the preview stranded on screen
