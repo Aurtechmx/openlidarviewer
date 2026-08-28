@@ -550,5 +550,22 @@ export async function withOpfsSpillBuild<T>(
     }
     throw err;
   }
-  return { result, dir: await pending.promote() };
+  // Promotion can fail too — a rename or quota fault mid-relocate. `promote`
+  // undoes its own half-moved target, but the partial it moved FROM is still on
+  // disk and would be stranded the same way an abandoned build is. So discard it
+  // on a promotion failure for the same reason the build path does, and rethrow
+  // the promotion error rather than any cleanup fault.
+  let dir: OpfsDirHandle;
+  try {
+    dir = await pending.promote();
+  } catch (err) {
+    try {
+      await pending.discard();
+    } catch {
+      // The partial outlives this attempt; the next build under the same name
+      // removes it. The promotion error is the one worth reporting.
+    }
+    throw err;
+  }
+  return { result, dir };
 }

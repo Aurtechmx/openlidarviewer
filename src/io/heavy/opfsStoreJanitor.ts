@@ -10,19 +10,32 @@
  * next open of the same file, so an explicit janitor is the only thing that
  * frees the disk.
  *
- * This sweep is deliberately conservative. It deletes a temp store ONLY when it
- * can prove the store is old — a lease marker (`STORE_LEASE_FILE`) written at
- * build time, older than a safe threshold — AND the store is not in the set a
- * live session says it owns. A store whose age it cannot read is KEPT, never
- * guessed at, so a store a running build is still filling is never swept out
- * from under it. That is the failure it must never have.
+ * This sweep is deliberately conservative, and narrower still since the
+ * cross-tab data-loss risk was found. It sweeps ONLY abandoned `<name>.partial`
+ * stores — a half-built directory a crashed tab left mid-build — and never a
+ * promoted final `ooc-…` store. A store is removed only when it is a partial,
+ * its lease marker (`STORE_LEASE_FILE`, written at build time) is older than a
+ * safe threshold, AND it is not in the set a live session says it owns. A store
+ * whose age it cannot read is KEPT, never guessed at, so a partial a running
+ * build is still filling is never swept out from under it. That is the failure
+ * it must never have.
  *
- * KNOWN LIMIT. The lease records CREATION time, not last use, and ownership is
- * known only for THIS tab. A store another tab has legitimately kept open for
- * longer than the threshold could therefore be swept. The threshold is sized in
- * hours to make that unlikely for a temporary store, and a cross-tab liveness
- * heartbeat (e.g. a BroadcastChannel lease refresh) is the fuller answer, left
- * for when multi-tab out-of-core use is a real workload.
+ * WHY PROMOTED STORES ARE LEFT ALONE. A promoted `ooc-…` store is a finished
+ * dataset another tab may still have open and be streaming from. The lease
+ * records CREATION time, not last use, and ownership is known only for THIS tab,
+ * so a promoted store a second tab has legitimately kept open past the threshold
+ * looks identical to an abandoned one — sweeping it deletes live data out from
+ * under that tab. There is no cross-tab ownership signal yet, so promoted stores
+ * are never swept automatically. A `.partial` this old, by contrast, is a build
+ * that stopped mid-flight: nothing promotes it, no reader opens it, and it only
+ * costs disk, so reclaiming it is safe.
+ *
+ * FUTURE WORK. Sweeping promoted stores safely needs a real cross-tab liveness
+ * mechanism — a BroadcastChannel lease refresh, or Web Locks plus a lease
+ * heartbeat — so a store still owned by any live tab can be told from one no tab
+ * holds. Until that exists, abandoned promoted stores are reclaimed only when a
+ * later build of the same source replaces them, or when the user clears site
+ * data.
  *
  * It runs against the structural {@link OpfsDirHandle}, so it is unit-tested in
  * Node against `tests/support/fakeOpfs.ts` exactly like the spill store.
@@ -59,9 +72,17 @@ export interface OocJanitorOptions {
   readonly debug?: boolean;
 }
 
-/** Whether a top-level name is an out-of-core temp store (final or partial). */
-function isTempStoreName(name: string): boolean {
-  return name.startsWith(OOC_STORE_PREFIX) || name.endsWith(PARTIAL_SUFFIX);
+/**
+ * Whether a top-level name is a sweepable store: an abandoned build partial.
+ *
+ * Only `<name>.partial` directories are sweepable. A promoted final `ooc-…`
+ * store is deliberately excluded — it may be a live dataset another tab still
+ * owns, and there is no cross-tab ownership signal to tell that apart from an
+ * abandoned one (see the header). A partial this scheme reaches is a build that
+ * stopped: nothing promotes it and no reader opens it.
+ */
+function isSweepablePartial(name: string): boolean {
+  return name.endsWith(PARTIAL_SUFFIX);
 }
 
 /**
@@ -89,14 +110,16 @@ export async function readStoreLease(dir: OpfsDirHandle): Promise<number | null>
 }
 
 /**
- * Sweep abandoned out-of-core stores under `root`, returning the names removed.
+ * Sweep abandoned out-of-core build partials under `root`, returning the names
+ * removed.
  *
- * A store is removed only when it is a temp store, not owned by a live session,
- * and its lease is older than the stale threshold. Anything the janitor cannot
- * prove stale — no lease, an unreadable lease, a lease younger than the
- * threshold — is left in place. A removal that itself fails is logged (in debug)
- * and skipped rather than aborting the sweep, so one stuck store does not block
- * the rest.
+ * A store is removed only when it is a `<name>.partial`, not owned by a live
+ * session, and its lease is older than the stale threshold. Promoted final
+ * `ooc-…` stores are never swept — they may be live data another tab owns (see
+ * the header). Anything the janitor cannot prove stale — no lease, an unreadable
+ * lease, a lease younger than the threshold — is left in place. A removal that
+ * itself fails is logged (in debug) and skipped rather than aborting the sweep,
+ * so one stuck store does not block the rest.
  */
 export async function sweepAbandonedOocStores(
   root: OpfsDirHandle,
@@ -108,7 +131,7 @@ export async function sweepAbandonedOocStores(
 
   const candidates: string[] = [];
   for await (const name of root.keys()) {
-    if (isTempStoreName(name) && !owned.has(name)) candidates.push(name);
+    if (isSweepablePartial(name) && !owned.has(name)) candidates.push(name);
   }
 
   const removed: string[] = [];
