@@ -78,6 +78,25 @@ const MAX_HEAD_BYTES = 4 * 1024 * 1024;
 /** Absurdity guard on the declared chunk count before any allocation. */
 const MAX_CHUNKS = 16_777_216;
 
+/**
+ * Bounded-decode caps on a SINGLE chunk. A LAZ chunk table can be valid yet
+ * hostile: a multi-gigabyte file may declare a handful of enormous chunks. The
+ * out-of-core path decodes a chunk WHOLE — `new Uint8Array(points * record)`
+ * plus raw position arrays — so one oversized chunk OOMs the worker before the
+ * octree spill can protect anything. Refusing here, at table-read time, routes
+ * the file through the existing fail-closed `supported: false` path (the heavy
+ * executor turns it into a `heavy: true` refusal) instead of a whole-file
+ * decode.
+ */
+// Real COPC-style chunks hold ~50 000 points. This admits ~40x that; at a
+// ~16-byte minimum tile record it bounds one chunk's decode staging near 32 MiB,
+// well under the 128 MiB build budget. A chunk above it is pathological.
+export const MAX_LAZ_CHUNK_POINTS = 2_097_152;
+// A compressed chunk of real points is sub-megabyte (50 000 PDRF-7 points
+// compress to tens of KB). 64 MiB is far above any honest chunk, so a chunk
+// whose compressed span exceeds it is refused rather than range-read whole.
+export const MAX_LAZ_CHUNK_COMPRESSED_BYTES = 64 * 1024 * 1024;
+
 const VARIABLE_CHUNK_SIZE = 0xffffffff;
 
 function readAscii(view: DataView, offset: number, length: number): string {
@@ -259,6 +278,21 @@ export async function readLazChunkTable(
     }
     if (startDeltas[i] <= 0) {
       return unsupported(`chunk ${i} has a non-positive byte length`);
+    }
+    // Bounded-decode caps come before the geometry checks: an oversized chunk is
+    // refused on its declared size alone, never trusted far enough to range-read
+    // or decode whole.
+    if (startDeltas[i] > MAX_LAZ_CHUNK_COMPRESSED_BYTES) {
+      return unsupported(
+        `chunk ${i} is ${startDeltas[i]} compressed bytes, too large for bounded browser ` +
+          'decoding; convert it to COPC or EPT',
+      );
+    }
+    if (pointCount > MAX_LAZ_CHUNK_POINTS) {
+      return unsupported(
+        `chunk ${i} decodes to ${pointCount} points, too large for bounded browser decoding; ` +
+          'convert it to COPC or EPT',
+      );
     }
     if (end > tableOffset) {
       return unsupported(`chunk ${i} runs past the chunk table`);
