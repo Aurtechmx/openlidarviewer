@@ -77,7 +77,11 @@ export function computeCivilProfileStats(
 
   for (let i = 0; i < n; i++) {
     const h = samples[i].height;
-    const el = finite(h) ? h : null;
+    // A station with zero corridor returns is a coverage gap even when the
+    // sampler carried a finite height across it — the degenerate/vertical
+    // branch borrows an endpoint elevation with count 0. Honest coverage
+    // counts returns, so a count-0 station is a gap, never a covered station.
+    const el = finite(h) && samples[i].count !== 0 ? h : null;
     if (el != null) {
       hits++;
       if (firstHit < 0) firstHit = i;

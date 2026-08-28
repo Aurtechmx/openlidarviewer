@@ -492,7 +492,7 @@ export class InspectTool {
           infoRow('Longitude', `${lon.toFixed(7)}°`),
         );
         if (typeof elev === 'number') {
-          rows.push(infoRow('Elevation', `${elev.toFixed(3)} m`));
+          rows.push(infoRow('Elevation', `${elev.toFixed(3)}${worldLabels.zUnit}`));
         }
       }
       // UTM grid — always shown when a geographic position exists.
@@ -517,7 +517,7 @@ export class InspectTool {
           infoRow('Northing', `${utm.northing.toFixed(3)} m`),
         );
         if (typeof utm.elevation === 'number') {
-          rows.push(infoRow('Elevation', `${utm.elevation.toFixed(3)} m`));
+          rows.push(infoRow('Elevation', `${utm.elevation.toFixed(3)}${worldLabels.zUnit}`));
         }
       }
     }
