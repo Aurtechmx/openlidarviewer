@@ -21,6 +21,14 @@ import { aggregate as aggregateMeasurements } from '../render/measure/measuremen
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
 
+// Re-exported here so the shell reaches it through the cluster that owns the
+// profile-workbench close signal, without adding a main.ts fan-out edge.
+export { createAnalyseProfileVisibility } from './analyseProfileVisibility';
+export type {
+  AnalyseProfileVisibility,
+  AnalyseProfileVisibilityDeps,
+} from './analyseProfileVisibility';
+
 import type { MeasurePanel } from '../ui/MeasurePanel';
 import type { Viewer } from '../render/Viewer';
 import type { CrsService } from '../geo/CrsService';
@@ -50,6 +58,13 @@ export interface MeasurePanelMountDeps {
    * control opening `ResultFocus`, exactly as it did before the dock existed.
    */
   workbenchStage?: { root: HTMLElement };
+  /**
+   * Called whenever the docked Profile Workbench closes (its Close button, a
+   * scan reset, or a new scan load). The kind-change event fires on open but
+   * never on close, so this is the shell's only close signal — main.ts uses it
+   * to restore the AnalysePanel visibility the profile open had hidden.
+   */
+  onWorkbenchClose?: () => void;
 }
 
 /** The Measurements-panel mount controller `main.ts` drives. */
@@ -144,6 +159,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   function closeWorkbench(): void {
     dockedId = null;
     launcher?.close();
+    deps.onWorkbenchClose?.();
   }
 
   /** Expand, for a profile row. False means the panel keeps `ResultFocus`. */
