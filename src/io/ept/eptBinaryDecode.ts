@@ -29,6 +29,7 @@
 import type { EptSchemaField } from './eptTypes';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 import { LoadError } from '../loadErrors';
+import { MAX_DECODE_PEAK_BYTES } from '../heavy/heavyByteBudget';
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
 
 /**
@@ -179,6 +180,52 @@ function assertChannelWidthsFit(attrs: readonly AttrLayout[]): void {
   }
 }
 
+/** Decoded-array bytes each EPT channel costs one point, matching the allocations below. */
+const EPT_POSITION_DECODED_BYTES = 12; // Float32 · 3
+const EPT_INTENSITY_DECODED_BYTES = 2; // Uint16
+const EPT_UINT8_CHANNEL_DECODED_BYTES = 1; // classification / returnNumber / returnCount
+const EPT_GPS_DECODED_BYTES = 8; // Float64
+const EPT_RGB_DECODED_BYTES = 3; // Uint8 · 3
+const EPT_RGB16_STAGING_BYTES = 6; // Uint16 · 3, temporary for uniform 16-bit colour
+
+/** Which channels a resolved schema materialises, for the peak-bytes estimate. */
+export interface EptDecodedChannels {
+  readonly intensity: boolean;
+  readonly classification: boolean;
+  readonly returnNumber: boolean;
+  readonly returnCount: boolean;
+  readonly gpsTime: boolean;
+  readonly rgb: boolean;
+  /** Uniform 16-bit RGB stages a temporary Uint16 buffer resident with the rest. */
+  readonly rgb16Staging: boolean;
+}
+
+/**
+ * Peak resident bytes of decoding one EPT binary tile: the raw tile body (still
+ * held through the DataView for the whole decode) plus every decoded channel
+ * array, plus the temporary Uint16 rgb16 staging when the colour channels are a
+ * uniform 16-bit width. The tile-body cap alone bounds `bodyBytes`; it does not
+ * bound the decoded arrays that coexist with the body, so a wide-schema tile can
+ * pass the body cap yet peak far past the decode budget while the arrays fill.
+ */
+export function eptBinaryPeakBytes(
+  bodyBytes: number,
+  pointCount: number,
+  channels: EptDecodedChannels,
+): number {
+  if (!Number.isFinite(pointCount) || pointCount < 0) return Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(bodyBytes) || bodyBytes < 0) return Number.POSITIVE_INFINITY;
+  let perPoint = EPT_POSITION_DECODED_BYTES;
+  if (channels.intensity) perPoint += EPT_INTENSITY_DECODED_BYTES;
+  if (channels.classification) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.returnNumber) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.returnCount) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.gpsTime) perPoint += EPT_GPS_DECODED_BYTES;
+  if (channels.rgb) perPoint += EPT_RGB_DECODED_BYTES;
+  if (channels.rgb16Staging) perPoint += EPT_RGB16_STAGING_BYTES;
+  return bodyBytes + pointCount * perPoint;
+}
+
 /**
  * Decode one EPT binary tile into a {@link DecodedChunk}.
  *
@@ -202,6 +249,7 @@ export function decodeEptBinaryTile(
   schema: readonly EptSchemaField[],
   renderOrigin: readonly [number, number, number],
   rgbEightBit?: boolean,
+  maxPeakBytes: number = MAX_DECODE_PEAK_BYTES,
 ): DecodedChunk {
   const { attrs, stride } = computeSchemaLayout(schema);
   // Every OLV channel this decoder materialises is narrower than some width the
@@ -260,6 +308,34 @@ export function decodeEptBinaryTile(
   const rAttr = findAttr(attrs, 'Red');
   const gAttr = findAttr(attrs, 'Green');
   const bAttr = findAttr(attrs, 'Blue');
+
+  // Peak-memory cap, BEFORE the first typed array is allocated. The tile-body
+  // cap at the transport bounds `buffer.byteLength`, but the raw body stays
+  // resident through the DataView for the whole decode while the channel arrays
+  // fill alongside it, so a wide-schema tile can pass the body cap yet peak far
+  // past the decode budget. Charge the body plus every channel this schema
+  // materialises (plus the temporary Uint16 rgb16 staging when colour is uniform
+  // 16-bit) and refuse before allocation when the joint peak exceeds the budget.
+  const hasRgb = rAttr !== undefined && gAttr !== undefined && bAttr !== undefined;
+  const rgb16Staging =
+    hasRgb && rAttr!.size === 2 && gAttr!.size === 2 && bAttr!.size === 2;
+  const peakBytes = eptBinaryPeakBytes(buffer.byteLength, pointCount, {
+    intensity: intensityAttr !== undefined,
+    classification: classAttr !== undefined,
+    returnNumber: retNumAttr !== undefined,
+    returnCount: retCntAttr !== undefined,
+    gpsTime: gpsAttr !== undefined,
+    rgb: hasRgb,
+    rgb16Staging,
+  });
+  if (peakBytes > maxPeakBytes) {
+    throw new LoadError(
+      'memory-constraint',
+      `EPT binary tile of ${pointCount.toLocaleString('en-US')} points would peak at ` +
+        `${peakBytes.toLocaleString('en-US')} bytes (raw tile body + decoded channel arrays), ` +
+        `over the ${maxPeakBytes.toLocaleString('en-US')}-byte decode budget.`,
+    );
+  }
 
   const positions = new Float32Array(pointCount * 3);
   // Only X/Y/Z are required of an EPT schema; every measured attribute below is

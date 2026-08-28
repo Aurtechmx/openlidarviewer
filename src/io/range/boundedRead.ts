@@ -77,6 +77,24 @@ export const DEFAULT_TOTAL_TIMEOUT_MS = 300_000;
  */
 export const MAX_DECLARED_PREALLOC_BYTES = 16 * 1024 * 1024;
 
+/**
+ * The ceiling on an UNKNOWN-length body, in bytes — the branch with no
+ * trustworthy identity `Content-Length`.
+ *
+ * That branch cannot stream straight into one exact target: it collects chunks
+ * and concatenates them at the end, so near the caller's ceiling it holds the
+ * chunk list AND the joined buffer at once and peaks at ~2x the body. A tile
+ * caller passes a `maxBytes` as high as 256 MiB, so an unknown-length body could
+ * transiently need ~512 MiB to assemble — over the 256 MiB decode-peak policy the
+ * rest of the pipeline promises. Capping the unknown-length branch at 64 MiB
+ * keeps its ~2x assembly peak (~128 MiB) inside that policy. An honest server
+ * that declares an identity `Content-Length` takes the streaming fast path above
+ * and is unaffected; only a body that refuses to declare its length is held to
+ * this lower bound. Legitimate manifests and hierarchies are far under it, so
+ * their own (smaller) `maxBytes` still governs via the `min` below.
+ */
+export const MAX_UNKNOWN_LENGTH_BODY_BYTES = 64 * 1024 * 1024;
+
 /** Timing and cancellation for one bounded body read. */
 export interface BoundedReadOptions {
   /**
@@ -510,6 +528,11 @@ export async function readAtMostBounded(
     // at or below the prealloc bound) returns `out` untouched.
     return filled === out.length ? out : out.slice(0, filled);
   }
+  // No trustworthy Content-Length: this branch concatenates chunks at the end
+  // and so peaks at ~2x the body during the join. Hold it to a lower ceiling
+  // than the caller's own so that ~2x assembly stays inside the decode-peak
+  // policy; a caller whose maxBytes is already smaller keeps its own limit.
+  const unknownMax = Math.min(maxBytes, MAX_UNKNOWN_LENGTH_BODY_BYTES);
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
@@ -524,11 +547,11 @@ export async function readAtMostBounded(
       );
       if (done) break;
       if (!value || value.byteLength === 0) continue;
-      if (total + value.byteLength > maxBytes) {
+      if (total + value.byteLength > unknownMax) {
         throw new BoundedReadError(
           what,
-          maxBytes,
-          `${what} exceeds the ${maxBytes}-byte limit — refusing to read further.`,
+          unknownMax,
+          `${what} exceeds the ${unknownMax}-byte unknown-length limit — refusing to read further.`,
         );
       }
       chunks.push(value);

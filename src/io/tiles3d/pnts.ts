@@ -741,11 +741,21 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
   // full channel width can still exceed what the device holds. `POINTS_LENGTH`
   // is a uint32 and the per-point cost is a small constant, so the product is
   // exact in a double and cannot round into agreement.
+  //
+  // Charged as a TOTAL peak, not decoded bytes alone: the raw tile body stays
+  // resident (the DataView reads positions and channels straight out of it)
+  // while the decoded arrays fill alongside it, so both coexist. A position-only
+  // tile costs the SAME again decoded as it does on the wire, so an 8M-point
+  // one is ~91.5 MiB body + ~91.5 MiB decoded = ~183 MiB peak while its decoded
+  // half alone (91.5 MiB) sits under the mobile ceiling and would slip through a
+  // decoded-only check. Bound body + decoded against the budget.
   const maxDecodedBytes = options.maxDecodedBytes ?? MAX_PNTS_DECODED_BYTES;
   const decodedBytes = pointsLength * decodedBytesPerPoint(ft);
-  if (decodedBytes > maxDecodedBytes) {
+  const peakBytes = byteLength + decodedBytes;
+  if (peakBytes > maxDecodedBytes) {
     throw new Error(
-      `PNTS: POINTS_LENGTH ${pointsLength} decodes to ${decodedBytes} bytes, past the ` +
+      `PNTS: POINTS_LENGTH ${pointsLength} peaks at ${peakBytes} bytes ` +
+        `(${byteLength}-byte tile body + ${decodedBytes} decoded bytes), past the ` +
         `${maxDecodedBytes} decoded byte ceiling this viewer holds in one tile.`,
     );
   }

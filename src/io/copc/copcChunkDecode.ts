@@ -114,6 +114,30 @@ export interface ChunkDecoder<TMeta = ChunkDecodeMetadata> {
   decode(chunk: ArrayBuffer, meta: TMeta, signal?: AbortSignal): Promise<DecodedChunk>;
 }
 
+/**
+ * Peak decoded channel-array bytes per point for one PDRF 6/7/8 node, matching
+ * exactly what {@link decodeRecords} allocates and holds LIVE at once.
+ *
+ * Every node fills seven base channels: positions (Float32 · 3 = 12), intensity
+ * (Uint16 = 2), classification (Uint8 = 1), return number (Uint8 = 1), return
+ * count (Uint8 = 1), GPS time (Float64 = 8), point source id (Uint16 = 2) — 27
+ * bytes a point. PDRF 7 and 8 add colour, and both the staged Uint16 rgb16 (3 ·
+ * 2 = 6) and the narrowed Uint8 rgb (3) are RESIDENT together while the narrow
+ * loop runs, so colour costs 9, not 3. PDRF 8's NIR is not decoded, so it is not
+ * charged. Returns {@link Number.POSITIVE_INFINITY} for a non-usable count so a
+ * nonsense value reads as over-budget rather than as zero.
+ */
+export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 27;
+export const COPC_RGB_CHANNEL_BYTES_PER_POINT = 9;
+
+export function copcDecodedChannelBytes(pdrf: number, pointCount: number): number {
+  if (!Number.isFinite(pointCount) || pointCount < 0) return Number.POSITIVE_INFINITY;
+  const hasRgb = pdrf === 7 || pdrf === 8;
+  const perPoint =
+    COPC_BASE_CHANNEL_BYTES_PER_POINT + (hasRgb ? COPC_RGB_CHANNEL_BYTES_PER_POINT : 0);
+  return pointCount * perPoint;
+}
+
 /** Point source id offset in PDRF 6, 7, and 8. */
 const POINT_SOURCE_ID_OFFSET = 20;
 /** GPS time lives at the same offset in PDRF 6, 7, and 8. */
