@@ -94,13 +94,6 @@
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
     {
-      "path": "src/io/heavy/opfsStoreJanitor.ts",
-      "status": "staged",
-      "why": "A startup sweep that removes out-of-core temp stores (ooc-… and .partial) a crashed tab or a failed close-time removal left in OPFS. It is written and tested but not yet wired: no production module imports it, because the one call site is a startup hook in src/main.ts, which concurrent work owns. Only its own test reaches sweepAbandonedOocStores.",
-      "graduation": "src/main.ts calls runStartupOocJanitor once at startup, passing the set of store names live sessions own.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/geo/cursorReadout.ts",
       "status": "staged",
       "why": "The truth model for a persistent coordinate banner. Its own header states the gap it fills: a coordinate is visible only inside the Probe tool today. The banner was never built, so no UI module renders from this model.",

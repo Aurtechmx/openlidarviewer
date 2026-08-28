@@ -36,6 +36,7 @@ import type { StreamingSource } from '../render/streaming/StreamingSource';
 import { LocalOocIndexerClient } from '../io/heavy/worker/localOocIndexerWorkerClient';
 import type { LocalOocPhase } from '../io/heavy/localOocBuild';
 import { readLazChunkTable } from '../io/heavy/lazChunkTable';
+import { sweepAbandonedOocStores } from '../io/heavy/opfsStoreJanitor';
 import { LocalFileRangeSource } from '../io/range/LocalFileRangeSource';
 import type { RangeSource } from '../io/range/RangeSource';
 import { LoadError } from '../io/loadErrors';
@@ -96,6 +97,12 @@ function heavyStoreName(file: File, uniqueId: string): string {
 }
 
 let openIdCounter = 0;
+
+// A crashed or force-closed session cannot delete its temporary store, so stale
+// `ooc-*` directories accumulate. The first heavy open of a session sweeps them
+// best-effort, keeping this open's own store and anything younger than the lease
+// threshold. It runs where OPFS-heavy usage actually happens rather than at boot.
+let janitorSwept = false;
 
 /**
  * A per-open id that keeps two concurrent opens on distinct store names. It is
@@ -162,6 +169,11 @@ export async function executeHeavyLasBuild(
 
   const root = await getOpfsRoot();
   if (root === null) return { status: 'unavailable', heavy: true, reason: 'no OPFS root' };
+
+  if (!janitorSwept) {
+    janitorSwept = true;
+    void sweepAbandonedOocStores(root, { ownedNames: new Set([storeName]) }).catch(() => {});
+  }
 
   // The disk guard. Sized from the declared point count and the record schema,
   // it refuses BEFORE any byte is written when the tile cache would not fit, or
