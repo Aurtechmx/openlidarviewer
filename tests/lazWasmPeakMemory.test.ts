@@ -64,21 +64,42 @@ describe('decode peak model — laz-perf WASM compressed copy', () => {
 
 /** A laz-perf stand-in that records every `_malloc`, so a refusal can be proven
  *  to happen before any WASM allocation. */
-function watchedLazPerf(): { module: LazPerfModule; mallocs: number[] } {
-  const mallocs: number[] = [];
-  const module = {
-    _malloc: (n: number) => {
-      mallocs.push(n);
-      return 1;
-    },
+/**
+ * Assemble a laz-perf module stand-in from the pieces a test cares about: the
+ * allocator to observe, the heap it writes into, and optional decoder hooks.
+ * The `_free`, `delete` and module-cast boilerplate lives here once.
+ */
+function makeLazPerf(opts: {
+  malloc: (n: number) => number;
+  heap: Uint8Array;
+  open?: (pdrf: number, recordLength: number, ptr: number) => void;
+  getPoint?: (ptr: number) => void;
+}): LazPerfModule {
+  return {
+    _malloc: opts.malloc,
     _free: () => {},
-    HEAPU8: new Uint8Array(16),
+    HEAPU8: opts.heap,
     ChunkDecoder: class {
-      open(): void {}
-      getPoint(): void {}
+      open(pdrf: number, recordLength: number, ptr: number): void {
+        opts.open?.(pdrf, recordLength, ptr);
+      }
+      getPoint(ptr: number): void {
+        opts.getPoint?.(ptr);
+      }
       delete(): void {}
     },
   } as unknown as LazPerfModule;
+}
+
+function watchedLazPerf(): { module: LazPerfModule; mallocs: number[] } {
+  const mallocs: number[] = [];
+  const module = makeLazPerf({
+    malloc: (n: number) => {
+      mallocs.push(n);
+      return 1;
+    },
+    heap: new Uint8Array(16),
+  });
   return { module, mallocs };
 }
 
@@ -138,27 +159,23 @@ function echoLazPerf(): { module: LazPerfModule; firstMalloc: () => number } {
   const mallocs: number[] = [];
   let chunkPtr = 0;
   let recordLength = 0;
-  const module = {
-    _malloc: (n: number) => {
+  const module = makeLazPerf({
+    malloc: (n: number) => {
       mallocs.push(n);
       const p = next;
       next += n;
       return p;
     },
-    _free: () => {},
-    HEAPU8: heap,
-    ChunkDecoder: class {
-      open(_pdrf: number, rl: number, ptr: number): void {
-        recordLength = rl;
-        chunkPtr = ptr;
-      }
-      getPoint(ptr: number): void {
-        // Echo the staged compressed bytes so output tracks the input exactly.
-        heap.copyWithin(ptr, chunkPtr, chunkPtr + recordLength);
-      }
-      delete(): void {}
+    heap,
+    open: (_pdrf, rl, ptr) => {
+      recordLength = rl;
+      chunkPtr = ptr;
     },
-  } as unknown as LazPerfModule;
+    // Echo the staged compressed bytes so output tracks the input exactly.
+    getPoint: (ptr) => {
+      heap.copyWithin(ptr, chunkPtr, chunkPtr + recordLength);
+    },
+  });
   return { module, firstMalloc: () => mallocs[0] };
 }
 
