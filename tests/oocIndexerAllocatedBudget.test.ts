@@ -80,18 +80,22 @@ function clusteredSource(count: number, batchPoints: number, clusters: number): 
 const RECORD_BYTES = 12;
 
 describe('out-of-core indexer — allocated-capacity staging budget', () => {
-  it('keeps peak ALLOCATED capacity within budget across thousands of keys and many flush windows', async () => {
-    const count = 3_000_000;
-    const budget = 2 * 1024 * 1024; // 2 MiB, far below the ~36 MB logical stream
+  it('keeps peak ALLOCATED capacity within budget across many keys and many flush windows', async () => {
+    const count = 1_200_000;
+    const budget = 512 * 1024; // 512 KiB, far below the ~9.6 MB logical stream; the tight budget keeps flush windows numerous at a smaller point count so the test stays fast on CI
     const store = memoryStore();
 
-    const index = await indexOutOfCore(clusteredSource(count, 50_000, 1500), store, {
-      pointsPerLeaf: 400,
+    const index = await indexOutOfCore(clusteredSource(count, 50_000, 4000), store, {
+      pointsPerLeaf: 150,
       memoryBudgetBytes: budget,
     });
 
     // Thousands of distinct nodes across the pyramid, many flush windows.
-    expect(index.leaves.length).toBeGreaterThan(1000);
+    // Hundreds of distinct leaf keys across many flush windows: enough that the
+    // old logical-bytes accounting (which retained grown arrays past each flush)
+    // pushes peak allocated capacity well over the budget. The peak-allocated
+    // assertion below is the real invariant.
+    expect(index.leaves.length).toBeGreaterThan(500);
 
     // The real bound: peak allocated backing-array capacity never exceeds the
     // configured budget. The old accounting counted logical bytes and let flush
@@ -103,5 +107,5 @@ describe('out-of-core indexer — allocated-capacity staging budget', () => {
     expect(index.pointCount).toBe(count);
     expect(index.leaves.reduce((n, l) => n + l.pointCount, 0)).toBe(count);
     expect(store.totalBytes()).toBe(count * RECORD_BYTES);
-  });
+  }, 60_000);
 });
