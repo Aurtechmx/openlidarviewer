@@ -67,8 +67,10 @@ discrete properties a test pins (byte-identity, exact inverses).
 - Seventeen products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
-  frozen analytic fixture within their preregistered tolerances (0.5° for slope
-  and aspect, 1.0 level on the 0 to 255 scale for hillshade). This validates those
+  frozen analytic fixture within their tolerances (0.5° for slope
+  and aspect, 1.0 level on the 0 to 255 scale for hillshade; the slope, hillshade
+  and contour tolerances were preregistered, while aspect's was carried over from
+  slope in the same change that produced its result). This validates those
   algorithms on one fixture. Aspect is compared as a circular quantity, and only where the
   surface is steeper than 2°, a level cell has no aspect to compare. The
   hillshade tolerance is weaker than it looks: GDAL encodes the shared

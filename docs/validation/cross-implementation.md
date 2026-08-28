@@ -93,8 +93,10 @@ same commit as the first result.
 | `CHANGE-RASTER` | GRASS 8.5.0 `r.mapcalc` (+ closed form) | `tests/changeGrassAgreement.test.ts` | 3,007 comparable cells (8 epoch pairs) | 7×10⁻⁶ relative | 1×10⁻⁵ relative |
 | `CHANGE-VOLUME` | GRASS 8.5.0 `r.univar` (+ closed form) | `tests/changeGrassAgreement.test.ts` | 3,007 comparable cells (8 epoch pairs) | 7×10⁻⁶ relative | 1×10⁻⁵ relative |
 
-Every tolerance above except the last five was registered in `REFERENCE_SLOTS`
-before the references were generated. The two change tolerances were written in
+Every tolerance above except aspect and the last five was registered in `REFERENCE_SLOTS`
+before the references were generated. Aspect's 0.5 degree tolerance was carried
+over from slope in the same change that produced its result, so it is adopted,
+not preregistered. The two change tolerances were written in
 the same change as their first result, so `PROTO-CHANGE-GRASS-MAPCALC` records
 `adopted-with-result` rather than `preregistered`; the witness commit is named so
 a reader can check that the fixture matrix, the level of detection and the

@@ -1,6 +1,6 @@
 # OpenLiDARViewer
 
-> A browser-native, local-first LiDAR and point-cloud viewer. Open a `.las`, `.laz`, or `.copc.laz` scan (or a remote COPC / Entwine EPT `ept.json` URL) in a browser tab, then inspect, navigate in 3D, colour, measure, analyse terrain, classify, annotate, and export. Everything runs on the user's device. Files stay local, and it needs no account. MIT-licensed and citable (Zenodo DOI).
+> A browser-native, local-first LiDAR and point-cloud viewer. Open a `.las`, `.laz`, or `.copc.laz` scan (or a remote COPC / Entwine EPT `ept.json` URL) in a browser tab, then inspect, navigate in 3D, colour, measure, analyse terrain, classify, annotate, and export. Everything runs on the user's device. Files stay local, and it needs no account. AGPL-3.0-only licensed and citable (Zenodo DOI).
 
 Live app: https://lidar.aurtech.mx/ · Source: https://github.com/Aurtechmx/openlidarviewer · DOI: https://doi.org/10.5281/zenodo.21544619
 
@@ -24,7 +24,7 @@ Live app: https://lidar.aurtech.mx/ · Source: https://github.com/Aurtechmx/open
 
 ## Key facts
 
-- Open-source (MIT) browser-based LiDAR and point-cloud viewer and terrain-analysis tool.
+- Open-source (AGPL-3.0-only) browser-based LiDAR and point-cloud viewer and terrain-analysis tool.
 - Runs entirely client-side. Local files never leave the device.
 - Research-derived, with a published evidence model, claim register, reproducibility record, and a Zenodo archive.
 
