@@ -27,8 +27,41 @@ import {
   opfsSpillStore,
   readOpfsText,
   writeOpfsText,
+  withOpfsSpillBuild,
+  PARTIAL_SUFFIX,
+  type OpfsDirHandle,
 } from '../src/io/heavy/opfsSpillStore';
-import { fakeOpfsDir } from './support/fakeOpfs';
+import { fakeOpfs, fakeOpfsDir } from './support/fakeOpfs';
+
+/**
+ * Wrap a root so a build under `<name>.partial` writes normally but PROMOTION
+ * fails: any file handle opened directly under the final `name` directory
+ * throws when written, which is how a rename or quota fault mid-relocate reaches
+ * `promote`. Everything else delegates to the real fake.
+ */
+function rootWithFailingPromotion(root: OpfsDirHandle, finalName: string): OpfsDirHandle {
+  return {
+    ...root,
+    async getDirectoryHandle(name, opts) {
+      const dir = await root.getDirectoryHandle(name, opts);
+      if (name !== finalName) return dir;
+      return {
+        ...dir,
+        async getFileHandle(fileName, fileOpts) {
+          const handle = await dir.getFileHandle(fileName, fileOpts);
+          return {
+            ...handle,
+            async createWritable() {
+              throw Object.assign(new Error('promotion write refused'), {
+                name: 'QuotaExceededError',
+              });
+            },
+          };
+        },
+      } as OpfsDirHandle;
+    },
+  } as OpfsDirHandle;
+}
 
 describe('OPFS spill store', () => {
   it('appends, reads, maps keys, and round-trips text', async () => {
@@ -96,5 +129,26 @@ describe('OPFS spill store', () => {
     }
     expect(bad).toBe(0);
     expect(total).toBe(n);
+  });
+
+  it('withOpfsSpillBuild discards the partial and rethrows when promotion fails', async () => {
+    const opfs = fakeOpfs();
+    const name = 'ooc-promote-fail.las-1-zzzz';
+    const root = rootWithFailingPromotion(opfs.root, name);
+
+    await expect(
+      withOpfsSpillBuild(root, name, async (build) => {
+        await build.store.append('', new Uint8Array([1, 2, 3]));
+        await writeOpfsText(build.dir, 'manifest.json', '{}');
+        return 'built';
+      }),
+    ).rejects.toThrow(/promotion write refused/);
+
+    // Neither the partial nor a half-promoted final directory may survive: the
+    // promotion failure must not strand the scan-sized partial on disk.
+    const top = opfs.topLevel();
+    expect(top).not.toContain(name + PARTIAL_SUFFIX);
+    expect(top).not.toContain(name);
+    expect(opfs.totalBytes()).toBe(0);
   });
 });

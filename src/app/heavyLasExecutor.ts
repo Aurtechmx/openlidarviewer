@@ -99,9 +99,12 @@ function heavyStoreName(file: File, uniqueId: string): string {
 let openIdCounter = 0;
 
 // A crashed or force-closed session cannot delete its temporary store, so stale
-// `ooc-*` directories accumulate. The first heavy open of a session sweeps them
-// best-effort, keeping this open's own store and anything younger than the lease
-// threshold. It runs where OPFS-heavy usage actually happens rather than at boot.
+// `<name>.partial` build directories accumulate. The first heavy open of a
+// session sweeps those best-effort, keeping this open's own store and anything
+// younger than the lease threshold. It runs where OPFS-heavy usage actually
+// happens rather than at boot. Promoted `ooc-*` stores are deliberately NOT
+// swept: one may be a live dataset another tab still owns, and there is no
+// cross-tab ownership signal yet (see opfsStoreJanitor.ts).
 let janitorSwept = false;
 
 /**
