@@ -42,6 +42,45 @@ function pntsWithDeclaredPoints(pointsLength: number): ArrayBuffer {
   return buffer;
 }
 
+/**
+ * Count the large (>4096-element) `Float32Array` / `Uint8Array` allocations that
+ * `run` triggers. The decoder resolves both constructors through the global at
+ * call time, so swapping the bindings here observes any allocation it attempts;
+ * a refusal that fires before the allocation seam leaves the count at zero.
+ */
+function countBigAllocations(run: () => void): number {
+  const RealF32 = globalThis.Float32Array;
+  const RealU8 = globalThis.Uint8Array;
+  let bigAlloc = 0;
+  const note = (n: unknown): void => {
+    if (typeof n === 'number' && n > 4096) bigAlloc++;
+  };
+  class F32 extends RealF32 {
+    constructor(...args: unknown[]) {
+      note(args[0]);
+      // @ts-expect-error forward whatever the decoder passed
+      super(...args);
+    }
+  }
+  class U8 extends RealU8 {
+    constructor(...args: unknown[]) {
+      note(args[0]);
+      // @ts-expect-error forward whatever the decoder passed
+      super(...args);
+    }
+  }
+  (globalThis as { Float32Array: unknown }).Float32Array = F32;
+  (globalThis as { Uint8Array: unknown }).Uint8Array = U8;
+  try {
+    run();
+  } finally {
+    (globalThis as { Float32Array: unknown }).Float32Array = RealF32;
+    (globalThis as { Uint8Array: unknown }).Uint8Array = RealU8;
+  }
+  return bigAlloc;
+}
+
+
 describe('PNTS decoded-point ceiling', () => {
   it('refuses a tile declaring more points than the ceiling', () => {
     const tile = pntsWithDeclaredPoints(MAX_PNTS_TILE_POINTS + 1);
@@ -120,36 +159,9 @@ describe('PNTS decoded-byte ceiling', () => {
 
   it('refuses before allocating: the big typed arrays are never constructed', () => {
     const tile = pntsAllChannels(7_000_000);
-    const RealF32 = globalThis.Float32Array;
-    const RealU8 = globalThis.Uint8Array;
-    let bigAlloc = 0;
-    const note = (n: unknown) => {
-      if (typeof n === 'number' && n > 4096) bigAlloc++;
-    };
-    // The decoder resolves `Float32Array`/`Uint8Array` through the global at
-    // call time, so a swapped binding here observes any allocation it attempts.
-    class F32 extends RealF32 {
-      constructor(...args: unknown[]) {
-        note(args[0]);
-        // @ts-expect-error forward whatever the decoder passed
-        super(...args);
-      }
-    }
-    class U8 extends RealU8 {
-      constructor(...args: unknown[]) {
-        note(args[0]);
-        // @ts-expect-error forward whatever the decoder passed
-        super(...args);
-      }
-    }
-    (globalThis as { Float32Array: unknown }).Float32Array = F32;
-    (globalThis as { Uint8Array: unknown }).Uint8Array = U8;
-    try {
+    const bigAlloc = countBigAllocations(() => {
       expect(() => parsePnts(tile)).toThrow(/decoded byte/i);
-    } finally {
-      (globalThis as { Float32Array: unknown }).Float32Array = RealF32;
-      (globalThis as { Uint8Array: unknown }).Uint8Array = RealU8;
-    }
+    });
     expect(bigAlloc).toBe(0);
   });
 
@@ -189,36 +201,11 @@ describe('device-aware PNTS decode ceiling', () => {
 
   it('refuses the tile on the mobile ceiling before the big allocation', () => {
     const tile = pntsAllChannels(MID_POINTS);
-    const RealF32 = globalThis.Float32Array;
-    const RealU8 = globalThis.Uint8Array;
-    let bigAlloc = 0;
-    const note = (n: unknown) => {
-      if (typeof n === 'number' && n > 4096) bigAlloc++;
-    };
-    class F32 extends RealF32 {
-      constructor(...args: unknown[]) {
-        note(args[0]);
-        // @ts-expect-error forward whatever the decoder passed
-        super(...args);
-      }
-    }
-    class U8 extends RealU8 {
-      constructor(...args: unknown[]) {
-        note(args[0]);
-        // @ts-expect-error forward whatever the decoder passed
-        super(...args);
-      }
-    }
-    (globalThis as { Float32Array: unknown }).Float32Array = F32;
-    (globalThis as { Uint8Array: unknown }).Uint8Array = U8;
-    try {
-      expect(() =>
-        parsePnts(tile, pntsDeviceDecodeLimits(true)),
-      ).toThrow(/decoded byte/i);
-    } finally {
-      (globalThis as { Float32Array: unknown }).Float32Array = RealF32;
-      (globalThis as { Uint8Array: unknown }).Uint8Array = RealU8;
-    }
+    const bigAlloc = countBigAllocations(() => {
+      expect(() => parsePnts(tile, pntsDeviceDecodeLimits(true))).toThrow(
+        /decoded byte/i,
+      );
+    });
     // The allocation seam is never reached: mobile refuses on the true size.
     expect(bigAlloc).toBe(0);
   });
