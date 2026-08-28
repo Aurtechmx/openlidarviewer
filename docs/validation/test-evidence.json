@@ -1,15 +1,15 @@
 {
   "schemaVersion": 3,
   "project": "openlidarviewer",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "2f353f66fb2d53c708bb477f07f923a46ba2c910",
+  "commit": "2538e02f67f64575cda5cfa0787c8f8d24c349f5",
   "repository": null,
-  "generatedAt": "2026-08-22T17:23:58.970Z",
-  "nodeVersion": "v26.0.0",
-  "npmVersion": "11.12.1",
+  "generatedAt": "2026-08-28T06:54:02.504Z",
+  "nodeVersion": "v26.7.0",
+  "npmVersion": "11.19.0",
   "platform": "darwin-arm64",
   "workflow": null,
   "workflowRunId": null,
@@ -17,7 +17,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "5cba97faa9f166508d34c8534a83602109f5a02160ae3c4861f076a3b4ff9b33",
+  "gateLogSha256": "6ff9b666c9a15060f4cb26cb2086e8ef3649d640c75ae9aafecb9c414acf4bc0",
   "stages": {
     "mutation": "not-executed"
   },
@@ -52,53 +52,54 @@
   },
   "buckets": {
     "unit": {
-      "passed": 6749,
-      "skipped": 29,
+      "passed": 8203,
+      "skipped": 30,
       "runs": 3
     },
     "export": {
-      "passed": 842,
+      "passed": 864,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 1753,
+      "passed": 2647,
       "skipped": 0,
       "runs": 2
     },
     "ui": {
-      "passed": 657,
+      "passed": 728,
       "skipped": 0,
       "runs": 1
     },
     "slow": {
-      "passed": 806,
+      "passed": 1020,
       "skipped": 6,
       "runs": 2
     }
   },
   "total": {
-    "passed": 10807,
-    "skipped": 35
+    "passed": 13462,
+    "skipped": 36
   },
   "bundle": {
-    "liveEntryKiB": 770,
-    "ceilingKiB": 776
+    "liveEntryKiB": 773,
+    "ceilingKiB": 780
   },
-  "packageLockSha256": "b1419471eee9b659377fa402ba40976e4bd3df7818a7dee0d578b045237aa79b",
+  "packageLockSha256": "523848f026420b04adc4b8b71ae930a6cadc5f6aa9b6a8b37819af7b83ebf7f4",
   "sbom": {
-    "sha256": "100d90fd9b9d18518d21c6f325e4bc1b2e089bed3ea09a4228876ccb9fe1a538",
+    "sha256": "e3a18fbde9e5670f14d4047ba097c8e9eb495df12d6fabc91c1584700b2241c7",
     "rootName": "openlidarviewer",
-    "rootVersion": "0.6.6",
-    "bomRef": "openlidarviewer@0.6.6",
+    "rootVersion": "0.6.7",
+    "bomRef": "openlidarviewer@0.6.7",
     "components": 56
   },
   "science": {
-    "e4ClaimCount": 12,
+    "e4ClaimCount": 17,
     "e4Claims": [
       "MEAS-AREA",
       "E57-INGEST",
       "MEAS-PROFILE",
+      "CRS-UTM-PROJECTION",
       "DTM",
       "DSM",
       "CHM",
@@ -107,8 +108,12 @@
       "ASPECT-RASTER",
       "HILLSHADE",
       "TPI",
-      "VRM"
+      "VRM",
+      "HOLDOUT-RMSE",
+      "NVA-VVA",
+      "CHANGE-RASTER",
+      "CHANGE-VOLUME"
     ],
-    "suppliedReferenceSlots": 12
+    "suppliedReferenceSlots": 13
   }
 }
