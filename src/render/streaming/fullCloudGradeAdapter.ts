@@ -37,6 +37,7 @@ import { renderLocalPositions } from '../../model/pointFrames';
 import type { SamplingPlanOptions, SampleNode } from './samplingPlan';
 import {
   runFullCloudGrade,
+  FullCloudGradeRefusedError,
   type DecodeNodeFn,
   type FullCloudGradeRun,
   type GradeFn,
@@ -102,10 +103,11 @@ export function sampleNodesFromSource(source: GradeNodeSource): SampleNode[] {
  *
  * The returned function is cooperative on `signal` at both the range-read and
  * the decode (the COPC worker honours it). A node id absent from the store
- * yields an empty buffer rather than throwing, so a hierarchy that changed
- * under a long grade degrades to slightly-lower coverage instead of aborting —
- * the planner's ids always come from the same `sampleNodesFromSource` snapshot,
- * so in practice this is a guard, not a path.
+ * yields an empty buffer rather than throwing here; the runner then sees a
+ * decoded count (0) that disagrees with the node's declared header count and
+ * fails the grade cleanly, rather than silently reporting a coverage over a
+ * sample it never decoded. The planner's ids always come from the same
+ * `sampleNodesFromSource` snapshot, so in practice this is a guard, not a path.
  *
  * Note: `decoder.decode` TRANSFERS the chunk buffer to the worker; the buffer is
  * freshly read per node and never reused, so the transfer is safe.
@@ -206,5 +208,18 @@ export function gradeFullCloud<G>(args: {
       complete: source.octree.isComplete,
       errorCount: source.octree.errors.length,
     },
-  }).then((run) => ({ kind: 'graded', run }) as const);
+  }).then(
+    (run) => ({ kind: 'graded', run }) as const,
+    (err: unknown) => {
+      // The runner refuses a plan whose selected node exceeds the decode budget
+      // BEFORE it allocates the positions buffer. Surface it the same way as the
+      // unstated-total refusal: an 'unavailable' outcome with a headline + note,
+      // so the panel renders a neutral result rather than a red error. Any other
+      // failure (abort, a short/inconsistent decode) propagates to the caller.
+      if (err instanceof FullCloudGradeRefusedError) {
+        return { kind: 'unavailable', ...err.refusal } as const;
+      }
+      throw err;
+    },
+  );
 }
