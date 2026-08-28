@@ -109,6 +109,16 @@ class FakeWorker implements WorkerLike {
     this.onmessage?.({ data: { type: 'error', requestId, error } } as MessageEvent);
   }
 
+  /**
+   * The worker consumed a cancel and skipped the decode, posting its single
+   * terminal `cancelled` reply instead of a decoded/error one. This is the real
+   * silent-cancel path: the decode never completes, so `inFlight` drops here.
+   */
+  cancel(requestId: number): void {
+    this.inFlight = Math.max(0, this.inFlight - 1);
+    this.onmessage?.({ data: { type: 'cancelled', requestId } } as MessageEvent);
+  }
+
   /** Raw reply — for stale ids and duplicates, where bookkeeping must not move. */
   raw(reply: unknown): void {
     this.onmessage?.({ data: reply } as MessageEvent);
@@ -471,6 +481,89 @@ describe('DecodeWorkerPool — cancellation', () => {
       'worker-death',
       'dispose',
     ]);
+  });
+});
+
+describe('DecodeWorkerPool — silent-cancel terminal', () => {
+  test('a cancelled active job frees its slot when the worker posts its cancelled terminal', async () => {
+    const { pool, workers } = mkPool(1);
+    const controller = new AbortController();
+    const active = job(pool, 1, controller.signal);
+    const queued = job(pool, 2);
+    const activeId = workers[0].decodes[0].requestId;
+
+    controller.abort();
+    await expect(active.promise).rejects.toThrow(/abort/i);
+    // The worker consumed the cancel and skipped the decode: its ONLY terminal
+    // is the `cancelled` reply, never a decoded/error one. The slot stays busy
+    // until that reply lands.
+    expect(pool.activeCount).toBe(1);
+    expect(workers[0].decodes).toHaveLength(1);
+
+    workers[0].cancel(activeId);
+    // The terminal freed the slot, so the queued job dispatched at once.
+    expect(workers[0].decodes).toHaveLength(2);
+    expect(pool.activeCount).toBe(1);
+    workers[0].resolve(workers[0].decodes[1].requestId, 42);
+    expect((await queued.promise).pointCount).toBe(42);
+    expect(pool.pendingCount).toBe(0);
+  });
+
+  test('draining every slot by cancellation repeatedly leaves the next decode able to start', async () => {
+    // The wedge this guards: without a terminal on the silent-cancel path, each
+    // cancelled slot stays held forever, so a fast camera sweep that cancels the
+    // whole pool over and over eventually leaves no slot free and every later
+    // decode queues without end. With the terminal, the slots come back.
+    const N = 3;
+    const { pool, workers } = mkPool(N);
+
+    for (let round = 0; round < 5; round++) {
+      const controllers: AbortController[] = [];
+      const promises: Array<Promise<{ pointCount: number }>> = [];
+      for (let i = 0; i < N; i++) {
+        const c = new AbortController();
+        controllers.push(c);
+        promises.push(job(pool, round * N + i, c.signal).promise);
+      }
+      expect(pool.activeCount).toBe(N);
+      const ids = workers.map((w) => (w.current as PostedMessage).requestId);
+      for (const c of controllers) c.abort();
+      for (const p of promises) await expect(p).rejects.toThrow(/abort/i);
+      // Every slot is still held mid-decode until its terminal arrives.
+      expect(pool.activeCount).toBe(N);
+      workers.forEach((w, i) => w.cancel(ids[i]));
+      expect(pool.activeCount).toBe(0);
+    }
+
+    // After the pool was drained by cancellation five times over, the NEXT
+    // decode still starts on a reusable slot.
+    const fresh = job(pool, 999);
+    const busy = workers.find((w) => w.inFlight === 1);
+    expect(busy).toBeDefined();
+    busy?.resolve((busy.current as PostedMessage).requestId, 7);
+    expect((await fresh.promise).pointCount).toBe(7);
+    expect(pool.pendingCount).toBe(0);
+  });
+
+  test('a cancelled terminal for an already-settled job neither resolves nor rejects again', async () => {
+    const { pool, workers } = mkPool(1);
+    const controller = new AbortController();
+    const active = job(pool, 1, controller.signal);
+    const activeId = workers[0].decodes[0].requestId;
+
+    let settledAgain = false;
+    active.promise.then(
+      () => (settledAgain = true),
+      () => undefined,
+    );
+    controller.abort();
+    await expect(active.promise).rejects.toThrow(/abort/i);
+
+    expect(() => workers[0].cancel(activeId)).not.toThrow();
+    await Promise.resolve();
+    expect(settledAgain).toBe(false);
+    expect(pool.pendingCount).toBe(0);
+    expect(pool.activeCount).toBe(0);
   });
 });
 

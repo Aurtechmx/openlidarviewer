@@ -106,6 +106,41 @@ test('decodeEptLaszipTile refuses a non-finite render origin', async () => {
   );
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Decoded-memory ceiling
+//
+// The declared-count guard only bounds the point count by the tile's own
+// compressed bytes at the loose LAZ ratio floor, so a large-but-plausible count
+// can still stage far more decoded memory than the compressed payload — the
+// positions, intensity, classification, returns, source id, GPS time and both
+// RGB buffers all coexist. A total decoded-byte ceiling refuses such a tile
+// BEFORE any of those arrays is allocated.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('decodeEptLaszipTile refuses a tile whose decoded channels exceed the memory budget', async () => {
+  // A buffer large enough that the count guard admits a huge declared count
+  // (its floor is recordLength / 50), but whose decoded channels would stage
+  // well over the 256 MiB decode budget. The header parses; the LAZ stream is
+  // never touched because the budget check throws first, before allocation.
+  const size = 8 * 1024 * 1024;
+  const buf = new Uint8Array(size);
+  // Seed the ASPRS public header from the real fixture, then override the
+  // fields the guard reads: PDRF 1 (positions + GPS time, no RGB), a 28-byte
+  // record, and a point count that trips the budget yet stays within what the
+  // 8 MiB of bytes could plausibly hold at the ratio floor.
+  buf.set(new Uint8Array(TINY_LAZ_BUF).subarray(0, 375));
+  const v = new DataView(buf.buffer);
+  v.setUint8(104, 1); // OFFSET_POINT_FORMAT → PDRF 1
+  v.setUint16(105, 28, true); // OFFSET_POINT_RECORD_LENGTH
+  const declared = 12_000_000;
+  v.setUint32(107, declared, true); // legacy point count (LAS < 1.4)
+  v.setBigUint64(247, BigInt(declared), true); // extended point count (LAS 1.4)
+
+  await expect(decodeEptLaszipTile(buf.buffer, [0, 0, 0])).rejects.toThrow(
+    /decode budget/,
+  );
+});
+
 test('decodeEptLaszipTile refuses a tile whose scale overflows a coordinate', async () => {
   // parseLasHeader accepts this scale — it is finite and positive — but
   // int32 · 1e300 overflows to ±Infinity in the coordinate loop, which is

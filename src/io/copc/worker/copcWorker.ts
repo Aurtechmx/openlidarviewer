@@ -86,12 +86,21 @@ ctx.onmessage = (event: MessageEvent<InMessage>): void => {
   if (msg.type !== 'decode') return;
 
   const { requestId, chunk, meta } = msg;
-  if (cancelled.consume(requestId)) return;
+  // Every accepted request must post exactly ONE terminal reply. A silent return
+  // on a consumed cancel leaves the pool's slot held forever (its job is only
+  // cleared by a reply), so a cancel-consume return posts `cancelled` first.
+  if (cancelled.consume(requestId)) {
+    ctx.postMessage({ type: 'cancelled', requestId });
+    return;
+  }
 
   void (async (): Promise<void> => {
     try {
       const lazPerf = await getLazPerf();
-      if (cancelled.consume(requestId)) return;
+      if (cancelled.consume(requestId)) {
+        ctx.postMessage({ type: 'cancelled', requestId });
+        return;
+      }
       const raw = decompressChunk(lazPerf, chunk, meta);
       const decoded = decodeRecords(raw, meta);
       ctx.postMessage(
