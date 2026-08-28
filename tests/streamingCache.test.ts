@@ -50,6 +50,19 @@ test('re-putting an id replaces its bytes without double-counting', () => {
   expect(cache.count).toBe(1);
 });
 
+test('put reports whether the chunk was stored', () => {
+  const cache = new CompressedChunkCache(200);
+  // A chunk that fits is stored → true, and the cache holds this exact buffer.
+  const small = buf(100);
+  expect(cache.put('small', small)).toBe(true);
+  expect(cache.get('small')).toBe(small);
+  // A chunk larger than the whole budget is refused → false, and nothing is
+  // held, so the caller may keep ownership without a defensive copy.
+  const big = buf(500);
+  expect(cache.put('big', big)).toBe(false);
+  expect(cache.has('big')).toBe(false);
+});
+
 test('clear empties the cache', () => {
   const cache = new CompressedChunkCache(1000);
   cache.put('a', buf(100));
