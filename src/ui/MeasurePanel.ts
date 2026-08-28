@@ -1453,6 +1453,12 @@ export class MeasurePanel {
         try {
           let primed = false;
           const ro = new ResizeObserver(() => {
+            // Re-fit the x labels against the chart's real width. This runs on
+            // the first (synchronous, mount-time) callback too, which is where
+            // the actual width first becomes readable, and again on every
+            // resize. The height-persist path below stays behind `primed` so a
+            // re-render never writes the default height back to storage.
+            (chart as ProfileChartEl)._olvRefitXLabels?.();
             if (!primed) {
               primed = true;
               return;
@@ -1785,6 +1791,84 @@ function buildStationTable(
   return { table, build };
 }
 
+/**
+ * The chart's narrowest CSS width, the safe floor the x-label fit reasons
+ * against before the overlay is in a document. The panel content box runs
+ * 218-760px and the chart's own CSS floor is 180px, so a first paint that has
+ * no real width to read (SSR, jsdom, the frame before mount) fits against this
+ * and never overprints. After mount the fit is recomputed against the real
+ * width. Coupled to `.olv-mp-chart` min-width and guarded by
+ * `tests/profileAxisLabelBounds.test.ts`.
+ */
+const MIN_CHART_PX = 180;
+/** Font size the axis labels are drawn at; matches `--text-xs`. */
+const AXIS_FONT_PX = 11;
+
+/** One x-axis label candidate, resolved to the overlay's box-fraction space. */
+export interface ProfileXLabelCandidate {
+  /** Position along the chart, a box-fraction percentage in [0, 100]. */
+  readonly pct: number;
+  /** Formatted chainage text. */
+  readonly text: string;
+  /** `translateX` anchor: first flush-left `0`, last flush-right `-100%`, else `-50%`. */
+  readonly anchor: string;
+}
+
+/**
+ * The x-axis label span markup that fits a chart `containerPx` wide.
+ *
+ * The label POSITIONS are box-fraction percentages, so they are width-correct
+ * at any chart size; only the fit DECISION — how many of the candidates the
+ * strip has room for — depends on the pixel width. The pixels handed to
+ * `fitAxisLabels` are scaled to the SAME `containerPx`, so the fit reasons in
+ * real pixels. Pure and DOM-free: it runs once at build time against the CSS
+ * floor and again after mount against the chart's actual content width.
+ */
+export function profileXLabelSpansHtml(
+  candidates: readonly ProfileXLabelCandidate[],
+  containerPx: number,
+  topPct: string,
+  fontPx: number,
+): string {
+  const keep = fitAxisLabels({
+    labels: candidates.map((c) => c.text),
+    pixels: candidates.map((c) => (c.pct / 100) * containerPx),
+    containerPx,
+    fontPx,
+    // The overlay anchors its end labels inside the plot, so the fit has to
+    // judge them the same way or it drops the label carrying the extent.
+    ends: 'pulled-in',
+  });
+  return candidates
+    .map((cand, k) =>
+      keep[k]
+        ? `<span class="olv-mp-axis olv-mp-axis-x" style="left:${cand.pct.toFixed(2)}%;top:${topPct}%;transform:translateX(${cand.anchor})">${cand.text}</span>`
+        : '',
+    )
+    .join('');
+}
+
+/**
+ * The width the x-label fit reasons against, given the overlay's measured
+ * `clientWidth`. Floored at `MIN_CHART_PX` so the fit never reasons against
+ * LESS than the box-fraction position math already assumes, and so a width
+ * that reads as zero (never mounted, display:none, a browser that reports no
+ * box) falls back to the same safe floor the first paint used.
+ */
+export function profileXLabelFitWidth(overlayClientWidth: number): number {
+  return Math.max(
+    MIN_CHART_PX,
+    Number.isFinite(overlayClientWidth) && overlayClientWidth > 0
+      ? overlayClientWidth
+      : MIN_CHART_PX,
+  );
+}
+
+/** A profile chart element carrying its post-mount x-label re-fit. */
+interface ProfileChartEl extends HTMLElement {
+  _olvRefitXLabels?: () => void;
+}
+
 function renderProfileChart(
   samples: readonly { distance: number; height: number }[],
   vex: number,
@@ -2036,37 +2120,26 @@ function renderProfileChart(
   // questions: the stride is how many labels an axis should carry, and the fit
   // is which of those the axis has room for.
   //
-  // The width below is a bound, not a measurement. This string is built before
-  // the overlay is in a document, so the chart's real width cannot be read
-  // here, and the two errors are not symmetric: believing the chart WIDER than
-  // it is keeps a pair that then overprints, while believing it narrower costs
-  // a tick mark the station table underneath still carries. So the fit runs
-  // against the chart's CSS floor rather than its usual size. A wide chart
-  // therefore carries fewer labels than it could, which is the price of never
-  // overprinting at any width. `axisLabelWidth` errs wide for the same reason.
-  const MIN_CHART_PX = 180;
-  const AXIS_FONT_PX = 11;
-  const candidates = stations
+  // The candidates are resolved to box-fraction positions once; the fit
+  // DECISION is left to `profileXLabelSpansHtml`, which is called twice. The
+  // first call fits against `MIN_CHART_PX`: this markup is built before the
+  // overlay is in a document, so the chart's real width cannot be read here,
+  // and the two errors are not symmetric — believing the chart WIDER than it is
+  // keeps a pair that then overprints, while believing it narrower only costs a
+  // tick mark the station table underneath still carries. After mount the
+  // observer below re-fits against the chart's actual width, so a wide chart
+  // recovers the labels the floor dropped. `axisLabelWidth` errs wide for the
+  // same never-overprint reason.
+  const xCandidates: ProfileXLabelCandidate[] = stations
     .map((c, i) => ({ c, i }))
-    .filter(({ i }) => i === lastIdx || i % labelStride === 0);
-  const texts = candidates.map(({ c }) => formatChainage(c));
-  const keep = fitAxisLabels({
-    labels: texts,
-    pixels: candidates.map(({ c }) => (xPct(c) / 100) * MIN_CHART_PX),
-    containerPx: MIN_CHART_PX,
-    fontPx: AXIS_FONT_PX,
-    // The overlay anchors its end labels inside the plot, so the fit has to
-    // judge them the same way or it drops the label carrying the extent.
-    ends: 'pulled-in',
-  });
-  const xLabelHtml = candidates
-    .map(({ c, i }, k) => {
-      if (!keep[k]) return '';
+    .filter(({ i }) => i === lastIdx || i % labelStride === 0)
+    .map(({ c, i }) => ({
+      pct: xPct(c),
+      text: formatChainage(c),
       // The end labels are pulled inside the plot so neither overhangs it.
-      const tx = i === 0 ? '0' : i === lastIdx ? '-100%' : '-50%';
-      return `<span class="olv-mp-axis olv-mp-axis-x" style="left:${xPct(c).toFixed(2)}%;top:${xLabelTop}%;transform:translateX(${tx})">${texts[k]}</span>`;
-    })
-    .join('');
+      anchor: i === 0 ? '0' : i === lastIdx ? '-100%' : '-50%',
+    }));
+  const xLabelHtml = profileXLabelSpansHtml(xCandidates, MIN_CHART_PX, xLabelTop, AXIS_FONT_PX);
   const yLabelHtml = yTicks
     .map(
       (v) =>
@@ -2095,5 +2168,21 @@ function renderProfileChart(
       if (Number.isInteger(si) && si >= 0) bindStationHover(hit, si, coupling!);
     }
   }
+  // Re-fit the x labels once the chart has a real width, and again on every
+  // resize. The overlay `.olv-mp-chart-labels` is the label coordinate box, so
+  // its `clientWidth` is the width the box-fraction positions map onto. Floor
+  // at MIN_CHART_PX so the fit never reasons against LESS than the position
+  // math already assumed. Only the `.olv-mp-axis-x` spans are swapped; the y
+  // labels and the vex badge in the same overlay are left untouched. The
+  // caller's ResizeObserver drives this (see `_chartObservers`); with no
+  // observer the build-time overlay stands as the fallback.
+  (chartEl as ProfileChartEl)._olvRefitXLabels = (): void => {
+    const overlayEl = chartEl.querySelector('.olv-mp-chart-labels');
+    if (!(overlayEl instanceof HTMLElement)) return;
+    const containerPx = profileXLabelFitWidth(overlayEl.clientWidth);
+    const html = profileXLabelSpansHtml(xCandidates, containerPx, xLabelTop, AXIS_FONT_PX);
+    for (const old of Array.from(overlayEl.querySelectorAll('.olv-mp-axis-x'))) old.remove();
+    overlayEl.insertAdjacentHTML('beforeend', html);
+  };
   return chartEl;
 }
