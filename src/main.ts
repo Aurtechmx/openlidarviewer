@@ -76,7 +76,7 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 // The Measurements panel is lazy-mounted on the first scan load (never in the
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
-import { createMeasurePanelMount } from './app/measurePanelMount';
+import { createMeasurePanelMount, createAnalyseProfileVisibility } from './app/measurePanelMount';
 import { createProcessStudioFromShell } from './app/processStudioMount';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
@@ -1959,6 +1959,7 @@ const dock = new ToolDock({
     // late streaming node can't yank the panel away.
     routing.pin();
     analyseDesiredVisible = show;
+    analyseProfileVisibility.clear(); // explicit toggle overrides a pending restore
     if (show) {
       showWorkspaceMode?.('analyse');
       // Opening: ensure the panel is mounted, then show it.
@@ -2021,24 +2022,27 @@ const measureMount = createMeasurePanelMount({
   exportSession, handleFile,
   recordUsage,
   workbenchStage: stage,
+  onWorkbenchClose: () => analyseProfileVisibility.restore(),
+});
+// Save the AnalysePanel's visibility when a profile hides it, and restore that
+// exact state on the workbench close (kind-change fires on open, not on close).
+const analyseProfileVisibility = createAnalyseProfileVisibility({
+  getDesired: () => analyseDesiredVisible,
+  setDesired: (v) => { analyseDesiredVisible = v; },
+  setPanelVisible: (v) => analysePanel?.setVisible(v),
+  setDockActive: (v) => dock.setAnalyseActive(v),
 });
 /** Refresh the Measurements panel's contents and visibility (thin delegate). */
 const refreshMeasurePanel = (): void => measureMount.refresh();
 
-// B2 (v0.4.5) — feed the measure stack the SAME render-units → metres seam
-// the terrain/space paths already read (`crsService.linearUnitToMetres`,
-// see the terrain run + terrainAnalysisRunner). Render space keeps the
-// scan's source units, so a foot-CRS scan must scale every measure readout
-// once, at the controller boundary; the subscription keeps a late resolve
-// or a user override in lockstep.
-//
-// Deferred behind viewerLoaded: `viewer` is null until the lazy chunk
-// resolves, so a top-level dereference throws at startup — and
-// CrsService.subscribe fires the listener synchronously on registration,
-// which would hit the same null (swallowed, silently dropping the seed).
-// Subscribing inside the .then is sufficient on its own: the immediate
-// fire seeds the CURRENT factor, covering a CRS that resolved before the
-// viewer chunk did, and every later resolve/override re-fires it.
+// B2 (v0.4.5) — feed the measure stack the SAME render-units to metres seam
+// the terrain/space paths read (`crsService.linearUnitToMetres`). Render space
+// keeps the scan's source units, so a foot-CRS scan must scale every measure
+// readout once, at the controller boundary; the subscription keeps a late
+// resolve or a user override in lockstep. Deferred behind viewerLoaded because
+// `viewer` is null until the lazy chunk resolves and CrsService.subscribe fires
+// synchronously on registration; subscribing inside the .then still seeds the
+// CURRENT factor and re-fires on every later resolve/override.
 void viewerLoaded.then(() => {
   crsService.subscribe(() => {
     // The ONE context for the active scan (the service invalidates it before it
@@ -3311,6 +3315,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   objectDesiredVisible = plan.showObjectPanel;
   objectPanel?.setVisible(plan.showObjectPanel);
   analyseDesiredVisible = plan.showAnalysePanel;
+  analyseProfileVisibility.clear(); // the route owns panel state; drop any restore
   analysePanel?.setVisible(plan.showAnalysePanel);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(plan.showAnalysePanel);
@@ -3505,16 +3510,11 @@ void viewerLoaded.then(() => {
     },
   });
   viewer.measure.setOnChange(refreshMeasurePanel);
-  // Selecting the Profile kind is a terrain cross-section workflow — get the
-  // Analyse panel out of the way and bring the Measurements panel forward so
-  // the profile chart has room and the focus is unambiguous.
+  // Profile kind is a cross-section workflow: hide the Analyse panel (its state
+  // saved for the workbench close to restore) and bring Measurements forward.
   viewer.measure.setOnKindChange((kind) => {
     if (kind === 'profile') {
-      // Null-safe: profile selection needs a scan (panel mounted), but track the
-      // desired-hidden state too so a not-yet-mounted panel hydrates hidden.
-      analyseDesiredVisible = false;
-      analysePanel?.setVisible(false);
-      dock.setAnalyseActive(false);
+      analyseProfileVisibility.hideForProfile();
       measureMount.showDesired();
     }
   });
@@ -5348,15 +5348,15 @@ function resetToEmptyState(): void {
   compass.refresh();
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
   clipPanel.setVisible(false);
-  // Hide + clear the Analyse panel so it doesn't linger with stale
-  // terrain results after the scan is closed. v0.4.0. Null-safe: the panel is
-  // lazy-mounted, so a reset before any scan simply has nothing to clear. Also
+  // Hide + clear the Analyse panel so it doesn't linger with stale terrain
+  // results after the scan is closed. v0.4.0. Null-safe (lazy-mounted); also
   // reset the tracked desired state so a fresh open starts hidden/collapsed.
   if (analysePanel) {
     analysePanel.update(null);
     analysePanel.setVisible(false);
   }
   analyseDesiredVisible = false;
+  analyseProfileVisibility.clear(); // before hide() fires onWorkbenchClose: stay hidden
   analyseExpanded = false;
   // Hide the Space / Object (non-terrain) panel too — it was added after this
   // reset path and a closed 360 / object scan would otherwise leave its report
