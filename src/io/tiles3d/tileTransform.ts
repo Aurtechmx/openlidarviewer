@@ -174,24 +174,98 @@ function normalizeOrZero(x: number, y: number, z: number): [number, number, numb
 }
 
 /**
- * The largest scaling factor of the linear part.
+ * The largest scaling factor of the linear part: its spectral norm, i.e. the
+ * largest singular value of the upper-left 3x3.
  *
- * Taken as the longest of the three transformed basis vectors, which is what
- * the specification's geometric-error scaling means for a non-uniform scale:
- * the error must not shrink on the axis that grew, so the maximum is the only
- * safe choice. A mean would under-report and a minimum would under-report
- * badly, and both look correct under the uniform scale that most tilesets use.
+ * This is the true maximum stretch the transform applies to any direction, and
+ * the quantity the specification's geometric-error scaling means. The longest
+ * of the three transformed basis vectors (the previous column-norm form) equals
+ * it only for a rotation composed with an axis-aligned scale; for a general
+ * affine or shear it UNDER-reports. The classic witness is the shear whose
+ * upper-left 3x3 is [[1,1,0],[0,1,0],[0,0,1]]: its column norms top out at
+ * sqrt(2) ~= 1.414, but its true largest singular value is (1+sqrt(5))/2
+ * ~= 1.618. Under-reporting shrinks bounding spheres (culling geometry that is
+ * really inside) and under-scales 1.1 geometric error (refining too late), so
+ * the maximum here must never fall below the spectral norm.
+ *
+ * Computed as sqrt of the largest eigenvalue of A^T A, a symmetric positive-
+ * semidefinite 3x3, via the closed-form trigonometric eigenvalue solution
+ * (Smith 1961). Singular values are transpose-invariant, so column-major versus
+ * row-major storage of the 3x3 does not change the result.
  */
 export function largestScale(m: Mat4): number {
-  const cx = Math.hypot(m[0]!, m[1]!, m[2]!);
-  const cy = Math.hypot(m[4]!, m[5]!, m[6]!);
-  const cz = Math.hypot(m[8]!, m[9]!, m[10]!);
-  return Math.max(cx, cy, cz);
+  // Columns of the upper-left 3x3 (column-major: m[col*4 + row]).
+  const c0x = m[0]!, c0y = m[1]!, c0z = m[2]!;
+  const c1x = m[4]!, c1y = m[5]!, c1z = m[6]!;
+  const c2x = m[8]!, c2y = m[9]!, c2z = m[10]!;
+
+  // A^T A is symmetric; its entries are the dot products of the columns.
+  const a = c0x * c0x + c0y * c0y + c0z * c0z; // (0,0)
+  const b = c1x * c1x + c1y * c1y + c1z * c1z; // (1,1)
+  const c = c2x * c2x + c2y * c2y + c2z * c2z; // (2,2)
+  const d = c0x * c1x + c0y * c1y + c0z * c1z; // (0,1)
+  const e = c0x * c2x + c0y * c2y + c0z * c2z; // (0,2)
+  const f = c1x * c2x + c1y * c2y + c1z * c2z; // (1,2)
+
+  const maxEigenvalue = largestSymmetricEigenvalue3x3(a, b, c, d, e, f);
+  // Clamp away a tiny negative that rounding can produce for a near-singular A.
+  return Math.sqrt(Math.max(0, maxEigenvalue));
+}
+
+/**
+ * Largest eigenvalue of the symmetric 3x3
+ *   [ a d e ]
+ *   [ d b f ]
+ *   [ e f c ]
+ * by the closed-form trigonometric method (Smith 1961). All three eigenvalues
+ * are real; only the largest is returned.
+ */
+function largestSymmetricEigenvalue3x3(
+  a: number, b: number, c: number, d: number, e: number, f: number,
+): number {
+  const p1 = d * d + e * e + f * f;
+  if (p1 === 0) {
+    // Already diagonal: the eigenvalues are the diagonal entries.
+    return Math.max(a, b, c);
+  }
+  const q = (a + b + c) / 3;
+  const p2 = (a - q) ** 2 + (b - q) ** 2 + (c - q) ** 2 + 2 * p1;
+  const p = Math.sqrt(p2 / 6);
+  // B = (A - qI) / p; det(B) / 2 lies in [-1, 1] up to rounding.
+  const ba = (a - q) / p, bb = (b - q) / p, bc = (c - q) / p;
+  const bd = d / p, be = e / p, bf = f / p;
+  const detB =
+    ba * (bb * bc - bf * bf) -
+    bd * (bd * bc - bf * be) +
+    be * (bd * bf - bb * be);
+  const r = Math.max(-1, Math.min(1, detB / 2));
+  const phi = Math.acos(r) / 3;
+  // eig1 = q + 2p cos(phi) is the largest of the three.
+  return q + 2 * p * Math.cos(phi);
 }
 
 /** A tile's geometric error under its cumulative transform. */
 export function transformGeometricError(m: Mat4, geometricError: number): number {
   return geometricError * largestScale(m);
+}
+
+/**
+ * Whether a tileset's geometric error is scaled by the tile transform.
+ *
+ * The two versions disagree, and the difference is not cosmetic: in 3D Tiles 1.0
+ * the tile transform does NOT apply to `geometricError`, while 1.1 scales it by
+ * the transform's largest scaling factor. Applying the 1.1 rule to a 1.0 tileset
+ * with a scaling root transform refines at the wrong error and mis-selects tiles.
+ *
+ * Only an explicit '1.0' opts out. An absent or unrecognised version defaults to
+ * scaling (the 1.1 rule): overscaling the error refines earlier and never
+ * under-refines, the same conservative direction the bounding volumes take, and
+ * it matches the historical behaviour of this walk. In production the tileset
+ * parser accepts only '1.0' or '1.1', so a served tileset always states which;
+ * this default is reached only by direct calls that omit the version.
+ */
+export function scalesGeometricError(assetVersion: string | undefined): boolean {
+  return assetVersion !== '1.0';
 }
 
 /**
@@ -279,7 +353,11 @@ export interface PlacedTile {
 export function* walkTilePlacements(
   root: Tile,
   rootTransform: Mat4 = IDENTITY_4X4,
+  assetVersion?: string,
 ): Generator<PlacedTile> {
+  // 1.0 leaves geometric error unscaled; 1.1 (and the conservative default for
+  // an absent version) scales it by the cumulative transform. Decided once.
+  const scaleGeometricError = scalesGeometricError(assetVersion);
   const stack: { tile: Tile; parent: Mat4; depth: number }[] = [
     { tile: root, parent: rootTransform, depth: 0 },
   ];
@@ -292,7 +370,9 @@ export function* walkTilePlacements(
       tile,
       transform,
       boundingVolume: transformBoundingVolume(transform, tile.boundingVolume),
-      geometricError: transformGeometricError(transform, tile.geometricError),
+      geometricError: scaleGeometricError
+        ? transformGeometricError(transform, tile.geometricError)
+        : tile.geometricError,
       depth,
     };
 

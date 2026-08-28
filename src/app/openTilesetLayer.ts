@@ -37,6 +37,7 @@ import { parseTileset } from '../io/tiles3d/tileset';
 import { createTilesetTransport } from '../io/tiles3d/tilesetTransport';
 import { validateRemoteTilesetUrl } from '../io/tiles3d/tilesetUrl';
 import { PntsChunkDecoder } from '../io/tiles3d/pntsDecode';
+import { pntsDeviceDecodeLimits } from '../io/tiles3d/pnts';
 import { TilesetStreamingSource } from '../render/streaming/TilesetStreamingSource';
 import {
   describeCloudFrame,

@@ -496,11 +496,49 @@ export const MAX_PNTS_TILE_POINTS = 8_000_000;
  */
 export const MAX_PNTS_DECODED_BYTES = 192 * 1024 * 1024;
 
+/**
+ * The mobile decoded-byte ceiling for one PNTS tile.
+ *
+ * {@link MAX_PNTS_DECODED_BYTES} is the desktop budget. On a phone the same
+ * 192 MiB is a single tile the device has no headroom for: the concurrency cap
+ * stops two concurrent decodes but does not make ONE legal tile safe, and the
+ * scheduler admits a node on `ASSUMED_TILE_POINTS` (500k) long before the real
+ * `POINTS_LENGTH` is known, so an 8M-point tile sails through admission and is
+ * only sized here, at decode. A far lower mobile ceiling refuses that tile on
+ * its true decoded size instead of allocating it. 96 MiB is half the desktop
+ * budget and above a positions-only 8M-point tile's 91.5 MiB, so an ordinary
+ * large tile still opens while a colour/normal-heavy one is refused.
+ */
+export const MAX_PNTS_DECODED_BYTES_MOBILE = 96 * 1024 * 1024;
+
 /** Decoded bytes each channel costs one point, matching what the decoders below allocate. */
 const POSITION_DECODED_BYTES = 12;
 const COLOR_DECODED_BYTES = 3;
 const NORMAL_DECODED_BYTES = 12;
 const BATCH_ID_DECODED_BYTES = 4;
+
+/**
+ * The point and decoded-byte ceilings one PNTS tile is allowed on this device.
+ *
+ * The byte ceiling is the operative memory bound (a channel-heavy tile costs far
+ * more than a positions-only one at the same count); the point ceiling is
+ * derived from it so the two never disagree — floor(ceiling / cheapest per-point
+ * cost), clamped to the desktop count ceiling so mobile never admits a larger
+ * count than desktop. Threaded from the same phone signal the streaming budget
+ * uses for concurrency, so mobile decodes are gated by a mobile-sized ceiling
+ * rather than the desktop default. Pure.
+ */
+export function pntsDeviceDecodeLimits(isMobile: boolean): {
+  maxPoints: number;
+  maxDecodedBytes: number;
+} {
+  const maxDecodedBytes = isMobile ? MAX_PNTS_DECODED_BYTES_MOBILE : MAX_PNTS_DECODED_BYTES;
+  const maxPoints = Math.min(
+    MAX_PNTS_TILE_POINTS,
+    Math.floor(maxDecodedBytes / POSITION_DECODED_BYTES),
+  );
+  return { maxPoints, maxDecodedBytes };
+}
 
 /**
  * Independent size ceilings on the tile's three variable-length metadata

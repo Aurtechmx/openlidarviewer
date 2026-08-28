@@ -281,6 +281,16 @@ export interface PntsChunkDecoderOptions {
    * says why a Normal chip is missing or a patch is drawn flat.
    */
   readonly onNormalsNotice?: (message: string) => void;
+  /**
+   * The point / decoded-byte ceilings one tile may reach on this device, from
+   * {@link pntsDeviceDecodeLimits}. Omitted, the decoder uses the desktop
+   * defaults `parsePnts` already applies. Passing the mobile limits is what
+   * makes a single legal-but-large tile refused at decode on a phone rather than
+   * allocated: the scheduler admits a node on `ASSUMED_TILE_POINTS` before the
+   * real size is known, so this is the first place the true `POINTS_LENGTH` is
+   * measured against a device-sized bound.
+   */
+  readonly decodeLimits?: { readonly maxPoints: number; readonly maxDecodedBytes: number };
 }
 
 /**
@@ -296,6 +306,9 @@ export interface PntsChunkDecoderOptions {
 export class PntsChunkDecoder implements ChunkDecoder {
   private readonly _onColourNotice: ((message: string) => void) | undefined;
   private readonly _onNormalsNotice: ((message: string) => void) | undefined;
+  private readonly _decodeLimits:
+    | { readonly maxPoints: number; readonly maxDecodedBytes: number }
+    | undefined;
   private _colour: TilesetColourConsensus = NO_TILE_DECODED;
   private _normals: TilesetNormalsConsensus = NO_TILE_DECODED_NORMALS;
   private _noticed = false;
@@ -304,6 +317,7 @@ export class PntsChunkDecoder implements ChunkDecoder {
   constructor(options: PntsChunkDecoderOptions = {}) {
     this._onColourNotice = options.onColourNotice;
     this._onNormalsNotice = options.onNormalsNotice;
+    this._decodeLimits = options.decodeLimits;
   }
 
   /** The layer's colour meaning as the tiles decoded so far have settled it. */
@@ -334,7 +348,19 @@ export class PntsChunkDecoder implements ChunkDecoder {
     // asks the parser not to copy the batch-table binary or materialise
     // BATCH_ID. That halves nothing here but spares a copy of the whole
     // batch-table binary section per tile on the path that never reads it.
-    const tile = parsePnts(chunk, { keepBatchMetadata: false });
+    const tile = parsePnts(chunk, {
+      keepBatchMetadata: false,
+      // Device-sized ceilings when the shell supplied them: on mobile a single
+      // legal-but-large tile is refused here on its true decoded size, before
+      // the first position array is allocated, rather than admitted at the
+      // desktop default. Omitted, `parsePnts` keeps its desktop defaults.
+      ...(this._decodeLimits
+        ? {
+            maxPoints: this._decodeLimits.maxPoints,
+            maxDecodedBytes: this._decodeLimits.maxDecodedBytes,
+          }
+        : {}),
+    });
     const n = tile.pointsLength;
     const [ox, oy, oz] = meta.renderOrigin;
     const rtc = tile.rtcCenter ?? [0, 0, 0];

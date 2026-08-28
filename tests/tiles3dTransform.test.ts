@@ -58,6 +58,27 @@ const Rz = (a: number): number[] => [
   0, 0, 0, 1,
 ];
 
+/**
+ * Column-major shear: x picks up y (the [[1,1,0],[0,1,0],[0,0,1]] map when read
+ * as row-major). Its largest singular value is the golden ratio (1+sqrt(5))/2.
+ */
+const Shear = (): number[] => [
+  1, 0, 0, 0,
+  1, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, 0, 1,
+];
+
+const GOLDEN = (1 + Math.sqrt(5)) / 2; // ~= 1.618
+
+/** The previous column-norm implementation, kept to prove the shear regression. */
+const columnNormScale = (m: number[]): number =>
+  Math.max(
+    Math.hypot(m[0]!, m[1]!, m[2]!),
+    Math.hypot(m[4]!, m[5]!, m[6]!),
+    Math.hypot(m[8]!, m[9]!, m[10]!),
+  );
+
 describe('composition order', () => {
   it('composes parent then child, so the child transform applies first', () => {
     // Scale by 2, then translate by 10 in x. A point at x=1 becomes 2, then 12.
@@ -223,6 +244,29 @@ describe('largest scaling factor', () => {
   it('scales geometric error by that factor', () => {
     expect(transformGeometricError(S(2, 3, 4), 10)).toBe(40);
     expect(transformGeometricError(IDENTITY_4X4, 10)).toBe(10);
+  });
+
+  it('is the uniform factor under a uniform scale', () => {
+    expect(largestScale(S(5, 5, 5))).toBeCloseTo(5, 12);
+  });
+
+  it('never underestimates the spectral norm of a shear', () => {
+    // The witness case: column norms cap at sqrt(2) ~= 1.414, but the true
+    // largest singular value is the golden ratio ~= 1.618. A correct spectral
+    // norm must reach it, and the old column-norm form provably could not.
+    expect(largestScale(Shear())).toBeCloseTo(GOLDEN, 10);
+    expect(largestScale(Shear())).toBeGreaterThanOrEqual(GOLDEN - 1e-9);
+    // Regression guard: the previous implementation underestimated here.
+    expect(columnNormScale(Shear())).toBeCloseTo(Math.SQRT2, 12);
+    expect(columnNormScale(Shear())).toBeLessThan(GOLDEN - 0.1);
+    expect(largestScale(Shear())).toBeGreaterThan(columnNormScale(Shear()));
+  });
+
+  it('is the largest scale factor of a rotation composed with a non-uniform scale', () => {
+    // Singular values are invariant under an orthogonal factor, so R * S keeps
+    // the scale's singular values {2,3,4}; the largest stays 4.
+    const m = composeTileTransform(Rz(0.7), S(2, 3, 4));
+    expect(largestScale(m)).toBeCloseTo(4, 10);
   });
 });
 

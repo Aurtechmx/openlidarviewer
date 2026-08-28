@@ -59,7 +59,7 @@ Scan Intelligence report, and export the result.
 | NFR-3 | **Compatibility** — works on modern evergreen browsers; WebGPU where available, WebGL 2 everywhere else. |
 | NFR-4 | **Zero friction** — usable with no install and no file conversion. |
 | NFR-5 | **Quality** — strict TypeScript; the algorithmic core is test-first; CI gates every change. |
-| NFR-6 | **Licensing** — MIT; citable via `CITATION.cff`. |
+| NFR-6 | **Licensing** — AGPL-3.0-only; citable via `CITATION.cff`. |
 | NFR-7 | **Deployability** — builds to static files hostable on any CDN or GitHub Pages. |
 | NFR-8 | **Maintainability** — one responsibility per file; analysis modules never import the renderer. |
 
