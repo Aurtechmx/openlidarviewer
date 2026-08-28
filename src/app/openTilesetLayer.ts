@@ -34,7 +34,7 @@ import { LoadCancelledError } from '../io/loadFile';
 import { describeLoadError } from '../io/loadErrors';
 import { expandImplicitTileset } from '../io/tiles3d/implicitExpand';
 import { parseTileset } from '../io/tiles3d/tileset';
-import { createTilesetTransport } from '../io/tiles3d/tilesetTransport';
+import { createTilesetTransport, pntsDeviceTransportCap } from '../io/tiles3d/tilesetTransport';
 import { validateRemoteTilesetUrl } from '../io/tiles3d/tilesetUrl';
 import { PntsChunkDecoder } from '../io/tiles3d/pntsDecode';
 import { pntsDeviceDecodeLimits } from '../io/tiles3d/pnts';
@@ -164,7 +164,13 @@ export async function openRemoteTileset(
     // the router only pattern-matches a path ending in tileset.json.
     const entry = validateRemoteTilesetUrl(url);
     if (!entry.ok) throw new TilesetRefusal(entry.reason);
-    const transport = createTilesetTransport();
+    // A device-sized `.pnts` transport cap from the same PNTS peak policy the
+    // decode step uses: on a phone a legal-but-large tile is refused before its
+    // body is fetched, not downloaded to the desktop 128 MiB ceiling and then
+    // refused at decode. Desktop keeps 128 MiB.
+    const transport = createTilesetTransport({
+      maxTileBytes: pntsDeviceTransportCap(deps.isPhone()),
+    });
     const json = await transport.fetchTilesetJson(url, controller.signal);
     let tileset;
     try {

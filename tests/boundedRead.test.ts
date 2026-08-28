@@ -235,6 +235,41 @@ describe('readAtMostBounded — declared length does not eagerly allocate', () =
     expect(overPrealloc).toBe(0);
   });
 
+  it('a large declared body allocates one big buffer, not the ~1.5x doubling peak', async () => {
+    // 128 MiB delivered in chunks. Doubling grew 16->32->64->128 MiB and held
+    // the old and new buffers together at the last step (~192 MiB, 1.5x). The
+    // single-final-allocation path must construct exactly ONE buffer larger than
+    // the prealloc bound, sized exactly `declared`, so the large-allocation
+    // total is `declared` (128 MiB), not ~1.5x it.
+    const declared = 128 * 1024 * 1024;
+    const chunk = 8 * 1024 * 1024;
+    const Real = globalThis.Uint8Array;
+    const largeAllocs: number[] = [];
+    class U8 extends Real {
+      constructor(...args: unknown[]) {
+        if (typeof args[0] === 'number' && args[0] > MAX_DECLARED_PREALLOC_BYTES) {
+          largeAllocs.push(args[0]);
+        }
+        // @ts-expect-error forward whatever the reader passed
+        super(...args);
+      }
+    }
+    (globalThis as { Uint8Array: unknown }).Uint8Array = U8;
+    let out: Uint8Array;
+    try {
+      const parts: Uint8Array[] = [];
+      for (let at = 0; at < declared; at += chunk) parts.push(bytes(chunk, 3));
+      const resp = streamingResponse(parts, { 'content-length': String(declared) });
+      out = await readAtMostBounded(resp, 256 * 1024 * 1024, 'EPT tile');
+    } finally {
+      (globalThis as { Uint8Array: unknown }).Uint8Array = Real;
+    }
+    expect(out.byteLength).toBe(declared);
+    // Exactly one large buffer, sized exactly `declared` — never a second big
+    // buffer coexisting, so the transient peak is `declared + prealloc`, not 1.5x.
+    expect(largeAllocs).toEqual([declared]);
+  });
+
   it('an honest large body still delivers every byte via bounded growth', async () => {
     // 40 MiB actually delivered in chunks, declared honestly: the growth path
     // must reach the full size and return all of it.

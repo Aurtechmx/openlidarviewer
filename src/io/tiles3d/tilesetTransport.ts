@@ -25,6 +25,7 @@
 
 import { sanitizeUrlForDisplay } from '../range/RangeSource';
 import { ownedExactBuffer, readAtMostBounded, readTextAtMost } from '../range/boundedRead';
+import { MAX_PNTS_DECODED_BYTES, pntsDeviceDecodeLimits } from './pnts';
 
 /**
  * Best-effort cancel a response body we are about to abandon (a retryable error
@@ -60,6 +61,24 @@ export const MAX_TILESET_JSON_BYTES = 8 * 1024 * 1024;
  * from a writer that produced unusually large tiles.
  */
 export const MAX_PNTS_TILE_BYTES = 128 * 1024 * 1024;
+/**
+ * The transport ceiling for one `.pnts` body on this device.
+ *
+ * {@link MAX_PNTS_TILE_BYTES} is the desktop cap; the DECODE step is already
+ * device-aware ({@link pntsDeviceDecodeLimits}), so a phone left at the desktop
+ * transport cap would DOWNLOAD a tile up to 128 MiB only to refuse it at decode
+ * on its true size. This derives the transport cap from the SAME PNTS device
+ * peak policy rather than inventing a separate mobile number: it scales the
+ * desktop transport cap by the device's decoded-byte budget ratio, so the
+ * transport ceiling tracks the decode ceiling. Desktop's ratio is 1 and it
+ * stays at 128 MiB; mobile's 96 MiB decode budget is half the 192 MiB desktop
+ * budget, so the mobile transport cap is 64 MiB. A body a phone could never hold
+ * is then refused before its bytes are fetched, not after.
+ */
+export function pntsDeviceTransportCap(isMobile: boolean): number {
+  const { maxDecodedBytes } = pntsDeviceDecodeLimits(isMobile);
+  return Math.round(MAX_PNTS_TILE_BYTES * (maxDecodedBytes / MAX_PNTS_DECODED_BYTES));
+}
 /**
  * Ceiling for one `.subtree` body.
  *
