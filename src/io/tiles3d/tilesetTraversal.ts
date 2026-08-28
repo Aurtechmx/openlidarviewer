@@ -155,7 +155,7 @@ export function selectTiles(
   // The walk already carries the cumulative transform, so this only decides
   // which of its tiles to keep.
   const byTile = new Map<Tile, PlacedTile>();
-  for (const placed of walkTilePlacements(tileset.root, rootTransform)) {
+  for (const placed of walkTilePlacements(tileset.root, rootTransform, tileset.assetVersion)) {
     byTile.set(placed.tile, placed);
   }
 

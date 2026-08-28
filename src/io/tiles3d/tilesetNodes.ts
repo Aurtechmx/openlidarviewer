@@ -170,7 +170,7 @@ export function tilesetNodes(
   // structural tiles that produce no node of their own.
   const contentParent: string[] = [];
 
-  for (const placed of walkTilePlacements(tileset.root, rootTransform)) {
+  for (const placed of walkTilePlacements(tileset.root, rootTransform, tileset.assetVersion)) {
     contentParent.length = Math.min(contentParent.length, placed.depth);
     const uri = placed.tile.contentUri;
     if (uri == null) continue;
