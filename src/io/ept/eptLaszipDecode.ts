@@ -252,13 +252,19 @@ export function decodeEptLaszipTileWith(
       n,
       decodedBytesPerPoint(ctx),
       0,
+      // laz-perf duplicates the whole compressed tile into its WASM heap
+      // (`_malloc` + `HEAPU8.set(fileBytes, filePtr)` below), so the JS buffer and
+      // its WASM copy are both resident during decode: two compressed copies, not
+      // one.
+      buffer.byteLength,
       MAX_DECODE_PEAK_BYTES,
     )
   ) {
     throw new HeavyByteBudgetError(
       `EPT laszip tile: ${n.toLocaleString('en-US')} points would stage ` +
         `${(n * decodedBytesPerPoint(ctx)).toLocaleString('en-US')} decoded bytes ` +
-        `plus a ${buffer.byteLength.toLocaleString('en-US')}-byte compressed payload, ` +
+        `plus two ${buffer.byteLength.toLocaleString('en-US')}-byte compressed copies ` +
+        `(JS buffer + laz-perf WASM heap), ` +
         `over the ${MAX_DECODE_PEAK_BYTES.toLocaleString('en-US')}-byte decode budget.`,
     );
   }

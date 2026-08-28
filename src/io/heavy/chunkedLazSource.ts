@@ -86,7 +86,8 @@ export const MAX_LAZ_WINDOW_SPAN_BYTES = 128 * 1024 * 1024;
  * from the first chunk's offset stays under {@link MAX_LAZ_WINDOW_SPAN_BYTES},
  * the aggregate DECODED bytes of the window stay under
  * {@link MAX_DECODED_ALLOCATION_BYTES}, the summed simultaneous peak
- * (span + decoded + packed) stays under {@link MAX_DECODE_PEAK_BYTES}, and it is
+ * (span + one chunk's WASM compressed copy + decoded + packed) stays under
+ * {@link MAX_DECODE_PEAK_BYTES}, and it is
  * under `window` chunks — but always take at least one chunk. The decoded-byte
  * cap uses the real record length (`recordLength`, 0 to skip it): the
  * compressed-span cap bounds the read, but a window of highly-compressed chunks
@@ -110,6 +111,10 @@ export function planChunkWindow(
   let end = start + 1;
   let points = chunks[start].pointCount;
   let decoded = decodedBytesFor(points, recordLength > 0 ? recordLength : 1);
+  // The largest single chunk in the window bounds laz-perf's WASM copy: chunks
+  // decode one at a time, so only one chunk's compressed bytes are duplicated into
+  // the WASM heap at any instant, on top of the whole resident span.
+  let maxChunk = chunks[start].byteLength;
   while (end < chunks.length && end - start < window) {
     const next = chunks[end];
     const nextSpan = next.byteOffset + next.byteLength - spanStart;
@@ -117,14 +122,16 @@ export function planChunkWindow(
     const nextPoints = points + next.pointCount;
     const nextDecoded = decoded + decodedBytesFor(next.pointCount, recordLength > 0 ? recordLength : 1);
     if (nextDecoded > cap) break;
+    const nextMaxChunk = Math.max(maxChunk, next.byteLength);
     if (
       peakActive &&
-      !withinDecodePeakBudget(nextSpan, nextPoints, recordLength, packedRecordBytes)
+      !withinDecodePeakBudget(nextSpan, nextPoints, recordLength, packedRecordBytes, nextMaxChunk)
     ) {
       break;
     }
     points = nextPoints;
     decoded = nextDecoded;
+    maxChunk = nextMaxChunk;
     end++;
   }
   const last = chunks[end - 1];
@@ -245,12 +252,15 @@ export async function openChunkedLazSource(
               only.pointCount,
               header.pointDataRecordLength,
               recordBytes,
+              // laz-perf copies the chunk into its WASM heap, so the span and its
+              // WASM duplicate are both resident during decode.
+              only.byteLength,
             )
           ) {
             throw new ChunkedLazUnsupportedError(
               `chunked LAZ chunk of ${only.pointCount} points would peak over the ` +
                 `${MAX_DECODE_PEAK_BYTES}-byte simultaneous-decode budget (compressed span + ` +
-                'decoded records + packed records); convert it to COPC or EPT',
+                'WASM compressed copy + decoded records + packed records); convert it to COPC or EPT',
             );
           }
         }
@@ -291,7 +301,12 @@ function decodeChunkBatch(
   }
   const rel = c.byteOffset - spanStart;
   const job: LazChunkJob = {
-    chunk: span.slice(rel, rel + c.byteLength),
+    // A VIEW into the already-resident window span, not `span.slice(...)`. The
+    // slice made a third live compressed copy of this chunk (window span + JS
+    // slice + laz-perf's WASM copy); the decoder only needs the bytes, and it
+    // stages its own WASM copy from whatever it is given, so a view carries the
+    // identical bytes with one fewer copy resident. Consumed here in-process.
+    chunk: new Uint8Array(span, rel, c.byteLength),
     pointCount: c.pointCount,
     firstPointIndex: c.firstPointIndex,
     pointDataRecordFormat: header.pointFormat,
