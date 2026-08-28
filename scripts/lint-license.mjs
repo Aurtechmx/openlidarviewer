@@ -24,6 +24,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 export const CURRENT_LICENSE = 'AGPL-3.0-only';
 export const FIRST_AGPL_RELEASE = '0.6.7';
@@ -72,7 +73,7 @@ export function checkLicense(root) {
 }
 
 // CLI
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isCliEntry(import.meta.url)) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const problems = checkLicense(root);
   if (problems.length > 0) {
