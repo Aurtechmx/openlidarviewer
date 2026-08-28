@@ -271,6 +271,38 @@ describe('runFullCloudGrade — oversized-plan budget guard (BUG 7)', () => {
     expect(refusal.note).toMatch(/safe ceiling/i);
   });
 
+  it('REFUSES a 3M-point node (above the 2M ceiling) before the sample allocation', async () => {
+    // A node coarser than the 2,000,000-point sample target: it sits below the
+    // former 8M ceiling but above the current one, so the peak-memory fix must
+    // decline it. The planner always selects at least one node, so this single
+    // node is the whole plan; the guard fires before positions is sized.
+    expect(MAX_SAMPLE_POINTS).toBe(2_000_000);
+    const coarse: SampleNode[] = [
+      { id: '0-0-0-0', depth: 0, pointCount: 3_000_000, byteSize: 10 },
+    ];
+    const decode = vi.fn();
+    const RealF32 = Float32Array;
+    const sizes: number[] = [];
+    const spy = vi.spyOn(globalThis, 'Float32Array').mockImplementation(((arg: number) => {
+      if (typeof arg === 'number') sizes.push(arg);
+      return new RealF32(arg as number);
+    }) as never);
+    try {
+      await expect(
+        runFullCloudGrade({
+          nodes: coarse,
+          decodeNode: decode,
+          grade: () => null,
+          options: { maxPoints: 2_000_000 },
+        }),
+      ).rejects.toBeInstanceOf(FullCloudGradeRefusedError);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(decode).not.toHaveBeenCalled();
+    expect(sizes.every((n) => n < 3_000_000 * 3)).toBe(true);
+  });
+
   it('grades a normal-sized node fine (the ceiling does not block real work)', async () => {
     const normal: SampleNode[] = [
       { id: '0-0-0-0', depth: 0, pointCount: 3, byteSize: 10 },
