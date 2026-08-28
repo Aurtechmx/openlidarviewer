@@ -20,7 +20,7 @@ and the fonts are under the SIL Open Font License. See
 | three | ^0.184.0 | 0.184.0 | MIT | https://github.com/mrdoob/three.js |
 | @loaders.gl/core | ^4.4.4 | 4.4.4 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/obj | ^4.4.2 | 4.4.3 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/obj | ^4.4.5 | 4.4.5 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/ply | ^4.4.4 | 4.4.4 | MIT | https://github.com/visgl/loaders.gl |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
