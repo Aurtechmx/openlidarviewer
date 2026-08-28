@@ -26,7 +26,9 @@ import {
 } from '../validateCount';
 import {
   MAX_DECODED_ALLOCATION_BYTES,
+  MAX_DECODE_PEAK_BYTES,
   withinDecodedByteBudget,
+  withinDecodePeakBudget,
 } from '../heavy/heavyByteBudget';
 import type { ChunkDecodeMetadata } from './copcChunkDecode';
 
@@ -64,7 +66,7 @@ export const MAX_DECOMPRESSED_NODE_BYTES = MAX_DECODED_ALLOCATION_BYTES;
  */
 export function decompressChunk(
   lazPerf: LazPerfModule,
-  chunk: ArrayBuffer,
+  chunk: ArrayBuffer | Uint8Array,
   meta: ChunkDecodeMetadata,
 ): Uint8Array {
   // Allocation guard — bound the node's declared count by its compressed
@@ -94,8 +96,32 @@ export function decompressChunk(
         `${MAX_DECOMPRESSED_NODE_BYTES.toLocaleString('en-US')}-byte decode budget.`,
     );
   }
+  // Peak-memory cap: the decoded guard above bounds the OUTPUT buffer, but the
+  // node's compressed bytes are live TWICE during decode — the JS `compressed`
+  // buffer plus the copy `HEAPU8.set` stages into laz-perf's WASM heap below — on
+  // top of that output. Bound the joint peak (2 × compressed + decoded) so a node
+  // whose output passes the per-node cap yet whose simultaneous working set blows
+  // the total budget is refused before either malloc.
+  if (
+    !withinDecodePeakBudget(
+      chunk.byteLength,
+      pointCount,
+      meta.pointRecordLength,
+      0,
+      chunk.byteLength,
+      MAX_DECODE_PEAK_BYTES,
+    )
+  ) {
+    throw new LoadError(
+      'malformed-file',
+      `malformed COPC: node of ${pointCount.toLocaleString('en-US')} points would peak over the ` +
+        `${MAX_DECODE_PEAK_BYTES.toLocaleString('en-US')}-byte decode budget ` +
+        `(decoded records + two ${chunk.byteLength.toLocaleString('en-US')}-byte compressed copies, ` +
+        `JS buffer + laz-perf WASM heap).`,
+    );
+  }
 
-  const compressed = new Uint8Array(chunk);
+  const compressed = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
   const recordLength = meta.pointRecordLength;
   const chunkPtr = lazPerf._malloc(compressed.byteLength);
   const pointPtr = lazPerf._malloc(recordLength);
