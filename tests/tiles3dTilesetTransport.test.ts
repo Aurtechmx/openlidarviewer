@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
+import { bodyCancelFetch } from './helpers/bodyCancelFetch';
 import {
   createTilesetTransport,
   TilesetTimeoutError,
@@ -180,5 +181,24 @@ describe('createTilesetTransport — bounds and cancellation', () => {
     const t = createTilesetTransport({ fetchImpl: h.fn, sleep: NOW });
     const buf = await t.fetchTileBytes('https://tiles.example.org/scan/a/0.pnts');
     expect(buf.byteLength).toBe(4);
+  });
+});
+
+
+describe('createTilesetTransport — abandoned response bodies are cancelled', () => {
+  test('cancels a retryable 503 body before the retry proceeds', async () => {
+    const h = bodyCancelFetch([{ status: 503 }, { status: 200, body: '{"asset":{}}' }]);
+    const t = createTilesetTransport({ fetchImpl: h.fn, sleep: NOW });
+    await expect(t.fetchTilesetJson(URL_JSON)).resolves.toBe('{"asset":{}}');
+    expect(h.cancels).toBe(1);
+  });
+
+  test('cancels a permanent 404 body before it throws', async () => {
+    const h = bodyCancelFetch([{ status: 404 }]);
+    const t = createTilesetTransport({ fetchImpl: h.fn, sleep: NOW });
+    await expect(
+      t.fetchTileBytes('https://tiles.example.org/scan/a/0.pnts'),
+    ).rejects.toThrow(/404/);
+    expect(h.cancels).toBe(1);
   });
 });

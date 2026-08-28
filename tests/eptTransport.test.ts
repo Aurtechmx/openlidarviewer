@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
+import { bodyCancelFetch } from './helpers/bodyCancelFetch';
 import { createEptTransport, EptTimeoutError } from '../src/io/ept/eptTransport';
 
 /**
@@ -291,5 +292,24 @@ describe('createEptTransport — bounded bodies (OOM defense)', () => {
     const t = createEptTransport({ fetchImpl: handle.fn, sleep: () => Promise.resolve() });
     const buf = await t.fetchBytes('https://example.com/ept-data/0-0-0-0.bin');
     expect(new TextDecoder().decode(new Uint8Array(buf))).toBe('AAAA');
+  });
+});
+
+
+describe('createEptTransport — abandoned response bodies are cancelled', () => {
+  test('cancels a retryable 503 body before the retry proceeds', async () => {
+    const h = bodyCancelFetch([{ status: 503 }, { status: 200, body: 'ok' }]);
+    const t = createEptTransport({ fetchImpl: h.fn, sleep: () => Promise.resolve() });
+    await expect(t.fetchText('https://example.com/ept.json')).resolves.toBe('ok');
+    expect(h.cancels).toBe(1);
+  });
+
+  test('cancels a permanent 404 body before it throws', async () => {
+    const h = bodyCancelFetch([{ status: 404 }]);
+    const t = createEptTransport({ fetchImpl: h.fn, sleep: () => Promise.resolve() });
+    await expect(
+      t.fetchBytes('https://example.com/ept-data/0-0-0-0.bin'),
+    ).rejects.toThrow(/404/);
+    expect(h.cancels).toBe(1);
   });
 });

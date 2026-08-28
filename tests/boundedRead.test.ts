@@ -16,6 +16,7 @@ import {
   readTextAtMost,
   ownedExactBuffer,
   BoundedReadError,
+  MAX_DECLARED_PREALLOC_BYTES,
 } from '../src/io/range/boundedRead';
 import { RangeReadError } from '../src/io/range/RangeSource';
 
@@ -199,5 +200,52 @@ describe('readTextAtMost', () => {
     const payload = new TextEncoder().encode('{"ept":"json"}');
     const out = await readTextAtMost(streamingResponse([payload]), 1000, 'EPT manifest');
     expect(out).toBe('{"ept":"json"}');
+  });
+});
+
+describe('readAtMostBounded — declared length does not eagerly allocate', () => {
+  it('a large Content-Length with few bytes delivered never allocates the full declared size', async () => {
+    // Declared 200 MiB (under the 256 MiB ceiling) but only 30 bytes arrive: the
+    // pre-fix path did `new Uint8Array(declared)` on the header alone. The
+    // bounded-growth path must never allocate past the small prealloc bound when
+    // the promised bytes never come.
+    const declared = 200 * 1024 * 1024;
+    const cap = 256 * 1024 * 1024;
+    const Real = globalThis.Uint8Array;
+    let overPrealloc = 0;
+    class U8 extends Real {
+      constructor(...args: unknown[]) {
+        if (typeof args[0] === 'number' && args[0] > MAX_DECLARED_PREALLOC_BYTES) {
+          overPrealloc++;
+        }
+        // @ts-expect-error forward whatever the reader passed
+        super(...args);
+      }
+    }
+    (globalThis as { Uint8Array: unknown }).Uint8Array = U8;
+    try {
+      const resp = streamingResponse([bytes(30)], { 'content-length': String(declared) });
+      const out = await readAtMostBounded(resp, cap, 'EPT tile');
+      expect(out.byteLength).toBe(30);
+    } finally {
+      (globalThis as { Uint8Array: unknown }).Uint8Array = Real;
+    }
+    // Nothing larger than the bounded initial prealloc was ever constructed,
+    // even though the header promised 200 MiB.
+    expect(overPrealloc).toBe(0);
+  });
+
+  it('an honest large body still delivers every byte via bounded growth', async () => {
+    // 40 MiB actually delivered in chunks, declared honestly: the growth path
+    // must reach the full size and return all of it.
+    const size = 40 * 1024 * 1024;
+    const chunk = 8 * 1024 * 1024;
+    const parts: Uint8Array[] = [];
+    for (let at = 0; at < size; at += chunk) parts.push(bytes(Math.min(chunk, size - at), 7));
+    const resp = streamingResponse(parts, { 'content-length': String(size) });
+    const out = await readAtMostBounded(resp, 256 * 1024 * 1024, 'EPT tile');
+    expect(out.byteLength).toBe(size);
+    expect(out[0]).toBe(7);
+    expect(out[size - 1]).toBe(7);
   });
 });

@@ -14,6 +14,7 @@ import {
   PNTS_COLOR_MODES,
   type PntsDecodeMetadata,
 } from '../src/io/tiles3d/pntsDecode';
+import { pntsDeviceDecodeLimits } from '../src/io/tiles3d/pnts';
 
 const PNTS_MAGIC = 0x73746e70;
 
@@ -164,6 +165,65 @@ describe('attributes the format does not carry', () => {
     expect([...(withRgb.rgb ?? [])]).toEqual([10, 20, 30]);
     const without = await new PntsChunkDecoder().decode(makePnts([[0, 0, 0]]), meta());
     expect(without.rgb).toBeUndefined();
+  });
+});
+
+/**
+ * A `.pnts` header declaring `pointsLength` points with position, colour, normal
+ * and batch-id channels, and NO binary section. The decoded-byte ceiling is
+ * checked before any accessor reads the (absent) binary, so a refusal that lands
+ * here landed before the first big array was allocated.
+ */
+function makeDeclaredAllChannels(pointsLength: number): ArrayBuffer {
+  const ft = JSON.stringify({
+    POINTS_LENGTH: pointsLength,
+    POSITION: { byteOffset: 0 },
+    RGBA: { byteOffset: 0 },
+    NORMAL: { byteOffset: 0 },
+    BATCH_ID: { byteOffset: 0 },
+  });
+  let json = ft;
+  while (json.length % 8 !== 0) json += ' ';
+  const jsonBytes = new TextEncoder().encode(json);
+  const total = 28 + jsonBytes.length;
+  const buf = new ArrayBuffer(total);
+  const view = new DataView(buf);
+  view.setUint32(0, PNTS_MAGIC, true);
+  view.setUint32(4, 1, true);
+  view.setUint32(8, total, true);
+  view.setUint32(12, jsonBytes.length, true);
+  view.setUint32(16, 0, true);
+  view.setUint32(20, 0, true);
+  view.setUint32(24, 0, true);
+  new Uint8Array(buf, 28, jsonBytes.length).set(jsonBytes);
+  return buf;
+}
+
+describe('device-aware decode limits', () => {
+  // 5,000,000 points at 31 decoded bytes each is ~147.8 MiB: above the 96 MiB
+  // mobile ceiling and below the 192 MiB desktop ceiling.
+  const MID_POINTS = 5_000_000;
+
+  it('refuses the mid-size tile when constructed with the mobile ceiling', async () => {
+    const mobile = new PntsChunkDecoder({ decodeLimits: pntsDeviceDecodeLimits(true) });
+    await expect(
+      mobile.decode(makeDeclaredAllChannels(MID_POINTS), meta()),
+    ).rejects.toThrow(/decoded byte/i);
+  });
+
+  it('admits it past the byte ceiling on desktop — a later section refusal, not a byte one', async () => {
+    const desktop = new PntsChunkDecoder({ decodeLimits: pntsDeviceDecodeLimits(false) });
+    await expect(
+      desktop.decode(makeDeclaredAllChannels(MID_POINTS), meta()),
+    ).rejects.toThrow(/section/i);
+  });
+
+  it('the old device-independent decoder (no limits) did not refuse it on decoded bytes', async () => {
+    // Red-green anchor: this is the pre-fix construction. It reaches the section
+    // refusal, never the decoded-byte one — the gap the mobile ceiling closes.
+    await expect(
+      new PntsChunkDecoder().decode(makeDeclaredAllChannels(MID_POINTS), meta()),
+    ).rejects.toThrow(/section/i);
   });
 });
 

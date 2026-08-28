@@ -37,6 +37,7 @@ import { parseTileset } from '../io/tiles3d/tileset';
 import { createTilesetTransport } from '../io/tiles3d/tilesetTransport';
 import { validateRemoteTilesetUrl } from '../io/tiles3d/tilesetUrl';
 import { PntsChunkDecoder } from '../io/tiles3d/pntsDecode';
+import { pntsDeviceDecodeLimits } from '../io/tiles3d/pnts';
 import { TilesetStreamingSource } from '../render/streaming/TilesetStreamingSource';
 import {
   describeCloudFrame,
@@ -214,7 +215,15 @@ export async function openRemoteTileset(
       // grey patch is owed the explanation rather than left to guess at it. It
       // fires at most once per layer, on the first disagreeing tile, which can be
       // long after this function has returned.
-      new PntsChunkDecoder({ onColourNotice: (message) => deps.showToast(message) }),
+      new PntsChunkDecoder({
+        onColourNotice: (message) => deps.showToast(message),
+        // Device-sized decode ceilings from the same phone signal the streaming
+        // budget uses for concurrency. On mobile a single legal-but-large tile
+        // is refused at decode on its true size rather than allocated at the
+        // desktop default, which the scheduler's `ASSUMED_TILE_POINTS` estimate
+        // cannot catch before the body is fetched.
+        decodeLimits: pntsDeviceDecodeLimits(deps.isPhone()),
+      }),
       deps.getStreamingQuality(),
       deps.isPhone(),
       deps.getStreamingBenchmark(),
