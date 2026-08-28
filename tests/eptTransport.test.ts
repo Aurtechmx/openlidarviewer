@@ -293,3 +293,54 @@ describe('createEptTransport — bounded bodies (OOM defense)', () => {
     expect(new TextDecoder().decode(new Uint8Array(buf))).toBe('AAAA');
   });
 });
+
+/**
+ * A fetch whose non-success responses expose a body with a spied `cancel()`,
+ * so a test can prove the transport tears the abandoned body down before it
+ * retries or throws. A success step returns a real Response the bounded read
+ * can consume.
+ */
+function bodyCancelFetch(
+  steps: Array<{ status: number; body?: string }>,
+): { fn: typeof fetch; cancels: number } {
+  let i = 0;
+  const handle = { cancels: 0, fn: undefined as unknown as typeof fetch };
+  handle.fn = (async (_input: RequestInfo | URL): Promise<Response> => {
+    const step = steps[Math.min(i++, steps.length - 1)]!;
+    if (step.status >= 200 && step.status < 300) {
+      return new Response(step.body ?? 'ok', { status: 200, statusText: 'OK' });
+    }
+    const body = {
+      cancel: (): Promise<void> => {
+        handle.cancels++;
+        return Promise.resolve();
+      },
+    } as unknown as ReadableStream<Uint8Array>;
+    return {
+      ok: false,
+      status: step.status,
+      statusText: 'Err',
+      body,
+      headers: new Headers(),
+    } as unknown as Response;
+  }) as typeof fetch;
+  return handle;
+}
+
+describe('createEptTransport — abandoned response bodies are cancelled', () => {
+  test('cancels a retryable 503 body before the retry proceeds', async () => {
+    const h = bodyCancelFetch([{ status: 503 }, { status: 200, body: 'ok' }]);
+    const t = createEptTransport({ fetchImpl: h.fn, sleep: () => Promise.resolve() });
+    await expect(t.fetchText('https://example.com/ept.json')).resolves.toBe('ok');
+    expect(h.cancels).toBe(1);
+  });
+
+  test('cancels a permanent 404 body before it throws', async () => {
+    const h = bodyCancelFetch([{ status: 404 }]);
+    const t = createEptTransport({ fetchImpl: h.fn, sleep: () => Promise.resolve() });
+    await expect(
+      t.fetchBytes('https://example.com/ept-data/0-0-0-0.bin'),
+    ).rejects.toThrow(/404/);
+    expect(h.cancels).toBe(1);
+  });
+});

@@ -26,6 +26,21 @@
 import { sanitizeUrlForDisplay } from '../range/RangeSource';
 import { ownedExactBuffer, readAtMostBounded, readTextAtMost } from '../range/boundedRead';
 
+/**
+ * Best-effort cancel a response body we are about to abandon (a retryable error
+ * response, or a permanent non-success the caller throws on). Cancelling the
+ * stream releases the connection instead of leaving an error page's body to
+ * trickle in the background. Guarded for runtimes / test stand-ins whose
+ * Response carries no streaming body, and for a `cancel()` that itself rejects.
+ * Mirrors `HttpRangeSource.cancelResponseBody`.
+ */
+function cancelResponseBody(response: Response): void {
+  const body = response.body as ReadableStream<Uint8Array> | null | undefined;
+  if (body && typeof body.cancel === 'function') {
+    void body.cancel().catch(() => undefined);
+  }
+}
+
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 /**
@@ -205,6 +220,11 @@ export function createTilesetTransport(
       }
       if (response) {
         if (response.ok) return response;
+        // Non-success: this response is being abandoned, to retry or to throw.
+        // Cancel its body first so the connection is released rather than left
+        // to trickle an error page in the background. Mirrors
+        // `HttpRangeSource.cancelResponseBody`.
+        cancelResponseBody(response);
         const message =
           `3D Tiles ${label} fetch failed (${response.status} ${response.statusText}) ` +
           `for ${sanitizeUrlForDisplay(url)}`;

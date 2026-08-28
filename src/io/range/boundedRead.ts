@@ -60,6 +60,23 @@ export const DEFAULT_IDLE_TIMEOUT_MS = 20_000;
  */
 export const DEFAULT_TOTAL_TIMEOUT_MS = 300_000;
 
+/**
+ * The largest buffer the known-length fast path will allocate up front, in bytes.
+ *
+ * The declared-length path used to allocate `new Uint8Array(declared)` the
+ * instant a valid `Content-Length` sat at or below the ceiling — so a hostile
+ * server could force an allocation as large as the ceiling (up to 256 MiB for a
+ * tile) with a header alone, before delivering a single meaningful byte. The
+ * eager allocation only pays off when the body actually arrives; a lie earns a
+ * free quarter-gigabyte. This bounds the immediate allocation to a small initial
+ * size and grows toward `declared` in doublings as bytes truly arrive, still
+ * refusing anything past `declared`. An honest small body (declared at or below
+ * this) is still one allocation; a large honest one costs a handful of doublings
+ * against the memory it is actually filling. 16 MiB keeps the common case
+ * single-shot while capping what a header alone can reserve.
+ */
+export const MAX_DECLARED_PREALLOC_BYTES = 16 * 1024 * 1024;
+
 /** Timing and cancellation for one bounded body read. */
 export interface BoundedReadOptions {
   /**
@@ -431,8 +448,24 @@ export async function readAtMostBounded(
   // and `declaredBodyLength` returns null under any non-identity
   // content-encoding, so a compressed length can never drive this branch.
   if (declared !== null) {
-    const out = new Uint8Array(declared);
+    // Allocate only a bounded initial buffer, never the whole declared size up
+    // front: a large `declared` is a claim, not yet bytes. The buffer grows in
+    // doublings toward `declared` as real bytes land, so a server that declares
+    // 256 MiB and then sends a kilobyte reserves a kilobyte's worth, not the
+    // whole claim. `declared` is already known `<= maxBytes`.
+    let out = new Uint8Array(Math.min(declared, MAX_DECLARED_PREALLOC_BYTES));
     let filled = 0;
+    // Grow `out` so it can hold at least `needed` bytes, doubling until it does
+    // and never past `declared` (which is the hard ceiling for this branch).
+    const ensureCapacity = (needed: number): void => {
+      if (needed <= out.length) return;
+      let next = Math.max(out.length, 1);
+      while (next < needed) next *= 2;
+      if (next > declared) next = declared;
+      const bigger = new Uint8Array(next);
+      bigger.set(out.subarray(0, filled));
+      out = bigger;
+    };
     try {
       for (;;) {
         const { done, value } = await readChunkRacing(
@@ -455,6 +488,7 @@ export async function readAtMostBounded(
             `${what} sent more than its declared ${declared} bytes — refusing to read further.`,
           );
         }
+        ensureCapacity(filled + value.byteLength);
         out.set(value, filled);
         filled += value.byteLength;
       }
@@ -470,10 +504,11 @@ export async function readAtMostBounded(
       }
       throw err;
     }
-    // A body shorter than its declared length leaves trailing zeros in `out`.
-    // Trim to what actually arrived so no phantom bytes reach the decoder; the
-    // exact-length common case returns `out` untouched (still one allocation).
-    return filled === declared ? out : out.slice(0, filled);
+    // `out` now spans exactly what arrived when the body matched or grew to its
+    // declared length; a short body leaves it longer than `filled`. Trim so no
+    // trailing zeros reach the decoder. The exact-length common case (declared
+    // at or below the prealloc bound) returns `out` untouched.
+    return filled === out.length ? out : out.slice(0, filled);
   }
   const chunks: Uint8Array[] = [];
   let total = 0;

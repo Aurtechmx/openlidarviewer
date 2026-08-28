@@ -46,6 +46,21 @@ import type { EptTransport } from '../../render/streaming/EptStreamingPointCloud
 import { sanitizeUrlForDisplay } from '../range/RangeSource';
 import { ownedExactBuffer, readAtMostBounded, readTextAtMost } from '../range/boundedRead';
 
+/**
+ * Best-effort cancel a response body we are about to abandon (a retryable error
+ * response, or a permanent non-success the caller throws on). Cancelling the
+ * stream releases the connection instead of leaving an error page's body to
+ * trickle in the background. Guarded for runtimes / test stand-ins whose
+ * Response carries no streaming body, and for a `cancel()` that itself rejects.
+ * Mirrors `HttpRangeSource.cancelResponseBody`.
+ */
+function cancelResponseBody(response: Response): void {
+  const body = response.body as ReadableStream<Uint8Array> | null | undefined;
+  if (body && typeof body.cancel === 'function') {
+    void body.cancel().catch(() => undefined);
+  }
+}
+
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 /**
@@ -202,6 +217,11 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
       if (response) {
         // 2xx — success.
         if (response.ok) return response;
+        // Non-success: we are abandoning this response, whether to retry or to
+        // throw. Cancel its body first so the connection is released instead of
+        // left to trickle an error page's body in the background. Mirrors
+        // `HttpRangeSource.cancelResponseBody`.
+        cancelResponseBody(response);
         // 4xx (except 408/429) — permanent. Don't retry; throw immediately.
         if (!RETRYABLE_STATUSES.has(response.status)) {
           throw new Error(

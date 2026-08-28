@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MAX_PNTS_DECODED_BYTES,
+  MAX_PNTS_DECODED_BYTES_MOBILE,
   MAX_PNTS_TILE_POINTS,
   parsePnts,
+  pntsDeviceDecodeLimits,
 } from '../src/io/tiles3d/pnts';
 
 /**
@@ -156,6 +158,92 @@ describe('PNTS decoded-byte ceiling', () => {
     // it, the same lever `maxPoints` gives for the count ceiling.
     const tile = pntsAllChannels(1_000);
     expect(() => parsePnts(tile, { maxDecodedBytes: 1_000 })).toThrow(/decoded byte/i);
+  });
+});
+
+describe('device-aware PNTS decode ceiling', () => {
+  // 5,000,000 points at 31 decoded bytes each is ~147.8 MiB: above the 96 MiB
+  // mobile ceiling, below the 192 MiB desktop ceiling, and under the 8,000,000
+  // point count ceiling. So it is a single legal tile that mobile must refuse on
+  // its decoded size and desktop must admit — the exact case the scheduler's
+  // ASSUMED_TILE_POINTS estimate cannot catch before the body is fetched.
+  const MID_POINTS = 5_000_000;
+
+  it('sizes the mobile ceiling below desktop and derives a matching point cap', () => {
+    const mobile = pntsDeviceDecodeLimits(true);
+    const desktop = pntsDeviceDecodeLimits(false);
+    expect(mobile.maxDecodedBytes).toBe(MAX_PNTS_DECODED_BYTES_MOBILE);
+    expect(desktop.maxDecodedBytes).toBe(MAX_PNTS_DECODED_BYTES);
+    expect(mobile.maxDecodedBytes).toBeLessThan(desktop.maxDecodedBytes);
+    // The point cap is derived from the byte ceiling and clamped to the desktop
+    // count ceiling, so it never exceeds it.
+    expect(mobile.maxPoints).toBeLessThanOrEqual(MAX_PNTS_TILE_POINTS);
+    expect(desktop.maxPoints).toBeLessThanOrEqual(MAX_PNTS_TILE_POINTS);
+  });
+
+  it('confirms the mid-size tile straddles the two ceilings', () => {
+    expect(MID_POINTS * 31).toBeGreaterThan(MAX_PNTS_DECODED_BYTES_MOBILE);
+    expect(MID_POINTS * 31).toBeLessThan(MAX_PNTS_DECODED_BYTES);
+    expect(MID_POINTS).toBeLessThan(MAX_PNTS_TILE_POINTS);
+  });
+
+  it('refuses the tile on the mobile ceiling before the big allocation', () => {
+    const tile = pntsAllChannels(MID_POINTS);
+    const RealF32 = globalThis.Float32Array;
+    const RealU8 = globalThis.Uint8Array;
+    let bigAlloc = 0;
+    const note = (n: unknown) => {
+      if (typeof n === 'number' && n > 4096) bigAlloc++;
+    };
+    class F32 extends RealF32 {
+      constructor(...args: unknown[]) {
+        note(args[0]);
+        // @ts-expect-error forward whatever the decoder passed
+        super(...args);
+      }
+    }
+    class U8 extends RealU8 {
+      constructor(...args: unknown[]) {
+        note(args[0]);
+        // @ts-expect-error forward whatever the decoder passed
+        super(...args);
+      }
+    }
+    (globalThis as { Float32Array: unknown }).Float32Array = F32;
+    (globalThis as { Uint8Array: unknown }).Uint8Array = U8;
+    try {
+      expect(() =>
+        parsePnts(tile, pntsDeviceDecodeLimits(true)),
+      ).toThrow(/decoded byte/i);
+    } finally {
+      (globalThis as { Float32Array: unknown }).Float32Array = RealF32;
+      (globalThis as { Uint8Array: unknown }).Uint8Array = RealU8;
+    }
+    // The allocation seam is never reached: mobile refuses on the true size.
+    expect(bigAlloc).toBe(0);
+  });
+
+  it('admits the same tile on desktop — the refusal is device-specific', () => {
+    // Desktop limits do NOT throw on the decoded-byte ceiling. The tile has no
+    // binary section, so it reaches the position accessor and then fails on the
+    // section bounds, which is a DIFFERENT refusal — proof the byte ceiling
+    // passed.
+    const tile = pntsAllChannels(MID_POINTS);
+    expect(() => parsePnts(tile, pntsDeviceDecodeLimits(false))).not.toThrow(
+      /decoded byte/i,
+    );
+    expect(() => parsePnts(tile, pntsDeviceDecodeLimits(false))).toThrow(
+      /section/i,
+    );
+  });
+
+  it('the mobile refusal did not hold under the old device-independent default', () => {
+    // Red-green anchor: the pre-fix decoder called parsePnts with no limits, so
+    // this tile sailed through the 192 MiB default. Reproduce that here and show
+    // it does NOT refuse on decoded bytes — which is exactly the gap the mobile
+    // ceiling closes.
+    const tile = pntsAllChannels(MID_POINTS);
+    expect(() => parsePnts(tile)).not.toThrow(/decoded byte/i);
   });
 });
 
