@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
+// @ts-expect-error — plain .mjs script, no types
 import { checkLicense } from '../scripts/lint-license.mjs';
 
 // A minimal repository fixture that satisfies the license boundary. Each test
@@ -39,35 +40,35 @@ describe('lint:license boundary', () => {
 
   it('rejects package.json declaring MIT', () => {
     writeFileSync(resolve(root, 'package.json'), JSON.stringify({ name: 'x', version: '0.6.7', license: 'MIT' }, null, 2));
-    expect(checkLicense(root).some((p) => /package\.json license/.test(p))).toBe(true);
+    expect(checkLicense(root).some((p: string) => /package\.json license/.test(p))).toBe(true);
   });
 
   it('rejects a README that claims MIT (badge)', () => {
     const readme = readFileSync(resolve(root, 'README.md'), 'utf8').replace('license-AGPL--3.0--only-blue', 'license-MIT-lightgrey');
     writeFileSync(resolve(root, 'README.md'), readme);
-    expect(checkLicense(root).some((p) => /README license badge/.test(p))).toBe(true);
+    expect(checkLicense(root).some((p: string) => /README license badge/.test(p))).toBe(true);
   });
 
   it('rejects a LICENSE from the wrong family (MIT text)', () => {
     writeFileSync(resolve(root, 'LICENSE'), 'MIT License\n\nPermission is hereby granted, free of charge, to any person...\n');
     const problems = checkLicense(root);
-    expect(problems.some((p) => /canonical GNU AGPL/.test(p) || /MIT permission text/.test(p))).toBe(true);
+    expect(problems.some((p: string) => /canonical GNU AGPL/.test(p) || /MIT permission text/.test(p))).toBe(true);
   });
 
   it('rejects release notes that omit the license change', () => {
     writeFileSync(resolve(root, 'docs/releases/RELEASE_NOTES_v0.6.7.md'), '# v0.6.7\nSome features.\n');
-    expect(checkLicense(root).some((p) => /does not describe the license change/.test(p))).toBe(true);
+    expect(checkLicense(root).some((p: string) => /does not describe the license change/.test(p))).toBe(true);
   });
 
   it('rejects a console banner that still claims MIT', () => {
     writeFileSync(resolve(root, 'src/main.ts'), 'console.log(`OLV v${x} — open source under the MIT license.`);\n');
-    expect(checkLicense(root).some((p) => /console banner still claims the MIT/.test(p))).toBe(true);
+    expect(checkLicense(root).some((p: string) => /console banner still claims the MIT/.test(p))).toBe(true);
   });
 
   it('rejects CITATION.cff declaring MIT', () => {
     writeFileSync(resolve(root, 'CITATION.cff'), 'cff-version: 1.2.0\nversion: "0.6.7"\nlicense: MIT\n');
     const problems = checkLicense(root);
-    expect(problems.some((p) => /CITATION\.cff/.test(p))).toBe(true);
+    expect(problems.some((p: string) => /CITATION\.cff/.test(p))).toBe(true);
   });
 
   it('ACCEPTS an accurate historical MIT statement', () => {

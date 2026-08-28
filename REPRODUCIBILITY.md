@@ -1,6 +1,6 @@
 # Reproducibility
 
-This page is the single entry point for reproducing OpenLiDARViewer's build, tests, and reported analysis figures. It stitches together the pieces that also live in `README.md`, `REVIEWER_QUICKSTART.md`, and `docs/benchmarks.md`. The exact figures reported for the current release, each tied to the command that regenerates it, are in [REPRODUCIBILITY_v0.6.6.md](docs/releases/REPRODUCIBILITY_v0.6.6.md).
+This page is the single entry point for reproducing OpenLiDARViewer's build, tests, and reported analysis figures. It stitches together the pieces that also live in `README.md`, `REVIEWER_QUICKSTART.md`, and `docs/benchmarks.md`. The exact figures reported for the current release, each tied to the command that regenerates it, are in [REPRODUCIBILITY_v0.6.7.md](docs/releases/REPRODUCIBILITY_v0.6.7.md).
 
 ## Environment
 

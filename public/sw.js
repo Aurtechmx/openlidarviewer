@@ -30,7 +30,7 @@ const CACHE_PREFIX = 'olv-shell-';
 // release verifier can machine-check the version by grep. Must stay prefixed
 // with CACHE_PREFIX's value; `lint:release-sync` enforces the version part on
 // release.
-const VERSION = 'olv-shell-0.6.6';
+const VERSION = 'olv-shell-0.6.7';
 const SHELL = [
   './',
   './index.html',

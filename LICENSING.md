@@ -61,4 +61,4 @@ license where Aur Technologies holds the necessary rights. See
 
 Contributions are accepted under a Contributor License Agreement so the project
 can keep both the open AGPL edition and a commercial edition consistent. See
-[CONTRIBUTING.md](CONTRIBUTING.md) and [docs/CLA.md](docs/CLA.md).
+[.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) and [docs/CLA.md](docs/CLA.md).
