@@ -21,6 +21,47 @@ import type { StreamingNode } from './StreamingNode';
 /** A hard cap on hierarchy pages, so a malformed file cannot loop forever. */
 const MAX_HIERARCHY_PAGES = 4096;
 
+/**
+ * The named reason pushed into {@link StreamingOctree.errors} when the resolved
+ * hierarchy's point total does not equal the LAS header's declared count. A
+ * consumer greps for this to tell a count gap apart from a fetch/parse error.
+ */
+export const POINT_COUNT_MISMATCH = 'POINT_COUNT_MISMATCH';
+
+/**
+ * The outcome of reconciling the LAS header's declared point total against the
+ * sum of the resolved hierarchy's per-node counts.
+ *
+ * - `EXACT`   — the hierarchy is fully resolved AND its counts sum to the header.
+ * - `MISMATCH` — fully resolved, but the sums disagree (a page/subtree is missing
+ *   or the file's own totals are inconsistent).
+ * - `UNKNOWN` — the hierarchy is not yet fully resolved, so no verdict is possible.
+ */
+export type PointTotalStatus = 'EXACT' | 'MISMATCH' | 'UNKNOWN';
+
+/** A declared-vs-resolved point-total comparison. */
+export interface PointTotalReconciliation {
+  readonly status: PointTotalStatus;
+  /** The LAS header's declared point count. */
+  readonly declared: number;
+  /** The sum of the resolved hierarchy's per-node point counts. */
+  readonly resolved: number;
+}
+
+/**
+ * Compare a declared total (LAS header) against a resolved hierarchy total.
+ * Until the hierarchy is fully resolved the resolved sum is still growing, so
+ * the only honest verdict is `UNKNOWN` — never `EXACT`.
+ */
+export function reconcilePointTotals(
+  declared: number,
+  resolved: number,
+  hierarchyResolved: boolean,
+): PointTotalReconciliation {
+  if (!hierarchyResolved) return { status: 'UNKNOWN', declared, resolved };
+  return { status: declared === resolved ? 'EXACT' : 'MISMATCH', declared, resolved };
+}
+
 /** The octree of a COPC file — its node store and hierarchy ingestion. */
 export class StreamingOctree {
   readonly store = new StreamingNodeStore();
@@ -56,7 +97,32 @@ export class StreamingOctree {
    * gate on THIS, not on `fullyLoaded`.
    */
   get isComplete(): boolean {
-    return this._fullyLoaded && this._errors.length === 0;
+    return (
+      this._fullyLoaded &&
+      this._errors.length === 0 &&
+      this.pointTotals.status === 'EXACT'
+    );
+  }
+
+  /**
+   * The declared (LAS header) vs resolved (Σ hierarchy node counts) point-total
+   * reconciliation. Reads `UNKNOWN` until the hierarchy is fully resolved, then
+   * `EXACT` or `MISMATCH`. A consumer that needs scientific completeness (the
+   * full-cloud grade's "exact" label) requires `EXACT`.
+   */
+  get pointTotals(): PointTotalReconciliation {
+    return reconcilePointTotals(
+      this._source.metadata.header.pointCount,
+      this._resolvedPointCount(),
+      this._fullyLoaded,
+    );
+  }
+
+  /** Sum of every resolved node's declared point count. */
+  private _resolvedPointCount(): number {
+    let total = 0;
+    for (const node of this.store.all()) total += node.record.pointCount;
+    return total;
   }
 
   /** Every known node. */
@@ -129,6 +195,19 @@ export class StreamingOctree {
 
     this._resolveChildLinks();
     this._fullyLoaded = true;
+
+    // Reconcile the COPC partition invariant: Σ(node point counts) must equal
+    // the LAS header's declared total. A hierarchy can walk to completion with
+    // no fetch/parse error yet still sum short (a dropped subtree, an
+    // inconsistent file), which no other check above would catch. Record the
+    // gap as a named reason so `isComplete` goes false and a consumer can see
+    // the declared/resolved totals rather than silently overclaiming "exact".
+    const totals = this.pointTotals;
+    if (totals.status === 'MISMATCH') {
+      this._errors.push(
+        `${POINT_COUNT_MISMATCH}: LAS header declares ${totals.declared} points but the resolved hierarchy sums to ${totals.resolved}`,
+      );
+    }
   }
 
   /** Add a page's data nodes to the store and record its parse errors. */

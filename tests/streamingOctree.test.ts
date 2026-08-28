@@ -278,6 +278,75 @@ test('StreamingOctree: hitting the hierarchy-page ceiling loads short → NOT co
   expect(cloud.octree.isComplete).toBe(false);
 });
 
+// --- StreamingOctree point-count reconciliation ------------------------------
+//
+// A COPC octree partitions the file: every point sits in exactly one node, so
+// Σ(node point counts) === LAS-header point count is an exact invariant. A
+// hierarchy can walk to completion with no fetch/parse error yet still resolve
+// to fewer points than the header declares — a gap no other completeness check
+// above would catch. These pin that the reconciliation catches it.
+
+test('StreamingOctree: hierarchy summing SHORT of the header → MISMATCH, not complete', async () => {
+  // Nodes sum to 1400, but the LAS header declares 2000 — a whole subtree's
+  // worth of points the hierarchy never accounts for, with no parse error.
+  const fixture = buildSyntheticCopc({
+    center: [0, 0, 0],
+    halfsize: 128,
+    nodes: [
+      { key: [0, 0, 0, 0], pointCount: 1000 },
+      { key: [1, 0, 0, 0], pointCount: 400 },
+    ],
+    headerPointCount: 2000,
+  });
+  const cloud = await StreamingPointCloud.open(
+    new ArrayBufferRangeSource(fixture.buffer),
+    'short.copc.laz',
+  );
+  // Structurally the walk looks healthy: it finished and dropped nothing.
+  expect(cloud.octree.fullyLoaded).toBe(true);
+  expect(cloud.octree.nodes()).toHaveLength(2);
+
+  const totals = cloud.octree.pointTotals;
+  expect(totals.status).toBe('MISMATCH');
+  expect(totals.declared).toBe(2000);
+  expect(totals.resolved).toBe(1400);
+  expect(cloud.octree.errors.some((e) => e.startsWith('POINT_COUNT_MISMATCH'))).toBe(true);
+  expect(cloud.octree.isComplete).toBe(false);
+});
+
+test('StreamingOctree: hierarchy summing to the header → EXACT and complete', async () => {
+  const fixture = buildSyntheticCopc({
+    center: [0, 0, 0],
+    halfsize: 128,
+    nodes: [
+      { key: [0, 0, 0, 0], pointCount: 1000 },
+      { key: [1, 0, 0, 0], pointCount: 400 },
+    ],
+    // headerPointCount omitted → defaults to the true node sum (1400).
+  });
+  const cloud = await StreamingPointCloud.open(
+    new ArrayBufferRangeSource(fixture.buffer),
+    'exact.copc.laz',
+  );
+  const totals = cloud.octree.pointTotals;
+  expect(totals.status).toBe('EXACT');
+  expect(totals.declared).toBe(1400);
+  expect(totals.resolved).toBe(1400);
+  expect(cloud.octree.errors).toEqual([]);
+  expect(cloud.octree.isComplete).toBe(true);
+});
+
+test('StreamingOctree: an unresolved hierarchy reads UNKNOWN, never EXACT', async () => {
+  const fixture = twoPageFixture();
+  const source = await CopcSource.open(new ArrayBufferRangeSource(fixture.buffer));
+  const octree = new StreamingOctree(source);
+  // Before loadFullHierarchy: only the root page is ingested, the walk has not
+  // finished, so no EXACT/MISMATCH verdict is possible.
+  expect(octree.fullyLoaded).toBe(false);
+  expect(octree.pointTotals.status).toBe('UNKNOWN');
+  expect(octree.isComplete).toBe(false);
+});
+
 // --- StreamingOctree cancel vs. timeout on the hierarchy walk ----------------
 //
 // The mid-walk `signal.aborted` guard must keep the three outcomes distinct: a

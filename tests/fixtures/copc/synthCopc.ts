@@ -60,6 +60,13 @@ export interface SynthCopcOptions {
   headerMin?: [number, number, number];
   headerMax?: [number, number, number];
   spacing?: number;
+  /**
+   * Override the LAS header's declared point count. By default the header count
+   * equals the sum of the node point counts (the COPC partition invariant); set
+   * this to model a file whose header disagrees with the hierarchy sum, so a
+   * declared-vs-resolved reconciliation can be exercised.
+   */
+  headerPointCount?: number;
   /** Flat node list — wrapped in a single root page. */
   nodes?: SynthNode[];
   /** Explicit multi-page layout; `pages[0]` is the root. Overrides `nodes`. */
@@ -143,6 +150,10 @@ export function buildSyntheticCopc(options: SynthCopcOptions = {}): SynthCopcRes
   }
   const chunksTotal = chunkCursor - pointDataOffset;
 
+  // The declared header count defaults to the true node sum (the partition
+  // invariant); an override lets a test model a header that disagrees.
+  const headerPointCount = options.headerPointCount ?? pointCount;
+
   const evlrHeaderStart = pointDataOffset + chunksTotal;
   const pagesStart = evlrHeaderStart + EVLR_HEADER_SIZE;
   const rootHierOffset = pagesStart + resolved[0].blobOffset;
@@ -170,7 +181,7 @@ export function buildSyntheticCopc(options: SynthCopcOptions = {}): SynthCopcRes
   view.setUint32(100, 1, true); // one VLR — the COPC info VLR
   view.setUint8(104, pdrf);
   view.setUint16(105, recordLength, true);
-  view.setUint32(107, pointCount > 0xffffffff ? 0 : pointCount, true);
+  view.setUint32(107, headerPointCount > 0xffffffff ? 0 : headerPointCount, true);
   view.setFloat64(131, scale[0], true);
   view.setFloat64(139, scale[1], true);
   view.setFloat64(147, scale[2], true);
@@ -190,7 +201,7 @@ export function buildSyntheticCopc(options: SynthCopcOptions = {}): SynthCopcRes
   view.setFloat64(219, hMin[2], true);
   view.setBigUint64(235, BigInt(evlrHeaderStart), true);
   view.setUint32(243, 1, true); // one EVLR — the COPC hierarchy
-  view.setBigUint64(247, BigInt(pointCount), true);
+  view.setBigUint64(247, BigInt(headerPointCount), true);
 
   // --- COPC info VLR (header at 375, payload at 429) -------------------------
   writeAscii(377, options.corrupt === 'no-copc-vlr' ? 'LASF_Spec' : 'copc', 16);
