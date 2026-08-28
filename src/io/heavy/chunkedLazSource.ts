@@ -36,8 +36,10 @@ import { getLazPerf } from '../lazDecode';
 import { readLazChunkTable, type LazChunkRange } from './lazChunkTable';
 import {
   MAX_DECODED_ALLOCATION_BYTES,
+  MAX_DECODE_PEAK_BYTES,
   decodedBytesFor,
   withinDecodedByteBudget,
+  withinDecodePeakBudget,
 } from './heavyByteBudget';
 import { decodeLazChunkLocal, type LazChunkJob } from './decodeLazChunked';
 import type { PointSource, PositionBatch, SourceHeader } from './oocIndexer';
@@ -83,29 +85,45 @@ export const MAX_LAZ_WINDOW_SPAN_BYTES = 128 * 1024 * 1024;
  * Plan the next window starting at `start`: grow it while the contiguous span
  * from the first chunk's offset stays under {@link MAX_LAZ_WINDOW_SPAN_BYTES},
  * the aggregate DECODED bytes of the window stay under
- * {@link MAX_DECODED_ALLOCATION_BYTES}, and it is under `window` chunks — but
- * always take at least one chunk. The decoded-byte cap uses the real record
- * length (`recordLength`, 0 to skip it): the compressed-span cap bounds the read,
- * but a window of highly-compressed chunks can decode to far more than it reads,
- * and every decoded chunk in the window is staged before the window advances.
- * Pure, so the shrink behaviour is unit-testable without decoding. `chunks` must
- * be non-empty at `start`.
+ * {@link MAX_DECODED_ALLOCATION_BYTES}, the summed simultaneous peak
+ * (span + decoded + packed) stays under {@link MAX_DECODE_PEAK_BYTES}, and it is
+ * under `window` chunks — but always take at least one chunk. The decoded-byte
+ * cap uses the real record length (`recordLength`, 0 to skip it): the
+ * compressed-span cap bounds the read, but a window of highly-compressed chunks
+ * can decode to far more than it reads, and every decoded chunk in the window is
+ * staged before the window advances. `packedRecordBytes` (0 to skip its term) adds
+ * the packed tile records to the joint peak, since those coexist with the span and
+ * the raw decode. Pure, so the shrink behaviour is unit-testable without decoding.
+ * `chunks` must be non-empty at `start`.
  */
 export function planChunkWindow(
   chunks: readonly LazChunkRange[],
   start: number,
   window: number,
   recordLength: number = 0,
+  packedRecordBytes: number = 0,
 ): { end: number; spanStart: number; spanLength: number } {
   const spanStart = chunks[start].byteOffset;
   const cap = recordLength > 0 ? MAX_DECODED_ALLOCATION_BYTES : Number.POSITIVE_INFINITY;
+  // The joint-peak cap only bites when the decoded size is knowable.
+  const peakActive = recordLength > 0;
   let end = start + 1;
-  let decoded = decodedBytesFor(chunks[start].pointCount, recordLength > 0 ? recordLength : 1);
+  let points = chunks[start].pointCount;
+  let decoded = decodedBytesFor(points, recordLength > 0 ? recordLength : 1);
   while (end < chunks.length && end - start < window) {
     const next = chunks[end];
-    if (next.byteOffset + next.byteLength - spanStart > MAX_LAZ_WINDOW_SPAN_BYTES) break;
+    const nextSpan = next.byteOffset + next.byteLength - spanStart;
+    if (nextSpan > MAX_LAZ_WINDOW_SPAN_BYTES) break;
+    const nextPoints = points + next.pointCount;
     const nextDecoded = decoded + decodedBytesFor(next.pointCount, recordLength > 0 ? recordLength : 1);
     if (nextDecoded > cap) break;
+    if (
+      peakActive &&
+      !withinDecodePeakBudget(nextSpan, nextPoints, recordLength, packedRecordBytes)
+    ) {
+      break;
+    }
+    points = nextPoints;
     decoded = nextDecoded;
     end++;
   }
@@ -213,7 +231,29 @@ export async function openChunkedLazSource(
           start,
           window,
           header.pointDataRecordLength,
+          recordBytes,
         );
+        // A window is always at least one chunk. When it shrank to a single chunk
+        // whose own summed peak (its span + decoded + packed) is still over the
+        // total budget, no smaller window exists: refuse via the unsupported path
+        // rather than stage an over-budget decode or fall to a whole-file read.
+        if (end - start === 1) {
+          const only = chunks[start];
+          if (
+            !withinDecodePeakBudget(
+              only.byteLength,
+              only.pointCount,
+              header.pointDataRecordLength,
+              recordBytes,
+            )
+          ) {
+            throw new ChunkedLazUnsupportedError(
+              `chunked LAZ chunk of ${only.pointCount} points would peak over the ` +
+                `${MAX_DECODE_PEAK_BYTES}-byte simultaneous-decode budget (compressed span + ` +
+                'decoded records + packed records); convert it to COPC or EPT',
+            );
+          }
+        }
         const windowChunks = chunks.slice(start, end);
         const span = await range.readRange(spanStart, spanLength, signal);
         for (const c of windowChunks) {

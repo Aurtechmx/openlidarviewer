@@ -70,6 +70,21 @@ export const MAX_CHUNK_TABLE_ENTRIES = Math.floor(
 );
 
 /**
+ * The ceiling on the TOTAL simultaneous working set of a single LAZ window decode,
+ * in bytes. The per-chunk compressed cap, the per-window decoded cap
+ * ({@link MAX_DECODED_ALLOCATION_BYTES}), and the window-span cap
+ * ({@link chunkedLazSource.MAX_LAZ_WINDOW_SPAN_BYTES}) each bound ONE allocation,
+ * but a window decode holds several at once — the compressed span, the raw decoded
+ * records, and the packed tile records — so the summed peak can reach several
+ * hundred megabytes while every single piece stays under its own cap. 256 MiB is
+ * the device-reasonable ceiling on that joint working set; it sits below the naive
+ * 384 MiB sum of the three separate caps, so it actually constrains a window the
+ * individual caps would each pass, and a window is shrunk (never below one chunk)
+ * to keep its span + decoded + packed within it.
+ */
+export const MAX_DECODE_PEAK_BYTES = 256 * 1024 * 1024;
+
+/**
  * The ceiling on ONE leaf tile the streaming reader loads whole, in bytes. The
  * out-of-core indexer buckets points into leaves; a degenerate cloud (millions
  * of identical XYZ, which share a leaf key and an LOD hash) can pile far past a
@@ -113,6 +128,37 @@ export function withinDecodedByteBudget(
   ceiling: number = MAX_DECODED_ALLOCATION_BYTES,
 ): boolean {
   return decodedBytesFor(pointCount, recordLength) <= ceiling;
+}
+
+/**
+ * The summed peak working set of decoding a span of `spanBytes` compressed bytes
+ * into `pointCount` records of `sourceRecordLength` bytes and packing them into
+ * `packedRecordBytes`-byte tile records — the three allocations that coexist
+ * during a LAZ window decode. A non-usable span or decoded size makes the total
+ * {@link Number.POSITIVE_INFINITY}, so a nonsense size reads as over-budget;
+ * `packedRecordBytes <= 0` drops the packed term (the caller is not staging one)
+ * rather than poisoning the sum.
+ */
+export function decodePeakBytesFor(
+  spanBytes: number,
+  pointCount: number,
+  sourceRecordLength: number,
+  packedRecordBytes: number,
+): number {
+  const span = Number.isFinite(spanBytes) && spanBytes >= 0 ? spanBytes : Number.POSITIVE_INFINITY;
+  const packed = packedRecordBytes > 0 ? decodedBytesFor(pointCount, packedRecordBytes) : 0;
+  return span + decodedBytesFor(pointCount, sourceRecordLength) + packed;
+}
+
+/** Whether a window/chunk's summed decode peak stays within `ceiling` (default the total cap). */
+export function withinDecodePeakBudget(
+  spanBytes: number,
+  pointCount: number,
+  sourceRecordLength: number,
+  packedRecordBytes: number,
+  ceiling: number = MAX_DECODE_PEAK_BYTES,
+): boolean {
+  return decodePeakBytesFor(spanBytes, pointCount, sourceRecordLength, packedRecordBytes) <= ceiling;
 }
 
 /**

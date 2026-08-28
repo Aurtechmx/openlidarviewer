@@ -110,7 +110,11 @@ export interface OocIndex {
   readonly leaves: readonly OocLeaf[];
   /** Bytes per point in every leaf tile. */
   readonly recordBytes: number;
-  /** High-water mark of buffered bytes during the bucketing pass. */
+  /**
+   * High-water mark of ALLOCATED staging capacity during the bucketing pass —
+   * the summed backing-array capacity of the live leaf buffers, held within the
+   * memory budget, not the smaller count of logical bytes written into them.
+   */
   readonly peakBufferedBytes: number;
 }
 
@@ -170,19 +174,35 @@ async function scanBounds(
   return { min, max, count };
 }
 
+/** A fresh leaf buffer's backing-array capacity, in bytes. */
+const LEAF_BUFFER_INITIAL_CAP = 4096;
+
+/**
+ * The backing-array capacity `current` grows to in order to hold `needed` bytes,
+ * doubling from `current` — the exact rule {@link LeafBuffer.append} follows.
+ * Pure, so the residency accounting can project a grow BEFORE it allocates.
+ */
+function grownCapacity(current: number, needed: number): number {
+  if (needed <= current) return current;
+  let cap = current * 2;
+  while (cap < needed) cap *= 2;
+  return cap;
+}
+
 /**
  * A growable per-leaf staging buffer of raw record bytes. Points for one leaf
- * accumulate here and are flushed to the store as a contiguous run.
+ * accumulate here and are flushed to the store as a contiguous run. The buffer
+ * exposes its backing-array {@link capacity} so the bucketing pass can budget on
+ * ALLOCATED memory, not just the logical bytes written: a doubling buffer holds a
+ * backing array up to twice its content, and that array is the real heap cost.
  */
 class LeafBuffer {
-  private data = new Uint8Array(4096);
+  private data = new Uint8Array(LEAF_BUFFER_INITIAL_CAP);
   length = 0; // bytes written
 
   append(src: Uint8Array): void {
     if (this.length + src.length > this.data.length) {
-      let cap = this.data.length * 2;
-      while (cap < this.length + src.length) cap *= 2;
-      const grown = new Uint8Array(cap);
+      const grown = new Uint8Array(grownCapacity(this.data.length, this.length + src.length));
       grown.set(this.data.subarray(0, this.length));
       this.data = grown;
     }
@@ -190,13 +210,19 @@ class LeafBuffer {
     this.length += src.length;
   }
 
+  /** The backing array's byte capacity — the memory this buffer actually holds. */
+  capacity(): number {
+    return this.data.length;
+  }
+
+  /** The capacity this buffer would grow to if `addBytes` more were appended. */
+  projectedCapacity(addBytes: number): number {
+    return grownCapacity(this.data.length, this.length + addBytes);
+  }
+
   /** The written bytes as a view, for a zero-copy append. Valid until the next append. */
   bytes(): Uint8Array {
     return this.data.subarray(0, this.length);
-  }
-
-  reset(): void {
-    this.length = 0;
   }
 }
 
@@ -335,16 +361,23 @@ export async function indexOutOfCore(
 
   const buffers = new Map<string, LeafBuffer>();
   const counts = new Map<string, number>();
-  let buffered = 0; // bytes currently staged in memory
+  // Sum of the live buffers' backing-array CAPACITIES — the memory actually held,
+  // not the logical bytes written. This is what the budget bounds.
+  let allocated = 0;
   let peakBufferedBytes = 0;
 
   async function flush(): Promise<void> {
     for (const [key, buf] of buffers) {
       if (buf.length === 0) continue;
       await store.append(key, buf.bytes());
-      buf.reset();
     }
-    buffered = 0;
+    // Actually release the backing arrays: clearing the map drops every LeafBuffer
+    // (and its grown Uint8Array) so a later point for a key re-creates a fresh
+    // buffer. `counts` is kept — the pyramid/degenerate hierarchy needs it. Not
+    // dropping these was the leak: reset() only zeroed length and the map retained
+    // a grown array per key, uncounted against the budget.
+    buffers.clear();
+    allocated = 0;
   }
 
   // Per-level keep-fraction thresholds for the pyramid. A point settles at the
@@ -426,9 +459,24 @@ export async function indexOutOfCore(
         const level = lodLevelFor(lodPriority(scratchU32), grid.depth, thresholds);
         const key = level === grid.depth ? leafKey : leafKey.slice(0, level);
         let buf = buffers.get(key);
+        // Project the allocated-capacity cost of staging this record BEFORE
+        // allocating it: a new buffer costs its initial capacity, an existing one
+        // costs whatever a doubling grow would add. If that would push the live
+        // allocated capacity over the budget, flush first — clearing the map
+        // releases every backing array, so the staged capacity never exceeds the
+        // budget rather than merely the logical bytes doing so.
+        const projected =
+          buf === undefined
+            ? grownCapacity(LEAF_BUFFER_INITIAL_CAP, rb)
+            : buf.projectedCapacity(rb) - buf.capacity();
+        if (allocated > 0 && allocated + projected > budget) {
+          await flush();
+          buf = undefined;
+        }
         if (buf === undefined) {
           buf = new LeafBuffer();
           buffers.set(key, buf);
+          allocated += buf.capacity();
         }
         let record: Uint8Array;
         if (batch.records) {
@@ -439,7 +487,10 @@ export async function indexOutOfCore(
           scratch[2] = z;
           record = scratchBytes;
         }
+        const capBefore = buf.capacity();
         buf.append(record);
+        allocated += buf.capacity() - capBefore;
+        if (allocated > peakBufferedBytes) peakBufferedBytes = allocated;
         const keyCount = (counts.get(key) ?? 0) + 1;
         counts.set(key, keyCount);
         // Per-tile byte ceiling. A degenerate cloud (millions of coincident XYZ)
@@ -454,11 +505,6 @@ export async function indexOutOfCore(
               'coincident points to subdivide. Convert it to COPC or EPT.',
           );
         }
-        buffered += rb;
-        if (buffered > peakBufferedBytes) peakBufferedBytes = buffered;
-        // Bound residency to the budget: spill everything once it is reached, so
-        // the high-water mark is the budget plus at most the record that tipped it.
-        if (buffered >= budget) await flush();
       }
     }
     await flush();
