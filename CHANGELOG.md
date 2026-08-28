@@ -2,6 +2,29 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.7] - 2026-08-28
+
+### Licensing
+
+- OpenLiDARViewer is licensed under AGPL-3.0-only from this release onward. Releases through v0.6.6 were published under MIT and stay available under MIT; nothing already distributed changes terms. The move does not alter the license of any bundled third-party dependency or of any test or validation dataset, each of which keeps the terms it already carried. LICENSING.md, COMMERCIAL-LICENSING.md and docs/CLA.md record the current terms, the separate commercial option, and the contributor agreement.
+
+### Added
+
+- Heavy local files stream out of core. A very large uncompressed LAS and a chunked LAZ are indexed into temporary browser storage in the Origin Private File System and streamed from there, or refused with guidance when they cannot be, instead of being read whole into memory. A stratified preview sample renders at once and is marked incomplete until the full index swaps in behind it.
+- 3D Tiles implicit tiling opens and streams. Quadtree and octree subtrees are read now, where an earlier release opened only an explicit tile hierarchy.
+
+### Changed
+
+- A memory-safety hardening wave, worked from an adversarial audit of the read paths. One shared decoded-byte budget now caps the LAZ chunk table, the LAZ chunks and windows, the LAS record batches, the COPC nodes and the out-of-core tiles together, so a malformed multi-gigabyte input is refused before it can allocate past that budget. The out-of-core store in the Origin Private File System is leak-free: every open takes a unique id, the store is promoted only inside the failure guard, each cancel or attach path either commits the store or deletes it, a short write is handled rather than left behind, and a startup janitor sweeps any store a previous session abandoned. First-node streaming admission reads the device it runs on, an over-ceiling non-streaming format fails closed, size caps were added to the batch converter and the metadata readers, and a truncated tile or source is refused rather than presented as a smaller complete scan.
+
+### Fixed
+
+- The profile PDF max-grade carries the sign the on-screen panel and the callout already show, so the exported sheet no longer contradicts itself.
+- The Inspector elevation rows read the source vertical unit instead of assuming metres.
+- Panel-rail observers that leaked are disposed.
+- A degenerate profile no longer reports full coverage over zero returns.
+- Closing the profile workbench restores the Analyse panel, so its contour controls no longer disappear with it.
+
 ## [0.6.6] - 2026-08-22
 
 ### Added

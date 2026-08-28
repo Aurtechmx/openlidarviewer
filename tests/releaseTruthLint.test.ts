@@ -137,9 +137,12 @@ describe('lint:release-truth', () => {
     });
 
     it('fails when the changelog claims the algorithms are inherited unchanged', () => {
+      // Inject the blanket claim into the CURRENT release section (the first
+      // "### Changed", which is the top-most/current version) so rule 6b, which
+      // scopes to the current version, sees it regardless of which version is cut.
       const text = realRead('CHANGELOG.md')!.replace(
-        '- The terrain and measurement algorithms changed in this cycle.',
-        '- The terrain and measurement algorithms are inherited from v0.6.5 unchanged.',
+        '### Changed\n',
+        '### Changed\n\n- The terrain and measurement algorithms are inherited from v0.6.5 unchanged.\n',
       );
       const problems = problemsFor(withOverride('CHANGELOG.md', text));
       expect(problems.some((p) => p.includes('inherited from v0.6.5'))).toBe(true);

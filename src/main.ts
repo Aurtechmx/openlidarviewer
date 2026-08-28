@@ -309,7 +309,7 @@ import {
 // the live site. The deployed bundle is compact-transformed; the readable source — and
 // the full documentation — live on GitHub.
 console.log(
-  `%cOpenLiDARViewer%c v${__APP_VERSION__} — open source under the MIT license.\n` +
+  `%cOpenLiDARViewer%c v${__APP_VERSION__} — open source under the AGPL-3.0-only license.\n` +
     `View the source and docs on GitHub: https://github.com/aurtechmx/openlidarviewer`,
   'font-weight:600;color:#22dcff',
   'color:#9aa3ad',

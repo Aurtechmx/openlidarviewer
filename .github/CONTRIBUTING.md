@@ -144,5 +144,13 @@ code actually supports it. Anything still in progress should not be listed
 as a feature. Measurement is for visual inspection, so please do not
 describe it as survey-grade.
 
-Licensed under MIT. By contributing, you agree your contributions are licensed
-the same way.
+## Licensing of contributions
+
+OpenLiDARViewer v0.6.7 and later is distributed under AGPL-3.0-only. Releases
+through v0.6.6 were distributed under MIT and keep their original terms.
+
+Contributions are accepted under a Contributor License Agreement. You keep the
+copyright in your contribution and grant Aur Technologies a license to
+distribute it under AGPL-3.0-only and under separate commercial terms, so the
+open edition and a commercial edition stay consistent. See
+[docs/CLA.md](../docs/CLA.md) and [LICENSING.md](../LICENSING.md).

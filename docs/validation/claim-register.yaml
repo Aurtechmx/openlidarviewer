@@ -136,7 +136,7 @@ schemaVersion: 1
 # pending, max difference under 8e-6 m. It rests on the two already-validated
 # grids and the same below-half-a-cell radius, so it adds the differencing
 # arithmetic and not ground classification or real canopy.
-softwareVersion: 0.6.6
+softwareVersion: 0.6.7
 generated: 2026-07-26
 validationOwner: A. Urias / Aurtech
 

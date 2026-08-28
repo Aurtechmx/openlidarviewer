@@ -2,6 +2,6 @@
   "name": "texture-compressor",
   "version": "1.0.2",
   "description": "Local empty stub. @loaders.gl/textures' encode path shells out to `npx texture-compressor`; OLV only decodes glTF and never invokes it. The real package pulls image-size@0.7.5 (CVE-2025-71329/71330, no upstream fix). Stubbing removes that vulnerable transitive.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "private": true
 }
