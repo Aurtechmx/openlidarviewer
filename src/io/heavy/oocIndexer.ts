@@ -19,6 +19,20 @@
  * an empty index rather than a fault.
  */
 import { octreeGridFor, type OctreeGrid } from './octreeGrid';
+import { MAX_TILE_BYTES, maxPointsForRecordLength } from './heavyByteBudget';
+
+/**
+ * A cloud one of whose logical nodes cannot be brought under the per-tile byte
+ * budget by spatial subdivision — millions of coincident XYZ share a leaf key and
+ * an LOD hash, so they pile into one tile no depth can split. Refused at index
+ * time so no oversized tile is ever produced (and later read whole into memory).
+ */
+export class DegenerateCloudError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DegenerateCloudError';
+  }
+}
 
 /**
  * One batch from a re-iterable source: interleaved xyz positions used to KEY
@@ -106,6 +120,13 @@ export interface IndexOptions {
   /** Bucketing-pass memory ceiling before a spill. Default 64 MB. */
   readonly memoryBudgetBytes?: number;
   readonly maxDepth?: number;
+  /**
+   * Byte ceiling on a single leaf tile. A logical node that cannot be brought
+   * under it by subdivision (coincident points that share a leaf) fails the build
+   * with {@link DegenerateCloudError} rather than producing an oversized tile the
+   * streaming reader would later load whole. Default {@link MAX_TILE_BYTES}.
+   */
+  readonly maxTileBytes?: number;
   readonly signal?: AbortSignal;
   /**
    * Force the two-pass path even when the source header would allow one pass.
@@ -287,6 +308,7 @@ export async function indexOutOfCore(
   const signal = options.signal;
   const pointsPerLeaf = Math.max(1, options.pointsPerLeaf ?? DEFAULT_POINTS_PER_LEAF);
   const budget = Math.max(POSITION_RECORD_BYTES, options.memoryBudgetBytes ?? DEFAULT_MEMORY_BUDGET);
+  const maxTileBytes = Math.max(1, options.maxTileBytes ?? MAX_TILE_BYTES);
 
   // The fast path spills before it can prove the header, so it must be able to
   // undo that if the header proves false: it runs only on a clearable store.
@@ -340,6 +362,7 @@ export async function indexOutOfCore(
   // allocating. `scratch` is packed with x,y,z before reading `scratchU32`.
   const scratchU32 = new Uint32Array(scratch.buffer);
   let recordBytes = -1; // set from the first batch; every batch must agree
+  let maxTilePoints = Infinity; // derived from recordBytes and maxTileBytes once known
 
   // The root cube the fast path holds every point to.
   const loX = grid.root.min[0];
@@ -356,8 +379,12 @@ export async function indexOutOfCore(
       const p = batch.positions;
       const rb = batch.records ? batch.recordBytes ?? 0 : POSITION_RECORD_BYTES;
       if (batch.records && rb <= 0) throw new Error('oocIndexer: a records batch must set a positive recordBytes');
-      if (recordBytes === -1) recordBytes = rb;
-      else if (rb !== recordBytes) throw new Error('oocIndexer: recordBytes changed between batches');
+      if (recordBytes === -1) {
+        recordBytes = rb;
+        maxTilePoints = maxPointsForRecordLength(rb, maxTileBytes);
+      } else if (rb !== recordBytes) {
+        throw new Error('oocIndexer: recordBytes changed between batches');
+      }
 
       for (let i = 0; i < batch.count; i++) {
         const x = p[i * 3];
@@ -413,7 +440,20 @@ export async function indexOutOfCore(
           record = scratchBytes;
         }
         buf.append(record);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
+        const keyCount = (counts.get(key) ?? 0) + 1;
+        counts.set(key, keyCount);
+        // Per-tile byte ceiling. A degenerate cloud (millions of coincident XYZ)
+        // funnels every point into one leaf key and one LOD-hash bucket, so no
+        // grid depth can subdivide it: the pile grows without bound and the reader
+        // would later load the whole tile into memory. Fail closed the moment a
+        // node crosses the budget, so no oversized tile is produced or spilled.
+        if (keyCount > maxTilePoints) {
+          throw new DegenerateCloudError(
+            `oocIndexer: node ${key === '' ? '(root)' : key} exceeds ${maxTilePoints} points ` +
+              `(${maxTileBytes}-byte tile budget at ${rb} bytes/record); the cloud has too many ` +
+              'coincident points to subdivide. Convert it to COPC or EPT.',
+          );
+        }
         buffered += rb;
         if (buffered > peakBufferedBytes) peakBufferedBytes = buffered;
         // Bound residency to the budget: spill everything once it is reached, so

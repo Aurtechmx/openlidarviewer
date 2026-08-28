@@ -24,6 +24,10 @@ import {
   validateDeclaredPointCount,
   compressedBytesPerPointFloor,
 } from '../validateCount';
+import {
+  MAX_DECODED_ALLOCATION_BYTES,
+  withinDecodedByteBudget,
+} from '../heavy/heavyByteBudget';
 import type { ChunkDecodeMetadata } from './copcChunkDecode';
 
 /** The instantiated laz-perf WASM module. */
@@ -39,6 +43,16 @@ export type LazPerfModule = Awaited<ReturnType<typeof createLazPerf>>;
  * arrays in `decodeRecords`) into the gigabytes.
  */
 export const MAX_NODE_POINTS = 50_000_000;
+
+/**
+ * Hard ceiling on a node's DECOMPRESSED size, `pointCount * recordLength`, in
+ * bytes. The point cap above bounds the count but not the allocation: a node with
+ * a low point count and a huge record length (LAS Extra Bytes reaches 65535 bytes
+ * per record) still sizes `new Uint8Array(pointCount * recordLength)` into the
+ * gigabytes. COPC is remote and untrusted, so the byte cost is bounded here,
+ * before the output buffer is allocated, by the shared decode budget.
+ */
+export const MAX_DECOMPRESSED_NODE_BYTES = MAX_DECODED_ALLOCATION_BYTES;
 
 /**
  * Decompress one COPC node chunk into raw concatenated LAS records using
@@ -67,6 +81,17 @@ export function decompressChunk(
       'malformed-file',
       `malformed COPC: node claims ${pointCount.toLocaleString('en-US')} points ` +
         `(limit ${MAX_NODE_POINTS.toLocaleString('en-US')}).`,
+    );
+  }
+  // Decoded-byte cap: refuse before sizing `pointCount * recordLength` output.
+  // A node can pass the point cap yet still stage gigabytes when its record is
+  // huge (Extra Bytes), so bound the actual decompressed size, not just the count.
+  if (!withinDecodedByteBudget(pointCount, meta.pointRecordLength, MAX_DECOMPRESSED_NODE_BYTES)) {
+    throw new LoadError(
+      'malformed-file',
+      `malformed COPC: node of ${pointCount.toLocaleString('en-US')} points × ` +
+        `${meta.pointRecordLength} bytes exceeds the ` +
+        `${MAX_DECOMPRESSED_NODE_BYTES.toLocaleString('en-US')}-byte decode budget.`,
     );
   }
 

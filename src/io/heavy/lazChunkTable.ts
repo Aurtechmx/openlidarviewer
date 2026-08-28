@@ -13,9 +13,15 @@
  *
  * Fail-closed contract: a file whose table is absent (pointwise compressor,
  * `-1` offset sentinel), unreadable, or inconsistent with the header reports
- * `supported: false` with a reason — the caller falls back to the legacy
- * whole-file path, and the fast path never guesses at a suspect index. The
- * invariants enforced before any chunk is trusted:
+ * `supported: false` with a reason. A `supported: false` result is NOT a licence
+ * to read the file whole: the caller may fall back to the legacy whole-file path
+ * ONLY when an independent load plan proves the whole-file path fits in memory.
+ * A refusal driven by the byte-budget caps (a chunk over the decoded-byte budget,
+ * a chunk table over the entry ceiling) means the file is too large for a bounded
+ * decode, so a whole-file read of the same file would be larger still and must
+ * not be attempted; those files are refused with convert-to-COPC/EPT guidance.
+ * The fast path never guesses at a suspect index. The invariants enforced before
+ * any chunk is trusted:
  *
  *   • chunk offsets strictly increase and stay inside the file;
  *   • the last chunk ends exactly where the table begins;
@@ -27,6 +33,11 @@
 import type { RangeSource } from '../range/RangeSource';
 import { parseLasHeader, type LasHeader } from '../lasHeader';
 import { ArithmeticDecoder, IntegerDecompressor } from './arithmeticCoder';
+import {
+  MAX_CHUNK_TABLE_ENTRIES,
+  MAX_DECODED_ALLOCATION_BYTES,
+  withinDecodedByteBudget,
+} from './heavyByteBudget';
 
 /** One independently decodable compressed chunk. */
 export interface LazChunkRange {
@@ -75,8 +86,15 @@ const LASZIP_RECORD_ID = 22204;
 
 /** Head read: the full VLR region, capped so a hostile header stays bounded. */
 const MAX_HEAD_BYTES = 4 * 1024 * 1024;
-/** Absurdity guard on the declared chunk count before any allocation. */
-const MAX_CHUNKS = 16_777_216;
+/**
+ * Absurdity guard on the declared chunk count, checked BEFORE the two
+ * `Float64Array(numChunks)` delta streams and the per-chunk range objects are
+ * allocated. {@link MAX_CHUNK_TABLE_ENTRIES} derives it from a byte budget on
+ * that staging, so the ceiling states the memory it protects; the old flat
+ * 16,777,216 let the delta arrays alone reach ~256 MiB before a single chunk was
+ * validated.
+ */
+const MAX_CHUNKS = MAX_CHUNK_TABLE_ENTRIES;
 
 /**
  * Bounded-decode caps on a SINGLE chunk. A LAZ chunk table can be valid yet
@@ -292,6 +310,16 @@ export async function readLazChunkTable(
       return unsupported(
         `chunk ${i} decodes to ${pointCount} points, too large for bounded browser decoding; ` +
           'convert it to COPC or EPT',
+      );
+    }
+    // Decoded-byte cap: the point cap alone does not bound the staging, because
+    // the byte cost is `pointCount * pointDataRecordLength` and LAS Extra Bytes
+    // lets one record reach 65535 bytes. A modest-looking count over a huge
+    // record still stages gigabytes, so refuse on the actual decoded size.
+    if (!withinDecodedByteBudget(pointCount, header.pointDataRecordLength)) {
+      return unsupported(
+        `chunk ${i} decodes to ${pointCount} points of ${header.pointDataRecordLength} bytes, ` +
+          `over the ${MAX_DECODED_ALLOCATION_BYTES}-byte decode budget; convert it to COPC or EPT`,
       );
     }
     if (end > tableOffset) {

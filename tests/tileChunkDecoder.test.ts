@@ -106,7 +106,7 @@ describe('TileChunkDecoder', () => {
     expect(dc.rgbEightBit).toBeUndefined();
   });
 
-  it('honours an aborted signal and clamps a short tile', async () => {
+  it('honours an aborted signal and refuses a truncated tile', async () => {
     const n = 10;
     const schema: TileSchema = { hasGps: true, hasRgb: false };
     const { bytes, recordBytes } = packTile(rawCloud(n, schema), n, schema);
@@ -116,9 +116,12 @@ describe('TileChunkDecoder', () => {
     ctrl.abort();
     await expect(decoder.decode(bytes.buffer as ArrayBuffer, meta(n, recordBytes), ctrl.signal)).rejects.toThrow();
 
-    // A tile with only half its records present decodes just those, never past end.
+    // A tile with only half its records present is a corrupt store, not a smaller
+    // valid one: the hierarchy declares n points, so a tile short of n × recordBytes
+    // is refused as a fault rather than decoded as a sparse tile.
     const half = bytes.subarray(0, 5 * recordBytes);
-    const dc = await decoder.decode(half.slice().buffer as ArrayBuffer, meta(n, recordBytes));
-    expect(dc.pointCount).toBe(5);
+    await expect(
+      decoder.decode(half.slice().buffer as ArrayBuffer, meta(n, recordBytes)),
+    ).rejects.toThrow(/truncated or corrupt/);
   });
 });

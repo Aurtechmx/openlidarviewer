@@ -104,7 +104,10 @@ export async function buildTileStoreFromLas(
     forceSlowPath: options.forceSlowPath,
     signal: options.signal,
   });
-  const { manifestJson, hierarchy } = buildTileStore(index, las.schema, las.origin);
+  const { manifestJson, hierarchy } = buildTileStore(index, las.schema, las.origin, {
+    declaredPointCount: las.declaredPointCount,
+    complete: las.complete,
+  });
 
   if (options.sink) {
     await options.sink.write(TILE_MANIFEST_NAME, manifestJson);

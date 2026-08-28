@@ -107,21 +107,53 @@ export interface DecodedTile {
   readonly rgb: Uint8Array | null;
 }
 
+/** A tile whose byte length does not match the point count the hierarchy declares. */
+export class TileTruncationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TileTruncationError';
+  }
+}
+
 /**
  * Decode a tile's records straight into typed arrays. Fields are read inline
  * from the byte view — no {@link TilePoint} per point — so a full leaf decodes
- * without a million short-lived objects. `maxPoints` caps the count for a
- * truncated tile; otherwise every whole record present is decoded.
+ * without a million short-lived objects.
+ *
+ * When `expectedPointCount` is given (the exact count the store hierarchy records
+ * for this tile), the tile's byte length MUST equal `expectedPointCount *
+ * recordBytes`. A truncated or over-long tile is a corrupt store, not a smaller
+ * valid one, so it throws {@link TileTruncationError} rather than silently
+ * decoding whatever whole records happen to be present — which would present a
+ * corrupt tile as a sparse one. With no `expectedPointCount` (the loose reader
+ * path) every whole record present is decoded.
  */
 export function decodeTile(
   bytes: Uint8Array,
   schema: TileSchema,
   recordBytes: number,
-  maxPoints: number = Number.POSITIVE_INFINITY,
+  expectedPointCount?: number,
 ): DecodedTile {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const available = recordBytes > 0 ? Math.floor(bytes.byteLength / recordBytes) : 0;
-  const n = Math.max(0, Math.min(available, Math.floor(maxPoints)));
+  let n: number;
+  if (expectedPointCount === undefined) {
+    n = Math.max(0, available);
+  } else {
+    if (!Number.isSafeInteger(expectedPointCount) || expectedPointCount < 0) {
+      throw new TileTruncationError(
+        `tileRecord: expected point count ${expectedPointCount} is not a valid count`,
+      );
+    }
+    const need = expectedPointCount * recordBytes;
+    if (bytes.byteLength !== need) {
+      throw new TileTruncationError(
+        `tileRecord: tile is ${bytes.byteLength} bytes but the hierarchy declares ` +
+          `${expectedPointCount} points × ${recordBytes} bytes = ${need}; the store is truncated or corrupt`,
+      );
+    }
+    n = expectedPointCount;
+  }
   const positions = new Float32Array(n * 3);
   const intensity = new Uint16Array(n);
   const classification = new Uint8Array(n);
