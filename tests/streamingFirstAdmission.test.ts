@@ -173,7 +173,7 @@ test('a node just under the ceiling is still admitted through the bypass', async
   // pinned from the test side so a future change to either the byte budget or
   // the per-point figure has to move this number deliberately.
   const ceiling = Math.floor((512 * 1024 * 1024) / DECODED_BYTES_PER_POINT);
-  expect(ceiling).toBe(21_474_836);
+  expect(ceiling).toBe(17_895_697);
   // Well past both the point budget and its 1.5x pressure cap, and past the
   // largest budget this viewer configures anywhere (desktop `high`, 8 M).
   expect(ceiling).toBeGreaterThan(streamingBudgets('high', false).pointBudget * 1.5);

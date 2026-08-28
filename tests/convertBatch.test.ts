@@ -4,7 +4,13 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildZip } from '../src/convert/zipStore';
-import { runBatch, dedupeName, summariseBatch, type DecodeFn } from '../src/convert/convertRunner';
+import {
+  runBatch,
+  dedupeName,
+  summariseBatch,
+  guardedBatchInput,
+  type DecodeFn,
+} from '../src/convert/convertRunner';
 import { PointCloud } from '../src/model/PointCloud';
 
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
@@ -158,6 +164,52 @@ describe('runBatch', () => {
     );
     expect(results[0].report.ok).toBe(false);
     expect(results[0].report.log[0].message).toMatch(/read error/);
+    expect(results[1].report.ok).toBe(true);
+  });
+});
+
+describe('guardedBatchInput — per-file memory preflight', () => {
+  const CEILING = 100;
+  const decodeOk: DecodeFn = async (_buf, name) => tinyCloud(name);
+
+  function fakeFile(name: string, size: number, onRead: () => void) {
+    return {
+      name,
+      size,
+      arrayBuffer: async (): Promise<ArrayBuffer> => {
+        onRead();
+        return new ArrayBuffer(size);
+      },
+    };
+  }
+
+  it('refuses an over-ceiling file BEFORE arrayBuffer() is called', async () => {
+    let read = false;
+    const input = guardedBatchInput(fakeFile('huge.ply', CEILING + 1, () => { read = true; }), CEILING);
+    expect(input.sizeBytes).toBe(CEILING + 1);
+    await expect(input.bytes()).rejects.toThrow(/larger than/);
+    expect(read).toBe(false); // the bytes were never materialised
+  });
+
+  it('reads a file that fits under the ceiling', async () => {
+    let read = false;
+    const input = guardedBatchInput(fakeFile('ok.las', CEILING, () => { read = true; }), CEILING);
+    const buf = await input.bytes();
+    expect(buf.byteLength).toBe(CEILING);
+    expect(read).toBe(true);
+  });
+
+  it('through runBatch, an over-ceiling file is a per-file error and the batch continues', async () => {
+    const results = await runBatch(
+      [
+        guardedBatchInput(fakeFile('huge.ply', CEILING + 1, () => {}), CEILING),
+        guardedBatchInput(fakeFile('ok.las', 8, () => {}), CEILING),
+      ],
+      { format: 'las' },
+      decodeOk,
+    );
+    expect(results[0].report.ok).toBe(false);
+    expect(results[0].report.log[0].message).toMatch(/larger than/);
     expect(results[1].report.ok).toBe(true);
   });
 });

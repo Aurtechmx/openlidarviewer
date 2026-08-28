@@ -29,7 +29,7 @@ import {
   nodeScore,
   depthCapForVelocity,
 } from './streamingScore';
-import { selectWithinBudget, DECODED_BYTES_PER_POINT } from './streamingBudget';
+import { selectWithinBudget, firstAdmissionMaxPoints } from './streamingBudget';
 import type { StreamingBudgets, ScoredCandidate } from './streamingBudget';
 import { CompressedChunkCache } from './StreamingCache';
 import {
@@ -247,15 +247,16 @@ const RETRY_BACKOFF_MAX_MS = 30_000;
  * downstream ceiling is the decompressor's 50 M `MAX_NODE_POINTS`: between
  * those two numbers sits a node that decodes and cannot be held.
  *
- * Deliberately absolute rather than a multiple of the point budget. A
- * budget-relative ceiling would refuse on a mobile `low` preset (600 k budget)
- * a node that a desktop renders, which turns a memory guard into a
- * device-dependent blank screen.
+ * A device CLASS ceiling, not a budget-relative one: it keys off desktop vs.
+ * mobile vs. low-memory (see {@link firstAdmissionMaxPoints}), not off the
+ * point budget. A budget-relative ceiling would refuse on a mobile `low` preset
+ * (600 k budget) a node a desktop renders, turning a memory guard into a
+ * device-dependent blank screen; a device-class ceiling instead lowers the
+ * absolute byte line on the devices that cannot survive a half-gigabyte decode.
+ * The scheduler default is the desktop line; the host passes the device-aware
+ * value through {@link SchedulerOptions.firstAdmissionMaxPoints}.
  */
-const FIRST_ADMISSION_MAX_DECODED_BYTES = 512 * 1024 * 1024;
-const FIRST_ADMISSION_MAX_POINTS = Math.floor(
-  FIRST_ADMISSION_MAX_DECODED_BYTES / DECODED_BYTES_PER_POINT,
-);
+const DEFAULT_FIRST_ADMISSION_MAX_POINTS = firstAdmissionMaxPoints(false);
 
 /** Per-scheduler tunables — defaulted, injected for unit tests. */
 export interface SchedulerOptions {
@@ -297,6 +298,13 @@ export interface SchedulerOptions {
   evictionHysteresis?: Partial<Omit<EvictionHysteresis, 'triggerRatio'>>;
   /** Monotonic clock, injected for deterministic tests. */
   now?: () => number;
+  /**
+   * Point ceiling for the empty-viewer first-admission bypass. Absent, the
+   * scheduler uses the desktop default; the host passes the device-aware value
+   * from {@link firstAdmissionMaxPoints} so a phone or low-memory machine gets
+   * a smaller ceiling than a desktop.
+   */
+  firstAdmissionMaxPoints?: number;
 }
 
 /**
@@ -530,7 +538,7 @@ export class StreamingScheduler {
   private readonly _retryReadyAt = new Map<string, number>();
   /**
    * Nodes refused by the first-admission ceiling (see
-   * {@link FIRST_ADMISSION_MAX_POINTS}). Held separately from
+   * the device-aware first-admission ceiling). Held separately from
    * `_decodeFailures`, which counts transient decode errors that a retry can
    * clear: this refusal reads a declared count off an immutable hierarchy
    * record, so it is settled for the session and re-deciding it is waste.
@@ -628,6 +636,8 @@ export class StreamingScheduler {
    * closer or coarser-and-cheaper node.
    */
   private readonly _stickyMargin: number;
+  /** Point ceiling for the empty-viewer first-admission bypass (device-aware). */
+  private readonly _firstAdmissionMaxPoints: number;
   /** Last full rescore's scored list (same lifecycle as `_lastWanted`). */
   private _lastScored: { node: StreamingNode; candidate: ScoredCandidate }[] | null = null;
   /** Tick index of the last full rescore — drives the periodic forced rescore. */
@@ -652,6 +662,8 @@ export class StreamingScheduler {
     this._effectiveMaxConcurrent = budgets.maxConcurrentDecodes;
     this._cache = new CompressedChunkCache(budgets.chunkCacheBytes);
     this._stickyMargin = Math.max(0, Math.min(1, options.stickyMargin ?? 0));
+    this._firstAdmissionMaxPoints =
+      options.firstAdmissionMaxPoints ?? DEFAULT_FIRST_ADMISSION_MAX_POINTS;
     this._evictDeferMs = options.evictDeferMs ?? DEFAULT_EVICT_DEFER_MS;
     this._memoryPressureRatio =
       options.memoryPressureRatio ?? DEFAULT_MEMORY_PRESSURE_RATIO;
@@ -1509,11 +1521,11 @@ export class StreamingScheduler {
       }
       if (
         store.residentPointCount === 0 &&
-        node.record.pointCount > FIRST_ADMISSION_MAX_POINTS
+        node.record.pointCount > this._firstAdmissionMaxPoints
       ) {
         // Bounded bypass. The branch above waves this node through because
         // nothing is resident; that is not a reason to admit any size. A node
-        // past `FIRST_ADMISSION_MAX_POINTS` is refused by name here, before the
+        // past `this._firstAdmissionMaxPoints` is refused by name here, before the
         // range read and before the decoder sizes anything from it.
         //
         // `continue`, not `break`: skipping one node leaves the rest of this
@@ -1532,7 +1544,7 @@ export class StreamingScheduler {
         store.setError(
           node,
           `streaming: first node ${node.record.id} declares ${node.record.pointCount} points, ` +
-            `past the ${FIRST_ADMISSION_MAX_POINTS} point ceiling for a decode admitted ` +
+            `past the ${this._firstAdmissionMaxPoints} point ceiling for a decode admitted ` +
             `before anything is resident.`,
         );
         continue;

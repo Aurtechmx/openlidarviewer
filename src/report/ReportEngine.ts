@@ -133,6 +133,13 @@ export async function generateReport(
   }
 
   return await new Promise<ReportResult>((resolve, reject) => {
+    // Re-check right before wiring the listener: a signal that aborted after
+    // the shortcut above but before we got here would never fire 'abort' on a
+    // once-listener, so renderReportPdf would start for a cancelled report.
+    if (options.signal?.aborted) {
+      reject(new DOMException('Report generation aborted before it started.', 'AbortError'));
+      return;
+    }
     // The timeout id is captured so the abort path can clear it; without
     // the clear, the timeout's `reject` would still fire after the abort
     // and re-reject a settled promise (harmless but noisy in tests).

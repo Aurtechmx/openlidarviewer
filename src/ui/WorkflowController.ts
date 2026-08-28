@@ -16,6 +16,27 @@ import {
   type WorkflowRecorderConfig,
 } from '../render/workflow/workflowConfig';
 
+/**
+ * Whole-file ceiling for a workflow read into a single string. A workflow is a
+ * small JSON document; anything in the tens of megabytes is not one, and
+ * reading it in full would exhaust memory before the parser could reject it.
+ * Mirrors the `.olvsession` read cap.
+ */
+export const MAX_WORKFLOW_TEXT_BYTES = 32 * 1024 * 1024;
+
+/**
+ * Throw when a workflow file is too large to read into a single string. Pure and
+ * DOM-free so the size gate can be tested without constructing the controller.
+ */
+export function assertWorkflowFileSize(sizeBytes: number): void {
+  if (sizeBytes > MAX_WORKFLOW_TEXT_BYTES) {
+    throw new Error(
+      `This workflow file is too large (${Math.round(sizeBytes / (1024 * 1024))} MB; ` +
+        `limit ${Math.round(MAX_WORKFLOW_TEXT_BYTES / (1024 * 1024))} MB).`,
+    );
+  }
+}
+
 /** Minimal File System Access API surface used by the native save path. */
 interface FileSystemWritableLike {
   write(data: string): Promise<void>;
@@ -344,6 +365,11 @@ export class WorkflowController {
    * parsed Workflow. Rejects with a clear error on malformed input.
    */
   async loadFromFile(file: File): Promise<Workflow> {
+    // A workflow is a small JSON document. Reject an over-large file before it
+    // is read into a single string, so a mistaken or hostile multi-hundred-MB
+    // file can't exhaust memory in `file.text()`/`JSON.parse`. Mirrors the
+    // `.olvsession` read cap; the parser bounds the rest once the JSON is in hand.
+    assertWorkflowFileSize(file.size);
     const text = await file.text();
     const result = parseWorkflow(text);
     if (!result.ok) throw new Error(result.error);
