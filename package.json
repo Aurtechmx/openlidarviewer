@@ -173,16 +173,16 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
-    "@loaders.gl/las": "^4.4.4",
+    "@loaders.gl/las": "^4.4.5",
     "@playwright/test": "^1.62.1",
-    "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/proj4": "^2.19.0",
     "@types/three": "^0.184.1",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "rollup-plugin-visualizer": "^7.1.1",
     "typescript": "~7.0.2",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vite-plugin-javascript-obfuscator": "^3.1.0",
     "vitepress": "1.6.4",
     "vitest": "^4.1.7"
