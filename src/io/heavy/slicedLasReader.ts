@@ -26,7 +26,11 @@ import {
   finalizeRawColors,
   type RawPoints,
 } from '../lasDecodeShared';
-import { batchPointsForRecordLength } from './heavyByteBudget';
+import {
+  MAX_BATCH_SOURCE_BYTES,
+  batchPointsForRecordLength,
+  maxPointsForRecordLength,
+} from './heavyByteBudget';
 
 /** One decoded batch of consecutive records. */
 export interface SlicedLasBatch {
@@ -121,12 +125,24 @@ export async function openSlicedLas(
           `range [0, ${readablePointCount})`,
       );
     }
-    const byteOffset = header.offsetToPointData + firstPointIndex * recordLength;
-    const bytes = await range.readRange(byteOffset, count * recordLength, signal);
-    const view = new DataView(bytes);
+    // Enforce the source-byte cap INSIDE readBatch, not only in `batches()`, so a
+    // caller passing a large `count` directly (the preview sampler reads
+    // strata-sized counts) can never issue a single range read above the ceiling:
+    // with Extra Bytes the record length reaches 65535, and `count * recordLength`
+    // would otherwise read a gigabyte in one shot. The batch is assembled from
+    // bounded sub-ranges of at most MAX_BATCH_SOURCE_BYTES; the returned `count`
+    // points are unchanged, and nothing beyond the returned batch is materialised.
     const raw = allocRawPoints(count, hasGps, hasColor);
-    for (let i = 0; i < count; i++) {
-      decodeRecord(view, i * recordLength, i, ctx, raw);
+    const maxPerRead = maxPointsForRecordLength(recordLength, MAX_BATCH_SOURCE_BYTES);
+    for (let done = 0; done < count; done += maxPerRead) {
+      signal?.throwIfAborted();
+      const n = Math.min(maxPerRead, count - done);
+      const byteOffset = header.offsetToPointData + (firstPointIndex + done) * recordLength;
+      const bytes = await range.readRange(byteOffset, n * recordLength, signal);
+      const view = new DataView(bytes);
+      for (let i = 0; i < n; i++) {
+        decodeRecord(view, i * recordLength, done + i, ctx, raw);
+      }
     }
     finalizeRawColors(raw);
     return { firstPointIndex, count, raw };
