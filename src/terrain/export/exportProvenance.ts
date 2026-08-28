@@ -36,7 +36,8 @@ import {
 } from '../contour/terrainAssessment';
 import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
-import { exportGate } from '../../validation/evidenceRegistry';
+import { exportGate, EVIDENCE_REGISTRY } from '../../validation/evidenceRegistry';
+import { evidenceRank, INDEPENDENCE_FLOOR } from '../../validation/evidenceLevel';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { methodRef, methodTag } from '../../science/methodRegistry';
 import {
@@ -78,9 +79,11 @@ export { NOT_SURVEY_GRADE_NOTE };
  * on the artifact so a downstream reader sees the gate verdict, per the evidence
  * model. When a product reaches its required level the note flips automatically.
  */
-export const EVIDENCE_GATE_NOTE: string = exportGate('DTM').exploratoryOnly
-  ? 'Evidence: exploratory export. Terrain products are validated only against synthetic known-truth (pre-E4) — not cross-validated against an independent tool, and not field-validated. Do not present as a validated deliverable.'
-  : 'Evidence: meets the required validation level for this product.';
+export const EVIDENCE_GATE_NOTE: string = !exportGate('DTM').exploratoryOnly
+  ? 'Evidence: meets the required validation level for this product.'
+  : evidenceRank(EVIDENCE_REGISTRY['DTM'].current) >= evidenceRank(INDEPENDENCE_FLOOR)
+    ? 'Evidence: exploratory export. The terrain products are cross-implementation validated against independent tools, but the DTM has not reached its required external field-validation level and is not field-validated against ground control. Do not present as a validated deliverable.'
+    : 'Evidence: exploratory export. Terrain products are validated only against synthetic known-truth (pre-E4) — not cross-validated against an independent tool, and not field-validated. Do not present as a validated deliverable.';
 
 /**
  * Derived terrain-complexity record (v0.5.4), present only when the run

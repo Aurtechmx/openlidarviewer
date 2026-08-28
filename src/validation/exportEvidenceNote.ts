@@ -17,7 +17,8 @@
  * Pure data. No DOM, no I/O.
  */
 
-import { exportGate } from './evidenceRegistry';
+import { exportGate, EVIDENCE_REGISTRY } from './evidenceRegistry';
+import { evidenceRank, INDEPENDENCE_FLOOR } from './evidenceLevel';
 
 /**
  * The evidence note for a product identified by its claim id. Derived from the
@@ -27,11 +28,26 @@ import { exportGate } from './evidenceRegistry';
 export function evidenceNote(claimId: string): string {
   const d = exportGate(claimId);
   if (d.exploratoryOnly) {
-    return (
-      'Evidence: exploratory export — this product is below its required evidence ' +
-      'level (not cross-validated against an independent implementation, and not ' +
-      'field-validated). Do not present it as a validated deliverable.'
-    );
+    // A product can be exploratory for two different reasons, and conflating
+    // them understates the evidence: it may sit below the independence floor
+    // (genuinely not cross-validated), or it may be cross-implementation
+    // validated (E4) yet still below a higher required level (E5 field). Name
+    // the real reason from the product's current level.
+    const current = EVIDENCE_REGISTRY[claimId]?.current;
+    const crossValidated =
+      current != null && evidenceRank(current) >= evidenceRank(INDEPENDENCE_FLOOR);
+    return crossValidated
+      ? (
+        'Evidence: exploratory export — this product is cross-implementation ' +
+        'validated against an independent implementation, but below its required ' +
+        'level (not field-validated against ground control). Do not present it ' +
+        'as a validated deliverable.'
+      )
+      : (
+        'Evidence: exploratory export — this product is below its required evidence ' +
+        'level (not cross-validated against an independent implementation, and not ' +
+        'field-validated). Do not present it as a validated deliverable.'
+      );
   }
   if (d.allowed) {
     return 'Evidence: validated export — this product meets its required evidence level.';
