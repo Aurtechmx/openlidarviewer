@@ -1,10 +1,11 @@
 {
-  "total": 148,
+  "total": 149,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/floorPlanPositions.ts": 4,
     "src/app/terrainAnalysisRunner.ts": 3,
     "src/io/copc/copcChunkDecode.ts": 1,
+    "src/io/heavy/chunkedLazSource.ts": 1,
     "src/io/heavy/decodeLazChunked.ts": 2,
     "src/io/heavy/oocIndexer.ts": 2,
     "src/io/heavy/slicedLasSource.ts": 1,
