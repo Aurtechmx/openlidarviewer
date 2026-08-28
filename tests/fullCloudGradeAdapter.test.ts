@@ -20,7 +20,11 @@ import {
   type FullCloudGradeOutcome,
   type GradeNodeSource,
 } from '../src/render/streaming/fullCloudGradeAdapter';
-import { runFullCloudGrade } from '../src/render/streaming/fullCloudGradeRunner';
+import {
+  runFullCloudGrade,
+  FullCloudGradeShortDecodeError,
+} from '../src/render/streaming/fullCloudGradeRunner';
+import { MAX_SAMPLE_POINTS } from '../src/render/streaming/fullCloudGrade';
 import { createStreamingNode } from '../src/render/streaming/StreamingNode';
 import type { StreamingNode } from '../src/render/streaming/StreamingNode';
 import type { StreamingNodeRecord } from '../src/io/copc/copcTypes';
@@ -50,7 +54,10 @@ function nodeList(): StreamingNode[] {
 }
 
 /** A fake source: nodes() + store.get over a Map; readNodeChunk encodes the id's
- *  marker into a 1-float buffer; decodeMeta is a stub the fake decoder ignores. */
+ *  marker AND the record's exact point count into a 2-float buffer so the fake
+ *  decoder can emit exactly that many points (COPC/EPT counts are exact, and the
+ *  runner now enforces decoded === declared); decodeMeta is a stub the decoder
+ *  ignores. */
 function fakeSource(
   nodes: StreamingNode[],
   markers: Record<string, number>,
@@ -78,14 +85,16 @@ function fakeSource(
     },
     readNodeChunk: async (rec: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> => {
       hooks.onRead?.(rec.id, signal);
-      return Float32Array.of(markers[rec.id] ?? -1).buffer;
+      return Float32Array.of(markers[rec.id] ?? -1, rec.pointCount).buffer;
     },
     decodeMeta: (): ChunkDecodeMetadata =>
       ({ renderOrigin: [0, 0, 0] } as unknown as ChunkDecodeMetadata),
   };
 }
 
-/** A fake decoder: reads the marker the fake source wrote, emits 1 point (m,m,m). */
+/** A fake decoder: reads [marker, count] the fake source wrote, emits exactly
+ *  `count` points all set to the marker — so decoded === declared, the honest
+ *  case the runner requires. */
 function fakeDecoder(seen?: { signals: (AbortSignal | undefined)[] }): ChunkDecoder {
   return {
     decode: async (
@@ -94,15 +103,19 @@ function fakeDecoder(seen?: { signals: (AbortSignal | undefined)[] }): ChunkDeco
       signal?: AbortSignal,
     ): Promise<DecodedChunk> => {
       seen?.signals.push(signal);
-      const m = new Float32Array(chunk)[0];
+      const header = new Float32Array(chunk);
+      const m = header[0];
+      const count = header[1];
+      const positions = new Float32Array(count * 3);
+      positions.fill(m);
       return {
-        pointCount: 1,
-        positions: Float32Array.of(m, m, m),
-        intensity: new Uint16Array(1),
-        classification: new Uint8Array(1),
-        returnNumber: new Uint8Array(1),
-        returnCount: new Uint8Array(1),
-        gpsTime: new Float64Array(1),
+        pointCount: count,
+        positions,
+        intensity: new Uint16Array(count),
+        classification: new Uint8Array(count),
+        returnNumber: new Uint8Array(count),
+        returnCount: new Uint8Array(count),
+        gpsTime: new Float64Array(count),
       };
     },
   };
@@ -143,7 +156,9 @@ describe('makeDecodeNode — id → decoded positions', () => {
     const src = fakeSource(nodeList(), { '1-0-0-0': 42 });
     const decode = makeDecodeNode(src, fakeDecoder());
     const pos = await decode('1-0-0-0');
-    expect(Array.from(pos)).toEqual([42, 42, 42]);
+    // Node '1-0-0-0' declares 200 points → 600 floats, all the marker value.
+    expect(pos).toHaveLength(200 * 3);
+    expect(Array.from(pos).every((v) => v === 42)).toBe(true);
   });
 
   it('yields an empty buffer for an id absent from the store (no throw)', async () => {
@@ -198,7 +213,7 @@ describe('adapter ∘ runner — end-to-end with fakes', () => {
     });
     expect(out.coverage.scope).toBe('exhaustive');
     expect(out.coverage.coveragePercent).toBe(100);
-    expect(out.grade).toEqual({ points: 3, scale: 1 }); // one marker point per node
+    expect(out.grade).toEqual({ points: 600, scale: 1 }); // 100 + 200 + 300 points
   });
 
   it('grades a representative sample and back-scales when over budget', async () => {
@@ -226,7 +241,7 @@ describe('gradeFullCloud — one-call composition + progress', () => {
       options: { maxPoints: 10_000 },
     }));
     expect(run.coverage.scope).toBe('exhaustive');
-    expect(run.grade).toBe(3); // 3 nodes → 3 marker points
+    expect(run.grade).toBe(600); // 100 + 200 + 300 points
     expect(run.coverage.label).toMatch(/exact/);
   });
 
@@ -242,7 +257,9 @@ describe('gradeFullCloud — one-call composition + progress', () => {
     });
     expect(seen.map((p) => p.decodedNodes)).toEqual([1, 2, 3]);
     expect(seen.every((p) => p.totalNodes === 3)).toBe(true);
-    expect(seen.map((p) => p.decodedPoints)).toEqual([1, 2, 3]); // one marker pt per node
+    // Plan order is root (depth 0), then depth-1 nodes by count desc: 300 then
+    // 200. Cumulative decoded points: 100, +300, +200.
+    expect(seen.map((p) => p.decodedPoints)).toEqual([100, 400, 600]);
   });
 
   it('cancels cleanly when the signal is already aborted', async () => {
@@ -281,6 +298,65 @@ describe('gradeFullCloud — one-call composition + progress', () => {
     // The reason and the (previously write-only) error count reach the user.
     expect(run.coverage.note).toMatch(/did not fully load/i);
     expect(run.coverage.note).toMatch(/1 load error/);
+  });
+});
+
+describe('gradeFullCloud — oversized first node is refused (BUG 7)', () => {
+  it('returns an unavailable outcome (no decode) when the plan exceeds the ceiling', async () => {
+    // One node above the point ceiling becomes the whole plan (the planner always
+    // takes at least one). The grade must refuse before decoding rather than size
+    // a multi-gigabyte positions buffer.
+    const huge = [createStreamingNode(record('0-0-0-0', 0, MAX_SAMPLE_POINTS + 1, 10))];
+    const reads: string[] = [];
+    const src = fakeSource(huge, { '0-0-0-0': 1 }, { onRead: (id) => reads.push(id) });
+    const outcome = await gradeFullCloud({
+      source: src,
+      decoder: fakeDecoder(),
+      grade: (pos) => pos.length / 3,
+    });
+    expect(outcome.kind).toBe('unavailable');
+    if (outcome.kind !== 'unavailable') return;
+    expect(outcome.headline).toMatch(/safe decode budget/i);
+    expect(outcome.note).toMatch(/safe ceiling/i);
+    expect(reads).toEqual([]); // nothing was read/decoded
+  });
+
+  it('still grades a normally-sized cloud (the ceiling does not block real work)', async () => {
+    const src = fakeSource(nodeList(), { '0-0-0-0': 1, '1-0-0-0': 2, '1-1-0-0': 3 });
+    const outcome = await gradeFullCloud({
+      source: src,
+      decoder: fakeDecoder(),
+      grade: (pos) => pos.length / 3,
+      options: { maxPoints: 10_000 },
+    });
+    expect(outcome.kind).toBe('graded');
+  });
+});
+
+describe('gradeFullCloud — a decoded count that disagrees with the header (BUG 8)', () => {
+  it('fails the grade rather than report coverage over a sample it never decoded', async () => {
+    // A decoder that always emits a single point, regardless of the header count.
+    // Node headers declare 100/200/300, so every node is a short decode.
+    const shortDecoder: ChunkDecoder = {
+      decode: async (): Promise<DecodedChunk> => ({
+        pointCount: 1,
+        positions: Float32Array.of(1, 1, 1),
+        intensity: new Uint16Array(1),
+        classification: new Uint8Array(1),
+        returnNumber: new Uint8Array(1),
+        returnCount: new Uint8Array(1),
+        gpsTime: new Float64Array(1),
+      }),
+    };
+    const src = fakeSource(nodeList(), { '0-0-0-0': 1, '1-0-0-0': 2, '1-1-0-0': 3 });
+    await expect(
+      gradeFullCloud({
+        source: src,
+        decoder: shortDecoder,
+        grade: (pos) => pos.length / 3,
+        options: { maxPoints: 10_000 },
+      }),
+    ).rejects.toBeInstanceOf(FullCloudGradeShortDecodeError);
   });
 });
 
@@ -343,7 +419,7 @@ describe('gradeFullCloud — a source that states no point total', () => {
     if (outcome.kind !== 'graded') return;
     expect(outcome.run.coverage.scope).toBe('exhaustive');
     expect(outcome.run.coverage.label).toBe('all 1.5M points (exact)');
-    expect(outcome.run.grade).toBe(3);
+    expect(outcome.run.grade).toBe(3 * ASSUMED); // every declared point decoded
   });
 
   it('grades a source that states a total of ZERO (null is not zero)', async () => {

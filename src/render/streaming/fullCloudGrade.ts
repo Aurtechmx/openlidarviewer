@@ -38,6 +38,71 @@
 import type { SamplingPlan } from './samplingPlan';
 import { formatPointCount } from '../../io/loadPlan';
 
+/**
+ * Hard ceiling on the points a single full-cloud grade may decode, independent
+ * of the sampling budget. The planner always selects at least one node so a
+ * positive budget never decodes nothing — but that guarantee means one
+ * arbitrarily large first node (a COPC root chunk can hold hundreds of millions
+ * of points) becomes the whole plan even when its count dwarfs
+ * {@link SamplingPlanOptions.maxPoints}. The grade runner sizes a Float32Array
+ * at `sampledPoints * 3` BEFORE decoding, so an unchecked first node forces a
+ * multi-gigabyte allocation on a path that never went through the streaming
+ * scheduler's device-aware first-node guard. This ceiling is that guard's
+ * equivalent for the grade: above it the grade refuses rather than allocates.
+ *
+ * Set well above the 2,000,000-point default budget so a legitimately large
+ * first node still grades, while the pathological hundreds-of-millions node is
+ * declined.
+ */
+export const MAX_SAMPLE_POINTS = 8_000_000;
+
+/**
+ * Companion byte ceiling on the decoded POSITIONS buffer (`sampledPoints * 3`
+ * Float32 values). Defends the allocation directly, so a caller that raises the
+ * point budget, or a future wider position element, still cannot drive the
+ * single pre-decode allocation past this size. 256 MiB.
+ */
+export const MAX_SAMPLE_DECODED_BYTES = 256 * 1024 * 1024;
+
+/** Float32 positions are XYZ triples; the decode buffer is `points * 3 * 4` bytes. */
+const DECODED_BYTES_PER_POINT = 3 * Float32Array.BYTES_PER_ELEMENT;
+
+/**
+ * A refusal the grade shows in place of figures. Same two slots the panel
+ * renders for a graded run (a headline where the coverage label goes and a note
+ * beneath), so a refusal reads as a result, not an error.
+ */
+export interface SampleBudgetRefusal {
+  /** Stands in for the coverage label. */
+  readonly headline: string;
+  /** Why the grade was declined. */
+  readonly note: string;
+}
+
+/**
+ * Decide whether a sampling plan is too large to decode safely, returning the
+ * user-facing refusal or `null` when it is within both ceilings. Pure and
+ * deterministic; the runner calls it right after building the plan and BEFORE
+ * sizing the decode buffer, so a plan above the ceiling never allocates.
+ */
+export function sampleBudgetRefusal(
+  plan: Pick<SamplingPlan, 'sampledPoints'>,
+): SampleBudgetRefusal | null {
+  const points = Math.max(0, plan.sampledPoints);
+  const decodedBytes = points * DECODED_BYTES_PER_POINT;
+  if (points <= MAX_SAMPLE_POINTS && decodedBytes <= MAX_SAMPLE_DECODED_BYTES) return null;
+  const mib = Math.round(decodedBytes / (1024 * 1024));
+  return {
+    headline: 'Full-cloud grade unavailable: the sample exceeds the safe decode budget',
+    note:
+      `Grading this cloud would decode ${formatPointCount(points)} points into a single ` +
+      `${mib} MiB buffer, above the ${formatPointCount(MAX_SAMPLE_POINTS)}-point safe ceiling. ` +
+      `The selected octree node is larger than the whole-cloud sample budget, so the grade ` +
+      `declines it here rather than force a multi-gigabyte allocation the streaming loader ` +
+      `itself would refuse. Grade a smaller scan or lower the sample budget.`,
+  };
+}
+
 /** Whether a full-cloud grade is exact (all nodes) or estimated from a sample. */
 export type GradeScope = 'exhaustive' | 'sampled';
 

@@ -8,6 +8,9 @@ import { describe, it, expect } from 'vitest';
 import { buildSamplingPlan, type SampleNode } from '../src/render/streaming/samplingPlan';
 import {
   fullCloudGradeCoverage,
+  sampleBudgetRefusal,
+  MAX_SAMPLE_POINTS,
+  MAX_SAMPLE_DECODED_BYTES,
   UNSTATED_POINT_TOTAL,
 } from '../src/render/streaming/fullCloudGrade';
 
@@ -139,6 +142,27 @@ describe('fullCloudGradeCoverage — completeness gating (a short hierarchy is n
     expect(cov.scope).toBe('sampled'); // driven by the budget, not completeness
     expect(cov.label).toMatch(/sampled/);
     expect(cov.note).toMatch(/representative octree sample/i);
+  });
+});
+
+describe('sampleBudgetRefusal — the oversized-plan ceiling (BUG 7)', () => {
+  it('passes a plan within the point ceiling (null = no refusal)', () => {
+    expect(sampleBudgetRefusal({ sampledPoints: MAX_SAMPLE_POINTS })).toBeNull();
+    expect(sampleBudgetRefusal({ sampledPoints: 2_000_000 })).toBeNull();
+    expect(sampleBudgetRefusal({ sampledPoints: 0 })).toBeNull();
+  });
+
+  it('refuses a plan one point above the ceiling, with a headline + note', () => {
+    const refusal = sampleBudgetRefusal({ sampledPoints: MAX_SAMPLE_POINTS + 1 });
+    expect(refusal).not.toBeNull();
+    expect(refusal!.headline).toMatch(/exceeds the safe decode budget/i);
+    expect(refusal!.note).toMatch(/safe ceiling/i);
+  });
+
+  it('the point ceiling keeps the decode buffer within the byte ceiling', () => {
+    // The buffer sized at the point ceiling is `points * 3 * 4` bytes; that must
+    // itself sit under the companion byte ceiling, so the two never disagree.
+    expect(MAX_SAMPLE_POINTS * 3 * 4).toBeLessThanOrEqual(MAX_SAMPLE_DECODED_BYTES);
   });
 });
 
