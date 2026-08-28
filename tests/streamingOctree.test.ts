@@ -22,11 +22,22 @@ function record(id: string, pointCount: number): StreamingNodeRecord {
 
 // --- StreamingNodeStore ------------------------------------------------------
 
-test('StreamingNodeStore.add is idempotent by id', () => {
+test('StreamingNodeStore.add is idempotent for an identical repeated record', () => {
   const store = new StreamingNodeStore();
   const a = store.add(record('n1', 100));
-  const b = store.add(record('n1', 999));
+  const b = store.add(record('n1', 100));
   expect(a).toBe(b);
+  expect(store.size).toBe(1);
+});
+
+test('StreamingNodeStore.add refuses a conflicting record for the same id', () => {
+  // A malformed hierarchy declaring the same id twice with a different point
+  // count is a self-contradiction, not a repeat: keeping the first-seen figure
+  // silently let the scheduler admit memory against one count and decode
+  // against another. Refuse it with a typed HIERARCHY_CONFLICT instead.
+  const store = new StreamingNodeStore();
+  store.add(record('n1', 100));
+  expect(() => store.add(record('n1', 999))).toThrow(/HIERARCHY_CONFLICT/);
   expect(store.size).toBe(1);
 });
 
@@ -261,10 +272,13 @@ test('StreamingOctree: hitting the hierarchy-page ceiling loads short → NOT co
   const childPages: number[] = [];
   const pages: SynthPage[] = [{ pageKey: [0, 0, 0, 0], nodes: [], childPages }];
   for (let i = 1; i <= FANOUT; i++) {
-    // Spread children across depth-1 octants deterministically; the exact keys
-    // don't matter, only that there are more PAGES (distinct offsets) than the
-    // ceiling admits.
-    const key: SynthKey = [1, i % 2, (i >> 1) % 2, (i >> 2) % 2];
+    // Spread children across DISTINCT depth-5 cells deterministically; the exact
+    // keys don't matter, only that there are more PAGES (distinct offsets) than
+    // the ceiling admits. Each key is unique (a depth-5 grid holds 32^3 cells,
+    // far above the fan-out) so no two pages declare the same node id — the node
+    // store now refuses a same-id record with a conflicting tile offset, which a
+    // reused key would trip before the page-ceiling assertion.
+    const key: SynthKey = [5, i % 32, (i >> 5) % 32, (i >> 10) % 32];
     pages.push({ pageKey: key, nodes: [{ key, pointCount: 10 }], childPages: [] });
     childPages.push(i);
   }

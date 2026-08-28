@@ -47,20 +47,53 @@ export interface ParsedHierarchyFile {
 }
 
 /**
+ * Maximum number of entries one hierarchy page may declare.
+ *
+ * The transport already caps a page by bytes, but a densely packed page (short
+ * keys, small counts) reaches a high entry count well below that byte ceiling,
+ * and each entry becomes a parsed object key plus an {@link EptHierarchyEntry}
+ * in up to three arrays. Bound the count directly so the parse heap stays
+ * predictable regardless of how tightly the JSON packs. A real Entwine page
+ * splits at a hierarchy step and holds far fewer than this; the committed
+ * reference fixture holds one. This is a defense-in-depth ceiling, not a tight
+ * fit.
+ */
+export const MAX_HIERARCHY_ENTRIES = 2_000_000;
+
+/**
  * Parse the body of one EPT hierarchy JSON file. Returns the entries
  * partitioned into `nodes` (point counts) and `links` (subtree pointers).
  *
+ * `maxEntries` bounds how many entries one page may declare, defaulting to
+ * {@link MAX_HIERARCHY_ENTRIES}; a page over it is refused before the
+ * partitioned arrays are built. Exposed as a parameter so the bound is testable
+ * without materialising millions of entries.
+ *
  * Throws on malformed input (non-object root, non-numeric values, bad
- * address strings). Throwing here is fine because the streaming-source
- * class wraps the call in its retry/error-typing layer; the caller never
- * sees the raw throw.
+ * address strings) and on a page over the entry ceiling. Throwing here is fine
+ * because the streaming-source class wraps the call in its retry/error-typing
+ * layer; the caller never sees the raw throw.
  */
-export function parseHierarchyFile(text: string): ParsedHierarchyFile {
+export function parseHierarchyFile(
+  text: string,
+  maxEntries: number = MAX_HIERARCHY_ENTRIES,
+): ParsedHierarchyFile {
   const raw = JSON.parse(text) as unknown;
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new Error('EPT hierarchy file root must be a JSON object.');
   }
   const obj = raw as Record<string, unknown>;
+  // Bound the entry count BEFORE building the partitioned arrays. A page above
+  // the ceiling is refused rather than expanded into three parallel arrays of
+  // entry objects — the byte cap in the transport is the outer guard, this is
+  // the inner one for a densely packed page that stays under it.
+  const declaredEntries = Object.keys(obj).length;
+  if (declaredEntries > maxEntries) {
+    throw new Error(
+      `EPT hierarchy page declares ${declaredEntries} entries, over the ` +
+        `${maxEntries} maximum; refusing to parse it.`,
+    );
+  }
   const entries: EptHierarchyEntry[] = [];
   const links: EptHierarchyEntry[] = [];
   const nodes: EptHierarchyEntry[] = [];
