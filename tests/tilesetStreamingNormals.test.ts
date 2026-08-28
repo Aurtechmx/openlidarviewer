@@ -152,6 +152,32 @@ describe('a tile that states normals', () => {
     expect(decoded.normals?.length).toBe(3 * decoded.pointCount);
   });
 
+  it('transforms the stated directions into the tile transform frame', async () => {
+    // A 90-degree Z rotation as the tile transform. The normals must ride it:
+    // the tile states +Z and +X, and both are directions in the tile's local
+    // frame that the transform places into the root frame. A decoder that
+    // returned them untransformed would report a surface facing a direction it
+    // does not, under any tile that is rotated relative to the root.
+    const ROTATE_Z90: PntsDecodeMetadata = {
+      format: 'pnts',
+      tileTransform: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      renderOrigin: [0, 0, 0],
+    };
+    const decoded = await new PntsChunkDecoder().decode(
+      makePnts(LOW_AND_HIGH, { normals: STATED_NORMALS }),
+      ROTATE_Z90,
+    );
+    const n = [...(decoded.normals ?? [])];
+    // +Z is on the rotation axis, unchanged.
+    expect(n[0]).toBeCloseTo(0, 6);
+    expect(n[1]).toBeCloseTo(0, 6);
+    expect(n[2]).toBeCloseTo(1, 6);
+    // +X rotates to +Y.
+    expect(n[3]).toBeCloseTo(0, 6);
+    expect(n[4]).toBeCloseTo(1, 6);
+    expect(n[5]).toBeCloseTo(0, 6);
+  });
+
   it('states no normals when the tile carries none', async () => {
     const decoded = await new PntsChunkDecoder().decode(makePnts(LOW_AND_HIGH), META);
     expect(

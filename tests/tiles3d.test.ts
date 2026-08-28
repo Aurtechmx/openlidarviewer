@@ -627,3 +627,77 @@ describe('parsePnts batch ids', () => {
     expect(t.batchTable?.json.classification).toEqual([2]);
   });
 });
+
+describe('parsePnts batch-metadata gating and section caps', () => {
+  it('reads BATCH_ID and the batch table by default', () => {
+    const t = parsePnts(
+      makeBatchPnts({ batchIds: [0, 1, 2], batchTable: { name: ['a', 'b', 'c'] } }),
+    );
+    expect([...(t.batchIds as Uint32Array)]).toEqual([0, 1, 2]);
+    expect(t.batchTable?.json.name).toEqual(['a', 'b', 'c']);
+  });
+
+  it('materialises neither BATCH_ID nor the batch table when metadata is disabled', () => {
+    const body = makeBatchPnts({ batchIds: [0, 1, 2], batchTable: { name: ['a', 'b', 'c'] } });
+    const RealUint32Array = Uint32Array;
+    let u32OfPointCount = 0;
+    const Spy = new Proxy(RealUint32Array, {
+      construct(target, args: [number]) {
+        if (args[0] === 3) u32OfPointCount += 1;
+        return Reflect.construct(target, args) as Uint32Array;
+      },
+    });
+    (globalThis as unknown as { Uint32Array: typeof Uint32Array }).Uint32Array =
+      Spy as unknown as typeof Uint32Array;
+    let t: ReturnType<typeof parsePnts>;
+    try {
+      t = parsePnts(body, { keepBatchMetadata: false });
+    } finally {
+      (globalThis as unknown as { Uint32Array: typeof Uint32Array }).Uint32Array = RealUint32Array;
+    }
+    expect(t.batchIds, 'BATCH_ID must not be materialised when metadata is disabled').toBeNull();
+    expect(t.batchTable, 'the batch table must not be kept when metadata is disabled').toBeNull();
+    expect(u32OfPointCount, 'no per-point BATCH_ID array was allocated').toBe(0);
+  });
+
+  it('refuses an oversized batch-table JSON before it is parsed', () => {
+    const body = makeBatchPnts({
+      batchIds: [0],
+      batchTable: { note: 'x'.repeat(64) },
+    });
+    const RealParse = JSON.parse;
+    let parseCalls = 0;
+    JSON.parse = ((...args: Parameters<typeof RealParse>) => {
+      parseCalls += 1;
+      return RealParse(...args);
+    }) as typeof JSON.parse;
+    try {
+      expect(() => parsePnts(body, { maxBatchTableJsonBytes: 8 })).toThrow(
+        /batch-table JSON is \d+ bytes, past the 8 byte ceiling/,
+      );
+    } finally {
+      JSON.parse = RealParse;
+    }
+    // The feature table is parsed (1); the batch table is refused on size before
+    // its own JSON.parse, so the count stays at one.
+    expect(parseCalls, 'the batch-table JSON was parsed despite exceeding the cap').toBe(1);
+  });
+
+  it('refuses an oversized feature-table JSON before it is parsed', () => {
+    const body = makeBatchPnts({ batchIds: [0] });
+    expect(() => parsePnts(body, { maxFeatureTableJsonBytes: 4 })).toThrow(
+      /feature-table JSON is \d+ bytes, past the 4 byte ceiling/,
+    );
+  });
+
+  it('refuses an oversized batch-table binary before it is copied', () => {
+    const body = makeBatchPnts({
+      batchIds: [0],
+      batchTable: { name: ['a'] },
+      batchTableBinary: [1, 2, 3, 4, 5, 6, 7, 8],
+    });
+    expect(() => parsePnts(body, { maxBatchTableBinaryBytes: 4 })).toThrow(
+      /batch-table binary is 8 bytes, past the 4 byte ceiling/,
+    );
+  });
+});

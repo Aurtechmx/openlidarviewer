@@ -8,6 +8,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   streamingBudgets,
+  capPntsConcurrency,
+  MAX_PNTS_CONCURRENT_DECODES_MOBILE,
+  MAX_PNTS_CONCURRENT_DECODES_DESKTOP,
   selectWithinBudget,
   decodedBytesPerPoint,
   firstAdmissionMaxDecodedBytes,
@@ -190,5 +193,34 @@ describe('selectWithinBudget — resident stickiness', () => {
       stickyMargin: 0.15,
     });
     expect(wanted).toEqual(new Set(['x', 'r']));
+  });
+});
+
+describe('capPntsConcurrency — the PNTS concurrent-decode ceiling', () => {
+  it('holds desktop PNTS decodes to two, below the shared budget of four', () => {
+    const shared = streamingBudgets('high', false);
+    expect(shared.maxConcurrentDecodes).toBe(4);
+    const capped = capPntsConcurrency(shared, false);
+    expect(capped.maxConcurrentDecodes).toBe(MAX_PNTS_CONCURRENT_DECODES_DESKTOP);
+    expect(capped.maxConcurrentDecodes).toBe(2);
+  });
+
+  it('holds mobile PNTS decodes to one, below the shared budget of two', () => {
+    const shared = streamingBudgets('high', true);
+    expect(shared.maxConcurrentDecodes).toBe(2);
+    const capped = capPntsConcurrency(shared, true);
+    expect(capped.maxConcurrentDecodes).toBe(MAX_PNTS_CONCURRENT_DECODES_MOBILE);
+    expect(capped.maxConcurrentDecodes).toBe(1);
+  });
+
+  it('only ever lowers the count and leaves the rest of the budget untouched', () => {
+    const shared = streamingBudgets('balanced', false);
+    const capped = capPntsConcurrency(shared, false);
+    expect(capped.maxConcurrentDecodes).toBeLessThanOrEqual(shared.maxConcurrentDecodes);
+    expect(capped.pointBudget).toBe(shared.pointBudget);
+    expect(capped.chunkCacheBytes).toBe(shared.chunkCacheBytes);
+    // A budget already at or below the cap is not raised.
+    const already = { ...shared, maxConcurrentDecodes: 1 };
+    expect(capPntsConcurrency(already, false).maxConcurrentDecodes).toBe(1);
   });
 });

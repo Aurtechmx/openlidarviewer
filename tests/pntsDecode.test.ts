@@ -95,6 +95,42 @@ describe('placement', () => {
   });
 });
 
+describe('transient memory', () => {
+  it('allocates no second XYZ array — positions are transformed in place', async () => {
+    // parsePnts already owns a fresh Float32Array of the tile's positions.
+    // Transforming into a second array of the same size doubled the transient
+    // XYZ footprint of every tile decode. A positions-only tile of N points must
+    // see exactly ONE Float32Array of length 3N allocated across the whole
+    // decode (the parser's), not two.
+    const points = [
+      [0, 0, 0],
+      [1, 1, 1],
+      [2, 2, 2],
+    ] as const;
+    const wanted = points.length * 3;
+    const RealFloat32Array = Float32Array;
+    let ofWantedLength = 0;
+    const Spy = new Proxy(RealFloat32Array, {
+      construct(target, args: [number]) {
+        if (args[0] === wanted) ofWantedLength += 1;
+        return Reflect.construct(target, args) as Float32Array;
+      },
+    });
+    (globalThis as unknown as { Float32Array: typeof Float32Array }).Float32Array =
+      Spy as unknown as typeof Float32Array;
+    try {
+      await new PntsChunkDecoder().decode(makePnts(points), meta());
+    } finally {
+      (globalThis as unknown as { Float32Array: typeof Float32Array }).Float32Array =
+        RealFloat32Array;
+    }
+    expect(
+      ofWantedLength,
+      'the decoder allocated a second positions array instead of reusing the parsed one',
+    ).toBe(1);
+  });
+});
+
 describe('attributes the format does not carry', () => {
   it('never offers intensity or classification as a colour mode', () => {
     expect(

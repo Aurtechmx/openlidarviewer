@@ -106,6 +106,74 @@ export function transformDirection(m: Mat4, v: Vec3): [number, number, number] {
 }
 
 /**
+ * A surface normal through the transform's linear part, as a unit vector.
+ *
+ * A normal is not a direction that rides the linear part the way a box half-axis
+ * does. Under a non-uniform or sheared linear map the plane a normal is
+ * perpendicular to is skewed, and applying the same matrix to the normal leaves
+ * it no longer perpendicular to that plane. The 3D Tiles specification (and every
+ * graphics text on the subject) fixes this by transforming a normal with the
+ * inverse-transpose of the upper-left 3x3, then renormalising: the inverse
+ * cancels the skew and the transpose puts it back in the normal's covector space.
+ *
+ * The inverse-transpose is the cofactor matrix of the 3x3 divided by its
+ * determinant. Dividing by the SIGNED determinant matters: a reflection
+ * (negative determinant) must flip the normal, and only the signed divide does
+ * that, which renormalising afterwards preserves rather than erases.
+ *
+ * Degenerate case: a 3x3 whose determinant is zero collapses a dimension and has
+ * no inverse. Rather than emit NaN, the direction is carried through the plain
+ * linear part and normalised, which is the best available answer for a transform
+ * that is not supposed to occur on a real tile. A zero-length result (a normal
+ * the linear part sends to the origin) is returned as written.
+ */
+export function transformNormal(m: Mat4, v: Vec3): [number, number, number] {
+  // Upper-left 3x3, column-major: a3[col][row] = m[col * 4 + row].
+  const a = m[0]!, b = m[1]!, c = m[2]!; // column 0
+  const d = m[4]!, e = m[5]!, f = m[6]!; // column 1
+  const g = m[8]!, h = m[9]!, i = m[10]!; // column 2
+
+  // Cofactor matrix of the 3x3. `cof[row][col]` is the signed minor with that
+  // row and column struck out; the cofactor matrix (not its transpose) is the
+  // inverse-transpose once divided by the determinant.
+  const cof00 = e * i - f * h;
+  const cof01 = -(b * i - c * h);
+  const cof02 = b * f - c * e;
+  const cof10 = -(d * i - f * g);
+  const cof11 = a * i - c * g;
+  const cof12 = -(a * f - c * d);
+  const cof20 = d * h - e * g;
+  const cof21 = -(a * h - b * g);
+  const cof22 = a * e - b * d;
+
+  const det = a * cof00 + d * cof01 + g * cof02;
+  const [x, y, z] = v;
+
+  if (!Number.isFinite(det) || det === 0) {
+    // No inverse. Fall back to the plain linear part, normalised.
+    return normalizeOrZero(
+      a * x + d * y + g * z,
+      b * x + e * y + h * z,
+      c * x + f * y + i * z,
+    );
+  }
+
+  // (inverse-transpose) · v = (cofactor / det) · v. Row `r` of the cofactor
+  // matrix is (cof[r][0], cof[r][1], cof[r][2]).
+  const nx = (cof00 * x + cof01 * y + cof02 * z) / det;
+  const ny = (cof10 * x + cof11 * y + cof12 * z) / det;
+  const nz = (cof20 * x + cof21 * y + cof22 * z) / det;
+  return normalizeOrZero(nx, ny, nz);
+}
+
+/** Normalise a vector, returning it unchanged when its length is zero. */
+function normalizeOrZero(x: number, y: number, z: number): [number, number, number] {
+  const length = Math.hypot(x, y, z);
+  if (length === 0 || !Number.isFinite(length)) return [x, y, z];
+  return [x / length, y / length, z / length];
+}
+
+/**
  * The largest scaling factor of the linear part.
  *
  * Taken as the longest of the three transformed basis vectors, which is what
