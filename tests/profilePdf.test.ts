@@ -17,6 +17,7 @@ import {
   profileSummaryRows,
   scaleProfileSamples,
 } from '../src/render/measure/profileSummary';
+import { computeCivilProfileStats } from '../src/render/measure/civilProfileStats';
 import {
   buildDerivedSurfaceLegend,
   type DerivedSurfaceSource,
@@ -805,5 +806,42 @@ describe('profile sheet: the ground under the section', () => {
     for (let i = 1; i < xs.length; i++) widest = Math.max(widest, xs[i] - xs[i - 1]);
     const span = xs[xs.length - 1] - xs[0];
     expect(widest / span).toBeGreaterThan(0.4);
+  });
+});
+
+/**
+ * BUG 1 — the KPI band's `MAX GRADE (%)` used `stats.maxGrade`, an unsigned
+ * magnitude, while the on-screen panel and the sheet's steepest-range callout
+ * print the SIGNED steepest grade (`intel.maxGrade`). A descending profile then
+ * read "-70.00%" on screen and in the callout but "70.00" in the KPI on the same
+ * sheet. The signed steepest grade is the single source of truth.
+ */
+describe('BUG 1 — signed MAX GRADE KPI', () => {
+  // A clear steepest DESCENDING segment (-0.7) distinct from the mean (-0.3).
+  const descending: ProfileChartSample[] = [
+    { distance: 0, height: 10 },
+    { distance: 10, height: 9 },
+    { distance: 20, height: 2 },
+    { distance: 30, height: 1 },
+  ];
+
+  it('the civil magnitude and the signed summary grade diverge in sign', () => {
+    expect(computeCivilProfileStats(descending).maxGrade).toBeCloseTo(0.7, 10);
+    expect(computeProfileSummary(descending).maxGrade).toBeCloseTo(-0.7, 10);
+  });
+
+  it('draws the KPI percent SIGNED, matching the callout (no unsigned magnitude)', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Descending',
+      samples: descending,
+      generatedAt: FIXED_DATE,
+    });
+    const text = drawnPdfText(bytes);
+    const total = (text.match(/70\.00/g) ?? []).length;
+    const signed = (text.match(/-70\.00/g) ?? []).length;
+    // The KPI cell (bare, no % sign) plus the signed callout both carry 70.00;
+    // every one of them must be signed. Pre-fix the KPI leaked an unsigned copy.
+    expect(total).toBeGreaterThan(0);
+    expect(signed).toBe(total);
   });
 });

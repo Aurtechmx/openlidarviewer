@@ -336,6 +336,8 @@ function nonStreamingOverCeilingRefusal(
     return undefined;
   }
   const ceiling = memoryCeilingBytes(options.deviceMemoryGB, options.isMobile ?? false);
+  // Gate on raw file size by design: an ASCII/whole-file parse needs transient
+  // memory that exceeds the decoded size, so file size is the conservative bound.
   if (file.size <= ceiling) return undefined;
   return new LoadError(
     'memory-constraint',

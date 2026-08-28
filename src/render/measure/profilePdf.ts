@@ -1290,7 +1290,11 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       span: 2,
     },
     { label: 'MEAN GRADE (%)', value: bare(formatGradePercent(stats.meanGrade)) },
-    { label: 'MAX GRADE (%)', value: bare(formatGradePercent(stats.maxGrade)) },
+    // Signed steepest grade: the panel, the callout, and this KPI must agree on
+    // sign for one profile. stats.maxGrade is an unsigned magnitude; intel.maxGrade
+    // is the signed steepest-section grade (same segment). The ratio/degrees row
+    // below stays magnitude on purpose.
+    { label: 'MAX GRADE (%)', value: bare(formatGradePercent(intel.maxGrade)) },
     { label: 'COVERAGE (%)', value: `${(stats.coverage * 100).toFixed(0)}` },
     { label: 'GAPS', value: `${gapCount}` },
     {

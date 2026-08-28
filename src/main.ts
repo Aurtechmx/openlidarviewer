@@ -3751,9 +3751,9 @@ void viewerLoaded.then(() => {
     containPanelWheel(rightRail);
     // Push the column below the measure toolbar whenever it is visible —
     // see wireMeasureBarClearance for why this is measured, not static CSS.
-    wireMeasureBarClearance(viewer.measureElements.hint, leftPanels);
+    stage.addTeardown(wireMeasureBarClearance(viewer.measureElements.hint, leftPanels));
     // P11 — keep the column above the real dock height, and add the one-tap rail collapse.
-    wireDockClearance(dock.dock, leftPanels);
+    stage.addTeardown(wireDockClearance(dock.dock, leftPanels));
     stage.addTeardown(wireRailToggle({
       overlay: stage.overlay,
       panels: [leftPanels],
@@ -3987,7 +3987,7 @@ void viewerLoaded.then(() => {
       // resolves. Wire the toolbar-overlap guard on the column up front (same as
       // the full app's ?measurements=1 path) so it holds regardless of order.
       const col = ensureBareLeftPanels();
-      wireMeasureBarClearance(viewer.measureElements.hint, col);
+      stage.addTeardown(wireMeasureBarClearance(viewer.measureElements.hint, col));
       void measureMount.ensure().then((p) => col.append(p.element));
     }
     if (embedConfig.forceAnnotations) {

@@ -52,6 +52,23 @@ describe('computeCivilProfileStats', () => {
     expect(stats.maxGrade).toBeNull();
     expect(stats.coverage).toBe(0);
   });
+
+  it('BUG 5 — a zero-return station is a gap, not 100% coverage', () => {
+    // The sampler's degenerate/vertical branch emits two coincident-in-plan
+    // stations with a FINITE endpoint height but count 0 — no corridor returns.
+    // Counting a finite height as covered reported coverage 2/2 = 100% over
+    // zero returns, so the PDF printed "Every station returned. No part is
+    // interpolated." beside a count column of 0. A count-0 station is a gap.
+    const degenerate: ProfileChartSample[] = [
+      { distance: 0, height: 12.5, count: 0 },
+      { distance: 0, height: 12.5, count: 0 },
+    ];
+    const stats = computeCivilProfileStats(degenerate);
+    expect(stats.coverage).not.toBe(1);
+    expect(stats.coverage).toBe(0);
+    expect(stats.stations[0].elevation).toBeNull();
+    expect(stats.stations[1].elevation).toBeNull();
+  });
 });
 
 describe('civil formatters', () => {

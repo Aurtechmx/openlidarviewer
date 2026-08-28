@@ -33,7 +33,7 @@ import { applyClassicScrollbarClass } from './classicScrollbars';
  * slides as the window resizes without its own box changing), so a window
  * resize listener recomputes alongside the ResizeObserver.
  */
-export function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): void {
+export function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): () => void {
   const update = (): void => {
     const h = bar.offsetHeight; // 0 while .olv-hidden (display: none)
     if (h <= 0) { column.style.setProperty('--olv-measure-bar-clear', '0px'); return; }
@@ -46,17 +46,27 @@ export function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): 
     // with the same rhythm as panel → panel.
     column.style.setProperty('--olv-measure-bar-clear', overlaps ? `${h + 8}px` : '0px');
   };
+  let observer: ResizeObserver | null = null;
   if (typeof ResizeObserver !== 'undefined') {
     try {
       const ro = new ResizeObserver(update);
       ro.observe(bar);
       ro.observe(column);
+      observer = ro;
     } catch {
       /* Static layout fallback — only ancient engines, overlap is cosmetic. */
     }
   }
-  if (typeof window !== 'undefined') window.addEventListener('resize', update);
+  const hasWindow = typeof window !== 'undefined';
+  if (hasWindow) window.addEventListener('resize', update);
   update();
+  // Without this the torn-down column left an observer watching a detached
+  // toolbar and a resize handler firing against it forever.
+  return () => {
+    observer?.disconnect();
+    observer = null;
+    if (hasWindow) window.removeEventListener('resize', update);
+  };
 }
 
 /**
@@ -67,20 +77,30 @@ export function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): 
  * dock. Fallback 80px (the previous static reserve) keeps layout unchanged where
  * ResizeObserver is unavailable.
  */
-export function wireDockClearance(dock: HTMLElement, column: HTMLElement): void {
+export function wireDockClearance(dock: HTMLElement, column: HTMLElement): () => void {
   // The column's scroll affordance travels with it, so the composition root
   // wires the rail once rather than remembering two calls that must agree.
-  wireRailScrollAffordance(column, applyClassicScrollbarClass());
-  if (typeof ResizeObserver === 'undefined') return;
-  try {
-    const ro = new ResizeObserver(() => {
-      const h = dock.offsetHeight; // 0 while hidden (display: none)
-      column.style.setProperty('--olv-dock-clear', h > 0 ? `${h + 14 + 8}px` : '80px');
-    });
-    ro.observe(dock);
-  } catch {
-    /* Static 80px fallback — only ancient engines. */
+  const disposeRail = wireRailScrollAffordance(column, applyClassicScrollbarClass());
+  let observer: ResizeObserver | null = null;
+  if (typeof ResizeObserver !== 'undefined') {
+    try {
+      const ro = new ResizeObserver(() => {
+        const h = dock.offsetHeight; // 0 while hidden (display: none)
+        column.style.setProperty('--olv-dock-clear', h > 0 ? `${h + 14 + 8}px` : '80px');
+      });
+      ro.observe(dock);
+      observer = ro;
+    } catch {
+      /* Static 80px fallback — only ancient engines. */
+    }
   }
+  // Disposes both the dock observer and the rail affordance it captured, so a
+  // torn-down column leaves neither watching detached nodes.
+  return () => {
+    observer?.disconnect();
+    observer = null;
+    disposeRail();
+  };
 }
 
 /**
