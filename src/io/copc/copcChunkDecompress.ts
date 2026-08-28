@@ -28,9 +28,9 @@ import {
   MAX_DECODED_ALLOCATION_BYTES,
   MAX_DECODE_PEAK_BYTES,
   withinDecodedByteBudget,
-  withinDecodePeakBudget,
 } from '../heavy/heavyByteBudget';
 import type { ChunkDecodeMetadata } from './copcChunkDecode';
+import { copcDecodedChannelBytes } from './copcChunkDecode';
 
 /** The instantiated laz-perf WASM module. */
 export type LazPerfModule = Awaited<ReturnType<typeof createLazPerf>>;
@@ -55,6 +55,43 @@ export const MAX_NODE_POINTS = 50_000_000;
  * before the output buffer is allocated, by the shared decode budget.
  */
 export const MAX_DECOMPRESSED_NODE_BYTES = MAX_DECODED_ALLOCATION_BYTES;
+
+/**
+ * The true peak resident bytes of decoding one COPC node, the larger of the two
+ * phases that never overlap but are each unbounded on their own:
+ *
+ *   phase 1 (laz-perf decompression) = 2·Bc + B_raw — the JS-side compressed
+ *   buffer plus laz-perf's WASM-heap duplicate of it, both live while the raw
+ *   LAS records are staged.
+ *
+ *   phase 2 (`decodeRecords`) = Bc + B_raw + B_channels — the compressed chunk
+ *   the worker still holds, the raw records handed in, and the decoded channel
+ *   arrays being filled, all resident at once.
+ *
+ * Bc is the compressed chunk size, B_raw = pointCount · recordLength, and
+ * B_channels is {@link copcDecodedChannelBytes} for the PDRF. The old guard
+ * charged only phase 1 (`2·Bc + B_raw`) and so admitted a node whose phase-2
+ * working set — where B_channels is a second copy the size of B_raw — blew the
+ * budget. Returns the max so a node is refused when EITHER phase exceeds the cap.
+ */
+export function estimateCopcPeakBytes(
+  meta: ChunkDecodeMetadata,
+  compressedBytes: number,
+  pointCount: number,
+): number {
+  const bc =
+    Number.isFinite(compressedBytes) && compressedBytes >= 0
+      ? compressedBytes
+      : Number.POSITIVE_INFINITY;
+  const rawBytes =
+    Number.isFinite(pointCount) && pointCount >= 0 && meta.pointRecordLength > 0
+      ? pointCount * meta.pointRecordLength
+      : Number.POSITIVE_INFINITY;
+  const channelBytes = copcDecodedChannelBytes(meta.pointDataRecordFormat, pointCount);
+  const phase1 = 2 * bc + rawBytes;
+  const phase2 = bc + rawBytes + channelBytes;
+  return Math.max(phase1, phase2);
+}
 
 /**
  * Decompress one COPC node chunk into raw concatenated LAS records using
@@ -96,28 +133,24 @@ export function decompressChunk(
         `${MAX_DECOMPRESSED_NODE_BYTES.toLocaleString('en-US')}-byte decode budget.`,
     );
   }
-  // Peak-memory cap: the decoded guard above bounds the OUTPUT buffer, but the
-  // node's compressed bytes are live TWICE during decode — the JS `compressed`
-  // buffer plus the copy `HEAPU8.set` stages into laz-perf's WASM heap below — on
-  // top of that output. Bound the joint peak (2 × compressed + decoded) so a node
-  // whose output passes the per-node cap yet whose simultaneous working set blows
-  // the total budget is refused before either malloc.
-  if (
-    !withinDecodePeakBudget(
-      chunk.byteLength,
-      pointCount,
-      meta.pointRecordLength,
-      0,
-      chunk.byteLength,
-      MAX_DECODE_PEAK_BYTES,
-    )
-  ) {
+  // Peak-memory cap: the decoded guard above bounds the OUTPUT buffer, but decode
+  // holds several allocations at once across two non-overlapping phases, and each
+  // phase is unbounded on its own. Phase 1 (laz-perf decompression) peaks at
+  // 2·Bc + B_raw — the JS compressed buffer, laz-perf's WASM-heap duplicate, and
+  // the raw records. Phase 2 (decodeRecords) peaks at Bc + B_raw + B_channels —
+  // the compressed chunk the worker still holds, the raw records, and the decoded
+  // channel arrays. The old guard charged only phase 1, so a node whose phase-2
+  // working set (B_channels is a second B_raw-sized copy) blew the budget slipped
+  // through. Bound the MAX of both phases before either malloc.
+  const peakBytes = estimateCopcPeakBytes(meta, chunk.byteLength, pointCount);
+  if (peakBytes > MAX_DECODE_PEAK_BYTES) {
     throw new LoadError(
       'malformed-file',
-      `malformed COPC: node of ${pointCount.toLocaleString('en-US')} points would peak over the ` +
+      `malformed COPC: node of ${pointCount.toLocaleString('en-US')} points would peak at ` +
+        `${peakBytes.toLocaleString('en-US')} bytes, over the ` +
         `${MAX_DECODE_PEAK_BYTES.toLocaleString('en-US')}-byte decode budget ` +
-        `(decoded records + two ${chunk.byteLength.toLocaleString('en-US')}-byte compressed copies, ` +
-        `JS buffer + laz-perf WASM heap).`,
+        `(max of laz-perf decompression 2·compressed + raw records, and decodeRecords ` +
+        `compressed + raw records + decoded channel arrays).`,
     );
   }
 
