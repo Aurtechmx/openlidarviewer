@@ -65,6 +65,10 @@ import type { PreviewSample } from './previewSampler';
  */
 const ID_PREFIX = 't';
 
+/** The tag a truncated source's completeness reason carries, so a consumer can
+ *  recognise the physical-truncation case distinct from a hierarchy hole. */
+export const SOURCE_TRUNCATED_REASON = 'SOURCE_TRUNCATED';
+
 /** The node id for an octant path. */
 export function tileNodeId(key: string): string {
   return ID_PREFIX + key;
@@ -97,6 +101,24 @@ export function tileVoxelKey(key: string): VoxelKey {
   return { depth: key.length, x, y, z };
 }
 
+/**
+ * The `ArrayBuffer` to hand a worker for `bytes`, ready to transfer.
+ *
+ * When `bytes` owns its whole backing buffer (offset 0 and exactly as long as
+ * the buffer) the buffer is returned as-is, so a caller that transfers it moves
+ * the existing allocation with no copy. A `slice()` there would transiently
+ * double the tile — 256 MiB becomes 512 MiB before decode. Only a partial view
+ * is copied, since transferring its buffer would carry bytes outside the view.
+ * Safe to transfer the returned buffer only when `bytes` is single-use (a reader
+ * that returns a fresh array per call); a retained partial view is copied here.
+ */
+function ownedBuffer(bytes: Uint8Array): ArrayBuffer {
+  if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
+    return bytes.buffer as ArrayBuffer;
+  }
+  return bytes.slice().buffer;
+}
+
 /** Reads one tile's stored bytes. A memory map in tests, OPFS in the browser. */
 export interface TileBytesReader {
   read(key: string, signal?: AbortSignal): Promise<Uint8Array>;
@@ -112,6 +134,14 @@ export interface TileBytesReader {
  * still added, since dropping it would lose its points as well, but the gap is
  * recorded and {@link isComplete} goes false, so a completeness-sensitive
  * consumer refuses to claim the cloud is whole.
+ *
+ * The manifest also carries the source's own completeness: a physically
+ * truncated LAS (the header declared more points than the file held) is written
+ * with `complete: false` and a `declaredPointCount` above the loaded count. That
+ * store can have a perfectly coherent hierarchy, so the ancestor check alone
+ * would call it whole; the constructor reads the manifest flag as well and
+ * records a named {@link SOURCE_TRUNCATED_REASON} so a scientific grade sees a
+ * truncated source rather than a smaller complete one.
  */
 export class OlvTileOctree implements StreamingOctreeView {
   readonly store = new StreamingNodeStore();
@@ -175,6 +205,18 @@ export class OlvTileOctree implements StreamingOctreeView {
     if (keys.length !== reader.manifest.leafCount) {
       this._errors.push(
         `tile store: manifest declares ${reader.manifest.leafCount} nodes but the hierarchy lists ${keys.length}`,
+      );
+    }
+
+    // Source-level completeness: the hierarchy above can be whole while the
+    // source it was built from was physically truncated. The manifest records
+    // that; surface it as a named reason so `isComplete` goes false and a grade
+    // reads a truncated source honestly.
+    if (reader.manifest.complete === false) {
+      const declared = reader.manifest.declaredPointCount ?? reader.manifest.pointCount;
+      const readable = reader.manifest.pointCount;
+      this._errors.push(
+        `${SOURCE_TRUNCATED_REASON}: declared ${declared}, readable ${readable}`,
       );
     }
   }
@@ -248,6 +290,12 @@ export class OlvTileSource implements StreamingSource {
     return this._store.manifest.pointCount;
   }
 
+  /** The point count the source header declared. Above {@link sourcePointCount}
+   *  (the readable count) when the source file was physically truncated. */
+  get declaredPointCount(): number {
+    return this._store.manifest.declaredPointCount ?? this._store.manifest.pointCount;
+  }
+
   get residentPointCount(): number {
     return this.octree.store.residentPointCount;
   }
@@ -313,9 +361,13 @@ export class OlvTileSource implements StreamingSource {
     signal?.throwIfAborted();
     const bytes = await this._tiles.read(tileKeyOf(record.id), signal);
     signal?.throwIfAborted();
-    // The scheduler transfers the buffer to a worker, so hand it one that owns
-    // its bytes: a subarray view would transfer the whole backing store with it.
-    return bytes.slice().buffer;
+    // The scheduler transfers the buffer to a worker. The bytes reader returns a
+    // fresh, single-use array per call, so when it owns its whole backing buffer
+    // we transfer that buffer directly — a needless `slice()` here would
+    // transiently double a 256 MiB tile to 512 MiB before decode. Only a partial
+    // view (offset, or shorter than its buffer) is copied, since transferring its
+    // buffer would take bytes outside the view with it.
+    return ownedBuffer(bytes);
   }
 
   /**
@@ -515,9 +567,11 @@ export class PreviewCloudSource implements StreamingSource {
 
   async readNodeChunk(_record: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> {
     signal?.throwIfAborted();
-    // The scheduler transfers the buffer to a worker, so hand it a copy that
-    // owns its bytes rather than a view over the retained sample.
-    return this._sample.records.slice().buffer;
+    // The scheduler transfers the buffer to a worker. The preview's records are
+    // retained for the life of the source, so a view into them must be copied;
+    // but a records array that owns its whole backing buffer can be transferred
+    // directly. `ownedBuffer` makes exactly that distinction.
+    return ownedBuffer(this._sample.records);
   }
 
   decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata {

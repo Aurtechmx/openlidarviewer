@@ -132,6 +132,81 @@ describe('tile store', () => {
     expect(() => parseHierarchy('3 12\nnotaline\n')).toThrow();
     expect(() => parseHierarchy('8 5\n')).toThrow(/bad key/); // 8 is not an octant digit
   });
+
+  it('refuses a manifest whose completeness invariants do not hold', () => {
+    // Declared below loaded is impossible: a source cannot load more points than
+    // it declared.
+    expect(() =>
+      parseTileManifest({ ...validManifest(), declaredPointCount: 4 }),
+    ).toThrow(/declaredPointCount/);
+    // A complete scan must have declared === loaded; a mismatch with the flag
+    // still set is an inconsistent store.
+    expect(() =>
+      parseTileManifest({ ...validManifest(), complete: true, declaredPointCount: 12, pointCount: 10 }),
+    ).toThrow(/complete is true/);
+    // Degenerate geometry: min above max, or a non-positive root cube.
+    expect(() =>
+      parseTileManifest({ ...validManifest(), bounds: { min: [2, 0, 0], max: [1, 1, 1] } }),
+    ).toThrow(/bounds\.min/);
+    expect(() =>
+      parseTileManifest({ ...validManifest(), root: { min: [0, 0, 0], size: 0 } }),
+    ).toThrow(/root\.size must be positive/);
+    // A truncated source round-trips: declared above loaded, complete false.
+    const truncated = parseTileManifest({
+      ...validManifest(),
+      pointCount: 10,
+      declaredPointCount: 25,
+      complete: false,
+    });
+    expect(truncated.complete).toBe(false);
+    expect(truncated.declaredPointCount).toBe(25);
+  });
+
+  it('refuses a hierarchy with a duplicate key, a bad sum, or an over-deep node', () => {
+    const manifest = parseTileManifest({ ...validManifest(), pointCount: 10, depth: 2 });
+    // A Map would silently collapse the duplicate and drop the second node's
+    // points; the reader must refuse instead.
+    expect(
+      () => new TileStoreReader(manifest, [{ key: '0', pointCount: 5 }, { key: '0', pointCount: 5 }]),
+    ).toThrow(/duplicate node key/);
+    // Leaf counts that claim MORE points than the manifest declares — an
+    // over-count is corruption. (An under-count is a tolerated hole, refused
+    // elsewhere as an incompleteness, not here.)
+    expect(
+      () => new TileStoreReader(manifest, [{ key: '0', pointCount: 7 }, { key: '1', pointCount: 7 }]),
+    ).toThrow(/more than/);
+    // A hole (sum below the manifest total) is tolerated at this layer.
+    expect(
+      () => new TileStoreReader(manifest, [{ key: '0', pointCount: 4 }]),
+    ).not.toThrow();
+    // A node deeper than the declared octree depth.
+    expect(
+      () => new TileStoreReader(manifest, [{ key: '000', pointCount: 10 }]),
+    ).toThrow(/deeper than the declared octree depth/);
+    // A consistent hierarchy is accepted.
+    expect(
+      () => new TileStoreReader(manifest, [{ key: '0', pointCount: 4 }, { key: '1', pointCount: 6 }]),
+    ).not.toThrow();
+  });
+
+  it('decodeTile refuses trailing bytes that do not complete a record', async () => {
+    const n = 2000;
+    const { index, store, schema, origin } = await buildIndex(n);
+    const { manifestJson, hierarchy } = buildTileStore(index, schema, origin);
+    const reader = new TileStoreReader(
+      parseTileManifest(JSON.parse(manifestJson)),
+      parseHierarchy(hierarchy),
+    );
+    const leaf = reader.leaves().find((l) => l.pointCount > 0)!;
+    const bytes = await store.read(leaf.key);
+    // Exact bytes decode.
+    expect(reader.decodeTile(bytes).length).toBe(reader.pointCountOf(leaf.key));
+    // One trailing byte makes it not a whole multiple of the record: refused,
+    // rather than floored to a smaller "valid" tile.
+    const overlong = new Uint8Array(bytes.byteLength + 1);
+    overlong.set(bytes, 0);
+    expect(() => reader.decodeTile(overlong)).toThrow(/truncated or corrupt/);
+  });
 });
 
 function validManifest(): Record<string, unknown> {

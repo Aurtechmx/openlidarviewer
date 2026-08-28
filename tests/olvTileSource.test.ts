@@ -30,6 +30,7 @@ import {
 import { TileChunkDecoder } from '../src/io/heavy/tileChunkDecoder';
 import {
   OlvTileSource,
+  SOURCE_TRUNCATED_REASON,
   tileKeyOf,
   tileNodeId,
   tileVoxelKey,
@@ -350,6 +351,78 @@ describe('OlvTileSource', () => {
     // The orphan's own points are still offered — dropping the node would lose
     // them on top of losing the parent.
     expect(source.octree.store.get(tileNodeId(orphan.key))).toBeDefined();
+  });
+
+  it('propagates a truncated source: manifest.complete=false drops isComplete', async () => {
+    const { reader, tiles } = await buildReader(5000);
+    // A physically truncated source: header declared more than the file held, so
+    // the store carries complete=false with a declared count above the readable
+    // one. The hierarchy itself is coherent, so only the manifest flag can catch
+    // this.
+    const readable = reader.manifest.pointCount;
+    const truncated = new TileStoreReader(
+      { ...reader.manifest, complete: false, declaredPointCount: readable + 1234 },
+      reader.leaves(),
+    );
+    const source = new OlvTileSource({ id: 'x', name: 'y', store: truncated, tiles });
+    expect(source.octree.isComplete).toBe(false);
+    const reason = source.octree.errors.find((e) => e.startsWith(SOURCE_TRUNCATED_REASON));
+    expect(reason).toBeDefined();
+    expect(reason).toContain(`declared ${readable + 1234}`);
+    expect(reason).toContain(`readable ${readable}`);
+    expect(source.declaredPointCount).toBe(readable + 1234);
+    expect(source.sourcePointCount).toBe(readable);
+
+    // A complete store still reports whole, with no truncation reason.
+    const whole = makeSource(reader, tiles);
+    expect(whole.octree.isComplete).toBe(true);
+    expect(whole.octree.errors.some((e) => e.startsWith(SOURCE_TRUNCATED_REASON))).toBe(false);
+    expect(whole.declaredPointCount).toBe(readable);
+  });
+
+  it('readNodeChunk transfers an owned buffer and copies a partial view', async () => {
+    const { reader } = await buildReader(5000);
+    const node = new OlvTileSource({
+      id: 'x',
+      name: 'y',
+      store: reader,
+      tiles: { read: async () => new Uint8Array(0) },
+    }).octree.nodes().find((n) => n.record.pointCount > 0)!.record;
+
+    // Owned: the reader hands back a fresh full-buffer array, so the chunk is
+    // the SAME underlying buffer — no transient doubling before transfer.
+    let handed!: Uint8Array;
+    const ownedSource = new OlvTileSource({
+      id: 'a',
+      name: 'b',
+      store: reader,
+      tiles: {
+        read: async () => {
+          handed = new Uint8Array(node.pointCount * reader.recordBytes);
+          for (let i = 0; i < handed.length; i++) handed[i] = i & 0xff;
+          return handed;
+        },
+      },
+    });
+    const ownedChunk = await ownedSource.readNodeChunk(node);
+    expect(ownedChunk).toBe(handed.buffer);
+    expect(new Uint8Array(ownedChunk)[7]).toBe(7);
+
+    // Partial view: a subarray over a larger buffer must be copied, or the
+    // transfer would carry bytes outside the view. The copy holds the same data.
+    const backing = new Uint8Array(node.pointCount * reader.recordBytes + 16);
+    for (let i = 0; i < backing.length; i++) backing[i] = (i * 3) & 0xff;
+    const view = backing.subarray(8, 8 + node.pointCount * reader.recordBytes);
+    const viewSource = new OlvTileSource({
+      id: 'c',
+      name: 'd',
+      store: reader,
+      tiles: { read: async () => view },
+    });
+    const copiedChunk = await viewSource.readNodeChunk(node);
+    expect(copiedChunk).not.toBe(backing.buffer);
+    expect(copiedChunk.byteLength).toBe(view.byteLength);
+    expect(new Uint8Array(copiedChunk)).toEqual(new Uint8Array(view));
   });
 
   it('streams through the scheduler with the camera framing the cube', async () => {
