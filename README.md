@@ -329,7 +329,7 @@ OpenLiDARViewer is modular, with one file per format and one file per concern. F
 <details>
 <summary><b>Performance notes</b></summary>
 
-Performance depends on point count, browser memory, GPU capability, point size, rendering detail, the color mode, the file format, and how the data was prepared. A LAS/LAZ file is planned from its header before it is fully read: a cloud above the device's point budget, roughly 3M points on a capable desktop and less on weaker hardware, loads at reduced density (voxel-downsampled, or stride-decoded when far over budget so it is never fully decoded into memory; the source file is still read in once, while COPC/EPT are the true streaming paths), with a memory-safety guard, staged progress, and a cancellable load. The Detail readout always shows the honest `shown / total` count.
+Performance depends on point count, browser memory, GPU capability, point size, rendering detail, the color mode, the file format, and how the data was prepared. A LAS/LAZ file is planned from its header before it is fully read: a cloud above the device's point budget, roughly 3M points on a capable desktop and less on weaker hardware, loads at reduced density (voxel-downsampled, or stride-decoded when far over budget so it is never fully decoded into memory; the source file is still read in once, while COPC, EPT, and the out-of-core path for a very large LAS or LAZ stream only the resident set), with a memory-safety guard, staged progress, and a cancellable load. The Detail readout always shows the honest `shown / total` count.
 
 COPC streaming (local and remote) ships in v0.3.0 and is hardened across v0.3.1 / v0.3.3 with a view-dependent scheduler, hierarchy-aware eviction, a dispatch-pressure gate that bounds residency under 1B-synthetic-point stress, and trustworthy picking against actively-refining clouds. EPT joins COPC as a first-class peer in v0.3.3.
 
@@ -359,10 +359,10 @@ Yes. Drag a `.las`, `.laz`, or `.copc.laz` onto [lidar.aurtech.mx](https://lidar
 No. Files are read and rendered locally. The only network calls are for remote datasets you choose to open; your local files never leave your device.
 
 **What's the largest scan it can open?**
-Most local files are bounded by browser memory and GPU. A very large uncompressed LAS is the exception: it is indexed out of core into browser storage and streamed through the same scheduler, when the browser provides that storage and enough space; the index is temporary and removed when the scan closes. If storage is unavailable or too small the file is refused with guidance rather than loaded whole. For anything else that is too large, stream it as COPC or EPT (local or remote) or convert with PDAL / Entwine. Streaming only loads the resident set the camera needs.
+Most local files are bounded by browser memory and GPU. A very large uncompressed LAS or chunked LAZ is the exception: it is indexed out of core into browser storage and streamed through the same scheduler, when the browser provides that storage and enough space; the index is temporary and removed when the scan closes. If storage is unavailable or too small the file is refused with guidance rather than loaded whole. For anything else that is too large, stream it as COPC or EPT (local or remote) or convert with PDAL / Entwine. Streaming only loads the resident set the camera needs.
 
 **Which formats are supported?**
-LAS / LAZ, PLY, XYZ / CSV, E57, and glTF / GLB for static loads; for streaming: COPC, EPT, a 3D Tiles PNTS tileset, and a very large uncompressed LAS indexed out of core. See [Formats & requirements](#formats--requirements).
+LAS / LAZ, PLY, XYZ / CSV, E57, and glTF / GLB for static loads; for streaming: COPC, EPT, a 3D Tiles PNTS tileset, and a very large uncompressed LAS or chunked LAZ indexed out of core. See [Formats & requirements](#formats--requirements).
 
 **Is it survey-grade?**
 No. Measurements and quality grades describe the data you loaded; they are not a survey-grade certification. Validate against ground control where accuracy matters.

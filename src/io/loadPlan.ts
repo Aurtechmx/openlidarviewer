@@ -94,16 +94,16 @@ export interface LoadPlan {
    */
   largeNonLasFormat?: boolean;
   /**
-   * True when the file is a large uncompressed LAS whose whole-file load would
+   * True when the file is a large uncompressed LAS or chunked LAZ whose whole-file load would
    * exceed the memory ceiling, so it should be built into an out-of-core tile
    * store and streamed rather than materialised (see `src/io/heavy/`). The
    * sliced reader never holds the whole file, so the out-of-core path removes
    * exactly the fixed whole-file cost that trips the ceiling here.
    *
-   * Only uncompressed LAS routes here today, because the tile builder reads
-   * sliced LAS (`openSlicedLasSource`); a compressed LAZ stays on the strided
-   * whole-file path until the chunked-LAZ builder is wired. Optional for
-   * backward-compat — treat `undefined` as `false`.
+   * Uncompressed LAS and chunked LAZ both route here: the tile builder reads
+   * sliced LAS (`openSlicedLasSource`) or decodes the LAZ chunk table one bounded
+   * window at a time. A heavy LAZ without a usable chunk table is refused rather
+   * than read whole. Optional for backward-compat, treat `undefined` as `false`.
    */
   buildThenStream?: boolean;
   /**

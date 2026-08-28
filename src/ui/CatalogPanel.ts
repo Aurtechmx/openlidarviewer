@@ -69,10 +69,8 @@ import { loadPlanetaryComputerCatalog } from '../lazyChunks';
  * rendered from two places and a second copy is a second thing to correct.
  */
 const CATALOG_HINT =
-  'Curated public COPC and EPT datasets: USGS 3DEP and European national '
-  + 'programmes. Each entry records its publisher, licence and the date its URL '
-  + 'was last checked; nothing re-checks it, so that date is the whole claim. '
-  + 'For other locations or your own COPC URL, use the URL field above.';
+  'Public datasets from USGS 3DEP and European national programmes, with '
+  + 'publisher and licence shown. For your own COPC URL, use the field above.';
 
 /**
  * The curated entry the start screen promotes as its one-click demo.
