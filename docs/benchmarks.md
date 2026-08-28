@@ -857,11 +857,35 @@ or classification, so those Scan Report rows read "No".
 This matters because it took no conversion step: Polycam's free `.glb` export
 opened directly, with nothing uploaded anywhere.
 
+## Test 3 — Multi-gigabyte local LAZ (out-of-core path)
+
+The heavy end of the local-file story: a file far larger than the browser can
+hold decoded at once, which the out-of-core path streams from an OPFS-backed
+temporary store instead of decoding whole.
+
+| | |
+|---|---|
+| File | 1.74 GB compressed LAZ |
+| Format | Compressed LAZ, opened locally by drag-and-drop |
+| Machine RAM | 36 GB |
+
+The file opens through the out-of-core indexer: it is chunk-decoded into a
+temporary store and served to the viewer within the shared decode-memory
+budget, so a file this size never has to fit in one decoded buffer.
+
+On this machine the same file opened in about 2 minutes 43 seconds on an
+earlier build and in about 1 minute 41 seconds on v0.6.7 (commit `5efd5257`),
+roughly a 38 percent drop after the heavy-load pipeline work, with the memory
+guards in place. This is one field observation on a single machine and browser.
+Open time depends on thermal state, cache and other tabs, so read it as
+directional rather than a fixed figure.
+
 ## Takeaway
 
-Two very different scans — a 9.6M-point georeferenced drone survey and a
-55K-point iPhone capture — both open from a single drag-and-drop, in a browser
-tab, with no install and no conversion. That is the whole point of the project.
+Three scans of very different scale — a 9.6M-point georeferenced drone survey, a
+55K-point iPhone capture, and a 1.74 GB out-of-core LAZ — all open from a single
+drag-and-drop, in a browser tab, with no install and no conversion. That is the
+whole point of the project.
 
 ## Extreme-scale synthetic stress — pinned to v0.3.3, valid through v0.3.5
 
