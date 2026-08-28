@@ -85,7 +85,7 @@
       "version": "0.6.7",
       "bom-ref": "openlidarviewer@0.6.7",
       "author": "A. Urias",
-      "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
+      "description": "Open any 3D scan \u2014 drone LiDAR, terrestrial laser scan, or phone scan \u2014 instantly and privately, in a browser tab. No install, no upload, no conversion.",
       "licenses": [
         {
           "license": {
@@ -383,8 +383,8 @@
       "type": "library",
       "name": "obj",
       "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.7|@loaders.gl/obj@4.4.3",
+      "version": "4.4.5",
+      "bom-ref": "openlidarviewer@0.6.7|@loaders.gl/obj@4.4.5",
       "description": "Framework-independent loader for the OBJ format",
       "licenses": [
         {
@@ -394,7 +394,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/obj@4.4.3",
+      "purl": "pkg:npm/%40loaders.gl/obj@4.4.5",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -1823,7 +1823,7 @@
       "group": "@swc",
       "version": "0.5.23",
       "bom-ref": "openlidarviewer@0.6.7|@swc/helpers@0.5.23",
-      "author": "강동윤",
+      "author": "\uac15\ub3d9\uc724",
       "description": "External helpers for the swc project.",
       "licenses": [
         {
