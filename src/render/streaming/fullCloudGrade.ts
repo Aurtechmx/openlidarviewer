@@ -50,11 +50,16 @@ import { formatPointCount } from '../../io/loadPlan';
  * scheduler's device-aware first-node guard. This ceiling is that guard's
  * equivalent for the grade: above it the grade refuses rather than allocates.
  *
- * Set well above the 2,000,000-point default budget so a legitimately large
- * first node still grades, while the pathological hundreds-of-millions node is
- * declined.
+ * Set at the 2,000,000-point default sample budget. A single node coarser than
+ * the whole-cloud sample is refused rather than graded, because grading one node
+ * holds far more than the final XYZ Float32Array at peak: the compressed node,
+ * the laz-perf WASM input, the raw LAS records, and the decoded positions,
+ * intensity, classification, returns, GPS time, and RGB channels all sit in
+ * memory alongside the sample buffer. Unlike the streaming scheduler this path is
+ * not device-aware, so the ceiling stays at the normal target instead of several
+ * multiples of it. A node above it is declined here rather than allocated.
  */
-export const MAX_SAMPLE_POINTS = 8_000_000;
+export const MAX_SAMPLE_POINTS = 2_000_000;
 
 /**
  * Companion byte ceiling on the decoded POSITIONS buffer (`sampledPoints * 3`
