@@ -69,11 +69,15 @@ export const DEFAULT_TOTAL_TIMEOUT_MS = 300_000;
  * tile) with a header alone, before delivering a single meaningful byte. The
  * eager allocation only pays off when the body actually arrives; a lie earns a
  * free quarter-gigabyte. This bounds the immediate allocation to a small initial
- * size and grows toward `declared` in doublings as bytes truly arrive, still
- * refusing anything past `declared`. An honest small body (declared at or below
- * this) is still one allocation; a large honest one costs a handful of doublings
- * against the memory it is actually filling. 16 MiB keeps the common case
- * single-shot while capping what a header alone can reserve.
+ * size; only once this many GENUINE bytes have arrived (confirming a substantial
+ * real body, not a header claim) does the reader allocate exactly `declared`
+ * once and stream the remainder straight into it, still refusing anything past
+ * `declared`. An honest small body (declared at or below this) is one allocation
+ * and is never reallocated; a large honest one pays a single final copy, so the
+ * transient peak is about `declared + MAX_DECLARED_PREALLOC_BYTES` rather than
+ * the ~1.5x declared that continued doubling would hold at its last step.
+ * 16 MiB keeps the common case single-shot while capping what a header alone can
+ * reserve.
  */
 export const MAX_DECLARED_PREALLOC_BYTES = 16 * 1024 * 1024;
 
@@ -467,20 +471,27 @@ export async function readAtMostBounded(
   // content-encoding, so a compressed length can never drive this branch.
   if (declared !== null) {
     // Allocate only a bounded initial buffer, never the whole declared size up
-    // front: a large `declared` is a claim, not yet bytes. The buffer grows in
-    // doublings toward `declared` as real bytes land, so a server that declares
-    // 256 MiB and then sends a kilobyte reserves a kilobyte's worth, not the
-    // whole claim. `declared` is already known `<= maxBytes`.
+    // front: a large `declared` is a claim, not yet bytes. `declared` is already
+    // known `<= maxBytes`. A small honest body (declared at or below the prealloc
+    // bound) fits this one buffer and is never reallocated.
     let out = new Uint8Array(Math.min(declared, MAX_DECLARED_PREALLOC_BYTES));
     let filled = 0;
-    // Grow `out` so it can hold at least `needed` bytes, doubling until it does
-    // and never past `declared` (which is the hard ceiling for this branch).
+    // Grow `out` so it can hold at least `needed` bytes. The initial buffer is
+    // `min(declared, PREALLOC)`, so this only ever fires when `declared` exceeds
+    // the prealloc bound AND real bytes have filled it — i.e. at least
+    // MAX_DECLARED_PREALLOC_BYTES of genuine body have already arrived,
+    // confirming a substantial real body rather than a header alone. At that
+    // point allocate exactly `declared` ONCE and stream the remainder straight
+    // in, instead of doubling. Doubling's final step held the old and new
+    // buffers together at ~1.5x declared (a 128 MiB body peaked ~192 MiB); a
+    // single final allocation bounds the transient peak to about
+    // `declared + MAX_DECLARED_PREALLOC_BYTES`. A trickle under the prealloc
+    // bound never reaches here, so a header claim alone can never force the
+    // large allocation. `declared` is the hard ceiling (over-declared bodies are
+    // refused before this), so one allocation suffices — no growth loop.
     const ensureCapacity = (needed: number): void => {
       if (needed <= out.length) return;
-      let next = Math.max(out.length, 1);
-      while (next < needed) next *= 2;
-      if (next > declared) next = declared;
-      const bigger = new Uint8Array(next);
+      const bigger = new Uint8Array(declared);
       bigger.set(out.subarray(0, filled));
       out = bigger;
     };

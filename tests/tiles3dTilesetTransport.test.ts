@@ -10,10 +10,38 @@
 
 import { describe, expect, test } from 'vitest';
 import { bodyCancelFetch } from './helpers/bodyCancelFetch';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   createTilesetTransport,
+  pntsDeviceTransportCap,
+  MAX_PNTS_TILE_BYTES,
   TilesetTimeoutError,
 } from '../src/io/tiles3d/tilesetTransport';
+
+describe('pntsDeviceTransportCap — the .pnts transport cap tracks the device decode budget', () => {
+  test('desktop keeps the full 128 MiB tile ceiling', () => {
+    expect(pntsDeviceTransportCap(false)).toBe(MAX_PNTS_TILE_BYTES);
+    expect(pntsDeviceTransportCap(false)).toBe(128 * 1024 * 1024);
+  });
+
+  test('a phone gets half the ceiling, matching the halved mobile decode budget', () => {
+    // Mobile decode budget is 96 MiB vs the 192 MiB desktop budget, so the
+    // transport cap is scaled to half: 64 MiB. A legal-but-large tile a phone
+    // cannot hold is refused before its body is fetched, not after decode.
+    expect(pntsDeviceTransportCap(true)).toBe(64 * 1024 * 1024);
+  });
+
+  test('the open path wires the device cap into the transport it builds', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../src/app/openTilesetLayer.ts', import.meta.url)),
+      'utf8',
+    );
+    const call = src.match(/createTilesetTransport\(\{[^;]{0,200}\}\)/);
+    expect(call, 'openTilesetLayer no longer configures createTilesetTransport').not.toBeNull();
+    expect(call?.[0]).toMatch(/maxTileBytes:\s*pntsDeviceTransportCap\(deps\.isPhone\(\)\)/);
+  });
+});
 
 /** A fetch returning a scripted sequence of responses. */
 function scriptedFetch(
