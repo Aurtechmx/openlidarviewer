@@ -16,7 +16,13 @@
  * caller reads and writes the blobs through a store of its choice.
  */
 import { octreeGridOf, type Cube, type OctreeGrid } from './octreeGrid';
-import { readTileRecord, tileRecordBytes, type TilePoint, type TileSchema } from './tileRecord';
+import {
+  readTileRecord,
+  tileRecordBytes,
+  TileTruncationError,
+  type TilePoint,
+  type TileSchema,
+} from './tileRecord';
 import type { OocIndex } from './oocIndexer';
 
 /** Bumped when the manifest or hierarchy format changes meaning. */
@@ -149,6 +155,26 @@ export function parseTileManifest(input: unknown): TileManifest {
       ? pointCount
       : nonNegativeInt(m.declaredPointCount, 'declaredPointCount');
   const complete = m.complete === undefined ? true : bool(m.complete, 'complete');
+  // A truncated source has more declared than loaded; a complete one has them
+  // equal. Anything else — declared below loaded, or a `complete` flag that
+  // disagrees with the counts — is an inconsistent manifest, not a store to
+  // trust, so refuse it here rather than let a grade read the mismatch as truth.
+  if (declaredPointCount < pointCount) {
+    fail(`declaredPointCount ${declaredPointCount} is below pointCount ${pointCount}`);
+  }
+  if (complete && declaredPointCount !== pointCount) {
+    fail(
+      `complete is true but declaredPointCount ${declaredPointCount} differs from pointCount ${pointCount}`,
+    );
+  }
+  const bounds = { min: triple(boundsRec.min, 'bounds.min'), max: triple(boundsRec.max, 'bounds.max') };
+  for (let a = 0; a < 3; a++) {
+    if (bounds.min[a] > bounds.max[a]) {
+      fail(`bounds.min[${a}] ${bounds.min[a]} exceeds bounds.max[${a}] ${bounds.max[a]}`);
+    }
+  }
+  const rootSize = finite(rootRec.size, 'root.size');
+  if (rootSize <= 0) fail(`root.size must be positive, got ${rootSize}`);
   return {
     schemaVersion: TILE_STORE_SCHEMA_VERSION,
     pointCount,
@@ -157,8 +183,8 @@ export function parseTileManifest(input: unknown): TileManifest {
     recordBytes,
     schema,
     origin: triple(m.origin, 'origin'),
-    bounds: { min: triple(boundsRec.min, 'bounds.min'), max: triple(boundsRec.max, 'bounds.max') },
-    root: { min: triple(rootRec.min, 'root.min'), size: finite(rootRec.size, 'root.size') },
+    bounds,
+    root: { min: triple(rootRec.min, 'root.min'), size: rootSize },
     depth: nonNegativeInt(m.depth, 'depth'),
     leafCount: nonNegativeInt(m.leafCount, 'leafCount'),
   };
@@ -196,7 +222,35 @@ export class TileStoreReader {
   constructor(manifest: TileManifest, leaves: readonly TileStoreLeaf[]) {
     this.manifest = manifest;
     this.grid = octreeGridOf(manifest.root, manifest.depth);
-    this.countByKey = new Map(leaves.map((l) => [l.key, l.pointCount]));
+    // Build the index by hand rather than `new Map(entries)`: a Map silently
+    // keeps the last value for a duplicate key, which would collapse two nodes
+    // that claim the same octant into one and quietly drop the other's points.
+    // A duplicate key is a corrupt hierarchy, so refuse it. While walking, check
+    // the depth and the running sum: a node deeper than the declared octree, or
+    // leaves that between them claim MORE points than the manifest declares, is
+    // corruption and is refused here. A sum BELOW the manifest total is not
+    // refused — that is a dropped node, the tolerated hole `OlvTileOctree`
+    // records as a completeness error while still offering the points it has.
+    const countByKey = new Map<string, number>();
+    let sum = 0;
+    for (const leaf of leaves) {
+      if (countByKey.has(leaf.key)) {
+        fail(`hierarchy has a duplicate node key ${JSON.stringify(leaf.key)}`);
+      }
+      if (leaf.key.length > manifest.depth) {
+        fail(
+          `hierarchy node ${JSON.stringify(leaf.key)} is deeper than the declared octree depth ${manifest.depth}`,
+        );
+      }
+      countByKey.set(leaf.key, leaf.pointCount);
+      sum += leaf.pointCount;
+    }
+    if (sum > manifest.pointCount) {
+      fail(
+        `hierarchy leaf counts sum to ${sum}, more than the ${manifest.pointCount} points the manifest declares`,
+      );
+    }
+    this.countByKey = countByKey;
   }
 
   get schema(): TileSchema {
@@ -219,13 +273,25 @@ export class TileStoreReader {
     return this.countByKey.get(key) ?? 0;
   }
 
-  /** Decode a leaf tile's bytes into points. */
+  /**
+   * Decode a leaf tile's bytes into points. Strict: the byte length must be an
+   * exact multiple of the record size. Trailing bytes that do not complete a
+   * record mean a truncated or corrupt tile, not a shorter valid one, so this
+   * refuses rather than floor the count and silently present a broken tile as a
+   * smaller good one — matching the strictness of the streaming `decodeTile`.
+   */
   decodeTile(bytes: Uint8Array): TilePoint[] {
+    const recordBytes = this.manifest.recordBytes;
+    if (recordBytes <= 0 || bytes.byteLength % recordBytes !== 0) {
+      throw new TileTruncationError(
+        `tileStore: tile is ${bytes.byteLength} bytes, not a whole multiple of the ${recordBytes}-byte record; the store is truncated or corrupt`,
+      );
+    }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const n = Math.floor(bytes.byteLength / this.manifest.recordBytes);
+    const n = bytes.byteLength / recordBytes;
     const out: TilePoint[] = [];
     for (let i = 0; i < n; i++) {
-      out.push(readTileRecord(view, i * this.manifest.recordBytes, this.manifest.schema));
+      out.push(readTileRecord(view, i * recordBytes, this.manifest.schema));
     }
     return out;
   }

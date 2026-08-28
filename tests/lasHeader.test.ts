@@ -114,4 +114,22 @@ describe('parseLasHeader — corrupted numeric header fields', () => {
     new Uint8Array(buf).fill(0xff, 155, 163); // offset-X float64 → NaN
     expect(() => parseLasHeader(buf)).toThrow(LoadError);
   });
+
+  test('a uint64 point count above 2^53 is refused, not silently truncated', () => {
+    // The extended point count is a uint64 at offset 247. A value JavaScript's
+    // Number cannot hold exactly would silently lose its low bits; the parser
+    // must refuse before converting rather than proceed with a wrong count.
+    const buf = loadFixture();
+    // 2^53 + 1 — one above Number.MAX_SAFE_INTEGER, not exactly representable.
+    new DataView(buf).setBigUint64(247, (1n << 53n) + 1n, true);
+    let caught: unknown;
+    try {
+      parseLasHeader(buf);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(LoadError);
+    expect((caught as LoadError).category).toBe('malformed-file');
+    expect((caught as LoadError).message).toMatch(/safe integer range/);
+  });
 });

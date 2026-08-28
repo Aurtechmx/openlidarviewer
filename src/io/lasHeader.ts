@@ -12,6 +12,21 @@ import { LoadError } from './loadErrors';
 import { parseCrsFromVlrs } from './crs';
 import type { CrsInfo } from './crs';
 
+/**
+ * Read a little-endian uint64 as a Number, refusing values JavaScript cannot
+ * hold exactly. Above 2^53−1 a `Number` silently loses low bits, so a point
+ * count, byte offset or hierarchy size read that large would be quietly wrong —
+ * a corruption no downstream check could recover. Guard BEFORE the conversion
+ * and reject the file with a typed error instead.
+ */
+export function readSafeUint64(view: DataView, offset: number, what: string): number {
+  const value = view.getBigUint64(offset, true);
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new LoadError('malformed-file', `${what} ${value} exceeds the safe integer range.`);
+  }
+  return Number(value);
+}
+
 /** Parsed subset of the LAS public header block. */
 export interface LasHeader {
   pointCount: number;
@@ -140,7 +155,7 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
     if (buffer.byteLength < MIN_LAS_1_4_HEADER_BYTES) {
       throw new Error('Not a valid LAS 1.4 file: the header is truncated');
     }
-    pointCount = Number(view.getBigUint64(OFFSET_EXTENDED_POINT_COUNT, true));
+    pointCount = readSafeUint64(view, OFFSET_EXTENDED_POINT_COUNT, 'LAS point count');
   }
 
   const scale: [number, number, number] = [

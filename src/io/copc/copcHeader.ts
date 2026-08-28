@@ -13,6 +13,7 @@
  */
 
 import { LoadError } from '../loadErrors';
+import { readSafeUint64 } from '../lasHeader';
 import { parseCrsFromVlrs } from '../crs';
 import type { CopcMetadata, CopcHeaderInfo, CopcInfo } from './copcTypes';
 
@@ -87,7 +88,7 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
   if (min.some((v) => !Number.isFinite(v)) || max.some((v) => !Number.isFinite(v))) {
     throw new LoadError('malformed-file', 'LAS header bounds are invalid.');
   }
-  const pointCount = Number(view.getBigUint64(247, true));
+  const pointCount = readSafeUint64(view, 247, 'LAS point count');
   if (!Number.isFinite(pointCount) || pointCount < 0) {
     throw new LoadError('malformed-file', 'LAS point count is invalid.');
   }
@@ -125,8 +126,8 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
     ],
     halfsize: view.getFloat64(ip + 24, true),
     spacing: view.getFloat64(ip + 32, true),
-    rootHierOffset: Number(view.getBigUint64(ip + 40, true)),
-    rootHierSize: Number(view.getBigUint64(ip + 48, true)),
+    rootHierOffset: readSafeUint64(view, ip + 40, 'COPC root hierarchy offset'),
+    rootHierSize: readSafeUint64(view, ip + 48, 'COPC root hierarchy size'),
     gpsTimeRange: [
       view.getFloat64(ip + 56, true),
       view.getFloat64(ip + 64, true),
