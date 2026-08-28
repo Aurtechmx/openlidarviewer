@@ -19,6 +19,27 @@
  *
  * Pure — no DOM, no three.js. The injected `fetchImpl`, `sleep`, and
  * `random` make every retry/timeout path deterministically testable.
+ *
+ * KNOWN LIMITATION — no dataset-wide snapshot pinning. COPC is one object, so
+ * `HttpRangeSource` can pin a single ETag / Last-Modified / size and reject a
+ * range read the moment the object changes underneath the session. EPT is a
+ * TREE of independent objects (`ept.json`, many hierarchy pages, many tiles)
+ * fetched over the life of a scan, with no equivalent whole-dataset validator.
+ * If the dataset is REPUBLISHED mid-stream — Entwine rewriting the pyramid, a
+ * bucket sync swapping objects — this transport can mix pages/tiles from the old
+ * and new versions and would not detect it. Each fetch is otherwise independent,
+ * so a per-request ETag pin (record the first `ept.json` response's validator,
+ * send `If-Match` / compare on every derived request, reject on mismatch) is the
+ * natural fix, but it has to thread a validator from the manifest fetch through
+ * `EptStreamingPointCloud` into every hierarchy + tile request and depends on
+ * the host emitting stable validators (many CDNs and S3-compatible stores vary
+ * them per node) — a real change, deferred rather than half-built here. Until
+ * then the practical guard is operational: treat a published EPT as immutable
+ * for the duration of a session, and re-open the scan after a republish. The
+ * per-tile / per-page integrity checks elsewhere (exact-stride binary decode,
+ * hierarchy-vs-tile count reconciliation, the point-count total reconciliation)
+ * still catch a tile that is internally inconsistent — they do not catch a
+ * consistent tile from a DIFFERENT snapshot.
  */
 
 import type { EptTransport } from '../../render/streaming/EptStreamingPointCloud';

@@ -120,6 +120,14 @@ export function parseEptMetadata(text: string): EptDetection {
   if (typeof span !== 'number' || !Number.isSafeInteger(span) || span <= 0) {
     return { isEpt: false, reason: 'EPT manifest is missing a positive whole "span".' };
   }
+  // EPT's span is the octree's linear voxel resolution, and Entwine builds the
+  // pyramid by repeated halving — so a real span is always a power of two. A
+  // value that is not (say 100) would make `_spacingForDepth`'s `span / 2^depth`
+  // describe a grid the tiles were never laid out on, silently mis-scoring
+  // refinement. Refuse it here rather than let the wrong resolution propagate.
+  if (!Number.isInteger(Math.log2(span))) {
+    return { isEpt: false, reason: `EPT "span" ${span} is not a power of two.` };
+  }
 
   // ── schema ───────────────────────────────────────────────────────────────
   const schema = json['schema'];
@@ -212,8 +220,17 @@ export function parseEptMetadata(text: string): EptDetection {
       srs = wkt;
     }
     const authority = typeof srsField['authority'] === 'string' ? srsField['authority'] : undefined;
-    const horizontalEpsg = parseEpsgCode(srsField['horizontal']);
-    const verticalEpsg = parseEpsgCode(srsField['vertical']);
+    // `srsCodes` is consumed (in `resolveEptCrs`) strictly as EPSG — fed to
+    // `crsFromEpsg` / `isGeographicEpsg`. So a numeric `horizontal` / `vertical`
+    // is an EPSG code ONLY when the manifest's authority says EPSG (or names no
+    // authority, the EPT default). A dataset authored against another registry
+    // (IAU planetary codes, an ESRI well-known id) reuses the same integer space
+    // for entirely different systems; reading 30100 as "EPSG:30100" would place a
+    // Mars cloud on Earth. When the authority is some other registry, refuse the
+    // codes rather than mislabel them — the CRS then stays unresolved (null) here.
+    const epsgAuthority = authority === undefined || authority.toUpperCase() === 'EPSG';
+    const horizontalEpsg = epsgAuthority ? parseEpsgCode(srsField['horizontal']) : undefined;
+    const verticalEpsg = epsgAuthority ? parseEpsgCode(srsField['vertical']) : undefined;
     if (authority !== undefined || horizontalEpsg !== undefined || verticalEpsg !== undefined) {
       srsCodes = { authority, horizontalEpsg, verticalEpsg };
     }

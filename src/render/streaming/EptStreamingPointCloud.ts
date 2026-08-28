@@ -185,6 +185,17 @@ export class EptStreamingPointCloud implements StreamingSource {
     // rest deepen in the background and the scheduler refines as they arrive. A
     // small dataset whose hierarchy fits the budget finishes here, unchanged.
     await octree.loadInitialHierarchy(FIRST_PAINT_HIERARCHY_FILES, signal);
+    // The octree tolerates a failed hierarchy fetch by recording the error,
+    // draining the frontier, and marking itself fullyLoaded — so a root file
+    // that never arrived (or parsed) still resolves the walk. Left unchecked,
+    // open() would hand back a cloud with zero nodes, zero points, and
+    // isComplete=false: a "successful" open of nothing that renders blank. The
+    // initial walk must yield at least one usable node (the root/coarse geometry
+    // the scan attaches to) or the open is a failure, not an empty success.
+    if (octree.nodes().length === 0) {
+      const detail = octree.errors[0] ? ` (${octree.errors[0]})` : '';
+      throw new Error(`unable to open EPT hierarchy: no nodes loaded from the root index${detail}`);
+    }
     const cloud = new EptStreamingPointCloud(
       metadata, baseUrl, name, renderOrigin, octree, transport, search,
     );

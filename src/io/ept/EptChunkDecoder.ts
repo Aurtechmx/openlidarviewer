@@ -27,6 +27,7 @@ import type {
 import type { EptStreamingPointCloud } from '../../render/streaming/EptStreamingPointCloud';
 import type { EptLaszipWorkerClient } from './worker/eptLaszipWorkerClient';
 import { decodeEptLaszipTile } from './eptLaszipDecode';
+import { LoadError } from '../loadErrors';
 
 export class EptChunkDecoder implements ChunkDecoder {
   private readonly _cloud: EptStreamingPointCloud;
@@ -69,10 +70,30 @@ export class EptChunkDecoder implements ChunkDecoder {
         // the main thread (the tile buffer is transferred zero-copy); the
         // in-process path is the fallback for environments without a worker.
         // Both carry `meta.rgbEightBit` — the dataset-level colour decision.
-        return this._laszipWorker
-          ? this._laszipWorker.decodeTile(
-              chunk, this._cloud.renderOrigin, signal, meta.rgbEightBit)
-          : decodeEptLaszipTile(chunk, this._cloud.renderOrigin, meta.rgbEightBit);
+        {
+          const decoded = await (this._laszipWorker
+            ? this._laszipWorker.decodeTile(
+                chunk, this._cloud.renderOrigin, signal, meta.rgbEightBit)
+            : decodeEptLaszipTile(chunk, this._cloud.renderOrigin, meta.rgbEightBit));
+          // The scheduler admitted this node — and reserved its memory — on the
+          // HIERARCHY point count (`meta.pointCount`). But an EPT laszip tile is
+          // a self-describing LAZ file whose own LAS header count drives the
+          // decode allocation. When the two disagree, the header wins by default
+          // and the memory-admission estimate is bypassed by that ratio: a
+          // hierarchy of 100k against a header of 10M lets a tile 100x its
+          // reservation through. A disagreement is not a transport fault a
+          // re-fetch could heal — it is the dataset contradicting itself — so
+          // fail closed (permanent) rather than trust the tile's own figure.
+          if (decoded.pointCount !== meta.pointCount) {
+            throw new LoadError(
+              'malformed-file',
+              `malformed EPT dataset: laszip tile declares ${decoded.pointCount} ` +
+                `points but its hierarchy entry declares ${meta.pointCount}. The ` +
+                `hierarchy count governs memory admission; refusing the tile.`,
+            );
+          }
+          return decoded;
+        }
       case 'zstandard':
         throw new Error(
           'EPT zstandard tile decode is not supported in this build. ' +

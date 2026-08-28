@@ -263,7 +263,36 @@ export class EptOctree implements StreamingOctreeView {
       this._errors.push(`EPT hierarchy exceeded ${MAX_HIERARCHY_FILES} files — stopped`);
       this._frontier = [];
     }
-    if (this._frontier.length === 0) this._fullyLoaded = true;
+    if (this._frontier.length === 0) {
+      this._fullyLoaded = true;
+      this._reconcilePointCount();
+    }
+  }
+
+  /**
+   * After a clean walk, reconcile the resolved point total against `ept.json`'s
+   * declared `points`. A walk that terminates with no fetch/parse errors still
+   * only reports "the traversal stopped and nothing threw" — it never checks
+   * that the nodes it ingested actually account for every point the manifest
+   * promised. A hierarchy that stops cleanly while a depth-capped or otherwise
+   * dropped subtree leaves 700k of 10M points unreachable would read
+   * KNOWN-COMPLETE. Summing the ingested node counts and requiring equality
+   * closes that: on a shortfall (or surplus) push a named POINT_COUNT_MISMATCH
+   * error carrying both totals, which drops {@link isComplete} to false through
+   * the existing error-count gate. Only meaningful when the walk was otherwise
+   * clean — an already-errored walk is incomplete regardless.
+   */
+  private _reconcilePointCount(): void {
+    if (this._errors.length > 0) return;
+    let resolved = 0;
+    for (const node of this.store.all()) resolved += node.record.pointCount;
+    if (resolved !== this._meta.points) {
+      this._errors.push(
+        `POINT_COUNT_MISMATCH: EPT hierarchy resolved ${resolved} points but ` +
+          `ept.json declares ${this._meta.points} (difference ` +
+          `${this._meta.points - resolved}).`,
+      );
+    }
   }
 
   /** Add one EPT hierarchy node to the store as a {@link StreamingNodeRecord}. */
