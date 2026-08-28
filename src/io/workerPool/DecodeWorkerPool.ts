@@ -61,7 +61,18 @@ interface ErrorReply {
   requestId: number;
   error: string;
 }
-type PoolReply<T> = DecodedReply<T> | ErrorReply;
+/**
+ * The terminal a worker posts when it consumed a cancel and skipped the decode.
+ * It carries no payload — the caller-facing promise was already rejected by the
+ * abort that triggered the cancel — its only job is to release the slot. Without
+ * it a cancelled request leaves the worker skipped but silent, and the slot it
+ * held is never freed, so repeated cancellation eventually drains every slot.
+ */
+interface CancelledReply {
+  type: 'cancelled';
+  requestId: number;
+}
+type PoolReply<T> = DecodedReply<T> | ErrorReply | CancelledReply;
 
 /**
  * The four rejection messages a pool produces. Held per-client so the COPC and
@@ -512,6 +523,18 @@ export class DecodeWorkerPool<T> {
     // unknown request id must never release a slot that has since been given a
     // different job — that is how two live decodes would end up on one worker.
     if (slot.job?.requestId === reply.requestId) slot.job = null;
+
+    if (reply.type === 'cancelled') {
+      // The worker consumed a cancel and produced its single terminal reply. Its
+      // caller-facing promise was already rejected by `_onAbort`, so there is
+      // nothing to resolve or reject here — clearing `slot.job` above is the
+      // point: it frees the slot the abandoned decode was holding. Drop any
+      // lingering bookkeeping (normally none — the abort already settled it) and
+      // pump so the freed slot picks up queued work.
+      this._settle(reply.requestId);
+      this._pump();
+      return;
+    }
 
     const job = this._settle(reply.requestId);
     if (!job) {

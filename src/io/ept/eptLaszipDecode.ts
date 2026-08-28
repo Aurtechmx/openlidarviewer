@@ -47,6 +47,11 @@ import {
   validateDeclaredPointCount,
   compressedBytesPerPointFloor,
 } from '../validateCount';
+import {
+  HeavyByteBudgetError,
+  MAX_DECODE_PEAK_BYTES,
+  withinDecodePeakBudget,
+} from '../heavy/heavyByteBudget';
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 
@@ -100,6 +105,33 @@ interface TileDecodeContext {
   readonly pointSourceOffset: number;
   readonly gpsTimeOffset: number | null;
   readonly rgbOffset: number | null;
+}
+
+/**
+ * Peak decoded bytes ONE point of this tile stages at once, across every output
+ * channel the decode allocates for the tile's format plus the raw-RGB staging
+ * buffer that coexists with the narrowed one. Structural channels are always
+ * present; GPS time and the two RGB buffers are gated exactly as the allocations
+ * below them are, so the estimate tracks the real transient peak rather than a
+ * worst-case guess.
+ *
+ *   positions   Float32 × 3   12
+ *   intensity   Uint16         2
+ *   class       Uint8          1
+ *   returnNo    Uint8          1
+ *   returnCnt   Uint8          1
+ *   sourceId    Uint16         2   ── structural subtotal 19
+ *   gpsTime     Float64        8   (PDRF 1/3/6-8 only)
+ *   rgb         Uint8 × 3      3   (RGB formats only)
+ *   rgb16       Uint16 × 3     6   (RGB staging, freed after narrowing)
+ */
+const EPT_STRUCTURAL_BYTES_PER_POINT = 19;
+function decodedBytesPerPoint(ctx: TileDecodeContext): number {
+  return (
+    EPT_STRUCTURAL_BYTES_PER_POINT +
+    (ctx.gpsTimeOffset !== null ? 8 : 0) +
+    (ctx.hasRgb ? 3 + 6 : 0)
+  );
 }
 
 /** Build the per-tile decode context from a parsed header. */
@@ -206,6 +238,30 @@ export function decodeEptLaszipTileWith(
     compressedBytesPerPointFloor(ctx.recordLength),
     'EPT laszip tile',
   );
+  // The count guard above only bounds the declared count by the tile's own
+  // compressed bytes, and at the loose LAZ ratio floor a large-but-honest tile
+  // can still pass with a point count whose decoded channels — positions,
+  // intensity, classification, returns, source id, GPS time, and both RGB
+  // buffers — stage far more transient memory than the compressed payload. Bound
+  // the SUMMED peak (compressed span held in the WASM heap + every decoded
+  // channel) against the shared heavy-path ceiling BEFORE the seven typed-array
+  // allocations below, so an over-budget tile is refused rather than allocated.
+  if (
+    !withinDecodePeakBudget(
+      buffer.byteLength,
+      n,
+      decodedBytesPerPoint(ctx),
+      0,
+      MAX_DECODE_PEAK_BYTES,
+    )
+  ) {
+    throw new HeavyByteBudgetError(
+      `EPT laszip tile: ${n.toLocaleString('en-US')} points would stage ` +
+        `${(n * decodedBytesPerPoint(ctx)).toLocaleString('en-US')} decoded bytes ` +
+        `plus a ${buffer.byteLength.toLocaleString('en-US')}-byte compressed payload, ` +
+        `over the ${MAX_DECODE_PEAK_BYTES.toLocaleString('en-US')}-byte decode budget.`,
+    );
+  }
   // Fail before decoding a whole tile when its transform is outright non-finite
   // (a bad scale/offset in the header, or a non-finite render origin). Cheap and
   // O(1); it does NOT catch a finite-but-extreme scale overflowing
