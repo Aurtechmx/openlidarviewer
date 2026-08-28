@@ -11,6 +11,35 @@
 import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
 import type { StreamingNode, NodeState } from './StreamingNode';
 import { createStreamingNode } from './StreamingNode';
+import { LoadError } from '../../io/loadErrors';
+
+/**
+ * Whether two records sharing an id disagree on a load-bearing immutable field.
+ *
+ * The store keys nodes by id and used to keep whichever record arrived first,
+ * so a malformed hierarchy that declared the same id twice with a different
+ * point count, tile location, or bounds was silently accepted — the scheduler
+ * then admitted memory against one figure and decoded against another. The
+ * fields compared here are exactly the ones that drive memory admission and the
+ * node's spatial identity: point count, the tile's byte offset / size, the node
+ * depth, and the six bounds components. A re-add with every one of these equal
+ * is a genuine idempotent repeat (the same node reached through two hierarchy
+ * pages) and stays a no-op; any disagreement is refused.
+ */
+function recordsConflict(a: StreamingNodeRecord, b: StreamingNodeRecord): boolean {
+  if (
+    a.pointCount !== b.pointCount ||
+    a.byteOffset !== b.byteOffset ||
+    a.byteSize !== b.byteSize ||
+    a.depth !== b.depth
+  ) {
+    return true;
+  }
+  for (let i = 0; i < 6; i++) {
+    if (a.bounds[i] !== b.bounds[i]) return true;
+  }
+  return false;
+}
 
 /** Live node counts by lifecycle state. */
 export interface NodeCounts {
@@ -73,12 +102,30 @@ export class StreamingNodeStore {
   private readonly _queued = new Set<StreamingNode>();
 
   /**
-   * Register a node record discovered in the hierarchy. Idempotent — a record
-   * already present (by id) returns the existing runtime node unchanged.
+   * Register a node record discovered in the hierarchy.
+   *
+   * Idempotent for a genuine repeat: an id already present whose record agrees
+   * on every load-bearing immutable field returns the existing runtime node
+   * unchanged. But an id present with a CONFLICTING record — a different point
+   * count, tile location, or bounds — is a self-contradicting hierarchy, not a
+   * repeat. Keeping the first-seen record silently (the old behaviour) let the
+   * scheduler admit memory against one figure while a later page declared
+   * another; refuse it with a typed error instead.
    */
   add(record: StreamingNodeRecord): StreamingNode {
     const existing = this._nodes.get(record.id);
-    if (existing) return existing;
+    if (existing) {
+      if (recordsConflict(existing.record, record)) {
+        throw new LoadError(
+          'malformed-file',
+          `HIERARCHY_CONFLICT: node "${record.id}" is declared twice with ` +
+            `conflicting records (pointCount ${existing.record.pointCount} vs ` +
+            `${record.pointCount}). The hierarchy contradicts itself; refusing ` +
+            `the malformed node.`,
+        );
+      }
+      return existing;
+    }
     const node = createStreamingNode(record);
     this._nodes.set(record.id, node);
     return node;

@@ -58,8 +58,18 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
  * The `boundedRead` helper refuses a `Content-Length` above the cap before
  * reading a byte, then streams with a running counter that cancels the body on
  * the chunk that would cross it — so a lying or absent length can't slip past.
+ *
+ * The hierarchy cap is 16 MiB, not the tile cap. A hierarchy page is a JSON
+ * document that `JSON.parse` inflates well past its byte size (the source
+ * string, the parsed object, and the partitioned entry arrays all coexist), so
+ * a 64 MiB page could stage several hundred MB of heap before the entry-count
+ * bound in `parseHierarchyFile` even sees it. A real Entwine page splits at a
+ * hierarchy step and runs KBs to low single-digit MBs; 16 MiB is far above any
+ * legitimate page (the committed reference fixture is 21 bytes) while cutting
+ * the worst-case parse heap roughly fourfold. The parser applies a matching
+ * entry-count ceiling so a densely packed page can't reach the byte cap first.
  */
-const HIERARCHY_MAX_BYTES = 64 * 1024 * 1024;
+const HIERARCHY_MAX_BYTES = 16 * 1024 * 1024;
 const TILE_MAX_BYTES = 256 * 1024 * 1024;
 /** Maximum retries beyond the initial attempt (so up to 4 total). */
 const DEFAULT_MAX_RETRIES = 3;

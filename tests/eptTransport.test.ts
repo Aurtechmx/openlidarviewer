@@ -259,9 +259,12 @@ describe('createEptTransport — internal timeout is a distinct outcome from a u
 });
 
 describe('createEptTransport — bounded bodies (OOM defense)', () => {
-  test('fetchText refuses a hierarchy whose Content-Length exceeds the 64 MiB cap', async () => {
+  test('fetchText refuses a hierarchy whose Content-Length exceeds the 16 MiB cap', async () => {
+    // 17 MiB: under the old 64 MiB hierarchy cap this passed; the lowered cap
+    // refuses it. A 64 MiB JSON page inflates to hundreds of MB of parse heap,
+    // so the ceiling is 16 MiB — far above any legitimate Entwine page.
     const handle = scriptedFetch([
-      { status: 200, body: '{}', headers: { 'content-length': String(65 * 1024 * 1024) } },
+      { status: 200, body: '{}', headers: { 'content-length': String(17 * 1024 * 1024) } },
     ]);
     const t = createEptTransport({ fetchImpl: handle.fn, sleep: () => Promise.resolve() });
     const err = await t

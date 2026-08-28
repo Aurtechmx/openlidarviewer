@@ -27,6 +27,7 @@ import type {
 import type { EptStreamingPointCloud } from '../../render/streaming/EptStreamingPointCloud';
 import type { EptLaszipWorkerClient } from './worker/eptLaszipWorkerClient';
 import { decodeEptLaszipTile } from './eptLaszipDecode';
+import { parseLasHeader } from '../lasHeader';
 import { LoadError } from '../loadErrors';
 
 export class EptChunkDecoder implements ChunkDecoder {
@@ -71,6 +72,28 @@ export class EptChunkDecoder implements ChunkDecoder {
         // in-process path is the fallback for environments without a worker.
         // Both carry `meta.rgbEightBit` — the dataset-level colour decision.
         {
+          // Memory-admission gate, BEFORE any laz-perf decompression. The
+          // scheduler admitted this node and reserved its memory on the
+          // hierarchy point count (`meta.pointCount`), but an EPT laszip tile is
+          // a complete LAZ file whose own LAS public header count drives the
+          // decode allocation. Parsing the header is cheap (no decompression) and
+          // catches the disagreement before the tile is handed to laz-perf — so a
+          // header claiming 5,000,000 points against a hierarchy of 100 never
+          // reaches the decoder or reserves its allocation. A disagreement is the
+          // dataset contradicting itself, not a transport fault a re-fetch could
+          // heal, so fail closed (permanent). The post-decode reconciliation
+          // below stays as defense-in-depth for the pointCount the decoder
+          // actually produced.
+          const headerPointCount = parseLasHeader(chunk).pointCount;
+          if (headerPointCount !== meta.pointCount) {
+            throw new LoadError(
+              'malformed-file',
+              `malformed EPT dataset: laszip tile header declares ` +
+                `${headerPointCount} points but its hierarchy entry declares ` +
+                `${meta.pointCount}. The hierarchy count governs memory ` +
+                `admission; refusing the tile before decompression.`,
+            );
+          }
           const decoded = await (this._laszipWorker
             ? this._laszipWorker.decodeTile(
                 chunk, this._cloud.renderOrigin, signal, meta.rgbEightBit)

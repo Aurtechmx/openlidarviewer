@@ -23,6 +23,7 @@ import { EptStreamingPointCloud } from '../src/render/streaming/EptStreamingPoin
 import type { EptTransport } from '../src/render/streaming/EptStreamingPointCloud';
 import { parseEptMetadata } from '../src/io/ept/eptDetect';
 import { LoadError } from '../src/io/loadErrors';
+import { lasHeaderBuffer } from './helpers/lasHeaderBytes';
 import type {
   ChunkDecodeMetadata,
   DecodedChunk,
@@ -296,24 +297,31 @@ function chunkWith(pointCount: number): DecodedChunk {
   } as DecodedChunk;
 }
 
-test('#2 a laszip tile whose header count disagrees with the hierarchy count is refused', async () => {
+// The tile carries a valid LAS header whose count MATCHES the hierarchy (100),
+// so the pre-decode admission gate passes and these tests exercise the
+// POST-decode reconciliation against the count the worker actually returns.
+const TILE_HEADER_100 = lasHeaderBuffer(100);
+
+test('#2 a laszip tile whose decoded count disagrees with the hierarchy count is refused', async () => {
   // The injected worker returns a chunk claiming 10M points against a hierarchy
-  // entry of 100 — the memory-admission bypass the audit flagged.
+  // entry of 100 — the memory-admission bypass the audit flagged. The header
+  // itself declares 100, so this trips the post-decode reconciliation, not the
+  // pre-decode header gate.
   const worker = {
     decodeTile: async (): Promise<DecodedChunk> => chunkWith(10_000_000),
   };
   const decoder = new EptChunkDecoder(laszipCloudStub(), worker as never);
-  await expect(decoder.decode(new ArrayBuffer(0), META_100)).rejects.toThrow(LoadError);
-  await expect(decoder.decode(new ArrayBuffer(0), META_100)).rejects.toThrow(
+  await expect(decoder.decode(TILE_HEADER_100.slice(0), META_100)).rejects.toThrow(LoadError);
+  await expect(decoder.decode(TILE_HEADER_100.slice(0), META_100)).rejects.toThrow(
     /hierarchy entry declares 100/,
   );
 });
 
-test('#2 a laszip tile whose header count matches the hierarchy count passes', async () => {
+test('#2 a laszip tile whose decoded count matches the hierarchy count passes', async () => {
   const worker = {
     decodeTile: async (): Promise<DecodedChunk> => chunkWith(100),
   };
   const decoder = new EptChunkDecoder(laszipCloudStub(), worker as never);
-  const decoded = await decoder.decode(new ArrayBuffer(0), META_100);
+  const decoded = await decoder.decode(TILE_HEADER_100.slice(0), META_100);
   expect(decoded.pointCount).toBe(100);
 });
