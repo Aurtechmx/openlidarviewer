@@ -32,6 +32,7 @@ import type { RangeSource } from '../range/RangeSource';
 import { decodeContext, finalizeRawColors } from '../lasDecodeShared';
 import { openSlicedLas } from './slicedLasReader';
 import { readLazChunkTable } from './lazChunkTable';
+import { withinDecodedByteBudget } from './heavyByteBudget';
 import { decodeLazChunkLocal } from './decodeLazChunked';
 import { getLazPerf } from '../lazDecode';
 import {
@@ -97,9 +98,13 @@ function localExtent(
 
 /**
  * Build a stratified preview sample, or null when the file is too small to be
- * worth one or the sample cannot be built (an unsupported LAZ table, a decode
- * fault). Null is not an error: the caller simply opens with no preview and
- * waits for the full index.
+ * worth one or the sample cannot be built. Null covers two distinct cases, both
+ * best-effort and neither a failed open: "preview unavailable" (an unsupported
+ * LAZ table, a point format outside the decoder's set, a decode fault, or a file
+ * under the preview-worth threshold) and "preview skipped: chunk exceeds safe
+ * decode budget" (a chunk whose decoded records are over the byte budget is not
+ * decoded for a preview). The caller opens with no preview and waits for the full
+ * index either way.
  */
 export async function buildPreviewSample(
   range: RangeSource,
@@ -209,6 +214,16 @@ async function sampleLaz(
   for (let i = 0; i < wanted && sampled < target; i++) {
     signal?.throwIfAborted();
     const c = chunks[Math.min(chunks.length - 1, Math.floor(i * stride))];
+    // Per-chunk decoded-byte refusal, the same cap the full build enforces. The
+    // sampler decodes a WHOLE chunk before taking the first `take` points it
+    // needs, so a chunk whose `pointCount * pointDataRecordLength` is over budget
+    // would stage the whole over-budget decode just for a preview. Skip this
+    // chunk rather than decode it — a "preview skipped: chunk exceeds safe decode
+    // budget" case, distinct from the "preview unavailable" that a null table or
+    // an unsupported format yields. readLazChunkTable already refuses such a
+    // chunk, so a supported table should never reach here; this stays as the
+    // sampler's own guard against decoding past budget.
+    if (!withinDecodedByteBudget(c.pointCount, header.pointDataRecordLength)) continue;
     // One bounded range read per chunk — never the whole file.
     const bytes = await range.readRange(c.byteOffset, c.byteLength, signal);
     const raw = decodeLazChunkLocal(lazPerf, {

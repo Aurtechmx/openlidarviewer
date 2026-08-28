@@ -30,6 +30,10 @@ export interface SlicedLasSource {
   readonly schema: TileSchema;
   readonly recordBytes: number;
   readonly readablePointCount: number;
+  /** The header's declared count, before any truncation clamp. */
+  readonly declaredPointCount: number;
+  /** `false` when the file physically holds fewer points than it declares. */
+  readonly complete: boolean;
   readonly origin: [number, number, number];
 }
 
@@ -73,6 +77,8 @@ export async function openSlicedLasSource(
     schema,
     recordBytes,
     readablePointCount: opened.readablePointCount,
+    declaredPointCount: opened.declaredPointCount,
+    complete: opened.complete,
     origin: opened.origin,
   };
 }

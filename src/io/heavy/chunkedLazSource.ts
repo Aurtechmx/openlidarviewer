@@ -34,6 +34,11 @@ import {
 } from '../lasDecodeShared';
 import { getLazPerf } from '../lazDecode';
 import { readLazChunkTable, type LazChunkRange } from './lazChunkTable';
+import {
+  MAX_DECODED_ALLOCATION_BYTES,
+  decodedBytesFor,
+  withinDecodedByteBudget,
+} from './heavyByteBudget';
 import { decodeLazChunkLocal, type LazChunkJob } from './decodeLazChunked';
 import type { PointSource, PositionBatch, SourceHeader } from './oocIndexer';
 import {
@@ -76,23 +81,32 @@ export const MAX_LAZ_WINDOW_SPAN_BYTES = 128 * 1024 * 1024;
 
 /**
  * Plan the next window starting at `start`: grow it while the contiguous span
- * from the first chunk's offset stays under {@link MAX_LAZ_WINDOW_SPAN_BYTES}
- * and under `window` chunks, but always take at least one chunk. Pure, so the
- * shrink behaviour is unit-testable without decoding. `chunks` must be non-empty
- * at `start`.
+ * from the first chunk's offset stays under {@link MAX_LAZ_WINDOW_SPAN_BYTES},
+ * the aggregate DECODED bytes of the window stay under
+ * {@link MAX_DECODED_ALLOCATION_BYTES}, and it is under `window` chunks — but
+ * always take at least one chunk. The decoded-byte cap uses the real record
+ * length (`recordLength`, 0 to skip it): the compressed-span cap bounds the read,
+ * but a window of highly-compressed chunks can decode to far more than it reads,
+ * and every decoded chunk in the window is staged before the window advances.
+ * Pure, so the shrink behaviour is unit-testable without decoding. `chunks` must
+ * be non-empty at `start`.
  */
 export function planChunkWindow(
   chunks: readonly LazChunkRange[],
   start: number,
   window: number,
+  recordLength: number = 0,
 ): { end: number; spanStart: number; spanLength: number } {
   const spanStart = chunks[start].byteOffset;
+  const cap = recordLength > 0 ? MAX_DECODED_ALLOCATION_BYTES : Number.POSITIVE_INFINITY;
   let end = start + 1;
-  while (
-    end < chunks.length &&
-    end - start < window &&
-    chunks[end].byteOffset + chunks[end].byteLength - spanStart <= MAX_LAZ_WINDOW_SPAN_BYTES
-  ) {
+  let decoded = decodedBytesFor(chunks[start].pointCount, recordLength > 0 ? recordLength : 1);
+  while (end < chunks.length && end - start < window) {
+    const next = chunks[end];
+    if (next.byteOffset + next.byteLength - spanStart > MAX_LAZ_WINDOW_SPAN_BYTES) break;
+    const nextDecoded = decoded + decodedBytesFor(next.pointCount, recordLength > 0 ? recordLength : 1);
+    if (nextDecoded > cap) break;
+    decoded = nextDecoded;
     end++;
   }
   const last = chunks[end - 1];
@@ -100,10 +114,15 @@ export function planChunkWindow(
 }
 
 /**
- * A LAZ the chunked out-of-core path cannot serve: no usable chunk table, or a
- * point format the per-chunk decoder does not support. Named so the open path
- * can route on it (e.g. fall back to the whole-file loader) rather than reading
- * the file whole here.
+ * A LAZ the chunked out-of-core path cannot serve: no usable chunk table, a
+ * point format the per-chunk decoder does not support, or a chunk/window over the
+ * decoded-byte budget. Named so the open path can route on it rather than reading
+ * the file whole here. Routing does NOT mean an automatic whole-file fallback: a
+ * whole-file read is permitted only when an independent load plan proves that
+ * path fits in memory. When this error is raised because a chunk or window
+ * exceeds the byte budget, the file is by construction too large for a bounded
+ * decode, so the whole-file path cannot fit and must not be tried — the file is
+ * refused with convert-to-COPC/EPT guidance.
  */
 export class ChunkedLazUnsupportedError extends Error {
   constructor(message: string) {
@@ -189,7 +208,12 @@ export async function openChunkedLazSource(
         // last chunk's end. `planChunkWindow` caps that span so a wide window of
         // large chunks can never read an unbounded contiguous slice. Nothing
         // outside this window is resident.
-        const { end, spanStart, spanLength } = planChunkWindow(chunks, start, window);
+        const { end, spanStart, spanLength } = planChunkWindow(
+          chunks,
+          start,
+          window,
+          header.pointDataRecordLength,
+        );
         const windowChunks = chunks.slice(start, end);
         const span = await range.readRange(spanStart, spanLength, signal);
         for (const c of windowChunks) {
@@ -215,6 +239,16 @@ function decodeChunkBatch(
   recordBytes: number,
   c: LazChunkRange,
 ): PositionBatch {
+  // Defense in depth behind the table-read cap: never decode a chunk whose
+  // records exceed the decoded-byte budget. readLazChunkTable already refuses
+  // such a chunk, so a supported table cannot reach here over budget; this holds
+  // even if a future caller hands in a chunk that skipped that gate.
+  if (!withinDecodedByteBudget(c.pointCount, header.pointDataRecordLength)) {
+    throw new ChunkedLazUnsupportedError(
+      `chunked LAZ chunk decodes to ${c.pointCount} points of ${header.pointDataRecordLength} ` +
+        'bytes, over the safe decode budget; convert it to COPC or EPT',
+    );
+  }
   const rel = c.byteOffset - spanStart;
   const job: LazChunkJob = {
     chunk: span.slice(rel, rel + c.byteLength),

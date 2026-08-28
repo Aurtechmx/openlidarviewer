@@ -25,6 +25,16 @@ export const TILE_STORE_SCHEMA_VERSION = 2;
 export interface TileManifest {
   readonly schemaVersion: number;
   readonly pointCount: number;
+  /**
+   * The point count the source header declared. Equals {@link pointCount} for a
+   * complete scan; larger when the file was physically truncated, so a consumer
+   * can report declared-vs-loaded honesty rather than presenting a truncated scan
+   * as a complete smaller one. Optional so a store written before this field is
+   * read as complete (declared === loaded).
+   */
+  readonly declaredPointCount?: number;
+  /** `false` when the source held fewer physical points than it declared. */
+  readonly complete?: boolean;
   readonly recordBytes: number;
   readonly schema: TileSchema;
   /**
@@ -59,6 +69,7 @@ export function buildTileStore(
   index: OocIndex,
   schema: TileSchema,
   origin: readonly [number, number, number],
+  provenance?: { readonly declaredPointCount: number; readonly complete: boolean },
 ): { manifest: TileManifest; manifestJson: string; hierarchy: string } {
   if (tileRecordBytes(schema) !== index.recordBytes) {
     throw new Error(
@@ -68,6 +79,11 @@ export function buildTileStore(
   const manifest: TileManifest = {
     schemaVersion: TILE_STORE_SCHEMA_VERSION,
     pointCount: index.pointCount,
+    // Carry declared-vs-loaded honesty when the source knows it. Default the
+    // declared count to the loaded count (a complete scan) so a store built
+    // without provenance reads as complete rather than unknown.
+    declaredPointCount: provenance ? provenance.declaredPointCount : index.pointCount,
+    complete: provenance ? provenance.complete : true,
     recordBytes: index.recordBytes,
     schema: { hasGps: schema.hasGps, hasRgb: schema.hasRgb },
     origin: [origin[0], origin[1], origin[2]],
@@ -126,9 +142,18 @@ export function parseTileManifest(input: unknown): TileManifest {
   }
   const boundsRec = asRecord(m.bounds, 'bounds');
   const rootRec = asRecord(m.root, 'root');
+  const pointCount = nonNegativeInt(m.pointCount, 'pointCount');
+  // Optional, so a store written before these fields round-trips as complete.
+  const declaredPointCount =
+    m.declaredPointCount === undefined
+      ? pointCount
+      : nonNegativeInt(m.declaredPointCount, 'declaredPointCount');
+  const complete = m.complete === undefined ? true : bool(m.complete, 'complete');
   return {
     schemaVersion: TILE_STORE_SCHEMA_VERSION,
-    pointCount: nonNegativeInt(m.pointCount, 'pointCount'),
+    pointCount,
+    declaredPointCount,
+    complete,
     recordBytes,
     schema,
     origin: triple(m.origin, 'origin'),

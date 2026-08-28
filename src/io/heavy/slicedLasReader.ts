@@ -26,6 +26,7 @@ import {
   finalizeRawColors,
   type RawPoints,
 } from '../lasDecodeShared';
+import { batchPointsForRecordLength } from './heavyByteBudget';
 
 /** One decoded batch of consecutive records. */
 export interface SlicedLasBatch {
@@ -60,6 +61,15 @@ export interface SlicedLasOpen {
    * truncated file yields its readable prefix instead of a fault.
    */
   readonly readablePointCount: number;
+  /** The point count the header declares, before any truncation clamp. */
+  readonly declaredPointCount: number;
+  /**
+   * Whether the file physically holds every declared point. `false` when the
+   * bytes after the header cannot back the declared count — a truncated scan.
+   * Carried so a truncated file is never presented as a complete smaller one:
+   * `readablePointCount < declaredPointCount` iff this is `false`.
+   */
+  readonly complete: boolean;
   readonly origin: [number, number, number];
   /** Read one batch of `count` records starting at `firstPointIndex`. */
   readBatch(firstPointIndex: number, count: number): Promise<SlicedLasBatch>;
@@ -85,13 +95,23 @@ export async function openSlicedLas(
       ? Math.floor((size - header.offsetToPointData) / recordLength)
       : 0;
   const readablePointCount = Math.min(header.pointCount, capacity);
+  const declaredPointCount = header.pointCount;
+  const complete = readablePointCount >= declaredPointCount;
 
   const origin: [number, number, number] =
     options.origin ?? [Math.floor(header.min[0]), Math.floor(header.min[1]), Math.floor(header.min[2])];
   const ctx = decodeContext(header, origin);
   const hasColor = pointFormatHasRgb(header.pointFormat);
   const hasGps = ctx.gpsTimeOffset !== null;
-  const batchPoints = Math.max(1, options.batchPoints ?? DEFAULT_BATCH_POINTS);
+  // Cap the batch by a source-byte ceiling, not a flat point count: one batch is
+  // read straight off disk as `batchPoints * recordLength` bytes, and LAS Extra
+  // Bytes lets recordLength reach 65535, so the default 262 144 points would read
+  // ~1 GiB+ in a single range read. `batchPointsForRecordLength` clamps the read
+  // to MAX_BATCH_SOURCE_BYTES while never dropping below one point.
+  const batchPoints = batchPointsForRecordLength(
+    recordLength,
+    Math.max(1, options.batchPoints ?? DEFAULT_BATCH_POINTS),
+  );
   const signal = options.signal;
 
   async function readBatch(firstPointIndex: number, count: number): Promise<SlicedLasBatch> {
@@ -118,5 +138,5 @@ export async function openSlicedLas(
     }
   }
 
-  return { header, readablePointCount, origin, readBatch, batches };
+  return { header, readablePointCount, declaredPointCount, complete, origin, readBatch, batches };
 }
