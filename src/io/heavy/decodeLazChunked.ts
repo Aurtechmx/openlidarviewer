@@ -40,7 +40,16 @@ const CHUNK_DECODE_FORMATS = new Set([6, 7, 8]);
  * transferable and the rest are copied into the message.
  */
 export interface LazChunkJob {
-  readonly chunk: ArrayBuffer;
+  /**
+   * The chunk's compressed bytes. An `ArrayBuffer` (the whole-file and worker
+   * paths own a standalone copy that structured-clone can transfer), or a
+   * `Uint8Array` VIEW into a larger already-resident buffer — the out-of-core
+   * window path hands a view into its window span so the chunk is not copied out
+   * of the span a second time. A view-bearing job must be decoded in-process
+   * ({@link decodeLazChunkLocal}), never posted to a worker, since cloning a view
+   * would carry its whole backing buffer.
+   */
+  readonly chunk: ArrayBuffer | Uint8Array;
   readonly pointCount: number;
   readonly firstPointIndex: number;
   readonly pointDataRecordFormat: number;

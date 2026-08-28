@@ -24,14 +24,16 @@ import {
 const MiB = 1024 * 1024;
 
 describe('planChunkWindow — total simultaneous-decode peak budget', () => {
-  it('shrinks a window whose span + decoded + packed exceeds the total peak, below what the individual caps allow', () => {
+  it('shrinks a window whose span + WASM copy + decoded + packed exceeds the total peak, below what the individual caps allow', () => {
     // Two chunks. Each on its own is legal under every individual cap; together
-    // their span (124 MiB < 128) and decoded (120 MiB < 128) both pass, but the
-    // summed peak span+decoded+packed = 268 MiB is over the 256 MiB total.
+    // their span (80 MiB < 128) and decoded (60 MiB < 128) both pass. The joint
+    // peak also charges laz-perf's WASM copy of the largest chunk (40 MiB) — the
+    // chunk's compressed bytes are duplicated into the WASM heap during decode —
+    // so span 80 + WASM 40 + decoded 60 = 180 MiB without packed, 258 MiB with it.
     const recordLength = 1000;
-    const packedRecordBytes = 200;
-    const pointsPerChunk = 60_000; // decoded 60 MiB, packed 12 MiB per chunk
-    const spanPerChunk = 62 * MiB;
+    const packedRecordBytes = 1300;
+    const pointsPerChunk = 31_457; // decoded 30 MiB, packed 39 MiB per chunk
+    const spanPerChunk = 40 * MiB;
 
     const chunks: LazChunkRange[] = [];
     let off = 0;
@@ -43,16 +45,26 @@ describe('planChunkWindow — total simultaneous-decode peak budget', () => {
     // Two chunks stay under the span and decoded caps individually.
     expect(2 * spanPerChunk).toBeLessThan(MAX_LAZ_WINDOW_SPAN_BYTES);
     expect(withinDecodedByteBudget(2 * pointsPerChunk, recordLength)).toBe(true);
-    // With the packed records counted, the summed peak (~261 MiB) exceeds the
+    // With the packed records counted the summed peak (~258 MiB) exceeds the
     // total, so the plan takes only one chunk.
-    const plan = planChunkWindow(chunks, 0, 4, recordLength, packedRecordBytes);
+    const plan = planChunkWindow(chunks, 0, 2, recordLength, packedRecordBytes);
     expect(plan.end).toBe(1);
 
-    // Dropping only the packed term leaves span+decoded (~238 MiB) under the total,
-    // so the span cap admits two — the packed allocation is exactly what tips the
-    // joint peak over budget and forces the shrink to one.
-    const withoutPacked = planChunkWindow(chunks, 0, 4, recordLength, 0);
+    // Dropping only the packed term leaves span + WASM + decoded (~180 MiB) under
+    // the total, so the plan admits two — the packed allocation is exactly what
+    // tips the joint peak over budget and forces the shrink to one.
+    const withoutPacked = planChunkWindow(chunks, 0, 2, recordLength, 0);
     expect(withoutPacked.end).toBe(2);
+
+    // The WASM copy is load-bearing: the OLD formula (no WASM term) would have
+    // admitted BOTH chunks even with the packed records, at span 80 + decoded 60 +
+    // packed 78 = 218 MiB < 256. Charging the 40 MiB WASM copy is what refuses it.
+    expect(
+      withinDecodePeakBudget(2 * spanPerChunk, 2 * pointsPerChunk, recordLength, packedRecordBytes, 0),
+    ).toBe(true); // old model: admitted
+    expect(
+      withinDecodePeakBudget(2 * spanPerChunk, 2 * pointsPerChunk, recordLength, packedRecordBytes, spanPerChunk),
+    ).toBe(false); // WASM-aware: refused
   });
 
   it('flags a single chunk whose own summed peak is over the total budget though its decoded bytes pass the per-chunk cap', () => {

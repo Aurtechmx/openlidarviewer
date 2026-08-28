@@ -133,21 +133,35 @@ export function withinDecodedByteBudget(
 /**
  * The summed peak working set of decoding a span of `spanBytes` compressed bytes
  * into `pointCount` records of `sourceRecordLength` bytes and packing them into
- * `packedRecordBytes`-byte tile records — the three allocations that coexist
- * during a LAZ window decode. A non-usable span or decoded size makes the total
+ * `packedRecordBytes`-byte tile records — the allocations that coexist during a
+ * LAZ window decode. A non-usable span or decoded size makes the total
  * {@link Number.POSITIVE_INFINITY}, so a nonsense size reads as over-budget;
  * `packedRecordBytes <= 0` drops the packed term (the caller is not staging one)
  * rather than poisoning the sum.
+ *
+ * `wasmCompressedBytes` (default 0) charges the compressed data laz-perf
+ * DUPLICATES inside the WASM heap. Every laz-perf decode does
+ * `_malloc(byteLength)` + `HEAPU8.set(compressed, ptr)` before it reads the first
+ * point, so the JS-side compressed buffer and its WASM copy are live at once. The
+ * span term alone charged the compressed bytes a single time and understated the
+ * real peak by one whole compressed copy (and, where a caller also slices a JS
+ * copy out of a shared span, by two); pass the size of that WASM duplicate here so
+ * the estimate matches what actually coexists.
  */
 export function decodePeakBytesFor(
   spanBytes: number,
   pointCount: number,
   sourceRecordLength: number,
   packedRecordBytes: number,
+  wasmCompressedBytes: number = 0,
 ): number {
   const span = Number.isFinite(spanBytes) && spanBytes >= 0 ? spanBytes : Number.POSITIVE_INFINITY;
+  const wasm =
+    Number.isFinite(wasmCompressedBytes) && wasmCompressedBytes >= 0
+      ? wasmCompressedBytes
+      : Number.POSITIVE_INFINITY;
   const packed = packedRecordBytes > 0 ? decodedBytesFor(pointCount, packedRecordBytes) : 0;
-  return span + decodedBytesFor(pointCount, sourceRecordLength) + packed;
+  return span + wasm + decodedBytesFor(pointCount, sourceRecordLength) + packed;
 }
 
 /** Whether a window/chunk's summed decode peak stays within `ceiling` (default the total cap). */
@@ -156,9 +170,13 @@ export function withinDecodePeakBudget(
   pointCount: number,
   sourceRecordLength: number,
   packedRecordBytes: number,
+  wasmCompressedBytes: number = 0,
   ceiling: number = MAX_DECODE_PEAK_BYTES,
 ): boolean {
-  return decodePeakBytesFor(spanBytes, pointCount, sourceRecordLength, packedRecordBytes) <= ceiling;
+  return (
+    decodePeakBytesFor(spanBytes, pointCount, sourceRecordLength, packedRecordBytes, wasmCompressedBytes) <=
+    ceiling
+  );
 }
 
 /**
