@@ -39,6 +39,7 @@ ctx.onmessage = (event: MessageEvent): void => {
       const root = (await navigator.storage.getDirectory()) as unknown as OpfsDirHandle;
       const range = new LocalFileRangeSource(message.file);
       return buildLocalOocStore(range, root, message.storeName, {
+        kind: message.options.kind,
         pointsPerLeaf: message.options.pointsPerLeaf,
         memoryBudgetBytes: message.options.memoryBudgetBytes,
         maxDepth: message.options.maxDepth,

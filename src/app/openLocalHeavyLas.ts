@@ -14,7 +14,9 @@
  * `OlvTileSource`, the tile decoder and the streaming attach — lives in
  * `heavyLasExecutor.ts` behind `lazyChunks.loadHeavyLasExecutor`. This module
  * delegates there only after the plan has already routed the file out of core,
- * so a small LAS, any LAZ, or a non-capable environment never loads that chunk.
+ * so a small LAS or LAZ never loads that chunk. For a heavy LAZ the executor
+ * itself reads a bounded chunk table first and fails closed when the file cannot
+ * be randomly decoded, keeping that (LAZ-only) weight out of the eager shell.
  *
  * FAIL SAFE FOR SMALL FILES, FAIL CLOSED FOR HEAVY ONES. This wires into the
  * live file-open path. Heaviness is decided FIRST, independently of capability:
@@ -77,11 +79,11 @@ export function describeHeavyRefusal(
   }
   if (result.status === 'unavailable') {
     return (
-      'This LAS is too large to open in one piece, and this browser has no storage for the ' +
+      'This file is too large to open in one piece, and this browser has no storage for the ' +
       `streaming index (${result.reason}). ${convert}`
     );
   }
-  return `This LAS is too large to open in one piece, and its streaming index could not be built. ${convert}`;
+  return `This file is too large to open in one piece, and its streaming index could not be built. ${convert}`;
 }
 
 /** How many header bytes to peek. The LAS public header is 375 bytes; this is
@@ -89,9 +91,11 @@ export function describeHeavyRefusal(
 const HEADER_PEEK_BYTES = 64 * 1024;
 
 /**
- * Peek the LAS header from a small ranged read. Returns null when the file is
- * not an uncompressed LAS or the header does not parse — both of which mean the
- * out-of-core path is not ours, not that anything is wrong.
+ * Peek the LAS public header from a small ranged read. Both LAS and LAZ carry
+ * it, so the peek serves both; the sniffed `format` is recorded so the plan and
+ * the worker build route correctly. Returns null when the file is neither LAS
+ * nor LAZ or the header does not parse — both of which mean the out-of-core path
+ * is not ours, not that anything is wrong.
  */
 async function peekLasHeaderFacts(
   range: RangeSource,
@@ -110,10 +114,14 @@ async function peekLasHeaderFacts(
   } catch {
     return null;
   }
-  // Only an UNCOMPRESSED LAS routes here: the tile builder reads sliced LAS, and
-  // a LAZ stays on the whole-file strided path until the chunked-LAZ builder is
-  // wired. `sniffFormat` distinguishes the two before the header is trusted.
-  if (sniffFormat(head, range.id()) !== 'las') return null;
+  // Both an uncompressed LAS and a compressed LAZ route here: the LAS half of
+  // the tile builder reads sliced LAS, the LAZ half decodes chunk-by-chunk from
+  // the LAZ chunk table. Anything else is not this path's file, so it returns
+  // null and takes the whole-file loader. The LAS public header is present in
+  // both, so `parseLasHeader` reads the point count and geometry either way; the
+  // compression bit is masked off, so `pointFormat` is the base PDRF for LAZ too.
+  const format = sniffFormat(head, range.id());
+  if (format !== 'las' && format !== 'laz') return null;
   let header;
   try {
     header = parseLasHeader(head);
@@ -134,7 +142,14 @@ async function peekLasHeaderFacts(
     hasNormals: false,
     hasLasExtras: true,
   };
-  return { declaredPointCount: header.pointCount, schema, attributes, fileBytes: size };
+  return {
+    format,
+    declaredPointCount: header.pointCount,
+    offsetToPointData: header.offsetToPointData,
+    schema,
+    attributes,
+    fileBytes: size,
+  };
 }
 
 /** The live default for the light decision seams. */
@@ -168,14 +183,14 @@ export async function openLocalHeavyLas(
   // Heaviness FIRST, before the capability probe. The header peek is a small
   // ranged read that is cheap even where the out-of-core path cannot run, and it
   // is what tells us whether a fall-through to the whole-file loader is safe. A
-  // file whose header does not parse as an uncompressed LAS is not one this path
+  // file whose header does not parse as a LAS or LAZ is not one this path
   // handles, so it is not-heavy and the whole-file loader takes it.
   const facts = await peekLasHeaderFacts(openRange(file), signal);
   if (facts === null) return { status: 'not-heavy' };
 
   // The same plan the whole-file loader computes, acted on before a point is
-  // decoded. `buildThenStream` is set only for an uncompressed LAS whose
-  // whole-file estimate exceeds the memory ceiling.
+  // decoded. `buildThenStream` is set for a LAS or LAZ whose whole-file estimate
+  // exceeds the memory ceiling, from the same ceiling for both formats.
   const plan = planLoad({
     sourceCount: facts.declaredPointCount,
     fileBytes: facts.fileBytes,
@@ -183,7 +198,7 @@ export async function openLocalHeavyLas(
     isMobile: deps.isPhone(),
     deviceMemoryGB: deps.deviceMemoryGB(),
     attributes: facts.attributes,
-    format: 'las',
+    format: facts.format,
   });
   if (!plan.buildThenStream) return { status: 'not-heavy' };
 

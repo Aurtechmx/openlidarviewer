@@ -83,7 +83,13 @@ export type HeavyLasBridgeEnv = HeavyLasDecisionEnv & HeavyLasExecutorEnv;
 
 /** What the header peek established, all from a small ranged read. */
 export interface LasHeaderFacts {
+  /** Whether the file is an uncompressed LAS or a compressed LAZ. Selects the
+   *  tile builder the worker runs and the heaviness format `planLoad` scores. */
+  readonly format: 'las' | 'laz';
   readonly declaredPointCount: number;
+  /** Byte offset to the first point record — the bound for the LAZ chunk-table
+   *  probe, so that read never pulls more than the header/VLR region. */
+  readonly offsetToPointData: number;
   readonly schema: TileSchema;
   readonly attributes: PointAttributes;
   readonly fileBytes: number;

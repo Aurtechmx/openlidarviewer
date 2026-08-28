@@ -23,6 +23,9 @@ export interface LocalOocIndexRequest {
   readonly file: File;
   /** The OPFS directory name the finished store is promoted to. */
   readonly storeName: string;
+  /** Which builder to run: the sliced-LAS reader or the chunked-LAZ source.
+   *  Optional and defaults to 'las' so an older caller keeps its behaviour. */
+  readonly kind?: 'las' | 'laz';
   readonly pointsPerLeaf?: number;
   readonly memoryBudgetBytes?: number;
   readonly maxDepth?: number;
@@ -33,6 +36,7 @@ export interface LocalOocIndexRequest {
 
 /** The build options that cross the boundary — no callbacks, no signal. */
 export interface LocalOocIndexOptions {
+  readonly kind?: 'las' | 'laz';
   readonly pointsPerLeaf?: number;
   readonly memoryBudgetBytes?: number;
   readonly maxDepth?: number;
@@ -99,6 +103,7 @@ export class LocalOocIndexerClient {
         file: request.file,
         storeName: request.storeName,
         options: {
+          kind: request.kind,
           pointsPerLeaf: request.pointsPerLeaf,
           memoryBudgetBytes: request.memoryBudgetBytes,
           maxDepth: request.maxDepth,

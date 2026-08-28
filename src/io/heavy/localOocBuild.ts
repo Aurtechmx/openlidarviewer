@@ -20,7 +20,7 @@
  * from OPFS by that name. Nothing live crosses the worker boundary.
  */
 import type { RangeSource } from '../range/RangeSource';
-import { buildTileStoreFromLas } from './tileStoreBuilder';
+import { buildTileStoreFromLas, buildTileStoreFromLaz } from './tileStoreBuilder';
 import {
   openOpfsSpillBuild,
   writeOpfsText,
@@ -31,6 +31,10 @@ import {
 export type LocalOocPhase = 'indexing' | 'finishing';
 
 export interface LocalOocBuildOptions {
+  /** Which builder to run: the sliced-LAS reader ('las', the default) or the
+   *  chunked-LAZ source ('laz'). The open path sets it from the header sniff, so
+   *  a compressed LAZ is decoded chunk-by-chunk rather than read as raw LAS. */
+  readonly kind?: 'las' | 'laz';
   readonly pointsPerLeaf?: number;
   readonly memoryBudgetBytes?: number;
   readonly maxDepth?: number;
@@ -73,16 +77,27 @@ export async function buildLocalOocStore(
   let peakBufferedBytes: number;
   let pointCount: number;
   try {
-    const built = await buildTileStoreFromLas(range, build.store, {
-      pointsPerLeaf: options.pointsPerLeaf,
-      memoryBudgetBytes: options.memoryBudgetBytes,
-      maxDepth: options.maxDepth,
-      signal: options.signal,
-      las: { batchPoints: options.batchPoints, signal: options.signal },
-      // The manifest and hierarchy go into the partial directory alongside the
-      // tiles, so promotion moves the whole store as one directory.
-      sink: { write: (name, text) => writeOpfsText(build.dir, name, text) },
-    });
+    // The manifest and hierarchy go into the partial directory alongside the
+    // tiles, so promotion moves the whole store as one directory.
+    const sink = { write: (name: string, text: string) => writeOpfsText(build.dir, name, text) };
+    const built =
+      options.kind === 'laz'
+        ? await buildTileStoreFromLaz(range, build.store, {
+            pointsPerLeaf: options.pointsPerLeaf,
+            memoryBudgetBytes: options.memoryBudgetBytes,
+            maxDepth: options.maxDepth,
+            signal: options.signal,
+            laz: { signal: options.signal },
+            sink,
+          })
+        : await buildTileStoreFromLas(range, build.store, {
+            pointsPerLeaf: options.pointsPerLeaf,
+            memoryBudgetBytes: options.memoryBudgetBytes,
+            maxDepth: options.maxDepth,
+            signal: options.signal,
+            las: { batchPoints: options.batchPoints, signal: options.signal },
+            sink,
+          });
     manifestJson = built.manifestJson;
     hierarchy = built.hierarchy;
     peakBufferedBytes = built.peakBufferedBytes;

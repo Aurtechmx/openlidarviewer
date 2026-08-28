@@ -320,10 +320,14 @@ describe('build-then-stream routing', () => {
     expect(plan.buildThenStream).toBe(false);
   });
 
-  it('does not route a compressed LAZ (no sliced-tile builder yet)', () => {
+  it('routes an over-ceiling compressed LAZ to build-then-stream', () => {
+    // Heaviness is format-symmetric: an over-ceiling LAZ is routed out of core
+    // too. Whether the file can actually be randomly decoded (a usable chunk
+    // table) is a separate check the open path makes before it builds; the plan
+    // decides heaviness only, from the same ceiling as LAS.
     const plan = planLoad(input({ format: 'laz', fileBytes: HUGE, sourceCount: HUGE_COUNT }));
     expect(plan.mayExceedCeiling).toBe(true);
-    expect(plan.buildThenStream).toBe(false);
+    expect(plan.buildThenStream).toBe(true);
   });
 
   it('does not route a large non-LAS format', () => {
