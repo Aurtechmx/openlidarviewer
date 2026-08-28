@@ -65,3 +65,11 @@ The viewer itself is built on open-source work we're grateful for:
 
 Full license details for every bundled dependency are in
 [THIRD_PARTY_NOTICES.md](project/THIRD_PARTY_NOTICES.md).
+
+## License and source
+
+OpenLiDARViewer v0.6.7 and later is licensed under AGPL-3.0-only. Releases
+through v0.6.6 were distributed under MIT and remain under those terms. The
+source is on [GitHub](https://github.com/aurtechmx/openlidarviewer). Commercial
+licensing is available separately from Aur Technologies for eligible components
+and use cases; write to alex@aurtech.mx.

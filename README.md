@@ -19,7 +19,7 @@ A browser-native LiDAR and point-cloud viewer for fast local inspection, 3D navi
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)
 [![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B%20%20%E2%97%8F%20%20%E2%97%8B-orange)](https://fair-software.eu)
 [![Latest release](https://img.shields.io/github/v/release/Aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/Aurtechmx/openlidarviewer/releases/latest)
-[![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
 
 ## Try it in 10 seconds
 
@@ -374,7 +374,7 @@ No. WebGPU is the primary path and it falls back to WebGL 2 automatically.
 
 OpenLiDARViewer started as an experiment: how far can modern browser technology go in making LiDAR and point-cloud data easy to reach? It explores browser-native rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, and local-first workflows. The aim is not to replace full GIS or survey-grade processing, but to give people a fast, approachable way to open, inspect, navigate, measure, and present point clouds. See [`docs/research-notes.md`](docs/research-notes.md).
 
-The current release is **v0.6.6**. The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release highlights live in the [Releases section of the docs site](https://aurtechmx.github.io/openlidarviewer/releases/).
+The current release is **v0.6.7**. The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release highlights live in the [Releases section of the docs site](https://aurtechmx.github.io/openlidarviewer/releases/).
 
 ### Help test OpenLiDARViewer
 
@@ -409,12 +409,16 @@ OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 
 ## Citation & research collaboration
 
-OpenLiDARViewer is MIT-licensed so its code and methods stay open. The licence lets you use, change, and redistribute the software, and it says nothing about citation. Citation is a separate request: if the software, its validation framework, algorithms, or documentation helped your research, software, thesis, or commercial work, please cite it. GitHub's "Cite this repository" button reads [CITATION.cff](CITATION.cff) and gives you the current reference, including BibTeX.
+OpenLiDARViewer v0.6.7 and later is licensed under AGPL-3.0-only so its code and methods stay open, including when a modified version is offered over a network. The licence lets you use, study, change, and redistribute the software under those terms, and it says nothing about citation. Citation is a separate request: if the software, its validation framework, algorithms, or documentation helped your research, software, thesis, or commercial work, please cite it. GitHub's "Cite this repository" button reads [CITATION.cff](CITATION.cff) and gives you the current reference, including BibTeX.
 
 Being cited is the minimum; working together is the better outcome. Independent reproduction, new surveyed-checkpoint datasets, terrain and contour cross-checks against a reference tool, and method comparisons feed the evidence record directly, and a result that holds or fails on your data tells us more than one that only holds on ours. If you have a dataset or a study in mind, open an issue or a discussion. The specifics, and what we can offer in return, are in [docs/collaboration/RESEARCH_COLLABORATION.md](docs/collaboration/RESEARCH_COLLABORATION.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE). If you use OpenLiDARViewer in research, a [CITATION.cff](CITATION.cff) is included. Developed by Aurtech ([aurtech.mx](https://aurtech.mx)).
+OpenLiDARViewer v0.6.7 and later is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only). See [LICENSE](LICENSE). Releases through v0.6.6 were distributed under the MIT License and remain available under those original terms.
+
+Commercial licensing may be available separately from Aur Technologies for eligible components and use cases such as closed-source embedding, OEM redistribution, or proprietary integration. See [LICENSING.md](LICENSING.md), [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md), and [THIRD_PARTY_NOTICES.md](docs/project/THIRD_PARTY_NOTICES.md).
+
+If you use OpenLiDARViewer in research, a [CITATION.cff](CITATION.cff) is included. Developed by Aur Technologies ([aurtech.mx](https://aurtech.mx)).
 </content>
 </invoke>
