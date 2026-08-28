@@ -1044,3 +1044,83 @@ test('readinessFacts counts are measured over the wanted set, not globally', asy
   expect(f.wantedCount).toBeLessThanOrEqual(cloud.counts().known);
   expect(bucketed).toBeLessThanOrEqual(f.wantedCount);
 });
+
+// --- BUG 11: no needless clone of an uncached oversized chunk ----------------
+
+/** Wrap a cloud so every buffer its `readNodeChunk` returns is recorded by
+ *  identity — the fresh, file-read buffers the scheduler then hands onward. */
+function recordingCloud(
+  cloud: StreamingPointCloud,
+  fresh: Set<ArrayBuffer>,
+): StreamingPointCloud {
+  return new Proxy(cloud, {
+    get(target, prop, receiver) {
+      if (prop === 'readNodeChunk') {
+        return async (...args: Parameters<StreamingPointCloud['readNodeChunk']>) => {
+          const buf = await (target.readNodeChunk as (
+            ...a: typeof args
+          ) => Promise<ArrayBuffer>)(...args);
+          fresh.add(buf);
+          return buf;
+        };
+      }
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as StreamingPointCloud;
+}
+
+/** A decoder that records the exact chunk buffer it was handed, by identity. */
+function capturingDecoder(seen: ArrayBuffer[]): ChunkDecoder {
+  return {
+    decode(chunk: ArrayBuffer, meta: ChunkDecodeMetadata): Promise<DecodedChunk> {
+      seen.push(chunk);
+      return fakeDecoder.decode(chunk, meta);
+    },
+  };
+}
+
+test('an uncached oversized chunk is handed to the decoder without a second copy', async () => {
+  const cloud = await openCloud();
+  const fresh = new Set<ArrayBuffer>();
+  const seen: ArrayBuffer[] = [];
+  // Cache budget of 1 byte → every node exceeds it and is refused by the cache.
+  const budgets = { ...streamingBudgets('balanced', false), chunkCacheBytes: 1 };
+  const scheduler = new StreamingScheduler(
+    recordingCloud(cloud, fresh),
+    capturingDecoder(seen),
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    budgets,
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  expect(seen.length).toBeGreaterThan(0);
+  // Every chunk the decoder saw is the SAME buffer instance the file read
+  // produced — no `slice(0)` clone was made for a chunk the cache never stored.
+  for (const chunk of seen) expect(fresh.has(chunk)).toBe(true);
+});
+
+test('a cached chunk is handed to the decoder as a copy, never the cache-held buffer', async () => {
+  const cloud = await openCloud();
+  const fresh = new Set<ArrayBuffer>();
+  const seen: ArrayBuffer[] = [];
+  // A generous cache budget → every node is stored, so the decoder must get a
+  // copy and never the buffer the cache retains.
+  const budgets = {
+    ...streamingBudgets('balanced', false),
+    chunkCacheBytes: 64 * 1024 * 1024,
+  };
+  const scheduler = new StreamingScheduler(
+    recordingCloud(cloud, fresh),
+    capturingDecoder(seen),
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    budgets,
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  expect(seen.length).toBeGreaterThan(0);
+  expect(fresh.size).toBeGreaterThan(0);
+  for (const chunk of seen) expect(fresh.has(chunk)).toBe(false);
+});

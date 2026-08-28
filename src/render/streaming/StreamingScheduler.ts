@@ -1617,8 +1617,12 @@ export class StreamingScheduler {
 
   /**
    * Read a node's compressed chunk — from the cache when present, otherwise
-   * from the file (caching the result). The returned buffer is always a fresh
-   * copy, safe to transfer to the decode worker without neutering the cache.
+   * from the file (caching the result). The returned buffer is always safe to
+   * transfer to the decode worker without neutering the cache: a cache hit and
+   * a freshly cached miss both hand back a copy, while a fresh chunk the cache
+   * refused (too big for the budget) is returned as is, since the cache holds
+   * no reference to it — avoiding a needless full-size clone of an oversized
+   * node.
    */
   private async _readChunk(
     node: StreamingNode,
@@ -1628,8 +1632,11 @@ export class StreamingScheduler {
     const cached = this._cache.get(id);
     if (cached) return cached.slice(0);
     const fresh = await this._cloud.readNodeChunk(node.record, signal);
-    this._cache.put(id, fresh);
-    return fresh.slice(0);
+    // When `put` stores the chunk the cache keeps this exact buffer, so the
+    // decoder must get a copy; when it refuses (oversized), the cache holds no
+    // reference and the decoder can own `fresh` directly with no second copy.
+    const stored = this._cache.put(id, fresh);
+    return stored ? fresh.slice(0) : fresh;
   }
 }
 

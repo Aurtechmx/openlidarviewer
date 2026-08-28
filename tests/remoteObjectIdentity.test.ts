@@ -150,3 +150,54 @@ describe('remote object identity pinning', () => {
     expect(ifMatchSeen[ifMatchSeen.length - 1]).toBeNull(); // then unconditional
   });
 });
+
+describe('retryable response bodies are cancelled before retry/throw (BUG 12)', () => {
+  /** A response whose body.cancel() is observable, of the given status. */
+  function bodyResponse(
+    status: number,
+    onCancel: () => void,
+    headers: Record<string, string> = {},
+  ): Response {
+    return {
+      status,
+      headers: new Headers(headers),
+      body: { cancel: async () => onCancel() },
+    } as unknown as Response;
+  }
+
+  it('cancels the body of a retryable 503 before backing off and after the final throw', async () => {
+    let cancels = 0;
+    const src = new HttpRangeSource(URL, {
+      maxRetries: 1,
+      sleep: async () => {},
+      random: () => 0,
+      fetchImpl: (async () =>
+        bodyResponse(503, () => {
+          cancels += 1;
+        })) as unknown as typeof fetch,
+    });
+    // Probe drives _fetchWithRetryAndTimeout; the 503 is retryable, so the body
+    // is cancelled on the retry AND on the terminal throw — one per attempt.
+    await expect(src.probe()).rejects.toMatchObject({ code: 'server-error' });
+    expect(cancels).toBe(2); // initial attempt + one retry
+  });
+
+  it('cancels the body when a range read throws on a non-206 status', async () => {
+    let cancels = 0;
+    const src = new HttpRangeSource(URL, {
+      maxRetries: 0,
+      sleep: async () => {},
+      fetchImpl: (async (_u: string, init?: RequestInit) => {
+        if (init?.method === 'HEAD') return head({});
+        // A 200 (server ignored Range) is thrown on — its body must be freed.
+        return bodyResponse(200, () => {
+          cancels += 1;
+        });
+      }) as unknown as typeof fetch,
+    });
+    await expect(src.readRange(0, 4)).rejects.toMatchObject({
+      code: 'range-unsupported',
+    });
+    expect(cancels).toBe(1);
+  });
+});

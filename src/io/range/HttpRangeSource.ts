@@ -229,18 +229,21 @@ export class HttpRangeSource implements RangeSource {
     // retried into correctness, because the bytes already decoded belong to a
     // version that no longer exists.
     if (response.status === PRECONDITION_FAILED) {
+      cancelResponseBody(response);
       throw new RangeReadError('resource-changed', RESOURCE_CHANGED_MESSAGE);
     }
     // 206 Partial Content is the expected success. A 200 means the server
     // ignored the Range header and is sending the whole file — that defeats
     // streaming, so it is treated as range-unsupported rather than accepted.
     if (response.status === 200) {
+      cancelResponseBody(response);
       throw new RangeReadError(
         'range-unsupported',
         'This server ignored the range request and returned the whole file.',
       );
     }
     if (response.status !== 206) {
+      cancelResponseBody(response);
       throw new RangeReadError(
         response.status >= 500 ? 'server-error' : 'transport',
         `Range read returned an unexpected status ${response.status}`,
@@ -302,12 +305,14 @@ export class HttpRangeSource implements RangeSource {
       signal,
     );
     if (response.status === 200) {
+      cancelResponseBody(response);
       throw new RangeReadError(
         'range-unsupported',
         'This server ignored the range request and returned the whole file.',
       );
     }
     if (response.status !== 206) {
+      cancelResponseBody(response);
       throw new RangeReadError(
         response.status >= 500 ? 'server-error' : 'transport',
         `Probe returned an unexpected status ${response.status}`,
@@ -488,7 +493,12 @@ export class HttpRangeSource implements RangeSource {
       if (!RETRYABLE_STATUSES.has(response.status)) {
         return response;
       }
-      // Retryable HTTP status — discard the body, back off, try again.
+      // Retryable HTTP status — cancel the unread body before backing off or
+      // throwing, so a slow multi-megabyte error body (a trickling 503) can't
+      // retain network / body resources across the retry or after the final
+      // throw. Best-effort and guarded: a runtime whose Response has no
+      // streaming body just skips it.
+      cancelResponseBody(response);
       lastError = new RangeReadError(
         response.status >= 500 ? 'server-error' : 'transport',
         `Server returned ${response.status} for ${sanitizeUrlForDisplay(this._url)}`,
@@ -509,6 +519,20 @@ export class HttpRangeSource implements RangeSource {
     const ceiling = this._retryBaseMs * Math.pow(2, attempt);
     const delay = Math.max(0, Math.floor(ceiling * this._random()));
     await this._sleep(delay);
+  }
+}
+
+/**
+ * Best-effort cancel a response body we are about to abandon (a retryable error
+ * response, or a non-OK status the caller throws on). Cancelling the stream
+ * releases the connection instead of leaving a slow body to trickle in the
+ * background. Guarded for runtimes / test stand-ins whose Response carries no
+ * streaming body, and for a `cancel()` that itself rejects.
+ */
+function cancelResponseBody(response: Response): void {
+  const body = response.body as ReadableStream<Uint8Array> | null | undefined;
+  if (body && typeof body.cancel === 'function') {
+    void body.cancel().catch(() => undefined);
   }
 }
 

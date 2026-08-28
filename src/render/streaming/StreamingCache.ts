@@ -46,18 +46,27 @@ export class CompressedChunkCache {
     return buffer;
   }
 
-  /** Store a compressed chunk, evicting least-recently-used entries to fit. */
-  put(id: string, bytes: ArrayBuffer): void {
+  /**
+   * Store a compressed chunk, evicting least-recently-used entries to fit.
+   * Returns `true` when the chunk was stored (the cache now holds this exact
+   * buffer, so a caller that transfers it to a worker must copy first), and
+   * `false` when it was refused for exceeding the whole budget (the cache holds
+   * no reference to it, so the caller owns it outright and may transfer it as
+   * is). The explicit result lets the caller skip a defensive copy of an
+   * oversized buffer the cache never took.
+   */
+  put(id: string, bytes: ArrayBuffer): boolean {
     const existing = this._entries.get(id);
     if (existing) {
       this._bytes -= existing.byteLength;
       this._entries.delete(id);
     }
     // A chunk larger than the whole budget is simply not cached.
-    if (bytes.byteLength > this._maxBytes) return;
+    if (bytes.byteLength > this._maxBytes) return false;
     this._entries.set(id, bytes);
     this._bytes += bytes.byteLength;
     this._evictToFit();
+    return true;
   }
 
   /** Whether a node id is cached, without touching its recency. */
