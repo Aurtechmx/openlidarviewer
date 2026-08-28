@@ -196,8 +196,8 @@ test(
 );
 
 // Regression: an object/interior scan routes the tall Object/Space panel into
-// the shared left column. `.olv-measure-panel` carries `overflow: auto` (for its
-// horizontal resize), which drops its flex auto-min-height to 0 — so the flex
+// the shared left column. `.olv-measure-panel` carries `overflow-y: auto` (for
+// its vertical scroll), which drops its flex auto-min-height to 0 — so the flex
 // column used to shrink the Measurements panel down to just its header (~25px),
 // clipping the profile chart and readings, whenever the column ran out of room.
 // The fix pins `flex-shrink: 0` so the readout keeps its natural height in

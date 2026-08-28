@@ -102,11 +102,16 @@ const PROFILE_CHART_HEIGHT_KEY = 'olv:measure:profile:chartHeightPx:v1';
  * (`.olv-mp-chart { min-height: 160px; }`); the
  * `profileChartHeightBounds.test.ts` spec pins the two against drift.
  */
-/** Panel-width resize bounds (drag the SE handle to widen the profile chart).
- *  Mirror of the CSS min/max-width on `.olv-measure-panel`. */
-export const MEASURE_PANEL_MIN_WIDTH_PX = 218;
-export const MEASURE_PANEL_MAX_WIDTH_PX = 760;
-const MEASURE_PANEL_WIDTH_KEY = 'olv:measure:panel:widthPx:v1';
+/** Left-rail width resize bounds. The Measurements panel fills the rail rather
+ *  than carrying its own width, so dragging its SE grip widens the whole rail
+ *  (`--olv-rail-width`): the workspace tabs and every left card widen together
+ *  and stay flush. The floor matches the CSS clamp floor (285px) so the rail is
+ *  never narrower than the widest panel was built for; the ceiling keeps the
+ *  viewport dominant at laptop widths. */
+export const RAIL_MIN_WIDTH_PX = 285;
+export const RAIL_MAX_WIDTH_PX = 480;
+const RAIL_WIDTH_KEY = 'olv:rail:widthPx:v1';
+const RAIL_WIDTH_VAR = '--olv-rail-width';
 
 export const PROFILE_CHART_MIN_HEIGHT_PX = 160;
 /** Upper bound on the resizable profile chart height. See
@@ -349,8 +354,6 @@ export class MeasurePanel {
   private _summaries: MeasurementSummary[] = [];
   /** Persistent geographic-CRS caveat, toggled via {@link setGeographicNotice}. */
   private readonly _geoNotice: HTMLElement;
-  /** Observer that persists the user's dragged panel width. */
-  private _panelWidthObserver?: ResizeObserver;
   /**
    * Active `ResizeObserver` instances created for the profile-chart
    * persistence path. Each `_renderList()` call detaches and replaces
@@ -488,14 +491,34 @@ export class MeasurePanel {
     // so the panel looked resizable but wasn't. This grip rides ABOVE the tab
     // and drives the same width the ResizeObserver already persists.
     this.element.append(this._buildResizeHandle());
-    this._restorePanelWidth();
+    this._restoreRailWidth();
+  }
+
+  /** Current left-rail width in CSS pixels: the measured column width, which
+   *  reflects the clamp default or any persisted override. */
+  private _railWidthPx(): number {
+    const rail = this.element.closest('.olv-left-panels') as HTMLElement | null;
+    return rail?.offsetWidth ?? this.element.offsetWidth;
+  }
+
+  /** Write and persist the left-rail width, clamped to the rail bounds. The var
+   *  drives the column width AND the grabber-tab offset, so the tabs and every
+   *  left card widen together and the stack stays flush. */
+  private _setRailWidth(w: number): void {
+    const clamped = Math.min(
+      RAIL_MAX_WIDTH_PX,
+      Math.max(RAIL_MIN_WIDTH_PX, Math.round(w)),
+    );
+    document.documentElement.style.setProperty(RAIL_WIDTH_VAR, `${clamped}px`);
+    storageSet(RAIL_WIDTH_KEY, String(clamped));
   }
 
   /**
-   * The panel's own south-east resize grip, raised above the rail collapse tab
-   * that covers the native handle. A pointer drag (or arrow keys) rewrites the
-   * panel width within the CSS bounds; the width observer in `_restorePanelWidth`
-   * picks up the change and persists it, so no separate save path is needed.
+   * The panel's south-east resize grip, raised above the rail collapse tab that
+   * covers the native handle. A pointer drag (or arrow keys) rewrites the RAIL
+   * width, not this panel alone: the panel fills the rail, so widening the rail
+   * widens the tabs, the Clip box card and this panel together and keeps their
+   * shared right edge aligned.
    */
   private _buildResizeHandle(): HTMLElement {
     const handle = el('div', {
@@ -507,16 +530,10 @@ export class MeasurePanel {
     handle.setAttribute('aria-orientation', 'vertical');
     handle.tabIndex = 0;
 
-    const clamp = (w: number): number =>
-      Math.min(
-        MEASURE_PANEL_MAX_WIDTH_PX,
-        Math.max(MEASURE_PANEL_MIN_WIDTH_PX, Math.round(w)),
-      );
-
     let startX = 0;
     let startW = 0;
     const onMove = (e: PointerEvent): void => {
-      this.element.style.width = `${clamp(startW + (e.clientX - startX))}px`;
+      this._setRailWidth(startW + (e.clientX - startX));
     };
     const onUp = (e: PointerEvent): void => {
       window.removeEventListener('pointermove', onMove);
@@ -531,7 +548,7 @@ export class MeasurePanel {
     handle.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return; // primary button / pen / touch only
       startX = e.clientX;
-      startW = this.element.offsetWidth;
+      startW = this._railWidthPx();
       handle.classList.add('olv-mp-resize-active');
       try {
         handle.setPointerCapture(e.pointerId);
@@ -547,10 +564,10 @@ export class MeasurePanel {
     handle.addEventListener('keydown', (e) => {
       const step = e.shiftKey ? 32 : 8;
       if (e.key === 'ArrowLeft') {
-        this.element.style.width = `${clamp(this.element.offsetWidth - step)}px`;
+        this._setRailWidth(this._railWidthPx() - step);
         e.preventDefault();
       } else if (e.key === 'ArrowRight') {
-        this.element.style.width = `${clamp(this.element.offsetWidth + step)}px`;
+        this._setRailWidth(this._railWidthPx() + step);
         e.preventDefault();
       }
     });
@@ -568,40 +585,19 @@ export class MeasurePanel {
   }
 
   /**
-   * Restore the user's last dragged panel width and persist any new width
-   * (the panel is horizontally resizable so the profile chart can be widened
-   * to read). One key, panel-wide; clamped to the CSS resize bounds.
+   * Restore the user's last dragged rail width. The panel fills the rail, so a
+   * stored width is applied to `--olv-rail-width` for the whole column; the grip
+   * writes new values as they are dragged, so no width observer is needed.
+   * One key, rail-wide; clamped to the rail bounds.
    */
-  private _restorePanelWidth(): void {
-    const stored = Number(storageGet(MEASURE_PANEL_WIDTH_KEY));
+  private _restoreRailWidth(): void {
+    const stored = Number(storageGet(RAIL_WIDTH_KEY));
     if (
       Number.isFinite(stored) &&
-      stored >= MEASURE_PANEL_MIN_WIDTH_PX &&
-      stored <= MEASURE_PANEL_MAX_WIDTH_PX
+      stored >= RAIL_MIN_WIDTH_PX &&
+      stored <= RAIL_MAX_WIDTH_PX
     ) {
-      this.element.style.width = `${stored}px`;
-    }
-    if (typeof ResizeObserver === 'undefined') return;
-    try {
-      let primed = false;
-      this._panelWidthObserver = new ResizeObserver(() => {
-        // Skip the first (synchronous) callback so an untouched panel never
-        // writes the default width back to storage.
-        if (!primed) {
-          primed = true;
-          return;
-        }
-        const w = this.element.offsetWidth;
-        if (!Number.isFinite(w) || w <= 0) return;
-        const clamped = Math.min(
-          MEASURE_PANEL_MAX_WIDTH_PX,
-          Math.max(MEASURE_PANEL_MIN_WIDTH_PX, Math.round(w)),
-        );
-        storageSet(MEASURE_PANEL_WIDTH_KEY, String(clamped));
-      });
-      this._panelWidthObserver.observe(this.element);
-    } catch {
-      /* ResizeObserver unavailable — resizing still works, just isn't persisted. */
+      document.documentElement.style.setProperty(RAIL_WIDTH_VAR, `${stored}px`);
     }
   }
 

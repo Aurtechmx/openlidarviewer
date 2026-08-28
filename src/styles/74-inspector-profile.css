@@ -7,19 +7,27 @@
   box-shadow: var(--shadow-raised);
 }
 .olv-measure-panel {
-  /* 222px, not 218. Measured: the content box is width minus 26px of padding
-     and border, and the widest row (CSV / Export PDF / Clear profile) needs
-     193px. At 218 that left 192 and clipped the last label by a pixel. */
-  width: 222px; box-sizing: border-box;
-  /* Drag the south-east grip (`.olv-mp-resize`) to widen the panel (and the
-   * profile chart inside it) rightward into the canvas. `overflow: auto` keeps
-   * the native `resize: horizontal` as a fallback; the chosen width is
-   * persisted. `position: relative` anchors the explicit grip, which rides
-   * ABOVE the rail collapse tab that otherwise covers the native corner. */
+  /* Fills the left rail instead of carrying its own fixed width, so the
+     workspace tabs (DATA / WORK / ANALYSE / OUTPUT), the Clip box card and this
+     panel share one width and one right edge. The rail is `--olv-rail-width`
+     (72-panel-rails.css), a clamp(285px, 21vw, 312px) that the SE grip widens by
+     rewriting `--olv-rail-width` for the whole column, so a resize keeps the
+     stack flush. `min-width: 0` lets the panel shrink on the mobile sheet;
+     `max-width: 100%` keeps it inside the rail. The old 222px fixed width sat
+     narrower than the tabs (the source of the misalignment) and cramped the
+     readouts. */
+  width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
+  /* `position: relative` anchors the explicit SE grip (`.olv-mp-resize`), which
+   * rides ABOVE the rail collapse tab that otherwise covers the native corner.
+   * The grip resizes the rail width, not this panel alone, so alignment holds. */
   position: relative;
-  min-width: 222px; max-width: 760px;
-  resize: horizontal; overflow: auto;
-  /* `overflow: auto` (needed for the horizontal resize + scrollbar-gutter) drops
+  /* `overflow-x: hidden` makes a horizontal scrollbar structurally impossible:
+     the panel must never require sideways scrolling to see its own readouts,
+     Clip box, or y-axis labels. `scrollbar-gutter: stable` still reserves the
+     vertical track. Any readout wider than the content box wraps (see
+     `.olv-mp-value`) rather than being scrolled to. */
+  overflow-x: hidden; overflow-y: auto;
+  /* `overflow-y: auto` (needed for the vertical scroll + scrollbar-gutter) drops
    * this flex child's automatic min-height to 0, so the left column's flex layout
    * would shrink the panel to just its header whenever the column runs out of
    * room. That happens acutely for an object/interior scan, where the tall
