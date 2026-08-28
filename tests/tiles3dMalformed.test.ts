@@ -334,10 +334,19 @@ describe('PNTS perimeter', () => {
     expect(() => parsePnts(withPointsLength(4294967295))).toThrow(
       /exceeds the 8000000 point ceiling/,
     );
-    // Lifting the ceiling past it shows what catches it next, which is the
-    // section bounds the accessor reads against.
+    // Lifting the point ceiling past it shows the decoded-byte ceiling catches
+    // it next: 4.29 billion points times the per-point width is far over the
+    // decoded-byte budget the decoder holds before allocating.
     expect(() =>
       parsePnts(withPointsLength(4294967295), { maxPoints: 4294967295 }),
+    ).toThrow(/decoded byte/i);
+    // Lifting BOTH ceilings shows what catches it next, the section bounds the
+    // accessor reads against.
+    expect(() =>
+      parsePnts(withPointsLength(4294967295), {
+        maxPoints: 4294967295,
+        maxDecodedBytes: Number.MAX_SAFE_INTEGER,
+      }),
     ).toThrow(/POSITION extends past the feature-table binary section/);
   });
 

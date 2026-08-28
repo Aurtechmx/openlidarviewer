@@ -478,6 +478,30 @@ function decodeBatchIds(
  */
 export const MAX_PNTS_TILE_POINTS = 8_000_000;
 
+/**
+ * The most decoded bytes this viewer will allocate for one PNTS tile.
+ *
+ * The count ceiling alone cannot bound memory, because a tile's cost depends on
+ * the channels it carries as well as how many points it holds. This viewer
+ * expands a point into a Float32 position (12 bytes) and, when present, an sRGB
+ * colour (3), a Float32 normal (12) and a uint32 batch id (4): up to 31 bytes a
+ * point, so a legal 8,000,000-point tile at full width is about 248 MB. This
+ * budget sits below that, so a channel-heavy tile the device cannot hold is
+ * refused on its true decoded size even when its point count is legal.
+ *
+ * The scheduler admits a tileset node on a throughput estimate before the body
+ * is fetched, not on this figure. This is the memory bound, checked here where
+ * the real `POINTS_LENGTH` and channel set are known and before the first array
+ * is allocated. 192 MiB is a conservative per-tile decode budget.
+ */
+export const MAX_PNTS_DECODED_BYTES = 192 * 1024 * 1024;
+
+/** Decoded bytes each channel costs one point, matching what the decoders below allocate. */
+const POSITION_DECODED_BYTES = 12;
+const COLOR_DECODED_BYTES = 3;
+const NORMAL_DECODED_BYTES = 12;
+const BATCH_ID_DECODED_BYTES = 4;
+
 /** Options for {@link parsePnts}. */
 export interface ParsePntsOptions {
   /**
@@ -487,6 +511,38 @@ export interface ParsePntsOptions {
    * crash.
    */
   readonly maxPoints?: number;
+  /**
+   * Ceiling on the decoded size of the tile's channels in bytes. Defaults to
+   * {@link MAX_PNTS_DECODED_BYTES}. Like `maxPoints`, a constrained device can
+   * lower it; it bounds what the decode HOLDS rather than how many points it
+   * declares, so a channel-heavy tile is refused before allocation.
+   */
+  readonly maxDecodedBytes?: number;
+}
+
+/**
+ * The decoded bytes one point costs given the channels the feature table
+ * carries. Mirrors {@link decodeColors}, {@link decodeNormals} and
+ * {@link decodeBatchIds}: a position is always allocated, and colour, normals
+ * and batch ids are each allocated only when their channel is present.
+ */
+function decodedBytesPerPoint(ft: JsonObject): number {
+  let bytes = POSITION_DECODED_BYTES;
+  if (
+    ft.RGBA !== undefined ||
+    ft.RGB !== undefined ||
+    ft.RGB565 !== undefined ||
+    ft.CONSTANT_RGBA !== undefined
+  ) {
+    bytes += COLOR_DECODED_BYTES;
+  }
+  if (ft.NORMAL !== undefined || ft.NORMAL_OCT16P !== undefined) {
+    bytes += NORMAL_DECODED_BYTES;
+  }
+  if (ft.BATCH_ID !== undefined) {
+    bytes += BATCH_ID_DECODED_BYTES;
+  }
+  return bytes;
 }
 
 /** Decode a PNTS tile's header, feature table, positions, and per-point attributes. */
@@ -564,15 +620,31 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
   // POSITION_QUANTIZED costs six bytes a point, so that cap admits roughly 22.4
   // million of them, and each becomes a Float32 position plus the intensity,
   // classification, return and GPS channels the generic chunk contract carries.
-  // The scheduler cannot pre-empt it either: every tile is admitted as
-  // ASSUMED_TILE_POINTS, so a 22-million-point tile is dispatched as though it
-  // were 500,000 and the real figure is only known once the arrays exist.
-  // Refusing names the tile; truncating would render a silently partial one.
+  // The scheduler admits a tileset node on a throughput ESTIMATE before the
+  // fetch, not on this figure, so this refusal is a real gate and not a
+  // formality: it is where a genuinely huge node is stopped regardless of what
+  // the scheduler guessed. Refusing names the tile; truncating would render a
+  // silently partial one.
   const maxPoints = options.maxPoints ?? MAX_PNTS_TILE_POINTS;
   if (pointsLength > maxPoints) {
     throw new Error(
       `PNTS: POINTS_LENGTH ${pointsLength} exceeds the ${maxPoints} point ceiling this ` +
         `viewer decodes in one tile.`,
+    );
+  }
+
+  // The decoded-size ceiling, also before the first allocation. The count
+  // ceiling above cannot bound memory on its own: a colour, a normal and a
+  // batch id triple what a position-only point costs, so a legal-count tile at
+  // full channel width can still exceed what the device holds. `POINTS_LENGTH`
+  // is a uint32 and the per-point cost is a small constant, so the product is
+  // exact in a double and cannot round into agreement.
+  const maxDecodedBytes = options.maxDecodedBytes ?? MAX_PNTS_DECODED_BYTES;
+  const decodedBytes = pointsLength * decodedBytesPerPoint(ft);
+  if (decodedBytes > maxDecodedBytes) {
+    throw new Error(
+      `PNTS: POINTS_LENGTH ${pointsLength} decodes to ${decodedBytes} bytes, past the ` +
+        `${maxDecodedBytes} decoded byte ceiling this viewer holds in one tile.`,
     );
   }
 
