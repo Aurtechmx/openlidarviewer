@@ -20,7 +20,7 @@
  */
 
 import type { ProfileChartSample, UnitSystem } from './types';
-import { formatStationing, formatGradePercent } from './civilProfileStats';
+import { formatStationing, formatGradePercent, profileSampleCovered } from './civilProfileStats';
 import { formatElevation, formatLength } from './format';
 // Height headings come from one vocabulary, where "Elevation" is earned by an
 // orthometric reference and by nothing else. The panel, the station table, the
@@ -73,9 +73,6 @@ export interface ProfileSummaryData {
   /** Lowest covered point (first occurrence on a tie). */
   readonly lowest: ProfileExtreme | null;
 }
-
-const covered = (h: number | undefined): h is number =>
-  typeof h === 'number' && Number.isFinite(h);
 
 /**
  * Take a sampled profile from render space to the numbers a reader is owed —
@@ -149,7 +146,7 @@ export function computeProfileSummary(
 
   for (let i = 0; i < n; i++) {
     const h = samples[i].height;
-    if (!covered(h)) continue;
+    if (!profileSampleCovered(samples[i])) continue;
     hits++;
     if (firstHit < 0) firstHit = i;
     lastHit = i;
@@ -166,7 +163,7 @@ export function computeProfileSummary(
   for (let i = 0; i < n - 1; i++) {
     const a = samples[i];
     const b = samples[i + 1];
-    if (!covered(a.height) || !covered(b.height)) continue; // gap — contribute nothing
+    if (!profileSampleCovered(a) || !profileSampleCovered(b)) continue; // gap — contribute nothing
     const run = b.distance - a.distance;
     if (!(run > 1e-9)) continue; // duplicate station — no honest grade
     segments++;
@@ -317,14 +314,14 @@ export function profileStationRows(
     if (i + 1 < samples.length) {
       const b = samples[i + 1];
       const run = b.distance - s.distance;
-      if (covered(s.height) && covered(b.height) && run > 1e-9) {
+      if (profileSampleCovered(s) && profileSampleCovered(b) && run > 1e-9) {
         grade = (((b.height - s.height) / run) * 100).toFixed(2);
       }
     }
     rows.push({
       station: formatStation(s.distance, system),
       chainage: (s.distance * k).toFixed(2),
-      elevation: covered(s.height) ? (s.height * k).toFixed(3) : '',
+      elevation: profileSampleCovered(s) ? (s.height * k).toFixed(3) : '',
       points: typeof s.count === 'number' && Number.isFinite(s.count) ? String(s.count) : '',
       grade,
     });

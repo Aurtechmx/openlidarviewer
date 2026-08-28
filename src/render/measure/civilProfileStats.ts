@@ -59,8 +59,27 @@ export interface CivilProfileStats {
   readonly stations: ProfileStation[];
 }
 
-const finite = (n: number | null | undefined): n is number =>
-  typeof n === 'number' && Number.isFinite(n);
+/**
+ * The ONE coverage rule every profile consumer decides "covered vs gap" from —
+ * civil stats, the summary/max-grade, the CSV/station table and the PDF all
+ * import THIS so the same station can never be a gap in one place and covered
+ * in another.
+ *
+ * A station is covered iff its height is finite AND the corridor returned at
+ * least one point. `count === 0` is the degenerate/vertical sampler branch
+ * borrowing an endpoint elevation across a bin that saw nothing: honest
+ * coverage counts returns, so a zero-return station is a gap even with a finite
+ * height.
+ *
+ * `count === undefined` is treated as covered-if-finite ON PURPOSE. A
+ * measurement from a pre-v0.4.5 session predates stored counts; those series
+ * never carried a count, so a missing count must not retroactively blank a
+ * station that a covered old session already read. Only an explicit `0` — a
+ * count the sampler actually wrote — marks a gap.
+ */
+export function profileSampleCovered(sample: ProfileChartSample): boolean {
+  return Number.isFinite(sample.height) && sample.count !== 0;
+}
 
 /** Compute the civil statistics for a profile sample series. */
 export function computeCivilProfileStats(
@@ -79,9 +98,9 @@ export function computeCivilProfileStats(
     const h = samples[i].height;
     // A station with zero corridor returns is a coverage gap even when the
     // sampler carried a finite height across it — the degenerate/vertical
-    // branch borrows an endpoint elevation with count 0. Honest coverage
-    // counts returns, so a count-0 station is a gap, never a covered station.
-    const el = finite(h) && samples[i].count !== 0 ? h : null;
+    // branch borrows an endpoint elevation with count 0. The shared predicate
+    // owns that rule so the summary/PDF cannot decide it differently.
+    const el = profileSampleCovered(samples[i]) ? h : null;
     if (el != null) {
       hits++;
       if (firstHit < 0) firstHit = i;
