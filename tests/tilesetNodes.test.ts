@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { tilesetNodes, ASSUMED_TILE_POINTS, contentKind } from '../src/io/tiles3d/tilesetNodes';
 import { parseTileset } from '../src/io/tiles3d/tileset';
+import { MAX_PNTS_TILE_POINTS } from '../src/io/tiles3d/pnts';
 
 /** A tileset document with the given root tile tree. */
 function ts(root: unknown) {
@@ -82,7 +83,7 @@ describe('which tiles become nodes', () => {
 });
 
 describe('the point count a tileset does not state', () => {
-  it('admits every tile with the same high estimate', () => {
+  it('admits every tile with the same realistic estimate', () => {
     const t = ts({
       boundingVolume: BOX,
       geometricError: 50,
@@ -92,11 +93,19 @@ describe('the point count a tileset does not state', () => {
     expect(tilesetNodes(t).records[0].pointCount).toBe(ASSUMED_TILE_POINTS);
   });
 
-  it('estimates high, because the scheduler can only absorb over-estimates', () => {
+  it('estimates high of a typical tile, because the scheduler can only absorb over-estimates', () => {
     // The admission gate refuses a decode when resident + in-flight is at the
     // cap. Over-estimating dispatches fewer decodes; under-estimating admits
     // more than the budget intends, which it cannot take back.
     expect(ASSUMED_TILE_POINTS).toBeGreaterThanOrEqual(100_000);
+  });
+
+  it('does NOT inflate the estimate to the parser ceiling, which would starve streaming', () => {
+    // This estimate drives resident/concurrency pressure, not memory safety.
+    // Reserving MAX_PNTS_TILE_POINTS per node would treat a few-hundred-point
+    // tile as millions and admit almost nothing. The memory bound lives in the
+    // PNTS decoder's decoded-byte ceiling instead, where the real count is known.
+    expect(ASSUMED_TILE_POINTS).toBeLessThan(MAX_PNTS_TILE_POINTS);
   });
 });
 

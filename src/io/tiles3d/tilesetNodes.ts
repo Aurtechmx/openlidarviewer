@@ -35,10 +35,19 @@ import type { Tile, Tileset } from './tileset';
 /**
  * Points assumed for a tile whose body has not been read.
  *
- * Chosen against the ceiling this repo already applies to a single point tile
- * rather than against a typical file: an estimate that is too low would admit
- * more decodes than the budget intends, which is the one direction the
- * scheduler's gate cannot absorb.
+ * A `tileset.json` never states a tile's point count, so the scheduler admits
+ * a node on an ESTIMATE. This estimate drives throughput accounting only —
+ * resident pressure, in-flight pressure and concurrency — not a memory-safety
+ * bound: it is deliberately on the high side of a typical tile so that at the
+ * budget boundary the scheduler dispatches slightly fewer decodes rather than
+ * slightly more, the one direction its admission gate can absorb.
+ *
+ * It is NOT the ceiling a malicious tile could reach. A body may legally
+ * declare far more points than this, and the memory bound that refuses such a
+ * body lives where the real `POINTS_LENGTH` is known before allocation: the
+ * PNTS decoder's decoded-byte ceiling (see {@link MAX_PNTS_TILE_POINTS} and the
+ * decoded-byte budget in `pnts.ts`). Inflating this estimate to that ceiling
+ * would starve normal streaming, treating a few-hundred-point tile as millions.
  */
 export const ASSUMED_TILE_POINTS = 500_000;
 
