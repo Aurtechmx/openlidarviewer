@@ -33,10 +33,14 @@ import {
 } from './openStreaming';
 import { LocalOocIndexerClient } from '../io/heavy/worker/localOocIndexerWorkerClient';
 import type { LocalOocPhase } from '../io/heavy/localOocBuild';
+import { readLazChunkTable } from '../io/heavy/lazChunkTable';
+import { LocalFileRangeSource } from '../io/range/LocalFileRangeSource';
+import type { RangeSource } from '../io/range/RangeSource';
+import { LoadError } from '../io/loadErrors';
 import { LoadCancelledError } from '../io/loadFile';
 import type {
   HeavyLasBridgeDeps,
-  HeavyLasExecutorEnv,
+  HeavyLasBridgeEnv,
   HeavyOpenResult,
   LasHeaderFacts,
 } from './heavyLasTypes';
@@ -48,6 +52,23 @@ const PHASE_LABELS: Record<LocalOocPhase, string> = {
   indexing: 'Indexing for streaming…',
   finishing: 'Finishing the index…',
 };
+
+/**
+ * The refusal sentence for a heavy LAZ the chunked out-of-core path cannot
+ * randomly decode. It names the true cause — no usable chunk table — and points
+ * at COPC/EPT, the same convert advice every heavy refusal ends with, so the
+ * user learns why the file will not open rather than watching the tab run out of
+ * memory on a whole-file decode. Carried on a `refused` result, so
+ * {@link describeHeavyRefusal} surfaces it verbatim.
+ */
+function describeUnchunkableLaz(fileName: string, reason: string): string {
+  return (
+    `${fileName} is a LAZ too large to open in one piece, and it has no usable chunk table ` +
+    `for random access (${reason}), so it cannot be streamed out of core. ` +
+    'Convert it to COPC or EPT (with PDAL or untwine) and open that instead, which streams ' +
+    'from the file and writes no local cache.'
+  );
+}
 
 /** A filesystem-safe store name derived from the file, stable for one file. */
 function heavyStoreName(file: File): string {
@@ -68,11 +89,33 @@ export async function executeHeavyLasBuild(
   signal: AbortSignal,
   facts: LasHeaderFacts,
   deps: HeavyLasBridgeDeps,
-  env: Partial<HeavyLasExecutorEnv> = {},
+  env: Partial<HeavyLasBridgeEnv> = {},
 ): Promise<HeavyOpenResult> {
   const getOpfsRoot = env.getOpfsRoot ?? defaultGetOpfsRoot;
   const readStorage = env.readStorage ?? readStorageEstimate;
   const runIndex = env.runIndex ?? ((request) => new LocalOocIndexerClient().run(request));
+  const openRange = env.openRange ?? ((f: File): RangeSource => new LocalFileRangeSource(f));
+
+  // For a heavy LAZ, decide chunkability from a bounded chunk-table read BEFORE
+  // any heavy work. The out-of-core LAZ builder decodes one window of chunks at a
+  // time from the chunk table, so a LAZ without a usable table (a pointwise
+  // pre-2011 compressor, an interrupted writer) cannot be randomly decoded. The
+  // file is already confirmed too large for one ArrayBuffer, so it must FAIL
+  // CLOSED here rather than fall through to the whole-file loader that would OOM
+  // on a multi-gigabyte sequential decode. The read is bounded by the point-data
+  // offset, so it never pulls more than the header/VLR region, and it runs in
+  // this lazily-loaded chunk so the LAZ chunk-table code stays out of the eager
+  // shell. LAS never reaches this branch.
+  if (facts.format === 'laz') {
+    const table = await readLazChunkTable(openRange(file), signal, facts.offsetToPointData);
+    if (!table.supported) {
+      return {
+        status: 'refused',
+        heavy: true,
+        error: new LoadError('memory-constraint', describeUnchunkableLaz(file.name, table.reason)),
+      };
+    }
+  }
 
   const root = await getOpfsRoot();
   if (root === null) return { status: 'unavailable', heavy: true, reason: 'no OPFS root' };
@@ -97,6 +140,7 @@ export async function executeHeavyLasBuild(
     const built = await runIndex({
       file,
       storeName: heavyStoreName(file),
+      kind: facts.format,
       memoryBudgetBytes: BUILD_MEMORY_BUDGET_BYTES,
       onPhase: (phase) => deps.setPhase(PHASE_LABELS[phase]),
       signal,

@@ -520,12 +520,16 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     NON_STREAMING_FORMATS.has(format) &&
     fileBytes > LARGE_NON_LAS_THRESHOLD_BYTES;
 
-  // Route an over-ceiling uncompressed LAS to the out-of-core build: its whole-
+  // Route an over-ceiling LAS or LAZ to the out-of-core build: for LAS the whole-
   // file buffer is the fixed cost that pushed the estimate past the ceiling, and
-  // the sliced reader that feeds the tile builder never holds it. The strided
-  // plan above stays populated as the fallback for a caller that does not yet
-  // act on this flag.
-  const buildThenStream = format === 'las' && mayExceedCeiling;
+  // for LAZ the same buffer plus the decode scratch is (see the `fixed` term
+  // above). The sliced LAS reader and the chunked-LAZ source that feed the tile
+  // builder never hold the whole file. This flag decides HEAVINESS only, from the
+  // same ceiling for both formats; whether a LAZ can actually be randomly decoded
+  // (a usable chunk table, a supported point format) is a separate check the open
+  // path makes before it builds. The strided plan above stays populated as the
+  // fallback for a caller that does not act on this flag.
+  const buildThenStream = (format === 'las' || format === 'laz') && mayExceedCeiling;
 
   return {
     mode: plan.mode,

@@ -1,8 +1,11 @@
 # Heavy clouds: the native out-of-core pipeline
 
-Plain LAS/LAZ files today are read whole — one `File.arrayBuffer()`, one
+Plain LAS/LAZ files were read whole — one `File.arrayBuffer()`, one
 sequential decode, one full-size attribute allocation — and only then reduced
-to the render budget. That shape has three ceilings, in the order a growing
+to the render budget. A large uncompressed LAS and a large chunked LAZ now take
+the out-of-core path this document describes; the whole-file shape below is the
+baseline it replaces, and it still applies to any format without a streaming
+route. That shape has three ceilings, in the order a growing
 file hits them: the browser's single-`ArrayBuffer` cap (~2 GB), the duplicate
 compressed copy inside the laz-perf WASM heap, and decoded attribute arrays
 sized to the source count (~30 B/point) before any budget applies. COPC and
