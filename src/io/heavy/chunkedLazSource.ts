@@ -63,6 +63,43 @@ const HEADER_PROBE_BYTES = 8 * 1024;
 export const DEFAULT_CHUNK_WINDOW = 4;
 
 /**
+ * Hard ceiling on the ONE contiguous span a window may range-read. Defense in
+ * depth behind the per-chunk caps in {@link readLazChunkTable}: even when every
+ * chunk is individually legal, a wide window of them would otherwise read an
+ * unbounded contiguous span into memory at once. 128 MiB matches the build's
+ * staging budget; real chunks are sub-megabyte, so a window of a few never
+ * approaches it and this only bites a pathological run of large-but-legal
+ * chunks, shrinking the window (never below one chunk, which the per-chunk
+ * compressed cap already bounds well under this).
+ */
+export const MAX_LAZ_WINDOW_SPAN_BYTES = 128 * 1024 * 1024;
+
+/**
+ * Plan the next window starting at `start`: grow it while the contiguous span
+ * from the first chunk's offset stays under {@link MAX_LAZ_WINDOW_SPAN_BYTES}
+ * and under `window` chunks, but always take at least one chunk. Pure, so the
+ * shrink behaviour is unit-testable without decoding. `chunks` must be non-empty
+ * at `start`.
+ */
+export function planChunkWindow(
+  chunks: readonly LazChunkRange[],
+  start: number,
+  window: number,
+): { end: number; spanStart: number; spanLength: number } {
+  const spanStart = chunks[start].byteOffset;
+  let end = start + 1;
+  while (
+    end < chunks.length &&
+    end - start < window &&
+    chunks[end].byteOffset + chunks[end].byteLength - spanStart <= MAX_LAZ_WINDOW_SPAN_BYTES
+  ) {
+    end++;
+  }
+  const last = chunks[end - 1];
+  return { end, spanStart, spanLength: last.byteOffset + last.byteLength - spanStart };
+}
+
+/**
  * A LAZ the chunked out-of-core path cannot serve: no usable chunk table, or a
  * point format the per-chunk decoder does not support. Named so the open path
  * can route on it (e.g. fall back to the whole-file loader) rather than reading
@@ -145,21 +182,21 @@ export async function openChunkedLazSource(
     async *batches(signal): AsyncGenerator<PositionBatch> {
       if (chunks.length === 0) return;
       const lazPerf = await getLazPerf();
-      for (let start = 0; start < chunks.length; start += window) {
+      for (let start = 0; start < chunks.length; ) {
         signal?.throwIfAborted();
-        const end = Math.min(start + window, chunks.length);
-        const windowChunks = chunks.slice(start, end);
         // One contiguous range read for the whole window: chunks are packed
         // back to back, so the span runs from the first chunk's offset to the
-        // last chunk's end. Nothing outside this window is resident.
-        const spanStart = windowChunks[0].byteOffset;
-        const last = windowChunks[windowChunks.length - 1];
-        const spanLength = last.byteOffset + last.byteLength - spanStart;
+        // last chunk's end. `planChunkWindow` caps that span so a wide window of
+        // large chunks can never read an unbounded contiguous slice. Nothing
+        // outside this window is resident.
+        const { end, spanStart, spanLength } = planChunkWindow(chunks, start, window);
+        const windowChunks = chunks.slice(start, end);
         const span = await range.readRange(spanStart, spanLength, signal);
         for (const c of windowChunks) {
           signal?.throwIfAborted();
           yield decodeChunkBatch(lazPerf, span, spanStart, header, ctx, schema, recordBytes, c);
         }
+        start = end;
       }
     },
   };
