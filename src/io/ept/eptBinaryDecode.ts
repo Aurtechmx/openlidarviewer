@@ -133,6 +133,53 @@ function findAttr(attrs: readonly AttrLayout[], name: string): AttrLayout | unde
 }
 
 /**
+ * Per-channel constraint on the EPT schema width this decoder can read WITHOUT
+ * losing bits. Each entry lists the (type, size) pairs whose full value range
+ * fits the OLV target array below:
+ *   • Intensity     → Uint16  — unsigned 1 or 2 bytes
+ *   • Classification, ReturnNumber, NumberOfReturns → Uint8 — unsigned 1 byte
+ *   • Red / Green / Blue → 8- or 16-bit only (the RGB narrow recognises no other
+ *     width; a 32-bit channel would be masked to its low byte).
+ * A wider or differently-typed declaration is refused, never truncated: an EPT
+ * Intensity `unsigned` size 4 holding 70000 would wrap to 4464 in a Uint16, and
+ * a Classification size 2 holding 300 would wrap to 44 in a Uint8 — silent
+ * scientific corruption of the same class as the earlier E57 narrowing bug.
+ */
+const CHANNEL_WIDTHS: Readonly<
+  Record<string, ReadonlyArray<{ readonly type: EptSchemaField['type']; readonly size: number }>>
+> = {
+  Intensity: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
+  Classification: [{ type: 'unsigned', size: 1 }],
+  ReturnNumber: [{ type: 'unsigned', size: 1 }],
+  NumberOfReturns: [{ type: 'unsigned', size: 1 }],
+  Red: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
+  Green: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
+  Blue: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
+};
+
+/**
+ * Fail closed when a declared channel is wider (or a different type) than the
+ * OLV array it lands in can hold losslessly. Throws a permanent typed error —
+ * the tile is not re-fetchable into a fitting shape, the schema itself is
+ * unsupported, so retrying gains nothing.
+ */
+function assertChannelWidthsFit(attrs: readonly AttrLayout[]): void {
+  for (const attr of attrs) {
+    const allowed = CHANNEL_WIDTHS[attr.name];
+    if (!allowed) continue;
+    if (!allowed.some((w) => w.type === attr.type && w.size === attr.size)) {
+      const widths = allowed.map((w) => `${w.type} ${w.size}-byte`).join(' or ');
+      throw new LoadError(
+        'malformed-file',
+        `unsupported EPT schema: attribute "${attr.name}" is declared ${attr.type} ` +
+          `${attr.size}-byte, which cannot be read without losing bits ` +
+          `(supported: ${widths}). Refusing to truncate.`,
+      );
+    }
+  }
+}
+
+/**
  * Decode one EPT binary tile into a {@link DecodedChunk}.
  *
  * @param buffer        The raw tile bytes as fetched from the EPT data URL.
@@ -157,6 +204,12 @@ export function decodeEptBinaryTile(
   rgbEightBit?: boolean,
 ): DecodedChunk {
   const { attrs, stride } = computeSchemaLayout(schema);
+  // Every OLV channel this decoder materialises is narrower than some width the
+  // EPT schema is allowed to declare. Validate the declared widths fit LOSSLESSLY
+  // before allocating anything — a truncating narrow is silent scientific
+  // corruption, not a display quirk (see the note on the helper).
+  assertChannelWidthsFit(attrs);
+
   const expectedBytes = pointCount * stride;
   if (buffer.byteLength < expectedBytes) {
     // A short tile is almost always a transport problem — partial body
@@ -168,6 +221,19 @@ export function decodeEptBinaryTile(
         `points × ${stride} stride, got ${buffer.byteLength}.`,
       expectedBytes,
       buffer.byteLength,
+    );
+  }
+  // A tile LONGER than the schema-exact size is not a transport hiccup: trailing
+  // bytes mean the hierarchy count, the schema stride, or the writer disagree
+  // about the record layout, and decoding the first N records would silently
+  // read a tile whose real shape we don't know. Require exact equality and fail
+  // closed (permanent) on any surplus.
+  if (buffer.byteLength > expectedBytes) {
+    throw new LoadError(
+      'malformed-file',
+      `malformed EPT binary tile: expected exactly ${expectedBytes} bytes for ` +
+        `${pointCount} points × ${stride} stride, got ${buffer.byteLength} ` +
+        `(${buffer.byteLength - expectedBytes} trailing).`,
     );
   }
 

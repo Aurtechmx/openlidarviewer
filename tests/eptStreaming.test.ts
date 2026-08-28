@@ -173,7 +173,12 @@ const MULTI_FILE_HIERARCHY: Record<string, string> = {
 };
 function multiFileOctree(): EptOctree {
   const fetched: string[] = [];
-  const octree = new EptOctree(loadFixtureMetadata(), (key) => {
+  // The multi-file hierarchy's node counts sum to 190 (100 + 50 + 30 + 10). The
+  // octree now reconciles Σ(node points) against ept.json's declared `points`
+  // for its isComplete claim, so the fixture metadata must declare that total
+  // for a fully-deepened walk to read as complete.
+  const meta: EptMetadata = { ...loadFixtureMetadata(), points: 190 };
+  const octree = new EptOctree(meta, (key) => {
     const id = `${key.d}-${key.x}-${key.y}-${key.z}`;
     fetched.push(id);
     const text = MULTI_FILE_HIERARCHY[id];

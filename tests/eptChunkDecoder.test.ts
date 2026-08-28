@@ -24,8 +24,12 @@ import type { ChunkDecodeMetadata, DecodedChunk } from '../src/io/copc/copcChunk
 
 const RENDER_ORIGIN: [number, number, number] = [100, 200, 300];
 
+// pointCount matches META.pointCount below: EptChunkDecoder now reconciles the
+// decoded laszip tile's count against the hierarchy count and refuses a
+// mismatch, so a routing mock must agree with the metadata it is dispatched
+// with or it trips that guard before the routing assertion runs.
 function fakeChunk(): DecodedChunk {
-  return { pointCount: 1 } as unknown as DecodedChunk;
+  return { pointCount: 5 } as unknown as DecodedChunk;
 }
 
 function fakeCloud(
