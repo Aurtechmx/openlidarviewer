@@ -30,8 +30,9 @@ import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
 import type { StreamingBenchmark } from './streamingBenchmark';
 import type { StreamingQuality } from './streamingBudget';
-import { streamingBudgets, firstAdmissionMaxPoints } from './streamingBudget';
+import { streamingBudgets, firstAdmissionMaxPoints, capPntsConcurrency } from './streamingBudget';
 import { makeStreamingCommit, type StreamingCommit } from './meteredCommit';
+import { PntsChunkDecoder } from '../../io/tiles3d/pntsDecode';
 import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
 import { renderLocalPositions } from '../../model/pointFrames';
 import { loadStreamingRenderer, loadStreamingScheduler } from '../../lazyChunks';
@@ -202,6 +203,14 @@ export async function buildStreamingSession(
   );
   // The commit driver picks the scheduler's commit path (see meteredCommit.ts).
   const commit = makeStreamingCommit(readDevFlags().streamingCommitMode, isMobile, benchmark);
+  // A PNTS source admits nodes on a fixed point estimate a real tile can far
+  // exceed, so its concurrent decodes are held below the shared budget until a
+  // real preflight exists. COPC and EPT carry true per-node counts and keep the
+  // shared budget. See `capPntsConcurrency`.
+  const budgets =
+    decoder instanceof PntsChunkDecoder
+      ? capPntsConcurrency(streamingBudgets(quality, isMobile), isMobile)
+      : streamingBudgets(quality, isMobile);
   const scheduler = new StreamingScheduler(
     cloud,
     decoder,
@@ -211,7 +220,7 @@ export async function buildStreamingSession(
       nodeClassesHook: () => host.streamingNodeClassesHook(),
       nodeReadyHook: () => host.streamingNodeReadyHook(),
     }),
-    streamingBudgets(quality, isMobile),
+    budgets,
     {
       ...commit.schedulerOptions(),
       // Opt-in resident stickiness. The flag lives here, with the other host

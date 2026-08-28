@@ -145,6 +145,37 @@ export function streamingBudgets(
   };
 }
 
+/**
+ * The concurrent-decode ceiling for a PNTS (3D Tiles point) source.
+ *
+ * A PNTS tile carries no point count in the tileset JSON, so the scheduler
+ * admits its nodes on a fixed estimate (`ASSUMED_TILE_POINTS`, 500k) that a real
+ * tile can exceed by more than an order of magnitude, and each decode can reach
+ * the per-tile decoded-byte ceiling (192 MiB) before the estimate is corrected.
+ * With the shared budget's 4 desktop / 2 mobile concurrent decodes that admits
+ * several near-ceiling decodes at once, a transient spike the point estimate did
+ * not predict. Until a real per-tile preflight exists, PNTS decodes are held to
+ * one on mobile and two on desktop: a conservative bound that trades a little
+ * fill throughput for a transient-memory ceiling the scheduler can reason about.
+ */
+export const MAX_PNTS_CONCURRENT_DECODES_MOBILE = 1;
+export const MAX_PNTS_CONCURRENT_DECODES_DESKTOP = 2;
+
+/**
+ * Clamp a resolved budget's concurrent-decode count to the PNTS ceiling. Pure,
+ * and only ever lowers: `Math.min` leaves a budget already at or below the cap
+ * untouched.
+ */
+export function capPntsConcurrency(
+  budgets: StreamingBudgets,
+  isMobile: boolean,
+): StreamingBudgets {
+  const cap = isMobile
+    ? MAX_PNTS_CONCURRENT_DECODES_MOBILE
+    : MAX_PNTS_CONCURRENT_DECODES_DESKTOP;
+  return { ...budgets, maxConcurrentDecodes: Math.min(budgets.maxConcurrentDecodes, cap) };
+}
+
 /** A scored node candidate — the minimal shape budget selection needs. */
 export interface ScoredCandidate {
   id: string;

@@ -51,6 +51,7 @@
  */
 
 import { parsePnts } from './pnts';
+import { transformNormal } from './tileTransform';
 import type { ChunkDecoder, DecodedChunk } from '../copc/copcChunkDecode';
 
 /**
@@ -329,14 +330,21 @@ export class PntsChunkDecoder implements ChunkDecoder {
     if (!isPntsMetadata(meta)) {
       throw new Error('PntsChunkDecoder was handed metadata for another format.');
     }
-    const tile = parsePnts(chunk);
+    // The streaming decoder throws away batch ids and the batch table, so it
+    // asks the parser not to copy the batch-table binary or materialise
+    // BATCH_ID. That halves nothing here but spares a copy of the whole
+    // batch-table binary section per tile on the path that never reads it.
+    const tile = parsePnts(chunk, { keepBatchMetadata: false });
     const n = tile.pointsLength;
-    const positions = new Float32Array(n * 3);
     const [ox, oy, oz] = meta.renderOrigin;
     const rtc = tile.rtcCenter ?? [0, 0, 0];
-    // Hoisted: the tile's own local array, read once rather than three times
-    // per point. Its frame is the tile's local space, before RTC_CENTER.
-    const local = tile.positions;
+    // Transformed IN PLACE into the tile's own position array rather than a
+    // second Float32Array of the same size. `parsePnts` allocated `positions`
+    // fresh for this tile and nothing else aliases it, so the tile buffer is
+    // this decoder's to overwrite; it is discarded with `tile` after decode.
+    // Each point reads its three components before any is written, so the
+    // in-place write is safe within one iteration.
+    const positions = tile.positions;
 
     for (let i = 0; i < n; i++) {
       const j = i * 3;
@@ -344,13 +352,33 @@ export class PntsChunkDecoder implements ChunkDecoder {
       // transform places the tile, not the offset.
       const [wx, wy, wz] = applyMatrix(
         meta.tileTransform,
-        local[j] + rtc[0],
-        local[j + 1] + rtc[1],
-        local[j + 2] + rtc[2],
+        positions[j] + rtc[0],
+        positions[j + 1] + rtc[1],
+        positions[j + 2] + rtc[2],
       );
       positions[j] = wx - ox;
       positions[j + 1] = wy - oy;
       positions[j + 2] = wz - oz;
+    }
+
+    // Normals are directions, not positions: they take the inverse-transpose of
+    // the tile transform's linear part (RTC_CENTER and the render origin are
+    // translations and do not touch a direction), renormalised. Transformed in
+    // place into the tile's own normal array for the same ownership reason the
+    // positions are. See `transformNormal`.
+    if (tile.normals !== null) {
+      const normals = tile.normals;
+      for (let i = 0; i < n; i++) {
+        const j = i * 3;
+        const [nx, ny, nz] = transformNormal(meta.tileTransform, [
+          normals[j]!,
+          normals[j + 1]!,
+          normals[j + 2]!,
+        ]);
+        normals[j] = nx;
+        normals[j + 1] = ny;
+        normals[j + 2] = nz;
+      }
     }
 
     // The layer's colour meaning, settled by the first tile with points and
@@ -376,9 +404,10 @@ export class PntsChunkDecoder implements ChunkDecoder {
     // allocated for them, so a reader is told the channel is missing rather
     // than handed `pointCount` zeros that look like readings.
     //
-    // Normals are the one channel a point tile CAN state, so they are carried
-    // through as the tile wrote them — never re-normalised, never invented for
-    // a tile that has none.
+    // Normals are the one channel a point tile CAN state. They are carried
+    // through, transformed into the same root frame as the positions above by
+    // the inverse-transpose of the tile transform, never invented for a tile
+    // that has none.
     const decoded: DecodedChunk = {
       pointCount: n,
       positions,

@@ -502,6 +502,24 @@ const COLOR_DECODED_BYTES = 3;
 const NORMAL_DECODED_BYTES = 12;
 const BATCH_ID_DECODED_BYTES = 4;
 
+/**
+ * Independent size ceilings on the tile's three variable-length metadata
+ * sections, in bytes, enforced BEFORE the section is decoded or copied.
+ *
+ * The outer tile-body cap (128 MiB at the transport) and the sectioned-length
+ * check bound the sections jointly, but jointly is not enough: a tile could
+ * spend its whole body budget on a batch-table JSON string and force a
+ * `JSON.parse` of a hundred megabytes, or on a batch-table binary this reader
+ * then copies whole. These caps are small and independent of that outer budget,
+ * so an oversized section is named and refused before the expensive step
+ * touches it rather than after. Feature-table JSON holds accessor descriptors
+ * and RTC/quantisation vectors and is tiny in practice; batch-table JSON and
+ * binary hold per-feature properties and are the larger two.
+ */
+export const MAX_PNTS_FEATURE_TABLE_JSON_BYTES = 1 * 1024 * 1024;
+export const MAX_PNTS_BATCH_TABLE_JSON_BYTES = 16 * 1024 * 1024;
+export const MAX_PNTS_BATCH_TABLE_BINARY_BYTES = 64 * 1024 * 1024;
+
 /** Options for {@link parsePnts}. */
 export interface ParsePntsOptions {
   /**
@@ -518,6 +536,25 @@ export interface ParsePntsOptions {
    * declares, so a channel-heavy tile is refused before allocation.
    */
   readonly maxDecodedBytes?: number;
+  /**
+   * Whether to decode the batch-table JSON, copy the batch-table binary, and
+   * materialise BATCH_ID. Defaults to `true`, the full generic-parser contract.
+   *
+   * The streaming decoder discards all three, so it passes `false`: the
+   * batch-table binary is not copied, its JSON is not parsed, and BATCH_ID is
+   * not read into a Uint32Array. `batchTable` and `batchIds` come back null, and
+   * no per-tile batch-table copy is made on the path that would only throw it
+   * away. Draco is still refused from the feature table, which is where point
+   * compression lives; a caller that needs batch metadata leaves this at the
+   * default.
+   */
+  readonly keepBatchMetadata?: boolean;
+  /** Ceiling on the feature-table JSON section in bytes. Defaults to {@link MAX_PNTS_FEATURE_TABLE_JSON_BYTES}. */
+  readonly maxFeatureTableJsonBytes?: number;
+  /** Ceiling on the batch-table JSON section in bytes. Defaults to {@link MAX_PNTS_BATCH_TABLE_JSON_BYTES}. */
+  readonly maxBatchTableJsonBytes?: number;
+  /** Ceiling on the batch-table binary section in bytes. Defaults to {@link MAX_PNTS_BATCH_TABLE_BINARY_BYTES}. */
+  readonly maxBatchTableBinaryBytes?: number;
 }
 
 /**
@@ -588,16 +625,43 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
 
   const btBinStart = btJsonStart + btJsonLength;
 
+  const keepBatchMetadata = options.keepBatchMetadata ?? true;
+
+  // Section-size ceilings, enforced before the JSON is parsed or the binary is
+  // copied, so an oversized section is refused before the expensive step rather
+  // than after it has already run.
+  const maxFtJsonBytes = options.maxFeatureTableJsonBytes ?? MAX_PNTS_FEATURE_TABLE_JSON_BYTES;
+  if (ftJsonLength > maxFtJsonBytes) {
+    throw new Error(
+      `PNTS: feature-table JSON is ${ftJsonLength} bytes, past the ${maxFtJsonBytes} byte ceiling.`,
+    );
+  }
+
   const ft = decodeJsonSection(buffer, ftJsonStart, ftJsonLength, 'feature table');
+
   // Kept, not just checked: BATCH_ID indexes these properties, so the ids and
-  // the table they index have to leave this function together.
-  const batchTable =
-    btJsonLength > 0
-      ? {
-          json: decodeJsonSection(buffer, btJsonStart, btJsonLength, 'batch table'),
-          binary: new Uint8Array(buffer, btBinStart, btBinLength).slice(),
-        }
-      : null;
+  // the table they index have to leave this function together. The streaming
+  // decoder discards both, so it disables this whole block: no JSON.parse of the
+  // batch-table section, no copy of its binary.
+  let batchTable: PntsBatchTable | null = null;
+  if (keepBatchMetadata && btJsonLength > 0) {
+    const maxBtJsonBytes = options.maxBatchTableJsonBytes ?? MAX_PNTS_BATCH_TABLE_JSON_BYTES;
+    if (btJsonLength > maxBtJsonBytes) {
+      throw new Error(
+        `PNTS: batch-table JSON is ${btJsonLength} bytes, past the ${maxBtJsonBytes} byte ceiling.`,
+      );
+    }
+    const maxBtBinBytes = options.maxBatchTableBinaryBytes ?? MAX_PNTS_BATCH_TABLE_BINARY_BYTES;
+    if (btBinLength > maxBtBinBytes) {
+      throw new Error(
+        `PNTS: batch-table binary is ${btBinLength} bytes, past the ${maxBtBinBytes} byte ceiling.`,
+      );
+    }
+    batchTable = {
+      json: decodeJsonSection(buffer, btJsonStart, btJsonLength, 'batch table'),
+      binary: new Uint8Array(buffer, btBinStart, btBinLength).slice(),
+    };
+  }
 
   // Before POINTS_LENGTH, before any accessor, before any binary read: on a
   // Draco tile none of what follows is describing the bytes it thinks it is.
@@ -661,7 +725,11 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
   // whichever position encoding it happens to carry.
   const colors = decodeColors(ft, view, pointsLength, ftBinStart, ftBinLength);
   const normals = decodeNormals(ft, view, pointsLength, ftBinStart, ftBinLength);
-  const batchIds = decodeBatchIds(ft, view, pointsLength, ftBinStart, ftBinLength);
+  // BATCH_ID indexes the batch table. When the caller keeps no batch metadata it
+  // has nothing to index, so the ids are not read into a Uint32Array.
+  const batchIds = keepBatchMetadata
+    ? decodeBatchIds(ft, view, pointsLength, ftBinStart, ftBinLength)
+    : null;
 
   // A tile carrying both encodings is decoded from POSITION: the format gives
   // the uncompressed array precedence over the quantised one.

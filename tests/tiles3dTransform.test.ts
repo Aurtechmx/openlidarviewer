@@ -23,6 +23,7 @@ import {
   cumulativeTransform,
   transformPoint,
   transformDirection,
+  transformNormal,
   largestScale,
   transformGeometricError,
   transformBox,
@@ -123,6 +124,81 @@ describe('points and directions differ by the translation', () => {
     expect(x).toBeCloseTo(0, 12);
     expect(y).toBeCloseTo(1, 12);
     expect(z).toBeCloseTo(0, 12);
+  });
+});
+
+describe('normals take the inverse-transpose, not the plain linear part', () => {
+  it('leaves a normal unchanged under the identity', () => {
+    expect(transformNormal(IDENTITY_4X4, [0, 0, 1])).toEqual([0, 0, 1]);
+  });
+
+  it('ignores translation, which does not touch a direction', () => {
+    expect(transformNormal(T(5, 6, 7), [0, 0, 1])).toEqual([0, 0, 1]);
+  });
+
+  it('rotates +X to +Y under a 90-degree Z rotation', () => {
+    const [x, y, z] = transformNormal(Rz(Math.PI / 2), [1, 0, 0]);
+    expect(x).toBeCloseTo(0, 12);
+    expect(y).toBeCloseTo(1, 12);
+    expect(z).toBeCloseTo(0, 12);
+  });
+
+  it('preserves direction and unit length under a uniform scale', () => {
+    // The inverse-transpose of a uniform scale s is (1/s)·I, so the direction is
+    // the same and renormalisation restores unit length.
+    const [x, y, z] = transformNormal(S(4, 4, 4), [0, 0, 1]);
+    expect(x).toBeCloseTo(0, 12);
+    expect(y).toBeCloseTo(0, 12);
+    expect(z).toBeCloseTo(1, 12);
+  });
+
+  it('renormalises to unit length whatever the scale', () => {
+    const [x, y, z] = transformNormal(S(2, 3, 4), [1, 1, 1]);
+    expect(Math.hypot(x, y, z)).toBeCloseTo(1, 12);
+  });
+
+  it('differs from the plain linear part under a NON-uniform scale', () => {
+    // Under S(1,1,4) a plane normal (0,0,1) is bent by the inverse-transpose to
+    // point MORE steeply, not less: the plain matrix scales the z component up
+    // (wrong), the inverse-transpose scales it by 1/4 relative to x,y (right).
+    // A 45-degree normal in the x-z plane is the sharpest witness.
+    const m = S(1, 1, 4);
+    const inClinedNormal: [number, number, number] = [Math.SQRT1_2, 0, Math.SQRT1_2];
+
+    const invT = transformNormal(m, inClinedNormal);
+    // Plain linear part, normalised, is what a naive multiply would produce.
+    const plain = transformDirection(m, inClinedNormal);
+    const plainLen = Math.hypot(...plain);
+    const plainUnit = plain.map((c) => c / plainLen);
+
+    // The two disagree: the plain multiply tilts z UP (0.97), the
+    // inverse-transpose tilts it DOWN (0.24).
+    expect(Math.abs(invT[2] - plainUnit[2])).toBeGreaterThan(0.1);
+    // Closed form: inverse-transpose of S(1,1,4) is S(1,1,1/4); applied to
+    // (1/√2,0,1/√2) gives (1/√2,0,1/(4√2)), normalised.
+    const ex = 1 / Math.SQRT2, ez = 1 / (4 * Math.SQRT2);
+    const exLen = Math.hypot(ex, 0, ez);
+    expect(invT[0]).toBeCloseTo(ex / exLen, 12);
+    expect(invT[2]).toBeCloseTo(ez / exLen, 12);
+  });
+
+  it('applies the rotational root frame of an ENU-style transform', () => {
+    // A root transform combining a rotation and a translation (the shape an ENU
+    // placement takes): the translation is ignored and the rotation carried.
+    const m = composeTileTransform(T(6378137, 0, 0), Rz(Math.PI / 2));
+    const [x, y, z] = transformNormal(m, [1, 0, 0]);
+    expect(x).toBeCloseTo(0, 9);
+    expect(y).toBeCloseTo(1, 9);
+    expect(z).toBeCloseTo(0, 9);
+  });
+
+  it('falls back to the normalised linear part on a degenerate transform', () => {
+    // A rank-deficient 3x3 (z axis collapsed) has no inverse; rather than NaN,
+    // the direction rides the plain linear part, normalised.
+    const collapsed = S(2, 2, 0);
+    const [x, y, z] = transformNormal(collapsed, [1, 0, 0]);
+    expect(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)).toBe(true);
+    expect(Math.hypot(x, y, z)).toBeCloseTo(1, 12);
   });
 });
 
