@@ -133,13 +133,24 @@ function unsupported(reason: string): LazChunkTableUnsupported {
  * Throws only what {@link parseLasHeader} throws (a file that is not LAS at
  * all); every table-level defect reports `supported: false` instead, so the
  * caller's fallback decision is one branch.
+ *
+ * `maxHeadBytes` caps the single prefix read that covers the public header and
+ * the VLR region; it defaults to {@link MAX_HEAD_BYTES} and is clamped to that
+ * cap. A caller that already knows `offsetToPointData` (every VLR precedes the
+ * point data) passes it here so the prefix read stays a few hundred bytes on a
+ * file whose header is small, instead of reading up to the 4 MiB default — which
+ * on a file smaller than the default would be the whole file. All the VLRs must
+ * still fall inside the prefix, so too small a cap simply reports `supported:
+ * false` (no laszip VLR found), it never mis-reads the table.
  */
 export async function readLazChunkTable(
   range: RangeSource,
   signal?: AbortSignal,
+  maxHeadBytes: number = MAX_HEAD_BYTES,
 ): Promise<LazChunkTableResult> {
   const size = await range.size();
-  const headLength = Math.min(size, MAX_HEAD_BYTES);
+  const headCap = Math.min(MAX_HEAD_BYTES, Math.max(0, Math.floor(maxHeadBytes)));
+  const headLength = Math.min(size, headCap);
   const head = await range.readRange(0, headLength, signal);
   const header = parseLasHeader(head);
 

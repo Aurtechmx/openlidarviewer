@@ -26,6 +26,7 @@ import type { RangeSource } from '../range/RangeSource';
 import type { SpillStore } from './oocIndexer';
 import { indexOutOfCore } from './oocIndexer';
 import { openSlicedLasSource } from './slicedLasSource';
+import { openChunkedLazSource, type ChunkedLazOptions } from './chunkedLazSource';
 import type { SlicedLasOptions } from './slicedLasReader';
 import {
   buildTileStore,
@@ -55,6 +56,8 @@ export interface BuildTileStoreOptions {
   readonly sink?: TileArtifactSink;
   /** Passed through to the sliced LAS reader (batch size, explicit origin). */
   readonly las?: SlicedLasOptions;
+  /** Passed through to the chunked LAZ source (origin, chunk window). */
+  readonly laz?: ChunkedLazOptions;
   /**
    * Force the two-pass index build even when the LAS header would allow one
    * pass. The store is identical either way for a valid header; this exists so a
@@ -102,6 +105,47 @@ export async function buildTileStoreFromLas(
     signal: options.signal,
   });
   const { manifestJson, hierarchy } = buildTileStore(index, las.schema, las.origin);
+
+  if (options.sink) {
+    await options.sink.write(TILE_MANIFEST_NAME, manifestJson);
+    await options.sink.write(TILE_HIERARCHY_NAME, hierarchy);
+  }
+
+  return {
+    reader: openTileStore(manifestJson, hierarchy),
+    tiles: tileBytesReader(spill),
+    manifestJson,
+    hierarchy,
+    peakBufferedBytes: index.peakBufferedBytes,
+  };
+}
+
+/**
+ * Build a tile store from a chunked LAZ, reading it out of core. Mirrors
+ * {@link buildTileStoreFromLas} exactly, differing only in how points are
+ * produced: {@link openChunkedLazSource} decodes a bounded window of chunks at a
+ * time from the file's chunk table instead of reading uncompressed slices.
+ *
+ * Throws {@link ChunkedLazUnsupportedError} for a LAZ the chunk table cannot
+ * randomly address (pointwise LAZ, interrupted writer) or an unsupported point
+ * format, so the caller routes rather than reading the file whole. The returned
+ * reader is parsed back out of the manifest and hierarchy, like the LAS build,
+ * so what streams is what a later session would reopen.
+ */
+export async function buildTileStoreFromLaz(
+  range: RangeSource,
+  spill: SpillStore,
+  options: BuildTileStoreOptions = {},
+): Promise<BuiltTileStore> {
+  const laz = await openChunkedLazSource(range, options.laz ?? {});
+  const index = await indexOutOfCore(laz.source, spill, {
+    pointsPerLeaf: options.pointsPerLeaf,
+    memoryBudgetBytes: options.memoryBudgetBytes,
+    maxDepth: options.maxDepth,
+    forceSlowPath: options.forceSlowPath,
+    signal: options.signal,
+  });
+  const { manifestJson, hierarchy } = buildTileStore(index, laz.schema, laz.origin);
 
   if (options.sink) {
     await options.sink.write(TILE_MANIFEST_NAME, manifestJson);
