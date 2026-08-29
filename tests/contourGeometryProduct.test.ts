@@ -109,3 +109,26 @@ describe('cartographicProduct', () => {
     expect(() => cartographicProduct(analytical, { toleranceSource: Number.NaN, horizontalUnit: knownUnit(1) })).toThrow();
   });
 });
+
+describe('method version comes from the registry (fail-closed)', () => {
+  const analytical = analyticalProduct([jagged]);
+
+  it('stamps the registered version, not a hardcoded literal', () => {
+    // Registry versions are integers; the product carries them as strings.
+    expect(analyticalProduct([jagged]).methodVersion).toBe('1'); // olv.contour.analytical@1
+    expect(
+      cartographicProduct(analytical, { toleranceSource: 2, horizontalUnit: knownUnit(1) }).methodVersion,
+    ).toBe('1'); // olv.contour.generalize.dp@1
+  });
+
+  it('throws on an unregistered method id rather than stamping a phantom method', () => {
+    expect(() => analyticalProduct([jagged], { methodId: 'olv.contour.ghost' })).toThrow(/Unknown method id/);
+    expect(() =>
+      cartographicProduct(analytical, {
+        toleranceSource: 2,
+        horizontalUnit: knownUnit(1),
+        methodId: 'olv.contour.ghost',
+      }),
+    ).toThrow(/Unknown method id/);
+  });
+});

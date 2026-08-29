@@ -19,6 +19,7 @@
 
 import type { ContourFeature } from '../contour/contourFeatureModel';
 import { canonicalHash } from '../../canonicalHash';
+import { methodRef } from '../../science/methodRegistry';
 import { raw, sourceUnits, toMetresIfKnown, type LinearUnitScale } from '../../units/units';
 
 export type ContourGeometryRole = 'analytical-isoline' | 'cartographic-generalization';
@@ -71,10 +72,13 @@ export function analyticalProduct(
   features: readonly ContourFeature[],
   method: { methodId?: string; methodVersion?: string } = {},
 ): ContourGeometryProduct {
+  const methodId = method.methodId ?? 'olv.contour.analytical';
   return {
     role: 'analytical-isoline',
-    methodId: method.methodId ?? 'olv.contour.analytical',
-    methodVersion: method.methodVersion ?? '1',
+    methodId,
+    // Version from the registry (fail-closed: methodRef throws on an
+    // unregistered id) instead of a hardcoded literal.
+    methodVersion: method.methodVersion ?? String(methodRef(methodId).version),
     contentHash: hashFeatures(features),
     sourceAnalyticalHash: null,
     features,
@@ -138,7 +142,7 @@ export function cartographicProduct(
     : 0;
 
   const methodId = opts.methodId ?? 'olv.contour.generalize.dp';
-  const methodVersion = opts.methodVersion ?? '1';
+  const methodVersion = opts.methodVersion ?? String(methodRef(methodId).version);
   const tolM = toMetresIfKnown(sourceUnits(tol), opts.horizontalUnit);
 
   return {
