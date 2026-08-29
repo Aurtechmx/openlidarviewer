@@ -19,12 +19,12 @@ unaffected.
 
 | Field | Value |
 |---|---|
-| Release line | v0.6.6 |
+| Release line | v0.6.7 |
 | Baseline date (UTC) | 2026-07-25 |
 | Canonical Node | 22.17.1 (`.nvmrc`) |
 | Canonical npm | 10.9.2 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.6`, 56 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.7`, 56 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](../../sbom.json). Licences are credited in
@@ -39,10 +39,10 @@ These ship in the deploy archive.
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 |
-| @loaders.gl/core | ^4.4.2 | 4.4.3 | MIT |
+| @loaders.gl/core | ^4.4.2 | 4.4.4 | MIT |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT |
 | @loaders.gl/obj | ^4.4.2 | 4.4.3 | MIT |
-| @loaders.gl/ply | ^4.4.2 | 4.4.3 | MIT |
+| @loaders.gl/ply | ^4.4.2 | 4.4.4 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.21.0 | 2.21.0 | MIT |
@@ -54,15 +54,15 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
-| @playwright/test | ^1.60.0 | 1.62.0 | Apache-2.0 |
+| @playwright/test | ^1.60.0 | 1.62.1 | Apache-2.0 |
 | @stryker-mutator/core | ^9.6.1 | 9.6.1 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^9.6.1 | 9.6.1 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
 | @types/three | ^0.184.1 | 0.184.1 | MIT |
 | @vitest/coverage-v8 | ^4.1.10 | 4.1.10 | MIT |
-| rollup-plugin-visualizer | ^7.0.1 | 7.0.1 | MIT |
+| rollup-plugin-visualizer | ^7.0.1 | 7.1.1 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
-| vite | ^8.1.5 | 8.1.5 | MIT |
+| vite | ^8.1.5 | 8.2.1 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
 | vitest | ^4.1.7 | 4.1.10 | MIT |
