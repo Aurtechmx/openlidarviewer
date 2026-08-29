@@ -31,6 +31,7 @@ import type { ContourStudioState } from './contourStudioState';
 import type { ContourShapeStyle } from '../contour/contourShapeStyle';
 import type { ContourGeneralizeMode } from '../contour/terrainAwareTolerance';
 import { PURPOSE_META } from './contourStudioPurpose';
+import { methodRef, methodTag } from '../../science/methodRegistry';
 
 /**
  * The purpose-driven product facts a deliverable renders on its sheet, so a
@@ -139,7 +140,12 @@ export function contourExportIntentFromState(state: ContourStudioState): Contour
     : generalizeMode === 'terrain-aware'
       ? 'olv.contour.generalize.terrain-adaptive'
       : 'olv.contour.generalize';
-  const methodVersion = 1;
+  // Version and tag come from the registry, fail-closed: methodRef throws on an
+  // unregistered id, so a stamped export can never name a method the catalogue
+  // does not define, and a method-version bump flows through here on its own
+  // instead of being hand-kept at 1.
+  const ref = methodRef(methodId);
+  const methodVersion = ref.version;
 
   const meta = PURPOSE_META[state.purpose];
   return {
@@ -150,7 +156,7 @@ export function contourExportIntentFromState(state: ContourStudioState): Contour
     labelsIndexOnly: state.labels.indexOnly,
     methodId,
     methodVersion,
-    methodTag: `${methodId}@${methodVersion}`,
+    methodTag: methodTag(ref),
     deliverable: {
       label: meta.label,
       statement: meta.summary,

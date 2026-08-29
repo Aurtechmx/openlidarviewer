@@ -23,6 +23,7 @@ export type MethodCategory =
   | 'classification'
   | 'ground'
   | 'terrain'
+  | 'contour'
   | 'validation'
   | 'registration'
   | 'volume'
@@ -195,6 +196,50 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     citation:
       'Internal composition (provenance record over the loader-recorded cell-to-record index); no single source method.',
     category: 'provenance',
+  },
+  'olv.contour.analytical': {
+    id: 'olv.contour.analytical',
+    version: 1,
+    name: 'Analytical iso-contour geometry',
+    summary:
+      'Exact iso-contours extracted from the terrain grid by linear interpolation ' +
+      'along cell edges, emitted without cartographic simplification.',
+    citation:
+      'Internal implementation of grid iso-contour extraction by edge linear interpolation; no single source method. Cross-checked against GDAL gdal_contour.',
+    category: 'contour',
+  },
+  'olv.contour.generalize.dp': {
+    id: 'olv.contour.generalize.dp',
+    version: 1,
+    name: 'Douglas–Peucker contour simplification',
+    summary:
+      'Per-feature Douglas–Peucker line simplification of the analytical contours ' +
+      'at a fixed tolerance, recording per-feature displacement statistics.',
+    citation: 'Douglas & Peucker (1973), The Canadian Cartographer 10(2):112–122',
+    category: 'contour',
+  },
+  'olv.contour.generalize': {
+    id: 'olv.contour.generalize',
+    version: 1,
+    name: 'Uniform contour generalization',
+    summary:
+      'Cartographic generalization at one uniform Douglas–Peucker tolerance across ' +
+      'every feature, run through the Douglas–Peucker primitive.',
+    citation:
+      'Douglas & Peucker (1973), The Canadian Cartographer 10(2):112–122 (uniform-tolerance application)',
+    category: 'contour',
+  },
+  'olv.contour.generalize.terrain-adaptive': {
+    id: 'olv.contour.generalize.terrain-adaptive',
+    version: 1,
+    name: 'Terrain-adaptive contour generalization',
+    summary:
+      'Cartographic generalization whose Douglas–Peucker tolerance is scaled per ' +
+      'feature by measurement confidence and feature scale — smoothing measured, ' +
+      'long contours more and low-confidence or small closed features less.',
+    citation:
+      'Internal composition (per-feature Douglas–Peucker tolerance scaled by terrain confidence and feature scale); no single source method.',
+    category: 'contour',
   },
 };
 

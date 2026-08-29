@@ -7,6 +7,9 @@
  * record can never reference a method the registry does not define).
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   METHOD_REGISTRY,
   method,
@@ -15,12 +18,37 @@ import {
   methodTag,
 } from '../src/science/methodRegistry';
 
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
 describe('METHOD_REGISTRY invariants', () => {
-  it('every key equals its entry id and is namespaced olv.<area>.<method>', () => {
+  it('every key equals its entry id and is namespaced olv.<area>.<method>[.<variant>]', () => {
     for (const [key, entry] of Object.entries(METHOD_REGISTRY)) {
       expect(entry.id).toBe(key);
-      expect(key).toMatch(/^olv\.[a-z]+\.[a-z0-9-]+$/);
+      // area.method, plus optional dotted variant segments (e.g.
+      // olv.contour.generalize.terrain-adaptive names a variant of a method).
+      expect(key).toMatch(/^olv\.[a-z]+\.[a-z0-9-]+(?:\.[a-z0-9-]+)*$/);
     }
+  });
+
+  it('docs/science/METHOD_REGISTRY.md lists every registered method (doc↔registry parity)', () => {
+    const doc = readFileSync(resolve(ROOT, 'docs/science/METHOD_REGISTRY.md'), 'utf8');
+    const documented = new Set(
+      [...doc.matchAll(/`(olv\.[a-z0-9.-]+)`/g)].map((m) => m[1]),
+    );
+    const missing = Object.keys(METHOD_REGISTRY).filter((id) => !documented.has(id));
+    expect(missing, `METHOD_REGISTRY.md omits: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('docs/science/METHOD_REGISTRY.md names no method the registry does not define', () => {
+    const doc = readFileSync(resolve(ROOT, 'docs/science/METHOD_REGISTRY.md'), 'utf8');
+    // Only the table rows name real ids; a prose example id would be a false
+    // positive, so restrict to backticked ids on table rows (lines starting "|").
+    const rowIds = doc
+      .split('\n')
+      .filter((l) => l.startsWith('| `olv.'))
+      .flatMap((l) => [...l.matchAll(/`(olv\.[a-z0-9.-]+)`/g)].map((m) => m[1]));
+    const unknown = rowIds.filter((id) => !isMethodId(id));
+    expect(unknown, `METHOD_REGISTRY.md rows name unregistered ids: ${unknown.join(', ')}`).toEqual([]);
   });
 
   it('every version is a positive integer', () => {
