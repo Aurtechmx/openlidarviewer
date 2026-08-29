@@ -96,6 +96,16 @@ export interface ProfileWorkbenchOptions {
    * promise did, so a failure is visible on the control the user pressed.
    */
   readonly onExportPdf?: () => Promise<void>;
+  /**
+   * Save a PNG of the section the panel is plotting.
+   *
+   * A different product from the PDF sheet: a raster of the individual returns
+   * off the same splat loop as the plot on screen, not the vector polyline the
+   * sheet draws. Absent means no PNG control is rendered. The panel neither
+   * composes nor encodes the image; it reports what the host's promise did, so
+   * a failure shows on the control the user pressed.
+   */
+  readonly onExportImage?: () => Promise<void>;
   /** Called when the user closes the panel. */
   readonly onClose?: () => void;
 }
@@ -163,6 +173,10 @@ const EXPORT_LABEL = 'Export PDF';
 const EXPORT_WORKING_LABEL = 'Building\u2026';
 const EXPORT_FAILED_LABEL = 'Export failed';
 
+/** The PNG control's resting label, and the two states it passes through. */
+const EXPORT_PNG_LABEL = 'Export PNG';
+const EXPORT_PNG_WORKING_LABEL = 'Saving\u2026';
+
 /** How long a failed export keeps saying so before the control resets. */
 const EXPORT_FAILED_MS = 1800;
 
@@ -191,6 +205,7 @@ class ProfileWorkbench {
   private readonly _title: HTMLElement;
   private readonly _titleInput: HTMLInputElement | null;
   private readonly _exportBtn: HTMLButtonElement | null;
+  private readonly _exportImageBtn: HTMLButtonElement | null;
   private readonly _status: HTMLElement;
   private readonly _detail: HTMLElement;
   private readonly _readout: HTMLElement;
@@ -278,9 +293,25 @@ class ProfileWorkbench {
       this._on(btn, 'click', () => void this._exportPdf(btn));
     }
 
-    const actions = this._exportBtn
-      ? [this._exportBtn, this._collapseBtn, closeBtn]
-      : [this._collapseBtn, closeBtn];
+    // The PNG control is independent of the PDF one: a host may offer the raster
+    // section image without the vector sheet, or both, or neither.
+    this._exportImageBtn = options.onExportImage
+      ? el('button', {
+          className: 'olv-workbench-btn',
+          type: 'button',
+          text: EXPORT_PNG_LABEL,
+          ariaLabel: 'Export this section as a PNG image',
+        })
+      : null;
+    if (this._exportImageBtn) {
+      const btn = this._exportImageBtn;
+      this._on(btn, 'click', () => void this._exportImage(btn));
+    }
+
+    const exportBtns = [this._exportBtn, this._exportImageBtn].filter(
+      (b): b is HTMLButtonElement => b !== null,
+    );
+    const actions = [...exportBtns, this._collapseBtn, closeBtn];
     const head = el('div', { className: 'olv-workbench-head' }, [
       el('div', { className: 'olv-workbench-titles' }, [
         this._title,
@@ -444,6 +475,34 @@ class ProfileWorkbench {
     }
     if (this._closed) return;
     btn.textContent = EXPORT_LABEL;
+    btn.disabled = false;
+  }
+
+  /**
+   * Save the section PNG the host offered, and say so on the control.
+   *
+   * Mirrors the PDF path: the panel composes nothing itself, it runs the
+   * host's promise and reports the outcome on the button the user pressed. A
+   * rejection stops here, on the control, rather than in the console.
+   */
+  private async _exportImage(btn: HTMLButtonElement): Promise<void> {
+    const run = this._options.onExportImage;
+    if (!run || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = EXPORT_PNG_WORKING_LABEL;
+    try {
+      await run();
+    } catch {
+      btn.textContent = EXPORT_FAILED_LABEL;
+      setTimeout(() => {
+        if (this._closed) return;
+        btn.textContent = EXPORT_PNG_LABEL;
+        btn.disabled = false;
+      }, EXPORT_FAILED_MS);
+      return;
+    }
+    if (this._closed) return;
+    btn.textContent = EXPORT_PNG_LABEL;
     btn.disabled = false;
   }
 

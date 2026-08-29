@@ -94,6 +94,15 @@ export interface ProfileWorkbenchLauncherDeps {
    * export control.
    */
   exportPdf?: (id: string) => Promise<void>;
+  /**
+   * Save a PNG of the section a dock is plotting.
+   *
+   * The raster of the returns off the same splat loop as the plot on screen —
+   * a different product from the PDF sheet. Composed from the live plot the
+   * presenter built, not re-extracted here. Absent means the dock renders no
+   * PNG control.
+   */
+  exportImage?: (request: ProfileWorkbenchLaunchRequest) => Promise<void>;
   /** Told about a rejected import, so a silent fallback still leaves a trace. */
   onLoadFailure?: (error: unknown) => void;
   /** Told about a `present` that threw, for the same reason. */
@@ -162,11 +171,13 @@ export function createProfileWorkbenchLauncher(
     // under it is filled by the presenter with what the section actually read.
     const rename = deps.rename;
     const exportPdf = deps.exportPdf;
+    const exportImage = deps.exportImage;
     const mounted = module.mountProfileWorkbench(host, {
       title: request.name,
       scope: request.name,
       ...(rename ? { onRename: (name: string) => rename(request.id, name) } : {}),
       ...(exportPdf ? { onExportPdf: () => exportPdf(request.id) } : {}),
+      ...(exportImage ? { onExportImage: () => exportImage(request) } : {}),
       onClose: () => {
         // Only for the dock that is still the live one: a panel closed by the
         // mount that replaced it must not hand back the successor's height.

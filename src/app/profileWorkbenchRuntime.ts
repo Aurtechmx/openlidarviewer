@@ -19,15 +19,27 @@
 
 import { createProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
 import { createStageProfileWorkbench } from './profileWorkbenchStage';
-import { presentWorkbenchSection } from './profileWorkbenchSection';
+import {
+  exportProfileSectionImagePng,
+  presentWorkbenchSection,
+} from './profileWorkbenchSection';
 import { loadProfileWorkbench } from '../lazyChunks';
 import { ProfileLinkOverlay } from '../render/ProfileLinkOverlay';
 import { focusPoseOnPoint } from '../render/measure/profilePointLink';
 
 import type { ProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
-import type { WorkbenchSectionScene } from './profileWorkbenchSection';
+import type { WorkbenchSectionPlot, WorkbenchSectionScene } from './profileWorkbenchSection';
 import type { ProfileLinkOverlayHost } from '../render/ProfileLinkOverlay';
 import type { ProfileCameraPose } from '../render/measure/profilePointLink';
+
+/**
+ * A UTC timestamp for the exported PNG's caption, in the same deterministic
+ * shape the profile PDF prints (`YYYY-MM-DD HH:MM UTC`). Read once, at the
+ * export boundary — the compose never reads a clock of its own.
+ */
+function sectionImageStamp(): string {
+  return `${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
 
 export interface ProfileWorkbenchRuntimeDeps {
   /** The stage the dock shares its box with. */
@@ -116,12 +128,41 @@ export function createProfileWorkbenchRuntime(
       : {}),
   };
 
+  // The plot the live dock is showing, captured when the presenter finishes so
+  // the PNG export composes from the same state rather than re-extracting the
+  // section. One dock at a time, so one slot: it is cleared when the dock's
+  // presentation is released.
+  let live: { plot: WorkbenchSectionPlot; name: string } | null = null;
+
   return createProfileWorkbenchLauncher({
     load: () => loadProfileWorkbench(),
     stage: createStageProfileWorkbench(deps.stage),
     ...(deps.rename ? { rename: deps.rename } : {}),
     ...(deps.exportPdf ? { exportPdf: deps.exportPdf } : {}),
-    present: (handle, request) => presentWorkbenchSection(handle, request.id, scene),
+    exportImage: async (request) => {
+      const current = live;
+      if (!current) {
+        throw new Error('The section is not ready to export yet.');
+      }
+      // The clock is read HERE, at the app boundary, and handed to the compose
+      // as a preformatted string, so the same section is the same pixels. Same
+      // deterministic stamp shape the PDF sheet prints.
+      await exportProfileSectionImagePng(current.plot, {
+        name: request.name,
+        generatedAt: sectionImageStamp(),
+      });
+    },
+    present: (handle, request) => {
+      const dispose = presentWorkbenchSection(handle, request.id, scene, {
+        onReady: (plot) => {
+          live = { plot, name: request.name };
+        },
+      });
+      return () => {
+        live = null;
+        dispose();
+      };
+    },
     onLoadFailure:
       deps.onLoadFailure ??
       ((error) => {
