@@ -11,7 +11,7 @@
   "softwareVersion": "0.6.7",
   "dateModified": "2026-08-29",
   "datePublished": "2026-08-29",
-  "license": "https://spdx.org/licenses/MIT.html",
+  "license": "https://spdx.org/licenses/AGPL-3.0-only.html",
   "codeRepository": "https://github.com/Aurtechmx/openlidarviewer",
   "url": "https://lidar.aurtech.mx/",
   "issueTracker": "https://github.com/Aurtechmx/openlidarviewer/issues",
