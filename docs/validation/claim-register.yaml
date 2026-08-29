@@ -185,7 +185,7 @@ claims:
     claim: "Planimetric area of a user polygon in square metres when the horizontal unit is known."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/measure*.test.ts, tests/formatArea*.test.ts, tests/measurementAnalyticalFixtures.test.ts, tests/measureAreaCrossCheck.test.ts]
+    supportingTests: [tests/measure*.test.ts, tests/measurementAnalyticalFixtures.test.ts, tests/measureAreaCrossCheck.test.ts]
     supportingDatasets: [8 planar polygons (OLV-DS-030-AREA-POLYGONS) with a GDAL/OGR OGR_GEOM_AREA reference]
     supportingStudies: [MEAS-AREA-OGR-PLANAR]
     units: [square-metres, source-units]
@@ -366,7 +366,7 @@ claims:
     claim: "Approximate cut/fill volume from a uniform-density point sample against a base."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/volume*.test.ts, tests/clipVolume*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]
+    supportingTests: [tests/volume*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Refuses on geographic degrees; local metric only."
@@ -999,7 +999,7 @@ claims:
     claim: "Content-integrity digest — detects edits made without re-stamping. NOT proof of authorship."
     currentEvidence: E1_UNIT_VERIFIED
     requiredEvidence: E1_UNIT_VERIFIED
-    supportingTests: [tests/reportManifest*.test.ts, tests/reportVerifier*.test.ts]
+    supportingTests: [tests/reportManifest*.test.ts]
     supportingDatasets: []
     units: [hash]
     crsDatum: n/a
