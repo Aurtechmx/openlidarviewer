@@ -32,7 +32,7 @@
 #     across 36 geodetic fixtures; CHANGE-RASTER against GRASS 8.5.0 r.mapcalc
 #     and CHANGE-VOLUME against GRASS 8.5.0 r.univar with a closed-form check,
 #     each over eight synthetic epoch pairs; and HOLDOUT-RMSE and NVA-VVA
-#     against R 4.4.1, cross-implementation-checked but internal holdout
+#     against R 4.6.1, cross-implementation-checked but internal holdout
 #     diagnostics rather than independent checkpoint accuracy. The slope,
 #     hillshade and contour tolerances were registered
 #     before the reference was generated: all three were fixed in the harness
