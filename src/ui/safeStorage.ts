@@ -43,3 +43,18 @@ export function storageSet(key: string, value: string): void {
     // Best-effort persistence; ignore quota / security failures.
   }
 }
+
+/**
+ * Remove a value. Best-effort — silently swallows any storage error
+ * (security, privacy mode). Never throws. Used where clearing a
+ * preference is itself a one-line string call, e.g. resetting a
+ * one-shot onboarding marker.
+ */
+export function storageRemove(key: string): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.removeItem(key);
+  } catch {
+    // Best-effort; ignore security failures.
+  }
+}

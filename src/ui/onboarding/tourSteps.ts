@@ -17,6 +17,8 @@
  * so unit tests use an in-memory fake.
  */
 
+import { storageGet, storageSet, storageRemove } from '../safeStorage';
+
 /** Where the tooltip card sits relative to its target. */
 export type TourPlacement = 'top' | 'bottom' | 'left' | 'right' | 'center';
 
@@ -153,28 +155,9 @@ const STORAGE_KEY = 'olv:tour:v1:completed';
 
 /** Default `localStorage`-backed port. */
 export const DEFAULT_TOUR_STORAGE: TourStoragePort = {
-  hasSeen: () => {
-    try {
-      return typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY) === '1';
-    } catch {
-      return false;
-    }
-  },
-  setSeen: () => {
-    try {
-      if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, '1');
-    } catch {
-      /* defensive — quota-exceeded / private-mode is fine, the tour
-         simply re-shows on the next session. */
-    }
-  },
-  clear: () => {
-    try {
-      if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* defensive */
-    }
-  },
+  hasSeen: () => storageGet(STORAGE_KEY) === '1',
+  setSeen: () => storageSet(STORAGE_KEY, '1'),
+  clear: () => storageRemove(STORAGE_KEY),
 };
 
 /**
