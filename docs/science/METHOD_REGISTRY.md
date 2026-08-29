@@ -26,6 +26,12 @@ the paper that specifies it.
 | `olv.terrain.slope-horn` | 1 | Horn slope & aspect | Horn (1981) |
 | `olv.terrain.vrm` | 1 | Vector Ruggedness Measure | Sappington et al. (2007) |
 | `olv.terrain.tpi` | 1 | Topographic Position Index | Weiss (2001) |
+| `olv.contour.analytical` | 1 | Analytical iso-contour geometry | internal (grid contour extraction) |
+| `olv.contour.generalize` | 1 | Uniform contour generalization | Douglas & Peucker (1973) |
+| `olv.contour.generalize.dp` | 1 | Douglas–Peucker contour simplification | Douglas & Peucker (1973) |
+| `olv.contour.generalize.terrain-adaptive` | 1 | Terrain-adaptive contour generalization | internal (feature-scaled DP) |
+| `olv.class.derived-heuristic` | 3 | Derived point classification (heuristic) | Zhang et al. (2003); internal composition |
+| `olv.topology.linkage-record` | 1 | Source acquisition topology linkage record | internal (provenance record) |
 | `olv.dtm.idw-fill` | 1 | DTM raster + IDW void fill | internal (standard IDW) |
 | `olv.validation.holdout-rmse` | 2 | Hold-out vertical accuracy (classify-inside-fold) | ASPRS (2014) formulas, hold-out basis |
 | `olv.validation.spatial-block` | 2 | Spatial-block cross-validation | Roberts et al. (2017) |
