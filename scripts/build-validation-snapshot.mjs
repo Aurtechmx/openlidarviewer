@@ -3,9 +3,15 @@
  * build-validation-snapshot.mjs — collect the candidate's validation state into
  * one directory that can be checked on its own.
  *
- *   npm run validation:snapshot
- *   node scripts/build-validation-snapshot.mjs --out <dir>
+ *   npm run validation:snapshot            # refuses to overwrite an existing baseline
+ *   node scripts/build-validation-snapshot.mjs --out <dir>   # build elsewhere freely
+ *   node scripts/build-validation-snapshot.mjs --force       # rebuild the baseline in place
  *   node scripts/build-validation-snapshot.mjs --preserve-existing
+ *
+ * The committed `validation/snapshot/` is a frozen baseline. With no `--out`, a
+ * rebuild would wipe it and regenerate from the current tree, so the default is
+ * NON-DESTRUCTIVE: it refuses when the baseline already exists unless `--force`
+ * is given. An explicit `--out <dir>` always builds into that directory.
  *
  * The output is `validation/snapshot/`: a copy of every record the snapshot
  * cites, a `snapshot.json` derived from those copies, a `SUMMARY.md` rendered
@@ -44,6 +50,18 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : fallback;
 };
+
+/**
+ * Whether to refuse an in-place rebuild. The committed `validation/snapshot/` is
+ * a frozen baseline; a plain `npm run validation:snapshot` used to wipe it and
+ * rebuild from the current tree, destroying the baseline by default. Refuse when
+ * no explicit `--out` was given AND the default output already exists AND
+ * `--force` was not passed: an explicit `--out <dir>` builds elsewhere freely,
+ * and `--force` rebuilds in place on purpose.
+ */
+export function refuseInPlaceOverwrite({ outPassed, exists, force }) {
+  return !outPassed && exists && !force;
+}
 
 /** Every file under a repository directory, as repo-relative paths. */
 function walk(dirAbs, base) {
@@ -113,7 +131,21 @@ export function writeManifest(dir) {
 }
 
 function main() {
-  const out = resolve(arg('--out', join(ROOT, 'validation/snapshot')));
+  const outArg = arg('--out', null);
+  const out = resolve(outArg ?? join(ROOT, 'validation/snapshot'));
+  if (refuseInPlaceOverwrite({
+    outPassed: outArg != null,
+    exists: existsSync(out),
+    force: process.argv.includes('--force'),
+  })) {
+    console.error(
+      'build-validation-snapshot: refusing to overwrite the frozen validation/snapshot baseline.\n'
+      + '  The committed snapshot is a frozen baseline; rebuilding it in place from the current\n'
+      + '  tree would destroy it. Build elsewhere with "--out <dir>", or rebuild in place on\n'
+      + '  purpose with "--force".',
+    );
+    process.exit(2);
+  }
   /**
    * Carry a record the working tree no longer holds over from the snapshot
    * being replaced.
