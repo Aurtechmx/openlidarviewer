@@ -9,6 +9,7 @@
  */
 import { el } from './dom';
 import { applyClassicScrollbarClass } from './classicScrollbars';
+import { storageGet, storageSet } from './safeStorage';
 
 /**
  * Keep the left panel column clear of the measure toolbar (v0.4.5 overlap
@@ -220,12 +221,7 @@ export function wireRailToggle(cfg: RailToggleConfig): () => void {
     tab.title = label;
   };
 
-  let collapsed = false;
-  try {
-    collapsed = localStorage.getItem(cfg.storageKey) === '1';
-  } catch {
-    /* private mode — default expanded */
-  }
+  let collapsed = storageGet(cfg.storageKey) === '1';
   apply(collapsed);
 
   // Named so the disposer can detach it. The tab is removed too, but a host
@@ -233,11 +229,7 @@ export function wireRailToggle(cfg: RailToggleConfig): () => void {
   const onClick = (): void => {
     collapsed = !collapsed;
     apply(collapsed);
-    try {
-      localStorage.setItem(cfg.storageKey, collapsed ? '1' : '0');
-    } catch {
-      /* ignore */
-    }
+    storageSet(cfg.storageKey, collapsed ? '1' : '0');
   };
   tab.addEventListener('click', onClick);
   cfg.overlay.append(tab);

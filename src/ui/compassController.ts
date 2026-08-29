@@ -25,6 +25,7 @@
  */
 
 import { loadViewCube } from '../lazyChunks';
+import { storageGet, storageSet } from './safeStorage';
 import type { StandardView } from '../render/viewCubeMath';
 import type { ViewCubeHandle, ViewCubeOptions } from './viewCube';
 
@@ -93,20 +94,8 @@ export function browserCompassPlatform(): CompassPlatform {
     isHidden: () => document.hidden,
     onVisibilityChange: (fn) => document.addEventListener('visibilitychange', fn),
     offVisibilityChange: (fn) => document.removeEventListener('visibilitychange', fn),
-    readPref: () => {
-      try {
-        return localStorage.getItem(COMPASS_PREF_KEY);
-      } catch {
-        return null;
-      }
-    },
-    writePref: (value) => {
-      try {
-        localStorage.setItem(COMPASS_PREF_KEY, value);
-      } catch {
-        /* private mode — honour for this session only */
-      }
-    },
+    readPref: () => storageGet(COMPASS_PREF_KEY),
+    writePref: (value) => storageSet(COMPASS_PREF_KEY, value),
   };
 }
 
