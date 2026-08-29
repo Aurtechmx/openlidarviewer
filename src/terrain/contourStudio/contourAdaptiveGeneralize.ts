@@ -76,7 +76,9 @@ export function terrainAwareCartographicProduct(
     toleranceSource: opts.baseToleranceSource,
     horizontalUnit: opts.horizontalUnit,
     methodId: opts.methodId ?? 'olv.contour.generalize.terrain-adaptive',
-    methodVersion: opts.methodVersion ?? '1',
+    // Let cartographicProduct derive the version from the registry unless a
+    // caller explicitly overrides it — no hardcoded literal.
+    methodVersion: opts.methodVersion,
     toleranceForFeature: (f, base) => base * adaptiveToleranceFactor(f, { longFeatureLen, smallRingLen }),
   });
 }
