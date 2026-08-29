@@ -1,7 +1,9 @@
 # Reviewer quickstart
 
-Everything below runs offline on commodity hardware. No accounts, no data upload,
-no external datasets.
+Bootstrapping needs the network once — `npm ci` fetches the pinned Node
+dependencies, and the optional figure step installs matplotlib. After that, the
+tests and the evaluation run offline on commodity hardware. No accounts, no data
+upload, no external datasets.
 
 ## 1. Install and test (~2 min)
 
@@ -24,8 +26,17 @@ analytic ground truth and writes:
 - `benchmarks/out/registration_bias.{png,pdf}` — vertical-change preservation
 - `benchmarks/out/calibration.{png,pdf}` — uncertainty-band coverage
 
-The figure step needs Python + matplotlib (`pip install matplotlib`); the metrics
-table is written even without it.
+The metrics and the figures are separable, so a missing Python environment never
+fails the numbers:
+
+- `npm run repro:metrics` — the evaluation table + JSON. JavaScript only, no Python.
+- `npm run repro:figures` — the PNG/PDF figures. Needs Python 3.11 + matplotlib:
+  `pip install -r requirements-repro.txt`. It exits with that instruction if
+  matplotlib is absent, and never touches the numbers.
+- `npm run repro` runs both in order.
+
+The figures visualise the metrics; the scientific values are the JSON from the
+metrics step.
 
 What the metrics show:
 

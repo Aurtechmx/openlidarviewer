@@ -6,7 +6,18 @@ emitted by `npm run repro` (benchmarks/out/metrics.json). Colourblind-safe
 """
 import json
 import os
-import matplotlib
+import sys
+
+try:
+    import matplotlib
+except ImportError:
+    sys.stderr.write(
+        "benchmarks/plots.py needs matplotlib. Install the figure environment:\n"
+        "  pip install -r requirements-repro.txt\n"
+        "The scientific numbers come from `npm run repro:metrics`, which needs no\n"
+        "Python; this step only renders their figures.\n"
+    )
+    sys.exit(1)
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
