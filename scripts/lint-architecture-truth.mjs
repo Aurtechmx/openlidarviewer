@@ -44,6 +44,21 @@ const read = (rel) => {
 };
 const countLines = (rel) => read(rel).split('\n').length;
 
+/**
+ * The mount state a document asserts in words, as 'enabled' | 'disabled', or
+ * null when it makes no present-tense assertion. Matches a PRESENT-TENSE verb
+ * (is/ships/shipped/remains/stays/now) so a historical "was disabled before
+ * v0.6.5" does not register; runs on whitespace-normalised text because the
+ * assertion wraps across a line break ("Multi-layer mounting\nshipped
+ * enabled"); and the [^.] gap stops at a sentence period, so a historical
+ * clause cannot reach a later present-tense verb inside the same match.
+ */
+export function mountStateFromProse(text) {
+  const re = /multi-layer\s+mount(?:ing)?\b[^.]{0,30}?\b(?:is|ships|shipped|remains|stays|now)\s+(enabled|disabled)\b/i;
+  const m = String(text).replace(/\s+/g, ' ').match(re);
+  return m ? m[1].toLowerCase() : null;
+}
+
 const problems = [];
 /** Checks deliberately not performed (absent optional documents). */
 const notes = [];
@@ -145,6 +160,21 @@ const fact = (name, value) => {
       if (claim && (claim[1].toLowerCase() === 'true') !== enabled) {
         problems.push(
           `${rel}: states MULTI_LAYER_MOUNT_ENABLED is ${claim[1]}; the code sets it to ${m[1]}.`,
+        );
+      }
+    }
+    // The policy prose states the mount state in words, not by flag name — the
+    // The policy prose states the mount state in words, not by flag name — the
+    // v0.6.4 "mount is disabled" line outlived the v0.6.5 flip and no check
+    // covered STABILITY_POLICY. Hold that present-tense assertion to the flag.
+    for (const rel of ['docs/project/STABILITY_POLICY.md', ...archDocs()]) {
+      const abs = resolve(ROOT, rel);
+      if (!existsSync(abs)) continue;
+      const stated = mountStateFromProse(read(rel));
+      if (stated && (stated === 'enabled') !== enabled) {
+        problems.push(
+          `${rel}: describes multi-layer mounting as ${stated}; the code sets `
+          + `MULTI_LAYER_MOUNT_ENABLED = ${m[1]}.`,
         );
       }
     }
