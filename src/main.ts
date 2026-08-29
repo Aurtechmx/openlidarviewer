@@ -3593,7 +3593,7 @@ void viewerLoaded.then(() => {
   });
 });
 
-const dropZone = new DropZone(document.body, (file) => void handleFile(file), prewarmLoaders);
+const dropZone = new DropZone(document.body, (file) => handleFile(file), prewarmLoaders);
 stage.overlay.append(dropZone.toast);
 
 // v0.3.10 trust-pass: install the Playwright seam under `?test=1`.

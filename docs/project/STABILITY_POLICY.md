@@ -34,8 +34,8 @@ claim on its own.
 Internals (module boundaries, the decomposition work), rendering performance
 characteristics, the streaming scheduler's tuning, UI layout, and anything
 explicitly marked experimental in KNOWN_LIMITATIONS. Multi-layer mounting
-remains disabled and is not part of the stable contract until it ships with
-its own browser-verified evidence.
+shipped enabled in v0.6.5; its placement precision refuses a mismatch past a
+1 mm Float32 budget, and its tuning and interaction surface are not yet frozen.
 
 ## How frozen things change
 
