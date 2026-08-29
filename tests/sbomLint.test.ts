@@ -29,6 +29,8 @@ function withSbom(mutate: (sbom: Record<string, unknown>) => void) {
   return (p: string): string | null => (p === 'sbom.json' ? JSON.stringify(sbom) : realRead(p));
 }
 
+type RootLicensed = { metadata: { component: { licenses: Array<{ license: { id?: string } }> } } };
+
 describe('lint:sbom', () => {
   it('passes on the committed SBOM', () => {
     expect(problemsFor(realRead)).toEqual([]);
@@ -41,6 +43,33 @@ describe('lint:sbom', () => {
     const scoped = sbom.components.filter((c: { group?: string }) => c.group);
     expect(scoped.length).toBeGreaterThan(0);
     expect(problemsFor(realRead)).toEqual([]);
+  });
+
+  it('fails when the root component license is MIT on the AGPL release', () => {
+    const problems = problemsFor(
+      withSbom((s) => {
+        (s as unknown as RootLicensed).metadata.component.licenses[0].license.id = 'MIT';
+      }),
+    );
+    expect(problems.some((p) => /root component license/.test(p))).toBe(true);
+  });
+
+  it('fails when the root component carries a different SPDX id', () => {
+    const problems = problemsFor(
+      withSbom((s) => {
+        (s as unknown as RootLicensed).metadata.component.licenses[0].license.id = 'GPL-3.0-only';
+      }),
+    );
+    expect(problems.some((p) => /root component license/.test(p))).toBe(true);
+  });
+
+  it('fails when the root component has no license', () => {
+    const problems = problemsFor(
+      withSbom((s) => {
+        delete (s as unknown as { metadata: { component: { licenses?: unknown } } }).metadata.component.licenses;
+      }),
+    );
+    expect(problems.some((p) => /root component license/.test(p))).toBe(true);
   });
 
   it('fails when a direct production dependency is absent', () => {

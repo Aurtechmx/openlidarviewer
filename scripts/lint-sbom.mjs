@@ -88,6 +88,16 @@ export function collectSbomProblems(read) {
     }
   }
 
+  // 2b. Root FIRST-PARTY licence must equal package.json.license. Only the root
+  // is checked; dependency components keep their own (often MIT) licences. A
+  // stale root licence shipped once — an MIT root on the AGPL release.
+  const rootLicenseId = Array.isArray(root.licenses) ? root.licenses[0]?.license?.id : undefined;
+  if (rootLicenseId !== pkg.license) {
+    problems.push(
+      `sbom.json root component license is ${JSON.stringify(rootLicenseId)}, expected "${pkg.license}" (package.json.license).`,
+    );
+  }
+
   // 3 + 4. Direct production dependencies present, at their LOCKED versions.
   //
   // The locked version is the authority: a range in package.json ("^4.4.2")
