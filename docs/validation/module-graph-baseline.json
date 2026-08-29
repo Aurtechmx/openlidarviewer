@@ -16,7 +16,7 @@
     },
     "io->render": {
       "runtime": 5,
-      "typeOnly": 14,
+      "typeOnly": 16,
       "dynamic": 0,
       "edges": [
         "src/io/heavy/OlvTileSource.ts -> src/render/streaming/StreamingNodeStore.ts",
@@ -52,8 +52,8 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 114,
-      "typeOnly": 18,
+      "runtime": 115,
+      "typeOnly": 19,
       "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
@@ -89,10 +89,11 @@
         "src/app/staleChunkReload.ts",
         "src/app/swUrl.ts",
         "src/app/terrainAnalysisRunner.ts",
+        "src/app/toggleTool.ts",
         "src/app/viewBookmarks.ts",
         "src/app/viewStateCoordinator.ts",
         "src/convert/decodeFull.ts",
-        "src/diagnostics/provenance.ts",
+        "src/diagnostics/captureProvenance.ts",
         "src/diagnostics/usageCounters.ts",
         "src/export/ScanReportRenderer.ts",
         "src/export/exportScanIdentity.ts",
@@ -178,7 +179,6 @@
       "dynamic": 1,
       "modules": [
         "src/io/coordinateBridge.ts",
-        "src/io/copc/voxelKey.ts",
         "src/io/sniffFormat.ts",
         "src/lazyChunks.ts",
         "src/perf/devFlags.ts",
@@ -217,7 +217,7 @@
         "src/render/measure/classificationEpoch.ts",
         "src/render/measure/lassoVolume.ts",
         "src/render/measure/lassoVolumeCompute.ts",
-        "src/render/measure/profileSampler.ts",
+        "src/render/measure/profileSectionSeam.ts",
         "src/render/measure/stockpilePresenter.ts",
         "src/render/measure/volume.ts",
         "src/render/navMath.ts",
@@ -229,6 +229,7 @@
         "src/render/presetApplication.ts",
         "src/render/projectElevationScale.ts",
         "src/render/quality/pixelRatioCeiling.ts",
+        "src/render/recordSelection.ts",
         "src/render/refinementPhase.ts",
         "src/render/renderActivityGate.ts",
         "src/render/renderLoop.ts",
@@ -261,7 +262,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 681,
+    "filesScanned": 765,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above."
   }
