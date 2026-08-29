@@ -31,7 +31,7 @@ export class DropZone {
   private _onDragIntent?: () => void;
   private _dragIntentFired = false;
 
-  constructor(target: HTMLElement, onFile: (file: File) => void, onDragIntent?: () => void) {
+  constructor(target: HTMLElement, onFile: (file: File) => void | Promise<void>, onDragIntent?: () => void) {
     this._onDragIntent = onDragIntent;
     this._text = el('span', { className: 'olv-toast-text' });
 
@@ -89,20 +89,30 @@ export class DropZone {
       e.preventDefault();
       target.classList.remove('olv-dragging');
       const files = e.dataTransfer?.files;
-      const file = files?.[0];
-      if (!file) return;
-      onFile(file);
-      // Only one scan can be open at a time, so a multi-file drop silently
-      // dropping files[1..n] looked like a bug. Say what happened and point
-      // at the batch path. The load's own progress updates will overwrite
-      // this hint, which is fine — it only needs to land once.
-      const ignored = (files?.length ?? 1) - 1;
-      if (ignored > 0) {
-        this.setProgress(
-          `Opened "${file.name}" — ${ignored} more file${ignored === 1 ? '' : 's'} ignored. Use Convert for batches.`,
-        );
-      }
+      if (!files || files.length === 0) return;
+      // Multiple datasets mount together, loaded one at a time. A multi-file
+      // drop opens each in turn rather than dropping all but the first; each
+      // file's own progress updates take over as it loads.
+      void this._openSequentially(Array.from(files), onFile);
     });
+  }
+
+  /**
+   * Open dropped files one after another. The loader takes one scan at a time,
+   * so these are awaited in sequence; a file that fails surfaces its own error
+   * toast and does not stop the rest.
+   */
+  private async _openSequentially(
+    files: readonly File[],
+    onFile: (file: File) => void | Promise<void>,
+  ): Promise<void> {
+    for (const file of files) {
+      try {
+        await onFile(file);
+      } catch {
+        // The load reports its own failure; continue with the remaining files.
+      }
+    }
   }
 
   /** Cancel a pending error auto-hide so it cannot hide a newer toast state. */

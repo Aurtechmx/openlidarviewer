@@ -2972,20 +2972,18 @@ export class AnalysePanel {
     const wrap = el('div', { className: 'olv-analyse-roadmap' });
     wrap.append(section('Planned'));
     const tags = el('div', { className: 'olv-analyse-plan' });
-    // Genuinely-future capabilities only. The earlier list (ground
-    // classification, DSM, slope/hillshade, 3D overlay, terrain report) has all
-    // shipped — leaving them here advertised done work as "planned", which
-    // contradicts the buttons in this very panel. These three are the real,
-    // not-yet-shipped roadmap. A single .pnts tile opens today, and so does a
-    // whole tileset as a static one-shot read, so what remains planned is
-    // streaming one: hierarchical, camera-driven refinement over time rather
-    // than a bounded read of the whole set (see supported-formats.md);
-    // out-of-core loading and co-registered change detection are the open
-    // engineering items.
+    // Genuinely-future capabilities only. Advertising shipped work as "planned"
+    // contradicts the buttons in this very panel, so the earlier items are gone
+    // as they land: 3D Tiles now streams tile bodies as the camera needs them
+    // (openTilesetLayer), heavy files load out of core (openLocalHeavyLas), and
+    // two-epoch change detection runs over epochs already in a compatible frame
+    // (compareLoadedLayers). What remains open is bringing scans that are NOT
+    // already in a common frame together: automatic scan-to-scan registration,
+    // and cross-CRS reprojection into one viewer frame — the mount still refuses
+    // a CRS mismatch rather than reprojecting (see KNOWN_LIMITATIONS).
     for (const item of [
-      '3D Tiles tileset streaming',
-      'Out-of-core large-file loading',
-      'Co-registered change detection',
+      'Scan-to-scan registration',
+      'Cross-CRS reprojection to a common frame',
     ]) {
       tags.append(el('span', { className: 'olv-analyse-plan-tag', text: item }));
     }
