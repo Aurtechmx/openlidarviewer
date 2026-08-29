@@ -389,6 +389,7 @@ claims:
   - claimId: VOL-STOCKPILE
     product: Stockpile volume
     algorithm: Point-sample estimator over a fitted/explicit base (area-weighted integration pending — Phase 8)
+    methodId: olv.volume.stockpile
     algorithmVersion: v0.5.x
     claim: "Stockpile volume above a reference base."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
@@ -417,6 +418,7 @@ claims:
   - claimId: GROUND-FILTER
     product: Ground classification
     algorithm: SMRF-core progressive morphological ground filter (subset of Pingel et al. 2013; not the full SMRF pipeline)
+    methodId: olv.ground.smrf
     algorithmVersion: v0.4.4
     claim: "Bare-earth vs non-ground separation via a progressive morphological opening + slope/elevation thresholds."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
@@ -445,6 +447,7 @@ claims:
   - claimId: DTM
     product: DTM (bare-earth grid)
     algorithm: Gridded interpolation of ground-classified returns
+    methodId: olv.dtm.idw-fill
     algorithmVersion: v0.4.4
     claim: "Bare-earth elevation grid over covered cells; gaps left empty or interpolated, never fabricated."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -552,6 +555,7 @@ claims:
   - claimId: CONTOURS
     product: Contours
     algorithm: Marching squares + stitching + evidence grading
+    methodId: olv.contour.analytical
     algorithmVersion: v0.4.x
     claim: "Iso-elevation contours graded solid/dashed/gap by supporting confidence."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -581,6 +585,7 @@ claims:
   - claimId: SLOPE-RASTER
     product: Slope raster
     algorithm: Horn 3x3 gradient
+    methodId: olv.terrain.slope-horn
     algorithmVersion: v0.4.x
     claim: "Slope in degrees per Horn's method; cos-latitude / per-axis cell metres on geographic grids."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -616,6 +621,7 @@ claims:
   - claimId: ASPECT-RASTER
     product: Aspect raster
     algorithm: Horn 3x3 gradient, downslope azimuth
+    methodId: olv.terrain.slope-horn
     algorithmVersion: v0.4.x
     claim: "Downslope aspect per Horn's method, reported as a compass bearing; per-axis cell metres on geographic grids."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -683,6 +689,7 @@ claims:
   - claimId: TPI
     product: TPI terrain descriptor
     algorithm: Topographic position index (centre minus mean of the 8 Moore neighbours)
+    methodId: olv.terrain.tpi
     algorithmVersion: v0.4.x
     claim: "Relative-position index over a 3x3 Moore neighbourhood."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -714,6 +721,7 @@ claims:
   - claimId: VRM
     product: VRM terrain descriptor
     algorithm: Vector ruggedness measure (Sappington et al. 2007), 3x3 mean-resultant of unit normals
+    methodId: olv.terrain.vrm
     algorithmVersion: v0.4.x
     claim: "Vector ruggedness over a 3x3 neighbourhood."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -746,6 +754,7 @@ claims:
   - claimId: HOLDOUT-RMSE
     product: Hold-out RMSE (interpolation)
     algorithm: Conditional point-wise interpolation holdout
+    methodId: olv.validation.holdout-rmse
     algorithmVersion: v0.4.x
     claim: "RMSE of held-out points against the interpolated surface — an INTERNAL diagnostic, not independent checkpoint accuracy."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -778,6 +787,7 @@ claims:
   - claimId: NVA-VVA
     product: NVA/VVA-style vertical accuracy
     algorithm: NVA/VVA formula (1.96 x RMSEz) on INTERNAL holdout
+    methodId: olv.validation.holdout-rmse
     algorithmVersion: v0.4.x
     claim: "NVA/VVA-STYLE statistic derived from internal holdout — not an independent checkpoint accuracy assessment."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -841,6 +851,7 @@ claims:
   - claimId: CONFIDENCE-OVERLAY
     product: Confidence overlay
     algorithm: Measured-cell empirical reliability (measured) + model-based support (interpolated)
+    methodId: olv.validation.reliability-wilson
     algorithmVersion: v0.4.x
     claim: "For measured cells, empirical reliability at a stated tolerance τ; for interpolated cells, a model-based support score that is NOT empirically calibrated."
     currentEvidence: E2_ANALYTICALLY_VERIFIED
@@ -869,6 +880,7 @@ claims:
   - claimId: EPOCH-ALIGN
     product: Epoch alignment
     algorithm: ICP (yaw + horizontal translation model; full model optional)
+    methodId: olv.registration.icp-planar
     algorithmVersion: v0.5.x
     claim: "Rigid alignment of two epochs; horizontal-only model preserves the vertical signal."
     currentEvidence: E2_ANALYTICALLY_VERIFIED
@@ -1049,6 +1061,7 @@ claims:
   - claimId: ORG-TOPOLOGY-IDENTITY
     product: Grid-cell to display-record identity
     algorithm: Loader-recorded cell-to-record index with a linkage state that degrades to unavailable
+    methodId: olv.topology.linkage-record
     algorithmVersion: v0.6.6
     claim: "A grid cell whose frame reports exact linkage resolves to the display record the loader decoded it from, and resolution is refused whenever sanitation, stride or voxelization can no longer prove the correspondence."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
