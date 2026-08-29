@@ -20,6 +20,8 @@ function writeValidFixture(root: string): void {
   w('COMMERCIAL-LICENSING.md', '# Commercial licensing\n');
   w('docs/CLA.md', '# Contributor License Agreement\n');
   w('CITATION.cff', 'cff-version: 1.2.0\nversion: "0.6.7"\nlicense: AGPL-3.0-only\n');
+  w('.zenodo.json', JSON.stringify({ title: 'OpenLiDARViewer', upload_type: 'software', license: 'AGPL-3.0-only' }, null, 2));
+  w('codemeta.json', JSON.stringify({ name: 'OpenLiDARViewer', version: '0.6.7', license: 'https://spdx.org/licenses/AGPL-3.0-only.html' }, null, 2));
   w('README.md', [
     '[![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)',
     '## License',
@@ -69,6 +71,17 @@ describe('lint:license boundary', () => {
     writeFileSync(resolve(root, 'CITATION.cff'), 'cff-version: 1.2.0\nversion: "0.6.7"\nlicense: MIT\n');
     const problems = checkLicense(root);
     expect(problems.some((p: string) => /CITATION\.cff/.test(p))).toBe(true);
+  });
+
+  it('rejects .zenodo.json declaring MIT', () => {
+    writeFileSync(resolve(root, '.zenodo.json'), JSON.stringify({ title: 'x', upload_type: 'software', license: 'MIT' }, null, 2));
+    expect(checkLicense(root).some((p: string) => /\.zenodo\.json license/.test(p))).toBe(true);
+  });
+
+  it('rejects codemeta.json declaring the MIT SPDX URL', () => {
+    writeFileSync(resolve(root, 'codemeta.json'), JSON.stringify({ name: 'x', version: '0.6.7', license: 'https://spdx.org/licenses/MIT.html' }, null, 2));
+    const problems = checkLicense(root);
+    expect(problems.some((p: string) => /codemeta\.json/.test(p))).toBe(true);
   });
 
   it('ACCEPTS an accurate historical MIT statement', () => {

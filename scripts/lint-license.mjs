@@ -10,8 +10,9 @@
  *   last MIT release         v0.6.6
  *
  * It asserts the CURRENT-license surfaces (package.json, LICENSE, CITATION.cff,
- * the README License section and badge, the app console banner, and the current
- * release notes) all say AGPL-3.0-only. It does NOT blindly reject the string
+ * .zenodo.json, codemeta.json, the README License section and badge, the app
+ * console banner, and the current release notes) all say AGPL-3.0-only. It does
+ * NOT blindly reject the string
  * "MIT": historical statements ("releases through v0.6.6 were distributed under
  * MIT"), third-party notices, and license texts legitimately mention MIT, and
  * those are left alone. Only the guarded current-license surfaces are checked,
@@ -53,6 +54,28 @@ export function checkLicense(root) {
   const cff = read('CITATION.cff') || '';
   must(/license:\s*AGPL-3\.0-only/.test(cff), 'CITATION.cff license is not AGPL-3.0-only.');
   must(!/license:\s*MIT\b/.test(cff), 'CITATION.cff still declares MIT as the current license.');
+
+  // The archival and machine-readable metadata surfaces. These carry the
+  // license to Zenodo and to software indexers, and on the v0.6.7 relicense
+  // both shipped MIT and were caught only by hand — lint:license did not read
+  // them. Zenodo uses the SPDX identifier; codemeta uses the SPDX URL.
+  const zenodoText = read('.zenodo.json');
+  must(zenodoText != null, '.zenodo.json is missing.');
+  if (zenodoText != null) {
+    let zenodo = {};
+    try { zenodo = JSON.parse(zenodoText); } catch { problems.push('.zenodo.json is not valid JSON.'); }
+    must(zenodo.license === CURRENT_LICENSE, `.zenodo.json license is ${JSON.stringify(zenodo.license)}, expected ${CURRENT_LICENSE}.`);
+  }
+
+  const codemetaText = read('codemeta.json');
+  must(codemetaText != null, 'codemeta.json is missing.');
+  if (codemetaText != null) {
+    let codemeta = {};
+    try { codemeta = JSON.parse(codemetaText); } catch { problems.push('codemeta.json is not valid JSON.'); }
+    const cmLicense = typeof codemeta.license === 'string' ? codemeta.license : '';
+    must(/AGPL-3\.0-only/.test(cmLicense), `codemeta.json license is ${JSON.stringify(codemeta.license)}, expected the AGPL-3.0-only SPDX URL.`);
+    must(!/\/MIT\b/.test(cmLicense), 'codemeta.json still declares the MIT license.');
+  }
 
   const readme = read('README.md') || '';
   must(/license-AGPL/.test(readme), 'README license badge is not AGPL.');
