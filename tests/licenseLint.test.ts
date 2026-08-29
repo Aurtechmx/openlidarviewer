@@ -22,6 +22,7 @@ function writeValidFixture(root: string): void {
   w('CITATION.cff', 'cff-version: 1.2.0\nversion: "0.6.7"\nlicense: AGPL-3.0-only\n');
   w('.zenodo.json', JSON.stringify({ title: 'OpenLiDARViewer', upload_type: 'software', license: 'AGPL-3.0-only' }, null, 2));
   w('codemeta.json', JSON.stringify({ name: 'OpenLiDARViewer', version: '0.6.7', license: 'https://spdx.org/licenses/AGPL-3.0-only.html' }, null, 2));
+  w('docs/project/MANIFEST.md', '# Manifest\n\n## License\n\nAGPL-3.0-only. See `LICENSE`. Releases through v0.6.6 were published under MIT.\n');
   w('README.md', [
     '[![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)',
     '## License',
@@ -76,6 +77,17 @@ describe('lint:license boundary', () => {
   it('rejects .zenodo.json declaring MIT', () => {
     writeFileSync(resolve(root, '.zenodo.json'), JSON.stringify({ title: 'x', upload_type: 'software', license: 'MIT' }, null, 2));
     expect(checkLicense(root).some((p: string) => /\.zenodo\.json license/.test(p))).toBe(true);
+  });
+
+  it('rejects docs/project/MANIFEST.md declaring MIT as the current license', () => {
+    writeFileSync(resolve(root, 'docs/project/MANIFEST.md'), '# Manifest\n\n## License\n\nMIT. See `LICENSE`.\n');
+    expect(checkLicense(root).some((p: string) => /MANIFEST\.md/.test(p))).toBe(true);
+  });
+
+  it('ACCEPTS MANIFEST.md naming MIT only as historical', () => {
+    // The valid fixture's MANIFEST already carries "released under MIT through
+    // v0.6.6"; that historical sentence must not trip the guard.
+    expect(checkLicense(root)).toEqual([]);
   });
 
   it('rejects codemeta.json declaring the MIT SPDX URL', () => {

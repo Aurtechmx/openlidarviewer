@@ -87,7 +87,7 @@
   },
   "packageLockSha256": "523848f026420b04adc4b8b71ae930a6cadc5f6aa9b6a8b37819af7b83ebf7f4",
   "sbom": {
-    "sha256": "e3a18fbde9e5670f14d4047ba097c8e9eb495df12d6fabc91c1584700b2241c7",
+    "sha256": "1adf57a8b8001fc568412f30116008593d5a09e6eefda14000e74384f3e35738",
     "rootName": "openlidarviewer",
     "rootVersion": "0.6.7",
     "bomRef": "openlidarviewer@0.6.7",

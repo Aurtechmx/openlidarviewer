@@ -54,4 +54,4 @@ development runs.
 
 ## License
 
-MIT. See `LICENSE`.
+AGPL-3.0-only. See `LICENSE`. Earlier releases were published under MIT.

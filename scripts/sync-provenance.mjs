@@ -155,6 +155,11 @@ function syncSbom(text, { pkg, lockedVersion }) {
     rootC.version = rootVersion;
     rootC['bom-ref'] = rootRef;
     if (rootC.purl) rootC.purl = bumpPurlVersion(rootC.purl, rootVersion);
+    // The FIRST-PARTY licence tracks package.json, so a relicence updates the
+    // SBOM root instead of preserving stale curated metadata. Only the root
+    // component is touched; dependency licences stay as curated.
+    const rootLicense = rootC.licenses?.[0]?.license;
+    if (rootLicense && typeof pkg.license === 'string') rootLicense.id = pkg.license;
   }
 
   // Every listed component -> its locked version.

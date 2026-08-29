@@ -55,6 +55,13 @@ export function checkLicense(root) {
   must(/license:\s*AGPL-3\.0-only/.test(cff), 'CITATION.cff license is not AGPL-3.0-only.');
   must(!/license:\s*MIT\b/.test(cff), 'CITATION.cff still declares MIT as the current license.');
 
+  // The project manifest's own License section. A historical "released under MIT
+  // through v0.6.6" sentence stays legal; what fails is the section leading with
+  // a bare MIT declaration (the stale "MIT. See LICENSE." this closed).
+  const manifest = read('docs/project/MANIFEST.md') || '';
+  must(/AGPL-3\.0-only/.test(manifest), 'docs/project/MANIFEST.md does not state AGPL-3.0-only as the current license.');
+  must(!/##\s*License\s*\n+\s*MIT\b/.test(manifest), 'docs/project/MANIFEST.md still declares MIT as the current license.');
+
   // The archival and machine-readable metadata surfaces. These carry the
   // license to Zenodo and to software indexers, and on the v0.6.7 relicense
   // both shipped MIT and were caught only by hand — lint:license did not read
