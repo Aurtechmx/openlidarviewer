@@ -36,6 +36,15 @@ import { parseRegister, VALID_LEVELS } from './lint-claim-register.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
+ * The version the working tree ships. The current release's documents carry it
+ * in their filename, so the scan derives their paths from here rather than
+ * naming a version literally — a literal is a doc that stops being scanned the
+ * moment the version rolls, which is how a release's own count prose went
+ * unguarded (the v0.6.7 report was absent from this list while v0.6.6 stayed).
+ */
+export const PKG_VERSION = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version;
+
+/**
  * Truth documents that describe the evidence state and must not contradict it.
  *
  * A document under `docs/releases/` carrying a version describes THAT release.
@@ -45,7 +54,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  * document is compared against the register AT ITS OWN TAG. See
  * {@link expectedCountFor}.
  */
-const TRUTH_DOCS = [
+export const TRUTH_DOCS = [
+  // The current release's own documents, derived from the shipping version so
+  // they are scanned the cycle they ship rather than the cycle after. Compared
+  // against the register at their own tag by {@link expectedCountFor}; absent
+  // paths (a version mid-preparation) are skipped by the existsSync guard.
+  `docs/releases/RELEASE_NOTES_v${PKG_VERSION}.md`,
+  `docs/releases/VALIDATION_REPORT_v${PKG_VERSION}.md`,
+  `docs/releases/KNOWN_LIMITATIONS_v${PKG_VERSION}.md`,
   // The release notes and validation report state the E4 count to the public and
   // were NOT scanned, which is half of why "Ten products are now at E4" survived
   // past twelve; the other half was a detector that stopped counting at seven.
@@ -308,6 +324,21 @@ function collectProseProblems(count, total) {
       + `|\\b(?:E4|cross-implement\\w*)\\b[^.\\n]{0,80}\\b(${any})\\b[^.\\n]{0,20}\\bproducts?\\b`,
     'gi',
   );
+  // A release document necessarily states counts that are NOT the register
+  // total: the delta promoted this cycle, the transition from the old total to
+  // the new one, and the tally inherited from the prior version. Those are
+  // correct beside an E4 claim, so a match whose sentence carries one of these
+  // markers is not a total claim and is exempt. A plain wrong total — "the
+  // register holds twelve products at E4" — carries none of them and still
+  // flags. The check is sentence-scoped, not line-scoped, so a marker in a
+  // neighbouring sentence cannot shelter a wrong total.
+  const NON_TOTAL_COUNT = /\bthis\s+cycle\b|\bfrom\s+\S+\s+to\s+\S+\s+products?\b|\binherited\s+from\b|\bvalidated\s+in\s+v\d/i;
+  const sentenceAround = (line, index) => {
+    const start = line.lastIndexOf('. ', index) + 1;
+    let end = line.indexOf('. ', index);
+    if (end === -1) end = line.length;
+    return line.slice(start, end);
+  };
 
   for (const rel of TRUTH_DOCS) {
     const abs = resolve(ROOT, rel);
@@ -333,6 +364,7 @@ function collectProseProblems(count, total) {
       const re = new RegExp(countClaim.source, 'gi');
       while ((m = re.exec(line)) !== null) {
         const word = (m[1] ?? m[2] ?? '').toLowerCase();
+        if (NON_TOTAL_COUNT.test(sentenceAround(line, m.index))) continue;
         if (word && word !== docExpectedWord && word !== String(docCount)) {
           problems.push(
             `${rel}:${i + 1} says "${word}" next to an E4 / cross-implementation claim, but ${basis} has ${docCount} E4 product(s) ("${docExpectedWord}"). Update the prose to match it.`,
