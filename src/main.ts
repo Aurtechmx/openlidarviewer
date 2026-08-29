@@ -43,6 +43,7 @@ import type { ShortcutSheet } from './ui/ShortcutSheet';
 import { bootTour, type TourHandle } from './ui/onboarding/bootTour';
 import { findDuplicateIds } from './ui/actionRegistry';
 import { buildActionRegistry } from './app/actionDefinitions';
+import { toggleTool } from './app/toggleTool';
 import { importSession as runImportSession, type SessionIoDeps } from './app/sessionIo';
 import { openScan, type OpenScanDeps } from './app/openScan';
 import {
@@ -1944,10 +1945,10 @@ const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => void copyShareLink(),
-  onMeasureToggle: () => { const on = !viewer.measureMode; viewer.setMeasureMode(on); if (on) showWorkspaceMode?.('work'); },
-  onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
+  onMeasureToggle: () => { if (toggleTool(viewer, workflowController, 'measure')) showWorkspaceMode?.('work'); },
+  onInspectToggle: () => { toggleTool(viewer, workflowController, 'inspect'); },
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
-  onAnnotateToggle: () => { const on = !viewer.annotateMode; viewer.setAnnotateMode(on); if (on) showWorkspaceMode?.('work'); },
+  onAnnotateToggle: () => { if (toggleTool(viewer, workflowController, 'annotate')) showWorkspaceMode?.('work'); },
   onAnalyseToggle: () => {
     // Re-open (or hide) the terrain analysis panel. If an object scan had
     // demoted it behind the Object panel, opening Analyse takes over —
@@ -3925,15 +3926,9 @@ void viewerLoaded.then(() => {
     // A tool shortcut needs a loaded scan and is inert behind the help modal.
     const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen;
     bindShortcuts({
-      onAnnotate: () => {
-        if (toolsReady()) viewer.setAnnotateMode(!viewer.annotateMode);
-      },
-      onMeasure: () => {
-        if (toolsReady()) viewer.setMeasureMode(!viewer.measureMode);
-      },
-      onInspect: () => {
-        if (toolsReady()) viewer.setInspectMode(!viewer.inspectMode);
-      },
+      onAnnotate: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'annotate'); },
+      onMeasure: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'measure'); },
+      onInspect: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'inspect'); },
       onSaveView: () => {
         if (toolsReady()) saveCurrentView();
       },

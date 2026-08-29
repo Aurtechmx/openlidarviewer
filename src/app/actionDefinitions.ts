@@ -11,6 +11,7 @@ import type { Viewer } from '../render/Viewer';
 import type { TourHandle } from '../ui/onboarding/bootTour';
 import type { WorkflowController } from '../ui/WorkflowController';
 import { WORKFLOW_RECORDER_ENABLED } from '../ui/WorkflowController';
+import { toggleTool } from './toggleTool';
 import type { WorkflowConfigPanel } from '../ui/WorkflowConfigPanel';
 import type { WorkflowEvent } from '../render/workflow/workflowRecorder';
 import type { ShortcutSheet } from '../ui/ShortcutSheet';
@@ -186,10 +187,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       hint: 'Activate the measurement toolbar.',
       keywords: ['distance', 'area', 'volume'],
       run: () => {
-        const viewer = deps.getViewer();
-        const next = !viewer.measureMode;
-        viewer.setMeasureMode(next);
-        deps.workflowController.capture({ type: 'tool', tool: 'measure', on: next });
+        toggleTool(deps.getViewer(), deps.workflowController, 'measure');
       },
     },
     {
@@ -199,10 +197,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       hint: 'Read attributes of any point under the cursor.',
       keywords: ['point info', 'attributes'],
       run: () => {
-        const viewer = deps.getViewer();
-        const next = !viewer.inspectMode;
-        viewer.setInspectMode(next);
-        deps.workflowController.capture({ type: 'tool', tool: 'inspect', on: next });
+        toggleTool(deps.getViewer(), deps.workflowController, 'inspect');
       },
     },
     {
@@ -212,10 +207,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       hint: 'Drop notes, info, warnings, or issues on points.',
       keywords: ['note', 'comment', 'mark'],
       run: () => {
-        const viewer = deps.getViewer();
-        const next = !viewer.annotateMode;
-        viewer.setAnnotateMode(next);
-        deps.workflowController.capture({ type: 'tool', tool: 'annotate', on: next });
+        toggleTool(deps.getViewer(), deps.workflowController, 'annotate');
       },
     },
     {
