@@ -78,12 +78,22 @@ import {
   profileReturnIdentity,
 } from '../render/measure/profilePointLink';
 import { drawProfileLinkOverlay } from '../render/measure/profileLinkOverlay2d';
+import {
+  composeProfileSectionImage,
+  type ProfileImageSurface,
+  type ProfileSectionImageRequest,
+} from '../render/measure/profileSectionImage';
+import { triggerDownload } from '../io/download';
 import { pointVerticalReference } from '../render/pointInfo';
 import { createProfileLinkController } from './profileLinkController';
 
 import type { ProfileWorkbenchDetailRow } from '../ui/ProfileWorkbench';
 import type { ProfileHitTestIndex } from '../render/measure/profileHitTest';
-import type { ProfileView, ProfileViewport } from '../render/measure/profileViewTransform';
+import type {
+  ProfileDataBounds,
+  ProfileView,
+  ProfileViewport,
+} from '../render/measure/profileViewTransform';
 import type { ProfileAxesModel } from '../render/measure/profileAxes';
 import type { VerticalReference } from '../geo/height';
 import type { ProfileLinkOverlayContext } from '../render/measure/profileLinkOverlay2d';
@@ -350,6 +360,22 @@ export interface WorkbenchSectionPlot {
   readonly view: WorkbenchSectionView;
   /** The section indices actually drawn, in draw order. */
   readonly indices: Uint32Array;
+  /**
+   * Assemble a {@link ProfileSectionImageRequest} for a PNG export of this
+   * section against `surface` at `size`.
+   *
+   * The request is built from the SAME state the plot drew from — the section's
+   * points, the drawn indices, the colours already resolved for them, and the
+   * extent over every accepted return — so an exported PNG cannot decimate,
+   * recolour or re-fit differently from the on-screen view. `acceptedCount` is
+   * every accepted return, and the compose counts the drawn ones from the draw,
+   * which is what keeps the caption's two figures honest.
+   */
+  imageRequest(
+    surface: ProfileImageSurface,
+    size: ProfileViewport,
+    opts: { name: string; generatedAt: string | null },
+  ): ProfileSectionImageRequest;
   /** Draw at the canvas's current box. A box with no area draws nothing. */
   draw(): void;
   /**
@@ -395,6 +421,138 @@ export interface ComposeSectionOptions {
    * axis must never promise a datum the section cannot show one for.
    */
   readonly reference?: VerticalReference;
+}
+
+/**
+ * Assemble a section-image (PNG) request from live section state.
+ *
+ * The one place the exported raster's inputs are gathered, so an export cannot
+ * quietly draw a different section from the one on screen. `indices` are the
+ * returns actually drawn and `colours` are the ones already resolved for them,
+ * both in draw order; `bounds` is the extent over EVERY accepted return, and
+ * `acceptedCount` is that same accepted total — the compose counts the drawn
+ * ones from its own draw, so the caption's two figures stay honest. The axis
+ * unit is stated only where the section's own render units already ARE that
+ * unit (scale 1), matching what the on-screen axes show.
+ */
+export function buildProfileSectionImageRequest(input: {
+  readonly surface: ProfileImageSurface;
+  readonly size: ProfileViewport;
+  readonly section: ProfileSectionResult;
+  readonly indices: Uint32Array;
+  readonly colours: Uint8Array;
+  readonly bounds: ProfileDataBounds;
+  readonly reference: VerticalReference;
+  readonly unitSuffix: string | null;
+  readonly unitScale: number;
+  readonly name: string;
+  readonly generatedAt: string | null;
+}): ProfileSectionImageRequest {
+  const axisUnit = input.unitScale === 1 ? input.unitSuffix : null;
+  return {
+    surface: input.surface,
+    size: input.size,
+    scene: {
+      points: input.section.points,
+      indices: input.indices,
+      colours: input.colours,
+      stations: null,
+    },
+    bounds: input.bounds,
+    scaleMode: { kind: 'fit' },
+    axes: {
+      reference: input.reference,
+      horizontalUnit: axisUnit,
+      verticalUnit: axisUnit,
+      units: { horizontalToMetres: null, verticalToMetres: null },
+    },
+    style: SECTION_STYLE,
+    name: input.name,
+    scope: input.section.scope,
+    streamingComplete: input.section.streamingComplete,
+    // Every accepted return, never the display cap: the drawn count is counted
+    // from the draw inside the compose, so decimation discloses itself.
+    acceptedCount: input.section.points.count,
+    legend: null,
+    generatedAt: input.generatedAt,
+  };
+}
+
+/** Default export raster size — a readable report-page figure at 2× backing. */
+export const SECTION_IMAGE_EXPORT_SIZE: ProfileViewport = {
+  width: 1600,
+  height: 900,
+  devicePixelRatio: 2,
+};
+
+/**
+ * Sanitise a section name into a safe download file stem.
+ *
+ * Unicode-aware: `\w` would collapse an all-non-ASCII name ("測線",
+ * "Sección-Ñ") to the fallback, so any letter or number in any script rides
+ * through, and only a genuinely empty result becomes "section".
+ */
+function safeImageFileName(name: string): string {
+  return name.replace(/[^\p{L}\p{N}._-]+/gu, '_').replace(/^_+|_+$/g, '') || 'section';
+}
+
+/** A 2D-capable canvas the PNG export composes onto and encodes from. */
+export interface SectionImageCanvas {
+  width: number;
+  height: number;
+  getContext(id: '2d'): ProfileImageSurface['ctx'] | null;
+  toBlob(callback: (blob: Blob | null) => void, type?: string): void;
+}
+
+/** How the export reaches the DOM, injectable so the wiring is testable. */
+export interface SectionImageExportPorts {
+  /** A blank raster canvas. Defaults to a detached `<canvas>` element. */
+  createCanvas?: () => SectionImageCanvas;
+  /** Hand the encoded PNG to the browser. Defaults to {@link triggerDownload}. */
+  download?: (blob: Blob, filename: string) => void;
+}
+
+function defaultSectionImageCanvas(): SectionImageCanvas {
+  if (typeof document === 'undefined') {
+    throw new Error('No document to create a canvas for the section-image export.');
+  }
+  return document.createElement('canvas') as unknown as SectionImageCanvas;
+}
+
+/**
+ * Render one section to a PNG and download it.
+ *
+ * The compose is the same DOM-free routine the unit tests drive; this only
+ * gives it a real canvas context, encodes the result, and funnels the blob
+ * through the shared download helper. A context or an encode that the browser
+ * refuses throws, so the control the user pressed can show the failure rather
+ * than appearing to have saved a file.
+ */
+export async function exportProfileSectionImagePng(
+  plot: WorkbenchSectionPlot,
+  opts: { name: string; generatedAt: string | null; size?: ProfileViewport },
+  ports: SectionImageExportPorts = {},
+): Promise<void> {
+  const canvas = (ports.createCanvas ?? defaultSectionImageCanvas)();
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('A 2D canvas context is unavailable for the section-image export.');
+  const surface: ProfileImageSurface = {
+    ctx,
+    setBackingSize: (deviceWidth, deviceHeight) => {
+      canvas.width = deviceWidth;
+      canvas.height = deviceHeight;
+    },
+  };
+  const request = plot.imageRequest(surface, opts.size ?? SECTION_IMAGE_EXPORT_SIZE, {
+    name: opts.name,
+    generatedAt: opts.generatedAt,
+  });
+  composeProfileSectionImage(request);
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((b) => resolve(b), 'image/png');
+  });
+  if (!blob) throw new Error('The browser could not encode the section image as a PNG.');
+  (ports.download ?? triggerDownload)(blob, `${safeImageFileName(opts.name)}.png`);
 }
 
 /**
@@ -533,6 +691,20 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
       drawn: indices.length,
     },
     indices,
+    imageRequest: (surface, size, opts) =>
+      buildProfileSectionImageRequest({
+        surface,
+        size,
+        section,
+        indices,
+        colours,
+        bounds,
+        reference,
+        unitSuffix: unit,
+        unitScale: scale,
+        name: opts.name,
+        generatedAt: opts.generatedAt,
+      }),
     draw,
     frame: () => lastFrame,
   };
@@ -649,6 +821,15 @@ export function presentWorkbenchSection(
   },
   id: string,
   scene: WorkbenchSectionScene,
+  hooks: {
+    /**
+     * The composed plot, once the corridor walk and the display selection have
+     * finished. Handed over so an export control can reach the SAME plot the
+     * dock is showing rather than re-extract the section. Called at most once
+     * per presentation, and never after `dispose`.
+     */
+    onReady?: (plot: WorkbenchSectionPlot) => void;
+  } = {},
 ): () => void {
   let stopped = false;
   let releaseSize: (() => void) | null = null;
@@ -721,6 +902,9 @@ export function presentWorkbenchSection(
       // previous one would answer for pixels that now hold different returns.
       link?.invalidate();
     });
+    // The plot is ready: an export control can now compose from the same state
+    // the dock is showing. Skipped if the presentation was already disposed.
+    if (!stopped) hooks.onReady?.(plot);
   }
 
   // The second stage: set once the corridor walk has answered, and pumped by
