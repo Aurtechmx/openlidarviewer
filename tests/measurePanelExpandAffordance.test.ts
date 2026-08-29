@@ -97,7 +97,11 @@ describe('the profile chart offers a working way into the focus view', () => {
     expect(rule('.olv-measure-panel')).toMatch(/width:\s*100%/);
     expect(rule('.olv-measure-panel')).toMatch(/min-width:\s*0/);
     expect(rule('.olv-measure-panel')).toMatch(/max-width:\s*100%/);
-    expect(rule('.olv-measure-panel')).toMatch(/overflow-x:\s*hidden/);
+    // `overflow-x: clip` forbids a horizontal scrollbar; `overflow-y: visible`
+    // keeps the panel from being a scroll container so a trackpad wheel reaches
+    // the `.olv-ws-body` column that actually scrolls.
+    expect(rule('.olv-measure-panel')).toMatch(/overflow-x:\s*clip/);
+    expect(rule('.olv-measure-panel')).toMatch(/overflow-y:\s*visible/);
   });
 
   it('keeps the left stack aligned by making every rail card fill the column', () => {

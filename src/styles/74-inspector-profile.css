@@ -26,19 +26,18 @@
      Clip box, or y-axis labels. `scrollbar-gutter: stable` still reserves the
      vertical track. Any readout wider than the content box wraps (see
      `.olv-mp-value`) rather than being scrolled to. */
-  overflow-x: hidden; overflow-y: auto;
-  /* `overflow-y: auto` (needed for the vertical scroll + scrollbar-gutter) drops
-   * this flex child's automatic min-height to 0, so the left column's flex layout
-   * would shrink the panel to just its header whenever the column runs out of
-   * room. That happens acutely for an object/interior scan, where the tall
-   * Object/Space panel fills the column and squeezed the Measurements panel down
-   * to a ~25px sliver — the profile chart and readings clipped away. Pin the
-   * shrink so the panel always keeps its natural height and the COLUMN scrolls
-   * instead; the readout then sizes identically in object-scan and terrain mode. */
+  /* `overflow-x: clip` makes a horizontal scrollbar structurally impossible while
+     leaving `overflow-y: visible`, so this panel is NOT a vertical scroll
+     container: a wheel over it is not swallowed by an inert scroller but passes
+     to `.olv-ws-body`, the column that actually scrolls. The panel no longer
+     needs its own overflow for resize (the SE grip resizes the rail). `clip` is
+     the only x value that keeps y visible; `hidden` would force y to auto and
+     make the panel a scroller again, which swallowed trackpad scrolling. */
+  overflow-x: clip; overflow-y: visible;
+  /* Pin the shrink so the tall Object/Space panel on an interior scan cannot
+     squeeze this one to a header sliver; the panel keeps its natural height and
+     the COLUMN scrolls instead. */
   flex-shrink: 0;
-  /* Reserve the scrollbar's track so an always-on (macOS) vertical scrollbar
-     doesn't eat into the content width and clip the right edge of a reading. */
-  scrollbar-gutter: stable;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
