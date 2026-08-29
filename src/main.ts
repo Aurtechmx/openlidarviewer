@@ -1128,8 +1128,8 @@ function refreshColorbarOverlay(): void {
 let copcDecoder: CopcWorkerClient | null = null;
 /** The EPT laszip decode worker client — created lazily on the first EPT laszip open. */
 let eptLaszipDecoder: EptLaszipWorkerClient | null = null;
-/** The active streaming quality preset. */
-let streamingQuality: StreamingQuality = 'balanced';
+/** The active streaming quality preset — initial value follows the static device tier (mirrors streamingProfile.qualityForTier); display-only and user-overridable. */
+let streamingQuality: StreamingQuality = deviceCapsValue.tier === 'low' ? 'low' : deviceCapsValue.tier === 'high' ? 'high' : 'balanced';
 /** Interval handle for the streaming-status poll, while a COPC is open. */
 let streamingStatusTimer: number | undefined;
 /** Active streaming benchmark collector — non-null only under `?benchmark=1`. */
