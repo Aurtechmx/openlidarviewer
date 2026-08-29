@@ -142,6 +142,7 @@ export class Stage {
   readonly overlay: HTMLElement;
   private readonly _empty: HTMLElement;
   private readonly _version: HTMLElement;
+  private readonly _addDataset: HTMLElement;
   /** Inline status banner above the URL field. */
   private _urlError: HTMLElement | null = null;
   /** Inline status banner at the top of the empty state for global warnings. */
@@ -210,6 +211,27 @@ export class Stage {
       }
     }
 
+    // Persistent "Add dataset" affordance, revealed with the first scan (like
+    // the version mark). Once the empty state hides, drag-and-drop is the only
+    // way to open a second dataset — and a phone has no drag-and-drop at all,
+    // so without this there is no way to build a multi-dataset project on
+    // touch. It reuses the same approval gate and open callback as the empty
+    // state's picker, so there is one ingest path.
+    const addInput = el('input', { className: 'olv-file-input', type: 'file' });
+    addInput.addEventListener('change', () => {
+      const file = addInput.files?.[0];
+      if (file) void this._approveFile(file).then((ok) => { if (ok) options.onOpenFile?.(file); });
+      addInput.value = ''; // let the same file be re-picked
+    });
+    this._addDataset = el('button', {
+      className: 'olv-add-dataset olv-hidden',
+      type: 'button',
+      text: '+ Add dataset',
+      title: 'Open another point-cloud file — it mounts alongside the current scan',
+    });
+    this._addDataset.addEventListener('click', () => addInput.click());
+    this.overlay.append(addInput, this._addDataset);
+
     mount.append(this.root);
   }
 
@@ -217,6 +239,7 @@ export class Stage {
   hideEmptyState(): void {
     this._empty.classList.add('olv-hidden');
     this._version.classList.remove('olv-hidden');
+    this._addDataset.classList.remove('olv-hidden');
     this._cancelUrlLoad();
   }
 
@@ -224,6 +247,7 @@ export class Stage {
   showEmptyState(): void {
     this._empty.classList.remove('olv-hidden');
     this._version.classList.add('olv-hidden');
+    this._addDataset.classList.add('olv-hidden');
   }
 
   /**
