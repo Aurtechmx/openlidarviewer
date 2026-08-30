@@ -189,13 +189,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/render/localDensitySize.ts",
-      "status": "staged",
-      "why": "Per-point size from local neighbourhood density. No point-size path in the Viewer reads a per-point size array from here.",
-      "graduation": "The Viewer offers density-scaled point size and computes it through this module.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/render/paletteCatalog.ts",
       "status": "staged",
       "why": "The user-facing palette catalogue plus a registry for custom palettes from the Palette Editor. The editor was never built; colorModes.ts and confidenceOverlay.ts cite this file in prose but import nothing from it.",

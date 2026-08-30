@@ -105,7 +105,11 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   if (typeof o.edlStrength === 'number' && Number.isFinite(o.edlStrength)) {
     out.edlStrength = clamp(o.edlStrength, 0, 1.5);
   }
-  if (o.pointSizeMode === 'adaptive' || o.pointSizeMode === 'fixed') {
+  if (
+    o.pointSizeMode === 'adaptive' ||
+    o.pointSizeMode === 'fixed' ||
+    o.pointSizeMode === 'density'
+  ) {
     out.pointSizeMode = o.pointSizeMode;
   }
   // P13 — validate against the known modes inline (kept type-only on splatShader

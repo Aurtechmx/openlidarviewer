@@ -174,7 +174,7 @@
       ]
     },
     "src/render/Viewer.ts": {
-      "runtime": 76,
+      "runtime": 77,
       "typeOnly": 14,
       "dynamic": 1,
       "modules": [
@@ -198,6 +198,7 @@
         "src/render/colorEncode.ts",
         "src/render/colorLegend.ts",
         "src/render/colorModes.ts",
+        "src/render/densityPointSize.ts",
         "src/render/edl.ts",
         "src/render/edlPresets.ts",
         "src/render/elevationFilterGpu.ts",
@@ -262,7 +263,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 765,
+    "filesScanned": 770,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above."
   }

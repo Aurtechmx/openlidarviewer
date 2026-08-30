@@ -118,6 +118,7 @@ import type { RefinementReadiness } from './streaming/refinementReadiness';
 import { readDevFlags } from '../perf/devFlags';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
+import { ensureDensitySizes, pointSizeBaseNode } from './densityPointSize';
 import {
   splatRadiusMultiplier,
   splatForcesAlphaToCoverage,
@@ -3414,9 +3415,10 @@ export class Viewer {
     return this._edlBaseStrength;
   }
 
-  /** Switch between adaptive (distance-scaled) and fixed point sizing. */
+  /** Switch between adaptive (distance-scaled), fixed, and density point sizing. */
   setPointSizeMode(mode: PointSizeMode): void {
     this._pointSizeMode = mode;
+    if (mode === 'density') ensureDensitySizes(this._clouds.values());
     this._reapplyAllSizeModes();
   }
 
@@ -5118,7 +5120,7 @@ export class Viewer {
    * meshes keep the exact prior graph (adaptive node or `null`).
    */
   private _applySizeMode(material: THREE.PointsNodeMaterial): void {
-    const adaptive = this._pointSizeMode === 'adaptive';
+    const base = pointSizeBaseNode(this._pointSizeMode, this._adaptiveSizeNode, material) as TslNode | null;
     // A fold enters this material's size graph only when BOTH the mesh carries
     // the required attribute AND the corresponding filter is currently active.
     //
@@ -5140,15 +5142,13 @@ export class Viewer {
     // size×mask shape as the filters); dropped again the moment it settles.
     const foldFade = this._materialsWithFade.has(material);
     if (!foldClass && !foldElev && !foldInten && !foldFade) {
-      material.sizeNode = (
-        adaptive ? this._adaptiveSizeNode : null
-      ) as typeof material.sizeNode;
+      material.sizeNode = base as typeof material.sizeNode;
       return;
     }
     // At least one filter is active on this material. Route fixed mode through
     // `materialPointSize` (the node form of `material.size`) so the pixel size is
     // preserved while the mask(s) multiply it, then fold each active multiplier.
-    let node: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
+    let node: TslNode = base ?? materialPointSize;
     if (foldElev) node = node.mul(this._elevGpu.maskMultiplier(material));
     if (foldClass) node = node.mul(this._classMaskMultiplier());
     if (foldInten) node = node.mul(this._intenMaskMultiplier());

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { localDensitySizes } from '../src/render/localDensitySize';
+import { localDensitySizes, autoDensitySizeParams } from '../src/render/localDensitySize';
 
 /**
  * tests/localDensitySize.test.ts
@@ -137,5 +137,46 @@ describe('localDensitySizes — pure data formula hardening', () => {
         expect(Number.isFinite(v)).toBe(true);
       }
     }
+  });
+});
+
+describe('autoDensitySizeParams', () => {
+  it('returns safe unit values for an empty cloud', () => {
+    expect(autoDensitySizeParams(new Float32Array(0))).toEqual({ cellSize: 1, referenceDensity: 1 });
+  });
+
+  it('sets the reference to the mean areal density and a positive cell size', () => {
+    // 100 points on a 10×10 grid at spacing 1 → footprint 9×9 = 81 m², so the
+    // mean areal density is 100/81 ≈ 1.235 points/m².
+    const positions = new Float32Array(100 * 3);
+    let k = 0;
+    for (let ix = 0; ix < 10; ix++) {
+      for (let iy = 0; iy < 10; iy++) {
+        positions[k++] = ix;
+        positions[k++] = iy;
+        positions[k++] = 0;
+      }
+    }
+    const { cellSize, referenceDensity } = autoDensitySizeParams(positions);
+    expect(referenceDensity).toBeCloseTo(100 / 81, 2);
+    expect(cellSize).toBeGreaterThan(0);
+  });
+
+  it('feeds params that keep a uniform cloud near scale 1', () => {
+    // A uniform grid has ~constant local density, so every per-point scale
+    // should sit near 1 (neither the sparse-grow nor dense-shrink cap).
+    const positions = new Float32Array(400 * 3);
+    let k = 0;
+    for (let ix = 0; ix < 20; ix++) {
+      for (let iy = 0; iy < 20; iy++) {
+        positions[k++] = ix;
+        positions[k++] = iy;
+        positions[k++] = 0;
+      }
+    }
+    const scales = localDensitySizes({ positions, ...autoDensitySizeParams(positions) });
+    const mean = scales.reduce((s, v) => s + v, 0) / scales.length;
+    expect(mean).toBeGreaterThan(0.6);
+    expect(mean).toBeLessThan(1.6);
   });
 });

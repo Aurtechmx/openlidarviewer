@@ -695,15 +695,24 @@ export class Inspector {
     });
     this._pointSizeSlider = slider;
 
-    this._sizeModeChips = (['adaptive', 'fixed'] as PointSizeMode[]).map((mode) => {
+    const sizeModeLabel: Record<PointSizeMode, string> = {
+      adaptive: 'Adaptive',
+      fixed: 'Fixed',
+      density: 'Density',
+    };
+    const sizeModeTitle: Record<PointSizeMode, string> = {
+      adaptive: 'Points scale with camera distance — far points stay visible, near ones do not bloat',
+      fixed: 'Every point keeps a constant on-screen size',
+      density: 'Sparse areas get larger points and dense areas smaller ones, so thin regions read clearly — a display aid, not a measurement',
+    };
+    this._sizeModeChips = (['adaptive', 'fixed', 'density'] as PointSizeMode[]).map((mode) => {
       const chip = el('button', {
-        className: 'olv-chip',
+        // `olv-size-chip` disambiguates from the colour-mode chip that also
+        // reads "Density" (the heatmap), for both CSS and test targeting.
+        className: 'olv-chip olv-size-chip',
         type: 'button',
-        text: mode === 'adaptive' ? 'Adaptive' : 'Fixed',
-        title:
-          mode === 'adaptive'
-            ? 'Points scale with camera distance — far points stay visible, near ones do not bloat'
-            : 'Every point keeps a constant on-screen size',
+        text: sizeModeLabel[mode],
+        title: sizeModeTitle[mode],
       });
       chip.addEventListener('click', () => {
         chip.blur();
