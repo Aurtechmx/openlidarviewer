@@ -93,6 +93,11 @@ export interface LasHeaderFacts {
   readonly schema: TileSchema;
   readonly attributes: PointAttributes;
   readonly fileBytes: number;
+  /** Source bounds from the public header, folded into the cache fingerprint so
+   *  a file whose extent changed cannot match a stored index. Optional: absent
+   *  bounds make the fingerprint unavailable, which the cache reads as a miss. */
+  readonly min?: readonly [number, number, number];
+  readonly max?: readonly [number, number, number];
 }
 
 /**
