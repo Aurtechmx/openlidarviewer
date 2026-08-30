@@ -1,5 +1,5 @@
 {
-  "total": 151,
+  "total": 155,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/featureExtractionInput.ts": 1,
@@ -42,6 +42,7 @@
     "src/render/measure/stockpileVolume.ts": 5,
     "src/render/measure/volume.ts": 1,
     "src/render/patchView.ts": 9,
+    "src/render/recordSelection.ts": 4,
     "src/terrain/change/alignEpochs.ts": 3,
     "src/terrain/change/compareEpochs.ts": 3,
     "src/terrain/worker/terrainCoreWorker.ts": 1

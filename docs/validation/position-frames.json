@@ -399,6 +399,13 @@
       "why": "The photometric witness patch is a neighbourhood of one picked point inside one layer, taken from that layer own buffer; a tangent basis over neighbours is translation-invariant anyway."
     },
     {
+      "file": "src/render/recordSelection.ts",
+      "symbol": "bindOrganizedRangeLink.register.registerOrganizedRange",
+      "frame": "render-local",
+      "reads": 4,
+      "why": "Builds a record->position callback from the cloud's own recentred buffer for the acquisition-coverage fit. The fit is translation-invariant (per-setup angular extent from the buffer's own bounds), so the recentred render-local frame is exactly what it needs; no origin shift applies."
+    },
+    {
       "file": "src/render/Viewer.ts",
       "symbol": "Viewer._pickDetailed",
       "frame": "source-local",
