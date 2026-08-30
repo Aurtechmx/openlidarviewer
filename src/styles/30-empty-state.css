@@ -19,10 +19,10 @@
     transparent 68%
   );
   pointer-events: none;
-  z-index: 0;
+  z-index: var(--z-base);
 }
 /* Every child sits above the wash; the wash must never eat a click. */
-.olv-empty > * { position: relative; z-index: 1; }
+.olv-empty > * { position: relative; z-index: var(--z-content); }
 /* On the light theme the same wash reads as a smudge on near-white rather than
  * depth, so it drops to a trace — enough to seat the hero, not enough to tint. */
 body.olv-theme-light .olv-empty::before {

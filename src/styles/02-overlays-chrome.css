@@ -13,7 +13,7 @@
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-pill);
   padding: var(--space-sm) var(--space-xl);
-  z-index: 90;
+  z-index: var(--z-modal-top);
   font-size: var(--text-xs); color: var(--text);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
@@ -50,7 +50,7 @@
  * card so the palette can dismiss without an explicit close button.
  */
 .olv-palette {
-  position: fixed; inset: 0; z-index: 100;
+  position: fixed; inset: 0; z-index: var(--z-palette);
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: clamp(60px, 12vh, 140px);
 }

@@ -10,7 +10,7 @@
      keep it below the functional panels (z 10+). The bar itself is made
      click-through so its empty middle never steals clicks from centred
      empty-state content beneath it; only its real controls capture input. */
-  z-index: 4;
+  z-index: var(--z-topbar);
   pointer-events: none;
 }
 .olv-topbar > * { pointer-events: auto; }
@@ -90,7 +90,7 @@
 .olv-quality-button-open { color: var(--accent); background: var(--accent-soft); }
 .olv-quality-pop {
   position: absolute; top: calc(100% + var(--space-md)); right: 0;
-  z-index: 20;
+  z-index: var(--z-dock);
   width: 280px; max-width: calc(100vw - var(--space-4xl));
   display: flex; flex-direction: column; gap: var(--space-md);
   padding: var(--space-xl);

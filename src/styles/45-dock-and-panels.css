@@ -4,7 +4,7 @@
   /* The dock owns the bottom band; the nav widget floats above it (see
    * .olv-navbar) so the two never overlap and never fight for clicks.
    * z-index 20 keeps the dock above the canvas (0) and the Inspector (15). */
-  z-index: 20;
+  z-index: var(--z-dock);
   display: flex; gap: var(--space-sm);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-sm);
@@ -66,7 +66,7 @@
      pointer-events:none so clicks fall through to whatever sits under it; only
      the title bar is interactive (the collapse toggle). */
   position: absolute; top: auto; left: auto; bottom: 14px; right: 14px;
-  z-index: 70;
+  z-index: var(--z-raised);
   max-width: 320px; max-height: 60vh; overflow-y: auto;
   background: rgba(10, 14, 26, 0.92);
   border: 0.5px solid var(--hairline);
@@ -131,7 +131,7 @@
  * the bottom-anchored Inspector overlaps it from below. The cap lets
  * both surfaces coexist without a JS-driven layout. */
 .olv-streaming-panel {
-  position: absolute; top: 56px; right: 14px; width: 232px; z-index: 36;
+  position: absolute; top: 56px; right: 14px; width: 232px; z-index: calc(var(--z-float) + 1);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
   max-height: calc(50vh - 40px); overflow-y: auto;

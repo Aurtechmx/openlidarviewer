@@ -9,7 +9,7 @@
 .olv-colorbar {
   position: absolute; top: 50%; transform: translateY(-50%);
   right: calc(var(--olv-right-rail-width, 232px) + 28px);
-  z-index: 60;
+  z-index: var(--z-popover);
   display: flex; flex-direction: column; gap: 2px;
   padding: 8px 10px;
   background: var(--panel);

@@ -15,7 +15,7 @@
     left: 0; right: 0; bottom: 0;
     /* Above the canvas (0), left panels and dock (20); below the help modal
        (80) and command palette (200). */
-    z-index: 50;
+    z-index: var(--z-backdrop);
     display: flex;
     flex-direction: column;
     /* Height is driven by the active snap detent (peek/half/full) below. The

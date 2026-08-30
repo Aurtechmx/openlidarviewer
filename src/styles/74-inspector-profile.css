@@ -47,7 +47,7 @@
  * pointer-down, so the panel LOOKED resizable but never engaged. */
 .olv-mp-resize {
   position: absolute; right: 0; bottom: 0;
-  width: 16px; height: 16px; z-index: 21;
+  width: 16px; height: 16px; z-index: calc(var(--z-dock) + 1);
   cursor: ew-resize; touch-action: none;
   color: var(--text-faint); opacity: 0.5;
   border-bottom-right-radius: var(--radius-lg);

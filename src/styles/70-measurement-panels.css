@@ -45,7 +45,7 @@
 
 /* ── Annotation inline editor ────────────────────────────────────────────── */
 .olv-anno-editor {
-  position: absolute; z-index: 30;
+  position: absolute; z-index: var(--z-overlay);
   display: flex; flex-direction: column; gap: var(--space-md);
   width: 264px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
@@ -157,7 +157,7 @@
 .olv-measure-bar {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center;
-  gap: var(--space-sm); z-index: 36;
+  gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
   background: rgba(11, 17, 33, 0.82);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 0.5px solid rgba(0, 178, 255, 0.28);
@@ -291,7 +291,7 @@
   color: var(--text); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em; white-space: nowrap; line-height: 1.2;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
-  opacity: 0; pointer-events: none; z-index: 60;
+  opacity: 0; pointer-events: none; z-index: var(--z-popover);
   transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
 }
 .olv-measure-bar [data-tip]::before {
@@ -300,7 +300,7 @@
   background: rgba(8, 13, 26, 0.94);
   border-left: 0.5px solid rgba(0, 178, 255, 0.42);
   border-top: 0.5px solid rgba(0, 178, 255, 0.42);
-  opacity: 0; pointer-events: none; z-index: 60;
+  opacity: 0; pointer-events: none; z-index: var(--z-popover);
   transition: opacity 140ms var(--ease-standard);
 }
 .olv-measure-bar [data-tip]:hover::after,
