@@ -283,6 +283,26 @@ export function newestChangelogEntry(text) {
 }
 
 /**
+ * The changelog section for a SPECIFIC version, as `{ version, date, body }`, or
+ * null. The defect audit is a frozen event: `defect-registry.json` carries a
+ * `registryVersion`, and the prose describing its composition lives in that
+ * version's changelog entry — not the newest one. Reading the composition from
+ * the entry that states it, rather than from whatever entry is newest, is what
+ * keeps the reconcile honest once the changelog advances past the audit.
+ */
+export function changelogEntryForVersion(text, version) {
+  const re = new RegExp(
+    `^##\\s*\\[${escapeRegExp(version)}\\]\\s*-\\s*(\\d{4}-\\d{2}-\\d{2})`,
+    'm',
+  );
+  const m = text.match(re);
+  if (!m) return null;
+  const rest = text.slice(m.index + m[0].length);
+  const next = rest.search(/^##\s*\[/m);
+  return { version, date: m[1], body: next < 0 ? rest : rest.slice(0, next) };
+}
+
+/**
  * The defect composition the changelog entry states in prose.
  *
  * The snapshot derives its own composition from the records and then compares
@@ -290,7 +310,10 @@ export function newestChangelogEntry(text) {
  * that describes it cannot drift apart without one of these figures moving.
  */
 export function declaredComposition(changelogBody) {
-  const flat = changelogBody.replace(/\s+/g, ' ');
+  // Collapse runs of whitespace to single spaces so the prose regexes below can
+  // span line breaks. split/join rather than replace: this is normalisation for
+  // matching, not escaping, and the replace form is easily misread as the latter.
+  const flat = changelogBody.split(/\s+/).join(' ');
   const pick = (re) => countFromText(flat.match(re)?.[1] ?? null);
   return {
     total: pick(/\b([A-Za-z]+|\d+) defects are fixed\b/i),
@@ -590,11 +613,14 @@ export function deriveSnapshot({ read, has, digest, listed, storedPathOf }) {
   const registryText = read('validation/defects/defect-registry.json');
   const registry = registryText == null ? null : JSON.parse(registryText);
   const changelog = read('CHANGELOG.md');
-  const entry = changelog == null ? null : newestChangelogEntry(changelog);
 
   let defects = { source: 'validation/defects/defect-registry.json', status: 'not-executed' };
   if (registry != null) {
     const derived = derivedComposition(registry);
+    // The composition prose lives in the changelog entry for the registry's own
+    // version (the frozen audit), not whatever entry is newest.
+    const entry =
+      changelog == null ? null : changelogEntryForVersion(changelog, registry.registryVersion);
     const declared = entry == null ? null : declaredComposition(entry.body);
     const checks = Object.keys(derived).map((k) => ({
       figure: k,
