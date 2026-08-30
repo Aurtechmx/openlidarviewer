@@ -72,7 +72,8 @@ const rel = (abs) => relative(ROOT, abs).split('\\').join('/');
  * `GDAL 3.13.1 "Iowa City", released 2026/06/01` to a sentence naming two tools.
  *
  * `names` is matched against a study's `reference.tool` field, case-insensitively
- * and as a substring, so "GDAL/OGR SpatiaLite and R" resolves to both GDAL and R.
+ * and as a WHOLE WORD, so "GDAL/OGR SpatiaLite and R" resolves to both GDAL and
+ * R, while "GeographicLib" is NOT mistaken for GDAL by the `ogr` inside it.
  */
 const ORACLES = [
   {
@@ -112,11 +113,21 @@ function bareVersion(text) {
   return /(\d+\.\d+\.\d+)/.exec(text)?.[1] ?? null;
 }
 
+/**
+ * Whether a name matches a tool field. A string name matches as a WHOLE WORD,
+ * not a bare substring: `ogr` matches "GDAL/OGR" (the slash is a boundary) but
+ * NOT "GeographicLib", where the letters `ogr` sit mid-word. Substring matching
+ * misread "GeographicLib" as GDAL and then attributed the PROJ version beside it
+ * to GDAL — the false positive this word-boundary form removes. A RegExp name is
+ * used as given (the `R` language token already relies on this).
+ */
+function nameMatches(name, tool) {
+  return name instanceof RegExp ? name.test(tool) : new RegExp(`\\b${name}\\b`, 'i').test(tool);
+}
+
 /** Which oracles a record's tool field names. */
-function oraclesFor(tool) {
-  return ORACLES.filter((o) =>
-    o.names.some((n) => (n instanceof RegExp ? n.test(tool) : tool.toLowerCase().includes(n))),
-  );
+export function oraclesFor(tool) {
+  return ORACLES.filter((o) => o.names.some((n) => nameMatches(n, tool)));
 }
 
 /** Every *.json under a directory tree, skipping the frozen snapshot. */
