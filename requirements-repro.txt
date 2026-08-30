@@ -1,0 +1,12 @@
+# Figure-rendering environment for `npm run repro:figures`
+# (benchmarks/plots.py). Python 3.11 (see .python-version).
+#
+# This pins ONLY the figure step. The scientific numbers come from
+# `npm run repro:metrics` (JavaScript, no Python), which writes
+# benchmarks/out/metrics.{md,json}. The figures are visualisations of those
+# numbers, so this environment reproduces the FIGURE rendering, not the
+# reported values — and figure byte-identity across platforms is not claimed.
+#
+# Separate from validation/oracles/requirements-pypi.txt, which pins the
+# scientific cross-implementation oracle tools, not plotting.
+matplotlib==3.9.2
