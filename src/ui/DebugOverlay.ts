@@ -20,6 +20,7 @@ import { formatTelemetry } from '../io/loadTelemetry';
 import { FrameTelemetry } from '../perf/frameTelemetry';
 import { readDevFlags } from '../perf/devFlags';
 import { buildMetricsJson } from '../perf/metricsJson';
+import { backendLabel } from './backendLabel';
 
 /** Live COPC streaming counters — present only while a COPC scan is open. */
 export interface StreamingDebugStats {
@@ -318,18 +319,11 @@ export class DebugOverlay {
     } else {
       this._perf.textContent = '(collecting…)';
     }
-    let backendLabel: string;
-    if (backend === 'webgpu') {
-      backendLabel = 'WebGPU';
-    } else if (backend === 'webgl2') {
-      backendLabel = 'WebGL 2';
-    } else {
-      backendLabel = '—';
-    }
+    const backendText = backendLabel(backend);
 
     if (stats) {
       this._live.textContent = [
-        `backend       ${backendLabel}`,
+        `backend       ${backendText}`,
         `fps           ${stats.fps.toFixed(0)}  (${stats.frameMs.toFixed(1)} ms)`,
         // A WebGPU backend can report 0 draw calls even while millions of
         // points are clearly on screen (the EDL post-pipeline / streaming path
