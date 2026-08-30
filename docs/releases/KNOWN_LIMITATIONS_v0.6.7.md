@@ -8,7 +8,7 @@ Five products reach E4 this cycle: `CRS-UTM-PROJECTION` (new), `CHANGE-RASTER` a
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,669 lines and `src/render/Viewer.ts` is 6,419, against stated targets of 2,500 and 2,000. The composition root shrank by a handful of lines as the tool-toggle wiring moved behind a shared helper; the renderer is unchanged. The remaining blocks to lift are in `docs/architecture/architecture-map.md`.
+`src/main.ts` is 5,604 lines and `src/render/Viewer.ts` is 6,419, against stated targets of 2,500 and 2,000. The composition root shrank as the scattered keyboard-shortcut listeners moved into one declarative table in `src/ui/keyBindings.ts`; the renderer is unchanged. The remaining blocks to lift are in `docs/architecture/architecture-map.md`.
 
 ## Out-of-core streaming holds the index, not the whole cloud
 
