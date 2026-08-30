@@ -707,6 +707,8 @@ export class AnalysePanel {
         this._rangeMounted = m.mountRangeWorkbench({
           set: entry.set,
           layerId: entry.layerId,
+          recordPosition: entry.recordPosition,
+          upAxis: entry.upAxis,
           launcherHost: this._rangeLauncher,
           workbenchHost: this._rangeWorkbench,
           onLaunch: () => this._rangeWorkbench.classList.remove('olv-hidden'),

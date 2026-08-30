@@ -29,6 +29,7 @@
  */
 
 import type { OrganizedRangeSet } from './OrganizedRange';
+import type { RecordPosition, UpAxis } from './acquisitionCoverage';
 
 /** What one loaded layer contributes to the workbench. */
 export interface OrganizedLayerEntry {
@@ -36,6 +37,11 @@ export interface OrganizedLayerEntry {
   /** The layer's display name. Shown, never used to key anything. */
   readonly name: string;
   readonly set: OrganizedRangeSet;
+  /** Record → position, for the acquisition-coverage fit. Absent for a layer
+   *  registered before this was threaded; the coverage summary then just omits. */
+  readonly recordPosition?: RecordPosition;
+  /** The cloud's up axis, so the coverage fit projects onto the ground plane. */
+  readonly upAxis?: UpAxis;
 }
 
 const entries = new Map<string, OrganizedLayerEntry>();
@@ -55,13 +61,15 @@ export function registerOrganizedRange(
   layerId: string,
   name: string,
   set: OrganizedRangeSet | undefined,
+  recordPosition?: RecordPosition,
+  upAxis?: UpAxis,
 ): void {
   const had = entries.has(layerId);
   if (!set || set.frames.length === 0) {
     if (!had) return;
     entries.delete(layerId);
   } else {
-    entries.set(layerId, { layerId, name, set });
+    entries.set(layerId, { layerId, name, set, recordPosition, upAxis });
   }
   notifyRegistry();
 }

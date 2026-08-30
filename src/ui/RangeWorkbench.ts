@@ -45,6 +45,12 @@ import {
 } from '../diagnostics/rangeRaster';
 import { cellText, linkageText, resolveCellLink } from '../diagnostics/rangeCellLink';
 import {
+  buildAcquisitionCoverage,
+  type AcquisitionCoverageIndex,
+  type RecordPosition,
+  type UpAxis,
+} from '../model/acquisitionCoverage';
+import {
   summariseRangeFrame,
   type BandCoverage,
   type RangeFrameSummary,
@@ -80,6 +86,10 @@ export interface RangeWorkbenchOptions {
   readonly layerId: string;
   /** Ask the renderer to mark a display record, or clear with null. */
   readonly onHighlightRecord?: (record: number | null) => void;
+  /** Record → position, for the set-level acquisition-extent summary. */
+  readonly recordPosition?: RecordPosition;
+  /** The layer's up axis, so the extent fit projects onto the ground plane. */
+  readonly upAxis?: UpAxis;
 }
 
 /**
@@ -90,6 +100,8 @@ export class RangeWorkbench {
 
   private readonly _set: OrganizedRangeSet;
   private readonly _opts: RangeWorkbenchOptions;
+  /** Fitted once from the whole set; null when no record positions were supplied. */
+  private readonly _coverage: AcquisitionCoverageIndex | null;
   private _frameIndex = 0;
   private _mode: RangeRasterMode = 'validity';
   private _plan: RasterPlan = { sourceWidth: 0, sourceHeight: 0, displayWidth: 0, displayHeight: 0 };
@@ -107,6 +119,15 @@ export class RangeWorkbench {
   constructor(opts: RangeWorkbenchOptions) {
     this._set = opts.set;
     this._opts = opts;
+    // Fit the per-setup interrogation extent once, from the set's own valid
+    // cells. Null when the mount supplied no record positions; the summary then
+    // omits rather than inventing an extent.
+    this._coverage = opts.recordPosition
+      ? buildAcquisitionCoverage(this._set, {
+          recordPosition: opts.recordPosition,
+          upAxis: opts.upAxis,
+        })
+      : null;
 
     this.element = el('div', { className: 'olv-range-workbench' });
     this.element.setAttribute('role', 'group');
@@ -422,6 +443,42 @@ export class RangeWorkbench {
     coverage.append(this._bandRow('Columns', summary.coverage.columnBands));
     coverage.append(this._bandRow('Rows', summary.coverage.rowBands));
     this._stats.append(coverage);
+
+    this._appendAcquisitionExtent();
+  }
+
+  /**
+   * A set-level summary of the interrogation extent: how many scanner setups
+   * have an angular extent this session could fit, and how many did not.
+   *
+   * The wording is load-bearing. "Interrogated" here means a ray addressed the
+   * direction, NOT that a surface was seen there — a NO_RETURN cell is still
+   * interrogated, and occlusion is not handled, so the extent is an upper bound.
+   * This block is a set-level fact, not a per-frame one, so it is drawn from the
+   * index fitted once in the constructor and does not depend on the shown frame.
+   */
+  private _appendAcquisitionExtent(): void {
+    const index = this._coverage;
+    if (!index) return;
+
+    const total = this._set.frames.length;
+    const fitted = index.setups.length;
+
+    const block = el('div', { className: 'olv-range-stat-block olv-range-coverage' });
+    block.append(el('h4', { text: 'Acquisition extent' }));
+    block.append(
+      el('p', {
+        className: 'olv-range-note',
+        text: `An interrogation extent was fitted for ${fitted} of ${total} scanner ${total === 1 ? 'setup' : 'setups'}. A fitted setup can answer whether a position lay within the directions its grid addressed; ${index.unfittedFrames} ${index.unfittedFrames === 1 ? 'setup was' : 'setups were'} too sparse to fit and answer indeterminate.`,
+      }),
+    );
+    block.append(
+      el('p', {
+        className: 'olv-range-note',
+        text: 'Interrogated means a ray addressed the direction — including cells that returned nothing — not that a surface was visible there. Occlusion is not modelled, so this is an upper bound on what was seen, not a measurement of coverage.',
+      }),
+    );
+    this._stats.append(block);
   }
 
   private _bandRow(name: string, bands: readonly BandCoverage[]): HTMLElement {

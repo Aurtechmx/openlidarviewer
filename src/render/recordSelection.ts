@@ -27,6 +27,7 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { isZUpFormat } from '../io/sniffFormat';
 import {
   forgetOrganizedRange,
   publishOrganizedPick,
@@ -74,7 +75,21 @@ export function bindOrganizedRangeLink(host: OrganizedLinkHost): OrganizedLinkBr
   });
 
   return {
-    register: (layerId, cloud) => registerOrganizedRange(layerId, cloud.name, cloud.organizedRange),
+    register: (layerId, cloud) =>
+      registerOrganizedRange(
+        layerId,
+        cloud.name,
+        cloud.organizedRange,
+        // Local (recentred) positions: the coverage fit is translation-invariant,
+        // so no origin shift is needed. Returns null past the buffer end.
+        (r) => {
+          const i = 3 * r;
+          return i >= 0 && i + 2 < cloud.positions.length
+            ? [cloud.positions[i], cloud.positions[i + 1], cloud.positions[i + 2]]
+            : null;
+        },
+        isZUpFormat(cloud.sourceFormat) ? 'z' : 'y',
+      ),
     forget: (layerId) => forgetOrganizedRange(layerId),
     layerIdOf: (cloud) => {
       // A linear scan of a table that holds a handful of entries. The pick path

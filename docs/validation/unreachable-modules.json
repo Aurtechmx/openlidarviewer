@@ -95,13 +95,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/model/acquisitionCoverage.ts",
-      "status": "staged",
-      "why": "Separates an interrogated-but-empty cell from one nobody looked at, over the acquisition grid of an organized cloud. No terrain or coverage surface consults it; nothing in src/ imports it.",
-      "graduation": "The void/coverage reporting path reads acquisition coverage instead of treating every absence alike.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/registration/registrationModel.ts",
       "status": "staged",
       "why": "Named in the v0.6.6 release notes as the model that \"selects [a planar ICP solver] directly instead of refusing the planar case\". It chooses mount / planar ICP / general ICP / tie-point; no caller asks it to choose.",
