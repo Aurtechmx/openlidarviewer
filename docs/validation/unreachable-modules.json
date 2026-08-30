@@ -20,6 +20,14 @@
   "reviewDates": "Reported by the lint when they pass, never enforced. A gate that turns red on a date with no change to the tree teaches people to edit the date rather than the code.",
   "modules": [
     {
+      "path": "src/io/heavy/fileFingerprint.ts",
+      "status": "staged",
+      "why": "Phase 1 of the persistent out-of-core cache: the pre-decode file fingerprint a persisted index is keyed by (SHA-256 over header facts plus sampled byte windows). Pure and tested; the open path does not call it yet, so the reopen branch that consumes it is a later phase.",
+      "graduation": "The reopen branch in src/app/heavyLasExecutor.ts calls fingerprintFromRange before the storage preflight to key the persisted cache map, reached from src/main.ts.",
+      "review": "2027-02-28",
+      "declaredIn": "PR #737 (persistent OOC cache, Phase 1)"
+    },
+    {
       "path": "src/features/FeatureExtractionService.ts",
       "status": "staged",
       "why": "Named in the v0.6.6 release notes under \"Also in this release\" as a foundation: \"a feature-extraction service over the building and conductor cores ... Nothing in the running application passes through either\". It is the product-side entry over the two cores; no UI or DerivedLayer calls it.",
