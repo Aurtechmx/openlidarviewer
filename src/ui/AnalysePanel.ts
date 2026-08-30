@@ -2759,7 +2759,10 @@ export class AnalysePanel {
     }
     // Without a regeneration callback we cannot change the interval honestly —
     // lock the picker to the current deliverable so the file matches the panel.
-    if (!canRegen) intervalSel.disabled = true;
+    if (!canRegen) {
+      intervalSel.disabled = true;
+      intervalSel.title = 'Locked to the current deliverable so the exported file matches the panel.';
+    }
 
     // Contour shape style — seeded from the panel's current choice; drives the
     // shape of the plotted contours on the sheet.
@@ -2773,7 +2776,10 @@ export class AnalysePanel {
       if (opt.value === this._contourStyle) o.selected = true;
       styleSel.append(o);
     }
-    if (!canRegen) styleSel.disabled = true;
+    if (!canRegen) {
+      styleSel.disabled = true;
+      styleSel.title = 'Locked to the current deliverable so the exported file matches the panel.';
+    }
 
     const filenameInput = document.createElement('input');
     filenameInput.type = 'text';
