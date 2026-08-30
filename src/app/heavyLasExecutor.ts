@@ -19,8 +19,34 @@ import {
   storagePreflightRefusal,
   readStorageEstimate,
 } from '../io/heavy/storagePreflight';
-import { openTileStore, tileBytesReader } from '../io/heavy/tileStoreBuilder';
-import { opfsSpillStore, removeOpfsStore, type OpfsDirHandle } from '../io/heavy/opfsSpillStore';
+import {
+  openTileStore,
+  tileBytesReader,
+  TILE_MANIFEST_NAME,
+  TILE_HIERARCHY_NAME,
+} from '../io/heavy/tileStoreBuilder';
+import {
+  opfsSpillStore,
+  removeOpfsStore,
+  readOpfsText,
+  type OpfsDirHandle,
+} from '../io/heavy/opfsSpillStore';
+import { fingerprintFromRange } from '../io/heavy/fileFingerprint';
+import {
+  readCacheMap,
+  writeCacheMap,
+  lookupEntry,
+  upsertEntry,
+  touchEntry,
+  removeByStoreName,
+  selectEvictions,
+  cacheGeneration,
+} from '../io/heavy/oocCacheMap';
+import {
+  resolveLockManager,
+  acquireStoreResidency,
+  liveStoreNames,
+} from '../io/heavy/oocStoreLiveness';
 import { OlvTileSource, PreviewCloudSource } from '../io/heavy/OlvTileSource';
 import { buildPreviewSample } from '../io/heavy/previewSampler';
 import { TileChunkDecoder } from '../io/heavy/tileChunkDecoder';
@@ -50,6 +76,47 @@ import type {
 
 /** Peak staging memory the bucketing pass may hold before spilling to OPFS. */
 const BUILD_MEMORY_BUDGET_BYTES = 128 * 1024 * 1024;
+
+/**
+ * Soft cap on the retained cache: after a fresh build records its store, the
+ * least-recently-used stores are evicted until the retained tile bytes fit this,
+ * so a session that opens many large files does not grow the cache without bound.
+ * A live store (one another tab holds open) is never evicted, whatever its age.
+ */
+const CACHE_BUDGET_BYTES = 8 * 1024 * 1024 * 1024;
+
+/**
+ * Fingerprint the file before any decode, so a persisted index can be looked up
+ * or recorded under a content-based key. Returns null when the source bounds are
+ * absent (an old peek) or any window read fails — the caller reads null as "no
+ * reuse and no record", never as a match, keeping the cache fail-safe.
+ */
+async function computeOpenFingerprint(
+  file: File,
+  facts: LasHeaderFacts,
+  range: RangeSource,
+  signal: AbortSignal,
+): Promise<string | null> {
+  if (!facts.min || !facts.max) return null;
+  try {
+    return await fingerprintFromRange(
+      range,
+      {
+        fileBytes: facts.fileBytes,
+        // A real File always carries a numeric lastModified; default defensively
+        // so a synthetic File missing it still yields a well-formed digest.
+        lastModified: typeof file.lastModified === 'number' ? file.lastModified : 0,
+        declaredPointCount: facts.declaredPointCount,
+        offsetToPointData: facts.offsetToPointData,
+        min: facts.min,
+        max: facts.max,
+      },
+      signal,
+    );
+  } catch {
+    return null;
+  }
+}
 
 const PHASE_LABELS: Record<LocalOocPhase, string> = {
   indexing: 'Indexing for streaming…',
@@ -126,6 +193,130 @@ function newOpenId(): string {
 }
 
 /**
+ * Reopen a cached store from OPFS without rebuilding: read its manifest and
+ * hierarchy back, present them as an {@link OlvTileSource}, and hold a shared
+ * residency lock so an eviction pass in another tab cannot delete it while it is
+ * open. Its `close` RETAINS the store — a reused index is never deleted. Returns
+ * null when the store directory is gone (evicted) or its artifacts cannot be
+ * read (a partial or corrupt store), which the caller treats as a miss.
+ */
+async function reopenFromCache(
+  root: OpfsDirHandle,
+  storeName: string,
+  file: File,
+): Promise<{ source: OlvTileSource; decoder: TileChunkDecoder } | null> {
+  let dir: OpfsDirHandle;
+  try {
+    dir = await root.getDirectoryHandle(storeName);
+  } catch {
+    return null; // store evicted out from under the map
+  }
+  let manifestJson: string;
+  let hierarchy: string;
+  try {
+    manifestJson = await readOpfsText(dir, TILE_MANIFEST_NAME);
+    hierarchy = await readOpfsText(dir, TILE_HIERARCHY_NAME);
+  } catch {
+    return null; // artifacts missing / unreadable → rebuild
+  }
+  const spill = opfsSpillStore(dir);
+  const reader = openTileStore(manifestJson, hierarchy);
+  const locks = resolveLockManager();
+  const releaseResidency = locks ? await acquireStoreResidency(locks, storeName) : null;
+  const source = new OlvTileSource({
+    id: `ooc-${storeName}`,
+    name: file.name,
+    store: reader,
+    tiles: tileBytesReader(spill),
+    // RETAIN: a reused store is kept for the next open. Release the tile handles
+    // and the residency lock, but never delete — the map still points here.
+    close: async () => {
+      await spill.close();
+      await releaseResidency?.();
+    },
+  });
+  const decoder = new TileChunkDecoder(reader.schema, reader.recordBytes);
+  return { source, decoder };
+}
+
+/**
+ * Try to satisfy the open from the persisted cache. Returns a terminal
+ * {@link HeavyOpenResult} on a hit (or a cancel mid-attach), or null to tell the
+ * caller to build fresh — on a miss, a stale entry whose store is gone (cleaned
+ * here), or a reopen whose attach faulted for a non-cancel reason.
+ */
+async function tryReopen(
+  root: OpfsDirHandle,
+  fingerprint: string,
+  generation: string,
+  file: File,
+  deps: HeavyLasBridgeDeps,
+  signal: AbortSignal,
+): Promise<HeavyOpenResult | null> {
+  const map = await readCacheMap(root);
+  const entry = lookupEntry(map, fingerprint, generation);
+  if (!entry) return null;
+  const opened = await reopenFromCache(root, entry.storeName, file);
+  if (!opened) {
+    // The map named a store that is no longer usable; drop the stale entry so a
+    // later open does not keep chasing it, then build fresh.
+    await writeCacheMap(root, removeByStoreName(map, entry.storeName)).catch(() => {});
+    return null;
+  }
+  try {
+    await attachHeavyStream(opened.source, opened.decoder, deps, signal);
+  } catch (err) {
+    await opened.source.close().catch(() => {});
+    if (signal.aborted || isCancel(err)) return { status: 'cancelled' };
+    if (deps.debug) console.warn('[heavy-las] cache reopen attach failed; rebuilding', err);
+    return null;
+  }
+  await writeCacheMap(root, touchEntry(map, fingerprint, generation, Date.now())).catch(() => {});
+  return { status: 'attached', source: opened.source, decoder: opened.decoder };
+}
+
+/**
+ * Record a freshly-built store in the cache map and evict down to the budget.
+ * Best-effort: any failure returns false and the caller then leaves the store
+ * uncommitted (deleted on close), so a cache-write fault never leaks an
+ * unrecorded store nor fails the open. Eviction skips every live store and never
+ * this one — the caller holds its residency lock, so it is in the live set.
+ */
+async function recordAndEvict(
+  root: OpfsDirHandle,
+  fingerprint: string,
+  generation: string,
+  storeName: string,
+  reader: { manifest: { pointCount: number }; recordBytes: number },
+  locks: ReturnType<typeof resolveLockManager>,
+): Promise<boolean> {
+  try {
+    const now = Date.now();
+    const tileBytes = reader.manifest.pointCount * reader.recordBytes;
+    let map = upsertEntry(await readCacheMap(root), {
+      fingerprint,
+      storeName,
+      generation,
+      createdAt: now,
+      lastUsedAt: now,
+      pointCount: reader.manifest.pointCount,
+      tileBytes,
+    });
+    const live = await liveStoreNames(locks);
+    if (live) {
+      for (const name of selectEvictions(map.entries, { budgetBytes: CACHE_BUDGET_BYTES, liveNames: live })) {
+        await removeOpfsStore(root, name).catch(() => {});
+        map = removeByStoreName(map, name);
+      }
+    }
+    await writeCacheMap(root, map);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Build the tile store, reopen it from OPFS, and attach it as a streaming scan.
  * Called only when the decision half has confirmed the plan routes this file out
  * of core, so every failure path here is a CONFIRMED-heavy failure: it returns a
@@ -172,6 +363,18 @@ export async function executeHeavyLasBuild(
 
   const root = await getOpfsRoot();
   if (root === null) return { status: 'unavailable', heavy: true, reason: 'no OPFS root' };
+
+  // Persistent cache. Fingerprint the file before any decode; on a hit, reopen
+  // the stored index instead of rebuilding it. A null fingerprint (a peek with no
+  // bounds, or a read fault) skips both reuse and recording, so the open behaves
+  // exactly as it did before the cache existed.
+  const generation = cacheGeneration();
+  const fingerprint = await computeOpenFingerprint(file, facts, openRange(file), signal);
+  if (signal.aborted) return { status: 'cancelled' };
+  if (fingerprint) {
+    const reopened = await tryReopen(root, fingerprint, generation, file, deps, signal);
+    if (reopened) return reopened;
+  }
 
   if (!janitorSwept) {
     janitorSwept = true;
@@ -252,21 +455,29 @@ export async function executeHeavyLasBuild(
     const dir = await root.getDirectoryHandle(built.storeName);
     const spill = opfsSpillStore(dir);
     const reader = openTileStore(built.manifestJson, built.hierarchy);
+    // Hold a shared residency lock while the store is open, so an eviction pass in
+    // this or another tab cannot delete it from under a live read.
+    const locks = resolveLockManager();
+    const releaseResidency = locks ? await acquireStoreResidency(locks, built.storeName) : null;
+    // Retained once the store is recorded in the cache map (only after a
+    // successful attach, and only when this open has a fingerprint to key it by).
+    // Until then — an attach fault, a build with no fingerprint — the store is
+    // uncommitted and close DELETES it, exactly as before the cache existed.
+    let retain = false;
     const source = new OlvTileSource({
       id: `ooc-${built.storeName}`,
       name: file.name,
       store: reader,
       tiles: tileBytesReader(spill),
-      // The out-of-core store is TEMPORARY for this release: nothing reuses it
-      // on a later open, so a persisted `ooc-<name>-<size>` directory is pure
-      // cost. On close, release the open tile handles FIRST (so a close racing
-      // a read unlocks before anything is deleted), THEN remove the store. The
-      // removal is fired without letting a rejection escape the close — a store
-      // the browser cannot delete because a read still holds it is left stale
-      // and rebuilt on the next open, which is the honest fallback. Persistent
-      // cross-session reuse via a source fingerprint is the future direction.
+      // Release the tile handles FIRST (so a close racing a read unlocks before
+      // anything is touched) and the residency lock, THEN — only for an
+      // uncommitted store — remove it. A committed store is kept for reuse; a
+      // removal that cannot run because a read still holds the handle is
+      // swallowed and the store rebuilt next open, the honest fallback.
       close: async () => {
         await spill.close();
+        await releaseResidency?.();
+        if (retain) return;
         try {
           await removeOpfsStore(root, built.storeName);
         } catch (err) {
@@ -290,6 +501,12 @@ export async function executeHeavyLasBuild(
         if (deps.debug) console.warn('[heavy-las] store cleanup after attach failure failed', closeErr);
       });
       throw err;
+    }
+    // The scan is committed. If this open has a fingerprint, record the store so a
+    // later open reuses it, and retain it on close; a failed record leaves the
+    // store uncommitted (deleted on close), never leaked.
+    if (fingerprint && (await recordAndEvict(root, fingerprint, generation, built.storeName, reader, locks))) {
+      retain = true;
     }
     return { status: 'attached', source, decoder };
   } catch (err) {

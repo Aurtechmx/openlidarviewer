@@ -145,7 +145,7 @@ function makeEnv(range: RangeSource): { env: HeavyLasBridgeEnv; opfs: ReturnType
 }
 
 describe('heavy LAS out-of-core store lifecycle', () => {
-  it('removes the OPFS store directory when the streaming source closes', async () => {
+  it('retains the recorded OPFS store when the streaming source closes', async () => {
     const buffer = lasBytes(60_000);
     const file = spyFile('heavy.las', buffer.byteLength);
     const { deps, getAttached } = makeDeps();
@@ -155,17 +155,48 @@ describe('heavy LAS out-of-core store lifecycle', () => {
     expect(result.status).toBe('attached');
     if (result.status !== 'attached') throw new Error('unreachable');
 
-    // The finished store is present while the source is attached.
-    const storeName = opfs.topLevel().find((n) => n.startsWith('ooc-'));
+    // The finished store is present, and it has been recorded in the cache map.
+    const storeName = opfs.topLevel().find((n) => n.startsWith('ooc-') && n !== 'ooc-cache-map.json');
     expect(storeName).toBeDefined();
-    expect(opfs.topLevel()).toContain(storeName);
+    expect(opfs.topLevel()).toContain('ooc-cache-map.json');
 
-    // Closing the source releases handles AND removes the persistent store.
+    // Closing the source releases handles but RETAINS the recorded store — the
+    // persistent cache keeps a completed index for the next open.
     const source = getAttached() as OlvTileSource;
     await source.close();
 
-    expect(opfs.topLevel()).not.toContain(storeName);
-    expect(opfs.topLevel().some((n) => n.startsWith('ooc-'))).toBe(false);
+    expect(opfs.topLevel()).toContain(storeName);
+  });
+
+  it('a second open of the same file reuses the store without rebuilding', async () => {
+    const buffer = lasBytes(60_000);
+    const { env, opfs } = makeEnv(new ArrayBufferRangeSource(buffer));
+    let builds = 0;
+    const countingEnv = {
+      ...env,
+      async runIndex(req: Parameters<typeof env.runIndex>[0]) {
+        builds += 1;
+        return env.runIndex(req);
+      },
+    };
+
+    const openOnce = async () => {
+      const { deps } = makeDeps();
+      const result = await openLocalHeavyLas(
+        spyFile('same.las', buffer.byteLength),
+        new AbortController().signal,
+        deps,
+        countingEnv,
+      );
+      expect(result.status).toBe('attached');
+    };
+
+    await openOnce();
+    await openOnce();
+
+    // One index build, one store: the second open reopened the cached index.
+    expect(builds).toBe(1);
+    expect(opfs.topLevel().filter((n) => n.startsWith('ooc-') && n !== 'ooc-cache-map.json')).toHaveLength(1);
   });
 
   it('still releases the tile handles on close (does not regress spill.close)', async () => {

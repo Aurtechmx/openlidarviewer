@@ -2,18 +2,19 @@
  * heavyOocLeakFree.test.ts — the out-of-core store lifecycle is leak- and
  * collision-free.
  *
- * Every exit path of the heavy-LAS open must end in exactly one of two states:
- * a committed store owned by the live source, OR no store. Never a third,
- * ambiguous state — a promoted store nobody owns, or two opens fighting over
- * one directory. These cases pin that:
+ * Every exit path of the heavy-LAS open must end in a coherent state: a
+ * committed store recorded in the cache map and retained for reuse, or no store
+ * at all. Never a promoted store nobody owns. Since the persistent cache (Phase
+ * 4) these cases pin that:
  *
- *  - two opens of the SAME name and size get DISTINCT stores (no collision);
- *  - closing the old source after a second open keeps the NEW store (no
- *    cross-session delete by shared name);
- *  - an abort right AFTER promotion leaves NO store (the promoted directory is
- *    swept, not stranded);
+ *  - two opens of the SAME file REUSE one recorded store (the cache hit — a
+ *    rebuild is not repeated, and no second directory is created);
+ *  - closing a source of a recorded store RETAINS it, so the next open still
+ *    finds it (the cache survives a close);
+ *  - an abort right AFTER promotion leaves NO store — an uncommitted store is
+ *    never recorded, so it is deleted, not stranded;
  *  - an attach failure AFTER promotion leaves NO store (the source's own close
- *    frees it);
+ *    frees the uncommitted store);
  *  - a promotion-copy failure discards the partial (finding #2).
  *
  * The browser-only seams are the repo's usual fakes: OPFS is
@@ -166,18 +167,25 @@ function makeEnv(
   };
 }
 
+// The store directories only — NOT the `ooc-cache-map.json` record, which also
+// begins with `ooc-` but is the map, not a store.
 const oocDirs = (opfs: ReturnType<typeof fakeOpfs>): string[] =>
-  opfs.topLevel().filter((n) => n.startsWith('ooc-'));
+  opfs.topLevel().filter((n) => n.startsWith('ooc-') && n !== 'ooc-cache-map.json');
 
 describe('heavy OOC store lifecycle is leak- and collision-free', () => {
-  it('gives two opens of the same name and size DISTINCT stores', async () => {
+  it('reuses ONE recorded store for two opens of the same file (the cache hit)', async () => {
     const buffer = lasBytes(40_000);
     const opfs = fakeOpfs({ syncAccess: true, fileMove: true });
+    let builds = 0;
 
     const openOnce = async () => {
       const file = spyFile('same.las', buffer.byteLength);
       const { deps } = makeDeps();
-      const env = makeEnv(new ArrayBufferRangeSource(buffer), opfs);
+      const env = makeEnv(new ArrayBufferRangeSource(buffer), opfs, {
+        afterBuild: () => {
+          builds += 1;
+        },
+      });
       const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
       expect(result.status).toBe('attached');
     };
@@ -185,12 +193,13 @@ describe('heavy OOC store lifecycle is leak- and collision-free', () => {
     await openOnce();
     await openOnce();
 
-    const dirs = oocDirs(opfs);
-    expect(dirs).toHaveLength(2);
-    expect(new Set(dirs).size).toBe(2);
+    // The second open matched the fingerprint and reopened the stored index, so
+    // there is exactly one store and the index was built only once.
+    expect(oocDirs(opfs)).toHaveLength(1);
+    expect(builds).toBe(1);
   });
 
-  it('closing the old source after a second open keeps the NEW store', async () => {
+  it('retains the recorded store when a source closes, so a later open still finds it', async () => {
     const buffer = lasBytes(40_000);
     const opfs = fakeOpfs({ syncAccess: true, fileMove: true });
 
@@ -204,20 +213,18 @@ describe('heavy OOC store lifecycle is leak- and collision-free', () => {
     };
 
     const first = await open();
-    const second = await open();
-    const secondDir = oocDirs(opfs).find((n) => n !== null);
-    expect(oocDirs(opfs)).toHaveLength(2);
+    expect(oocDirs(opfs)).toHaveLength(1);
 
-    // Close the OLD source. With a shared name this would delete the new store;
-    // with per-open names it removes only its own.
+    // Closing the source of a RECORDED store retains it — a recorded index is
+    // kept for reuse, not deleted (the pre-cache behaviour).
     await first.close();
+    expect(oocDirs(opfs)).toHaveLength(1);
 
-    const remaining = oocDirs(opfs);
-    expect(remaining).toHaveLength(1);
-    // The survivor is the store the second (still-live) source owns.
+    // A later open of the same file reopens that retained store: still one store,
+    // and the second source is live over it.
+    const second = await open();
+    expect(oocDirs(opfs)).toHaveLength(1);
     expect(second).toBeDefined();
-    expect(remaining[0]).toBeDefined();
-    void secondDir;
   });
 
   it('leaves NO store when the open is aborted right after promotion', async () => {
