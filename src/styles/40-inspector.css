@@ -8,7 +8,7 @@
    * scrollable content (Photometric witness, Visuals Studio chips,
    * etc.) always wins pointer events on any vertical overlap with
    * the legend group at the bottom of the navbar. */
-  z-index: 15;
+  z-index: var(--z-panel);
 }
 /* Streaming-mode layout — the StreamingPanel anchors top-right at the
  * same 232 px width. The Inspector starts BELOW the streaming panel's
@@ -37,7 +37,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  z-index: 15;
+  z-index: var(--z-panel);
 }
 /* Panels flow inside the rail: drop their own absolute positioning and per-panel
    scroll (the rail scrolls as one). Their surface styling — background, border,
@@ -259,7 +259,7 @@
   left: 50%;
   top: calc(64px + env(safe-area-inset-top));
   transform: translateX(-50%);
-  z-index: 80;
+  z-index: var(--z-modal);
   display: inline-flex; align-items: center; gap: var(--space-xs);
   padding: 4px 6px 4px 10px;
   background: rgba(11, 17, 33, 0.92);
@@ -288,7 +288,7 @@
   left: 50%;
   bottom: calc(120px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  z-index: 80;
+  z-index: var(--z-modal);
   /* Subtract the horizontal display cut-outs too (landscape notch / rounded
      corners) so the toast never tucks under a sensor housing. env() is 0 on
      inset-free displays, so desktop width is unchanged. */

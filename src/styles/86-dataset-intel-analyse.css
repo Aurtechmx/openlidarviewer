@@ -232,7 +232,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.45);
   margin-top: 1px;
-  z-index: 1;
+  z-index: var(--z-content);
   transition: background var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard),
               color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }

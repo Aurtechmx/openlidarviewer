@@ -332,7 +332,7 @@
     position: fixed;
     right: calc(12px + env(safe-area-inset-right));
     bottom: calc(14px + env(safe-area-inset-bottom));
-    z-index: 40;
+    z-index: var(--z-sheet);
     font-size: var(--text-sm); font-weight: 500; color: var(--accent);
     background: rgba(11, 17, 33, 0.92);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -366,7 +366,7 @@
     border-radius: 16px 16px 0 0;
     border-bottom: none;
     padding: 14px var(--space-2xl) calc(var(--space-2xl) + env(safe-area-inset-bottom));
-    z-index: 60;
+    z-index: var(--z-popover);
     animation: none;
     /* Peek: leave the head visible above the safe-area. The translate
        maths shifts the panel down by its own height minus the peek and

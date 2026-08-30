@@ -180,6 +180,33 @@
   --m-chrome-head-h: calc(
     var(--m-tab-h) + 2 * var(--m-tabs-pad) + 2 * var(--m-head-pad-y)
   );
+
+  /*
+   * Stacking scale. Every z-index in the app routes through one of these
+   * semantic tokens so the layer order is explicit in one place instead of
+   * scattered magic integers. Ordered low → high; the integers are the exact
+   * values the sheet has always used. z-index does NOT vary by theme, so these
+   * live only here (never in the Light / High-contrast / forced-colors rails).
+   * Where two siblings deliberately differ by 1, the site uses
+   * calc(var(--z-role) + 1) so the lift is visible and the integer preserved.
+   */
+  --z-base: 0;            /* canvas + background washes */
+  --z-content: 1;         /* content sitting above a same-stack wash */
+  --z-scene-overlay: 2;   /* decorative canvas vignette overlay */
+  --z-topbar: 4;          /* click-through top bar */
+  --z-hud: 10;            /* persistent navigation-bar HUD */
+  --z-panel: 15;          /* Inspector panel (16 = panel + 1) */
+  --z-dock: 20;           /* tool dock + left/right panels (21 = dock + 1) */
+  --z-overlay: 30;        /* annotation inline editor */
+  --z-float: 35;          /* floating readouts (36 = float + 1) */
+  --z-sheet: 40;          /* mobile file-picker sheet */
+  --z-backdrop: 50;       /* help / converter / phone-sheet backdrops */
+  --z-popover: 60;        /* tooltips, layer-health, toast popovers */
+  --z-raised: 70;         /* raised dock panel + progress toast */
+  --z-modal: 80;          /* modal surfaces */
+  --z-modal-top: 90;      /* badge + shortcut sheet (91 = modal-top + 1) */
+  --z-palette: 100;       /* command palette */
+  --z-max: 200;           /* onboarding tour overlay, top of stack */
 }
 
 /*
@@ -197,7 +224,7 @@
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-pill);
   padding: var(--space-sm) var(--space-xl);
-  z-index: 90;
+  z-index: var(--z-modal-top);
   font-size: var(--text-xs); color: var(--text);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
@@ -234,7 +261,7 @@
  * card so the palette can dismiss without an explicit close button.
  */
 .olv-palette {
-  position: fixed; inset: 0; z-index: 100;
+  position: fixed; inset: 0; z-index: var(--z-palette);
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: clamp(60px, 12vh, 140px);
 }
@@ -536,11 +563,11 @@ button:disabled { cursor: not-allowed; }
       rgba(0, 0, 0, 0) 0%,
       rgba(0, 0, 0, 0) 55%,
       rgba(0, 0, 0, 0.28) 100%);
-  z-index: 1;
+  z-index: var(--z-content);
 }
 .olv-canvas {
   position: absolute; inset: 0; width: 100%; height: 100%; display: block;
-  z-index: 0;
+  z-index: var(--z-base);
   /* The viewer owns every touch on the canvas — 1-finger orbit, 2-finger
      twist / pinch / pan. Without this the browser claims those gestures for
      page pinch-zoom and scrolling, so the model wouldn't respond on phones. */
@@ -549,7 +576,7 @@ button:disabled { cursor: not-allowed; }
 /* Overlay sits above the vignette so panels read crisp against the
  * darkened corners — the vignette is decorative scene framing, not a
  * dimming layer for the UI. */
-.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: var(--z-scene-overlay); }
 .olv-overlay > * { pointer-events: auto; }
 .olv-dragging::after {
   content: "";
@@ -571,7 +598,7 @@ button:disabled { cursor: not-allowed; }
      keep it below the functional panels (z 10+). The bar itself is made
      click-through so its empty middle never steals clicks from centred
      empty-state content beneath it; only its real controls capture input. */
-  z-index: 4;
+  z-index: var(--z-topbar);
   pointer-events: none;
 }
 .olv-topbar > * { pointer-events: auto; }
@@ -651,7 +678,7 @@ button:disabled { cursor: not-allowed; }
 .olv-quality-button-open { color: var(--accent); background: var(--accent-soft); }
 .olv-quality-pop {
   position: absolute; top: calc(100% + var(--space-md)); right: 0;
-  z-index: 20;
+  z-index: var(--z-dock);
   width: 280px; max-width: calc(100vw - var(--space-4xl));
   display: flex; flex-direction: column; gap: var(--space-md);
   padding: var(--space-xl);
@@ -719,10 +746,10 @@ button:disabled { cursor: not-allowed; }
     transparent 68%
   );
   pointer-events: none;
-  z-index: 0;
+  z-index: var(--z-base);
 }
 /* Every child sits above the wash; the wash must never eat a click. */
-.olv-empty > * { position: relative; z-index: 1; }
+.olv-empty > * { position: relative; z-index: var(--z-content); }
 /* On the light theme the same wash reads as a smudge on near-white rather than
  * depth, so it drops to a trace — enough to seat the hero, not enough to tint. */
 body.olv-theme-light .olv-empty::before {
@@ -1087,7 +1114,7 @@ body.olv-theme-light .olv-empty::before {
    * scrollable content (Photometric witness, Visuals Studio chips,
    * etc.) always wins pointer events on any vertical overlap with
    * the legend group at the bottom of the navbar. */
-  z-index: 15;
+  z-index: var(--z-panel);
 }
 /* Streaming-mode layout — the StreamingPanel anchors top-right at the
  * same 232 px width. The Inspector starts BELOW the streaming panel's
@@ -1116,7 +1143,7 @@ body.olv-theme-light .olv-empty::before {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  z-index: 15;
+  z-index: var(--z-panel);
 }
 /* Panels flow inside the rail: drop their own absolute positioning and per-panel
    scroll (the rail scrolls as one). Their surface styling — background, border,
@@ -1338,7 +1365,7 @@ body.olv-theme-light .olv-empty::before {
   left: 50%;
   top: calc(64px + env(safe-area-inset-top));
   transform: translateX(-50%);
-  z-index: 80;
+  z-index: var(--z-modal);
   display: inline-flex; align-items: center; gap: var(--space-xs);
   padding: 4px 6px 4px 10px;
   background: rgba(11, 17, 33, 0.92);
@@ -1367,7 +1394,7 @@ body.olv-theme-light .olv-empty::before {
   left: 50%;
   bottom: calc(120px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  z-index: 80;
+  z-index: var(--z-modal);
   /* Subtract the horizontal display cut-outs too (landscape notch / rounded
      corners) so the toast never tucks under a sensor housing. env() is 0 on
      inset-free displays, so desktop width is unchanged. */
@@ -1619,7 +1646,7 @@ body.olv-theme-light .olv-empty::before {
   /* The dock owns the bottom band; the nav widget floats above it (see
    * .olv-navbar) so the two never overlap and never fight for clicks.
    * z-index 20 keeps the dock above the canvas (0) and the Inspector (15). */
-  z-index: 20;
+  z-index: var(--z-dock);
   display: flex; gap: var(--space-sm);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-sm);
@@ -1681,7 +1708,7 @@ body.olv-theme-light .olv-empty::before {
      pointer-events:none so clicks fall through to whatever sits under it; only
      the title bar is interactive (the collapse toggle). */
   position: absolute; top: auto; left: auto; bottom: 14px; right: 14px;
-  z-index: 70;
+  z-index: var(--z-raised);
   max-width: 320px; max-height: 60vh; overflow-y: auto;
   background: rgba(10, 14, 26, 0.92);
   border: 0.5px solid var(--hairline);
@@ -1746,7 +1773,7 @@ body.olv-theme-light .olv-empty::before {
  * the bottom-anchored Inspector overlaps it from below. The cap lets
  * both surfaces coexist without a JS-driven layout. */
 .olv-streaming-panel {
-  position: absolute; top: 56px; right: 14px; width: 232px; z-index: 36;
+  position: absolute; top: 56px; right: 14px; width: 232px; z-index: calc(var(--z-float) + 1);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
   max-height: calc(50vh - 40px); overflow-y: auto;
@@ -1928,7 +1955,7 @@ body.olv-theme-light .olv-empty::before {
    * the navbar clear of the dock removes the overlap entirely, so neither
    * steals the other's clicks at any dock width — and the z-order can stay
    * simple. Canvas 0, navbar 10, Inspector 15, dock 20. */
-  z-index: 10;
+  z-index: var(--z-hud);
   /* The navbar's visual area is mostly informational (HUD legend,
    * triangle frame, presets row label). Make the container itself
    * pointer-transparent — only the interactive widgets (mode buttons,
@@ -2867,7 +2894,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      stay clickable where the point-info card overlaps the centred nav HUD —
      the card is the focused pick result, the HUD is ambient. Below the dock
      (z:20). */
-  z-index: 16;
+  z-index: calc(var(--z-panel) + 1);
   background: rgba(11, 17, 33, 0.94);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border: 0.5px solid rgba(0, 178, 255, 0.34);
@@ -3269,7 +3296,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     position: fixed;
     right: calc(12px + env(safe-area-inset-right));
     bottom: calc(14px + env(safe-area-inset-bottom));
-    z-index: 40;
+    z-index: var(--z-sheet);
     font-size: var(--text-sm); font-weight: 500; color: var(--accent);
     background: rgba(11, 17, 33, 0.92);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -3303,7 +3330,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     border-radius: 16px 16px 0 0;
     border-bottom: none;
     padding: 14px var(--space-2xl) calc(var(--space-2xl) + env(safe-area-inset-bottom));
-    z-index: 60;
+    z-index: var(--z-popover);
     animation: none;
     /* Peek: leave the head visible above the safe-area. The translate
        maths shifts the panel down by its own height minus the peek and
@@ -3536,7 +3563,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* ── Annotation inline editor ────────────────────────────────────────────── */
 .olv-anno-editor {
-  position: absolute; z-index: 30;
+  position: absolute; z-index: var(--z-overlay);
   display: flex; flex-direction: column; gap: var(--space-md);
   width: 264px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
@@ -3648,7 +3675,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-measure-bar {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center;
-  gap: var(--space-sm); z-index: 36;
+  gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
   background: rgba(11, 17, 33, 0.82);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 0.5px solid rgba(0, 178, 255, 0.28);
@@ -3782,7 +3809,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   color: var(--text); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em; white-space: nowrap; line-height: 1.2;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
-  opacity: 0; pointer-events: none; z-index: 60;
+  opacity: 0; pointer-events: none; z-index: var(--z-popover);
   transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
 }
 .olv-measure-bar [data-tip]::before {
@@ -3791,7 +3818,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(8, 13, 26, 0.94);
   border-left: 0.5px solid rgba(0, 178, 255, 0.42);
   border-top: 0.5px solid rgba(0, 178, 255, 0.42);
-  opacity: 0; pointer-events: none; z-index: 60;
+  opacity: 0; pointer-events: none; z-index: var(--z-popover);
   transition: opacity 140ms var(--ease-standard);
 }
 .olv-measure-bar [data-tip]:hover::after,
@@ -3921,7 +3948,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
     4px 4px 14px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.24);
-  cursor: pointer; pointer-events: auto; z-index: 20;
+  cursor: pointer; pointer-events: auto; z-index: var(--z-dock);
   transition: left 420ms var(--ease-spring), width 200ms var(--ease-standard),
     color 160ms var(--ease-standard), border-color 160ms var(--ease-standard),
     box-shadow 200ms var(--ease-standard), background 200ms var(--ease-standard);
@@ -3987,7 +4014,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
     -4px 4px 14px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.24);
-  cursor: pointer; pointer-events: auto; z-index: 20;
+  cursor: pointer; pointer-events: auto; z-index: var(--z-dock);
   transition: right 420ms var(--ease-spring), width 200ms var(--ease-standard),
     color 160ms var(--ease-standard), border-color 160ms var(--ease-standard),
     box-shadow 200ms var(--ease-standard), background 200ms var(--ease-standard);
@@ -4459,7 +4486,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * pointer-down, so the panel LOOKED resizable but never engaged. */
 .olv-mp-resize {
   position: absolute; right: 0; bottom: 0;
-  width: 16px; height: 16px; z-index: 21;
+  width: 16px; height: 16px; z-index: calc(var(--z-dock) + 1);
   cursor: ew-resize; touch-action: none;
   color: var(--text-faint); opacity: 0.5;
   border-bottom-right-radius: var(--radius-lg);
@@ -5316,7 +5343,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-shortcuts {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: var(--z-modal-top);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -5349,7 +5376,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 /* ── Workflow recorder settings popup ──────────────────────────────── */
 .olv-wfc {
-  position: fixed; inset: 0; z-index: 91;
+  position: fixed; inset: 0; z-index: calc(var(--z-modal-top) + 1);
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: 12vh; pointer-events: none;
 }
@@ -5546,7 +5573,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-tour-root {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: var(--z-max);
   pointer-events: none;
 }
 .olv-tour-backdrop {
@@ -5973,7 +6000,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    Help overlay — a static, modal reference card
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-help-backdrop {
-  position: absolute; inset: 0; z-index: 50;
+  position: absolute; inset: 0; z-index: var(--z-backdrop);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4xl);
   background: rgba(6, 10, 20, 0.66);
@@ -6023,7 +6050,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    treatment of .olv-analyse-run; Cancel stays a quiet secondary.
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-modal-backdrop {
-  position: fixed; inset: 0; z-index: 80;
+  position: fixed; inset: 0; z-index: var(--z-modal);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4xl);
   background: rgba(6, 10, 20, 0.66);
@@ -6228,7 +6255,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    Live-probe readout — a cursor-following hover panel
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-probe-readout {
-  position: absolute; z-index: 35;
+  position: absolute; z-index: var(--z-float);
   /* Follows the cursor while the user orbits — it must never block a drag. */
   pointer-events: none;
   max-width: 232px;
@@ -6913,7 +6940,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.45);
   margin-top: 1px;
-  z-index: 1;
+  z-index: var(--z-content);
   transition: background var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard),
               color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
@@ -7351,7 +7378,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-batch-convert-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .olv-bc-overlay {
-  position: fixed; inset: 0; z-index: 50;
+  position: fixed; inset: 0; z-index: var(--z-backdrop);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-2xl);
   background: rgba(5, 8, 16, 0.66);
@@ -8657,7 +8684,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     left: 0; right: 0; bottom: 0;
     /* Above the canvas (0), left panels and dock (20); below the help modal
        (80) and command palette (200). */
-    z-index: 50;
+    z-index: var(--z-backdrop);
     display: flex;
     flex-direction: column;
     /* Height is driven by the active snap detent (peek/half/full) below. The
@@ -9225,7 +9252,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-colorbar {
   position: absolute; top: 50%; transform: translateY(-50%);
   right: calc(var(--olv-right-rail-width, 232px) + 28px);
-  z-index: 60;
+  z-index: var(--z-popover);
   display: flex; flex-direction: column; gap: 2px;
   padding: 8px 10px;
   background: var(--panel);

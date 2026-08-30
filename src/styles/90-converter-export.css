@@ -16,7 +16,7 @@
 .olv-batch-convert-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .olv-bc-overlay {
-  position: fixed; inset: 0; z-index: 50;
+  position: fixed; inset: 0; z-index: var(--z-backdrop);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-2xl);
   background: rgba(5, 8, 16, 0.66);

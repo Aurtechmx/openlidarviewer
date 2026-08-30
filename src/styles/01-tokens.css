@@ -180,5 +180,32 @@
   --m-chrome-head-h: calc(
     var(--m-tab-h) + 2 * var(--m-tabs-pad) + 2 * var(--m-head-pad-y)
   );
+
+  /*
+   * Stacking scale. Every z-index in the app routes through one of these
+   * semantic tokens so the layer order is explicit in one place instead of
+   * scattered magic integers. Ordered low → high; the integers are the exact
+   * values the sheet has always used. z-index does NOT vary by theme, so these
+   * live only here (never in the Light / High-contrast / forced-colors rails).
+   * Where two siblings deliberately differ by 1, the site uses
+   * calc(var(--z-role) + 1) so the lift is visible and the integer preserved.
+   */
+  --z-base: 0;            /* canvas + background washes */
+  --z-content: 1;         /* content sitting above a same-stack wash */
+  --z-scene-overlay: 2;   /* decorative canvas vignette overlay */
+  --z-topbar: 4;          /* click-through top bar */
+  --z-hud: 10;            /* persistent navigation-bar HUD */
+  --z-panel: 15;          /* Inspector panel (16 = panel + 1) */
+  --z-dock: 20;           /* tool dock + left/right panels (21 = dock + 1) */
+  --z-overlay: 30;        /* annotation inline editor */
+  --z-float: 35;          /* floating readouts (36 = float + 1) */
+  --z-sheet: 40;          /* mobile file-picker sheet */
+  --z-backdrop: 50;       /* help / converter / phone-sheet backdrops */
+  --z-popover: 60;        /* tooltips, layer-health, toast popovers */
+  --z-raised: 70;         /* raised dock panel + progress toast */
+  --z-modal: 80;          /* modal surfaces */
+  --z-modal-top: 90;      /* badge + shortcut sheet (91 = modal-top + 1) */
+  --z-palette: 100;       /* command palette */
+  --z-max: 200;           /* onboarding tour overlay, top of stack */
 }
 

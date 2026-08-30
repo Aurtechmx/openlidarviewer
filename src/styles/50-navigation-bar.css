@@ -11,7 +11,7 @@
    * the navbar clear of the dock removes the overlap entirely, so neither
    * steals the other's clicks at any dock width — and the z-order can stay
    * simple. Canvas 0, navbar 10, Inspector 15, dock 20. */
-  z-index: 10;
+  z-index: var(--z-hud);
   /* The navbar's visual area is mostly informational (HUD legend,
    * triangle frame, presets row label). Make the container itself
    * pointer-transparent — only the interactive widgets (mode buttons,

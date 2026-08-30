@@ -2,7 +2,7 @@
 .olv-shortcuts {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: var(--z-modal-top);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -35,7 +35,7 @@
 }
 /* ── Workflow recorder settings popup ──────────────────────────────── */
 .olv-wfc {
-  position: fixed; inset: 0; z-index: 91;
+  position: fixed; inset: 0; z-index: calc(var(--z-modal-top) + 1);
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: 12vh; pointer-events: none;
 }
@@ -232,7 +232,7 @@
 .olv-tour-root {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: var(--z-max);
   pointer-events: none;
 }
 .olv-tour-backdrop {

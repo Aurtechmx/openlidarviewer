@@ -2,7 +2,7 @@
    Help overlay — a static, modal reference card
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-help-backdrop {
-  position: absolute; inset: 0; z-index: 50;
+  position: absolute; inset: 0; z-index: var(--z-backdrop);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4xl);
   background: rgba(6, 10, 20, 0.66);
@@ -52,7 +52,7 @@
    treatment of .olv-analyse-run; Cancel stays a quiet secondary.
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-modal-backdrop {
-  position: fixed; inset: 0; z-index: 80;
+  position: fixed; inset: 0; z-index: var(--z-modal);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4xl);
   background: rgba(6, 10, 20, 0.66);
@@ -257,7 +257,7 @@
    Live-probe readout — a cursor-following hover panel
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-probe-readout {
-  position: absolute; z-index: 35;
+  position: absolute; z-index: var(--z-float);
   /* Follows the cursor while the user orbits — it must never block a drag. */
   pointer-events: none;
   max-width: 232px;
