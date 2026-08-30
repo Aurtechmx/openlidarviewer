@@ -62,7 +62,7 @@ import type { StreamingSource } from '../render/streaming/StreamingSource';
 import { LocalOocIndexerClient } from '../io/heavy/worker/localOocIndexerWorkerClient';
 import type { LocalOocPhase } from '../io/heavy/localOocBuild';
 import { readLazChunkTable } from '../io/heavy/lazChunkTable';
-import { sweepAbandonedOocStores } from '../io/heavy/opfsStoreJanitor';
+import { sweepAbandonedOocStores, sweepPromotedOrphans } from '../io/heavy/opfsStoreJanitor';
 import { LocalFileRangeSource } from '../io/range/LocalFileRangeSource';
 import type { RangeSource } from '../io/range/RangeSource';
 import { LoadError } from '../io/loadErrors';
@@ -379,6 +379,16 @@ export async function executeHeavyLasBuild(
   if (!janitorSwept) {
     janitorSwept = true;
     void sweepAbandonedOocStores(root, { ownedNames: new Set([storeName]) }).catch(() => {});
+    // Also reclaim promoted stores the cache no longer references and no live tab
+    // holds (Phase 6). Skipped entirely when liveness is unavailable — without a
+    // live-set an in-use store cannot be told from an orphan, so nothing is swept.
+    void (async () => {
+      const live = await liveStoreNames(resolveLockManager());
+      if (!live) return;
+      const map = await readCacheMap(root);
+      const referenced = new Set(map.entries.map((e) => e.storeName));
+      await sweepPromotedOrphans(root, { referenced, live, debug: deps.debug });
+    })().catch(() => {});
   }
 
   // The disk guard. Sized from the declared point count and the record schema,

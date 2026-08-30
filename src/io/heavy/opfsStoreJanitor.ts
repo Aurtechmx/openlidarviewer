@@ -30,12 +30,14 @@
  * that stopped mid-flight: nothing promotes it, no reader opens it, and it only
  * costs disk, so reclaiming it is safe.
  *
- * FUTURE WORK. Sweeping promoted stores safely needs a real cross-tab liveness
- * mechanism — a BroadcastChannel lease refresh, or Web Locks plus a lease
- * heartbeat — so a store still owned by any live tab can be told from one no tab
- * holds. Until that exists, abandoned promoted stores are reclaimed only when a
- * later build of the same source replaces them, or when the user clears site
- * data.
+ * PROMOTED STORES ARE NOW SWEPT SEPARATELY. That liveness mechanism exists (Web
+ * Locks residency, `oocStoreLiveness.ts`), so {@link sweepPromotedOrphans}
+ * reclaims a promoted store when it is neither referenced by the persistent
+ * cache map nor held open by any live tab — and only when its lease is old, so a
+ * store another tab just promoted but has not yet recorded is left alone. The
+ * conservative `.partial`-only sweep below is unchanged; the two run side by
+ * side. When liveness is unavailable the promoted sweep does not run at all, so
+ * an in-use store is never mistaken for an orphan.
  *
  * It runs against the structural {@link OpfsDirHandle}, so it is unit-tested in
  * Node against `tests/support/fakeOpfs.ts` exactly like the spill store.
@@ -47,6 +49,7 @@ import {
   readOpfsText,
   type OpfsDirHandle,
 } from './opfsSpillStore';
+import { CACHE_MAP_FILE } from './oocCacheMap';
 
 /** The prefix every out-of-core temp store name carries. */
 export const OOC_STORE_PREFIX = 'ooc-';
@@ -151,6 +154,81 @@ export async function sweepAbandonedOocStores(
       removed.push(name);
     } catch (err) {
       if (options.debug) console.warn('[ooc-janitor] could not remove stale store', name, err);
+    }
+  }
+  return removed;
+}
+
+/**
+ * Whether a top-level name is a PROMOTED final store: an `ooc-…` directory that
+ * is not a build partial and not the cache-map record. These are the finished
+ * indices the persistent cache keeps.
+ */
+function isPromotedStore(name: string): boolean {
+  return (
+    name.startsWith(OOC_STORE_PREFIX) && !name.endsWith(PARTIAL_SUFFIX) && name !== CACHE_MAP_FILE
+  );
+}
+
+/**
+ * The promoted stores that are orphans: neither referenced by the cache map nor
+ * held open by any live tab. A referenced store is the cache and is kept; a live
+ * store is in use and must never be deleted from under the tab that holds it.
+ */
+export function selectOrphanPromoted(
+  names: readonly string[],
+  referenced: ReadonlySet<string>,
+  live: ReadonlySet<string>,
+): string[] {
+  return names.filter(
+    (name) => isPromotedStore(name) && !referenced.has(name) && !live.has(name),
+  );
+}
+
+export interface PromotedSweepOptions {
+  /** Store names the cache map points at — the cache; never swept. */
+  readonly referenced: ReadonlySet<string>;
+  /** Store names a live tab holds open (from Web Locks); never swept. */
+  readonly live: ReadonlySet<string>;
+  readonly now?: number;
+  readonly staleMs?: number;
+  readonly debug?: boolean;
+}
+
+/**
+ * Sweep promoted `ooc-…` stores that no longer belong to anything: not in the
+ * cache map, not held by a live tab, and — the race guard — with a lease older
+ * than the stale threshold, so a store another tab just promoted but has not yet
+ * recorded or locked is left alone. This is the sweep the header once listed as
+ * future work; it is safe now that the map names the cache and Web Locks name
+ * the live stores. The caller supplies both sets and must NOT call this when
+ * liveness is unavailable, or an in-use store could read as an orphan.
+ */
+export async function sweepPromotedOrphans(
+  root: OpfsDirHandle,
+  options: PromotedSweepOptions,
+): Promise<string[]> {
+  const now = options.now ?? Date.now();
+  const staleMs = options.staleMs ?? DEFAULT_STALE_MS;
+  const names: string[] = [];
+  for await (const name of root.keys()) names.push(name);
+
+  const removed: string[] = [];
+  for (const name of selectOrphanPromoted(names, options.referenced, options.live)) {
+    let dir: OpfsDirHandle;
+    try {
+      dir = await root.getDirectoryHandle(name);
+    } catch {
+      continue;
+    }
+    const createdAt = await readStoreLease(dir);
+    if (createdAt === null) continue; // Unknown age — keep.
+    if (now - createdAt < staleMs) continue; // Fresh — a just-promoted store; keep.
+    try {
+      await removeOpfsStore(root, name);
+      removed.push(name);
+    } catch (err) {
+      if (options.debug) console.warn('[ooc-janitor] could not remove orphan store', name, err);
     }
   }
   return removed;
