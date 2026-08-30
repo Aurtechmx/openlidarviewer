@@ -20,6 +20,8 @@ import {
 } from '../src/io/heavy/opfsSpillStore';
 import {
   sweepAbandonedOocStores,
+  sweepPromotedOrphans,
+  selectOrphanPromoted,
   DEFAULT_STALE_MS,
 } from '../src/io/heavy/opfsStoreJanitor';
 
@@ -83,5 +85,50 @@ describe('OOC startup janitor', () => {
     const removed = await sweepAbandonedOocStores(opfs.root, { now: NOW });
     expect(removed).toEqual([]);
     expect(opfs.topLevel()).toHaveLength(2);
+  });
+});
+
+describe('selectOrphanPromoted', () => {
+  const names = [
+    'ooc-a-100-x',            // promoted, orphan
+    'ooc-b-100-y',            // promoted, referenced
+    'ooc-c-100-z',            // promoted, live
+    'ooc-d-100-w.partial',    // a build partial — not promoted
+    'ooc-cache-map.json',     // the map record — not a store
+  ];
+  const referenced = new Set(['ooc-b-100-y']);
+  const live = new Set(['ooc-c-100-z']);
+
+  it('picks only promoted stores that are neither referenced nor live', () => {
+    expect(selectOrphanPromoted(names, referenced, live)).toEqual(['ooc-a-100-x']);
+  });
+
+  it('never selects a partial or the cache-map file', () => {
+    const got = selectOrphanPromoted(names, new Set(), new Set());
+    expect(got).not.toContain('ooc-d-100-w.partial');
+    expect(got).not.toContain('ooc-cache-map.json');
+  });
+});
+
+describe('sweepPromotedOrphans', () => {
+  it('removes a stale orphan, but keeps referenced, live, fresh, and unknown-age promoted stores', async () => {
+    const opfs = fakeOpfs();
+    await makeStore(opfs.root, 'ooc-orphan-100-a', NOW - DEFAULT_STALE_MS - 60_000); // stale orphan → sweep
+    await makeStore(opfs.root, 'ooc-referenced-100-b', NOW - DEFAULT_STALE_MS - 60_000); // in map → keep
+    await makeStore(opfs.root, 'ooc-live-100-c', NOW - DEFAULT_STALE_MS - 60_000); // held by a tab → keep
+    await makeStore(opfs.root, 'ooc-fresh-100-d', NOW - 60_000); // just promoted → keep (race guard)
+    await makeStore(opfs.root, 'ooc-nolease-100-e', null); // unknown age → keep
+
+    const removed = await sweepPromotedOrphans(opfs.root, {
+      referenced: new Set(['ooc-referenced-100-b']),
+      live: new Set(['ooc-live-100-c']),
+      now: NOW,
+    });
+
+    expect(removed).toEqual(['ooc-orphan-100-a']);
+    expect(opfs.topLevel()).not.toContain('ooc-orphan-100-a');
+    for (const kept of ['ooc-referenced-100-b', 'ooc-live-100-c', 'ooc-fresh-100-d', 'ooc-nolease-100-e']) {
+      expect(opfs.topLevel()).toContain(kept);
+    }
   });
 });
