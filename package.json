@@ -159,7 +159,8 @@
     "lint:oracle-registry": "node scripts/lint-oracle-registry.mjs",
     "verify:reference-reproducibility": "node scripts/verify-reference-reproducibility.mjs",
     "lint:pr-hygiene": "node scripts/pr-hygiene.mjs",
-    "lint:license": "node scripts/lint-license.mjs"
+    "lint:license": "node scripts/lint-license.mjs",
+    "bench:ooc-reopen": "OOC_REOPEN_BENCH=1 playwright test --config playwright.oocReopen.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
