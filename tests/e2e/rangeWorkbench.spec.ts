@@ -54,6 +54,12 @@ test('offers the workbench for a scan that carries an acquisition grid', async (
   await expect(workbench.locator('.olv-range-canvas')).toBeVisible();
   // Validity leads, and the linkage state is stated rather than assumed.
   await expect(workbench.locator('.olv-range-linkage')).toContainText('Exact linkage');
+
+  // The set-level acquisition-extent summary is present and stays honest: it
+  // reports a fitted extent without claiming surface visibility or coverage.
+  const extent = workbench.locator('.olv-range-coverage');
+  await expect(extent).toContainText('Acquisition extent');
+  await expect(extent).toContainText('not that a surface was visible');
 });
 
 test('offers nothing for a scan that carries no acquisition grid', async ({ page }) => {

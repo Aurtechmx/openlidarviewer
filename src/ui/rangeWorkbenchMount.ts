@@ -16,6 +16,7 @@
  */
 
 import type { OrganizedRangeSet } from '../model/OrganizedRange';
+import type { RecordPosition, UpAxis } from '../model/acquisitionCoverage';
 import { requestOrganizedHighlight, subscribeOrganizedPick } from '../model/organizedRangeLink';
 import { RangeWorkbench } from './RangeWorkbench';
 import { el } from './dom';
@@ -39,6 +40,10 @@ export interface MountRangeWorkbenchOptions {
   readonly set: OrganizedRangeSet;
   /** The renderer's own layer id. The link keys on this, never on a name. */
   readonly layerId: string;
+  /** Record → position, for the acquisition-extent summary. Absent omits it. */
+  readonly recordPosition?: RecordPosition;
+  /** The layer's up axis, so the extent fit projects onto the ground plane. */
+  readonly upAxis?: UpAxis;
   /** Where the launcher card is rendered. */
   readonly launcherHost: HTMLElement;
   /** The container the workbench is rendered into, revealed on launch. */
@@ -59,7 +64,7 @@ export interface MountedRangeWorkbench {
  * at the same moment for the same reason.
  */
 export function mountRangeWorkbench(opts: MountRangeWorkbenchOptions): MountedRangeWorkbench {
-  const { set, layerId, launcherHost, workbenchHost, onLaunch } = opts;
+  const { set, layerId, recordPosition, upAxis, launcherHost, workbenchHost, onLaunch } = opts;
 
   let workbench: RangeWorkbench | null = null;
   let unsubscribe: (() => void) | null = null;
@@ -92,6 +97,8 @@ export function mountRangeWorkbench(opts: MountRangeWorkbenchOptions): MountedRa
       workbench = new RangeWorkbench({
         set,
         layerId,
+        recordPosition,
+        upAxis,
         onHighlightRecord: (record) =>
           requestOrganizedHighlight(record === null ? null : { layerId, record }),
       });
