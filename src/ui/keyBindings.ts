@@ -168,8 +168,11 @@ export function createKeyDispatcher<Deps>(
 
 /** A canonical, order-independent signature for a `KeyMatch`. */
 function keySignature(m: KeyMatch): string {
-  const keys = m.key === undefined ? [] : (Array.isArray(m.key) ? [...m.key] : [m.key]);
-  keys.sort();
+  let keys: string[];
+  if (m.key === undefined) keys = [];
+  else if (Array.isArray(m.key)) keys = [...m.key];
+  else keys = [m.key];
+  keys.sort((a, b) => a.localeCompare(b));
   return JSON.stringify({
     key: keys,
     code: m.code ?? null,
@@ -407,7 +410,9 @@ export function buildViewerKeyBindings(
       when: (_ctx, e) => !targetIsField(e),
       run: (_ctx, e) => {
         const k = e.key.toLowerCase();
-        const preset = k === 't' ? 'top' : k === 'o' ? 'oblique' : 'planar';
+        let preset: 'top' | 'oblique' | 'planar' = 'planar';
+        if (k === 't') preset = 'top';
+        else if (k === 'o') preset = 'oblique';
         const fired = deps.setCameraPreset(preset);
         if (fired) {
           deps.toast(`Camera · ${preset[0].toUpperCase()}${preset.slice(1)} view.`);
