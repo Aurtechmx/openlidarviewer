@@ -28,6 +28,14 @@
       "declaredIn": "PR #737 (persistent OOC cache, Phase 1)"
     },
     {
+      "path": "src/io/heavy/oocCacheMap.ts",
+      "status": "staged",
+      "why": "Phase 2 of the persistent out-of-core cache: the persisted fingerprint-to-store map (a JSON record in the OPFS root) the reopen branch reads to find a prior index. Pure core plus an OPFS bridge, tested; the open path does not call it yet.",
+      "graduation": "The reopen branch in src/app/heavyLasExecutor.ts reads the map with readCacheMap to resolve a fingerprint to a promoted store, reached from src/main.ts.",
+      "review": "2027-02-28",
+      "declaredIn": "PR #738 (persistent OOC cache, Phase 2)"
+    },
+    {
       "path": "src/features/FeatureExtractionService.ts",
       "status": "staged",
       "why": "Named in the v0.6.6 release notes under \"Also in this release\" as a foundation: \"a feature-extraction service over the building and conductor cores ... Nothing in the running application passes through either\". It is the product-side entry over the two cores; no UI or DerivedLayer calls it.",
