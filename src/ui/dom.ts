@@ -40,8 +40,12 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   if (props.tip) node.dataset.tip = props.tip;
   if (props.ariaLabel) node.setAttribute('aria-label', props.ariaLabel);
   if (props.href && node instanceof HTMLAnchorElement) node.href = props.href;
-  if (props.type && (node instanceof HTMLInputElement || node instanceof HTMLButtonElement))
-    node.type = props.type;
+  // `node.tagName === 'BUTTON'` rather than `instanceof HTMLButtonElement`: the
+  // unit-test DOM shim defines HTMLInputElement/HTMLAnchorElement but not
+  // HTMLButtonElement, so the instanceof would throw ReferenceError and break
+  // every el() caller. tagName works in the shim and in the browser alike.
+  if (props.type && (node instanceof HTMLInputElement || node.tagName === 'BUTTON'))
+    (node as HTMLInputElement).type = props.type;
   for (const child of children) node.append(child);
   return node;
 }
