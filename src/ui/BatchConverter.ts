@@ -206,7 +206,7 @@ export class BatchConverter {
         this._refresh();
       });
       row.append(
-        el('span', { className: 'olv-bc-file-name', text: f.name }),
+        el('span', { className: 'olv-bc-file-name', text: f.name, title: f.name }),
         el('span', { className: 'olv-bc-file-size', text: formatBytes(f.sizeBytes) }),
         remove,
       );
@@ -416,7 +416,7 @@ export class BatchConverter {
       const top = el('div', { className: 'olv-bc-row-top' });
       top.append(
         el('span', { className: 'olv-bc-row-icon', text: ok ? '●' : '▲' }),
-        el('span', { className: 'olv-bc-row-name', text: r.source }),
+        el('span', { className: 'olv-bc-row-name', text: r.source, title: r.source }),
         el('span', { className: 'olv-bc-row-meta', text: ok ? `${r.report.pointCount.toLocaleString()} pts · ${r.report.crsNote}` : 'failed' }),
       );
       if (ok && r.file) {
