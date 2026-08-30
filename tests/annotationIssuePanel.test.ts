@@ -366,7 +366,7 @@ describe('the issue view ranks open issues worst first', () => {
     // Four distinct glyphs: the rank survives greyscale and forced colours.
     expect(new Set(marks.map((m) => m.textContent)).size).toBe(4);
     for (const mark of marks) {
-      expect(mark.getAttribute('aria-label')).toMatch(/^Severity: (low|medium|high|critical)$/);
+      expect(mark.getAttribute('aria-label')).toMatch(/^Severity: (Low|Medium|High|Critical)$/);
     }
     // And the word itself is on the section header above the rows.
     expect(panel.headers().map((h) => h.textContent).join(' ')).toContain('Critical');

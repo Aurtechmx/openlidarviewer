@@ -75,6 +75,12 @@ test('an exported report verifies as intact', async ({ page }) => {
   await verifyWith(page, reportPath);
   await expect(page.locator('[data-testid="report-verify-valid"]')).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('[data-testid="report-verify-valid"]')).toHaveText(/intact/i);
+  // The verdict is announced: the modal carries dialog semantics, matching the
+  // app's other modals, so a screen reader conveys the intact/tamper result.
+  await expect(page.locator('[data-testid="report-verify"] [role="dialog"]')).toHaveAttribute(
+    'aria-modal',
+    'true',
+  );
   await page.locator('[data-testid="report-verify-close"]').click();
   await expect(page.locator('[data-testid="report-verify"]')).toHaveCount(0);
 });

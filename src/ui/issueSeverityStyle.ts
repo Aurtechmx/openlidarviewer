@@ -45,5 +45,5 @@ export function severityText(severity: IssueSeverity): string {
  * reader, so the name has to carry the rank in words.
  */
 export function severityAriaLabel(severity: IssueSeverity): string {
-  return `Severity: ${severity}`;
+  return `Severity: ${SEVERITY_LABEL[severity]}`;
 }
