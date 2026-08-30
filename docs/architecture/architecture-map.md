@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,669 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,604 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -99,7 +99,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,669)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,604)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -170,6 +170,17 @@ CRS gate are a separate pure module, `src/export/scanFootprint.ts`, testable wit
 no DOM, three.js or proj4 (`tests/scanFootprint.test.ts`); the serialiser is
 `buildFootprintKml` in the existing `src/export/kmlExport.ts`. `main.ts` keeps
 four thin delegates and the deps object.
+
+Done: the scattered keyboard-shortcut handling (the five `window` keydown
+listeners for Space / measure / Esc, L, T/O/P, ⌘K and the `?` sheet, plus the
+former `bindShortcuts` for the global A/M/I/V / undo-redo / delete actions) now
+lives in `src/ui/keyBindings.ts` as ONE declarative `KeyBinding[]` table driven
+by a single `installKeyDispatch` window listener. Precedence is explicit
+`priority` data rather than listener-registration order, which makes a future
+collision lint possible (`findKeyCollisions` is exported for it). `src/ui/shortcuts.ts`
+keeps only the pure focus-guard / measure-key helpers the table and tests import;
+component-owned keys (NavController, Viewer Esc, Lasso) stay put and appear as
+`reservedOnly` table entries (`tests/keyBindings.test.ts`).
 
 Done: the restorable view-state cluster (~162 lines) now lives in
 `src/app/viewStateCoordinator.ts`: `captureViewState`, `applyViewState`,

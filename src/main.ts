@@ -148,7 +148,12 @@ import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
-import { bindShortcuts, isEditableTarget, measureKeyAction } from './ui/shortcuts';
+import {
+  buildViewerKeyBindings,
+  installKeyDispatch,
+  type GlobalActionHandlers,
+  type KeyBindingDeps,
+} from './ui/keyBindings';
 import { LoadCancelledError } from './io/loadFile';
 import { LocalFileSource } from './io/LocalFileSource';
 import { deviceCaps } from './render/deviceProfile';
@@ -744,60 +749,11 @@ viewerLoaded.then((v) => {
   );
 });
 
-// ── Universal Esc → return to free navigation ─────────────────────────────
-// Catches any tool the user has left armed and returns the canvas to
-// pure orbit/pan/zoom. Picks up after the Stage / NavController have
-// had their chance — those are scoped to specific element handlers,
-// this fallback ensures Esc always reads as "exit the active tool"
-// regardless of where focus is.
-window.addEventListener('keydown', (e) => {
-  // Never hijack key events from a field the user is typing in.
-  if (isEditableTarget(e.target)) return;
-
-  // Hold-Space re-orient: while a modal tool (measure / inspect / annotate) is
-  // armed, holding Space hands pointer input back to camera navigation so the
-  // user can rotate / pan / zoom mid-draw; releasing it (keyup, below) resumes
-  // the tool. Outside a tool, Space keeps its walk/fly "move up" meaning, so we
-  // only intercept it when a tool is active.
-  if (e.code === 'Space' && viewer?.toolActive) {
-    if (!e.repeat) viewer.setToolPaused(true);
-    e.preventDefault();
-    return;
-  }
-
-  // Polygon-completion keyboard shortcuts — Enter commits the in-progress
-  // polygon (area/volume/polyline/profile), Backspace and the platform undo
-  // chord pop the most recent vertex. All only fire while measure mode is
-  // armed. This listener is bound before the global shortcut handler, so
-  // consuming the chord here is what keeps a mid-draft Cmd/Ctrl+Z off the
-  // annotation stack.
-  if (viewer?.measureMode) {
-    const action = measureKeyAction(e, viewer.measure.drafting);
-    if (action) {
-      if (action === 'finish') viewer.measure.finishCurrent();
-      else viewer.measure.undoLastPoint();
-      e.preventDefault();
-      return;
-    }
-  }
-
-  if (e.key !== 'Escape') return;
-  let handled = false;
-  if (lassoVolumeTool.enabled) {
-    lassoVolumeTool.disable();
-    viewer?.setLassoMode(false);
-    viewer?.clearSelectionHighlight();
-    syncLassoButton();
-    handled = true;
-  }
-  if (viewer?.measureMode) {
-    viewer.setMeasureMode(false);
-    handled = true;
-  }
-  if (handled) {
-    showLassoToast('Back to navigation.');
-  }
-});
+// Hold-Space re-orient, measure polygon keys, and the universal Esc "exit the
+// active tool" fallback were all in a window keydown listener here. They now
+// live as declarative bindings (priorities 100/110/120) in the single dispatch
+// table installed below (see `installKeyDispatch`), so precedence across every
+// shortcut is one ordered list rather than fragile listener-registration order.
 
 // Releasing Space resumes the modal tool after a hold-Space re-orient.
 window.addEventListener('keyup', (e) => {
@@ -869,60 +825,11 @@ if (
   });
 }
 
-window.addEventListener('keydown', (e) => {
-  // Another bare-key handler (e.g. `bindShortcuts`) already consumed this
-  // keystroke — never double-fire on the same key press.
-  if (e.defaultPrevented) return;
-  if (e.key === 'l' || e.key === 'L') {
-    // Don't hijack key events from form inputs.
-    const target = e.target as HTMLElement | null;
-    const tag = target?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
-    if (lassoVolumeTool.enabled) {
-      lassoVolumeTool.disable();
-      viewer?.setLassoMode(false);
-      showLassoToast('Lasso volume off.');
-    } else {
-      lassoVolumeTool.enable();
-      viewer?.setLassoMode(true);
-      showLassoToast('Lasso volume armed — draw a shape on the canvas.');
-    }
-  }
-
-  // v0.3.9 Smart camera presets: T / O / P each fire a tuned
-  // pose via Viewer.setCameraPreset(). Modifier-key combos are
-  // skipped so we don't fight Cmd-T (new tab) etc.
-  //
-  // 'I' is deliberately NOT bound here. Bare 'I' belongs to the
-  // Inspect tool (`bindShortcuts` → onInspect — what the HelpOverlay and
-  // tool dock advertise); binding Iso to the same key made both fire on
-  // one keystroke in v0.4.3. The Iso preset stays reachable via the
-  // NavBar view chips and the command palette.
-  if (
-    !e.ctrlKey &&
-    !e.metaKey &&
-    !e.altKey &&
-    !e.shiftKey &&
-    (e.key === 't' || e.key === 'T' ||
-      e.key === 'o' || e.key === 'O' ||
-      e.key === 'p' || e.key === 'P')
-  ) {
-    const target = e.target as HTMLElement | null;
-    const tag = target?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
-    const k = e.key.toLowerCase();
-    const preset = k === 't' ? 'top' : k === 'o' ? 'oblique' : 'planar';
-    const fired = viewer?.setCameraPreset(preset);
-    // Mark the keystroke consumed so any later bare-key handler
-    // (`bindShortcuts`) sees `defaultPrevented` and stays quiet.
-    e.preventDefault();
-    if (fired) {
-      showLassoToast(
-        `Camera · ${preset[0].toUpperCase() + preset.slice(1)} view.`,
-      );
-    }
-  }
-});
+// Lasso toggle (`L`) and the Smart camera presets (`T` / `O` / `P`) were a
+// window keydown listener here. They are now bindings 200 / 210 in the dispatch
+// table below. `I` / iso stays deliberately UNbound to a camera preset — bare
+// `I` belongs solely to the Inspect tool (binding 612), the collision fixed in
+// v0.4.3.
 
 let _lassoToastEl: HTMLElement | null = null;
 let _lassoToastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1843,30 +1750,10 @@ if (duplicateActionIds.length > 0) {
 // Both the command palette and the shortcut sheet are lazy: each wires
 // ACTION_REGISTRY into its instance during its own first-use init.
 
-// Cmd-K / Ctrl-K toggles the palette. Esc inside the palette closes
-// it (handled internally), so the universal Esc handler below
-// doesn't need to know about the palette.
-window.addEventListener('keydown', (e) => {
-  const isToggle = (e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey);
-  if (!isToggle) return;
-  e.preventDefault();
-  void openCommandPalette();
-});
-
-// `?` toggles the keyboard shortcut sheet. Skipped when the user is
-// typing in any input / textarea / contenteditable so a `?` in a
-// rename field doesn't open the sheet. Esc inside the sheet closes
-// it (handled internally).
-window.addEventListener('keydown', (e) => {
-  if (e.key !== '?') return;
-  const target = e.target as HTMLElement | null;
-  const tag = target?.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
-  // Don't fight a chord — only the bare `?` (Shift+/ on most layouts).
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
-  e.preventDefault();
-  void ensureShortcutSheet().then((sheet) => sheet.toggle());
-});
+// Cmd-K / Ctrl-K (palette, binding 300) and bare `?` (shortcut sheet, binding
+// 400) were window keydown listeners here. They are now in the dispatch table
+// below. The sheet's priority (400) beats the `?` help overlay (614), which is
+// exactly the precedence the old registration order produced.
 
 // Cmd-Shift-U / Ctrl-Shift-U toggles workflow recording. When idle,
 // start a recording; when recording, stop and immediately download
@@ -1893,17 +1780,63 @@ window.addEventListener('keydown', (e) => {
 // The start/stop chord is user-configurable (default ⌘/Ctrl+Shift+U) via the
 // recorder settings popup; the handler reads the live config each press, so a
 // rebind takes effect with no re-binding. A text field with focus suppresses
-// it (so capturing a new chord in the settings popup never also toggles).
-if (WORKFLOW_RECORDER_ENABLED) {
-  window.addEventListener('keydown', (e) => {
-    if (e.defaultPrevented) return;
-    const active = document.activeElement;
-    if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
-    if (!matchesShortcut(e, workflowController.config.shortcut)) return;
-    e.preventDefault();
-    toggleWorkflowRecord();
-  });
-}
+// it (so capturing a new chord in the settings popup never also toggles). It is
+// now binding 500 in the dispatch table below, gated on WORKFLOW_RECORDER_ENABLED.
+
+// ── The single declarative keyboard-shortcut dispatcher ───────────────────
+// One ordered table, one non-capture window keydown listener. Precedence is the
+// explicit `priority` on each binding, not the order five separate listeners
+// happened to register in. The global-action handlers (undo/redo, A/M/I/V, the
+// `?` help overlay, Delete) are wired only by the full (non-embed) app after the
+// viewer loads, so this slot stays null in embed mode — exactly as `bindShortcuts`
+// was never called there. The five formerly-unconditional listeners (Space,
+// measure, Esc, L, T/O/P, ⌘K, `?` sheet, workflow) are installed here at module
+// eval, so their embed + pre-scan availability is unchanged; component listeners
+// (Viewer Esc, NavController, Lasso) still register later and fire independently.
+let globalActionHandlers: GlobalActionHandlers | null = null;
+const keyBindingDeps: KeyBindingDeps = {
+    isToolActive: () => !!viewer?.toolActive,
+    setToolPaused: (paused) => viewer?.setToolPaused(paused),
+    isMeasureMode: () => !!viewer?.measureMode,
+    isDrafting: () => !!(viewer && viewer.measure.drafting),
+    measureFinish: () => viewer?.measure.finishCurrent(),
+    measureUndoPoint: () => viewer?.measure.undoLastPoint(),
+    onEscape: () => {
+      let handled = false;
+      if (lassoVolumeTool.enabled) {
+        lassoVolumeTool.disable();
+        viewer?.setLassoMode(false);
+        viewer?.clearSelectionHighlight();
+        syncLassoButton();
+        handled = true;
+      }
+      if (viewer?.measureMode) {
+        viewer.setMeasureMode(false);
+        handled = true;
+      }
+      if (handled) showLassoToast('Back to navigation.');
+    },
+    toggleLasso: () => {
+      if (lassoVolumeTool.enabled) {
+        lassoVolumeTool.disable();
+        viewer?.setLassoMode(false);
+        showLassoToast('Lasso volume off.');
+      } else {
+        lassoVolumeTool.enable();
+        viewer?.setLassoMode(true);
+        showLassoToast('Lasso volume armed — draw a shape on the canvas.');
+      }
+    },
+    setCameraPreset: (preset) => viewer?.setCameraPreset(preset),
+    toast: (message) => showLassoToast(message),
+    openCommandPalette: () => void openCommandPalette(),
+    toggleShortcutSheet: () => void ensureShortcutSheet().then((sheet) => sheet.toggle()),
+    workflowRecorderEnabled: WORKFLOW_RECORDER_ENABLED,
+    matchesWorkflowShortcut: (e) => matchesShortcut(e, workflowController.config.shortcut),
+    toggleWorkflowRecord: () => toggleWorkflowRecord(),
+    globalActions: () => globalActionHandlers,
+};
+installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), keyBindingDeps);
 
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
 
@@ -3922,10 +3855,12 @@ void viewerLoaded.then(() => {
     stage.overlay.append(helpOverlay.element);
 
     // Global keyboard shortcuts — single-key tool access, suppressed while
-    // typing. Only wired for the full app, never the minimal embed view.
-    // A tool shortcut needs a loaded scan and is inert behind the help modal.
+    // typing. Only wired for the full app, never the minimal embed view: this
+    // populates the dispatch table's `globalActions` slot (null until now, so
+    // embed leaves these keys unbound). A tool shortcut needs a loaded scan and
+    // is inert behind the help modal.
     const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen;
-    bindShortcuts({
+    globalActionHandlers = {
       onAnnotate: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'annotate'); },
       onMeasure: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'measure'); },
       onInspect: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'inspect'); },
@@ -3961,7 +3896,7 @@ void viewerLoaded.then(() => {
         });
         if (pick === 'classification') reclassifyUi?.refresh();
       },
-    });
+    };
   } else {
     // Bare mode (embed / ?ui=minimal): the dock and panels are hidden, but
     // ?measurements=1 / ?annotations=1 can each surface one tool's layer. The
