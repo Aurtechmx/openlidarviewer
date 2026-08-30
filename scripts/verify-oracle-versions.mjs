@@ -210,19 +210,35 @@ function collectClaims() {
   return claims;
 }
 
-/** What the pinned image installs, when the pin manifest is present. */
+/**
+ * What the pinned image declares for each oracle, when the pin manifest is
+ * present. A value is a single version OR an array of accepted versions — a
+ * declared set for a corpus produced across more than one patch release (see
+ * oracle-pins.json GDALVersionsNote). Each accepted version becomes one entry.
+ */
 function collectPins() {
   if (!existsSync(PINS)) return null;
   try {
     const pins = JSON.parse(readFileSync(PINS, 'utf8'));
     const out = [];
-    for (const [oracleId, version] of Object.entries(pins.oracleVersions ?? {})) {
-      if (typeof version === 'string') out.push({ oracleId, version });
+    for (const [oracleId, value] of Object.entries(pins.oracleVersions ?? {})) {
+      for (const version of Array.isArray(value) ? value : [value]) {
+        if (typeof version === 'string') out.push({ oracleId, version });
+      }
     }
     return { path: rel(PINS), entries: out };
   } catch {
     return { path: rel(PINS), entries: [], unreadable: true };
   }
+}
+
+/**
+ * The recorded versions a declared set does not accept. Empty when every
+ * recorded version is in the set. This is what keeps the guard honest: a
+ * documented multi-version corpus passes, but a version nobody declared fails.
+ */
+export function undeclaredVersions(recorded, accepted) {
+  return [...new Set(recorded.filter((v) => !accepted.has(v)))];
 }
 
 /** Ask one oracle its own version. */
@@ -281,14 +297,17 @@ function main() {
       status: 'ok',
     };
 
-    // The static half: the image's pin against the corpus, no oracle needed.
-    for (const p of pinned) {
-      const disagreeing = mine.filter((c) => c.version !== p.version);
+    // The static half: the image's declared version set against the corpus, no
+    // oracle needed. A record passes if it matches ANY declared version; one that
+    // matches none is undeclared drift.
+    const accepted = new Set(pinned.map((p) => p.version));
+    if (pinned.length > 0) {
+      const disagreeing = mine.filter((c) => !accepted.has(c.version));
       if (disagreeing.length > 0) {
         entry.status = 'pin-drift';
         problems.push(
-          `${oracle.id}: ${pins.path} pins ${p.version}, but ${disagreeing.length} record(s) cite ` +
-            `${[...new Set(disagreeing.map((c) => c.version))].join(', ')}. ` +
+          `${oracle.id}: ${pins.path} accepts ${[...accepted].join(', ')}, but ${disagreeing.length} record(s) cite ` +
+            `${undeclaredVersions(disagreeing.map((c) => c.version), accepted).join(', ')} (undeclared). ` +
             `First: ${disagreeing[0].source} (${disagreeing[0].field}).`,
         );
       }
@@ -303,7 +322,10 @@ function main() {
           live.detail.split('\n').join('\n      '),
       );
     } else if (live.state === 'present') {
-      const wrong = mine.filter((c) => c.version !== live.version);
+      // A record is only a live mismatch when it names a version this machine
+      // does not have AND the pin does not declare — a declared version produced
+      // on another machine is expected, not a reproduction failure.
+      const wrong = mine.filter((c) => c.version !== live.version && !accepted.has(c.version));
       if (wrong.length > 0) {
         entry.status = 'mismatch';
         const cited = [...new Set(wrong.map((c) => c.version))].join(', ');

@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs script, no type declarations
-import { oraclesFor } from '../scripts/verify-oracle-versions.mjs';
+import { oraclesFor, undeclaredVersions } from '../scripts/verify-oracle-versions.mjs';
 
 const ids = (tool: string): string[] => oraclesFor(tool).map((o: { id: string }) => o.id);
 
@@ -29,5 +29,17 @@ describe('oraclesFor — whole-word tool matching', () => {
 
   it('does not match a tool named nowhere in the field', () => {
     expect(ids('CloudCompare 2.13.2')).toEqual([]);
+  });
+});
+
+describe('undeclaredVersions — a declared set passes, an undeclared version fails', () => {
+  const accepted = new Set(['3.13.1', '3.13.3']);
+
+  it('accepts every version in the declared set (the documented GDAL split)', () => {
+    expect(undeclaredVersions(['3.13.1', '3.13.3', '3.13.1'], accepted)).toEqual([]);
+  });
+
+  it('flags a version the set does not declare, deduplicated', () => {
+    expect(undeclaredVersions(['3.13.1', '3.13.5', '3.13.5'], accepted)).toEqual(['3.13.5']);
   });
 });
