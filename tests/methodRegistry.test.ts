@@ -7,7 +7,7 @@
  * record can never reference a method the registry does not define).
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -64,6 +64,25 @@ describe('METHOD_REGISTRY invariants', () => {
       expect(entry.summary.length).toBeGreaterThan(0);
       expect(entry.citation.length).toBeGreaterThan(0);
     }
+  });
+
+  it('every entry names at least one implementation source path', () => {
+    for (const entry of Object.values(METHOD_REGISTRY)) {
+      expect(entry.implementation.length, `${entry.id} has no implementation`).toBeGreaterThan(0);
+      for (const p of entry.implementation) {
+        expect(p, `${entry.id} implementation path`).toMatch(/^src\/.+\.ts$/);
+      }
+    }
+  });
+
+  it('every declared implementation path exists in the tree', () => {
+    const missing: string[] = [];
+    for (const entry of Object.values(METHOD_REGISTRY)) {
+      for (const p of entry.implementation) {
+        if (!existsSync(resolve(ROOT, p))) missing.push(`${entry.id} → ${p}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });
 
