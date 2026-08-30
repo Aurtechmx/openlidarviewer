@@ -16,10 +16,11 @@
     "note": "The Dockerfile pins the platform-specific manifest digest, not the tag and not the index."
   },
   "oracleVersions": {
-    "GDAL": "3.13.1",
+    "GDAL": ["3.13.1", "3.13.3"],
     "PDAL": "2.10.2"
   },
-  "oracleVersionsNote": "Keyed by the oracle id scripts/verify-oracle-versions.mjs uses. GDAL is the version libgdal-core reports, which is what gdalinfo, gdaldem, gdal_translate, gdal_contour and ogrinfo all come from.",
+  "oracleVersionsNote": "Keyed by the oracle id scripts/verify-oracle-versions.mjs uses. GDAL is the version libgdal-core reports, which is what gdalinfo, gdaldem, gdal_translate, gdal_contour and ogrinfo all come from. A value may be a single version or a declared set of accepted versions; the verifier accepts a recorded version that matches any entry and still fails on one that matches none.",
+  "GDALVersionsNote": "GDAL is a declared SET, not a single pin. The pinned image installs 3.13.1 (see condaPinned.gdal), and that is the canonical version most of the corpus was produced against. Four reference-run sets — validation/change-pair/reference-runs.json, validation/repeatability/antiochia-flight/reference-runs.json, and validation/cross-implementation/profile/reference-runs-profile-{section,endcap}.json — were produced on the reference workstation after its Homebrew GDAL was upgraded from 3.13.1 to 3.13.3, and truthfully record 3.13.3. Both are patch releases of GDAL 3.13.x and the studies that cite them pass their tolerances; the versions are recorded as they actually were rather than relabelled. 3.13.1 remains the version to reproduce against from the pinned image; 3.13.3 is declared so those honest host-produced records are not flagged as undeclared drift. Any GDAL version outside this set is still a failure.",
   "condaSpecs": [
     "python=3.12.14",
     "pdal=2.10.2",

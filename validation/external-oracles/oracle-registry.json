@@ -146,7 +146,7 @@
         "gdaldem slope/aspect implement Horn, which is the formula OLV registers; that is what makes them same-quantity rather than alternative-family."
       ],
       "limitations": [
-        "The host toolchain currently carries GDAL 3.13.3. Any study citing 3.13.1 must come from the pinned image, which is what scripts/verify-oracle-versions.mjs enforces."
+        "The pinned image installs GDAL 3.13.1; the reference workstation's Homebrew GDAL was later upgraded to 3.13.3, so four host-produced reference-run sets truthfully record 3.13.3. Both patch releases of 3.13.x are declared in validation/oracles/oracle-pins.json (oracleVersions.GDAL) and accepted by scripts/verify-oracle-versions.mjs; a version outside that declared set still fails. Reproduce against 3.13.1 from the pinned image."
       ]
     },
     {
