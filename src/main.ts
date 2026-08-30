@@ -2133,7 +2133,7 @@ function newAnalysePanel(
     // Same cached-core rebuild, generalised with the contour shape-style picker so
     // an export reflects the user's chosen interval AND line shape.
     buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(),
+    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null,
     // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
     // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
     // are the card's own strings (null when the card is empty — the report

@@ -38,6 +38,8 @@ the paper that specifies it.
 | `olv.validation.reliability-wilson` | 1 | Measured-cell reliability | Wilson (1927) |
 | `olv.registration.icp-planar` | 1 | Planar rigid ICP | Besl & McKay (1992); Umeyama (1991) |
 | `olv.volume.stockpile` | 1 | Stockpile cut-fill volume ±1σ | internal (prismatic cut-fill) |
+| `olv.feature.building-footprint` | 1 | Building footprint candidate extraction | internal (connected-component + boundary trace) |
+| `olv.feature.conductor-fit` | 1 | Conductor centreline and sag fit | internal (parabolic small-sag approximation) |
 
 ## Honesty boundary
 

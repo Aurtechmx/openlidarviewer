@@ -20,46 +20,10 @@
   "reviewDates": "Reported by the lint when they pass, never enforced. A gate that turns red on a date with no change to the tree teaches people to edit the date rather than the code.",
   "modules": [
     {
-      "path": "src/features/FeatureExtractionService.ts",
-      "status": "staged",
-      "why": "Named in the v0.6.6 release notes under \"Also in this release\" as a foundation: \"a feature-extraction service over the building and conductor cores ... Nothing in the running application passes through either\". It is the product-side entry over the two cores; no UI or DerivedLayer calls it.",
-      "graduation": "A candidate-review surface or a DerivedLayer producer calls extractFeatures, reached from src/main.ts or src/lazyChunks.ts.",
-      "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
-    },
-    {
-      "path": "src/features/buildingFootprints.ts",
-      "status": "staged",
-      "why": "A pure core under FeatureExtractionService. Its only non-test importer is that service, which is itself unreachable, so the whole cluster is off the production graph together.",
-      "graduation": "FeatureExtractionService graduates; this arrives with it.",
-      "review": "2027-02-28"
-    },
-    {
-      "path": "src/features/conductors.ts",
-      "status": "staged",
-      "why": "A pure core under FeatureExtractionService, in the same cluster and unreachable for the same reason.",
-      "graduation": "FeatureExtractionService graduates; this arrives with it.",
-      "review": "2027-02-28"
-    },
-    {
-      "path": "src/features/footprintTrace.ts",
-      "status": "staged",
-      "why": "The trace/simplify/orthogonalise step the footprint core and the GeoJSON writer share. Both importers are inside the same unreachable cluster.",
-      "graduation": "FeatureExtractionService graduates; this arrives with it.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/features/footprintGeoJson.ts",
       "status": "staged",
-      "why": "Writes extracted footprints as RFC 7946 GeoJSON. No export route offers footprints, so nothing in the export layer imports it.",
+      "why": "Writes extracted footprints as RFC 7946 GeoJSON. The candidate-review surface (v0.6.8) reviews footprints but offers no GeoJSON export, so no export route imports this writer.",
       "graduation": "The export layer offers a footprint product and routes it through this writer.",
-      "review": "2027-02-28"
-    },
-    {
-      "path": "src/features/candidateReview.ts",
-      "status": "staged",
-      "why": "Holds accept/reject/pending state over extracted candidates. There is no candidate-review UI, so nothing holds the state.",
-      "graduation": "A review surface exists and reads this store.",
       "review": "2027-02-28"
     },
     {

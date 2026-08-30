@@ -15,6 +15,13 @@
       "why": "Each epoch's buffer is paired with its own sourceOrigin so the two are gridded in one common world frame; differencing raw local coordinates would compare mismatched locations. Extracted from compareLoadedLayers."
     },
     {
+      "file": "src/app/featureExtractionInput.ts",
+      "symbol": "buildFeatureExtractionInput",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "Reads the cloud's recentred buffer to split building/wire points for the feature cores. Both cores are translation-invariant (footprint grid on the points' own bounds; conductor fit from their covariance), so the recentred render-local frame is exactly what they consume and no origin shift applies."
+    },
+    {
       "file": "src/app/floorPlanPositions.ts",
       "symbol": "floorPlanPositions",
       "frame": "project-local",
