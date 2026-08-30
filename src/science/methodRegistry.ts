@@ -49,6 +49,13 @@ export interface MethodEntry extends MethodRef {
    */
   readonly citation: string;
   readonly category: MethodCategory;
+  /**
+   * The source module(s) that implement this method — the machine-readable hop
+   * from a method id to the code that realises it, so the chain reads
+   * claim → method → version → source → test → study without a human grep.
+   * Repo-relative `src/…` paths; the registry test asserts each one exists.
+   */
+  readonly implementation: readonly string[];
 }
 
 /**
@@ -65,6 +72,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'object returns on a rasterised surface.',
     citation: 'Pingel, Clarke & McBride (2013), doi:10.1016/j.isprsjprs.2012.12.002',
     category: 'ground',
+    implementation: ['src/terrain/ground/groundFilter.ts'],
   },
   'olv.class.derived-heuristic': {
     id: 'olv.class.derived-heuristic',
@@ -82,6 +90,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'filter); Amolins et al. (2008) roughness separation; Weinmann et al. (2015) ' +
       'eigenvalue shape features; internal composition of the cues.',
     category: 'classification',
+    implementation: ['src/render/class/deriveClassification.ts'],
   },
   'olv.terrain.slope-horn': {
     id: 'olv.terrain.slope-horn',
@@ -92,6 +101,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'stencil on the DTM grid.',
     citation: 'Horn (1981), doi:10.1109/PROC.1981.11918',
     category: 'terrain',
+    implementation: ['src/terrain/ground/terrainDerivatives.ts'],
   },
   'olv.terrain.vrm': {
     id: 'olv.terrain.vrm',
@@ -102,6 +112,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'vectors over a moving window.',
     citation: 'Sappington, Longshore & Thompson (2007), doi:10.2193/2005-723',
     category: 'terrain',
+    implementation: ['src/terrain/complexity/vectorRuggedness.ts'],
   },
   'olv.terrain.tpi': {
     id: 'olv.terrain.tpi',
@@ -112,6 +123,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'scheme for landform classification.',
     citation: 'Weiss (2001), TPI poster / Jenness (2006) implementation',
     category: 'terrain',
+    implementation: ['src/terrain/complexity/terrainPositionIndex.ts'],
   },
   // Id is a stable legacy token (predates the geodesic upgrade) kept so existing
   // exports/sessions stamped `olv.dtm.idw-fill@1` stay resolvable; the shipped
@@ -127,6 +139,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'surface, refined along in-surface geodesic distance), tracking measured vs interpolated cells.',
     citation: 'Internal composition (geodesic-distance void fill with an IDW prefill); no single source method.',
     category: 'dtm',
+    implementation: ['src/terrain/ground/surfaceFromRaster.ts', 'src/terrain/ground/geodesicFill.ts'],
   },
   'olv.validation.holdout-rmse': {
     id: 'olv.validation.holdout-rmse',
@@ -140,6 +153,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       '— hold-out, not independent checkpoints.',
     citation: 'ASPRS (2014) Positional Accuracy Standards, formulas only (hold-out basis)',
     category: 'validation',
+    implementation: ['src/terrain/validate/holdoutRmse.ts', 'src/terrain/validate/trainOnlyReclassify.ts'],
   },
   'olv.validation.spatial-block': {
     id: 'olv.validation.spatial-block',
@@ -151,6 +165,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'optimistic estimate than random hold-out under spatial autocorrelation.',
     citation: 'Roberts et al. (2017), doi:10.1111/ecog.02881 (spatial block CV)',
     category: 'validation',
+    implementation: ['src/terrain/validate/spatialBlockHoldout.ts'],
   },
   'olv.validation.reliability-wilson': {
     id: 'olv.validation.reliability-wilson',
@@ -162,6 +177,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'measured reliability.',
     citation: 'Wilson (1927), doi:10.1080/01621459.1927.10502953 (score interval)',
     category: 'validation',
+    implementation: ['src/terrain/validate/reliabilitySplit.ts'],
   },
   'olv.registration.icp-planar': {
     id: 'olv.registration.icp-planar',
@@ -173,6 +189,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'RMS residual and a refusal gate.',
     citation: 'Besl & McKay (1992), doi:10.1109/34.121791; Umeyama (1991) planar LS',
     category: 'registration',
+    implementation: ['src/registration/planarIcp.ts'],
   },
   'olv.volume.stockpile': {
     id: 'olv.volume.stockpile',
@@ -183,6 +200,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'propagated 1σ volume uncertainty of area·σ(thickness)/√N.',
     citation: 'Internal composition (prismatic cut-fill); standard earthworks method.',
     category: 'volume',
+    implementation: ['src/render/measure/stockpileVolume.ts'],
   },
   'olv.topology.linkage-record': {
     id: 'olv.topology.linkage-record',
@@ -196,6 +214,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     citation:
       'Internal composition (provenance record over the loader-recorded cell-to-record index); no single source method.',
     category: 'provenance',
+    implementation: ['src/science/sourceTopology.ts'],
   },
   'olv.contour.analytical': {
     id: 'olv.contour.analytical',
@@ -207,6 +226,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     citation:
       'Internal implementation of grid iso-contour extraction by edge linear interpolation; no single source method. Cross-checked against GDAL gdal_contour.',
     category: 'contour',
+    implementation: ['src/terrain/contour/contoursAt.ts'],
   },
   'olv.contour.generalize.dp': {
     id: 'olv.contour.generalize.dp',
@@ -217,6 +237,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'at a fixed tolerance, recording per-feature displacement statistics.',
     citation: 'Douglas & Peucker (1973), The Canadian Cartographer 10(2):112–122',
     category: 'contour',
+    implementation: ['src/terrain/contourStudio/contourGeometryProduct.ts'],
   },
   'olv.contour.generalize': {
     id: 'olv.contour.generalize',
@@ -228,6 +249,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     citation:
       'Douglas & Peucker (1973), The Canadian Cartographer 10(2):112–122 (uniform-tolerance application)',
     category: 'contour',
+    implementation: ['src/terrain/contourStudio/contourGeometryProduct.ts'],
   },
   'olv.contour.generalize.terrain-adaptive': {
     id: 'olv.contour.generalize.terrain-adaptive',
@@ -240,6 +262,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     citation:
       'Internal composition (per-feature Douglas–Peucker tolerance scaled by terrain confidence and feature scale); no single source method.',
     category: 'contour',
+    implementation: ['src/terrain/contourStudio/contourAdaptiveGeneralize.ts'],
   },
 };
 
