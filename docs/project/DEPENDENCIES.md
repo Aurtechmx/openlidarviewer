@@ -13,7 +13,7 @@ Since v0.6.0 the three bundled font packages moved from 5.2.8 to 5.3.0. No
 package was added or removed, and no other bundled package changed.
 
 The development toolchain moved after that baseline was taken: TypeScript to
-7.0.2, Vite to 8.1.5, and Playwright to 1.62.0. All three are development-only
+7.0.2, Vite to 8.2.1, and Playwright to 1.62.1. All three are development-only
 and none reaches the deployed app, so the runtime dependency set above is
 unaffected.
 
@@ -39,10 +39,10 @@ These ship in the deploy archive.
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 |
-| @loaders.gl/core | ^4.4.2 | 4.4.4 | MIT |
+| @loaders.gl/core | ^4.4.4 | 4.4.4 | MIT |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT |
 | @loaders.gl/obj | ^4.4.2 | 4.4.3 | MIT |
-| @loaders.gl/ply | ^4.4.2 | 4.4.4 | MIT |
+| @loaders.gl/ply | ^4.4.4 | 4.4.4 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.21.0 | 2.21.0 | MIT |
@@ -54,15 +54,16 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
-| @playwright/test | ^1.60.0 | 1.62.1 | Apache-2.0 |
+| @loaders.gl/las | ^4.4.4 | 4.4.4 | MIT |
+| @playwright/test | ^1.62.1 | 1.62.1 | Apache-2.0 |
 | @stryker-mutator/core | ^9.6.1 | 9.6.1 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^9.6.1 | 9.6.1 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
 | @types/three | ^0.184.1 | 0.184.1 | MIT |
 | @vitest/coverage-v8 | ^4.1.10 | 4.1.10 | MIT |
-| rollup-plugin-visualizer | ^7.0.1 | 7.1.1 | MIT |
+| rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
-| vite | ^8.1.5 | 8.2.1 | MIT |
+| vite | ^8.2.1 | 8.2.1 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
 | vitest | ^4.1.7 | 4.1.10 | MIT |
@@ -114,7 +115,7 @@ through `overrides` rather than waiting on the packages that depend on them:
 | brace-expansion | 1.1.15 | 1.1.16 | CVE-2026-13149, exponential-time expansion |
 
 The `vite` override is scoped to `vitepress` alone. The application builds on
-Vite 8.1.5 and is not affected by it. `npm run docs:build` passes on the
+Vite 8.2.1 and is not affected by it. `npm run docs:build` passes on the
 overridden tree.
 
 ## Stubbed to prune
@@ -141,9 +142,9 @@ against, so they wait for a dedicated update:
 VitePress itself stays at 1.6.4, which is the latest stable release; 2.0.0 has
 only alpha builds.
 
-The TypeScript 7 / Vite 8.1.5 toolchain bump is no longer deferred. Dependabot
-#40 landed as a dedicated toolchain update: TypeScript 7.0.2, Vite 8.1.5, and
-Playwright 1.62.0, with no application source change. It was taken on its own
+The TypeScript 7 / Vite 8.2.1 toolchain bump is no longer deferred. Dependabot
+#40 landed as a dedicated toolchain update: TypeScript 7.0.2, Vite 8.2.1, and
+Playwright 1.62.1, with no application source change. It was taken on its own
 rather than alongside the migrations above so the build and test contract could
 be re-validated against one variable.
 
