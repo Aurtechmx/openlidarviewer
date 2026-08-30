@@ -27,6 +27,7 @@
  */
 
 import { isEditableTarget, isTypingTarget, measureKeyAction } from './shortcuts';
+import { CAMERA_PRESET_KEY } from '../render/camera/cameraPresets';
 
 /** A key-event shape a `KeyMatch` is tested against. */
 type KeyEventLike = Pick<
@@ -179,7 +180,7 @@ function keySignature(m: KeyMatch): string {
   });
 }
 
-/** A reported collision: two dispatchable bindings that fight over one key. */
+/** A reported collision: two bindings that could fire on one key event. */
 export interface KeyCollision {
   a: string;
   b: string;
@@ -187,28 +188,79 @@ export interface KeyCollision {
   contextTag?: string;
 }
 
+/** The individual `key` tokens a match can fire on (empty for a code-only or
+ *  externally-matched entry). */
+function matchKeys(m: KeyMatch): string[] {
+  if (m.key === undefined) return [];
+  return Array.isArray(m.key) ? m.key : [m.key];
+}
+
 /**
- * Flag pairs of NON-`reservedOnly` bindings that share a canonical key
- * signature AND have non-disjoint `contextTag` (either both untagged, or the
- * same tag). Two bindings on the same key in genuinely different scopes do not
- * collide; two on the same key in the same scope do. Pure — the actual lint /
- * test that consumes this is a separate task.
+ * Whether two matches can be satisfied by the SAME key event: they must share
+ * a concrete key token (or the same `code`) AND their modifier constraints must
+ * be jointly satisfiable. Case variants are distinct tokens on purpose — `z`
+ * and `Z` are different events (Shift differs), so a `['z']` binding and a
+ * `['Z']` binding do not overlap, while the table's `['z','Z']` entries do.
+ */
+function slotsOverlap(a: KeyMatch, b: KeyMatch): boolean {
+  const aKeys = new Set(matchKeys(a));
+  const shareKey = matchKeys(b).some((k) => aKeys.has(k));
+  const shareCode = a.code !== undefined && b.code !== undefined && a.code === b.code;
+  if (!shareKey && !shareCode) return false;
+  return modsCompatible(a, b);
+}
+
+/** Reject only modifier pairs that can never co-occur on one event. */
+function modsCompatible(a: KeyMatch, b: KeyMatch): boolean {
+  if (a.ctrlOrMeta === true && b.ctrlOrMeta === false) return false;
+  if (a.ctrlOrMeta === false && b.ctrlOrMeta === true) return false;
+  // `bareOnly` forbids Ctrl / Cmd / Alt, so it cannot meet a peer that requires one.
+  if (a.bareOnly && (b.ctrlOrMeta === true || b.alt === true)) return false;
+  if (b.bareOnly && (a.ctrlOrMeta === true || a.alt === true)) return false;
+  if (a.shift === true && b.shift === false) return false;
+  if (a.shift === false && b.shift === true) return false;
+  if (a.alt === true && b.alt === false) return false;
+  if (a.alt === false && b.alt === true) return false;
+  return true;
+}
+
+/**
+ * Context tags that layer onto the ONE global keydown surface this dispatcher
+ * owns: a `global` binding stays live while `tool-active` / `measure` mode is
+ * on, so those scopes are NON-disjoint with `global` (and with each other).
+ * Every other tag names a separate component listener's surface
+ * (`camera-nav`, `tool-mode`, `lasso-draw`), which is disjoint from these — an
+ * event handled there is not handled here.
+ */
+const DISPATCH_SURFACE_TAGS = new Set(['global', 'tool-active', 'measure']);
+
+/** Two context scopes are disjoint when they can never both own an event. */
+function tagsDisjoint(a?: string, b?: string): boolean {
+  if (a === undefined || b === undefined) return false; // untagged = any scope
+  if (a === b) return false;
+  if (DISPATCH_SURFACE_TAGS.has(a) && DISPATCH_SURFACE_TAGS.has(b)) return false;
+  return true;
+}
+
+/**
+ * Flag pairs of bindings that could fire on the same key event in a
+ * non-disjoint context. `reservedOnly` entries are OCCUPIED SLOTS: a dispatched
+ * binding that lands on a reserved (component-owned) key in a shared scope is
+ * flagged, even though reserved entries are never dispatched. Two reserved
+ * entries are not compared against each other (neither runs here). Pure — the
+ * collision-lint test consumes this.
  */
 export function findKeyCollisions<Deps>(
   bindings: ReadonlyArray<KeyBinding<Deps>>,
 ): KeyCollision[] {
-  const live = bindings.filter((b) => !b.reservedOnly);
   const collisions: KeyCollision[] = [];
-  for (let i = 0; i < live.length; i++) {
-    for (let j = i + 1; j < live.length; j++) {
-      const a = live[i];
-      const b = live[j];
-      if (keySignature(a.match) !== keySignature(b.match)) continue;
-      const tagsDisjoint =
-        a.contextTag !== undefined &&
-        b.contextTag !== undefined &&
-        a.contextTag !== b.contextTag;
-      if (tagsDisjoint) continue;
+  for (let i = 0; i < bindings.length; i++) {
+    for (let j = i + 1; j < bindings.length; j++) {
+      const a = bindings[i];
+      const b = bindings[j];
+      if (a.reservedOnly && b.reservedOnly) continue;
+      if (!slotsOverlap(a.match, b.match)) continue;
+      if (tagsDisjoint(a.contextTag, b.contextTag)) continue;
       collisions.push({
         a: a.id,
         b: b.id,
@@ -349,7 +401,9 @@ export function buildViewerKeyBindings(
       match: { key: ['t', 'T', 'o', 'O', 'p', 'P'], bareOnly: true, shift: false },
       priority: 210,
       contextTag: 'global',
-      displayKeys: 'T / O / P',
+      // Derived from cameraPresets so the chip cannot drift from the keys the
+      // presets actually advertise (single source: CAMERA_PRESET_KEY).
+      displayKeys: `${CAMERA_PRESET_KEY.top} / ${CAMERA_PRESET_KEY.oblique} / ${CAMERA_PRESET_KEY.planar}`,
       when: (_ctx, e) => !targetIsField(e),
       run: (_ctx, e) => {
         const k = e.key.toLowerCase();
@@ -392,7 +446,9 @@ export function buildViewerKeyBindings(
       match: {}, // matcher lives in matchesWorkflowShortcut (config-driven)
       priority: 500,
       contextTag: 'global',
-      displayKeys: '⌘⇧U',
+      // The exact chip the workflow-start action advertised before this became
+      // the single source; kept verbatim so the registry chip is unchanged.
+      displayKeys: 'Cmd-Shift-U',
       when: (_ctx, e) => {
         if (!deps.workflowRecorderEnabled) return false;
         const active = typeof document === 'undefined' ? null : document.activeElement;
@@ -522,13 +578,16 @@ export function buildViewerKeyBindings(
     //    Present so a future collision lint knows they are taken. ──────────
     {
       id: 'reserved-nav-controller',
+      // Real `key` values (not `e.code` strings), so the collision lint reads
+      // them as occupied slots and can catch a dispatched binding placed on a
+      // nav key in a shared scope. Both cases are listed because the lint
+      // treats `w` and `W` as distinct events.
       match: {
-        code: undefined,
         key: [
-          'Digit1', 'Digit2', 'Digit3', 'Digit4',
-          'KeyR', 'KeyF', 'KeyH', 'KeyG',
+          '1', '2', '3', '4',
+          'r', 'R', 'f', 'F', 'h', 'H', 'g', 'G',
           'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-          'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyC',
+          'w', 'W', 'a', 'A', 's', 'S', 'd', 'D', 'c', 'C',
         ],
       },
       priority: 10_000,
@@ -560,4 +619,42 @@ export function buildViewerKeyBindings(
     },
   ];
   return bindings;
+}
+
+/**
+ * No-op deps used only to instantiate the table for its STATIC metadata (ids,
+ * `displayKeys`). `run` / `when` are never invoked here, so the stubs never
+ * fire — this reads the shape of the table, not its behaviour.
+ */
+const DISPLAY_META_DEPS: KeyBindingDeps = {
+  isToolActive: () => false,
+  setToolPaused: () => {},
+  isMeasureMode: () => false,
+  isDrafting: () => false,
+  measureFinish: () => {},
+  measureUndoPoint: () => {},
+  onEscape: () => {},
+  toggleLasso: () => {},
+  setCameraPreset: () => undefined,
+  toast: () => {},
+  openCommandPalette: () => {},
+  toggleShortcutSheet: () => {},
+  workflowRecorderEnabled: false,
+  matchesWorkflowShortcut: () => false,
+  toggleWorkflowRecord: () => {},
+  globalActions: () => null,
+};
+
+/** id → `displayKeys`, built ONCE from the table so display surfaces (the
+ *  command-palette / shortcut-sheet registry) can derive their key chips from
+ *  the same source that dispatches the keys. */
+const KEY_DISPLAY_BY_ID: ReadonlyMap<string, string> = new Map(
+  buildViewerKeyBindings(DISPLAY_META_DEPS)
+    .filter((b) => b.displayKeys !== undefined)
+    .map((b) => [b.id, b.displayKeys as string]),
+);
+
+/** The help chip a binding advertises, or `undefined` for an unknown id. */
+export function keyDisplayFor(id: string): string | undefined {
+  return KEY_DISPLAY_BY_ID.get(id);
 }

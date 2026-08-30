@@ -364,10 +364,49 @@ describe('findKeyCollisions', () => {
     ).toHaveLength(0);
   });
 
-  it('ignores reservedOnly bindings', () => {
+  it('treats measure/tool-active as non-disjoint with the global surface', () => {
+    // A `global` binding is live while measure mode is on, so they overlap.
+    expect(
+      findKeyCollisions([
+        mk('a', { key: 'x' }, { contextTag: 'measure' }),
+        mk('b', { key: 'x' }, { contextTag: 'global' }),
+      ]),
+    ).toHaveLength(1);
+  });
+
+  it('does not overlap distinct case variants of one key', () => {
+    // `z` and `Z` are different events (Shift differs), so they never collide.
+    expect(
+      findKeyCollisions([
+        mk('a', { key: 'z' }, { contextTag: 'global' }),
+        mk('b', { key: 'Z' }, { contextTag: 'global' }),
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it('rejects overlaps whose modifier constraints can never co-occur', () => {
+    // bareOnly forbids Ctrl/Cmd; ctrlOrMeta requires one — no shared event.
+    expect(
+      findKeyCollisions([
+        mk('a', { key: 'x', bareOnly: true }, { contextTag: 'global' }),
+        mk('b', { key: 'x', ctrlOrMeta: true }, { contextTag: 'global' }),
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it('treats a reservedOnly binding as an occupied slot against a dispatched one', () => {
     expect(
       findKeyCollisions([
         mk('a', { key: 'x' }, { contextTag: 'global' }),
+        mk('b', { key: 'x' }, { contextTag: 'global', reservedOnly: true }),
+      ]),
+    ).toHaveLength(1);
+  });
+
+  it('does not compare two reservedOnly bindings against each other', () => {
+    expect(
+      findKeyCollisions([
+        mk('a', { key: 'x' }, { contextTag: 'global', reservedOnly: true }),
         mk('b', { key: 'x' }, { contextTag: 'global', reservedOnly: true }),
       ]),
     ).toHaveLength(0);

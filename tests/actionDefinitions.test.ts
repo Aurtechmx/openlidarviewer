@@ -78,6 +78,7 @@ const {
 
 import { buildActionRegistry, type ActionRegistryDeps } from '../src/app/actionDefinitions';
 import type { Action } from '../src/ui/actionRegistry';
+import { keyDisplayFor } from '../src/ui/keyBindings';
 import { WORKFLOW_RECORDER_ENABLED } from '../src/ui/WorkflowController';
 import { CAMERA_PRESET_ORDER } from '../src/render/camera/cameraPresets';
 import { THEME_ORDER } from '../src/ui/themes';
@@ -575,6 +576,38 @@ describe('buildActionRegistry — view and navigation', () => {
     h.run('view.restore-state');
     expect(h.applyView).toHaveBeenCalledWith(2);
     expect(h.toast).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildActionRegistry — key chips derive from the keyBindings table', () => {
+  // Registry action id → the binding id whose displayKeys it must show. The
+  // table is the single source; this parity guard fails if the two drift.
+  const SHARED: ReadonlyArray<readonly [string, string]> = [
+    ['tool.lasso-volume', 'lasso-toggle'],
+    ['view.save-state', 'save-view'],
+    ['help.shortcuts', 'shortcut-sheet'],
+  ];
+
+  it('shows the table displayKeys for each shared action', () => {
+    const { find } = harness();
+    for (const [actionId, bindingId] of SHARED) {
+      const chip = keyDisplayFor(bindingId);
+      expect(chip, bindingId).toBeTruthy();
+      expect(find(actionId).keys, actionId).toBe(chip);
+    }
+  });
+
+  it('keeps the exact chip strings that shipped', () => {
+    const { find } = harness();
+    expect(find('tool.lasso-volume').keys).toBe('L');
+    expect(find('view.save-state').keys).toBe('V');
+    expect(find('help.shortcuts').keys).toBe('?');
+  });
+
+  it.runIf(WORKFLOW_RECORDER_ENABLED)('derives the workflow-start chip from the table', () => {
+    const { find } = harness();
+    expect(find('workflow.start').keys).toBe(keyDisplayFor('workflow-recorder'));
+    expect(find('workflow.start').keys).toBe('Cmd-Shift-U');
   });
 });
 

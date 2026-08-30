@@ -30,6 +30,7 @@ import {
 import { buildScanStory, buildExportHealth, type ScanStoryInputs } from '../intelligence/scanStory';
 import { renderDatasetStoryCard, renderExportHealthPanel } from '../ui/scanStoryViews';
 import { openModal } from '../ui/Modal';
+import { keyDisplayFor } from '../ui/keyBindings';
 import { el } from '../ui/dom';
 import { loadReportVerifier } from '../lazyChunks';
 
@@ -254,7 +255,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       id: 'tool.lasso-volume',
       title: 'Lasso volume',
       section: 'Tools',
-      keys: 'L',
+      keys: keyDisplayFor('lasso-toggle'),
       hint: 'Draw a freeform shape to measure a 3D volume.',
       keywords: ['select', 'shape', 'cut', 'fill'],
       run: () => {
@@ -305,7 +306,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
         id: 'workflow.start',
         title: 'Start recording workflow',
         section: 'Workflow',
-        keys: 'Cmd-Shift-U',
+        keys: keyDisplayFor('workflow-recorder'),
         // v0.3.10 — `.olvworkflow` files capture camera
         // moves and tool actions ONLY (no scan data, no measurements). To
         // replay one the recipient needs the same scan file already open
@@ -457,7 +458,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       id: 'view.save-state',
       title: 'Save view state',
       section: 'View',
-      keys: 'V',
+      keys: keyDisplayFor('save-view'),
       hint: 'Bookmark the camera plus clip box, colour mode, class filter, point filters, and render settings as a named, restorable state.',
       keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'capture'],
       run: () => {
@@ -502,7 +503,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       id: 'help.shortcuts',
       title: 'Show keyboard shortcuts',
       section: 'Help',
-      keys: '?',
+      keys: keyDisplayFor('shortcut-sheet'),
       hint: 'Every action and key, grouped by section.',
       keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
       run: () => void deps.ensureShortcutSheet().then((sheet) => sheet.open()),
