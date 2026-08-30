@@ -18,6 +18,7 @@ import {
   upsertEntry,
   touchEntry,
   removeByStoreName,
+  selectEvictions,
   readCacheMap,
   writeCacheMap,
   cacheGeneration,
@@ -100,6 +101,43 @@ describe('oocCacheMap — pure core', () => {
   it('cacheGeneration is a stable non-empty string', () => {
     expect(cacheGeneration()).toBe(cacheGeneration());
     expect(cacheGeneration().length).toBeGreaterThan(0);
+  });
+});
+
+describe('selectEvictions', () => {
+  const e = (storeName: string, lastUsedAt: number, tileBytes: number): OocCacheEntry => ({
+    fingerprint: 'fp-' + storeName,
+    storeName,
+    generation: GEN,
+    createdAt: 0,
+    lastUsedAt,
+    pointCount: 1,
+    tileBytes,
+  });
+
+  it('evicts nothing when total is within the byte budget', () => {
+    const entries = [e('a', 1, 100), e('b', 2, 100)];
+    expect(selectEvictions(entries, { budgetBytes: 1000, liveNames: new Set() })).toEqual([]);
+  });
+
+  it('evicts least-recently-used first until under budget', () => {
+    const entries = [e('newest', 30, 100), e('oldest', 10, 100), e('mid', 20, 100)];
+    // budget 150 → must drop 150 bytes → oldest then mid (100 each), leaving 100 ≤ 150
+    expect(selectEvictions(entries, { budgetBytes: 150, liveNames: new Set() })).toEqual(['oldest', 'mid']);
+  });
+
+  it('never evicts a live store, even if it is the oldest', () => {
+    const entries = [e('oldest-live', 10, 100), e('mid', 20, 100), e('newest', 30, 100)];
+    // total 300, budget 120 → must shed 180+; oldest is live so it is skipped,
+    // and mid + newest (100 each) are dropped to reach 100 ≤ 120.
+    const evict = selectEvictions(entries, { budgetBytes: 120, liveNames: new Set(['oldest-live']) });
+    expect(evict).not.toContain('oldest-live');
+    expect(evict).toEqual(['mid', 'newest']);
+  });
+
+  it('evicts nothing when only live stores remain over budget', () => {
+    const entries = [e('a', 1, 100), e('b', 2, 100)];
+    expect(selectEvictions(entries, { budgetBytes: 50, liveNames: new Set(['a', 'b']) })).toEqual([]);
   });
 });
 

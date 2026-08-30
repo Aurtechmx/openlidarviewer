@@ -149,6 +149,8 @@ async function peekLasHeaderFacts(
     schema,
     attributes,
     fileBytes: size,
+    min: [header.min[0], header.min[1], header.min[2]],
+    max: [header.max[0], header.max[1], header.max[2]],
   };
 }
 

@@ -143,6 +143,36 @@ export function removeByStoreName(map: OocCacheMap, storeName: string): OocCache
   return { version: map.version, entries: map.entries.filter((e) => e.storeName !== storeName) };
 }
 
+export interface EvictionBudget {
+  /** Total tile bytes the retained stores may occupy. */
+  readonly budgetBytes: number;
+  /** Stores a tab currently has open — never evicted, whatever their age. */
+  readonly liveNames: ReadonlySet<string>;
+}
+
+/**
+ * The store names to evict so the retained stores fit the byte budget, oldest
+ * use first. A live store is never chosen, even when it is the oldest and the
+ * budget is blown — a store in use must not be deleted from under it, so an
+ * over-budget cache of only-live stores evicts nothing and waits.
+ */
+export function selectEvictions(
+  entries: readonly OocCacheEntry[],
+  { budgetBytes, liveNames }: EvictionBudget,
+): string[] {
+  let total = entries.reduce((n, e) => n + e.tileBytes, 0);
+  if (total <= budgetBytes) return [];
+  const evict: string[] = [];
+  const byOldest = [...entries].sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+  for (const entry of byOldest) {
+    if (total <= budgetBytes) break;
+    if (liveNames.has(entry.storeName)) continue;
+    evict.push(entry.storeName);
+    total -= entry.tileBytes;
+  }
+  return evict;
+}
+
 /**
  * Read the map from the OPFS root, failing closed: a missing file or any read
  * error yields an empty map rather than throwing.
