@@ -292,7 +292,7 @@ export function newestChangelogEntry(text) {
  */
 export function changelogEntryForVersion(text, version) {
   const re = new RegExp(
-    `^##\\s*\\[${version.replace(/\./g, '\\.')}\\]\\s*-\\s*(\\d{4}-\\d{2}-\\d{2})`,
+    `^##\\s*\\[${escapeRegExp(version)}\\]\\s*-\\s*(\\d{4}-\\d{2}-\\d{2})`,
     'm',
   );
   const m = text.match(re);
