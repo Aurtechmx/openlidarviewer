@@ -28,6 +28,7 @@ export type MethodCategory =
   | 'registration'
   | 'volume'
   | 'dtm'
+  | 'feature'
   | 'provenance';
 
 /** A lightweight reference to a registered method at its current version. */
@@ -215,6 +216,34 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'Internal composition (provenance record over the loader-recorded cell-to-record index); no single source method.',
     category: 'provenance',
     implementation: ['src/science/sourceTopology.ts'],
+  },
+  'olv.feature.building-footprint': {
+    id: 'olv.feature.building-footprint',
+    version: 1,
+    name: 'Building footprint candidate extraction',
+    summary:
+      'Building-classified points are rasterised to a binary occupancy grid, grouped ' +
+      'into 8-connected components above a noise-area floor, and each component is ' +
+      'traced to an outline. A footprint is a derived candidate over classified points, ' +
+      'not a surveyed or detected building.',
+    citation:
+      'Internal composition of connected-component labelling over an occupancy grid and boundary tracing; no single source method.',
+    category: 'feature',
+    implementation: ['src/features/buildingFootprints.ts', 'src/features/footprintTrace.ts'],
+  },
+  'olv.feature.conductor-fit': {
+    id: 'olv.feature.conductor-fit',
+    version: 1,
+    name: 'Conductor centreline and sag fit',
+    summary:
+      'Wire-classified points are fitted to a horizontal centreline (principal direction) ' +
+      'and a vertical parabolic profile along it — the small-sag approximation to a ' +
+      'catenary. Reports span, sag and fit residual as a derived candidate, not a ' +
+      'calibrated catenary.',
+    citation:
+      'Parabolic small-sag approximation to the catenary; standard overhead-line result. Internal least-squares implementation.',
+    category: 'feature',
+    implementation: ['src/features/conductors.ts'],
   },
   'olv.contour.analytical': {
     id: 'olv.contour.analytical',

@@ -111,6 +111,7 @@ import {
   loadContourStudioMount,
   loadContourExportAdapter,
   loadRangeWorkbenchMount,
+  loadFeatureCandidatesMount,
 } from '../lazyChunks';
 import {
   organizedRangeFor,
@@ -118,6 +119,8 @@ import {
   type OrganizedLayerEntry,
 } from '../model/organizedRangeLink';
 import type { MountedRangeWorkbench } from './rangeWorkbenchMount';
+import type { MountedFeatureCandidates } from './featureCandidatesMount';
+import type { PointCloud } from '../model/PointCloud';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
 import type { Annotation } from '../render/annotate/types';
@@ -226,6 +229,13 @@ export interface AnalysePanelCallbacks {
    * tell the two apart and behaves as before.
    */
   getActiveScanId?: () => string | null;
+  /**
+   * The loaded cloud for a scan, or null. The panel offers the feature-candidate
+   * review launcher when the cloud carries a classification; the (lazy) review
+   * surface reads the building- and wire-classified points itself. Omitted in
+   * embeds with no feature review.
+   */
+  getFeatureCloud?: (scanId: string) => PointCloud | null;
   /**
    * Switch the 3D viewer's colour mode to the colourblind-safe 'confidence'
    * trust overlay — the SAME per-cell confidence + strong/moderate/weak
@@ -429,6 +439,11 @@ export class AnalysePanel {
   private _rangeLayerId: string | null = null;
   private _rangeToken = 0;
   private _rangeUnsubscribe: (() => void) | null = null;
+  private readonly _featureLauncher: HTMLElement;
+  private readonly _featureReview: HTMLElement;
+  private _featureMounted: MountedFeatureCandidates | null = null;
+  private _featureScanId: string | null = null;
+  private _featureToken = 0;
   private readonly _contourLauncher: HTMLElement;
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
   private readonly _contourLayerControls: HTMLElement;
@@ -575,6 +590,12 @@ export class AnalysePanel {
     this._rangeLauncher = el('div', { className: 'olv-analyse-range-launcher' });
     this._rangeWorkbench = el('div', { className: 'olv-analyse-range-workbench olv-hidden' });
 
+    // Feature candidates (v0.6.8). A context-sensitive launcher for the
+    // candidate-review surface, rendered ONLY when the active scan carries
+    // building- or wire-classified points, and mounted from its own lazy chunk.
+    this._featureLauncher = el('div', { className: 'olv-analyse-feature-launcher' });
+    this._featureReview = el('div', { className: 'olv-analyse-feature-review olv-hidden' });
+
     this._contourLauncher = el('div', { className: 'olv-analyse-contour-launcher' });
     this._contourLayerControls = el('div', { className: 'olv-analyse-layer-controls olv-hidden' });
     this._contourDeliverable = el('div', {
@@ -639,6 +660,8 @@ export class AnalysePanel {
       this._status,
       this._rangeLauncher,
       this._rangeWorkbench,
+      this._featureLauncher,
+      this._featureReview,
       this._resultsRegion,
       this._roadmap,
       this._scanTypeControl.element,
@@ -656,6 +679,7 @@ export class AnalysePanel {
     // was mounted before this panel was.
     this._rangeUnsubscribe = subscribeOrganizedRange(() => this._refreshRangeLauncher());
     this._refreshRangeLauncher();
+    this._refreshFeatureLauncher();
   }
 
   /**
@@ -703,8 +727,52 @@ export class AnalysePanel {
     this._rangeWorkbench.classList.add('olv-hidden');
   }
 
+  /**
+   * Show, replace, or remove the feature-candidate launcher for whichever scan
+   * is active. Gated on the host returning extraction input — a scan with no
+   * building- or wire-classified points shows no launcher.
+   */
+  private _refreshFeatureLauncher(): void {
+    const scanId = this._cb.getActiveScanId?.() ?? null;
+    const cloud = scanId ? this._cb.getFeatureCloud?.(scanId) ?? null : null;
+    // Gate cheaply on the presence of a classification — the specific
+    // building/wire scan is the lazy surface's job, not a per-refresh cost.
+    if (!scanId || !cloud || !cloud.classification) {
+      this._teardownFeatures();
+      return;
+    }
+    if (this._featureScanId === scanId && this._featureMounted) return;
+    this._teardownFeatures();
+    this._featureScanId = scanId;
+    const token = ++this._featureToken;
+    void loadFeatureCandidatesMount()
+      .then((m) => {
+        if (token !== this._featureToken) return;
+        this._featureMounted = m.mountFeatureCandidates({
+          cloud,
+          launcherHost: this._featureLauncher,
+          reviewHost: this._featureReview,
+          onLaunch: () => this._featureReview.classList.remove('olv-hidden'),
+        });
+      })
+      .catch(() => {
+        /* An optional review surface: omit it rather than break the panel. */
+      });
+  }
+
+  private _teardownFeatures(): void {
+    this._featureToken++;
+    this._featureMounted?.dispose();
+    this._featureMounted = null;
+    this._featureScanId = null;
+    this._featureLauncher.replaceChildren();
+    this._featureReview.replaceChildren();
+    this._featureReview.classList.add('olv-hidden');
+  }
+
   /** Drop the registry subscription. Call when the panel is discarded. */
   destroy(): void {
+    this._teardownFeatures();
     this._rangeUnsubscribe?.();
     this._rangeUnsubscribe = null;
     this._teardownRange();
@@ -2043,6 +2111,7 @@ export class AnalysePanel {
     // launcher is gated on, so this is where a newly opened structured file
     // gets its entry point.
     this._refreshRangeLauncher();
+    this._refreshFeatureLauncher();
   }
 
   /**

@@ -522,6 +522,9 @@ export const loadProfileWorkbenchRuntime = () => import('./app/profileWorkbenchR
  */
 export const loadRangeWorkbenchMount = () => import('./ui/rangeWorkbenchMount');
 
+/** The feature-candidate review surface (building footprints, conductor fits). */
+export const loadFeatureCandidatesMount = () => import('./ui/featureCandidatesMount');
+
 /**
  * The 3D Tiles open — the tileset parser, the traversal, the hardened tileset
  * transport and the PNTS decoder, as one chunk behind the remote-URL router.
