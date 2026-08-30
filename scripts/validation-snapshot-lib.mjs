@@ -310,7 +310,10 @@ export function changelogEntryForVersion(text, version) {
  * that describes it cannot drift apart without one of these figures moving.
  */
 export function declaredComposition(changelogBody) {
-  const flat = changelogBody.replace(/\s+/g, ' ');
+  // Collapse runs of whitespace to single spaces so the prose regexes below can
+  // span line breaks. split/join rather than replace: this is normalisation for
+  // matching, not escaping, and the replace form is easily misread as the latter.
+  const flat = changelogBody.split(/\s+/).join(' ');
   const pick = (re) => countFromText(flat.match(re)?.[1] ?? null);
   return {
     total: pick(/\b([A-Za-z]+|\d+) defects are fixed\b/i),
