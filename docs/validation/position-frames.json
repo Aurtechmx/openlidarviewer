@@ -89,7 +89,7 @@
       "symbol": "packTileRecord",
       "frame": "source-local",
       "reads": 3,
-      "why": "Packs each decoded point into a tile-store record; raw.positions is the loader's source-local buffer (scaled value + header offset \u2212 load origin), copied into the tile verbatim with no reframing."
+      "why": "Packs each decoded point into a tile-store record; raw.positions is the loader's source-local buffer (scaled value + header offset − load origin), copied into the tile verbatim with no reframing."
     },
     {
       "file": "src/io/lasDecodeShared.ts",
@@ -222,7 +222,7 @@
       "symbol": "scanHullPositions",
       "frame": "source-local",
       "reads": 1,
-      "why": "The active static cloud's resident buffer feeds the KML footprint's convex-hull outline, which is traced in the cloud's own source-local XY \u2014 the same frame the bounding-rectangle extent is read in."
+      "why": "The active static cloud's resident buffer feeds the KML footprint's convex-hull outline, which is traced in the cloud's own source-local XY — the same frame the bounding-rectangle extent is read in."
     },
     {
       "file": "src/main.ts",
@@ -285,7 +285,7 @@
       "symbol": "ContourOverlay._upload",
       "frame": "project-local",
       "reads": 1,
-      "why": "Uploads the CONTOUR line-segment vertices (not cloud points) into a THREE.BufferGeometry. They arrive from buildContourOverlayBuffers over a model derived from gatherTerrainPositions, which folds every layer placement in, so the buffer is already in the project frame the scene draws at its origin \u2014 the object carries no further offset."
+      "why": "Uploads the CONTOUR line-segment vertices (not cloud points) into a THREE.BufferGeometry. They arrive from buildContourOverlayBuffers over a model derived from gatherTerrainPositions, which folds every layer placement in, so the buffer is already in the project frame the scene draws at its origin — the object carries no further offset."
     },
     {
       "file": "src/render/densityColors.ts",
@@ -293,6 +293,13 @@
       "frame": "source-local",
       "reads": 1,
       "why": "Numeric kernel. The grid is anchored on the buffer own bounds, so the result is invariant under a pure translation: static callers pass source-local, the streaming recolour passes render-local, and both are correct. What it must never be given is two frames concatenated."
+    },
+    {
+      "file": "src/render/densityPointSize.ts",
+      "symbol": "ensureDensitySizes",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "Reads the same positions the cloud's geometry was built from (render-local) to compute a per-point display-size multiplier. The density grid is translation-invariant, so only relative position matters; the result is a rendering aid, never a measurement."
     },
     {
       "file": "src/render/elevationRange.ts",

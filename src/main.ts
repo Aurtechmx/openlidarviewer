@@ -4662,9 +4662,8 @@ async function copyShareLink(): Promise<void> {
 /** Restore a decoded share-link state onto the freshly loaded scan. */
 function applyShareState(state: ShareState, cloud: PointCloud): void {
   if (state.pointSize !== undefined) viewer.setPointSize(state.pointSize);
-  if (state.pointSizeMode === 'adaptive' || state.pointSizeMode === 'fixed') {
-    viewer.setPointSizeMode(state.pointSizeMode);
-  }
+  const psm = state.pointSizeMode;
+  if (psm === 'adaptive' || psm === 'fixed' || psm === 'density') viewer.setPointSizeMode(psm);
   if (state.colorMode && scans.activeId) {
     const modes = availableModes(cloud);
     if (modes.includes(state.colorMode as ColorMode)) {

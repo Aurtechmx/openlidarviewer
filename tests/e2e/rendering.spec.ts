@@ -100,9 +100,20 @@ test('the Rendering panel switches point-size mode and antialiasing', async ({ p
 
   // Point-size mode — Adaptive is the default; switch to Fixed and back.
   const fixed = page.locator('.olv-chip', { hasText: 'Fixed' });
-  const adaptive = page.locator('.olv-chip', { hasText: 'Adaptive' });
+  const adaptive = page.locator('.olv-size-chip', { hasText: 'Adaptive' });
   await fixed.click();
   await expect(fixed).toHaveClass(/olv-chip-active/);
+  await adaptive.click();
+  await expect(adaptive).toHaveClass(/olv-chip-active/);
+
+  // Density mode computes a per-point size multiplier and multiplies it into the
+  // size graph; scoped to `.olv-size-chip` so it never matches the colour-mode
+  // "Density" heatmap chip. The final `errors` assertion catches a shader/
+  // attribute fault this render path could introduce.
+  const densitySize = page.locator('.olv-size-chip', { hasText: 'Density' });
+  await densitySize.click();
+  await expect(densitySize).toHaveClass(/olv-chip-active/);
+  await page.waitForTimeout(300);
   await adaptive.click();
   await expect(adaptive).toHaveClass(/olv-chip-active/);
 

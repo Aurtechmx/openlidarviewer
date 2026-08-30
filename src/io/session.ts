@@ -1588,7 +1588,7 @@ function isColorMode(v: string): v is ColorMode {
 
 /** Type guard for the runtime's PointSizeMode union. */
 function isPointSizeMode(v: unknown): v is PointSizeMode {
-  return v === 'fixed' || v === 'adaptive';
+  return v === 'fixed' || v === 'adaptive' || v === 'density';
 }
 
 /**

@@ -44,6 +44,43 @@ export interface LocalDensitySizeInput {
  * 2.0]` which is the sweet spot a few months of A/B testing on drone
  * + airborne surveys converged on.
  */
+/**
+ * Auto-tune the density grid to a cloud, so density sizing needs no manual
+ * parameters. The reference density is the cloud's mean areal density over its
+ * XY footprint (so an average-density region maps to scale ≈ 1), and the cell is
+ * a few mean spacings wide (enough points per cell for a stable count). Both
+ * derive from one linear extent pass; degenerate input falls back to unit
+ * values, so the size multiplier stays a safe 1 rather than throwing.
+ */
+export function autoDensitySizeParams(positions: Float32Array): {
+  cellSize: number;
+  referenceDensity: number;
+} {
+  const n = positions.length / 3;
+  if (n === 0) return { cellSize: 1, referenceDensity: 1 };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const width = Math.max(maxX - minX, 1e-6);
+  const height = Math.max(maxY - minY, 1e-6);
+  const area = width * height;
+  const referenceDensity = Math.max(1e-9, n / area);
+  // Mean inter-point spacing ≈ sqrt(area / n); a cell a few spacings wide holds
+  // enough points that its density is a stable estimate, not per-point noise.
+  const meanSpacing = Math.sqrt(area / n);
+  const cellSize = Math.max(1e-3, meanSpacing * 8);
+  return { cellSize, referenceDensity };
+}
+
 export function localDensitySizes(input: LocalDensitySizeInput): Float32Array {
   const positions = input.positions;
   const n = positions.length / 3;

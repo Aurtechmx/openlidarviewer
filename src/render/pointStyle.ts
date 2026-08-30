@@ -11,7 +11,7 @@
 import { clamp } from '../numeric';
 
 /** How point size responds to camera distance. */
-export type PointSizeMode = 'adaptive' | 'fixed';
+export type PointSizeMode = 'adaptive' | 'fixed' | 'density';
 
 /** Default adaptive-sizing tuning. */
 export const POINT_STYLE_DEFAULTS = {
