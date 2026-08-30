@@ -1,4 +1,5 @@
 import { el } from './dom';
+import { backendLabel } from './backendLabel';
 import {
   ICON_FRAME,
   ICON_SNAPSHOT,
@@ -254,7 +255,7 @@ export class ToolDock {
 
   /** Report which GPU backend the renderer initialised. */
   setBackend(backend: 'webgpu' | 'webgl2'): void {
-    this._backendText.textContent = backend === 'webgpu' ? 'WebGPU' : 'WebGL2';
+    this._backendText.textContent = backendLabel(backend);
   }
 
   /**
