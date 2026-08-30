@@ -20,6 +20,14 @@
   "reviewDates": "Reported by the lint when they pass, never enforced. A gate that turns red on a date with no change to the tree teaches people to edit the date rather than the code.",
   "modules": [
     {
+      "path": "src/io/heavy/oocStoreLiveness.ts",
+      "status": "staged",
+      "why": "Phase 3 of the persistent out-of-core cache: cross-tab liveness over the Web Locks API, so eviction or a rebuild in place never touches a store another tab has open. Pure logic over an injected lock manager, tested; the open path and janitor do not call it yet.",
+      "graduation": "The reopen branch in src/app/heavyLasExecutor.ts holds acquireStoreResidency while a store is open and the janitor consults liveStoreNames before evicting, reached from src/main.ts.",
+      "review": "2027-02-28",
+      "declaredIn": "PR (persistent OOC cache, Phase 3)"
+    },
+    {
       "path": "src/io/heavy/fileFingerprint.ts",
       "status": "staged",
       "why": "Phase 1 of the persistent out-of-core cache: the pre-decode file fingerprint a persisted index is keyed by (SHA-256 over header facts plus sampled byte windows). Pure and tested; the open path does not call it yet, so the reopen branch that consumes it is a later phase.",
