@@ -40,7 +40,8 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   if (props.tip) node.dataset.tip = props.tip;
   if (props.ariaLabel) node.setAttribute('aria-label', props.ariaLabel);
   if (props.href && node instanceof HTMLAnchorElement) node.href = props.href;
-  if (props.type && node instanceof HTMLInputElement) node.type = props.type;
+  if (props.type && (node instanceof HTMLInputElement || node instanceof HTMLButtonElement))
+    node.type = props.type;
   for (const child of children) node.append(child);
   return node;
 }

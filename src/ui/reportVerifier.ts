@@ -38,6 +38,12 @@ export function showReportVerification(result: VerifyReportResult): void {
     'min-width:300px;max-width:440px;padding:18px 20px;border-radius:12px;' +
     'background:var(--panel);border:1px solid var(--hairline);color:var(--text);' +
     'box-shadow:0 8px 30px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:10px;';
+  // Dialog semantics, matching the app's other modals (Modal.ts, TourOverlay):
+  // a screen reader announces the boundary and reads the verdict headline as the
+  // accessible name, so the tamper/intact result is conveyed, not just coloured.
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-modal', 'true');
+  card.setAttribute('aria-labelledby', 'olv-verify-status');
 
   // Status headline — colour carries the verdict, the WORD carries it too. A
   // digest match with a NON-cryptographic (FNV-1a) checksum is forgeable, so it
@@ -45,6 +51,7 @@ export function showReportVerification(result: VerifyReportResult): void {
   const ok = result.valid;
   const weak = ok && result.cryptographic === false;
   const status = document.createElement('div');
+  status.id = 'olv-verify-status';
   let statusTestid: string;
   if (!ok) {
     statusTestid = 'report-verify-invalid';
