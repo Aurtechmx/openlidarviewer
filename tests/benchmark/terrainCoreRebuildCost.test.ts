@@ -29,9 +29,18 @@
  * pay deserialization, allocation and GPU-side costs, so if reuse does not win
  * here it cannot win in the browser.
  *
- * It runs by default (small sizes) and prints its table straight to stdout —
- * vitest buffers console.log away for passing tests. Override the ladder with
- * TERRAIN_CORE_BENCH_SIZES=100000,500000,1000000.
+ * It runs a 100k/500k/1M ladder by default (the 1M row recomputes a core three
+ * times, so a default run is not instant) and prints its table straight to
+ * stdout — vitest buffers console.log away for passing tests. Override the
+ * ladder with TERRAIN_CORE_BENCH_SIZES=100000,500000.
+ *
+ * READING THE PER-SIZE ROWS. The grid EXTENT is fixed (1000 m span / 2 m cell ≈
+ * 500×500 cells) regardless of point count, so the ladder conflates two opposing
+ * costs: SMRF work rises with points while geodesic void-fill FALLS as the grid
+ * fills in. A sparse pairing (100k points onto a 2 m grid ≈ 0.1 pt/m²) therefore
+ * does MORE fill work and can time slower than a denser one — real terrain-core
+ * cost, not a measurement artefact. The GO/NO-GO rests on recompute dwarfing
+ * reuse at every size, which holds regardless of that ordering.
  */
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
