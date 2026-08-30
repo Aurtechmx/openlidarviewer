@@ -6,6 +6,7 @@ emitted by `npm run repro` (benchmarks/out/metrics.json). Colourblind-safe
 """
 import json
 import os
+import platform
 import sys
 
 try:
@@ -69,4 +70,23 @@ ax2.spines["top"].set_visible(False)
 ax2.spines["right"].set_visible(False)
 save(fig2, "calibration")
 
-print("wrote registration_bias.{png,pdf} + calibration.{png,pdf} to benchmarks/out/")
+# Record the interpreter and matplotlib that actually rendered these figures,
+# beside them. requirements-repro.txt pins matplotlib==3.9.2 on Python 3.11; this
+# sidecar states what ran, so a figure can be traced to its render environment
+# rather than only to a pin the run may or may not have matched.
+with open(os.path.join(OUT, "environment.json"), "w") as fh:
+    json.dump(
+        {
+            "generatedBy": "benchmarks/plots.py",
+            "python": platform.python_version(),
+            "matplotlib": matplotlib.__version__,
+        },
+        fh,
+        indent=2,
+    )
+    fh.write("\n")
+
+print(
+    "wrote registration_bias.{png,pdf} + calibration.{png,pdf} + environment.json "
+    "to benchmarks/out/"
+)
