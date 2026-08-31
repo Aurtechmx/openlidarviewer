@@ -235,6 +235,15 @@ export class Stage {
     mount.append(this.root);
   }
 
+  /**
+   * Open the add-a-dataset file picker — the same one the "+ Add dataset" button
+   * opens. Lets a host (e.g. the preflight "load a second scan" remediation)
+   * reach the one ingest path without the user hunting for the control.
+   */
+  promptAddDataset(): void {
+    this._addDataset.click();
+  }
+
   /** Hide the empty state once the first cloud loads; reveal the version. */
   hideEmptyState(): void {
     this._empty.classList.add('olv-hidden');
