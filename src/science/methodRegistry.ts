@@ -192,6 +192,20 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'registration',
     implementation: ['src/registration/planarIcp.ts'],
   },
+  'olv.registration.epoch-horizontal-icp': {
+    id: 'olv.registration.epoch-horizontal-icp',
+    version: 1,
+    name: 'Repeat-epoch horizontal alignment (yaw + XY, Z locked)',
+    summary:
+      'The transform applied to align repeat epochs: the yaw and translation from ' +
+      'the planar ICP solver, with the vertical component constrained to zero so a ' +
+      'real elevation change between epochs is preserved rather than absorbed into ' +
+      'the fit. Describes the applied product; the generic solver it wraps is ' +
+      'olv.registration.icp-planar.',
+    citation: 'Besl & McKay (1992), doi:10.1109/34.121791; Umeyama (1991) planar LS',
+    category: 'registration',
+    implementation: ['src/terrain/change/alignEpochs.ts', 'src/registration/planarIcp.ts'],
+  },
   'olv.volume.stockpile': {
     id: 'olv.volume.stockpile',
     version: 1,

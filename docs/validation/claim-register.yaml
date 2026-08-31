@@ -880,7 +880,7 @@ claims:
   - claimId: EPOCH-ALIGN
     product: Epoch alignment
     algorithm: ICP (yaw + horizontal translation model; full model optional)
-    methodId: olv.registration.icp-planar
+    methodId: olv.registration.epoch-horizontal-icp
     algorithmVersion: v0.5.x
     claim: "Rigid alignment of two epochs; horizontal-only model preserves the vertical signal."
     currentEvidence: E2_ANALYTICALLY_VERIFIED
