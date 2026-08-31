@@ -81,8 +81,7 @@ function fixture(o: FixtureOpts = {}): AnalyseContoursResult {
     nvaM: rmseZM != null ? rmseZM * 1.96 : null,
     vvaM: 0.12,
     pointDensityPerM2: o.meanDensity ?? 6,
-    qualityLevel: 'QL2',
-    qualityLevelReason: 'meets QL2',
+    densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
   };
   return {
     quality: quality as DtmQualityReport,

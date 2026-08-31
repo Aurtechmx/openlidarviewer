@@ -91,7 +91,7 @@ function readyResult(): AnalyseContoursResult {
     },
     accuracyStandards: {
       rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
-      qualityLevel: 'QL2', qualityLevelReason: '4.2 pts/m² and 0.14 m RMSEz meet QL2.',
+      densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
     },
     quality: {
       readiness: 'ready', exportReadiness: 'available',
@@ -316,7 +316,7 @@ describe('provenance consistency — export-ready run', () => {
     expect(prov.exportReason).toBe('');
     expect(prov.horizontalCrs).toBe('EPSG:32610');
     expect(prov.verticalDatum).toBe('EPSG:5703');
-    expect(prov.accuracy).toEqual({ rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsQualityLevel: 'QL2' });
+    expect(prov.accuracy).toEqual({ rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsDensityReferenceFloor: 'QL2' });
   });
 
   it('README, DXF and SVG carry the identical provenance line block, verbatim', async () => {
@@ -376,7 +376,7 @@ describe('provenance consistency — export-ready run', () => {
     expect(mapSheetText).toContain(`${acc.rmseZM!.toFixed(2)} m`);
     expect(mapSheetText).toContain(`${acc.nvaM!.toFixed(2)} m`);
     expect(mapSheetText).toContain(`${acc.vvaM!.toFixed(2)} m`);
-    expect(mapSheetText).toContain(acc.usgsQualityLevel);
+    expect(mapSheetText).toContain(acc.usgsDensityReferenceFloor);
   });
 
   it('the terrain report content embeds the shared provenance verbatim', async () => {

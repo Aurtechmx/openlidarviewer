@@ -98,8 +98,7 @@ function readyResult(): AnalyseContoursResult {
       nvaM: 0.27,
       vvaM: 0.3,
       pointDensityPerM2: 4.2,
-      qualityLevel: 'QL2',
-      qualityLevelReason: '4.2 pts/m² and 0.14 m RMSEz meet QL2.',
+      densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
     },
     quality: {
       readiness: 'ready',

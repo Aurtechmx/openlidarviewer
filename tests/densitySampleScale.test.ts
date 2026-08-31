@@ -87,7 +87,7 @@ describe('samplePointScale through the terrain pipeline', () => {
       samplePointScale: 4,
     });
     expect(scaled.warnings.some((w) => w.includes('uniform-stride assumption'))).toBe(true);
-    expect(scaled.warnings.some((w) => /USGS 3DEP Quality Level/.test(w))).toBe(true);
+    expect(scaled.warnings.some((w) => /USGS 3DEP density reference/.test(w))).toBe(true);
   });
 
   it('does NOT add the stride caveat for an un-strided (scale 1) run', () => {

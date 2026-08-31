@@ -67,8 +67,7 @@ function readyResult(): AnalyseContoursResult {
       nvaM: 0.27,
       vvaM: 0.3,
       pointDensityPerM2: 4.2,
-      qualityLevel: 'QL2',
-      qualityLevelReason: '4.2 pts/m² and 0.14 m RMSEz meet QL2.',
+      densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
     },
     quality: {
       readiness: 'ready',
@@ -138,8 +137,7 @@ function previewResult(): AnalyseContoursResult {
       nvaM: null,
       vvaM: null,
       pointDensityPerM2: 0,
-      qualityLevel: 'unknown',
-      qualityLevelReason: 'Not enough validated points to measure RMSEz.',
+      densityReferenceFloorsMet: [], densityReferenceNote: 'none',
     },
     quality: {
       readiness: 'previewOnly',
@@ -285,7 +283,7 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     const text = qm.rows.map((r) => `${r.label}: ${r.value}`).join('\n');
     expect(text).toMatch(/0\.14 m/); // RMSEz
     expect(text).toMatch(/0\.27 m/); // NVA
-    expect(text).toMatch(/QL2 \(estimated\)/);
+    expect(text).toMatch(/>= QL2 floor/);
     // The report's labels carry the honesty qualifiers, same as the panel
     // and the provenance stamp — hold-out formulas, not checkpoints.
     expect(text).toMatch(/NVA-style \(95%, hold-out\)/);

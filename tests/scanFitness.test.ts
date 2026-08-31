@@ -25,7 +25,7 @@ function base(over: Partial<FitnessInputs> = {}): FitnessInputs {
     unclassifiedFraction: 0.02,
     hasGroundClass: true,
     coverageMode: 'full',
-    qualityLevel: 'USGS QL1',
+    densityReferenceFloor: 'QL1',
     ...over,
   };
 }
@@ -38,7 +38,7 @@ describe('buildScanFitness — scorecard tones', () => {
     const f = buildScanFitness(base());
     expect(f.overallTone).toBe<FitnessTone>('ready');
     expect(f.verdict).toMatch(/ready for terrain products/i);
-    expect(f.tierBadge).toBe('USGS QL1 (estimated)');
+    expect(f.tierBadge).toBe('≥ QL1 density floor');
     expect(f.headlineAccuracy).toBe('±0.07 m vertical');
     expect(f.dimensions).toHaveLength(6);
   });
@@ -95,7 +95,7 @@ describe('buildScanFitness — provisional (streaming / partial) state', () => {
   it('a full-cloud grade is not provisional and can earn its badge', () => {
     const f = buildScanFitness(base());
     expect(f.provisional).toBe(false);
-    expect(f.tierBadge).toBe('USGS QL1 (estimated)');
+    expect(f.tierBadge).toBe('≥ QL1 density floor');
   });
 });
 
@@ -195,7 +195,7 @@ describe('buildScanFitness — density reports a measurement, not a quality leve
   });
 
   it('marks the tier badge as an estimate, matching every other surface', () => {
-    expect(buildScanFitness(base()).tierBadge).toBe('USGS QL1 (estimated)');
+    expect(buildScanFitness(base()).tierBadge).toBe('≥ QL1 density floor');
   });
 });
 
@@ -231,7 +231,7 @@ describe('buildScanFitness — unverified units fail closed', () => {
     expect(tone(f, 'density')).toBe<FitnessTone>('ready');
     expect(tone(f, 'accuracy')).toBe<FitnessTone>('ready');
     expect(f.headlineAccuracy).toBe('±0.07 m vertical');
-    expect(f.tierBadge).toBe('USGS QL1 (estimated)');
+    expect(f.tierBadge).toBe('≥ QL1 density floor');
     expect(f.caveats.some((c) => /units are unverified/i.test(c))).toBe(false);
   });
 
@@ -239,6 +239,6 @@ describe('buildScanFitness — unverified units fail closed', () => {
     const f = buildScanFitness(base({ unitKnown: true }));
     expect(tone(f, 'density')).toBe<FitnessTone>('ready');
     expect(tone(f, 'accuracy')).toBe<FitnessTone>('ready');
-    expect(f.tierBadge).toBe('USGS QL1 (estimated)');
+    expect(f.tierBadge).toBe('≥ QL1 density floor');
   });
 });

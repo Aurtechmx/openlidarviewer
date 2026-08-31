@@ -2173,32 +2173,25 @@ export class AnalysePanel {
           `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
         ));
       }
-      if (std.qualityLevel !== 'unknown') {
-        const qlReason = std.qualityLevelReason;
-        // When the gather strided the cloud, the density behind the QL is a
-        // uniform-stride extrapolation (the core pushes a warning saying so).
-        // Carry that into the QL hint so the chip is never read as an exact,
-        // directly-counted grade — the same honesty the space-scan path gives.
+      if (std.densityReferenceFloorsMet.length > 0) {
+        // When the gather strided the cloud, the density is a uniform-stride
+        // extrapolation (the core pushes a warning saying so). Carry that into
+        // the hint so the figure is never read as an exact, directly-counted
+        // density — the same honesty the space-scan path gives.
         const strideNote = (this._result?.warnings ?? []).some((w) =>
           w.includes('uniform-stride assumption'),
         )
-          ? ' Density is scaled from the analysed sample (uniform-stride assumption), so this grade is an estimate.'
+          ? ' Density is scaled from the analysed sample (uniform-stride assumption).'
           : '';
-        // Keep the dynamic gate reason in the hint, but lead with the
-        // plain-language explanation of what a Quality Level actually is.
-        const qlTooltip =
-          (qlReason
-            ? `${METRIC_TOOLTIPS.qualityLevel} ${qlReason}`
-            : METRIC_TOOLTIPS.qualityLevel) + strideNote;
-        // "(estimated)": the QL's vertical-accuracy leg is hold-out-based
-        // (and the density leg may be stride-scaled) — never a measured,
-        // checkpoint-verified 3DEP grade. The tooltip spells out why.
+        // A density REFERENCE, not a quality-level grade: ground-return density
+        // is not a nominal-pulse-density determination. The chip names the 3DEP
+        // density floor cleared as context; the tooltip states the boundary.
         this._validationRow.append(this._hint(
           el('div', {
             className: 'olv-analyse-ql',
-            text: `USGS 3DEP ${std.qualityLevel} (estimated)`,
+            text: `USGS density ref: ≥ ${std.densityReferenceFloorsMet[0]} floor`,
           }),
-          qlTooltip,
+          std.densityReferenceNote + strideNote,
         ));
       }
     }
@@ -2838,9 +2831,13 @@ export class AnalysePanel {
       ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
       ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
       ['RMSEz', fmtM(a?.rmseZM)],
-      // "(estimated)" — same qualifier the panel chip and provenance stamp
-      // carry: the QL's RMSEz leg is hold-out-based, never checkpoint-verified.
-      ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? `${a.qualityLevel} (estimated)` : '—'],
+      // A density REFERENCE (which 3DEP nominal-pulse-density floor the measured
+      // ground-return density clears), not a quality-level grade — ground-return
+      // density is not a pulse-density determination.
+      [
+        'USGS density ref',
+        a && a.densityReferenceFloorsMet.length > 0 ? `≥ ${a.densityReferenceFloorsMet[0]} floor` : '—',
+      ],
       ['Approx. scale', 'auto — fits sheet'],
       ['Generated', generatedAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'],
     ];
@@ -3081,7 +3078,7 @@ export class AnalysePanel {
     const a = terrainAssessment(r);
     const t = r.cellStatusTally;
     const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
-    const ql = r.accuracyStandards.qualityLevel;
+    const densityFloor = r.accuracyStandards.densityReferenceFloorsMet[0] ?? null;
     const hasClass = r.excludedByClassification > 0;
     // Whether the source linear unit is confirmed — the same gate every other
     // unit consumer applies (`crs.linearUnit !== 'unknown'`). An unknown-unit or
@@ -3111,7 +3108,7 @@ export class AnalysePanel {
       unclassifiedFraction: hasClass ? 0 : null,
       hasGroundClass: hasClass,
       coverageMode: r.dtm.coverageMode,
-      qualityLevel: ql !== 'unknown' ? ql : null,
+      densityReferenceFloor: densityFloor,
     };
     const f = buildScanFitness(inputs);
 
