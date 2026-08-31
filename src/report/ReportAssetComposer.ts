@@ -24,6 +24,7 @@ import type {
   ReportTemplateId,
   ReportVisualAsset,
 } from './types';
+import { scanQualityFromFacts, type ScanQualityFacts } from './ReportScanQuality';
 import {
   buildDatasetSummary,
   type MetadataInputs,
@@ -86,6 +87,14 @@ export interface ComposeReportInputs {
    */
   readonly sourceMetadata?: ReportSourceMetadata;
   /**
+   * The raw Scan QA facts, as primitives read off the loaded cloud by the caller
+   * (the resolved CRS, the classification-derived flag, attribute presence). The
+   * composer turns them into the `source-quality` section here, in the lazy
+   * report chunk, so the eager report-export path imports neither `georefStatus`
+   * nor the builder. Omitted → the section is omitted entirely.
+   */
+  readonly scanQualityFacts?: ScanQualityFacts;
+  /**
    * Annotation ordering — `'type'` groups issues together at the top,
    * `'createdAt'` (the default) reads chronologically. Mirrors the live
    * AnnotationPanel's two sort modes.
@@ -124,6 +133,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
     technicalNotes: input.technicalNotes,
     provenance: input.provenance,
     sourceMetadata: input.sourceMetadata,
+    scanQuality: input.scanQualityFacts ? scanQualityFromFacts(input.scanQualityFacts) : undefined,
     // Synthesised once here so every template that includes the
     // `inspection-summary` section renders the same findings. Pure of the
     // renderer; the QL-tier gating lives in buildInspectionSummary.

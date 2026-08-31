@@ -25,7 +25,8 @@ import type { ReportInspectionSummary } from './ReportFindings';
  */
 export type ReportTemplateId =
   | 'survey-summary'
-  | 'technical-report';
+  | 'technical-report'
+  | 'scan-qa';
 
 /** Which sections a template wants, in render order. */
 export type ReportSectionId =
@@ -35,6 +36,7 @@ export type ReportSectionId =
   | 'provenance'             // v0.3.6 — auto-computed capture-type + signals + literature bounds
   | 'provenance-compact'     // v0.5.5 — capture type + confidence + disclaimer only
   | 'source-metadata'        // v0.5.4 — the file's own declared metadata, verbatim
+  | 'source-quality'         // v0.6.8 — Scan QA: georef verdict, classification provenance, caveats
   | 'visuals'
   | 'annotations'
   | 'measurements'
@@ -245,6 +247,37 @@ export interface ReportInputs {
    * `inspection-summary` section; omitted otherwise.
    */
   readonly summary?: ReportInspectionSummary;
+  /**
+   * v0.6.8 — the Scan QA facts: coordinate-quality verdict, classification
+   * provenance, which attributes the cloud carries, and the explicit list of
+   * what the report does NOT establish. Rendered by the `source-quality`
+   * section; omitted otherwise. Every field is a fact read off the loaded cloud
+   * (georeferencing booleans, the classification-derived flag, attribute
+   * presence) — never a metadata-presence checkbox dressed as a certificate,
+   * which is the defect the retired `scan-acceptance` template carried.
+   */
+  readonly scanQuality?: ReportScanQuality;
+}
+
+/**
+ * The `source-quality` section's facts. Each is read off the loaded cloud, and
+ * the caveats state the report's boundary in plain terms — a QA report that
+ * cannot imply survey-grade acceptance, vertical accuracy, or a density claim it
+ * did not measure.
+ */
+export interface ReportScanQuality {
+  /** Plain-language georeferencing verdict, e.g. "On the map · elevation datum not declared". */
+  readonly coordinateHeadline: string;
+  /** Position sub-fact, e.g. "On the map" / "Not on a map". */
+  readonly positionLabel: string;
+  /** Height sub-fact, e.g. "Real-world elevation" / "Datum not declared". */
+  readonly heightLabel: string;
+  /** How the classification arose: producer-supplied vs derived in the viewer. */
+  readonly classificationNote: string;
+  /** Which point attributes the cloud actually carries (present or absent). */
+  readonly attributes: readonly { readonly name: string; readonly present: boolean }[];
+  /** What this report does NOT establish — always shown, never optional. */
+  readonly caveats: readonly string[];
 }
 
 /**

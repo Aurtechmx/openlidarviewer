@@ -254,6 +254,10 @@ const TEMPLATE_DESIGN_KEYS: Record<ReportTemplateId, TemplateDesignKey> = {
     tag: 'TECHNICAL',
     defaultAccent: { r: 0.13, g: 0.45, b: 0.78 }, // engineer blue
   },
+  'scan-qa': {
+    tag: 'SCAN QA',
+    defaultAccent: { r: 0.52, g: 0.36, b: 0.72 }, // QA violet
+  },
 };
 
 function designKeyFor(templateId: ReportTemplateId): TemplateDesignKey {
@@ -292,6 +296,8 @@ async function renderSection(
       });
     case 'source-metadata':
       return renderSourceMetadata(cursor, inputs, doc, accent, theme, body, bold, organisation);
+    case 'source-quality':
+      return renderScanQuality(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'visuals':
       return renderVisuals(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'annotations':
@@ -1048,6 +1054,66 @@ async function renderSourceMetadata(
       cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
       cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, theme);
     }
+  }
+  return { page: cursor.page, y: cursor.y - 14 };
+}
+
+async function renderScanQuality(
+  cursor: PageCursor,
+  inputs: ReportInputs,
+  doc: PDFDocument,
+  accent: ParsedColor,
+  theme: ReportThemePalette,
+  body: PDFFont,
+  bold: PDFFont,
+  organisation: string | undefined,
+): Promise<PageCursor> {
+  const q = inputs.scanQuality;
+  if (!q) return cursor;
+  cursor = ensureSpace(cursor, 90, doc, accent, theme, organisation);
+  cursor = drawSectionHeader(cursor, 'Scan quality', accent, bold);
+  cursor = drawBodyLine(
+    cursor,
+    'A summary of what the loaded scan establishes about itself. Every line ' +
+      'below is read off the cloud; the boundary of the report is stated at the end.',
+    body,
+    theme,
+  );
+  cursor = { page: cursor.page, y: cursor.y - 4 };
+
+  // Coordinate quality — the georeferencing verdict and its two sub-facts.
+  cursor = ensureSpace(cursor, 48, doc, accent, theme, organisation);
+  cursor = drawLabelValueRow(cursor, 'Coordinate reference', q.coordinateHeadline, body, bold, theme);
+  cursor = drawLabelValueRow(cursor, 'Position', q.positionLabel, body, bold, theme);
+  cursor = drawLabelValueRow(cursor, 'Height', q.heightLabel, body, bold, theme);
+
+  // Classification provenance.
+  cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+  cursor = drawLabelValueRow(cursor, 'Classification', q.classificationNote, body, bold, theme);
+
+  // Attributes the cloud carries.
+  if (q.attributes.length > 0) {
+    const carried = q.attributes.filter((a) => a.present).map((a) => a.name);
+    const absent = q.attributes.filter((a) => !a.present).map((a) => a.name);
+    cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+    cursor = drawLabelValueRow(cursor, 'Attributes present', carried.length > 0 ? carried.join(', ') : 'none', body, bold, theme);
+    if (absent.length > 0) {
+      cursor = drawLabelValueRow(cursor, 'Attributes absent', absent.join(', '), body, bold, theme);
+    }
+  }
+
+  // The boundary of the report — always shown, one line each.
+  cursor = ensureSpace(cursor, 30, doc, accent, theme, organisation);
+  cursor = { page: cursor.page, y: cursor.y - 4 };
+  cursor.page.drawText('This report does not establish', {
+    x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
+    size: BODY_FONT_SIZE, font: bold,
+    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+  });
+  cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
+  for (const caveat of q.caveats) {
+    cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+    cursor = drawBodyLine(cursor, `• ${caveat}`, body, theme, 2);
   }
   return { page: cursor.page, y: cursor.y - 14 };
 }
