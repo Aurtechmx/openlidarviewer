@@ -2345,5 +2345,414 @@ datasets:
     evidenceRole: reference-labelling
     storage: acquired
     localPath: not-vendored
+  # ── libE57Format self-test corpus (asmaloney/libE57Format-test-data, CC0-1.0) ──
+  # Exercised by tests/e57LibE57FormatCorpus.test.ts. Files live under that
+  # repo's `self/` directory, which carries CC0-1.0 (the repo's `reference/`
+  # directory carries a separate modified-MIT licence and is not used here).
+  - datasetId: OLV-DS-078-LIBE57FORMAT-COLOUREDCUBE-FLOAT
+    title: "libE57Format self-test ColouredCubeFloat, single-precision cube cross-encoding case"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/ColouredCubeFloat.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 6dbf7972b358bd7dd0864c7893a4aa7b61a339fd6ee27c71b3031f763c977d33
+    sourceBytes: 118784
+    format: e57
+    pointCount: 7680
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/ColouredCubeFloat.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "A synthetic cube written at single-precision only; no colour tolerance beyond the encoding, no pose, no real-world scale reference. Exists to prove float/double cross-decode agreement against ColouredCubeDouble, not to fix accuracy against a survey."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/ColouredCubeFloat.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-079-LIBE57FORMAT-COLOUREDCUBE-DOUBLE
+    title: "libE57Format self-test ColouredCubeDouble, double-precision cube cross-encoding case"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/ColouredCubeDouble.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 58e7cfbb3e9cef777c4cd8f52aff2ff704fcf6dd3aea4b420430adaa1cdb978d
+    sourceBytes: 210944
+    format: e57
+    pointCount: 7680
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/ColouredCubeDouble.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Same cube as ColouredCubeFloat at double precision; the pair exists to isolate the cross-encoding case and settles nothing about real sensor accuracy."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/ColouredCubeDouble.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-080-LIBE57FORMAT-ZEROPOINTS
+    title: "libE57Format self-test ZeroPoints, well-formed CompressedVector declaring no records"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/ZeroPoints.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: d0a44d8b97069cf5c52ca64d2495c5086717faaa4262066abb24c9bf39089051
+    sourceBytes: 2048
+    format: e57
+    pointCount: 0
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/ZeroPoints.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Degenerate by construction: a legally empty scan, not a sample of real sensor output. Fixes the zero-record decode path only."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/ZeroPoints.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-081-LIBE57FORMAT-ZEROPOINTS-INVALID
+    title: "libE57Format self-test ZeroPointsInvalid, fileOffset pointing outside any section"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/ZeroPointsInvalid.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 7b978b4466a073da28ffb19a2128cc4dbc629d99c55078f856bd200883e3b7ae
+    sourceBytes: 2048
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/ZeroPointsInvalid.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Deliberately malformed: fileOffset=\"0\" addresses the file header, not a CompressedVector section. This reader refuses it; no point cloud is ever produced. Fixes one refusal path only."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/ZeroPointsInvalid.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-082-LIBE57FORMAT-INVALIDCVHEADER
+    title: "libE57Format self-test InvalidCVHeader, corrupted CompressedVector section type byte"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/InvalidCVHeader.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 4bbdaf1181492511276d60989186cbabe68b0a2ee157f97d35d3ba5b201ac2bd
+    sourceBytes: 2048
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/InvalidCVHeader.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Byte-for-byte ZeroPoints.e57 with the section type byte changed from 1 to 0xb6. No point cloud is ever produced; fixes the section-header validation path only, and shows this reader is stricter than PDAL 2.10.2 on this file."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/InvalidCVHeader.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-083-LIBE57FORMAT-INVALIDFILELENGTH
+    title: "libE57Format self-test InvalidFileLength, header declares more bytes than the file has"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/InvalidFileLength.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 452500f8215d545cb2b350fb81f640fd6ccd229fb8452c6d1cdb3545bf3c6ac6
+    sourceBytes: 120
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/InvalidFileLength.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Truncated to 120 bytes against a declared 2048; PDAL 2.10.2 readers.e57 refuses it too. No point cloud is ever produced; fixes the truncation guard only."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/InvalidFileLength.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-084-LIBE57FORMAT-NOPROTOTYPE
+    title: "libE57Format self-test NoPrototype, a scan declared with no point prototype"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/NoPrototype.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 0fe17336fc9a817df8fbe351fcc2d8306cf216e7656d8bdc4024b2a91595030e
+    sourceBytes: 2048
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/NoPrototype.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Deliberately malformed: the scan carries no point prototype, so no column layout can be derived. No point cloud is ever produced; fixes that one guard only."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/NoPrototype.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-085-LIBE57FORMAT-BADCRC
+    title: "libE57Format self-test bad-crc, page CRC-32C mismatch from an independent writer"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/bad-crc.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 64d1b03f9459ae2a0aa9b10f5561696c470037ce760ba6e3b1844f9b90c54516
+    sourceBytes: 1024
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/bad-crc.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "The only corruption in this suite produced by an independent implementation rather than by this project's own tests; page 0 fails its CRC-32C checksum. PDAL 2.10.2 readers.e57 refuses it too. No point cloud is ever produced."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/bad-crc.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-086-LIBE57FORMAT-EMPTY
+    title: "libE57Format self-test empty, a well-formed file with zero 3D scans"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/empty.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: ab43ff6ac95d043eb012641ce99cc9281c54b5a50acca365e89d3da0ceea7d58
+    sourceBytes: 1024
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/empty.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Valid E57 structure declaring no 3D scans at all; refused for that reason. No point cloud is ever produced."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/empty.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-087-SYNTHETIC-E57-DECODE
+    title: "OpenLiDARViewer synthetic E57 fixture, exact single-precision decode paths"
+    sourceUrl: scripts/make-e57-fixture.mjs
+    landingPage: scripts/make-e57-fixture.mjs
+    licence: MIT
+    licenceUrl: https://github.com/Aurtechmx/openlidarviewer/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 1336cc1174c1e7e6a5a0387911b0fe9da69ebe01007658fe8b31572377acc0ab
+    sourceBytes: 2048
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: OpenLiDARViewer contributors
+    citation: "OpenLiDARViewer synthetic E57 fixture, generated by scripts/make-e57-fixture.mjs."
+    knownLimitations: "Deterministic, project-generated bytes covering a single named scan, Float cartesian prototype and a bit-packed invalid-state column. Fixes exact-decode behaviour only; no real sensor, pose, colour or intensity data."
+    evidenceRole: fixture
+    storage: committed
+    localPath: tests/fixtures/synthetic.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-088-SYNTHETIC-E57-NORMALS
+    title: "OpenLiDARViewer synthetic E57 fixture with normal-vector fields"
+    sourceUrl: scripts/make-e57-normals-fixture.mjs
+    landingPage: scripts/make-e57-normals-fixture.mjs
+    licence: MIT
+    licenceUrl: https://github.com/Aurtechmx/openlidarviewer/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: 73eb5d96ad8dbf620e418029b1d57564bbec3fce9851d3b459334e9015508a8d
+    sourceBytes: 2048
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: OpenLiDARViewer contributors
+    citation: "OpenLiDARViewer synthetic E57 fixture with normals, generated by scripts/make-e57-normals-fixture.mjs."
+    knownLimitations: "Deterministic, project-generated bytes adding normalX/Y/Z fields to the base synthetic profile. Fixes normal-vector decode and skip-column behaviour only; no real sensor data."
+    evidenceRole: fixture
+    storage: committed
+    localPath: tests/fixtures/synthetic-normals.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-089-LIBE57-PUMP-NOINVALIDPOINTS
+    title: "libE57 pumpARowColumnIndexNoInvalidPoints, pump-room structured scan (gridded, XYZ+intensity+RGB)"
+    sourceUrl: http://www.libe57.org/data.html
+    landingPage: http://www.libe57.org/data.html
+    licence: libE57-test-data
+    licenceUrl: http://www.libe57.org/data.html
+    redistribution: permitted
+    acquisitionDate: 2022-01-01
+    sourceSha256: a3cb24cfbfa62bea2f6d27831f3ea4e5b3fcb065ae2b364595a4eb6e6c7f1783
+    sourceBytes: 2596864
+    format: e57
+    pointCount: 155201
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: unknown
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-recorded
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Carnahan-Proctor and Cross, Inc. (copyright 2008), published by the libE57 project"
+    citation: "libE57 E57 Example/Test Data, pumpARowColumnIndexNoInvalidPoints.e57. http://www.libe57.org/data.html"
+    knownLimitations: "A different libE57 pump variant from OLV-DS-042/043 (rowIndex+columnIndex+indexBounds, no invalid-state points), used for the structured-range and structured-declarations decode paths. Committed at 2.6 MB rather than acquired; not shipped in the deployed app (docs/project/THIRD_PARTY_NOTICES.md)."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/pumpARowColumnIndexNoInvalidPoints.e57
     controlPointIds: []
     checkpointIds: []
