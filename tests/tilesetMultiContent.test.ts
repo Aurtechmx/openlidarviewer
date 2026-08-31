@@ -1,16 +1,17 @@
 /**
- * tilesetMultiContent.test.ts — a tile this reader cannot serve must not pass
- * for a tile with nothing to serve.
+ * tilesetMultiContent.test.ts — the 3D Tiles 1.1 `contents` array is served,
+ * and a tile with several contents must never open short of tiles.
  *
- * 3D Tiles 1.1 lets a tile carry `contents`, an array, instead of `content`.
- * The parser reads only the single form, so such a tile produced a null URI,
- * and the node walk treats a null URI as a STRUCTURAL tile: no node, and
- * nothing added to `skipped`. `isComplete` therefore stayed true and the open
- * succeeded, serving none of that tile's data while reporting a complete scene.
+ * 1.1 lets a tile carry `contents`, an array, instead of `content`. The parser
+ * once read only the single form, so such a tile produced no content URI, and
+ * the node walk treated it as a STRUCTURAL tile: no node, and nothing added to
+ * `skipped`. `isComplete` stayed true and the open succeeded, serving none of
+ * that tile's data while reporting a complete scene.
  *
- * That is the failure mode every ceiling in this reader exists to prevent, so
- * the case below is written against the observable consequence (a tileset that
- * opens with tiles missing) rather than against the parser's error string.
+ * The parser now reads every entry of the array, so each point-cloud content on
+ * a tile becomes its own node. These cases pin that every entry is served and
+ * that the completeness accounting stays honest — a tile whose entries are all
+ * point clouds yields one node per entry, with nothing silently dropped.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -19,14 +20,14 @@ import { tilesetNodes } from '../src/io/tiles3d/tilesetNodes';
 
 const BOX = { box: [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10] };
 
-/** A tileset whose child carries two contents in the 1.1 array form. */
+/** A tileset whose child carries two point contents in the 1.1 array form. */
 const MULTI = JSON.stringify({
   asset: { version: '1.1' },
   geometricError: 100,
   root: {
     boundingVolume: BOX,
     geometricError: 50,
-    refine: 'REPLACE',
+    refine: 'ADD',
     content: { uri: 'a.pnts' },
     children: [
       {
@@ -39,35 +40,20 @@ const MULTI = JSON.stringify({
 });
 
 describe('the 1.1 multi-content form', () => {
-  it('is refused, and the message says what would otherwise be lost', () => {
-    let message = '';
-    try {
-      parseTileset(MULTI);
-    } catch (e) {
-      message = (e as Error).message;
-    }
-    expect(message).toContain('contents');
-    expect(
-      message,
-      'the refusal must say why, since the alternative is a scene that looks complete',
-    ).toContain('reported itself complete');
+  it('serves every point content in the array as its own node', () => {
+    const idx = tilesetNodes(parseTileset(MULTI));
+    expect(idx.records.map((r) => r.id)).toEqual(['a.pnts', 'b.pnts', 'c.pnts']);
   });
 
   it('never yields a tileset that is short of tiles yet calls itself complete', () => {
-    // The regression, stated as what a user would get. Before the refusal this
-    // parsed cleanly and produced ONE node for a three-tile document, with an
-    // empty `skipped`, so nothing downstream could tell.
-    let idx: ReturnType<typeof tilesetNodes> | null = null;
-    try {
-      idx = tilesetNodes(parseTileset(MULTI));
-    } catch {
-      idx = null; // refused at parse, which is the fix
-    }
-    if (idx === null) return;
+    // The old regression, stated as what a user would get. A three-content
+    // document must serve three nodes, and any content it could not serve must
+    // be recorded in `skipped` rather than silently dropped.
+    const idx = tilesetNodes(parseTileset(MULTI));
     const complete = idx.skipped.length === 0;
     expect(
       complete && idx.records.length < 3,
-      `served ${idx.records.length} of 3 tiles while reporting complete`,
+      `served ${idx.records.length} of 3 contents while reporting complete`,
     ).toBe(false);
   });
 
@@ -75,7 +61,7 @@ describe('the 1.1 multi-content form', () => {
     const single = JSON.stringify({
       asset: { version: '1.1' },
       geometricError: 100,
-      root: { boundingVolume: BOX, geometricError: 50, refine: 'REPLACE', content: { uri: 'a.pnts' } },
+      root: { boundingVolume: BOX, geometricError: 50, refine: 'ADD', content: { uri: 'a.pnts' } },
     });
     expect(tilesetNodes(parseTileset(single)).records.map((r) => r.id)).toEqual(['a.pnts']);
   });
