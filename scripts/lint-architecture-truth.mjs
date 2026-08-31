@@ -288,6 +288,36 @@ const fact = (name, value) => {
   }
 }
 
+// ── Fact 8: persistent OOC cache reality vs the docs ────────────────────────
+// The out-of-core index is a PERSISTENT, generation-gated cache (PR #760/#761):
+// a build semantics version invalidates stale indices, and a whole-file digest
+// gates reuse. Guard the two ways the docs could drift back to the old truth:
+// (a) the semantics-version constant must exist and be folded into the cache
+// generation; (b) no current architecture/limitations/README surface may call
+// the OOC index temporary / removed-on-close / cross-session-reuse-is-future.
+{
+  const map = read('src/io/heavy/oocCacheMap.ts');
+  const hasSemVer = /export\s+const\s+HEAVY_INGEST_SEMANTICS_VERSION\s*=\s*\d+/.test(map);
+  const inGeneration = /cacheGeneration\s*\([^)]*\)\s*:\s*string\s*\{[\s\S]*HEAVY_INGEST_SEMANTICS_VERSION[\s\S]*\}/.test(map);
+  if (!hasSemVer) {
+    problems.push('src/io/heavy/oocCacheMap.ts: HEAVY_INGEST_SEMANTICS_VERSION is not defined; the persistent cache needs a build-semantics generation.');
+  } else if (!inGeneration) {
+    problems.push('src/io/heavy/oocCacheMap.ts: HEAVY_INGEST_SEMANTICS_VERSION is not folded into cacheGeneration(); a semantics change would not invalidate stale indices.');
+  } else {
+    fact('OOC persistent cache', 'generation-gated');
+  }
+  // The OOC index must not be described as temporary in current surfaces.
+  const STALE = /out-of-core[\s\S]{0,120}?(temporary|removed when the (scan|source) closes)|OOC[\s\S]{0,80}?temporary|cross-session reuse[\s\S]{0,40}?(is|remains) future work/i;
+  for (const rel of ['README.md', 'docs/limitations.md', ...archDocs()]) {
+    const abs = resolve(ROOT, rel);
+    if (!existsSync(abs)) continue;
+    const m = read(rel).match(STALE);
+    if (m) {
+      problems.push(`${rel}: describes the OOC cache as temporary/removed-on-close/future ("${m[0].slice(0, 50).replace(/\s+/g, ' ')}…"); it is a persistent, generation-gated cache.`);
+    }
+  }
+}
+
 // ── Report ──────────────────────────────────────────────────────────────────
 if (problems.length > 0) {
   console.error('lint:architecture-truth FAILED\n');

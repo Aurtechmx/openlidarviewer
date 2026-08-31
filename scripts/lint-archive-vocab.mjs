@@ -22,6 +22,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+import { findSecret, findNarration } from './lib/hygienePatterns.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
@@ -129,6 +130,14 @@ for (const rel of shipped) {
   // The lint's own definitions and the commit-msg hook name the phrases they
   // guard against — exempt them as the claims lint exempts its policy file.
   if (rel.endsWith('lint-archive-vocab.mjs')) continue;
+  // The hygiene-pattern negative-control test deliberately contains sample
+  // secret/narration shapes to prove the scanner catches them; exempt it as the
+  // one place those shapes may legitimately appear.
+  if (rel.endsWith('tests/hygienePatterns.test.ts')) continue;
+  if (rel.endsWith('scripts/lib/hygienePatterns.mjs')) continue;
+  // AI_ASSISTANCE.md legitimately discusses AI assistance at a policy level, so
+  // it is exempt from the narration scan (never from the secret scans).
+  const narrationExempt = rel.endsWith('AI_ASSISTANCE.md');
   const lines = readFileSync(full, 'utf8').split('\n');
   lines.forEach((line, i) => {
     const secret = line.match(LEAKED_URL_SECRET);
@@ -136,6 +145,20 @@ for (const rel of shipped) {
       problems.push(
         `  • ${rel}:${i + 1}: "${secret[1]}=…" — a signed-URL secret in a shipped file; redact the query string before committing.`,
       );
+    }
+    const cred = findSecret(line);
+    if (cred) {
+      problems.push(
+        `  • ${rel}:${i + 1}: a ${cred} in a shipped file — remove it and rotate the credential (treat it as leaked).`,
+      );
+    }
+    if (!narrationExempt) {
+      const narr = findNarration(line);
+      if (narr) {
+        problems.push(
+          `  • ${rel}:${i + 1}: "${narr}" — conversational/process narration in a shipped file; describe the software, not the conversation.`,
+        );
+      }
     }
     if (ALLOW.some((re) => re.test(line))) return;
     for (const re of BANNED) {
