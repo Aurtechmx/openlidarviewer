@@ -25,13 +25,10 @@
 import * as THREE from 'three/webgpu';
 
 import { profileMarkerSegments } from './measure/profilePointLink';
+import { SceneLineOverlay, type SceneOverlayHost } from './sceneLineOverlay';
 
-/** Scene membership and redraw, and nothing more. */
-export interface ProfileLinkOverlayHost {
-  add(object: THREE.Object3D): void;
-  remove(object: THREE.Object3D): void;
-  requestFrame(): void;
-}
+/** Scene membership and redraw, and nothing more. The shared overlay host. */
+export type ProfileLinkOverlayHost = SceneOverlayHost;
 
 /** What to mark. `null` clears the mark. */
 export interface ProfileLinkMark {
@@ -47,72 +44,39 @@ const LOCKED_COLOUR = 0xffffff;
 const HOVER_OPACITY = 0.65;
 const LOCKED_OPACITY = 1;
 
-export class ProfileLinkOverlay {
-  private readonly _host: ProfileLinkOverlayHost;
+export class ProfileLinkOverlay extends SceneLineOverlay {
   private readonly _positions = new Float32Array(18);
-  private readonly _geometry: THREE.BufferGeometry;
-  private readonly _material: THREE.LineBasicMaterial;
-  private readonly _lines: THREE.LineSegments;
-  private _attached = false;
-  private _disposed = false;
 
   constructor(host: ProfileLinkOverlayHost) {
-    this._host = host;
-    this._geometry = new THREE.BufferGeometry();
-    this._geometry.setAttribute('position', new THREE.BufferAttribute(this._positions, 3));
-    this._material = new THREE.LineBasicMaterial({
-      color: HOVER_COLOUR,
-      transparent: true,
-      opacity: HOVER_OPACITY,
-      // Drawn through the scan rather than behind it: the marked return is
-      // usually inside the cloud, and a mark occluded by the points it names
-      // would only be visible when the section happened to face the camera.
-      depthTest: false,
-    });
-    this._lines = new THREE.LineSegments(this._geometry, this._material);
-    this._lines.name = 'olv-profile-link-mark';
-    this._lines.frustumCulled = false;
-    this._lines.renderOrder = 10;
-    this._lines.visible = false;
+    super(
+      host,
+      {
+        color: HOVER_COLOUR,
+        transparent: true,
+        opacity: HOVER_OPACITY,
+        // Drawn through the scan rather than behind it: the marked return is
+        // usually inside the cloud, and a mark occluded by the points it names
+        // would only be visible when the section happened to face the camera.
+        depthTest: false,
+      },
+      { name: 'olv-profile-link-mark', renderOrder: 10 },
+    );
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this._positions, 3));
   }
 
   /** Place the mark, or clear it with `null`. */
   show(mark: ProfileLinkMark | null): void {
-    if (this._disposed) return;
+    if (this.isDisposed) return;
     if (!mark) {
-      if (this._attached) {
-        this._host.remove(this._lines);
-        this._attached = false;
-      }
-      this._lines.visible = false;
-      this._host.requestFrame();
+      this.clear();
       return;
     }
     profileMarkerSegments(mark.position, mark.size, this._positions);
-    const attribute = this._geometry.getAttribute('position');
-    attribute.needsUpdate = true;
-    this._geometry.computeBoundingSphere();
+    this.geometry.getAttribute('position').needsUpdate = true;
+    this.geometry.computeBoundingSphere();
     const locked = mark.mode === 'locked';
-    this._material.color.setHex(locked ? LOCKED_COLOUR : HOVER_COLOUR);
-    this._material.opacity = locked ? LOCKED_OPACITY : HOVER_OPACITY;
-    this._lines.visible = true;
-    if (!this._attached) {
-      this._host.add(this._lines);
-      this._attached = true;
-    }
-    this._host.requestFrame();
-  }
-
-  /** Detach and release the GPU resources. Idempotent. */
-  dispose(): void {
-    if (this._disposed) return;
-    this._disposed = true;
-    if (this._attached) {
-      this._host.remove(this._lines);
-      this._attached = false;
-    }
-    this._geometry.dispose();
-    this._material.dispose();
-    this._host.requestFrame();
+    this.material.color.setHex(locked ? LOCKED_COLOUR : HOVER_COLOUR);
+    this.material.opacity = locked ? LOCKED_OPACITY : HOVER_OPACITY;
+    this.present();
   }
 }

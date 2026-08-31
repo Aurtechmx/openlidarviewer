@@ -19,7 +19,7 @@
 import * as THREE from 'three/webgpu';
 
 import type { ProfileCorridorOutline } from './measure/profileCorridorOutline';
-import type { ProfileLinkOverlayHost } from './ProfileLinkOverlay';
+import { SceneLineOverlay, type SceneOverlayHost } from './sceneLineOverlay';
 
 /** A muted cyan — a boundary the eye reads as context, not as measured geometry. */
 const CORRIDOR_COLOUR = 0x4dd0e1;
@@ -54,66 +54,33 @@ function outlineSegments(outline: ProfileCorridorOutline): Float32Array {
   return new Float32Array(out);
 }
 
-export class ProfileCorridorOverlay {
-  private readonly _host: ProfileLinkOverlayHost;
-  private readonly _geometry: THREE.BufferGeometry;
-  private readonly _material: THREE.LineBasicMaterial;
-  private readonly _lines: THREE.LineSegments;
-  private _attached = false;
-  private _disposed = false;
-
-  constructor(host: ProfileLinkOverlayHost) {
-    this._host = host;
-    this._geometry = new THREE.BufferGeometry();
-    this._geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
-    this._material = new THREE.LineBasicMaterial({
-      color: CORRIDOR_COLOUR,
-      transparent: true,
-      opacity: CORRIDOR_OPACITY,
-      // Drawn through the scan like the link mark: the corridor encloses the
-      // points it describes, so an occluded outline would only show edge-on.
-      depthTest: false,
-    });
-    this._lines = new THREE.LineSegments(this._geometry, this._material);
-    this._lines.name = 'olv-profile-corridor';
-    this._lines.frustumCulled = false;
-    this._lines.renderOrder = 9;
-    this._lines.visible = false;
+export class ProfileCorridorOverlay extends SceneLineOverlay {
+  constructor(host: SceneOverlayHost) {
+    super(
+      host,
+      {
+        color: CORRIDOR_COLOUR,
+        transparent: true,
+        opacity: CORRIDOR_OPACITY,
+        // Drawn through the scan like the link mark: the corridor encloses the
+        // points it describes, so an occluded outline would only show edge-on.
+        depthTest: false,
+      },
+      { name: 'olv-profile-corridor', renderOrder: 9 },
+    );
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
   }
 
   /** Draw the outline, or clear it with `null` (or a degenerate `none` outline). */
   show(outline: ProfileCorridorOutline | null): void {
-    if (this._disposed) return;
+    if (this.isDisposed) return;
     const positions = outline ? outlineSegments(outline) : new Float32Array(0);
     if (positions.length === 0) {
-      if (this._attached) {
-        this._host.remove(this._lines);
-        this._attached = false;
-      }
-      this._lines.visible = false;
-      this._host.requestFrame();
+      this.clear();
       return;
     }
-    this._geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    this._geometry.computeBoundingSphere();
-    this._lines.visible = true;
-    if (!this._attached) {
-      this._host.add(this._lines);
-      this._attached = true;
-    }
-    this._host.requestFrame();
-  }
-
-  /** Detach and release the GPU resources. Idempotent. */
-  dispose(): void {
-    if (this._disposed) return;
-    this._disposed = true;
-    if (this._attached) {
-      this._host.remove(this._lines);
-      this._attached = false;
-    }
-    this._geometry.dispose();
-    this._material.dispose();
-    this._host.requestFrame();
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.geometry.computeBoundingSphere();
+    this.present();
   }
 }
