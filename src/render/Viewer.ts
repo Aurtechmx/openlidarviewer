@@ -419,6 +419,7 @@ export interface AnnotateListeners {
 /** UI-facing live-probe events the app can subscribe to. */
 export interface ProbeListeners {
   onModeChange?: (active: boolean) => void;
+  onHoverInfo?: (info: PointInfo | null) => void;
 }
 
 /**
@@ -6344,9 +6345,7 @@ export class Viewer {
       toolMode: () => this._toolMode,
       measureDragging: () => this._measure.dragging,
       pointerMoved: () => this._pointerMoved,
-      clearPointerMoved: () => {
-        this._pointerMoved = false;
-      },
+      clearPointerMoved: () => { this._pointerMoved = false; },
       pointerOnCanvas: () => this._pointerOnCanvas,
       pointerNdc: () => ({ x: this._pointerNdcX, y: this._pointerNdcY }),
       pointerClient: () => ({ x: this._pointerClientX, y: this._pointerClientY }),
@@ -6361,7 +6360,7 @@ export class Viewer {
         const hit = this._pickStreamingDetailed(ndcX, ndcY);
         return hit ? this._infoForStreamingHit(hit) : null;
       },
-      updateProbe: (info, clientX, clientY) => this._probe.update(info, clientX, clientY),
+      updateProbe: (info, clientX, clientY) => { this._probe.update(info, clientX, clientY); this._probeListeners.onHoverInfo?.(info); },
       renderMeasureOverlay: () => this._measure.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
       renderInspectOverlay: () => this._inspect.render(),
       renderAnnotateOverlay: () => this._annotate.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),

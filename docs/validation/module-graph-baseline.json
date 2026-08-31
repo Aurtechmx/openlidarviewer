@@ -52,7 +52,7 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 116,
+      "runtime": 118,
       "typeOnly": 19,
       "dynamic": 7,
       "modules": [
@@ -70,6 +70,7 @@
         "src/app/ScanRouteService.ts",
         "src/app/ScanService.ts",
         "src/app/actionDefinitions.ts",
+        "src/app/coordinateHudMount.ts",
         "src/app/crsCoordinator.ts",
         "src/app/epochFramePrep.ts",
         "src/app/exportCrsResolver.ts",
@@ -90,6 +91,7 @@
         "src/app/staleChunkReload.ts",
         "src/app/swUrl.ts",
         "src/app/terrainAnalysisRunner.ts",
+        "src/app/terrainComputePath.ts",
         "src/app/toggleTool.ts",
         "src/app/viewBookmarks.ts",
         "src/app/viewStateCoordinator.ts",
@@ -264,7 +266,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 777,
+    "filesScanned": 784,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above."
   }
