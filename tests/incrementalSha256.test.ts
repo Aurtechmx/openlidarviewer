@@ -55,6 +55,41 @@ describe('IncrementalSha256', () => {
     }
   });
 
+  it('is invariant under thousands of RANDOM chunk segmentations of one buffer', () => {
+    // The fixed-size sweep above cannot hit a boundary pattern it does not list;
+    // this re-segments the SAME buffer into random-width windows a few thousand
+    // ways and asserts every one reproduces the one-shot digest. A seeded PRNG
+    // makes a failure reproducible — the failing seed is named in the message.
+    const n = 4096;
+    const bytes = new Uint8Array(n);
+    for (let i = 0; i < n; i++) bytes[i] = (i * 2654435761) & 0xff;
+    const whole = incrementalSha256Hex(bytes);
+    // mulberry32 — a small deterministic PRNG so the fuzz is reproducible.
+    const rng = (seed: number): (() => number) => () => {
+      seed |= 0;
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    for (let seed = 1; seed <= 3000; seed++) {
+      const next = rng(seed);
+      const h = new IncrementalSha256();
+      let i = 0;
+      while (i < n) {
+        // Window widths from 0 to 96 — deliberately including 0-length updates
+        // and widths straddling the 64-byte block boundary.
+        const w = Math.floor(next() * 97);
+        // A 0-width window is a valid no-op update; it must not skip a byte, so
+        // i only advances by the bytes actually fed. A later non-zero width
+        // eventually reaches n, so the loop terminates.
+        h.update(bytes.subarray(i, Math.min(i + w, n)));
+        i += w;
+      }
+      expect(h.digestHex(), `seed ${seed}`).toBe(whole);
+    }
+  });
+
   it('refuses update after digest', () => {
     const h = new IncrementalSha256();
     h.update(enc.encode('abc'));
