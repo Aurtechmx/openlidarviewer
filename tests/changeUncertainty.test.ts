@@ -26,6 +26,36 @@ describe('changeVolumeUncertainty', () => {
     expect(r.sigmaM3).toBeCloseTo(1.0, 6);
   });
 
+  test('names the error model on the result, and the correlation caveat travels', () => {
+    const r = changeVolumeUncertainty({
+      netVolumeM3: 1000,
+      significantCells: 400,
+      cellAreaM2: 1,
+      cellSigmaM: 0.05,
+    });
+    expect(r.model).toBe('independent-cells');
+    expect(r.caveats.some((c) => /spatially independent/i.test(c))).toBe(true);
+  });
+
+  test('an explicit independent-cells model matches the default', () => {
+    const args = { netVolumeM3: 1000, significantCells: 400, cellAreaM2: 1, cellSigmaM: 0.05 };
+    const a = changeVolumeUncertainty(args);
+    const b = changeVolumeUncertainty({ ...args, model: { kind: 'independent-cells' } });
+    expect(b).toEqual(a);
+  });
+
+  test('refuses an unimplemented covariance model rather than serving the independent band', () => {
+    expect(() =>
+      changeVolumeUncertainty({
+        netVolumeM3: 1000,
+        significantCells: 400,
+        cellAreaM2: 1,
+        cellSigmaM: 0.05,
+        model: { kind: 'covariance', correlationLengthM: 5 },
+      }),
+    ).toThrow(/not implemented/i);
+  });
+
   test('a co-registration bias adds a systematic term in quadrature', () => {
     const base = changeVolumeUncertainty({
       netVolumeM3: 1000,
