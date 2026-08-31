@@ -8,7 +8,7 @@ Five products reach E4 this cycle: `CRS-UTM-PROJECTION` (new), `CHANGE-RASTER` a
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,545 lines and `src/render/Viewer.ts` is 6,419, against stated targets of 2,500 and 2,000. The composition root shrank as the image-export callback moved into `src/app/exportImageAction.ts`; the renderer is unchanged. The remaining blocks to lift are in `docs/architecture/architecture-map.md`.
+`src/main.ts` is 5,532 lines and `src/render/Viewer.ts` is 6,418, against stated targets of 2,500 and 2,000. The composition root shrank as the terrain-compute-path read moved into `src/app/terrainComputePath.ts`. The remaining blocks to lift are in `docs/architecture/architecture-map.md`.
 
 ## Out-of-core streaming holds the index, not the whole cloud
 

@@ -1640,6 +1640,26 @@ body.olv-theme-light .olv-empty::before {
 .olv-advanced-summary:hover { color: var(--text-dim); }
 .olv-advanced-body { display: flex; flex-direction: column; gap: var(--space-sm); padding-top: var(--space-xs); }
 
+
+/* Persistent coordinate HUD — a survey-style corner readout of the point under
+   the cursor while the probe is active. Fixed bottom-left, out of the panels. */
+.olv-coordinate-hud {
+  position: absolute; left: var(--space-sm); bottom: var(--space-sm);
+  z-index: 6; pointer-events: none;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums;
+  color: var(--text); background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+}
+.olv-coordinate-hud-row { display: flex; justify-content: space-between; gap: var(--space-md); }
+.olv-coordinate-hud-axis { color: var(--text-dim); }
+.olv-coordinate-hud-geo { color: var(--text-dim); }
+.olv-coordinate-hud-footer { display: flex; justify-content: space-between; gap: var(--space-md); margin-top: 2px; }
+.olv-coordinate-hud-crs { color: var(--text-dim); }
+.olv-coordinate-hud-status[data-status='georeferenced'] { color: var(--good, var(--accent)); }
+.olv-coordinate-hud-status[data-status='local'] { color: var(--warn, var(--text-dim)); }
+.olv-coordinate-hud-status[data-status='unresolved'] { color: var(--text-dim); }
 /* Tool dock + backend indicator */
 .olv-dock {
   position: absolute; bottom: 14px; left: 16px;

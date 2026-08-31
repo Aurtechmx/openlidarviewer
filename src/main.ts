@@ -79,6 +79,8 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
 import { createMeasurePanelMount, createAnalyseProfileVisibility } from './app/measurePanelMount';
 import { createProcessStudioFromShell } from './app/processStudioMount';
+import { readTerrainComputePath } from './app/terrainComputePath';
+import { wireCoordinateHud } from './app/coordinateHudMount';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
@@ -3375,6 +3377,13 @@ void viewerLoaded.then(() => {
       // The probe keeps navigation live, so the "look around" prompt stays.
       if (active) projectCard.hide();
     },
+    // The persistent corner coordinate HUD reads the same hovered point the probe
+    // resolves, and renders the CRS/unit/frame-honest banner from cursorReadout.
+    onHoverInfo: wireCoordinateHud({
+      mount: (el) => stage.overlay.append(el),
+      activeCrs: () => crsService.current() ?? undefined,
+      upAxis: () => crsService.context().upAxis,
+    }),
   });
   viewer.setAnnotateListeners({
     onModeChange: (active) => {
@@ -3924,28 +3933,6 @@ if (debug || benchmark) {
     stage.overlay.append(debugOverlay.element);
     debugOverlay.start();
   });
-}
-
-/**
- * Read the MAIN-thread terrain engine's CPU/GPU equivalence-gate verdict for
- * the debug overlay, via the verification-only `window` hook the engine
- * registers when it loads. Returns null before any main-thread terrain run (or
- * when analysis ran in the worker, whose engine is not reachable from here).
- * Reads through the hook deliberately — a static import would pull the terrain
- * engine into the main bundle and break chunk isolation.
- */
-function readTerrainComputePath(): { path: 'cpu' | 'gpu'; reason: string } | null {
-  const hook = (
-    window as unknown as {
-      __olvTerrainRasterEngine?: { getComputePath?: () => { path: 'cpu' | 'gpu'; reason: string } };
-    }
-  ).__olvTerrainRasterEngine;
-  try {
-    const s = hook?.getComputePath?.();
-    return s ? { path: s.path, reason: s.reason } : null;
-  } catch {
-    return null;
-  }
 }
 
 /** Re-entry guard for the full-cloud grade — one run at a time per session. */

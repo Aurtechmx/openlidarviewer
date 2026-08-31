@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,545 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,532 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -99,7 +99,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,545)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,532)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -197,7 +197,7 @@ that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,419)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,418)** — the constructor and a handful of large
 methods dominate:
 
 The count fell by 37 with the profile seam. The constructor held the whole
