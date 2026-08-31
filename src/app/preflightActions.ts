@@ -16,6 +16,8 @@
  *                            flag are shown
  *   solo-active-layer      → isolate the active layer (`LayerService.soloOnly`)
  *   classify-scan          → run the classification derive
+ *   load-second-scan       → open the add-a-dataset file picker (the same one
+ *                            the "+ Add dataset" control opens)
  *   continue-exploratory   → arm the measurement anyway. Honest because the
  *   continue-resident-only   figure keeps its own label: `measureConfidence`
  *                            already marks it approximate in the measure bar and
@@ -29,9 +31,6 @@
  *   await-full-coverage — waiting is not an action the app performs; the
  *                         streaming source refines on its own, and a control
  *                         that "waits" would do nothing.
- *   load-second-scan    — the app has no add-a-scan control while a scan is
- *                         open; a second scan arrives by drag-and-drop or from
- *                         the empty state's picker.
  *   align-scans         — placement onto the shared project frame is automatic
  *                         and there is no user-invocable align step to offer.
  *
@@ -57,12 +56,13 @@ export interface PreflightActionHost {
   classifyScan?(): void;
   /** Arm a measurement so the user may proceed with the stated caveat. */
   armMeasurement?(kind: MeasurementKind): void;
+  /** Open the add-a-dataset file picker so a second scan can be loaded. */
+  addDataset?(): void;
 }
 
 /** The actions no host can perform — see the header for why each one is here. */
 export const UNPERFORMABLE_ACTIONS: readonly PreflightActionId[] = [
   'await-full-coverage',
-  'load-second-scan',
   'align-scans',
 ];
 
@@ -95,8 +95,9 @@ function handlerFor(
       const arm = host.armMeasurement;
       return kind !== null && arm ? () => arm(kind) : null;
     }
-    case 'await-full-coverage':
     case 'load-second-scan':
+      return host.addDataset ? () => host.addDataset?.() : null;
+    case 'await-full-coverage':
     case 'align-scans':
       return null;
   }

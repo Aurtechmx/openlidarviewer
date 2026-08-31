@@ -118,12 +118,13 @@ interface Performed {
   focusLayers: number;
   solo: string[];
   classify: number;
+  addDataset: number;
   measureMode: boolean[];
   kinds: string[];
 }
 
 function fakeShell(options: FakeShellOptions = {}): { shell: ProcessStudioShell; done: Performed } {
-  const done: Performed = { focusCrs: 0, focusLayers: 0, solo: [], classify: 0, measureMode: [], kinds: [] };
+  const done: Performed = { focusCrs: 0, focusLayers: 0, solo: [], classify: 0, addDataset: 0, measureMode: [], kinds: [] };
   const companions = options.companions ?? [];
   const viewer: StudioViewer = {
     streamingCloud: null,
@@ -157,6 +158,7 @@ function fakeShell(options: FakeShellOptions = {}): { shell: ProcessStudioShell;
     classifyScan: () => { done.classify += 1; },
     focusCrs: () => { done.focusCrs += 1; },
     focusLayers: () => { done.focusLayers += 1; },
+    addDataset: () => { done.addDataset += 1; },
   };
   return { shell, done };
 }
@@ -265,6 +267,7 @@ describe('remediation dispatch', () => {
     soloActiveLayer: () => {},
     classifyScan: () => {},
     armMeasurement: () => {},
+    addDataset: () => {},
   };
 
   it('carries out every action a host can perform', () => {
@@ -273,6 +276,20 @@ describe('remediation dispatch', () => {
     expect(runner.canRun('inspect-layer-crs', 'measure-area')).toBe(true);
     expect(runner.canRun('solo-active-layer', 'measure-area')).toBe(true);
     expect(runner.canRun('classify-scan', 'terrain-dtm')).toBe(true);
+  });
+
+  it('runs "load a second scan" through the host, which opens the add-dataset picker', () => {
+    const { shell, done } = fakeShell();
+    const runner = createPreflightActionRunner({ addDataset: () => shell.addDataset() });
+    expect(runner.canRun('load-second-scan', 'cross-epoch-change')).toBe(true);
+    expect(runner.run('load-second-scan', 'cross-epoch-change')).toBe(true);
+    expect(done.addDataset).toBe(1);
+  });
+
+  it('reports "load a second scan" unavailable when the host cannot add one', () => {
+    const runner = createPreflightActionRunner({});
+    expect(runner.canRun('load-second-scan', 'cross-epoch-change')).toBe(false);
+    expect(runner.run('load-second-scan', 'cross-epoch-change')).toBe(false);
   });
 
   it('offers "continue" only for a measurement, where proceeding is a real action', () => {

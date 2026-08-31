@@ -272,6 +272,8 @@ export interface ProcessStudioShell {
   focusCrs(): void;
   /** Reveal the layer list (the `inspect-layer-crs` remediation). */
   focusLayers(): void;
+  /** Open the add-a-dataset file picker (the `load-second-scan` remediation). */
+  addDataset(): void;
 }
 
 /**
@@ -329,6 +331,7 @@ export function createProcessStudioFromShell(shell: ProcessStudioShell): Mounted
         if (id !== null) shell.soloLayer(id);
       },
       classifyScan: () => shell.classifyScan(),
+      addDataset: () => shell.addDataset(),
       // Proceeding arms the tool; the figure keeps the exploratory label the
       // measure surfaces already give it, so nothing here re-states the caveat.
       armMeasurement: (kind) => {

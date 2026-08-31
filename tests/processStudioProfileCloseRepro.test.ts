@@ -197,7 +197,7 @@ function buildRig() {
     crsService: crsService as never,
     classLegend: { presentCodes: () => [2], classificationIsDerived: () => false },
     resolveLayerCrs: () => metreCrs,
-    soloLayer: () => {}, classifyScan: () => {}, focusCrs: () => {}, focusLayers: () => {},
+    soloLayer: () => {}, classifyScan: () => {}, focusCrs: () => {}, focusLayers: () => {}, addDataset: () => {},
   });
 
   // The shell's reveal/reset handler (main.ts): resolved → refresh+show; null → clearProduced+hide.

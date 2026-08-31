@@ -2240,7 +2240,7 @@ const processStudio = createProcessStudioFromShell({
   crsService, classLegend: classLegendPanel,
   resolveLayerCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
   soloLayer: (id) => layerService.soloOnly(id), classifyScan: () => { void runDeriveClassification(); },
-  focusCrs: () => { inspector.focusCrsOverride(); }, focusLayers: () => { inspector.focusLayers(); },
+  focusCrs: () => { inspector.focusCrsOverride(); }, focusLayers: () => { inspector.focusLayers(); }, addDataset: () => { stage.promptAddDataset(); },
 });
 
 // Manual classification-edit panel — lazy-loaded below the legend on first
