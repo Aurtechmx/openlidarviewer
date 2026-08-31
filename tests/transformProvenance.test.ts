@@ -221,7 +221,7 @@ describe('ExportProvenance — discloses a supplied transform, carries none othe
       model: { crs: 'EPSG:32615', verticalDatum: 'EPSG:5703', intervalM: 1, contourStyle: 'smooth', coverageMode: 'full' },
       accuracyStandards: {
         rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
-        qualityLevel: 'QL2', qualityLevelReason: 'meets QL2.',
+        densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
       },
       quality: {
         readiness: 'ready', exportReadiness: 'available',

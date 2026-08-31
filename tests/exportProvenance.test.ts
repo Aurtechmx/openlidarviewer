@@ -38,7 +38,7 @@ function readyResult(): AnalyseContoursResult {
     model: { crs: 'EPSG:32610', verticalDatum: 'EPSG:5703', intervalM: 1, contourStyle: 'smooth', coverageMode: 'full' },
     accuracyStandards: {
       rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
-      qualityLevel: 'QL2', qualityLevelReason: '4.2 pts/m² and 0.14 m RMSEz meet QL2.',
+      densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
     },
     quality: {
       readiness: 'ready', exportReadiness: 'available',
@@ -116,7 +116,7 @@ describe('buildExportProvenance — field derivation', () => {
     const p = buildExportProvenance(readyResult(), OPTS);
     expect(p.accuracy).not.toBeNull();
     expect(p.accuracy?.rmseZM).toBeCloseTo(0.14);
-    expect(p.accuracy?.usgsQualityLevel).toBe('QL2');
+    expect(p.accuracy?.usgsDensityReferenceFloor).toBe('QL2');
     expect(p.pointDensityPerM2).toBeCloseTo(4.2);
   });
 
@@ -152,7 +152,7 @@ describe('buildExportProvenance — field derivation', () => {
     const base = readyResult() as unknown as { accuracyStandards: Record<string, unknown> };
     const noAcc = {
       ...(base as unknown as AnalyseContoursResult),
-      accuracyStandards: { rmseZM: null, nvaM: null, vvaM: null, pointDensityPerM2: 0, qualityLevel: 'unknown', qualityLevelReason: 'x' },
+      accuracyStandards: { rmseZM: null, nvaM: null, vvaM: null, pointDensityPerM2: 0, densityReferenceFloorsMet: [], densityReferenceNote: 'none' },
     } as unknown as AnalyseContoursResult;
     const p = buildExportProvenance(noAcc, OPTS);
     expect(p.accuracy).toBeNull();
@@ -193,9 +193,9 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     expect(text).toMatch(/Contour style\s+Smooth/);
     expect(text).toMatch(/Surface quality\s+Good/);
     expect(text).toMatch(/Export readiness\s+Ready/);
-    // "(estimated)" is load-bearing: the QL's RMSEz leg is hold-out-based,
-    // so the stamped grade must carry the same qualifier the panel chip does.
-    expect(text).toMatch(/USGS 3DEP\s+QL2 \(estimated\)/);
+    // A density REFERENCE, not a quality-level grade: the stamp names the 3DEP
+    // density floor the ground-return density clears, never a determination.
+    expect(text).toMatch(/USGS density ref\s+QL2 density floor \(reference\)/);
     // "-style (hold-out)" is equally load-bearing: the stamp must not claim
     // an ASPRS checkpoint assessment for hold-out figures.
     expect(text).toMatch(/NVA-style \(95%, hold-out\)/);
@@ -217,7 +217,7 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     expect(j.contourStyleLabel).toBe('Smooth');
     expect(j.surfaceQuality).toBe('Good');
     expect(j.exportReadiness).toBe('Ready');
-    expect((j.accuracy as { usgsQualityLevel: string }).usgsQualityLevel).toBe('QL2');
+    expect((j.accuracy as { usgsDensityReferenceFloor: string }).usgsDensityReferenceFloor).toBe('QL2');
     expect(j.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
     expect(j.evidence).toMatch(/exploratory/i);
     expect(Array.isArray(j.warnings)).toBe(true);
@@ -380,7 +380,7 @@ describe('processingManifestFromProvenance — the verify-only manifest assembly
 
 describe('provenanceJson — the machine-readable accuracy block states its basis', () => {
   const p: ExportProvenance = buildExportProvenance(readyResult(), OPTS);
-  it('carries a basis string beside nvaM / vvaM / usgsQualityLevel', () => {
+  it('carries a basis string beside nvaM / vvaM / usgsDensityReferenceFloor', () => {
     const j = provenanceJson(p);
     const acc = j.accuracy as Record<string, unknown>;
     expect(acc.nvaM).toBeTypeOf('number');

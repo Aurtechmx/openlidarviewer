@@ -71,12 +71,11 @@ export const METRIC_TOOLTIPS = {
     'VVA-style (hold-out) — the ASPRS vegetated vertical accuracy FORMULA ' +
     '(95th percentile), computed over ALL hold-out residuals, NOT ' +
     'vegetated-class checkpoints.',
-  qualityLevel:
-    'USGS 3DEP Quality Level — where the measured ground density and ' +
-    'vertical accuracy sit against the 3DEP thresholds for that level. ' +
-    'Estimated, not a determination: the RMSEz leg is measured on ' +
-    'internally withheld points (hold-out), NOT the independent ' +
-    'checkpoints a 3DEP assessment requires.',
+  densityReference:
+    'USGS density reference — which 3DEP nominal-pulse-density floor the ' +
+    'measured GROUND-return density clears, as context only. Ground-return ' +
+    'density is not nominal pulse density (NPD/ANPD), so this is a reference ' +
+    'threshold, never a USGS 3DEP quality-level determination.',
   crs:
     'CRS — coordinate reference system; exports are not georeferenced ' +
     'without it.',

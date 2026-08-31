@@ -1093,7 +1093,7 @@ function drawTitleBlock(
         ['NVA-style (95%, hold-out)', fmtM(prov.accuracy?.nvaM)],
         ['VVA-style (95th pct, hold-out)', fmtM(prov.accuracy?.vvaM)],
         ['RMSEz', fmtM(prov.accuracy?.rmseZM)],
-        ['USGS 3DEP', prov.accuracy && prov.accuracy.usgsQualityLevel !== 'unknown' ? `${prov.accuracy.usgsQualityLevel} (estimated)` : '—'],
+        ['USGS density ref', prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none' ? `>= ${prov.accuracy.usgsDensityReferenceFloor} floor` : '—'],
       ]
     : (() => {
         const a = input.accuracy ?? null;
@@ -1101,7 +1101,10 @@ function drawTitleBlock(
           ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
           ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
           ['RMSEz', fmtM(a?.rmseZM)],
-          ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? `${a.qualityLevel} (estimated)` : '—'],
+          [
+            'USGS density ref',
+            a && a.densityReferenceFloorsMet.length > 0 ? `>= ${a.densityReferenceFloorsMet[0]} floor` : '—',
+          ],
         ];
       })();
   aRows.forEach((r, i) => {

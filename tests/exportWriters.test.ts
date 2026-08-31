@@ -33,7 +33,7 @@ const PROV: ExportProvenance = {
   surfaceQuality: 'Good',
   exportReadiness: 'Ready',
   exportReason: '',
-  accuracy: { rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsQualityLevel: 'QL2' },
+  accuracy: { rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsDensityReferenceFloor: 'QL2' },
   complexity: null,
   pointDensityPerM2: 4.2,
   measuredCells: 90,
@@ -147,7 +147,7 @@ describe('toGeoJSON', () => {
     expect(gj.metadata.metricVersion).toBe('v0.4.1');
     expect(gj.metadata.exportReadiness).toBe('Ready');
     expect(gj.metadata.surfaceQuality).toBe('Good');
-    expect(gj.metadata.accuracy.usgsQualityLevel).toBe('QL2');
+    expect(gj.metadata.accuracy.usgsDensityReferenceFloor).toBe('QL2');
     expect(gj.metadata.generated).toBe('2026-06-05T00:00:00.000Z');
   });
 });
@@ -190,7 +190,7 @@ describe('svgContours', () => {
     const svg = svgContours(model([feat('solid', [[0, 0], [10, 0]], 10, true)]), {
       provenance: {
         ...PROV,
-        accuracy: { rmseZM: 0.1, nvaM: 0.2, vvaM: 0.3, usgsQualityLevel: 'QL2' },
+        accuracy: { rmseZM: 0.1, nvaM: 0.2, vvaM: 0.3, usgsDensityReferenceFloor: 'QL2' },
       },
       unitLabel: 'ft',
     });
