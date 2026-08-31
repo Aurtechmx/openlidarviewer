@@ -62,7 +62,7 @@ describe('validationDeliverableJson', () => {
 
   it('omits the raw calibration samples (a deliverable, not a fit input)', () => {
     const j = validationDeliverableJson(
-      report({ samples: [{ confidence: 0.5, error: 0.1 }] } as Partial<ValidationReport>),
+      report({ samples: [{ confidence: 50, absError: 0.1 }] } as Partial<ValidationReport>),
     );
     expect('samples' in j).toBe(false);
   });
