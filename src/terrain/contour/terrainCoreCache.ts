@@ -219,7 +219,7 @@ function classificationHash(
  * classification length stay unchanged. Keying only presence + length would let
  * such an edit reuse a stale core and silently emit the wrong DTM.
  */
-function paramsKey(params: TerrainCoreParams): string {
+export function paramsKey(params: TerrainCoreParams): string {
   const g = params.ground;
   const ground = g
     ? [
