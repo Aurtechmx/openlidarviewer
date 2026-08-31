@@ -152,7 +152,7 @@ import type { ClipBox } from './render/clip/clipBox';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
-import { HelpOverlay } from './ui/HelpOverlay';
+import { createHelpOverlayLazy } from './app/helpOverlayLazy';
 import {
   buildViewerKeyBindings,
   installKeyDispatch,
@@ -1876,7 +1876,7 @@ function syncInspectorVisuals(): void {
   inspector.setAdvancedWbVisible(viewer.isStreamingActive());
 }
 
-const helpOverlay = new HelpOverlay();
+const helpOverlay = createHelpOverlayLazy(stage.overlay); // lazy chunk, see helpOverlayLazy.ts
 
 const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
@@ -3801,15 +3801,14 @@ void viewerLoaded.then(() => {
     if (analysePanel) mountAnalysePanelElement(analysePanel.element);
     if (objectPanel) mountObjectPanelElement(objectPanel.element);
 
-    // The help overlay is a modal — appended last so it sits above everything.
-    stage.overlay.append(helpOverlay.element);
+    // The help overlay lazy-mounts itself on first Help press (helpOverlayLazy.ts).
 
     // Global keyboard shortcuts — single-key tool access, suppressed while
     // typing. Only wired for the full app, never the minimal embed view: this
     // populates the dispatch table's `globalActions` slot (null until now, so
     // embed leaves these keys unbound). A tool shortcut needs a loaded scan and
     // is inert behind the help modal.
-    const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen;
+    const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen();
     globalActionHandlers = {
       onAnnotate: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'annotate'); },
       onMeasure: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'measure'); },
@@ -3819,11 +3818,11 @@ void viewerLoaded.then(() => {
       },
       onDeleteSelection: () => {
         const id = viewer.annotate.selectedId;
-        if (id && !helpOverlay.isOpen) viewer.annotate.remove(id);
+        if (id && !helpOverlay.isOpen()) viewer.annotate.remove(id);
       },
       onToggleHelp: () => helpOverlay.toggle(),
       onUndo: () => {
-        if (helpOverlay.isOpen) return;
+        if (helpOverlay.isOpen()) return;
         const id = scans.activeId;
         const canClass = !!id && viewer.canUndoClassification(id);
         const pick = pickUndo(viewer.annotate.canUndo, canClass);
@@ -3835,7 +3834,7 @@ void viewerLoaded.then(() => {
         if (pick === 'classification') reclassifyUi?.refresh();
       },
       onRedo: () => {
-        if (helpOverlay.isOpen) return;
+        if (helpOverlay.isOpen()) return;
         const id = scans.activeId;
         const canClass = !!id && viewer.canRedoClassification(id);
         const pick = pickRedo(viewer.annotate.canRedo, canClass);
