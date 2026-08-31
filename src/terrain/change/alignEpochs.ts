@@ -469,3 +469,13 @@ export function summarizeAlignment(a: EpochAlignment): string {
     ? `${base} Indicative local-frame result — one or both epochs declare no CRS or vertical datum, so this is not a georeferenced agreement.`
     : base;
 }
+
+// The registration provenance record and its readout — re-exported here so the
+// compare flow, which already lazy-loads this module, reaches them through the
+// same import rather than a second lazy chunk.
+export {
+  buildRegistrationArtifact,
+  summarizeRegistration,
+  type RegistrationArtifact,
+  type RegistrationScans,
+} from './registrationArtifact';
