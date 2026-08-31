@@ -40,6 +40,9 @@ import { captureProvenance, isNonTerrainVerdict } from '../diagnostics/capturePr
 import { triggerDownload } from '../io/download';
 
 import type { MetadataInputs, ReportProvenanceFingerprint } from '../report';
+import type { ReportScanQuality } from '../report/types';
+import { buildScanQuality } from '../report/ReportScanQuality';
+import { georefStatus } from '../geo/georefStatus';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { Viewer } from '../render/Viewer';
 import type { DropZone } from '../ui/DropZone';
@@ -368,8 +371,40 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   } catch (err) {
     if (deps.debug) console.warn('[report] captureProvenance.fingerprint threw', err);
   }
+  // The Scan QA facts, built from what the loaded cloud proves: the
+  // georeferencing verdict from the RESOLVED active CRS (so a user override is
+  // honoured, exactly as the stamped CRS row is), how the classification arose,
+  // and which attributes the cloud carries. Built only for a static cloud — a
+  // streaming source carries none of these attribute arrays — so the
+  // `source-quality` section is omitted for a streamed scan rather than guessed.
+  let scanQuality: ReportScanQuality | undefined;
+  if (staticCloud) {
+    const crsKnown = activeCrsLabel !== undefined;
+    const datumKnown = activeCrs?.verticalDatum != null;
+    const gs = georefStatus(crsKnown, datumKnown, {
+      crsName: activeCrsLabel ?? null,
+      datumName: activeCrs?.verticalDatum ?? null,
+    });
+    const hasClassification = staticCloud.classification !== undefined;
+    scanQuality = buildScanQuality({
+      coordinateHeadline: gs.headline,
+      positionLabel: gs.positionLabel,
+      heightLabel: gs.heightLabel,
+      positionKnown: gs.positionKnown,
+      heightKnown: gs.heightKnown,
+      hasClassification,
+      classificationDerived: hasClassification && staticCloud.classificationIsDerived,
+      attributes: [
+        { name: 'RGB colour', present: staticCloud.colors !== undefined },
+        { name: 'Intensity', present: staticCloud.intensity !== undefined },
+        { name: 'Classification', present: hasClassification },
+        { name: 'GPS time', present: staticCloud.gpsTime !== undefined },
+      ],
+    });
+  }
   const inputs = report.composeReportInputs({
     templateId: validatedTemplateId,
+    scanQuality,
     title: coverTitle,
     subtitle: metadata.fileName,
     metadata,

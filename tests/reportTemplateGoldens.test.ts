@@ -184,7 +184,6 @@ describe('legacy template ids render via the engine', () => {
     ['qa-validation', 'technical-report'],
     ['technical-documentation', 'technical-report'],
     ['terrain-review', 'technical-report'],
-    ['scan-acceptance', 'technical-report'],
   ] as const)('%s → %s', async (legacy, expected) => {
     const { templateId, text } = await renderText(makeInputs(legacy));
     expect(templateId).toBe(expected);
@@ -192,9 +191,64 @@ describe('legacy template ids render via the engine', () => {
     expect(text).toContain('Expected accuracy (cited literature)');
   });
 
+  it('scan-acceptance now resolves to the real Scan QA successor', async () => {
+    // The retired metadata-presence checklist maps to the honest QA report.
+    const { templateId } = await renderText(makeInputs('scan-acceptance'));
+    expect(templateId).toBe('scan-qa');
+  });
+
   it('a genuinely unknown id still throws a precise error', async () => {
     await expect(generateReport(makeInputs('not-a-template'))).rejects.toThrow(
       /Unknown report template id/,
     );
+  });
+});
+
+describe('scan-qa source-quality section', () => {
+  function scanQaInputs(): ReportInputs {
+    return composeReportInputs({
+      templateId: 'scan-qa',
+      title: 'Scan QA fixture',
+      metadata: {
+        fileName: 'golden.copc.laz',
+        format: 'COPC',
+        sourcePointCount: 4_683_690,
+        width: 120, depth: 80, height: 22,
+        density: 488,
+        hasRgb: true, hasIntensity: true, hasClassification: true,
+        crsName: 'WGS 84 / UTM zone 12N (EPSG:32612)',
+        crsUnit: 'metre',
+      },
+      visuals: [],
+      annotations: [],
+      measurements: [],
+      unitSystem: 'metric',
+      scanQuality: {
+        coordinateHeadline: 'On the map · elevation datum not declared',
+        positionLabel: 'On the map',
+        heightLabel: 'Datum not declared',
+        classificationNote: 'Classification derived in the viewer (heuristic) — review before trusting.',
+        attributes: [
+          { name: 'RGB colour', present: true },
+          { name: 'Intensity', present: false },
+        ],
+        caveats: [
+          'This is a data-quality summary, not a survey-grade acceptance certificate.',
+          'Vertical accuracy is not established — no checkpoint comparison was run.',
+          'No vertical datum is declared, so heights are not tied to a known reference.',
+        ],
+      },
+    });
+  }
+
+  it('renders the QA facts and the does-not-establish boundary', async () => {
+    const { text, failed } = await renderText(scanQaInputs());
+    expect(failed).toEqual([]);
+    expect(text).toContain('Scan quality');
+    expect(text).toContain('On the map · elevation datum not declared');
+    expect(text).toContain('This report does not establish');
+    expect(text).toContain('not a survey-grade acceptance certificate');
+    // The QA template foregrounds the scan, not the user's own marks.
+    expect(text).not.toContain('Deck span');
   });
 });

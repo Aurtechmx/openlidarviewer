@@ -20,6 +20,7 @@ import type {
   ReportCoverInputs,
   ReportInputs,
   ReportProvenanceFingerprint,
+  ReportScanQuality,
   ReportSourceMetadata,
   ReportTemplateId,
   ReportVisualAsset,
@@ -86,6 +87,14 @@ export interface ComposeReportInputs {
    */
   readonly sourceMetadata?: ReportSourceMetadata;
   /**
+   * The Scan QA facts — the georeferencing verdict, classification provenance,
+   * attribute presence and does-not-establish caveats — built by the caller
+   * from the loaded cloud (it reads the resolved CRS and the cloud's attribute
+   * arrays, which this metadata-blind composer does not see). Rendered by the
+   * `source-quality` section; omitted → the section is omitted entirely.
+   */
+  readonly scanQuality?: ReportScanQuality;
+  /**
    * Annotation ordering — `'type'` groups issues together at the top,
    * `'createdAt'` (the default) reads chronologically. Mirrors the live
    * AnnotationPanel's two sort modes.
@@ -124,6 +133,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
     technicalNotes: input.technicalNotes,
     provenance: input.provenance,
     sourceMetadata: input.sourceMetadata,
+    scanQuality: input.scanQuality,
     // Synthesised once here so every template that includes the
     // `inspection-summary` section renders the same findings. Pure of the
     // renderer; the QL-tier gating lives in buildInspectionSummary.

@@ -1,7 +1,7 @@
 /**
  * ReportTemplates.ts
  *
- * The two built-in report templates. Each is a pure-data record:
+ * The built-in report templates. Each is a pure-data record:
  * id, label, description, ordered list of sections.
  *
  * v0.5.5 P12 — consolidated from the previous six-template catalogue.
@@ -79,10 +79,33 @@ const technicalReport: ReportTemplate = {
   ],
 };
 
+const scanQa: ReportTemplate = {
+  id: 'scan-qa',
+  label: 'Scan QA',
+  description:
+    'A data-quality summary of the loaded scan: the honest inspection ' +
+    'verdict, the coordinate-reference and classification-provenance facts, ' +
+    'the dataset metadata, and an explicit statement of what the report does ' +
+    'NOT establish. The successor to the retired acceptance checklist — every ' +
+    'line read off the cloud, no metadata-presence rows dressed as a certificate.',
+  sections: [
+    'cover',
+    // The QL-gated findings verdict — the honest core the old checklist lacked.
+    'inspection-summary',
+    // The Scan QA facts: georef verdict, classification provenance, caveats.
+    'source-quality',
+    'dataset-summary',
+    // Capture type + confidence, without the full literature-cited evidence chain.
+    'provenance-compact',
+    'footer',
+  ],
+};
+
 /** The full template catalogue, in display order. */
 export const REPORT_TEMPLATES: readonly ReportTemplate[] = [
   surveySummary,
   technicalReport,
+  scanQa,
 ];
 
 /**
@@ -94,17 +117,16 @@ export const REPORT_TEMPLATES: readonly ReportTemplate[] = [
  *    members of the ~85 %-identical family — the complete record is the
  *    honest replacement.
  *  - terrain-review: a strict section-subset of the same shared core.
- *  - scan-acceptance: retired with this consolidation. Its checklist was
- *    metadata-only presence rows — the same title-overpromising defect
- *    this change removes. It returns behind real cloud-sampled checks
- *    once the analysis seam lands.
+ *  - scan-acceptance: its metadata-presence checklist was retired, and now maps
+ *    to `scan-qa` — the honest successor whose facts are read off the cloud, the
+ *    "real cloud-sampled checks" the retirement said it would return behind.
  */
 export const LEGACY_TEMPLATE_IDS: Readonly<Record<string, ReportTemplateId>> = {
   'engineering-inspection': 'technical-report',
   'qa-validation': 'technical-report',
   'technical-documentation': 'technical-report',
   'terrain-review': 'technical-report',
-  'scan-acceptance': 'technical-report',
+  'scan-acceptance': 'scan-qa',
 };
 
 /**

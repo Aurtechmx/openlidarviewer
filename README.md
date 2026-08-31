@@ -169,7 +169,7 @@ See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md), [`docs/valid
 - Annotations: drop categorised, titled markers with notes, browse and search them, capture the camera viewpoint with each, and undo/redo. The panel and the PDF report open with a grouping summary (totals, per-category counts, and how many areas the notes fall across)
 - Inspection sessions: export measurements, annotations, and named views to one JSON file and reload them later
 - Workflow recorder: record and replay `.olvworkflow` files of camera moves and tool actions, with settings for file format, save destination, start/stop shortcut, replay speed, a pre-record countdown, captured action families, and loop replay. It records actions only, never scan data, so a recipient needs the same scan open to replay
-- Multi-page PDF technical reports: two built-in templates (Survey Summary, Technical Report) with branding and unit-system awareness
+- Multi-page PDF technical reports: three built-in templates (Survey Summary, Technical Report, Scan QA) with branding and unit-system awareness
 - Visual Export Studio: orthographic RGB, height map, intensity, classification, depth, normal, and contour map exports
 - Screenshot export that burns in placed measurements and annotations as inspection evidence
 </details>

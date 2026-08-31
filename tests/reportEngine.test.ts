@@ -30,9 +30,25 @@ import type { Measurement } from '../src/render/measure/types';
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('templates', () => {
-  it('ships exactly two report templates (v0.5.5 P12 consolidation)', () => {
-    expect(REPORT_TEMPLATES).toHaveLength(2);
-    expect(REPORT_TEMPLATES.map((t) => t.id)).toEqual(['survey-summary', 'technical-report']);
+  it('ships the survey, technical, and scan-QA templates', () => {
+    expect(REPORT_TEMPLATES).toHaveLength(3);
+    expect(REPORT_TEMPLATES.map((t) => t.id)).toEqual([
+      'survey-summary',
+      'technical-report',
+      'scan-qa',
+    ]);
+  });
+
+  it('scan-qa foregrounds the quality facts and omits the user\'s own marks', () => {
+    const t = getReportTemplate('scan-qa');
+    expect(t).toBeDefined();
+    if (!t) return;
+    expect(t.sections).toContain('inspection-summary');
+    expect(t.sections).toContain('source-quality');
+    expect(t.sections).toContain('dataset-summary');
+    expect(t.sections).not.toContain('measurements');
+    expect(t.sections).not.toContain('annotations');
+    expect(t.sections).not.toContain('visuals');
   });
 
   it('default template id resolves to a valid template', () => {
@@ -97,7 +113,8 @@ describe('templates', () => {
     expect(normalizeReportTemplateId('qa-validation')).toBe('technical-report');
     expect(normalizeReportTemplateId('technical-documentation')).toBe('technical-report');
     expect(normalizeReportTemplateId('terrain-review')).toBe('technical-report');
-    expect(normalizeReportTemplateId('scan-acceptance')).toBe('technical-report');
+    // scan-acceptance now resolves to its real successor, the Scan QA report.
+    expect(normalizeReportTemplateId('scan-acceptance')).toBe('scan-qa');
     expect(normalizeReportTemplateId('survey-summary')).toBe('survey-summary');
     expect(normalizeReportTemplateId('technical-report')).toBe('technical-report');
     // getReportTemplate follows the same mapping, so legacy callers work.
