@@ -5,16 +5,13 @@
  * its children. REPLACE means the parent's content is replaced by them, so it
  * must NOT be drawn once they are selected.
  *
- * The streaming scheduler draws every resident node. That is exactly right for
- * ADD. For REPLACE it draws the coarse parent and the fine children over the
- * same ground, which duplicates geometry on screen and inflates the displayed
- * point count. `Tile.refine` is parsed and reaches the streaming path nowhere,
- * so nothing downstream could tell the two apart.
- *
- * Until the scheduler can suppress a replaced ancestor, a REPLACE tile that
- * genuinely refines into content is refused by name rather than drawn wrongly.
- * A REPLACE tile that refines into nothing cannot duplicate anything, so it is
- * served.
+ * Both are served. Each node record carries the tile's own `refine` mode, and
+ * the scheduler's replace frontier (`replaceFrontier.ts`) hides a REPLACE parent
+ * once every one of its children is resident — an atomic parent → children swap.
+ * So a REPLACE tile that refines into content becomes a node like any other; the
+ * suppression is a render decision keyed on `refine`, not a parse-time refusal.
+ * These cases pin that the mode is parsed, carried onto the record, and read by
+ * the export frontier.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -45,35 +42,36 @@ const doc = (refine: string, childHasContent: boolean) =>
 
 describe('refinement mode', () => {
   it('serves an ADD tileset, parent and child together', () => {
-    // Additive refinement is what the scheduler already does correctly.
     const idx = tilesetNodes(parseTileset(doc('ADD', true)));
     expect(idx.records.map((r) => r.id)).toEqual(['root.pnts', 'child.pnts']);
     expect(idx.skipped).toEqual([]);
   });
 
-  it('refuses a REPLACE tile that refines into content', () => {
+  it('serves a REPLACE tile that refines into content, marking the parent replace', () => {
+    // No longer refused: the parent becomes a node and the render-time replace
+    // frontier hides it once its children cover it.
     const idx = tilesetNodes(parseTileset(doc('REPLACE', true)));
-    expect(
-      idx.skipped.join(' '),
-      'drawing the parent alongside its replacement duplicates geometry and ' +
-        'inflates the displayed point count',
-    ).toContain('REPLACE');
-    expect(idx.skipped.join(' ')).toContain('root.pnts');
+    expect(idx.records.map((r) => r.id)).toEqual(['root.pnts', 'child.pnts']);
+    expect(idx.skipped).toEqual([]);
+    const root = idx.records.find((r) => r.id === 'root.pnts');
+    expect(root?.refine).toBe('replace');
   });
 
-  it('carries the tile\'s own refinement onto the node record', () => {
-    const idx = tilesetNodes(parseTileset(doc('ADD', true)));
-    expect(idx.records.map((r) => r.refine)).toEqual(['add', 'add']);
-    // A REPLACE tile only survives the walk when it refines into nothing, so it
-    // is a content leaf and can never be an ancestor of another record. Its
-    // record still states the mode the document declared.
+  it("carries the tile's own refinement onto the node record", () => {
+    const add = tilesetNodes(parseTileset(doc('ADD', true)));
+    expect(add.records.map((r) => r.refine)).toEqual(['add', 'add']);
+    // A REPLACE parent with content below carries 'replace'; the child, which
+    // states no mode of its own, inherits it too.
+    const rep = tilesetNodes(parseTileset(doc('REPLACE', true)));
+    expect(rep.records.map((r) => r.refine)).toEqual(['replace', 'replace']);
+    // A REPLACE leaf still records the mode the document declared.
     expect(tilesetNodes(parseTileset(doc('REPLACE', false))).records[0].refine).toBe('replace');
   });
 
   it('keeps an ADD parent in the export frontier beside its resident child', () => {
     // The data-loss case. An additive parent's points are its own, so an export
     // that drops it for having a resident child is missing the coarse level of
-    // every tileset this reader can open.
+    // every additive tileset.
     const idx = tilesetNodes(parseTileset(doc('ADD', true)));
     const parentOf = (id: string): string | undefined =>
       idx.records.find((r) => r.id === id)?.parentId;
@@ -84,14 +82,26 @@ describe('refinement mode', () => {
     expect([...keep].sort()).toEqual(['child.pnts', 'root.pnts']);
   });
 
+  it('drops a REPLACE parent from the export frontier when its child is resident', () => {
+    // The mirror case: a replacing parent's points are re-represented by its
+    // child, so the snapshot keeps only the finer node.
+    const idx = tilesetNodes(parseTileset(doc('REPLACE', true)));
+    const parentOf = (id: string): string | undefined =>
+      idx.records.find((r) => r.id === id)?.parentId;
+    const keep = computeExportFrontier(
+      idx.records.map((r) => ({ id: r.id, refine: r.refine })),
+      parentOf,
+    );
+    expect([...keep]).toEqual(['child.pnts']);
+  });
+
   it('serves a REPLACE tile that refines into nothing', () => {
-    // Nothing replaces it, so nothing can be drawn twice.
     const idx = tilesetNodes(parseTileset(doc('REPLACE', false)));
     expect(idx.records.map((r) => r.id)).toEqual(['root.pnts']);
     expect(idx.skipped).toEqual([]);
   });
 
-  it('sees content anywhere below, not only in a direct child', () => {
+  it('serves a REPLACE tile whose content sits several levels below', () => {
     const deep = JSON.stringify({
       asset: { version: '1.1' },
       geometricError: 100,
@@ -109,9 +119,9 @@ describe('refinement mode', () => {
         ],
       },
     });
-    expect(
-      tilesetNodes(parseTileset(deep)).skipped.join(' '),
-      'a structural tile between the parent and its replacement hides nothing',
-    ).toContain('REPLACE');
+    const idx = tilesetNodes(parseTileset(deep));
+    expect(idx.records.map((r) => r.id)).toEqual(['root.pnts', 'deep.pnts']);
+    expect(idx.skipped).toEqual([]);
+    expect(idx.records.find((r) => r.id === 'root.pnts')?.refine).toBe('replace');
   });
 });

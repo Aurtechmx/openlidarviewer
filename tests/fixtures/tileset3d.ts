@@ -205,9 +205,10 @@ export interface BoxTilesetOptions {
  * geocentric frame and the report must say which way is up was never
  * established.
  *
- * `refine` is ADD throughout: a REPLACE tile that refines into content is
- * refused by the node walk, because this viewer draws every resident node and
- * would therefore draw a replaced parent alongside its replacements.
+ * `refine` is ADD throughout, so the parent and its children are all part of
+ * the represented surface and every resident node draws. (A REPLACE tileset is
+ * also served; there the scheduler's replace frontier hides a parent once its
+ * children cover it. This fixture stays additive to keep its point set stable.)
  */
 export function boxTileset(options: BoxTilesetOptions = {}): TilesetScene {
   const path = options.path ?? '/box';

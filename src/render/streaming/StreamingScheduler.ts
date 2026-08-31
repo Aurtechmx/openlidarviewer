@@ -40,6 +40,7 @@ import {
 import type { EvictionCandidate, EvictionHysteresis } from './evictionPolicy';
 import { evaluateRefinementReadiness, type SchedulerReadinessFacts } from './refinementReadiness';
 import { buildStreamingDiagnostics, type StreamingDiagnostics } from './streamingDiagnostics';
+import { computeReplaceHidden } from './replaceFrontier';
 
 /** Renderer-facing callbacks the scheduler drives. */
 export interface SchedulerCallbacks {
@@ -54,6 +55,14 @@ export interface SchedulerCallbacks {
    * by the streaming benchmark to build a tick-time histogram.
    */
   onTick?(ms: number): void;
+  /**
+   * The replace frontier changed — `hidden` is the set of resident node ids the
+   * renderer must not draw this frame (a REPLACE parent refined away, or a node
+   * withheld under an incomplete replacement). Emitted only for a hierarchy that
+   * contains a replacing node; a purely additive source (COPC, EPT, an ADD
+   * tileset) never fires it, so those meshes draw exactly as before.
+   */
+  onFrontierChanged?(hidden: ReadonlySet<string>): void;
 }
 
 /** The camera view for one scheduling pass, in local render space. */
@@ -690,8 +699,20 @@ export class StreamingScheduler {
     this._renderOrigin = [cloud.renderOrigin[0], cloud.renderOrigin[1], cloud.renderOrigin[2]];
     for (const node of cloud.octree.nodes()) {
       this._localBoundsFor(node);
+      if (node.record.refine === 'replace') this._hasReplace = true;
     }
   }
+
+  /**
+   * Whether any node in this source refines by REPLACE. Set once at
+   * construction from the fully-known tileset tree (a tileset walks its whole
+   * hierarchy upfront; COPC/EPT ingest additive nodes only, so a node arriving
+   * later is never replacing). Gates the per-tick replace-frontier work to
+   * nothing for every additive source.
+   */
+  private _hasReplace = false;
+  /** The last replace-frontier hidden set, to emit only on a real change. */
+  private _lastHiddenKey = ' ';
 
   /**
    * A node's bounds in local render space, computed on first use and cached.
@@ -1369,9 +1390,35 @@ export class StreamingScheduler {
     }
 
     this._dispatch();
+    this._emitReplaceFrontier();
     this._lastTickMs = nowMs() - startedAt;
     this._callbacks.onTick?.(this._lastTickMs);
     this._callbacks.onChange?.();
+  }
+
+  /**
+   * Recompute the replace frontier from the current resident set and hand the
+   * renderer the ids to hide, but only for a source that actually contains a
+   * replacing node and only when the set changed since the last tick. An
+   * additive source never reaches the body, so it pays a single boolean per
+   * tick and its meshes are never touched.
+   */
+  private _emitReplaceFrontier(): void {
+    if (!this._hasReplace) return;
+    const nodes = this._cloud.octree.store.all().map((node) => ({
+      id: node.record.id,
+      refine: node.record.refine,
+      resident: node.state === 'resident',
+      childIds: node.childIds,
+      parentId: node.record.parentId,
+    }));
+    const hidden = computeReplaceHidden(nodes);
+    // Emit only on a real change: an ordered key of the hidden ids is cheap
+    // next to re-touching every mesh's visibility each tick.
+    const key = [...hidden].sort().join(' ');
+    if (key === this._lastHiddenKey) return;
+    this._lastHiddenKey = key;
+    this._callbacks.onFrontierChanged?.(hidden);
   }
 
   /**

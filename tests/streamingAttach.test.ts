@@ -36,11 +36,18 @@ function decoded(over: Partial<{ classification: Uint8Array | undefined; posByte
   } as unknown as DecodedChunk;
 }
 
-function fakeRenderer(): Pick<StreamingRenderer, 'onNodeReady' | 'onNodeEvicted'> {
+function fakeRenderer(): Pick<
+  StreamingRenderer,
+  'onNodeReady' | 'onNodeEvicted' | 'applyReplaceVisibility'
+> {
   return {
     onNodeReady: vi.fn(),
     onNodeEvicted: vi.fn(),
-  } as unknown as Pick<StreamingRenderer, 'onNodeReady' | 'onNodeEvicted'>;
+    applyReplaceVisibility: vi.fn(),
+  } as unknown as Pick<
+    StreamingRenderer,
+    'onNodeReady' | 'onNodeEvicted' | 'applyReplaceVisibility'
+  >;
 }
 
 function fakeBenchmark(): StreamingBenchmark {
@@ -86,6 +93,19 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
     expect(renderer.onNodeReady).toHaveBeenCalledWith(node('0-0-0-0'), d);
     expect(classesHook).toHaveBeenCalledWith(d.classification);
     expect(readyHook).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards the replace frontier to the renderer visibility hook', () => {
+    const renderer = fakeRenderer();
+    const cb = buildSchedulerCallbacks({
+      renderer,
+      benchmark: null,
+      nodeClassesHook: () => undefined,
+      nodeReadyHook: () => undefined,
+    });
+    const hidden = new Set(['root.pnts']);
+    cb.onFrontierChanged?.(hidden);
+    expect(renderer.applyReplaceVisibility).toHaveBeenCalledWith(hidden);
   });
 
   it('skips the class hook when the host has none, or the chunk carries no classification', () => {

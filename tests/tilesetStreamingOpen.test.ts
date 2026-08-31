@@ -384,16 +384,16 @@ describe('a refusal reaches the user', () => {
         root: {
           boundingVolume: BOX2,
           geometricError: 50,
-          refine: 'REPLACE',
+          refine: 'ADD',
           content: { uri: 'a.pnts' },
           children: [
-            { boundingVolume: BOX2, geometricError: 10, contents: [{ uri: 'b.pnts' }] },
+            { boundingVolume: BOX2, geometricError: 10, content: { uri: 'mesh.b3dm' } },
           ],
         },
       }),
     );
     expect(shown).not.toContain('corrupt');
-    expect(shown).toContain('REPLACE');
+    expect(shown).toContain('mesh.b3dm');
   });
 
   it('names the tile it cannot serve', async () => {

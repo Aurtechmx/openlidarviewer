@@ -30,7 +30,7 @@ import { walkTilePlacements } from './tileTransform';
 import { volumeToAabb } from './tilesetTraversal';
 import type { Aabb } from './boundingVolume';
 import { resolveTilesetContentUrl, tilesetBaseUrl, tilesetUrlSearch } from './tilesetUrl';
-import type { Tile, Tileset } from './tileset';
+import type { Tileset } from './tileset';
 
 /**
  * Points assumed for a tile whose body has not been read.
@@ -122,14 +122,6 @@ function aabbThroughMatrix(aabb: Aabb, m: readonly number[]): Aabb {
   };
 }
 
-/** Whether any tile below this one carries content of its own. */
-function subtreeHasContent(tile: Tile): boolean {
-  for (const child of tile.children) {
-    if (child.contentUris.length > 0 || subtreeHasContent(child)) return true;
-  }
-  return false;
-}
-
 /** An AABB as the streaming model's flat six-number box. */
 function toBox6(min: readonly number[], max: readonly number[]): Box6 {
   return [min[0], min[1], min[2], max[0], max[1], max[2]];
@@ -157,15 +149,11 @@ export function tilesetNodes(
   const skipped: string[] = [];
   const seen = new Set<string>();
   // REPLACE means a refined tile's content is replaced by its children, so the
-  // parent must not be drawn once they are selected. The streaming scheduler
-  // has no such rule: it draws every resident node, which is exactly right for
-  // ADD and duplicates geometry for REPLACE, over-reporting displayed points
-  // along with it. Rather than draw a scene that is quietly wrong, a REPLACE
-  // tile that actually refines into content is refused by name.
-  //
-  // A REPLACE tile whose subtree holds no further content refines into nothing,
-  // so nothing can be duplicated and it is served.
-  const replacing: string[] = [];
+  // parent must not be drawn once they are selected. Each served node carries
+  // its `refine` mode (below), and the scheduler's replace frontier
+  // (`replaceFrontier.ts`) hides a REPLACE parent once every one of its children
+  // is resident — an atomic parent → children swap with no overlap and no hole.
+  // So a REPLACE tile that refines into content is now served like any other.
   // Nearest ancestor WITH content, so the store's parent chain skips the
   // structural tiles that produce no node of their own.
   const contentParent: string[] = [];
@@ -225,10 +213,6 @@ export function tilesetNodes(
       }
       seen.add(uri);
 
-      if (placed.tile.refine === 'REPLACE' && subtreeHasContent(placed.tile)) {
-        replacing.push(uri);
-      }
-
       // Refused before anything is fetched, and named, so the open can say which
       // tile it would have had to request.
       let target = uri;
@@ -256,12 +240,11 @@ export function tilesetNodes(
         byteSize: 0,
         spacing: placed.geometricError,
         parentId,
-        // The document's own value, resolved by the parser (a child inherits its
-        // parent's when it declares none). Only ADD, and REPLACE that refines
-        // into nothing, get this far — a REPLACE tile with content below it is
-        // named in `replacing` and refuses the open — so a served node is never
-        // a replaced ancestor of another. Carrying the value anyway keeps the
-        // export frontier reading the tile rather than a default.
+        // The document's own refine mode, resolved by the parser (a child
+        // inherits its parent's when it declares none). The scheduler's replace
+        // frontier reads it to hide a REPLACE parent once its children cover it,
+        // and the export frontier reads it to drop a replaced ancestor from a
+        // snapshot; an ADD node is drawn alongside its children by both.
         refine: placed.tile.refine === 'REPLACE' ? 'replace' : 'add',
       });
       contentUri.set(uri, target);
@@ -269,13 +252,6 @@ export function tilesetNodes(
       // The first served content anchors this tile's children.
       if (contentParent[placed.depth] == null) contentParent[placed.depth] = uri;
     }
-  }
-
-  for (const uri of replacing) {
-    skipped.push(
-      `${uri}: refines by REPLACE into tiles with their own content, which this ` +
-        `reader would draw alongside it rather than instead of it.`,
-    );
   }
 
   return { records, contentUri, transform, skipped };

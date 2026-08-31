@@ -119,7 +119,7 @@ export function shouldFadeIn(isMobile: boolean, quality: StreamingQuality): bool
  * benchmark bookkeeping are Node-testable with fakes.
  */
 export function buildSchedulerCallbacks(deps: {
-  renderer: Pick<StreamingRenderer, 'onNodeReady' | 'onNodeEvicted'>;
+  renderer: Pick<StreamingRenderer, 'onNodeReady' | 'onNodeEvicted' | 'applyReplaceVisibility'>;
   benchmark: StreamingBenchmark | null;
   nodeClassesHook(): ((classes: Uint8Array) => void) | undefined;
   nodeReadyHook(): (() => void) | undefined;
@@ -164,6 +164,13 @@ export function buildSchedulerCallbacks(deps: {
       benchmark?.recordNodeEvicted(node.record.id);
     },
     onTick: benchmark ? (ms: number): void => benchmark.recordSchedulerTick(ms) : undefined,
+    // A REPLACE tileset hands the renderer the ids to hide so a coarse parent is
+    // not drawn over its finer children; the scheduler fires this only for a
+    // hierarchy that contains a replacing node, so an additive source never
+    // reaches it and its meshes are left drawing as before.
+    onFrontierChanged: (hidden: ReadonlySet<string>): void => {
+      renderer.applyReplaceVisibility(hidden);
+    },
   };
 }
 
