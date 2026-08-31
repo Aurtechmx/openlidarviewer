@@ -290,6 +290,14 @@ export const loadObjectPanel = () => import('./ui/ObjectPanel');
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
 
 /**
+ * Load the static Help overlay (should-have #15) on the first Help
+ * button press or `onToggleHelp` shortcut, never in the startup shell. The
+ * card is pure static markup with no live state — nothing before the first
+ * open can need it, so it no longer rides the eager index bundle.
+ */
+export const loadHelpOverlay = () => import('./ui/HelpOverlay');
+
+/**
  * Load the live colorbar legend overlay. Fetched the first time the active
  * colour mode is a continuous scalar (elevation / intensity / gpsTime /
  * returnNumber) — an RGB-only session never downloads it, and the eager
