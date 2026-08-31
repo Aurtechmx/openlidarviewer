@@ -589,6 +589,22 @@ describe('metamorphic: volumeCutFill', () => {
     },
   );
 
+  it('HOLDS: reflecting the cloud about the reference plane swaps fill and cut and negates net', () => {
+    // z → 2·refZ − z mirrors every point across the reference plane, so material
+    // that was above it is now the same amount below and vice-versa: fill and cut
+    // exchange exactly and the signed net inverts. A sign error in the estimator
+    // (e.g. counting a below-plane point as fill) breaks this.
+    const r = volumeCutFill({
+      polygon: HEX,
+      referenceZ: REF_Z,
+      positions: emit(CLOUD, (p) => [p[0], p[1], 2 * REF_Z - p[2]]),
+    });
+    expect(r.pointsInPolygon).toBe(BASE.pointsInPolygon);
+    assertRelClose(r.fill, BASE.cut, TOL_PERMUTATION, 'reflect fill↔cut');
+    assertRelClose(r.cut, BASE.fill, TOL_PERMUTATION, 'reflect cut↔fill');
+    assertScaledClose(r.net, -BASE.net, BASE.fill + BASE.cut, TOL_PERMUTATION, 'reflect net negates');
+  });
+
   it('the all-above fixture has no material below the plane', () => {
     expect(ABOVE_BASE.validity).toBe('ok');
     expect(ABOVE_BASE.cut).toBe(0);

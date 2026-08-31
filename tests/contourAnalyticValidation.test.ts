@@ -93,6 +93,34 @@ describe('analytic contour validation (§24.1)', () => {
       expect(Math.abs((meanCur - meanPrev) - 4)).toBeLessThan(0.25);
     }
   });
+
+  // ── Degeneracy: a constant surface crosses no intermediate level ──
+  it('a constant surface produces no contour segments at a level it does not equal', () => {
+    const flat = grid(() => 50, 30, 30);
+    const set = contoursAt(flat, { intervalM: 5, levels: [10, 20, 30, 40] });
+    const total = set.levels.reduce((n, l) => n + l.segments.length, 0);
+    // No cell straddles any requested level, so marching squares emits nothing —
+    // a flat surface has no isolines, and inventing one would be a false feature.
+    expect(total).toBe(0);
+  });
+
+  // ── Metamorphic: translating elevation shifts the level labels, not the lines ──
+  it('adding a constant Δz to a tilted plane relabels the isolines by Δz (same geometry)', () => {
+    // z = x (gradient 1 in x): the contour at value L is the vertical line x = L.
+    // Adding Δ makes z = x + Δ, so its contour at value L sits where x = L − Δ —
+    // i.e. exactly where the ORIGINAL surface's contour at value (L − Δ) sits.
+    const plane = (x: number) => x;
+    const delta = 7;
+    const base = contoursAt(grid((x) => plane(x), 41, 41), { intervalM: 10, levels: [20] });
+    const shifted = contoursAt(grid((x) => plane(x) + delta, 41, 41), { intervalM: 10, levels: [20 + delta] });
+    const xs = (s: ReturnType<typeof contoursAt>): number =>
+      mean(vertices(s).map((v) => v.x));
+    expect(base.levels[0].segments.length).toBeGreaterThan(0);
+    expect(shifted.levels[0].segments.length).toBeGreaterThan(0);
+    // Same isoline geometry: the mean x of level 20 on z equals that of level
+    // 20+Δ on z+Δ, to sub-cell precision.
+    expect(Math.abs(xs(shifted) - xs(base))).toBeLessThan(0.1);
+  });
 });
 
 function mean(a: number[]): number {
