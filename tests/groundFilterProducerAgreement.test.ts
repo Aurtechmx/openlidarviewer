@@ -22,10 +22,23 @@
  *
  *     GF_SCENE=/path/to/tile.laz GF_STRIDE=10 npx vitest run tests/groundFilterProducerAgreement.test.ts
  *
- * Observed data points (exploratory, licences unverified, not registered): on
- * natural terrain OLV's filter tracks the producer closely (F1 ≈ 0.95, MCC ≈
- * 0.92); on a complex urban scene precision falls (≈ 0.34) as flat building
- * roofs are read as ground — a known morphological-filter weakness.
+ * Observed data points (exploratory, producer labels are a REFERENCE not survey
+ * truth). Four independently-labelled scenes across the difficulty spectrum:
+ *
+ *   scene                         land cover        recall  prec.  F1     MCC
+ *   ----------------------------  ----------------  ------  -----  -----  -----
+ *   open natural (4_6.las)        bare / low relief  —      —      0.951  0.917
+ *   Jemez snow-off (OLV-DS-078)   montane forest    0.884  0.625  0.732  0.629
+ *   Rogue 3DEP (OLV-DS-079)       dense canopy      0.918  0.338  0.494  0.531
+ *   urban (autzen)                buildings          —     0.340   —      —
+ *
+ * Consistent pattern: recall stays high everywhere, precision collapses where
+ * something flat sits above ground — dense canopy (Rogue, ~4% producer ground)
+ * and building roofs (urban) both read as ground, the known morphological-filter
+ * weakness. Jemez and Rogue carry verified licences (CC BY 4.0; US-Government
+ * public domain) and are registered as OLV-DS-078/079; the numbers reproduce via
+ * GF_SCENE. None of this is survey-grade and none promotes a claim to E5, which
+ * still requires independent checkpoints.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -112,6 +125,6 @@ describe.skipIf(!(SCENE && existsSync(SCENE)))(
       // producer labelling is a reference, not a survey truth to gate against.
       expect(producerGroundN).toBeGreaterThan(0);
       expect(codes.length).toBe(count);
-    });
+    }, 180_000); // decode + derive over a multi-million-point real tile exceeds the default 15 s cap
   },
 );

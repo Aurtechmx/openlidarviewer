@@ -2279,3 +2279,69 @@ datasets:
     knownLimitations: "Residual vectors written as exact decimal literals, not returns from a survey. Four of the six carry values computed from the construction; the other two exist to compare implementations. The set exercises the estimators over a residual vector and says nothing about how a residual vector is produced, so interpolation, ground classification and checkpoint independence are all outside it."
     storage: committed
     localPath: validation/external-oracles/statistics/residuals.json
+
+  - datasetId: OLV-DS-078-JEMEZ-SNOWOFF-2010-FOREST
+    title: "Jemez River Basin Snow-off Lidar Survey, one 1 km OpenTopography tile"
+    sourceUrl: https://opentopography.org/
+    landingPage: https://opentopography.org/
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-31
+    sourceSha256: 323d3145d6fa5e97c5c0ee51b006c5f54ccd5027d1641adc4e5556fc79be4fc2
+    sourceBytes: 49114702
+    format: laz
+    pointCount: 10789680
+    sensorType: airborne-lidar
+    capturePlatform: aircraft
+    captureDate: 2010-04-01
+    horizontalCrs: "EPSG:26913 NAD83(CORS96) / UTM zone 13N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID03)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 9.68
+    terrainClasses: [montane, forested-slope, river-basin]
+    landCoverClasses: [coniferous-forest, bare-earth, shrub]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "National Center for Airborne Laser Mapping (NCALM), distributed by OpenTopography"
+    citation: "Jemez River Basin Snow-off Lidar Survey. Distributed by OpenTopography, https://opentopography.org/. Use License: CC BY 4.0. Tile ot_356000_3972000_1.laz retrieved 2026-08-31."
+    knownLimitations: "The producer ground class (ASPRS class 2) is a reference labelling, not surveyed ground truth: agreement with it bounds classifier-to-producer difference, not accuracy. A single 1 km snow-off tile over forested montane terrain; canopy return density limits ground return coverage on steep slopes. The file is 49 MB and not vendored; the ground-filter agreement harness reads it from GF_SCENE."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-079-ROGUE-SISKIYOU-2019-3DEP
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, one LAS 1.4 tile"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-08-31
+    sourceSha256: ba8b7a3b08a05a190896013d701348d00dc843f03f36654329160bb66def15c3
+    sourceBytes: 130981300
+    format: laz
+    pointCount: 24063174
+    sensorType: airborne-lidar
+    capturePlatform: aircraft
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-08-31."
+    knownLimitations: "The producer ground class (ASPRS class 2) is a reference labelling, not surveyed ground truth. Dense-canopy forest tile: only ~4% of returns are producer ground, so precision is dominated by canopy/understorey false positives. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) noted in the metadata. The file is 131 MB and not vendored; the ground-filter agreement harness reads it from GF_SCENE."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
