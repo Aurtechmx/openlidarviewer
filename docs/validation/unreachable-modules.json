@@ -160,13 +160,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/render/measure/profileCorridorOutline.ts",
-      "status": "staged",
-      "why": "Drawable geometry for the capsule corridor profileCorridor.ts tests membership against. The scene draws no corridor outline.",
-      "graduation": "The section overlay draws the corridor from this outline.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/render/measure/profileRawFilter.ts",
       "status": "staged",
       "why": "Chooses which accepted corridor returns the raw scatter draws, and describes the choice. The section view draws its scatter without this selection layer.",

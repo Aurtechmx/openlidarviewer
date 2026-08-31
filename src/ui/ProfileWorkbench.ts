@@ -106,6 +106,12 @@ export interface ProfileWorkbenchOptions {
    * a failure shows on the control the user pressed.
    */
   readonly onExportImage?: () => Promise<void>;
+  /**
+   * Show or hide the 3D outline of the corridor the section sampled from — its
+   * sampling support, not an uncertainty band. Absent means no corridor control
+   * is rendered (there is no 3D scene to draw into). Off by default.
+   */
+  readonly onToggleCorridor?: (on: boolean) => void;
   /** Called when the user closes the panel. */
   readonly onClose?: () => void;
 }
@@ -206,6 +212,7 @@ class ProfileWorkbench {
   private readonly _titleInput: HTMLInputElement | null;
   private readonly _exportBtn: HTMLButtonElement | null;
   private readonly _exportImageBtn: HTMLButtonElement | null;
+  private readonly _corridorBtn: HTMLButtonElement | null;
   private readonly _status: HTMLElement;
   private readonly _detail: HTMLElement;
   private readonly _readout: HTMLElement;
@@ -308,10 +315,34 @@ class ProfileWorkbench {
       this._on(btn, 'click', () => void this._exportImage(btn));
     }
 
+    // A toggle, not an action: it flips the 3D sample-corridor outline on and
+    // off. aria-pressed carries the state so it reads as a toggle to assistive
+    // tech; off by default, so the scene is unchanged until the user asks.
+    this._corridorBtn = options.onToggleCorridor
+      ? el('button', {
+          className: 'olv-workbench-btn',
+          type: 'button',
+          text: 'Sample corridor',
+          ariaLabel: 'Show the 3D outline of the corridor this section sampled from',
+        })
+      : null;
+    if (this._corridorBtn) {
+      const btn = this._corridorBtn;
+      btn.setAttribute('aria-pressed', 'false');
+      this._on(btn, 'click', () => {
+        const on = btn.getAttribute('aria-pressed') !== 'true';
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.classList.toggle('is-active', on);
+        options.onToggleCorridor?.(on);
+      });
+    }
+
     const exportBtns = [this._exportBtn, this._exportImageBtn].filter(
       (b): b is HTMLButtonElement => b !== null,
     );
-    const actions = [...exportBtns, this._collapseBtn, closeBtn];
+    const actions = [this._corridorBtn, ...exportBtns, this._collapseBtn, closeBtn].filter(
+      (b): b is HTMLButtonElement => b !== null,
+    );
     const head = el('div', { className: 'olv-workbench-head' }, [
       el('div', { className: 'olv-workbench-titles' }, [
         this._title,

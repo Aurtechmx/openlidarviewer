@@ -71,6 +71,10 @@ import {
 } from '../render/measure/profileHitTest';
 import { buildProfilePointDetail } from '../render/measure/profilePointDetail';
 import {
+  buildProfileCorridorOutline,
+  type ProfileCorridorOutline,
+} from '../render/measure/profileCorridorOutline';
+import {
   profileDetailSources,
   profileHoverReadout,
   profileLinkStatusText,
@@ -754,6 +758,13 @@ export interface WorkbenchSectionScene {
   /** Place or clear the 3D mark. Absent ⇒ the link is 2D only. */
   markLinkedReturn?(marker: (ProfileLinkMarker & { readonly size: number }) | null): void;
   /**
+   * Hand the runtime the section's sample-corridor outline (or null to clear) so
+   * it can draw the 3D corridor the transect sampled from. The runtime decides
+   * whether it is currently shown; this only supplies the geometry when a section
+   * finishes. Absent ⇒ no corridor is drawn.
+   */
+  markSampleCorridor?(outline: ProfileCorridorOutline | null): void;
+  /**
    * Move the camera onto a point.
    *
    * Reached ONLY from a deliberate focus action on a clicked selection. A
@@ -847,6 +858,8 @@ export function presentWorkbenchSection(
     // standing in the scene over a section nobody can see any more.
     link?.release();
     link = null;
+    // …and the sample-corridor outline, for the same reason.
+    scene.markSampleCorridor?.(null);
   }
 
   const profile = scene.profile(id);
@@ -902,6 +915,14 @@ export function presentWorkbenchSection(
       // previous one would answer for pixels that now hold different returns.
       link?.invalidate();
     });
+    // The corridor the section sampled from, built from the SAME frame + resolved
+    // half-width the walk used, so the outline encloses exactly the returns the
+    // transect drew from. The runtime decides whether it is currently shown. A
+    // section with no frame (degenerate transect) simply draws no corridor.
+    if (!stopped && section.frame) {
+      const halfWidth = Number.isFinite(section.band) ? section.band : 0;
+      scene.markSampleCorridor?.(buildProfileCorridorOutline(section.frame, halfWidth));
+    }
     // The plot is ready: an export control can now compose from the same state
     // the dock is showing. Skipped if the presentation was already disposed.
     if (!stopped) hooks.onReady?.(plot);

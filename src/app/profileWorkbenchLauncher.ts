@@ -103,6 +103,12 @@ export interface ProfileWorkbenchLauncherDeps {
    * PNG control.
    */
   exportImage?: (request: ProfileWorkbenchLaunchRequest) => Promise<void>;
+  /**
+   * Show or hide the 3D sample-corridor outline for the section a dock is
+   * plotting. Absent means the dock renders no corridor control (and the 3D
+   * corridor stays off).
+   */
+  onToggleCorridor?: (on: boolean) => void;
   /** Told about a rejected import, so a silent fallback still leaves a trace. */
   onLoadFailure?: (error: unknown) => void;
   /** Told about a `present` that threw, for the same reason. */
@@ -172,12 +178,14 @@ export function createProfileWorkbenchLauncher(
     const rename = deps.rename;
     const exportPdf = deps.exportPdf;
     const exportImage = deps.exportImage;
+    const onToggleCorridor = deps.onToggleCorridor;
     const mounted = module.mountProfileWorkbench(host, {
       title: request.name,
       scope: request.name,
       ...(rename ? { onRename: (name: string) => rename(request.id, name) } : {}),
       ...(exportPdf ? { onExportPdf: () => exportPdf(request.id) } : {}),
       ...(exportImage ? { onExportImage: () => exportImage(request) } : {}),
+      ...(onToggleCorridor ? { onToggleCorridor } : {}),
       onClose: () => {
         // Only for the dock that is still the live one: a panel closed by the
         // mount that replaced it must not hand back the successor's height.

@@ -25,6 +25,8 @@ import {
 } from './profileWorkbenchSection';
 import { loadProfileWorkbench } from '../lazyChunks';
 import { ProfileLinkOverlay } from '../render/ProfileLinkOverlay';
+import { ProfileCorridorOverlay } from '../render/ProfileCorridorOverlay';
+import type { ProfileCorridorOutline } from '../render/measure/profileCorridorOutline';
 import { focusPoseOnPoint } from '../render/measure/profilePointLink';
 
 import type { ProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
@@ -102,6 +104,13 @@ export function createProfileWorkbenchRuntime(
   // A per-dock overlay would need the launcher to remember to dispose the
   // previous one, which is exactly the "stale mark left in the scene" bug.
   let overlay: ProfileLinkOverlay | null = null;
+  // The sample-corridor outline: one overlay for the runtime, and a visibility
+  // flag the dock's toggle drives. The section presenter supplies the latest
+  // outline (`markSampleCorridor`); the flag decides whether it is drawn, so
+  // toggling never re-runs the section walk.
+  let corridorOverlay: ProfileCorridorOverlay | null = null;
+  let corridorVisible = false;
+  let lastCorridorOutline: ProfileCorridorOutline | null = null;
   const markerHost = deps.markerHost;
   const camera = deps.camera;
 
@@ -116,6 +125,15 @@ export function createProfileWorkbenchRuntime(
             }
             overlay ??= new ProfileLinkOverlay(markerHost());
             overlay.show({ position: marker.position, mode: marker.mode, size: marker.size });
+          },
+          markSampleCorridor: (outline): void => {
+            lastCorridorOutline = outline;
+            // The overlay is built on the first time it is actually shown, not on
+            // every section finish: a dock the user never turns the corridor on
+            // for never touches the scene host at all.
+            if (!corridorVisible) return;
+            corridorOverlay ??= new ProfileCorridorOverlay(markerHost());
+            corridorOverlay.show(outline);
           },
         }
       : {}),
@@ -139,6 +157,19 @@ export function createProfileWorkbenchRuntime(
     stage: createStageProfileWorkbench(deps.stage),
     ...(deps.rename ? { rename: deps.rename } : {}),
     ...(deps.exportPdf ? { exportPdf: deps.exportPdf } : {}),
+    ...(markerHost
+      ? {
+          onToggleCorridor: (on: boolean): void => {
+            corridorVisible = on;
+            if (on) {
+              corridorOverlay ??= new ProfileCorridorOverlay(markerHost());
+              corridorOverlay.show(lastCorridorOutline);
+            } else {
+              corridorOverlay?.show(null);
+            }
+          },
+        }
+      : {}),
     exportImage: async (request) => {
       const current = live;
       if (!current) {
