@@ -32,7 +32,7 @@ describe('buildFindingsPanel', () => {
     const findings = new SessionFindings();
     const { element } = buildFindingsPanel({
       findings,
-      collectMeasurements: () => [],
+      collectMeasurements: () => Promise.resolve([]),
       exportReport: () => {},
     });
     expect(q(element, '.olv-findings-empty')).not.toBeNull();
@@ -40,14 +40,16 @@ describe('buildFindingsPanel', () => {
     expect(q(element, '.olv-findings-clear').disabled).toBe(true);
   });
 
-  it('adds current measurements to the ledger and renders rows', () => {
+  it('adds current measurements to the ledger and renders rows', async () => {
     const findings = new SessionFindings();
     const { element } = buildFindingsPanel({
       findings,
-      collectMeasurements: () => [finding('Distance AB', 43.28), finding('Stockpile A', 612.4)],
+      collectMeasurements: () => Promise.resolve([finding('Distance AB', 43.28), finding('Stockpile A', 612.4)]),
       exportReport: () => {},
     });
     q(element, '.olv-findings-add').click();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(findings.count).toBe(2);
     expect(q(element, '.olv-findings-list').querySelectorAll('.olv-findings-row')).toHaveLength(2);
     // The band and caveat travel onto the row.
@@ -56,14 +58,16 @@ describe('buildFindingsPanel', () => {
     expect(q(element, '.olv-findings-export').disabled).toBe(false);
   });
 
-  it('reports nothing to add when there are no measurements', () => {
+  it('reports nothing to add when there are no measurements', async () => {
     const findings = new SessionFindings();
     const { element } = buildFindingsPanel({
       findings,
-      collectMeasurements: () => [],
+      collectMeasurements: () => Promise.resolve([]),
       exportReport: () => {},
     });
     q(element, '.olv-findings-add').click();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(findings.count).toBe(0);
     expect(q(element, '.olv-findings-status').textContent).toMatch(/no placed measurements/i);
   });
@@ -74,7 +78,7 @@ describe('buildFindingsPanel', () => {
     findings.add(finding('B', 2));
     const { element } = buildFindingsPanel({
       findings,
-      collectMeasurements: () => [],
+      collectMeasurements: () => Promise.resolve([]),
       exportReport: () => {},
     });
     // Remove the first row.
@@ -89,7 +93,7 @@ describe('buildFindingsPanel', () => {
     let exported: readonly ReportFinding[] | null = null;
     const { element } = buildFindingsPanel({
       findings,
-      collectMeasurements: () => [],
+      collectMeasurements: () => Promise.resolve([]),
       exportReport: (f) => {
         exported = f;
       },

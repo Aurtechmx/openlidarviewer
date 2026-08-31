@@ -30,6 +30,9 @@ import type { ClipBox } from '../render/clip/clipBox';
 import type { ExportFormat } from '../io/exporters';
 import type { ExportMode } from '../export/types';
 import { buildExportDeliverables, type ExportDeliverables } from './export/exportDeliverables';
+import type { ReportFinding } from '../render/measure/reportManifest';
+import { SessionFindings } from '../render/measure/sessionFindings';
+import { buildFindingsPanel, type MountedFindingsPanel } from './findingsPanel';
 
 /**
  * Lightweight, allocation-free description of the exportable cloud, used to
@@ -116,6 +119,15 @@ export interface ExportPanelCallbacks {
    */
   exportIntegrityReport?: () => void;
   /**
+   * Convert the placed measurements into report findings for the findings
+   * ledger. Async because the converter lives in a lazy chunk. Wiring this AND
+   * {@link exportFindingsReport} mounts the durable findings ledger under the
+   * Measurements group.
+   */
+  collectMeasurementFindings?: () => Promise<readonly ReportFinding[]>;
+  /** Export the curated findings ledger as the signed integrity report (JSON). */
+  exportFindingsReport?: (findings: readonly ReportFinding[]) => void;
+  /**
    * Export a site KML (annotations + measurements + viewpoints) for Google
    * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
    */
@@ -180,6 +192,9 @@ export class ExportPanel {
   private readonly _summary: HTMLElement;
   private readonly _products: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
+  /** The session findings ledger, owned here and rendered by the findings panel. */
+  private readonly _findings = new SessionFindings();
+  private _findingsPanel: MountedFindingsPanel | null = null;
 
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
   // default the panel to it so the pill selection matches the recommended choice.
@@ -578,6 +593,19 @@ export class ExportPanel {
             : `${count} measurement${measurePlural} ready to export.`,
         ),
       );
+      // The durable findings ledger: curate the results worth keeping (each with
+      // its band and caveats), then export the whole ledger as the same signed
+      // integrity report. Mounted only when the host wires both halves.
+      if (this._cb.collectMeasurementFindings && this._cb.exportFindingsReport) {
+        const collect = this._cb.collectMeasurementFindings;
+        const exportReport = this._cb.exportFindingsReport;
+        this._findingsPanel = buildFindingsPanel({
+          findings: this._findings,
+          collectMeasurements: () => collect(),
+          exportReport: (f) => exportReport(f),
+        });
+        content.append(this._productGroup('Findings ledger', this._findingsPanel.element));
+      }
     }
 
     // The map lane: everything that lands in Google Earth / QGIS as lon/lat.
@@ -635,13 +663,12 @@ export class ExportPanel {
   }
 
   /** One labelled product group: label, its stacked actions, one line of hint. */
-  private _productGroup(label: string, actions: HTMLElement, hint: string): HTMLElement {
+  private _productGroup(label: string, actions: HTMLElement, hint?: string): HTMLElement {
     const group = el('div', { className: 'olv-export-product-group' });
-    group.append(
-      this._label(label),
-      actions,
-      el('span', { className: 'olv-export-fullres-hint', text: hint }),
-    );
+    group.append(this._label(label), actions);
+    if (hint) {
+      group.append(el('span', { className: 'olv-export-fullres-hint', text: hint }));
+    }
     return group;
   }
 

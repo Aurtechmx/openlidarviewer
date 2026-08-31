@@ -25,9 +25,10 @@ export interface FindingsPanelDeps {
   /**
    * The findings to append when the reviewer clicks "Add current measurements"
    * — the host converts the live measurements via `measurementsToFindings`.
-   * Returns an empty array when there is nothing to add.
+   * Async because the converter lives in a lazily-loaded chunk. Returns an empty
+   * array when there is nothing to add.
    */
-  readonly collectMeasurements: () => readonly ReportFinding[];
+  readonly collectMeasurements: () => Promise<readonly ReportFinding[]>;
   /**
    * Export the ledger as the integrity report. The host builds the manifest
    * (SHA-256) and triggers the download; the panel only decides WHEN and passes
@@ -107,14 +108,21 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
   };
 
   addBtn.addEventListener('click', () => {
-    const toAdd = deps.collectMeasurements();
-    if (toAdd.length === 0) {
-      status.textContent = 'No placed measurements to add.';
-      return;
-    }
-    for (const f of toAdd) findings.add(f);
-    status.textContent = `Added ${toAdd.length} measurement finding(s).`;
-    render();
+    addBtn.disabled = true;
+    void deps
+      .collectMeasurements()
+      .then((toAdd) => {
+        if (toAdd.length === 0) {
+          status.textContent = 'No placed measurements to add.';
+          return;
+        }
+        for (const f of toAdd) findings.add(f);
+        status.textContent = `Added ${toAdd.length} measurement finding(s).`;
+        render();
+      })
+      .finally(() => {
+        addBtn.disabled = false;
+      });
   });
 
   exportBtn.addEventListener('click', () => {

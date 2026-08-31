@@ -52,7 +52,7 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 115,
+      "runtime": 116,
       "typeOnly": 19,
       "dynamic": 7,
       "modules": [
@@ -73,6 +73,7 @@
         "src/app/crsCoordinator.ts",
         "src/app/epochFramePrep.ts",
         "src/app/exportCrsResolver.ts",
+        "src/app/exportImageAction.ts",
         "src/app/floorPlanPositions.ts",
         "src/app/inspectorCardRefreshers.ts",
         "src/app/kmlActions.ts",
@@ -161,10 +162,10 @@
         "src/ui/embedConfig.ts",
         "src/ui/headerControls.ts",
         "src/ui/isMobileDevice.ts",
+        "src/ui/keyBindings.ts",
         "src/ui/navBarWiring.ts",
         "src/ui/onboarding/bootTour.ts",
         "src/ui/panelChrome.ts",
-        "src/ui/shortcuts.ts",
         "src/ui/streamingScanReveal.ts",
         "src/ui/themes.ts",
         "src/ui/toolDock.ts",
@@ -263,7 +264,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 770,
+    "filesScanned": 777,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above."
   }
