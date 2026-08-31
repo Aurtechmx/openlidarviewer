@@ -150,6 +150,11 @@ skills-lock.json
 .vscode/
 .idea/
 
+# AI/session artifact files — conversational scratch, never part of the source.
+# Ignored so lint:no-tracked-ignored refuses them if one is ever added.
+*.prompt.md
+*.session.md
+
 # Python bytecode — a compiled artifact nobody reads, and one that would pin an
 # interpreter version into a tree that states 3.11 in .python-version.
 __pycache__/
