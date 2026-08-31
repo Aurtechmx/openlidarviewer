@@ -1,7 +1,7 @@
 /**
  * terrainQualityScore.ts
  *
- * A single calibrated 0–100 terrain quality score that summarises how much a
+ * A single heuristic 0–100 terrain readiness index that summarises how much a
  * surveyor should trust the DTM, combining six honest signals:
  *
  *   coverage    — measured cells as a fraction of covered cells
@@ -11,10 +11,13 @@
  *   edge        — fraction of measured cells NOT on the survey boundary
  *   ground      — ground returns as a fraction of all returns
  *
+ * The six weights are hand-chosen heuristics for workflow readiness — NOT an
+ * external calibration against a registered validation dataset — so the index is
+ * a heuristic composite that carries no scientific claim.
  * It complements — does not replace — the ready/previewOnly/blocked gate: the
- * gate decides whether export is allowed; the score says how good the surface
+ * gate decides whether export is allowed; the index says how ready the surface
  * is within that. Unknown signals (no validation, unknown ground ratio) score
- * a neutral 0.5 rather than being assumed good, so the score never overclaims.
+ * a neutral 0.5 rather than being assumed good, so the index never overclaims.
  *
  * Pure data — no DOM. Deterministic.
  */

@@ -818,10 +818,13 @@ claims:
     scopeNote: "ACCURACY-NVA95-R-RESIDUALS shows that the 95 percent figure is 1.96 times the pooled RMSE and that the product agrees with a base-R recomputation to 8.88e-16 over the six frozen residual fixtures. That is the derivation checked in a second language, not a vertical accuracy assessment; requiredEvidence stays at E5 because the statistic is still computed on an internal holdout with no independent checkpoints."
 
   - claimId: QUALITY-LEVEL
-    product: USGS Quality-Level comparison
-    algorithm: Two-metric threshold comparison (density + internal RMSE)
-    algorithmVersion: v0.4.x
-    claim: "Comparison of density + internal RMSE against named/versioned thresholds — NOT a quality-level compliance determination."
+    # Identity retained for the generated export-gate registry; the claim now
+    # describes the density-only reference comparison production actually ships
+    # (the retired two-metric density+RMSE level assignment is gone from src).
+    product: Ground-return density vs published reference floors
+    algorithm: Single-metric comparison of observed ground-return density against published USGS 3DEP nominal-pulse-density reference floors; RMSEz feeds the hold-out NVA/VVA diagnostic separately and never selects a floor
+    algorithmVersion: v0.6.x
+    claim: "Observed ground-return density compared numerically against named/versioned published density floors — NOT a quality-level compliance determination, and not an NPD/ANPD measurement."
     currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/qualityLevelOracle.test.ts, tests/demAccuracyStandards.test.ts, tests/verticalAccuracy.test.ts]
@@ -829,17 +832,17 @@ claims:
     units: [pts-per-sq-m, metres]
     crsDatum: metric
     assumptions:
-      - "compliance requires independent checkpoints + full standard"
-      - "both legs of the published table are inclusive: density >= the pts/m2 floor, RMSEz <= the metre ceiling"
-      - "the level reported is the strongest row a (density, RMSEz) pair clears; a pair clearing no row is below-QL3, and an unusable density or RMSEz is unknown"
-    failureModes: ["misread as compliance"]
+      - "a formal quality level requires independent checkpoints and the full acquisition specification (NPS/swath), none of which this comparison uses"
+      - "the comparison is single-metric: observed ground-return density against the published pts/m2 floors; RMSEz is a separate hold-out diagnostic and never selects a floor"
+      - "an unusable or missing ground-return density yields no floor; ground-return density is not NPD/ANPD"
+    failureModes: ["misread as compliance", "merged/multi-pass data may not represent acquisition pulse density", "classification and unsupported regions affect observed ground-return density"]
     exportAllowed: true
-    userLabel: "Two-metric threshold comparison (not a compliance determination)"
+    userLabel: "Ground-return density reference (not a quality-level determination)"
     softwareStatus: shipping
     evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
-    approvedClaim: "Density + internal RMSE compared to stated thresholds."
-    prohibitedClaim: ["USGS QL compliance", "meets ASPRS quality level"]
+    approvedClaim: "Observed ground-return density compared to published reference density floors, indicating which floors the value exceeds."
+    prohibitedClaim: ["USGS QL compliance", "meets ASPRS quality level", "nominal pulse density or ANPD inferred from ground-return density", "formal USGS project Quality Level"]
     scope:
       supported: []
       unsupported:

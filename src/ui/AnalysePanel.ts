@@ -2155,8 +2155,9 @@ export class AnalysePanel {
       el('div', { className: 'olv-analyse-cal', text: calText }),
     );
 
-    // Standards expression — NVA (95% conf), VVA (95th pct), and the USGS
-    // 3DEP Quality Level the surface meets on density + RMSEz together.
+    // Standards expression — NVA (95% conf), VVA (95th pct), and which published
+    // USGS 3DEP nominal-pulse-density reference floors the observed ground-return
+    // density clears (density only; no quality-level determination).
     const std = this._result?.accuracyStandards;
     if (std) {
       const fmtM = (n: number | null): string =>

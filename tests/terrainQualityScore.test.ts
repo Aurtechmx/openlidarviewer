@@ -2,6 +2,8 @@
  * terrainQualityScore.test.ts — composite 0–100 terrain quality score.
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import {
   terrainQualityScore,
@@ -80,5 +82,20 @@ describe('terrainQualityScore', () => {
     for (let i = 1; i < bands.length; i++) {
       expect(rank[bands[i]]).toBeLessThanOrEqual(rank[bands[i - 1]]);
     }
+  });
+});
+
+describe('terrain readiness index — honesty of naming', () => {
+  it('the module does not present the index as an externally calibrated accuracy score', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../src/terrain/quality/terrainQualityScore.ts', import.meta.url)),
+      'utf8',
+    );
+    // §3: the index is a heuristic workflow-readiness composite. The header must
+    // not make the POSITIVE claim that it is a calibrated / accuracy score.
+    expect(src).not.toMatch(/\ba calibrated [^.]*score/i);
+    expect(src).not.toMatch(/\bcalibrated 0–100/i);
+    expect(src).toMatch(/heuristic/i);
+    expect(src).toMatch(/readiness index/i);
   });
 });
