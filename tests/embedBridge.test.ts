@@ -237,47 +237,21 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     dispose();
   });
 
-  it('with an allow-list set, ACCEPTS a state command from a listed origin', () => {
+  // Once an embedder configures allowedOrigins, the list gates EVERY command
+  // (not just load-file): a genuine-parent state command runs only from a listed
+  // origin, and an unlisted or null/opaque origin is dropped before it runs.
+  // Table-driven so the one dispatch+assert shape is written once.
+  it.each([
+    ['a listed origin', 'https://host.example', true],
+    ['an unlisted origin', 'https://attacker.example', false],
+    ['a null/opaque origin', 'null', false],
+  ] as const)('with an allow-list set, a state command from %s runs=%s', (_label, origin, shouldRun) => {
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
     const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
-    env.dispatch({
-      source: env.parent,
-      origin: 'https://host.example',
-      data: { type: 'toggle-layer', id: 'cloud_0', visible: true },
-    });
-    expect(calls.onToggleLayer).toHaveBeenCalledWith('cloud_0', true);
-    dispose();
-  });
-
-  it('with an allow-list set, REFUSES a state command from an UNLISTED origin', () => {
-    // The origin allow-list gates every command, not just load-file: once an
-    // embedder configures allowedOrigins, a genuine-parent message from an
-    // origin outside the list is dropped before the command runs.
-    const { handlers, calls } = makeHandlers();
-    const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
-    env.dispatch({
-      source: env.parent,
-      origin: 'https://attacker.example',
-      data: { type: 'toggle-layer', id: 'cloud_0', visible: true },
-    });
-    expect(calls.onToggleLayer).not.toHaveBeenCalled();
-    dispose();
-  });
-
-  it('with an allow-list set, REFUSES a null/opaque origin', () => {
-    // A sandboxed or data-URL parent posts with origin "null"; it can never be
-    // on an explicit allow-list, so a configured allow-list refuses it.
-    const { handlers, calls } = makeHandlers();
-    const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
-    env.dispatch({
-      source: env.parent,
-      origin: 'null',
-      data: { type: 'toggle-layer', id: 'cloud_0', visible: true },
-    });
-    expect(calls.onToggleLayer).not.toHaveBeenCalled();
+    env.dispatch({ source: env.parent, origin, data: { type: 'toggle-layer', id: 'cloud_0', visible: true } });
+    if (shouldRun) expect(calls.onToggleLayer).toHaveBeenCalledWith('cloud_0', true);
+    else expect(calls.onToggleLayer).not.toHaveBeenCalled();
     dispose();
   });
 });
