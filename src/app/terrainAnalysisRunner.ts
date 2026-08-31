@@ -45,12 +45,15 @@ import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareToler
 // TYPE-ONLY: the service and the overlay it builds both load lazily, so
 // neither this import nor the runner widens the startup shell chunk.
 import type { ContourLayerService } from './contourLayerService';
+import type { DerivedLayer, DerivedLayerStore } from '../model/DerivedLayer';
+import type { DerivedLayersList } from '../ui/DerivedLayersList';
 import {
   loadTerrainCoreCache,
   loadComputeTerrainCoreAsync,
   loadContourLayerService,
   loadContourOverlay,
   loadDerivedLayer,
+  loadDerivedLayersList,
   loadDerivedLayerReceipt,
 } from '../lazyChunks';
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
@@ -279,6 +282,12 @@ export function createTerrainAnalysisRunner(
   // three-free — the overlay class (and with it three/webgpu) arrives through a
   // lazy import, so nothing here widens the startup shell.
   let contourLayers: ContourLayerService | null = null;
+  // The shared derived-layer store and the Layers-panel section that lists it.
+  // Both are built once, lazily, alongside the first product's service, so every
+  // derived layer (contours today; more as each is routed through the store) is
+  // listed and toggled in one place rather than through a per-product control.
+  let derivedStore: DerivedLayerStore | null = null;
+  let derivedList: DerivedLayersList | null = null;
 
   /** The contour derived-layer service, or null before the first analysis. */
   const getContourLayers = (): ContourLayerService | null => contourLayers;
@@ -299,6 +308,32 @@ export function createTerrainAnalysisRunner(
     return scale != null ? verticalUnitLabel(scale) : null;
   }
 
+  /**
+   * Route a Layers-list visibility change to the service that owns the layer's
+   * geometry. The store holds display state, but each product's service is what
+   * mirrors it onto the scene, so a generic control dispatches by type. Contours
+   * are the only routed product today; another is added here as it joins the
+   * store, and a layer with no service yet updates its record only.
+   */
+  function applyDerivedVisibility(layer: DerivedLayer, visible: boolean): void {
+    if (layer.type === 'contours' && contourLayers) {
+      const scanId = layer.sourceScanIds[0];
+      if (scanId) contourLayers.setVisible(scanId, visible);
+      return;
+    }
+    derivedStore?.setVisible(layer.id, visible);
+  }
+
+  /** Opacity counterpart of {@link applyDerivedVisibility}. */
+  function applyDerivedOpacity(layer: DerivedLayer, opacity: number): void {
+    if (layer.type === 'contours' && contourLayers) {
+      const scanId = layer.sourceScanIds[0];
+      if (scanId) contourLayers.setOpacity(scanId, opacity);
+      return;
+    }
+    derivedStore?.setOpacity(layer.id, opacity);
+  }
+
   async function showContourLayer(
     result: AnalyseContoursResult,
     scanId: string | null,
@@ -309,17 +344,35 @@ export function createTerrainAnalysisRunner(
       const cloud = viewer.getCloud(scanId);
       if (!cloud) return;
       if (!contourLayers) {
-        const [{ createContourLayerService }, { DerivedLayerStore }, { ContourOverlay }] =
-          await Promise.all([
-            loadContourLayerService(),
-            loadDerivedLayer(),
-            loadContourOverlay(),
-          ]);
+        const [
+          { createContourLayerService },
+          { DerivedLayerStore },
+          { ContourOverlay },
+          { createDerivedLayersList },
+        ] = await Promise.all([
+          loadContourLayerService(),
+          loadDerivedLayer(),
+          loadContourOverlay(),
+          loadDerivedLayersList(),
+        ]);
+        // ONE store, shared by every product's service and the Layers-panel
+        // list, so a layer is listed the moment its service registers it.
+        const store = new DerivedLayerStore();
+        derivedStore = store;
         contourLayers = createContourLayerService({
           host: viewer.derivedLayerHost(),
-          store: new DerivedLayerStore(),
+          store,
           makeOverlay: (host) => new ContourOverlay(host),
         });
+        // The list reads the store; its controls route back to the owning
+        // service, which updates the store AND the drawn geometry. A store
+        // notification then re-renders the row, so the two cannot drift.
+        derivedList = createDerivedLayersList({
+          store,
+          onSetVisible: (layer, visible) => applyDerivedVisibility(layer, visible),
+          onSetOpacity: (layer, opacity) => applyDerivedOpacity(layer, opacity),
+        });
+        getAnalysePanel().setDerivedLayersList(derivedList.element);
       }
       // The digest identifies the RUN reproducibly: the record's fingerprint
       // covers the scientific content only — not build, not time — so two runs

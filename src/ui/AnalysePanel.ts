@@ -447,6 +447,8 @@ export class AnalysePanel {
   private readonly _contourLauncher: HTMLElement;
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
   private readonly _contourLayerControls: HTMLElement;
+  /** Mount point for the generic derived-layers list (built by the runner). */
+  private readonly _derivedLayersHost: HTMLElement;
   private readonly _contourDeliverable: HTMLElement;
   /** Monotonic token so a slow lazy launcher load can't mount a stale result. */
   private _contourToken = 0;
@@ -598,6 +600,7 @@ export class AnalysePanel {
 
     this._contourLauncher = el('div', { className: 'olv-analyse-contour-launcher' });
     this._contourLayerControls = el('div', { className: 'olv-analyse-layer-controls olv-hidden' });
+    this._derivedLayersHost = el('div', { className: 'olv-analyse-derived-layers' });
     this._contourDeliverable = el('div', {
       className: 'olv-analyse-contour-deliverable olv-hidden',
     });
@@ -639,7 +642,12 @@ export class AnalysePanel {
     // own "Terrain Products" eyebrow; this wrapper just groups + spaces it. Only
     // the stale caveat outranks it, so a stale verdict is never read as current.
     const terrainProducts = el('div', { className: 'olv-analyse-products' });
-    terrainProducts.append(this._contourLauncher, this._contourLayerControls, this._contourDeliverable);
+    terrainProducts.append(
+      this._contourLauncher,
+      this._contourLayerControls,
+      this._derivedLayersHost,
+      this._contourDeliverable,
+    );
 
     this._resultsRegion.append(
       this._staleNotice,
@@ -902,6 +910,15 @@ export class AnalysePanel {
    * re-reads what the service actually applied, so the record stays the single
    * source of truth and the UI can never drift from what is drawn.
    */
+  /**
+   * Mount the generic derived-layers list (the runner builds it against the
+   * shared store). Idempotent: a second call replaces the mounted element, so a
+   * re-init cannot stack two lists.
+   */
+  setDerivedLayersList(element: HTMLElement): void {
+    this._derivedLayersHost.replaceChildren(element);
+  }
+
   setContourLayerControls(controls: ContourLayerControls | null): void {
     const host = this._contourLayerControls;
     host.replaceChildren();

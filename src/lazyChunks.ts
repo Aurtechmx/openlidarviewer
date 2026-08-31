@@ -466,6 +466,7 @@ export const loadExportProvenance = () => import('./terrain/export/exportProvena
  */
 export const loadContourLayerService = () => import('./app/contourLayerService');
 export const loadDerivedLayer = () => import('./model/DerivedLayer');
+export const loadDerivedLayersList = () => import('./ui/DerivedLayersList');
 export const loadContourOverlay = () => import('./render/ContourOverlay');
 export const loadDerivedLayerReceipt = () => import('./science/derivedLayerReceipt');
 
