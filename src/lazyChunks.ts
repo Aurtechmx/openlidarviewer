@@ -464,6 +464,13 @@ export const loadExportProvenance = () => import('./terrain/export/exportProvena
  * which reloaded the page, so the run looked like a crash back to the start
  * screen. Held here for the reason the module exists.
  */
+/**
+ * Load the coordinate-HUD mount on the FIRST probe hover, never in the startup
+ * shell. The HUD is hidden until a point is under the cursor, so its builder,
+ * the cursor readout and the CRS-frame banner it renders have no reason to weigh
+ * on the boot frame — `app/coordinateHudLazy.ts` defers them behind this.
+ */
+export const loadCoordinateHudMount = () => import('./app/coordinateHudMount');
 export const loadContourLayerService = () => import('./app/contourLayerService');
 export const loadDerivedLayer = () => import('./model/DerivedLayer');
 export const loadDerivedLayersList = () => import('./ui/DerivedLayersList');

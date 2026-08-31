@@ -80,7 +80,7 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 import { createMeasurePanelMount, createAnalyseProfileVisibility } from './app/measurePanelMount';
 import { createProcessStudioFromShell } from './app/processStudioMount';
 import { readTerrainComputePath } from './app/terrainComputePath';
-import { wireCoordinateHud } from './app/coordinateHudMount';
+import { lazyCoordinateHud } from './app/coordinateHudLazy';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
@@ -3379,7 +3379,7 @@ void viewerLoaded.then(() => {
     },
     // The persistent corner coordinate HUD reads the same hovered point the probe
     // resolves, and renders the CRS/unit/frame-honest banner from cursorReadout.
-    onHoverInfo: wireCoordinateHud({
+    onHoverInfo: lazyCoordinateHud({
       mount: (el) => stage.overlay.append(el),
       activeCrs: () => crsService.current() ?? undefined,
       upAxis: () => crsService.context().upAxis,
