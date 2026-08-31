@@ -414,6 +414,25 @@ describe('buildDemPackage', () => {
     const studio = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_ContourStudio.json')!));
     expect(studio.contourStyle).toBe('generalized');
     expect(studio.contourMethod).toBe('olv.contour.generalize@1');
+    // The three sibling rasters ship as valid GeoTIFFs on the DTM grid — each
+    // built from a REAL per-cell array, none synthesised.
+    for (const name of ['site_Hillshade.tif', 'site_Support.tif', 'site_Uncertainty.tif']) {
+      const tif = extractEntry(zip, name);
+      expect(tif, name).not.toBeNull();
+      const tags = readTiffTags(tif!);
+      expect(tags.get(258)).toBe(32); // Float32 sample
+      expect(tags.get(256)! * tags.get(257)!).toBeGreaterThan(0); // has cells
+    }
+    // The support raster keeps unsupported cells VISIBLE (a coverage code), not
+    // dropped to NODATA: at least one cell reads a finite 0/1/2 support code.
+    const sup = extractEntry(zip, 'site_Support.tif')!;
+    const supTags = readTiffTags(sup);
+    const supDv = new DataView(sup.buffer, sup.byteOffset, sup.byteLength);
+    const codes = new Set<number>();
+    for (let i = 0; i < supTags.get(256)! * supTags.get(257)!; i++) {
+      codes.add(supDv.getFloat32(supTags.get(273)! + i * 4, true));
+    }
+    expect([...codes].some((c) => c === 0 || c === 1 || c === 2)).toBe(true);
     // …and the deliverable self-describes the purpose it was built for.
     const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
     expect(prov.deliverablePurpose).toBe('presentation-map');

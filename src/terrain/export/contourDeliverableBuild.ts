@@ -7,11 +7,12 @@
  * a SHA256SUMS integrity manifest (contourDeliverablePackage).
  *
  * Scope: the deliverable bundles the CURRENT contour geometry (honestly
- * labelled analytical vs cartographic by its actual style), the DTM raster, the
- * cartographic DXF (when the geometry is cartographic), the validation JSON, the
- * Contour Studio settings JSON, provenance, a README and checksums. The rasters
- * beyond the DTM (hillshade / support / uncertainty) stay OMITTED with honest
- * reasons — never shipped as empty placeholders. Widening the set is additive.
+ * labelled analytical vs cartographic by its actual style), the DTM raster and
+ * its three sibling rasters (hillshade, per-cell support, per-cell model
+ * confidence — each from a REAL grid array, never synthesised), the cartographic
+ * DXF (when the geometry is cartographic), the validation JSON, the Contour
+ * Studio settings JSON, provenance, a README and checksums. A product whose
+ * inputs are absent is OMITTED with an honest reason — never an empty placeholder.
  *
  * Pure and synchronous given the result: no DOM, no I/O. Reuses the same
  * serializers every other export uses, so a file in the package is byte-for-byte
@@ -84,9 +85,9 @@ export interface DeliverableBuildOptions {
 const OMISSION_REASONS: Partial<Record<PackageRole, string>> = {
   'contour-map-pdf': 'Export separately via the Map sheet (PDF) product.',
   'contours-cartographic-dxf': 'Included only with a cartographic contour export.',
-  'hillshade-raster': 'A shaded-relief raster is not yet part of this package.',
-  'support-raster': 'A per-cell support raster is not yet part of this package.',
-  'uncertainty-raster': 'A per-cell uncertainty raster is not yet part of this package.',
+  'hillshade-raster': 'The shaded-relief grid was not computed for this result.',
+  'support-raster': 'No DTM grid, so there is no per-cell support to raster.',
+  'uncertainty-raster': 'Per-cell model confidence was not available for this result.',
 };
 
 /**
@@ -229,6 +230,43 @@ function gatherDeliverable(
         verticalUnitCode: verticalUnitGeoKeyCode(dtm.verticalUnitToMetres),
       }),
     );
+
+    // The sibling rasters share the DTM's grid + georeferencing but carry no
+    // elevation datum (they are not heights), so the vertical GeoKeys are left
+    // off. Each reads a REAL per-cell array the analysis already holds — none is
+    // synthesised. A `gridRaster` helper keeps the three writes identical.
+    const cellCount = dtm.cols * dtm.rows;
+    const gridRaster = (values: ArrayLike<number>, mask: ArrayLike<number>): Uint8Array =>
+      writeGeoTiff({
+        values,
+        coverage: mask,
+        cols: dtm.cols,
+        rows: dtm.rows,
+        cellSize: dtm.cellSizeM,
+        xllCorner: ox + dtm.originH1,
+        yllCorner: oy + dtm.originH2,
+        noData: NO_DATA,
+        epsg: dtm.horizontalEpsg ?? parseEpsg(dtm.crs),
+        isGeographic: opts.isGeographic ?? false,
+      });
+
+    // Hillshade — the shaded-relief image already computed on the DTM grid; its
+    // own coverage marks empty cells so a deep shadow is not read as no-data.
+    const hs = result.surface?.hillshade;
+    if (hs && hs.shade.length === cellCount && hs.coverage.length === cellCount) {
+      bytes.set('hillshade-raster', gridRaster(hs.shade, hs.coverage));
+    }
+    // Support — the per-cell provenance code (2 measured / 1 interpolated / 0
+    // unsupported) IS the coverage array. Written with an all-present mask so the
+    // unsupported cells stay visible as 0 rather than being dropped to NODATA.
+    if (dtm.coverage.length === cellCount) {
+      bytes.set('support-raster', gridRaster(dtm.coverage, new Uint8Array(cellCount).fill(1)));
+    }
+    // Uncertainty — the per-cell model confidence (0..100, higher = better
+    // supported); NODATA where the cell has no data, so it is never invented.
+    if (dtm.confidence && dtm.confidence.length === cellCount) {
+      bytes.set('uncertainty-raster', gridRaster(dtm.confidence, dtm.coverage));
+    }
   }
 
   bytes.set('provenance-json', enc(JSON.stringify(provenanceJson(provenance), null, 2)));
@@ -284,9 +322,9 @@ function manifestFor(g: GatheredDeliverable, opts: DeliverableBuildOptions, pdf:
       nativeGeojson: g.bytes.has('contours-native-geojson'),
       cartographicDxf: g.bytes.has('contours-cartographic-dxf'),
       dtm: g.bytes.has('dtm-raster'),
-      hillshade: false,
-      support: false,
-      uncertainty: false,
+      hillshade: g.bytes.has('hillshade-raster'),
+      support: g.bytes.has('support-raster'),
+      uncertainty: g.bytes.has('uncertainty-raster'),
       validationJson: g.bytes.has('validation-json'),
       provenanceJson: g.bytes.has('provenance-json'),
       studioJson: g.bytes.has('contour-studio-json'),
