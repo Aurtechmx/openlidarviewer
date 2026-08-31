@@ -288,6 +288,34 @@ test('parseCrsFromVlrs — ignores non-LASF_Projection VLRs', () => {
   expect(parseCrsFromVlrs(buffer, vlrStart, count)).toBeNull();
 });
 
+test('parseCrsFromVlrs — a 2111 math-transform VLR with no 2112 does NOT resolve as a CRS', () => {
+  // Record ID 2111 (Math Transform WKT) is an optional supplemental transform,
+  // not a coordinate system, per the LAS spec. Falling back to it as the CRS
+  // when 2112 is absent would silently mislabel the file's frame.
+  const wktBytes = new TextEncoder().encode(UTM12N_WKT + '\0');
+  const { buffer, vlrStart, count } = buildVlrBuffer(
+    [{ userId: 'LASF_Projection', recordId: 2111, payload: wktBytes }],
+    100,
+  );
+  expect(parseCrsFromVlrs(buffer, vlrStart, count)).toBeNull();
+});
+
+test('parseCrsFromVlrs — a 2112 CRS WKT alongside a 2111 math-transform VLR uses only 2112', () => {
+  const wktBytes = new TextEncoder().encode(UTM12N_WKT + '\0');
+  const mathBytes = new TextEncoder().encode('PARAM_MT["Affine"]\0');
+  const { buffer, vlrStart, count } = buildVlrBuffer(
+    [
+      { userId: 'LASF_Projection', recordId: 2111, payload: mathBytes },
+      { userId: 'LASF_Projection', recordId: 2112, payload: wktBytes },
+    ],
+    100,
+  );
+  const crs = parseCrsFromVlrs(buffer, vlrStart, count);
+  expect(crs).not.toBeNull();
+  expect(crs?.source).toBe('wkt');
+  expect(crs?.epsg).toBe(32612);
+});
+
 test('parseCrsFromVlrs — gracefully returns null on truncated buffer', () => {
   // A "buffer" that promises 5 VLRs but only has bytes for one header.
   const buffer = new ArrayBuffer(100);

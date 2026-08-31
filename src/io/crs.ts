@@ -6,8 +6,10 @@
  * specification:
  *
  *   1. OGC WKT (LAS 1.4 default and best for modern files) — VLR with
- *      User ID `LASF_Projection`, record ID 2112 (Coordinate System WKT)
- *      or 2111 (Math Transform WKT). Payload is null-terminated ASCII.
+ *      User ID `LASF_Projection`, record ID 2112 (Coordinate System WKT).
+ *      Payload is null-terminated ASCII. Record ID 2111 (Math Transform WKT)
+ *      is a distinct, optional supplemental transform, NOT a coordinate
+ *      system, and is never used as one here.
  *
  *   2. GeoTIFF tags (LAS 1.0–1.3, also LAS 1.4 when the global-encoding
  *      WKT bit is clear) — three VLRs:
@@ -144,9 +146,13 @@ const VLR_RECORD_LENGTH_OFFSET = 20;
 
 /** The user ID every LAS georeference VLR uses. */
 const CRS_USER_ID = 'LASF_Projection';
-/** OGC WKT record IDs. 2112 is the coordinate-system WKT; 2111 is the math transform. */
+/**
+ * OGC WKT record ID for the coordinate-system WKT — the ONLY authoritative CRS.
+ * Record ID 2111 (Math Transform WKT) is a distinct, optional supplemental
+ * transform per the LAS spec and is deliberately NOT read here: it is not a
+ * coordinate system and must never stand in for one.
+ */
 const RECORD_ID_OGC_WKT_COORD = 2112;
-const RECORD_ID_OGC_WKT_MATH = 2111;
 /** GeoTIFF tag VLR record IDs. */
 const RECORD_ID_GEOKEY_DIRECTORY = 34735;
 const RECORD_ID_GEO_DOUBLE_PARAMS = 34736;
@@ -206,9 +212,12 @@ export function parseCrsFromVlrs(
     if (payloadStart + payloadLength > buffer.byteLength) break;
 
     if (userId === CRS_USER_ID) {
-      if (recordId === RECORD_ID_OGC_WKT_COORD || recordId === RECORD_ID_OGC_WKT_MATH) {
+      if (recordId === RECORD_ID_OGC_WKT_COORD) {
         if (!wktPayload) {
-          // The OGC WKT payload is null-terminated ASCII per LAS spec.
+          // 2112 is the ONLY authoritative CRS WKT. 2111 (math transform) is a
+          // supplemental parameter set, not a coordinate system, and must never
+          // be substituted in when 2112 is absent — that would silently label
+          // the file with a transform, not a CRS.
           wktPayload = readNullTerminated(buffer, payloadStart, payloadLength);
         }
       } else if (recordId === RECORD_ID_GEOKEY_DIRECTORY) {
