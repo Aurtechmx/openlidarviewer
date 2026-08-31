@@ -138,7 +138,11 @@ import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import {
   hypsometricColor,
   DEFAULT_CANOPY_PALETTE,
+  type ColorStop,
 } from '../terrain/contour/hypsometric';
+import { builtinHypsometricStops } from '../render/hypsometricPalette';
+import { listBuiltinPalettes } from '../render/paletteCatalog';
+import type { ElevationPalette } from '../render/colorModes';
 import { histogramBins, type Histogram } from '../terrain/contour/histogram';
 import {
   shadeFromSlopeAspect,
@@ -1648,17 +1652,39 @@ export class AnalysePanel {
     const coverage = r.dtm.coverage;
     if (!(cols > 0 && rows > 0) || slope.length !== cols * rows) return null;
 
+    // Elevation range over the covered cells, for the coloured-relief tint. A
+    // flat or empty surface leaves `elevRange` false, so the palette options
+    // stay disabled and the tile is grayscale-only.
+    const z = r.dtm.z;
+    let zMin = Infinity;
+    let zMax = -Infinity;
+    for (let i = 0; i < z.length; i++) {
+      if (coverage[i] !== 0 && Number.isFinite(z[i])) {
+        if (z[i] < zMin) zMin = z[i];
+        if (z[i] > zMax) zMax = z[i];
+      }
+    }
+    const elevRange = zMax > zMin;
+
     const tile = el('div', { className: 'olv-analyse-raster-tile' });
     tile.append(el('div', { className: 'olv-analyse-sublabel', text: 'Relief (hillshade)' }));
     const canvas = this._makeCanvas(cols, rows);
     const wrap = this._rasterWrap(canvas);
     tile.append(wrap.wrap);
-    tile.append(this._grayLegend());
+    // A swappable legend slot: grayscale shade by default, an elevation colour
+    // ramp when the analyst picks a palette.
+    const legendSlot = el('div', { className: 'olv-analyse-legend-slot' });
+    legendSlot.append(this._grayLegend());
+    tile.append(legendSlot);
 
     const caption = el('div', { className: 'olv-analyse-caption' });
     let multi = true;
     let azimuth = 315;
     let altitude = 45;
+    // null = grayscale shading; otherwise the coloured-relief ramp, sampled once
+    // per selection into hypsometric stops.
+    let paletteId: ElevationPalette | null = null;
+    let stops: ColorStop[] = [];
 
     const repaint = (): void => {
       const res = multi
@@ -1667,6 +1693,7 @@ export class AnalysePanel {
             azimuthDeg: azimuth,
             altitudeDeg: altitude,
           });
+      const tinted = paletteId !== null && elevRange;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         const img = ctx.createImageData(cols, rows);
@@ -1678,7 +1705,18 @@ export class AnalysePanel {
             const o = (dst + c) * 4;
             if (res.coverage[si] !== 0) {
               const v = res.shade[si];
-              img.data[o] = v; img.data[o + 1] = v; img.data[o + 2] = v; img.data[o + 3] = 255;
+              if (tinted) {
+                // Coloured relief: the elevation ramp modulated by the shade, so
+                // the hillshade's form reads through the hypsometric colour.
+                const base = hypsometricColor(z[si], zMin, zMax, stops);
+                const k = v / 255;
+                img.data[o] = Math.round(base.r * k);
+                img.data[o + 1] = Math.round(base.g * k);
+                img.data[o + 2] = Math.round(base.b * k);
+              } else {
+                img.data[o] = v; img.data[o + 1] = v; img.data[o + 2] = v;
+              }
+              img.data[o + 3] = 255;
             } else {
               img.data[o + 3] = 0;
             }
@@ -1686,9 +1724,10 @@ export class AnalysePanel {
         }
         ctx.putImageData(img, 0, 0);
       }
-      caption.textContent = multi
+      const light = multi
         ? `Multi-directional · alt ${altitude}°`
         : `Sun ${String(azimuth).padStart(3, '0')}° · alt ${altitude}°`;
+      caption.textContent = tinted ? `Coloured relief · ${light}` : light;
     };
 
     // Coalesce slider repaints into one rAF: dragging fires many `input`
@@ -1763,7 +1802,39 @@ export class AnalysePanel {
       altVal.textContent = `${altitude}°`;
       scheduleRepaint();
     });
-    controls.append(multiLabel, azRow, altRow);
+
+    // Palette: grayscale shading, or an elevation ramp for coloured relief. The
+    // colour-blind-safe ramps are marked so the choice is informed. Disabled on
+    // a flat surface, where an elevation ramp would carry no information.
+    const palRow = el('label', { className: 'olv-analyse-relief-slider' });
+    const palSelect = document.createElement('select');
+    palSelect.className = 'olv-analyse-relief-select';
+    palSelect.setAttribute('aria-label', 'Relief palette');
+    palSelect.disabled = !elevRange;
+    const shadeOpt = document.createElement('option');
+    shadeOpt.value = '';
+    shadeOpt.textContent = 'Shading';
+    palSelect.append(shadeOpt);
+    for (const p of listBuiltinPalettes()) {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.colorblindSafe ? `${p.label} (CVD-safe)` : p.label;
+      palSelect.append(opt);
+    }
+    palRow.append(el('span', { className: 'olv-analyse-relief-tag', text: 'Colour' }), palSelect);
+    palSelect.addEventListener('change', () => {
+      paletteId = palSelect.value === '' ? null : (palSelect.value as ElevationPalette);
+      stops = paletteId !== null ? builtinHypsometricStops(paletteId) : [];
+      // Swap the legend to match: an elevation ramp when tinted, else the shade.
+      legendSlot.replaceChildren(
+        paletteId !== null && elevRange
+          ? this._legendBar({ min: 0, max: zMax - zMin, palette: stops, unit: this._verticalUnitToken() })
+          : this._grayLegend(),
+      );
+      repaint();
+    });
+
+    controls.append(multiLabel, azRow, altRow, palRow);
     tile.append(controls);
     tile.append(caption);
 

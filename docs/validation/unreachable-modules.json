@@ -146,13 +146,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/render/paletteCatalog.ts",
-      "status": "staged",
-      "why": "The user-facing palette catalogue plus a registry for custom palettes from the Palette Editor. The editor was never built; colorModes.ts and confidenceOverlay.ts cite this file in prose but import nothing from it.",
-      "graduation": "A palette picker or the Palette Editor reads the catalogue.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/render/streaming/pipelineLimits.ts",
       "status": "staged",
       "why": "Its own header states the position: the P8 fetch/decode/upload separation is evidence-gated, so this is \"the policy math only ... NOT wired into the live scheduler\", and wiring waits on device profiling that shows the P7 upload queue did not already resolve the stalls.",
