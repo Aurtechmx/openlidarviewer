@@ -2308,6 +2308,7 @@ datasets:
     dataOwner: "National Center for Airborne Laser Mapping (NCALM), distributed by OpenTopography"
     citation: "Jemez River Basin Snow-off Lidar Survey. Distributed by OpenTopography, https://opentopography.org/. Use License: CC BY 4.0. Tile ot_356000_3972000_1.laz retrieved 2026-08-31."
     knownLimitations: "The producer ground class (ASPRS class 2) is a reference labelling, not surveyed ground truth: agreement with it bounds classifier-to-producer difference, not accuracy. A single 1 km snow-off tile over forested montane terrain; canopy return density limits ground return coverage on steep slopes. The file is 49 MB and not vendored; the ground-filter agreement harness reads it from GF_SCENE."
+    evidenceRole: reference-labelling
     storage: acquired
     localPath: not-vendored
     controlPointIds: []
@@ -2341,6 +2342,7 @@ datasets:
     dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
     citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-08-31."
     knownLimitations: "The producer ground class (ASPRS class 2) is a reference labelling, not surveyed ground truth. Dense-canopy forest tile: only ~4% of returns are producer ground, so precision is dominated by canopy/understorey false positives. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) noted in the metadata. The file is 131 MB and not vendored; the ground-filter agreement harness reads it from GF_SCENE."
+    evidenceRole: reference-labelling
     storage: acquired
     localPath: not-vendored
     controlPointIds: []
