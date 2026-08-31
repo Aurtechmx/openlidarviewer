@@ -14,12 +14,13 @@
  * evidence a step beyond the synthetic corpus — it is NOT survey-grade accuracy
  * and promotes no claim to E5, which still requires independent checkpoints.
  *
- * REPRODUCIBILITY. It runs against the plain (uncompressed) LAS named by
- * `GF_SCENE`, and skips when that is unset — no data is committed to the repo,
- * and no dataset of unstated licence is registered as evidence. A caller with a
+ * REPRODUCIBILITY. It runs against the LAS or LAZ/COPC named by `GF_SCENE`, and
+ * skips when that is unset — no data is committed to the repo, and no dataset of
+ * unstated licence is registered as evidence. `GF_STRIDE=N` subsamples a large
+ * tile (e.g. a full 3DEP `.laz`) so a Node run stays bounded. A caller with a
  * producer-classified scene runs:
  *
- *     GF_SCENE=/path/to/scene.las npx vitest run tests/groundFilterProducerAgreement.test.ts
+ *     GF_SCENE=/path/to/tile.laz GF_STRIDE=10 npx vitest run tests/groundFilterProducerAgreement.test.ts
  *
  * Observed data points (exploratory, licences unverified, not registered): on
  * natural terrain OLV's filter tracks the producer closely (F1 ≈ 0.95, MCC ≈
@@ -30,26 +31,43 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { parseLasHeader } from '../src/io/lasHeader';
-import { allocRawPoints, decodeContext, decodeRecord } from '../src/io/lasDecodeShared';
+import { allocRawPoints, decodeContext, decodeRecord, type RawPoints } from '../src/io/lasDecodeShared';
+import { decodeLaz } from '../src/io/lazDecode';
 import { deriveClassification, DERIVED_GROUND } from '../src/render/class/deriveClassification';
 
 const SCENE = process.env.GF_SCENE;
+// Subsample a large tile so a Node run stays bounded; stride keeps one record
+// per bucket at a jittered offset, so the sample does not band along scan lines.
+// Both OLV's codes and the producer labels are read on the SAME sampled points,
+// so the comparison stays valid — it is a smaller scene, not a biased one.
+const STRIDE = Math.max(1, Math.floor(Number(process.env.GF_STRIDE ?? '1')));
 const PRODUCER_GROUND = 2; // ASPRS class 2 = ground
+
+/** Decode a plain LAS (uncompressed) or a .laz/COPC into RawPoints. */
+async function decodeScene(path: string): Promise<{ out: RawPoints; count: number }> {
+  const bytes = readFileSync(path);
+  const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const header = parseLasHeader(buf);
+  const compressed = /\.(laz|copc\.laz)$/i.test(path);
+  if (compressed) {
+    const out = await decodeLaz(buf, header, [0, 0, 0], STRIDE);
+    return { out, count: Math.ceil(header.pointCount / STRIDE) };
+  }
+  const count = header.pointCount;
+  const view = new DataView(buf);
+  const ctx = decodeContext(header, [0, 0, 0]);
+  const out = allocRawPoints(count, false, false);
+  for (let i = 0; i < count; i++) {
+    decodeRecord(view, header.offsetToPointData + i * header.pointDataRecordLength, i, ctx, out);
+  }
+  return { out, count };
+}
 
 describe.skipIf(!(SCENE && existsSync(SCENE)))(
   'OLV ground filter vs producer ground on a real scene',
   () => {
-    it('scores accuracy against the independent producer classification', () => {
-      const bytes = readFileSync(SCENE!);
-      const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      const header = parseLasHeader(buf);
-      const count = header.pointCount;
-      const view = new DataView(buf);
-      const ctx = decodeContext(header, [0, 0, 0]);
-      const out = allocRawPoints(count, false, false);
-      for (let i = 0; i < count; i++) {
-        decodeRecord(view, header.offsetToPointData + i * header.pointDataRecordLength, i, ctx, out);
-      }
+    it('scores accuracy against the independent producer classification', async () => {
+      const { out, count } = await decodeScene(SCENE!);
 
       let producerGroundN = 0;
       const truthGround = new Uint8Array(count);
