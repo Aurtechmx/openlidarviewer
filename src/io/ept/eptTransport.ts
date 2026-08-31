@@ -158,7 +158,7 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
       // `redirect: 'error'`: the EPT host was validated against the SSRF
       // block-list, but a redirect could reach a private address the literal
       // check never resolved. Refuse redirect hops on every hierarchy/tile read.
-      const response = await fetchFn(url, { signal: composed.signal, redirect: 'error' });
+      const response = await fetchFn(url, { signal: composed.signal, redirect: 'error', credentials: 'omit' });
       return response;
     } catch (err) {
       // A per-attempt timeout aborts the in-flight fetch exactly as a user

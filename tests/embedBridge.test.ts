@@ -236,4 +236,48 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     expect(calls.onJumpCamera).toHaveBeenCalled();
     dispose();
   });
+
+  it('with an allow-list set, ACCEPTS a state command from a listed origin', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
+    env.dispatch({
+      source: env.parent,
+      origin: 'https://host.example',
+      data: { type: 'toggle-layer', id: 'cloud_0', visible: true },
+    });
+    expect(calls.onToggleLayer).toHaveBeenCalledWith('cloud_0', true);
+    dispose();
+  });
+
+  it('with an allow-list set, REFUSES a state command from an UNLISTED origin', () => {
+    // The origin allow-list gates every command, not just load-file: once an
+    // embedder configures allowedOrigins, a genuine-parent message from an
+    // origin outside the list is dropped before the command runs.
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
+    env.dispatch({
+      source: env.parent,
+      origin: 'https://attacker.example',
+      data: { type: 'toggle-layer', id: 'cloud_0', visible: true },
+    });
+    expect(calls.onToggleLayer).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('with an allow-list set, REFUSES a null/opaque origin', () => {
+    // A sandboxed or data-URL parent posts with origin "null"; it can never be
+    // on an explicit allow-list, so a configured allow-list refuses it.
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
+    env.dispatch({
+      source: env.parent,
+      origin: 'null',
+      data: { type: 'toggle-layer', id: 'cloud_0', visible: true },
+    });
+    expect(calls.onToggleLayer).not.toHaveBeenCalled();
+    dispose();
+  });
 });
