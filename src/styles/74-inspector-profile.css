@@ -696,6 +696,16 @@
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   border-color: var(--accent);
 }
+.olv-workbench-select {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-sm);
+}
+.olv-workbench-select:hover { color: var(--text); }
+.olv-workbench-select:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
 .olv-workbench-status {
   padding: 0 var(--space-md) var(--space-2xs);
   font-size: var(--text-xs); color: var(--text-faint);
