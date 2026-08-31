@@ -1,13 +1,13 @@
 /**
- * heavyLasStoreLifecycle.test.ts — the out-of-core store is temporary.
+ * heavyLasStoreLifecycle.test.ts — the out-of-core store's persistent lifecycle.
  *
  * A heavy uncompressed LAS is indexed into an OPFS tile store (`ooc-<name>-<size>`)
- * and streamed from it. For this release that store is TEMPORARY: nothing reuses
- * it on a later open, so leaving it in OPFS is pure cost. These cases pin the
- * lifecycle — the store exists while the source is attached, and closing the
- * `OlvTileSource` removes it — plus the two guarantees the removal must keep:
- * the tile handles are still released, and removing an already-absent store is a
- * no-op rather than a throw.
+ * and streamed from it. The store is a PERSISTENT cache: a later open of the same
+ * source reuses the built index instead of rebuilding it — but only after the
+ * quick locator finds a candidate AND the whole-file content digest verifies, so
+ * a source edited outside the sampled windows is refused reuse and rebuilt. These
+ * cases pin that lifecycle: a retained store, a verified reuse, a refused stale
+ * reuse, released tile handles on close, and a no-op removal of an absent store.
  *
  * The browser-only seams are the repo's usual fakes: OPFS is
  * `tests/support/fakeOpfs.ts`, and the index "worker" runs the real build in
@@ -18,6 +18,7 @@ import { writeLas14 } from '../src/convert/writeLas';
 import type { GlobalPoints } from '../src/convert/globalPoints';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
 import type { RangeSource } from '../src/io/range/RangeSource';
+import { fingerprintSamplePlan } from '../src/io/heavy/fileFingerprint';
 import { fakeOpfs, fakeOpfsDir } from './support/fakeOpfs';
 import { buildLocalOocStore } from '../src/io/heavy/localOocBuild';
 import { OlvTileSource } from '../src/io/heavy/OlvTileSource';
@@ -197,6 +198,65 @@ describe('heavy LAS out-of-core store lifecycle', () => {
     // One index build, one store: the second open reopened the cached index.
     expect(builds).toBe(1);
     expect(opfs.topLevel().filter((n) => n.startsWith('ooc-') && n !== 'ooc-cache-map.json')).toHaveLength(1);
+  });
+
+  it('refuses reuse when the source changed OUTSIDE the sampled windows (no stale hit)', async () => {
+    // The exact stale-cache vector end-to-end: B preserves size and header facts
+    // and every quick-locator sample window, changing one byte in a gap between
+    // them. The locator matches the cached entry; the whole-file content digest
+    // does not, so reuse must be refused and the index rebuilt.
+    const a = new Uint8Array(lasBytes(60_000));
+    const b = a.slice();
+    const plan = fingerprintSamplePlan(a.length);
+    const inWindow = (o: number): boolean =>
+      plan.some((w) => o >= w.offset && o < w.offset + w.length);
+    let off = -1;
+    for (let o = 0; o < a.length; o++) {
+      if (!inWindow(o)) { off = o; break; }
+    }
+    expect(off).toBeGreaterThan(0);
+    b[off] ^= 0xff;
+
+    const opfs = fakeOpfs({ syncAccess: true, fileMove: true });
+    const reading: StorageEstimateReading = { available: true, quotaBytes: 200_000_000_000, usageBytes: 0 };
+    const abOf = (u8: Uint8Array): ArrayBuffer => {
+      const copy = new Uint8Array(u8.length);
+      copy.set(u8);
+      return copy.buffer;
+    };
+    let builds = 0;
+    const envFor = (buf: Uint8Array): HeavyLasBridgeEnv => ({
+      capable: () => true,
+      openRange: () => new ArrayBufferRangeSource(abOf(buf), 'same.las'),
+      getOpfsRoot: async () => opfs.root,
+      readStorage: async () => reading,
+      async runIndex(req) {
+        builds += 1;
+        return buildLocalOocStore(new ArrayBufferRangeSource(abOf(buf), 'same.las'), opfs.root, req.storeName, {
+          pointsPerLeaf: req.pointsPerLeaf,
+          memoryBudgetBytes: req.memoryBudgetBytes,
+          maxDepth: req.maxDepth,
+          batchPoints: 4096,
+          signal: req.signal,
+          onPhase: req.onPhase,
+        });
+      },
+    });
+
+    const open = async (buf: Uint8Array): Promise<void> => {
+      const { deps } = makeDeps();
+      const result = await openLocalHeavyLas(
+        spyFile('same.las', buf.length),
+        new AbortController().signal,
+        deps,
+        envFor(buf),
+      );
+      expect(result.status).toBe('attached');
+    };
+
+    await open(a); // cold: build #1, records the store keyed by A's content digest
+    await open(b); // locator hits A's entry, digest differs → must rebuild
+    expect(builds).toBe(2);
   });
 
   it('still releases the tile handles on close (does not regress spill.close)', async () => {
