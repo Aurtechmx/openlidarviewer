@@ -38,7 +38,7 @@ describe('buildScanFitness — scorecard tones', () => {
     const f = buildScanFitness(base());
     expect(f.overallTone).toBe<FitnessTone>('ready');
     expect(f.verdict).toMatch(/ready for terrain products/i);
-    expect(f.tierBadge).toBe('≥ QL1 density floor');
+    expect(f.tierBadge).toBe('≥ QL1 density reference');
     expect(f.headlineAccuracy).toBe('±0.07 m vertical');
     expect(f.dimensions).toHaveLength(6);
   });
@@ -95,7 +95,7 @@ describe('buildScanFitness — provisional (streaming / partial) state', () => {
   it('a full-cloud grade is not provisional and can earn its badge', () => {
     const f = buildScanFitness(base());
     expect(f.provisional).toBe(false);
-    expect(f.tierBadge).toBe('≥ QL1 density floor');
+    expect(f.tierBadge).toBe('≥ QL1 density reference');
   });
 });
 
@@ -189,13 +189,25 @@ describe('buildScanFitness — density reports a measurement, not a quality leve
 
   it('keeps the measured density and names the threshold it is compared against', () => {
     expect(summary(12)).toMatch(/12 ground pts\/m²/);
-    expect(summary(12)).toMatch(/8 pts\/m².*QL1 density floor/i);
-    expect(summary(3)).toMatch(/2 pts\/m².*QL2 density floor/i);
-    expect(summary(0.9)).toMatch(/below.*2 pts\/m².*QL2 density floor/i);
+    expect(summary(12)).toMatch(/clears the 8 pts\/m² QL1 pulse-density reference/i);
+    expect(summary(3)).toMatch(/clears the 2 pts\/m² QL2 pulse-density reference/i);
+    expect(summary(0.9)).toMatch(/below the 2 pts\/m² QL2 pulse-density reference/i);
+  });
+
+  it('labels the QL comparison as a pulse-density reference, not a ground-density quality level', () => {
+    // The known semantic gap: `groundDensityPerM2` is GROUND-RETURN density,
+    // while USGS 3DEP QL floors are nominal PULSE density (first/single-swath
+    // returns). The summary must name the floors as a "pulse-density reference"
+    // rather than imply the measured ground-return figure IS a pulse-density
+    // quality-level determination.
+    for (const d of [12, 3, 0.9]) {
+      expect(summary(d)).toMatch(/pulse-density reference/i);
+      expect(summary(d)).not.toMatch(/\bQL\d density floor\b/i);
+    }
   });
 
   it('marks the tier badge as an estimate, matching every other surface', () => {
-    expect(buildScanFitness(base()).tierBadge).toBe('≥ QL1 density floor');
+    expect(buildScanFitness(base()).tierBadge).toBe('≥ QL1 density reference');
   });
 });
 
@@ -231,7 +243,7 @@ describe('buildScanFitness — unverified units fail closed', () => {
     expect(tone(f, 'density')).toBe<FitnessTone>('ready');
     expect(tone(f, 'accuracy')).toBe<FitnessTone>('ready');
     expect(f.headlineAccuracy).toBe('±0.07 m vertical');
-    expect(f.tierBadge).toBe('≥ QL1 density floor');
+    expect(f.tierBadge).toBe('≥ QL1 density reference');
     expect(f.caveats.some((c) => /units are unverified/i.test(c))).toBe(false);
   });
 
@@ -239,6 +251,6 @@ describe('buildScanFitness — unverified units fail closed', () => {
     const f = buildScanFitness(base({ unitKnown: true }));
     expect(tone(f, 'density')).toBe<FitnessTone>('ready');
     expect(tone(f, 'accuracy')).toBe<FitnessTone>('ready');
-    expect(f.tierBadge).toBe('≥ QL1 density floor');
+    expect(f.tierBadge).toBe('≥ QL1 density reference');
   });
 });
