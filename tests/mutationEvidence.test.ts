@@ -52,7 +52,7 @@ describe('scoreReport', () => {
   });
 
   it('returns no score rather than a fabricated one when nothing was scored', () => {
-    // 0/0 is not 100 %. A run that mutated nothing must not be publishable as
+    // 0/0 is not 100 %. A run that mutated nothing must not be reported as
     // a perfect one.
     expect(scoreReport(report(['Ignored'])).score).toBeNull();
     expect(scoreReport({}).score).toBeNull();

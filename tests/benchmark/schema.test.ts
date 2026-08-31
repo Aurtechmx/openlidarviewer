@@ -1,8 +1,8 @@
 /**
  * schema.test.ts — the benchmark report schema and its honesty contract.
  *
- * The reports become paper figures, so the schema has one job the reviewer must
- * be able to trust: a metric that was NOT measured never carries a number. A `0`
+ * The reports are consumed as evidence, so the schema has one job it must
+ * guarantee: a metric that was NOT measured never carries a number. A `0`
  * standing in for "we did not measure this" is the failure this suite prevents.
  */
 import { describe, test, expect } from 'vitest';
