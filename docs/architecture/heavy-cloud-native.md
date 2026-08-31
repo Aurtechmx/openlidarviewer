@@ -193,9 +193,12 @@ exists.
   long-term answer.
 - **Two-pass build time** (phase 1): the indexer reads the file twice; for
   LAZ that is two decompression passes, though both are chunk-parallel. The
-  build shows progress and cancels cleanly. Its OPFS store is temporary: it is
-  removed when the streaming source closes, so a session does not accumulate
-  multi-GB caches. Cross-session reuse that skips the build is future work.
+  build shows progress and cancels cleanly. Its OPFS store is a persistent
+  local cache: a later open of the same source reuses the built index and skips
+  the build, after a source-fingerprint and cache-generation match. The cache is
+  not durable — the browser or user may clear origin-private storage, and the
+  indexer evicts least-recently-used stores past a soft byte cap — so a session
+  does not accumulate unbounded multi-GB caches.
 - **Native decoder conformance** (phase 0): a round-trip test proves the
   decoder against its own mirror encoder, which cannot catch a shared
   misreading of the laszip stream format. The invariant checks catch gross

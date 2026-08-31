@@ -107,6 +107,8 @@ const SIGNATURE = 'LASF';
 const F64 = 8;
 /** Version minor at which the uint64 extended point count appears. */
 const LAS_1_4_MINOR = 4;
+/** First version minor this build refuses rather than decoding as 1.4. */
+const LAS_1_5_MINOR = 5;
 /** Smallest buffer that can hold every public-header field this parser reads. */
 const MIN_PUBLIC_HEADER_BYTES = 227;
 /** LAS 1.4 additionally carries the uint64 point count at byte 247. */
@@ -148,6 +150,23 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
   }
 
   const versionMinor = view.getUint8(OFFSET_VERSION_MINOR);
+
+  // LAS 1.5 (R00, 2025) is recognised but refused rather than decoded through
+  // the 1.4 path. LAS 1.5 redefines the header size (393 bytes), restricts the
+  // valid point-record formats to 6–10 (0–5 become invalid), adds the GPS-time
+  // extrema/offset fields and requires a WKT CRS (legacy GeoTIFF encoding is no
+  // longer conformant). Reading such a file with the 1.4 rules would silently
+  // misinterpret those fields, so fail closed with an accurate explanation
+  // instead of producing a wrong-but-confident decode. This must precede the
+  // 1.4 point-count branch below so a 1.5 file never reaches the 1.4 decode.
+  if (versionMinor >= LAS_1_5_MINOR) {
+    throw new Error(
+      `LAS 1.${versionMinor} is not supported: this build recognises the ` +
+        'version but will not decode it through the LAS 1.4 path, which would ' +
+        'misread its header size, point-record formats and CRS. Convert the ' +
+        'file to LAS 1.4 to open it here.',
+    );
+  }
 
   // Point count: LAS 1.4 carries a uint64; older versions a uint32.
   let pointCount = view.getUint32(OFFSET_LEGACY_POINT_COUNT, true);
