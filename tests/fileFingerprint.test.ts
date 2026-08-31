@@ -14,10 +14,12 @@ import {
   fingerprintSamplePlan,
   computeFileFingerprint,
   fingerprintFromRange,
+  sourceContentDigestFromRange,
   FINGERPRINT_VERSION,
   type FingerprintFacts,
   type FingerprintSample,
 } from '../src/io/heavy/fileFingerprint';
+import { incrementalSha256Hex } from '../src/io/heavy/incrementalSha256';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
 
 const facts = (over: Partial<FingerprintFacts> = {}): FingerprintFacts => ({
@@ -158,5 +160,97 @@ describe('fingerprintFromRange', () => {
       readRange: () => Promise.reject(new Error('read failed')),
     };
     expect(await fingerprintFromRange(failing, rangeFacts(size))).toBeNull();
+  });
+});
+
+describe('sourceContentDigestFromRange — authoritative whole-file identity', () => {
+  const SIZE = 200_000;
+  const build = (): Uint8Array => {
+    const b = new Uint8Array(SIZE);
+    for (let i = 0; i < SIZE; i++) b[i] = (i * 31 + 7) & 0xff;
+    return b;
+  };
+  /** A standalone ArrayBuffer holding a copy of `u8` (never a SharedArrayBuffer). */
+  const ab = (u8: Uint8Array): ArrayBuffer => {
+    const copy = new Uint8Array(u8.length);
+    copy.set(u8);
+    return copy.buffer;
+  };
+  /** An offset provably inside NONE of the quick-locator sample windows. */
+  const gapOffset = (): number => {
+    const plan = fingerprintSamplePlan(SIZE);
+    const inAnyWindow = (o: number): boolean =>
+      plan.some((w) => o >= w.offset && o < w.offset + w.length);
+    for (let o = 0; o < SIZE; o++) if (!inAnyWindow(o)) return o;
+    throw new Error('no gap offset found');
+  };
+
+  it('the exact stale-cache vector: quick locator collides, content digest differs', async () => {
+    // B changes a byte OUTSIDE every sampled window, preserving size and facts.
+    const a = build();
+    const b = a.slice();
+    const off = gapOffset();
+    expect(off).toBeGreaterThan(0);
+    b[off] ^= 0xff;
+
+    const f = facts({ fileBytes: SIZE });
+    const srcA = new ArrayBufferRangeSource(ab(a), 'survey.las');
+    const srcB = new ArrayBufferRangeSource(ab(b), 'survey.las');
+
+    // The quick locator cannot tell them apart — this is the false-hit vector.
+    expect(await fingerprintFromRange(srcA, f)).toBe(await fingerprintFromRange(srcB, f));
+    // The authoritative digest does, so reuse of B's index from A is refused.
+    const da = await sourceContentDigestFromRange(srcA, SIZE);
+    const db = await sourceContentDigestFromRange(srcB, SIZE);
+    expect(da).not.toBe(db);
+  });
+
+  it('equals the whole-buffer hash and is chunk-count invariant', async () => {
+    const a = build();
+    const digest = await sourceContentDigestFromRange(new ArrayBufferRangeSource(ab(a), 'a'), SIZE);
+    expect(digest).toBe(incrementalSha256Hex(a));
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('a rename (identical bytes) shares the digest; one changed byte does not', async () => {
+    const a = build();
+    const renamed = new ArrayBufferRangeSource(ab(a), 'renamed.las');
+    expect(await sourceContentDigestFromRange(renamed, SIZE)).toBe(incrementalSha256Hex(a));
+    const edited = a.slice();
+    edited[0] ^= 0x01;
+    expect(await sourceContentDigestFromRange(new ArrayBufferRangeSource(ab(edited), 'a'), SIZE)).not.toBe(
+      incrementalSha256Hex(a),
+    );
+  });
+
+  it('a truncated source (fewer bytes than claimed) fails closed to null', async () => {
+    const a = build();
+    // Claim more bytes than the buffer holds — the read past the end returns
+    // empty, so the digest cannot cover the claimed length.
+    expect(await sourceContentDigestFromRange(new ArrayBufferRangeSource(ab(a), 'a'), SIZE + 4096)).toBeNull();
+  });
+
+  it('an already-aborted signal yields null, never a partial digest', async () => {
+    const a = build();
+    const ac = new AbortController();
+    ac.abort();
+    expect(
+      await sourceContentDigestFromRange(new ArrayBufferRangeSource(ab(a), 'a'), SIZE, ac.signal),
+    ).toBeNull();
+  });
+
+  it('a read error yields null', async () => {
+    const failing = {
+      id: () => 'boom',
+      kind: () => 'array-buffer' as const,
+      size: () => Promise.resolve(SIZE),
+      readRange: () => Promise.reject(new Error('read failed')),
+    };
+    expect(await sourceContentDigestFromRange(failing, SIZE)).toBeNull();
+  });
+
+  it('a non-positive size is null', async () => {
+    const a = build();
+    expect(await sourceContentDigestFromRange(new ArrayBufferRangeSource(ab(a), 'a'), 0)).toBeNull();
   });
 });

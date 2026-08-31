@@ -27,15 +27,30 @@ import { TILE_STORE_SCHEMA_VERSION } from './tileStore';
 import { FINGERPRINT_VERSION } from './fileFingerprint';
 import { readOpfsText, writeOpfsText, type OpfsDirHandle } from './opfsSpillStore';
 
-/** Bumped when the map's own shape changes, so an old record parses to empty. */
-export const CACHE_MAP_VERSION = 1;
+/** Bumped when the map's own shape changes, so an old record parses to empty.
+ *  v2 adds the authoritative `sourceContentSha256` to every entry. */
+export const CACHE_MAP_VERSION = 2;
+
+/**
+ * Bumped when the SAME source bytes could decode to semantically different OOC
+ * point content — a change in LAS/LAZ decode semantics, classification or
+ * return-number interpretation, coordinate scaling, Extra Bytes handling,
+ * invalid-point filtering, a CRS-relevant point transform, or which source
+ * records are selected. It is NOT the application version: a UI-only release must
+ * not invalidate every cached index. Bump it only when a reused index built by
+ * an older build could now be scientifically wrong, and note the reason here.
+ */
+export const HEAVY_INGEST_SEMANTICS_VERSION = 1;
 
 /** The map's file name in the OPFS root, beside the tile stores it points at. */
 export const CACHE_MAP_FILE = 'ooc-cache-map.json';
 
 /** One cached index: which store holds it, and the facts eviction/telemetry need. */
 export interface OocCacheEntry {
+  /** The quick locator (sampled fingerprint): finds a candidate, never authorises. */
   readonly fingerprint: string;
+  /** The authoritative SHA-256 over the whole source stream: authorises reuse. */
+  readonly sourceContentSha256: string;
   readonly storeName: string;
   readonly generation: string;
   readonly createdAt: number;
@@ -56,7 +71,7 @@ export interface OocCacheMap {
  * schema and the fingerprint scheme, so bumping either invalidates old indices.
  */
 export function cacheGeneration(): string {
-  return `t${TILE_STORE_SCHEMA_VERSION}.f${FINGERPRINT_VERSION}.m${CACHE_MAP_VERSION}`;
+  return `t${TILE_STORE_SCHEMA_VERSION}.f${FINGERPRINT_VERSION}.m${CACHE_MAP_VERSION}.i${HEAVY_INGEST_SEMANTICS_VERSION}`;
 }
 
 export function emptyCacheMap(): OocCacheMap {
@@ -73,10 +88,12 @@ function validEntry(raw: unknown): OocCacheEntry | null {
   const e = raw as Record<string, unknown>;
   const str = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
   const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-  if (!str(e.fingerprint) || !str(e.storeName) || !str(e.generation)) return null;
+  if (!str(e.fingerprint) || !str(e.sourceContentSha256) || !str(e.storeName) || !str(e.generation))
+    return null;
   if (!num(e.createdAt) || !num(e.lastUsedAt) || !num(e.pointCount) || !num(e.tileBytes)) return null;
   return {
     fingerprint: e.fingerprint,
+    sourceContentSha256: e.sourceContentSha256,
     storeName: e.storeName,
     generation: e.generation,
     createdAt: e.createdAt,
@@ -109,31 +126,63 @@ export function parseCacheMap(text: string): OocCacheMap {
   return { version: CACHE_MAP_VERSION, entries };
 }
 
-/** The entry for a fingerprint, only if its generation matches — else null. */
+/**
+ * The CANDIDATE entry for a quick locator, only if its generation matches — else
+ * null. A candidate is not yet a reuse authorisation: the caller must still
+ * verify the source-content digest (see {@link verifiedEntry}). The locator is a
+ * sampled fingerprint, so a file edited outside the sampled windows can match
+ * here while being a different file.
+ */
 export function lookupEntry(map: OocCacheMap, fingerprint: string, generation: string): OocCacheEntry | null {
   return (
     map.entries.find((e) => e.fingerprint === fingerprint && e.generation === generation) ?? null
   );
 }
 
-/** Add or replace the entry for its (fingerprint, generation) pair. Immutable. */
+/**
+ * The entry that authorises reuse: it matches the quick locator AND the
+ * generation AND the authoritative whole-file `sourceContentSha256`. A candidate
+ * whose stored content digest differs from the one recomputed from the file is
+ * NOT returned — that is the stale-source case a locator-only match would wrongly
+ * accept. An empty recomputed digest (verification failed or was cancelled)
+ * never authorises reuse.
+ */
+export function verifiedEntry(
+  map: OocCacheMap,
+  generation: string,
+  sourceContentSha256: string,
+): OocCacheEntry | null {
+  if (!sourceContentSha256) return null;
+  return (
+    map.entries.find(
+      (e) => e.generation === generation && e.sourceContentSha256 === sourceContentSha256,
+    ) ?? null
+  );
+}
+
+/** Add or replace the entry for its authoritative (sourceContentSha256,
+ *  generation) pair. Immutable. Keyed on the content digest, not the sampled
+ *  locator, so two distinct files that share a locator get distinct entries. */
 export function upsertEntry(map: OocCacheMap, next: OocCacheEntry): OocCacheMap {
   const entries = map.entries.filter(
-    (e) => !(e.fingerprint === next.fingerprint && e.generation === next.generation),
+    (e) =>
+      !(e.sourceContentSha256 === next.sourceContentSha256 && e.generation === next.generation),
   );
   entries.push(next);
   return { version: map.version, entries };
 }
 
-/** Bump `lastUsedAt` for the matching entry (for LRU eviction later). Immutable. */
+/** Bump `lastUsedAt` for the matching entry (for LRU eviction). Immutable. */
 export function touchEntry(
   map: OocCacheMap,
-  fingerprint: string,
+  sourceContentSha256: string,
   generation: string,
   now: number,
 ): OocCacheMap {
   const entries = map.entries.map((e) =>
-    e.fingerprint === fingerprint && e.generation === generation ? { ...e, lastUsedAt: now } : e,
+    e.sourceContentSha256 === sourceContentSha256 && e.generation === generation
+      ? { ...e, lastUsedAt: now }
+      : e,
   );
   return { version: map.version, entries };
 }

@@ -31,11 +31,12 @@ import {
   readOpfsText,
   type OpfsDirHandle,
 } from '../io/heavy/opfsSpillStore';
-import { fingerprintFromRange } from '../io/heavy/fileFingerprint';
+import { fingerprintFromRange, sourceContentDigestFromRange } from '../io/heavy/fileFingerprint';
 import {
   readCacheMap,
   writeCacheMap,
   lookupEntry,
+  verifiedEntry,
   upsertEntry,
   touchEntry,
   removeByStoreName,
@@ -247,14 +248,17 @@ async function reopenFromCache(
  */
 async function tryReopen(
   root: OpfsDirHandle,
-  fingerprint: string,
   generation: string,
+  sourceContentSha256: string,
   file: File,
   deps: HeavyLasBridgeDeps,
   signal: AbortSignal,
 ): Promise<HeavyOpenResult | null> {
   const map = await readCacheMap(root);
-  const entry = lookupEntry(map, fingerprint, generation);
+  // Reuse is authorised by the whole-file content digest, not the quick locator:
+  // a candidate whose stored digest differs (a file edited outside the sampled
+  // windows) is not returned, so a stale source can never receive a hit.
+  const entry = verifiedEntry(map, generation, sourceContentSha256);
   if (!entry) return null;
   const opened = await reopenFromCache(root, entry.storeName, file);
   if (!opened) {
@@ -271,7 +275,10 @@ async function tryReopen(
     if (deps.debug) console.warn('[heavy-las] cache reopen attach failed; rebuilding', err);
     return null;
   }
-  await writeCacheMap(root, touchEntry(map, fingerprint, generation, Date.now())).catch(() => {});
+  await writeCacheMap(
+    root,
+    touchEntry(map, sourceContentSha256, generation, Date.now()),
+  ).catch(() => {});
   return { status: 'attached', source: opened.source, decoder: opened.decoder };
 }
 
@@ -285,6 +292,7 @@ async function tryReopen(
 async function recordAndEvict(
   root: OpfsDirHandle,
   fingerprint: string,
+  sourceContentSha256: string,
   generation: string,
   storeName: string,
   reader: { manifest: { pointCount: number }; recordBytes: number },
@@ -295,6 +303,7 @@ async function recordAndEvict(
     const tileBytes = reader.manifest.pointCount * reader.recordBytes;
     let map = upsertEntry(await readCacheMap(root), {
       fingerprint,
+      sourceContentSha256,
       storeName,
       generation,
       createdAt: now,
@@ -364,16 +373,41 @@ export async function executeHeavyLasBuild(
   const root = await getOpfsRoot();
   if (root === null) return { status: 'unavailable', heavy: true, reason: 'no OPFS root' };
 
-  // Persistent cache. Fingerprint the file before any decode; on a hit, reopen
-  // the stored index instead of rebuilding it. A null fingerprint (a peek with no
-  // bounds, or a read fault) skips both reuse and recording, so the open behaves
-  // exactly as it did before the cache existed.
+  // Persistent cache. The quick locator (a sampled fingerprint) finds a
+  // CANDIDATE cheaply; the authoritative whole-file source-content digest then
+  // AUTHORISES reuse, so a file edited outside the sampled windows can never
+  // receive a verified hit. A null locator (a peek with no bounds, or a read
+  // fault) skips both reuse and recording, so the open behaves as it did before
+  // the cache existed.
   const generation = cacheGeneration();
   const fingerprint = await computeOpenFingerprint(file, facts, openRange(file), signal);
   if (signal.aborted) return { status: 'cancelled' };
+
+  // The whole-file digest is computed at most once per open, and only when it is
+  // actually needed: to verify a reopen candidate, or to record a freshly built
+  // store. A cold cache with no candidate never pays for it here. (Folding the
+  // digest into the build's existing sequential pass is a browser-measured
+  // follow-up; correctness does not depend on it.)
+  let digestMemo: string | null | undefined;
+  const sourceDigest = async (): Promise<string | null> => {
+    if (digestMemo === undefined) {
+      digestMemo = await sourceContentDigestFromRange(openRange(file), facts.fileBytes, signal);
+    }
+    return digestMemo;
+  };
+
   if (fingerprint) {
-    const reopened = await tryReopen(root, fingerprint, generation, file, deps, signal);
-    if (reopened) return reopened;
+    // Cheap candidate pre-filter: only hash the whole file when the locator finds
+    // a same-generation candidate that could match.
+    const hasCandidate = lookupEntry(await readCacheMap(root), fingerprint, generation) !== null;
+    if (hasCandidate) {
+      const digest = await sourceDigest();
+      if (signal.aborted) return { status: 'cancelled' };
+      if (digest) {
+        const reopened = await tryReopen(root, generation, digest, file, deps, signal);
+        if (reopened) return reopened;
+      }
+    }
   }
 
   if (!janitorSwept) {
@@ -512,10 +546,16 @@ export async function executeHeavyLasBuild(
       });
       throw err;
     }
-    // The scan is committed. If this open has a fingerprint, record the store so a
-    // later open reuses it, and retain it on close; a failed record leaves the
-    // store uncommitted (deleted on close), never leaked.
-    if (fingerprint && (await recordAndEvict(root, fingerprint, generation, built.storeName, reader, locks))) {
+    // The scan is committed. If this open has a locator AND a whole-file digest,
+    // record the store so a later open can verify and reuse it, and retain it on
+    // close. Without the digest the store could never be authorised for reuse, so
+    // it is left uncommitted (deleted on close) rather than recorded unusably.
+    const recordDigest = fingerprint ? await sourceDigest() : null;
+    if (
+      fingerprint &&
+      recordDigest &&
+      (await recordAndEvict(root, fingerprint, recordDigest, generation, built.storeName, reader, locks))
+    ) {
       retain = true;
     }
     return { status: 'attached', source, decoder };

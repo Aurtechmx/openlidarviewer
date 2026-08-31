@@ -15,6 +15,7 @@ import {
   serializeCacheMap,
   parseCacheMap,
   lookupEntry,
+  verifiedEntry,
   upsertEntry,
   touchEntry,
   removeByStoreName,
@@ -30,6 +31,7 @@ import { fakeOpfsDir } from './support/fakeOpfs';
 const GEN = 'gen-A';
 const entry = (over: Partial<OocCacheEntry> = {}): OocCacheEntry => ({
   fingerprint: 'fp-1',
+  sourceContentSha256: 'sha-1',
   storeName: 'ooc-abc-123',
   generation: GEN,
   createdAt: 1000,
@@ -62,34 +64,61 @@ describe('oocCacheMap — pure core', () => {
     expect(parsed.entries).toEqual([good]);
   });
 
-  it('looks up only on matching fingerprint AND generation', () => {
+  it('drops an entry missing the authoritative source-content digest', () => {
+    const { sourceContentSha256: _omit, ...noDigest } = entry();
+    const raw = JSON.stringify({ version: CACHE_MAP_VERSION, entries: [noDigest] });
+    expect(parseCacheMap(raw).entries).toEqual([]);
+  });
+
+  it('looks up a CANDIDATE on matching locator AND generation', () => {
     const map = upsertEntry(emptyCacheMap(), entry());
     expect(lookupEntry(map, 'fp-1', GEN)?.storeName).toBe('ooc-abc-123');
     expect(lookupEntry(map, 'fp-other', GEN)).toBeNull();
-    // generation mismatch is a miss even though the fingerprint matches
+    // generation mismatch is a miss even though the locator matches
     expect(lookupEntry(map, 'fp-1', 'gen-B')).toBeNull();
   });
 
-  it('upsert replaces the entry for a (fingerprint, generation) pair without duplicating', () => {
+  it('authorises reuse only on matching content digest AND generation', () => {
+    const map = upsertEntry(emptyCacheMap(), entry());
+    expect(verifiedEntry(map, GEN, 'sha-1')?.storeName).toBe('ooc-abc-123');
+    // A candidate with the same locator but a different whole-file digest — the
+    // edited-outside-the-window case — is NOT authorised.
+    expect(verifiedEntry(map, GEN, 'sha-different')).toBeNull();
+    // Generation mismatch and an empty digest never authorise.
+    expect(verifiedEntry(map, 'gen-B', 'sha-1')).toBeNull();
+    expect(verifiedEntry(map, GEN, '')).toBeNull();
+  });
+
+  it('upsert replaces the entry for a (content digest, generation) pair without duplicating', () => {
     let map = upsertEntry(emptyCacheMap(), entry({ storeName: 'store-old' }));
     map = upsertEntry(map, entry({ storeName: 'store-new' }));
     expect(map.entries).toHaveLength(1);
-    expect(lookupEntry(map, 'fp-1', GEN)?.storeName).toBe('store-new');
+    expect(verifiedEntry(map, GEN, 'sha-1')?.storeName).toBe('store-new');
+  });
+
+  it('upsert keeps two distinct-content entries that share a locator', () => {
+    // A locator collision (same sampled fingerprint, different whole-file bytes)
+    // must not overwrite: each keeps its own store, keyed on the content digest.
+    let map = upsertEntry(emptyCacheMap(), entry({ sourceContentSha256: 'sha-A', storeName: 'store-A' }));
+    map = upsertEntry(map, entry({ sourceContentSha256: 'sha-B', storeName: 'store-B' }));
+    expect(map.entries).toHaveLength(2);
+    expect(verifiedEntry(map, GEN, 'sha-A')?.storeName).toBe('store-A');
+    expect(verifiedEntry(map, GEN, 'sha-B')?.storeName).toBe('store-B');
   });
 
   it('upsert is immutable — it does not mutate the input map', () => {
     const before = upsertEntry(emptyCacheMap(), entry());
     const snapshot = JSON.parse(JSON.stringify(before));
-    upsertEntry(before, entry({ fingerprint: 'fp-2', storeName: 'store-2' }));
+    upsertEntry(before, entry({ sourceContentSha256: 'sha-2', storeName: 'store-2' }));
     expect(before).toEqual(snapshot);
   });
 
   it('touch updates lastUsedAt for the matching entry only', () => {
-    let map = upsertEntry(emptyCacheMap(), entry({ fingerprint: 'fp-1', lastUsedAt: 1000 }));
-    map = upsertEntry(map, entry({ fingerprint: 'fp-2', storeName: 'store-2', lastUsedAt: 1000 }));
-    map = touchEntry(map, 'fp-1', GEN, 9999);
-    expect(lookupEntry(map, 'fp-1', GEN)?.lastUsedAt).toBe(9999);
-    expect(lookupEntry(map, 'fp-2', GEN)?.lastUsedAt).toBe(1000);
+    let map = upsertEntry(emptyCacheMap(), entry({ sourceContentSha256: 'sha-1', lastUsedAt: 1000 }));
+    map = upsertEntry(map, entry({ sourceContentSha256: 'sha-2', storeName: 'store-2', lastUsedAt: 1000 }));
+    map = touchEntry(map, 'sha-1', GEN, 9999);
+    expect(verifiedEntry(map, GEN, 'sha-1')?.lastUsedAt).toBe(9999);
+    expect(verifiedEntry(map, GEN, 'sha-2')?.lastUsedAt).toBe(1000);
   });
 
   it('removeByStoreName drops the entry whose store was deleted out from under it', () => {
@@ -107,6 +136,7 @@ describe('oocCacheMap — pure core', () => {
 describe('selectEvictions', () => {
   const e = (storeName: string, lastUsedAt: number, tileBytes: number): OocCacheEntry => ({
     fingerprint: 'fp-' + storeName,
+    sourceContentSha256: 'sha-' + storeName,
     storeName,
     generation: GEN,
     createdAt: 0,
