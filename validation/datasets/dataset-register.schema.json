@@ -54,7 +54,8 @@
         "dataOwner",
         "citation",
         "knownLimitations",
-        "storage"
+        "storage",
+        "evidenceRole"
       ],
       "properties": {
         "datasetId": {
@@ -196,6 +197,11 @@
           "description": "Points withheld from processing and used only to measure error. Must not intersect controlPointIds.",
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "evidenceRole": {
+          "description": "What agreement with this dataset can prove, independent of what the bytes are. `fixture`: synthetic/unit input, exercises code paths not accuracy. `oracle`: cross-implementation reference (GDAL, PDAL, libE57, etc.), agreement catches coding errors not truth. `checkpoint-source`: independent survey truth withheld from processing. `reference-labelling`: a producer's own classification used as a reference, not as ground truth. `sample-scene`: a real cloud used for exploratory agreement, no accuracy claim on its own.",
+          "type": "string",
+          "enum": ["fixture", "oracle", "checkpoint-source", "reference-labelling", "sample-scene"]
         }
       }
     }
