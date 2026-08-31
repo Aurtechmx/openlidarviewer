@@ -51,6 +51,12 @@ export const INPUTS = Object.freeze([
     primary: 'validation/reachability/summary.json',
     command: 'npm run verify:reachability',
     files: ['validation/reachability/claims.json', 'validation/reachability/summary.json'],
+    // claims.json is a tracked input (committed), not a producer output. On a
+    // clean tree the generated summary.json (the primary) is absent while
+    // claims.json is present; without this its presence would infer "ran and
+    // failed" rather than "not executed". Only the primary output run proves
+    // the producer ran.
+    trackedInputs: ['validation/reachability/claims.json'],
   },
   {
     id: 'mutations',
@@ -577,11 +583,17 @@ export function deriveSnapshot({ read, has, digest, listed, storedPathOf }) {
     // declare records that are tracked inputs rather than outputs — the GDAL
     // reference fixtures are in the repository whether or not GDAL is installed
     // — so their presence is not evidence that the producer ran and stumbled.
+    // Records the producer declares as tracked inputs (committed, not produced)
+    // do not count toward the "some output present → it ran and failed"
+    // inference: their presence is a repository fact, not evidence of a run.
+    const trackedInputs = new Set(spec.trackedInputs ?? []);
+    const presentOutputs = present.filter((p) => !trackedInputs.has(p));
+
     let status;
     if (has(spec.primary)) status = 'collected';
     else if (spec.notApplicable) status = 'not-applicable';
     else if (ABSENT_STATUS[spec.id]) status = ABSENT_STATUS[spec.id];
-    else if (present.length > 0) status = 'failed';
+    else if (presentOutputs.length > 0) status = 'failed';
     else status = 'not-executed';
 
     producers.push({

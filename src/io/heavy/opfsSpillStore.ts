@@ -376,12 +376,13 @@ export interface OpfsSpillBuild {
  * Delete a named store directory from `root`, swallowing the NotFoundError a
  * removal of an absent store raises (a store already gone is not an error).
  *
- * The out-of-core heavy-LAS store is TEMPORARY for this release: it is built,
- * streamed from, and removed when its source closes, because nothing reuses it
- * on a later open. Cross-session reuse — detecting "I already indexed this file"
- * from a stable source fingerprint and reopening the store instead of rebuilding
- * it — is the better long-term answer and the future direction here; it needs
- * source-identity work and is out of scope for this change.
+ * The out-of-core heavy-LAS store is a PERSISTENT local cache: a build records
+ * its store in the cache map, and a later open of the same source (matched by
+ * source fingerprint and cache generation) reopens that store instead of
+ * rebuilding it. This delete path is used for eviction and for stores that were
+ * never committed — not on every close of a reused store, which is retained.
+ * The cache is not durable: origin-private storage may be cleared by the
+ * browser or user, and least-recently-used stores are evicted past a soft cap.
  *
  * This is deliberately tolerant: it must never throw out of a close path. A
  * store the browser cannot remove because a read still holds it stays on disk,
