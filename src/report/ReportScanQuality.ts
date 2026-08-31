@@ -16,6 +16,46 @@
  */
 
 import type { ReportScanQuality } from './types';
+import { georefStatus } from '../geo/georefStatus';
+
+/**
+ * The raw facts the caller reads off the cloud, as primitives only. Kept
+ * separate from {@link ScanQualityInput} so the caller (the EAGER report-export
+ * path) passes primitives and never imports `georefStatus` or the builder:
+ * {@link scanQualityFromFacts} turns these into the section in the lazy report
+ * chunk, so nothing here weighs on the startup bundle.
+ */
+export interface ScanQualityFacts {
+  readonly crsKnown: boolean;
+  readonly datumKnown: boolean;
+  readonly crsName: string | null;
+  readonly datumName: string | null;
+  readonly hasClassification: boolean;
+  readonly classificationDerived: boolean;
+  readonly attributes: readonly { readonly name: string; readonly present: boolean }[];
+}
+
+/**
+ * Build the Scan QA section from the raw cloud facts: resolve the plain-language
+ * georeferencing verdict, then assemble the section and its caveats. Called from
+ * the lazy report composer so `georefStatus` and the builder ride that chunk.
+ */
+export function scanQualityFromFacts(facts: ScanQualityFacts): ReportScanQuality {
+  const gs = georefStatus(facts.crsKnown, facts.datumKnown, {
+    crsName: facts.crsName,
+    datumName: facts.datumName,
+  });
+  return buildScanQuality({
+    coordinateHeadline: gs.headline,
+    positionLabel: gs.positionLabel,
+    heightLabel: gs.heightLabel,
+    positionKnown: gs.positionKnown,
+    heightKnown: gs.heightKnown,
+    hasClassification: facts.hasClassification,
+    classificationDerived: facts.classificationDerived,
+    attributes: facts.attributes,
+  });
+}
 
 /** The facts a Scan QA section is built from, as primitives. */
 export interface ScanQualityInput {

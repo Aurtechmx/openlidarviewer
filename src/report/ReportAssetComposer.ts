@@ -20,11 +20,11 @@ import type {
   ReportCoverInputs,
   ReportInputs,
   ReportProvenanceFingerprint,
-  ReportScanQuality,
   ReportSourceMetadata,
   ReportTemplateId,
   ReportVisualAsset,
 } from './types';
+import { scanQualityFromFacts, type ScanQualityFacts } from './ReportScanQuality';
 import {
   buildDatasetSummary,
   type MetadataInputs,
@@ -87,13 +87,13 @@ export interface ComposeReportInputs {
    */
   readonly sourceMetadata?: ReportSourceMetadata;
   /**
-   * The Scan QA facts — the georeferencing verdict, classification provenance,
-   * attribute presence and does-not-establish caveats — built by the caller
-   * from the loaded cloud (it reads the resolved CRS and the cloud's attribute
-   * arrays, which this metadata-blind composer does not see). Rendered by the
-   * `source-quality` section; omitted → the section is omitted entirely.
+   * The raw Scan QA facts, as primitives read off the loaded cloud by the caller
+   * (the resolved CRS, the classification-derived flag, attribute presence). The
+   * composer turns them into the `source-quality` section here, in the lazy
+   * report chunk, so the eager report-export path imports neither `georefStatus`
+   * nor the builder. Omitted → the section is omitted entirely.
    */
-  readonly scanQuality?: ReportScanQuality;
+  readonly scanQualityFacts?: ScanQualityFacts;
   /**
    * Annotation ordering — `'type'` groups issues together at the top,
    * `'createdAt'` (the default) reads chronologically. Mirrors the live
@@ -133,7 +133,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
     technicalNotes: input.technicalNotes,
     provenance: input.provenance,
     sourceMetadata: input.sourceMetadata,
-    scanQuality: input.scanQuality,
+    scanQuality: input.scanQualityFacts ? scanQualityFromFacts(input.scanQualityFacts) : undefined,
     // Synthesised once here so every template that includes the
     // `inspection-summary` section renders the same findings. Pure of the
     // renderer; the QL-tier gating lives in buildInspectionSummary.

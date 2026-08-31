@@ -223,19 +223,19 @@ describe('scan-qa source-quality section', () => {
       annotations: [],
       measurements: [],
       unitSystem: 'metric',
-      scanQuality: {
-        coordinateHeadline: 'On the map · elevation datum not declared',
-        positionLabel: 'On the map',
-        heightLabel: 'Datum not declared',
-        classificationNote: 'Classification derived in the viewer (heuristic) — review before trusting.',
+      // Raw facts: a horizontally-placed scan with no vertical datum and a
+      // derived classification. georefStatus + buildScanQuality turn these into
+      // the headline "On the map · elevation datum not declared" and its caveat.
+      scanQualityFacts: {
+        crsKnown: true,
+        datumKnown: false,
+        crsName: 'WGS 84 / UTM zone 12N',
+        datumName: null,
+        hasClassification: true,
+        classificationDerived: true,
         attributes: [
           { name: 'RGB colour', present: true },
           { name: 'Intensity', present: false },
-        ],
-        caveats: [
-          'This is a data-quality summary, not a survey-grade acceptance certificate.',
-          'Vertical accuracy is not established — no checkpoint comparison was run.',
-          'No vertical datum is declared, so heights are not tied to a known reference.',
         ],
       },
     });

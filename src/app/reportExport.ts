@@ -40,9 +40,7 @@ import { captureProvenance, isNonTerrainVerdict } from '../diagnostics/capturePr
 import { triggerDownload } from '../io/download';
 
 import type { MetadataInputs, ReportProvenanceFingerprint } from '../report';
-import type { ReportScanQuality } from '../report/types';
-import { buildScanQuality } from '../report/ReportScanQuality';
-import { georefStatus } from '../geo/georefStatus';
+import type { ScanQualityFacts } from '../report/ReportScanQuality';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { Viewer } from '../render/Viewer';
 import type { DropZone } from '../ui/DropZone';
@@ -377,21 +375,14 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   // and which attributes the cloud carries. Built only for a static cloud — a
   // streaming source carries none of these attribute arrays — so the
   // `source-quality` section is omitted for a streamed scan rather than guessed.
-  let scanQuality: ReportScanQuality | undefined;
+  let scanQualityFacts: ScanQualityFacts | undefined;
   if (staticCloud) {
-    const crsKnown = activeCrsLabel !== undefined;
-    const datumKnown = activeCrs?.verticalDatum != null;
-    const gs = georefStatus(crsKnown, datumKnown, {
+    const hasClassification = staticCloud.classification !== undefined;
+    scanQualityFacts = {
+      crsKnown: activeCrsLabel !== undefined,
+      datumKnown: activeCrs?.verticalDatum != null,
       crsName: activeCrsLabel ?? null,
       datumName: activeCrs?.verticalDatum ?? null,
-    });
-    const hasClassification = staticCloud.classification !== undefined;
-    scanQuality = buildScanQuality({
-      coordinateHeadline: gs.headline,
-      positionLabel: gs.positionLabel,
-      heightLabel: gs.heightLabel,
-      positionKnown: gs.positionKnown,
-      heightKnown: gs.heightKnown,
       hasClassification,
       classificationDerived: hasClassification && staticCloud.classificationIsDerived,
       attributes: [
@@ -400,11 +391,11 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
         { name: 'Classification', present: hasClassification },
         { name: 'GPS time', present: staticCloud.gpsTime !== undefined },
       ],
-    });
+    };
   }
   const inputs = report.composeReportInputs({
     templateId: validatedTemplateId,
-    scanQuality,
+    scanQualityFacts,
     title: coverTitle,
     subtitle: metadata.fileName,
     metadata,
