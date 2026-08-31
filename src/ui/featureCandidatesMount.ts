@@ -102,7 +102,7 @@ export function mountFeatureCandidates(
     };
   }
 
-  const counts = `${input.buildingPoints.length} building-classified, ${input.conductorPoints.length} wire-classified point(s)`;
+  const counts = `${input.buildingPoints.length.toLocaleString()} building-classified, ${input.conductorPoints.length.toLocaleString()} wire-classified point(s)`;
   card.append(el('div', { className: 'olv-feature-launcher-fact', text: counts }));
   card.append(
     el('p', {
