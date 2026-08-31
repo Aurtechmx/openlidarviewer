@@ -28,6 +28,7 @@
  */
 
 import { el } from './dom';
+import { PROFILE_RAW_SCOPES, type ProfileRawScope } from '../render/measure/profileRawFilter';
 import {
   PROFILE_WORKBENCH_DOCK_KEY,
   dockOccupiedHeight,
@@ -112,6 +113,11 @@ export interface ProfileWorkbenchOptions {
    * is rendered (there is no 3D scene to draw into). Off by default.
    */
   readonly onToggleCorridor?: (on: boolean) => void;
+  /**
+   * Re-draw the raw scatter through a chosen attribute scope (all returns /
+   * ground only / exclude vegetation & noise). Absent renders no scope selector.
+   */
+  readonly onRawScope?: (scope: ProfileRawScope) => void;
   /** Called when the user closes the panel. */
   readonly onClose?: () => void;
 }
@@ -213,6 +219,7 @@ class ProfileWorkbench {
   private readonly _exportBtn: HTMLButtonElement | null;
   private readonly _exportImageBtn: HTMLButtonElement | null;
   private readonly _corridorBtn: HTMLButtonElement | null;
+  private readonly _rawScope: HTMLSelectElement | null;
   private readonly _status: HTMLElement;
   private readonly _detail: HTMLElement;
   private readonly _readout: HTMLElement;
@@ -337,12 +344,36 @@ class ProfileWorkbench {
       });
     }
 
+    // The raw-scatter scope selector: which returns the section draws (all /
+    // ground / exclude veg & noise). A plain select, so the choice and its
+    // current value are one control.
+    this._rawScope = options.onRawScope
+      ? (el('select', {
+          className: 'olv-workbench-select',
+          ariaLabel: 'Which returns the section scatter draws',
+        }) as HTMLSelectElement)
+      : null;
+    if (this._rawScope) {
+      const select = this._rawScope;
+      for (const s of PROFILE_RAW_SCOPES) {
+        const opt = el('option', { text: s.label }) as HTMLOptionElement;
+        opt.value = s.id;
+        opt.title = s.desc;
+        select.append(opt);
+      }
+      this._on(select, 'change', () => options.onRawScope?.(select.value as ProfileRawScope));
+    }
+
     const exportBtns = [this._exportBtn, this._exportImageBtn].filter(
       (b): b is HTMLButtonElement => b !== null,
     );
-    const actions = [this._corridorBtn, ...exportBtns, this._collapseBtn, closeBtn].filter(
-      (b): b is HTMLButtonElement => b !== null,
-    );
+    const actions = [
+      this._corridorBtn,
+      this._rawScope,
+      ...exportBtns,
+      this._collapseBtn,
+      closeBtn,
+    ].filter((b): b is HTMLButtonElement | HTMLSelectElement => b !== null);
     const head = el('div', { className: 'olv-workbench-head' }, [
       el('div', { className: 'olv-workbench-titles' }, [
         this._title,

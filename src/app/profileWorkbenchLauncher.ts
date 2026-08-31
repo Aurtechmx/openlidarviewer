@@ -29,6 +29,7 @@ import type {
   ProfileWorkbenchHost,
   ProfileWorkbenchOptions,
 } from '../ui/ProfileWorkbench';
+import type { ProfileRawScope } from '../render/measure/profileRawFilter';
 
 /** The shape the lazy chunk resolves to. Only the mount function is used. */
 export interface ProfileWorkbenchModule {
@@ -109,6 +110,12 @@ export interface ProfileWorkbenchLauncherDeps {
    * corridor stays off).
    */
   onToggleCorridor?: (on: boolean) => void;
+  /**
+   * Re-draw the section's raw scatter through a chosen attribute scope (all /
+   * ground / exclude veg & noise). Absent means the dock renders no scope
+   * selector and draws every corridor return.
+   */
+  onRawScope?: (scope: ProfileRawScope) => void;
   /** Told about a rejected import, so a silent fallback still leaves a trace. */
   onLoadFailure?: (error: unknown) => void;
   /** Told about a `present` that threw, for the same reason. */
@@ -179,6 +186,7 @@ export function createProfileWorkbenchLauncher(
     const exportPdf = deps.exportPdf;
     const exportImage = deps.exportImage;
     const onToggleCorridor = deps.onToggleCorridor;
+    const onRawScope = deps.onRawScope;
     const mounted = module.mountProfileWorkbench(host, {
       title: request.name,
       scope: request.name,
@@ -186,6 +194,7 @@ export function createProfileWorkbenchLauncher(
       ...(exportPdf ? { onExportPdf: () => exportPdf(request.id) } : {}),
       ...(exportImage ? { onExportImage: () => exportImage(request) } : {}),
       ...(onToggleCorridor ? { onToggleCorridor } : {}),
+      ...(onRawScope ? { onRawScope } : {}),
       onClose: () => {
         // Only for the dock that is still the live one: a panel closed by the
         // mount that replaced it must not hand back the successor's height.

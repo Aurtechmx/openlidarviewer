@@ -27,6 +27,10 @@ import { loadProfileWorkbench } from '../lazyChunks';
 import { ProfileLinkOverlay } from '../render/ProfileLinkOverlay';
 import { ProfileCorridorOverlay } from '../render/ProfileCorridorOverlay';
 import type { ProfileCorridorOutline } from '../render/measure/profileCorridorOutline';
+import {
+  rawFilterRequestForScope,
+  type ProfileRawFilterRequest,
+} from '../render/measure/profileRawFilter';
 import { focusPoseOnPoint } from '../render/measure/profilePointLink';
 
 import type { ProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
@@ -152,6 +156,10 @@ export function createProfileWorkbenchRuntime(
   // presentation is released.
   let live: { plot: WorkbenchSectionPlot; name: string } | null = null;
 
+  // The live dock's raw-scatter re-filter, handed over when its plot is ready
+  // and cleared when it is released. One dock at a time, so one slot.
+  let setRawFilter: ((request: ProfileRawFilterRequest) => void) | null = null;
+
   return createProfileWorkbenchLauncher({
     load: () => loadProfileWorkbench(),
     stage: createStageProfileWorkbench(deps.stage),
@@ -183,14 +191,19 @@ export function createProfileWorkbenchRuntime(
         generatedAt: sectionImageStamp(),
       });
     },
+    onRawScope: (scope): void => setRawFilter?.(rawFilterRequestForScope(scope)),
     present: (handle, request) => {
       const dispose = presentWorkbenchSection(handle, request.id, scene, {
         onReady: (plot) => {
           live = { plot, name: request.name };
         },
+        onControls: (controls) => {
+          setRawFilter = controls.setRawFilter;
+        },
       });
       return () => {
         live = null;
+        setRawFilter = null;
         dispose();
       };
     },

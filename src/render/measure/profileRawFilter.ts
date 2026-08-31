@@ -60,6 +60,36 @@ export type ProfileRawFilter =
 /** The rule applied when a request names none: the whole accepted set. */
 export const DEFAULT_PROFILE_RAW_FILTER: ProfileRawFilter = { kind: 'all' };
 
+/** The user-facing scatter scopes the section view offers, in menu order. */
+export type ProfileRawScope = 'all' | 'ground' | 'exclude-non-ground';
+
+/** Menu metadata for the {@link ProfileRawScope} options. */
+export const PROFILE_RAW_SCOPES: readonly {
+  readonly id: ProfileRawScope;
+  readonly label: string;
+  readonly desc: string;
+}[] = [
+  { id: 'all', label: 'All returns', desc: 'Every return the corridor accepted.' },
+  { id: 'ground', label: 'Ground only', desc: 'ASPRS class 2 — the returns the derived surface is built from.' },
+  {
+    id: 'exclude-non-ground',
+    label: 'Exclude veg & noise',
+    desc: 'All but the classes the derived profile drops (vegetation, building, noise).',
+  },
+];
+
+/** The filter request for a chosen scatter scope. */
+export function rawFilterRequestForScope(scope: ProfileRawScope): ProfileRawFilterRequest {
+  switch (scope) {
+    case 'ground':
+      return { filter: { kind: 'ground' } };
+    case 'exclude-non-ground':
+      return { filter: { kind: 'excludeNonGround' } };
+    case 'all':
+      return { filter: { kind: 'all' } };
+  }
+}
+
 /**
  * A filter request.
  *

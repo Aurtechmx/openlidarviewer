@@ -75,6 +75,11 @@ import {
   type ProfileCorridorOutline,
 } from '../render/measure/profileCorridorOutline';
 import {
+  filterProfileRaw,
+  type ProfileRawFilterRequest,
+  type ProfileRawFilterDescriptor,
+} from '../render/measure/profileRawFilter';
+import {
   profileDetailSources,
   profileHoverReadout,
   profileLinkStatusText,
@@ -418,6 +423,13 @@ export interface ComposeSectionOptions {
    */
   readonly indices?: Uint32Array;
   /**
+   * The raw-scatter attribute/source filter to draw through. A non-'all' filter
+   * (or a source-slot selection) narrows the drawn returns to those it keeps and
+   * records the choice in the detail rows. Absent or 'all' draws every corridor
+   * return, exactly as before this existed.
+   */
+  readonly rawFilter?: ProfileRawFilterRequest;
+  /**
    * Vertical reference of the section's heights, for the height-axis title.
    *
    * Absent reads as `unknown`, which titles the axis "Height (datum unknown)".
@@ -577,7 +589,23 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
       : 1;
   const reference: VerticalReference = options.reference ?? 'unknown';
   const axisUnit = scale === 1 ? unit : null;
-  const indices = options.indices ?? drawIndices(section);
+  let indices = options.indices ?? drawIndices(section);
+  // The raw-scatter filter narrows what draws to the returns it keeps. Applied
+  // AFTER the display selection (a drawn point is always in the kept set), so the
+  // dots stay a spread subsample of the kept population — the descriptor reports
+  // that population, which the "Kept" row shows beside the "Drawn" count.
+  let filterDescriptor: ProfileRawFilterDescriptor | null = null;
+  const rawFilter = options.rawFilter;
+  const filterActive =
+    rawFilter != null &&
+    (((rawFilter.filter?.kind ?? 'all') !== 'all') || rawFilter.slots != null);
+  if (filterActive) {
+    const filtered = filterProfileRaw(section.points, rawFilter);
+    filterDescriptor = filtered.descriptor;
+    const kept = new Uint8Array(section.points.count);
+    for (const i of filtered.indices) kept[i] = 1;
+    indices = indices.filter((i) => kept[i] === 1);
+  }
   const colours = new Uint8Array(indices.length * 3);
   const colouring = colourProfileSection(
     {
@@ -673,6 +701,14 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
     { label: 'Sources', value: String(section.sources.length) },
     { label: 'Colour', value: colouring.legend.kind === 'unavailable' ? 'unavailable' : colouring.mode },
   ];
+  if (filterDescriptor) {
+    detail.push({
+      label: 'Kept (filter)',
+      value: `${filterDescriptor.keptCount} of ${filterDescriptor.acceptedCount}`,
+    });
+    const rules = filterDescriptor.scopes.filter((s) => s.active).map((s) => s.rule);
+    if (rules.length > 0) detail.push({ label: 'Filter', value: rules.join('; ') });
+  }
 
   const status =
     section.points.count === 0
@@ -840,6 +876,12 @@ export function presentWorkbenchSection(
      * per presentation, and never after `dispose`.
      */
     onReady?: (plot: WorkbenchSectionPlot) => void;
+    /**
+     * Hand the host the controls that re-drive the live plot, once it is ready.
+     * `setRawFilter` re-composes the scatter through a new attribute/source
+     * filter over the SAME extracted section — no re-walk. Called at most once.
+     */
+    onControls?: (controls: { setRawFilter(request: ProfileRawFilterRequest): void }) => void;
   } = {},
 ): () => void {
   let stopped = false;
@@ -879,7 +921,14 @@ export function presentWorkbenchSection(
   const now = scene.now ?? Date.now;
   const schedule = scene.scheduleSlice ?? scheduleFrame;
 
-  function finish(section: ProfileSectionResult, indices: Uint32Array): void {
+  // The raw-scatter filter the dock currently draws through, and the state a
+  // re-filter needs: the extracted section and the display selection, held so a
+  // filter change re-composes from memory rather than re-walking the scene.
+  let currentRawFilter: ProfileRawFilterRequest = { filter: { kind: 'all' } };
+  let liveSection: ProfileSectionResult | null = null;
+  let liveIndices: Uint32Array | null = null;
+
+  function compose(section: ProfileSectionResult, indices: Uint32Array): WorkbenchSectionPlot {
     // A unit is stated only alongside the scale that reaches it: a section is
     // measured in the scan's own render units, and a foot-CRS scan labelled
     // "m" without the factor would read as metres it never was.
@@ -887,6 +936,7 @@ export function presentWorkbenchSection(
     const plot = prepareWorkbenchSection({
       section,
       indices,
+      rawFilter: currentRawFilter,
       canvas: handle.canvas as unknown as WorkbenchCanvas,
       devicePixelRatio: scene.devicePixelRatio(),
       unitSuffix: metres === null ? null : 'm',
@@ -899,6 +949,9 @@ export function presentWorkbenchSection(
     handle.setGroundBasis(plot.view.groundBasisNote);
     handle.setStatus(plot.view.status);
     handle.setDetail(plot.view.detail);
+    // Re-filtering re-composes over the same section, so drop the previous link
+    // and size subscription before building their replacements.
+    link?.release();
     link = attachSectionPointLink({
       plot,
       section,
@@ -907,6 +960,7 @@ export function presentWorkbenchSection(
       unitToMetres: metres,
       devicePixelRatio: scene.devicePixelRatio(),
     });
+    releaseSize?.();
     const observe = scene.observeCanvasSize ?? observeElementSize;
     releaseSize = observe(handle.canvas, () => {
       if (stopped) return;
@@ -915,6 +969,21 @@ export function presentWorkbenchSection(
       // previous one would answer for pixels that now hold different returns.
       link?.invalidate();
     });
+    return plot;
+  }
+
+  function setRawFilter(request: ProfileRawFilterRequest): void {
+    currentRawFilter = request;
+    if (stopped || !liveSection || !liveIndices) return;
+    const plot = compose(liveSection, liveIndices);
+    // The export control composes from whatever the dock currently shows.
+    hooks.onReady?.(plot);
+  }
+
+  function finish(section: ProfileSectionResult, indices: Uint32Array): void {
+    liveSection = section;
+    liveIndices = indices;
+    const plot = compose(section, indices);
     // The corridor the section sampled from, built from the SAME frame + resolved
     // half-width the walk used, so the outline encloses exactly the returns the
     // transect drew from. The runtime decides whether it is currently shown. A
@@ -923,9 +992,12 @@ export function presentWorkbenchSection(
       const halfWidth = Number.isFinite(section.band) ? section.band : 0;
       scene.markSampleCorridor?.(buildProfileCorridorOutline(section.frame, halfWidth));
     }
-    // The plot is ready: an export control can now compose from the same state
-    // the dock is showing. Skipped if the presentation was already disposed.
-    if (!stopped) hooks.onReady?.(plot);
+    // The plot is ready: hand over the re-filter control and let an export
+    // control compose from the same state. Skipped if already disposed.
+    if (!stopped) {
+      hooks.onControls?.({ setRawFilter });
+      hooks.onReady?.(plot);
+    }
   }
 
   // The second stage: set once the corridor walk has answered, and pumped by
