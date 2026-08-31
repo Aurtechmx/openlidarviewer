@@ -295,8 +295,8 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
       } else {
         lines.push(
           u.detectable
-            ? `Volume uncertainty: ±${u.sigmaM3.toFixed(1)} m³ (1σ, ${(u.relativeError * 100).toFixed(0)}% relative); ${u.confidence} confidence.`
-            : `Net volume is below the level of detection: ±${u.sigmaM3.toFixed(1)} m³ (1σ) — not distinguishable from noise.`,
+            ? `Independent-cell model uncertainty: ±${u.sigmaM3.toFixed(1)} m³ (1σ, ${(u.relativeError * 100).toFixed(0)}% relative). Net volume exceeds the selected 1.96σ threshold under the independent-cell uncertainty model.`
+            : `Independent-cell model uncertainty: ±${u.sigmaM3.toFixed(1)} m³ (1σ) — net volume is below the selected 1.96σ threshold, not distinguishable from noise.`,
         );
       }
       if (!(ctx.registrationSigmaM && ctx.registrationSigmaM > 0)) {

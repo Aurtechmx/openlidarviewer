@@ -148,7 +148,7 @@ describe('summarizeChange', () => {
     const a = grid([1, 1, 1, 1], 2, 2);
     const b = grid([2, 2, 2, 2], 2, 2);
     const lines = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0.02 });
-    expect(lines.some((l) => /Volume uncertainty|below the level of detection/.test(l))).toBe(true);
+    expect(lines.some((l) => /Independent-cell model uncertainty|below the selected 1\.96σ threshold/.test(l))).toBe(true);
   });
 
   it('flags the band as a lower bound when the co-registration error is unquantified (#3)', () => {
