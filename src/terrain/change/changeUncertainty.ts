@@ -31,11 +31,38 @@
  * not the strongest, so `quantified` records that nothing was measured and
  * `detectable` / `confidence` refuse to read certainty out of it.
  *
+ * The result names the error model it was computed under (`model:
+ * 'independent-cells'`) so a consumer never mistakes the band for a generic
+ * total uncertainty. The input accepts a {@link ChangeUncertaintyModel} for a
+ * future correlated model; only the independent-cell model is implemented, and a
+ * covariance request is refused rather than silently served under a correlated
+ * label.
+ *
  * Pure, deterministic. Sits beside {@link detectChange}: that computes the
  * volume, this bounds it.
  */
 
 export type ChangeConfidence = 'high' | 'medium' | 'low';
+
+/** The identifier of the error model a result was computed under. */
+export type ChangeUncertaintyModelId = 'independent-cells';
+
+/**
+ * The error model to compute the band under. Discriminated so a correlated
+ * model can be added later WITHOUT changing the default: `independent-cells` is
+ * the only implemented kind today. `covariance` is declared for the API shape
+ * but is not implemented — passing it throws rather than silently falling back,
+ * so a caller can never believe it received a spatially-correlated band it did
+ * not. Shipping only the labelled independent-cell model is a deliberate,
+ * honest outcome until a correlated model passes its evidence gate.
+ */
+export type ChangeUncertaintyModel =
+  | { readonly kind: 'independent-cells' }
+  | {
+      readonly kind: 'covariance';
+      /** Correlation length (m). Reserved; the covariance model is not built. */
+      readonly correlationLengthM?: number;
+    };
 
 export interface ChangeVolumeUncertaintyInput {
   /** The net volume (m³) whose band we want — usually `stats.netVolumeM3`. */
@@ -56,9 +83,22 @@ export interface ChangeVolumeUncertaintyInput {
    * common way a change number lies.
    */
   readonly registrationSigmaM?: number;
+  /**
+   * The error model to use. Defaults to `{ kind: 'independent-cells' }` — the
+   * only implemented model. Provided so callers name the model explicitly and a
+   * correlated model can be introduced later behind its own kind.
+   */
+  readonly model?: ChangeUncertaintyModel;
 }
 
 export interface ChangeVolumeUncertainty {
+  /**
+   * The error model the band was computed under. Always `'independent-cells'`
+   * today — the caveat that the true error is larger under spatial correlation
+   * travels with every result, so a reader is never handed a bare band that
+   * looks like a total-uncertainty figure.
+   */
+  readonly model: ChangeUncertaintyModelId;
   readonly sigmaM3: number;
   /** net ∓ σ. Signed — a net loss stays negative, never clamped to 0. */
   readonly lowM3: number;
@@ -96,6 +136,20 @@ export function cellSigmaFromLoD(lodM: number): number {
 export function changeVolumeUncertainty(
   input: ChangeVolumeUncertaintyInput,
 ): ChangeVolumeUncertainty {
+  // Resolve the error model. Only the independent-cell model is implemented; a
+  // covariance request is refused rather than silently served the independent
+  // band under a correlated label. Building a validated correlated model is
+  // gated on its evidence (closed-form tiny-grid tests, limiting behaviour,
+  // synthetic random fields) and is deliberately not shipped here.
+  const model = input.model ?? { kind: 'independent-cells' };
+  if (model.kind !== 'independent-cells') {
+    throw new Error(
+      `changeVolumeUncertainty: model '${model.kind}' is not implemented; only ` +
+        "'independent-cells' is available. A spatially-correlated model is staged " +
+        'behind its evidence gate.',
+    );
+  }
+
   const n = Math.max(0, Math.floor(input.significantCells));
   const area = Math.max(0, input.cellAreaM2);
   const cellSigma = Math.max(0, input.cellSigmaM);
@@ -157,6 +211,7 @@ export function changeVolumeUncertainty(
   );
 
   return {
+    model: 'independent-cells',
     sigmaM3,
     lowM3: net - sigmaM3,
     highM3: net + sigmaM3,
