@@ -19,6 +19,7 @@
 
 import type { DevFlags } from './devFlags';
 import type { FrameTelemetrySnapshot } from './frameTelemetry';
+import type { StreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
 
 /** Renderer-level stats, structurally matching `FrameStats` (Viewer.ts). */
 export interface MetricsRenderingInput {
@@ -67,6 +68,12 @@ export interface MetricsJsonInput {
   telemetry: FrameTelemetrySnapshot | null;
   rendering: MetricsRenderingInput | null;
   streaming: MetricsStreamingInput | null;
+  /**
+   * The canonical streaming-diagnostics record (scheduler.diagnostics()), or
+   * null when no streaming cloud is attached. Emitted verbatim into the document;
+   * absent reads as null.
+   */
+  streamingDiagnostics?: StreamingDiagnostics | null;
 }
 
 /** Round to 3 decimals for stable, readable ms values. */
@@ -155,6 +162,11 @@ export function buildMetricsDocument(input: MetricsJsonInput): Record<string, un
           thrashEvents: orNull(s.thrashEvents),
         }
       : null,
+    // The canonical streaming-diagnostics snapshot, emitted verbatim: it is
+    // already a flat record of numbers, literal nulls, and its own `unavailable`
+    // list, so it self-describes what it could not measure. Distinct from the
+    // legacy `streaming` block above, which the overlay text still formats.
+    streamingDiagnostics: input.streamingDiagnostics ?? null,
   };
 }
 
