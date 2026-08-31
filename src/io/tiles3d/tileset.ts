@@ -42,8 +42,13 @@ export interface Tile {
   readonly refine: Refine;
   /** Column-major 4x4, when present. */
   readonly transform: readonly number[] | null;
-  /** Content URI (a `.pnts` tile or a nested external `tileset.json`), or null. */
-  readonly contentUri: string | null;
+  /**
+   * Content URIs this tile carries, in document order. The 1.0 single `content`
+   * form yields one; the 1.1 `contents` array yields each. Empty for a
+   * structural tile with no content. Each is classified and served (or skipped)
+   * independently by the node walk.
+   */
+  readonly contentUris: readonly string[];
   readonly children: readonly Tile[];
 }
 
@@ -59,7 +64,7 @@ interface RawTile {
   refine?: unknown;
   transform?: number[];
   content?: { uri?: string; url?: string };
-  /** 1.1 multi-content. Refused in `parseTile`; see the note there. */
+  /** 1.1 multi-content. Read alongside `content` by `parseContentUris`. */
   contents?: unknown;
   children?: RawTile[];
   implicitTiling?: unknown;
@@ -182,6 +187,36 @@ function explicitRefine(v: unknown): Refine | null {
   return upper;
 }
 
+/** One content URI from a `content`/`contents[]` entry, validated non-empty. */
+function contentEntryUri(entry: unknown): string {
+  const c = entry as { uri?: unknown; url?: unknown } | null | undefined;
+  // TypeScript types the field as a string, but the runtime accepts whatever the
+  // document held; a non-string would flow out as a URI and be fetched.
+  const uri = c?.uri ?? c?.url;
+  if (typeof uri !== 'string' || uri.length === 0) {
+    throw new Error('3D Tiles: a tile content URI is not a non-empty string.');
+  }
+  return uri;
+}
+
+/**
+ * The content URIs a tile carries. Reads the 1.0 single `content` and the 1.1
+ * `contents` array uniformly, in document order. A tile may declare both (the
+ * spec allows it during migration); each entry is validated. An empty `contents`
+ * array is honoured as "no content", not an error.
+ */
+function parseContentUris(raw: RawTile): string[] {
+  const uris: string[] = [];
+  if (raw.content !== undefined) uris.push(contentEntryUri(raw.content));
+  if (raw.contents !== undefined) {
+    if (!Array.isArray(raw.contents)) {
+      throw new Error('3D Tiles: a tile `contents` field is not an array.');
+    }
+    for (const entry of raw.contents) uris.push(contentEntryUri(entry));
+  }
+  return uris;
+}
+
 function parseTile(raw: RawTile, inheritedRefine: Refine, depth: number, budget: ParseBudget): Tile {
   if (depth > budget.maxDepth) {
     throw new Error(
@@ -208,19 +243,6 @@ function parseTile(raw: RawTile, inheritedRefine: Refine, depth: number, budget:
         'availability files and rewrites the tree explicitly.',
     );
   }
-  // 1.1 lets a tile carry `contents` (an array) instead of `content`. Only the
-  // single form is read below, so such a tile used to yield a null URI, which
-  // the node walk treats as a structural tile: no node, and no skip recorded.
-  // The reader then called itself complete while serving none of that tile's
-  // data. Refusing here is what keeps `isComplete` honest until the array form
-  // is actually served.
-  if (raw.contents !== undefined) {
-    throw new Error(
-      '3D Tiles: a tile declares `contents`, the 1.1 multi-content form, which this ' +
-        'reader does not serve yet. Opening it would leave that tile out of a scene ' +
-        'that reported itself complete.',
-    );
-  }
   if (typeof raw.geometricError !== 'number' || !Number.isFinite(raw.geometricError)) {
     throw new Error('3D Tiles: a tile has no finite geometricError.');
   }
@@ -229,13 +251,7 @@ function parseTile(raw: RawTile, inheritedRefine: Refine, depth: number, budget:
     throw new Error(`3D Tiles: a tile has a negative geometricError (${raw.geometricError}).`);
   }
   const refine: Refine = explicitRefine(raw.refine) ?? inheritedRefine;
-  // TypeScript types content.uri as a string, but the runtime accepts whatever
-  // the document held. A non-string here would flow out as a URI and be fetched.
-  const rawUri = raw.content?.uri ?? raw.content?.url;
-  if (rawUri !== undefined && (typeof rawUri !== 'string' || rawUri.length === 0)) {
-    throw new Error('3D Tiles: a tile content URI is not a non-empty string.');
-  }
-  const contentUri = rawUri ?? null;
+  const contentUris = parseContentUris(raw);
   if (raw.children !== undefined && !Array.isArray(raw.children)) {
     throw new Error('3D Tiles: a tile children field is not an array.');
   }
@@ -245,7 +261,7 @@ function parseTile(raw: RawTile, inheritedRefine: Refine, depth: number, budget:
     geometricError: raw.geometricError,
     refine,
     transform: tileTransform(raw.transform),
-    contentUri,
+    contentUris,
     children,
   };
 }

@@ -98,8 +98,8 @@ describe('3D Tiles implicit tiling: it opens', () => {
     const { options, asked } = serve(new Map([[ROOT_SUBTREE_URL, fullQuadSubtree()]]));
     const tileset = parseTileset(await expandImplicitTileset(implicitDoc({}), options));
     expect(asked).toEqual([ROOT_SUBTREE_URL]);
-    expect(tileset.root.contentUri).toBe('content/0/0/0.pnts');
-    expect(tileset.root.children.map((c) => c.contentUri).sort()).toEqual([
+    expect(tileset.root.contentUris[0] ?? null).toBe('content/0/0/0.pnts');
+    expect(tileset.root.children.map((c) => c.contentUris[0] ?? null).sort()).toEqual([
       'content/1/0/0.pnts',
       'content/1/0/1.pnts',
       'content/1/1/0.pnts',
@@ -149,9 +149,9 @@ describe('3D Tiles implicit tiling: it opens', () => {
       { content: { uri: 'c/{level}/{x}/{y}/{z}.pnts' } },
     );
     const tileset = parseTileset(await expandImplicitTileset(doc, options));
-    expect(tileset.root.contentUri).toBe('c/0/0/0/0.pnts');
+    expect(tileset.root.contentUris[0] ?? null).toBe('c/0/0/0/0.pnts');
     expect(tileset.root.children).toHaveLength(8);
-    expect(tileset.root.children.map((c) => c.contentUri)).toContain('c/1/1/1/1.pnts');
+    expect(tileset.root.children.map((c) => c.contentUris[0] ?? null)).toContain('c/1/1/1/1.pnts');
     // OCTREE halves all three axes, so every half-axis is four.
     const box = tileset.root.children[0]!.boundingVolume.box as number[];
     expect(box).toEqual([-4, -4, -4, 4, 0, 0, 0, 4, 0, 0, 0, 4]);
@@ -202,7 +202,7 @@ describe('3D Tiles implicit tiling: availability decides what exists', () => {
     );
     const { options } = serve(new Map([[ROOT_SUBTREE_URL, body]]));
     const tileset = parseTileset(await expandImplicitTileset(implicitDoc({}), options));
-    expect(tileset.root.children.map((c) => c.contentUri)).toEqual(['content/1/1/0.pnts']);
+    expect(tileset.root.children.map((c) => c.contentUris[0] ?? null)).toEqual(['content/1/1/0.pnts']);
   });
 
   it('gives a tile no content when only its content bit is clear', async () => {
@@ -219,9 +219,9 @@ describe('3D Tiles implicit tiling: availability decides what exists', () => {
     );
     const { options } = serve(new Map([[ROOT_SUBTREE_URL, body]]));
     const tileset = parseTileset(await expandImplicitTileset(implicitDoc({}), options));
-    expect(tileset.root.contentUri).toBeNull();
+    expect(tileset.root.contentUris).toEqual([]);
     expect(tileset.root.children).toHaveLength(4);
-    expect(tileset.root.children.every((c) => c.contentUri !== null)).toBe(true);
+    expect(tileset.root.children.every((c) => c.contentUris.length > 0)).toBe(true);
   });
 
   it('follows an available child subtree into a second subtree file', async () => {
@@ -261,10 +261,10 @@ describe('3D Tiles implicit tiling: availability decides what exists', () => {
     // Only the (0,0) branch continues; the other three level-1 tiles are leaves.
     const withChildren = level1.filter((c) => c.children.length > 0);
     expect(withChildren).toHaveLength(1);
-    expect(withChildren[0]!.contentUri).toBe('content/1/0/0.pnts');
+    expect(withChildren[0]!.contentUris[0] ?? null).toBe('content/1/0/0.pnts');
     const level2 = withChildren[0]!.children;
-    expect(level2.map((c) => c.contentUri)).toEqual(['content/2/0/0.pnts']);
-    expect(level2[0]!.children.map((c) => c.contentUri).sort()).toEqual([
+    expect(level2.map((c) => c.contentUris[0] ?? null)).toEqual(['content/2/0/0.pnts']);
+    expect(level2[0]!.children.map((c) => c.contentUris[0] ?? null).sort()).toEqual([
       'content/3/0/0.pnts',
       'content/3/0/1.pnts',
       'content/3/1/0.pnts',
@@ -299,7 +299,7 @@ describe('3D Tiles implicit tiling: availability decides what exists', () => {
     );
     const { options } = serve(new Map([[ROOT_SUBTREE_URL, body]]));
     const tileset = parseTileset(await expandImplicitTileset(implicitDoc({}), options));
-    expect(tileset.root.contentUri).toBeNull();
+    expect(tileset.root.contentUris).toEqual([]);
     expect(tileset.root.children).toEqual([]);
   });
 
@@ -354,7 +354,7 @@ describe('3D Tiles implicit tiling: external availability buffers', () => {
     expect(asked[1]).toBe('https://tiles.example/data/subtrees/0/0/availability.bin');
     // Bits 0 and 2 set: the root, and the level-1 child at Morton index 1,
     // which is (x=1, y=0).
-    expect(tileset.root.children.map((c) => c.contentUri)).toEqual(['content/1/1/0.pnts']);
+    expect(tileset.root.children.map((c) => c.contentUris[0] ?? null)).toEqual(['content/1/1/0.pnts']);
   });
 
   it('refuses an availability buffer that escapes the tileset directory', async () => {

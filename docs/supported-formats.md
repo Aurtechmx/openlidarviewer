@@ -69,7 +69,7 @@ What does not open: the wider 3D Tiles ecosystem. B3DM, I3DM, CMPT and glTF cont
 Two further limits of the supported subset are known:
 
 - Content is selected by the URI extension. 3D Tiles 1.1 does not require a content URI to have a file extension, and permits content to be identified by its magic header or to be JSON, so a tileset that names its tiles without an extension is not opened even when every tile in it is PNTS.
-- A tile is read as carrying a single `content`. 3D Tiles 1.1 allows `contents[]`, several contents on one tile, and only the single-content form is read here.
+- Both the single `content` and the 3D Tiles 1.1 `contents[]` array are read; every content entry on a tile is classified and served independently, and a tile whose entries are all point clouds streams all of them.
 
 ## Mobile Scan Exports
 

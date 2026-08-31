@@ -393,7 +393,7 @@ describe('a refusal reaches the user', () => {
       }),
     );
     expect(shown).not.toContain('corrupt');
-    expect(shown).toContain('contents');
+    expect(shown).toContain('REPLACE');
   });
 
   it('names the tile it cannot serve', async () => {

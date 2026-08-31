@@ -125,7 +125,7 @@ function aabbThroughMatrix(aabb: Aabb, m: readonly number[]): Aabb {
 /** Whether any tile below this one carries content of its own. */
 function subtreeHasContent(tile: Tile): boolean {
   for (const child of tile.children) {
-    if (child.contentUri !== null || subtreeHasContent(child)) return true;
+    if (child.contentUris.length > 0 || subtreeHasContent(child)) return true;
   }
   return false;
 }
@@ -172,61 +172,21 @@ export function tilesetNodes(
 
   for (const placed of walkTilePlacements(tileset.root, rootTransform, tileset.assetVersion)) {
     contentParent.length = Math.min(contentParent.length, placed.depth);
-    const uri = placed.tile.contentUri;
-    if (uri == null) continue;
+    if (placed.tile.contentUris.length === 0) continue;
 
-    // Only a point tile becomes a node. Everything else would be fetched and
-    // handed to the point-tile decoder, which is a runtime failure on bytes
-    // that were never point data. A skip is recorded so the caller can refuse
-    // the open rather than draw a scene with pieces silently absent.
-    const kind = contentKind(uri);
-    if (kind !== 'pnts') {
-      skipped.push(
-        kind === 'tileset'
-          ? `${uri}: an external tileset, which this reader does not follow.`
-          : kind === 'unknown'
-            ? `${uri}: names no file extension, so its content type is undeclared.`
-            : `${uri}: not a point tile, and this viewer decodes no other content.`,
-      );
-      continue;
-    }
-
-    const raw = volumeToAabb(placed.boundingVolume);
-    // A region skipped the walk's transform, so it needs the root frame applied
-    // here or its bounds describe a different place from its points.
+    // Tile-level bounds — every content the tile carries shares them. A region
+    // skipped the walk's transform, so it needs the root frame applied here or
+    // its bounds describe a different place from its points.
+    const rawAabb = volumeToAabb(placed.boundingVolume);
     const aabb =
-      raw !== null && placed.boundingVolume.region !== undefined && rootTransform !== undefined
-        ? aabbThroughMatrix(raw, rootTransform)
-        : raw;
-    if (aabb == null) {
-      skipped.push(`${uri}: bounding volume carries none of box, region or sphere.`);
-      continue;
-    }
-    if (seen.has(uri)) {
-      skipped.push(`${uri}: a second tile names the same content; only the first is served.`);
-      continue;
-    }
-    seen.add(uri);
+      rawAabb !== null && placed.boundingVolume.region !== undefined && rootTransform !== undefined
+        ? aabbThroughMatrix(rawAabb, rootTransform)
+        : rawAabb;
 
-    if (placed.tile.refine === 'REPLACE' && subtreeHasContent(placed.tile)) {
-      replacing.push(uri);
-    }
-
-    // Refused before anything is fetched, and named, so the open can say which
-    // tile it would have had to request.
-    let target = uri;
-    if (base !== null) {
-      const resolved = resolveTilesetContentUrl(base, uri, search);
-      if (!resolved.ok) {
-        skipped.push(`${uri}: ${resolved.reason}`);
-        continue;
-      }
-      target = resolved.url;
-    }
-
-    // Nearest ANCESTOR that produced a node, which may be several levels up:
-    // a chain of structural tiles leaves those depths unset, and looking only
-    // one level up left such a leaf parentless.
+    // Nearest ANCESTOR that produced a node, which may be several levels up: a
+    // chain of structural tiles leaves those depths unset, and looking only one
+    // level up left such a leaf parentless. Tile-level, so every content of this
+    // tile shares the same parent anchor.
     let parentId: string | undefined;
     for (let d = placed.depth - 1; d >= 0; d--) {
       if (contentParent[d] != null) {
@@ -235,32 +195,80 @@ export function tilesetNodes(
       }
     }
 
-    records.push({
-      id: uri,
-      // The streaming model still types a voxel key. A tileset has none, so
-      // the depth is repeated into it rather than inventing coordinates that
-      // would read as an octree address. Nothing consumes it for this source:
-      // the scheduler refines on `depth`.
-      key: { depth: placed.depth, x: 0, y: 0, z: 0 },
-      depth: placed.depth,
-      bounds: toBox6(aabb.min, aabb.max),
-      pointCount: ASSUMED_TILE_POINTS,
-      // A tile is a separate resource, not a range inside one file.
-      byteOffset: 0,
-      byteSize: 0,
-      spacing: placed.geometricError,
-      parentId,
-      // The document's own value, resolved by the parser (a child inherits its
-      // parent's when it declares none). Only ADD, and REPLACE that refines
-      // into nothing, get this far — a REPLACE tile with content below it is
-      // named in `replacing` and refuses the open — so a served node is never a
-      // replaced ancestor of another. Carrying the value anyway keeps the
-      // export frontier reading the tile rather than a default.
-      refine: placed.tile.refine === 'REPLACE' ? 'replace' : 'add',
-    });
-    contentUri.set(uri, target);
-    transform.set(uri, placed.transform);
-    contentParent[placed.depth] = uri;
+    // Each content — the 1.0 single `content` or a 1.1 `contents[]` entry — is
+    // classified and served or skipped INDEPENDENTLY. A tile mixing a point tile
+    // with an unsupported content (a mesh, a nested tileset) serves the points
+    // and records a skip for the rest, so `isComplete` stays honest.
+    for (const uri of placed.tile.contentUris) {
+      // Only a point tile becomes a node. Everything else would be fetched and
+      // handed to the point-tile decoder, a runtime failure on bytes that were
+      // never point data. A skip is recorded so the caller can refuse the open
+      // rather than draw a scene with pieces silently absent.
+      const kind = contentKind(uri);
+      if (kind !== 'pnts') {
+        skipped.push(
+          kind === 'tileset'
+            ? `${uri}: an external tileset, which this reader does not follow.`
+            : kind === 'unknown'
+              ? `${uri}: names no file extension, so its content type is undeclared.`
+              : `${uri}: not a point tile, and this viewer decodes no other content.`,
+        );
+        continue;
+      }
+      if (aabb == null) {
+        skipped.push(`${uri}: bounding volume carries none of box, region or sphere.`);
+        continue;
+      }
+      if (seen.has(uri)) {
+        skipped.push(`${uri}: a second tile names the same content; only the first is served.`);
+        continue;
+      }
+      seen.add(uri);
+
+      if (placed.tile.refine === 'REPLACE' && subtreeHasContent(placed.tile)) {
+        replacing.push(uri);
+      }
+
+      // Refused before anything is fetched, and named, so the open can say which
+      // tile it would have had to request.
+      let target = uri;
+      if (base !== null) {
+        const resolved = resolveTilesetContentUrl(base, uri, search);
+        if (!resolved.ok) {
+          skipped.push(`${uri}: ${resolved.reason}`);
+          continue;
+        }
+        target = resolved.url;
+      }
+
+      records.push({
+        id: uri,
+        // The streaming model still types a voxel key. A tileset has none, so
+        // the depth is repeated into it rather than inventing coordinates that
+        // would read as an octree address. Nothing consumes it for this source:
+        // the scheduler refines on `depth`.
+        key: { depth: placed.depth, x: 0, y: 0, z: 0 },
+        depth: placed.depth,
+        bounds: toBox6(aabb.min, aabb.max),
+        pointCount: ASSUMED_TILE_POINTS,
+        // A tile is a separate resource, not a range inside one file.
+        byteOffset: 0,
+        byteSize: 0,
+        spacing: placed.geometricError,
+        parentId,
+        // The document's own value, resolved by the parser (a child inherits its
+        // parent's when it declares none). Only ADD, and REPLACE that refines
+        // into nothing, get this far — a REPLACE tile with content below it is
+        // named in `replacing` and refuses the open — so a served node is never
+        // a replaced ancestor of another. Carrying the value anyway keeps the
+        // export frontier reading the tile rather than a default.
+        refine: placed.tile.refine === 'REPLACE' ? 'replace' : 'add',
+      });
+      contentUri.set(uri, target);
+      transform.set(uri, placed.transform);
+      // The first served content anchors this tile's children.
+      if (contentParent[placed.depth] == null) contentParent[placed.depth] = uri;
+    }
   }
 
   for (const uri of replacing) {
