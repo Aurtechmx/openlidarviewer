@@ -259,6 +259,29 @@ export class StreamingRenderer {
     return this._meshes.size;
   }
 
+  /**
+   * Ids the replace frontier says must not draw this frame — a coarse parent a
+   * REPLACE tileset has refined away, or a node withheld under an incomplete
+   * replacement. Held so a mesh that arrives after the frontier was computed is
+   * hidden on creation rather than flashing for a frame before the next tick.
+   * Empty for every additive source, where nothing is ever hidden.
+   */
+  private _hiddenIds: ReadonlySet<string> = new Set();
+
+  /**
+   * Apply the replace-frontier hidden set: a hidden node's mesh stays resident
+   * (so it reappears with no hole if its replacement is later evicted) but is
+   * not drawn. A node absent from the set draws normally. Called each scheduler
+   * tick for a replacing hierarchy; never called for an additive one, so those
+   * meshes keep `visible === true` untouched.
+   */
+  applyReplaceVisibility(hidden: ReadonlySet<string>): void {
+    this._hiddenIds = hidden;
+    for (const [id, entry] of this._meshes) {
+      entry.mesh.visible = !hidden.has(id);
+    }
+  }
+
   /** A decoded node is ready — build its mesh and add it to the scene. */
   onNodeReady(node: StreamingNode, decoded: DecodedChunk): void {
     const existing = this._meshes.get(node.record.id);
@@ -356,6 +379,10 @@ export class StreamingRenderer {
       decoded.intensity ?? null,
     );
     this._host.addStreamingMesh(handle.mesh, decoded, node.record.key.depth, node.record.id);
+    // A node whose replace frontier said "withheld" before its mesh existed is
+    // hidden on creation, so it does not flash for the frame before the next
+    // tick re-applies the frontier. No-op for an additive source (empty set).
+    if (this._hiddenIds.has(node.record.id)) handle.mesh.visible = false;
     this._meshes.set(node.record.id, {
       mesh: handle.mesh,
       colorAttr: handle.colorAttr,
