@@ -52,4 +52,33 @@ describe('DerivedLayerStore', () => {
     expect(s.remove('a')).toBe(true);
     expect(s.has('a')).toBe(false);
   });
+
+  it('notifies a subscriber on every change and stops after unsubscribe', () => {
+    const s = new DerivedLayerStore();
+    let calls = 0;
+    const off = s.subscribe(() => {
+      calls += 1;
+    });
+    s.put({ id: 'a', type: 'contours', name: 'Contours', sourceScanIds: ['x'] });
+    s.setVisible('a', false);
+    s.setOpacity('a', 0.5);
+    s.setStyle('a', { ramp: 'x' });
+    s.solo('a');
+    s.remove('a');
+    expect(calls).toBe(6);
+    off();
+    s.put({ id: 'b', type: 'slope', name: 'Slope', sourceScanIds: ['x'] });
+    expect(calls).toBe(6);
+  });
+
+  it('does not notify when a remove or patch hits no layer', () => {
+    const s = new DerivedLayerStore();
+    let calls = 0;
+    s.subscribe(() => {
+      calls += 1;
+    });
+    expect(s.remove('missing')).toBe(false);
+    expect(s.setVisible('missing', false)).toBeUndefined();
+    expect(calls).toBe(0);
+  });
 });

@@ -85,12 +85,33 @@ function makeLayer(init: DerivedLayerInit, generation: number): DerivedLayer {
  */
 export class DerivedLayerStore {
   private readonly _byId = new Map<string, DerivedLayer>();
+  private readonly _listeners = new Set<() => void>();
+
+  /**
+   * Observe every change to the set of layers — a put, a remove, or a display
+   * mutation (visibility, opacity, style, solo). A Layers-panel section reads
+   * `list()` on each call to re-render, so it never drifts from the store. The
+   * listener is called after the change has landed. Returns an unsubscribe.
+   */
+  subscribe(listener: () => void): () => void {
+    this._listeners.add(listener);
+    return () => {
+      this._listeners.delete(listener);
+    };
+  }
+
+  private _notify(): void {
+    // A copy so a listener that unsubscribes during dispatch cannot mutate the
+    // set mid-iteration.
+    for (const listener of [...this._listeners]) listener();
+  }
 
   /** Add a new layer, or regenerate an existing one (generation bumps). */
   put(init: DerivedLayerInit): DerivedLayer {
     const prev = this._byId.get(init.id);
     const layer = makeLayer(init, prev ? prev.generation + 1 : 1);
     this._byId.set(init.id, layer);
+    this._notify();
     return layer;
   }
 
@@ -103,7 +124,9 @@ export class DerivedLayerStore {
   }
 
   remove(id: string): boolean {
-    return this._byId.delete(id);
+    const removed = this._byId.delete(id);
+    if (removed) this._notify();
+    return removed;
   }
 
   /** All layers, in insertion order. */
@@ -135,6 +158,7 @@ export class DerivedLayerStore {
     for (const [key, layer] of this._byId) {
       this._byId.set(key, { ...layer, visible: id === null ? true : key === id });
     }
+    this._notify();
   }
 
   private _patch(id: string, patch: Partial<DerivedLayer>): DerivedLayer | undefined {
@@ -142,6 +166,7 @@ export class DerivedLayerStore {
     if (!prev) return undefined;
     const next = { ...prev, ...patch };
     this._byId.set(id, next);
+    this._notify();
     return next;
   }
 }
