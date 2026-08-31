@@ -40,7 +40,7 @@ describe('computeVerticalAccuracy', () => {
     expect(a.rmseZ).toBe(0.5);
     expect(a.nva95).toBeCloseTo(0.5 * NVA_95_MULTIPLIER, 6);
     expect(a.vva95).toBe(1.1);
-    expect(a.standard).toBe('ASPRS 2014 formulas, hold-out basis');
+    expect(a.standard).toBe('internal residual diagnostic; 2014-formula analogs, hold-out basis');
   });
 
   it('carries signed bias + NMAD through, and formats them with direction', () => {
@@ -49,7 +49,7 @@ describe('computeVerticalAccuracy', () => {
     expect(a.nmad).toBe(0.3);
     const lines = formatVerticalAccuracy(report(0.5, 1.1, 100, -0.08, 0.3)).join('\n');
     // Negative bias ⇒ surface reads high; NMAD line present.
-    expect(lines).toMatch(/Systematic bias: -0\.08 m.*reads high/);
+    expect(lines).toMatch(/Bias: -0\.08 m.*reads high/);
     expect(lines).toMatch(/NMAD \(robust spread, hold-out\): 0\.30 m/);
   });
 
@@ -60,11 +60,11 @@ describe('computeVerticalAccuracy', () => {
 });
 
 describe('formatVerticalAccuracy', () => {
-  it('states the normal-distribution assumption and both figures', () => {
+  it('leads with plain residual diagnostics, not an ASPRS conformance claim', () => {
     const lines = formatVerticalAccuracy(report(0.5, 1.1));
-    expect(lines.join(' ')).toMatch(/NVA-style @ 95%/);
-    expect(lines.join(' ')).toMatch(/assumes normally distributed/i);
-    expect(lines.join(' ')).toMatch(/VVA-style @ 95%/);
+    expect(lines[0]).toMatch(/Internal vertical residual RMSE/);
+    expect(lines.join(' ')).toMatch(/not an ASPRS checkpoint assessment/i);
+    expect(lines.join(' ')).toMatch(/2014-formula (NVA|VVA) analog/i);
   });
 
   it('qualifies every figure as hold-out — never an independent-checkpoint claim', () => {
@@ -72,7 +72,7 @@ describe('formatVerticalAccuracy', () => {
     // All three lines carry the hold-out qualifier.
     for (const line of lines) expect(line).toMatch(/hold-out/);
     // The disclosures name what the figures are NOT.
-    expect(lines.join(' ')).toMatch(/not independent checkpoints/i);
+    expect(lines.join(' ')).toMatch(/not an ASPRS checkpoint assessment/i);
     expect(lines.join(' ')).toMatch(/not vegetated-class checkpoints/i);
   });
 
@@ -87,7 +87,7 @@ describe('VerticalAccuracy.standard — a basis tag, not a conformance tag', () 
   it('never reads as a bare "ASPRS 2014" conformance claim', () => {
     const a = computeVerticalAccuracy(report(0.5, 1.1));
     expect(a.standard).not.toBe('ASPRS 2014');
-    expect(a.standard).toMatch(/formulas/i);
+    expect(a.standard).toMatch(/internal residual diagnostic/i);
     expect(a.standard).toMatch(/hold-out/i);
   });
 });
