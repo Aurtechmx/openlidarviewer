@@ -525,6 +525,10 @@ export const loadRangeWorkbenchMount = () => import('./ui/rangeWorkbenchMount');
 /** The feature-candidate review surface (building footprints, conductor fits). */
 export const loadFeatureCandidatesMount = () => import('./ui/featureCandidatesMount');
 
+/** The findings-ledger panel + its session store, kept out of the index bundle. */
+export const loadFindingsPanel = () => import('./ui/findingsPanel');
+export const loadSessionFindings = () => import('./render/measure/sessionFindings');
+
 /**
  * The 3D Tiles open — the tileset parser, the traversal, the hardened tileset
  * transport and the PNTS decoder, as one chunk behind the remote-URL router.

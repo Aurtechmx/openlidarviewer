@@ -160,13 +160,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/render/measure/sessionFindings.ts",
-      "status": "staged",
-      "why": "The session ledger of measurements with their uncertainty bands, written to be handed to buildReportManifest. The measurement flow shows results in toasts and collects them nowhere.",
-      "graduation": "The measurement flow appends findings here and the report export reads them.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/render/measure/profileCorridorOutline.ts",
       "status": "staged",
       "why": "Drawable geometry for the capsule corridor profileCorridor.ts tests membership against. The scene draws no corridor outline.",

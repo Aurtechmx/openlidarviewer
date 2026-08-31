@@ -197,6 +197,43 @@ export function integrityReportFile(
   };
 }
 
+/**
+ * Ledger variant of {@link integrityReportFile}: sign a report built from an
+ * already-assembled {@link ReportFinding} ledger (the findings panel's curated
+ * list) rather than re-deriving findings from live measurements. Same gate, same
+ * manifest builder, same digest — only the finding source differs. The reviewer
+ * has chosen and pruned these findings, so their bands and caveats travel as-is.
+ */
+export function findingsReportFile(
+  findings: readonly ReportFinding[],
+  datasetId: string,
+  crsName: string | undefined,
+  generatedAt: string,
+  classificationEpoch: number,
+  software?: string,
+  unitsVerified: boolean = true,
+  claimId: string = INTEGRITY_REPORT_CLAIM,
+): IntegrityReportFile {
+  const gate = exportGate(claimId);
+  if (!gate.allowed && !gate.exploratoryOnly) {
+    throw new Error(`Findings report refused: ${gate.reason}`);
+  }
+  const manifest = buildReportManifest({
+    dataset: { id: datasetId, crs: crsName },
+    generatedAt,
+    software,
+    classificationEpoch,
+    findings: [...findings],
+  });
+  return {
+    filename: `${datasetId}-findings.json`,
+    text: JSON.stringify(manifest, null, 2),
+    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified),
+    evidenceStatus: evidenceStatus(claimId),
+    exploratory: gate.exploratoryOnly,
+  };
+}
+
 /** Build (and sign) a report manifest from the placed measurements. */
 export function measurementsToReportManifest(
   measurements: readonly Measurement[],

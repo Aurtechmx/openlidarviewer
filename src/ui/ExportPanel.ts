@@ -13,7 +13,7 @@
 
 import { el } from './dom';
 import { downloadBytes } from '../io/download';
-import { loadConvertEngine } from '../lazyChunks';
+import { loadConvertEngine, loadFindingsPanel, loadSessionFindings } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
@@ -30,6 +30,9 @@ import type { ClipBox } from '../render/clip/clipBox';
 import type { ExportFormat } from '../io/exporters';
 import type { ExportMode } from '../export/types';
 import { buildExportDeliverables, type ExportDeliverables } from './export/exportDeliverables';
+import type { ReportFinding } from '../render/measure/reportManifest';
+import type { SessionFindings } from '../render/measure/sessionFindings';
+import type { MountedFindingsPanel } from './findingsPanel';
 
 /**
  * Lightweight, allocation-free description of the exportable cloud, used to
@@ -116,6 +119,15 @@ export interface ExportPanelCallbacks {
    */
   exportIntegrityReport?: () => void;
   /**
+   * Convert the placed measurements into report findings for the findings
+   * ledger. Async because the converter lives in a lazy chunk. Wiring this AND
+   * {@link exportFindingsReport} mounts the durable findings ledger under the
+   * Measurements group.
+   */
+  collectMeasurementFindings?: () => Promise<readonly ReportFinding[]>;
+  /** Export the curated findings ledger as the signed integrity report (JSON). */
+  exportFindingsReport?: (findings: readonly ReportFinding[]) => void;
+  /**
    * Export a site KML (annotations + measurements + viewpoints) for Google
    * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
    */
@@ -180,6 +192,16 @@ export class ExportPanel {
   private readonly _summary: HTMLElement;
   private readonly _products: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
+  /**
+   * The session findings ledger, owned here and rendered by the findings panel.
+   * Both the store and the panel live in a lazy chunk (kept out of the index
+   * bundle, which sits at its budget ceiling): the first Products render with the
+   * findings callbacks wired imports them and mounts into `_findingsSlot`, and
+   * the reference persists across re-renders.
+   */
+  private _findings: SessionFindings | null = null;
+  private _findingsPanel: MountedFindingsPanel | null = null;
+  private _findingsMountStarted = false;
 
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
   // default the panel to it so the pill selection matches the recommended choice.
@@ -578,6 +600,20 @@ export class ExportPanel {
             : `${count} measurement${measurePlural} ready to export.`,
         ),
       );
+      // The durable findings ledger: curate the results worth keeping (each with
+      // its band and caveats), then export the whole ledger as the same signed
+      // integrity report. Mounted only when the host wires both halves, and lazily
+      // (the panel + store are a separate chunk). An already-mounted panel is
+      // re-attached to the fresh slot so its ledger survives a re-render.
+      if (this._cb.collectMeasurementFindings && this._cb.exportFindingsReport) {
+        const slot = el('div', { className: 'olv-findings-slot' });
+        content.append(this._productGroup('Findings ledger', slot));
+        if (this._findingsPanel) {
+          slot.append(this._findingsPanel.element);
+        } else {
+          this._mountFindingsLedger(slot);
+        }
+      }
     }
 
     // The map lane: everything that lands in Google Earth / QGIS as lon/lat.
@@ -635,13 +671,35 @@ export class ExportPanel {
   }
 
   /** One labelled product group: label, its stacked actions, one line of hint. */
-  private _productGroup(label: string, actions: HTMLElement, hint: string): HTMLElement {
-    const group = el('div', { className: 'olv-export-product-group' });
-    group.append(
-      this._label(label),
-      actions,
-      el('span', { className: 'olv-export-fullres-hint', text: hint }),
+  /**
+   * Lazily import the findings store + panel (kept out of the index bundle) and
+   * mount them into `slot`. Guarded so the dynamic import fires once; if the
+   * Products lane re-renders before the chunk resolves, the panel lands in the
+   * latest slot via the re-attach path above. Callbacks are re-read from `_cb`
+   * at mount time, so this stays correct if the host rewires them.
+   */
+  private _mountFindingsLedger(slot: HTMLElement): void {
+    if (this._findingsMountStarted) return;
+    this._findingsMountStarted = true;
+    void Promise.all([loadFindingsPanel(), loadSessionFindings()]).then(
+      ([{ buildFindingsPanel }, { SessionFindings }]) => {
+        this._findings = new SessionFindings();
+        this._findingsPanel = buildFindingsPanel({
+          findings: this._findings,
+          collectMeasurements: () => this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]),
+          exportReport: (f) => this._cb.exportFindingsReport?.(f),
+        });
+        slot.append(this._findingsPanel.element);
+      },
     );
+  }
+
+  private _productGroup(label: string, actions: HTMLElement, hint?: string): HTMLElement {
+    const group = el('div', { className: 'olv-export-product-group' });
+    group.append(this._label(label), actions);
+    if (hint) {
+      group.append(el('span', { className: 'olv-export-fullres-hint', text: hint }));
+    }
     return group;
   }
 

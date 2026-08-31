@@ -12,6 +12,7 @@
 
 import type { Measurement, Vec3 } from '../render/measure/types';
 import type { MeasurementExportContext } from '../export/measurementExport';
+import type { ReportFinding } from '../render/measure/reportManifest';
 import type { GeoExportContext } from './reportExport';
 
 /** The slice of the measure controller these exports read. */
@@ -34,7 +35,10 @@ export interface MeasurementExportActionDeps {
     Pick<typeof import('../export/measurementExport'), 'measurementsToGeoJSON' | 'measurementsToCsv'>
   >;
   readonly loadMeasurementReport: () => Promise<
-    Pick<typeof import('../export/measurementReport'), 'integrityReportFile'>
+    Pick<
+      typeof import('../export/measurementReport'),
+      'integrityReportFile' | 'measurementsToFindings' | 'findingsReportFile'
+    >
   >;
   /** Active scan's classification epoch (0 when none), for the report manifest. */
   readonly activeClassificationEpoch: () => number;
@@ -96,6 +100,42 @@ export async function exportMeasurementIntegrityReport(
     deps.appVersion,
     // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
     measure.crsKnown,
+  );
+  deps.downloadText(f.filename, f.text);
+}
+
+/**
+ * Convert the placed measurements into report findings for the findings ledger.
+ * The panel's "Add current measurements" button drives this; the conversion
+ * lives in the lazy report chunk, so the call is async. Returns an empty array
+ * when nothing is placed.
+ */
+export async function collectMeasurementFindings(
+  deps: MeasurementExportActionDeps,
+): Promise<readonly ReportFinding[]> {
+  const { measure } = deps;
+  const ms = measure.getMeasurements();
+  if (ms.length === 0) return [];
+  const { measurementsToFindings } = await deps.loadMeasurementReport();
+  return measurementsToFindings(ms, measure.worldUp, measure.unitToMetres, measure.verticalUnitToMetres);
+}
+
+/** Export the curated findings ledger as the signed integrity report (JSON). */
+export async function exportFindingsReport(
+  deps: MeasurementExportActionDeps,
+  findings: readonly ReportFinding[],
+): Promise<void> {
+  if (findings.length === 0) return;
+  const geo = deps.geo();
+  const { findingsReportFile } = await deps.loadMeasurementReport();
+  const f = findingsReportFile(
+    findings,
+    geo.name ? deps.baseName(geo.name) : 'scan',
+    geo.crsName,
+    deps.now(),
+    deps.activeClassificationEpoch(),
+    deps.appVersion,
+    deps.measure.crsKnown,
   );
   deps.downloadText(f.filename, f.text);
 }
