@@ -404,6 +404,16 @@ describe('buildDemPackage', () => {
     // A cartographic purpose bundles the GENERALIZED geometry (not analytical).
     expect(extractEntry(zip, 'site_Contours_Cartographic.geojson')).not.toBeNull();
     expect(extractEntry(zip, 'site_Contours_Analytical.geojson')).toBeNull();
+    // The cartographic line ships its CAD sibling and the two JSON products.
+    const dxf = extractEntry(zip, 'site_Contours_Cartographic.dxf');
+    expect(dxf).not.toBeNull();
+    expect(new TextDecoder().decode(dxf!)).toContain('LWPOLYLINE');
+    const val = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Validation.json')!));
+    expect(val.independentCheckpoints).toBe(false);
+    expect(String(val.scope)).toMatch(/internal hold-out/i);
+    const studio = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_ContourStudio.json')!));
+    expect(studio.contourStyle).toBe('generalized');
+    expect(studio.contourMethod).toBe('olv.contour.generalize@1');
     // …and the deliverable self-describes the purpose it was built for.
     const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
     expect(prov.deliverablePurpose).toBe('presentation-map');
@@ -430,6 +440,13 @@ describe('buildDemPackage', () => {
     });
     expect(extractEntry(zip, 'site_Contours_Analytical.geojson')).not.toBeNull();
     expect(extractEntry(zip, 'site_Contours_Cartographic.geojson')).toBeNull();
+    // An analytical export carries no cartographic line, so the DXF is omitted
+    // (honestly, not fabricated) while the JSON products still ship.
+    expect(extractEntry(zip, 'site_Contours_Cartographic.dxf')).toBeNull();
+    expect(extractEntry(zip, 'site_Validation.json')).not.toBeNull();
+    expect(extractEntry(zip, 'site_ContourStudio.json')).not.toBeNull();
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site_README.txt')!);
+    expect(readme).toMatch(/Cartographic\.dxf — omitted: Included only with a cartographic/);
     const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
     expect(prov.deliverablePurpose).toBe('survey-review');
     expect(prov.contourMethod).toBe('olv.contour.analytical@1');

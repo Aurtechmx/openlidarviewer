@@ -6,12 +6,12 @@
  * decide the honest manifest (contourPackageManifest), and assemble the ZIP with
  * a SHA256SUMS integrity manifest (contourDeliverablePackage).
  *
- * Scope (v0.5.9): the curated deliverable bundles the CURRENT contour geometry
- * (honestly labelled analytical vs cartographic by its actual style), the DTM
- * raster, provenance, a README, and checksums. The other geometry variant, the
- * cartographic DXF, the rasters beyond the DTM, the map PDF and the validation
- * JSON are OMITTED with honest reasons (produced via their own dedicated
- * products) — never shipped as empty placeholders. Widening the set is additive.
+ * Scope: the deliverable bundles the CURRENT contour geometry (honestly
+ * labelled analytical vs cartographic by its actual style), the DTM raster, the
+ * cartographic DXF (when the geometry is cartographic), the validation JSON, the
+ * Contour Studio settings JSON, provenance, a README and checksums. The rasters
+ * beyond the DTM (hillshade / support / uncertainty) stay OMITTED with honest
+ * reasons — never shipped as empty placeholders. Widening the set is additive.
  *
  * Pure and synchronous given the result: no DOM, no I/O. Reuses the same
  * serializers every other export uses, so a file in the package is byte-for-byte
@@ -27,6 +27,8 @@ import { buildExportProvenance, provenanceJson, analysisRecordFromProvenance } f
 import { buildContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
 import { buildContourStudioPdf } from './contourStudioPdf';
 import { serializeContours } from '../contour/contourDownload';
+import { dxfContours } from '../contour/dxfContours';
+import { validationDeliverableJson, contourStudioDeliverableJson } from './contourDeliverableJson';
 import { verticalUnitLabel } from '../../units/units';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { parseEpsg } from './demPackage';
@@ -78,15 +80,13 @@ export interface DeliverableBuildOptions {
   readonly deliverablePurpose?: string | null;
 }
 
-/** Honest one-line reasons for the products this curated package omits. */
+/** Honest one-line reasons for the products this package omits. */
 const OMISSION_REASONS: Partial<Record<PackageRole, string>> = {
   'contour-map-pdf': 'Export separately via the Map sheet (PDF) product.',
-  'contours-cartographic-dxf': 'Export separately via the DXF product.',
-  'hillshade-raster': 'Not bundled in this package.',
-  'support-raster': 'Not bundled in this package.',
-  'uncertainty-raster': 'Not bundled in this package.',
-  'validation-json': 'Not bundled in this package.',
-  'contour-studio-json': 'Not bundled in this package.',
+  'contours-cartographic-dxf': 'Included only with a cartographic contour export.',
+  'hillshade-raster': 'A shaded-relief raster is not yet part of this package.',
+  'support-raster': 'A per-cell support raster is not yet part of this package.',
+  'uncertainty-raster': 'A per-cell uncertainty raster is not yet part of this package.',
 };
 
 /**
@@ -184,6 +184,15 @@ function gatherDeliverable(
       });
       bytes.set(nativeGeojsonRole, enc(native.content));
     }
+    // Cartographic DXF for CAD — the CAD sibling of the cartographic line, so it
+    // ships only when the bundled geometry IS cartographic. An analytical export
+    // has no generalized line to honestly label 'cartographic'.
+    if (!isAnalytical) {
+      bytes.set(
+        'contours-cartographic-dxf',
+        enc(dxfContours(model, { provenance, labels: result.labels, linearUnit: opts.linearUnit })),
+      );
+    }
   }
 
   if (dtm != null) {
@@ -224,6 +233,38 @@ function gatherDeliverable(
 
   bytes.set('provenance-json', enc(JSON.stringify(provenanceJson(provenance), null, 2)));
 
+  // Validation.json — the hold-out figures + their scope. A real analysis always
+  // validates, so this ships whenever the report is present; non-finite
+  // statistics become null, not NaN. Omitted (never fabricated) if absent.
+  if (result.validation) {
+    bytes.set(
+      'validation-json',
+      enc(JSON.stringify(validationDeliverableJson(result.validation), null, 2)),
+    );
+  }
+
+  // ContourStudio.json — the exact generation settings that produced the bundle,
+  // read from the real generation params so the run can be understood and repeated.
+  if (result.generationParams) {
+    bytes.set(
+      'contour-studio-json',
+      enc(
+        JSON.stringify(
+          contourStudioDeliverableJson(result.generationParams, {
+            contourMethod: opts.contourMethod ?? null,
+            purpose: opts.deliverablePurpose ?? null,
+            intervalM: model?.intervalM ?? NaN,
+            software: provenance.software,
+            softwareVersion: provenance.softwareVersion,
+            generatedAt: opts.generatedAt.toISOString(),
+          }),
+          null,
+          2,
+        ),
+      ),
+    );
+  }
+
   return { basename, provenance, isAnalytical, hasContours, dtm, horizontalUnit, verticalUnit, bytes };
 }
 
@@ -233,18 +274,22 @@ function manifestFor(g: GatheredDeliverable, opts: DeliverableBuildOptions, pdf:
   return buildContourPackageManifest({
     projectName: g.basename,
     decision: opts.decision,
+    // Availability is read from the bytes actually gathered, so the manifest and
+    // README can never claim a file the ZIP does not carry (or omit one it does).
+    // The rasters beyond the DTM have no producer yet, so they stay false.
     available: {
       pdf,
-      analyticalGeojson: g.hasContours && g.isAnalytical,
-      cartographicGeojson: g.hasContours && !g.isAnalytical,
-      cartographicDxf: false,
-      dtm: g.dtm != null,
+      analyticalGeojson: g.bytes.has('contours-analytical-geojson'),
+      cartographicGeojson: g.bytes.has('contours-cartographic-geojson'),
+      nativeGeojson: g.bytes.has('contours-native-geojson'),
+      cartographicDxf: g.bytes.has('contours-cartographic-dxf'),
+      dtm: g.bytes.has('dtm-raster'),
       hillshade: false,
       support: false,
       uncertainty: false,
-      validationJson: false,
-      provenanceJson: true,
-      studioJson: false,
+      validationJson: g.bytes.has('validation-json'),
+      provenanceJson: g.bytes.has('provenance-json'),
+      studioJson: g.bytes.has('contour-studio-json'),
     },
     omissionReasons: OMISSION_REASONS,
     provenance: {
