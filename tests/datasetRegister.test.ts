@@ -78,6 +78,7 @@ function baseRecord(): Record_ {
     citation: 'Test fixture, not published.',
     knownLimitations: 'Four cells. It pins the verifier, nothing about terrain.',
     storage: 'committed',
+    evidenceRole: 'fixture',
     localPath: 'data/sample.asc',
     controlPointIds: [],
     checkpointIds: [],
@@ -147,7 +148,7 @@ describe('dataset register — the committed register', () => {
       'verticalCrs', 'horizontalUnits', 'verticalUnits', 'nominalDensity',
       'terrainClasses', 'landCoverClasses', 'containsIndependentCheckpoints',
       'checkpointSource', 'checkpointUseRestriction', 'dataOwner', 'citation',
-      'knownLimitations', 'storage',
+      'knownLimitations', 'storage', 'evidenceRole',
     ]) {
       expect(required.has(field), `${field} must be required`).toBe(true);
     }
