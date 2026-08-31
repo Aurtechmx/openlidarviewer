@@ -1415,7 +1415,7 @@ export class StreamingScheduler {
     const hidden = computeReplaceHidden(nodes);
     // Emit only on a real change: an ordered key of the hidden ids is cheap
     // next to re-touching every mesh's visibility each tick.
-    const key = [...hidden].sort().join(' ');
+    const key = [...hidden].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).join(' ');
     if (key === this._lastHiddenKey) return;
     this._lastHiddenKey = key;
     this._callbacks.onFrontierChanged?.(hidden);
