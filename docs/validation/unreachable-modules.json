@@ -20,6 +20,13 @@
   "reviewDates": "Reported by the lint when they pass, never enforced. A gate that turns red on a date with no change to the tree teaches people to edit the date rather than the code.",
   "modules": [
     {
+      "path": "src/render/measure/stockpileAreaGrid.ts",
+      "status": "staged",
+      "why": "Area-weighted stockpile volume (method olv.volume.stockpile-area-grid): grid integration with polygon-clipped cell areas, robust median surface, coverage accounting and an explicit incomplete-uncertainty model. The scientific core is analytically verified (prism/ramp/pyramid/cone, density-gradient invariance, coverage honesty), but the live volume tool still calls the legacy point-sample estimator (volumeCutFill / olv.volume.stockpile), so nothing in the app constructs the area-grid result yet.",
+      "graduation": "The volume tool projects the cloud + footprint into the area-grid input and presents its result (with the coverage verdict and separated uncertainty terms), replacing or offered beside the legacy estimator.",
+      "review": "2027-02-28"
+    },
+    {
       "path": "src/terrain/contour/persistentCoreKey.ts",
       "status": "staged",
       "why": "The identity and invalidation contract for a persistent (across-reopen) terrain core cache: a full SHA-256 content fingerprint, the core-method generation string, and an integrity digest. It is the library half of the recompute-vs-reuse gate in tests/benchmark/terrainCoreRebuildCost.test.ts, which returned GO (conditional). No storage or reopen path is built, so nothing in the application computes a persistent key; only its own test imports it.",
