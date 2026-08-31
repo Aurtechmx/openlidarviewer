@@ -5569,8 +5569,8 @@ async function saveSnapshot(): Promise<void> {
     const blob = await viewer.snapshot({
       annotations: viewer.annotate.getAnnotations().length > 0,
       measurements: viewer.measure.getMeasurements().length > 0,
-      // Publishability: burn the labelled colorbar when a continuous scalar
-      // mode is active. Self-gating in the Viewer (categorical modes draw
+      // Burn the labelled colorbar when a continuous scalar mode is active, so
+      // exported colours read back to values + units. Self-gating in the Viewer (categorical modes draw
       // nothing), and single-sourced with the on-screen legend, so the PNG
       // always matches what the user saw.
       colorbar: true,

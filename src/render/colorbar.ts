@@ -2,12 +2,12 @@
  * colorbar.ts
  *
  * A pure colorbar / legend generator for the perceptual elevation-and-scalar
- * ramps. A quantitative point-cloud figure is not publishable without a labelled
- * colorbar: it maps colour back to a value + unit, names the field, and — because
+ * ramps. A quantitative point-cloud figure needs a labelled colorbar: it maps
+ * colour back to a value + unit, names the field, and — because
  * it samples the SAME ramp the points on screen use ({@link elevationRampColor})
  * — it can never disagree with the colouring it labels.
  *
- * This is the shared foundation for two publishability surfaces: the on-screen
+ * This is the shared foundation for two rendering surfaces: the on-screen
  * legend overlay and the colorbar burned into figure / map-sheet exports. It
  * emits a self-contained, deterministic SVG string (no DOM, no external CSS), so
  * the same bytes render on screen, in a PDF, or beside a PNG.
