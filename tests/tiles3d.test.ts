@@ -21,7 +21,7 @@ describe('parseTileset', () => {
     const t = parseTileset(JSON.stringify(base));
     expect(t.assetVersion).toBe('1.1');
     expect(t.root.refine).toBe('ADD');
-    expect(t.root.contentUri).toBe('root.pnts');
+    expect(t.root.contentUris[0] ?? null).toBe('root.pnts');
     expect(t.root.children).toHaveLength(1);
     expect(t.root.children[0].refine).toBe('ADD'); // inherited
     expect(t.root.children[0].boundingVolume.sphere).toEqual([0, 0, 0, 5]);
@@ -29,7 +29,24 @@ describe('parseTileset', () => {
 
   it('accepts a pre-parsed object and the url content alias', () => {
     const t = parseTileset({ ...base, root: { ...base.root, content: { url: 'root.pnts' } } } as object);
-    expect(t.root.contentUri).toBe('root.pnts');
+    expect(t.root.contentUris[0] ?? null).toBe('root.pnts');
+  });
+
+  it('reads the 3D Tiles 1.1 contents[] array as several content uris on one tile', () => {
+    const t = parseTileset({
+      ...base,
+      root: {
+        ...base.root,
+        content: undefined,
+        contents: [{ uri: 'a.pnts' }, { uri: 'b.pnts' }],
+      },
+    } as object);
+    expect(t.root.contentUris).toEqual(['a.pnts', 'b.pnts']);
+  });
+
+  it('reads a content-free tile as an empty contentUris array', () => {
+    const t = parseTileset({ ...base, root: { ...base.root, content: undefined } } as object);
+    expect(t.root.contentUris).toEqual([]);
   });
 
   it('refuses implicit tiling and a missing root refine', () => {

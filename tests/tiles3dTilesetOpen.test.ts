@@ -134,7 +134,7 @@ describe('openTileset', () => {
     const opened = await openTileset(`${ENTRY}?sig=xyz`, t);
     expect(opened.baseUrl).toBe('https://tiles.example.org/scan/a/');
     expect(opened.search).toBe('?sig=xyz');
-    expect(opened.tileset.root.contentUri).toBe('0.pnts');
+    expect(opened.tileset.root.contentUris[0]).toBe('0.pnts');
   });
 
   test('refuses a URL that fails the entry gate without fetching anything', async () => {

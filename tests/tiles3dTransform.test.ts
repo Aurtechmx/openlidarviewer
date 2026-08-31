@@ -378,7 +378,7 @@ describe('walking a tileset top-down', () => {
     geometricError: 16,
     refine: 'REPLACE',
     transform: null,
-    contentUri: null,
+    contentUris: [],
     children: [],
     ...over,
   });
