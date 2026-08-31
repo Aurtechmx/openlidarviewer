@@ -38,6 +38,11 @@ export class SessionFindings {
     return this._findings.pop();
   }
 
+  /** Drop the finding at `index` (a row the reviewer removed). No-op if out of range. */
+  remove(index: number): void {
+    if (index >= 0 && index < this._findings.length) this._findings.splice(index, 1);
+  }
+
   clear(): void {
     this._findings.length = 0;
   }

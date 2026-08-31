@@ -160,6 +160,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/ui/findingsPanel.ts",
+      "status": "staged",
+      "why": "The durable findings-ledger review surface: renders a SessionFindings (label/value/±band/confidence/caveats), adds the live measurement findings, removes rows, and exports the ledger as the existing SHA-256 integrity report. Complete and unit-tested, but not yet mounted: the mount must be wired in the composition root (main.ts) — instantiating the shared store and passing the measurements-to-findings + export-with-context callbacks that only main.ts holds — and main.ts is at its shrink-only monolith-size baseline (one line of headroom), so the wiring cannot land without first freeing room via a main.ts decomposition.",
+      "graduation": "A main.ts decomposition opens a wiring seam (e.g. an export-callbacks builder in measurementExportActions), through which ExportPanel mounts buildFindingsPanel with a shared SessionFindings and the ledger export.",
+      "review": "2027-02-28"
+    },
+    {
       "path": "src/render/measure/sessionFindings.ts",
       "status": "staged",
       "why": "The session ledger of measurements with their uncertainty bands, written to be handed to buildReportManifest. The measurement flow shows results in toasts and collects them nowhere.",
