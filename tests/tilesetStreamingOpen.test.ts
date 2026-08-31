@@ -404,15 +404,15 @@ describe('a refusal reaches the user', () => {
         root: {
           boundingVolume: BOX2,
           geometricError: 50,
-          refine: 'REPLACE',
+          refine: 'ADD',
           content: { uri: 'a.pnts' },
           children: [
-            { boundingVolume: BOX2, geometricError: 10, content: { uri: 'sub/tileset.json' } },
+            { boundingVolume: BOX2, geometricError: 10, content: { uri: 'sub/mesh.glb' } },
           ],
         },
       }),
     );
-    expect(shown).toContain('sub/tileset.json');
+    expect(shown).toContain('sub/mesh.glb');
     expect(shown).not.toContain('corrupt');
   });
 

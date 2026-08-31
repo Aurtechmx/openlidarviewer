@@ -71,7 +71,7 @@ describe('the tileset open expands implicit tiling before parsing', () => {
   it('parses what the expander returned, not the raw document', () => {
     // Calling the expander and then parsing the original leaves the feature
     // just as unreachable, and no name match would notice.
-    expect(openSrc).toMatch(/parseTileset\(expanded\)/);
+    expect(openSrc).toMatch(/parseTileset\(linked\)/);
     expect(openSrc, 'the raw json must not go straight to the parser').not.toMatch(
       /parseTileset\(json\)/,
     );
@@ -79,7 +79,7 @@ describe('the tileset open expands implicit tiling before parsing', () => {
 
   it('expands before it parses, not after', () => {
     const expandAt = openSrc.search(/await\s+expandImplicitTileset\(/);
-    const parseAt = openSrc.indexOf('parseTileset(expanded)');
+    const parseAt = openSrc.indexOf('parseTileset(linked)');
     expect(expandAt).toBeGreaterThan(-1);
     expect(parseAt).toBeGreaterThan(-1);
     expect(expandAt, 'the expander must run before the parser').toBeLessThan(parseAt);
