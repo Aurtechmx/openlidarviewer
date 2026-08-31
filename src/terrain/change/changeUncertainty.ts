@@ -32,11 +32,13 @@
  * `detectable` / `confidence` refuse to read certainty out of it.
  *
  * The result names the error model it was computed under (`model:
- * 'independent-cells'`) so a consumer never mistakes the band for a generic
- * total uncertainty. The input accepts a {@link ChangeUncertaintyModel} for a
- * future correlated model; only the independent-cell model is implemented, and a
- * covariance request is refused rather than silently served under a correlated
- * label.
+ * 'independent-cells'` or `'covariance'`) so a consumer never mistakes the
+ * band for a generic total uncertainty. `independent-cells` remains the
+ * default. A `covariance` model is also available: it treats the random term
+ * as spatially correlated (exponential semivariogram, correlation length L)
+ * instead of assuming every changed cell is an independent observation — see
+ * the covariance branch in {@link changeVolumeUncertainty} for the formula
+ * and its documented approximation.
  *
  * Pure, deterministic. Sits beside {@link detectChange}: that computes the
  * volume, this bounds it.
@@ -45,23 +47,34 @@
 export type ChangeConfidence = 'high' | 'medium' | 'low';
 
 /** The identifier of the error model a result was computed under. */
-export type ChangeUncertaintyModelId = 'independent-cells';
+export type ChangeUncertaintyModelId = 'independent-cells' | 'covariance';
 
 /**
  * The error model to compute the band under. Discriminated so a correlated
- * model can be added later WITHOUT changing the default: `independent-cells` is
- * the only implemented kind today. `covariance` is declared for the API shape
- * but is not implemented — passing it throws rather than silently falling back,
- * so a caller can never believe it received a spatially-correlated band it did
- * not. Shipping only the labelled independent-cell model is a deliberate,
- * honest outcome until a correlated model passes its evidence gate.
+ * model can sit beside the default WITHOUT changing it: `independent-cells`
+ * remains the default, unconditionally. `covariance` models the random term
+ * as a spatially correlated field with an exponential semivariogram,
+ * Cov(e_i, e_j) = σ_z²·exp(−d_ij / correlationLengthM), instead of treating
+ * every changed cell as an independent observation.
+ *
+ * Computing the true aᵀΣa for N cells needs their pairwise distances, which
+ * this module's flat, geometry-free inputs do not carry (only a cell count
+ * and an area). Rather than silently downgrade to the independent model, or
+ * demand a full distance matrix from every caller, the model uses a
+ * documented closed-form approximation — see `changeVolumeUncertainty`'s
+ * covariance branch for the derivation and its stated assumptions.
  */
 export type ChangeUncertaintyModel =
   | { readonly kind: 'independent-cells' }
   | {
       readonly kind: 'covariance';
-      /** Correlation length (m). Reserved; the covariance model is not built. */
-      readonly correlationLengthM?: number;
+      /**
+       * Correlation length (m) of the exponential semivariogram,
+       * Cov(e_i, e_j) = σ_z²·exp(−d_ij / L). L → 0 recovers the
+       * independent-cells band; L → ∞ recovers the fully-correlated bound
+       * (every cell moves together, same as the systematic term).
+       */
+      readonly correlationLengthM: number;
     };
 
 export interface ChangeVolumeUncertaintyInput {
@@ -136,17 +149,11 @@ export function cellSigmaFromLoD(lodM: number): number {
 export function changeVolumeUncertainty(
   input: ChangeVolumeUncertaintyInput,
 ): ChangeVolumeUncertainty {
-  // Resolve the error model. Only the independent-cell model is implemented; a
-  // covariance request is refused rather than silently served the independent
-  // band under a correlated label. Building a validated correlated model is
-  // gated on its evidence (closed-form tiny-grid tests, limiting behaviour,
-  // synthetic random fields) and is deliberately not shipped here.
   const model = input.model ?? { kind: 'independent-cells' };
-  if (model.kind !== 'independent-cells') {
+  if (model.kind !== 'independent-cells' && model.kind !== 'covariance') {
     throw new Error(
-      `changeVolumeUncertainty: model '${model.kind}' is not implemented; only ` +
-        "'independent-cells' is available. A spatially-correlated model is staged " +
-        'behind its evidence gate.',
+      `changeVolumeUncertainty: model '${(model as { kind: string }).kind}' is not ` +
+        "implemented; available models are 'independent-cells' and 'covariance'.",
     );
   }
 
@@ -155,7 +162,46 @@ export function changeVolumeUncertainty(
   const cellSigma = Math.max(0, input.cellSigmaM);
   const reg = Math.max(0, input.registrationSigmaM ?? 0);
 
-  const randomErrorM3 = area * cellSigma * Math.sqrt(n);
+  let randomErrorM3: number;
+  if (model.kind === 'covariance') {
+    // Spatially correlated random term: Var(V) = aᵀΣa with a_i = area (every
+    // changed cell contributes the same area) and Σ_ij = σ_z²·exp(−d_ij / L)
+    // an exponential semivariogram. Building the true N×N Σ needs the pairwise
+    // distances d_ij, which this module's flat inputs (a cell COUNT and an
+    // area) do not carry — only geometry-aware callers could supply that, and
+    // this API is deliberately geometry-free. Instead this uses a documented
+    // closed-form approximation via an effective correlated-cluster size:
+    //
+    //   cellSizeM = √area              (assumes roughly square cells, same
+    //                                    assumption `cellAreaM2`'s own doc
+    //                                    comment makes)
+    //   clusterCells = clamp(1 + (L / cellSizeM)², 1, N)
+    //   randomErrorM3 = area · σ_z · √(N · clusterCells)
+    //
+    // `clusterCells` is the number of cells that move together as one
+    // effectively-correlated block at length scale L. Two limits anchor it:
+    //   L → 0:  clusterCells → 1 → √(N·1) = √N, i.e. the independent-cells
+    //           band exactly (cells decorrelate at zero range).
+    //   L → ∞:  clusterCells → N (capped) → √(N·N) = N, i.e. the fully
+    //           correlated bound area·σ_z·N — every cell biased together,
+    //           the same scaling as the systematic term.
+    // Between the limits the exponent grows continuously and monotonically
+    // with L, so σ_V rises smoothly from the independent floor to the
+    // fully-correlated ceiling as the correlation length grows relative to
+    // the cell size. This is an APPROXIMATION, not an exact aᵀΣa evaluation:
+    // it collapses the true correlation structure (which depends on the
+    // actual footprint shape of the changed cells) into a single scalar
+    // cluster size driven by L vs. cell size. It is stated here, not hidden,
+    // and travels in `caveats` below.
+    const cellSizeM = Math.sqrt(area);
+    const l = Math.max(0, model.correlationLengthM);
+    const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+    const clusterCells =
+      cellSizeM > 0 ? clamp(1 + (l / cellSizeM) ** 2, 1, Math.max(1, n)) : 1;
+    randomErrorM3 = area * cellSigma * Math.sqrt(n * clusterCells);
+  } else {
+    randomErrorM3 = area * cellSigma * Math.sqrt(n);
+  }
   const systematicErrorM3 = n * area * reg;
   const sigmaM3 = Math.hypot(randomErrorM3, systematicErrorM3);
 
@@ -206,12 +252,20 @@ export function changeVolumeUncertainty(
         'Supply a registration RMSE to bound the systematic component.',
     );
   }
-  caveats.push(
-    'Random cell noise is assumed spatially independent; the true error is larger if it is correlated.',
-  );
+  if (model.kind === 'covariance') {
+    caveats.push(
+      `Random cell noise uses a spatially correlated (covariance) model with correlation ` +
+        `length ${model.correlationLengthM} m; the effective cluster size is an approximation ` +
+        `from correlation length vs. cell size, not an exact pairwise-distance covariance.`,
+    );
+  } else {
+    caveats.push(
+      'Random cell noise is assumed spatially independent; the true error is larger if it is correlated.',
+    );
+  }
 
   return {
-    model: 'independent-cells',
+    model: model.kind,
     sigmaM3,
     lowM3: net - sigmaM3,
     highM3: net + sigmaM3,
