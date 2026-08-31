@@ -54,6 +54,8 @@ describe('alignEpochClouds', () => {
     const after = cloudFrom(base.map(([x, y, z]) => [x + 3, y - 2, z + 0.5] as P));
     const r = alignEpochClouds(before, after); // horizontalOnly defaults true
     expect(r.alignment.applied).toBe(true);
+    // Provenance describes the APPLIED transform: yaw + XY, Z locked.
+    expect(r.alignment.appliedDof).toBe('yaw+xy');
     expect(r.alignment.translation[2]).toBe(0); // no z applied
     let maxHoriz = 0;
     let minZDelta = Infinity;
@@ -72,6 +74,7 @@ describe('alignEpochClouds', () => {
     const after = cloudFrom(base.map(([x, y, z]) => [x + 3, y - 2, z + 0.5] as P));
     const r = alignEpochClouds(cloudFrom(base), after, { horizontalOnly: false });
     expect(r.alignment.applied).toBe(true);
+    expect(r.alignment.appliedDof).toBe('yaw+xyz'); // opted out of Z-lock
     let maxErr = 0;
     for (let i = 0; i < base.length; i++) {
       const dx = r.after.positions[i * 3] - base[i][0];
@@ -110,7 +113,31 @@ describe('alignEpochClouds', () => {
     expect(r.alignment.attempted).toBe(true);
     expect(r.alignment.refused).toBe(true);
     expect(r.alignment.applied).toBe(false);
+    expect(r.alignment.appliedDof).toBe('none'); // nothing applied
     expect(r.after).toBe(b); // unchanged reference
+  });
+
+  test('withholds a low-overlap (subset-lock) fit and applies nothing', () => {
+    // 30% of `after` matches `before` under a +3/-2 shift; the other 70% is
+    // scattered far away with no correspondence, so the inlier fraction falls
+    // below the gate. With trimming the solver still locks onto the matching
+    // subset (a small residual), which is exactly the failure RMS alone hides —
+    // the transform must be WITHHELD, not applied.
+    const base = scatter(200);
+    const after = cloudFrom(
+      base.map(([x, y, z], i) =>
+        i % 10 < 3
+          ? ([x + 3, y - 2, z] as P)
+          : ([x + 800 + (i % 7), y - 800 - (i % 5), z + 40] as P),
+      ),
+    );
+    const r = alignEpochClouds(cloudFrom(base), after, { trimFraction: 0.3, maxResidualM: 1 });
+    expect(r.alignment.attempted).toBe(true);
+    expect(r.alignment.lowOverlap).toBe(true);
+    expect(r.alignment.overlapFraction).toBeLessThan(0.5);
+    expect(r.alignment.applied).toBe(false);
+    expect(r.alignment.appliedDof).toBe('none');
+    expect(r.after).toBe(after); // unchanged reference — compared as-is
   });
 
   test('a georeferenced (UTM-scale origin) cloud keeps centimetre precision through alignment', () => {

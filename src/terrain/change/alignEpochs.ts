@@ -73,11 +73,29 @@ export interface AlignEpochOptions {
   readonly horizontalUnitKnown?: boolean;
 }
 
+/**
+ * The degrees of freedom of the transform ACTUALLY applied to the `after`
+ * cloud — provenance for the applied product, not the intermediate solver. The
+ * solver (`icpRegister`, method `olv.registration.icp-planar`) computes yaw plus
+ * a full 3-D translation; the repeat-epoch path (method
+ * `olv.registration.epoch-horizontal-icp`) applies `yaw+xy` with Z locked to
+ * preserve a real vertical change, or `yaw+xyz` only when a caller opts out of
+ * the horizontal-only model. `none` when nothing was applied (refused,
+ * degenerate, low overlap, geographic, or frame-incompatible).
+ */
+export type EpochAppliedDof = 'yaw+xy' | 'yaw+xyz' | 'none';
+
 export interface EpochAlignment {
   /** A fit was attempted (both clouds had enough points). */
   readonly attempted: boolean;
   /** The solved transform was applied to the `after` cloud. */
   readonly applied: boolean;
+  /**
+   * Degrees of freedom of the APPLIED transform — describes what moved the
+   * points, not what the solver computed. `yaw+xy` is the repeat-epoch default
+   * (Z locked); a fit that is not applied reports `none`.
+   */
+  readonly appliedDof: EpochAppliedDof;
   /** The residual exceeded the gate, so the transform was NOT applied. */
   readonly refused: boolean;
   /** Too few finite points in a cloud to align. */
@@ -144,6 +162,7 @@ export const LOW_OVERLAP_FRACTION = 0.5;
 const NO_ALIGNMENT: EpochAlignment = {
   attempted: false,
   applied: false,
+  appliedDof: 'none',
   refused: false,
   degenerate: true,
   rmsResidualM: Infinity,
@@ -327,6 +346,7 @@ export function alignEpochClouds(
       alignment: {
         attempted: true,
         applied: false,
+        appliedDof: 'none',
         refused: fit.refused,
         degenerate: fit.degenerate,
         rmsResidualM,
@@ -351,6 +371,7 @@ export function alignEpochClouds(
       alignment: {
         attempted: true,
         applied: false,
+        appliedDof: 'none',
         refused: false,
         degenerate: false,
         rmsResidualM,
@@ -390,6 +411,7 @@ export function alignEpochClouds(
     alignment: {
       attempted: true,
       applied: true,
+      appliedDof: horizontalOnly ? 'yaw+xy' : 'yaw+xyz',
       refused: false,
       degenerate: false,
       rmsResidualM,
