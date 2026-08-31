@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -61,7 +62,10 @@ export function findEditorialLeaks(text) {
 function main() {
   const files = execSync('git ls-files src tests', { cwd: ROOT, encoding: 'utf8' })
     .split('\n')
-    .filter((f) => /\.(ts|tsx|js|mjs|css)$/.test(f));
+    .filter((f) => /\.(ts|tsx|js|mjs|css)$/.test(f))
+    // The negative-control test deliberately contains sample editorial phrases
+    // to prove the checker catches them; it is the one place they may appear.
+    .filter((f) => !f.endsWith('tests/editorialLanguage.test.ts'));
   const violations = [];
   for (const file of files) {
     const hits = findEditorialLeaks(readFileSync(resolve(ROOT, file), 'utf8'));
@@ -79,4 +83,4 @@ function main() {
   console.log(`lint:editorial-language OK — ${files.length} src/test files carry no editorial/manuscript intent.`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (isCliEntry(import.meta.url)) main();
