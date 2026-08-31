@@ -26,6 +26,22 @@ describe('changeVolumeUncertainty', () => {
     expect(r.sigmaM3).toBeCloseTo(1.0, 6);
   });
 
+  test('epoch-swap invariance: negating the net leaves the band magnitude unchanged and mirrors the bounds', () => {
+    // Swapping before/after negates the net volume (a gain becomes an equal
+    // loss) but changes nothing about the cells or their per-cell error, so the
+    // ± band must be identical in magnitude and the signed bounds must mirror.
+    const base = { significantCells: 400, cellAreaM2: 1, cellSigmaM: 0.05, registrationSigmaM: 0.02 };
+    const gain = changeVolumeUncertainty({ ...base, netVolumeM3: 1000 });
+    const loss = changeVolumeUncertainty({ ...base, netVolumeM3: -1000 });
+    expect(loss.sigmaM3).toBeCloseTo(gain.sigmaM3, 9);
+    expect(loss.randomErrorM3).toBeCloseTo(gain.randomErrorM3, 9);
+    expect(loss.systematicErrorM3).toBeCloseTo(gain.systematicErrorM3, 9);
+    expect(loss.relativeError).toBeCloseTo(gain.relativeError, 9);
+    // Signed bounds mirror through zero: low(+V) = −high(−V), high(+V) = −low(−V).
+    expect(loss.highM3).toBeCloseTo(-gain.lowM3, 6);
+    expect(loss.lowM3).toBeCloseTo(-gain.highM3, 6);
+  });
+
   test('names the error model on the result, and the correlation caveat travels', () => {
     const r = changeVolumeUncertainty({
       netVolumeM3: 1000,
