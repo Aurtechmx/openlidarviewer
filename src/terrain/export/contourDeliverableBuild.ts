@@ -253,7 +253,12 @@ function gatherDeliverable(
           contourStudioDeliverableJson(result.generationParams, {
             contourMethod: opts.contourMethod ?? null,
             purpose: opts.deliverablePurpose ?? null,
-            intervalM: model?.intervalM ?? NaN,
+            // The interval is in the SOURCE vertical unit; it ships with its unit
+            // label and the metres-per-unit factor (null when unknown), so the
+            // JSON never puts a source-unit number in a metre-labelled field.
+            interval: model?.intervalM ?? NaN,
+            intervalUnit: verticalUnit,
+            verticalUnitToMetres: vScale != null && Number.isFinite(vScale) && vScale > 0 ? vScale : null,
             software: provenance.software,
             softwareVersion: provenance.softwareVersion,
             generatedAt: opts.generatedAt.toISOString(),

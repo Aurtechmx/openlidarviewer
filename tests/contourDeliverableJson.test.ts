@@ -68,34 +68,57 @@ describe('validationDeliverableJson', () => {
   });
 });
 
+const studioCtx = (over: Record<string, unknown> = {}) => ({
+  contourMethod: 'olv.contour.generalize@1',
+  purpose: 'presentation-map',
+  interval: 0.5,
+  intervalUnit: 'm',
+  verticalUnitToMetres: 1,
+  software: 'OpenLiDARViewer',
+  softwareVersion: '0.6.9',
+  generatedAt: '2026-08-31T00:00:00.000Z',
+  ...over,
+});
+
 describe('contourStudioDeliverableJson', () => {
   it('reflects the real generation settings, not defaults', () => {
-    const j = contourStudioDeliverableJson(params, {
-      contourMethod: 'olv.contour.generalize@1',
-      purpose: 'presentation-map',
-      intervalM: 0.5,
-      software: 'OpenLiDARViewer',
-      softwareVersion: '0.6.9',
-      generatedAt: '2026-08-31T00:00:00.000Z',
-    });
+    const j = contourStudioDeliverableJson(params, studioCtx());
+    expect(j.schemaVersion).toBe(2);
     expect(j.contourStyle).toBe('generalized');
     expect(j.interpolation).toBe('idw');
     expect(j.aggregation).toBe('median');
     expect(j.generalizeToleranceCells).toBe(1.5);
     expect(j.contourMethod).toBe('olv.contour.generalize@1');
     expect(j.purpose).toBe('presentation-map');
-    expect(j.intervalM).toBe(0.5);
   });
 
-  it('reports a non-finite interval as null', () => {
-    const j = contourStudioDeliverableJson(params, {
-      contourMethod: null,
-      purpose: null,
-      intervalM: NaN,
-      software: 'OpenLiDARViewer',
-      softwareVersion: '0.6.9',
-      generatedAt: '2026-08-31T00:00:00.000Z',
-    });
-    expect(j.intervalM).toBeNull();
+  it('a metre project carries its interval, unit, and matching SI metres', () => {
+    const j = contourStudioDeliverableJson(params, studioCtx({ interval: 0.5, intervalUnit: 'm', verticalUnitToMetres: 1 }));
+    expect(j.interval).toBe(0.5);
+    expect(j.intervalUnit).toBe('m');
+    expect(j.intervalMetres).toBe(0.5);
+    // The metre-labelled value equals the source value only because the unit IS metre.
+    expect('intervalM' in j).toBe(false);
+  });
+
+  it('a US survey foot project converts the interval to SI, not a fake metre', () => {
+    // 2 ftUS × (1200/3937) m/ftUS = 0.6096012192 m.
+    const j = contourStudioDeliverableJson(params, studioCtx({ interval: 2, intervalUnit: 'ftUS', verticalUnitToMetres: 1200 / 3937 }));
+    expect(j.interval).toBe(2);
+    expect(j.intervalUnit).toBe('ftUS');
+    expect(j.intervalMetres).toBeCloseTo(0.6096012192, 9);
+  });
+
+  it('an unknown vertical unit ships NO metres value, never a fabricated one', () => {
+    const j = contourStudioDeliverableJson(params, studioCtx({ interval: 2, intervalUnit: 'unknown', verticalUnitToMetres: null }));
+    expect(j.interval).toBe(2);
+    expect(j.intervalUnit).toBe('unknown');
+    expect(j.intervalMetres).toBeNull();
+  });
+
+  it('reports a non-finite interval as null (and no SI metres)', () => {
+    const j = contourStudioDeliverableJson(params, studioCtx({ interval: NaN, intervalUnit: 'unknown', verticalUnitToMetres: null }));
+    expect(j.interval).toBeNull();
+    expect(j.intervalMetres).toBeNull();
   });
 });
