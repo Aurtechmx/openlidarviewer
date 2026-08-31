@@ -263,6 +263,8 @@ export interface PointInfo {
   intensity: number | null;
   /** ASPRS classification code, or null when the cloud carries none. */
   classification: number | null;
+  /** True when the classification was derived in the viewer, not producer-supplied. */
+  classificationDerived: boolean;
   /** RGB triple, each 0–255, or null when the cloud carries no colour. */
   rgb: [number, number, number] | null;
   /**
@@ -312,6 +314,12 @@ export interface RawPointInfo {
   geographicHorizontal?: boolean;
   intensity: number | null;
   classification: number | null;
+  /**
+   * True when this cloud's classification was DERIVED by the viewer's heuristic
+   * rather than read from the producer file — so the inspector can say the class
+   * is not an authoritative label. A per-cloud fact, carried on each pick.
+   */
+  classificationDerived?: boolean;
   rgb: [number, number, number] | null;
   /** LAS return number, when the cloud carries return data. */
   returnNumber?: number;
@@ -348,6 +356,7 @@ export function makePointInfo(raw: RawPointInfo): PointInfo {
     distance: round(raw.distance, 2),
     intensity: raw.intensity,
     classification: raw.classification,
+    classificationDerived: raw.classificationDerived ?? false,
     rgb: raw.rgb,
   };
   // The inspection extras — carried only when the cloud supplies them,
@@ -414,9 +423,11 @@ export function intensityText(info: PointInfo): string {
 
 /** The classification field's display text — a name, or "Not available". */
 export function classificationText(info: PointInfo): string {
-  return info.classification === null
-    ? 'Not available'
-    : classificationLabel(info.classification);
+  if (info.classification === null) return 'Not available';
+  const label = classificationLabel(info.classification);
+  // Mark a viewer-derived class so it is never read as an authoritative
+  // producer label — the single most important per-point provenance fact.
+  return info.classificationDerived ? `${label} · derived (heuristic)` : label;
 }
 
 /** The RGB field's display text — "r, g, b", or "Not available". */
