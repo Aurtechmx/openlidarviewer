@@ -6083,7 +6083,7 @@ export class Viewer {
       origin: [0, 0, 0],
       distance: this._camera.position.distanceTo(point),
       intensity: cloud.intensity ? cloud.intensity[index] : null,
-      classification: cloud.classification ? cloud.classification[index] : null,
+      classification: cloud.classification ? cloud.classification[index] : null, classificationDerived: cloud.classificationIsDerived,
       rgb,
       // inspection extras — passed only when the cloud carries them.
       returnNumber: cloud.returnNumber ? cloud.returnNumber[index] : undefined,

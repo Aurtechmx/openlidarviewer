@@ -94,6 +94,14 @@ test('field text helpers show real values when present', () => {
   expect(rgbText(info)).toBe('180, 92, 40');
 });
 
+test('classificationText marks a viewer-derived class, and a producer class stays plain', () => {
+  const derived = makePointInfo({ ...fullRaw(), classificationDerived: true });
+  expect(classificationText(derived)).toBe('Ground · derived (heuristic)');
+  // Default (no flag) reads as an authoritative producer label.
+  expect(makePointInfo(fullRaw()).classificationDerived).toBe(false);
+  expect(classificationText(makePointInfo(fullRaw()))).toBe('Ground');
+});
+
 test('field text helpers show "Not available" when an attribute is missing', () => {
   const info = makePointInfo({
     ...fullRaw(),
