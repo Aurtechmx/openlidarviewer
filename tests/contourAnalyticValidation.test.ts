@@ -104,6 +104,53 @@ describe('analytic contour validation (§24.1)', () => {
     expect(total).toBe(0);
   });
 
+  // ── Negative control: a flat surface AT the requested level still emits nothing ──
+  it('a surface exactly equal to the requested level produces no segments (no divide-by-zero line)', () => {
+    // Every cell has all four corners == level, so mask is 0000 in the marching-
+    // squares table — no straddling, no crossing to interpolate. If the `>=`
+    // vs `>` comparison in the masking were flipped, this would spuriously
+    // classify every corner as "above" and emit a degenerate full-grid segment.
+    const flat = grid(() => 25, 20, 20);
+    const set = contoursAt(flat, { intervalM: 5, levels: [25] });
+    const total = set.levels.reduce((n, l) => n + l.segments.length, 0);
+    expect(total).toBe(0);
+  });
+
+  // ── Negative control: non-finite elevations must not produce contours or NaN vertices ──
+  it('an all-NaN elevation grid yields no levels and no segments, not garbage geometry', () => {
+    // Every cell is non-finite, so the no-data guard (`!Number.isFinite(z[i])`)
+    // must skip every cell. Without that guard, marching squares would compare
+    // NaN against the level (always false) and either emit nothing by accident
+    // or, depending on comparison direction, emit spurious/NaN-valued segments.
+    const nan = grid(() => Number.NaN, 20, 20);
+    const set = contoursAt(nan, { intervalM: 5, levels: [10, 20] });
+    expect(set.warnings.length).toBeGreaterThan(0);
+    expect(Number.isNaN(set.minZ)).toBe(true);
+    expect(Number.isNaN(set.maxZ)).toBe(true);
+    const total = set.levels.reduce((n, l) => n + l.segments.length, 0);
+    expect(total).toBe(0);
+    for (const v of vertices(set)) {
+      expect(Number.isFinite(v.x)).toBe(true);
+      expect(Number.isFinite(v.y)).toBe(true);
+    }
+  });
+
+  // ── Negative control: a grid with some NaN and some finite cells only contours the finite region ──
+  it('a grid half-NaN, half-flat produces no segments and no NaN vertices from the missing half', () => {
+    // Left half is NaN (no data), right half is a flat plateau at 25. Cells
+    // that straddle the NaN/finite boundary touch a non-finite corner and must
+    // be skipped entirely, not averaged or coerced to a number.
+    const half = grid((x) => (x < 10 ? Number.NaN : 25), 20, 20);
+    const set = contoursAt(half, { intervalM: 5, levels: [25] });
+    const total = set.levels.reduce((n, l) => n + l.segments.length, 0);
+    expect(total).toBe(0);
+    for (const v of vertices(set)) {
+      expect(Number.isFinite(v.x)).toBe(true);
+      expect(Number.isFinite(v.y)).toBe(true);
+      expect(Number.isFinite(v.value)).toBe(true);
+    }
+  });
+
   // ── Metamorphic: translating elevation shifts the level labels, not the lines ──
   it('adding a constant Δz to a tilted plane relabels the isolines by Δz (same geometry)', () => {
     // z = x (gradient 1 in x): the contour at value L is the vertical line x = L.
