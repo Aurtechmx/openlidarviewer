@@ -20,6 +20,7 @@ export class FakeEl {
   value = '';
   innerHTML = '';
   open = false;
+  disabled = false;
   readonly dataset: Record<string, string> = {};
   readonly style: Record<string, string> = {};
   readonly children: FakeEl[] = [];
@@ -82,6 +83,9 @@ export class FakeEl {
   setAttribute(n: string, v: string): void {
     this.attrs.set(n, v);
   }
+  hasAttribute(n: string): boolean {
+    return this.attrs.has(n);
+  }
   getAttribute(n: string): string | null {
     return this.attrs.get(n) ?? null;
   }
@@ -100,6 +104,10 @@ export class FakeEl {
   }
   focus(): void {}
   blur(): void {}
+  /** Fire the registered click handlers — how DOM tests activate a control. */
+  click(): void {
+    for (const fn of this.handlers.get('click') ?? []) fn({ type: 'click' });
+  }
 
   /** `tag`, `.class`, or `tag.class` — the only selector shapes this panel uses. */
   private _matches(sel: string): boolean {
