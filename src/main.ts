@@ -5341,7 +5341,7 @@ function compareLoadedLayers(): void {
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
-    const [{ buildSharedEpochDtms }, { alignEpochClouds, summarizeAlignment }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
+    const [{ buildSharedEpochDtms }, { alignEpochClouds, summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
       await Promise.all([
         loadCompareEpochs(),
         loadAlignEpochs(),
@@ -5384,7 +5384,7 @@ function compareLoadedLayers(): void {
         verticalUnitToMetres: ctxA.verticalUnitToMetres, // Z keeps its OWN declared scale; the horizontal verdict never stands in for it
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })]);
+      inspector.setCompareResult([header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })]);
       // A georeferenced .asc of the signed difference. The shared grid is built
       // in the common world frame, so its origin IS the scan's projected corner.
       // The .asc grid geometry (cellsize + corners) is in the source LINEAR
