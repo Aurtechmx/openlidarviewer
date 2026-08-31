@@ -64,12 +64,14 @@ A tile that refines by REPLACE into tiles with their own content is refused. REP
 
 Implicit tiling opens. A tileset that describes its hierarchy with a subdivision scheme and subtree files rather than a written-out tree is expanded into the equivalent explicit document before it is parsed, so every refusal the explicit path makes applies to it unchanged. Quadtree and octree schemes are read, availability arrives as a constant or as a bitstream in an internal or external buffer, and subtree and buffer URLs pass the same origin and credential checks as tile content, including the directory-escape rule. The expansion is bounded: subtree levels, tiles per subtree, external buffers, available levels, subtree count, total expanded tiles and subtree bytes each have a ceiling that refuses by name rather than truncating. A sphere bounding volume on an implicit tile is refused, as is a tile declaring both `implicitTiling` and `children`. The older extension spellings are refused by name.
 
-What does not open: the wider 3D Tiles ecosystem. B3DM, I3DM, CMPT and glTF content are refused by name, because mesh tiles need a renderer this viewer does not have. A selection cannot reach a nested external `tileset.json`. Draco-compressed tiles are refused rather than partially read.
+A tile whose content is a nested external `tileset.json` is followed: the referenced document is fetched, its own implicit and external references expanded in turn, and its root spliced in as a child in the referencing tile's frame, so a set split across several documents opens as one scene. The follow is bounded — the count of external documents, the nesting depth and the bytes of one document each refuse by name — and a document that references itself, directly or around a cycle, is refused rather than followed forever.
+
+What does not open: the wider 3D Tiles ecosystem. B3DM, I3DM, CMPT and glTF content are refused by name, because mesh tiles need a renderer this viewer does not have. Draco-compressed tiles are refused rather than partially read.
 
 Two further limits of the supported subset are known:
 
 - Content is selected by the URI extension. 3D Tiles 1.1 does not require a content URI to have a file extension, and permits content to be identified by its magic header or to be JSON, so a tileset that names its tiles without an extension is not opened even when every tile in it is PNTS.
-- A tile is read as carrying a single `content`. 3D Tiles 1.1 allows `contents[]`, several contents on one tile, and only the single-content form is read here.
+- Both the single `content` and the 3D Tiles 1.1 `contents[]` array are read; every content entry on a tile is classified and served independently, and a tile whose entries are all point clouds streams all of them.
 
 ## Mobile Scan Exports
 

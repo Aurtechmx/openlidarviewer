@@ -208,23 +208,25 @@ export function selectTileContents(
   const externalTilesets: SelectedTileContent[] = [];
   let emptyTiles = 0;
   for (const tile of selected) {
-    const uri = tile.placed.tile.contentUri;
-    if (uri === null) {
+    const uris = tile.placed.tile.contentUris;
+    if (uris.length === 0) {
       emptyTiles++;
       continue;
     }
-    const kind = contentKind(uri);
-    if (kind === 'other') {
-      // A tileset streamed here is a point-cloud tileset. A `.b3dm` or `.glb`
-      // is a real 3D Tiles content type this viewer has no decoder for, and
-      // fetching it to discover that wastes the transfer.
-      throw new Error(`3D Tiles: content "${uri}" is not a .pnts tile or an external tileset.`);
+    for (const uri of uris) {
+      const kind = contentKind(uri);
+      if (kind === 'other') {
+        // A tileset streamed here is a point-cloud tileset. A `.b3dm` or `.glb`
+        // is a real 3D Tiles content type this viewer has no decoder for, and
+        // fetching it to discover that wastes the transfer.
+        throw new Error(`3D Tiles: content "${uri}" is not a .pnts tile or an external tileset.`);
+      }
+      const resolved = resolveTilesetContentUrl(opened.baseUrl, uri, opened.search);
+      if (!resolved.ok) throw new Error(`3D Tiles: ${resolved.reason}`);
+      const entry: SelectedTileContent = { selected: tile, url: resolved.url, kind };
+      if (kind === 'pnts') contents.push(entry);
+      else externalTilesets.push(entry);
     }
-    const resolved = resolveTilesetContentUrl(opened.baseUrl, uri, opened.search);
-    if (!resolved.ok) throw new Error(`3D Tiles: ${resolved.reason}`);
-    const entry: SelectedTileContent = { selected: tile, url: resolved.url, kind };
-    if (kind === 'pnts') contents.push(entry);
-    else externalTilesets.push(entry);
   }
   return { contents, externalTilesets, emptyTiles };
 }

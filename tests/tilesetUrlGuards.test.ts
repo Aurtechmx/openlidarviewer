@@ -78,3 +78,26 @@ describe('a content URI this viewer must not request', () => {
     }
   });
 });
+
+describe('a tile carrying several 3D Tiles 1.1 contents', () => {
+  it('emits one node per content, each resolved independently', () => {
+    const tileset = parseTileset(
+      JSON.stringify({
+        asset: { version: '1.1' },
+        geometricError: 100,
+        root: {
+          boundingVolume: BOX,
+          geometricError: 50,
+          refine: 'ADD',
+          contents: [{ uri: 'a.pnts' }, { uri: 'sub/b.pnts' }],
+        },
+      }),
+    );
+    const built = tilesetNodes(tileset, undefined, ENTRY);
+    expect(built.records.map((r) => r.id)).toEqual(['a.pnts', 'sub/b.pnts']);
+    expect(built.contentUri.get('a.pnts')).toBe('https://tiles.example.com/city/a.pnts');
+    expect(built.contentUri.get('sub/b.pnts')).toBe(
+      'https://tiles.example.com/city/sub/b.pnts',
+    );
+  });
+});

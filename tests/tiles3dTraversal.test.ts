@@ -32,7 +32,7 @@ const tile = (over: Partial<Tile> = {}): Tile => ({
   geometricError: 100,
   refine: 'REPLACE',
   transform: null,
-  contentUri: null,
+  contentUris: [],
   children: [],
   ...over,
 });
