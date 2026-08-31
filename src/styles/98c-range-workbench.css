@@ -8,9 +8,9 @@
 .olv-range-launcher {
   margin: 12px 0;
   padding: 12px 14px;
-  border: 1px solid var(--olv-border, rgba(255, 255, 255, 0.12));
+  border: 1px solid var(--hairline);
   border-radius: 10px;
-  background: var(--olv-surface-2, rgba(255, 255, 255, 0.03));
+  background: var(--panel-raised);
 }
 
 .olv-range-launcher-head {
@@ -41,7 +41,7 @@
 .olv-range-workbench {
   margin: 0 0 14px;
   padding: 12px 14px;
-  border: 1px solid var(--olv-border, rgba(255, 255, 255, 0.12));
+  border: 1px solid var(--hairline);
   border-radius: 10px;
 }
 
@@ -68,7 +68,7 @@
 .olv-range-mode {
   padding: 4px 10px;
   font-size: 12px;
-  border: 1px solid var(--olv-border, rgba(255, 255, 255, 0.16));
+  border: 1px solid var(--hairline);
   border-radius: 999px;
   background: transparent;
   color: inherit;
@@ -76,8 +76,8 @@
 }
 
 .olv-range-mode.is-active {
-  background: var(--olv-accent, #2f7fd8);
-  border-color: var(--olv-accent, #2f7fd8);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -123,7 +123,7 @@
   margin-top: 6px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: var(--olv-surface-2, rgba(255, 255, 255, 0.04));
+  background: var(--panel-raised);
 }
 
 .olv-range-readout-head {
@@ -197,7 +197,7 @@
 
 .olv-range-total th,
 .olv-range-total td {
-  border-top: 1px solid var(--olv-border, rgba(255, 255, 255, 0.12));
+  border-top: 1px solid var(--hairline);
   opacity: 1;
 }
 
@@ -219,5 +219,5 @@
   padding: 2px 5px;
   border-radius: 4px;
   font-variant-numeric: tabular-nums;
-  background: var(--olv-surface-2, rgba(255, 255, 255, 0.06));
+  background: var(--panel-raised);
 }
