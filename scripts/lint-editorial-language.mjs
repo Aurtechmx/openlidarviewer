@@ -16,13 +16,36 @@
  * tag/GitHub release) are legitimate and allowlisted.
  */
 
-import { readFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
-import { resolve, dirname } from 'node:path';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Walk `src` and `tests` on the filesystem — NOT `git ls-files`, which throws in
+ * the published/extracted source archive (no repo). Returns lintable files
+ * relative to ROOT, in a stable code-unit order.
+ */
+function collectFiles() {
+  const out = [];
+  const walk = (rel) => {
+    const abs = join(ROOT, rel);
+    if (!existsSync(abs)) return;
+    for (const entry of readdirSync(abs)) {
+      const childRel = `${rel}/${entry}`;
+      if (statSync(join(ROOT, childRel)).isDirectory()) {
+        walk(childRel);
+      } else if (/\.(ts|tsx|js|mjs|css)$/.test(entry)) {
+        out.push(childRel);
+      }
+    }
+  };
+  walk('src');
+  walk('tests');
+  return out.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
 
 /** Intent-revealing editorial phrases (case-insensitive). Not bare words. */
 const BANNED = [
@@ -60,9 +83,7 @@ export function findEditorialLeaks(text) {
 }
 
 function main() {
-  const files = execSync('git ls-files src tests', { cwd: ROOT, encoding: 'utf8' })
-    .split('\n')
-    .filter((f) => /\.(ts|tsx|js|mjs|css)$/.test(f))
+  const files = collectFiles()
     // The negative-control test deliberately contains sample editorial phrases
     // to prove the checker catches them; it is the one place they may appear.
     .filter((f) => !f.endsWith('tests/editorialLanguage.test.ts'));
