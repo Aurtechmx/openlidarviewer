@@ -105,10 +105,10 @@ export interface ScanFitness {
   /** Worst dimension tone — drives the hero colour. */
   readonly overallTone: FitnessTone;
   /**
-   * Named tier badge when earnable, carrying the "(estimated)" qualifier every
-   * other surface stamps on the level (e.g. "QL2 (estimated)"), else null. The
-   * level's RMSEz leg is hold-out, not independent checkpoints, so an unadorned
-   * "QL2" on the hero would read as a 3DEP determination.
+   * Named density-floor badge when earnable (e.g. "≥ QL2 density floor"), else
+   * null. The badge reports which published nominal-pulse-density reference floor
+   * the observed ground-return density clears — density only, never a 3DEP
+   * quality-level determination, so an unadorned "QL2" is deliberately avoided.
    */
   readonly tierBadge: string | null;
   /** Headline accuracy string, or null when unvalidated. */
