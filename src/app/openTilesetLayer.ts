@@ -33,6 +33,7 @@
 import { LoadCancelledError } from '../io/loadFile';
 import { describeLoadError } from '../io/loadErrors';
 import { expandImplicitTileset } from '../io/tiles3d/implicitExpand';
+import { expandExternalTilesets } from '../io/tiles3d/externalTilesets';
 import { parseTileset } from '../io/tiles3d/tileset';
 import { createTilesetTransport, pntsDeviceTransportCap } from '../io/tiles3d/tilesetTransport';
 import { validateRemoteTilesetUrl } from '../io/tiles3d/tilesetUrl';
@@ -185,7 +186,19 @@ export async function openRemoteTileset(
           transport.fetchSubtreeBytes(subtreeUrl, signal),
         signal: controller.signal,
       });
-      tileset = parseTileset(expanded);
+      // A tile whose content is another tileset.json is followed here: the
+      // referenced document (implicit and external references expanded in turn)
+      // is spliced in as a child so every leaf reachable across the set becomes
+      // a servable node, rather than an unserved `.json` that refuses the open.
+      const linked = await expandExternalTilesets(expanded, {
+        entryUrl: url,
+        fetchTilesetJson: (tilesetUrl, signal) =>
+          transport.fetchTilesetJson(tilesetUrl, signal),
+        fetchSubtreeBytes: (subtreeUrl, signal) =>
+          transport.fetchSubtreeBytes(subtreeUrl, signal),
+        signal: controller.signal,
+      });
+      tileset = parseTileset(linked);
     } catch (err) {
       // The parser's and the expander's refusals are all deliberate and already
       // say why. A cancel is not a refusal and has to keep its own identity.
