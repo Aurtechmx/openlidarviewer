@@ -167,13 +167,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/render/streaming/streamingDiagnostics.ts",
-      "status": "staged",
-      "why": "A flat record of everything the streaming path knows about itself. The ?debug=1 overlay still formats its own counters rather than building this record.",
-      "graduation": "The debug overlay, or a metrics export, builds its numbers from this record.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/render/streaming/streamingProfile.ts",
       "status": "staged",
       "why": "It maps a device tier onto a full bundle of streaming-session defaults: quality preset, EDL default and fade-in. The direct calls did not settle its question, they left its value unrealised. src/main.ts hardcodes the initial streamingQuality to 'balanced' and never derives it from deviceCapsValue.tier; streamingBudgets(quality, isMobile) is called with that fixed quality. So no path yet turns a device tier into these session defaults as a whole. tierAdaptation.ts, itself staged, is written to layer runtime FPS stepping on top of this bundle, which marks it as intended future work rather than a superseded module. Wiring it would edit src/main.ts, held off here because concurrent work owns that file.",

@@ -38,7 +38,8 @@ import {
   selectLapsedEvictions,
 } from './evictionPolicy';
 import type { EvictionCandidate, EvictionHysteresis } from './evictionPolicy';
-import type { SchedulerReadinessFacts } from './refinementReadiness';
+import { evaluateRefinementReadiness, type SchedulerReadinessFacts } from './refinementReadiness';
+import { buildStreamingDiagnostics, type StreamingDiagnostics } from './streamingDiagnostics';
 
 /** Renderer-facing callbacks the scheduler drives. */
 export interface SchedulerCallbacks {
@@ -821,6 +822,42 @@ export class StreamingScheduler {
       decodedPendingCount,
       failedCount,
     };
+  }
+
+  /**
+   * One flat streaming-diagnostics snapshot, assembled from the SAME readiness
+   * facts the phase machine acted on and the live store / cache counters. The
+   * five fields the scheduler does not track (generation id, decode-retry total,
+   * GPU-upload queue depth/bytes, resident decoded bytes) are left unset, so the
+   * record reports them as null and names them under `unavailable` rather than
+   * estimating. This is the canonical numbers source for the debug overlay and a
+   * diagnostics export — neither has to re-derive the same metrics.
+   */
+  diagnostics(): StreamingDiagnostics {
+    const facts = this.readinessFacts();
+    const store = this._cloud.octree.store;
+    const s = this.stats();
+    const c = this.cacheStats();
+    return buildStreamingDiagnostics(facts, evaluateRefinementReadiness(facts), {
+      knownNodes: store.counts().known,
+      visibleNodes: s.visible,
+      residentPoints: store.residentPointCount,
+      decodedPendingPoints: store.decodedPendingPointCount,
+      pointBudget: this._pointBudget,
+      lastTickMs: s.lastTickMs,
+      cameraVelocity: s.cameraVelocity,
+      cameraStable: s.isStable,
+      effectiveMaxConcurrent: s.effectiveMaxConcurrent,
+      pressureDepthReduction: s.pressureDepthReduction,
+      fpsBudgetFactor: s.fpsBudgetFactor,
+      fullRescoreCount: s.fullRescoreCount,
+      cacheBytes: c.byteSize,
+      cacheEntries: c.count,
+      cacheMaxBytes: c.maxBytes,
+      cacheHits: c.hits,
+      cacheMisses: c.misses,
+      cacheEvictions: c.evictions,
+    });
   }
 
   /** Whether the camera has settled long enough for full-detail refinement. */

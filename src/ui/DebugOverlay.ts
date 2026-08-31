@@ -20,6 +20,7 @@ import { formatTelemetry } from '../io/loadTelemetry';
 import { FrameTelemetry } from '../perf/frameTelemetry';
 import { readDevFlags } from '../perf/devFlags';
 import { buildMetricsJson } from '../perf/metricsJson';
+import type { StreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
 import { backendLabel } from './backendLabel';
 
 /** Live COPC streaming counters — present only while a COPC scan is open. */
@@ -141,6 +142,8 @@ export class DebugOverlay {
   private readonly _telemetry: HTMLElement;
   private readonly _benchmark: HTMLElement;
   private readonly _sample: () => DebugSample;
+  /** The canonical streaming-diagnostics snapshot for the metrics export. */
+  private readonly _diagnostics: () => StreamingDiagnostics | null;
   private _timer: number | undefined;
   /**
    * Per-frame collector (v0.5.5 P0) — constructed here (the overlay only
@@ -152,8 +155,12 @@ export class DebugOverlay {
   /** Most recent polled sample — reused by {@link metricsJson}. */
   private _lastSample: DebugSample | null = null;
 
-  constructor(sample: () => DebugSample) {
+  constructor(
+    sample: () => DebugSample,
+    diagnostics: () => StreamingDiagnostics | null = () => null,
+  ) {
     this._sample = sample;
+    this._diagnostics = diagnostics;
 
     this._live = el('pre', { className: 'olv-debug-block', text: 'initialising…' });
     this._perf = el('pre', { className: 'olv-debug-block', text: '(collecting…)' });
@@ -278,6 +285,7 @@ export class DebugOverlay {
       telemetry: this._perfCollector.snapshot(),
       rendering: sample.stats,
       streaming: sample.streaming ?? null,
+      streamingDiagnostics: this._diagnostics(),
     });
   }
 

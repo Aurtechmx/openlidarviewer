@@ -3920,7 +3920,7 @@ if (debug || benchmark) {
       stats: viewerReady ? viewer.frameStats() : null,
       streaming: streamingDebugSample(),
       terrainCompute: readTerrainComputePath(),
-    }));
+    }), () => (viewerReady ? viewer.streamingScheduler?.diagnostics() ?? null : null));
     stage.overlay.append(debugOverlay.element);
     debugOverlay.start();
   });

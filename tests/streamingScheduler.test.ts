@@ -144,6 +144,40 @@ test('the scheduler streams every visible node within budget', async () => {
   expect(cloud.residentPointCount).toBe(3100);
 });
 
+test('diagnostics() reports the live streaming state and names what it cannot measure', async () => {
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  const d = scheduler.diagnostics();
+  // Real, measured quantities from the same store the render path draws.
+  expect(d.residentNodes).toBe(5);
+  expect(d.residentPoints).toBe(3100);
+  expect(d.pointBudget).toBeGreaterThan(0);
+  expect(d.cacheMaxBytes).toBeGreaterThan(0);
+  // The five fields the scheduler does not track are null AND named — never faked.
+  expect(d.generationId).toBeNull();
+  expect(d.decodeRetryCount).toBeNull();
+  expect(d.uploadPendingNodes).toBeNull();
+  expect(d.uploadPendingBytes).toBeNull();
+  expect(d.residentDecodedBytes).toBeNull();
+  expect(d.unavailable).toEqual(
+    expect.arrayContaining([
+      'generationId',
+      'decodeRetryCount',
+      'uploadPendingNodes',
+      'uploadPendingBytes',
+      'residentDecodedBytes',
+    ]),
+  );
+});
+
 test('nodes at real UTM-scale coordinates still reach resident (origin-localisation guard)', async () => {
   // Regression guard for the v0.6.0-alpha.1 EPT blank-render bug: node bounds
   // were offset by the render origin twice, so every node at a large projected
