@@ -13,7 +13,7 @@
 
 import { el } from './dom';
 import { downloadBytes } from '../io/download';
-import { loadConvertEngine } from '../lazyChunks';
+import { loadConvertEngine, loadFindingsPanel, loadSessionFindings } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
@@ -681,18 +681,17 @@ export class ExportPanel {
   private _mountFindingsLedger(slot: HTMLElement): void {
     if (this._findingsMountStarted) return;
     this._findingsMountStarted = true;
-    void Promise.all([
-      import('./findingsPanel'),
-      import('../render/measure/sessionFindings'),
-    ]).then(([{ buildFindingsPanel }, { SessionFindings }]) => {
-      this._findings = new SessionFindings();
-      this._findingsPanel = buildFindingsPanel({
-        findings: this._findings,
-        collectMeasurements: () => this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]),
-        exportReport: (f) => this._cb.exportFindingsReport?.(f),
-      });
-      slot.append(this._findingsPanel.element);
-    });
+    void Promise.all([loadFindingsPanel(), loadSessionFindings()]).then(
+      ([{ buildFindingsPanel }, { SessionFindings }]) => {
+        this._findings = new SessionFindings();
+        this._findingsPanel = buildFindingsPanel({
+          findings: this._findings,
+          collectMeasurements: () => this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]),
+          exportReport: (f) => this._cb.exportFindingsReport?.(f),
+        });
+        slot.append(this._findingsPanel.element);
+      },
+    );
   }
 
   private _productGroup(label: string, actions: HTMLElement, hint?: string): HTMLElement {
