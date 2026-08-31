@@ -69,6 +69,7 @@ import {
   formatHonestValue,
 } from '../terrain/contour/contourCopy';
 import { gradeForConfidence } from '../terrain/ground/cellConfidence';
+import { ASPRS_2024_UNAVAILABLE_NOTE } from '../terrain/validate/verticalAccuracy';
 import { triggerDownload } from '../io/download';
 import {
   coverageHeatmapImage,
@@ -2162,15 +2163,24 @@ export class AnalysePanel {
       const fmtM = (n: number | null): string =>
         n != null && Number.isFinite(n) ? `${n.toFixed(2)} m` : '—';
       if (std.nvaM != null || std.vvaM != null) {
-        // "-style (hold-out)": the figures use the ASPRS 2014 FORMULAS on
-        // internally withheld points, not independent checkpoints — the
-        // label must not claim a checkpoint assessment (see the tooltips).
+        // Legacy 2014-formula diagnostic on internally withheld points, not
+        // independent checkpoints — never a checkpoint assessment, and named
+        // "legacy" so it is not taken for the current standard (see tooltips).
         this._validationRow.append(this._hint(
           el('div', {
             className: 'olv-analyse-strata',
-            text: `NVA-style ${fmtM(std.nvaM)} · VVA-style ${fmtM(std.vvaM)} (95%, hold-out)`,
+            text: `Legacy NVA/VVA-style ${fmtM(std.nvaM)} · ${fmtM(std.vvaM)} (ASPRS 2014 formulas, hold-out)`,
           }),
           `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
+        ));
+        // The current-standard boundary, stated so the legacy figures above are
+        // never read as a current ASPRS assessment.
+        this._validationRow.append(this._hint(
+          el('div', {
+            className: 'olv-analyse-strata olv-analyse-standard-note',
+            text: 'ASPRS 2024: not assessed (no independent checkpoints)',
+          }),
+          ASPRS_2024_UNAVAILABLE_NOTE,
         ));
       }
       if (std.densityReferenceFloorsMet.length > 0) {

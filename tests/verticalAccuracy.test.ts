@@ -7,6 +7,8 @@ import {
   computeVerticalAccuracy,
   formatVerticalAccuracy,
   NVA_95_MULTIPLIER,
+  ASPRS_2024_UNAVAILABLE_NOTE,
+  LEGACY_ASPRS_2014_BASIS,
 } from '../src/terrain/validate/verticalAccuracy';
 import type { ValidationReport } from '../src/terrain/validate/ValidationReport';
 
@@ -40,7 +42,7 @@ describe('computeVerticalAccuracy', () => {
     expect(a.rmseZ).toBe(0.5);
     expect(a.nva95).toBeCloseTo(0.5 * NVA_95_MULTIPLIER, 6);
     expect(a.vva95).toBe(1.1);
-    expect(a.standard).toBe('ASPRS 2014 formulas, hold-out basis');
+    expect(a.standard).toBe('legacy ASPRS 2014 formulas, hold-out basis');
   });
 
   it('carries signed bias + NMAD through, and formats them with direction', () => {
@@ -89,5 +91,29 @@ describe('VerticalAccuracy.standard — a basis tag, not a conformance tag', () 
     expect(a.standard).not.toBe('ASPRS 2014');
     expect(a.standard).toMatch(/formulas/i);
     expect(a.standard).toMatch(/hold-out/i);
+  });
+});
+
+describe('current-standard boundary', () => {
+  it('names the 2014 figures as a LEGACY diagnostic, never the current standard', () => {
+    expect(LEGACY_ASPRS_2014_BASIS).toMatch(/legacy/i);
+    expect(LEGACY_ASPRS_2014_BASIS).toMatch(/2014/);
+    expect(LEGACY_ASPRS_2014_BASIS).toMatch(/hold-out/i);
+  });
+
+  it('states the ASPRS 2024 assessment is unavailable and why', () => {
+    expect(ASPRS_2024_UNAVAILABLE_NOTE).toMatch(/ASPRS 2024|Edition 2/);
+    expect(ASPRS_2024_UNAVAILABLE_NOTE).toMatch(/unavailable/i);
+    expect(ASPRS_2024_UNAVAILABLE_NOTE).toMatch(/independent checkpoint/i);
+    // RMSEV is the current positional-accuracy measure; the note must name it.
+    expect(ASPRS_2024_UNAVAILABLE_NOTE).toMatch(/RMSEV/);
+  });
+
+  it('never claims the 2014 form is current or that NVA-95 is the current measure', () => {
+    // Guards against a regression that re-asserts the outdated vocabulary as current.
+    for (const s of [LEGACY_ASPRS_2014_BASIS, ASPRS_2024_UNAVAILABLE_NOTE]) {
+      expect(s).not.toMatch(/ASPRS 2014 is current/i);
+      expect(s).not.toMatch(/current positional accuracy/i);
+    }
   });
 });

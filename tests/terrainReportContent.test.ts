@@ -285,9 +285,11 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     expect(text).toMatch(/0\.27 m/); // NVA
     expect(text).toMatch(/>= QL2 floor/);
     // The report's labels carry the honesty qualifiers, same as the panel
-    // and the provenance stamp — hold-out formulas, not checkpoints.
-    expect(text).toMatch(/NVA-style \(95%, hold-out\)/);
-    expect(text).toMatch(/VVA-style \(95th pct, hold-out\)/);
+    // and the provenance stamp — legacy 2014-formula hold-out figures, not
+    // checkpoints, with the current-standard boundary stated explicitly.
+    expect(text).toMatch(/Legacy NVA-style \(ASPRS 2014 formulas, hold-out\)/);
+    expect(text).toMatch(/Legacy VVA-style \(ASPRS 2014 formulas, hold-out\)/);
+    expect(text).toMatch(/ASPRS 2024 assessment: not available/);
   });
 
   it('the not-survey-grade note is always present in the footer', () => {

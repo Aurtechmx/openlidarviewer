@@ -358,11 +358,12 @@ export function buildTerrainReportContent(
     title: 'Quality Metrics',
     rows: [
       { label: 'Vertical RMSEz', value: hasAcc ? fmtM(provenance.accuracy?.rmseZM) : DASH },
-      // "-style (hold-out)" / "(estimated)": the report carries the same
-      // qualifiers as the Analyse panel and the provenance stamp — hold-out
-      // figures via the ASPRS formulas, never a checkpoint assessment.
-      { label: 'NVA-style (95%, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
-      { label: 'VVA-style (95th pct, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
+      // Legacy 2014-formula diagnostic on hold-out points, never a checkpoint
+      // assessment; the current-standard boundary row below states that the
+      // formal ASPRS 2024 assessment is not available.
+      { label: 'Legacy NVA-style (ASPRS 2014 formulas, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
+      { label: 'Legacy VVA-style (ASPRS 2014 formulas, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
+      { label: 'ASPRS 2024 assessment', value: 'not available (no independent checkpoints)' },
       // Measured-cell empirical reliability (Wilson CI) and the less optimistic
       // spatially-blocked RMSE — the same numbers the Analyse panel surfaces.
       { label: 'Measured reliability', value: reliabilityValue },

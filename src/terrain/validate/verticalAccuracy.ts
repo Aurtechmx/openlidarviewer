@@ -35,6 +35,27 @@ import type { ValidationReport } from './ValidationReport';
 /** ASPRS 95% multiplier for RMSE → NVA under a normal error model. */
 export const NVA_95_MULTIPLIER = 1.96;
 
+/**
+ * The formal-standard boundary, stated explicitly so no surface implies the
+ * hold-out figures are a current-standard assessment. ASPRS Positional Accuracy
+ * Standards Edition 2 (2024) express positional accuracy as RMSEV (not the 2014
+ * RMSEz/NVA vocabulary) and drop the 95% confidence level as the primary
+ * measure; a formal RMSEV also incorporates the checkpoint-survey error, which
+ * an internal hold-out has no way to supply. OLV has no independent checkpoint
+ * set, so it does not — and must not — produce a formal ASPRS 2024 assessment.
+ */
+export const ASPRS_2024_UNAVAILABLE_NOTE =
+  'ASPRS 2024 (Edition 2) assessment: unavailable — it requires an independent ' +
+  'checkpoint set and checkpoint-survey uncertainty (RMSEV), which internal ' +
+  'hold-out validation does not provide.';
+
+/**
+ * The basis tag for the 2014-formula figures, named as a LEGACY diagnostic so a
+ * reader never takes it for the current standard. The formulas are reproducible
+ * and useful; they are not current ASPRS conformance.
+ */
+export const LEGACY_ASPRS_2014_BASIS = 'legacy ASPRS 2014 formulas, hold-out basis';
+
 /** ASPRS-style vertical accuracy figures derived from a validation report. */
 export interface VerticalAccuracy {
   /** RMSEz in source linear units; NaN when not measurable. */
@@ -68,7 +89,7 @@ export function computeVerticalAccuracy(report: ValidationReport): VerticalAccur
     bias: Number.isFinite(report.bias) ? report.bias : Number.NaN,
     nmad: Number.isFinite(report.nmad) ? report.nmad : Number.NaN,
     sampleSize: report.sampleSize,
-    standard: 'ASPRS 2014 formulas, hold-out basis',
+    standard: LEGACY_ASPRS_2014_BASIS,
   };
 }
 

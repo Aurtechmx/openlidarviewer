@@ -147,12 +147,14 @@ export interface ExportPermitStamp {
  * qualifiers the text surfaces put in the label.
  */
 export const ACCURACY_BASIS_NOTE =
-  'RMSEz, NVA and VVA are computed from hold-out residuals within this cloud using the '
-  + 'ASPRS 2014 formulas — withheld ground points, not independent survey checkpoints, and '
-  + 'the VVA figure is the 95th percentile of all hold-out residuals rather than '
-  + 'vegetated-class checkpoints. The quality level compares measured ground density and '
-  + 'that hold-out RMSEz against the 3DEP thresholds. This is not an ASPRS conformance '
-  + 'assessment and not a USGS 3DEP determination.';
+  'RMSEz and the legacy NVA/VVA-style figures are computed from hold-out residuals within '
+  + 'this cloud using the legacy ASPRS 2014 formulas — withheld ground points, not '
+  + 'independent survey checkpoints, and the VVA figure is the 95th percentile of all '
+  + 'hold-out residuals rather than vegetated-class checkpoints. A formal ASPRS 2024 '
+  + '(Edition 2, RMSEV) assessment is not available: it requires an independent checkpoint '
+  + 'set and checkpoint-survey uncertainty. The density figure names which 3DEP '
+  + 'nominal-pulse-density floor the measured ground-return density clears, as a reference '
+  + 'only. This is not an ASPRS conformance assessment and not a USGS 3DEP determination.';
 
 /** Validated vertical-accuracy figures, present only when the run measured them. */
 export interface ExportProvenanceAccuracy {
