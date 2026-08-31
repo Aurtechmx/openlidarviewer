@@ -48,6 +48,27 @@ export interface ToolDockCallbacks {
 }
 
 /**
+ * One entry in the ordered dock manifest. `title` is the button's initial
+ * tooltip (the disabled-state string for a scan-enabled tool); `enabledTitle`,
+ * when present, is swapped in by `setEnabled(id, true)`. `toggle` marks a
+ * button that carries aria-pressed and an active state. `custom` builds a
+ * button that does not fit the icon+label template (the "More" disclosure).
+ */
+interface DockToolSpec {
+  id: string;
+  label: string;
+  title: string;
+  enabledTitle?: string;
+  icon?: string;
+  classes?: string[];
+  disabled?: boolean;
+  toggle?: boolean;
+  blur?: boolean;
+  onClick?: () => void;
+  custom?: () => HTMLButtonElement;
+}
+
+/**
  * The bottom-left tool dock and the bottom-right backend indicator.
  *
  * Frame and Snapshot are always available. Measure, Inspect and Close become
@@ -60,197 +81,257 @@ export class ToolDock {
   private readonly _backendText: HTMLElement;
   private readonly _share: HTMLButtonElement;
   private _shareTimer: number | undefined;
-  private readonly _measure: HTMLButtonElement;
-  private readonly _inspect: HTMLButtonElement;
-  private readonly _probe: HTMLButtonElement;
-  private readonly _annotate: HTMLButtonElement;
-  private readonly _analyse: HTMLButtonElement;
-  private readonly _close: HTMLButtonElement;
-  private readonly _more: HTMLButtonElement;
+  /** Every dock button, keyed by its manifest id, for id-driven patching. */
+  private readonly _buttons = new Map<string, HTMLButtonElement>();
+  /** Per-tool enabled/disabled tooltip strings for `setEnabled`. */
+  private readonly _titles = new Map<string, { enabled: string; disabled: string }>();
+  /** Ids of the toggle tools (those carrying aria-pressed / an active state). */
+  private readonly _toggles = new Set<string>();
 
   constructor(callbacks: ToolDockCallbacks) {
-    const frame = this._tool(
-      'Frame',
-      'Fit the whole scan back in view — also the R key',
-      false,
-      ICON_FRAME,
-    );
-    frame.classList.add('olv-tool-frame');
-    frame.addEventListener('click', callbacks.onFrameAll);
+    // The dock is one ordered manifest. Each entry names a button, its tooltip
+    // (and — for the tools a scan enables — both enabled and disabled tooltip
+    // strings), its extra CSS classes, whether it is a toggle (carries
+    // aria-pressed and an active state) and its click behaviour. The render
+    // order below IS the on-screen order; id-keyed `setEnabled`/`setActive`
+    // patch a single button. The mobile stylesheets key off the per-tool
+    // classes, so every class here is load-bearing.
+    const specs: DockToolSpec[] = [
+      {
+        id: 'tool.frame',
+        label: 'Frame',
+        title: 'Fit the whole scan back in view — also the R key',
+        icon: ICON_FRAME,
+        classes: ['olv-tool-frame'],
+        onClick: callbacks.onFrameAll,
+      },
+      {
+        id: 'tool.snapshot',
+        label: 'Snapshot',
+        title:
+          'Save the current view as a PNG image — placed measurements and annotations included',
+        icon: ICON_SNAPSHOT,
+        classes: ['olv-tool-snapshot'],
+        onClick: callbacks.onSnapshot,
+      },
+      // Measure starts disabled — enabled by setEnabled('tool.measure') once a
+      // scan loads. The `olv-dock-measure` class is a stable hook for the
+      // onboarding tour's spotlight (v0.4.5): the tour's only other selector
+      // keys off the tooltip text, which changes with enablement, so the
+      // spotlight used to miss the disabled button.
+      {
+        id: 'tool.measure',
+        label: 'Measure',
+        title: 'Load a scan to enable measurement',
+        enabledTitle:
+          'Measure distance, area, height, angle and slope on the scan — also the M key',
+        icon: ICON_MEASURE,
+        classes: ['olv-dock-measure'],
+        disabled: true,
+        toggle: true,
+        blur: true,
+        onClick: callbacks.onMeasureToggle,
+      },
+      {
+        id: 'tool.inspect',
+        label: 'Inspect',
+        title: 'Load a scan to enable inspection',
+        enabledTitle: 'Click any point to read its coordinates and attributes — also the I key',
+        icon: ICON_INSPECT,
+        disabled: true,
+        toggle: true,
+        blur: true,
+        onClick: callbacks.onInspectToggle,
+      },
+      // Probe is a desktop-only hover affordance; CSS hides the button on phones.
+      {
+        id: 'tool.probe',
+        label: 'Probe',
+        title: 'Load a scan to enable the live probe',
+        enabledTitle: 'Hover the scan to read each point live, with no click',
+        icon: ICON_PROBE,
+        classes: ['olv-tool-probe'],
+        disabled: true,
+        toggle: true,
+        blur: true,
+        onClick: callbacks.onProbeToggle,
+      },
+      {
+        id: 'tool.annotate',
+        label: 'Annotate',
+        title: 'Load a scan to enable annotation',
+        enabledTitle: 'Mark points of interest with notes and findings — also the A key',
+        icon: ICON_ANNOTATE,
+        disabled: true,
+        toggle: true,
+        blur: true,
+        onClick: callbacks.onAnnotateToggle,
+      },
+      // Analyse re-opens the Terrain analysis panel. The panel can be closed
+      // (e.g. selecting the Profile measurement tucks it away to free the
+      // canvas), so a dock toggle guarantees a one-click way back to it.
+      {
+        id: 'tool.analyse',
+        label: 'Analyse',
+        title: 'Load a scan to enable terrain analysis',
+        enabledTitle: 'Show or hide the terrain analysis panel',
+        icon: ICON_ANALYSE,
+        classes: ['olv-tool-analyse'],
+        disabled: true,
+        toggle: true,
+        blur: true,
+        onClick: callbacks.onAnalyseToggle,
+      },
+      // "Copy view link" copies only the camera angle and viewport settings.
+      // The recipient still has to open the *same scan file* on their own
+      // device before the link does anything visible. This is a deliberate
+      // consequence of the local-first architecture: scan data never leaves
+      // the user's machine. The label and tooltip are written to make that
+      // contract obvious at first read — earlier wording ("Share") implied
+      // collaborative behaviour the architecture cannot deliver. v0.3.10.
+      // `olv-dock-gap` opens the meta-tools cluster; `olv-tool-share` is the
+      // stable hook the phone stylesheet uses to file it under "More".
+      {
+        id: 'tool.share',
+        label: COPY_VIEW_LINK_LABEL,
+        title:
+          'Copies the camera angle and view settings — not the scan itself. ' +
+          'The recipient needs to open the same file first.',
+        icon: ICON_LINK,
+        classes: ['olv-tool-share', 'olv-dock-gap'],
+        blur: true,
+        onClick: () => {
+          callbacks.onShare();
+          this._flashShare();
+        },
+      },
+      {
+        id: 'tool.command',
+        label: 'Commands',
+        title: 'Open the command palette — search every action (also Cmd/Ctrl-K)',
+        icon: ICON_COMMAND,
+        classes: ['olv-tool-command'],
+        blur: true,
+        onClick: callbacks.onCommandPalette,
+      },
+      {
+        id: 'tool.help',
+        label: 'Help',
+        title: 'Workflows, navigation and keyboard shortcuts — also the ? key',
+        icon: ICON_HELP,
+        classes: ['olv-tool-help'],
+        blur: true,
+        onClick: callbacks.onHelp,
+      },
+      // "More" disclosure for phones — hidden on desktop, shown on phones.
+      // CSS hides Snapshot and Help by default on phones (low-value with no
+      // keyboard). "More" toggles a `.olv-dock-more-open` class on the dock
+      // that un-hides them. On desktop every button is visible and More never
+      // appears. Built via `custom` because it is a bare `•••` glyph with no
+      // icon+label structure and an aria-expanded disclosure state.
+      {
+        id: 'tool.more',
+        label: '•••',
+        title: 'More tools: Snapshot, Analyse, Copy view link, Help',
+        custom: () => {
+          const more = el('button', {
+            className: 'olv-tool olv-tool-more',
+            text: '•••',
+            title: 'More tools: Snapshot, Analyse, Copy view link, Help',
+            ariaLabel: 'Show more tools',
+          });
+          more.setAttribute('aria-expanded', 'false');
+          more.addEventListener('click', () => {
+            more.blur();
+            const open = this.dock.classList.toggle('olv-dock-more-open');
+            more.setAttribute('aria-expanded', open ? 'true' : 'false');
+          });
+          return more;
+        },
+      },
+      // Close is its own destructive cluster at the far right (`olv-dock-gap`),
+      // keeping its rose tint. It has an enabled state but NO active state.
+      {
+        id: 'tool.close',
+        label: 'Close',
+        title: 'Load a scan to enable',
+        enabledTitle: 'Close the scan and return to the start',
+        icon: ICON_CLOSE,
+        classes: ['olv-tool-close', 'olv-dock-gap'],
+        disabled: true,
+        blur: true,
+        onClick: callbacks.onClose,
+      },
+    ];
 
-    const snapshot = this._tool(
-      'Snapshot',
-      'Save the current view as a PNG image — placed measurements and annotations included',
-      false,
-      ICON_SNAPSHOT,
-    );
-    snapshot.classList.add('olv-tool-snapshot');
-    snapshot.addEventListener('click', callbacks.onSnapshot);
+    // Gestalt proximity: three explicit clusters in one rail — work tools
+    // (Frame…Analyse), meta tools (Copy view link, Commands, Help) and the
+    // destructive Close group — separated by `olv-dock-gap` boundaries above.
+    // (Slice/Section was previously a permanently disabled work tool; a
+    // disabled tool in an active cluster reads as broken rather than as a
+    // roadmap signal, so it was removed until the feature ships.)
+    const buttons = specs.map((spec) => this._build(spec));
+    this._share = this._buttons.get('tool.share')!;
 
-    // "Copy view link" copies only the camera angle and viewport settings.
-    // The recipient still has to open the *same scan file* on their own
-    // device before the link does anything visible. This is a deliberate
-    // consequence of the local-first architecture: scan data never leaves
-    // the user's machine. The button label and tooltip below are written
-    // to make that contract obvious at first read — earlier wording
-    // ("Share") implied collaborative behaviour the architecture cannot
-    // deliver, and recipients who clicked the link saw an empty viewer
-    // and lost trust. v0.3.10.
-    this._share = this._tool(
-      COPY_VIEW_LINK_LABEL,
-      'Copies the camera angle and view settings — not the scan itself. ' +
-        'The recipient needs to open the same file first.',
-      false,
-      ICON_LINK,
-    );
-    // Stable hook for the phone stylesheet, which files this meta tool under
-    // the "More" disclosure instead of the primary row.
-    this._share.classList.add('olv-tool-share');
-    this._share.addEventListener('click', () => {
-      this._share.blur();
-      callbacks.onShare();
-      this._flashShare();
-    });
-
-    const command = this._tool(
-      'Commands',
-      'Open the command palette — search every action (also Cmd/Ctrl-K)',
-      false,
-      ICON_COMMAND,
-    );
-    command.classList.add('olv-tool-command');
-    command.addEventListener('click', () => {
-      command.blur();
-      callbacks.onCommandPalette();
-    });
-
-    const help = this._tool(
-      'Help',
-      'Workflows, navigation and keyboard shortcuts — also the ? key',
-      false,
-      ICON_HELP,
-    );
-    help.classList.add('olv-tool-help');
-    help.addEventListener('click', () => {
-      help.blur();
-      callbacks.onHelp();
-    });
-
-    // Measure starts disabled — enabled by setMeasureEnabled once a scan loads.
-    this._measure = this._tool('Measure', 'Load a scan to enable measurement', true, ICON_MEASURE);
-    // Stable hook for the onboarding tour's spotlight (v0.4.5) — the tour's
-    // only other selector keys off the tooltip text, which changes with
-    // enablement, so the spotlight used to miss the disabled button.
-    this._measure.classList.add('olv-dock-measure');
-    this._measure.addEventListener('click', () => {
-      this._measure.blur();
-      callbacks.onMeasureToggle();
-    });
-
-    // Inspect starts disabled — enabled by setInspectEnabled once a scan loads.
-    this._inspect = this._tool('Inspect', 'Load a scan to enable inspection', true, ICON_INSPECT);
-    this._inspect.addEventListener('click', () => {
-      this._inspect.blur();
-      callbacks.onInspectToggle();
-    });
-
-    // Probe starts disabled — enabled by setProbeEnabled once a scan loads.
-    // It is a desktop-only hover affordance; CSS hides the button on phones.
-    this._probe = this._tool('Probe', 'Load a scan to enable the live probe', true, ICON_PROBE);
-    this._probe.classList.add('olv-tool-probe');
-    this._probe.addEventListener('click', () => {
-      this._probe.blur();
-      callbacks.onProbeToggle();
-    });
-
-    // Annotate starts disabled — enabled by setAnnotateEnabled once a scan loads.
-    this._annotate = this._tool('Annotate', 'Load a scan to enable annotation', true, ICON_ANNOTATE);
-    this._annotate.addEventListener('click', () => {
-      this._annotate.blur();
-      callbacks.onAnnotateToggle();
-    });
-
-    // Analyse re-opens the Terrain analysis panel. The panel can be closed
-    // (e.g. selecting the Profile measurement tucks it away to free the
-    // canvas), so a dock toggle guarantees a one-click way back to it.
-    this._analyse = this._tool('Analyse', 'Load a scan to enable terrain analysis', true, ICON_ANALYSE);
-    this._analyse.classList.add('olv-tool-analyse');
-    this._analyse.addEventListener('click', () => {
-      this._analyse.blur();
-      callbacks.onAnalyseToggle();
-    });
-
-    // Toggle buttons must carry aria-pressed from creation — the attribute's
-    // mere presence is what tells assistive tech "this is a toggle", so it
-    // cannot wait for the first set*Active() call.
-    for (const toggle of [this._measure, this._inspect, this._probe, this._annotate, this._analyse]) {
-      toggle.setAttribute('aria-pressed', 'false');
-    }
-
-    // (Slice/Section was previously rendered here as a permanently
-    // disabled button. A disabled tool in an active cluster reads as
-    // broken rather than as a roadmap signal — Gestalt similarity
-    // violation. The tool will land back in the dock when the
-    // feature ships, alongside the other work tools.)
-
-    // Close starts disabled — enabled by setCloseEnabled once a scan loads.
-    // It clears the current scan and returns to the empty state.
-    this._close = this._tool('Close', 'Load a scan to enable', true, ICON_CLOSE);
-    this._close.classList.add('olv-tool-close');
-    this._close.addEventListener('click', () => {
-      this._close.blur();
-      callbacks.onClose();
-    });
-
-    // Gestalt proximity: three explicit clusters in one rail.
-    //   1. work tools  — Frame, Snapshot, Measure, Inspect, Probe,
-    //      Annotate, Slice (the seven things you actually DO to a scan)
-    //   2. meta tools  — Copy view link, Help (state about the scan, not edits)
-    //   3. close       — its own destructive group at the far right
-    // Each cluster boundary gets a wider left margin via the
-    // `.olv-dock-gap` class so the user sees three groups instead
-    // of one flat row of ten. Close keeps its rose tint so the
-    // destructive role is also signalled by colour.
-    this._share.classList.add('olv-dock-gap');
-    this._close.classList.add('olv-dock-gap');
-    // "More" disclosure for phones — hidden on desktop, shown on phones.
-    // CSS hides Snapshot and Help by default on phones (they're low-value
-    // when no keyboard is available). The "More" button toggles a
-    // `.olv-dock-more-open` class on the dock that un-hides those two
-    // buttons so the user can still reach them when needed. On desktop
-    // every button is visible and the More toggle never appears.
-    this._more = el('button', {
-      className: 'olv-tool olv-tool-more',
-      text: '•••',
-      title: 'More tools: Snapshot, Analyse, Copy view link, Help',
-      ariaLabel: 'Show more tools',
-    });
-    this._more.setAttribute('aria-expanded', 'false');
-    this._more.addEventListener('click', () => {
-      this._more.blur();
-      const open = this.dock.classList.toggle('olv-dock-more-open');
-      this._more.setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
-    this.dock = el('div', { className: 'olv-dock' }, [
-      frame,
-      snapshot,
-      this._measure,
-      this._inspect,
-      this._probe,
-      this._annotate,
-      this._analyse,
-      this._share,
-      command,
-      help,
-      this._more,
-      this._close,
-    ]);
+    this.dock = el('div', { className: 'olv-dock' }, buttons);
 
     this._backendText = el('span', { className: 'olv-backend-text', text: 'initialising…' });
     this.backend = el('div', { className: 'olv-backend' }, [
       el('span', { className: 'olv-backend-dot' }),
       this._backendText,
     ]);
+  }
+
+  /** Build one dock button from its spec and register it for id-driven patching. */
+  private _build(spec: DockToolSpec): HTMLButtonElement {
+    const button = spec.custom ? spec.custom() : this._tool(spec.label, spec.title, spec.disabled ?? false, spec.icon);
+    for (const cls of spec.classes ?? []) button.classList.add(cls);
+    // Toggle buttons must carry aria-pressed from creation — the attribute's
+    // mere presence is what tells assistive tech "this is a toggle", so it
+    // cannot wait for the first setActive() call.
+    if (spec.toggle) {
+      button.setAttribute('aria-pressed', 'false');
+      this._toggles.add(spec.id);
+    }
+    if (spec.onClick) {
+      const handler = spec.onClick;
+      button.addEventListener('click', () => {
+        if (spec.blur) button.blur();
+        handler();
+      });
+    }
+    if (spec.enabledTitle !== undefined) {
+      this._titles.set(spec.id, { enabled: spec.enabledTitle, disabled: spec.title });
+    }
+    this._buttons.set(spec.id, button);
+    return button;
+  }
+
+  /**
+   * Enable or disable a tool by id — enabled once a scan is loaded. Swaps in
+   * the tool's enabled/disabled tooltip and, for a disabled toggle, forces its
+   * active state off (disable clears active).
+   */
+  setEnabled(id: string, enabled: boolean): void {
+    const button = this._buttons.get(id);
+    if (!button) return;
+    button.disabled = !enabled;
+    const titles = this._titles.get(id);
+    if (titles) button.title = enabled ? titles.enabled : titles.disabled;
+    if (!enabled) this.setActive(id, false);
+  }
+
+  /**
+   * Reflect whether a toggle tool is currently active. aria-pressed is the
+   * canonical toggle-state signal for screen readers; the class only restyles.
+   * The label stays fixed in both states — swapping it shifted the dock layout
+   * on every toggle. No-op for a tool with no active variant (e.g. Close).
+   */
+  setActive(id: string, active: boolean): void {
+    const button = this._buttons.get(id);
+    if (!button || !this._toggles.has(id)) return;
+    button.classList.toggle('olv-tool-active', active);
+    button.setAttribute('aria-pressed', String(active));
   }
 
   /** Report which GPU backend the renderer initialised. */
@@ -271,93 +352,62 @@ export class ToolDock {
     this.backend.classList.toggle('olv-hidden', empty);
   }
 
+  // Thin, name-stable shims over the id-keyed API. They keep the ~11 call
+  // sites in main.ts / openScan.ts unchanged; each delegates to setEnabled /
+  // setActive on the matching manifest id.
   /** Enable or disable the Measure tool — enabled once a scan is loaded. */
   setMeasureEnabled(enabled: boolean): void {
-    this._measure.disabled = !enabled;
-    this._measure.title = enabled
-      ? 'Measure distance, area, height, angle and slope on the scan — also the M key'
-      : 'Load a scan to enable measurement';
-    if (!enabled) this.setMeasureActive(false);
+    this.setEnabled('tool.measure', enabled);
   }
 
   /** Reflect whether measurement mode is currently active. */
   setMeasureActive(active: boolean): void {
-    // aria-pressed is the canonical toggle-state signal for screen readers;
-    // the class only restyles. The label stays 'Measure' in both states —
-    // the old 'Measuring…' swap shifted the dock layout on every toggle.
-    this._measure.classList.toggle('olv-tool-active', active);
-    this._measure.setAttribute('aria-pressed', String(active));
+    this.setActive('tool.measure', active);
   }
 
   /** Enable or disable the Inspect tool — enabled once a scan is loaded. */
   setInspectEnabled(enabled: boolean): void {
-    this._inspect.disabled = !enabled;
-    this._inspect.title = enabled
-      ? 'Click any point to read its coordinates and attributes — also the I key'
-      : 'Load a scan to enable inspection';
-    if (!enabled) this.setInspectActive(false);
+    this.setEnabled('tool.inspect', enabled);
   }
 
   /** Reflect whether point-inspection mode is currently active. */
   setInspectActive(active: boolean): void {
-    // Stable label + aria-pressed — see setMeasureActive for the rationale.
-    this._inspect.classList.toggle('olv-tool-active', active);
-    this._inspect.setAttribute('aria-pressed', String(active));
+    this.setActive('tool.inspect', active);
   }
 
   /** Enable or disable the live Probe — enabled once a scan is loaded. */
   setProbeEnabled(enabled: boolean): void {
-    this._probe.disabled = !enabled;
-    this._probe.title = enabled
-      ? 'Hover the scan to read each point live, with no click'
-      : 'Load a scan to enable the live probe';
-    if (!enabled) this.setProbeActive(false);
+    this.setEnabled('tool.probe', enabled);
   }
 
   /** Reflect whether live-probe mode is currently active. */
   setProbeActive(active: boolean): void {
-    // Stable label + aria-pressed — see setMeasureActive for the rationale.
-    this._probe.classList.toggle('olv-tool-active', active);
-    this._probe.setAttribute('aria-pressed', String(active));
+    this.setActive('tool.probe', active);
   }
 
   /** Enable or disable the Annotate tool — enabled once a scan is loaded. */
   setAnnotateEnabled(enabled: boolean): void {
-    this._annotate.disabled = !enabled;
-    this._annotate.title = enabled
-      ? 'Mark points of interest with notes and findings — also the A key'
-      : 'Load a scan to enable annotation';
-    if (!enabled) this.setAnnotateActive(false);
+    this.setEnabled('tool.annotate', enabled);
   }
 
   /** Reflect whether annotation mode is currently active. */
   setAnnotateActive(active: boolean): void {
-    // Stable label + aria-pressed — see setMeasureActive for the rationale.
-    this._annotate.classList.toggle('olv-tool-active', active);
-    this._annotate.setAttribute('aria-pressed', String(active));
+    this.setActive('tool.annotate', active);
   }
 
   /** Enable or disable the Analyse tool — enabled once a scan is loaded. */
   setAnalyseEnabled(enabled: boolean): void {
-    this._analyse.disabled = !enabled;
-    this._analyse.title = enabled
-      ? 'Show or hide the terrain analysis panel'
-      : 'Load a scan to enable terrain analysis';
-    if (!enabled) this.setAnalyseActive(false);
+    this.setEnabled('tool.analyse', enabled);
   }
 
   /** Reflect whether the terrain analysis panel is currently open. */
   setAnalyseActive(active: boolean): void {
-    this._analyse.classList.toggle('olv-tool-active', active);
-    this._analyse.setAttribute('aria-pressed', String(active));
+    this.setActive('tool.analyse', active);
   }
 
   /** Enable or disable the Close action — enabled once a scan is loaded. */
   setCloseEnabled(enabled: boolean): void {
-    this._close.disabled = !enabled;
-    this._close.title = enabled
-      ? 'Close the scan and return to the start'
-      : 'Load a scan to enable';
+    this.setEnabled('tool.close', enabled);
   }
 
   /** Briefly confirm a share link was copied, then restore the label. */
