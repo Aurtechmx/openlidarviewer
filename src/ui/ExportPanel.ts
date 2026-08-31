@@ -31,8 +31,8 @@ import type { ExportFormat } from '../io/exporters';
 import type { ExportMode } from '../export/types';
 import { buildExportDeliverables, type ExportDeliverables } from './export/exportDeliverables';
 import type { ReportFinding } from '../render/measure/reportManifest';
-import { SessionFindings } from '../render/measure/sessionFindings';
-import { buildFindingsPanel, type MountedFindingsPanel } from './findingsPanel';
+import type { SessionFindings } from '../render/measure/sessionFindings';
+import type { MountedFindingsPanel } from './findingsPanel';
 
 /**
  * Lightweight, allocation-free description of the exportable cloud, used to
@@ -192,9 +192,16 @@ export class ExportPanel {
   private readonly _summary: HTMLElement;
   private readonly _products: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
-  /** The session findings ledger, owned here and rendered by the findings panel. */
-  private readonly _findings = new SessionFindings();
+  /**
+   * The session findings ledger, owned here and rendered by the findings panel.
+   * Both the store and the panel live in a lazy chunk (kept out of the index
+   * bundle, which sits at its budget ceiling): the first Products render with the
+   * findings callbacks wired imports them and mounts into `_findingsSlot`, and
+   * the reference persists across re-renders.
+   */
+  private _findings: SessionFindings | null = null;
   private _findingsPanel: MountedFindingsPanel | null = null;
+  private _findingsMountStarted = false;
 
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
   // default the panel to it so the pill selection matches the recommended choice.
@@ -595,16 +602,17 @@ export class ExportPanel {
       );
       // The durable findings ledger: curate the results worth keeping (each with
       // its band and caveats), then export the whole ledger as the same signed
-      // integrity report. Mounted only when the host wires both halves.
+      // integrity report. Mounted only when the host wires both halves, and lazily
+      // (the panel + store are a separate chunk). An already-mounted panel is
+      // re-attached to the fresh slot so its ledger survives a re-render.
       if (this._cb.collectMeasurementFindings && this._cb.exportFindingsReport) {
-        const collect = this._cb.collectMeasurementFindings;
-        const exportReport = this._cb.exportFindingsReport;
-        this._findingsPanel = buildFindingsPanel({
-          findings: this._findings,
-          collectMeasurements: () => collect(),
-          exportReport: (f) => exportReport(f),
-        });
-        content.append(this._productGroup('Findings ledger', this._findingsPanel.element));
+        const slot = el('div', { className: 'olv-findings-slot' });
+        content.append(this._productGroup('Findings ledger', slot));
+        if (this._findingsPanel) {
+          slot.append(this._findingsPanel.element);
+        } else {
+          this._mountFindingsLedger(slot);
+        }
       }
     }
 
@@ -663,6 +671,30 @@ export class ExportPanel {
   }
 
   /** One labelled product group: label, its stacked actions, one line of hint. */
+  /**
+   * Lazily import the findings store + panel (kept out of the index bundle) and
+   * mount them into `slot`. Guarded so the dynamic import fires once; if the
+   * Products lane re-renders before the chunk resolves, the panel lands in the
+   * latest slot via the re-attach path above. Callbacks are re-read from `_cb`
+   * at mount time, so this stays correct if the host rewires them.
+   */
+  private _mountFindingsLedger(slot: HTMLElement): void {
+    if (this._findingsMountStarted) return;
+    this._findingsMountStarted = true;
+    void Promise.all([
+      import('./findingsPanel'),
+      import('../render/measure/sessionFindings'),
+    ]).then(([{ buildFindingsPanel }, { SessionFindings }]) => {
+      this._findings = new SessionFindings();
+      this._findingsPanel = buildFindingsPanel({
+        findings: this._findings,
+        collectMeasurements: () => this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]),
+        exportReport: (f) => this._cb.exportFindingsReport?.(f),
+      });
+      slot.append(this._findingsPanel.element);
+    });
+  }
+
   private _productGroup(label: string, actions: HTMLElement, hint?: string): HTMLElement {
     const group = el('div', { className: 'olv-export-product-group' });
     group.append(this._label(label), actions);
