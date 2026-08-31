@@ -1,8 +1,11 @@
 /**
  * auditLog.ts
  *
- * A tamper-evident, replayable record of what was done to a dataset and what
- * each measurement claimed.
+ * An append-only, replayable hash-chain record of what was done to a dataset
+ * and what each measurement claimed. The chain hashes with SHA-256 by default
+ * (a cryptographic digest); the fast non-cryptographic FNV-1a checksum remains
+ * injectable for accidental-corruption detection where that is all that is
+ * wanted — the algorithm is the caller's explicit choice, never implied.
  *
  * Local-first means the data never leaves the machine — but a surveyor staking
  * their name on a number needs more than privacy: they need to prove the number
@@ -136,7 +139,9 @@ export class AuditLog {
   private readonly _entries: AuditEntry[] = [];
   private readonly _hashFn: HashFn;
 
-  constructor(hashFn: HashFn = fnv1a) {
+  // Defaults to the cryptographic SHA-256 so the chain is tamper-evident by
+  // construction; pass fnv1a explicitly for a fast corruption-only checksum.
+  constructor(hashFn: HashFn = sha256) {
     this._hashFn = hashFn;
   }
 
@@ -173,7 +178,9 @@ export class AuditLog {
  */
 export function verifyAuditChain(
   entries: ReadonlyArray<AuditEntry>,
-  hashFn: HashFn = fnv1a,
+  // Must match the algorithm the chain was built with; defaults to SHA-256 like
+  // the AuditLog constructor, and takes fnv1a explicitly to verify a legacy chain.
+  hashFn: HashFn = sha256,
 ): number {
   let prev = GENESIS;
   for (let i = 0; i < entries.length; i++) {

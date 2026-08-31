@@ -705,7 +705,7 @@ export async function handleRemoteEpt(
       // but a 3xx could send the fetch to a private address the validator never
       // saw (it does not resolve DNS or follow hops). Refuse redirects so a
       // validated public URL cannot be bounced somewhere internal.
-      manifestResponse = await fetch(safeUrl, { signal: manifestTimeout.signal, redirect: 'error' });
+      manifestResponse = await fetch(safeUrl, { signal: manifestTimeout.signal, redirect: 'error', credentials: 'omit' });
     } catch (err) {
       // manifestTimeout is aborted by the 20 s timer OR, composed, by the outer
       // load-cancel. Only the timer firing with no user cancel is a timeout:

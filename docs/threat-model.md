@@ -23,7 +23,15 @@ release changes what the app reads or where it reaches.
 ## Threats and mitigations
 
 Server-side request forgery via a remote URL is handled by the URL validators
-above and the CSP; the validators run before the fetch, not after.
+above and the CSP; the validators run before the fetch, not after. The validators
+reject unsupported schemes, embedded credentials, and literal private-network
+hosts (localhost, private/link-local/CGNAT IPv4, and unsafe/mapped-private IPv6),
+and remote point-cloud fetches use `credentials: 'omit'` with `redirect: 'error'`.
+This is a syntactic, pre-fetch check: it does not resolve or pin DNS, so a
+public-looking hostname that resolves (or later re-resolves) to a private address
+is bounded by the browser — its CORS, Private Network Access controls, and the
+`connect-src` CSP — not by this client-side validation. OLV does not claim to be
+SSRF-proof or to guarantee a public destination.
 
 Cross-site scripting is handled by a strict Content-Security-Policy. The single
 `innerHTML` sink is enforced static-only by `lint:unsafe-html`, and there is no

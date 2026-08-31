@@ -461,7 +461,7 @@ export class HttpRangeSource implements RangeSource {
         // `redirect: 'error'` (after `...init` so a caller can't weaken it): the
         // URL host passed the SSRF block-list, but a redirect could reach a
         // private address the literal validator never resolved. Refuse hops.
-        response = await this._fetch(this._url, { ...init, signal, redirect: 'error' });
+        response = await this._fetch(this._url, { ...init, signal, redirect: 'error', credentials: 'omit' });
       } catch (err) {
         clearTimeout(timer);
         cleanup();

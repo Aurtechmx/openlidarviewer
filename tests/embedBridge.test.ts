@@ -236,4 +236,22 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     expect(calls.onJumpCamera).toHaveBeenCalled();
     dispose();
   });
+
+  // Once an embedder configures allowedOrigins, the list gates EVERY command
+  // (not just load-file): a genuine-parent state command runs only from a listed
+  // origin, and an unlisted or null/opaque origin is dropped before it runs.
+  // Table-driven so the one dispatch+assert shape is written once.
+  it.each([
+    ['a listed origin', 'https://host.example', true],
+    ['an unlisted origin', 'https://attacker.example', false],
+    ['a null/opaque origin', 'null', false],
+  ] as const)('with an allow-list set, a state command from %s runs=%s', (_label, origin, shouldRun) => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
+    env.dispatch({ source: env.parent, origin, data: { type: 'toggle-layer', id: 'cloud_0', visible: true } });
+    if (shouldRun) expect(calls.onToggleLayer).toHaveBeenCalledWith('cloud_0', true);
+    else expect(calls.onToggleLayer).not.toHaveBeenCalled();
+    dispose();
+  });
 });

@@ -85,6 +85,20 @@ describe('AuditLog hash chain', () => {
     // Verifying with the wrong hash function flags entry 0.
     expect(verifyAuditChain(log.entries, fnv1a)).toBe(0);
   });
+
+  test('defaults to cryptographic SHA-256, so "tamper-evident" is true by construction', () => {
+    const log = new AuditLog();
+    log.append('op', { a: 1 });
+    // A SHA-256 chain hash is 64 hex chars; the 8-char FNV form would not be.
+    expect(log.entries[0].hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(verifyAuditChain(log.entries)).toBe(-1);
+  });
+
+  test('algorithm confusion fails: a SHA-256 chain does not verify as FNV', () => {
+    const log = new AuditLog(); // default sha256
+    log.append('op', { a: 1 });
+    expect(verifyAuditChain(log.entries, fnv1a)).toBe(0);
+  });
 });
 
 import { sha256 as _sha256 } from '../src/render/measure/auditLog';
