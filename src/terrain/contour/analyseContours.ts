@@ -1015,12 +1015,11 @@ export function computeTerrainCore(
     cellMetrics.meanDensity,
   );
   // Stride honesty: when the gather strided the cloud, the ground density (and
-  // therefore the USGS 3DEP Quality Level graded from it) is a uniform-stride
+  // therefore the USGS 3DEP density reference derived from it) is a uniform-stride
   // extrapolation from the analysed subsample up to the full scan, NOT a
-  // directly counted figure. Surface that the same way the space-scan path
-  // does, so the density-derived QL is never read as an exact, directly-counted
-  // grade. Only when striding actually happened (scale > 1) and a density-based
-  // grade was assigned.
+  // directly counted figure. Surface that the same way the space-scan path does,
+  // so the density figure is never read as an exact, directly-counted one. Only
+  // when striding actually happened (scale > 1) and a density was measured.
   const densityScale =
     Number.isFinite(params.samplePointScale) && (params.samplePointScale as number) > 1
       ? (params.samplePointScale as number)
@@ -1028,7 +1027,7 @@ export function computeTerrainCore(
   if (densityScale > 1 && cellMetrics.meanDensity > 0) {
     warnings.push(
       'Ground density is scaled from the analysed sample to the full scan ' +
-        '(uniform-stride assumption); the USGS 3DEP Quality Level is graded ' +
+        '(uniform-stride assumption); the USGS 3DEP density reference is derived ' +
         'from that scaled density, not a directly counted one.',
     );
   }

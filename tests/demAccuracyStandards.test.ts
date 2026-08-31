@@ -1,5 +1,6 @@
 /**
- * demAccuracyStandards.test.ts — ASPRS/USGS 3DEP accuracy expression.
+ * demAccuracyStandards.test.ts — ASPRS accuracy expression + USGS density
+ * REFERENCE (no quality-level grade is emitted from ground-return density).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -14,23 +15,34 @@ describe('demAccuracyStandards', () => {
     expect(s.rmseZM).toBe(0.08);
   });
 
-  it('assigns USGS Quality Levels on joint density + RMSEz', () => {
-    // ≥8 pts/m² and ≤0.05 m → QL0
-    expect(demAccuracyStandards(0.04, 0.1, 9).qualityLevel).toBe('QL0');
-    // ≥8 and ≤0.10 (but >0.05) → QL1
-    expect(demAccuracyStandards(0.08, 0.1, 9).qualityLevel).toBe('QL1');
-    // ≥2 and ≤0.10 → QL2 (the 3DEP baseline)
-    expect(demAccuracyStandards(0.09, 0.1, 3).qualityLevel).toBe('QL2');
-    // dense but inaccurate falls back to the accuracy it actually meets
-    expect(demAccuracyStandards(0.18, 0.3, 9).qualityLevel).toBe('QL3');
-    // too sparse / inaccurate for any level
-    expect(demAccuracyStandards(0.5, 0.9, 0.1).qualityLevel).toBe('below-QL3');
+  it('reports which USGS density FLOORS the ground-return density clears (reference only)', () => {
+    // ≥8 pts/m² clears QL0/QL1 (8), QL2 (2) and QL3 (0.5) density floors.
+    expect(demAccuracyStandards(0.04, 0.1, 9).densityReferenceFloorsMet).toEqual(['QL0', 'QL1', 'QL2', 'QL3']);
+    // ≥2 but <8 clears QL2 and QL3 only.
+    expect(demAccuracyStandards(0.09, 0.1, 3).densityReferenceFloorsMet).toEqual(['QL2', 'QL3']);
+    // ≥0.5 but <2 clears QL3 only.
+    expect(demAccuracyStandards(0.18, 0.3, 1).densityReferenceFloorsMet).toEqual(['QL3']);
+    // below the QL3 density floor clears none.
+    expect(demAccuracyStandards(0.5, 0.9, 0.1).densityReferenceFloorsMet).toEqual([]);
   });
 
-  it('is unknown when RMSEz or density is unavailable', () => {
-    expect(demAccuracyStandards(null, null, 5).qualityLevel).toBe('unknown');
-    expect(demAccuracyStandards(0.05, 0.1, 0).qualityLevel).toBe('unknown');
+  it('does NOT emit a quality-level grade, and never claims a determination', () => {
+    const s = demAccuracyStandards(0.04, 0.1, 9);
+    // The graded field is gone; the surface exposes a reference note instead.
+    expect((s as unknown as Record<string, unknown>).qualityLevel).toBeUndefined();
+    expect(s.densityReferenceNote).toMatch(/not a nominal-pulse-density/i);
+    expect(s.densityReferenceNote).toMatch(/QL0/); // names the floor cleared as a reference
+  });
+
+  it('has no density floors and an explicit note when density is unavailable', () => {
+    const s = demAccuracyStandards(0.05, 0.1, 0);
+    expect(s.densityReferenceFloorsMet).toEqual([]);
+    expect(s.densityReferenceNote).toMatch(/No measured ground-return density/i);
+  });
+
+  it('nulls the accuracy figures when RMSEz is unavailable', () => {
     const s = demAccuracyStandards(null, null, 5);
     expect(s.nvaM).toBeNull();
+    expect(s.rmseZM).toBeNull();
   });
 });

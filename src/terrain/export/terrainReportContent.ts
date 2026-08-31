@@ -336,10 +336,10 @@ export function buildTerrainReportContent(
   // ── Quality Metrics ─────────────────────────────────────────────────────
   // ASPRS / USGS 3DEP vocabulary, honestly null-able: when the run measured no
   // RMSEz the whole block reads em-dash / unknown rather than a fabricated zero.
-  const qlFallback = acc && acc.qualityLevel !== 'unknown' ? acc.qualityLevel : DASH;
+  const qlFallback = acc && acc.densityReferenceFloorsMet.length > 0 ? acc.densityReferenceFloorsMet[0] : DASH;
   const qlValue =
-    hasAcc && provenance.accuracy && provenance.accuracy.usgsQualityLevel !== 'unknown'
-      ? provenance.accuracy.usgsQualityLevel
+    hasAcc && provenance.accuracy && provenance.accuracy.usgsDensityReferenceFloor !== 'none'
+      ? provenance.accuracy.usgsDensityReferenceFloor
       : qlFallback;
   // Phase 4 honesty figures, single-sourced from the same result the panel
   // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
@@ -367,7 +367,7 @@ export function buildTerrainReportContent(
       // spatially-blocked RMSE — the same numbers the Analyse panel surfaces.
       { label: 'Measured reliability', value: reliabilityValue },
       { label: 'Blocked RMSE (spatial CV)', value: blockedValue },
-      { label: 'USGS 3DEP Quality Level', value: qlValue === DASH ? DASH : `${qlValue} (estimated)` },
+      { label: 'USGS density reference', value: qlValue === DASH ? DASH : `>= ${qlValue} floor` },
     ],
   };
 

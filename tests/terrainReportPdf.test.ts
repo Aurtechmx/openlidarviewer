@@ -40,8 +40,7 @@ function readyResult(): AnalyseContoursResult {
       nvaM: 0.27,
       vvaM: 0.3,
       pointDensityPerM2: 4.2,
-      qualityLevel: 'QL2',
-      qualityLevelReason: '4.2 pts/m² and 0.14 m RMSEz meet QL2.',
+      densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
     },
     quality: {
       readiness: 'ready',
@@ -82,7 +81,7 @@ function previewResult(): AnalyseContoursResult {
     },
     intervalM: 2,
     model: { crs: 'EPSG:32610', verticalDatum: null, intervalM: 2, contourStyle: 'crisp', coverageMode: 'resident-only', features: [{}] },
-    accuracyStandards: { rmseZM: null, nvaM: null, vvaM: null, pointDensityPerM2: 0, qualityLevel: 'unknown', qualityLevelReason: 'Not enough validated points to measure RMSEz.' },
+    accuracyStandards: { rmseZM: null, nvaM: null, vvaM: null, pointDensityPerM2: 0, densityReferenceFloorsMet: [], densityReferenceNote: 'none' },
     quality: {
       readiness: 'previewOnly',
       exportReadiness: 'previewOnly',

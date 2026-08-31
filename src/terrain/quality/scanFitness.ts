@@ -80,8 +80,13 @@ export interface FitnessInputs {
   readonly hasGroundClass: boolean;
   // Integrity / provenance
   readonly coverageMode: string; // 'full' | 'resident-only' | 'sampled' | …
-  /** A USGS-style named tier when one is earnable, else null. */
-  readonly qualityLevel?: string | null;
+  /**
+   * The strongest USGS 3DEP nominal-pulse-density FLOOR the measured
+   * ground-return density clears (e.g. 'QL2'), or null. A reference threshold,
+   * NOT a quality-level determination — ground-return density is not pulse
+   * density.
+   */
+  readonly densityReferenceFloor?: string | null;
 }
 
 /** One traffic-light row in the scorecard. */
@@ -339,14 +344,16 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     verdict = `Still streaming — ${verdict.charAt(0).toLowerCase()}${verdict.slice(1)}`;
   }
 
-  // A named tier is only earned when density AND accuracy both pass, the file is
-  // georeferenced, AND the grade is on the full cloud — otherwise the QL label
-  // would overclaim (a partial/streaming sample can't earn a tier).
+  // A density-reference badge is shown only when density AND accuracy both pass,
+  // the file is georeferenced, AND the figure is on the full cloud — otherwise a
+  // partial/streaming sample would misrepresent the density. It names the 3DEP
+  // pulse-density FLOOR the ground-return density clears as a REFERENCE, never a
+  // quality-level grade (ground-return density is not a pulse determination).
   const densTone = dimensions.find((d) => d.key === 'density')!.tone;
   const accTone = dimensions.find((d) => d.key === 'accuracy')!.tone;
   const tierBadge =
-    inp.qualityLevel && !provisional && densTone !== 'review' && accTone !== 'review' && inp.crsKnown
-      ? `${inp.qualityLevel} (estimated)`
+    inp.densityReferenceFloor && !provisional && densTone !== 'review' && accTone !== 'review' && inp.crsKnown
+      ? `≥ ${inp.densityReferenceFloor} density floor`
       : null;
 
   // The headline is a bare "± m" claim, so it too is withheld on an unverified

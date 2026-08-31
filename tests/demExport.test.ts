@@ -210,7 +210,7 @@ describe('buildDemPackage', () => {
       surface: { canopy: { heightM: new Float32Array([0, 5, NaN, NaN]) } },
       accuracyStandards: {
         rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
-        qualityLevel: 'QL2', qualityLevelReason: '4.2 pts/m² and 0.14 m RMSEz meet QL2.',
+        densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
       },
       quality: {
         readiness: 'ready', exportReadiness: 'available',

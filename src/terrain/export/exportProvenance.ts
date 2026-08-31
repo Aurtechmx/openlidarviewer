@@ -162,8 +162,12 @@ export interface ExportProvenanceAccuracy {
   readonly nvaM: number | null;
   /** Vegetated Vertical Accuracy (95th pct) in metres. */
   readonly vvaM: number | null;
-  /** USGS 3DEP Quality Level (e.g. 'QL2'), or 'unknown'. */
-  readonly usgsQualityLevel: string;
+  /**
+   * The strongest USGS 3DEP nominal-pulse-density FLOOR the measured
+   * ground-return density clears (e.g. 'QL2'), or 'none'. A reference threshold,
+   * NOT a quality-level determination — ground-return density is not pulse density.
+   */
+  readonly usgsDensityReferenceFloor: string;
 }
 
 /**
@@ -353,7 +357,7 @@ export function buildExportProvenance(
           rmseZM: acc.rmseZM,
           nvaM: acc.nvaM ?? null,
           vvaM: acc.vvaM ?? null,
-          usgsQualityLevel: acc.qualityLevel ?? 'unknown',
+          usgsDensityReferenceFloor: acc.densityReferenceFloorsMet[0] ?? 'none',
         }
       : null;
   const pointDensityPerM2 =
@@ -472,7 +476,7 @@ export function analysisRecordFromProvenance(p: ExportProvenance): ScientificAna
       surfaceQuality: p.surfaceQuality,
       exportReadiness: p.exportReadiness,
       rmseZM: p.accuracy?.rmseZM ?? null,
-      usgsQualityLevel: p.accuracy?.usgsQualityLevel ?? 'unknown',
+      usgsDensityReferenceFloor: p.accuracy?.usgsDensityReferenceFloor ?? 'none',
       pointDensityPerM2: p.pointDensityPerM2,
       measuredCells: p.measuredCells,
       totalCells: p.totalCells,
@@ -653,13 +657,13 @@ export function provenanceLines(p: ExportProvenance): string[] {
     // checkpoints (see verticalAccuracy.ts for the honesty boundary).
     kv('NVA-style (95%, hold-out)', p.accuracy ? fmtM(p.accuracy.nvaM) : 'unknown'),
     kv('VVA-style (95th pct, hold-out)', p.accuracy ? fmtM(p.accuracy.vvaM) : 'unknown'),
-    // "(estimated)" mirrors the panel chip: the QL's RMSEz leg is hold-out-
-    // based (withheld points, not independent checkpoints), so the stamped
-    // grade must carry the same qualifier the screen does.
+    // A density REFERENCE, not a quality-level grade: it names the 3DEP
+    // nominal-pulse-density floor the measured ground-return density clears.
+    // Ground-return density is not a pulse-density determination.
     kv(
-      'USGS 3DEP',
-      p.accuracy && p.accuracy.usgsQualityLevel !== 'unknown'
-        ? `${p.accuracy.usgsQualityLevel} (estimated)`
+      'USGS density ref',
+      p.accuracy && p.accuracy.usgsDensityReferenceFloor !== 'none'
+        ? `${p.accuracy.usgsDensityReferenceFloor} density floor (reference)`
         : 'unknown',
     ),
     kv(
@@ -769,11 +773,11 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
           rmseZM: p.accuracy.rmseZM,
           nvaM: p.accuracy.nvaM,
           vvaM: p.accuracy.vvaM,
-          usgsQualityLevel: p.accuracy.usgsQualityLevel,
+          usgsDensityReferenceFloor: p.accuracy.usgsDensityReferenceFloor,
           // The text surfaces qualify these in the label itself ("NVA-style
-          // (95%, hold-out)", "QL2 (estimated)"). A JSON key cannot, and a
-          // consumer reading `nvaM` has nothing telling it the figure is not an
-          // ASPRS checkpoint result — so the qualifier is a field.
+          // (95%, hold-out)", "USGS density ref: >= QL2 floor"). A JSON key
+          // cannot, and a consumer reading `nvaM` has nothing telling it the
+          // figure is not an ASPRS checkpoint result — so the qualifier is a field.
           basis: ACCURACY_BASIS_NOTE,
         }
       : null,

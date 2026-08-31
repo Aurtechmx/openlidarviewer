@@ -17,7 +17,7 @@ const PROV: ExportProvenance = {
   contourRequestedIntervalM: null,
   contourMethod: null, contourGeneralizeToleranceCells: null, deliverablePurpose: null,
   surfaceQuality: 'Good', exportReadiness: 'Ready', exportReason: '',
-  accuracy: { rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsQualityLevel: 'QL2' },
+  accuracy: { rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsDensityReferenceFloor: 'QL2' },
   complexity: null,
   pointDensityPerM2: 4.2, measuredCells: 90, totalCells: 100, classScope: null, warnings: [],
   notSurveyGrade: 'Suitability: not survey-grade unless validated against ground-truth control.',
