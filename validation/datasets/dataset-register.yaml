@@ -2280,7 +2280,7 @@ datasets:
     storage: committed
     localPath: validation/external-oracles/statistics/residuals.json
 
-  - datasetId: OLV-DS-078-JEMEZ-SNOWOFF-2010-FOREST
+  - datasetId: OLV-DS-090-JEMEZ-SNOWOFF-2010-FOREST
     title: "Jemez River Basin Snow-off Lidar Survey, one 1 km OpenTopography tile"
     sourceUrl: https://opentopography.org/
     landingPage: https://opentopography.org/
@@ -2292,8 +2292,8 @@ datasets:
     sourceBytes: 49114702
     format: laz
     pointCount: 10789680
-    sensorType: airborne-lidar
-    capturePlatform: aircraft
+    sensorType: als-linear
+    capturePlatform: fixed-wing
     captureDate: 2010-04-01
     horizontalCrs: "EPSG:26913 NAD83(CORS96) / UTM zone 13N"
     verticalCrs: "EPSG:5703 NAVD88 (GEOID03)"
@@ -2308,13 +2308,12 @@ datasets:
     dataOwner: "National Center for Airborne Laser Mapping (NCALM), distributed by OpenTopography"
     citation: "Jemez River Basin Snow-off Lidar Survey. Distributed by OpenTopography, https://opentopography.org/. Use License: CC BY 4.0. Tile ot_356000_3972000_1.laz retrieved 2026-08-31."
     knownLimitations: "The producer ground class (ASPRS class 2) is a reference labelling, not surveyed ground truth: agreement with it bounds classifier-to-producer difference, not accuracy. A single 1 km snow-off tile over forested montane terrain; canopy return density limits ground return coverage on steep slopes. The file is 49 MB and not vendored; the ground-filter agreement harness reads it from GF_SCENE."
-    evidenceRole: reference-labelling
     storage: acquired
     localPath: not-vendored
     controlPointIds: []
     checkpointIds: []
 
-  - datasetId: OLV-DS-079-ROGUE-SISKIYOU-2019-3DEP
+  - datasetId: OLV-DS-091-ROGUE-SISKIYOU-2019-3DEP
     title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, one LAS 1.4 tile"
     sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
     landingPage: https://www.fisheries.noaa.gov/inport/item/64356
@@ -2326,8 +2325,8 @@ datasets:
     sourceBytes: 130981300
     format: laz
     pointCount: 24063174
-    sensorType: airborne-lidar
-    capturePlatform: aircraft
+    sensorType: als-linear
+    capturePlatform: fixed-wing
     captureDate: 2019-01-01
     horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
     verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
@@ -2342,7 +2341,6 @@ datasets:
     dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
     citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-08-31."
     knownLimitations: "The producer ground class (ASPRS class 2) is a reference labelling, not surveyed ground truth. Dense-canopy forest tile: only ~4% of returns are producer ground, so precision is dominated by canopy/understorey false positives. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) noted in the metadata. The file is 131 MB and not vendored; the ground-filter agreement harness reads it from GF_SCENE."
-    evidenceRole: reference-labelling
     storage: acquired
     localPath: not-vendored
     controlPointIds: []

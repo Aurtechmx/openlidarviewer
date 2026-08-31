@@ -28,15 +28,15 @@
  *   scene                         land cover        recall  prec.  F1     MCC
  *   ----------------------------  ----------------  ------  -----  -----  -----
  *   open natural (4_6.las)        bare / low relief  —      —      0.951  0.917
- *   Jemez snow-off (OLV-DS-078)   montane forest    0.884  0.625  0.732  0.629
- *   Rogue 3DEP (OLV-DS-079)       dense canopy      0.918  0.338  0.494  0.531
+ *   Jemez snow-off (OLV-DS-090)   montane forest    0.884  0.625  0.732  0.629
+ *   Rogue 3DEP (OLV-DS-091)       dense canopy      0.918  0.338  0.494  0.531
  *   urban (autzen)                buildings          —     0.340   —      —
  *
  * Consistent pattern: recall stays high everywhere, precision collapses where
  * something flat sits above ground — dense canopy (Rogue, ~4% producer ground)
  * and building roofs (urban) both read as ground, the known morphological-filter
  * weakness. Jemez and Rogue carry verified licences (CC BY 4.0; US-Government
- * public domain) and are registered as OLV-DS-078/079; the numbers reproduce via
+ * public domain) and are registered as OLV-DS-090/091; the numbers reproduce via
  * GF_SCENE. None of this is survey-grade and none promotes a claim to E5, which
  * still requires independent checkpoints.
  */
