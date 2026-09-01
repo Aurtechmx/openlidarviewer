@@ -41,7 +41,7 @@ These ship in the deploy archive.
 | @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @loaders.gl/core | ^4.4.4 | 4.4.4 | MIT |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT |
-| @loaders.gl/obj | ^4.4.2 | 4.4.3 | MIT |
+| @loaders.gl/obj | ^4.4.5 | 4.4.5 | MIT |
 | @loaders.gl/ply | ^4.4.4 | 4.4.4 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
