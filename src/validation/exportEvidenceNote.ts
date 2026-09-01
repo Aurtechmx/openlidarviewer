@@ -20,7 +20,7 @@
 import { exportGate, EVIDENCE_REGISTRY } from './evidenceRegistry';
 import { evidenceRank, INDEPENDENCE_FLOOR } from './evidenceLevel';
 import {
-  resolveEvidence,
+  resolveExportEvidence,
   type EvidenceContext,
   type ScopedEvidenceRecord,
 } from './scopedEvidence';
@@ -115,26 +115,8 @@ export function scopedEvidenceNote(
   context?: EvidenceContext,
   records?: readonly ScopedEvidenceRecord[],
 ): string {
-  const r = resolveEvidence(claimId, context, records);
-  switch (r.resolutionState) {
-    case 'validated-in-scope':
-      return (
-        'Evidence: externally field validated for the registered study envelope ('
-        + r.matchedScopedStudy + '). Applies only within that scope.'
-      );
-    case 'external-evidence-out-of-scope':
-      return (
-        'Evidence: external field evidence exists for this DTM method, but this '
-        + 'dataset is outside the validated study scope. Baseline level stands.'
-      );
-    case 'applicability-unknown':
-      return (
-        'Evidence: external field evidence exists for this DTM method, but this '
-        + 'dataset’s applicability could not be established, so it is treated '
-        + 'as outside the validated study scope. Baseline level stands.'
-      );
-    default:
-      // No scoped record for the claim: the baseline gate note is authoritative.
-      return evidenceNote(claimId);
-  }
+  // Route through the ONE authoritative resolver so this note can never disagree
+  // with the provenance stamp / analysis record for the same claim+context. The
+  // baseline wording (default branch) is the product's gate note.
+  return resolveExportEvidence(claimId, context, records, evidenceNote(claimId)).note;
 }

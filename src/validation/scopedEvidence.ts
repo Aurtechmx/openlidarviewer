@@ -34,9 +34,10 @@
  * Pure: types, ranks, a matching predicate, a resolver. No DOM, no I/O.
  */
 
-import type { EvidenceLevel } from './evidenceLevel';
+import type { EvidenceLevel, ExportDecision } from './evidenceLevel';
 import { evidenceRank, meetsRequired, INDEPENDENCE_FLOOR } from './evidenceLevel';
 import { EVIDENCE_REGISTRY, type RegistryEntry } from './claimRegistry.generated';
+import { exportGate } from './evidenceRegistry';
 
 /**
  * The explicit resolution state of an evidence lookup. The first three are new
@@ -358,5 +359,86 @@ export function resolveEvidence(
       'External field evidence exists for this method, but this artifact is outside '
       + 'every registered study envelope; the baseline level stands.',
     resolutionState: 'external-evidence-out-of-scope',
+  };
+}
+
+/**
+ * The SINGLE authoritative export-evidence resolution for a DTM-family claim.
+ * Composes the scoped overlay ({@link resolveEvidence}) with the baseline
+ * registry gate ({@link exportGate}) and the user-facing note into ONE object,
+ * so every DTM export path — provenance stamp, evidence note, analysis record —
+ * derives its baseline level, effective level, applicability state, matched
+ * study, gate verdict and note from the SAME call. No path can report E5 while
+ * another reports E4, because there is now only one place the decision is made.
+ *
+ * `note` is scope-aware: an in-scope match reads as validated FOR the registered
+ * study envelope; an out-of-scope / applicability-unknown result says external
+ * evidence exists but this dataset is outside the validated scope; and with no
+ * scoped record (the shipped set is empty, so every real artifact) the note is
+ * the caller-supplied `baselineNote` — the product's own baseline wording — so
+ * production artifacts stay byte-identical.
+ *
+ * Fail-closed and conservative: no context, or an out-of-scope context, yields
+ * baseline everywhere (never the scoped level). Pure and deterministic.
+ */
+export interface ExportEvidenceResolution {
+  /** The DTM-family claim resolved. */
+  readonly claimId: string;
+  /** Baseline registry level (before any scoped overlay); null if unregistered. */
+  readonly baselineEvidence: EvidenceLevel | null;
+  /** Level after scoped overlay — equals baseline unless matched in scope. */
+  readonly effectiveEvidence: EvidenceLevel | null;
+  /** The explicit applicability / resolution state. */
+  readonly applicabilityStatus: ResolutionState;
+  /** Matched study id when in-scope, else null. */
+  readonly matchedStudy: string | null;
+  /** Human-readable applicability verdict (from the scoped resolver). */
+  readonly applicabilityVerdict: string;
+  /** The baseline registry gate verdict (exportAllowed / exploratoryOnly / reason). */
+  readonly gate: ExportDecision;
+  /** The single user-facing evidence note every path stamps. */
+  readonly note: string;
+}
+
+export function resolveExportEvidence(
+  claimId: string,
+  context?: EvidenceContext,
+  records?: readonly ScopedEvidenceRecord[],
+  baselineNote?: string,
+): ExportEvidenceResolution {
+  const r = resolveEvidence(claimId, context, records);
+  const gate = exportGate(claimId);
+  let note: string;
+  switch (r.resolutionState) {
+    case 'validated-in-scope':
+      note =
+        'Evidence: externally field validated for the registered study envelope ('
+        + r.matchedScopedStudy + '). Applies only within that scope.';
+      break;
+    case 'external-evidence-out-of-scope':
+      note =
+        'Evidence: external field evidence exists for this DTM method, but this '
+        + 'dataset is outside the validated study scope. Baseline level stands.';
+      break;
+    case 'applicability-unknown':
+      note =
+        'Evidence: external field evidence exists for this DTM method, but this '
+        + 'dataset’s applicability could not be established, so it is treated '
+        + 'as outside the validated study scope. Baseline level stands.';
+      break;
+    default:
+      // No scoped record for the claim: the caller's baseline wording is
+      // authoritative (the gate note the product already carried).
+      note = baselineNote ?? '';
+  }
+  return {
+    claimId,
+    baselineEvidence: r.baselineEvidence,
+    effectiveEvidence: r.effectiveEvidence,
+    applicabilityStatus: r.resolutionState,
+    matchedStudy: r.matchedScopedStudy,
+    applicabilityVerdict: r.applicabilityVerdict,
+    gate,
+    note,
   };
 }

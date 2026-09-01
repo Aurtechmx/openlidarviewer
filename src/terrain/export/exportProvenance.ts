@@ -39,8 +39,9 @@ import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/conto
 import { exportGate, EVIDENCE_REGISTRY } from '../../validation/evidenceRegistry';
 import { evidenceRank, INDEPENDENCE_FLOOR } from '../../validation/evidenceLevel';
 import {
-  resolveEvidence,
+  resolveExportEvidence,
   type EvidenceContext,
+  type ExportEvidenceResolution,
   type ScopedEvidenceRecord,
 } from '../../validation/scopedEvidence';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
@@ -301,6 +302,21 @@ export interface ExportProvenance {
    * study envelope matched the artifact context.
    */
   readonly scopedEvidence?: ExportScopedEvidence | null;
+  /**
+   * The SINGLE authoritative evidence resolution this export was stamped from
+   * (§18). Every evidence surface — the `Evidence` provenance line, the GeoJSON
+   * `evidence` field, the scope-aware disclosure block, and the analysis
+   * record's `evidenceExploratory` flag — derives its note, baseline/effective
+   * level and gate verdict from THIS one object, so no two surfaces can ever
+   * disagree (one saying E5 while another says E4). With the empty shipped
+   * record set the effective level equals the baseline for every real artifact.
+   *
+   * Optional only so a hand-built provenance literal (test fixtures) need not
+   * spell it out; {@link buildExportProvenance} — the ONLY production path —
+   * always populates it, and the formatters fall back to the conservative
+   * baseline note/gate when it is absent.
+   */
+  readonly evidenceResolution?: ExportEvidenceResolution;
 }
 
 /** Options for {@link buildExportProvenance}. */
@@ -489,7 +505,33 @@ export function buildExportProvenance(
     // Scope-aware evidence: resolved only when the path supplied a context/digest.
     // Absent (null) otherwise, which keeps the export byte-identical to before.
     scopedEvidence: buildScopedEvidence(opts),
+    // The ONE authoritative resolution every evidence surface below derives from.
+    evidenceResolution: buildEvidenceResolution(opts),
   };
+}
+
+/**
+ * The single authoritative evidence resolution for this export (§18). Composes
+ * the scoped overlay, the baseline registry gate and the note into one object
+ * via {@link resolveExportEvidence}, keyed on whatever artifact context the path
+ * supplied (undefined ⇒ conservative baseline). The terrain-specific baseline
+ * wording ({@link EVIDENCE_GATE_NOTE}) is the note used when no scoped record
+ * matches — the common case with today's empty record set — so the stamped note
+ * is byte-identical to before, while every surface now reads the SAME object.
+ */
+function buildEvidenceResolution(opts: ExportProvenanceOptions): ExportEvidenceResolution {
+  const claimId = opts.evidenceClaimId ?? 'DTM';
+  const hasSignal =
+    opts.evidenceContext != null || (opts.methodDigest != null && opts.methodDigest !== '');
+  const context: EvidenceContext | undefined = hasSignal
+    ? {
+        ...(opts.evidenceContext ?? {}),
+        ...(opts.methodDigest != null && opts.evidenceContext?.methodDigest == null
+          ? { methodDigest: opts.methodDigest }
+          : {}),
+      }
+    : undefined;
+  return resolveExportEvidence(claimId, context, opts.scopedRecords, EVIDENCE_GATE_NOTE);
 }
 
 /**
@@ -509,14 +551,16 @@ function buildScopedEvidence(opts: ExportProvenanceOptions): ExportScopedEvidenc
       ? { methodDigest: opts.methodDigest }
       : {}),
   };
-  const r = resolveEvidence(claimId, context, opts.scopedRecords);
+  // Derived from the SAME authoritative resolver as the note / gate / analysis
+  // record, so the disclosure block can never disagree with them.
+  const r = resolveExportEvidence(claimId, context, opts.scopedRecords, EVIDENCE_GATE_NOTE);
   return {
     claimId,
     baselineEvidence: r.baselineEvidence,
     effectiveEvidence: r.effectiveEvidence,
-    matchedScopedStudy: r.matchedScopedStudy,
+    matchedScopedStudy: r.matchedStudy,
     applicabilityVerdict: r.applicabilityVerdict,
-    resolutionState: r.resolutionState,
+    resolutionState: r.applicabilityStatus,
     methodDigest: context.methodDigest ?? null,
   };
 }
@@ -555,7 +599,7 @@ export function analysisRecordFromProvenance(p: ExportProvenance): ScientificAna
       verticalDatumKnown: p.datumKnown,
     },
     methodIds: terrainMethodIds(p),
-    evidenceExploratory: exportGate('DTM').exploratoryOnly,
+    evidenceExploratory: (p.evidenceResolution?.gate ?? exportGate('DTM')).exploratoryOnly,
     summary: {
       surfaceQuality: p.surfaceQuality,
       exportReadiness: p.exportReadiness,
@@ -808,7 +852,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
       `schema ${manifest.schemaVersion} · ${manifest.head.slice(0, 12)} · ${manifest.ops.length} ops · verifiable`,
     ),
     kv('Note', p.notSurveyGrade),
-    kv('Evidence', EVIDENCE_GATE_NOTE),
+    kv('Evidence', p.evidenceResolution?.note ?? EVIDENCE_GATE_NOTE),
   );
   // Scope-aware evidence disclosure — present only when the path assessed
   // applicability. Names the baseline vs effective level, the matched study (or
@@ -888,7 +932,7 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     classScope: p.classScope,
     warnings: [...p.warnings],
     notSurveyGrade: p.notSurveyGrade,
-    evidence: EVIDENCE_GATE_NOTE,
+    evidence: p.evidenceResolution?.note ?? EVIDENCE_GATE_NOTE,
     // Scope-aware evidence block — emitted ONLY when applicability was assessed
     // (the key is absent otherwise, keeping the common export byte-identical).
     // Never promotes above baseline unless a registered study envelope matched.
