@@ -2756,3 +2756,37 @@ datasets:
     localPath: tests/pumpARowColumnIndexNoInvalidPoints.e57
     controlPointIds: []
     checkpointIds: []
+
+  - datasetId: OLV-DS-092-OPENGF-VALIDATION
+    title: "OpenGF ultra-large-scale ground-filtering dataset, 9-scene validation split"
+    sourceUrl: https://github.com/Nathan-UW/OpenGF
+    landingPage: https://github.com/Nathan-UW/OpenGF
+    licence: "OGL-Ontario / CC-BY-4.0 / CC-BY-SA-4.0"
+    licenceUrl: https://github.com/Nathan-UW/OpenGF#download
+    redistribution: share-alike
+    acquisitionDate: 2026-08-31
+    sourceSha256: 0f6c4853ae8cd56d7fa882c7f83d1b7e291db49e848b77866332114550441018
+    sourceBytes: 114827155
+    format: laz
+    pointCount: not-applicable
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: not-applicable
+    horizontalCrs: "multiple national ALS grids (Netherlands AHN3, US via OpenTopography, Ontario)"
+    verticalCrs: multiple-national
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [metropolis, small-city, village, mountain, flat, undulating, rugged, steep-slope]
+    landCoverClasses: [bare-earth, buildings, dense-vegetation, sparse-vegetation]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Qin, Tan, Ma, Zhang, Li (University of Waterloo) — OpenGF, CVPRW 2021"
+    citation: "Qin, N., Tan, W., Ma, L., Zhang, D., Li, J. (2021). OpenGF: An Ultra-Large-Scale Ground Filtering Dataset Built Upon Open ALS Point Clouds Around the World. Proc. IEEE CVPR Workshops, 1082-1091. https://github.com/Nathan-UW/OpenGF"
+    knownLimitations: "Finely hand-labelled GROUND (class 2 = GR) vs NON-GROUND (class 1 = NG) per the paper — high-quality reference labels, but NOT independent survey checkpoints, so agreement bounds classifier-to-reference difference, not survey accuracy (does not reach E5). Nine 500x500 m validation tiles, one per terrain scene (S1 metropolis large-roofs, S2 metropolis dense-roofs, S3 small-city flat, S4 undulating, S5 rugged, S6 village, S7-S9 mountain). Mixed source CRS across four countries. The 115 MB validation set is not vendored; the ground-filter agreement harness reads each scene from GF_SCENE."
+    storage: acquired
+    localPath: not-vendored
+    evidenceRole: reference-labelling
+    controlPointIds: []
+    checkpointIds: []

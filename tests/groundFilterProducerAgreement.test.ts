@@ -39,6 +39,28 @@
  * public domain) and are registered as OLV-DS-090/091; the numbers reproduce via
  * GF_SCENE. None of this is survey-grade and none promotes a claim to E5, which
  * still requires independent checkpoints.
+ *
+ * OpenGF corpus (OLV-DS-092, finely hand-labelled GR=class 2 per the CVPRW2021
+ * paper §4.3; run each scene via GF_SCENE). Nine 500 m tiles, one per terrain
+ * scene, span a deliberate difficulty gradient:
+ *
+ *   scene  terrain (paper §3.2)             recall  prec.  F1     MCC
+ *   -----  -------------------------------  ------  -----  -----  -----
+ *   S4     small-city undulating            0.996  0.952  0.974  0.947
+ *   S3     small-city flat                  0.994  0.930  0.961  0.916
+ *   S2     metropolis dense-roofs           0.998  0.901  0.947  0.922
+ *   S1     metropolis large-roofs           0.998  0.781  0.876  0.767
+ *   S5     small-city rugged                0.957  0.782  0.861  0.778
+ *   S6     village scattered-buildings      0.755  0.960  0.846  0.720
+ *   S8     mountain steep + sparse veg      0.665  0.558  0.607  0.448
+ *   S7     mountain gentle + dense veg      0.956  0.349  0.511  0.496
+ *   S9     mountain steep + dense veg       0.700  0.398  0.508  0.468
+ *
+ * The filter is strongest on small-city flat/undulating terrain and collapses on
+ * all three MOUNTAIN scenes (steep slope and/or dense vegetation) — the terrain
+ * the paper itself calls hardest — and on metropolis large roofs (read as
+ * ground). OpenGF labels are a high-quality REFERENCE, not survey checkpoints:
+ * still not E5.
  */
 
 import { describe, it, expect } from 'vitest';
