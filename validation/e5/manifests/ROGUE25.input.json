@@ -17,7 +17,7 @@
       "North American Vertical Datum 1988"
     ],
     "geoidModel": [
-      "Geoid12"
+      "GEOID12B"
     ],
     "lasVersion": [
       "1.4"
@@ -25,13 +25,16 @@
     "pointDataRecordFormat": [
       6
     ],
-    "captureYears": [
-      2021
-    ],
     "homogeneousFrame": true,
     "groundPointFraction": 0.051273,
     "allTilesHaveGround": true,
-    "tilesWithoutGround": []
+    "tilesWithoutGround": [],
+    "fileCreationYears": [
+      2021
+    ],
+    "acquisitionYears": [
+      null
+    ]
   },
   "tiles": [
     {
@@ -53,10 +56,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 15,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -66,7 +67,11 @@
         "18": 19043
       },
       "groundPointCount": 2271741,
-      "groundPointFraction": 0.101884
+      "groundPointFraction": 0.101884,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 15,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz",
@@ -87,10 +92,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 15,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -100,7 +103,11 @@
         "18": 1634
       },
       "groundPointCount": 943274,
-      "groundPointFraction": 0.0392
+      "groundPointFraction": 0.0392,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 15,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3846.laz",
@@ -121,10 +128,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 19,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -134,7 +139,11 @@
         "18": 2122
       },
       "groundPointCount": 1501277,
-      "groundPointFraction": 0.04878
+      "groundPointFraction": 0.04878,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 19,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3847.laz",
@@ -155,10 +164,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -168,7 +175,11 @@
         "18": 22081
       },
       "groundPointCount": 1292536,
-      "groundPointFraction": 0.040679
+      "groundPointFraction": 0.040679,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4544.laz",
@@ -189,10 +200,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -202,7 +211,11 @@
         "18": 5130
       },
       "groundPointCount": 3100790,
-      "groundPointFraction": 0.044709
+      "groundPointFraction": 0.044709,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4643.laz",
@@ -223,10 +236,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -236,7 +247,11 @@
         "18": 186
       },
       "groundPointCount": 2094282,
-      "groundPointFraction": 0.044398
+      "groundPointFraction": 0.044398,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4647.laz",
@@ -257,10 +272,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -270,7 +283,11 @@
         "18": 53634
       },
       "groundPointCount": 3143952,
-      "groundPointFraction": 0.058578
+      "groundPointFraction": 0.058578,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4648.laz",
@@ -291,10 +308,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -304,7 +319,11 @@
         "18": 26056
       },
       "groundPointCount": 2830970,
-      "groundPointFraction": 0.059921
+      "groundPointFraction": 0.059921,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4849.laz",
@@ -325,10 +344,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -339,7 +356,11 @@
         "18": 89
       },
       "groundPointCount": 2365666,
-      "groundPointFraction": 0.063137
+      "groundPointFraction": 0.063137,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4853.laz",
@@ -360,10 +381,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -373,7 +392,11 @@
         "18": 140245
       },
       "groundPointCount": 3257965,
-      "groundPointFraction": 0.085954
+      "groundPointFraction": 0.085954,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5450.laz",
@@ -394,10 +417,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -407,7 +428,11 @@
         "18": 78
       },
       "groundPointCount": 3117666,
-      "groundPointFraction": 0.06804
+      "groundPointFraction": 0.06804,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5458.laz",
@@ -428,10 +453,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -441,7 +464,11 @@
         "18": 143
       },
       "groundPointCount": 2774198,
-      "groundPointFraction": 0.073388
+      "groundPointFraction": 0.073388,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5959.laz",
@@ -462,10 +489,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -475,7 +500,11 @@
         "18": 568
       },
       "groundPointCount": 1288446,
-      "groundPointFraction": 0.050155
+      "groundPointFraction": 0.050155,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6151.laz",
@@ -496,10 +525,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -509,7 +536,11 @@
         "18": 1169
       },
       "groundPointCount": 3741335,
-      "groundPointFraction": 0.049175
+      "groundPointFraction": 0.049175,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6152.laz",
@@ -530,10 +561,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -545,7 +574,11 @@
         "20": 1002
       },
       "groundPointCount": 3392043,
-      "groundPointFraction": 0.048529
+      "groundPointFraction": 0.048529,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6159.laz",
@@ -566,10 +599,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -579,7 +610,11 @@
         "18": 1320
       },
       "groundPointCount": 2077348,
-      "groundPointFraction": 0.035372
+      "groundPointFraction": 0.035372,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6161.laz",
@@ -600,10 +635,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -613,7 +646,11 @@
         "18": 2443
       },
       "groundPointCount": 1386073,
-      "groundPointFraction": 0.037127
+      "groundPointFraction": 0.037127,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6252.laz",
@@ -634,10 +671,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -649,7 +684,11 @@
         "20": 1692
       },
       "groundPointCount": 3184591,
-      "groundPointFraction": 0.080489
+      "groundPointFraction": 0.080489,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6265.laz",
@@ -670,10 +709,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -684,7 +721,11 @@
         "18": 82
       },
       "groundPointCount": 1492472,
-      "groundPointFraction": 0.042267
+      "groundPointFraction": 0.042267,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6455.laz",
@@ -705,10 +746,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -718,7 +757,11 @@
         "18": 262
       },
       "groundPointCount": 2321716,
-      "groundPointFraction": 0.025921
+      "groundPointFraction": 0.025921,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6470.laz",
@@ -739,10 +782,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -752,7 +793,11 @@
         "18": 133
       },
       "groundPointCount": 2567171,
-      "groundPointFraction": 0.073713
+      "groundPointFraction": 0.073713,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6564.laz",
@@ -773,10 +818,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -786,7 +829,11 @@
         "18": 885
       },
       "groundPointCount": 2007655,
-      "groundPointFraction": 0.040603
+      "groundPointFraction": 0.040603,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6762.laz",
@@ -807,10 +854,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -820,7 +865,11 @@
         "18": 702
       },
       "groundPointCount": 2953884,
-      "groundPointFraction": 0.041221
+      "groundPointFraction": 0.041221,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM7851.laz",
@@ -841,10 +890,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -854,7 +901,11 @@
         "18": 410
       },
       "groundPointCount": 3050534,
-      "groundPointFraction": 0.077931
+      "groundPointFraction": 0.077931,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM8061.laz",
@@ -875,10 +926,8 @@
       "horizontalEpsg": 6339,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid12",
+      "geoidModel": "GEOID12B",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 10N + NAVD88 height - Geoid12B (m)\",PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-123],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6339\"]],VERT_CS[\"NAVD88 height - Geoid12B (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2021,
-      "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
       "softwareId": "LasMonkey 2.6.2",
       "classHistogram": {
@@ -888,7 +937,11 @@
         "18": 142
       },
       "groundPointCount": 2431337,
-      "groundPointFraction": 0.035187
+      "groundPointFraction": 0.035187,
+      "fileCreationYear": 2021,
+      "fileCreationDayOfYear": 12,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     }
   ]
 }
