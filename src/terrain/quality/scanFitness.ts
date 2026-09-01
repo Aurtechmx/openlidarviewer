@@ -105,10 +105,12 @@ export interface ScanFitness {
   /** Worst dimension tone — drives the hero colour. */
   readonly overallTone: FitnessTone;
   /**
-   * Named density-floor badge when earnable (e.g. "≥ QL2 density floor"), else
-   * null. The badge reports which published nominal-pulse-density reference floor
-   * the observed ground-return density clears — density only, never a 3DEP
-   * quality-level determination, so an unadorned "QL2" is deliberately avoided.
+   * Named density-reference badge when earnable (e.g. "≥ QL2 density reference"),
+   * else null. The badge reports which published nominal-pulse-density reference
+   * floor the observed GROUND-RETURN density clears — never a true pulse-density
+   * measurement (this codebase has no return-number-filtered first/only-return
+   * metric) and never a 3DEP quality-level determination, so an unadorned "QL2"
+   * is deliberately avoided.
    */
   readonly tierBadge: string | null;
   /** Headline accuracy string, or null when unvalidated. */
@@ -199,10 +201,12 @@ function densityDimension(d: number | null, unitKnown: boolean): FitnessDimensio
   else if (d >= QL2_DENSITY) tone = 'okay';
   else tone = 'review';
   const v = d >= 100 ? Math.round(d) : Math.round(d * 10) / 10;
+  // "reference" (not "floor met"/"quality level") — this is ground-return
+  // density measured against a pulse-density figure, not a QL determination.
   let summary: string;
-  if (tone === 'ready') summary = `${v} ground pts/m² — at or above ${QL1_DENSITY} pts/m² (the 3DEP QL1 density floor).`;
-  else if (tone === 'okay') summary = `${v} ground pts/m² — at or above ${QL2_DENSITY} pts/m² (the 3DEP QL2 density floor).`;
-  else summary = `${v} ground pts/m² — below ${QL2_DENSITY} pts/m² (the 3DEP QL2 density floor).`;
+  if (tone === 'ready') summary = `${v} ground pts/m² — clears the ${QL1_DENSITY} pts/m² QL1 pulse-density reference.`;
+  else if (tone === 'okay') summary = `${v} ground pts/m² — clears the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
+  else summary = `${v} ground pts/m² — below the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
   return { key: 'density', label: 'Ground detail', tone, summary };
 }
 
@@ -311,7 +315,7 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     georeferencing: 'it isn’t placed in the real world (no map position or height datum)',
     coverage: 'ground coverage is sparse — most of the surface is interpolated',
     density: unitKnown
-      ? 'ground density is below survey thresholds'
+      ? 'ground-return density is below the pulse-density reference'
       : 'coordinate units are unverified, so density can’t be graded',
     accuracy: unitKnown
       ? 'vertical accuracy isn’t validated'
@@ -353,7 +357,7 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   const accTone = dimensions.find((d) => d.key === 'accuracy')!.tone;
   const tierBadge =
     inp.densityReferenceFloor && !provisional && densTone !== 'review' && accTone !== 'review' && inp.crsKnown
-      ? `≥ ${inp.densityReferenceFloor} density floor`
+      ? `≥ ${inp.densityReferenceFloor} density reference`
       : null;
 
   // The headline is a bare "± m" claim, so it too is withheld on an unverified
