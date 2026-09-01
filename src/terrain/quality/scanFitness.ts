@@ -50,6 +50,14 @@ export interface FitnessInputs {
   readonly measuredFraction: number | null;
   // Ground-return density (points per m²) — the DTM-relevant density
   readonly groundDensityPerM2: number | null;
+  /**
+   * Median ground-return density (pts/m²) over measured cells — the robust
+   * companion to the mean above. Surfaced only as a neutral regularity readout
+   * (median vs mean) on the density line; it grades nothing and retunes no
+   * threshold. Optional, so callers that predate it are unaffected (the readout
+   * is simply omitted when absent).
+   */
+  readonly medianGroundDensityPerM2?: number | null;
   // Vertical accuracy (held-out RMSE, in DISPLAY units) + whether it is
   // self-consistency only (no independent checkpoints).
   readonly verticalRmse: number | null;
@@ -183,7 +191,24 @@ function coverageDimension(f: number | null): FitnessDimension {
   return { key: 'coverage', label: 'Coverage', tone, summary };
 }
 
-function densityDimension(d: number | null, unitKnown: boolean): FitnessDimension {
+/** Round a pts/m² figure the way the density line displays it. */
+function densityRound(d: number): number {
+  return d >= 100 ? Math.round(d) : Math.round(d * 10) / 10;
+}
+
+/**
+ * Neutral regularity readout appended to the density line: the already-computed
+ * median ground density and its ratio to the mean. A figure only — it sets no
+ * threshold, downgrades no tone, and changes no graded surface. Empty when the
+ * median is absent/non-finite or the mean is non-positive (ratio undefined).
+ */
+function densityRegularity(mean: number, median: number | null | undefined): string {
+  if (median == null || !Number.isFinite(median) || !(mean > 0)) return '';
+  const ratio = Math.round((median / mean) * 100) / 100;
+  return ` Median ${densityRound(median)} ground pts/m² (median/mean ${ratio.toFixed(2)}).`;
+}
+
+function densityDimension(d: number | null, median: number | null | undefined, unitKnown: boolean): FitnessDimension {
   if (d == null) return { key: 'density', label: 'Ground detail', tone: 'review', summary: 'Ground density unknown.' };
   // Fail closed on an unverified scale: a pts/m² figure derived off an inert
   // placeholder factor is not assertable, so hold the metric verdict rather than
@@ -200,13 +225,16 @@ function densityDimension(d: number | null, unitKnown: boolean): FitnessDimensio
   if (d >= QL1_DENSITY) tone = 'ready';
   else if (d >= QL2_DENSITY) tone = 'okay';
   else tone = 'review';
-  const v = d >= 100 ? Math.round(d) : Math.round(d * 10) / 10;
+  const v = densityRound(d);
   // "reference" (not "floor met"/"quality level") — this is ground-return
   // density measured against a pulse-density figure, not a QL determination.
   let summary: string;
   if (tone === 'ready') summary = `${v} ground pts/m² — clears the ${QL1_DENSITY} pts/m² QL1 pulse-density reference.`;
   else if (tone === 'okay') summary = `${v} ground pts/m² — clears the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
   else summary = `${v} ground pts/m² — below the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
+  // Median vs mean, when the median is supplied — a regularity signal only; the
+  // tone above still buckets on the mean.
+  summary += densityRegularity(d, median);
   return { key: 'density', label: 'Ground detail', tone, summary };
 }
 
@@ -298,7 +326,7 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   const dimensions: FitnessDimension[] = [
     georefDimension(inp),
     coverageDimension(inp.measuredFraction),
-    densityDimension(inp.groundDensityPerM2, unitKnown),
+    densityDimension(inp.groundDensityPerM2, inp.medianGroundDensityPerM2, unitKnown),
     accuracyDimension(inp.verticalRmse, unit, unitToMetres, unitKnown),
     classificationDimension(inp.unclassifiedFraction, inp.hasGroundClass),
     integrityDimension(inp),

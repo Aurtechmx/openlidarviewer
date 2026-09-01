@@ -3186,6 +3186,7 @@ export class AnalysePanel {
       datumName: r.dtm.verticalDatum,
       measuredFraction: covered > 0 ? t.measured / covered : null,
       groundDensityPerM2: Number.isFinite(r.cellMetrics.meanDensity) ? r.cellMetrics.meanDensity : null,
+      medianGroundDensityPerM2: Number.isFinite(r.cellMetrics.medianDensity) ? r.cellMetrics.medianDensity : null,
       verticalRmse: Number.isFinite(r.validation.rmse) ? r.validation.rmse : null,
       notSurveyGrade: true,
       unit: 'm',
