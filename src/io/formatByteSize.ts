@@ -20,3 +20,13 @@ export function formatByteSize(bytes: number): string {
   if (v >= 1024) return `${(v / 1024).toFixed(1)} KB`;
   return `${Math.round(v)} B`;
 }
+
+/**
+ * Render an integer with thousands separators: 4_200_000 → "4,200,000". The
+ * companion count formatter to {@link formatByteSize}, kept here so the overlay
+ * and the streaming-diagnostics readout share one grouping rule rather than each
+ * carrying a copy. Pure — no DOM, no three.js.
+ */
+export function groupInt(n: number): string {
+  return Math.round(n).toLocaleString('en-US');
+}

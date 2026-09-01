@@ -51,6 +51,7 @@ import type {
   RefinementReadinessPhase,
   SchedulerReadinessFacts,
 } from './refinementReadiness';
+import { formatByteSize, groupInt } from '../../io/formatByteSize';
 
 /**
  * Everything outside the readiness facts, as the scheduler already reports it.
@@ -367,14 +368,6 @@ export function buildStreamingDiagnostics(
 }
 
 /**
- * Render one integer with thousands separators: 4200000 → "4,200,000".
- * Non-integers (fractions, multipliers) are left to the caller.
- */
-function groupInt(n: number): string {
-  return Math.round(n).toLocaleString('en-US');
-}
-
-/**
  * A human-readable rendering of one diagnostics snapshot — the text half of the
  * record the `?debug=1` overlay already carries into its metrics JSON, so a
  * developer reads the SAME numbers a test asserts on rather than a second
@@ -416,15 +409,15 @@ export function formatStreamingDiagnostics(d: StreamingDiagnostics | null): stri
     `adaptation    concurrency ${groupInt(d.effectiveMaxConcurrent)}` +
       ` · pressure -${groupInt(d.pressureDepthReduction)} depth` +
       ` · fps budget ×${d.fpsBudgetFactor.toFixed(2)}`,
-    `cache         ${groupInt(d.cacheBytes)} / ${groupInt(d.cacheMaxBytes)} bytes` +
+    `cache         ${formatByteSize(d.cacheBytes)} / ${formatByteSize(d.cacheMaxBytes)}` +
       ` · ${groupInt(d.cacheEntries)} entries` +
       ` · hits ${groupInt(d.cacheHits)} misses ${groupInt(d.cacheMisses)}` +
       ` evict ${groupInt(d.cacheEvictions)}`,
     `generation    ${show('generationId', () => groupInt(d.generationId ?? 0))}` +
       ` · decode retries ${show('decodeRetryCount', () => groupInt(d.decodeRetryCount ?? 0))}`,
     `upload queue  ${show('uploadPendingNodes', () => `${groupInt(d.uploadPendingNodes ?? 0)} nodes`)}` +
-      ` · ${show('uploadPendingBytes', () => `${groupInt(d.uploadPendingBytes ?? 0)} bytes`)}` +
-      ` · resident decoded ${show('residentDecodedBytes', () => `${groupInt(d.residentDecodedBytes ?? 0)} bytes`)}`,
+      ` · ${show('uploadPendingBytes', () => formatByteSize(d.uploadPendingBytes ?? 0))}` +
+      ` · resident decoded ${show('residentDecodedBytes', () => formatByteSize(d.residentDecodedBytes ?? 0))}`,
   ];
 
   return lines.join('\n');

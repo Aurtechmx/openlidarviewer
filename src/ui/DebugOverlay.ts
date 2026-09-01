@@ -13,7 +13,7 @@
 
 import { el } from './dom';
 import { registerMetricsHook } from '../perf/metricsHook';
-import { formatByteSize as formatBytes } from '../io/formatByteSize';
+import { formatByteSize as formatBytes, groupInt as formatInt } from '../io/formatByteSize';
 import type { FrameStats } from '../render/Viewer';
 import type { LoadTelemetry } from '../io/loadTelemetry';
 import { formatTelemetry } from '../io/loadTelemetry';
@@ -123,11 +123,6 @@ export function formatTerrainCompute(
 /** Overlay refresh interval — about 4 Hz, deliberately never per frame. */
 const REFRESH_MS = 250;
 
-
-/** Render an integer with thousands separators: 4200000 → "4,200,000". */
-function formatInt(n: number): string {
-  return Math.round(n).toLocaleString('en-US');
-}
 
 /**
  * The `?debug=1` overlay panel. Construct it with a sampler, mount `element`,
