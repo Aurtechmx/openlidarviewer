@@ -42,7 +42,7 @@ These ship in the deploy archive.
 | @loaders.gl/core | ^4.4.4 | 4.4.4 | MIT |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT |
 | @loaders.gl/obj | ^4.4.2 | 4.4.3 | MIT |
-| @loaders.gl/ply | ^4.4.4 | 4.4.4 | MIT |
+| @loaders.gl/ply | ^4.4.5 | 4.4.5 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.21.0 | 2.21.0 | MIT |
