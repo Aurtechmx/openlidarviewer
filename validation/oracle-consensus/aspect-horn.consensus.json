@@ -1,0 +1,18 @@
+{
+  "$schemaNote": "Oracle-triangulation for terrain aspect (Horn). The three implementations use DIFFERENT native conventions; the contract's canonical output is compass degrees clockwise from north (downslope), and each oracle's native value is converted to it. This proves agreement is real and not a convention artifact. OLV's leg is recomputed live by tests/oracleConsensusAspect.test.ts; external legs are committed (gdaldem aspect, GRASS r.slope.aspect).",
+  "contract": {
+    "id": "terrain-aspect-horn-v1",
+    "quantity": "terrain.aspect",
+    "algorithm": "Horn",
+    "canonicalOutput": "compass-degrees-cw-from-north (downslope)",
+    "edgePolicy": "exclude-one-cell-border",
+    "absoluteToleranceDeg": 0.5,
+    "note": "Axis-aligned east-gradient fixture: aspect is due west everywhere, which exercises the E-W axis and the convention conversion without the raster row-orientation (N/S) ambiguity. A diagonal fixture that also tests N-S is future work needing an explicit row-orientation contract."
+  },
+  "fixture": { "id": "tilted-plane-eastgrad-0.30", "cols": 50, "rows": 50, "cellMetres": 1, "crs": "EPSG:32633", "model": "z[r][c] = 0.30 * c (rises east; downslope faces west)" },
+  "oracles": [
+    { "id": "analytic-plane-aspect", "referenceClass": "analytic-truth", "tool": "closed form (downslope = west)", "nativeValueDeg": 270, "nativeConvention": "compass-cw-north" },
+    { "id": "gdal-horn-aspect", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem aspect", "nativeValueDeg": 270, "nativeConvention": "compass-cw-north" },
+    { "id": "grass-horn-aspect", "referenceClass": "matched-implementation", "tool": "GRASS 8.5.0 r.slope.aspect", "nativeValueDeg": 180, "nativeConvention": "ccw-from-east" }
+  ]
+}
