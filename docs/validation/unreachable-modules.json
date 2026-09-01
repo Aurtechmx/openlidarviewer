@@ -27,6 +27,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/science/scientificArtifactPassport.ts",
+      "status": "staged",
+      "why": "A self-verifying provenance record binding source digest, methods and parameters, the analysis content, the evidence decision and the exported artifact bytes into one tamper-evident document (separate cryptographic fields beside the record's legacy FNV fingerprint). It reuses the existing synchronous SHA-256 and canonicalize; it introduces no second crypto and changes no numerical result. The export/validation path does not construct a passport yet, so only its own tests import it. Kept out of the eager graph because index.html's bundle has near-zero headroom.",
+      "graduation": "The export path (or a validation harness) builds a ScientificArtifactPassport for an emitted artifact and surfaces its scienceId / reproducibility line, at which point it is reached through src/lazyChunks.ts.",
+      "review": "2027-02-28"
+    },
+    {
       "path": "src/terrain/contour/persistentCoreKey.ts",
       "status": "staged",
       "why": "The identity and invalidation contract for a persistent (across-reopen) terrain core cache: a full SHA-256 content fingerprint, the core-method generation string, and an integrity digest. It is the library half of the recompute-vs-reuse gate in tests/benchmark/terrainCoreRebuildCost.test.ts, which returned GO (conditional). No storage or reopen path is built, so nothing in the application computes a persistent key; only its own test imports it.",
