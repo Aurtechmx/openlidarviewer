@@ -53,7 +53,10 @@ function readHeader(path) {
   // The vertical CRS's own authority is the last EPSG authority in the string.
   const vertMatch = comp.match(/VERT_CS\[[\s\S]*AUTHORITY\["EPSG","(\d+)"\]/);
   const vertDatum = (comp.match(/VERT_DATUM\["([^"]+)"/) ?? [])[1] ?? null;
-  const geoid = (comp.match(/Geoid\d{2}/) ?? [])[0] ?? null;
+  // Preserve the FULL geoid identifier (e.g. GEOID12B) and canonicalise to upper
+  // case — a `\d{2}` match silently dropped the trailing revision letter.
+  const geoidRaw = (comp.match(/Geoid\d{2}[A-Za-z]?/) ?? [])[0] ?? null;
+  const geoid = geoidRaw ? geoidRaw.toUpperCase() : null;
   return {
     lasVersion: m.major_version != null ? `${m.major_version}.${m.minor_version}` : null,
     pointDataRecordFormat: m.dataformat_id ?? null,
@@ -68,8 +71,13 @@ function readHeader(path) {
     verticalDatum: vertDatum,
     geoidModel: geoid,
     compoundCrs: comp || null,
-    captureYear: m.creation_year ?? null,
-    captureDayOfYear: m.creation_doy ?? null,
+    // LAS header CREATION date — NOT the acquisition date. Named so no reader
+    // mistakes a 2021 file-write for a 2019 flight. Acquisition is left an
+    // explicit unknown; it is never guessed from the filename or GPS time here.
+    fileCreationYear: m.creation_year ?? null,
+    fileCreationDayOfYear: m.creation_doy ?? null,
+    acquisitionYear: null,
+    acquisitionDateSource: 'not-established',
     systemId: m.system_id ?? null,
     softwareId: m.software_id ?? null,
   };
@@ -113,7 +121,8 @@ const summary = {
   geoidModel: uniq((t) => t.geoidModel),
   lasVersion: uniq((t) => t.lasVersion),
   pointDataRecordFormat: uniq((t) => t.pointDataRecordFormat),
-  captureYears: uniq((t) => t.captureYear),
+  fileCreationYears: uniq((t) => t.fileCreationYear),
+  acquisitionYears: uniq((t) => t.acquisitionYear),
   homogeneousFrame:
     uniq((t) => t.horizontalEpsg).length === 1 &&
     uniq((t) => t.verticalEpsg).length === 1 &&

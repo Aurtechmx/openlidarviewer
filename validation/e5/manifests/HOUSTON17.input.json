@@ -1,5 +1,5 @@
 {
-  "$schemaNote": "Immutable input manifest for an E5 LAZ collection. Every field is read from the file header; a null is an unknown the header did not carry, never a guess. collectionDigest fixes the exact set of input bytes. This manifest is input to a product-under-test, not field truth.",
+  "$schemaNote": "Immutable input manifest for an E5 LAZ collection. Every field is read from the file header; a null is an unknown the header did not carry, never a guess. Per-tile class histograms are exact point-scan counts. collectionDigest fixes the exact set of input bytes. This manifest is input to a product-under-test, not field truth.",
   "collectionId": "HOUSTON17",
   "role": "candidate-input",
   "generatedFrom": "pdal info --metadata (header only)",
@@ -17,7 +17,7 @@
       "North American Vertical Datum 1988"
     ],
     "geoidModel": [
-      "Geoid18"
+      "GEOID18"
     ],
     "lasVersion": [
       "1.4"
@@ -25,10 +25,18 @@
     "pointDataRecordFormat": [
       6
     ],
-    "captureYears": [
+    "homogeneousFrame": true,
+    "groundPointFraction": 0.518853,
+    "allTilesHaveGround": false,
+    "tilesWithoutGround": [
+      "USGS_LPC_TX_Houston_B24_15RTM262193.laz"
+    ],
+    "fileCreationYears": [
       2025
     ],
-    "homogeneousFrame": true
+    "acquisitionYears": [
+      null
+    ]
   },
   "tiles": [
     {
@@ -50,12 +58,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 1547798,
+        "2": 3815575,
+        "7": 5869,
+        "9": 1604892,
+        "18": 12,
+        "20": 9620
+      },
+      "groundPointCount": 3815575,
+      "groundPointFraction": 0.546349,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260194.laz",
@@ -76,12 +96,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 1598375,
+        "2": 3271916,
+        "7": 3421,
+        "9": 1951739,
+        "18": 15,
+        "20": 10553
+      },
+      "groundPointCount": 3271916,
+      "groundPointFraction": 0.478629,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260195.laz",
@@ -102,12 +134,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 2753990,
+        "2": 4010654,
+        "7": 2810,
+        "9": 1820656,
+        "18": 29,
+        "20": 31267
+      },
+      "groundPointCount": 4010654,
+      "groundPointFraction": 0.465305,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260196.laz",
@@ -128,12 +172,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 4251555,
+        "2": 4970947,
+        "7": 4799,
+        "9": 578796,
+        "18": 82,
+        "20": 12775
+      },
+      "groundPointCount": 4970947,
+      "groundPointFraction": 0.50626,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260197.laz",
@@ -154,12 +210,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 1676780,
+        "2": 3336106,
+        "7": 2977,
+        "9": 2067381,
+        "18": 24,
+        "20": 9554
+      },
+      "groundPointCount": 3336106,
+      "groundPointFraction": 0.47035,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260198.laz",
@@ -180,12 +248,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 2172750,
+        "2": 4534456,
+        "7": 3432,
+        "9": 1198031,
+        "18": 287,
+        "20": 10968
+      },
+      "groundPointCount": 4534456,
+      "groundPointFraction": 0.572538,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260199.laz",
@@ -206,12 +286,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 2045278,
+        "2": 3610036,
+        "7": 4144,
+        "9": 831237,
+        "18": 17,
+        "20": 27681
+      },
+      "groundPointCount": 3610036,
+      "groundPointFraction": 0.553823,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261193.laz",
@@ -232,12 +324,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 1115984,
+        "2": 1339152,
+        "7": 13180,
+        "9": 714492,
+        "18": 8,
+        "20": 2640
+      },
+      "groundPointCount": 1339152,
+      "groundPointFraction": 0.420396,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261194.laz",
@@ -258,12 +362,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 4545930,
+        "2": 6696160,
+        "7": 1099,
+        "9": 57297,
+        "18": 30,
+        "20": 17128
+      },
+      "groundPointCount": 6696160,
+      "groundPointFraction": 0.591657,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261195.laz",
@@ -284,12 +400,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 5626372,
+        "2": 5864177,
+        "7": 4208,
+        "9": 144168,
+        "18": 59,
+        "20": 16589
+      },
+      "groundPointCount": 5864177,
+      "groundPointFraction": 0.503122,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261196.laz",
@@ -310,12 +438,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 6386864,
+        "2": 5396942,
+        "7": 6427,
+        "9": 163113,
+        "18": 73,
+        "20": 13871
+      },
+      "groundPointCount": 5396942,
+      "groundPointFraction": 0.450974,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261197.laz",
@@ -336,12 +476,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 4919871,
+        "2": 7121011,
+        "7": 1237,
+        "9": 22819,
+        "18": 22,
+        "20": 30369
+      },
+      "groundPointCount": 7121011,
+      "groundPointFraction": 0.588741,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261198.laz",
@@ -362,12 +514,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 4354379,
+        "2": 5720691,
+        "7": 2371,
+        "9": 168670,
+        "18": 38,
+        "20": 29090
+      },
+      "groundPointCount": 5720691,
+      "groundPointFraction": 0.556745,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261199.laz",
@@ -388,12 +552,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 4306801,
+        "2": 4227077,
+        "7": 4444,
+        "9": 354755,
+        "18": 46,
+        "20": 42645
+      },
+      "groundPointCount": 4227077,
+      "groundPointFraction": 0.473051,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM262193.laz",
@@ -414,12 +590,22 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 1028285,
+        "7": 10058,
+        "9": 2655296,
+        "18": 51
+      },
+      "groundPointCount": 0,
+      "groundPointFraction": 0,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM262194.laz",
@@ -440,12 +626,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 3092749,
+        "2": 6848517,
+        "7": 2379,
+        "9": 1130906,
+        "18": 57,
+        "20": 15515
+      },
+      "groundPointCount": 6848517,
+      "groundPointFraction": 0.617533,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM262195.laz",
@@ -466,12 +664,24 @@
       "horizontalEpsg": 6344,
       "verticalEpsg": 5703,
       "verticalDatum": "North American Vertical Datum 1988",
-      "geoidModel": "Geoid18",
+      "geoidModel": "GEOID18",
       "compoundCrs": "COMPD_CS[\"NAD83(2011) / UTM zone 15N + NAVD88 height - Geoid18 (m)\",PROJCS[\"NAD83(2011) / UTM zone 15N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83 (National Spatial Reference System 2011)\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],AUTHORITY[\"EPSG\",\"1116\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"6318\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-93],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"X\",EAST],AXIS[\"Y\",NORTH],AUTHORITY[\"EPSG\",\"6344\"]],VERT_CS[\"NAVD88 height - Geoid18 (m)\",VERT_DATUM[\"North American Vertical Datum 1988\",2005,AUTHORITY[\"EPSG\",\"5103\"]],UNIT[\"meter\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Up\",UP],AUTHORITY[\"EPSG\",\"5703\"]]]",
-      "captureYear": 2025,
-      "captureDayOfYear": 175,
       "systemId": "AR15J AR15S",
-      "softwareId": "NV5 Geospatial Lidar Suite"
+      "softwareId": "NV5 Geospatial Lidar Suite",
+      "classHistogram": {
+        "1": 4409814,
+        "2": 7351768,
+        "7": 1073,
+        "9": 767710,
+        "18": 28,
+        "20": 17705
+      },
+      "groundPointCount": 7351768,
+      "groundPointFraction": 0.585887,
+      "fileCreationYear": 2025,
+      "fileCreationDayOfYear": 175,
+      "acquisitionYear": null,
+      "acquisitionDateSource": "not-established"
     }
   ]
 }
