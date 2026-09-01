@@ -1,0 +1,36 @@
+{
+  "$schemaNote": "Oracle-triangulation record: OLV's volumeCutFill vs analytic truth vs an independent numerical quadrature, on ONE canonical quantity contract. OLV's legs are recomputed live by tests/oracleConsensusVolume.test.ts by running volumeCutFill over a cell-centre lattice; the analytic and quadrature legs here are closed forms and a fine-lattice Riemann integral that CI reads without any third-party tool. volumeCutFill is a sample-mean x area estimator: fill = A*mean(max(0,dz)), cut = A*mean(max(0,-dz)) over in-polygon points against a horizontal reference plane. It is EXACT for a plane (flat cap and tilted plane) on a symmetric cell-centre lattice, so both cases below are honest PASS_TRUTH rather than convergence approximations. Two cases span different magnitudes and exercise different behaviour: a large fill-only flat cap and a tilted plane that straddles the reference (equal cut and fill, net zero) so a scale error in the volume magnitude or a broken cut/fill split cannot pass both.",
+  "contract": {
+    "id": "volume-cutfill-v1",
+    "quantity": "volume.cutfill",
+    "algorithm": "point-sample mean x area (horizontal reference plane)",
+    "footprint": "square S = [-0.5, 0.5] x [-0.5, 0.5], area 1 m^2",
+    "units": { "horizontal": "metre", "vertical": "metre", "output": "cubic-metre" },
+    "estimatorNote": "volumeCutFill reports A*mean(max(0,dz)) for fill and A*mean(max(0,-dz)) for cut over in-polygon points; it is EXACT for a plane (a flat cap or a tilted plane) on a symmetric lattice, so both cases are exact-for-estimator, not convergence-limited. The tolerance only has to absorb Float32 position storage and the quadrature leg's convergence residual.",
+    "absoluteToleranceM3": 1e-4
+  },
+  "cases": [
+    {
+      "fixture": {
+        "id": "flat-cap-h3.0",
+        "latticeN": 200, "cellMetres": 0.005, "referenceZ": 0,
+        "model": "z(x,y) = 3.0 over S (flat cap; fill = A*h, cut = 0, net = A*h)"
+      },
+      "oracles": [
+        { "id": "analytic-plane-volume", "referenceClass": "analytic-truth", "tool": "closed form V = A*h", "fillM3": 3.0, "cutM3": 0, "netM3": 3.0 },
+        { "id": "numerical-quadrature", "referenceClass": "matched-implementation", "tool": "independent composite-trapezoid Riemann integral over S at 2000x2000", "fillM3": 3.0, "cutM3": 0, "netM3": 3.0 }
+      ]
+    },
+    {
+      "fixture": {
+        "id": "tilted-plane-eastgrad-2.0",
+        "latticeN": 200, "cellMetres": 0.005, "referenceZ": 0,
+        "model": "z(x,y) = 2.0 * x over S (tilted plane straddling the reference; fill = cut = A*p*(a/4), net = 0)"
+      },
+      "oracles": [
+        { "id": "analytic-plane-volume", "referenceClass": "analytic-truth", "tool": "closed form fill = cut = A*p*(a/4), net = 0", "fillM3": 0.25, "cutM3": 0.25, "netM3": 0 },
+        { "id": "numerical-quadrature", "referenceClass": "matched-implementation", "tool": "independent composite-trapezoid Riemann integral over S at 2000x2000", "fillM3": 0.24999999999996184, "cutM3": 0.25000000000007494, "netM3": -1.13e-13 }
+      ]
+    }
+  ]
+}
