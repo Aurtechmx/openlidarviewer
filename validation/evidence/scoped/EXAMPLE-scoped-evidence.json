@@ -1,0 +1,30 @@
+{
+  "$comment": "TEMPLATE ONLY — NOT A REAL RECORD. No field study exists yet. This file documents the record shape and is deliberately NON-CLAIMABLE: its claimId is not a registered claim and its envelope values are sentinels, so it can never match a real artifact or raise any real product above its baseline. The running app never reads this file (SCOPED_EVIDENCE_RECORDS is empty). A real record is created only after a real, frozen study, replacing every EXAMPLE- sentinel with measured values.",
+  "claimId": "EXAMPLE-CLAIM-NOT-REGISTERED",
+  "evidenceLevel": "E5_EXTERNALLY_VALIDATED",
+  "studyId": "EXAMPLE-STUDY-DO-NOT-USE",
+  "candidateRevision": "EXAMPLE-REVISION",
+  "methodId": "EXAMPLE-METHOD",
+  "methodVersion": "0",
+  "methodDigest": "EXAMPLE-METHOD-DIGEST-DO-NOT-MATCH",
+  "horizontalEpsg": 0,
+  "verticalEpsg": 0,
+  "verticalDatum": "EXAMPLE-DATUM",
+  "geoidModel": "EXAMPLE-GEOID",
+  "cellSize": 0,
+  "aggregation": "EXAMPLE-AGGREGATION",
+  "interpolation": "EXAMPLE-INTERPOLATION",
+  "trustGroundClassification": false,
+  "terrainStratum": "EXAMPLE-STRATUM",
+  "slopeRange": [0, 0],
+  "supportState": "EXAMPLE — no checkpoints",
+  "studyArea": "EXAMPLE-AREA",
+  "surveyDate": "0001-01-01",
+  "applicabilityEnvelope": {
+    "methodDigest": "EXAMPLE-METHOD-DIGEST-DO-NOT-MATCH",
+    "horizontalEpsg": 0,
+    "verticalEpsg": 0,
+    "geoidModel": "EXAMPLE-GEOID",
+    "terrainStratum": "EXAMPLE-STRATUM"
+  }
+}

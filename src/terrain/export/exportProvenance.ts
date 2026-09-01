@@ -38,6 +38,11 @@ import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
 import { exportGate, EVIDENCE_REGISTRY } from '../../validation/evidenceRegistry';
 import { evidenceRank, INDEPENDENCE_FLOOR } from '../../validation/evidenceLevel';
+import {
+  resolveEvidence,
+  type EvidenceContext,
+  type ScopedEvidenceRecord,
+} from '../../validation/scopedEvidence';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { methodRef, methodTag } from '../../science/methodRegistry';
 import {
@@ -171,6 +176,31 @@ export interface ExportProvenanceAccuracy {
 }
 
 /**
+ * The scope-aware evidence resolution stamped into a terrain export (§7/§8/§43).
+ * Present only when the export path supplies a `methodDigest` / `evidenceContext`
+ * so applicability can be assessed; absent (null) on the common path, which keeps
+ * existing artifacts byte-identical. Records the baseline vs effective level, the
+ * matched study (or null), the applicability verdict and the method digest, so a
+ * downstream reader can see the artifact was NOT silently promoted out of scope.
+ */
+export interface ExportScopedEvidence {
+  /** The DTM-family claim resolved (e.g. 'DTM'). */
+  readonly claimId: string;
+  /** Baseline registry level (before any scoped overlay). */
+  readonly baselineEvidence: string | null;
+  /** Effective level after scoped overlay — equals baseline unless matched in scope. */
+  readonly effectiveEvidence: string | null;
+  /** Matched study id when in-scope, else null. */
+  readonly matchedScopedStudy: string | null;
+  /** Human-readable applicability verdict. */
+  readonly applicabilityVerdict: string;
+  /** The explicit resolution state string. */
+  readonly resolutionState: string;
+  /** The method digest the resolution was keyed on, or null when not supplied. */
+  readonly methodDigest: string | null;
+}
+
+/**
  * The unified provenance of one analysis run, stamped identically into every
  * export. Absent values are honest: `null` / "unknown" / "not georeferenced".
  */
@@ -264,6 +294,13 @@ export interface ExportProvenance {
    * figure the export already stated.
    */
   readonly transform?: TransformProvenance | null;
+  /**
+   * The scope-aware evidence resolution for this export, or null when the path
+   * supplied no artifact context (the common case — absent keeps the artifact
+   * byte-identical to before). Never promotes above baseline unless a registered
+   * study envelope matched the artifact context.
+   */
+  readonly scopedEvidence?: ExportScopedEvidence | null;
 }
 
 /** Options for {@link buildExportProvenance}. */
@@ -306,6 +343,21 @@ export interface ExportProvenanceOptions {
    * transform. Pure disclosure metadata — it never alters an exported figure.
    */
   readonly transform?: TransformProvenance | null;
+  /**
+   * The DTM-family claim id to resolve scope-aware evidence for. Defaults to
+   * 'DTM' when an evidence context or method digest is supplied.
+   */
+  readonly evidenceClaimId?: string;
+  /** Digest of the method that produced this artifact — the method-match anchor. */
+  readonly methodDigest?: string | null;
+  /** The artifact context checked against registered study envelopes. */
+  readonly evidenceContext?: EvidenceContext | null;
+  /**
+   * Scoped evidence records to resolve against. Defaults to the empty shipped
+   * set, so a real export never promotes above baseline. Supplied only by tests
+   * or a future path that registers a real, frozen study.
+   */
+  readonly scopedRecords?: readonly ScopedEvidenceRecord[];
 }
 
 /** Resolve the generation timestamp to an ISO string. */
@@ -434,6 +486,38 @@ export function buildExportProvenance(
     // `null` otherwise — the terrain surface products build in the source CRS
     // and reproject nothing, so this is `null` for them.
     transform: opts.transform ?? null,
+    // Scope-aware evidence: resolved only when the path supplied a context/digest.
+    // Absent (null) otherwise, which keeps the export byte-identical to before.
+    scopedEvidence: buildScopedEvidence(opts),
+  };
+}
+
+/**
+ * Resolve the scope-aware evidence block for an export, or null when the path
+ * supplied no artifact context (no `evidenceContext` and no `methodDigest`). The
+ * resolver defaults to the empty shipped record set, so with today's registry a
+ * real export never rises above its baseline level.
+ */
+function buildScopedEvidence(opts: ExportProvenanceOptions): ExportScopedEvidence | null {
+  const hasSignal =
+    opts.evidenceContext != null || (opts.methodDigest != null && opts.methodDigest !== '');
+  if (!hasSignal) return null;
+  const claimId = opts.evidenceClaimId ?? 'DTM';
+  const context: EvidenceContext = {
+    ...(opts.evidenceContext ?? {}),
+    ...(opts.methodDigest != null && opts.evidenceContext?.methodDigest == null
+      ? { methodDigest: opts.methodDigest }
+      : {}),
+  };
+  const r = resolveEvidence(claimId, context, opts.scopedRecords);
+  return {
+    claimId,
+    baselineEvidence: r.baselineEvidence,
+    effectiveEvidence: r.effectiveEvidence,
+    matchedScopedStudy: r.matchedScopedStudy,
+    applicabilityVerdict: r.applicabilityVerdict,
+    resolutionState: r.resolutionState,
+    methodDigest: context.methodDigest ?? null,
   };
 }
 
@@ -726,6 +810,20 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Note', p.notSurveyGrade),
     kv('Evidence', EVIDENCE_GATE_NOTE),
   );
+  // Scope-aware evidence disclosure — present only when the path assessed
+  // applicability. Names the baseline vs effective level, the matched study (or
+  // "none"), and the resolution state, so a reader sees no silent out-of-scope
+  // promotion. Absent entirely for the common context-free export.
+  if (p.scopedEvidence) {
+    const s = p.scopedEvidence;
+    lines.push(
+      kv(
+        'Scoped evidence',
+        `${s.resolutionState}; baseline ${s.baselineEvidence ?? 'unregistered'} → effective `
+          + `${s.effectiveEvidence ?? 'unregistered'}; study ${s.matchedScopedStudy ?? 'none'}`,
+      ),
+    );
+  }
   // The evidence-gate permit that authorised this file (§19). Absent only for a
   // non-gated path; a gated contour export always carries its decision here.
   if (p.exportPermit) {
@@ -791,6 +889,22 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     warnings: [...p.warnings],
     notSurveyGrade: p.notSurveyGrade,
     evidence: EVIDENCE_GATE_NOTE,
+    // Scope-aware evidence block — emitted ONLY when applicability was assessed
+    // (the key is absent otherwise, keeping the common export byte-identical).
+    // Never promotes above baseline unless a registered study envelope matched.
+    ...(p.scopedEvidence
+      ? {
+          scopedEvidence: {
+            claimId: p.scopedEvidence.claimId,
+            baselineEvidence: p.scopedEvidence.baselineEvidence,
+            effectiveEvidence: p.scopedEvidence.effectiveEvidence,
+            matchedScopedStudy: p.scopedEvidence.matchedScopedStudy,
+            applicabilityVerdict: p.scopedEvidence.applicabilityVerdict,
+            resolutionState: p.scopedEvidence.resolutionState,
+            methodDigest: p.scopedEvidence.methodDigest,
+          },
+        }
+      : {}),
     exportPermit: p.exportPermit
       ? {
           status: p.exportPermit.status,

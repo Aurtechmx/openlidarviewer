@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openlidarviewer/validation/evidence/scoped/scoped-evidence.schema.json",
+  "title": "Scoped external-evidence record",
+  "description": "A scoped external-evidence record raises a claim's effective evidence level (e.g. E5) ONLY for artifacts inside its applicability envelope. A record is created ONLY after a real, frozen field study with independent ground control. Until such a study exists, the only files here are EXAMPLE- templates that cannot match a real artifact. The running app never reads these files: the runtime record set (src/validation/scopedEvidence.ts SCOPED_EVIDENCE_RECORDS) is empty. Records are data passed explicitly to resolveEvidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claimId", "evidenceLevel", "studyId", "applicabilityEnvelope"],
+  "properties": {
+    "claimId": {
+      "type": "string",
+      "description": "The registry claim id this record scopes (e.g. DTM)."
+    },
+    "evidenceLevel": {
+      "type": "string",
+      "enum": [
+        "E0_IMPLEMENTED",
+        "E1_UNIT_VERIFIED",
+        "E2_ANALYTICALLY_VERIFIED",
+        "E3_SYNTHETICALLY_VALIDATED",
+        "E4_CROSS_IMPLEMENTATION_VALIDATED",
+        "E5_EXTERNALLY_VALIDATED",
+        "E6_INDEPENDENTLY_REPRODUCED"
+      ],
+      "description": "The evidence level this study establishes inside its envelope."
+    },
+    "studyId": { "type": "string", "description": "Stable study identifier." },
+    "candidateRevision": { "type": "string" },
+    "methodId": { "type": "string" },
+    "methodVersion": { "type": "string" },
+    "methodDigest": { "type": "string", "description": "Digest of the validated method (method-match anchor)." },
+    "horizontalEpsg": { "type": "integer" },
+    "verticalEpsg": { "type": "integer" },
+    "verticalDatum": { "type": "string" },
+    "geoidModel": { "type": "string" },
+    "cellSize": { "type": "number" },
+    "aggregation": { "type": "string" },
+    "interpolation": { "type": "string" },
+    "trustGroundClassification": { "type": "boolean" },
+    "terrainStratum": { "type": "string" },
+    "slopeRange": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "supportState": { "type": "string" },
+    "studyArea": { "type": "string" },
+    "surveyDate": { "type": "string" },
+    "applicabilityEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The matching predicate. Any key set here becomes a hard constraint the artifact context must satisfy exactly (slopeRange is a containment band). Missing safety-critical keys in the context (methodDigest, horizontalEpsg, verticalEpsg, geoidModel) yield applicability-unknown, not a match.",
+      "properties": {
+        "methodDigest": { "type": "string" },
+        "horizontalEpsg": { "type": "integer" },
+        "verticalEpsg": { "type": "integer" },
+        "geoidModel": { "type": "string" },
+        "verticalDatum": { "type": "string" },
+        "terrainStratum": { "type": "string" },
+        "studyArea": { "type": "string" },
+        "slopeRange": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "aggregation": { "type": "string" },
+        "interpolation": { "type": "string" },
+        "cellSize": { "type": "number" },
+        "trustGroundClassification": { "type": "boolean" },
+        "candidateRevision": { "type": "string" }
+      }
+    }
+  }
+}
