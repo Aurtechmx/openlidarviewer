@@ -39,7 +39,7 @@ These ship in the deploy archive.
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 |
-| @loaders.gl/core | ^4.4.4 | 4.4.4 | MIT |
+| @loaders.gl/core | ^4.4.5 | 4.4.5 | MIT |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT |
 | @loaders.gl/obj | ^4.4.2 | 4.4.3 | MIT |
 | @loaders.gl/ply | ^4.4.4 | 4.4.4 | MIT |
