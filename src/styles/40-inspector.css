@@ -539,7 +539,7 @@
    the cursor while the probe is active. Fixed bottom-left, out of the panels. */
 .olv-coordinate-hud {
   position: absolute; left: var(--space-sm); bottom: var(--space-sm);
-  z-index: 6; pointer-events: none;
+  z-index: var(--z-hud-readout); pointer-events: none;
   display: flex; flex-direction: column; gap: 2px;
   padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-xs); font-variant-numeric: tabular-nums;

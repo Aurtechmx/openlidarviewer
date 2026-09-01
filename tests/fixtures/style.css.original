@@ -194,6 +194,7 @@
   --z-content: 1;         /* content sitting above a same-stack wash */
   --z-scene-overlay: 2;   /* decorative canvas vignette overlay */
   --z-topbar: 4;          /* click-through top bar */
+  --z-hud-readout: 6;     /* coordinate/survey corner readout, above the top bar */
   --z-hud: 10;            /* persistent navigation-bar HUD */
   --z-panel: 15;          /* Inspector panel (16 = panel + 1) */
   --z-dock: 20;           /* tool dock + left/right panels (21 = dock + 1) */
@@ -1645,7 +1646,7 @@ body.olv-theme-light .olv-empty::before {
    the cursor while the probe is active. Fixed bottom-left, out of the panels. */
 .olv-coordinate-hud {
   position: absolute; left: var(--space-sm); bottom: var(--space-sm);
-  z-index: 6; pointer-events: none;
+  z-index: var(--z-hud-readout); pointer-events: none;
   display: flex; flex-direction: column; gap: 2px;
   padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-xs); font-variant-numeric: tabular-nums;
