@@ -61,6 +61,32 @@
  * the paper itself calls hardest — and on metropolis large roofs (read as
  * ground). OpenGF labels are a high-quality REFERENCE, not survey checkpoints:
  * still not E5.
+ *
+ * Four-algorithm cross-check on the same 9 scenes vs the same expert labels
+ * (OLV / PDAL-SMRF / PDAL-CSF / PDAL-PMF, F1; all three references bundled in
+ * PDAL, so reproducible without extra installs). It shows OLV's SMRF is a
+ * faithful SMRF (≈ PDAL-SMRF everywhere) and, crucially, that NO single filter
+ * wins every scene — CSF is best on metropolis large-roofs (S1 0.959), PMF on
+ * the village (S6 0.951) and gentle+dense mountain (S7 0.709), SMRF on the steep
+ * mountains, OLV on rugged (S5). So agreement with any one tool is NOT ground
+ * truth; the expert labels are the anchor.
+ *
+ *   scene  OLV    SMRF   CSF    PMF
+ *   -----  -----  -----  -----  -----
+ *   S1     0.876  0.863  0.959  0.872
+ *   S2     0.947  0.935  0.949  0.954
+ *   S3     0.961  0.960  0.963  0.961
+ *   S4     0.974  0.971  0.973  0.974
+ *   S5     0.861  0.852  0.787  0.810
+ *   S6     0.846  0.973  0.868  0.951
+ *   S7     0.511  0.480  0.453  0.709
+ *   S8     0.607  0.701  0.618  0.573
+ *   S9     0.508  0.546  0.202  0.534
+ *
+ * The two families not bundled in PDAL — MCC and PTD — are not reproduced here
+ * (lidR does not build on this toolchain's R). For reference, the OpenGF paper's
+ * own Test-I leaderboard (overall accuracy, a different split/metric, indicative
+ * only) ranks the classical methods MCC 96.3 > PTD 94.8 > CSF 93.1 > PMF 90.6.
  */
 
 import { describe, it, expect } from 'vitest';
