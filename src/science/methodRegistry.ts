@@ -205,7 +205,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'olv.registration.icp-planar.',
     citation: 'Besl & McKay (1992), doi:10.1109/34.121791; Umeyama (1991) planar LS',
     category: 'registration',
-    implementation: ['src/terrain/change/alignEpochs.ts', 'src/registration/planarIcp.ts'],
+    implementation: ['src/terrain/change/alignEpochs.ts', 'src/terrain/change/icpRegister.ts'],
   },
   'olv.volume.stockpile': {
     id: 'olv.volume.stockpile',
