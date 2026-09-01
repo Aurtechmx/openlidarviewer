@@ -1,12 +1,15 @@
 {
-  "$schemaNote": "Deterministic exposure-honest dev/holdout split of the 25 Rogue tiles for RETROSPECTIVE E5 hardening. Rogue never becomes E5. Exposed tiles (already used anywhere in the repo) are forced into development; unexposed tiles are ordered by sha256(salt + fileSha256) and filled to the development target, the rest holdout. Reproducible from the input manifest alone.",
+  "$schemaNote": "Deterministic exposure-honest dev/holdout split of the 25 Rogue tiles for RETROSPECTIVE E5 hardening. Rogue never becomes E5. Exposed tiles are pinned in the immutable ROGUE25.exposure.json ledger and forced into development; unexposed tiles are ordered by sha256(salt + fileSha256) compared by code unit and filled to the development target, the rest holdout. Reproducible from the input manifest and the exposure ledger alone.",
   "policy": {
     "salt": "ROGUE-E5-HARDENING-v1",
     "targetDevelopment": 17,
+    "exposureLedger": "validation/e5/splits/ROGUE25.exposure.json",
+    "ordering": "UTF-16 code unit on sha256(salt+fileSha256); no locale collation",
     "rule": "exposed → development; unexposed ordered by sha256(salt+fileSha256), first (target − exposed) → development, rest → holdout"
   },
   "inputCollectionDigest": "c8b8ce14d4d5204ba64aec243e028e14722bd7285e0ec98a93018f859d6d4d4b",
-  "splitDigest": "c156406a475805fc932ec871da95c4b9f33dc7529bef30d154b84e60ace22b05",
+  "exposureDigest": "9cbb73a590318c815c5b6bc36b29b73f83e871cdbf884a8b747481c8073ea5c0",
+  "splitDigest": "6bffd73f9288708d8b867100327f1e4456495c6127686cd6857f8f7668f17649",
   "summary": {
     "total": 25,
     "development": 17,

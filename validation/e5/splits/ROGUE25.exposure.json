@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "$schemaNote": "Immutable exposure ledger for the retrospective Rogue dev/holdout split. It PINS the tiles the repository had already used before the split was frozen; those tiles are forced into development and can never serve as an untouched holdout. build-rogue-split.mjs reads exposure only from this file (not a live git scan), so a later doc that mentions a tile does not silently move it out of the holdout and the split reproduces on any machine. collectionDigest ties the ledger to the exact input collection it was pinned against.",
+  "collectionDigest": "c8b8ce14d4d5204ba64aec243e028e14722bd7285e0ec98a93018f859d6d4d4b",
+  "exposed": [
+    {
+      "tileId": "10TDM3746",
+      "reason": "used before split freeze",
+      "evidence": "cited in validation/datasets/dataset-register.yaml and validation/protocols/independent-checkpoints-v1.md, scored in validation/real-scene/gf-strata/OLV-DS-091.json, and referenced by tests/e5ManifestVerify.test.ts and tests/independentCheckpointHarness.test.ts"
+    }
+  ]
+}
