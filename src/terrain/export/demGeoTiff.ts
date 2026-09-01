@@ -1,11 +1,13 @@
 /**
  * demGeoTiff.ts
  *
- * Write a single-band Float32 GeoTIFF for an elevation grid — the gold-standard
- * DEM exchange format. Classic (non-BigTIFF) little-endian TIFF with one
- * uncompressed strip, plus the GeoTIFF tags (ModelPixelScale, ModelTiepoint,
- * GeoKeyDirectory) and a GDAL_NODATA tag. CRS is carried by EPSG code in the
- * GeoKeys, so no WKT lookup is needed.
+ * Write a single-band GeoTIFF for a grid — the gold-standard DEM exchange
+ * format. The default band is Float32 (the elevation surface); an optional
+ * `band: 'uint8'` writes an unsigned-byte band instead, for a categorical grid
+ * such as the per-cell support map. Classic (non-BigTIFF) little-endian TIFF
+ * with one uncompressed strip, plus the GeoTIFF tags (ModelPixelScale,
+ * ModelTiepoint, GeoKeyDirectory) and a GDAL_NODATA tag. CRS is carried by EPSG
+ * code in the GeoKeys, so no WKT lookup is needed.
  *
  * Pure-data: builds and returns the file bytes; no DOM, deterministic.
  *
@@ -40,6 +42,14 @@ export interface DemGeoTiffInput {
    * between metres and feet. Never derived from the horizontal unit.
    */
   readonly verticalUnitCode?: number | null;
+  /**
+   * Sample band type. 'float32' (default) writes the IEEE-float surface — the
+   * DEM's long-standing format, byte-for-byte unchanged. 'uint8' writes a
+   * single-band unsigned-byte grid (BitsPerSample 8, SampleFormat 1) for a
+   * categorical raster such as the per-cell support map; `values` are truncated
+   * to bytes and `noData` should be a byte value outside the class set.
+   */
+  readonly band?: 'float32' | 'uint8';
 }
 
 /**
@@ -101,6 +111,8 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
     );
   }
   const noData = input.noData ?? -9999;
+  const band = input.band ?? 'float32';
+  const bytesPerSample = band === 'uint8' ? 1 : 4;
   const epsg = input.epsg ?? null;
   const verticalEpsg = input.verticalEpsg ?? null;
 
@@ -157,11 +169,11 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
   const noDataAscii = new TextEncoder().encode(`${noData}\0`);
 
   // ── tag table (must be ascending by tag id) ──────────────────────────────
-  const stripByteCount = cols * rows * 4;
+  const stripByteCount = cols * rows * bytesPerSample;
   const tags: Tag[] = [
     { tag: 256, type: T_LONG, count: 1, value: cols }, // ImageWidth
     { tag: 257, type: T_LONG, count: 1, value: rows }, // ImageLength
-    { tag: 258, type: T_SHORT, count: 1, value: 32 }, // BitsPerSample
+    { tag: 258, type: T_SHORT, count: 1, value: band === 'uint8' ? 8 : 32 }, // BitsPerSample
     { tag: 259, type: T_SHORT, count: 1, value: 1 }, // Compression = none
     { tag: 262, type: T_SHORT, count: 1, value: 1 }, // Photometric = BlackIsZero
     { tag: 273, type: T_LONG, count: 1, value: 0 }, // StripOffsets (patched)
@@ -169,7 +181,7 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
     { tag: 278, type: T_LONG, count: 1, value: rows }, // RowsPerStrip
     { tag: 279, type: T_LONG, count: 1, value: stripByteCount }, // StripByteCounts
     { tag: 284, type: T_SHORT, count: 1, value: 1 }, // PlanarConfiguration
-    { tag: 339, type: T_SHORT, count: 1, value: 3 }, // SampleFormat = IEEE float
+    { tag: 339, type: T_SHORT, count: 1, value: band === 'uint8' ? 1 : 3 }, // SampleFormat: 1=uint, 3=IEEE float
     { tag: 33550, type: T_DOUBLE, count: 3, value: 0, blob: pixelScale }, // ModelPixelScale
     { tag: 33922, type: T_DOUBLE, count: 6, value: 0, blob: tiepoint }, // ModelTiepoint
     { tag: 34735, type: T_SHORT, count: geoDir.length, value: 0, blob: geoDirBlob }, // GeoKeyDirectory
@@ -221,7 +233,8 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
     if (t.blob) out.set(t.blob, t.value);
   }
 
-  // Image strip — Float32 LE, row 0 = NORTH (grid row rows-1-r).
+  // Image strip — row 0 = NORTH (grid row rows-1-r). Float32 LE by default; a
+  // uint8 band writes one truncated byte per cell.
   let o = stripOffset;
   for (let r = 0; r < rows; r++) {
     const gridRow = rows - 1 - r;
@@ -229,8 +242,13 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
     for (let c = 0; c < cols; c++) {
       const i = base + c;
       const v = input.coverage[i] !== 0 && Number.isFinite(input.values[i]) ? input.values[i] : noData;
-      dv.setFloat32(o, v, true);
-      o += 4;
+      if (band === 'uint8') {
+        out[o] = v & 0xff;
+        o += 1;
+      } else {
+        dv.setFloat32(o, v, true);
+        o += 4;
+      }
     }
   }
 
