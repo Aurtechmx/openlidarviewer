@@ -51,6 +51,7 @@ import type {
   RefinementReadinessPhase,
   SchedulerReadinessFacts,
 } from './refinementReadiness';
+import { formatByteSize, groupInt } from '../../io/formatByteSize';
 
 /**
  * Everything outside the readiness facts, as the scheduler already reports it.
@@ -364,4 +365,64 @@ export function buildStreamingDiagnostics(
 
     unavailable,
   };
+}
+
+/**
+ * A human-readable rendering of one diagnostics snapshot — the text half of the
+ * record the `?debug=1` overlay already carries into its metrics JSON, so a
+ * developer reads the SAME numbers a test asserts on rather than a second
+ * derivation.
+ *
+ * THE HONESTY RULE CARRIES THROUGH. A field named in `d.unavailable` is printed
+ * as the literal word `unavailable`, never as `0` or `—`: the record's own
+ * account of what it could not measure is preserved verbatim in the readout, so
+ * a reader never mistakes a gap for a measured zero. Pure — no DOM, no clock.
+ */
+export function formatStreamingDiagnostics(d: StreamingDiagnostics | null): string {
+  if (d === null) return '(no active stream)';
+
+  const gone = new Set<string>(d.unavailable);
+  /** A value field, or the word `unavailable` when the record named it so. */
+  const show = (field: StreamingDiagnosticField, render: () => string): string =>
+    gone.has(field) ? 'unavailable' : render();
+
+  const fraction = (n: number | null): string => (n === null ? '—' : n.toFixed(3));
+
+  // Precomputed so the upload-queue line is a flat template, not one nesting a
+  // template literal inside a `show` callback inside another template.
+  const uploadNodes = show('uploadPendingNodes', () => `${groupInt(d.uploadPendingNodes ?? 0)} nodes`);
+  const uploadBytes = show('uploadPendingBytes', () => formatByteSize(d.uploadPendingBytes ?? 0));
+  const residentDecoded = show('residentDecodedBytes', () => formatByteSize(d.residentDecodedBytes ?? 0));
+
+  const lines: string[] = [
+    `readiness     ${d.readinessPhase}` +
+      ` · resident ${show('fractionResident', () => fraction(d.fractionResident))}` +
+      ` · churn ${show('churn', () => fraction(d.churn))}`,
+    `wanted nodes  ${groupInt(d.wantedNodes)} wanted` +
+      ` · ${groupInt(d.residentNodes)} resident` +
+      ` · ${groupInt(d.inFlightNodes)} in-flight` +
+      ` · ${groupInt(d.queuedNodes)} queued`,
+    `              ${groupInt(d.decodedPendingNodes)} decoded-pending` +
+      ` · ${groupInt(d.failedNodes)} failed` +
+      ` · ${groupInt(d.knownNodes)} known` +
+      ` · ${groupInt(d.visibleNodes)} visible`,
+    `points        ${groupInt(d.residentPoints)} resident` +
+      ` · ${groupInt(d.decodedPendingPoints)} decoded-pending` +
+      ` / ${groupInt(d.pointBudget)} budget`,
+    `scheduler     tick ${d.lastTickMs.toFixed(1)} ms` +
+      ` · camera ${d.cameraVelocity.toFixed(2)} u/s (${d.cameraState})` +
+      ` · rescores ${groupInt(d.fullRescoreCount)}`,
+    `adaptation    concurrency ${groupInt(d.effectiveMaxConcurrent)}` +
+      ` · pressure -${groupInt(d.pressureDepthReduction)} depth` +
+      ` · fps budget ×${d.fpsBudgetFactor.toFixed(2)}`,
+    `cache         ${formatByteSize(d.cacheBytes)} / ${formatByteSize(d.cacheMaxBytes)}` +
+      ` · ${groupInt(d.cacheEntries)} entries` +
+      ` · hits ${groupInt(d.cacheHits)} misses ${groupInt(d.cacheMisses)}` +
+      ` evict ${groupInt(d.cacheEvictions)}`,
+    `generation    ${show('generationId', () => groupInt(d.generationId ?? 0))}` +
+      ` · decode retries ${show('decodeRetryCount', () => groupInt(d.decodeRetryCount ?? 0))}`,
+    `upload queue  ${uploadNodes} · ${uploadBytes} · resident decoded ${residentDecoded}`,
+  ];
+
+  return lines.join('\n');
 }
