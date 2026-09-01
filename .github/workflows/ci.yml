@@ -61,6 +61,8 @@ jobs:
         run: npm run lint:oracle-consensus
       - name: E5 input-manifest verify (immutable digest, no dup tiles, creation ≠ acquisition)
         run: npm run validation:e5:manifests:verify
+      - name: Reference-strategy lint (every consensus record classifies + is test-backed)
+        run: npm run lint:reference-strategy
       - name: No source files git-ignored
         run: npm run lint:no-ignored-src
       - name: No git-ignored path is tracked (local tooling committed by `git add -A`)

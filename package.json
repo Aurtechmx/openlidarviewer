@@ -160,6 +160,7 @@
     "lint:digest-manifests": "node scripts/lint-digest-manifests.mjs",
     "lint:oracle-registry": "node scripts/lint-oracle-registry.mjs",
     "lint:oracle-consensus": "node scripts/lint-oracle-consensus.mjs",
+    "lint:reference-strategy": "node scripts/lint-reference-strategy.mjs",
     "verify:reference-reproducibility": "node scripts/verify-reference-reproducibility.mjs",
     "lint:pr-hygiene": "node scripts/pr-hygiene.mjs",
     "lint:license": "node scripts/lint-license.mjs",
