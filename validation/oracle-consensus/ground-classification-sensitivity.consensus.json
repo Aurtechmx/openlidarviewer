@@ -1,0 +1,29 @@
+{
+  "$schemaNote": "Oracle-triangulation for GROUND classification. Unlike the slope/aspect/CRS families there is no analytic truth and no single reference algorithm that can be treated as ground truth: SMRF, CSF and PMF are all established, published filters and they disagree with each other. This record documents that disagreement, measured against the SAME expert-labelled reference (OpenGF), and shows OLV sits inside the envelope the established tools already span. The verdict is METHOD_SENSITIVITY: agreement or disagreement with any one filter is not an accuracy claim, because the references do not agree among themselves. These numbers are EXPLORATORY evidence (the OpenGF clouds are licensed but too large to commit, so CI cannot recompute the legs); the committed test validates the verdict logic and the record's internal consistency, not the cloud measurements.",
+  "contract": {
+    "id": "ground-classification-f1-v1",
+    "quantity": "ground.classification.f1",
+    "reference": "OpenGF finely-labelled expert ground (class 2 = ground; Qin et al. CVPRW 2021)",
+    "matching": "all four filters run over the identical scene through PDAL (filters.smrf / filters.csf / filters.pmf) and scored against the identical expert labels; OLV deriveClassification scored the same way. Matched grid, matched truth, so a difference is a method difference, not a parameter artifact.",
+    "sensitivityThresholdF1": 0.08,
+    "note": "sensitivityThresholdF1 is the inter-reference F1 span above which the three established filters are treated as genuinely disagreeing (no consensus truth). It is a documented decision, not a measured constant."
+  },
+  "evidenceRole": "exploratory",
+  "scenes": [
+    { "id": "OpenGF-S1", "terrain": "metropolis large-roofs", "olvF1": 0.876, "referenceF1": { "smrf": 0.863, "csf": 0.959, "pmf": 0.872 } },
+    { "id": "OpenGF-S2", "terrain": "metropolis dense-roofs", "olvF1": 0.947, "referenceF1": { "smrf": 0.935, "csf": 0.949, "pmf": 0.954 } },
+    { "id": "OpenGF-S3", "terrain": "small-city flat", "olvF1": 0.961, "referenceF1": { "smrf": 0.960, "csf": 0.963, "pmf": 0.961 } },
+    { "id": "OpenGF-S4", "terrain": "small-city undulating", "olvF1": 0.974, "referenceF1": { "smrf": 0.971, "csf": 0.973, "pmf": 0.974 } },
+    { "id": "OpenGF-S5", "terrain": "small-city rugged", "olvF1": 0.861, "referenceF1": { "smrf": 0.852, "csf": 0.787, "pmf": 0.810 } },
+    { "id": "OpenGF-S6", "terrain": "village scattered-buildings", "olvF1": 0.846, "referenceF1": { "smrf": 0.973, "csf": 0.868, "pmf": 0.951 } },
+    { "id": "OpenGF-S7", "terrain": "mountain gentle + dense veg", "olvF1": 0.511, "referenceF1": { "smrf": 0.480, "csf": 0.453, "pmf": 0.709 } },
+    { "id": "OpenGF-S8", "terrain": "mountain steep + sparse veg", "olvF1": 0.607, "referenceF1": { "smrf": 0.701, "csf": 0.618, "pmf": 0.573 } },
+    { "id": "OpenGF-S9", "terrain": "mountain steep + dense veg", "olvF1": 0.508, "referenceF1": { "smrf": 0.546, "csf": 0.202, "pmf": 0.534 } }
+  ],
+  "finding": "On the flat/undulating city scenes (S2-S4) all three references agree within a few thousandths and OLV joins them. On rugged and mountain scenes the references diverge widely (S9 span 0.344, S7 span 0.256, S6 span 0.127) and no filter wins everywhere: CSF best on S1, PMF best on S6/S7, SMRF best on S8/S9, OLV best on S5. Where established tools disagree by more than the threshold, the honest verdict is METHOD_SENSITIVITY, not an OLV accuracy grade.",
+  "interOracleF1Corroboration": {
+    "note": "Direct filter-vs-filter ground agreement (not vs expert truth), measured on two scenes, corroborates that the references disagree with each other by up to ~12 percent.",
+    "OpenGF-S1": { "smrf_csf": 0.881, "smrf_pmf": 0.949, "csf_pmf": 0.878 },
+    "OpenGF-S6": { "smrf_csf": 0.880, "smrf_pmf": 0.951, "csf_pmf": 0.867 }
+  }
+}
