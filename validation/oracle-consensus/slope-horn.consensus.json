@@ -1,0 +1,22 @@
+{
+  "$schemaNote": "Oracle-triangulation record: OLV vs analytic truth vs matched independent implementations, on ONE canonical quantity contract. OLV's leg is recomputed live by tests/oracleConsensusSlope.test.ts; the external legs here were produced by scripts/gen-oracle-consensus-slope.mjs and are read by CI without the tools installed.",
+  "contract": {
+    "id": "terrain-slope-horn-v1",
+    "quantity": "terrain.slope",
+    "algorithm": "Horn",
+    "units": { "horizontal": "metre", "vertical": "metre", "output": "degree" },
+    "edgePolicy": "exclude-one-cell-border",
+    "noDataPolicy": "strict",
+    "absoluteToleranceDeg": 1e-5
+  },
+  "fixture": {
+    "id": "tilted-plane-eastgrad-0.30",
+    "cols": 50, "rows": 50, "cellMetres": 1, "crs": "EPSG:32633",
+    "model": "z[r][c] = 0.30 * c  (pure east gradient; analytic slope is constant everywhere)"
+  },
+  "oracles": [
+    { "id": "analytic-plane-slope", "referenceClass": "analytic-truth", "tool": "closed form atan(0.30)", "meanSlopeDeg": 16.69924423 },
+    { "id": "gdal-horn-slope", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem slope -alg Horn", "meanSlopeDeg": 16.699243783951 },
+    { "id": "grass-horn-slope", "referenceClass": "matched-implementation", "tool": "GRASS 8.5.0 r.slope.aspect", "meanSlopeDeg": 16.6992439428965 }
+  ]
+}
