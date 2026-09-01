@@ -19,6 +19,11 @@
 
 import { exportGate, EVIDENCE_REGISTRY } from './evidenceRegistry';
 import { evidenceRank, INDEPENDENCE_FLOOR } from './evidenceLevel';
+import {
+  resolveEvidence,
+  type EvidenceContext,
+  type ScopedEvidenceRecord,
+} from './scopedEvidence';
 
 /**
  * The evidence note for a product identified by its claim id. Derived from the
@@ -92,4 +97,44 @@ export function evidenceStatus(claimId: string): EvidenceStatus {
   if (d.exploratoryOnly) return 'exploratory';
   if (d.allowed) return 'validated';
   return 'refused';
+}
+
+/**
+ * The SCOPE-AWARE evidence note for a DTM-family product, derived from
+ * {@link resolveEvidence}. Compact, and never shows a bare "E5": an in-scope
+ * match reads as validated FOR the registered study envelope; an out-of-scope or
+ * applicability-unknown result says external evidence exists but this dataset is
+ * outside the validated scope. With no context (or no scoped record), the wording
+ * matches the baseline note the product already carries.
+ *
+ * `records` defaults to the empty shipped set, so with today's registry this
+ * returns the baseline wording for every real artifact.
+ */
+export function scopedEvidenceNote(
+  claimId: string,
+  context?: EvidenceContext,
+  records?: readonly ScopedEvidenceRecord[],
+): string {
+  const r = resolveEvidence(claimId, context, records);
+  switch (r.resolutionState) {
+    case 'validated-in-scope':
+      return (
+        'Evidence: externally field validated for the registered study envelope ('
+        + r.matchedScopedStudy + '). Applies only within that scope.'
+      );
+    case 'external-evidence-out-of-scope':
+      return (
+        'Evidence: external field evidence exists for this DTM method, but this '
+        + 'dataset is outside the validated study scope. Baseline level stands.'
+      );
+    case 'applicability-unknown':
+      return (
+        'Evidence: external field evidence exists for this DTM method, but this '
+        + 'dataset’s applicability could not be established, so it is treated '
+        + 'as outside the validated study scope. Baseline level stands.'
+      );
+    default:
+      // No scoped record for the claim: the baseline gate note is authoritative.
+      return evidenceNote(claimId);
+  }
 }
