@@ -435,12 +435,12 @@ claims:
     evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: pending
     approvedClaim: "Ground separation validated on synthetic known-truth fixtures."
-    prohibitedClaim: ["SMRF (unqualified)", "field-validated ground accuracy", "precision/recall on external benchmarks"]
+    prohibitedClaim: ["SMRF (unqualified)", "field-validated ground accuracy", "field-validated precision/recall on external benchmarks"]
     scope:
       supported: []
       unsupported:
         - "Real terrain. The evidence is synthetic known-truth fixtures, and synthetic validation is not field validation."
-        - "Precision and recall against an external benchmark; none has been run."
+        - "Field-validated (surveyed-ground) precision and recall. External reference-label agreement (OpenGF expert labels, ASPRS producer class-2 ground on real airborne scenes) HAS been measured and reported with its weak regimes intact (mountain F1 near 0.5, dense-canopy precision near 0.34, building roofs read as ground), but reference labels are a classifier's output, not survey checkpoints, so field accuracy stays unmeasured and E5 unreached."
         - "Steep sparse terrain, dense low vegetation and complex roofs, the cases the fixtures do not contain."
         - "The name SMRF unqualified. A subset of the stages is implemented and the output metadata says which."
 
