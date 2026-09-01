@@ -1,5 +1,5 @@
 {
-  "$schemaNote": "Oracle-triangulation for hillshade (standard Lambertian shaded relief). The physics is the cosine of the incidence angle between the sun vector and the surface normal, a continuous value in [0,1]; GDAL gdaldem hillshade and OLV shadeFromSlopeAspect both compute it and then quantise to a grey byte. Crucially they use DIFFERENT published byte encodings: GDAL maps 1+254*hs (reserving 0 for nodata) while OLV maps 255*hs. So the triangulation is on the CONTINUOUS illumination, where all three agree to floating point; the ~1 byte difference in the rendered grey is a convention difference, proven, not an OLV error. OLV's leg is recomputed live; the external byte is committed from gdaldem.",
+  "$schemaNote": "Oracle-triangulation for hillshade (standard Lambertian shaded relief). The physics is the cosine of the incidence angle between the sun vector and the surface normal, a continuous value in [0,1]; GDAL gdaldem hillshade and OLV shadeFromSlopeAspect both compute it and then quantise to a grey byte. They use DIFFERENT published byte encodings: GDAL maps 1+254*hs (reserving 0 for nodata) while OLV maps 255*hs. So the triangulation is on the CONTINUOUS illumination, where all agree to floating point; the ~1 byte difference in the rendered grey is a convention difference, proven, not an OLV error. Two cases at different aspects (a west-facing and an east-facing plane) give two different operating points so a sign error in the illumination term cannot pass. OLV's legs are recomputed live; the external bytes are committed from gdaldem.",
   "contract": {
     "id": "terrain-hillshade-lambert-v1",
     "quantity": "terrain.hillshade",
@@ -8,11 +8,22 @@
     "sun": { "azimuthDeg": 315, "altitudeDeg": 45, "zFactor": 1 },
     "continuousToleranceAbs": 1e-4,
     "byteConventions": { "gdal": "round(1 + 254*hs), 0 reserved for nodata", "olv": "round(255*hs)" },
-    "note": "Comparing the two grey bytes directly is the trap this contract exists to avoid: 209 vs 210 looks like disagreement but is entirely the encoding. The physics is identical."
+    "note": "Comparing the two grey bytes directly is the trap this contract exists to avoid: the west-facing case renders 209 vs 210 and the east-facing case 136 vs 137. Both gaps are entirely the encoding; the physics is identical in each."
   },
-  "fixture": { "id": "tilted-plane-eastgrad-0.30", "cols": 50, "rows": 50, "cellMetres": 1, "model": "z[r][c] = 0.30 * c (slope tangent 0.30, aspect due west)" },
-  "oracles": [
-    { "id": "analytic-lambert", "referenceClass": "analytic-truth", "tool": "closed form", "continuousHs": 0.820959 },
-    { "id": "gdal-hillshade", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem hillshade -az 315 -alt 45 -z 1", "byteInterior": 210, "byteEncoding": "gdal" }
+  "cases": [
+    {
+      "fixture": { "id": "tilted-plane-westfacing-0.30", "cols": 50, "rows": 50, "cellMetres": 1, "gradient": 0.3, "aspectMathRad": 3.141592653589793, "model": "z[r][c] = 0.30 * c (aspect due west)" },
+      "oracles": [
+        { "id": "analytic-lambert", "referenceClass": "analytic-truth", "tool": "closed form", "continuousHs": 0.820959 },
+        { "id": "gdal-hillshade", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem hillshade -az 315 -alt 45 -z 1", "byteInterior": 210, "byteEncoding": "gdal" }
+      ]
+    },
+    {
+      "fixture": { "id": "tilted-plane-eastfacing-0.30", "cols": 50, "rows": 50, "cellMetres": 1, "gradient": 0.3, "aspectMathRad": 0, "model": "z[r][c] = 0.30 * (49 - c) (aspect due east)" },
+      "oracles": [
+        { "id": "analytic-lambert", "referenceClass": "analytic-truth", "tool": "closed form", "continuousHs": 0.533612 },
+        { "id": "gdal-hillshade", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem hillshade -az 315 -alt 45 -z 1", "byteInterior": 137, "byteEncoding": "gdal" }
+      ]
+    }
   ]
 }
