@@ -21,9 +21,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const yaml = readFileSync(resolve(ROOT, 'docs/validation/claim-register.yaml'), 'utf8');
 const binding = readFileSync(resolve(ROOT, 'tests/methodSupportingTests.test.ts'), 'utf8');
 
+/** Escape every regex metacharacter in a literal, so an id is matched verbatim. */
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /** Extract a method's supporting-test list literal from the binding source. */
 function supportingTests(id: string): string {
-  const re = new RegExp(`'${id.replace(/\./g, '\\.')}':\\s*(\\[[^\\]]*\\])`);
+  const re = new RegExp(`'${escapeRegExp(id)}':\\s*(\\[[^\\]]*\\])`);
   const m = binding.match(re);
   expect(m, `no supporting-test binding for ${id}`).toBeTruthy();
   return m![1];
