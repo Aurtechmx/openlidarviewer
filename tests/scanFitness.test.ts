@@ -211,6 +211,45 @@ describe('buildScanFitness — density reports a measurement, not a quality leve
   });
 });
 
+describe('buildScanFitness — density regularity readout (median vs mean)', () => {
+  const densitySummary = (f: ReturnType<typeof buildScanFitness>): string =>
+    f.dimensions.find((d) => d.key === 'density')!.summary;
+
+  it('appends a neutral median + median/mean readout when the median is supplied', () => {
+    const f = buildScanFitness(base({ groundDensityPerM2: 12, medianGroundDensityPerM2: 11 }));
+    const s = densitySummary(f);
+    // The mean-based grade line is untouched…
+    expect(s).toMatch(/12 ground pts\/m² — clears the 8 pts\/m² QL1 pulse-density reference\./);
+    // …and the median + ratio are appended as a plain figure.
+    expect(s).toMatch(/Median 11 ground pts\/m² \(median\/mean 0\.92\)\./);
+    // Neutral: no superlative or verdict words in the readout.
+    expect(s).not.toMatch(/even|uniform|regular|excellent|great|poor|clustered/i);
+  });
+
+  it('omits the readout when no median is supplied (legacy callers unaffected)', () => {
+    const s = densitySummary(buildScanFitness(base({ groundDensityPerM2: 12 })));
+    expect(s).not.toMatch(/median\/mean/i);
+  });
+
+  it('the readout retunes no tone — a low median still grades on the mean', () => {
+    // Mean clears QL1 (ready); a far-lower median only reports a ratio, never a downgrade.
+    const f = buildScanFitness(base({ groundDensityPerM2: 12, medianGroundDensityPerM2: 3 }));
+    expect(tone(f, 'density')).toBe<FitnessTone>('ready');
+    expect(densitySummary(f)).toMatch(/median\/mean 0\.25/);
+  });
+
+  it('omits the readout on an unverified-unit scan (metric held back)', () => {
+    const s = densitySummary(buildScanFitness(base({ groundDensityPerM2: 12, medianGroundDensityPerM2: 11, unitKnown: false })));
+    expect(s).not.toMatch(/median\/mean/i);
+    expect(s).toMatch(/units are unverified/i);
+  });
+
+  it('omits the readout when the ratio is undefined (non-positive mean)', () => {
+    const s = densitySummary(buildScanFitness(base({ groundDensityPerM2: 0, medianGroundDensityPerM2: 5 })));
+    expect(s).not.toMatch(/median\/mean/i);
+  });
+});
+
 describe('buildScanFitness — unverified units fail closed', () => {
   const summary = (f: ReturnType<typeof buildScanFitness>, key: FitnessKey): string =>
     f.dimensions.find((d) => d.key === key)!.summary;
