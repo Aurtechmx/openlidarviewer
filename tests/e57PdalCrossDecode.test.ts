@@ -1,5 +1,6 @@
 /**
- * e57PdalCrossDecode.test.ts — OLV's E57 reader against PDAL's, point for point.
+ * e57PdalCrossDecode.test.ts — OLV's E57 reader against PDAL's, by aggregate
+ * (order-independent) cross-decode agreement.
  *
  * WHY A SECOND READER AND NOT THE FILE'S OWN METADATA. An E57 file declares its
  * own `recordCount`, `cartesianBounds` and per-field limits, and OLV reproduces
@@ -14,14 +15,23 @@
  * CHM against. Its output is committed, so the assertion runs without PDAL
  * installed; regenerating it needs PDAL and the source file.
  *
- * WHAT MAKES THE COMPARISON FULL COVERAGE. The per-dimension QUANTISED SUM is the
- * strong leg: every value rounded to 1e-6 and summed as an exact integer, which
- * is order independent and lossless, so ANY single point differing by 1e-6 or
- * more fails it. The mean is kept as a second, differently-shaped check but is
- * deliberately NOT relied on for that: measured against this point count, one
- * value would have to be wrong by about 1.79 m before it moved the mean past the
- * registered 1e-6 budget. The mean catches systematic error, which is the
- * realistic parser failure; the integer sum catches the isolated kind it cannot.
+ * WHAT THE QUANTISED SUM DOES AND DOES NOT PROVE. The per-dimension QUANTISED SUM
+ * is the strong leg: every value rounded to 1e-6 and summed as an exact integer,
+ * which is order independent and lossless, so ANY single isolated point differing
+ * by 1e-6 or more fails it. The mean is kept as a second, differently-shaped
+ * check but is deliberately NOT relied on for that: measured against this point
+ * count, one value would have to be wrong by about 1.79 m before it moved the
+ * mean past the registered 1e-6 budget. The mean catches systematic error, which
+ * is the realistic parser failure; the integer sum catches the isolated kind it
+ * cannot. Because the sum is order-independent, though, this is AGGREGATE
+ * agreement, not ordered point-for-point equality: two compensating errors
+ * (+1 at one record, −1 at another) cancel in the sum, and a record REORDERING
+ * leaves it unchanged. Neither is a realistic decoder failure, but the honest
+ * scope is "same multiset of values per column", not "same value at every index".
+ * Ordered point-for-point verification (fixed-size chunk hashes of the ordered
+ * quantised tuples, with swap/alter/drop negative controls) is future work: it
+ * needs the committed reference to carry per-block hashes, which requires
+ * regenerating from the source E57 (external, DOI-gated) with PDAL.
  * Extremes and count bound the set, and the 18 committed positional samples,
  * spread the length of the file, turn a failure into a diagnosis.
  *
@@ -187,9 +197,10 @@ withSource('OLV and PDAL decode the same E57 the same way', () => {
 
   /**
    * Sum of `Math.round(v * quantum)` as an exact BigInt: order independent, and
-   * lossless, so it cannot absorb a single wrong value the way a mean can. The
-   * reference is generated with `floor(x + 0.5)` to match `Math.round` exactly,
-   * including on ties and negatives.
+   * lossless, so it cannot absorb a single ISOLATED wrong value the way a mean
+   * can (two compensating errors, or a reordering, do cancel — see the header:
+   * this is aggregate, not ordered, agreement). The reference is generated with
+   * `floor(x + 0.5)` to match `Math.round` exactly, including on ties and negatives.
    */
   function quantisedSum(c: ArrayLike<number>, scale = 1): bigint {
     let total = 0n;
