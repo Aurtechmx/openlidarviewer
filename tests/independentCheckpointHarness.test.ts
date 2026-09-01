@@ -54,7 +54,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parseLasHeader } from '../src/io/lasHeader';
 import { allocRawPoints, decodeContext, decodeRecord, type RawPoints } from '../src/io/lasDecodeShared';
 import { decodeLaz } from '../src/io/lazDecode';
+import { computeOrigin } from '../src/io/coordinateBridge';
 import { DtmSurfaceModel } from '../src/terrain/validate/dtmSurfaceModel';
+import { recommendGrid } from '../src/terrain/quality/recommendGrid';
 import {
   readProjectCheckpointsCsv,
   runCheckpointStudy,
@@ -71,27 +73,38 @@ const HORIZONTAL_EPSG = Number(process.env.CHECKPOINT_HORIZONTAL_EPSG ?? '6339')
 const VERTICAL_EPSG = Number(process.env.CHECKPOINT_VERTICAL_EPSG ?? '5703');
 
 const PRODUCER_GROUND = 2; // ASPRS class 2 = ground
-const CELL_SIZE_M = 1;
 
 /** Decode a plain LAS (uncompressed) or a .laz/COPC into RawPoints — same
- *  idiom as tests/groundFilterProducerAgreement.test.ts. */
-async function decodeScene(path: string): Promise<{ out: RawPoints; count: number }> {
+ *  idiom as tests/groundFilterProducerAgreement.test.ts.
+ *
+ *  Recentring is load-bearing here. USGS 3DEP tiles carry world UTM
+ *  coordinates (northings ~3.2M m Houston, ~4.65M m Rogue). Float32 ULP at
+ *  those magnitudes is ~0.5 m, which would obliterate the centimetric/
+ *  decimetric residuals a checkpoint study measures. The production loader
+ *  (`src/io/loadLas.ts`) never lets a raw world coordinate enter Float32: it
+ *  derives a per-cloud integer origin with `computeOrigin(header.min)` and
+ *  subtracts it in Float64 before the f32 downcast. We do exactly the same and
+ *  return the origin so callers can map checkpoints into the same local frame. */
+async function decodeScene(
+  path: string,
+): Promise<{ out: RawPoints; count: number; origin: [number, number, number] }> {
   const bytes = readFileSync(path);
   const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const header = parseLasHeader(buf);
+  const origin = computeOrigin(header.min);
   const compressed = /\.(laz|copc\.laz)$/i.test(path);
   if (compressed) {
-    const out = await decodeLaz(buf, header, [0, 0, 0], 1);
-    return { out, count: header.pointCount };
+    const out = await decodeLaz(buf, header, origin, 1);
+    return { out, count: header.pointCount, origin };
   }
   const count = header.pointCount;
   const view = new DataView(buf);
-  const ctx = decodeContext(header, [0, 0, 0]);
+  const ctx = decodeContext(header, origin);
   const out = allocRawPoints(count, false, false);
   for (let i = 0; i < count; i++) {
     decodeRecord(view, header.offsetToPointData + i * header.pointDataRecordLength, i, ctx, out);
   }
-  return { out, count };
+  return { out, count, origin };
 }
 
 const ready = Boolean(SCENE && GDB && PROJECT_ID && existsSync(SCENE) && existsSync(GDB));
@@ -100,12 +113,19 @@ describe.skipIf(!ready)('independent-checkpoint accuracy harness (pathway A: pro
   it('reports Bias/RMSE/MAE/NMAD/P95 when prerequisites are met, else fails closed with a named reason', async () => {
     // A full USGS 3DEP tile decode + 1 m DTM rasterisation over its whole
     // extent is well beyond the default 15 s unit-test timeout.
-    const { out, count } = await decodeScene(SCENE!);
+    const { out, count, origin } = await decodeScene(SCENE!);
+    const [originX, originY] = origin;
 
+    // Bounds are accumulated in the LOCAL frame the points now live in (world
+    // minus `origin`). The DTM grid and every predict() query stay local; the
+    // world bounds handed to the extent/CRS gate are reconstructed by adding
+    // the origin back, so the checkpoint gate still reasons in world UTM.
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
     const trainPts: Array<{ x: number; y: number; z: number }> = [];
     for (let i = 0; i < count; i++) {
       if (out.classification[i] !== PRODUCER_GROUND) continue;
@@ -118,18 +138,41 @@ describe.skipIf(!ready)('independent-checkpoint accuracy harness (pathway A: pro
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
     }
     // Sanity: the tile really does carry an official ground classification.
     expect(trainPts.length).toBeGreaterThan(0);
 
+    // Cell size comes from the SAME production chooser the live pipeline uses
+    // (`recommendGrid`, density-aware: √(area/points)·2.5 snapped to the grid
+    // ladder), never a harness-local magic constant that would silently define
+    // the method under test. Deterministic given the tile's extent and count.
+    const cellSizeM = recommendGrid({
+      pointCount: trainPts.length,
+      widthM: maxX - minX,
+      depthM: maxY - minY,
+      reliefM: maxZ - minZ,
+    }).cellSizeM;
+
     const grid = {
       originH1: minX,
       originH2: minY,
-      cols: Math.max(1, Math.ceil((maxX - minX) / CELL_SIZE_M) + 1),
-      rows: Math.max(1, Math.ceil((maxY - minY) / CELL_SIZE_M) + 1),
-      cellSizeM: CELL_SIZE_M,
+      cols: Math.max(1, Math.ceil((maxX - minX) / cellSizeM) + 1),
+      rows: Math.max(1, Math.ceil((maxY - minY) / cellSizeM) + 1),
+      cellSizeM,
     };
-    const model = new DtmSurfaceModel({ grid, aggregation: 'median' });
+    const model = new DtmSurfaceModel({
+      grid,
+      aggregation: 'median',
+      // Production parity with the shipped trusted-Class-2 ground path: despike
+      // is OFF there (measured survey returns are authoritative and a steep node
+      // must not be void-filled as a blunder), and the tile's vertical unit is
+      // metres. Freeze both so the harness scores the surface the product ships,
+      // not a despiked or rescaled variant of it.
+      despike: false,
+      verticalUnitToMetres: 1,
+    });
     model.fit(trainPts);
 
     const rows = readProjectCheckpointsCsv(GDB!, LAYER, PROJECT_ID!);
@@ -138,16 +181,17 @@ describe.skipIf(!ready)('independent-checkpoint accuracy harness (pathway A: pro
     const tile: TileFrame = {
       horizontalEpsg: HORIZONTAL_EPSG,
       verticalEpsg: VERTICAL_EPSG,
-      minX,
-      maxX,
-      minY,
-      maxY,
+      minX: minX + originX,
+      maxX: maxX + originX,
+      minY: minY + originY,
+      maxY: maxY + originY,
     };
 
     const measuredById = new Map<string, number>();
     for (const r of rows) {
-      const x = Number(r.source_easting);
-      const y = Number(r.source_northing);
+      // World checkpoint XY → the DTM's local frame before sampling.
+      const x = Number(r.source_easting) - originX;
+      const y = Number(r.source_northing) - originY;
       const z = model.predict(x, y);
       if (z !== null) measuredById.set(r.unique_identifier, z);
     }
@@ -159,7 +203,8 @@ describe.skipIf(!ready)('independent-checkpoint accuracy harness (pathway A: pro
       [
         `scene: ${SCENE!.split('/').pop()}`,
         `project ${PROJECT_ID}: ${rows.length} checkpoint(s) total`,
-        `tile bounds: X[${minX.toFixed(1)}, ${maxX.toFixed(1)}]  Y[${minY.toFixed(1)}, ${maxY.toFixed(1)}]`,
+        `tile bounds (world): X[${tile.minX.toFixed(1)}, ${tile.maxX.toFixed(1)}]  Y[${tile.minY.toFixed(1)}, ${tile.maxY.toFixed(1)}]`,
+        `local origin: [${originX}, ${originY}]  cell size: ${cellSizeM} m`,
         `prerequisites ok: ${prereq.ok}`,
         ...prereq.reasons.map((r) => `  - ${r}`),
       ].join('\n'),
