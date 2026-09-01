@@ -263,6 +263,13 @@
       "why": "The single source of truth for every Web Worker the app ships, consumed at BUILD time by vite.config.ts (live-transform excludes and chunk-emission pins) and by scripts/lint-worker-registry.mjs. The application graph reaches the workers by new Worker(new URL(...)) from their clients, never through this file, so a walk from index.html cannot see it.",
       "graduation": "None expected. It is reachable from the build configuration by design; this entry records that the application entry graph is not where to look for it.",
       "review": "2027-08-27"
+    },
+    {
+      "path": "src/science/liveDtmDescriptor.ts",
+      "status": "validation-only",
+      "why": "The canonical descriptor of the delivered DTM method plus a SHA-256 method digest, for the external-validation and export-provenance paths: a stamped digest can be compared against a fresh resolve to prove the delivered method has not drifted. The scoped-evidence resolver and the E5 reduce path will read it, but neither construction is wired into the application graph yet, so only its test imports it.",
+      "graduation": "Export provenance stamps dtmMethodDigest into the DTM evidence context, or the E5 reduce path resolves the descriptor to verify the candidate method, at which point the application graph reaches it.",
+      "review": "2027-02-28"
     }
   ]
 }
