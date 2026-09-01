@@ -13,8 +13,8 @@ Every DTM accuracy figure this project has produced so far is either synthetic
 (ground truth known by construction) or cross-implementation agreement against
 another algorithm (PDAL, GDAL). Both are useful and neither is physical
 accuracy: two programs computing the same wrong answer agree perfectly.
-Independent survey checkpoints — 145,299 of them, public domain, in the USGS
-3DEP checkpoint database — are observations nothing in this project produced or
+Independent survey checkpoints (145,299 of them, public domain, in the USGS
+3DEP checkpoint database) are observations nothing in this project produced or
 tuned against. Comparing OLV's output to them is the one comparison that can
 move a claim from "consistent with another implementation" to "consistent with
 where the ground actually is."
@@ -32,9 +32,9 @@ where the ground actually is."
 `checkpointPrerequisites()` refuses to report a figure unless, in order:
 
 1. at least one project checkpoint falls inside the tile's horizontal extent;
-2. of those, at least one shares the tile's horizontal AND vertical EPSG — a
+2. of those, at least one shares the tile's horizontal AND vertical EPSG (a
    checkpoint surveyed in a different datum is excluded rather than silently
-   reprojected;
+   reprojected);
 3. of those, the checkpoint states an accuracy/uncertainty value;
 4. of those, the checkpoint states a `point_type` (NVA/VVA), the field marking
    it as an independent survey observation;
@@ -46,30 +46,28 @@ stop at the first failure, and nothing partial is computed when it is closed.
 ## Statistics reported
 
 Once the gate passes, `src/validation/checkpointAccuracy.ts` (the existing,
-already-tested accuracy engine — reused here, not reimplemented) computes,
-pooled and per-stratum, over signed residuals `measured − reference`:
+already-tested accuracy engine, reused here rather than reimplemented) computes
+the following pooled and per-stratum, over signed residuals `measured − reference`:
+bias (mean residual), RMSE (root mean square residual), median, NMAD
+(1.4826 × median absolute deviation from the median), P90 and P95 of the
+absolute residual, the maximum absolute residual, and a 95% confidence interval
+on the bias (normal approximation).
 
-- **bias** — mean residual
-- **RMSE** — root mean square residual
-- **median** and **NMAD** (1.4826 × median absolute deviation from the median)
-- **P90 / P95** of the absolute residual
-- **max absolute residual**
-- a 95 % confidence interval on the bias (normal approximation)
-
-`tests/support/checkpointGdb.ts` adds **MAE** (mean absolute residual), which
+`tests/support/checkpointGdb.ts` adds MAE (mean absolute residual), which
 `checkpointAccuracy()` does not report, computed directly from the same
 residuals.
 
 ## Two separate pathways
 
-- **Pathway A** — official (producer) class-2 ground returns rasterised
-  directly into an OLV DTM via `DtmSurfaceModel`, sampled at each checkpoint.
-  This measures OLV's *surface builder* against survey truth, holding the
-  ground labelling fixed to a source OLV did not classify.
-- **Pathway B** — raw, unclassified points run through OLV's own ground
-  classifier, then rasterised the same way.
+Pathway A rasterises the official (producer) class-2 ground returns directly
+into an OLV DTM via `DtmSurfaceModel`, sampled at each checkpoint. This measures
+OLV's surface builder against survey truth, holding the ground labelling fixed
+to a source OLV did not classify.
 
-The gap between pathway A and pathway B's accuracy figures is the ground
+Pathway B runs raw, unclassified points through OLV's own ground classifier,
+then rasterises the same way.
+
+The gap between pathway A and pathway B accuracy figures is the ground
 classifier's own accuracy penalty, isolated from the surface builder's. The
 harness currently exercises pathway A; pathway B is future work using the same
 gate and the same statistics.
@@ -77,6 +75,6 @@ gate and the same statistics.
 ## Reference fixture
 
 `USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz` (project_id `182543`) has
-0 of that project's 70 checkpoints inside its own extent — verified by direct
+0 of that project's 70 checkpoints inside its own extent, verified by direct
 query. Running the harness against it exercises the fail-closed
 "insufficient checkpoints" branch, not a reported accuracy figure.
