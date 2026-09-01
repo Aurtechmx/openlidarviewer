@@ -34,6 +34,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/validation/evidenceBoundaryInspector.ts",
+      "status": "validation-only",
+      "why": "A read-only projection of one resolveEvidence() lookup: it copies the resolver's decision verbatim and adds a per-envelope-field breakdown so the scoped-evidence verdict is human-auditable. It holds no applicability logic and produces evidence ABOUT the resolver; only its own test imports it, and becoming reachable would give the running app a second place that describes the evidence boundary.",
+      "graduation": "A provenance or report surface renders the field-by-field envelope breakdown and calls buildEvidenceContractView from the application graph.",
+      "review": "2027-02-28"
+    },
+    {
       "path": "src/classification/classificationEvidence.ts",
       "status": "staged",
       "why": "The per-point evidence record for a classification decision. The derived classifier that ships does not attach one, so no production module constructs or reads the record.",
