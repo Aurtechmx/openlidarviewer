@@ -1,0 +1,21 @@
+{
+  "$schemaNote": "Oracle-triangulation record for the CRS/UTM family. There is no closed-form truth leg for an arbitrary UTM projection, so two matched implementations (PROJ, GeographicLib) anchor it. OLV's live leg is checked by tests/geodesyOracleAgreement.test.ts (latLonToUtm vs both, without the tools installed); this record frames that family in the consensus matrix and is guarded against drift by tests/oracleConsensusCrs.test.ts.",
+  "contract": {
+    "id": "crs-utm-projection-v1",
+    "quantity": "crs.utm-projection",
+    "algorithm": "WGS-84 geographic to WGS-84 UTM (zone, hemisphere, easting, northing)",
+    "units": { "horizontal": "degree", "output": "metre" },
+    "domainPolicy": "refuse latitudes outside 80S..84N rather than extrapolate",
+    "absoluteToleranceM": 0.0015
+  },
+  "fixtures": { "id": "geodesy-utm-36", "count": 36, "source": "validation/external-oracles/geodesy/fixtures.json" },
+  "oracles": [
+    { "id": "proj-9.8.1", "referenceClass": "matched-implementation", "tool": "PROJ 9.8.1 cs2cs" },
+    { "id": "geographiclib-2.7", "referenceClass": "matched-implementation", "tool": "GeographicLib 2.7 GeoConvert" }
+  ],
+  "oracleSpread": { "maxAbsEastingM": 2.0372681319713593e-9, "maxAbsNorthingM": 1.862645149230957e-9 },
+  "olvResidual": { "maxAbsEastingM": 4.531e-4, "maxAbsNorthingM": 9.521e-4, "source": "VALIDATION_REPORT_v0.6.7 / claim CRS-UTM-PROJECTION" },
+  "verdict": "PASS_REPLICATION",
+  "verdictNote": "OLV agrees with both independent implementations within the 1.5 mm acceptance tolerance. The two oracles agree with EACH OTHER to ~2e-9 m, six orders below the tolerance and below OLV's own residual, so OLV's ~1e-3 m residual is attributable to the candidate's transverse-Mercator series, not to oracle disagreement. Replication within tolerance, not machine-tight truth.",
+  "liveTest": "tests/geodesyOracleAgreement.test.ts"
+}
