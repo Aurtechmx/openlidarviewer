@@ -150,14 +150,30 @@ function parseCheckpointCsv(csv: string): RawCheckpointRow[] {
  * /vsistdout/`. Requires GDAL's `ogr2ogr` on PATH. No FileGDB parsing is done
  * in this codebase — GDAL is the reference reader for the format.
  */
+/**
+ * Absolute path to GDAL's `ogr2ogr`, resolved through the absolute `which` so
+ * the tool call never depends on PATH resolution (a bare `ogr2ogr` could run an
+ * attacker-planted binary earlier in PATH). `OGR2OGR_BIN` overrides for a
+ * non-standard install. Throws if GDAL is not installed, since the harness
+ * cannot read a FileGDB without it.
+ */
+function resolveOgr2ogr(): string {
+  const override = process.env.OGR2OGR_BIN;
+  if (override) return override;
+  const found = execFileSync('/usr/bin/which', ['ogr2ogr'], { encoding: 'utf8' }).trim();
+  if (!found) throw new Error('ogr2ogr not found on PATH; install GDAL or set OGR2OGR_BIN');
+  return found;
+}
+
 export function readProjectCheckpointsCsv(
   gdbPath: string,
   layer: string,
   projectId: string,
 ): RawCheckpointRow[] {
   const whereValue = /^-?\d+$/.test(projectId) ? projectId : `'${projectId.replace(/'/g, "''")}'`;
+  const ogr2ogr = resolveOgr2ogr();
   const csv = execFileSync(
-    'ogr2ogr',
+    ogr2ogr,
     [
       '-f',
       'CSV',
