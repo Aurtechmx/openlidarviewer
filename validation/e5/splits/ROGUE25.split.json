@@ -1,0 +1,195 @@
+{
+  "$schemaNote": "Deterministic exposure-honest dev/holdout split of the 25 Rogue tiles for RETROSPECTIVE E5 hardening. Rogue never becomes E5. Exposed tiles (already used anywhere in the repo) are forced into development; unexposed tiles are ordered by sha256(salt + fileSha256) and filled to the development target, the rest holdout. Reproducible from the input manifest alone.",
+  "policy": {
+    "salt": "ROGUE-E5-HARDENING-v1",
+    "targetDevelopment": 17,
+    "rule": "exposed → development; unexposed ordered by sha256(salt+fileSha256), first (target − exposed) → development, rest → holdout"
+  },
+  "inputCollectionDigest": "c8b8ce14d4d5204ba64aec243e028e14722bd7285e0ec98a93018f859d6d4d4b",
+  "splitDigest": "c156406a475805fc932ec871da95c4b9f33dc7529bef30d154b84e60ace22b05",
+  "summary": {
+    "total": 25,
+    "development": 17,
+    "holdout": 8,
+    "exposedForcedToDevelopment": [
+      "10TDM3746"
+    ]
+  },
+  "tiles": [
+    {
+      "tileId": "10TDM3449",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3449.laz",
+      "sha256": "841d20f45458c974e9559207acf88816c6ea3f375cb2261819c2cc9609fb05d4",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM3746",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz",
+      "sha256": "ba8b7a3b08a05a190896013d701348d00dc843f03f36654329160bb66def15c3",
+      "exposed": true,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM3846",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3846.laz",
+      "sha256": "a5b08f543f12a965aafb69b0984fd0d939428c16d48ee56dc8e0213252dea89e",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM3847",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3847.laz",
+      "sha256": "01533fd14536eda2d8e12209bcf28e41ac7096fcd781ef00217471db62340511",
+      "exposed": false,
+      "set": "holdout"
+    },
+    {
+      "tileId": "10TDM4544",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4544.laz",
+      "sha256": "b31ad5cf1e38028f299cb096c42d4ff4971bc7df8a61e2ae8d7e10c1996215a2",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM4643",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4643.laz",
+      "sha256": "5e1515bc02bf048c18576c3b613d14f150931a5eb0943a11bf2bb83978597fb0",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM4647",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4647.laz",
+      "sha256": "2f961da5f485ad38cc0f2676c126ae1c287fdec779b9e6b70372c521d6f14276",
+      "exposed": false,
+      "set": "holdout"
+    },
+    {
+      "tileId": "10TDM4648",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4648.laz",
+      "sha256": "e196d76c8953b16ac625cbaf6c9bbc991a2d40b70e0d923f133821b9bfe7fc4d",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM4849",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4849.laz",
+      "sha256": "7079f83f209be1a46b44a343857ee1d5cee9e8100d602a95dd5489e2bc50b0ac",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM4853",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4853.laz",
+      "sha256": "2d918692cf60d2c26d835dd9376b259bc1347300271ab96c0208dfc27ee39127",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM5450",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5450.laz",
+      "sha256": "8e0e5877e8d697ca8b3957c8d1e23ccf89af373353978840e2bc87f9a500125c",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM5458",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5458.laz",
+      "sha256": "c4772da1adf5967df5b815ae8ab677af2150b7a57f44bb9519aa04f7d1607c4a",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM5959",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5959.laz",
+      "sha256": "da0de7a9048e3acb91a7f1b533f441a81012182d16b4c4f5aef5078b534386da",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM6151",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6151.laz",
+      "sha256": "edf7a0c890b2e0a11a059b45929708f5cf9ae15558480d78a0f7f58373013f04",
+      "exposed": false,
+      "set": "holdout"
+    },
+    {
+      "tileId": "10TDM6152",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6152.laz",
+      "sha256": "10480ed0eb0f965214fee6cef4860a2a4e60df4303f65269322aff14d1cc0689",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM6159",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6159.laz",
+      "sha256": "a1b1753cfd06a03b80dfc0d7073a4e48f079f1a218919501811d3fe5791abe79",
+      "exposed": false,
+      "set": "holdout"
+    },
+    {
+      "tileId": "10TDM6161",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6161.laz",
+      "sha256": "bb4a3f6be595d2c800173537eaef8360088b0619b995a89281fa208015b7f8ac",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM6252",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6252.laz",
+      "sha256": "a8cc9fc5c6ec17155c3956df0f92eaea035b1c45801c24d2a73ae1cfb31dd422",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM6265",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6265.laz",
+      "sha256": "5236afb85553ae239cebf0e843cd4f00d7d6a925b6ef9389892bfb8d90e5359a",
+      "exposed": false,
+      "set": "holdout"
+    },
+    {
+      "tileId": "10TDM6455",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6455.laz",
+      "sha256": "d933b811da0eb80e405f6e6b648109c9bf578553a6a6186b062c39772a53bfca",
+      "exposed": false,
+      "set": "holdout"
+    },
+    {
+      "tileId": "10TDM6470",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6470.laz",
+      "sha256": "81660a63c140381e9353ba2032b289092d3dcce817e677643af9832fa30f95f0",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM6564",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6564.laz",
+      "sha256": "8e2b5a163c5b71661bdb0c7c5c4af5bb1316943012eb90d34eacbe05a44f816e",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM6762",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6762.laz",
+      "sha256": "5cf81bf0d584faa260d86f81c68c5ed50c8ad448af8fbd5e5ba7ce13fd92b7c6",
+      "exposed": false,
+      "set": "holdout"
+    },
+    {
+      "tileId": "10TDM7851",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM7851.laz",
+      "sha256": "2cae8f32917c88ab0929871b645d18b96d2a97b8cd43e3614c298c500e497041",
+      "exposed": false,
+      "set": "development"
+    },
+    {
+      "tileId": "10TDM8061",
+      "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM8061.laz",
+      "sha256": "be12c943fa614cda9529c001d48c0c271e33df2df32fd5928c19f7a8287876f5",
+      "exposed": false,
+      "set": "holdout"
+    }
+  ]
+}
