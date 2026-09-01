@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openlidarviewer/validation/e5/input-manifest.schema.json",
+  "title": "E5 input manifest",
+  "description": "Immutable, verifiable description of an E5 LAZ collection. Every field is read from a file header; a null is an unknown the header did not carry, never a guess. fileCreationYear is the LAS header creation stamp and must never be relabelled as an acquisition date; acquisitionYear may be null and is qualified by acquisitionDateSource.",
+  "type": "object",
+  "required": ["collectionId", "collectionDigest", "summary", "tiles"],
+  "additionalProperties": true,
+  "properties": {
+    "collectionId": { "type": "string", "minLength": 1 },
+    "collectionDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "summary": {
+      "type": "object",
+      "required": [
+        "tileCount",
+        "horizontalEpsg",
+        "verticalEpsg",
+        "verticalDatum",
+        "geoidModel",
+        "homogeneousFrame",
+        "fileCreationYears",
+        "acquisitionYears"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "tileCount": { "type": "integer", "minimum": 1 },
+        "horizontalEpsg": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
+        "verticalEpsg": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
+        "verticalDatum": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "geoidModel": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "homogeneousFrame": { "type": "boolean" },
+        "tilesWithoutGround": { "type": "array", "items": { "type": "string" } },
+        "fileCreationYears": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
+        "acquisitionYears": {
+          "type": "array",
+          "items": { "type": ["integer", "null"] },
+          "minItems": 1
+        }
+      },
+      "not": { "required": ["captureYears"] }
+    },
+    "tiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "basename",
+          "sha256",
+          "bytes",
+          "pointCount",
+          "horizontalEpsg",
+          "verticalEpsg",
+          "verticalDatum",
+          "geoidModel",
+          "fileCreationYear",
+          "acquisitionYear",
+          "acquisitionDateSource",
+          "classHistogram",
+          "groundPointCount"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "basename": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer", "minimum": 1 },
+          "pointCount": { "type": "integer", "minimum": 0 },
+          "horizontalEpsg": { "type": "integer" },
+          "verticalEpsg": { "type": "integer" },
+          "verticalDatum": { "type": "string", "minLength": 1 },
+          "geoidModel": { "type": "string", "minLength": 1 },
+          "compoundCrs": { "type": "string" },
+          "classHistogram": { "type": "object" },
+          "groundPointCount": { "type": "integer", "minimum": 0 },
+          "fileCreationYear": { "type": "integer" },
+          "acquisitionYear": { "type": ["integer", "null"] },
+          "acquisitionDateSource": { "type": "string", "minLength": 1 }
+        },
+        "not": { "required": ["captureYear"] }
+      }
+    }
+  }
+}
