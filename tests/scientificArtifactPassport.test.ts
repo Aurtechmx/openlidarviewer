@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildScientificArtifactPassport,
   reproducibilityLine,
+  PASSPORT_CLAIM_SCOPE,
   SCIENTIFIC_ARTIFACT_PASSPORT_SCHEMA,
   type ScientificArtifactPassportInput,
 } from '../src/science/scientificArtifactPassport';
@@ -112,6 +113,23 @@ describe('buildScientificArtifactPassport', () => {
     const b = buildScientificArtifactPassport(baseInput(GEOTIFF));
     expect(a.scienceId).toBe(b.scienceId);
     expect(a.passportSha256).toBe(b.passportSha256);
+  });
+
+  it('throws before any digest when a caller supplies an unregistered method id', () => {
+    expect(() =>
+      buildScientificArtifactPassport({ ...baseInput(GEOTIFF), methodIds: ['olv.not.real'] }),
+    ).toThrow(/Unknown method id: olv\.not\.real/);
+  });
+});
+
+describe('PASSPORT_CLAIM_SCOPE', () => {
+  it('pins the tamper-evidence disclaimer and claims nothing stronger', () => {
+    const scope = PASSPORT_CLAIM_SCOPE.toLowerCase();
+    expect(scope).toContain('tamper-evident');
+    expect(scope).toContain('not authenticated');
+    expect(scope).not.toContain('certified accurate');
+    expect(scope).not.toContain('authenticated by');
+    expect(scope).not.toContain('survey-grade');
   });
 });
 

@@ -17,7 +17,11 @@ import {
   buildScientificAnalysisRecord,
   type ScientificAnalysisRecordInput,
 } from '../src/science/scientificAnalysisRecord';
-import { buildProcessingManifest, type ProcessingOpInput } from '../src/science/processingManifest';
+import {
+  buildProcessingManifest,
+  verifyProcessingManifest,
+  type ProcessingOpInput,
+} from '../src/science/processingManifest';
 import type { BuildIdentity } from '../src/build/buildIdentity';
 
 const build: BuildIdentity = {
@@ -217,5 +221,35 @@ describe('verifyScientificArtifactPassport — one broken link', () => {
     const p = clone(buildScientificArtifactPassport(makeInput()));
     delete (p as { passportSha256?: string }).passportSha256;
     expect(verifyScientificArtifactPassport(p)).toBe('INCOMPLETE');
+  });
+});
+
+describe('verifyScientificArtifactPassport — fails closed over a broken chain', () => {
+  it('never returns VERIFIED when the processing chain did not verify intact', () => {
+    // A manifest whose op parameter was altered without re-folding the chain:
+    // the recorded head no longer covers it, so verifyProcessingManifest reports
+    // it broken and the passport records processing.verified === false.
+    const tampered = JSON.parse(JSON.stringify(manifest)) as typeof manifest;
+    (tampered.ops[0] as { params: Record<string, unknown> }).params = { cell: 1, slope: 0.99 };
+    expect(verifyProcessingManifest(tampered).ok).toBe(false);
+
+    const p = buildScientificArtifactPassport({ ...makeInput(), processing: tampered });
+    expect(p.processing.verified).toBe(false);
+
+    // Fail closed with no reference material supplied at all.
+    expect(verifyScientificArtifactPassport(p)).not.toBe('VERIFIED');
+    expect(verifyScientificArtifactPassport(p)).toBe('PROCESSING_MANIFEST_CHANGED');
+
+    // And with the full reference set supplied.
+    expect(
+      verifyScientificArtifactPassport(p, {
+        artifactBytes: ARTIFACT,
+        analysis: buildScientificAnalysisRecord(recordInput),
+        methodIds: ['olv.ground.smrf', 'olv.validation.spatial-block'],
+        methodDigest: 'deadbeef',
+        processing: tampered,
+        evidence,
+      }),
+    ).not.toBe('VERIFIED');
   });
 });
