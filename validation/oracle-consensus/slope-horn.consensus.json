@@ -1,5 +1,5 @@
 {
-  "$schemaNote": "Oracle-triangulation record: OLV vs analytic truth vs matched independent implementations, on ONE canonical quantity contract. OLV's leg is recomputed live by tests/oracleConsensusSlope.test.ts; the external legs here were produced by scripts/gen-oracle-consensus-slope.mjs and are read by CI without the tools installed.",
+  "$schemaNote": "Oracle-triangulation record: OLV vs analytic truth vs matched independent implementations, on ONE canonical quantity contract. OLV's legs are recomputed live by tests/oracleConsensusSlope.test.ts; the external legs here were produced by scripts/gen-oracle-consensus-slope.mjs and are read by CI without the tools installed. Two cases at different gradients (a shallow 16.7 deg plane and a steep 45 deg plane) span the range, so a scale error in the slope magnitude cannot pass both.",
   "contract": {
     "id": "terrain-slope-horn-v1",
     "quantity": "terrain.slope",
@@ -9,14 +9,29 @@
     "noDataPolicy": "strict",
     "absoluteToleranceDeg": 1e-5
   },
-  "fixture": {
-    "id": "tilted-plane-eastgrad-0.30",
-    "cols": 50, "rows": 50, "cellMetres": 1, "crs": "EPSG:32633",
-    "model": "z[r][c] = 0.30 * c  (pure east gradient; analytic slope is constant everywhere)"
-  },
-  "oracles": [
-    { "id": "analytic-plane-slope", "referenceClass": "analytic-truth", "tool": "closed form atan(0.30)", "meanSlopeDeg": 16.69924423 },
-    { "id": "gdal-horn-slope", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem slope -alg Horn", "meanSlopeDeg": 16.699243783951 },
-    { "id": "grass-horn-slope", "referenceClass": "matched-implementation", "tool": "GRASS 8.5.0 r.slope.aspect", "meanSlopeDeg": 16.6992439428965 }
+  "cases": [
+    {
+      "fixture": {
+        "id": "tilted-plane-eastgrad-0.30",
+        "cols": 50, "rows": 50, "cellMetres": 1, "crs": "EPSG:32633", "gradient": 0.3,
+        "model": "z[r][c] = 0.30 * c  (pure east gradient; analytic slope is constant everywhere)"
+      },
+      "oracles": [
+        { "id": "analytic-plane-slope", "referenceClass": "analytic-truth", "tool": "closed form atan(0.30)", "meanSlopeDeg": 16.69924423 },
+        { "id": "gdal-horn-slope", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem slope -alg Horn", "meanSlopeDeg": 16.699243783951 },
+        { "id": "grass-horn-slope", "referenceClass": "matched-implementation", "tool": "GRASS 8.5.0 r.slope.aspect", "meanSlopeDeg": 16.6992439428965 }
+      ]
+    },
+    {
+      "fixture": {
+        "id": "tilted-plane-eastgrad-1.00",
+        "cols": 50, "rows": 50, "cellMetres": 1, "crs": "EPSG:32633", "gradient": 1.0,
+        "model": "z[r][c] = 1.00 * c  (steep east gradient; analytic slope 45 deg everywhere)"
+      },
+      "oracles": [
+        { "id": "analytic-plane-slope", "referenceClass": "analytic-truth", "tool": "closed form atan(1.00)", "meanSlopeDeg": 45 },
+        { "id": "gdal-horn-slope", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem slope -alg Horn (interior min=max=mean=45, stddev=0)", "meanSlopeDeg": 45 }
+      ]
+    }
   ]
 }
