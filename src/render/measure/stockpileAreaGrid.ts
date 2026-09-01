@@ -208,13 +208,13 @@ function clipHalfPlane(
  * rectangle is the CONVEX clip window, so an arbitrary (even concave) footprint
  * clips correctly. Returns the clipped area in source-unit².
  */
-export function clippedCellArea(
+function clipCellPolygon(
   poly: ReadonlyArray<Vec2>,
   xmin: number,
   ymin: number,
   xmax: number,
   ymax: number,
-): number {
+): Vec2[] {
   let p: Vec2[] = [...poly];
   const lerp = (a: Vec2, b: Vec2, t: number): Vec2 => ({
     x: a.x + (b.x - a.x) * t,
@@ -228,7 +228,68 @@ export function clippedCellArea(
   p = clipHalfPlane(p, (q) => q.y >= ymin, (a, b) => lerp(a, b, (ymin - a.y) / (b.y - a.y)));
   // y <= ymax
   p = clipHalfPlane(p, (q) => q.y <= ymax, (a, b) => lerp(a, b, (ymax - a.y) / (b.y - a.y)));
-  return polygonArea(p);
+  return p;
+}
+
+/**
+ * The area of `poly` clipped to the axis-aligned cell rectangle
+ * [xmin,xmax]×[ymin,ymax], via Sutherland–Hodgman against the four edges. The
+ * rectangle is the CONVEX clip window, so an arbitrary (even concave) footprint
+ * clips correctly. Returns the clipped area in source-unit².
+ */
+export function clippedCellArea(
+  poly: ReadonlyArray<Vec2>,
+  xmin: number,
+  ymin: number,
+  xmax: number,
+  ymax: number,
+): number {
+  return polygonArea(clipCellPolygon(poly, xmin, ymin, xmax, ymax));
+}
+
+/**
+ * Centroid of a simple polygon (signed-area weighted formula). Falls back to
+ * the plain vertex average for a degenerate (near-zero-area, e.g. collinear)
+ * polygon, where the area-weighted formula divides by ~0.
+ */
+function polygonCentroid(poly: ReadonlyArray<Vec2>): Vec2 {
+  const n = poly.length;
+  if (n === 0) return { x: 0, y: 0 };
+  if (n === 1) return poly[0];
+  let a = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const cross = poly[j].x * poly[i].y - poly[i].x * poly[j].y;
+    a += cross;
+    cx += (poly[j].x + poly[i].x) * cross;
+    cy += (poly[j].y + poly[i].y) * cross;
+  }
+  a *= 0.5;
+  if (Math.abs(a) < 1e-12) {
+    let sx = 0, sy = 0;
+    for (const v of poly) { sx += v.x; sy += v.y; }
+    return { x: sx / n, y: sy / n };
+  }
+  return { x: cx / (6 * a), y: cy / (6 * a) };
+}
+
+/**
+ * Point-in-polygon test (ray-crossing / even-odd rule). Boundary-touching
+ * points may resolve either way, which is immaterial here — they belong to
+ * whichever adjacent cell binning is consistent for the bbox pre-filter.
+ */
+function pointInPolygon(poly: ReadonlyArray<Vec2>, x: number, y: number): boolean {
+  let inside = false;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersects = (yi > y) !== (yj > y) &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
 }
 
 function baseZ(base: StockpileBase, x: number, y: number): number {
@@ -279,6 +340,11 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
   const heights: number[][] = Array.from({ length: nx * ny }, () => []);
   for (const p of input.points) {
     if (p.x < xmin || p.x > xmax || p.y < ymin || p.y > ymax) continue;
+    // The bounding-box test above is a cheap pre-filter only; a concave
+    // footprint can have bbox-inside points that sit outside the actual
+    // polygon (e.g. in the notch of an L-shape), which would otherwise
+    // corrupt the surface of whichever cell they land in.
+    if (!pointInPolygon(input.polygon, p.x, p.y)) continue;
     const ix = Math.min(nx - 1, Math.floor((p.x - xmin) / cell));
     const iy = Math.min(ny - 1, Math.floor((p.y - ymin) / cell));
     heights[iy * nx + ix].push(p.z);
@@ -294,7 +360,8 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
     for (let ix = 0; ix < nx; ix++) {
       const cx0 = xmin + ix * cell;
       const cy0 = ymin + iy * cell;
-      const areaSrc = clippedCellArea(input.polygon, cx0, cy0, Math.min(cx0 + cell, xmax), Math.min(cy0 + cell, ymax));
+      const clipped = clipCellPolygon(input.polygon, cx0, cy0, Math.min(cx0 + cell, xmax), Math.min(cy0 + cell, ymax));
+      const areaSrc = polygonArea(clipped);
       if (areaSrc <= 0) continue; // cell outside the footprint
       const hs = heights[iy * nx + ix];
       if (hs.length < minSupport) {
@@ -304,7 +371,14 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
       }
       const med = median(hs);
       const spread = nmad(hs, med);
-      const bz = baseZ(input.base, cx0 + cell / 2, cy0 + cell / 2);
+      // A linear base plane's mean over a region equals the plane evaluated
+      // at the region's centroid. For a boundary cell the clipped polygon
+      // (not the full grid-cell square) IS the region actually inside the
+      // footprint, so the base must be sampled at ITS centroid — the plain
+      // cell-centre is only correct for a full interior cell, where the two
+      // coincide.
+      const { x: bcx, y: bcy } = polygonCentroid(clipped);
+      const bz = baseZ(input.base, bcx, bcy);
       const dz = med - bz;
       if (dz >= 0) fillSrc += areaSrc * dz;
       else cutSrc += areaSrc * -dz;

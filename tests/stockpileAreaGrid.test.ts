@@ -224,6 +224,68 @@ describe('clippedCellArea — Sutherland–Hodgman against analytic areas', () =
   });
 });
 
+describe('stockpileAreaGrid — tilted base evaluated at the clipped centroid', () => {
+  it('a single boundary cell over a right triangle matches the closed-form volume', () => {
+    // Right triangle (0,0),(10,0),(0,10): area 50, centroid (10/3, 10/3).
+    // One grid cell (cellSizeM larger than the footprint) makes the WHOLE
+    // triangle a single boundary cell, so its clipped-polygon centroid is
+    // the triangle centroid — while the grid-cell centre (bbox midpoint) is
+    // (5, 5), a different point. Base z = x (a=1,b=0,c=0), flat top z = h.
+    // Exact volume = ∫∫(h − x) dA = A·(h − x̄) since the base is linear.
+    const tri: Vec2[] = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10 }];
+    const A = 50;
+    const xbar = 10 / 3;
+    const h = 15;
+    const exact = A * (h - xbar); // 1750/3 ≈ 583.333
+    const cellCentreVolume = A * (h - 5); // what the OLD (bug) evaluation gives: 500
+
+    const r = stockpileAreaGrid({
+      points: sample(10, 60, () => h),
+      polygon: tri,
+      base: { kind: 'plane', a: 1, b: 0, c: 0 },
+      cellSizeM: 20, // forces exactly one cell covering the whole footprint
+    });
+
+    expect(r.cells.length).toBe(1);
+    expect(r.fillM3).toBeCloseTo(exact, 1);
+    // The centroid-correct answer is measurably different from the
+    // cell-centre evaluation the bug produced (≈83 m³ off here).
+    expect(Math.abs(r.fillM3 - cellCentreVolume)).toBeGreaterThan(50);
+  });
+});
+
+describe('stockpileAreaGrid — point-in-polygon filtering', () => {
+  it('excludes a bbox-inside, polygon-outside point from a concave (L-shaped) footprint', () => {
+    const L: Vec2[] = [
+      { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 4 },
+      { x: 4, y: 4 }, { x: 4, y: 10 }, { x: 0, y: 10 },
+    ];
+    // Cell [3,6)×[3,6): the x<4 half is inside the L (left column extends to
+    // y=10), the x>=4,y>=4 corner is the removed notch. A contaminant point
+    // sits in the notch — inside this cell's bounding box, outside the polygon.
+    const legit: AreaGridPoint[] = [
+      { x: 3.2, y: 3.3, z: 1 },
+      { x: 3.6, y: 5.5, z: 1 },
+      { x: 3.9, y: 3.9, z: 1 },
+    ];
+    const contaminant: AreaGridPoint = { x: 4.5, y: 5.5, z: 1000 };
+
+    const r = stockpileAreaGrid({
+      points: [...legit, contaminant],
+      polygon: L,
+      base: flatBase,
+      cellSizeM: 3,
+      minSupportPerCell: 1,
+    });
+
+    const cell = r.cells.find((c) => c.ix === 1 && c.iy === 1);
+    expect(cell).toBeDefined();
+    // Only the 3 legitimate points contributed — the notch point was rejected.
+    expect(cell!.support).toBe(3);
+    expect(cell!.surfaceZ).toBeCloseTo(1, 9);
+  });
+});
+
 describe('deriveCellSize', () => {
   it('scales with point spacing and clamps to bounds', () => {
     // 400 points over 100 m² → spacing 0.5 m → ×2.5 = 1.25 m.
