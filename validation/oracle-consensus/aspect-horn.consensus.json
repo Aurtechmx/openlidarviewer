@@ -1,5 +1,5 @@
 {
-  "$schemaNote": "Oracle-triangulation for terrain aspect (Horn). The three implementations use DIFFERENT native conventions; the contract's canonical output is compass degrees clockwise from north (downslope), and each oracle's native value is converted to it. This proves agreement is real and not a convention artifact. OLV's leg is recomputed live by tests/oracleConsensusAspect.test.ts; external legs are committed (gdaldem aspect, GRASS r.slope.aspect).",
+  "$schemaNote": "Oracle-triangulation for terrain aspect (Horn). The implementations use DIFFERENT native conventions; the contract's canonical output is compass degrees clockwise from north (downslope), and each oracle's native value is converted to it. This proves agreement is real and not a convention artifact. Two cases run at opposite aspects (a west-facing and an east-facing plane), so a sign error in the x-gradient — which would swap west for east — produces the right bearing in neither. OLV's legs are recomputed live; external legs are committed (gdaldem aspect, GRASS r.slope.aspect).",
   "contract": {
     "id": "terrain-aspect-horn-v1",
     "quantity": "terrain.aspect",
@@ -7,12 +7,25 @@
     "canonicalOutput": "compass-degrees-cw-from-north (downslope)",
     "edgePolicy": "exclude-one-cell-border",
     "absoluteToleranceDeg": 0.5,
-    "note": "Axis-aligned east-gradient fixture: aspect is due west everywhere, which exercises the E-W axis and the convention conversion without the raster row-orientation (N/S) ambiguity. A diagonal fixture that also tests N-S is future work needing an explicit row-orientation contract."
+    "note": "Both fixtures are axis-aligned (east/west gradient), which exercises the E-W axis and the convention conversion without the raster row-orientation (N/S) ambiguity. A diagonal fixture that also tests N-S is future work needing an explicit row-orientation contract."
   },
-  "fixture": { "id": "tilted-plane-eastgrad-0.30", "cols": 50, "rows": 50, "cellMetres": 1, "crs": "EPSG:32633", "model": "z[r][c] = 0.30 * c (rises east; downslope faces west)" },
-  "oracles": [
-    { "id": "analytic-plane-aspect", "referenceClass": "analytic-truth", "tool": "closed form (downslope = west)", "nativeValueDeg": 270, "nativeConvention": "compass-cw-north" },
-    { "id": "gdal-horn-aspect", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem aspect", "nativeValueDeg": 270, "nativeConvention": "compass-cw-north" },
-    { "id": "grass-horn-aspect", "referenceClass": "matched-implementation", "tool": "GRASS 8.5.0 r.slope.aspect", "nativeValueDeg": 180, "nativeConvention": "ccw-from-east" }
+  "cases": [
+    {
+      "fixture": { "id": "tilted-plane-eastgrad-0.30", "cols": 50, "rows": 50, "cellMetres": 1, "crs": "EPSG:32633", "gradientSign": 1, "model": "z[r][c] = 0.30 * c (rises east; downslope faces west)" },
+      "expectedCompassDeg": 270,
+      "oracles": [
+        { "id": "analytic-plane-aspect", "referenceClass": "analytic-truth", "tool": "closed form (downslope = west)", "nativeValueDeg": 270, "nativeConvention": "compass-cw-north" },
+        { "id": "gdal-horn-aspect", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem aspect", "nativeValueDeg": 270, "nativeConvention": "compass-cw-north" },
+        { "id": "grass-horn-aspect", "referenceClass": "matched-implementation", "tool": "GRASS 8.5.0 r.slope.aspect", "nativeValueDeg": 180, "nativeConvention": "ccw-from-east" }
+      ]
+    },
+    {
+      "fixture": { "id": "tilted-plane-westgrad-0.30", "cols": 50, "rows": 50, "cellMetres": 1, "crs": "EPSG:32633", "gradientSign": -1, "model": "z[r][c] = 0.30 * (49 - c) (rises west; downslope faces east)" },
+      "expectedCompassDeg": 90,
+      "oracles": [
+        { "id": "analytic-plane-aspect", "referenceClass": "analytic-truth", "tool": "closed form (downslope = east)", "nativeValueDeg": 90, "nativeConvention": "compass-cw-north" },
+        { "id": "gdal-horn-aspect", "referenceClass": "matched-implementation", "tool": "GDAL 3.13.3 gdaldem aspect", "nativeValueDeg": 90, "nativeConvention": "compass-cw-north" }
+      ]
+    }
   ]
 }
