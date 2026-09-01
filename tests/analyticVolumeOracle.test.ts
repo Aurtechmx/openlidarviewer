@@ -89,6 +89,7 @@ import { describe, it, expect } from 'vitest';
 import { volumeCutFill } from '../src/render/measure/volume';
 import { stockpileVolume } from '../src/render/measure/stockpileVolume';
 import type { Vec3 } from '../src/render/navMath';
+import { A_HALF, latticeCloud, type Field } from './support/volumeLatticeFixture';
 
 // ── deterministic PRNG ────────────────────────────────────────────────────────
 
@@ -106,11 +107,8 @@ function mulberry32(seed: number): () => number {
 
 // ── geometry under test ──────────────────────────────────────────────────────
 
-/** Half-width of the square footprint. A = 4a^2 = 1 m^2. */
-const A_HALF = 0.5;
+// A_HALF, Field and latticeCloud come from ./support/volumeLatticeFixture.
 const AREA = 4 * A_HALF * A_HALF;
-
-type Field = (x: number, y: number) => number;
 
 interface Primitive {
   readonly name: string;
@@ -290,22 +288,6 @@ function integrateGauss(z: Field, m: number, refZ: number): Quadrature {
 
 // ── clouds ───────────────────────────────────────────────────────────────────
 
-/** Cell centres of an n x n lattice over S, heights from `z`. */
-function latticeCloud(z: Field, n: number): Float32Array {
-  const h = (2 * A_HALF) / n;
-  const out = new Float32Array(n * n * 3);
-  let k = 0;
-  for (let i = 0; i < n; i++) {
-    const x = -A_HALF + (i + 0.5) * h;
-    for (let j = 0; j < n; j++) {
-      const y = -A_HALF + (j + 0.5) * h;
-      out[k++] = x;
-      out[k++] = y;
-      out[k++] = z(x, y);
-    }
-  }
-  return out;
-}
 
 /**
  * Cell centres displaced by up to `amp` cell widths in each axis. The amplitude

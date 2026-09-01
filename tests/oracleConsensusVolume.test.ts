@@ -27,10 +27,9 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { volumeCutFill } from '../src/render/measure/volume';
 import type { Vec3 } from '../src/render/navMath';
+import { A_HALF, latticeCloud, type Field } from './support/volumeLatticeFixture';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
-const A_HALF = 0.5; // half-width of the unit-area square footprint (A = 1 m^2)
 
 type Oracle = {
   id: string;
@@ -46,30 +45,11 @@ const record = JSON.parse(
   readFileSync(resolve(ROOT, 'validation/oracle-consensus/volume-cutfill.consensus.json'), 'utf8'),
 ) as { contract: { absoluteToleranceM3: number }; cases: Case[] };
 
-type Field = (x: number, y: number) => number;
-
 /** The height field for a case, reconstructed from its fixture id. */
 function fieldFor(fixtureId: string): Field {
   if (fixtureId.startsWith('flat-cap-h3.0')) return () => 3.0;
   if (fixtureId.startsWith('tilted-plane-eastgrad-2.0')) return (x) => 2.0 * x;
   throw new Error(`unknown fixture ${fixtureId}`);
-}
-
-/** Cell centres of an n x n lattice over S, heights from the field. */
-function latticeCloud(z: Field, n: number): Float32Array {
-  const h = (2 * A_HALF) / n;
-  const out = new Float32Array(n * n * 3);
-  let k = 0;
-  for (let i = 0; i < n; i++) {
-    const x = -A_HALF + (i + 0.5) * h;
-    for (let j = 0; j < n; j++) {
-      const y = -A_HALF + (j + 0.5) * h;
-      out[k++] = x;
-      out[k++] = y;
-      out[k++] = z(x, y);
-    }
-  }
-  return out;
 }
 
 /** The unit-square footprint polygon, strictly enclosing every cell centre. */
