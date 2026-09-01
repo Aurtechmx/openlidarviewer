@@ -33,6 +33,7 @@ import { createHash } from 'node:crypto';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isCliEntry } from './lib/isCliEntry.mjs';
+import { computeArchitectureFingerprint } from './lint-module-graph.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -68,7 +69,7 @@ export function classifyAsset(name, version) {
  * the caller so this stays a pure function of its inputs and can be tested
  * without a staged directory.
  */
-export function buildManifest({ version, evidence, assets, builtAt, sourceDateEpoch = null }) {
+export function buildManifest({ version, evidence, assets, builtAt, sourceDateEpoch = null, architecture = null }) {
   const problems = [];
   if (!version) problems.push('package version is missing');
   if (!evidence) problems.push('evidence record is missing');
@@ -156,6 +157,11 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
         liveEntryKiB: evidence.bundle?.liveEntryKiB ?? null,
         ceilingKiB: evidence.bundle?.ceilingKiB ?? null,
       },
+      // A canonical, timestamp-free fingerprint of the enforced module-graph
+      // facts (fan-out ratchets, directory-pair edges, file-level cycles). The
+      // digest binds this release to a specific architecture shape: a reviewer
+      // can recompute it from the source tree and match it byte for byte.
+      architecture,
       // The manifest hashes payload assets only — never itself, never
       // SHA256SUMS. See the header for why that cycle cannot be closed.
       artifacts: Object.fromEntries(PAYLOAD_KINDS.map((k) => [k, assets[k]])),
@@ -213,6 +219,7 @@ if (isMain()) {
     assets,
     builtAt: new Date().toISOString(),
     sourceDateEpoch: process.env.SOURCE_DATE_EPOCH ?? null,
+    architecture: computeArchitectureFingerprint(),
   });
 
   if (!built.ok) {

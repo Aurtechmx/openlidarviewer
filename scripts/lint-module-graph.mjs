@@ -68,6 +68,8 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname, relative, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE = resolve(ROOT, 'docs/validation/module-graph-baseline.json');
@@ -423,41 +425,13 @@ function sourceFiles(dir, out = []) {
   return out;
 }
 
-const problems = [];
-
-/** file → { value: Map(key → line), type: Map, dynamic: Map, inlineOnly: number } */
-const graph = new Map();
-
-for (const abs of sourceFiles(SRC)) {
-  const from = rel(abs);
-  const { statics, dynamics } = scanSpecifiers(readFileSync(abs, 'utf8'));
-  const entry = { value: new Map(), type: new Map(), dynamic: new Map(), inlineOnly: 0 };
-  for (const s of statics) {
-    const r = resolveSpec(abs, s.spec);
-    if (r.kind === 'unresolved') {
-      problems.push(`${from}:${s.line}: the relative specifier "${s.spec}" resolves to no file. The scan cannot classify an edge it cannot resolve.`);
-      continue;
-    }
-    if (s.inlineOnly) entry.inlineOnly++;
-    const bucket = s.typeOnly ? entry.type : entry.value;
-    if (!bucket.has(r.key)) bucket.set(r.key, s.line);
-  }
-  for (const d of dynamics) {
-    if (d.spec === null) continue; // a computed specifier names no module
-    const r = resolveSpec(abs, d.spec);
-    if (r.kind === 'unresolved') continue; // a lazy edge is not enforced either way
-    if (!entry.dynamic.has(r.key)) entry.dynamic.set(r.key, d.line);
-  }
-  graph.set(from, entry);
-}
-
 /** A module reached only by `import type` is not a runtime edge of any kind. */
 const typeOnlyKeys = (entry) => [...entry.type.keys()].filter((k) => !entry.value.has(k));
 
 // ── the seven measurements ──────────────────────────────────────────────────
 
 /** Directory-pair edges, one entry per distinct file pair. */
-function measurePair(pair) {
+function measurePair(graph, pair) {
   const runtime = [];
   const type = [];
   const dynamic = [];
@@ -478,7 +452,7 @@ function measurePair(pair) {
 }
 
 /** Distinct modules one file imports, internal files and packages alike. */
-function measureFanOut(file) {
+function measureFanOut(graph, problems, file) {
   const entry = graph.get(file);
   if (!entry) {
     problems.push(`${file}: not found in src/. The fan-out measurement names a file that does not exist.`);
@@ -500,7 +474,7 @@ function measureFanOut(file) {
  * Tarjan, iterative: the graph is 682 files deep in places and a recursive walk
  * is a stack-overflow waiting for the wrong import to be added.
  */
-function measureCycles() {
+function measureCycles(graph) {
   const index = new Map();
   const low = new Map();
   const onStack = new Set();
@@ -556,10 +530,81 @@ function measureCycles() {
   return { count: components.length, components };
 }
 
-const pairs = new Map(PAIRS.map((p) => [p.id, measurePair(p)]));
-const fanOut = new Map(FAN_OUT_FILES.map((f) => [f, measureFanOut(f)]));
-const cycles = measureCycles();
-const inlineOnlyTotal = [...graph.values()].reduce((a, e) => a + e.inlineOnly, 0);
+/**
+ * Scan src/ once and return every enforced graph fact.
+ *
+ * Pure with respect to the working tree: no console output, no process.exit,
+ * no side effect, so it is safe to import from a release/build step or a test.
+ * The CLI lint below is a thin caller of this same measurement.
+ */
+export function measureModuleGraph() {
+  const problems = [];
+  /** file → { value: Map(key → line), type: Map, dynamic: Map, inlineOnly: number } */
+  const graph = new Map();
+
+  for (const abs of sourceFiles(SRC)) {
+    const from = rel(abs);
+    const { statics, dynamics } = scanSpecifiers(readFileSync(abs, 'utf8'));
+    const entry = { value: new Map(), type: new Map(), dynamic: new Map(), inlineOnly: 0 };
+    for (const s of statics) {
+      const r = resolveSpec(abs, s.spec);
+      if (r.kind === 'unresolved') {
+        problems.push(`${from}:${s.line}: the relative specifier "${s.spec}" resolves to no file. The scan cannot classify an edge it cannot resolve.`);
+        continue;
+      }
+      if (s.inlineOnly) entry.inlineOnly++;
+      const bucket = s.typeOnly ? entry.type : entry.value;
+      if (!bucket.has(r.key)) bucket.set(r.key, s.line);
+    }
+    for (const d of dynamics) {
+      if (d.spec === null) continue; // a computed specifier names no module
+      const r = resolveSpec(abs, d.spec);
+      if (r.kind === 'unresolved') continue; // a lazy edge is not enforced either way
+      if (!entry.dynamic.has(r.key)) entry.dynamic.set(r.key, d.line);
+    }
+    graph.set(from, entry);
+  }
+
+  const pairs = new Map(PAIRS.map((p) => [p.id, measurePair(graph, p)]));
+  const fanOut = new Map(FAN_OUT_FILES.map((f) => [f, measureFanOut(graph, problems, f)]));
+  const cycles = measureCycles(graph);
+  const inlineOnlyTotal = [...graph.values()].reduce((a, e) => a + e.inlineOnly, 0);
+  // Total distinct runtime import edges (internal files and packages alike).
+  const totalEdges = [...graph.values()].reduce((a, e) => a + e.value.size, 0);
+
+  return { graph, problems, pairs, fanOut, cycles, inlineOnlyTotal, totalEdges, filesScanned: graph.size };
+}
+
+/**
+ * A canonical, timestamp-free fingerprint of the enforced architecture facts.
+ *
+ * `architectureDigest` is the sha256 of a sorted serialization of exactly the
+ * facts this gate enforces — the directory-pair edges, the two fan-out module
+ * lists, and the file-level cycle components — so the same tree always yields
+ * the same hex and any change to the enforced graph moves the digest.
+ */
+export function computeArchitectureFingerprint(measurement = measureModuleGraph()) {
+  if (measurement.problems.length > 0) {
+    throw new Error(
+      `architecture fingerprint refused; the module-graph scan reported a problem:\n  ${measurement.problems.join('\n  ')}`,
+    );
+  }
+  const enforced = {
+    edges: Object.fromEntries(PAIRS.map((p) => [p.id, measurement.pairs.get(p.id).edges])),
+    fanOut: Object.fromEntries(FAN_OUT_FILES.map((f) => [f, measurement.fanOut.get(f).modules])),
+    cycles: measurement.cycles.components,
+  };
+  const canonical = JSON.stringify(enforced);
+  const architectureDigest = createHash('sha256').update(canonical).digest('hex');
+  return {
+    moduleCount: measurement.filesScanned,
+    edgeCount: measurement.totalEdges,
+    cycleCount: measurement.cycles.count,
+    mainFanOut: measurement.fanOut.get('src/main.ts').runtime,
+    viewerFanOut: measurement.fanOut.get('src/render/Viewer.ts').runtime,
+    architectureDigest,
+  };
+}
 
 // ── --update ────────────────────────────────────────────────────────────────
 
@@ -575,8 +620,11 @@ const PURPOSE =
   + 'the static value graph. Run "node scripts/lint-module-graph.mjs --update" to bank a '
   + 'reduction. There is no flag that raises a number.';
 
-if (process.argv.includes('--update') || !existsSync(BASELINE)) {
-  if (problems.length > 0) {
+function runCli() {
+  const { graph, problems, pairs, fanOut, cycles, inlineOnlyTotal } = measureModuleGraph();
+
+  if (process.argv.includes('--update') || !existsSync(BASELINE)) {
+    if (problems.length > 0) {
     console.error('module-graph baseline NOT written; the scan itself reported a problem:\n');
     for (const p of problems) console.error(`  • ${p}`);
     process.exit(1);
@@ -690,7 +738,10 @@ const summary = [
 const dropped = PAIRS.reduce((a, p) => a + (baseline.edges[p.id].runtime - pairs.get(p.id).runtime), 0)
   + FAN_OUT_FILES.reduce((a, f) => a + (baseline.fanOut[f].runtime - fanOut.get(f).runtime), 0)
   + (baseCycles - cycles.count);
-console.log(
-  `lint:module-graph OK [runtime edges only; ${graph.size} files scanned]: ${summary.join(', ')}`
-  + (dropped > 0 ? ` (${dropped} fewer than baseline; run --update to bank it).` : '.'),
-);
+  console.log(
+    `lint:module-graph OK [runtime edges only; ${graph.size} files scanned]: ${summary.join(', ')}`
+    + (dropped > 0 ? ` (${dropped} fewer than baseline; run --update to bank it).` : '.'),
+  );
+}
+
+if (isCliEntry(import.meta.url)) runCli();
