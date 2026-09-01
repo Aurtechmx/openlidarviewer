@@ -36,12 +36,23 @@
 
 import { canonicalize, sha256 } from '../render/measure/auditLog';
 import { sha256Hex } from '../terrain/export/sha256';
-import { methodRef, methodTag, type MethodRef } from './methodRegistry';
+import { isMethodId, methodRef, methodTag, type MethodRef } from './methodRegistry';
 import type { ScientificAnalysisRecord } from './scientificAnalysisRecord';
 import { verifyProcessingManifest, type ProcessingManifest } from './processingManifest';
 import type { BuildIdentity } from '../build/buildIdentity';
 
 export const SCIENTIFIC_ARTIFACT_PASSPORT_SCHEMA = 1;
+
+/**
+ * The exact scope this passport claims, pinned as a constant so UI and exports
+ * quote it verbatim and no caller drifts into a stronger word. It is tamper
+ * EVIDENCE over internal consistency — never authentication, authorship, or
+ * accuracy beyond the recorded evidence level.
+ */
+export const PASSPORT_CLAIM_SCOPE =
+  'Tamper-evident, not authenticated. Proves only that the recorded digests ' +
+  'still recompute over the bytes and records they cover; it proves no identity, ' +
+  'no authorship, and no accuracy beyond the evidence level recorded.';
 
 /** Whether the whole-source digest was available when the passport was built. */
 export type SourceDigestStatus = 'verified' | 'unavailable';
@@ -216,6 +227,10 @@ export function buildScientificArtifactPassport(
 ): ScientificArtifactPassport {
   const record = input.analysis;
   const methodIds = input.methodIds ?? record.methods.map((m: MethodRef) => m.id);
+  // Caller-supplied ids must be registered before any digest binds to them.
+  for (const id of methodIds) {
+    if (!isMethodId(id)) throw new Error(`Unknown method id: ${id}`);
+  }
   const methodDigest = input.methodDigest ?? null;
   const sourceSha = input.source.sha256;
 
@@ -350,6 +365,10 @@ export function verifyScientificArtifactPassport(
   opts: PassportVerifyOptions = {},
 ): PassportVerificationState {
   if (!structurallyComplete(passport)) return 'INCOMPLETE';
+
+  // Fail closed: a passport built over a processing chain that did not verify
+  // intact is never VERIFIED, even when no reference material is supplied.
+  if (passport.processing.verified !== true) return 'PROCESSING_MANIFEST_CHANGED';
 
   // Processing: recompute the chain head and re-verify the op chain.
   if (opts.processing) {
