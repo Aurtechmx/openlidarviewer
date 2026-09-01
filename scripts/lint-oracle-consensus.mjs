@@ -21,6 +21,7 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = resolve(ROOT, 'validation/oracle-consensus');
@@ -132,4 +133,4 @@ function main() {
 }
 
 // Only run when invoked directly, not when imported by the test.
-if (resolve(process.argv[1] ?? '') === resolve(fileURLToPath(import.meta.url))) main();
+if (isCliEntry(import.meta.url)) main();
