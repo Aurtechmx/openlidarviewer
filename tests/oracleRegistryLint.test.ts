@@ -17,9 +17,10 @@ import { describe, it, expect } from 'vitest';
 
 // Kept on one line: @ts-expect-error applies to the line that follows it.
 // @ts-expect-error — plain .mjs script, no types
-import { collectOracleProblems } from '../scripts/lint-oracle-registry.mjs';
+import { collectOracleProblems, collectRegistryProblems } from '../scripts/lint-oracle-registry.mjs';
 
 interface Result { problems: string[]; cited: number; lineages: number }
+interface RegistryResult { problems: string[] }
 
 const REGISTRY = {
   roleDefinitions: {
@@ -148,5 +149,76 @@ describe('O3 — same lineage is not two independent legs', () => {
       { path: 'b.json', oracles: [{ oracleId: 'gdal-3.13.1' }] },
     ]);
     expect(ids(r.problems)).not.toContain('O3');
+  });
+});
+
+// The O rules trust the registry; these guard the registry entries themselves,
+// because a broken entry defeats an O rule with no error of its own — a dropped
+// lineageGroup blinds O3, a duplicate oracleId overwrites an entry in the lookup.
+const runRegistry = (registry: unknown): RegistryResult =>
+  collectRegistryProblems(registry) as RegistryResult;
+
+const validEntry = () => ({
+  oracleId: 'proj-9.8.1',
+  name: 'PROJ',
+  version: '9.8.1',
+  lineageGroup: 'proj',
+  license: 'MIT',
+  roleCapabilities: ['independent-same-quantity-implementation'],
+  domains: ['utm'],
+});
+
+describe('registry entries — the entries the O rules read must be well-formed', () => {
+  it('accepts a well-formed entry', () => {
+    expect(runRegistry({ oracles: [validEntry()] }).problems).toEqual([]);
+  });
+
+  it('R0 rejects a duplicate oracleId, which would overwrite the earlier entry', () => {
+    const dup = { ...validEntry(), lineageGroup: 'gdal', domains: ['slope'] };
+    const r = runRegistry({ oracles: [validEntry(), dup] });
+    expect(ids(r.problems)).toContain('R0');
+    expect(r.problems.find((p) => p.startsWith('[R0'))).toContain('proj-9.8.1');
+  });
+
+  it('R1 rejects a missing lineageGroup and names the field O3 depends on', () => {
+    const e = validEntry() as Record<string, unknown>;
+    delete e.lineageGroup;
+    const r = runRegistry({ oracles: [e] });
+    expect(ids(r.problems)).toContain('R1');
+    expect(r.problems.find((p) => p.startsWith('[R1'))).toContain('lineageGroup');
+  });
+
+  it('R1 flags every required scalar field by name when all are absent', () => {
+    const r = runRegistry({ oracles: [{ roleCapabilities: ['x'], domains: ['y'] }] });
+    const r1 = r.problems.filter((p) => p.startsWith('[R1'));
+    for (const field of ['oracleId', 'name', 'version', 'lineageGroup', 'license']) {
+      expect(r1.some((p) => p.includes(field))).toBe(true);
+    }
+  });
+
+  it('R1 treats an empty-string field as missing', () => {
+    const r = runRegistry({ oracles: [{ ...validEntry(), license: '   ' }] });
+    expect(ids(r.problems)).toContain('R1');
+    expect(r.problems.find((p) => p.startsWith('[R1'))).toContain('license');
+  });
+
+  it('R2 rejects an entry whose roleCapabilities is empty or absent', () => {
+    expect(ids(runRegistry({ oracles: [{ ...validEntry(), roleCapabilities: [] }] }).problems)).toContain('R2');
+    const e = validEntry() as Record<string, unknown>;
+    delete e.roleCapabilities;
+    expect(ids(runRegistry({ oracles: [e] }).problems)).toContain('R2');
+  });
+
+  it('R3 rejects an entry whose domains is empty or absent', () => {
+    expect(ids(runRegistry({ oracles: [{ ...validEntry(), domains: [] }] }).problems)).toContain('R3');
+    const e = validEntry() as Record<string, unknown>;
+    delete e.domains;
+    expect(ids(runRegistry({ oracles: [e] }).problems)).toContain('R3');
+  });
+
+  it('labels a missing-oracleId entry by list position, having no id to name', () => {
+    const r = runRegistry({ oracles: [{ name: 'X', version: '1', lineageGroup: 'x', license: 'MIT', roleCapabilities: ['r'], domains: ['d'] }] });
+    expect(ids(r.problems)).toContain('R1');
+    expect(r.problems.find((p) => p.startsWith('[R1'))).toContain('entry #0');
   });
 });

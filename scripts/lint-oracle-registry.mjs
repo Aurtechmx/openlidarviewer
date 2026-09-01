@@ -15,9 +15,20 @@
  *       Two programs wrapping one library are one implementation. Summing them
  *       reports a corroboration that does not exist.
  *
- * `collectOracleProblems` is a function of the registry and records it is
- * given, so tests/oracleRegistryLint.test.ts constructs both rather than
- * depending on what the repository holds today.
+ * The O rules trust the registry to be well formed. `collectRegistryProblems`
+ * checks that assumption, because a broken entry defeats them silently:
+ *
+ *   R0  Two entries share an oracleId. The later one overwrites the earlier in
+ *       every lookup, so the first oracle's roles and lineage vanish.
+ *   R1  An entry omits oracleId, name, version, lineageGroup or license. A
+ *       dropped lineageGroup is the one O3 reads to see a double count.
+ *   R2  roleCapabilities is empty or absent, so the entry can play no role a
+ *       record may claim.
+ *   R3  domains is empty or absent.
+ *
+ * Both collectors are functions of their input, so tests/oracleRegistryLint.
+ * test.ts constructs synthetic registries and records rather than depending on
+ * what the repository holds today.
  */
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -91,6 +102,58 @@ export function collectOracleProblems(registry, records) {
   return { problems, cited, lineages: lineages.size };
 }
 
+/**
+ * Problems in the registry's own entries. Returns `{ problems }`.
+ *
+ * Rules R0-R3 above. Missing scalar fields are reported one per field so the
+ * message names which one; a missing oracleId is labelled by list position,
+ * since there is no id to name it by.
+ */
+export function collectRegistryProblems(registry) {
+  const problems = [];
+  const seen = new Set();
+  const oracles = registry.oracles ?? [];
+
+  oracles.forEach((o, i) => {
+    const hasId = typeof o.oracleId === 'string' && o.oracleId.trim() !== '';
+    const label = hasId ? o.oracleId : `entry #${i}`;
+
+    if (hasId) {
+      if (seen.has(o.oracleId)) {
+        problems.push(
+          `[R0 duplicate-oracle-id] registry defines ${o.oracleId} more than once. ` +
+            "The later entry overwrites the earlier in every lookup, so the first oracle's roles and lineage vanish.",
+        );
+      } else {
+        seen.add(o.oracleId);
+      }
+    }
+
+    for (const field of ['oracleId', 'name', 'version', 'lineageGroup', 'license']) {
+      const v = o[field];
+      if (typeof v !== 'string' || v.trim() === '') {
+        problems.push(
+          `[R1 field-missing] registry ${label} has no ${field}. ` +
+            'Every registered oracle needs one before a study can cite it.',
+        );
+      }
+    }
+
+    if (!Array.isArray(o.roleCapabilities) || o.roleCapabilities.length === 0) {
+      problems.push(
+        `[R2 role-capabilities-empty] registry ${label} lists no roleCapabilities, ` +
+          'so it can play no role a record may claim.',
+      );
+    }
+
+    if (!Array.isArray(o.domains) || o.domains.length === 0) {
+      problems.push(`[R3 domains-empty] registry ${label} lists no domains.`);
+    }
+  });
+
+  return { problems };
+}
+
 /** Every JSON under validation/external-oracles that names oracles. */
 function* walk(dir) {
   if (!existsSync(dir)) return;
@@ -119,10 +182,11 @@ if (isCli) {
   }
 
   const { problems, cited, lineages } = collectOracleProblems(registry, records);
+  const allProblems = [...collectRegistryProblems(registry).problems, ...problems];
 
-  if (problems.length > 0) {
-    console.error(`\nlint:oracle-registry: ${problems.length} problem(s):\n`);
-    for (const p of problems) console.error(`  - ${p}`);
+  if (allProblems.length > 0) {
+    console.error(`\nlint:oracle-registry: ${allProblems.length} problem(s):\n`);
+    for (const p of allProblems) console.error(`  - ${p}`);
     console.error('');
     process.exit(1);
   }
