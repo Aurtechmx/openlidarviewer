@@ -355,7 +355,7 @@ export class DebugOverlay {
         `terrain comp  ${formatTerrainCompute(terrainCompute)}`,
       ].join('\n');
     } else {
-      this._live.textContent = `backend       ${backendLabel}\n(initialising…)`;
+      this._live.textContent = `backend       ${backendText}\n(initialising…)`;
     }
 
     if (streaming) {
