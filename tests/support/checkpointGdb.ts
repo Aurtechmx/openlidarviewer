@@ -12,10 +12,24 @@
  *   - reading rows out of the `.gdb` with GDAL's `ogr2ogr` (no FileGDB reader
  *     is written here — GDAL already reads the format correctly);
  *   - the FAIL-CLOSED prerequisite gate a checkpoint set must pass before any
- *     of its rows may be treated as an independent, usable checkpoint; and
+ *     of its rows may be paired with the tile;
+ *   - the PREDICTION-COVERAGE LEDGER: how many eligible checkpoints the product
+ *     actually predicted a value at, so a low-coverage tile reports a low
+ *     coverage rather than silently shrinking the sample; and
  *   - Mean Absolute Error, which `checkpointAccuracy()` does not report
  *     (it reports bias, RMSE, median, NMAD, P90/P95, max — MAE is computed
  *     here directly from the same residuals it returns).
+ *
+ * INDEPENDENCE IS NOT INFERRED FROM THE GDB. A 3DEP `point_type` of NVA or VVA
+ * is an accuracy-TYPE label (Non-vegetated / Vegetated Vertical Accuracy), not
+ * evidence that a checkpoint was held back from the product's calibration,
+ * registration, or parameter tuning. Whether a checkpoint is independent is a
+ * property of external provenance, and this adapter only marks a checkpoint
+ * `independent` when the caller passes provenance that says so
+ * (`IndependenceProvenance`). Absent that provenance a checkpoint is given a
+ * usage `checkpointAccuracy()` does not recognise, so it forces an
+ * `unknown-usage` refusal naming it rather than entering an independent-accuracy
+ * statistic.
  *
  * Fail-closed prerequisites, in the order checked:
  *   1. at least one checkpoint of the project falls inside the tile extent;
@@ -24,9 +38,10 @@
  *      a reprojection this module does not perform, so it is excluded, not
  *      silently reprojected);
  *   3. of those, the checkpoint states an accuracy/uncertainty value;
- *   4. of those, the checkpoint states a point_type (NVA/VVA) — the field
- *      that marks it as an independent survey observation rather than a
- *      derived or unlabelled row;
+ *   4. of those, the checkpoint states a point_type (NVA/VVA) — the accuracy-
+ *      type label 3DEP uses to distinguish a vertical-accuracy observation from
+ *      a derived or unlabelled row. This gates accuracy-type eligibility only;
+ *      it does NOT establish independence (see above);
  *   5. the surviving count is >= MIN_CHECKPOINT_SAMPLE_SIZE.
  * Any failure is reported with a specific reason string; the gate does not
  * stop at the first failure; nothing partial is computed for a closed gate.
@@ -35,8 +50,11 @@
 import { execFileSync } from 'node:child_process';
 import {
   checkpointAccuracy,
+  referenceUncertaintyFromValue,
   type Checkpoint,
   type CheckpointResult,
+  type CheckpointUsage,
+  type ReferenceUncertaintyMeaning,
 } from '../../src/validation/checkpointAccuracy';
 
 /**
@@ -259,7 +277,7 @@ export function checkpointPrerequisites(rows: readonly RawCheckpointRow[], tile:
   if (withAccuracy.length > 0 && withPointType.length < withAccuracy.length) {
     reasons.push(
       `${withAccuracy.length - withPointType.length} checkpoint(s) lack a point_type (NVA/VVA); ` +
-        'independence cannot be established without it',
+        'the accuracy-type label is required to treat the row as a vertical-accuracy observation',
     );
   }
 
@@ -274,28 +292,128 @@ export function checkpointPrerequisites(rows: readonly RawCheckpointRow[], tile:
 }
 
 /**
+ * Externally-established independence of individual checkpoints.
+ *
+ * The GDB does not carry independence (a point_type is an accuracy-type label,
+ * not proof a checkpoint was withheld from the product's calibration,
+ * registration, or tuning). The caller supplies what external provenance
+ * established:
+ *
+ *   - `independentIds`: unique_identifiers confirmed independent. A checkpoint
+ *     in this set is marked `usage: 'independent'`.
+ *   - `usageById`: a specific `CheckpointUsage` per checkpoint, for provenance
+ *     that recorded a leaking role (control/registration/parameter-tuning/
+ *     manual-correction) rather than independence. Takes precedence over
+ *     `independentIds` for the ids it names, and a leaking usage here is carried
+ *     into `checkpointAccuracy()` so it refuses over that checkpoint rather than
+ *     the adapter dropping it.
+ *
+ * A checkpoint named by neither is left at `INDEPENDENCE_NOT_ESTABLISHED`.
+ */
+export interface IndependenceProvenance {
+  readonly independentIds?: ReadonlySet<string>;
+  readonly usageById?: ReadonlyMap<string, CheckpointUsage>;
+}
+
+/**
+ * The `usage` given to a checkpoint whose independence external provenance did
+ * not confirm. It is intentionally NOT one of CHECKPOINT_USAGES: an unconfirmed
+ * checkpoint's independence is UNKNOWN, not known-leaked. `checkpointAccuracy()`
+ * does not recognise this string, so it triggers an `unknown-usage` refusal that
+ * names the checkpoint ("an unreadable usage cannot be shown to be
+ * independent"), rather than the value silently entering an independent-accuracy
+ * figure. Supply `IndependenceProvenance` to lift a checkpoint out of it.
+ */
+export const INDEPENDENCE_NOT_ESTABLISHED: string = 'independence-not-established';
+
+function resolveUsage(id: string, provenance?: IndependenceProvenance): CheckpointUsage {
+  const explicit = provenance?.usageById?.get(id);
+  if (explicit !== undefined) return explicit;
+  if (provenance?.independentIds?.has(id)) return 'independent';
+  // Cast at the parse boundary the way checkpointAccuracy() documents: the value
+  // is not a CheckpointUsage, and its isUsage() runtime check refuses it.
+  return INDEPENDENCE_NOT_ESTABLISHED as CheckpointUsage;
+}
+
+/**
+ * Prediction coverage over the checkpoints offered to the product.
+ *
+ * A checkpoint with no finite product prediction at its XY (outside the DTM's
+ * coverage, or a void inside it) carries no comparison, so it cannot become a
+ * `Checkpoint`. It is COUNTED here rather than dropped: `pooled.n` alone cannot
+ * tell a reader whether a low sample is a thin survey or a tile the product
+ * barely covered. The GDB/prediction map does not say WHY a prediction is
+ * missing, so no outside-coverage vs void distinction is fabricated.
+ */
+export interface PredictionCoverageLedger {
+  /** Checkpoints offered for comparison (rows that passed the prerequisite gate). */
+  readonly eligible: number;
+  /** Of those, the ones with a finite product prediction at their XY. */
+  readonly predicted: number;
+  /** Of those, the ones with no finite prediction. `eligible - predicted`. */
+  readonly unpredicted: number;
+}
+
+/** Optional metadata the caller establishes about the checkpoint set. */
+export interface CheckpointAdapterOptions {
+  /** Externally-established per-checkpoint independence. */
+  readonly independence?: IndependenceProvenance;
+  /**
+   * What the GDB `accuracy` field's number means statistically. The 3DEP
+   * checkpoint schema does not state this per row, so it defaults to `'unknown'`
+   * (fail-closed): an unlabelled value is NOT taken as a 1-sigma standard
+   * uncertainty. Set it (for example to `'95-percent'`) only when external
+   * metadata establishes what the field is.
+   */
+  readonly accuracyMeaning?: ReferenceUncertaintyMeaning;
+}
+
+/** `checkpointAccuracy()` input plus the coverage ledger over the same rows. */
+export interface AccuracyCheckpointBuild {
+  readonly checkpoints: Checkpoint[];
+  readonly ledger: PredictionCoverageLedger;
+}
+
+/**
  * Build `checkpointAccuracy()` input from checkpoint rows that already passed
  * `checkpointPrerequisites`, given the product's measured elevation at each
- * checkpoint's XY (by `unique_identifier`). Rows with no measured value
- * (outside DTM coverage) are dropped — they carry no comparison, not a zero.
+ * checkpoint's XY (by `unique_identifier`).
+ *
+ * Independence comes from `options.independence`, not from the GDB. The stated
+ * accuracy value is wrapped in a `ReferenceUncertainty` whose meaning is
+ * `options.accuracyMeaning` (default `'unknown'`), so an unlabelled value is
+ * never converted to a 1-sigma sigma by `checkpointAccuracy()`.
+ *
+ * Rows with no finite product prediction cannot form a comparison, so they do
+ * not become a `Checkpoint`; they are counted in the returned ledger rather than
+ * dropped silently.
  */
 export function toAccuracyCheckpoints(
   rows: readonly RawCheckpointRow[],
   measuredById: ReadonlyMap<string, number>,
-): Checkpoint[] {
+  options: CheckpointAdapterOptions = {},
+): AccuracyCheckpointBuild {
+  const meaning: ReferenceUncertaintyMeaning = options.accuracyMeaning ?? 'unknown';
   const out: Checkpoint[] = [];
+  let predicted = 0;
   for (const r of rows) {
     const measured = measuredById.get(r.unique_identifier);
     if (measured === undefined || !Number.isFinite(measured)) continue;
+    predicted++;
     out.push({
       id: r.unique_identifier,
       measured,
       reference: Number(r.source_elevation),
-      usage: 'independent',
-      referenceSigma: Number(r.accuracy),
+      usage: resolveUsage(r.unique_identifier, options.independence),
+      referenceUncertainty: referenceUncertaintyFromValue(
+        Number(r.accuracy),
+        meaning,
+        '3DEP checkpoint accuracy field',
+      ),
     });
   }
-  return out;
+  const eligible = rows.length;
+  return { checkpoints: out, ledger: { eligible, predicted, unpredicted: eligible - predicted } };
 }
 
 /** Mean Absolute Error over residuals — not reported by `checkpointAccuracy()`. */
@@ -306,29 +424,53 @@ export function meanAbsoluteError(residuals: readonly number[]): number | null {
   return sum / residuals.length;
 }
 
+const EMPTY_LEDGER: PredictionCoverageLedger = { eligible: 0, predicted: 0, unpredicted: 0 };
+
 export interface CheckpointStudyOutcome {
   readonly prereq: PrerequisiteResult;
   readonly result: CheckpointResult | null;
   readonly mae: number | null;
+  /**
+   * Prediction coverage over the gated checkpoints. Populated even when
+   * `result` is a refusal (for example an insufficient sample caused by low
+   * coverage): the count of eligible checkpoints and how many the product
+   * predicted is a reported figure, not something a refusal erases.
+   */
+  readonly coverage: PredictionCoverageLedger;
+  /**
+   * `coverage.predicted / coverage.eligible`, or null when nothing was eligible.
+   * A tile the product barely covered reports a low coverage here rather than a
+   * shrunken checkpoint sample.
+   */
+  readonly predictionCoverage: number | null;
 }
 
 /**
  * End-to-end: gate, then (only if the gate passes) compute pooled/stratified
  * accuracy plus MAE. Fails closed: `result`/`mae` stay `null` whenever
- * `prereq.ok` is false, never a partial figure over an ungated sample.
+ * `prereq.ok` is false, never a partial figure over an ungated sample. The
+ * coverage ledger is always populated (empty when the gate closed before any
+ * row was eligible).
+ *
+ * Independence and the accuracy-field meaning are supplied through `options`;
+ * with none, every checkpoint stays at `INDEPENDENCE_NOT_ESTABLISHED` and
+ * `checkpointAccuracy()` refuses (`unknown-usage`) rather than reporting an
+ * independent-accuracy figure the provenance does not support.
  */
 export function runCheckpointStudy(
   rows: readonly RawCheckpointRow[],
   tile: TileFrame,
   measuredById: ReadonlyMap<string, number>,
+  options: CheckpointAdapterOptions = {},
 ): CheckpointStudyOutcome {
   const prereq = checkpointPrerequisites(rows, tile);
   if (!prereq.ok) {
-    return { prereq, result: null, mae: null };
+    return { prereq, result: null, mae: null, coverage: EMPTY_LEDGER, predictionCoverage: null };
   }
-  const checkpoints = toAccuracyCheckpoints(prereq.usable, measuredById);
+  const { checkpoints, ledger } = toAccuracyCheckpoints(prereq.usable, measuredById, options);
   const result = checkpointAccuracy(checkpoints, { minSample: MIN_CHECKPOINT_SAMPLE_SIZE });
   const mae =
     result.status === 'reported' ? meanAbsoluteError(result.residuals.map((r) => r.residual)) : null;
-  return { prereq, result, mae };
+  const predictionCoverage = ledger.eligible === 0 ? null : ledger.predicted / ledger.eligible;
+  return { prereq, result, mae, coverage: ledger, predictionCoverage };
 }

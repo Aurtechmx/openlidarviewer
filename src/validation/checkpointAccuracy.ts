@@ -56,6 +56,88 @@ export const LEAKING_USAGES: readonly CheckpointUsage[] = [
   'manual-correction',
 ];
 
+/**
+ * What a stated reference-uncertainty number actually means.
+ *
+ * A survey may report a number with no statement of what it is: a standard
+ * deviation, an RMSE, a 95 % positional accuracy, or a manufacturer's spec
+ * bound. Only some of those are a 1-sigma standard uncertainty, and treating a
+ * 95 % figure or a manufacturer bound as if it were 1-sigma understates the
+ * reference error by a factor of roughly two. This module therefore refuses to
+ * guess: a value whose meaning is not established is never converted to sigma.
+ */
+export const REFERENCE_UNCERTAINTY_MEANINGS = [
+  'standard-deviation',
+  'rmse',
+  '95-percent',
+  'manufacturer-bound',
+  'unknown',
+] as const;
+
+export type ReferenceUncertaintyMeaning = (typeof REFERENCE_UNCERTAINTY_MEANINGS)[number];
+
+/**
+ * A reference-survey uncertainty with its statistical meaning made explicit.
+ *
+ * `source` records where the number and its meaning came from, so a report can
+ * say why a value was or was not treated as a standard uncertainty.
+ */
+export interface ReferenceUncertainty {
+  readonly valueMetres: number;
+  readonly meaning: ReferenceUncertaintyMeaning;
+  readonly source: string;
+}
+
+/**
+ * Two-sided 95 % normal coverage factor. Dividing a 95 % positional accuracy by
+ * this recovers the 1-sigma standard deviation, ASSUMING a zero-mean normal
+ * error. Frozen alongside DEFAULT_CI_Z so the two cannot drift apart.
+ */
+export const NORMAL_95_COVERAGE_FACTOR = 1.96;
+
+/**
+ * Convert a reference uncertainty to a 1-sigma standard uncertainty, or null
+ * when its meaning does not statistically justify a sigma.
+ *
+ * - `standard-deviation` is already sigma.
+ * - `rmse` is treated as sigma under a zero-mean assumption (RMSE = sqrt(bias^2
+ *   + sigma^2), so RMSE ≈ sigma when the reference is unbiased). This matches
+ *   the USGS/ASPRS convention of combining RMSE terms in quadrature.
+ * - `95-percent` is divided by the normal coverage factor (zero-mean normal
+ *   assumption).
+ * - `manufacturer-bound` and `unknown` are NOT a standard uncertainty and yield
+ *   null: fabricating a sigma from them would assert a distribution nobody
+ *   stated.
+ */
+export function referenceSigmaFromUncertainty(u: ReferenceUncertainty): number | null {
+  switch (u.meaning) {
+    case 'standard-deviation':
+      return u.valueMetres;
+    case 'rmse':
+      return u.valueMetres;
+    case '95-percent':
+      return u.valueMetres / NORMAL_95_COVERAGE_FACTOR;
+    case 'manufacturer-bound':
+    case 'unknown':
+      return null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Wrap a bare uncertainty number in a descriptor. The meaning defaults to
+ * `unknown` (fail-closed): a legacy value with no stated meaning must NOT be
+ * silently taken as 1-sigma.
+ */
+export function referenceUncertaintyFromValue(
+  valueMetres: number,
+  meaning: ReferenceUncertaintyMeaning = 'unknown',
+  source = 'unspecified',
+): ReferenceUncertainty {
+  return { valueMetres, meaning, source };
+}
+
 export interface Checkpoint {
   readonly id: string;
   /** The product's value at the checkpoint (for example the DTM elevation). */
@@ -65,8 +147,20 @@ export interface Checkpoint {
   readonly usage: CheckpointUsage;
   /** Land cover, terrain class, or any caller-defined stratum key. */
   readonly stratum?: string;
-  /** 1-sigma uncertainty of `reference`, or null when the survey did not state one. */
+  /**
+   * 1-sigma uncertainty of `reference`, or null when the survey did not state
+   * one. This field carries the 1-sigma contract: supplying it is equivalent to
+   * a `referenceUncertainty` with meaning `standard-deviation`. When both are
+   * supplied, `referenceUncertainty` takes precedence.
+   */
   readonly referenceSigma?: number | null;
+  /**
+   * Reference uncertainty with its statistical meaning made explicit. Use this
+   * rather than `referenceSigma` when the survey stated a 95 % figure, an RMSE,
+   * a manufacturer bound, or a number of unknown meaning: only some of those may
+   * be treated as a 1-sigma standard uncertainty.
+   */
+  readonly referenceUncertainty?: ReferenceUncertainty | null;
 }
 
 /**
@@ -164,6 +258,20 @@ export interface AccuracyStats {
   readonly uncertaintyCombinationId: string | null;
   /** Quadratic mean of the stated reference sigmas, or null when none were stated. */
   readonly referenceRmse: number | null;
+  /**
+   * Whether the reference uncertainty could be established for this group.
+   *
+   * - `none-stated`: the survey stated no reference uncertainty. `referenceRmse`
+   *   is null.
+   * - `established`: every stated reference uncertainty had a meaning that
+   *   justifies a 1-sigma value, so `referenceRmse` is the quadratic mean of
+   *   those sigmas and a combined RMSE can be produced.
+   * - `not-established`: at least one checkpoint stated a reference uncertainty
+   *   whose meaning does not justify a sigma (`unknown`/`manufacturer-bound`).
+   *   `referenceRmse` and `combinedRmse` are null: the fit RMSE stands alone and
+   *   is not combined against a reference uncertainty that was never established.
+   */
+  readonly referenceUncertaintyState: 'none-stated' | 'established' | 'not-established';
 }
 
 export interface StratumAccuracy {
@@ -236,11 +344,13 @@ const EMPTY_STATS: AccuracyStats = {
   combinedRmse: null,
   uncertaintyCombinationId: null,
   referenceRmse: null,
+  referenceUncertaintyState: 'none-stated',
 };
 
 function statsOf(
   residuals: readonly number[],
   sigmas: readonly number[],
+  referenceNotEstablished: boolean,
   ciZ: number,
   combination: UncertaintyCombination | undefined,
 ): AccuracyStats {
@@ -274,13 +384,19 @@ function statsOf(
     standardError = Math.sqrt(ss / (n - 1)) / Math.sqrt(n);
   }
 
+  // A reference uncertainty of unknown meaning cannot become a sigma, so its
+  // group's referenceRmse is null and its state is not-established: the fit RMSE
+  // is still reported, but nothing is combined against a reference uncertainty
+  // that was never established.
   const referenceRmse =
-    sigmas.length === 0
+    referenceNotEstablished || sigmas.length === 0
       ? null
       : Math.sqrt(sigmas.reduce((acc, s) => acc + s * s, 0) / sigmas.length);
-  // No combination and no reference sigma both leave the combined figure null.
-  // Relabelling the observed RMSE as "combined" would assert a propagation that
-  // never happened.
+  const referenceUncertaintyState: AccuracyStats['referenceUncertaintyState'] =
+    referenceNotEstablished ? 'not-established' : sigmas.length === 0 ? 'none-stated' : 'established';
+  // No combination, no reference sigma, and an unestablished reference all leave
+  // the combined figure null. Relabelling the observed RMSE as "combined" would
+  // assert a propagation that never happened.
   const combinedRmse =
     combination && referenceRmse !== null ? combination.combine(rmse, referenceRmse) : null;
 
@@ -299,7 +415,32 @@ function statsOf(
     combinedRmse,
     uncertaintyCombinationId: combinedRmse === null ? null : combination!.id,
     referenceRmse,
+    referenceUncertaintyState,
   };
+}
+
+type ResolvedReference =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'sigma'; readonly value: number }
+  | { readonly kind: 'not-established' };
+
+/**
+ * Resolve a checkpoint's reference uncertainty to a usable 1-sigma value.
+ *
+ * `referenceUncertainty` (with its explicit meaning) wins when present. A bare
+ * `referenceSigma` carries the 1-sigma contract and is used directly. A stated
+ * uncertainty whose meaning does not justify a sigma resolves to
+ * `not-established` rather than being fabricated into one.
+ */
+function resolveReference(c: Checkpoint): ResolvedReference {
+  const u = c.referenceUncertainty;
+  if (u !== undefined && u !== null) {
+    const sigma = referenceSigmaFromUncertainty(u);
+    return sigma === null ? { kind: 'not-established' } : { kind: 'sigma', value: sigma };
+  }
+  const s = c.referenceSigma;
+  if (s === undefined || s === null) return { kind: 'none' };
+  return { kind: 'sigma', value: s };
 }
 
 /**
@@ -369,16 +510,28 @@ export function checkpointAccuracy(
   // Every consumer of sigma squares it, so -0.5 and 0.5 produce the same
   // referenceRmse and the sign error disappears into a plausible number. An
   // absent sigma (null or undefined) is a different thing and stays legal: it
-  // means the survey stated no uncertainty.
+  // means the survey stated no uncertainty. The same rule applies to a stated
+  // referenceUncertainty.valueMetres, which is a length that cannot be negative
+  // regardless of its meaning.
   const badSigma = checkpoints.filter((c) => {
+    const u = c.referenceUncertainty;
+    if (u !== undefined && u !== null) {
+      return !(Number.isFinite(u.valueMetres) && u.valueMetres >= 0);
+    }
     const s = c.referenceSigma;
     return s !== undefined && s !== null && !(Number.isFinite(s) && s >= 0);
   });
   if (badSigma.length > 0) {
     return refuse(
       'invalid-reference-sigma',
-      'referenceSigma must be finite and >= 0 when stated: ' +
-        badSigma.map((c) => `${c.id} (${String(c.referenceSigma)})`).join(', '),
+      'reference uncertainty must be finite and >= 0 when stated: ' +
+        badSigma
+          .map((c) =>
+            c.referenceUncertainty
+              ? `${c.id} (${String(c.referenceUncertainty.valueMetres)})`
+              : `${c.id} (${String(c.referenceSigma)})`,
+          )
+          .join(', '),
       badSigma.map((c) => c.id),
     );
   }
@@ -386,8 +539,12 @@ export function checkpointAccuracy(
   const residuals: Residual[] = [];
   const pooled: number[] = [];
   const pooledSigmas: number[] = [];
+  let pooledNotEstablished = false;
   const excludedNonFiniteIds: string[] = [];
-  const byStratum = new Map<string, { residuals: number[]; sigmas: number[] }>();
+  const byStratum = new Map<
+    string,
+    { residuals: number[]; sigmas: number[]; notEstablished: boolean }
+  >();
 
   for (const c of checkpoints) {
     if (!Number.isFinite(c.measured) || !Number.isFinite(c.reference)) {
@@ -398,17 +555,21 @@ export function checkpointAccuracy(
     const stratum = c.stratum ?? UNSTRATIFIED;
     residuals.push({ id: c.id, stratum, residual: r });
     pooled.push(r);
-    const sigma = c.referenceSigma;
+    // A referenceUncertainty of unknown meaning resolves to no usable sigma; it
+    // marks its group not-established rather than being silently taken as 1σ.
+    const resolved = resolveReference(c);
     let bucket = byStratum.get(stratum);
     if (!bucket) {
-      bucket = { residuals: [], sigmas: [] };
+      bucket = { residuals: [], sigmas: [], notEstablished: false };
       byStratum.set(stratum, bucket);
     }
     bucket.residuals.push(r);
-    // Validated above, so anything not null/undefined here is a usable sigma.
-    if (sigma !== undefined && sigma !== null) {
-      pooledSigmas.push(sigma);
-      bucket.sigmas.push(sigma);
+    if (resolved.kind === 'sigma') {
+      pooledSigmas.push(resolved.value);
+      bucket.sigmas.push(resolved.value);
+    } else if (resolved.kind === 'not-established') {
+      pooledNotEstablished = true;
+      bucket.notEstablished = true;
     }
   }
 
@@ -454,13 +615,19 @@ export function checkpointAccuracy(
       return {
         stratum: key,
         status: 'reported' as const,
-        stats: statsOf(bucket.residuals, bucket.sigmas, ciZ, options.uncertaintyCombination),
+        stats: statsOf(
+          bucket.residuals,
+          bucket.sigmas,
+          bucket.notEstablished,
+          ciZ,
+          options.uncertaintyCombination,
+        ),
       };
     });
 
   return {
     status: 'reported',
-    pooled: statsOf(pooled, pooledSigmas, ciZ, options.uncertaintyCombination),
+    pooled: statsOf(pooled, pooledSigmas, pooledNotEstablished, ciZ, options.uncertaintyCombination),
     strata,
     residuals,
     ciZ,

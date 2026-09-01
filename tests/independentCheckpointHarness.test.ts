@@ -62,7 +62,13 @@ import {
   runCheckpointStudy,
   MIN_CHECKPOINT_SAMPLE_SIZE,
   type TileFrame,
+  type CheckpointAdapterOptions,
+  type IndependenceProvenance,
 } from './support/checkpointGdb';
+import {
+  REFERENCE_UNCERTAINTY_MEANINGS,
+  type ReferenceUncertaintyMeaning,
+} from '../src/validation/checkpointAccuracy';
 
 const SCENE = process.env.CHECKPOINT_SCENE;
 const GDB = process.env.CHECKPOINT_GDB;
@@ -71,6 +77,29 @@ const LAYER =
   process.env.CHECKPOINT_LAYER ?? 'Consolidated_Standardized_Checkpoints_3DEP_Version2_20250930';
 const HORIZONTAL_EPSG = Number(process.env.CHECKPOINT_HORIZONTAL_EPSG ?? '6339');
 const VERTICAL_EPSG = Number(process.env.CHECKPOINT_VERTICAL_EPSG ?? '5703');
+// Independence is NOT inferred from the GDB (a point_type is an accuracy-type
+// label, not proof a checkpoint was withheld from the product). It is supplied
+// externally: a file of unique_identifiers confirmed independent, one per line.
+// Absent it, runCheckpointStudy refuses (unknown-usage) rather than reporting an
+// independent-accuracy figure the provenance does not support.
+const INDEPENDENT_IDS_FILE = process.env.CHECKPOINT_INDEPENDENT_IDS_FILE;
+// What the GDB `accuracy` field means statistically; unknown unless external
+// metadata establishes it (for example '95-percent' for an NVA/VVA figure).
+const RAW_ACCURACY_MEANING = process.env.CHECKPOINT_ACCURACY_MEANING;
+const ACCURACY_MEANING: ReferenceUncertaintyMeaning = (
+  REFERENCE_UNCERTAINTY_MEANINGS as readonly string[]
+).includes(RAW_ACCURACY_MEANING ?? '')
+  ? (RAW_ACCURACY_MEANING as ReferenceUncertaintyMeaning)
+  : 'unknown';
+
+function loadIndependenceProvenance(): IndependenceProvenance | undefined {
+  if (!INDEPENDENT_IDS_FILE || !existsSync(INDEPENDENT_IDS_FILE)) return undefined;
+  const ids = readFileSync(INDEPENDENT_IDS_FILE, 'utf8')
+    .split(/\r\n|\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  return { independentIds: new Set(ids) };
+}
 
 const PRODUCER_GROUND = 2; // ASPRS class 2 = ground
 
@@ -196,7 +225,16 @@ describe.skipIf(!ready)('independent-checkpoint accuracy harness (pathway A: pro
       if (z !== null) measuredById.set(r.unique_identifier, z);
     }
 
-    const { prereq, result, mae } = runCheckpointStudy(rows, tile, measuredById);
+    const studyOptions: CheckpointAdapterOptions = {
+      independence: loadIndependenceProvenance(),
+      accuracyMeaning: ACCURACY_MEANING,
+    };
+    const { prereq, result, mae, coverage, predictionCoverage } = runCheckpointStudy(
+      rows,
+      tile,
+      measuredById,
+      studyOptions,
+    );
 
     // eslint-disable-next-line no-console
     console.log(
@@ -207,6 +245,10 @@ describe.skipIf(!ready)('independent-checkpoint accuracy harness (pathway A: pro
         `local origin: [${originX}, ${originY}]  cell size: ${cellSizeM} m`,
         `prerequisites ok: ${prereq.ok}`,
         ...prereq.reasons.map((r) => `  - ${r}`),
+        `independence provenance: ${studyOptions.independence ? 'supplied' : 'not supplied'}`,
+        `accuracy-field meaning: ${ACCURACY_MEANING}`,
+        `prediction coverage: ${coverage.predicted}/${coverage.eligible}` +
+          (predictionCoverage === null ? '' : ` (${(predictionCoverage * 100).toFixed(1)}%)`),
       ].join('\n'),
     );
 
@@ -217,22 +259,30 @@ describe.skipIf(!ready)('independent-checkpoint accuracy harness (pathway A: pro
       expect(mae).toBeNull();
       expect(prereq.reasons.length).toBeGreaterThan(0);
       expect(prereq.usable.length).toBeLessThan(MIN_CHECKPOINT_SAMPLE_SIZE);
+    } else if (result?.status === 'reported') {
+      // Reached only when independence provenance covered the whole sample and
+      // enough checkpoints were predicted; otherwise runCheckpointStudy refuses.
+      // eslint-disable-next-line no-console
+      console.log(
+        [
+          `n=${result.pooled.n}`,
+          `bias=${result.pooled.bias?.toFixed(4)}`,
+          `rmse=${result.pooled.rmse?.toFixed(4)}`,
+          `mae=${mae?.toFixed(4)}`,
+          `nmad=${result.pooled.nmad?.toFixed(4)}`,
+          `p95=${result.pooled.p95AbsResidual?.toFixed(4)}`,
+        ].join('  '),
+      );
+      expect(mae).not.toBeNull();
+      expect(coverage.eligible).toBeGreaterThan(0);
     } else {
-      expect(result?.status).toBe('reported');
-      if (result?.status === 'reported') {
-        // eslint-disable-next-line no-console
-        console.log(
-          [
-            `n=${result.pooled.n}`,
-            `bias=${result.pooled.bias?.toFixed(4)}`,
-            `rmse=${result.pooled.rmse?.toFixed(4)}`,
-            `mae=${mae?.toFixed(4)}`,
-            `nmad=${result.pooled.nmad?.toFixed(4)}`,
-            `p95=${result.pooled.p95AbsResidual?.toFixed(4)}`,
-          ].join('  '),
-        );
-        expect(mae).not.toBeNull();
-      }
+      // Gate passed but no independent-accuracy figure is produced: without
+      // independence provenance every checkpoint is unknown-usage, and low
+      // prediction coverage leaves too few for the sample floor. The coverage
+      // ledger is still a reported figure over the eligible checkpoints.
+      expect(result?.status).toBe('refused');
+      expect(mae).toBeNull();
+      expect(coverage.eligible).toBeGreaterThan(0);
     }
   }, 120_000);
 });

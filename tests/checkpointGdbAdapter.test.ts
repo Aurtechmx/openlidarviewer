@@ -12,9 +12,17 @@ import {
   meanAbsoluteError,
   runCheckpointStudy,
   MIN_CHECKPOINT_SAMPLE_SIZE,
+  INDEPENDENCE_NOT_ESTABLISHED,
   type RawCheckpointRow,
   type TileFrame,
+  type IndependenceProvenance,
 } from './support/checkpointGdb';
+import { referenceSigmaFromUncertainty } from '../src/validation/checkpointAccuracy';
+
+/** Provenance marking a whole set of rows externally-confirmed independent. */
+function allIndependent(rows: readonly RawCheckpointRow[]): IndependenceProvenance {
+  return { independentIds: new Set(rows.map((r) => r.unique_identifier)) };
+}
 
 const TILE: TileFrame = {
   horizontalEpsg: 6339,
@@ -148,44 +156,123 @@ describe('meanAbsoluteError', () => {
   });
 });
 
-describe('toAccuracyCheckpoints', () => {
-  it('drops rows with no measured value rather than inventing a zero residual', () => {
-    const rows = goodSample(2);
-    const measured = new Map([[rows[0].unique_identifier, 1000.1]]); // rows[1] absent
-    const cps = toAccuracyCheckpoints(rows, measured);
-    expect(cps.length).toBe(1);
-    expect(cps[0].id).toBe(rows[0].unique_identifier);
+describe('toAccuracyCheckpoints — independence, uncertainty meaning, coverage', () => {
+  it('does not treat an NVA/VVA row as independent without external provenance', () => {
+    // point_type is NVA (an accuracy-type label); no provenance is supplied.
+    const rows = [row({ point_type: 'NVA' })];
+    const measured = new Map([[rows[0].unique_identifier, 1000.02]]);
+    const { checkpoints } = toAccuracyCheckpoints(rows, measured);
+    expect(checkpoints[0].usage).not.toBe('independent');
+    expect(checkpoints[0].usage).toBe(INDEPENDENCE_NOT_ESTABLISHED);
   });
 
-  it('carries the stated accuracy through as referenceSigma', () => {
+  it('marks a checkpoint independent only when provenance names it', () => {
+    const rows = [row()];
+    const measured = new Map([[rows[0].unique_identifier, 1000.02]]);
+    const { checkpoints } = toAccuracyCheckpoints(rows, measured, {
+      independence: allIndependent(rows),
+    });
+    expect(checkpoints[0].usage).toBe('independent');
+  });
+
+  it('wraps the accuracy value with meaning unknown by default (no 1-sigma sigma)', () => {
     const rows = [row({ accuracy: '0.07' })];
     const measured = new Map([[rows[0].unique_identifier, 1000.02]]);
-    const cps = toAccuracyCheckpoints(rows, measured);
-    expect(cps[0].referenceSigma).toBeCloseTo(0.07, 12);
+    const { checkpoints } = toAccuracyCheckpoints(rows, measured);
+    const u = checkpoints[0].referenceUncertainty;
+    expect(u?.valueMetres).toBeCloseTo(0.07, 12);
+    expect(u?.meaning).toBe('unknown');
+    // The engine must not fabricate a sigma from an unknown-meaning value.
+    expect(referenceSigmaFromUncertainty(u!)).toBeNull();
+    // The legacy 1-sigma field is no longer asserted from an unlabelled value.
+    expect(checkpoints[0].referenceSigma).toBeUndefined();
+  });
+
+  it('carries a caller-stated 95-percent meaning through so a sigma can be recovered', () => {
+    const rows = [row({ accuracy: '0.098' })];
+    const measured = new Map([[rows[0].unique_identifier, 1000.02]]);
+    const { checkpoints } = toAccuracyCheckpoints(rows, measured, { accuracyMeaning: '95-percent' });
+    const u = checkpoints[0].referenceUncertainty;
+    expect(u?.meaning).toBe('95-percent');
+    expect(referenceSigmaFromUncertainty(u!)).toBeCloseTo(0.098 / 1.96, 12);
+  });
+
+  it('counts an unpredicted row in the coverage ledger rather than dropping it silently', () => {
+    const rows = goodSample(2);
+    const measured = new Map([[rows[0].unique_identifier, 1000.1]]); // rows[1] absent
+    const { checkpoints, ledger } = toAccuracyCheckpoints(rows, measured);
+    // The unpredicted row still forms no comparison...
+    expect(checkpoints.length).toBe(1);
+    expect(checkpoints[0].id).toBe(rows[0].unique_identifier);
+    // ...but it is COUNTED, not vanished: eligible = 2, predicted = 1.
+    expect(ledger.eligible).toBe(2);
+    expect(ledger.predicted).toBe(1);
+    expect(ledger.unpredicted).toBe(1);
   });
 });
 
 describe('runCheckpointStudy — end to end', () => {
-  it('reports full pooled statistics when every gate passes', () => {
+  it('reports full pooled statistics when every gate passes and independence is established', () => {
     const rows = goodSample();
     // measured = reference + 0.1 for every checkpoint -> bias should be exactly 0.1
     const measured = new Map(rows.map((r) => [r.unique_identifier, Number(r.source_elevation) + 0.1]));
-    const { prereq, result, mae } = runCheckpointStudy(rows, TILE, measured);
+    const { prereq, result, mae, coverage, predictionCoverage } = runCheckpointStudy(rows, TILE, measured, {
+      independence: allIndependent(rows),
+    });
     expect(prereq.ok).toBe(true);
     expect(result?.status).toBe('reported');
     if (result?.status === 'reported') {
       expect(result.pooled.n).toBe(MIN_CHECKPOINT_SAMPLE_SIZE);
       expect(result.pooled.bias).toBeCloseTo(0.1, 9);
       expect(result.pooled.rmse).toBeCloseTo(0.1, 9);
+      // Accuracy field left at its default unknown meaning: no reference sigma,
+      // so no combined RMSE is fabricated.
+      expect(result.pooled.referenceUncertaintyState).toBe('not-established');
+      expect(result.pooled.referenceRmse).toBeNull();
+      expect(result.pooled.combinedRmse).toBeNull();
     }
     expect(mae).toBeCloseTo(0.1, 9);
+    expect(coverage.eligible).toBe(MIN_CHECKPOINT_SAMPLE_SIZE);
+    expect(coverage.predicted).toBe(MIN_CHECKPOINT_SAMPLE_SIZE);
+    expect(predictionCoverage).toBe(1);
+  });
+
+  it('refuses (unknown-usage) rather than reporting when independence is not established', () => {
+    const rows = goodSample();
+    const measured = new Map(rows.map((r) => [r.unique_identifier, Number(r.source_elevation) + 0.1]));
+    const { prereq, result } = runCheckpointStudy(rows, TILE, measured);
+    expect(prereq.ok).toBe(true);
+    expect(result?.status).toBe('refused');
+    if (result?.status === 'refused') {
+      expect(result.reason).toBe('unknown-usage');
+    }
+  });
+
+  it('surfaces prediction coverage on a mixed covered/uncovered sample', () => {
+    // Every gate passes (all rows in extent, matching CRS, accuracy + point_type),
+    // and independence is established, but the product predicted only half of them.
+    const rows = goodSample(MIN_CHECKPOINT_SAMPLE_SIZE);
+    const predictedRows = rows.slice(0, MIN_CHECKPOINT_SAMPLE_SIZE / 2);
+    const measured = new Map(
+      predictedRows.map((r) => [r.unique_identifier, Number(r.source_elevation) + 0.1]),
+    );
+    const { coverage, predictionCoverage } = runCheckpointStudy(rows, TILE, measured, {
+      independence: allIndependent(rows),
+    });
+    expect(coverage.eligible).toBe(MIN_CHECKPOINT_SAMPLE_SIZE);
+    expect(coverage.predicted).toBe(MIN_CHECKPOINT_SAMPLE_SIZE / 2);
+    expect(coverage.unpredicted).toBe(MIN_CHECKPOINT_SAMPLE_SIZE / 2);
+    expect(predictionCoverage).toBeCloseTo(0.5, 12);
+    expect(predictionCoverage).toBe(coverage.predicted / coverage.eligible);
   });
 
   it('fails closed with result:null and mae:null on the 0-in-extent case', () => {
     const rows = [row({ source_easting: '0', source_northing: '0' })];
-    const { prereq, result, mae } = runCheckpointStudy(rows, TILE, new Map());
+    const { prereq, result, mae, coverage, predictionCoverage } = runCheckpointStudy(rows, TILE, new Map());
     expect(prereq.ok).toBe(false);
     expect(result).toBeNull();
     expect(mae).toBeNull();
+    expect(coverage.eligible).toBe(0);
+    expect(predictionCoverage).toBeNull();
   });
 });
