@@ -12,9 +12,10 @@
  *
  * Usage: node scripts/e5/enrich-class-histogram.mjs <dir> <manifest.json>
  */
-import { readFileSync, writeFileSync, writeSync } from 'node:fs';
+import { readFileSync, writeFileSync, writeSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const [, , dir, manifestPath] = process.argv;
 if (!dir || !manifestPath) {
@@ -28,12 +29,18 @@ function classHistogram(path) {
     { type: 'readers.las', filename: path },
     { type: 'filters.stats', count: 'Classification' },
   ]);
-  const tmp = `/tmp/e5-hist-${process.pid}.json`;
-  writeFileSync(tmp, pipeline);
-  execFileSync('pdal', ['pipeline', tmp, '--metadata', `/tmp/e5-meta-${process.pid}.json`], {
-    maxBuffer: 64 << 20,
-  });
-  const meta = JSON.parse(readFileSync(`/tmp/e5-meta-${process.pid}.json`, 'utf8'));
+  // A private, unpredictable temp dir (0700) — not a fixed/PID-derived path.
+  const dir = mkdtempSync(join(tmpdir(), 'e5-hist-'));
+  const plPath = join(dir, 'pipeline.json');
+  const metaPath = join(dir, 'meta.json');
+  let meta;
+  try {
+    writeFileSync(plPath, pipeline);
+    execFileSync('pdal', ['pipeline', plPath, '--metadata', metaPath], { maxBuffer: 64 << 20 });
+    meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
   let counts = null;
   const walk = (o) => {
     if (counts) return;
