@@ -28,7 +28,7 @@ function goodManifest() {
       verticalEpsg: 5703,
       verticalDatum: 'North American Vertical Datum 1988',
       geoidModel: 'GEOID12B',
-      classHistogram: { 2: 5 },
+      classHistogram: { 1: 5, 2: 5 },
       groundPointCount: 5,
       fileCreationYear: 2021,
       acquisitionYear: null,
@@ -43,7 +43,7 @@ function goodManifest() {
       verticalEpsg: 5703,
       verticalDatum: 'North American Vertical Datum 1988',
       geoidModel: 'GEOID12B',
-      classHistogram: { 2: 8 },
+      classHistogram: { 1: 12, 2: 8 },
       groundPointCount: 8,
       fileCreationYear: 2021,
       acquisitionYear: null,
@@ -60,7 +60,8 @@ function goodManifest() {
       verticalDatum: ['North American Vertical Datum 1988'],
       geoidModel: ['GEOID12B'],
       homogeneousFrame: true,
-      tilesWithoutGround: [],
+      tilesWithoutGround: [] as string[],
+      allTilesHaveGround: true,
       fileCreationYears: [2021],
       acquisitionYears: [null] as (number | null)[],
     },
@@ -144,6 +145,95 @@ describe('E5 manifest verifier', () => {
     const r = verifyManifest(m, { expectedCount: 2 });
     expect(r.ok).toBe(false);
     expect(r.errors.join('\n')).toMatch(/relabels creation year/);
+  });
+
+  it('catches a classHistogram whose values do not sum to pointCount', () => {
+    const m = goodManifest();
+    m.tiles[0].classHistogram = { 1: 4, 2: 5 }; // sum 9 ≠ pointCount 10
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/classHistogram sum 9 ≠ pointCount 10/);
+  });
+
+  it('catches a classHistogram that is not a plain object', () => {
+    const m = goodManifest();
+    (m.tiles[0] as Record<string, unknown>).classHistogram = [5, 5];
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/classHistogram must be a plain object/);
+  });
+
+  it('catches a classHistogram with a negative count', () => {
+    const m = goodManifest();
+    m.tiles[0].classHistogram = { 1: 15, 2: -5 };
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/classHistogram values must be non-negative integers/);
+  });
+
+  it('catches groundPointCount disagreeing with classHistogram[2]', () => {
+    const m = goodManifest();
+    m.tiles[0].groundPointCount = 4; // histogram class 2 is 5
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/groundPointCount 4 ≠ classHistogram\['2'\] 5/);
+  });
+
+  it('catches a groundPointFraction that does not match the ratio', () => {
+    const m = goodManifest();
+    (m.tiles[0] as Record<string, unknown>).groundPointFraction = 0.4; // true ratio 5/10 = 0.5
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/groundPointFraction 0.4 ≠ recomputed 0.5/);
+  });
+
+  it('accepts a matching groundPointFraction', () => {
+    const m = goodManifest();
+    (m.tiles[0] as Record<string, unknown>).groundPointFraction = 0.5; // 5/10
+    (m.tiles[1] as Record<string, unknown>).groundPointFraction = 0.4; // 8/20
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('guards a zero-point tile without dividing by zero', () => {
+    const m = goodManifest();
+    m.tiles[0].pointCount = 0;
+    (m.tiles[0] as Record<string, unknown>).classHistogram = {};
+    m.tiles[0].groundPointCount = 0;
+    (m.tiles[0] as Record<string, unknown>).groundPointFraction = 0;
+    m.summary.tilesWithoutGround = [m.tiles[0].basename];
+    m.summary.allTilesHaveGround = false;
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('catches a tilesWithoutGround set that names a tile that has ground', () => {
+    const m = goodManifest();
+    m.summary.tilesWithoutGround = ['USGS_LPC_OR_Rogue_2019_B19_10TDM3746.laz'];
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/tilesWithoutGround set mismatch/);
+  });
+
+  it('catches a tilesWithoutGround set that omits a groundless tile', () => {
+    const m = goodManifest();
+    m.tiles[1].groundPointCount = 0;
+    (m.tiles[1] as Record<string, unknown>).classHistogram = { 1: 20 };
+    m.summary.tilesWithoutGround = []; // omits the now-groundless tile
+    m.summary.allTilesHaveGround = false;
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/tilesWithoutGround set mismatch/);
+  });
+
+  it('catches allTilesHaveGround that disagrees with the members', () => {
+    const m = goodManifest();
+    m.summary.allTilesHaveGround = false; // every tile actually has ground
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/allTilesHaveGround=false but 0 tile/);
   });
 
   it.each([

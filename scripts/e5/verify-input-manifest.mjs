@@ -10,10 +10,14 @@
  * `${basename}:${sha256}` lines, tiles sorted by basename); the homogeneity
  * claim matches the members (homogeneousFrame ⇔ one horizontalEpsg + one
  * verticalEpsg + one geoidModel); the geoid summary equals the set of member
- * geoids; and the creation-vs-acquisition separation holds — every tile has a
- * fileCreationYear, no tile still carries a captureYear, acquisitionYear is
- * present (possibly null) with an acquisitionDateSource, and the summary never
- * relabels a creation year as an acquisition year.
+ * geoids; each classHistogram is a plain object of non-negative integers whose
+ * values sum to pointCount, with groundPointCount === classHistogram['2'] and
+ * (when present) groundPointFraction the ground/point ratio to six decimals;
+ * the summary's tilesWithoutGround and allTilesHaveGround are recomputed from
+ * the members, not trusted; and the creation-vs-acquisition separation holds —
+ * every tile has a fileCreationYear, no tile still carries a captureYear,
+ * acquisitionYear is present (possibly null) with an acquisitionDateSource, and
+ * the summary never relabels a creation year as an acquisition year.
  *
  * A missing manifest file is a loud failure, never a silent pass.
  */
@@ -96,6 +100,35 @@ export function verifyManifest(manifest, { expectedCount } = {}) {
     if (t.verticalDatum == null || t.verticalDatum === '') fail(`${b}: verticalDatum is null`);
     if (t.geoidModel == null || t.geoidModel === '') fail(`${b}: geoidModel is null`);
 
+    // Class histogram proves the per-tile point tallies.
+    const ch = t.classHistogram;
+    if (ch == null || typeof ch !== 'object' || Array.isArray(ch)) {
+      fail(`${b}: classHistogram must be a plain object`);
+    } else {
+      const values = Object.values(ch);
+      if (!values.every((v) => Number.isInteger(v) && v >= 0)) {
+        fail(`${b}: classHistogram values must be non-negative integers`);
+      } else if (Number.isInteger(t.pointCount)) {
+        const histSum = values.reduce((a, v) => a + v, 0);
+        if (histSum !== t.pointCount) {
+          fail(`${b}: classHistogram sum ${histSum} ≠ pointCount ${t.pointCount}`);
+        }
+      }
+      const groundFromHist = ch['2'] ?? 0;
+      if (t.groundPointCount !== groundFromHist) {
+        fail(`${b}: groundPointCount ${t.groundPointCount} ≠ classHistogram['2'] ${groundFromHist}`);
+      }
+      if (t.groundPointFraction != null) {
+        const expected =
+          Number.isInteger(t.pointCount) && t.pointCount > 0
+            ? Number((groundFromHist / t.pointCount).toFixed(6))
+            : 0;
+        if (Math.abs(t.groundPointFraction - expected) > 5e-7) {
+          fail(`${b}: groundPointFraction ${t.groundPointFraction} ≠ recomputed ${expected}`);
+        }
+      }
+    }
+
     // Creation-vs-acquisition separation.
     if (!Number.isInteger(t.fileCreationYear)) fail(`${b}: fileCreationYear must be an integer`);
     if ('captureYear' in t) fail(`${b}: forbidden captureYear leftover (use fileCreationYear/acquisitionYear)`);
@@ -151,6 +184,37 @@ export function verifyManifest(manifest, { expectedCount } = {}) {
       const overlap = acq.filter((y) => summary.fileCreationYears.includes(y));
       if (overlap.length > 0) {
         fail(`summary.acquisitionYears relabels creation year(s): ${overlap.join(', ')}`);
+      }
+    }
+
+    // Ground coverage: recompute from the members; don't trust the labels.
+    const groundless = tiles
+      .filter((t) => (t.groundPointCount ?? 0) === 0)
+      .map((t) => t.basename)
+      .sort((a, b) => String(a).localeCompare(String(b)));
+    if ('tilesWithoutGround' in summary) {
+      if (!Array.isArray(summary.tilesWithoutGround)) {
+        fail('summary.tilesWithoutGround must be an array');
+      } else {
+        const claimed = new Set(summary.tilesWithoutGround);
+        const actual = new Set(groundless);
+        const missing = groundless.filter((n) => !claimed.has(n));
+        const extra = [...claimed].filter((n) => !actual.has(n));
+        if (missing.length > 0 || extra.length > 0) {
+          fail(
+            `summary.tilesWithoutGround set mismatch: ` +
+              `missing [${missing.join(', ')}], unexpected [${extra.join(', ')}]`,
+          );
+        }
+      }
+    }
+    if ('allTilesHaveGround' in summary) {
+      const expected = groundless.length === 0;
+      if (summary.allTilesHaveGround !== expected) {
+        fail(
+          `summary.allTilesHaveGround=${summary.allTilesHaveGround} but ` +
+            `${groundless.length} tile(s) lack ground`,
+        );
       }
     }
   }
