@@ -116,9 +116,15 @@ describe('resolveExportEvidence — the one authoritative export-evidence resolv
     // The standalone note helper agrees with the provenance note for the same input.
     expect(scopedEvidenceNote('DTM', IN_SCOPE, RECORDS)).toContain('SYNTH-STUDY-9');
 
-    // The analysis-record gate is the SAME gate verdict (still exploratory:
-    // the empty runtime registry is E4, the scoped E5 does not change the gate).
+    // The gate tracks the EFFECTIVE level: an in-scope E5 match meets the
+    // required E5, so the artifact exports as validated, not exploratory. The
+    // baseline gate (empty runtime registry = E4) still reads exploratory and is
+    // retained for the audit trail — the two are distinct, and no longer contradict.
+    expect(res.gate.exploratoryOnly).toBe(false);
+    expect(res.gate.allowed).toBe(true);
+    expect(res.baselineGate.exploratoryOnly).toBe(true);
     const rec = analysisRecordFromProvenance(p);
+    expect(rec.evidenceExploratory).toBe(false);
     expect(rec.evidenceExploratory).toBe(p.evidenceResolution!.gate.exploratoryOnly);
   });
 

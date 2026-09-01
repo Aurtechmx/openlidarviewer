@@ -35,7 +35,7 @@
  */
 
 import type { EvidenceLevel, ExportDecision } from './evidenceLevel';
-import { evidenceRank, meetsRequired, INDEPENDENCE_FLOOR } from './evidenceLevel';
+import { evidenceRank, meetsRequired, INDEPENDENCE_FLOOR, exportDecision } from './evidenceLevel';
 import { EVIDENCE_REGISTRY, type RegistryEntry } from './claimRegistry.generated';
 import { exportGate } from './evidenceRegistry';
 
@@ -364,12 +364,15 @@ export function resolveEvidence(
 
 /**
  * The SINGLE authoritative export-evidence resolution for a DTM-family claim.
- * Composes the scoped overlay ({@link resolveEvidence}) with the baseline
- * registry gate ({@link exportGate}) and the user-facing note into ONE object,
- * so every DTM export path — provenance stamp, evidence note, analysis record —
+ * Composes the scoped overlay ({@link resolveEvidence}) with the EFFECTIVE
+ * export gate (derived from the overlay's effective level, {@link baselineGate}
+ * retained for the audit trail) and the user-facing note into ONE object, so
+ * every DTM export path — provenance stamp, evidence note, analysis record —
  * derives its baseline level, effective level, applicability state, matched
  * study, gate verdict and note from the SAME call. No path can report E5 while
- * another reports E4, because there is now only one place the decision is made.
+ * another reports E4, because there is now only one place the decision is made —
+ * and the gate now tracks the effective level, so an in-scope E5 match exports
+ * as validated instead of being stamped exploratory by the baseline E4.
  *
  * `note` is scope-aware: an in-scope match reads as validated FOR the registered
  * study envelope; an out-of-scope / applicability-unknown result says external
@@ -394,10 +397,44 @@ export interface ExportEvidenceResolution {
   readonly matchedStudy: string | null;
   /** Human-readable applicability verdict (from the scoped resolver). */
   readonly applicabilityVerdict: string;
-  /** The baseline registry gate verdict (exportAllowed / exploratoryOnly / reason). */
+  /**
+   * The EFFECTIVE export-gate verdict — derived from {@link effectiveEvidence}
+   * (the scoped overlay), so an in-scope match that reaches the required level
+   * exports as validated rather than exploratory. Equals {@link baselineGate}
+   * for every artifact outside a scoped envelope; the shipped record set is
+   * empty, so this is byte-identical to the prior behaviour for real exports.
+   */
   readonly gate: ExportDecision;
+  /**
+   * The baseline registry gate ({@link exportGate}) — the pre-overlay decision
+   * the global registry level yields, retained for the audit trail.
+   */
+  readonly baselineGate: ExportDecision;
   /** The single user-facing evidence note every path stamps. */
   readonly note: string;
+}
+
+/**
+ * The export decision for the EFFECTIVE (scoped-overlay) evidence level rather
+ * than the baseline registry level. Mirrors {@link exportGate} but substitutes
+ * the resolved effective level for the registry's `current`, so an in-scope
+ * match that raises the claim to its required level clears the exploratory mark.
+ * An unregistered claim (no entry, or a null effective level) is refused exactly
+ * as {@link exportGate} refuses it.
+ */
+function effectiveExportGate(
+  claimId: string,
+  effectiveEvidence: EvidenceLevel | null,
+): ExportDecision {
+  const entry = EVIDENCE_REGISTRY[claimId];
+  if (!entry || effectiveEvidence == null) {
+    return {
+      allowed: false,
+      exploratoryOnly: true,
+      reason: `No evidence-register entry for "${claimId}"; treated as unregistered (E0) and exportable only as exploratory.`,
+    };
+  }
+  return exportDecision(effectiveEvidence, entry.required, entry.exportAllowed);
 }
 
 export function resolveExportEvidence(
@@ -407,7 +444,8 @@ export function resolveExportEvidence(
   baselineNote?: string,
 ): ExportEvidenceResolution {
   const r = resolveEvidence(claimId, context, records);
-  const gate = exportGate(claimId);
+  const baselineGate = exportGate(claimId);
+  const gate = effectiveExportGate(claimId, r.effectiveEvidence);
   let note: string;
   switch (r.resolutionState) {
     case 'validated-in-scope':
@@ -439,6 +477,7 @@ export function resolveExportEvidence(
     matchedStudy: r.matchedScopedStudy,
     applicabilityVerdict: r.applicabilityVerdict,
     gate,
+    baselineGate,
     note,
   };
 }
