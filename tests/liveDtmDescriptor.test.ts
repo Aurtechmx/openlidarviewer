@@ -47,6 +47,17 @@ describe('resolveLiveDtmDescriptor', () => {
     expect(d.cellSizeSource).toBe('caller-supplied');
   });
 
+  it('derives despike from trust: trust=false flips the despike on', () => {
+    // Default keeps the production live path (trust set, despike off).
+    const def = resolveLiveDtmDescriptor();
+    expect(def.trustGroundClassification).toBe(true);
+    expect(def.despikeApplied).toBe(false);
+    // Untrusted classification is the complement (analyseContours.ts:790).
+    const untrusted = resolveLiveDtmDescriptor({ trustGroundClassification: false });
+    expect(untrusted.trustGroundClassification).toBe(false);
+    expect(untrusted.despikeApplied).toBe(true);
+  });
+
   it('accepts per-dataset unit-scale overrides', () => {
     const d = resolveLiveDtmDescriptor({
       horizontalUnitToMetres: 0.3048,
@@ -92,6 +103,21 @@ describe('dtmMethodDigest', () => {
       const mutated = { ...base, ...m } as LiveDtmDescriptor;
       expect(dtmMethodDigest(mutated), JSON.stringify(m)).not.toBe(baseDigest);
     }
+  });
+
+  it('default trust holds the digest byte-identical; trust=false moves it', () => {
+    // Pinned pre-refactor default digest: deriving despike from a trust
+    // parameter must not perturb the production default (trust=true → despike
+    // off). If this literal ever changes, the delivered method changed.
+    const DEFAULT_DIGEST =
+      '5150c0a1321a523cf4c4c8522bc549a5388acf018d6ee4f6132d71a4d1505149';
+    expect(dtmMethodDigest(resolveLiveDtmDescriptor())).toBe(DEFAULT_DIGEST);
+    // trust=false flips despike on — a method-behaviour change — so the digest
+    // must differ from the trusted default.
+    const untrusted = dtmMethodDigest(
+      resolveLiveDtmDescriptor({ trustGroundClassification: false }),
+    );
+    expect(untrusted).not.toBe(DEFAULT_DIGEST);
   });
 
   it('does not fold CRS/datum/geoid into the digest', () => {

@@ -122,6 +122,13 @@ export interface ResolveLiveDtmOptions {
   readonly horizontalUnitToMetres?: number;
   /** Override the identity vertical unit scale (per-dataset). */
   readonly verticalUnitToMetres?: number;
+  /**
+   * Whether the run trusts an authoritative ASPRS class-2 set. Defaults true —
+   * the production live path. The blunder-only despike is its complement
+   * (`analyseContours.ts:790` — `const despikeApplied = !trust.trust`), so the
+   * two descriptor fields are derived from this one input rather than set apart.
+   */
+  readonly trustGroundClassification?: boolean;
 }
 
 /**
@@ -136,6 +143,10 @@ export function resolveLiveDtmDescriptor(
   if (!entry) {
     throw new Error(`liveDtmDescriptor: method ${LIVE_DTM_METHOD_ID} missing from registry`);
   }
+  // Trust and despike are one decision, not two literals: the despike is the
+  // complement of trust (`analyseContours.ts:790`). Default true keeps the
+  // production live path (trust=true, despike=false).
+  const trust = opts.trustGroundClassification ?? true;
   return {
     methodId: entry.id,
     methodVersion: entry.version,
@@ -143,10 +154,9 @@ export function resolveLiveDtmDescriptor(
     // never mirrored — so a change to the delivered aggregation moves the digest.
     aggregation: LIVE_DTM_AGGREGATION,
     verticalAxis: LIVE_VERTICAL_AXIS,
-    // Production live path delivers the trusted-classification surface.
-    trustGroundClassification: true,
+    trustGroundClassification: trust,
     groundClass: ASPRS_GROUND_CLASS,
-    despikeApplied: false,
+    despikeApplied: !trust,
     interpolation: LIVE_INTERPOLATION,
     extrapolationGuard: {
       radiusCells: LIVE_EXTRAPOLATION_GUARD.radiusCells,
