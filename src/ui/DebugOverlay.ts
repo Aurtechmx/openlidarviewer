@@ -21,6 +21,7 @@ import { FrameTelemetry } from '../perf/frameTelemetry';
 import { readDevFlags } from '../perf/devFlags';
 import { buildMetricsJson } from '../perf/metricsJson';
 import type { StreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
+import { formatStreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
 import { backendLabel } from './backendLabel';
 
 /** Live COPC streaming counters — present only while a COPC scan is open. */
@@ -140,6 +141,8 @@ export class DebugOverlay {
   private readonly _streamingLabel: HTMLElement;
   private readonly _streaming: HTMLElement;
   private readonly _telemetry: HTMLElement;
+  private readonly _diagnosticsLabel: HTMLElement;
+  private readonly _diagnosticsText: HTMLElement;
   private readonly _benchmark: HTMLElement;
   private readonly _sample: () => DebugSample;
   /** The canonical streaming-diagnostics snapshot for the metrics export. */
@@ -172,6 +175,14 @@ export class DebugOverlay {
     this._telemetry = el('pre', {
       className: 'olv-debug-block',
       text: '(no scan loaded yet)',
+    });
+    this._diagnosticsLabel = el('div', {
+      className: 'olv-debug-label',
+      text: 'streaming diagnostics',
+    });
+    this._diagnosticsText = el('pre', {
+      className: 'olv-debug-block',
+      text: '(no active stream)',
     });
     this._benchmark = el('pre', { className: 'olv-debug-block olv-hidden' });
 
@@ -225,6 +236,8 @@ export class DebugOverlay {
       this._streaming,
       el('div', { className: 'olv-debug-label', text: 'last load' }),
       this._telemetry,
+      this._diagnosticsLabel,
+      this._diagnosticsText,
       this._benchmark,
       copyBtn,
     ]);
@@ -305,6 +318,8 @@ export class DebugOverlay {
     const sample = this._sample();
     this._lastSample = sample;
     const { backend, stats, streaming, terrainCompute } = sample;
+
+    this._diagnosticsText.textContent = formatStreamingDiagnostics(this._diagnostics());
 
     // Perf section (v0.5.5 P0) — rolling frame-time percentiles, over-budget
     // frame counters, longest observed main-thread task (honest "—" where the
