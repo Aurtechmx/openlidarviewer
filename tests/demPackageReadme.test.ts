@@ -53,6 +53,22 @@ function previewResult(): AnalyseContoursResult {
   } as unknown as AnalyseContoursResult;
 }
 
+/**
+ * Set the resolved vertical factor (metres per source vertical unit) on a
+ * result's DTM. The README's elevation unit now derives from this — the vertical
+ * axis — not from the horizontal `linearUnit`. `null` models an unresolved
+ * vertical unit (fail-closed → 'unknown').
+ */
+function withVerticalFactor(
+  r: AnalyseContoursResult,
+  metresPerUnit: number | null,
+): AnalyseContoursResult {
+  return {
+    ...(r as unknown as Record<string, unknown>),
+    dtm: { ...(r.dtm as unknown as Record<string, unknown>), verticalUnitToMetres: metresPerUnit },
+  } as unknown as AnalyseContoursResult;
+}
+
 const OPTS: Omit<DemReadmeOptions, 'result'> = {
   basename: 'site',
   isGeographic: false,
@@ -161,16 +177,22 @@ describe('buildDemReadme — generation parameters derive from the run', () => {
 });
 
 describe('buildDemReadme — unit labels follow the source CRS (label-vs-value)', () => {
-  it('labels cell size + elevation in metres for a metric CRS (default)', () => {
-    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+  it('labels cell size + elevation in metres for a metric CRS (declared metre vertical)', () => {
+    // The elevation unit now derives from the resolved VERTICAL factor, not the
+    // horizontal unit: a metre-vertical CRS (verticalUnitToMetres === 1) reads
+    // 'metres', matching the GeoTIFF vertical GeoKey (9001) in the same package.
+    const txt = buildDemReadme({ result: withVerticalFactor(readyResult(), 1), ...OPTS });
     expect(txt).toMatch(/Cell size\s+1 m\b/);
     expect(txt).toMatch(/Grid cell size 1 m\b/);
     expect(txt).toMatch(/Elevation unit metres/);
   });
 
-  it('labels cell size + elevation in FEET on a foot CRS — never "m"/"metres"', () => {
-    // The DTM grid stores cellSizeM and Z in SOURCE units; a foot CRS carries
-    // feet, so the README must read "ft" / "feet", not the metre default.
+  it('labels cell size in FEET on a foot CRS, but an undeclared vertical unit reads "unknown"', () => {
+    // The DTM grid stores cellSizeM in SOURCE units, so a foot CRS's cell size
+    // reads "ft". The elevation unit is INDEPENDENT of the horizontal one: with
+    // no declared vertical factor it fails closed to "unknown" — the horizontal
+    // foot must never be copied onto the vertical axis (the compound-CRS drift
+    // this fix pins).
     const txt = buildDemReadme({
       result: readyResult(),
       ...OPTS,
@@ -178,17 +200,49 @@ describe('buildDemReadme — unit labels follow the source CRS (label-vs-value)'
     });
     expect(txt).toMatch(/Cell size\s+1 ft\b/);
     expect(txt).toMatch(/Grid cell size 1 ft\b/);
-    expect(txt).toMatch(/Elevation unit feet/);
-    // The drift: a foot scan must NOT assert metres anywhere in the raster block.
+    expect(txt).toMatch(/Elevation unit unknown/);
+    // A foot scan must neither assert metres nor blindly inherit the plan foot.
     expect(txt).not.toMatch(/Elevation unit metres/);
+    expect(txt).not.toMatch(/Elevation unit feet/);
     expect(txt).not.toMatch(/Cell size\s+1 m\b/);
   });
 
-  it('labels degrees for a geographic CRS, with linear elevation', () => {
-    const txt = buildDemReadme({ result: readyResult(), ...OPTS, isGeographic: true });
-    expect(txt).toMatch(/Cell size\s+1 degrees/);
-    // Geographic heights are still linear metres by the standing default.
+  it('reads FEET elevation on a metre-plan / foot-height compound CRS', () => {
+    // metre horizontal (linearUnit undefined ⇒ 'm' cells) over a foot vertical
+    // axis (verticalUnitToMetres === 0.3048). The elevation must read 'feet' from
+    // the vertical factor even though the plan unit is metres.
+    const txt = buildDemReadme({ result: withVerticalFactor(readyResult(), 0.3048), ...OPTS });
+    expect(txt).toMatch(/Cell size\s+1 m\b/);
+    expect(txt).toMatch(/Elevation unit feet/);
+    expect(txt).not.toMatch(/Elevation unit metres/);
+  });
+
+  it('reads METRES elevation on a foot-plan / metre-height compound CRS', () => {
+    // foot horizontal (cells read 'ft') over a metre vertical axis
+    // (verticalUnitToMetres === 1). The elevation must read 'metres', the reverse
+    // of the metre-plan/foot-height case.
+    const txt = buildDemReadme({
+      result: withVerticalFactor(readyResult(), 1),
+      ...OPTS,
+      linearUnit: 'foot',
+    });
+    expect(txt).toMatch(/Cell size\s+1 ft\b/);
     expect(txt).toMatch(/Elevation unit metres/);
+    expect(txt).not.toMatch(/Elevation unit feet/);
+  });
+
+  it('labels degrees for cells on a geographic CRS while honouring the vertical factor (feet)', () => {
+    // A geographic frame's cells/bounds are degrees, but its heights still carry
+    // the declared vertical unit: a foot vertical axis reads 'feet' for elevation
+    // with the cell size still 'degrees'.
+    const txt = buildDemReadme({
+      result: withVerticalFactor(readyResult(), 0.3048),
+      ...OPTS,
+      isGeographic: true,
+    });
+    expect(txt).toMatch(/Cell size\s+1 degrees/);
+    expect(txt).toMatch(/Elevation unit feet/);
+    expect(txt).not.toMatch(/Elevation unit metres/);
   });
 });
 

@@ -571,6 +571,22 @@ describe('buildDemPackage', () => {
     expect(readTiffGeoKey(extractEntry(zip, 'site-dtm.tif')!, 4099)).toBe(9002);
   });
 
+  it('README elevation and the GeoTIFF vertical unit agree on a metre-plan / foot-height CRS', () => {
+    // The compound-CRS drift this fix pins: the README derived its elevation
+    // label from the HORIZONTAL unit while the GeoTIFF stamped the vertical unit
+    // from verticalUnitToMetres. A metre plan (cells 'm') over a foot vertical
+    // axis (0.3048) must now read 'feet' in the README AND 9002 in GeoKey 4099 —
+    // the same unit for the same grid in the same zip.
+    const r = fixtureResult();
+    (r.dtm as { verticalUnitToMetres?: number | null }).verticalUnitToMetres = 0.3048;
+    const zip = buildDemPackage(r, { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' });
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site-README.txt')!);
+    expect(readme).toMatch(/Cell size\s+1 m\b/); // metre plan
+    expect(readme).toMatch(/Elevation unit feet/); // foot height, from the vertical factor
+    expect(readme).not.toMatch(/Elevation unit metres/);
+    expect(readTiffGeoKey(extractEntry(zip, 'site-dtm.tif')!, 4099)).toBe(9002);
+  });
+
   it('maps a metres-per-unit factor to its GeoTIFF unit code, or to none', () => {
     // The shared derivation both products now go through. An unrecognised
     // factor must yield null so the writer omits key 4099 rather than
