@@ -40,6 +40,23 @@ export interface DtmSurfaceOptions {
   readonly isGeographic?: boolean;
   readonly latitudeDeg?: number | null;
   readonly horizontalUnitToMetres?: number;
+  /**
+   * Vertical-unit → metre scale, passed straight through to
+   * {@link buildSurfaceFromRaster}. The live pipeline supplies it (it scales the
+   * despike floor and the confidence roughness); the validation surface must
+   * carry the SAME value so a foot-vertical scan is not validated against a
+   * metre-scaled surface.
+   */
+  readonly verticalUnitToMetres?: number;
+  /**
+   * Run the blunder-only despike before building the surface. The live pipeline
+   * turns this OFF on the trusted-classification path (`trustGroundClassification`),
+   * where measured ground returns are authoritative and a steep survey node must
+   * not be void-filled as a spike, and leaves it ON otherwise. The field
+   * validator MUST pass the SAME value the shipped surface used, or it scores a
+   * different surface. Defaults to the live builder's default (on) when omitted.
+   */
+  readonly despike?: boolean;
   readonly targetCount?: number;
 }
 
@@ -80,9 +97,27 @@ export class DtmSurfaceModel implements SurfaceModel {
       isGeographic: this.opts.isGeographic,
       latitudeDeg: this.opts.latitudeDeg,
       horizontalUnitToMetres: this.opts.horizontalUnitToMetres,
+      verticalUnitToMetres: this.opts.verticalUnitToMetres,
+      // Faithful reproduction of the shipped surface: the despike decision the
+      // live builder made (off on the trusted-classification path) is passed
+      // through so the validated grid is the delivered grid, not a despiked
+      // variant of it. Omitted → undefined → the live builder's default (on).
+      despike: this.opts.despike,
     });
     this.z = dtm.z;
     this.coverage = dtm.coverage;
+  }
+
+  /**
+   * The grid produced by the most recent {@link fit}: the same `z` heights and
+   * per-cell `coverage` the live builder returns. Exposed so a field validator
+   * can assert the validated surface is byte-for-byte the shipped surface (the
+   * DTM parity invariant), rather than inferring it through sampled `predict`.
+   * Returns `null` before the first `fit`.
+   */
+  builtGrid(): { readonly z: Float32Array; readonly coverage: Uint8Array } | null {
+    if (!this.z || !this.coverage) return null;
+    return { z: this.z, coverage: this.coverage };
   }
 
   predict(x: number, y: number): number | null {
