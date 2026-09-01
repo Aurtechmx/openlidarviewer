@@ -4,7 +4,7 @@ The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](
 
 ## Validation baseline
 
-The frozen validation snapshot under `validation/snapshot/` is the 0.6.2 validation baseline, carried forward. 0.6.3 through 0.6.7 added features and evidence but did not re-run the cross-platform portability workflow or a defect audit, so the snapshot's defect registry, portability record (`docs/validation/evidence/portability-v0.6.2/`), and build-identity are the 0.6.2 ones, unchanged because the runs that would refresh them were not repeated. Its checks still hold on its own bytes; it is a baseline this release inherits, not a fresh 0.6.7 run. v0.6.7 promotes no grade, so no new study feeds this baseline.
+The frozen validation snapshot under `validation/snapshot/` is the 0.6.2 validation baseline, carried forward. 0.6.3 through 0.6.7 added features and evidence but did not re-run the cross-platform portability workflow or a defect audit, so the snapshot's defect registry, portability record (`docs/validation/evidence/portability-v0.6.2/`), and build-identity are the 0.6.2 ones, unchanged because the runs that would refresh them were not repeated. Its checks still hold on its own bytes; it is a baseline this release inherits, not a fresh 0.6.7 run. v0.6.7's evidence promotions this cycle are cross-implementation studies recorded in the claim register (see `VALIDATION_REPORT_v0.6.7.md`); none re-ran the cross-platform portability or defect workflow this snapshot records, so no new study feeds this inherited baseline.
 
 ## Toolchain
 

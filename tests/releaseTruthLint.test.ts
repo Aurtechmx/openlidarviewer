@@ -67,6 +67,15 @@ describe('lint:release-truth', () => {
     expect(problems.some((p) => /nothing/i.test(p) && /E4/.test(p))).toBe(true);
   });
 
+  it('fails on "promotes no grade" while the validation report promoted claims this cycle', () => {
+    // Rule 3b: the exact v0.6.7 contradiction — REPRODUCIBILITY said "promotes
+    // no grade" while the validation report promoted five claims to E4.
+    const REPRO = `docs/releases/REPRODUCIBILITY_v${VERSION}.md`;
+    const doc = (realRead(REPRO) ?? '# repro\n') + '\n\nv' + VERSION + ' promotes no grade.\n';
+    const problems = problemsFor(withOverride(REPRO, doc));
+    expect(problems.some((p) => /no grade/i.test(p) && /contradict|promoted/i.test(p))).toBe(true);
+  });
+
   it('fails on a stale dependency-audit version heading', () => {
     const doc = realRead(DEPS)!.replace(
       `# Dependency audit (v${VERSION})`,

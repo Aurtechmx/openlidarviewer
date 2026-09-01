@@ -140,6 +140,35 @@ export function collectReleaseTruthProblems(read) {
     }
   }
 
+  // ── 3b. "promotes no grade" wording vs this cycle's actual promotions ─────
+  // A release whose VALIDATION_REPORT states promotions this cycle must not also
+  // carry "promotes no grade" in any of its truth docs. This is the exact
+  // contradiction v0.6.7 shipped: REPRODUCIBILITY said "v0.6.7 promotes no
+  // grade" (scoped to the inherited snapshot, but read as a global claim) while
+  // the validation report promoted five claims to E4. No prior gate caught it.
+  {
+    const REPRO = `docs/releases/REPRODUCIBILITY_v${version}.md`;
+    const valText = read(VALREPORT) ?? '';
+    const promotedThisCycle =
+      /reach(?:es)? [^.]*E4[^.]* this cycle|promotes? \w+ evidence claim|to seventeen products at E4|from twelve to seventeen/i.test(
+        valText,
+      );
+    if (promotedThisCycle) {
+      const NO_GRADE = /promotes? no (?:new )?grade/i;
+      for (const doc of [REPRO, KNOWN, RELEASE_NOTES]) {
+        const text = read(doc);
+        if (text == null) continue;
+        const m = NO_GRADE.exec(text);
+        if (m) {
+          problems.push(
+            `${doc} says "${m[0]}", but VALIDATION_REPORT_v${version}.md states this cycle promoted ` +
+              `claims. Scope or remove the "no grade" wording so the release docs do not contradict.`,
+          );
+        }
+      }
+    }
+  }
+
   // ── 4. Dependency-audit doc names the current release ─────────────────────
   {
     const text = read(DEPS);
