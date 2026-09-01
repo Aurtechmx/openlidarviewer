@@ -387,7 +387,7 @@ The quick report takes five to ten minutes. A longer comparison against a refere
 For reviewers, and anyone who wants to check the claims above rather than take them on trust:
 
 - [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md): install and run the offline test suite from a clean clone in about two minutes.
-- [VALIDATION_REPORT_v0.6.7.md](docs/releases/VALIDATION_REPORT_v0.6.7.md): what this release validates and what it does not; the DSM and DTM surface grids reach E4 on cross-implementation agreement with PDAL, and the terrain and measurement algorithms are otherwise inherited from [VALIDATION_REPORT_v0.6.5.md](docs/releases/VALIDATION_REPORT_v0.6.5.md).
+- [VALIDATION_REPORT_v0.6.7.md](docs/releases/VALIDATION_REPORT_v0.6.7.md): what this release validates and what it does not; five products reach E4 on cross-implementation agreement this cycle — CRS-UTM-PROJECTION against GeographicLib and PROJ, CHANGE-RASTER and CHANGE-VOLUME against GRASS, and HOLDOUT-RMSE and NVA-VVA against base R — taking the register from twelve to seventeen products at E4, with the twelve carried unchanged from [VALIDATION_REPORT_v0.6.6.md](docs/releases/VALIDATION_REPORT_v0.6.6.md).
 - [KNOWN_LIMITATIONS_v0.6.7.md](docs/releases/KNOWN_LIMITATIONS_v0.6.7.md): the documented limits of this release (DSM/DTM cross-check covers the gridding step only, ground classification still partial, residual streaming flicker, no cross-CRS reprojection).
 - [REPRODUCIBILITY.md](REPRODUCIBILITY.md): the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
 - [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md): how to evaluate the artifact without special hardware or private data.
