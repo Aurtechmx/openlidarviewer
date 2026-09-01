@@ -64,7 +64,7 @@ describe('analyseContours', () => {
   });
 
   it('exposes ASPRS accuracy and index-contour labels', () => {
-    expect(r.accuracy.standard).toBe('ASPRS 2014 formulas, hold-out basis');
+    expect(r.accuracy.standard).toBe('internal residual diagnostic; 2014-formula analogs, hold-out basis');
     if (Number.isFinite(r.accuracy.rmseZ)) {
       expect(r.accuracy.nva95).toBeCloseTo(1.96 * r.accuracy.rmseZ, 6);
     }
