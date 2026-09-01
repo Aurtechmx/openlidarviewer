@@ -9,16 +9,25 @@ import {
   LIVE_INTERPOLATION,
   LIVE_EXTRAPOLATION_GUARD,
 } from '../src/terrain/ground/surfaceFromRaster';
+import {
+  LIVE_DTM_AGGREGATION,
+  ASPRS_GROUND_CLASS,
+} from '../src/terrain/ground/liveDtmConstants';
 
 describe('resolveLiveDtmDescriptor', () => {
   it('resolves to the documented production DTM method values', () => {
     const d = resolveLiveDtmDescriptor();
     expect(d.methodId).toBe('olv.dtm.idw-fill');
     expect(d.methodVersion).toBe(METHOD_REGISTRY['olv.dtm.idw-fill'].version);
-    expect(d.aggregation).toBe('median');
+    // Track the production source of truth, not a hardcoded literal: the
+    // descriptor must equal the constants the delivered surface is built from.
+    expect(d.aggregation).toBe(LIVE_DTM_AGGREGATION);
+    expect(d.groundClass).toBe(ASPRS_GROUND_CLASS);
+    // Sanity: the documented production values.
+    expect(LIVE_DTM_AGGREGATION).toBe('median');
+    expect(ASPRS_GROUND_CLASS).toBe(2);
     expect(d.verticalAxis).toBe('z');
     expect(d.trustGroundClassification).toBe(true);
-    expect(d.groundClass).toBe(2);
     expect(d.despikeApplied).toBe(false);
     expect(d.interpolation).toBe('geodesic');
     expect(d.interpolation).toBe(LIVE_INTERPOLATION);

@@ -33,6 +33,10 @@ import {
   LIVE_INTERPOLATION,
   LIVE_EXTRAPOLATION_GUARD,
 } from '../terrain/ground/surfaceFromRaster';
+import {
+  LIVE_DTM_AGGREGATION,
+  ASPRS_GROUND_CLASS,
+} from '../terrain/ground/liveDtmConstants';
 
 /**
  * The registry id of the delivered DTM method. Stable legacy token; the shipped
@@ -41,22 +45,6 @@ import {
  * the method version tracks the registry's behaviour-versioning contract.
  */
 const LIVE_DTM_METHOD_ID = 'olv.dtm.idw-fill' as const;
-
-/**
- * Per-cell aggregation of the delivered surface. Read from the production path:
- * `analyseContours.ts:238` — `LIVE_DTM_AGGREGATION: DtmAggregation = 'median'`,
- * applied at `analyseContours.ts:767`
- * (`params.aggregation ?? LIVE_DTM_AGGREGATION`). Mirrored here as a literal
- * because that constant is module-private in the terrain layer; the test
- * cross-checks the documented value.
- */
-const LIVE_AGGREGATION = 'median' as const;
-
-/**
- * ASPRS classification code trusted as bare-earth ground. Read from
- * `analyseContours.ts:540` — `const ASPRS_GROUND_CLASS = 2` (module-private).
- */
-const LIVE_GROUND_CLASS = 2 as const;
 
 /**
  * Vertical axis convention of the delivered grid. Read from
@@ -151,11 +139,13 @@ export function resolveLiveDtmDescriptor(
   return {
     methodId: entry.id,
     methodVersion: entry.version,
-    aggregation: LIVE_AGGREGATION,
+    // Imported from the production source of truth (shared constants module),
+    // never mirrored — so a change to the delivered aggregation moves the digest.
+    aggregation: LIVE_DTM_AGGREGATION,
     verticalAxis: LIVE_VERTICAL_AXIS,
     // Production live path delivers the trusted-classification surface.
     trustGroundClassification: true,
-    groundClass: LIVE_GROUND_CLASS,
+    groundClass: ASPRS_GROUND_CLASS,
     despikeApplied: false,
     interpolation: LIVE_INTERPOLATION,
     extrapolationGuard: {

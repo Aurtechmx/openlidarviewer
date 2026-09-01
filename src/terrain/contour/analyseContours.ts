@@ -48,6 +48,7 @@ import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
 import { synthesisedNeighbourMask } from '../ground/terrainDerivatives';
 import type { DtmGrid } from '../ground/cellConfidence';
 import { buildSurfaceFromRaster, LIVE_INTERPOLATION } from '../ground/surfaceFromRaster';
+import { LIVE_DTM_AGGREGATION, ASPRS_GROUND_CLASS } from '../ground/liveDtmConstants';
 import { computeCellMetrics, type CellMetricsSummary } from '../quality/cellMetrics';
 import { terrainQualityScore, type TerrainQualityScore } from '../quality/terrainQualityScore';
 import { demAccuracyStandards, type DemAccuracyStandards } from '../quality/demAccuracyStandards';
@@ -235,7 +236,9 @@ export interface TerrainCoreParams {
  * hold-out validation rasterises with this same value so the validated surface
  * is byte-for-byte the surface that ships, and the DEM provenance reports it.
  */
-const LIVE_DTM_AGGREGATION: DtmAggregation = 'median';
+// Sourced from the shared, dependency-free constants module so the method
+// descriptor (`science/liveDtmDescriptor`) reads the SAME literal without
+// importing this heavy pipeline. See {@link LIVE_DTM_AGGREGATION}.
 
 /**
  * Fraction of derivative cells built on a synthesised neighbour above which the
@@ -537,7 +540,7 @@ function normalisePoints(input: TerrainPointInput): ReadonlyArray<TerrainPoint> 
 }
 
 /** ASPRS classification code for bare-earth ground returns. */
-const ASPRS_GROUND_CLASS = 2;
+// ASPRS ground code — see the shared constants module (re-imported above).
 
 /**
  * Minimum class-2 points for AUTO trust to engage — enough to hold-out
