@@ -23,7 +23,6 @@ import {
   type SchedulerDiagnosticsExtra,
   type StreamingDiagnosticField,
 } from '../src/render/streaming/streamingDiagnostics';
-import { formatByteSize, groupInt } from '../src/io/formatByteSize';
 import {
   evaluateRefinementReadiness,
   type SchedulerReadinessFacts,
@@ -89,49 +88,50 @@ describe('formatStreamingDiagnostics', () => {
     expect(d.unavailable).toEqual([]);
     const text = formatStreamingDiagnostics(d);
 
-    // A distinctive marker per field, derived from the record's own values so
-    // the check tracks the data rather than a second hard-coded copy. Typed
-    // against the field union: adding a field to the record without an entry
-    // here is a compile error, and its marker then forces a rendered line.
-    const markers: Record<StreamingDiagnosticField, string> = {
-      readinessPhase: `readiness     ${d.readinessPhase}`,
-      fractionResident: `resident ${d.fractionResident!.toFixed(3)}`,
-      churn: `churn ${d.churn!.toFixed(3)}`,
-      wantedNodes: `${groupInt(d.wantedNodes)} wanted`,
-      residentNodes: `${groupInt(d.residentNodes)} resident`,
-      inFlightNodes: `${groupInt(d.inFlightNodes)} in-flight`,
-      queuedNodes: `${groupInt(d.queuedNodes)} queued`,
-      decodedPendingNodes: `${groupInt(d.decodedPendingNodes)} decoded-pending`,
-      failedNodes: `${groupInt(d.failedNodes)} failed`,
-      knownNodes: `${groupInt(d.knownNodes)} known`,
-      visibleNodes: `${groupInt(d.visibleNodes)} visible`,
-      residentPoints: `${groupInt(d.residentPoints)} resident`,
-      decodedPendingPoints: `${groupInt(d.decodedPendingPoints)} decoded-pending`,
-      pointBudget: `${groupInt(d.pointBudget)} budget`,
-      lastTickMs: `tick ${d.lastTickMs.toFixed(1)} ms`,
-      cameraVelocity: `${d.cameraVelocity.toFixed(2)} u/s`,
-      cameraState: `(${d.cameraState})`,
-      effectiveMaxConcurrent: `concurrency ${groupInt(d.effectiveMaxConcurrent)}`,
-      pressureDepthReduction: `-${groupInt(d.pressureDepthReduction)} depth`,
-      fpsBudgetFactor: `×${d.fpsBudgetFactor.toFixed(2)}`,
-      fullRescoreCount: `rescores ${groupInt(d.fullRescoreCount)}`,
-      cacheBytes: `${formatByteSize(d.cacheBytes)} /`,
-      cacheEntries: `${groupInt(d.cacheEntries)} entries`,
-      cacheMaxBytes: `/ ${formatByteSize(d.cacheMaxBytes)}`,
-      cacheHits: `hits ${groupInt(d.cacheHits)}`,
-      cacheMisses: `misses ${groupInt(d.cacheMisses)}`,
-      cacheEvictions: `evict ${groupInt(d.cacheEvictions)}`,
-      generationId: `generation    ${groupInt(d.generationId!)}`,
-      decodeRetryCount: `decode retries ${groupInt(d.decodeRetryCount!)}`,
-      uploadPendingNodes: `${groupInt(d.uploadPendingNodes!)} nodes`,
-      uploadPendingBytes: formatByteSize(d.uploadPendingBytes!),
-      residentDecodedBytes: `resident decoded ${formatByteSize(d.residentDecodedBytes!)}`,
+    // A distinctive per-field pattern anchored to that field's label or position
+    // in the readout — short and structural, so it does not restate (and drift
+    // from, or duplicate) the formatter's own interpolations. Typed against the
+    // field union: adding a field to the record without an entry here is a
+    // compile error, and its pattern then forces a rendered line.
+    const markers: Record<StreamingDiagnosticField, RegExp> = {
+      readinessPhase: /readiness {5}\S/,
+      fractionResident: /· resident \d\.\d{3}/,
+      churn: /· churn \d\.\d{3}/,
+      wantedNodes: /[\d,]+ wanted/,
+      residentNodes: /· [\d,]+ resident/,
+      inFlightNodes: /[\d,]+ in-flight/,
+      queuedNodes: /[\d,]+ queued/,
+      decodedPendingNodes: /[\d,]+ decoded-pending ·/,
+      failedNodes: /[\d,]+ failed/,
+      knownNodes: /[\d,]+ known/,
+      visibleNodes: /[\d,]+ visible/,
+      residentPoints: /points {8}[\d,]+ resident/,
+      decodedPendingPoints: /decoded-pending \//,
+      pointBudget: /[\d,]+ budget/,
+      lastTickMs: /tick \d/,
+      cameraVelocity: /camera \d/,
+      cameraState: /u\/s \(\w+\)/,
+      effectiveMaxConcurrent: /concurrency [\d,]+/,
+      pressureDepthReduction: /pressure -[\d,]+ depth/,
+      fpsBudgetFactor: /fps budget ×/,
+      fullRescoreCount: /rescores [\d,]+/,
+      cacheBytes: /cache {9}[\d.]+ [KMGT]?B \//,
+      cacheEntries: /[\d,]+ entries/,
+      cacheMaxBytes: /\/ [\d.]+ [KMGT]?B ·/,
+      cacheHits: /hits [\d,]+/,
+      cacheMisses: /misses [\d,]+/,
+      cacheEvictions: /evict [\d,]+/,
+      generationId: /generation {4}[\d,]+/,
+      decodeRetryCount: /decode retries [\d,]+/,
+      uploadPendingNodes: /upload queue {2}[\d,]+ nodes/,
+      uploadPendingBytes: /nodes · [\d.]+ [KMGT]?B ·/,
+      residentDecodedBytes: /resident decoded [\d.]+ [KMGT]?B/,
     };
 
     // The map covers exactly the field list — no field left unmarked, none stale.
     expect(Object.keys(markers).sort()).toEqual([...STREAMING_DIAGNOSTIC_FIELDS].sort());
     for (const field of STREAMING_DIAGNOSTIC_FIELDS) {
-      expect(text, `field ${field} not reachable in output`).toContain(markers[field]);
+      expect(text, `field ${field} not reachable in output`).toMatch(markers[field]);
     }
   });
 
@@ -170,7 +170,7 @@ describe('formatStreamingDiagnostics', () => {
     // All three quantities on this line are unavailable, none rendered as 0.
     expect(uploadLine).not.toContain('0 nodes');
     expect(uploadLine).not.toContain('0 B');
-    expect((uploadLine!.match(/unavailable/g) ?? []).length).toBe(3);
+    expect(uploadLine!.match(/unavailable/g) ?? []).toHaveLength(3);
   });
 
   it('prints fractionResident/churn as "unavailable" when readiness is unknown', () => {

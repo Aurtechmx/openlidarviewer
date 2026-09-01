@@ -388,6 +388,12 @@ export function formatStreamingDiagnostics(d: StreamingDiagnostics | null): stri
 
   const fraction = (n: number | null): string => (n === null ? '—' : n.toFixed(3));
 
+  // Precomputed so the upload-queue line is a flat template, not one nesting a
+  // template literal inside a `show` callback inside another template.
+  const uploadNodes = show('uploadPendingNodes', () => `${groupInt(d.uploadPendingNodes ?? 0)} nodes`);
+  const uploadBytes = show('uploadPendingBytes', () => formatByteSize(d.uploadPendingBytes ?? 0));
+  const residentDecoded = show('residentDecodedBytes', () => formatByteSize(d.residentDecodedBytes ?? 0));
+
   const lines: string[] = [
     `readiness     ${d.readinessPhase}` +
       ` · resident ${show('fractionResident', () => fraction(d.fractionResident))}` +
@@ -415,9 +421,7 @@ export function formatStreamingDiagnostics(d: StreamingDiagnostics | null): stri
       ` evict ${groupInt(d.cacheEvictions)}`,
     `generation    ${show('generationId', () => groupInt(d.generationId ?? 0))}` +
       ` · decode retries ${show('decodeRetryCount', () => groupInt(d.decodeRetryCount ?? 0))}`,
-    `upload queue  ${show('uploadPendingNodes', () => `${groupInt(d.uploadPendingNodes ?? 0)} nodes`)}` +
-      ` · ${show('uploadPendingBytes', () => formatByteSize(d.uploadPendingBytes ?? 0))}` +
-      ` · resident decoded ${show('residentDecodedBytes', () => formatByteSize(d.residentDecodedBytes ?? 0))}`,
+    `upload queue  ${uploadNodes} · ${uploadBytes} · resident decoded ${residentDecoded}`,
   ];
 
   return lines.join('\n');
