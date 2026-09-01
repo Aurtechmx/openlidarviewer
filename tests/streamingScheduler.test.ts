@@ -10,6 +10,7 @@ import {
   selectWithinBudget,
 } from '../src/render/streaming/streamingBudget';
 import { StreamingScheduler } from '../src/render/streaming/StreamingScheduler';
+import { GpuUploadQueue } from '../src/render/gpuUploadQueue';
 import { evaluateRefinementReadiness } from '../src/render/streaming/refinementReadiness';
 import { StreamingPointCloud } from '../src/render/streaming/StreamingPointCloud';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
@@ -161,21 +162,71 @@ test('diagnostics() reports the live streaming state and names what it cannot me
   expect(d.residentPoints).toBe(3100);
   expect(d.pointBudget).toBeGreaterThan(0);
   expect(d.cacheMaxBytes).toBeGreaterThan(0);
-  // The five fields the scheduler does not track are null AND named — never faked.
+  // The scheduler owns the decode-retry counter: no decode failed here, so it
+  // reports a measured zero rather than 'unavailable'.
+  expect(d.decodeRetryCount).toBe(0);
+  expect(d.unavailable).not.toContain('decodeRetryCount');
+  // The fields no counter backs — no upload queue attached, generation id and
+  // resident decoded bytes untotalled — are null AND named, never faked.
   expect(d.generationId).toBeNull();
-  expect(d.decodeRetryCount).toBeNull();
   expect(d.uploadPendingNodes).toBeNull();
   expect(d.uploadPendingBytes).toBeNull();
   expect(d.residentDecodedBytes).toBeNull();
   expect(d.unavailable).toEqual(
     expect.arrayContaining([
       'generationId',
-      'decodeRetryCount',
       'uploadPendingNodes',
       'uploadPendingBytes',
       'residentDecodedBytes',
     ]),
   );
+});
+
+test('diagnostics() surfaces the scheduler-owned decode-retry total once decodes fail', async () => {
+  const cloud = await openCloud();
+  const failingDecoder: ChunkDecoder = {
+    decode(): Promise<DecodedChunk> {
+      return Promise.reject(new Error('synthetic decode failure'));
+    },
+  };
+  const scheduler = new StreamingScheduler(
+    cloud,
+    failingDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  const d = scheduler.diagnostics();
+  // Every wanted node failed to decode at least once, so the summed per-node
+  // failure counter is a real, non-null quantity — not 'unavailable'.
+  expect(d.decodeRetryCount).toBeGreaterThan(0);
+  expect(d.unavailable).not.toContain('decodeRetryCount');
+});
+
+test('diagnostics() surfaces the attached upload queue depth and byte backlog', async () => {
+  const cloud = await openCloud();
+  const uploadQueue = new GpuUploadQueue();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { uploadQueue, datasetId: 'sched.copc.laz' },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  const d = scheduler.diagnostics();
+  // Decoded nodes wait in the queue until the render loop commits them. The
+  // scheduler owns that queue, so its depth and bytes report as measured.
+  expect(d.uploadPendingNodes).toBe(uploadQueue.pendingCount);
+  expect(d.uploadPendingNodes).toBeGreaterThan(0);
+  expect(d.uploadPendingBytes).toBe(uploadQueue.pendingBytes);
+  expect(d.uploadPendingBytes).toBeGreaterThan(0);
+  expect(d.unavailable).not.toContain('uploadPendingNodes');
+  expect(d.unavailable).not.toContain('uploadPendingBytes');
 });
 
 test('nodes at real UTM-scale coordinates still reach resident (origin-localisation guard)', async () => {
