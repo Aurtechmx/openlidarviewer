@@ -60,14 +60,14 @@ describe('changeVolumeUncertainty', () => {
     expect(b).toEqual(a);
   });
 
-  test('refuses an unimplemented covariance model rather than serving the independent band', () => {
+  test('refuses an unknown model kind rather than silently defaulting', () => {
     expect(() =>
       changeVolumeUncertainty({
         netVolumeM3: 1000,
         significantCells: 400,
         cellAreaM2: 1,
         cellSigmaM: 0.05,
-        model: { kind: 'covariance', correlationLengthM: 5 },
+        model: { kind: 'bogus' } as never,
       }),
     ).toThrow(/not implemented/i);
   });
@@ -171,5 +171,83 @@ describe('changeVolumeUncertainty', () => {
     });
     expect(r.relativeError).toBe(0);
     expect(Number.isFinite(r.sigmaM3)).toBe(true);
+  });
+});
+
+describe('changeVolumeUncertainty — covariance model', () => {
+  const base = {
+    netVolumeM3: 1000,
+    significantCells: 400,
+    cellAreaM2: 1,
+    cellSigmaM: 0.05,
+    registrationSigmaM: 0,
+  };
+
+  test('names the model on the result', () => {
+    const r = changeVolumeUncertainty({
+      ...base,
+      model: { kind: 'covariance', correlationLengthM: 3 },
+    });
+    expect(r.model).toBe('covariance');
+  });
+
+  test('L → 0 recovers the independent-cells band to tight tolerance', () => {
+    const independent = changeVolumeUncertainty(base);
+    const correlated = changeVolumeUncertainty({
+      ...base,
+      model: { kind: 'covariance', correlationLengthM: 0 },
+    });
+    expect(correlated.randomErrorM3).toBeCloseTo(independent.randomErrorM3, 9);
+    expect(correlated.sigmaM3).toBeCloseTo(independent.sigmaM3, 9);
+  });
+
+  test('L → ∞ approaches the fully-correlated bound area·σ·N', () => {
+    const r = changeVolumeUncertainty({
+      ...base,
+      model: { kind: 'covariance', correlationLengthM: 1e9 },
+    });
+    // cellAreaM2=1, cellSigmaM=0.05, N=400 → fully correlated bound = 1·0.05·400 = 20.
+    const fullyCorrelatedBound = base.cellAreaM2 * base.cellSigmaM * base.significantCells;
+    expect(r.randomErrorM3).toBeCloseTo(fullyCorrelatedBound, 6);
+  });
+
+  test('an intermediate L gives σ strictly between the two limits', () => {
+    const lo = changeVolumeUncertainty({
+      ...base,
+      model: { kind: 'covariance', correlationLengthM: 0 },
+    });
+    const hi = changeVolumeUncertainty({
+      ...base,
+      model: { kind: 'covariance', correlationLengthM: 1e9 },
+    });
+    const mid = changeVolumeUncertainty({
+      ...base,
+      model: { kind: 'covariance', correlationLengthM: 5 }, // cellSizeM = 1, so L=5 is mid-range
+    });
+    expect(mid.randomErrorM3).toBeGreaterThan(lo.randomErrorM3);
+    expect(mid.randomErrorM3).toBeLessThan(hi.randomErrorM3);
+  });
+
+  test('monotonicity: σ_V increases (non-strictly decreasing never happens) as L grows', () => {
+    const lengths = [0, 0.5, 1, 2, 5, 10, 50, 1000];
+    const sigmas = lengths.map(
+      (l) =>
+        changeVolumeUncertainty({ ...base, model: { kind: 'covariance', correlationLengthM: l } })
+          .randomErrorM3,
+    );
+    for (let i = 1; i < sigmas.length; i += 1) {
+      expect(sigmas[i]).toBeGreaterThanOrEqual(sigmas[i - 1]);
+    }
+    // And strictly increasing somewhere in the middle of the range (not flat throughout).
+    expect(sigmas[sigmas.length - 1]).toBeGreaterThan(sigmas[0]);
+  });
+
+  test('the correlation-length caveat travels and names L', () => {
+    const r = changeVolumeUncertainty({
+      ...base,
+      model: { kind: 'covariance', correlationLengthM: 7 },
+    });
+    expect(r.caveats.join(' ')).toMatch(/correlation length 7 m/i);
+    expect(r.caveats.join(' ')).toMatch(/approximation/i);
   });
 });
