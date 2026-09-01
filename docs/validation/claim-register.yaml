@@ -210,7 +210,7 @@ claims:
     product: E57 point-cloud ingestion
     algorithm: ASTM E57 reader (XML header, CompressedVector, extension namespaces)
     algorithmVersion: v0.6.6
-    claim: "Every point and per-point attribute decoded from an E57 file matches an independent reader of the same standard."
+    claim: "Whole-file aggregate (order-independent) agreement with an independent reader of the same standard, per decoded field, plus exact conformance to the file's declared count/bounds and agreement on committed positional samples."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/e57PdalCrossDecode.test.ts, tests/e57*.test.ts]
@@ -225,11 +225,12 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly with PDAL 2.10.2 readers.e57 over all 1788994 points of a public CC-BY terrestrial scan (OLV-DS-040, pinned by SHA-256, not vendored; the PDAL reference outputs are committed), compared as an exact quantised integer sum at a 1e-6 quantum, within the preregistered 1e-6 m tolerance."
+    approvedClaim: "Decoded cartesian coordinates, namespaced surface normals and colour agreed with PDAL 2.10.2 readers.e57 over all 1788994 points of a public CC-BY terrestrial scan (OLV-DS-040, pinned by SHA-256, not vendored; the PDAL reference outputs are committed), compared per field as an exact order-independent quantised integer sum at a 1e-6 quantum within the preregistered 1e-6 m tolerance, alongside exact declared count/bounds conformance and agreement on 18 committed positional samples."
     prohibitedClaim: ["survey-grade ingestion", "validated against every E57 writer", "scanner-native metadata handling"]
     scope:
       supported: []
       unsupported:
+        - "Ordered point-for-point equality. The per-field comparison is an order-independent quantised sum, so it proves the same multiset of values per column, not the same value at every index; two compensating errors or a record reordering would pass it. Ordered block-hash verification with swap/alter/drop controls is future work."
         - "Intensity, excluded because PDAL scales it by 65535/(max-min) without subtracting the minimum, so a tolerance would measure that transform rather than either reader."
         - "Any writer other than the one that produced this file (CloudCompare 2.12.4 via E57Format 2.3.0). One file is one profile, not the format."
         - "Scanner-native acquisition metadata. This file is a re-export and carries no sensor vendor, model, serial or acquisition time."
@@ -946,7 +947,7 @@ claims:
     product: Change volume (gain/loss/net)
     algorithm: Integrated change over the difference grid
     algorithmVersion: v0.5.x
-    claim: "Gain / loss / net volume from the change raster."
+    claim: "Two separately named quantities from the change raster: the LoD-thresholded gross gain and loss volumes (and their difference, the thresholded net), which the cross-implementation evidence covers; and the raw net volume summed over every comparable cell with no LoD threshold, which rests on analytical verification only and is not cross-implementation validated. The two are never reported under one 'net volume' label."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/compareDtms*.test.ts, tests/changeVolumeAnalyticalOracle.test.ts]
@@ -954,7 +955,7 @@ claims:
     supportingStudies: [CHANGE-VOLUME-GRASS-MAPCALC-EIGHT-PAIRS]
     units: [cubic-metres]
     crsDatum: "Blocks cross-datum."
-    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified", "volume is a cell-centre Riemann sum over the above-LoD cells, so sub-LoD mass is excluded by design"]
+    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified", "the thresholded gross gain/loss (and thresholded net) are a cell-centre Riemann sum over the above-LoD cells, so sub-LoD mass is excluded by design", "the raw net volume is a cell-centre Riemann sum over ALL comparable cells with no LoD threshold, so it retains sub-LoD mass; its evidence is the analytical oracle only, distinct from the E4 the thresholded gross earned"]
     failureModes: ["propagates registration + surface error", "quadrature defect on a curved surface, second order in cell size"]
     exportAllowed: true
     userLabel: "Analytically-verified change volume (exploratory)"
@@ -973,6 +974,7 @@ claims:
         - "Anything the change raster underneath it does not support."
         - "Real epoch pairs, and the DTM build that produces them. The oracle enters at the grid pair, so nothing here bounds ground-classification or interpolation error."
         - "The sub-LoD mass the threshold removes. Its size is stated in closed form on the fixtures, not measured on any survey."
+        - "Cross-implementation of the raw (unthresholded) net volume. The GRASS r.univar oracle validated the thresholded gross gain and loss; the raw net over all comparable cells is checked against the closed-form analytical oracle only, so it does not carry the E4 the thresholded gross earned (olv.change.dtm-difference.raw-net)."
         - "Non-metre CRS units and non-square cells. Only one-metre metre-CRS grids were compared."
         - "Agreement with GRASS on synthetic epoch pairs is not accuracy against a surveyed volume."
         - "Anything a preregistration would carry. The protocol freeze is adopted-with-result: it landed in the same commit as the first result, and the witness commit is named so a reader can check the fixture matrix, the level of detection and the tolerance basis predate the GRASS run."

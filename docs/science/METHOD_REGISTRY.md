@@ -39,7 +39,7 @@ the paper that specifies it.
 | `olv.registration.icp-planar` | 1 | Planar rigid ICP | Besl & McKay (1992); Umeyama (1991) |
 | `olv.registration.epoch-horizontal-icp` | 1 | Repeat-epoch horizontal alignment (yaw + XY, Z locked) | Besl & McKay (1992); Umeyama (1991) |
 | `olv.volume.stockpile` | 1 | Stockpile cut-fill volume ±1σ | internal (prismatic cut-fill) |
-| `olv.volume.stockpile-area-grid` | 1 | Area-weighted stockpile volume (grid integration) | internal (area-weighted DoD); Sutherland & Hodgman (1974) |
+| `olv.volume.stockpile-area-grid` | 2 | Area-weighted stockpile volume (grid integration) | internal (area-weighted DoD); Sutherland & Hodgman (1974) |
 | `olv.change.dtm-difference` | 1 | DTM-of-difference cut/fill (thresholded gain/loss/net) | Anderson (2019), LoD thresholding |
 | `olv.change.dtm-difference.raw-net` | 1 | DTM-of-difference cut/fill (raw net + thresholded gross) | Anderson (2019), thresholded gross vs raw net |
 | `olv.feature.building-footprint` | 1 | Building footprint candidate extraction | internal (connected-component + boundary trace) |
