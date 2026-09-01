@@ -1,5 +1,5 @@
 {
-  "$schemaNote": "Immutable input manifest for an E5 LAZ collection. Every field is read from the file header; a null is an unknown the header did not carry, never a guess. collectionDigest fixes the exact set of input bytes. This manifest is input to a product-under-test, not field truth.",
+  "$schemaNote": "Immutable input manifest for an E5 LAZ collection. Every field is read from the file header; a null is an unknown the header did not carry, never a guess. Per-tile class histograms are exact point-scan counts. collectionDigest fixes the exact set of input bytes. This manifest is input to a product-under-test, not field truth.",
   "collectionId": "ROGUE25",
   "role": "reference-labelling",
   "generatedFrom": "pdal info --metadata (header only)",
@@ -28,7 +28,10 @@
     "captureYears": [
       2021
     ],
-    "homogeneousFrame": true
+    "homogeneousFrame": true,
+    "groundPointFraction": 0.051273,
+    "allTilesHaveGround": true,
+    "tilesWithoutGround": []
   },
   "tiles": [
     {
@@ -55,7 +58,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 15,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 19958442,
+        "2": 2271741,
+        "7": 48067,
+        "18": 19043
+      },
+      "groundPointCount": 2271741,
+      "groundPointFraction": 0.101884
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz",
@@ -81,7 +92,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 15,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 23091197,
+        "2": 943274,
+        "7": 27069,
+        "18": 1634
+      },
+      "groundPointCount": 943274,
+      "groundPointFraction": 0.0392
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3846.laz",
@@ -107,7 +126,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 19,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 29223270,
+        "2": 1501277,
+        "7": 49912,
+        "18": 2122
+      },
+      "groundPointCount": 1501277,
+      "groundPointFraction": 0.04878
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3847.laz",
@@ -133,7 +160,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 30425508,
+        "2": 1292536,
+        "7": 33772,
+        "18": 22081
+      },
+      "groundPointCount": 1292536,
+      "groundPointFraction": 0.040679
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4544.laz",
@@ -159,7 +194,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 66162976,
+        "2": 3100790,
+        "7": 85278,
+        "18": 5130
+      },
+      "groundPointCount": 3100790,
+      "groundPointFraction": 0.044709
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4643.laz",
@@ -185,7 +228,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 45007631,
+        "2": 2094282,
+        "7": 68557,
+        "18": 186
+      },
+      "groundPointCount": 2094282,
+      "groundPointFraction": 0.044398
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4647.laz",
@@ -211,7 +262,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 50395808,
+        "2": 3143952,
+        "7": 77454,
+        "18": 53634
+      },
+      "groundPointCount": 3143952,
+      "groundPointFraction": 0.058578
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4648.laz",
@@ -237,7 +296,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 44317274,
+        "2": 2830970,
+        "7": 71043,
+        "18": 26056
+      },
+      "groundPointCount": 2830970,
+      "groundPointFraction": 0.059921
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4849.laz",
@@ -263,7 +330,16 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 35068999,
+        "2": 2365666,
+        "7": 32316,
+        "17": 1849,
+        "18": 89
+      },
+      "groundPointCount": 2365666,
+      "groundPointFraction": 0.063137
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4853.laz",
@@ -289,7 +365,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 34461240,
+        "2": 3257965,
+        "7": 44195,
+        "18": 140245
+      },
+      "groundPointCount": 3257965,
+      "groundPointFraction": 0.085954
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5450.laz",
@@ -315,7 +399,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 42664938,
+        "2": 3117666,
+        "7": 38460,
+        "18": 78
+      },
+      "groundPointCount": 3117666,
+      "groundPointFraction": 0.06804
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5458.laz",
@@ -341,7 +433,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 34965251,
+        "2": 2774198,
+        "7": 62442,
+        "18": 143
+      },
+      "groundPointCount": 2774198,
+      "groundPointFraction": 0.073388
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5959.laz",
@@ -367,7 +467,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 24374343,
+        "2": 1288446,
+        "7": 25861,
+        "18": 568
+      },
+      "groundPointCount": 1288446,
+      "groundPointFraction": 0.050155
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6151.laz",
@@ -393,7 +501,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 72220390,
+        "2": 3741335,
+        "7": 119223,
+        "18": 1169
+      },
+      "groundPointCount": 3741335,
+      "groundPointFraction": 0.049175
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6152.laz",
@@ -419,7 +535,17 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 66357574,
+        "2": 3392043,
+        "7": 126494,
+        "9": 18524,
+        "18": 1813,
+        "20": 1002
+      },
+      "groundPointCount": 3392043,
+      "groundPointFraction": 0.048529
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6159.laz",
@@ -445,7 +571,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 56597232,
+        "2": 2077348,
+        "7": 52442,
+        "18": 1320
+      },
+      "groundPointCount": 2077348,
+      "groundPointFraction": 0.035372
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6161.laz",
@@ -471,7 +605,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 35903727,
+        "2": 1386073,
+        "7": 41040,
+        "18": 2443
+      },
+      "groundPointCount": 1386073,
+      "groundPointFraction": 0.037127
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6252.laz",
@@ -497,7 +639,17 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 36172816,
+        "2": 3184591,
+        "7": 116426,
+        "9": 88311,
+        "18": 1645,
+        "20": 1692
+      },
+      "groundPointCount": 3184591,
+      "groundPointFraction": 0.080489
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6265.laz",
@@ -523,7 +675,16 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 33776781,
+        "2": 1492472,
+        "7": 37403,
+        "17": 3525,
+        "18": 82
+      },
+      "groundPointCount": 1492472,
+      "groundPointFraction": 0.042267
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6455.laz",
@@ -549,7 +710,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 87171959,
+        "2": 2321716,
+        "7": 73596,
+        "18": 262
+      },
+      "groundPointCount": 2321716,
+      "groundPointFraction": 0.025921
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6470.laz",
@@ -575,7 +744,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 32217746,
+        "2": 2567171,
+        "7": 41697,
+        "18": 133
+      },
+      "groundPointCount": 2567171,
+      "groundPointFraction": 0.073713
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6564.laz",
@@ -601,7 +778,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 47370509,
+        "2": 2007655,
+        "7": 66368,
+        "18": 885
+      },
+      "groundPointCount": 2007655,
+      "groundPointFraction": 0.040603
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6762.laz",
@@ -627,7 +812,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 68645375,
+        "2": 2953884,
+        "7": 60319,
+        "18": 702
+      },
+      "groundPointCount": 2953884,
+      "groundPointFraction": 0.041221
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM7851.laz",
@@ -653,7 +846,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 36012954,
+        "2": 3050534,
+        "7": 80093,
+        "18": 410
+      },
+      "groundPointCount": 3050534,
+      "groundPointFraction": 0.077931
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM8061.laz",
@@ -679,7 +880,15 @@
       "captureYear": 2021,
       "captureDayOfYear": 12,
       "systemId": "Quantum Spatial",
-      "softwareId": "LasMonkey 2.6.2"
+      "softwareId": "LasMonkey 2.6.2",
+      "classHistogram": {
+        "1": 66581691,
+        "2": 2431337,
+        "7": 83881,
+        "18": 142
+      },
+      "groundPointCount": 2431337,
+      "groundPointFraction": 0.035187
     }
   ]
 }
