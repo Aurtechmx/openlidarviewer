@@ -106,7 +106,7 @@
     "docs:build": "npm run docs:render && vitepress build docs-site && node scripts/lint-docs-site.mjs",
     "docs:preview": "vitepress preview docs-site",
     "test:e2e:gpu": "playwright test --project=gpu",
-    "coverage": "OLV_REACHABILITY=0 vitest run --coverage --maxWorkers=2 --testTimeout=60000 --exclude='tests/terrainRunnerDensityWiring.test.ts'",
+    "coverage": "OLV_REACHABILITY=0 vitest run --coverage --maxWorkers=2 --testTimeout=60000 --exclude='tests/terrainRunnerDensityWiring.test.ts' --exclude='tests/benchmark/terrainCoreRebuildCost.test.ts'",
     "mutation": "stryker run",
     "evidence": "bash -c 'set -o pipefail; mkdir -p release; npm run test:release:execute > release/gate.log 2>&1; code=$?; node scripts/collect-evidence.mjs release/gate.log \"$code\" && npm run lint:evidence'",
     "lint:evidence": "node scripts/lint-evidence.mjs",
