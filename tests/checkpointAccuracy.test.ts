@@ -389,3 +389,57 @@ describe('checkpointAccuracy reference uncertainty', () => {
     expect(r.pooled.uncertaintyCombinationId).toBeNull();
   });
 });
+
+describe('checkpointAccuracy partial reference-uncertainty coverage', () => {
+  const quadratureSum: UncertaintyCombination = {
+    id: 'test-quadrature-sum-v1',
+    combine: (observed, reference) => Math.sqrt(observed * observed + reference * reference),
+  };
+
+  it('refuses a combined RMSE when only some checkpoints state a sigma', () => {
+    // Three of five carry a sigma; combining a referenceRmse over those three
+    // against the observed RMSE over all five would mismatch populations.
+    const mixed = [
+      cp('a', 0.1, { referenceSigma: 0.03 }),
+      cp('b', -0.05),
+      cp('c', 0.2, { referenceSigma: 0.03 }),
+      cp('d', 0),
+      cp('e', -0.25, { referenceSigma: 0.03 }),
+    ];
+    const r = checkpointAccuracy(mixed, { minSample: 5, uncertaintyCombination: quadratureSum });
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    expect(r.pooled.referenceUncertaintyState).toBe('partial');
+    expect(r.pooled.referenceUncertaintyCount).toBe(3);
+    expect(r.pooled.referenceUncertaintyCoverage).toBeCloseTo(0.6, 12);
+    expect(r.pooled.referenceRmse).toBeNull();
+    expect(r.pooled.combinedRmse).toBeNull();
+    expect(r.pooled.uncertaintyCombinationId).toBeNull();
+    // The plain fit RMSE over all five is untouched.
+    expect(r.pooled.rmse).toBeCloseTo(Math.sqrt(0.115 / 5), 12);
+  });
+
+  it('still produces a combined RMSE at full coverage', () => {
+    const full = FIVE.map((c) => ({ ...c, referenceSigma: 0.03 }));
+    const r = checkpointAccuracy(full, { minSample: 5, uncertaintyCombination: quadratureSum });
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    const observed = Math.sqrt(0.115 / 5);
+    expect(r.pooled.referenceUncertaintyState).toBe('established');
+    expect(r.pooled.referenceUncertaintyCount).toBe(5);
+    expect(r.pooled.referenceUncertaintyCoverage).toBeCloseTo(1, 12);
+    expect(r.pooled.referenceRmse).toBeCloseTo(0.03, 12);
+    expect(r.pooled.combinedRmse).toBeCloseTo(Math.sqrt(observed * observed + 0.03 * 0.03), 12);
+  });
+
+  it('stays none-stated when no checkpoint states a sigma', () => {
+    const r = checkpointAccuracy(FIVE, { minSample: 5, uncertaintyCombination: quadratureSum });
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    expect(r.pooled.referenceUncertaintyState).toBe('none-stated');
+    expect(r.pooled.referenceUncertaintyCount).toBe(0);
+    expect(r.pooled.referenceUncertaintyCoverage).toBeCloseTo(0, 12);
+    expect(r.pooled.referenceRmse).toBeNull();
+    expect(r.pooled.combinedRmse).toBeNull();
+  });
+});
