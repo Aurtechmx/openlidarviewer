@@ -20,7 +20,7 @@ features:
   - title: Local-first by design
     details: Files are read and rendered in your browser. There is no server to upload to — your data never leaves your device.
   - title: Twelve import formats, four streaming
-    details: LAS, LAZ, E57, PLY, OBJ, GLB/GLTF, XYZ, CSV, PCD, PTX, PTS for static loads — plus four streaming paths with bounded memory: progressive COPC and EPT, 3D Tiles PNTS tilesets, and out-of-core LAS / chunked LAZ indexed via OPFS.
+    details: "LAS, LAZ, E57, PLY, OBJ, GLB/GLTF, XYZ, CSV, PCD, PTX, PTS for static loads — plus four streaming paths with bounded memory: progressive COPC and EPT, 3D Tiles PNTS tilesets, and out-of-core LAS / chunked LAZ indexed via OPFS."
     link: /formats/
     linkText: Format matrix
   - title: Honesty about uncertainty
