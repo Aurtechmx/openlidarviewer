@@ -70,10 +70,37 @@ export interface ChangeStats {
   readonly unchanged: number;
   /** Fraction of comparable cells that changed significantly, 0..1. */
   readonly significantFraction: number;
-  /** Volumes (m³) over comparable cells: gain (Δ>0), loss (Δ<0), and net = gain − loss. */
+  /**
+   * Volumes (m³) over ABOVE-LoD cells only: gain (Δ>+LoD), loss (Δ<−LoD), and
+   * net = gain − loss. Thresholding is the right call for GROSS erosion/
+   * deposition (Anderson, USGS pubs.usgs.gov/publication/70202166 — noise
+   * inflates both sides equally, so dropping sub-LoD cells removes it), but
+   * applying the SAME threshold to the NET is a bias: uncorrelated random
+   * error that would cancel in a raw sum survives here because opposite-sign
+   * sub-LoD cells are both zeroed out before they can offset each other. Use
+   * {@link rawNetVolumeM3} for the net figure; these three remain exactly the
+   * legacy `olv.change.dtm-difference@1` quantities and are NOT redefined.
+   */
   readonly gainVolumeM3: number;
   readonly lossVolumeM3: number;
   readonly netVolumeM3: number;
+  /**
+   * Net volume (m³) summed over EVERY comparable cell (no LoD threshold):
+   * Σ Δz·cellArea. Per Anderson, this is the statistically correct net —
+   * uncorrelated sub-LoD noise of both signs is free to cancel, instead of
+   * being clipped to zero on one side only. This is the primary net figure
+   * (`olv.change.dtm-difference@2`); `netVolumeM3` above is kept unchanged
+   * for `@1` provenance.
+   */
+  readonly rawNetVolumeM3: number;
+  /** Alias of {@link gainVolumeM3} under the `@2` naming (above-LoD gain). */
+  readonly detectableGainVolumeM3: number;
+  /** Alias of {@link lossVolumeM3} under the `@2` naming (above-LoD loss). */
+  readonly detectableLossVolumeM3: number;
+  /** Alias of {@link netVolumeM3} under the `@2` naming (thresholded net, for gross/net comparison). */
+  readonly detectableNetVolumeM3: number;
+  /** Fraction of comparable cells whose |Δ| exceeds the LoD (same value as {@link significantFraction}, named for `@2`'s gross/net reconciliation). */
+  readonly areaAboveLoDFraction: number;
   /** Mean |Δ| over comparable cells (m). */
   readonly meanAbsChangeM: number;
   /** Signed extremes (m): largest gain (≥0) and largest loss (≤0). */
@@ -152,6 +179,7 @@ export function detectChange(
   let lost = 0;
   let gainVolumeM3 = 0;
   let lossVolumeM3 = 0;
+  let rawNetVolumeM3 = 0;
   let absSum = 0;
   let maxGainM = 0;
   let maxLossM = 0;
@@ -172,8 +200,14 @@ export function detectChange(
       absSum += Math.abs(d);
       if (d > maxGainM) maxGainM = d;
       if (d < maxLossM) maxLossM = d;
-      // Volumes count ONLY significant (above-LoD) cells — a DEM-of-difference
-      // thresholds out the noise floor so sub-LoD jitter never inflates cut/fill.
+      // rawNetVolumeM3 integrates EVERY comparable cell, thresholded or not —
+      // the correct net estimator (Anderson, USGS pubs.usgs.gov/publication/70202166):
+      // uncorrelated sub-LoD noise of both signs is free to cancel here, unlike
+      // the thresholded gain/loss volumes below.
+      rawNetVolumeM3 += d * cellArea;
+      // Detectable (above-LoD) gain/loss volumes — correct for GROSS
+      // erosion/deposition, where thresholding out the noise floor stops
+      // sub-LoD jitter from inflating cut/fill in either direction.
       if (d > lod) { classes[oi] = 1; gained++; gainVolumeM3 += d * cellArea; }
       else if (d < -lod) { classes[oi] = -1; lost++; lossVolumeM3 += -d * cellArea; }
       else classes[oi] = 0;
@@ -191,6 +225,11 @@ export function detectChange(
     gainVolumeM3,
     lossVolumeM3,
     netVolumeM3: gainVolumeM3 - lossVolumeM3,
+    rawNetVolumeM3,
+    detectableGainVolumeM3: gainVolumeM3,
+    detectableLossVolumeM3: lossVolumeM3,
+    detectableNetVolumeM3: gainVolumeM3 - lossVolumeM3,
+    areaAboveLoDFraction: comparable > 0 ? (gained + lost) / comparable : 0,
     meanAbsChangeM: comparable > 0 ? absSum / comparable : 0,
     maxGainM,
     maxLossM,

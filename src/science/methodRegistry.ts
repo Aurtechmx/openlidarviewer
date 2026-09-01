@@ -27,6 +27,7 @@ export type MethodCategory =
   | 'validation'
   | 'registration'
   | 'volume'
+  | 'change'
   | 'dtm'
   | 'feature'
   | 'provenance';
@@ -232,6 +233,37 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'Sutherland & Hodgman (1974) polygon clipping); standard earthworks method.',
     category: 'volume',
     implementation: ['src/render/measure/stockpileAreaGrid.ts'],
+  },
+  // Legacy id: the net figure this describes is the ABOVE-LoD thresholded
+  // gain-minus-loss (see changeDetection.ts's `netVolumeM3`). Kept resolvable
+  // for existing exports/sessions; `.raw-net` below is the corrected successor
+  // and should be preferred for new net-volume figures.
+  'olv.change.dtm-difference': {
+    id: 'olv.change.dtm-difference',
+    version: 1,
+    name: 'DTM-of-difference cut/fill (thresholded gain/loss/net)',
+    summary:
+      'Per-cell two-epoch elevation difference, classified against a Level-of-Detection ' +
+      'threshold; gain and loss volumes sum only above-LoD cells, and net is gain minus ' +
+      'loss over that same thresholded subset.',
+    citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (LoD thresholding for gross change)',
+    category: 'change',
+    implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],
+  },
+  'olv.change.dtm-difference.raw-net': {
+    id: 'olv.change.dtm-difference.raw-net',
+    version: 1,
+    name: 'DTM-of-difference cut/fill (raw net + thresholded gross)',
+    summary:
+      'Same per-cell two-epoch difference as olv.change.dtm-difference, but reports the ' +
+      'net volume as a raw sum over ALL comparable cells (no LoD threshold), alongside the ' +
+      'LoD-thresholded gross gain/loss for erosion/deposition reporting. Thresholding is ' +
+      'correct for gross change (noise inflates both sides) but biases the net, since ' +
+      'uncorrelated sub-LoD error of opposite sign would otherwise cancel and instead gets ' +
+      'zeroed out asymmetrically.',
+    citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (thresholded gross vs raw net)',
+    category: 'change',
+    implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],
   },
   'olv.topology.linkage-record': {
     id: 'olv.topology.linkage-record',

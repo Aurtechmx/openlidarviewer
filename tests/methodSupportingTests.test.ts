@@ -60,6 +60,15 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   'olv.volume.stockpile-area-grid': ['tests/stockpileAreaGrid.test.ts'],
   'olv.topology.linkage-record': ['tests/sourceTopologyManifest.test.ts'],
+  'olv.change.dtm-difference': [
+    'tests/changeDetection.test.ts',
+    'tests/compareDtms.test.ts',
+    'tests/changeGrassAgreement.test.ts',
+  ],
+  'olv.change.dtm-difference.raw-net': [
+    'tests/changeNetVolumeRaw.test.ts',
+    'tests/changeVolumeAnalyticalOracle.test.ts',
+  ],
   'olv.feature.building-footprint': ['tests/buildingFootprints.test.ts', 'tests/footprintTrace.test.ts'],
   'olv.feature.conductor-fit': ['tests/conductors.test.ts'],
   'olv.contour.analytical': [

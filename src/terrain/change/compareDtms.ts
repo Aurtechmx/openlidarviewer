@@ -267,8 +267,14 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     );
   } else {
     lines.push(
-      `Net volume change: ${s.netVolumeM3.toFixed(1)} m³ ` +
-        `(gain ${s.gainVolumeM3.toFixed(1)} m³, loss ${s.lossVolumeM3.toFixed(1)} m³).`,
+      `Net volume change (raw, all comparable cells, no LoD threshold): ${s.rawNetVolumeM3.toFixed(1)} m³.`,
+    );
+    lines.push(
+      `Detectable gross change (above the ${comparison.levelOfDetectionM} m level of detection): ` +
+        `gain ${s.detectableGainVolumeM3.toFixed(1)} m³, loss ${s.detectableLossVolumeM3.toFixed(1)} m³, ` +
+        `thresholded net ${s.detectableNetVolumeM3.toFixed(1)} m³ — thresholding the net biases it ` +
+        `(uncorrelated sub-LoD error should cancel, not zero out asymmetrically), so the raw net above ` +
+        `is the reported net figure.`,
     );
     // Qualify the net volume with a ± band + detectability. A bare figure hides
     // whether the change exceeds the noise, and an unquantified co-registration
