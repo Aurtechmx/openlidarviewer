@@ -3436,12 +3436,12 @@ export class Viewer {
    */
   /**
    * Optional host hook fired once per streaming node as it becomes resident,
-   * with that node's decoded per-point classification. DISPLAY-ONLY: lets the
-   * classification legend fold late-arriving nodes into its histogram. Set to
-   * `undefined` to detach. Never invoked for static clouds (the host already
-   * has their full classification buffer at load time).
+   * with its canonical id (`StreamingNodeRecord.id`) and its decoded per-point
+   * classification. DISPLAY-ONLY: the id lets the host count each node once,
+   * since an evicted node re-decodes on the way back. Set to `undefined` to
+   * detach. Never invoked for static clouds (the host has their full buffer).
    */
-  onStreamingNodeClasses?: (classes: Uint8Array) => void;
+  onStreamingNodeClasses?: (nodeId: string, classes: Uint8Array) => void;
 
   /**
    * Optional host hook fired once per streaming node as it becomes resident

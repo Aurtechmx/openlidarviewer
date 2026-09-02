@@ -91,8 +91,27 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
     cb.onNodeReady(node('0-0-0-0'), d);
 
     expect(renderer.onNodeReady).toHaveBeenCalledWith(node('0-0-0-0'), d);
-    expect(classesHook).toHaveBeenCalledWith(d.classification);
+    expect(classesHook).toHaveBeenCalledWith('0-0-0-0', d.classification);
     expect(readyHook).toHaveBeenCalledTimes(1);
+  });
+
+  it('keys the class hook on the node CANONICAL record id, not on decode order', () => {
+    const renderer = fakeRenderer();
+    const classesHook = vi.fn();
+    const cb = buildSchedulerCallbacks({
+      renderer,
+      benchmark: null,
+      nodeClassesHook: () => classesHook,
+      nodeReadyHook: () => undefined,
+    });
+    // The same node evicted and re-decoded arrives with a FRESH classification
+    // array, later in the order, and still carries the same record id — which is
+    // what lets the host count it once. Anything derived from the array, the
+    // mesh or the arrival index would read the two as different nodes.
+    cb.onNodeReady(node('3-4-5-6'), decoded({ classification: new Uint8Array([2, 2]) }));
+    cb.onNodeReady(node('7-0-0-0'), decoded({ classification: new Uint8Array([6]) }));
+    cb.onNodeReady(node('3-4-5-6'), decoded({ classification: new Uint8Array([2, 2]) }));
+    expect(classesHook.mock.calls.map((c) => c[0])).toEqual(['3-4-5-6', '7-0-0-0', '3-4-5-6']);
   });
 
   it('forwards the replace frontier to the renderer visibility hook', () => {

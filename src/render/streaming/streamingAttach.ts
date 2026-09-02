@@ -82,9 +82,10 @@ export interface StreamingHost {
   /**
    * The display-only per-node classification hook, read fresh on every
    * node-ready so a late `undefined`/reassignment takes effect. Fires the
-   * classification legend's late-node fold.
+   * classification legend's late-node fold, keyed on the node's canonical id so
+   * the host counts each node once across eviction and re-decode.
    */
-  streamingNodeClassesHook(): ((classes: Uint8Array) => void) | undefined;
+  streamingNodeClassesHook(): ((nodeId: string, classes: Uint8Array) => void) | undefined;
   /**
    * The geometry-level per-node hook, read fresh on every node-ready — lets the
    * host re-route the scan type as a sparse early cloud fills in.
@@ -121,15 +122,18 @@ export function shouldFadeIn(isMobile: boolean, quality: StreamingQuality): bool
 export function buildSchedulerCallbacks(deps: {
   renderer: Pick<StreamingRenderer, 'onNodeReady' | 'onNodeEvicted' | 'applyReplaceVisibility'>;
   benchmark: StreamingBenchmark | null;
-  nodeClassesHook(): ((classes: Uint8Array) => void) | undefined;
+  nodeClassesHook(): ((nodeId: string, classes: Uint8Array) => void) | undefined;
   nodeReadyHook(): (() => void) | undefined;
 }): SchedulerCallbacks {
   const { renderer, benchmark, nodeClassesHook, nodeReadyHook } = deps;
   return {
     onNodeReady: (node: StreamingNode, decoded: DecodedChunk): void => {
       renderer.onNodeReady(node, decoded);
-      // DISPLAY-ONLY class legend hook — hand the host the node's decoded
-      // per-point classification so the legend can fold its histogram in. The
+      // DISPLAY-ONLY class legend hook — hand the host the node's CANONICAL id
+      // and its decoded per-point classification so the legend can fold its
+      // histogram in. The id is what makes the fold idempotent: a node evicted
+      // under memory pressure re-decodes when the camera returns, and without it
+      // the host counted the same source points again on every return trip. The
       // channel is optional on a DecodedChunk, and a node from a format that
       // carries none is skipped: folding zeros in would build a histogram
       // claiming every point is "never classified". Pure read; never touches
@@ -137,7 +141,7 @@ export function buildSchedulerCallbacks(deps: {
       const classesHook = nodeClassesHook();
       if (classesHook && decoded.classification) {
         try {
-          classesHook(decoded.classification);
+          classesHook(node.record.id, decoded.classification);
         } catch {
           /* a legend refresh must never break the streaming pipeline */
         }

@@ -11,6 +11,7 @@
 
 import { createAppContext, type AppContext } from './appContext';
 import { createLayerIdentityService, type LayerIdentityService } from './layerIdentityService';
+import { createStreamingClassLedger, type StreamingClassLedger } from './streamingClassLedger';
 
 /** The composition root: shared state now, extracted services as they land. */
 export interface AppRuntime {
@@ -22,9 +23,20 @@ export interface AppRuntime {
    * state, rather than as a module-level singleton in the shell.
    */
   readonly layerIdentity: LayerIdentityService;
+  /**
+   * The session tally of classification counts over the UNIQUE streamed nodes
+   * decoded so far. DISPLAY ONLY — it feeds the class legend and nothing
+   * scientific. Held here so the shell keeps exactly one per session and can
+   * reset it from every path that changes the streaming dataset.
+   */
+  readonly streamingClasses: StreamingClassLedger;
 }
 
 /** Construct the runtime with a fresh, empty AppContext and its services. */
 export function createAppRuntime(): AppRuntime {
-  return { context: createAppContext(), layerIdentity: createLayerIdentityService() };
+  return {
+    context: createAppContext(),
+    layerIdentity: createLayerIdentityService(),
+    streamingClasses: createStreamingClassLedger(),
+  };
 }
