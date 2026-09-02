@@ -77,8 +77,18 @@ export type ComplexityBucket = 'unknown' | 'low' | 'moderate' | 'high' | 'very-h
  */
 export type GroundVisibilityBucket = 'unknown' | 'poor' | 'fair' | 'good' | 'excellent';
 
-/** Streaming coverage bucket — mirrors TerrainCoverageMode. */
-export type CoverageBucket = TerrainCoverageMode;
+/**
+ * Streaming coverage bucket — the engine's TerrainCoverageMode plus one
+ * card-only reading: `'display-sample'` is a STATIC load whose resident points
+ * are a loader-strided display sample of the file (the full extent is present,
+ * not every point). The engine never emits it; the load-time summary does.
+ */
+export type CoverageBucket = TerrainCoverageMode | 'display-sample';
+
+/** Coverage meta as the card takes it — the engine's meta widened to {@link CoverageBucket}. */
+export type IntelCoverageMeta = Omit<TerrainCoverageMeta, 'coverage'> & {
+  readonly coverage: CoverageBucket;
+};
 
 /** The Dataset Intelligence rows that carry a bucket. */
 export type IntelDimension = 'density' | 'complexity' | 'groundVisibility' | 'coverage';
@@ -111,6 +121,7 @@ export function signalTier(dimension: IntelDimension, bucket: string): SignalTie
     case 'coverage':
       if (bucket === 'full') return 'strong';
       if (bucket === 'resident-only') return 'moderate';
+      if (bucket === 'display-sample') return 'neutral'; // a load fact, not a quality
       return 'weak'; // sampled — partial, carries the streaming caveat
     case 'complexity':
       return 'neutral'; // descriptive, never judged
@@ -174,6 +185,14 @@ export interface DatasetIntelligenceInput {
   /** Optional terrain-suggestion (classification histogram). */
   readonly terrainSuggestion?: TerrainSuggestionResult;
   /**
+   * Ground returns as a share of all returns, 0..1, as a finished terrain run
+   * measured it (`quality.groundPointRatio`). Feeds the ground-visibility
+   * bucket when no load-time classification histogram was attached.
+   */
+  readonly groundPointRatio?: number;
+  /** True once a terrain run's values have been folded in — drives the engine status. */
+  readonly engineRan?: boolean;
+  /**
    * ENGINE-DERIVED complexity (v0.5.4): the real VRM/TPI summary from a
    * finished terrain run. When present it OVERRIDES the heuristic
    * slope/roughness/variance bucket — the band label comes from the VRM
@@ -183,8 +202,8 @@ export interface DatasetIntelligenceInput {
    * the row then renders the heuristic bucket or an honest "—".
    */
   readonly complexityDerived?: DerivedComplexity;
-  /** Coverage envelope from the Terrain Engine. */
-  readonly coverageMeta?: TerrainCoverageMeta;
+  /** Coverage envelope from the Terrain Engine (or the load-time summary). */
+  readonly coverageMeta?: IntelCoverageMeta;
   /**
    * Metric version label — surfaced in the Details panel so power
    * users can tell which v0.3.x cut produced the summary.
@@ -493,10 +512,16 @@ export function complexityLabel(b: ComplexityBucket): string {
 export function classifyGroundVisibility(
   input: Pick<
     DatasetIntelligenceInput,
-    'terrainSuggestion' | 'meanRoughness' | 'residentDensity'
+    'terrainSuggestion' | 'meanRoughness' | 'residentDensity' | 'groundPointRatio'
   >,
 ): GroundVisibilityBucket {
-  const suggest = input.terrainSuggestion;
+  // A run-measured ground share stands in for the load-time histogram when
+  // no histogram was attached (same quantity: ground returns / all returns).
+  const suggest =
+    input.terrainSuggestion ??
+    (input.groundPointRatio !== undefined && Number.isFinite(input.groundPointRatio)
+      ? { groundFraction: input.groundPointRatio, vegetationFraction: 0 }
+      : undefined);
   const haveClass = suggest !== undefined && Number.isFinite(suggest.groundFraction);
   const haveRough = input.meanRoughness !== undefined && Number.isFinite(input.meanRoughness);
   const haveDensity =
@@ -542,7 +567,7 @@ export function groundVisibilityLabel(b: GroundVisibilityBucket): string {
 }
 
 /** Coverage bucket maps the engine's coverage mode 1:1. */
-export function classifyCoverage(meta: TerrainCoverageMeta | undefined): CoverageBucket {
+export function classifyCoverage(meta: IntelCoverageMeta | undefined): CoverageBucket {
   // Without engine output the safest reading is "sampled" — that
   // triggers the streaming-warning string downstream so the user
   // never sees an over-confident result.
@@ -559,6 +584,8 @@ export function coverageLabel(b: CoverageBucket): string {
       return 'Resident Nodes';
     case 'sampled':
       return 'Sampled Analysis';
+    case 'display-sample':
+      return 'Full extent · display sample';
   }
 }
 
@@ -571,6 +598,9 @@ export function coverageLabel(b: CoverageBucket): string {
  */
 export function coverageStreamingWarning(b: CoverageBucket): string | undefined {
   if (b === 'full') return undefined;
+  if (b === 'display-sample') {
+    return 'Analysis reads the strided display sample resident in memory, not every point in the file.';
+  }
   return 'Analysis is based on currently loaded data. Results may change as additional points stream.';
 }
 
@@ -665,7 +695,12 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
           ? input.coverageMeta.analyzedPointCount
           : null,
       metricVersion: input.metricVersion ?? TERRAIN_METRIC_VERSION,
-      engineStatus: input.coverageMeta ? 'active' : 'idle',
+      // Active only once a run's values arrived — a load-time coverageMeta is
+      // header-derived and says nothing about the engine.
+      engineStatus:
+        input.engineRan || input.complexityDerived !== undefined || confidenceHasSignal
+          ? 'active'
+          : 'idle',
     },
   };
 }

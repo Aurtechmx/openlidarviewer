@@ -2621,14 +2621,12 @@ const terrainRunner = createTerrainAnalysisRunner({
     });
     inspector.setCoverageAvailable(true);
     processStudio.markProduced(['dtm', 'contours']); // run generated the DTM + contours — show them produced
-    // Fold the run's real analysed-point count into the Dataset Intelligence
-    // card — the same `dtm.analyzedPointCount` the terrain report's
-    // "Analysed points" row prints, so card and PDF agree. The streaming
-    // attach-time summary necessarily wrote `analyzedPointCount: 0` (nothing
-    // analysed yet); without this the Details row reads "Analyzed Points 0"
-    // forever on streamed scans. The refresher only acts when the last summary
-    // came from streaming, and the stale-result guard skips closed/replaced scans.
-    inspectorCards.noteAnalyzedPointCount(result.dtm.analyzedPointCount);
+    // Fold the run's measured facts into the Dataset Intelligence card: the
+    // walked count the terrain report's "Analysed points" row prints, the
+    // engine coverage mode, the mean cell confidence and the ground-return
+    // share — so card and PDF agree and no row shows a header constant as a
+    // measurement. The stale-result guard skips closed/replaced scans.
+    inspectorCards.noteTerrainRun(result);
     // Fold the run's ENGINE-DERIVED terrain complexity (the VRM/TPI summary
     // computed alongside the core, off the interactive path) into the card:
     // the band label replaces the header-time heuristic and the numeric

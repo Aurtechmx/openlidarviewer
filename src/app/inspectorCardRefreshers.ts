@@ -21,7 +21,23 @@ import {
 import {
   TERRAIN_METRIC_VERSION,
   type DerivedComplexity,
+  type IntelCoverageMeta,
 } from '../terrain/datasetIntelligence';
+import type { TerrainCoverageMode } from '../terrain/TerrainContracts';
+
+/** The slice of a finished terrain run the Dataset Intelligence card reads. */
+export interface TerrainRunCardFacts {
+  readonly dtm: {
+    readonly analyzedPointCount: number;
+    readonly coverageMode: TerrainCoverageMode;
+  };
+  readonly quality: {
+    /** Mean per-cell confidence, 0..100. */
+    readonly meanCellConfidence: number;
+    /** Ground returns / all returns, 0..1 (NaN when unknown). */
+    readonly groundPointRatio: number;
+  };
+}
 import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
 
 export interface InspectorCardRefreshers {
@@ -65,14 +81,19 @@ export interface InspectorCardRefreshers {
   }): void;
   /**
    * Fold a real analysed-point count from a finished terrain run into the
-   * card. Only acts when the last summary came from the STREAMING path, whose
-   * attach-time summary necessarily wrote `analyzedPointCount: 0` ("no
-   * analysis yet") — without this, the Details panel keeps reading
-   * "Analyzed Points 0" forever on streamed scans, even after a run walked
-   * hundreds of thousands of points. The static path already carries a count
-   * and is left untouched.
+   * card, static or streaming. The streaming attach-time summary writes
+   * `analyzedPointCount: 0` and the static one the resident sample size;
+   * either way the Details row reads the run's walked count afterwards.
    */
   noteAnalyzedPointCount(count: number): void;
+  /**
+   * Fold a finished terrain run's measured facts into the card: the walked
+   * point count, the engine coverage mode, the mean cell confidence (Metric
+   * Stability) and the ground-return share (Ground Visibility), and mark the
+   * engine active. Non-finite values are skipped so a row never shows a
+   * number the run did not measure.
+   */
+  noteTerrainRun(run: TerrainRunCardFacts): void;
   /**
    * Fold a finished terrain run's ENGINE-DERIVED complexity (the VRM/TPI
    * summary — band + the numeric detail with window and units) into the last
@@ -161,12 +182,10 @@ export function createInspectorCardRefreshers(
     | { readonly linearUnit?: string; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number }
     | null,
 ): InspectorCardRefreshers {
-  // The last summary pushed by the STREAMING refresher, remembered so a
-  // finished terrain run can re-push it with the real analysed-point count
-  // (see `noteAnalyzedPointCount`). Nulled by the static refresher so a
-  // streamed-scan summary can never be merged onto a later static scan; the
-  // terrain runner's stale-result guard already prevents a result for a
-  // closed scan from reaching `noteAnalyzedPointCount` at all.
+  // The last summary pushed by the STREAMING refresher. Nulled by the static
+  // refresher so a streamed-scan summary can never be merged onto a later
+  // static scan; the terrain runner's stale-result guard already prevents a
+  // result for a closed scan from reaching the note* folds at all.
   let lastStreamingSummary: Parameters<Inspector['setDatasetIntelligence']>[0] | null = null;
   // The last summary pushed by EITHER path (static or streaming), so a
   // finished terrain run can fold its engine-derived complexity into it
@@ -256,9 +275,13 @@ export function createInspectorCardRefreshers(
         // box is empty air between the ground and the flight line.
         bboxSpansM,
         coverageMeta: {
-          coverage: 'full',
+          // A loader stride leaves only a display sample resident: the extent
+          // is complete, the point set is not, so the row must not say "Full".
+          coverage: cloud.pointCount < n ? 'display-sample' : 'full',
           sourcePointCount: n,
-          analyzedPointCount: n,
+          // What is actually resident (and what a run can walk) — the declared
+          // header total stays on `sourcePointCount`.
+          analyzedPointCount: cloud.pointCount,
           // v0.3.10 honesty pass — this path runs at load time from
           // header data ALONE. No terrain analysis has happened yet, so
           // we have nothing meaningful to say about confidence. The
@@ -343,21 +366,41 @@ export function createInspectorCardRefreshers(
     }
   }
 
-  function noteAnalyzedPointCount(count: number): void {
-    const base = lastStreamingSummary;
-    if (!base || !Number.isFinite(count) || count <= 0) return;
-    const updated = {
-      // Merge onto the CURRENT summary (which may already carry the derived
-      // complexity), so folding the count never drops the other run-fed field.
-      ...(lastSummary ?? base),
-      coverageMeta: {
-        ...base.coverageMeta!,
-        analyzedPointCount: Math.round(count),
-      },
-    };
-    lastStreamingSummary = updated;
+  /** Merge run-fed fields onto the CURRENT summary (static or streaming). */
+  function foldCoverageMeta(
+    patch: Partial<IntelCoverageMeta>,
+    extra: { groundPointRatio?: number; engineRan?: boolean } = {},
+  ): void {
+    const base = lastSummary;
+    if (!base?.coverageMeta) return;
+    const updated = { ...base, ...extra, coverageMeta: { ...base.coverageMeta, ...patch } };
     lastSummary = updated;
+    if (lastStreamingSummary) lastStreamingSummary = updated;
     inspector.setDatasetIntelligence(updated);
+  }
+
+  function noteAnalyzedPointCount(count: number): void {
+    if (!Number.isFinite(count) || count <= 0) return;
+    foldCoverageMeta({ analyzedPointCount: Math.round(count) });
+  }
+
+  function noteTerrainRun(run: TerrainRunCardFacts): void {
+    const base = lastSummary?.coverageMeta;
+    if (!base) return;
+    const count = run.dtm.analyzedPointCount;
+    const mode = run.dtm.coverageMode;
+    const confidence = run.quality.meanCellConfidence;
+    const ground = run.quality.groundPointRatio;
+    foldCoverageMeta(
+      {
+        ...(Number.isFinite(count) && count > 0 ? { analyzedPointCount: Math.round(count) } : {}),
+        // The engine's 'full' means "every RESIDENT point walked"; a strided
+        // display sample stays labelled as one. Any partial mode wins as-is.
+        coverage: mode === 'full' && base.coverage === 'display-sample' ? base.coverage : mode,
+        ...(Number.isFinite(confidence) ? { confidence } : {}),
+      },
+      { engineRan: true, ...(Number.isFinite(ground) ? { groundPointRatio: ground } : {}) },
+    );
   }
 
   function noteTerrainComplexity(derived: DerivedComplexity | null): void {
@@ -375,6 +418,7 @@ export function createInspectorCardRefreshers(
     refreshDatasetIntelligenceFromStaticCloud,
     refreshDatasetIntelligenceFromStreamingCloud,
     noteAnalyzedPointCount,
+    noteTerrainRun,
     noteTerrainComplexity,
   };
 }

@@ -74,8 +74,8 @@ export const DENSITY_ROW = {
 const TOOLTIP_METRIC_STABILITY =
   'Metric Stability — how stable the dataset-level terrain signals ' +
   'are given coverage and analysed point count. This is NOT ground-' +
-  'classification accuracy. Renders "—" until the engine has produced ' +
-  'a measurement.';
+  'classification accuracy. Renders "—" until a terrain run has produced ' +
+  'its mean cell confidence.';
 
 /**
  * Five-row card with a Details disclosure. Construct once at Inspector
@@ -168,15 +168,17 @@ export class DatasetIntelligenceCard {
         this._groundValue,
         'How clearly the terrain surface can be inferred from the ' +
           'points — combines roughness, density, and any classification ' +
-          'signal in the source file. Renders "—" until the engine has ' +
-          'a measurement. This is NOT ground-classification accuracy.',
+          'signal in the source file. Renders "—" until a terrain run has ' +
+          'measured the ground-return share. This is NOT ground-' +
+          'classification accuracy.',
       ),
       this._row(
         'Streaming Coverage',
         this._coverageValue,
-        'Whether the analysis used the full cloud (static load), only ' +
-          'the nodes resident in memory (streaming clouds mid-load), or ' +
-          'a sampled subset. Drives the "may refine" caveat below.',
+        'Whether the analysis used every point (static load), a strided ' +
+          'display sample of the file (large static loads), only the nodes ' +
+          'resident in memory (streaming clouds mid-load), or a sampled ' +
+          'subset. Drives the "may refine" caveat below.',
       ),
       this._row(
         'Metric Stability',
