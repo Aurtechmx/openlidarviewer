@@ -51,6 +51,7 @@ import {
   enterStreamingInspectorMode,
   isAbortError,
   linkAbortSignals,
+  publishStreamingDetail,
   resetClassificationUi,
   shouldDropCandidateOnPostCommitCancel,
   type OpenStreamingDeps,
@@ -283,6 +284,11 @@ export async function openRemoteTileset(
     } catch (err) {
       if (deps.debug) console.warn('[inspector] streaming mode (tileset) threw', err);
     }
+    // The Detail readout for THIS scan. Nothing published it on this path, so a
+    // tileset opened over a COPC kept that COPC's point total on screen; a
+    // tileset states no total, and stating THAT is what clears the previous
+    // figure. The resident count is real and is published either way.
+    publishStreamingDetail(deps.inspector, cloud, deps.debug);
 
     // The Scan Report for THIS scan. Nothing set it on this path, so the
     // Inspector kept whichever streaming scan was open before: a tileset opened

@@ -1,4 +1,9 @@
 import { el, formatCount } from './dom';
+import {
+  renderStreamingDetail,
+  clearStreamingDetail,
+  type StreamingDetail,
+} from './streamingDetail';
 import { collapsibleSection } from './collapsibleSection';
 import type { LayerGroupsPanel } from './LayerGroupsPanel';
 import type { SessionLayerGroup } from '../io/session';
@@ -1600,6 +1605,9 @@ export class Inspector {
     // none has a StreamingPanel equivalent, so hiding the section removed
     // point-thickness control on a streaming COPC.
     this.element.classList.toggle('olv-inspector-streaming', streaming);
+    // Leaving streaming layout retires the streaming Detail readout with the
+    // scan it measured. The static open writes its own through `setDetail`.
+    if (!streaming) clearStreamingDetail(this._detail);
   }
 
   /**
@@ -1894,6 +1902,25 @@ export class Inspector {
     this._navPrefs = { ...prefs };
     this._syncNavChips();
     this._navPresetSelect.value = prefs.preset;
+  }
+
+  /**
+   * Show the streaming residency readout — what is resident now against what
+   * the source declares, or the fact that it declares nothing.
+   *
+   * Separate from {@link setDetail} on purpose. That seam is positional and its
+   * two arguments mean "shown of a cloud the viewer holds"; a streaming source
+   * has a resident set, a source total and a current-view readiness that are
+   * three different quantities, and passing the source total through the static
+   * seam twice is what made an out-of-core scan read as 100 % held. The typed
+   * object is what stops resident and source being transposed.
+   *
+   * Called on every streaming status tick, so the figure tracks the CURRENT
+   * resident set rather than the one at attach; each call replaces the readout,
+   * so a source that declares no total clears the previous source's.
+   */
+  setStreamingDetail(detail: StreamingDetail): void {
+    renderStreamingDetail(this._detail, detail);
   }
 
   /** Show the honest "shown / total" point count and a fill bar. */

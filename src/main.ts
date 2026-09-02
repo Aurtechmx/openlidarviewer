@@ -50,10 +50,8 @@ import { openScan, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
-  isEptUrl,
-  isTilesetEntryUrl,
-  isAbortError,
-  linkAbortSignals,
+  isEptUrl, isTilesetEntryUrl, isAbortError, linkAbortSignals,
+  publishStreamingDetail,
   type OpenStreamingDeps,
 } from './app/openStreaming';
 import {
@@ -5039,6 +5037,8 @@ function startStreamingStatusPolling(): void {
       cacheBytes: scheduler.cacheStats().byteSize,
     });
     streamingPanel.setViewDiagnostics(diag);
+    // Same tick's counters; residency is source-vs-resident, not readiness.
+    publishStreamingDetail(inspector, cloud, debug);
     if (diag.readinessPhase === 'settled') {
       // First settled current-view verdict: re-evaluate the scan type on
       // the now fully-resident cloud — a sparse early frame can misread a

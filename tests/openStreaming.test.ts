@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, it, expect, vi } from 'vitest';
 import {
   isEptUrl,
@@ -14,6 +17,8 @@ import type { Viewer } from '../src/render/Viewer';
 import type { RangeSource } from '../src/io/range/RangeSource';
 import { RangeReadError } from '../src/io/range/RangeSource';
 import { EptTimeoutError } from '../src/io/ept/eptTransport';
+
+const SRC_ROOT = join(import.meta.dirname, '..');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The pure decisions the extraction exposes — the only remote-open logic that
@@ -378,6 +383,8 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
     kind: 'copc' as const,
     name: 'scan.copc.laz',
     sourcePointCount: 1000,
+    // What is on the GPU at attach — a bounded subset, never the source total.
+    residentPointCount: 40,
     metadata: {
       header: { min: [0, 0, 0], max: [10, 10, 5], pointDataRecordFormat: 6 },
       info: { spacing: 0.05 },
@@ -460,6 +467,7 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
       element: { classList: { remove: vi.fn() } },
       setStreamingMode: vi.fn(),
       setDetail: vi.fn(),
+      setStreamingDetail: vi.fn(),
       setReport: vi.fn(),
     } as unknown as OpenStreamingDeps['inspector'],
     exportPanel: {
@@ -618,5 +626,45 @@ describe('openStreamingCopc — metadata is published only AFTER commit (blocker
     ).rejects.toThrow(/malformed COPC/i);
     expect(calls.refreshCrs).not.toHaveBeenCalled();
     expect(calls.refreshProvenance).not.toHaveBeenCalled();
+  });
+});
+
+describe('openStreamingCopc — the Detail readout states residency, not the source twice', () => {
+  it('publishes the resident set and the source total as separate figures', async () => {
+    const { deps } = makeCopcDeps();
+    await openStreamingCopc(
+      { kind: () => 'local-file' } as unknown as RangeSource,
+      'scan.copc.laz',
+      new AbortController().signal,
+      deps,
+    );
+    const inspector = deps.inspector as unknown as {
+      setStreamingDetail: ReturnType<typeof vi.fn>;
+      setDetail: ReturnType<typeof vi.fn>;
+    };
+    expect(inspector.setStreamingDetail).toHaveBeenCalledWith({
+      residentPointCount: 40,
+      sourcePointCount: 1000,
+      sourcePointCountKnown: true,
+    });
+    // The static "shown / total" seam means a fully held cloud; a streaming
+    // source must not reach it at all.
+    expect(inspector.setDetail).not.toHaveBeenCalled();
+  });
+});
+
+describe('no streaming open path passes a source total as both figures', () => {
+  it('leaves the positional setDetail seam to the static open', () => {
+    // The EPT, out-of-core and tileset opens publish through the same helper.
+    // A source read is what catches a regression at a site whose full open is
+    // not exercised here.
+    for (const file of [
+      'src/app/openStreaming.ts',
+      'src/app/heavyLasExecutor.ts',
+      'src/app/openTilesetLayer.ts',
+    ]) {
+      const text = readFileSync(join(SRC_ROOT, file), 'utf8');
+      expect(text, file).not.toMatch(/\binspector\.setDetail\(/);
+    }
   });
 });

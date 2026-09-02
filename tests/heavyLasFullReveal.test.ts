@@ -94,6 +94,7 @@ function fakeStreaming(viewer: ReturnType<typeof fakeViewer>) {
   const inspector = {
     setStreamingMode: vi.fn(),
     setDetail: vi.fn(),
+    setStreamingDetail: vi.fn(),
     setReport: vi.fn(),
     element: { classList: { remove: vi.fn() } },
   };
@@ -244,7 +245,15 @@ describe('heavy-LAS full streaming reveal', () => {
     expect(report).not.toBeNull();
     expect(report?.sourcePointCount).toBe(n);
     expect(report?.sourcePointCount).not.toBeNull();
-    expect(s.inspector.setDetail).toHaveBeenCalledWith(n, n);
+    // The total is the SOURCE figure. What is resident is a separate count off
+    // the same store, so the readout can state residency instead of claiming
+    // the whole store is on the GPU.
+    expect(s.inspector.setStreamingDetail).toHaveBeenCalledWith({
+      residentPointCount: 0,
+      sourcePointCount: n,
+      sourcePointCountKnown: true,
+    });
+    expect(s.inspector.setDetail).not.toHaveBeenCalled();
   });
 
   it('omits the two surfaces a local out-of-core store cannot honestly fill', async () => {
