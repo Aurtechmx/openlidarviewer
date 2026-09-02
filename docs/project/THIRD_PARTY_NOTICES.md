@@ -9,11 +9,19 @@ end of the file.
 OpenLiDARViewer itself is licensed under AGPL-3.0-only from v0.6.7 (MIT through
 v0.6.6). The project license does not change the license of any component listed
 here. Each component keeps its own license and notice. Every runtime component
-is compatible with AGPL-3.0-only: the runtime libraries are MIT or Apache-2.0
-and the fonts are under the SIL Open Font License. See
+is compatible with AGPL-3.0-only: the bundled libraries are MIT, Apache-2.0,
+Zlib, or 0BSD, and the fonts are under the SIL Open Font License, all
+permissive licenses that AGPL-3.0-only distribution may include. See
 [../../LICENSING.md](../../LICENSING.md).
 
 ## Runtime dependencies (bundled into the shipped build)
+
+The direct runtime dependencies declared in `package.json` are listed first,
+with their upstream projects, declared range, and the version resolved in
+`package-lock.json`. The complete bundled set (these plus every transitive
+package that ships in the built app) follows in "Complete bundled set",
+grouped by license, so attribution covers everything the build carries and not
+only the direct entry points.
 
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
@@ -28,6 +36,88 @@ and the fonts are under the SIL Open Font License. See
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/rsms/inter |
 | @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/sharanda/manrope |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/JetBrains/JetBrainsMono |
+
+### Complete bundled set (direct and transitive), grouped by license
+
+The list below is the full production dependency set from `sbom.json`
+(CycloneDX, generated with `--omit dev`): the direct runtime dependencies above
+plus every transitive package they pull into the production graph. Versions are
+the ones resolved in `package-lock.json` and recorded in `sbom.json`. A few
+entries (`@types/*`, `undici-types`) are TypeScript type declarations that carry
+no executable code; they belong to the production graph and are listed for
+completeness. All of these licenses are permissive and compatible with
+AGPL-3.0-only distribution; none require the distributor to relicense.
+
+MIT (46 packages):
+
+- @loaders.gl/core 4.4.4
+- @loaders.gl/draco 4.4.3
+- @loaders.gl/gltf 4.4.3
+- @loaders.gl/images 4.4.3
+- @loaders.gl/loader-utils 4.4.3
+- @loaders.gl/obj 4.4.3
+- @loaders.gl/ply 4.4.4
+- @loaders.gl/schema 4.4.3
+- @loaders.gl/schema-utils 4.4.3
+- @loaders.gl/textures 4.4.3
+- @loaders.gl/worker-utils 4.4.3
+- @math.gl/core 4.1.0
+- @math.gl/types 4.1.0
+- @pdf-lib/standard-fonts 1.0.0
+- @pdf-lib/upng 1.0.1
+- @probe.gl/env 4.1.1
+- @probe.gl/log 4.1.1
+- @probe.gl/stats 4.1.1
+- @types/command-line-args 5.2.3
+- @types/command-line-usage 5.0.4
+- @types/geojson 7946.0.16
+- @types/node 24.13.2
+- ansi-styles 4.3.0
+- array-back 6.2.3
+- chalk 4.1.2
+- chalk-template 0.4.0
+- color-convert 2.0.1
+- color-name 1.1.4
+- command-line-args 6.0.2
+- command-line-usage 7.0.4
+- find-replace 5.0.2
+- has-flag 4.0.0
+- json-bignum 0.0.3
+- ktx-parse 0.7.1
+- lodash.camelcase 4.3.0
+- mgrs 1.0.0
+- pdf-lib 1.17.1
+- proj4 2.21.0
+- supports-color 7.2.0
+- table-layout 4.1.1
+- texture-compressor 1.0.2
+- three 0.184.0
+- typical 7.3.0
+- undici-types 7.18.2
+- wkt-parser 1.5.5
+- wordwrapjs 5.1.1
+
+Apache-2.0 (5 packages):
+
+- @swc/helpers 0.5.23
+- apache-arrow 21.1.0
+- draco3d 1.5.7
+- flatbuffers 25.9.23
+- laz-perf 0.0.7
+
+MIT AND Zlib (1 package):
+
+- pako 1.0.11 (dual-licensed): both the MIT text and the Zlib text below apply.
+
+0BSD (1 package):
+
+- tslib 2.8.1
+
+SIL Open Font License 1.1 (3 packages):
+
+- @fontsource-variable/inter 5.3.0
+- @fontsource/manrope 5.3.0
+- @fontsource/jetbrains-mono 5.3.0
 
 ## Development-only dependencies (not bundled into the shipped build)
 
@@ -54,7 +144,7 @@ here for transparency.
 
 ## License texts
 
-### MIT License (applies to: three, @loaders.gl/*, pdf-lib, proj4, vite, vitest, vitepress, vite-plugin-javascript-obfuscator, @vitest/coverage-v8, rollup-plugin-visualizer, @types/three, @types/proj4)
+### MIT License (applies to every package marked MIT above: the 46 bundled MIT packages in "Complete bundled set", the MIT development-only dependencies, and pako's MIT half)
 
 ```
 MIT License
@@ -81,15 +171,48 @@ THE SOFTWARE.
 Each MIT-licensed package retains its own copyright notice in its
 upstream repository (see the "Upstream" column above).
 
-### Apache License 2.0 (applies to: laz-perf, typescript, @playwright/test, @stryker-mutator/*)
+### Apache License 2.0 (applies to bundled: laz-perf, apache-arrow, draco3d, flatbuffers, @swc/helpers; and development-only: typescript, @playwright/test, @stryker-mutator/*)
 
 The Apache 2.0 license text is reproduced at:
 https://www.apache.org/licenses/LICENSE-2.0
 
-Copyright holders for the Apache-2.0-licensed packages:
+Copyright holders for the bundled Apache-2.0 packages:
 - laz-perf: Howard Butler / Hobu, Inc. and contributors
+- apache-arrow: The Apache Software Foundation
+- draco3d: Google LLC and the Draco authors
+- flatbuffers: Google Inc. and the FlatBuffers authors
+- @swc/helpers: the SWC project authors
+
+apache-arrow ships a NOTICE file. Apache-2.0 section 4(d) requires its contents
+travel with the distribution:
+
+```
+Apache Arrow JavaScript
+Copyright 2017-2025 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+```
+
+Copyright holders for the Apache-2.0 development-only packages:
 - typescript: Microsoft Corporation
 - @playwright/test: Microsoft Corporation
+- @stryker-mutator/*: the Stryker Mutator project authors
+
+### Zlib License (applies to: pako, in addition to its MIT terms above)
+
+pako is a JavaScript port of zlib and is distributed under `(MIT AND Zlib)`.
+The MIT text above covers pako's own code; the Zlib terms cover the
+zlib-derived portions. Copyright (C) 2014-2017 Vitaly Puzrin and Andrei
+Tuputcyn (pako). The zlib algorithms it ports are (C) 1995-2017 Jean-loup
+Gailly and Mark Adler. The Zlib license text is reproduced at:
+https://opensource.org/license/zlib/
+
+### BSD Zero-Clause License (0BSD) (applies to: tslib)
+
+Copyright (c) Microsoft Corporation. The 0BSD license permits use, copying,
+modification, and distribution for any purpose without conditions, and requires
+no attribution notice. Full text at: https://opensource.org/license/0bsd/
 
 ### SIL Open Font License 1.1 (applies to: Inter, Manrope, JetBrains Mono)
 
@@ -104,17 +227,25 @@ Copyright (c) 2020 The JetBrains Mono Project Authors
 
 ## How to refresh this notice
 
-When a new runtime dependency is added to `package.json`:
+The "Complete bundled set" list must match the production dependency set in
+`sbom.json` (regenerate it with
+`npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json`). When a
+dependency changes:
 
-1. Identify the license from the package's upstream repository
-   (the `LICENSE` file, or `license` field in its `package.json`).
-2. Add a row to the appropriate table above.
-3. If the license is one not already listed, append its full text or
-   a stable URL to the "License texts" section.
+1. Regenerate `sbom.json` and diff its component set against the "Complete
+   bundled set" list above.
+2. For each added package, identify the license from its upstream repository
+   (the `LICENSE` file, or `license` field in its `package.json`) and add it to
+   the matching license group. Add its declared range to the direct-dependency
+   table too if it is a new direct dependency.
+3. If the license is one not already listed, append its full text or a stable
+   URL to the "License texts" section, and confirm it is compatible with
+   AGPL-3.0-only distribution, and flag it here if it is not.
+4. For a removed package, drop it from the list (and the table, if direct).
+   Leave a license-text block intact unless every package under it is gone.
 
-When a runtime dependency is removed: drop its row from the table.
-Leave the license-text section intact unless every package using
-that license has been removed.
+`node scripts/lint-sbom.mjs` fails if any `sbom.json` component is absent from
+this file, so a regenerated SBOM that drifts from this notice is caught in CI.
 
 ## Test fixtures (not shipped in the deployed app)
 

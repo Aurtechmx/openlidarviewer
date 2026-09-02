@@ -128,6 +128,34 @@ export function collectSbomProblems(read) {
     }
   }
 
+  // 6. Attribution completeness: every bundled component is credited in
+  //    THIRD_PARTY_NOTICES.md. The SBOM is generated with `--omit dev`, so its
+  //    component set is exactly what ships in `dist/`; each such package must
+  //    carry its licence attribution. This closed the gap where the notice
+  //    listed only the direct runtime deps and omitted the bundled transitive
+  //    packages the build actually distributes.
+  if (components) {
+    const noticesText = read('docs/project/THIRD_PARTY_NOTICES.md');
+    if (noticesText == null) {
+      problems.push(
+        'docs/project/THIRD_PARTY_NOTICES.md is missing — bundled components cannot be attributed.',
+      );
+    } else {
+      for (const c of components) {
+        if (!c || !c.name) continue;
+        const full = c.group ? `${c.group}/${c.name}` : c.name;
+        const esc = full.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match the name as a whole token, not as the prefix of a longer name,
+        // so "chalk" is not counted as covered by "chalk-template".
+        if (!new RegExp(`${esc}(?![\\w./-])`).test(noticesText)) {
+          problems.push(
+            `docs/project/THIRD_PARTY_NOTICES.md does not attribute bundled package "${full}".`,
+          );
+        }
+      }
+    }
+  }
+
   return { problems, componentCount: components ? components.length : 0, version };
 }
 
@@ -144,7 +172,8 @@ if (isMain()) {
   if (problems.length === 0) {
     console.log(
       `lint:sbom OK — root openlidarviewer@${version}, ${componentCount} components, every direct ` +
-        `production dependency at its locked version (identity + consistency checks, not full schema validation).`,
+        `production dependency at its locked version, and every bundled component attributed in ` +
+        `THIRD_PARTY_NOTICES.md (identity + consistency checks, not full schema validation).`,
     );
     process.exit(0);
   }
