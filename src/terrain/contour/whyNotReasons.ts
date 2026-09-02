@@ -101,13 +101,14 @@ export function explainLimitations(result: AnalyseContoursResult): Limitations {
   }
 
   // ── high edge risk ────────────────────────────────────────────────────
-  // `q.edgeRiskRatio` is cellMetrics.edgeRiskRatio (analyseContours wires it
-  // through): the fraction of MEASURED cells that sit within a couple of cells
-  // of the data boundary. Those cells HAVE real returns — they are just least
-  // supported by neighbours. The old wording here ("a long interpolation from
-  // real returns") described the OTHER edge metric (the gate's tally of
-  // interpolated cells far from any measurement, dtmCellStatus 'edgeRisk') and
-  // was untrue for this one — the same mislabel terrainAssessment already fixed.
+  // `q` here is the gate report (DtmQualityReport), so `q.edgeRiskRatio` is
+  // the gate's cell-status tally: the fraction of ALL covered cells whose
+  // status is 'edgeRisk' (interpolated cells far from any measurement). It is
+  // NOT cellMetrics.boundaryMeasuredRatio (measured cells near the raster
+  // boundary), despite what an earlier version of this comment claimed. The
+  // cause wording below still uses the boundary-measured phrasing, pinned by a
+  // regression test; reconciling the figure and the phrasing is a separate,
+  // behaviour-changing fix.
   const edgeFrac = finite(q.edgeRiskRatio);
   if (Number.isFinite(edgeFrac) && edgeFrac > HIGH_EDGE_FRACTION) {
     emit(

@@ -1072,7 +1072,7 @@ export function computeTerrainCore(
     meanCellConfidence: Number.isFinite(dtm.meanConfidence) ? dtm.meanConfidence : 0,
     holdoutRmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
     groundPointRatio: Number.isFinite(groundPointRatio) ? groundPointRatio : null,
-    edgeRiskRatio: cellMetrics.edgeRiskRatio,
+    boundaryMeasuredRatio: cellMetrics.boundaryMeasuredRatio,
     meanDensity: cellMetrics.meanDensity,
     cellSizeM: params.cellSizeM,
   });

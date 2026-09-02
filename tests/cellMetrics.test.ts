@@ -127,7 +127,7 @@ describe('computeCellMetrics', () => {
     expect(metrics.edgeDistanceCells[0]).toBe(1); // corner touches the grid edge
     expect(metrics.edgeDistanceCells[4]).toBe(2); // centre is one step inside
     // With threshold 2, every cell in this tiny grid is edge-risk.
-    expect(summary.edgeRiskRatio).toBeCloseTo(1, 6);
+    expect(summary.boundaryMeasuredRatio).toBeCloseTo(1, 6);
   });
 
   it('summary density stats over measured cells only', () => {

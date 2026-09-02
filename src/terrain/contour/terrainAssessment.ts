@@ -206,7 +206,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     coveredCells > 0 ? 1 - tally.measured / coveredCells : 1;
   const gridTotal = tally.total > 0 ? tally.total : 1;
   const emptyFrac = tally.empty / gridTotal;
-  const edgeFrac = Number.isFinite(cm?.edgeRiskRatio) ? cm.edgeRiskRatio : 0;
+  const edgeFrac = Number.isFinite(cm?.boundaryMeasuredRatio) ? cm.boundaryMeasuredRatio : 0;
   const density = Number.isFinite(cm?.meanDensity) ? cm.meanDensity : 0;
   const groundRatio = Number.isFinite(q.groundPointRatio) ? q.groundPointRatio : Number.NaN;
   const crsKnown = crs != null;
@@ -263,11 +263,11 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
       rating: bandLow(emptyFrac, 0.2, HIGH_EMPTY_FRACTION),
     },
     {
-      // cellMetrics.edgeRiskRatio — measured cells near the data boundary
-      // (least neighbour support). DISTINCT from the gate's 'edgeRisk' cell
-      // status (interpolated cells far from any measurement); the reason
-      // sentence below words each truthfully.
-      label: 'Edge risk',
+      // cellMetrics.boundaryMeasuredRatio: measured cells near the data
+      // boundary (least neighbour support). The gate's 'edgeRisk' cell status
+      // (interpolated cells far from any measurement) is a different quantity
+      // and keeps that name.
+      label: 'Boundary share',
       value: pctStr(edgeFrac),
       rating: bandLow(edgeFrac, 0.05, HIGH_EDGE_FRACTION),
     },
@@ -332,12 +332,11 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     else if (coverageMode === 'sampled') caps.push('the cloud was sampled, not fully walked');
     if (interpFrac > HIGH_INTERP_FRACTION) caps.push(`${pctStr(interpFrac)} of the surface is interpolated`);
     if (emptyFrac > HIGH_EMPTY_FRACTION) caps.push(`${pctStr(emptyFrac)} of the grid has no data`);
-    // `edgeFrac` is cellMetrics.edgeRiskRatio: the fraction of MEASURED cells
-    // that sit within a couple of cells of the data boundary. Those cells HAVE
-    // real returns — they are just least supported by neighbours. The old
-    // wording here ("a long interpolation from real returns") described the
-    // OTHER edge metric (the gate's tally of interpolated cells far from any
-    // measurement, dtmCellStatus 'edgeRisk') and was untrue for this one.
+    // `edgeFrac` is cellMetrics.boundaryMeasuredRatio: the fraction of
+    // MEASURED cells that sit within a couple of cells of the data boundary.
+    // Those cells HAVE real returns; they are just least supported by
+    // neighbours. The gate's tally of interpolated cells far from any
+    // measurement (dtmCellStatus 'edgeRisk') is a different quantity.
     if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of measured cells sit at the edge of the data, where the surface is least supported`);
     if (density < LOW_DENSITY_PER_M2) caps.push('ground returns are sparse');
     if (coverageMode === 'resident-only') {

@@ -1265,7 +1265,7 @@ export class AnalysePanel {
     // just flagged so the always-"unknown" pair never masquerades as signal.
     const clusters: Array<{ name: string; labels: string[] }> = [
       { name: 'Coverage', labels: ['Scan scope', 'Empty cells', 'Interpolation'] },
-      { name: 'Surface', labels: ['Ground density', 'DTM quality', 'Edge risk'] },
+      { name: 'Surface', labels: ['Ground density', 'DTM quality', 'Boundary share'] },
       { name: 'Accuracy', labels: ['Vertical RMSE'] },
       { name: 'Georef', labels: ['CRS', 'Vertical datum'] },
     ];
