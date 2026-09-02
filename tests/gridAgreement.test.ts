@@ -488,3 +488,18 @@ describe('compareGridsCircular', () => {
     expect(r.value.withinToleranceFraction).toBe(0);
   });
 });
+
+describe('compareGrids compensated summation', () => {
+  // Signed errors [1e16, 1, -1e16, 0]: the true sum is 1, mean 0.25. Naive
+  // accumulation cancels the 1 away (1e16 + 1 rounds to 1e16) and reports
+  // mean 0; the Neumaier accumulator keeps it.
+  it('keeps the mean signed error where a naive running sum cancels', () => {
+    const a = raster([1e16, 1, -1e16, 0]);
+    const b = raster([0, 0, 0, 0]);
+    const r = compareGrids(a, b, { tolerance: 2e16 });
+    expect(r.status).toBe('compared');
+    if (r.status !== 'compared') return;
+    // Reference: exact integer arithmetic (1e16 and 1 are exact doubles).
+    expect(r.value.meanSignedError).toBeCloseTo(0.25, 12);
+  });
+});

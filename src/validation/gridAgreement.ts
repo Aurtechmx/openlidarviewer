@@ -25,6 +25,8 @@
  * here validates any product; it only compares two arrays the caller supplies.
  */
 
+import { NeumaierSum } from '../process/numerics';
+
 /** Grid geometry. Two rasters are comparable only when all five agree. */
 export interface GridSpec {
   readonly originX: number;
@@ -266,20 +268,25 @@ function statsOf(signed: readonly number[], tolerance: number): ErrorStats {
       withinToleranceFraction: null,
     };
   }
-  let sum = 0;
-  let sumSq = 0;
-  let sumAbs = 0;
+  // Compensated accumulation: cell counts reach the millions, where a naive
+  // running sum drifts by O(N·ε) and mixed magnitudes drop low-order bits.
+  const sumAcc = new NeumaierSum();
+  const sumSqAcc = new NeumaierSum();
+  const sumAbsAcc = new NeumaierSum();
   let within = 0;
   const abs: number[] = [];
   for (let i = 0; i < n; i++) {
     const d = signed[i];
     const a = Math.abs(d);
-    sum += d;
-    sumSq += d * d;
-    sumAbs += a;
+    sumAcc.add(d);
+    sumSqAcc.add(d * d);
+    sumAbsAcc.add(a);
     if (a <= tolerance) within++;
     abs.push(a);
   }
+  const sum = sumAcc.total;
+  const sumSq = sumSqAcc.total;
+  const sumAbs = sumAbsAcc.total;
   const sortedSigned = [...signed].sort((x, y) => x - y);
   const sortedAbs = abs.toSorted((x, y) => x - y);
   const median = quantileSorted(sortedSigned, 0.5);
