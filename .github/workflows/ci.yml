@@ -83,6 +83,8 @@ jobs:
         run: npm run lint:int-truncation
       - name: Monolith size ratchet (main.ts / Viewer.ts may not grow)
         run: npm run lint:monolith-size
+      - name: Default colour ramps rise in lightness
+        run: npm run lint:palette-lightness
       - name: Evidence lint (documents match the recorded test evidence)
         run: npm run lint:evidence
       - name: Dependency singletons (one copy of each critical package)

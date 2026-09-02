@@ -27,14 +27,14 @@ import {
   burnInColorbarLayout,
   type ActiveColorbarSource,
 } from '../src/render/activeColorbar';
-import type { ColorMode } from '../src/render/colorModes';
+import { DEFAULT_ELEVATION_PALETTE, type ColorMode } from '../src/render/colorModes';
 
 function src(overrides: Partial<ActiveColorbarSource> & { mode: ColorMode }): ActiveColorbarSource {
   return { range: { min: 0, max: 100 }, ...overrides };
 }
 
 describe('buildActiveColorbarSpec — elevation', () => {
-  it('builds a Turbo-ramp spec with the CRS unit when the unit is known', () => {
+  it('builds a spec on the default elevation ramp, with the CRS unit when known', () => {
     const bar = buildActiveColorbarSpec(
       src({ mode: 'elevation', range: { min: 12.5, max: 87.5 }, elevationUnit: 'm' }),
     );
@@ -42,7 +42,10 @@ describe('buildActiveColorbarSpec — elevation', () => {
     expect(bar!.mode).toBe('elevation');
     // The live elevation colouring always uses the default elevation ramp
     // (colorByElevation's default palette) — the legend must sample the same.
-    expect(bar!.spec.palette).toBe('turbo');
+    // Asserted against the constant, not a literal: the invariant is that the
+    // two agree, and pinning the name meant a changed default failed here as a
+    // stale expectation rather than as the mismatch it would actually be.
+    expect(bar!.spec.palette).toBe(DEFAULT_ELEVATION_PALETTE);
     expect(bar!.spec.label).toBe('Elevation');
     expect(bar!.spec.unit).toBe('m');
     expect(bar!.spec.min).toBe(12.5);
