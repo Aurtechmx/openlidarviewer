@@ -32,6 +32,20 @@ const NODE_A = classes({ 2: 20, 5: 80 });
 const NODE_B = classes({ 2: 10, 6: 30 });
 const NODE_C = classes({ 9: 5 });
 
+/** A ledger that has already seen nodes A and B, the shared starting point. */
+function ledgerWithAandB() {
+  const ledger = createStreamingClassLedger();
+  ledger.record('0-0-0-0', NODE_A);
+  ledger.record('1-0-0-0', NODE_B);
+  return ledger;
+}
+
+/** The tally after A and B, asserted the same way wherever it must not move. */
+function expectAandBTally(ledger: ReturnType<typeof createStreamingClassLedger>): void {
+  expect(asObject(ledger.aggregate())).toEqual({ 2: 30, 5: 80, 6: 30 });
+  expect(ledger.size()).toBe(2);
+}
+
 describe('streaming class ledger — unique nodes only', () => {
   it('counts the first node it sees', () => {
     const ledger = createStreamingClassLedger();
@@ -41,31 +55,23 @@ describe('streaming class ledger — unique nodes only', () => {
   });
 
   it('folds a second, distinct node into the same tally', () => {
-    const ledger = createStreamingClassLedger();
-    ledger.record('0-0-0-0', NODE_A);
-    ledger.record('1-0-0-0', NODE_B);
+    const ledger = ledgerWithAandB();
     expect(asObject(ledger.aggregate())).toEqual({ 2: 30, 5: 80, 6: 30 });
     expect(ledger.size()).toBe(2);
   });
 
   it('keeps an evicted node in the tally (the ledger is never told about eviction)', () => {
-    const ledger = createStreamingClassLedger();
-    ledger.record('0-0-0-0', NODE_A);
-    ledger.record('1-0-0-0', NODE_B);
+    const ledger = ledgerWithAandB();
     // Eviction happens in the scheduler and has NO entry point here: the
     // statistic is "unique nodes seen", not "nodes currently resident", so the
     // historical count stands after the node leaves the GPU.
-    expect(asObject(ledger.aggregate())).toEqual({ 2: 30, 5: 80, 6: 30 });
-    expect(ledger.size()).toBe(2);
+    expectAandBTally(ledger);
   });
 
   it('adds nothing when an evicted node is decoded again', () => {
-    const ledger = createStreamingClassLedger();
-    ledger.record('0-0-0-0', NODE_A);
-    ledger.record('1-0-0-0', NODE_B);
+    const ledger = ledgerWithAandB();
     expect(ledger.record('0-0-0-0', NODE_A)).toBeNull();
-    expect(asObject(ledger.aggregate())).toEqual({ 2: 30, 5: 80, 6: 30 });
-    expect(ledger.size()).toBe(2);
+    expectAandBTally(ledger);
   });
 
   it('adds nothing however many times the same node comes back', () => {
@@ -79,9 +85,7 @@ describe('streaming class ledger — unique nodes only', () => {
   });
 
   it('adds only the new node when a fresh id arrives among reloads', () => {
-    const ledger = createStreamingClassLedger();
-    ledger.record('0-0-0-0', NODE_A);
-    ledger.record('1-0-0-0', NODE_B);
+    const ledger = ledgerWithAandB();
     ledger.record('0-0-0-0', NODE_A); // reload
     expect(asObject(ledger.record('2-1-1-1', NODE_C) ?? new Map())).toEqual({ 9: 5 });
     expect(asObject(ledger.aggregate())).toEqual({ 2: 30, 5: 80, 6: 30, 9: 5 });
@@ -104,9 +108,7 @@ describe('streaming class ledger — unique nodes only', () => {
 
 describe('streaming class ledger — session reset', () => {
   it('clears the ids and the tally when the dataset changes', () => {
-    const ledger = createStreamingClassLedger();
-    ledger.record('0-0-0-0', NODE_A);
-    ledger.record('1-0-0-0', NODE_B);
+    const ledger = ledgerWithAandB();
     ledger.reset();
     expect(asObject(ledger.aggregate())).toEqual({});
     expect(ledger.size()).toBe(0);
