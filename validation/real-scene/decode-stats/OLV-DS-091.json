@@ -1,0 +1,44 @@
+{
+  "datasetId": "OLV-DS-091",
+  "scene": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz",
+  "reference": "PDAL",
+  "olv": {
+    "count": 24063174,
+    "xmin": 437000,
+    "xmax": 438000,
+    "ymin": 4646000,
+    "ymax": 4647000,
+    "zmin": 548.2,
+    "zmax": 1008.2799865722657,
+    "zmean": 693.9922664010237,
+    "classHistogram": {
+      "1": 23091197,
+      "2": 943274,
+      "7": 27069,
+      "18": 1634
+    }
+  },
+  "pdal": {
+    "count": 24063174,
+    "xmin": 437000,
+    "xmax": 438000,
+    "ymin": 4646000,
+    "ymax": 4647000,
+    "zmin": 548.2,
+    "zmax": 1008.28,
+    "zmean": 693.9922661,
+    "lasVersion": "1.4",
+    "pointFormat": 6,
+    "srs": "PROJCS[\"NAD83(2011) / UTM zone 10N\",GEOGCS[\"NAD83(2011)\",DATUM[\"NAD83_National_Spatial_Reference_System_2011\",SPHEROID[\""
+  },
+  "delta": {
+    "count": 0,
+    "xmin": 0,
+    "xmax": 0,
+    "ymin": 0,
+    "ymax": 0,
+    "zmin": 0,
+    "zmax": 0.000013427734302240424,
+    "zmean": 3.01023646898102e-7
+  }
+}
