@@ -43,3 +43,15 @@ const MEASURED_COLOR_MODES: ReadonlySet<ColorMode> = new Set<ColorMode>(['rgb'])
 export function isDerivedColorMode(mode: ColorMode): boolean {
   return !MEASURED_COLOR_MODES.has(mode);
 }
+
+/**
+ * The qualifier a surface shows while a derived mode is active.
+ *
+ * Deliberately about the colour rather than about the mode: "height" already
+ * tells the analyst what is encoded, and what they cannot see from the image is
+ * that the hue was chosen here. Worth stating plainly, because the viewer picks
+ * a derived mode on its own whenever a scan has no readable colour, and a
+ * spectral image the reader did not ask for is the easiest thing to mistake for
+ * something the survey recorded.
+ */
+export const DERIVED_COLOR_NOTE = 'Colour is applied by the viewer, not recorded by the scan.';
