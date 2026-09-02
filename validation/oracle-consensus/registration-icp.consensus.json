@@ -1,0 +1,51 @@
+{
+  "$schemaNote": "Oracle-triangulation record: OLV point-cloud registration vs ANALYTIC TRUTH — a KNOWN rigid transform. Cloud Q is built from an asymmetric source cloud P by a known rotation+translation; OLV's registration must recover that same transform. No third-party registration tool (Open3D/CloudCompare) is available, so the truth anchor is the closed-form known transform itself, not a matched implementation. OLV's leg is recomputed LIVE by tests/oracleConsensusRegistration.test.ts from the same fixtures (the JSON only records the known transform the test must recover). Convention: source->target — the recovered (R,t) satisfy q ~= R*p + t, exactly the transform that generated Q. Two cases use different small rotations, axes and translations so a single systematic error could not pass both.",
+  "contract": {
+    "id": "registration-icp-rigid-v1",
+    "quantity": "registration.rigid-transform",
+    "algorithm": "trimmed ICP with closed-form Kabsch/Horn rigid solve (src/registration/generalIcp -> rigidSolve), identity initialisation, full correspondence (Q is P transformed, so every point has an exact partner)",
+    "convention": "source->target: recovered R,t satisfy q ~= R*p + t (the same transform that built Q from P)",
+    "fixture": "asymmetric synthetic cloud (200 points, deterministic LCG, extents 10x6x3 m; NOT symmetric/degenerate so R is uniquely determined)",
+    "convergenceAssumption": "small transform (rotation <=5 deg) so ICP converges from an identity initial pose to the global optimum",
+    "units": { "rotation": "degree", "translation": "metre", "residual": "metre" },
+    "rotationToleranceDeg": 1e-4,
+    "translationToleranceM": 1e-4,
+    "rmsToleranceM": 1e-6
+  },
+  "cases": [
+    {
+      "fixture": {
+        "id": "asym-cloud-A",
+        "points": 200, "seed": 12345, "extents": [10, 6, 3],
+        "model": "P = deterministic asymmetric cloud; Q = R(rz=4,ry=3,rx=2 deg)*P + [0.5,-0.3,0.2]"
+      },
+      "oracles": [
+        {
+          "id": "analytic-known-transform",
+          "referenceClass": "analytic-truth",
+          "tool": "closed-form: Q constructed from P by a known rigid transform",
+          "eulerDegZYX": { "rz": 4, "ry": 3, "rx": 2 },
+          "rotationMagnitudeDeg": 5.385124,
+          "translationM": [0.5, -0.3, 0.2]
+        }
+      ]
+    },
+    {
+      "fixture": {
+        "id": "asym-cloud-B",
+        "points": 200, "seed": 6789, "extents": [10, 6, 3],
+        "model": "P = deterministic asymmetric cloud; Q = R(rz=1,ry=-2,rx=3 deg)*P + [-1.2,0.8,-0.5]"
+      },
+      "oracles": [
+        {
+          "id": "analytic-known-transform",
+          "referenceClass": "analytic-truth",
+          "tool": "closed-form: Q constructed from P by a known rigid transform",
+          "eulerDegZYX": { "rz": 1, "ry": -2, "rx": 3 },
+          "rotationMagnitudeDeg": 3.751932,
+          "translationM": [-1.2, 0.8, -0.5]
+        }
+      ]
+    }
+  ]
+}
