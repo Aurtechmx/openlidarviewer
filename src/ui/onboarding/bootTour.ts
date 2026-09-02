@@ -24,7 +24,7 @@ export interface TourHandle {
   readonly replay: () => void;
 }
 
-/** Build, mount, and wrap the tour. Call once at app boot. */
+/** Build, mount, and wrap the tour. Called once, by app/tourLauncher.ts on first use. */
 export function bootTour(): TourHandle {
   const session = new TourSession();
   const overlay = new TourOverlay(session);
