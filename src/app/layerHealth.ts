@@ -65,6 +65,14 @@ export interface LayerHealthInput {
   readonly precisionBasis: 'projected-linear-unit' | 'geographic' | 'unknown' | null;
   /** True while the layer streams (partial residency). */
   readonly streaming: boolean;
+  /**
+   * Resident vs source-declared point counts for a non-streaming layer, or
+   * null when the source declared no total. A resident count below the
+   * source count is a display sample, and the Loading row says so instead of
+   * "fully loaded". Undefined keeps the legacy wording (callers that do not
+   * know the counts).
+   */
+  readonly residency?: { readonly resident: number; readonly source: number } | null;
 }
 
 /** One rendered fact. `mono` marks numeric values (coordinates, offsets, mm). */
@@ -286,10 +294,27 @@ export function buildLayerHealth(input: LayerHealthInput): LayerHealthRow[] {
           value: 'streaming — resident detail refines as tiles load',
           status: 'info',
         }
-      : { label: 'Loading', value: 'fully loaded', status: 'ok' },
+      : loadingRow(input.residency),
   );
 
   return rows;
+}
+
+/** The Loading row for a non-streaming layer, grounded in the counts. */
+function loadingRow(residency: LayerHealthInput['residency']): LayerHealthRow {
+  if (residency === undefined) return { label: 'Loading', value: 'fully loaded', status: 'ok' };
+  if (residency === null) {
+    return { label: 'Loading', value: 'fully loaded (no source count declared)', status: 'info' };
+  }
+  const { resident, source } = residency;
+  if (resident < source) {
+    return {
+      label: 'Loading',
+      value: `display sample — ${resident.toLocaleString('en-US')} of ${source.toLocaleString('en-US')} resident`,
+      status: 'info',
+    };
+  }
+  return { label: 'Loading', value: 'fully loaded', status: 'ok' };
 }
 
 /**

@@ -61,10 +61,11 @@ describe('Scan Report — in-memory resolution row', () => {
     expect(row.status).toBe('info');
   });
 
-  it('reports both the worst case and the typical step', () => {
+  it('reports both the worst case and the mean-over-the-reach step', () => {
     const row = rowByLabel(scanReport.run(cloudSpanning(1_000, METRE_CRS)), 'In-memory resolution');
     expect(row.value).toContain('worst case');
-    expect(row.value).toContain('typical');
+    expect(row.value).toContain('mean over the reach');
+    expect(row.value).not.toContain('typical');
   });
 
   it('warns and grades coarse once the step passes a millimetre', () => {

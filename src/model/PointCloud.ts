@@ -33,11 +33,19 @@ export interface SourceMetadata {
  * it. Every field is optional — most scan files fill in only some, or none.
  */
 export interface CloudMetadata {
-  /** Capture hardware or sensor, e.g. the LAS System Identifier field. */
+  /**
+   * The LAS System Identifier (or the E57 sensor summary). Per the LAS spec
+   * this names the hardware OR the producing process/organisation, so it is
+   * shown as "System identifier", not as a capture sensor.
+   */
   captureSensor?: string;
   /** Software that produced the file, e.g. the LAS Generating Software field. */
   sourceSoftware?: string;
-  /** Human-readable capture / file-creation date. */
+  /**
+   * Human-readable FILE-CREATION date (LAS header File Creation Day/Year).
+   * Not the acquisition date — a reprocessed flight carries the reprocessing
+   * date here — so it is shown as "File created".
+   */
   captureDate?: string;
   /**
    * True when the source asset carried a texture/material (glTF images or

@@ -150,13 +150,39 @@ export const scanReport: AnalysisModule = {
     // subset can only be counted over the points actually loaded, so it keeps
     // the decoded basis.
     const declaredN = cloud.declaredPointCount;
-    const strided = subset === null && declaredN !== undefined && declaredN > n;
+    // `sampled`: the file holds more points than the buffer, whatever the
+    // scope. `strided`: the unfiltered report back-scales density/spacing to
+    // the declared total (a class subset keeps the decoded basis).
+    const sampled = declaredN !== undefined && declaredN > totalN;
+    const strided = subset === null && sampled;
     const reportedN = strided ? (declaredN as number) : n;
 
-    rows.push(withScope(rowInfo('Point Count', reportedN.toLocaleString('en-US')), scope));
-    if (strided) {
-      // Don't hide the sampling: name the subset actually held in memory.
-      rows.push(rowInfo('Loaded', `${n.toLocaleString('en-US')} (display sample)`));
+    if (sampled) {
+      // The file's count is a whole-file fact: it does not change with the
+      // class scope, so it carries no scope stamp, and it stays on the panel
+      // when a class is solo'd — otherwise a filtered report reads its visible
+      // sample count as the file's total and the sampling disappears with it.
+      rows.push(rowInfo('Point Count', (declaredN as number).toLocaleString('en-US')));
+      // Don't hide the sampling: name the subset actually held in memory AND
+      // every reduction that produced it, so the header count, the Health
+      // Check's decoded count and this row reconcile in one sentence. A
+      // voxel-reduced buffer holds one averaged centroid per occupied voxel.
+      const decoded = cloud.decodedPointCount;
+      const loaded = totalN.toLocaleString('en-US');
+      const how =
+        decoded !== undefined && decoded > totalN
+          ? `stride to ${decoded.toLocaleString('en-US')}, then voxel-reduced to ${loaded} centroids`
+          : cloud.loadStride !== undefined && cloud.loadStride > 1
+            ? `1-in-${cloud.loadStride} stride`
+            : 'stride';
+      rows.push(rowInfo('Loaded', `${loaded} (display sample: ${how})`));
+      if (subset !== null) {
+        rows.push(
+          withScope(rowInfo('Visible', `${n.toLocaleString('en-US')} of the ${loaded}-point display sample`), scope),
+        );
+      }
+    } else {
+      rows.push(withScope(rowInfo('Point Count', n.toLocaleString('en-US')), scope));
     }
 
     // Extent — bounds are in the source CRS's native linear units (feet for a
@@ -198,10 +224,14 @@ export const scanReport: AnalysisModule = {
     const footprintArea = width * depth;
 
     // Point density — over the file's true count (back-scaled when strided).
+    // Both figures are nominal averages (count ÷ footprint), and on a strided
+    // load they mix bases — the header's count over the SAMPLE's footprint —
+    // so the row says so rather than reading as a measured density.
+    const mixedBasis = strided ? ' (mean: declared count over the display-sample footprint)' : '';
     if (footprintArea <= 0 || reportedN === 0) {
       rows.push(withScope(rowWarn('Density', 'N/A (degenerate footprint)'), scope));
     } else {
-      rows.push(withScope(rowInfo('Density', `${(reportedN / footprintArea).toFixed(1)}${basis.densityUnit}`), scope));
+      rows.push(withScope(rowInfo('Density', `${(reportedN / footprintArea).toFixed(1)}${basis.densityUnit}${mixedBasis}`), scope));
     }
 
     // Estimated point spacing. The cm/m formatter assumes metres, so it is used
@@ -212,7 +242,8 @@ export const scanReport: AnalysisModule = {
     } else {
       const spacing = Math.sqrt(footprintArea / reportedN);
       const spacingValue = basis.unitKnown ? formatLength(spacing) : `${spacing.toFixed(2)} (source units)`;
-      rows.push(withScope(rowInfo('Spacing', spacingValue), scope));
+      const spacingBasis = strided ? ' (nominal: √(display-sample footprint ÷ declared count))' : '';
+      rows.push(withScope(rowInfo('Spacing', `${spacingValue}${spacingBasis}`), scope));
     }
 
     // In-memory resolution — what the Float32 position buffer can still tell
@@ -256,7 +287,7 @@ export const scanReport: AnalysisModule = {
             label: 'In-memory resolution',
             value:
               `${formatPrecisionMetres(pm.worstCaseSpacing)} worst case, `
-              + `${formatPrecisionMetres(pm.typicalSpacing)} typical `
+              + `${formatPrecisionMetres(pm.typicalSpacing)} mean over the reach `
               + `(${precisionGradeLabel(precision.grade)})`,
             status: precision.grade === 'fine' ? 'info' : 'warn',
           }
@@ -288,27 +319,45 @@ export const scanReport: AnalysisModule = {
     // below ("Present, unclassified" + "0.0 %" are one statement). Both loops
     // honour a class-subset scope; full scope is byte-identical to counting
     // the whole buffer.
+    //
+    // "Coverage" counts every non-zero code, which includes ASPRS 1
+    // (Unclassified) — so a tile whose points are 95 % code 1 would read as
+    // fully classified. The headline therefore also states the code-1 share,
+    // over the same visible points, and names the sample once when the buffer
+    // is a display sample of the file.
     let classValue = 'No';
     if (cls !== undefined) {
       let anyAssigned = false;
       let nonZero = 0;
+      let codeOne = 0;
       for (let i = 0; i < totalN; i++) {
         if (!isVisible(i)) continue;
         const code = cls[i] & 0xff;
         if (code > 1) anyAssigned = true;
         if (code !== 0) nonZero++;
+        if (code === 1) codeOne++;
       }
-      const base = anyAssigned ? 'Yes' : 'Present, unclassified';
-      classValue =
-        n > 0 ? `${base} (${((nonZero / n) * 100).toFixed(1)} % coverage)` : base;
+      const pct = (k: number): string => ((k / n) * 100).toFixed(1);
+      if (!anyAssigned) {
+        classValue = n > 0 ? `Present, unclassified (${pct(nonZero)} % coverage)` : 'Present, unclassified';
+      } else if (n > 0) {
+        classValue =
+          `Yes — codes on ${pct(nonZero)} %, ${pct(codeOne)} % unclassified (code 1)`
+          + (strided ? ' of display sample' : '');
+      } else {
+        classValue = 'Yes';
+      }
     }
     rows.push(withScope(rowInfo('Classification', classValue), scope));
 
-    // Capture provenance — shown only when the file header carried it.
+    // Header provenance — shown only when the file carried it, labelled by
+    // what the header field IS. LAS `system_identifier` names the hardware OR
+    // the producing process/organisation, and the File Creation Day/Year is
+    // when the file was written, not when the survey was flown.
     const meta = cloud.metadata;
-    if (meta?.captureSensor) rows.push(rowInfo('Capture Sensor', meta.captureSensor));
+    if (meta?.captureSensor) rows.push(rowInfo('System identifier', meta.captureSensor));
     if (meta?.sourceSoftware) rows.push(rowInfo('Source Software', meta.sourceSoftware));
-    if (meta?.captureDate) rows.push(rowInfo('Captured', meta.captureDate));
+    if (meta?.captureDate) rows.push(rowInfo('File created', meta.captureDate));
     if (meta?.scannerOrigin) {
       const [sx, sy, sz] = meta.scannerOrigin;
       rows.push(

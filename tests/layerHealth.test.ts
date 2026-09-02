@@ -205,6 +205,15 @@ describe('buildLayerHealth — frame membership, origin and streaming', () => {
     expect(off.value).toBe('fully loaded');
     expect(off.status).toBe('ok');
   });
+
+  it('a display sample is disclosed as resident-of-source, not "fully loaded"', () => {
+    const r = row(
+      buildLayerHealth(base({ residency: { resident: 2_880_236, source: 53_670_848 } })),
+      'Loading',
+    );
+    expect(r.value).toBe('display sample — 2,880,236 of 53,670,848 resident');
+    expect(r.status).toBe('info');
+  });
 });
 
 describe('buildCompatibilityReport', () => {
