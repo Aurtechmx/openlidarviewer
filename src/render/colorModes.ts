@@ -123,19 +123,21 @@ export type ElevationPalette = 'cividis' | 'viridis' | 'inferno' | 'turbo' | 'cl
 /**
  * The default palette.
  *
- * v0.3.7 final-polish: switched from Cividis to Turbo. Cividis is
- * fully CVD-safe but its mid-tones are muted blue → grey → gold —
- * not perceptually dramatic enough on field-only scans where the
- * actual elevation variation is small. Turbo (Google's perceptually-
- * corrected spectral rainbow) keeps the red → orange → yellow →
- * green → blue gradient an analyst expects from a topographic ramp
- * and lights up small elevation differences much more clearly.
+ * Cividis, which rises from L* 13 to 91 without ever going backwards. Turbo
+ * held this default from v0.3.7 for its contrast on low-relief field scans, but
+ * measured on the stops below it reverses lightness on 19 of 63 sampled steps
+ * and ends about as dark as it starts (L* 12 to 24, peaking at 91 in the
+ * middle). On a sequential quantity that is a defect: the lowest and highest
+ * ground share a luminance, so the two are indistinguishable in greyscale, in
+ * print, and to a reader with colour-vision deficiency, while the mid-ramp
+ * brightness peak reads as a ridge the terrain does not have.
  *
- * Cividis is still in the catalogue (and remains the recommended pick
- * for colour-blind users) — every preset and the future per-cloud
- * picker can swap to it.
+ * The contrast Turbo was chosen for is a range problem, and the height-trim
+ * slider is the instrument for it — narrowing the range raises contrast without
+ * inventing structure. Turbo stays in the catalogue for a reader who selects it
+ * deliberately. `lint:palette-lightness` holds this property.
  */
-export const DEFAULT_ELEVATION_PALETTE: ElevationPalette = 'turbo';
+export const DEFAULT_ELEVATION_PALETTE: ElevationPalette = 'cividis';
 
 /**
  * The default palette for the generic scalar modes (gpsTime, returnNumber,
