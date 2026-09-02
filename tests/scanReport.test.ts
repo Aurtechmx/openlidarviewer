@@ -89,7 +89,7 @@ describe('scanReport module', () => {
       expect(row.value.toLowerCase()).toContain('yes');
       // 3 out of 4 non-zero = 75% — merged into the same row, not a
       // separate "Classification Coverage" diagnostic.
-      expect(row.value).toContain('75.0 % coverage');
+      expect(row.value).toContain('codes on 75.0 %');
       expect(row.status).toBe('info');
     });
 

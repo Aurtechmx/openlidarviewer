@@ -407,7 +407,10 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
             crsSource: (crs as { source?: string } | null)?.source ?? null,
             horizontalUnit:
               crs && isLinearUnitKnown(crs) ? crs.linearUnit : null,
-            verticalUnit: null, // no declared vertical unit NAME exists; never reverse-map the factor
+            // The parsed vertical unit NAME (WKT VERT_CS UNIT / GeoTIFF key)
+            // from the CrsInfo the file declared; never reverse-mapped from
+            // the numeric factor. Null only when the CRS declares none.
+            verticalUnit: verticalUnitName(c?.metadata?.crs),
             verticalDatum: info.verticalDatum ?? null,
             compatibility: lastCompatibility.get(info.id) ?? null,
             mounted: !lastUnmounted.includes(info.id),
@@ -416,6 +419,9 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
             precisionMm: p && p.errorMetres !== null ? p.errorMetres * 1000 : null,
             precisionBasis: (p?.basis as 'projected-linear-unit' | 'geographic' | 'unknown' | undefined) ?? null,
             streaming: false,
+            // Resident vs header-declared counts, so a display sample is not
+            // reported as fully loaded.
+            residency: residencyOf(c),
             soleLayer: infos.length <= 1,
           }),
           name: info.name,
@@ -461,4 +467,19 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
   }
 
   return { buildLayerInfos, applyVisibility, refreshCrsFlags, setVisible, toggleSolo, soloOnly };
+}
+
+/** The declared vertical linear-unit name, or null when the CRS carries none. */
+function verticalUnitName(crs: CrsInfo | null | undefined): string | null {
+  const u = crs?.verticalLinearUnit;
+  return u !== undefined && u !== 'unknown' ? u : null;
+}
+
+/** Resident-vs-source counts for the Layer Health Loading row (null = no declared total). */
+function residencyOf(
+  c: { pointCount: number; declaredPointCount?: number; sourceDeclaredPointCount?: number } | undefined,
+): { resident: number; source: number } | null {
+  if (!c) return null;
+  const source = c.sourceDeclaredPointCount ?? c.declaredPointCount;
+  return source === undefined ? null : { resident: c.pointCount, source };
 }

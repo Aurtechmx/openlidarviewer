@@ -68,7 +68,9 @@ export function float32Spacing(magnitude: number): number {
 
 /**
  * The MEAN Float32 step over coordinates spread uniformly across `[0, reach]` —
- * the "typical" figure, as opposed to the worst case at `reach` itself.
+ * the "mean over the reach" figure, as opposed to the worst case at `reach`
+ * itself. It is a closed-form property of the extent, not a statistic of the
+ * cloud's actual coordinates, and is labelled that way on the Scan Report.
  *
  * Worth reporting because the worst case is a boundary value: the step halves
  * with every binade below `reach`, so most of a cloud sits on a finer grid than

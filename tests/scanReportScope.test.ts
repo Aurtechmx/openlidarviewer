@@ -80,7 +80,7 @@ describe('scanReport — subset scope restricts and stamps', () => {
     // Coverage: both visible points are class 2 (non-zero) → 100% of 2.
     // v0.5.5 P12 — coverage merged into the Classification row.
     const classification = rowByLabel(result, 'Classification');
-    expect(classification.value).toContain('100.0 % coverage');
+    expect(classification.value).toContain('codes on 100.0 %');
     expect(classification.scope).toEqual(scope);
 
     // Result-level scope is carried too.

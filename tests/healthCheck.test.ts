@@ -69,8 +69,10 @@ describe('healthCheck module', () => {
       expect(['pass', 'info']).toContain(status);
     });
 
-    test('duplicate points → pass', () => {
-      expect(rowByLabel(healthCheck.run(cloud), 'Duplicate Points').status).toBe('pass');
+    test('duplicate points → pass (every record resident, so the verdict is about the file)', () => {
+      const row = rowByLabel(healthCheck.run(cloud), 'Duplicate Points');
+      expect(row.status).toBe('pass');
+      expect(row.value).toBe('None');
     });
 
     test('stray outliers → pass', () => {

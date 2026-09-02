@@ -219,6 +219,35 @@ function foldCoord(hash: number, v: number): number {
   return h ^ (h >>> 15);
 }
 
+/**
+ * What the held buffer IS relative to the file, so the per-point verdicts
+ * below can name their basis. `voxel` — the loader averaged the decoded
+ * records into one centroid per occupied voxel (`decodedPointCount` above
+ * the held count): duplicates cannot survive that step and an isolated
+ * point is smoothed into its neighbours, so neither verdict says anything
+ * about the file. `stride` — a 1-in-N record sample, nothing averaged.
+ * `full` — every record is resident. No computation changes; only the
+ * wording and the pass/info status of a clean result.
+ */
+function sampleBasis(cloud: PointCloud): { kind: 'full' | 'stride' | 'voxel'; note: string } {
+  const n = cloud.pointCount;
+  const decoded = cloud.decodedPointCount;
+  if (decoded !== undefined && decoded > n) {
+    return {
+      kind: 'voxel',
+      note: `checked on the ${fmtCount(n)}-point display sample (voxel centroids); not run on the full cloud`,
+    };
+  }
+  const declared = cloud.declaredPointCount;
+  if (declared !== undefined && declared > n) {
+    return {
+      kind: 'stride',
+      note: `checked on the ${fmtCount(n)}-point display sample (1-in-${cloud.loadStride ?? '?'} stride); not run on the full cloud`,
+    };
+  }
+  return { kind: 'full', note: '' };
+}
+
 function checkDuplicatePoints(cloud: PointCloud): AnalysisRow {
   const n = cloud.pointCount;
   if (n === 0) {
@@ -276,10 +305,17 @@ function checkDuplicatePoints(cloud: PointCloud): AnalysisRow {
       status: 'warn',
     };
   }
+  // A clean scan of voxel centroids is a property of the sampler, not of the
+  // file (one averaged point per voxel cannot collide), so it is reported as
+  // a neutral fact with its basis rather than a pass.
+  const basis = sampleBasis(cloud);
+  if (basis.kind === 'full') {
+    return { label: 'Duplicate Points', value: 'None', status: 'pass' };
+  }
   return {
     label: 'Duplicate Points',
-    value: 'None',
-    status: 'pass',
+    value: `None — ${basis.note}`,
+    status: basis.kind === 'voxel' ? 'info' : 'pass',
   };
 }
 
@@ -316,10 +352,16 @@ function checkStrayOutliers(cloud: PointCloud): AnalysisRow {
       status: 'warn',
     };
   }
+  // Voxel averaging suppresses exactly the isolated points this check looks
+  // for, so a clean result over centroids is disclosed, not passed.
+  const basis = sampleBasis(cloud);
+  if (basis.kind === 'full') {
+    return { label: 'Stray Outliers', value: 'None', status: 'pass' };
+  }
   return {
     label: 'Stray Outliers',
-    value: 'None',
-    status: 'pass',
+    value: `None — ${basis.note}`,
+    status: basis.kind === 'voxel' ? 'info' : 'pass',
   };
 }
 
