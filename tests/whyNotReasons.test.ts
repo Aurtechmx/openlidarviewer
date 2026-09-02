@@ -118,13 +118,13 @@ describe('explainLimitations', () => {
     // tally-metric phrasing ("a long interpolation from real returns"). NOTE:
     // q here is the gate report, so q.edgeRiskRatio is actually the gate's
     // cell-status tally (dtmCellStatus 'edgeRisk'), not
-    // cellMetrics.boundaryMeasuredRatio as this comment once claimed; the
-    // engine reads the gate figure while wording it as the boundary metric.
-    // Reconciling figure and phrasing is a separate behaviour-changing fix
-    // (see the matching note in whyNotReasons.ts).
+    // cellMetrics.boundaryMeasuredRatio as this comment once claimed. The
+    // cause now describes the gate figure it reads, and must not borrow the
+    // boundary-share wording terrainAssessment uses for the other quantity.
     const r = fixture({ edgeRiskRatio: 0.53 });
     expect(causeText(r)).not.toMatch(/long interpolation/i);
-    expect(causeText(r)).toMatch(/53% of measured cells sit at the edge of the data/);
+    expect(causeText(r)).not.toMatch(/of measured cells/);
+    expect(causeText(r)).toMatch(/53% of the covered surface is interpolated at a long reach from any measured cell/);
   });
 
   it('low ground visibility / low confidence → ground-visibility cause + fix', () => {

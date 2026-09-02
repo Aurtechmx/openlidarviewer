@@ -336,8 +336,11 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     // MEASURED cells that sit within a couple of cells of the data boundary.
     // Those cells HAVE real returns; they are just least supported by
     // neighbours. The gate's tally of interpolated cells far from any
-    // measurement (dtmCellStatus 'edgeRisk') is a different quantity.
-    if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of measured cells sit at the edge of the data, where the surface is least supported`);
+    // measurement (dtmCellStatus 'edgeRisk') is a different quantity and
+    // gets its own wording in whyNotReasons; the two sentences used to be
+    // identical, so a report could show 79% here and 7% there under one
+    // description.
+    if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of measured cells lie within a few cells of the data boundary, where neighbour support is thinnest`);
     if (density < LOW_DENSITY_PER_M2) caps.push('ground returns are sparse');
     if (coverageMode === 'resident-only') {
       // PARTIAL STREAM: lead with the honest "only part has loaded" framing, not
