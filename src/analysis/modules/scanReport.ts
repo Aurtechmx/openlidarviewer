@@ -6,11 +6,8 @@ import type { SpatialContext } from '../../geo/SpatialContext';
 import { spatialContextFrom } from '../../geo/SpatialContext';
 import { isZUpFormat } from '../../io/sniffFormat';
 import { heightLabel } from '../../geo/height';
-import {
-  estimateInMemoryPrecision,
-  formatPrecisionMetres,
-  precisionGradeLabel,
-} from '../../geo/inMemoryPrecision';
+import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
+import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
 
 function rowInfo(label: string, value: string): AnalysisRow {
   return { label, value, status: 'info' };
@@ -280,31 +277,10 @@ export const scanReport: AnalysisModule = {
         verticalUnitToMetres: zUp ? ctx.verticalUnitToMetres : undefined,
       },
     });
-    const pm = precision.metres;
+    // Both rows come from the one formatter the streaming report also uses, so
+    // the two paths cannot describe the same Float32 policy in different words.
     rows.push(
-      pm
-        ? {
-            label: 'In-memory resolution',
-            value:
-              `${formatPrecisionMetres(pm.worstCaseSpacing)} worst case, `
-              + `${formatPrecisionMetres(pm.typicalSpacing)} mean over the reach `
-              + `(${precisionGradeLabel(precision.grade)})`,
-            status: precision.grade === 'fine' ? 'info' : 'warn',
-          }
-        : rowWarn(
-            'In-memory resolution',
-            `${precision.worstCaseSpacing.toPrecision(3)} (source units) worst case — `
-              + 'no linear unit declared, not graded',
-          ),
-      {
-        label: 'Quantization basis',
-        value:
-          `Float32 positions, ${precision.governingAxis} axis, `
-          + `${precision.reach.toFixed(0)} source units from the local origin `
-          + `(${precision.localOrigin.map((n) => n.toFixed(0)).join(', ')})`,
-        status: 'info',
-        advanced: true,
-      },
+      ...inMemoryPrecisionRows(precision),
       // Attribute coverage.
       rowInfo('RGB', cloud.colors !== undefined ? 'Yes' : 'No'),
       rowInfo('Intensity', cloud.intensity !== undefined ? 'Yes' : 'No'),

@@ -278,7 +278,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
 // streaming clouds expose `.crs()` returning the same shape.
 import type { CrsLinearUnit } from './io/crs';
-import { streamingExtentRows } from './analysis/streamingExtentRows';
+import { streamingExtentRows, streamingProvenanceRows, streamingReportBasisRow, streamingStructureRows } from './app/streamingScanReport';
 import { CrsService } from './geo/CrsService';
 import { verticalMetresPerUnit } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines } from './app/epochFramePrep';
@@ -4089,18 +4089,25 @@ function syncInspectClassScope(): void {
  * modules can't run as-is. We instead pull the equivalent facts directly
  * from the streaming source's header + COPC info / EPT schema, which
  * carry everything the report needs: total point count, source-declared
- * bounds, spacing, octree depth, and the LAS VLR sensor / software
- * strings the provenance classifier already feeds from.
+ * bounds, spacing, octree depth, and the LAS header provenance strings
+ * the provenance classifier already feeds from.
  *
  * The output is intentionally the same `AnalysisRow` shape the static
  * report uses, so the Inspector's Scan-report section renders uniformly
  * and the PDF Report Engine can consume it without a separate code path.
+ *
+ * Every row whose wording is a CLAIM — the unit on a length, the name of a
+ * LAS header field, the Float32 step the coordinates are stored on — is
+ * built in `app/streamingScanReport.ts` against the resolved frame this
+ * shell reads once, so it says what the static Scan Report says about the
+ * same file. This function stays the assembler.
  */
 function runStreamingModules(cloud: {
   readonly kind: StreamingSourceKind;
   readonly name: string;
   readonly sourcePointCount: number | null; // null where the format states no total: a tileset declares none, and its per-tile figures are decode-admission estimates rather than counts
   readonly localBounds?: () => readonly [number, number, number, number, number, number];
+  readonly renderOrigin?: readonly [number, number, number]; // the Float64 origin the decoder subtracts; absent on a source that exposes none, and then no precision row is minted
   readonly metadata?: {
     readonly header?: {
       min: readonly [number, number, number];
@@ -4110,6 +4117,7 @@ function runStreamingModules(cloud: {
     readonly info?: { spacing?: number };
     readonly captureSensor?: string;
     readonly sourceSoftware?: string;
+    readonly captureDate?: string;
   };
   readonly crs?: () => { readonly linearUnit?: CrsLinearUnit; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number } | null;
   readonly maxDepth?: () => number;
@@ -4130,6 +4138,9 @@ function runStreamingModules(cloud: {
   };
 
   rows.push(info('Source', streamingSourceLabel(cloud.kind)));
+  // Said once, before any figure: every number below is a source DECLARATION,
+  // not a count of what is decoded and on the GPU right now.
+  rows.push(streamingReportBasisRow());
   if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
   // An absent total is reported as absent: a zero, or a summed per-tile estimate, would each read as a figure the source stands behind.
   rows.push(cloud.sourcePointCount === null ? info('Source point count', 'not stated by the source') : headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
@@ -4161,27 +4172,16 @@ function runStreamingModules(cloud: {
     }
   }
 
-  // Streaming-specific: octree structure.
-  if (cloud.metadata?.info?.spacing !== undefined) {
-    rows.push(info('Octree root spacing', `${cloud.metadata.info.spacing.toFixed(2)} m`));
-  }
-  if (cloud.maxDepth) {
-    try { rows.push(info('Octree depth', String(cloud.maxDepth()))); }
-    catch { /* defensive — depth not always computable mid-load */ }
-  }
-  if (cloud.octree) {
-    try { rows.push(info('Octree nodes', cloud.octree.nodes().length.toLocaleString('en-US'))); }
-    catch { /* defensive */ }
-  }
+  // Streaming-specific: the octree structure, and the Float32 in-memory
+  // resolution the static report already discloses. The spacing unit and the
+  // precision measurement are decided against the same resolved frame the
+  // extent block reads, and both fail closed on an unconfirmed unit.
+  rows.push(...streamingStructureRows(cloud, crsService.context()));
 
-  // Provenance metadata mirrored from the LAS VLRs the COPC header
-  // carries — same fields the static report shows.
-  if (cloud.metadata?.captureSensor) {
-    rows.push(info('Capture Sensor', cloud.metadata.captureSensor));
-  }
-  if (cloud.metadata?.sourceSoftware) {
-    rows.push(info('Source Software', cloud.metadata.sourceSoftware));
-  }
+  // Header provenance, labelled by what each LAS field IS — the same labels
+  // the static Scan Report uses, so the same file is never described two ways
+  // depending on how it was opened.
+  rows.push(...streamingProvenanceRows(cloud.metadata));
 
   return rows;
 }
