@@ -1,0 +1,34 @@
+{
+  "$schemaNote": "Authoritative acquisition provenance for the E5 collections, derived from USGS 3DEP WESM (Work-unit Extent Spatial Metadata). This is the provider's own record of when each work unit was flown and in which frame; it is not the raw CSV. The local WESM.csv (~2 MB) is not vendored, so only the acquisition-relevant fields for the two pinned collections are recorded here. Dates are the WESM collect_start/collect_end, canonicalised to ISO. acquisitionYear is a single integer only when the whole collection window falls in one calendar year; a window that crosses a year boundary is left null (ambiguous per tile) and the window is carried by collectStart/collectEnd. This ledger changes only provenance fields; it never enters any collectionDigest.",
+  "source": "USGS 3DEP WESM (Work-unit Extent Spatial Metadata)",
+  "collections": [
+    {
+      "collectionId": "ROGUE25",
+      "projectId": 182543,
+      "workunits": ["OR_RogueRiverSiskiyouNF_B1_2019"],
+      "collectStart": "2019-10-05",
+      "collectEnd": "2019-10-10",
+      "acquisitionYear": 2019,
+      "ql": "QL 1",
+      "horizontalEpsg": 6339,
+      "verticalEpsg": 5703,
+      "geoidModel": "GEOID12B",
+      "source": "USGS 3DEP WESM (Work-unit Extent Spatial Metadata)",
+      "sourceNote": "Authoritative provider acquisition manifest. Single work unit, collected 2019-10-05..2019-10-10 — one calendar year, so acquisitionYear is unambiguously 2019."
+    },
+    {
+      "collectionId": "HOUSTON17",
+      "projectId": 300203,
+      "workunits": ["TX_Houston_1_B24", "TX_Houston_2_B24", "TX_Houston_3_B24"],
+      "collectStart": "2024-02-18",
+      "collectEnd": "2025-01-31",
+      "acquisitionYear": null,
+      "ql": "QL 1",
+      "horizontalEpsg": 6344,
+      "verticalEpsg": 5703,
+      "geoidModel": "GEOID18",
+      "source": "USGS 3DEP WESM (Work-unit Extent Spatial Metadata)",
+      "sourceNote": "Authoritative provider acquisition manifest. The tiles verify homogeneous at horiz_crs 6344 / GEOID18, which selects work units 1-3 of project TX_Houston_B24; unit 4 (horiz_crs 6343 / GEOID12B) is a different frame and is excluded. The units 1-3 window spans 2024-02-18..2025-01-31 — two calendar years — so acquisitionYear is left null and the window is authoritative."
+    }
+  ]
+}

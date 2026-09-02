@@ -33,8 +33,18 @@
       2021
     ],
     "acquisitionYears": [
-      null
-    ]
+      2019
+    ],
+    "acquisition": {
+      "acquisitionStart": "2019-10-05",
+      "acquisitionEnd": "2019-10-10",
+      "acquisitionSource": "usgs-wesm",
+      "projectId": 182543,
+      "workunits": [
+        "OR_RogueRiverSiskiyouNF_B1_2019"
+      ],
+      "ql": "QL 1"
+    }
   },
   "tiles": [
     {
@@ -70,8 +80,8 @@
       "groundPointFraction": 0.101884,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 15,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3746.laz",
@@ -106,8 +116,8 @@
       "groundPointFraction": 0.0392,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 15,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3846.laz",
@@ -142,8 +152,8 @@
       "groundPointFraction": 0.04878,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 19,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3847.laz",
@@ -178,8 +188,8 @@
       "groundPointFraction": 0.040679,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4544.laz",
@@ -214,8 +224,8 @@
       "groundPointFraction": 0.044709,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4643.laz",
@@ -250,8 +260,8 @@
       "groundPointFraction": 0.044398,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4647.laz",
@@ -286,8 +296,8 @@
       "groundPointFraction": 0.058578,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4648.laz",
@@ -322,8 +332,8 @@
       "groundPointFraction": 0.059921,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4849.laz",
@@ -359,8 +369,8 @@
       "groundPointFraction": 0.063137,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4853.laz",
@@ -395,8 +405,8 @@
       "groundPointFraction": 0.085954,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5450.laz",
@@ -431,8 +441,8 @@
       "groundPointFraction": 0.06804,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5458.laz",
@@ -467,8 +477,8 @@
       "groundPointFraction": 0.073388,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5959.laz",
@@ -503,8 +513,8 @@
       "groundPointFraction": 0.050155,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6151.laz",
@@ -539,8 +549,8 @@
       "groundPointFraction": 0.049175,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6152.laz",
@@ -577,8 +587,8 @@
       "groundPointFraction": 0.048529,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6159.laz",
@@ -613,8 +623,8 @@
       "groundPointFraction": 0.035372,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6161.laz",
@@ -649,8 +659,8 @@
       "groundPointFraction": 0.037127,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6252.laz",
@@ -687,8 +697,8 @@
       "groundPointFraction": 0.080489,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6265.laz",
@@ -724,8 +734,8 @@
       "groundPointFraction": 0.042267,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6455.laz",
@@ -760,8 +770,8 @@
       "groundPointFraction": 0.025921,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6470.laz",
@@ -796,8 +806,8 @@
       "groundPointFraction": 0.073713,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6564.laz",
@@ -832,8 +842,8 @@
       "groundPointFraction": 0.040603,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6762.laz",
@@ -868,8 +878,8 @@
       "groundPointFraction": 0.041221,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM7851.laz",
@@ -904,8 +914,8 @@
       "groundPointFraction": 0.077931,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM8061.laz",
@@ -940,8 +950,8 @@
       "groundPointFraction": 0.035187,
       "fileCreationYear": 2021,
       "fileCreationDayOfYear": 12,
-      "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionYear": 2019,
+      "acquisitionDateSource": "usgs-wesm"
     }
   ]
 }

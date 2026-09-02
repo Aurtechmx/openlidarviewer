@@ -36,7 +36,19 @@
     ],
     "acquisitionYears": [
       null
-    ]
+    ],
+    "acquisition": {
+      "acquisitionStart": "2024-02-18",
+      "acquisitionEnd": "2025-01-31",
+      "acquisitionSource": "usgs-wesm",
+      "projectId": 300203,
+      "workunits": [
+        "TX_Houston_1_B24",
+        "TX_Houston_2_B24",
+        "TX_Houston_3_B24"
+      ],
+      "ql": "QL 1"
+    }
   },
   "tiles": [
     {
@@ -75,7 +87,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260194.laz",
@@ -113,7 +125,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260195.laz",
@@ -151,7 +163,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260196.laz",
@@ -189,7 +201,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260197.laz",
@@ -227,7 +239,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260198.laz",
@@ -265,7 +277,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM260199.laz",
@@ -303,7 +315,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261193.laz",
@@ -341,7 +353,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261194.laz",
@@ -379,7 +391,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261195.laz",
@@ -417,7 +429,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261196.laz",
@@ -455,7 +467,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261197.laz",
@@ -493,7 +505,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261198.laz",
@@ -531,7 +543,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM261199.laz",
@@ -569,7 +581,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM262193.laz",
@@ -605,7 +617,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM262194.laz",
@@ -643,7 +655,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     },
     {
       "basename": "USGS_LPC_TX_Houston_B24_15RTM262195.laz",
@@ -681,7 +693,7 @@
       "fileCreationYear": 2025,
       "fileCreationDayOfYear": 175,
       "acquisitionYear": null,
-      "acquisitionDateSource": "not-established"
+      "acquisitionDateSource": "usgs-wesm"
     }
   ]
 }

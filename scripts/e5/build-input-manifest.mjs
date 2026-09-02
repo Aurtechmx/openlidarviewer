@@ -19,8 +19,15 @@
  */
 import { readdirSync, readFileSync, writeFileSync, statSync, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve, basename, join } from 'node:path';
+import { resolve, basename, join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+// Authoritative acquisition provenance (USGS 3DEP WESM), derived from WESM.csv
+// which is not vendored. The LAS header carries no acquisition date, so the ONLY
+// acquisition source is this ledger — never the filename or a LAS creation stamp.
+const WESM_LEDGER = resolve(HERE, '../../validation/e5/manifests/wesm-acquisition.json');
 
 const [, , dir, collectionId, role, out] = process.argv;
 if (!dir || !collectionId || !role || !out) {
@@ -83,6 +90,51 @@ function readHeader(path) {
   };
 }
 
+/**
+ * Look up the authoritative WESM acquisition entry for a collection. Returns the
+ * matching ledger entry, or null when the collection is not in the ledger (then
+ * acquisition stays the explicit `not-established` unknown from the header pass).
+ */
+function wesmEntryFor(collectionId) {
+  let ledger;
+  try {
+    ledger = JSON.parse(readFileSync(WESM_LEDGER, 'utf8'));
+  } catch {
+    return null;
+  }
+  const found = (ledger.collections ?? []).find((c) => c.collectionId === collectionId);
+  return found ?? null;
+}
+
+/**
+ * Merge WESM acquisition provenance into the tiles + summary. Only the
+ * acquisition fields change: acquisitionYear (single integer only when the whole
+ * collection window is one calendar year, else null) and acquisitionDateSource,
+ * plus a summary-level acquisition block carrying the authoritative window,
+ * project id, work units and QL. Never touches sha256/EPSG/geoid/counts, so the
+ * collectionDigest is unaffected.
+ */
+function mergeWesmAcquisition(tiles, summary, collectionId) {
+  const e = wesmEntryFor(collectionId);
+  if (!e) {
+    process.stderr.write(`  (no WESM entry for ${collectionId}; acquisition left not-established)\n`);
+    return;
+  }
+  for (const t of tiles) {
+    t.acquisitionYear = e.acquisitionYear ?? null;
+    t.acquisitionDateSource = 'usgs-wesm';
+  }
+  summary.acquisitionYears = [e.acquisitionYear ?? null];
+  summary.acquisition = {
+    acquisitionStart: e.collectStart,
+    acquisitionEnd: e.collectEnd,
+    acquisitionSource: 'usgs-wesm',
+    projectId: e.projectId,
+    workunits: e.workunits,
+    ql: e.ql,
+  };
+}
+
 const files = readdirSync(dir).filter((f) => /\.la[sz]$/i.test(f)).sort();
 if (files.length === 0) {
   console.error(`no LAS/LAZ files in ${dir}`);
@@ -128,6 +180,11 @@ const summary = {
     uniq((t) => t.verticalEpsg).length === 1 &&
     uniq((t) => t.geoidModel).length === 1,
 };
+
+// Overlay authoritative WESM acquisition provenance (offline; from the ledger,
+// not the LAS headers). Keeps a regenerated manifest consistent with the
+// committed one on the acquisition fields.
+mergeWesmAcquisition(tiles, summary, collectionId);
 
 const manifest = {
   $schemaNote:

@@ -19,6 +19,17 @@
  * acquisitionYear is present (possibly null) with an acquisitionDateSource, and
  * the summary never relabels a creation year as an acquisition year.
  *
+ * A non-null acquisitionYear must name an authoritative acquisitionDateSource
+ * (the WESM provider manifest), never the `not-established` placeholder — a year
+ * is only ever recorded when the provider established it.
+ *
+ * When the WESM acquisition ledger is supplied, the verifier cross-checks it
+ * against the manifest: the authoritative horizontal/vertical EPSG and geoid must
+ * equal the manifest's single homogeneous frame (this is what proves the Houston
+ * collection is work units 1-3 at 6344 / GEOID18, not unit 4 at 6343 / GEOID12B),
+ * every tile's acquisitionYear equals the ledger year, and any summary acquisition
+ * block agrees with the ledger's window, project id, work units and QL.
+ *
  * A missing manifest file is a loud failure, never a silent pass.
  */
 import { readFileSync } from 'node:fs';
@@ -37,6 +48,9 @@ export const EXPECTED = {
 };
 
 const HEX64 = /^[0-9a-f]{64}$/;
+
+/** Acquisition sources the gate accepts for a non-null acquisitionYear. */
+export const AUTHORITATIVE_ACQ_SOURCES = new Set(['usgs-wesm']);
 
 /** tileId is the last underscore-delimited token of the basename (sans .la[sz]). */
 export function tileIdOf(basename) {
@@ -57,7 +71,7 @@ export function collectionDigestOf(tiles) {
  * Check one parsed manifest. Returns { ok, errors[], summary }. Pure: no I/O,
  * so tests can feed crafted objects.
  */
-export function verifyManifest(manifest, { expectedCount } = {}) {
+export function verifyManifest(manifest, { expectedCount, wesm } = {}) {
   const errors = [];
   const fail = (m) => errors.push(m);
 
@@ -138,6 +152,13 @@ export function verifyManifest(manifest, { expectedCount } = {}) {
     }
     if (typeof t.acquisitionDateSource !== 'string' || t.acquisitionDateSource === '') {
       fail(`${b}: acquisitionDateSource is required`);
+    } else if (Number.isInteger(t.acquisitionYear) && !AUTHORITATIVE_ACQ_SOURCES.has(t.acquisitionDateSource)) {
+      // A recorded year must come from an authoritative provider, never the
+      // not-established placeholder or any other unestablished source.
+      fail(
+        `${b}: acquisitionYear ${t.acquisitionYear} needs an authoritative acquisitionDateSource ` +
+          `(one of ${[...AUTHORITATIVE_ACQ_SOURCES].join(', ')}), got "${t.acquisitionDateSource}"`,
+      );
     }
   }
 
@@ -219,6 +240,56 @@ export function verifyManifest(manifest, { expectedCount } = {}) {
     }
   }
 
+  // WESM ledger cross-check: the authoritative provider frame must equal the
+  // manifest's single homogeneous frame, and the recorded acquisition must match
+  // the ledger. Only runs when a ledger entry is supplied.
+  if (wesm && typeof wesm === 'object') {
+    const single = (sel, label, expected) => {
+      const set = new Set(tiles.map(sel));
+      if (!(set.size === 1 && set.has(expected))) {
+        fail(`WESM ${label} mismatch: ledger ${expected}, members [${[...set].join(', ')}]`);
+      }
+    };
+    single((t) => t.horizontalEpsg, 'horizontalEpsg', wesm.horizontalEpsg);
+    single((t) => t.verticalEpsg, 'verticalEpsg', wesm.verticalEpsg);
+    single((t) => t.geoidModel, 'geoidModel', wesm.geoidModel);
+
+    const ledgerYear = wesm.acquisitionYear ?? null;
+    for (const t of tiles) {
+      const y = t.acquisitionYear ?? null;
+      if (y !== ledgerYear) {
+        fail(`${t.basename ?? '(no basename)'}: acquisitionYear ${y} ≠ WESM ledger ${ledgerYear}`);
+      }
+    }
+    if (summary && Array.isArray(summary.acquisitionYears)) {
+      const ay = summary.acquisitionYears;
+      if (!(ay.length === 1 && (ay[0] ?? null) === ledgerYear)) {
+        fail(`summary.acquisitionYears ${JSON.stringify(ay)} ≠ WESM ledger [${ledgerYear}]`);
+      }
+    }
+    const acq = summary && summary.acquisition;
+    if (acq && typeof acq === 'object') {
+      if (acq.acquisitionSource !== 'usgs-wesm') {
+        fail(`summary.acquisition.acquisitionSource must be "usgs-wesm", got "${acq.acquisitionSource}"`);
+      }
+      if (acq.projectId !== wesm.projectId) {
+        fail(`summary.acquisition.projectId ${acq.projectId} ≠ WESM ledger ${wesm.projectId}`);
+      }
+      if (acq.ql !== wesm.ql) fail(`summary.acquisition.ql "${acq.ql}" ≠ WESM ledger "${wesm.ql}"`);
+      if (acq.acquisitionStart !== wesm.collectStart) {
+        fail(`summary.acquisition.acquisitionStart "${acq.acquisitionStart}" ≠ WESM ledger "${wesm.collectStart}"`);
+      }
+      if (acq.acquisitionEnd !== wesm.collectEnd) {
+        fail(`summary.acquisition.acquisitionEnd "${acq.acquisitionEnd}" ≠ WESM ledger "${wesm.collectEnd}"`);
+      }
+      const lw = Array.isArray(wesm.workunits) ? wesm.workunits : [];
+      const aw = Array.isArray(acq.workunits) ? acq.workunits : [];
+      if (aw.length !== lw.length || aw.some((w, i) => w !== lw[i])) {
+        fail(`summary.acquisition.workunits [${aw.join(', ')}] ≠ WESM ledger [${lw.join(', ')}]`);
+      }
+    }
+  }
+
   return {
     ok: errors.length === 0,
     errors,
@@ -231,9 +302,28 @@ export function verifyManifest(manifest, { expectedCount } = {}) {
   };
 }
 
+/** The authoritative WESM acquisition ledger, keyed by collectionId. */
+export const WESM_LEDGER = resolve(MANIFEST_DIR, 'wesm-acquisition.json');
+
+/** Load the WESM ledger as a collectionId→entry map. A missing/broken ledger is
+ * a loud failure — the acquisition cross-check depends on it. */
+export function loadWesmLedger(path = WESM_LEDGER) {
+  const ledger = JSON.parse(readFileSync(path, 'utf8'));
+  const map = new Map();
+  for (const c of ledger.collections ?? []) map.set(c.collectionId, c);
+  return map;
+}
+
 /** Read + verify every pinned manifest. Returns true when all pass. */
 export function verifyAll(dir = MANIFEST_DIR) {
   let allOk = true;
+  let wesmMap;
+  try {
+    wesmMap = loadWesmLedger(resolve(dir, 'wesm-acquisition.json'));
+  } catch (e) {
+    console.error(`FAIL: cannot read WESM acquisition ledger — ${e.message}`);
+    return false;
+  }
   for (const [id, { file, expectedCount }] of Object.entries(EXPECTED)) {
     const path = resolve(dir, file);
     let manifest;
@@ -244,7 +334,13 @@ export function verifyAll(dir = MANIFEST_DIR) {
       allOk = false;
       continue;
     }
-    const { ok, errors, summary } = verifyManifest(manifest, { expectedCount });
+    const wesm = wesmMap.get(id);
+    if (!wesm) {
+      console.error(`FAIL ${id}: no WESM ledger entry for this collection`);
+      allOk = false;
+      continue;
+    }
+    const { ok, errors, summary } = verifyManifest(manifest, { expectedCount, wesm });
     if (ok) {
       console.log(
         `PASS ${id}: ${summary.tiles} tiles, digest ok, ` +
