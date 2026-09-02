@@ -21,6 +21,7 @@ import type { ProvenanceCardModel } from '../render/scanCapability';
 import type { ColorMode } from '../render/colorModes';
 import {
   buildColorChipModel,
+  buildColorChipNote,
   COVERAGE_DISABLED_TITLE,
   ANALYSIS_GATED_MODES,
 } from './colorChipModel';
@@ -1760,11 +1761,13 @@ export class Inspector {
       this._chips.append(chip);
     }
     // Surface the gate reason in the flow (visible on touch, where the chip's
-    // hover-only `title` never appears).
-    this._chipsNote.textContent = anyGatedDisabled
-      ? `${COVERAGE_DISABLED_TITLE} to enable Coverage and Confidence.`
-      : '';
-    this._chipsNote.classList.toggle('olv-hidden', !anyGatedDisabled);
+    // hover-only `title` never appears), and qualify a derived colour whenever
+    // one is active. The provenance line comes first: it describes what the
+    // analyst is looking at right now, while the gate note describes a mode
+    // they cannot select yet.
+    const note = buildColorChipNote(this._activeMode, anyGatedDisabled);
+    this._chipsNote.textContent = note;
+    this._chipsNote.classList.toggle('olv-hidden', note === '');
     // Initial visibility for the trim row — track the active mode.
     this._heightTrimRow.classList.toggle('olv-hidden', this._activeMode !== 'elevation');
     this._syncProjectScaleRow();

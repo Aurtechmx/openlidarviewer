@@ -12,6 +12,7 @@
  */
 
 import type { ColorMode } from '../render/colorModes';
+import { isDerivedColorMode, DERIVED_COLOR_NOTE } from '../render/colorModeProvenance';
 
 /** Tooltip shown on a gated chip while it is disabled (no analysis yet). */
 export const COVERAGE_DISABLED_TITLE = 'Run terrain analysis first';
@@ -62,4 +63,24 @@ export function buildColorChipModel(
     });
   }
   return out;
+}
+
+/**
+ * The note shown beneath the rail: a provenance qualifier while a derived
+ * colour is active, and the gate reason while Coverage and Confidence are
+ * unavailable. Either, both, or neither.
+ *
+ * The provenance line comes first because it describes what the analyst is
+ * looking at now, whereas the gate note describes a mode they cannot select
+ * yet. Both are surfaced in the flow rather than only as a chip `title`, which
+ * never appears on touch.
+ *
+ * Returns an empty string when there is nothing to say, so the caller can key
+ * the row's visibility off the result.
+ */
+export function buildColorChipNote(activeMode: ColorMode, anyGatedDisabled: boolean): string {
+  const notes: string[] = [];
+  if (isDerivedColorMode(activeMode)) notes.push(DERIVED_COLOR_NOTE);
+  if (anyGatedDisabled) notes.push(`${COVERAGE_DISABLED_TITLE} to enable Coverage and Confidence.`);
+  return notes.join(' ');
 }
