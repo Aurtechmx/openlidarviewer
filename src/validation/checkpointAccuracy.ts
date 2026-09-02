@@ -256,22 +256,39 @@ export interface AccuracyStats {
    */
   readonly combinedRmse: number | null;
   readonly uncertaintyCombinationId: string | null;
-  /** Quadratic mean of the stated reference sigmas, or null when none were stated. */
+  /**
+   * Quadratic mean of the stated reference sigmas, or null unless every
+   * checkpoint in the group carried a usable sigma. Reported only at full
+   * coverage: a quadratic mean over a subset combined against an observed RMSE
+   * over the whole group is a population mismatch, so partial and unestablished
+   * coverage both leave it null.
+   */
   readonly referenceRmse: number | null;
+  /** Number of checkpoints in the group that carried a usable 1-sigma reference. */
+  readonly referenceUncertaintyCount: number;
+  /**
+   * Fraction of the group that carried a usable 1-sigma reference
+   * (`referenceUncertaintyCount / n`), or null when the group is empty.
+   */
+  readonly referenceUncertaintyCoverage: number | null;
   /**
    * Whether the reference uncertainty could be established for this group.
    *
-   * - `none-stated`: the survey stated no reference uncertainty. `referenceRmse`
+   * - `none-stated`: no checkpoint stated a reference uncertainty. `referenceRmse`
    *   is null.
-   * - `established`: every stated reference uncertainty had a meaning that
-   *   justifies a 1-sigma value, so `referenceRmse` is the quadratic mean of
-   *   those sigmas and a combined RMSE can be produced.
+   * - `established`: every checkpoint carried a usable 1-sigma reference (full
+   *   coverage), so `referenceRmse` is the quadratic mean of those sigmas and a
+   *   combined RMSE can be produced.
+   * - `partial`: some but not all checkpoints carried a usable sigma. A
+   *   referenceRmse over that subset cannot be combined against an observed RMSE
+   *   over all n without mismatching populations, so `referenceRmse` and
+   *   `combinedRmse` are null and the fit RMSE stands alone.
    * - `not-established`: at least one checkpoint stated a reference uncertainty
    *   whose meaning does not justify a sigma (`unknown`/`manufacturer-bound`).
    *   `referenceRmse` and `combinedRmse` are null: the fit RMSE stands alone and
    *   is not combined against a reference uncertainty that was never established.
    */
-  readonly referenceUncertaintyState: 'none-stated' | 'established' | 'not-established';
+  readonly referenceUncertaintyState: 'none-stated' | 'established' | 'partial' | 'not-established';
 }
 
 export interface StratumAccuracy {
@@ -344,6 +361,8 @@ const EMPTY_STATS: AccuracyStats = {
   combinedRmse: null,
   uncertaintyCombinationId: null,
   referenceRmse: null,
+  referenceUncertaintyCount: 0,
+  referenceUncertaintyCoverage: null,
   referenceUncertaintyState: 'none-stated',
 };
 
@@ -384,19 +403,36 @@ function statsOf(
     standardError = Math.sqrt(ss / (n - 1)) / Math.sqrt(n);
   }
 
-  // A reference uncertainty of unknown meaning cannot become a sigma, so its
-  // group's referenceRmse is null and its state is not-established: the fit RMSE
-  // is still reported, but nothing is combined against a reference uncertainty
-  // that was never established.
-  const referenceRmse =
-    referenceNotEstablished || sigmas.length === 0
-      ? null
-      : Math.sqrt(sigmas.reduce((acc, s) => acc + s * s, 0) / sigmas.length);
+  // Coverage of the reference uncertainty over the group. sigmaCount counts the
+  // checkpoints that carried a usable 1-sigma reference; the residual population
+  // is n, so partial coverage is the case where some but not all stated one.
+  const sigmaCount = sigmas.length;
+  const referenceUncertaintyCoverage = n > 0 ? sigmaCount / n : null;
+
+  // The state gates in priority order. An unusable meaning
+  // (unknown/manufacturer-bound) fails the whole group closed regardless of how
+  // many usable sigmas the rest carried. Otherwise: no sigma is none-stated,
+  // full coverage is established, and anything between is partial.
+  //
+  // Partial coverage is refused a combined figure on purpose. referenceRmse over
+  // the covered subset combined against the observed RMSE over all n mismatches
+  // populations (RMSE_reference over k vs RMSE_observed over n), so referenceRmse
+  // is produced only at full coverage and combinedRmse follows it to null.
   const referenceUncertaintyState: AccuracyStats['referenceUncertaintyState'] =
-    referenceNotEstablished ? 'not-established' : sigmas.length === 0 ? 'none-stated' : 'established';
-  // No combination, no reference sigma, and an unestablished reference all leave
-  // the combined figure null. Relabelling the observed RMSE as "combined" would
-  // assert a propagation that never happened.
+    referenceNotEstablished
+      ? 'not-established'
+      : sigmaCount === 0
+        ? 'none-stated'
+        : sigmaCount < n
+          ? 'partial'
+          : 'established';
+  const referenceRmse =
+    referenceUncertaintyState === 'established'
+      ? Math.sqrt(sigmas.reduce((acc, s) => acc + s * s, 0) / sigmas.length)
+      : null;
+  // No combination, no reference sigma, partial coverage, and an unestablished
+  // reference all leave the combined figure null. Relabelling the observed RMSE
+  // as "combined" would assert a propagation that never happened.
   const combinedRmse =
     combination && referenceRmse !== null ? combination.combine(rmse, referenceRmse) : null;
 
@@ -415,6 +451,8 @@ function statsOf(
     combinedRmse,
     uncertaintyCombinationId: combinedRmse === null ? null : combination!.id,
     referenceRmse,
+    referenceUncertaintyCount: sigmaCount,
+    referenceUncertaintyCoverage,
     referenceUncertaintyState,
   };
 }
