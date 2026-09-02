@@ -365,6 +365,15 @@ export interface TerrainCore {
   /** Per-cell metric rollup: density, completeness, edge risk. */
   readonly cellMetrics: CellMetricsSummary;
   /** Classified vegetation/building/noise returns dropped before ground filtering. */
+  /**
+   * Share of source returns carrying ASPRS class 0 (created, never classified)
+   * or 1 (unclassified), or null when the scan has no classification at all.
+   * A file can be fully classified in the sense that every point holds a code
+   * and still be almost entirely code 1, which is what a raw airborne tile
+   * usually is; the fitness panel needs the measured share rather than the
+   * mere presence of the attribute.
+   */
+  readonly unclassifiedFraction: number | null;
   readonly excludedByClassification: number;
   /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
   readonly accuracyStandards: DemAccuracyStandards;
@@ -459,6 +468,15 @@ export interface AnalyseContoursResult {
   /** Per-cell metric rollup: density, completeness, edge risk. */
   readonly cellMetrics: CellMetricsSummary;
   /** Classified vegetation/building/noise returns dropped before ground filtering. */
+  /**
+   * Share of source returns carrying ASPRS class 0 (created, never classified)
+   * or 1 (unclassified), or null when the scan has no classification at all.
+   * A file can be fully classified in the sense that every point holds a code
+   * and still be almost entirely code 1, which is what a raw airborne tile
+   * usually is; the fitness panel needs the measured share rather than the
+   * mere presence of the attribute.
+   */
+  readonly unclassifiedFraction: number | null;
   readonly excludedByClassification: number;
   /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
   readonly accuracyStandards: DemAccuracyStandards;
@@ -740,6 +758,19 @@ export function computeTerrainCore(
   // or rooftops. The full cloud is still used for the DSM further down, so
   // above-ground height keeps measuring those very returns.
   const classFilter = excludeNonGroundClasses(points, params.classification, params.excludeClasses);
+  // Measured from the same array the filter reads, so the reported share and
+  // the exclusion tally cannot disagree.
+  const unclassifiedFraction = ((): number | null => {
+    const cls = params.classification;
+    if (cls == null || cls.length === 0) return null;
+    const n = cls.length;
+    let unclassified = 0;
+    for (let i = 0; i < n; i++) {
+      const c = cls[i];
+      if (c === 0 || c === 1) unclassified++;
+    }
+    return n > 0 ? unclassified / n : null;
+  })();
   let groundPts: ReadonlyArray<TerrainPoint> = classFilter.points;
   if (classFilter.excludedCount > 0) {
     warnings.push(
@@ -1193,6 +1224,7 @@ export function computeTerrainCore(
     quality,
     qualityScore,
     cellMetrics,
+    unclassifiedFraction,
     excludedByClassification: classFilter.excludedCount,
     accuracyStandards,
     surface,
@@ -1307,6 +1339,7 @@ export function contoursFromCore(
       qualityScore: core.qualityScore,
       cellMetrics: core.cellMetrics,
       surface: core.surface,
+      unclassifiedFraction: core.unclassifiedFraction,
       excludedByClassification: core.excludedByClassification,
       accuracyStandards: core.accuracyStandards,
       cellStatusTally: core.cellStatusTally,
@@ -1400,6 +1433,7 @@ export function contoursFromCore(
     qualityScore: core.qualityScore,
     cellMetrics: core.cellMetrics,
     surface: core.surface,
+    unclassifiedFraction: core.unclassifiedFraction,
     excludedByClassification: core.excludedByClassification,
     accuracyStandards: core.accuracyStandards,
     cellStatusTally: core.cellStatusTally,
