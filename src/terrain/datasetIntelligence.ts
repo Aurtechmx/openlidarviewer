@@ -147,6 +147,15 @@ export interface DatasetIntelligenceInput {
    */
   readonly bboxVolume?: number;
   /**
+   * Bounding-box spans `[x, y, z]` in METRES. Optional, and only supplied when
+   * the source CRS declares a real linear unit (same fail-closed gate as
+   * `bboxVolume`). With the spans in hand the summariser can tell a flat
+   * airborne swath from a tall interior scan and tier the flat one on points
+   * per footprint m², which is the figure a surveyor reads. Without them the
+   * density reading falls back to the volume-only estimate.
+   */
+  readonly bboxSpansM?: readonly [number, number, number];
+  /**
    * Average resident-neighbour density (points per metre cubed)
    * measured by a sampled pass. Optional — when present
    * it overrides the bbox-derived estimate.
@@ -199,7 +208,16 @@ export interface DerivedComplexity {
 
 /** The summarised, presentation-ready view. */
 export interface DatasetIntelligence {
-  readonly density: { readonly bucket: DensityBucket; readonly label: string };
+  readonly density: {
+    readonly bucket: DensityBucket;
+    readonly label: string;
+    /**
+     * Which measure produced the tier. The card and the scan story name the
+     * row after this, so an areal reading is never presented as a volumetric
+     * one.
+     */
+    readonly basis: DensityBasis;
+  };
   readonly complexity: {
     readonly bucket: ComplexityBucket;
     readonly label: string;
@@ -271,6 +289,130 @@ export function classifyDensity(
   if (candidate < 40) return 'moderate';
   if (candidate < 400) return 'dense';
   return 'very-dense';
+}
+
+/** Which density measure drove a headline density tier. */
+export type DensityBasis = 'areal' | 'volumetric' | 'none';
+
+/**
+ * Tier an AREAL point density (points per m²) using bands aligned to the USGS
+ * 3DEP nominal density floors the rest of the app references (QL2 ≥ 2 pts/m²,
+ * QL1 ≥ 8). The output is a density word, never a quality level: below the QL2
+ * floor is sparse, between the floors moderate, above QL1 dense, and
+ * terrestrial / very low-altitude drone (≳ 50 pts/m²) very dense. Shares
+ * {@link DensityBucket} with {@link classifyDensity} so an areal reading and a
+ * volumetric one speak the same Sparse/Moderate/Dense language. Returns
+ * 'unknown' for a non-finite or non-positive density.
+ */
+export function classifyArealDensity(pointsPerM2: number): DensityBucket {
+  if (!Number.isFinite(pointsPerM2) || pointsPerM2 <= 0) return 'unknown';
+  if (pointsPerM2 < 2) return 'sparse';
+  if (pointsPerM2 < 8) return 'moderate';
+  if (pointsPerM2 < 50) return 'dense';
+  return 'very-dense';
+}
+
+/**
+ * Vertical-to-horizontal span ratio at which a cloud stops reading as flat.
+ * Above it the scene has real vertical structure (an interior, a façade) and
+ * a per-volume density is the meaningful one; below it the scene is a sheet
+ * (an aerial swath, a terrain tile) whose per-volume density is diluted by a
+ * bounding box that is mostly empty air.
+ */
+export const TALL_EXTENT_RATIO = 0.5;
+
+/**
+ * Whether a bounding box counts as TALL under {@link TALL_EXTENT_RATIO}. Spans
+ * are in metres; the comparison uses the SHORTER horizontal span so a long thin
+ * corridor is not called tall just because its narrow axis is small.
+ */
+export function isTallExtent(spanX: number, spanY: number, spanZ: number): boolean {
+  if (!Number.isFinite(spanX) || !Number.isFinite(spanY) || !Number.isFinite(spanZ)) return false;
+  const minHoriz = Math.min(spanX, spanY);
+  return minHoriz > 0 && spanZ > TALL_EXTENT_RATIO * minHoriz;
+}
+
+/** A density tier together with the measure it was judged on. */
+export interface DensityTier {
+  readonly bucket: DensityBucket;
+  readonly basis: DensityBasis;
+}
+
+/**
+ * Pick the headline density tier from the two measures.
+ *
+ * Flat clouds (vertical span much smaller than the footprint) read truest by
+ * AREA: a thin airborne swath spread over a wide extent has a low per-m³
+ * density that misclassifies as sparse even when its pts/m² is a comfortable
+ * QL1. Tall clouds (interiors, façades) read truest by VOLUME. Whichever
+ * measure is missing, the other is used rather than reporting nothing.
+ *
+ * Single source for both the streaming sample grade and the static
+ * header-derived summary, so the two paths cannot drift apart.
+ */
+export function chooseDensityTier(input: {
+  readonly arealDensityPerM2: number | null;
+  readonly volumetricDensityPerM3: number | null;
+  readonly isTall: boolean;
+}): DensityTier {
+  const arealBucket =
+    input.arealDensityPerM2 != null ? classifyArealDensity(input.arealDensityPerM2) : 'unknown';
+  const volumetricBucket =
+    input.volumetricDensityPerM3 != null
+      ? classifyDensity({ residentDensity: input.volumetricDensityPerM3 })
+      : 'unknown';
+  if (!input.isTall && arealBucket !== 'unknown') {
+    return { bucket: arealBucket, basis: 'areal' };
+  }
+  if (volumetricBucket !== 'unknown') {
+    return { bucket: volumetricBucket, basis: 'volumetric' };
+  }
+  if (arealBucket !== 'unknown') {
+    return { bucket: arealBucket, basis: 'areal' };
+  }
+  return { bucket: 'unknown', basis: 'none' };
+}
+
+/**
+ * The density tier the card shows, with the measure behind it.
+ *
+ * An engine-measured `residentDensity` is already a per-m³ figure, so it stays
+ * volumetric. Otherwise, when the bbox SPANS are known in metres, the flat /
+ * tall split above decides: a flat scan is tiered on points per footprint m²,
+ * a tall one on points per m³. With no spans the reading falls back to the
+ * volume-only estimate, unchanged.
+ */
+export function classifyDensityTier(
+  input: Pick<
+    DatasetIntelligenceInput,
+    'pointCount' | 'bboxVolume' | 'residentDensity' | 'bboxSpansM'
+  >,
+): DensityTier {
+  const volumeOnly = (): DensityTier => {
+    const bucket = classifyDensity(input);
+    return { bucket, basis: bucket === 'unknown' ? 'none' : 'volumetric' };
+  };
+  if (input.residentDensity !== undefined && Number.isFinite(input.residentDensity)) {
+    return volumeOnly();
+  }
+  const spans = input.bboxSpansM;
+  const n = input.pointCount;
+  if (spans && n !== undefined && Number.isFinite(n) && n > 0) {
+    const [sx, sy, sz] = spans;
+    if (
+      Number.isFinite(sx) && Number.isFinite(sy) && Number.isFinite(sz) &&
+      sx > 0 && sy > 0 && sz >= 0
+    ) {
+      const footprintM2 = sx * sy;
+      const volumeM3 = footprintM2 * sz;
+      return chooseDensityTier({
+        arealDensityPerM2: footprintM2 > 0 ? n / footprintM2 : null,
+        volumetricDensityPerM3: volumeM3 > 0 ? n / volumeM3 : null,
+        isTall: isTallExtent(sx, sy, sz),
+      });
+    }
+  }
+  return volumeOnly();
 }
 
 /** Human label for a density bucket. */
@@ -474,7 +616,7 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
     input.complexityDerived !== undefined ||
     input.coverageMeta !== undefined;
   if (!hasAnyData) return null;
-  const densityBucket = classifyDensity(input);
+  const densityTier = classifyDensityTier(input);
   // The engine-derived VRM/TPI reading (a real measurement with stated
   // window + units) outranks the heuristic bucket whenever a run supplied it.
   const derived = input.complexityDerived;
@@ -494,7 +636,11 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
     ? `${Math.round(clamp(confidenceRaw, 0, 100))}%`
     : '—';
   return {
-    density: { bucket: densityBucket, label: densityLabel(densityBucket) },
+    density: {
+      bucket: densityTier.bucket,
+      label: densityLabel(densityTier.bucket),
+      basis: densityTier.basis,
+    },
     complexity: derived
       ? { bucket: complexityBucket, label: derived.label, detail: derived.detail }
       : { bucket: complexityBucket, label: complexityLabel(complexityBucket) },

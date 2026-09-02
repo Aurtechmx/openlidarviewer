@@ -17,10 +17,10 @@
  *   • VERTICAL EXTENT — the real min/max Z of the sample, for a height-span read
  *     the header's nominal bounds (which can be padded) doesn't guarantee.
  *
- * The density TIER reuses {@link classifyDensity} (points per cubic metre, the
- * app's existing convention) so a streaming grade and a static grade speak the
- * same language. The back-scale (`samplePointScale`, ≥ 1) lifts the sample's
- * density to the whole cloud, exactly as the preview scales a strided gather.
+ * The density TIER reuses {@link chooseDensityTier} (the shared areal / per-m³
+ * bands) so a streaming grade and a static grade speak the same language. The
+ * back-scale (`samplePointScale`, ≥ 1) lifts the sample's density to the whole
+ * cloud, exactly as the preview scales a strided gather.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic. The honesty label
  * (exhaustive vs sampled, coverage %) is the runner's `coverage`, kept separate
@@ -28,18 +28,24 @@
  *
  * UNIT NOTE: positions are in the source CRS's linear unit. `metresPerUnit`
  * converts spans to metres so the densities read in SI; it defaults to 1
- * (the common projected-metres case). The classifyDensity bands are
+ * (the common projected-metres case). The density bands are
  * deliberately wide, so a modest unit error shifts a number, not a verdict.
  */
 
 import {
-  classifyDensity,
+  chooseDensityTier,
   densityLabel,
+  isTallExtent,
+  type DensityBasis,
   type DensityBucket,
 } from '../../terrain/datasetIntelligence';
 
-/** Which density measure drove the headline tier. */
-export type DensityBasis = 'areal' | 'volumetric' | 'none';
+// The areal band table, the flat/tall split and the tier choice live in
+// datasetIntelligence so the static header-derived card reads a flat swath the
+// same way this grade does. Re-exported here for the callers that already
+// import them from this module.
+export { classifyArealDensity } from '../../terrain/datasetIntelligence';
+export type { DensityBasis };
 
 /** The geometric grade of a decoded full-cloud sample. */
 export interface SampleGrade {
@@ -84,24 +90,6 @@ export interface SampleGrade {
   readonly bucketLabel: string;
   /** Which measure {@link bucket} came from — so the summary labels its unit. */
   readonly bucketBasis: DensityBasis;
-}
-
-/**
- * Tier an AREAL point density (points per m²) using bands aligned to the USGS
- * 3DEP nominal density floors the rest of the app references (QL2 ≥ 2 pts/m²,
- * QL1 ≥ 8). The output is a density word, never a quality level: below the QL2
- * floor is sparse, between the floors moderate, above QL1 dense, and
- * terrestrial / very
- * low-altitude drone (≳ 50 pts/m²) very dense. Reuses {@link DensityBucket} so
- * the streaming grade speaks the same Sparse/Moderate/Dense language as the
- * static path. Returns 'unknown' for a non-finite or non-positive density.
- */
-export function classifyArealDensity(pointsPerM2: number): DensityBucket {
-  if (!Number.isFinite(pointsPerM2) || pointsPerM2 <= 0) return 'unknown';
-  if (pointsPerM2 < 2) return 'sparse';
-  if (pointsPerM2 < 8) return 'moderate';
-  if (pointsPerM2 < 50) return 'dense';
-  return 'very-dense';
 }
 
 /** Minimum points before an occupancy ratio is meaningful rather than noise. */
@@ -211,29 +199,13 @@ export function gradeSampleDensity(
   // ── Choose the headline tier ──
   // Flat clouds (vertical span much smaller than the footprint) read truest by
   // AREA: a thin aerial swath has a low per-m³ density that misclassifies as
-  // sparse. Tall clouds (interiors, façades — vertical span comparable to the
-  // footprint) read truest by VOLUME. The 0.5 threshold splits the two.
-  const minHoriz = Math.min(spanX, spanY);
-  const isTall = minHoriz > 0 && spanZ > 0.5 * minHoriz;
-  const arealBucket = arealDensityPerM2 != null ? classifyArealDensity(arealDensityPerM2) : 'unknown';
-  const volumetricBucket =
-    volumetricDensityPerM3 != null ? classifyDensity({ residentDensity: volumetricDensityPerM3 }) : 'unknown';
-
-  let bucket: DensityBucket;
-  let bucketBasis: DensityBasis;
-  if (!isTall && arealBucket !== 'unknown') {
-    bucket = arealBucket;
-    bucketBasis = 'areal';
-  } else if (volumetricBucket !== 'unknown') {
-    bucket = volumetricBucket;
-    bucketBasis = 'volumetric';
-  } else if (arealBucket !== 'unknown') {
-    bucket = arealBucket;
-    bucketBasis = 'areal';
-  } else {
-    bucket = 'unknown';
-    bucketBasis = 'none';
-  }
+  // sparse. Tall clouds (interiors, façades) read truest by VOLUME. The split
+  // and the bands are shared with the static card (see `chooseDensityTier`).
+  const { bucket, basis: bucketBasis } = chooseDensityTier({
+    arealDensityPerM2,
+    volumetricDensityPerM3,
+    isTall: isTallExtent(spanX, spanY, spanZ),
+  });
 
   return {
     sampledPoints: n,

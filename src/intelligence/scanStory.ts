@@ -25,6 +25,7 @@
  */
 
 import type {
+  DensityBasis,
   DensityBucket,
   GroundVisibilityBucket,
   CoverageBucket,
@@ -55,6 +56,12 @@ export interface ScanStoryInputs {
   readonly products?: readonly StoryProduct[];
   /** Dataset-intelligence buckets. */
   readonly density?: DensityBucket;
+  /**
+   * Which measure the density tier came from. A flat scan is tiered on points
+   * per m², so the row is named for that rather than claiming pts/m³. Absent
+   * reads as volumetric, the historical behaviour.
+   */
+  readonly densityBasis?: DensityBasis;
   readonly groundVisibility?: GroundVisibilityBucket;
   readonly coverageMode?: CoverageBucket | 'unknown';
   /** Georeferencing knowledge. */
@@ -177,6 +184,18 @@ function notEstablished(i: ScanStoryInputs): string[] {
   return out;
 }
 
+/**
+ * The story's density fields from a Dataset Intelligence reading. Kept here so
+ * the bucket and the measure behind it always travel together — a tier shown
+ * without its basis is what lets a pts/m² number get labelled "volumetric".
+ */
+export function densityStoryFields(
+  density: { readonly bucket: DensityBucket; readonly basis: DensityBasis } | undefined,
+): Pick<ScanStoryInputs, 'density' | 'densityBasis'> {
+  if (!density) return {};
+  return { density: density.bucket, densityBasis: density.basis };
+}
+
 export function buildScanStory(i: ScanStoryInputs): ScanStory {
   const area = formatArea(i.areaM2);
   const captureLabel = i.captureLabel ?? 'Point cloud';
@@ -262,7 +281,7 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   if (i.density && i.density !== 'unknown') {
     const label = i.density.replace('-', ' ');
     rows.push({
-      label: 'Volumetric point density',
+      label: i.densityBasis === 'areal' ? 'Areal point density' : 'Volumetric point density',
       value: label.charAt(0).toUpperCase() + label.slice(1),
       tier: i.density === 'sparse' ? 'caution' : 'good',
     });
