@@ -7,8 +7,11 @@
  * coverage mode, source/analyzed point counts, a 0–100 confidence, and
  * ordered warnings.
  *
- * CONFIDENCE IS DERIVED, NEVER ASSERTED. It is computed from observable
- * data support only:
+ * CONFIDENCE IS DERIVED, NEVER ASSERTED. It is a WINDOW-COMPLETENESS
+ * figure computed from observable data support only — how much of the grid
+ * and of each metric window held a valid cell. Interpolated (void-filled)
+ * cells count as valid, so it says nothing about how well those cells
+ * represent the terrain; reports label it "Complexity window completeness".
  *
  *   validFraction     = valid cells / total cells      (void fraction is
  *                       1 − validFraction)

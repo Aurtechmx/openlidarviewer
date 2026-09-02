@@ -193,6 +193,21 @@ export async function buildTerrainReportPdf(
     y -= 10;
   }
 
+  // ── Definitions — the panel's metric tooltips, single-sourced ─────────────
+  if (content.definitions.length > 0) {
+    ensure(34);
+    text('Definitions', M, y, 12, bold, INK);
+    y -= 6;
+    page.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 0.5, color: FRAME });
+    y -= 14;
+    for (const d of content.definitions) {
+      ensure(16);
+      y = drawWrapped(page, font, `- ${d}`, M, y, PW - 2 * M, 9, INK);
+      y -= 3;
+    }
+    y -= 10;
+  }
+
   // ── Provenance footer + the standing not-survey-grade note ───────────────
   // Bottom-anchored on the LAST page from the block's MEASURED height (the old
   // fixed start at M + 78 fit ~12 lines; Methods / Record / Manifest grew the

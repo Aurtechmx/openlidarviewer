@@ -201,3 +201,12 @@ describe('buildTerrainReportPdf — provenance footer stays on the page', () => 
     expect(ops.some((o) => o.page === last && o.text.startsWith('Suitability:'))).toBe(true);
   });
 });
+
+describe('buildTerrainReportPdf — Definitions block', () => {
+  it('prints the panel metric tooltips at the end of the body', async () => {
+    const bytes = await buildTerrainReportPdf(maximalResult(), MAX_OPTS);
+    const ops = await extractTextOps(bytes);
+    expect(ops.some((o) => o.text === 'Definitions')).toBe(true);
+    expect(ops.some((o) => o.text.startsWith('- RMSE'))).toBe(true);
+  });
+});

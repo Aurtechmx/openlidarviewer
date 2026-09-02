@@ -253,7 +253,7 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     const ds = withIntel.sections.find((s) => s.title === 'Dataset Statistics')!;
     const row = (label: string): string =>
       ds.rows.find((r) => r.label === label)?.value ?? '(missing)';
-    expect(row('Point density (class)')).toBe('Dense');
+    expect(row('Volumetric point density (all returns, bounding box)')).toBe('Dense');
     expect(row('Terrain complexity')).toBe('Moderate');
     expect(row('Ground visibility')).toBe('Good');
     expect(row('Metric stability')).toBe('82%');
@@ -262,7 +262,7 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     const without = buildTerrainReportContent(readyResult(), OPTS);
     const dsWithout = without.sections.find((s) => s.title === 'Dataset Statistics')!;
     const labels = dsWithout.rows.map((r) => r.label);
-    expect(labels).not.toContain('Point density (class)');
+    expect(labels).not.toContain('Volumetric point density (all returns, bounding box)');
     expect(labels).not.toContain('Terrain complexity');
     expect(labels).not.toContain('Ground visibility');
     expect(labels).not.toContain('Metric stability');
@@ -506,8 +506,202 @@ describe('buildTerrainReportContent — §19 permit stamp in provenance', () => 
     it('does not reuse the Ground visibility label for the ground return share', () => {
       const c = buildTerrainReportContent(readyResult(), OPTS);
       const cov = c.sections.find((s) => s.title === 'Coverage Analysis');
-      expect(cov?.rows.some((x) => x.label === 'Ground returns (of all returns)')).toBe(true);
+      expect(
+        cov?.rows.some((x) => x.label === 'Ground share of analysed candidates (after class exclusion)'),
+      ).toBe(true);
       expect(cov?.rows.some((x) => x.label === 'Ground visibility')).toBe(false);
     });
+  });
+});
+
+/**
+ * Every row states the basis it is measured against. Reported from a real
+ * report: "Ground returns (of all returns) 35%" was the SMRF ground share of
+ * the analysed candidate sample AFTER class exclusion; "Measured reliability
+ * 76% (|dz| <= 0.66 m)" used the hold-out RMSE itself as the tolerance;
+ * "Ground visibility —" printed a dash for an unknown bucket; the blocked and
+ * random RMSE sat side by side with no bridging text; "Classification
+ * available Yes" said nothing about whether class 2 built the DTM.
+ */
+describe('buildTerrainReportContent — every row names its basis', () => {
+  const section = (c: TerrainReportContent, title: string) =>
+    c.sections.find((s) => s.title === title)!;
+  const rowValue = (c: TerrainReportContent, title: string, label: string) =>
+    section(c, title).rows.find((r) => r.label === label)?.value;
+  const labels = (c: TerrainReportContent, title: string) =>
+    section(c, title).rows.map((r) => r.label);
+
+  it('#1 names the ground share as the analysed-candidate share after class exclusion', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    expect(labels(c, 'Coverage Analysis')).not.toContain('Ground returns (of all returns)');
+    expect(rowValue(c, 'Coverage Analysis', 'Ground share of analysed candidates (after class exclusion)')).toBe('60%');
+  });
+
+  it('#1 prints "class 2 trusted" instead of a meaningless 100% on the trusted path', () => {
+    const base = readyResult();
+    const r = {
+      ...base,
+      generationParams: { ...base.generationParams, despike: false },
+      quality: { ...base.quality, groundPointRatio: 1 },
+    } as AnalyseContoursResult;
+    const c = buildTerrainReportContent(r, OPTS);
+    expect(rowValue(c, 'Coverage Analysis', 'Ground share of analysed candidates (after class exclusion)')).toBe(
+      'class 2 trusted',
+    );
+  });
+
+  it('#2 states that the reliability tolerance IS 1 × the hold-out RMSEz', () => {
+    const base = readyResult();
+    const r = {
+      ...base,
+      reliabilitySplit: {
+        measured: { n: 500, reliability: 0.76, ciLow: 0.75, ciHigh: 0.76, tolerance: 0.66 },
+        interpolated: null,
+      },
+    } as unknown as AnalyseContoursResult;
+    const c = buildTerrainReportContent(r, OPTS);
+    expect(labels(c, 'Quality Metrics')).not.toContain('Measured reliability');
+    expect(rowValue(c, 'Quality Metrics', 'Within 1 × hold-out RMSEz (0.66 m)')).toBe(
+      '76% of measured-cell hold-out residuals (95% CI 75%-76%)',
+    );
+  });
+
+  it('#3 omits an intelligence row whose bucket is unknown instead of printing a dash', () => {
+    const intelligence: DatasetIntelligence = {
+      density: { bucket: 'dense', label: 'Dense', basis: 'areal' },
+      complexity: { bucket: 'unknown', label: '—' },
+      groundVisibility: { bucket: 'unknown', label: '—' },
+      coverage: { bucket: 'full', label: 'Full Dataset' },
+      confidence: { value: 0, band: 'unknown', label: '—' },
+      details: {
+        coverageMode: 'Full Dataset',
+        sourcePointCount: 1,
+        analyzedPointCount: 1,
+        metricVersion: 'v0.4.4',
+        engineStatus: 'idle',
+      },
+    };
+    const c = buildTerrainReportContent(readyResult(), { ...OPTS, intelligence });
+    const ds = labels(c, 'Dataset Statistics');
+    expect(ds).toContain('Areal point density (all returns, header footprint)');
+    expect(ds).not.toContain('Terrain complexity');
+    expect(ds).not.toContain('Ground visibility');
+    expect(ds).not.toContain('Metric stability');
+    expect(section(c, 'Dataset Statistics').rows.some((r) => r.value === '—' && /visibility|stability|complexity/.test(r.label))).toBe(false);
+  });
+
+  it('#4 bridges the random hold-out and the blocked spatial CV with their true parameters', () => {
+    const base = readyResult();
+    const r = {
+      ...base,
+      blockedAccuracy: { n: 4, rmse: 3.87, mae: 2.1, ciLow: 3.5, ciHigh: 4.2 },
+    } as unknown as AnalyseContoursResult;
+    const c = buildTerrainReportContent(r, OPTS);
+    const v = rowValue(c, 'Quality Metrics', 'Accuracy bases') ?? '';
+    expect(v).toMatch(/Random hold-out RMSEz \(0\.14 m\)/);
+    expect(v).toMatch(/interpolation between neighbouring ground points/);
+    expect(v).toMatch(/feeds NVA\/VVA/);
+    expect(v).toMatch(/8-cell blocks, 4 folds/);
+    expect(v).toMatch(/<= 20,000 points/);
+    expect(v).toMatch(/extrapolation across held-out blocks/);
+    expect(v).toMatch(/blocked figure \(3\.87 m\) for map-scale use/);
+  });
+
+  it('#5 names the two density bases apart', () => {
+    const intelligence: DatasetIntelligence = {
+      density: { bucket: 'very-dense', label: 'Very Dense', basis: 'areal' },
+      complexity: { bucket: 'low', label: 'Low' },
+      groundVisibility: { bucket: 'good', label: 'Good' },
+      coverage: { bucket: 'full', label: 'Full Dataset' },
+      confidence: { value: 80, band: 'green', label: '80%' },
+      details: { coverageMode: 'Full Dataset', sourcePointCount: 1, analyzedPointCount: 1, metricVersion: 'v', engineStatus: 'active' },
+    };
+    const c = buildTerrainReportContent(readyResult(), { ...OPTS, intelligence });
+    const ds = labels(c, 'Dataset Statistics');
+    expect(ds).not.toContain('Point density (class)');
+    expect(ds).not.toContain('Ground density');
+    expect(rowValue(c, 'Dataset Statistics', 'Areal point density (all returns, header footprint)')).toBe('Very Dense');
+    expect(rowValue(c, 'Dataset Statistics', 'Ground density (measured cells, stride-scaled)')).toBe('4.2 pts/m²');
+    // The provenance footer names the same figure the same way.
+    expect(c.provenanceLines.some((l) => /^Ground density\s+4\.2 pts\/m²/.test(l))).toBe(true);
+    expect(c.provenanceLines.some((l) => /^Point density\s/.test(l))).toBe(false);
+  });
+
+  it('#6 separates "non-ground classes excluded" from the ground source', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const ds = labels(c, 'Dataset Statistics');
+    expect(ds).not.toContain('Classification available');
+    expect(rowValue(c, 'Dataset Statistics', 'Non-ground classes excluded')).toBe('Yes');
+    expect(rowValue(c, 'Dataset Statistics', 'Ground source')).toBe('SMRF filter (classification not trusted)');
+    const base = readyResult();
+    const trusted = {
+      ...base,
+      excludedByClassification: 0,
+      generationParams: { ...base.generationParams, despike: false },
+    } as AnalyseContoursResult;
+    const t = buildTerrainReportContent(trusted, OPTS);
+    expect(rowValue(t, 'Dataset Statistics', 'Non-ground classes excluded')).toBe('No');
+    expect(rowValue(t, 'Dataset Statistics', 'Ground source')).toBe('ASPRS class 2 (trusted)');
+  });
+
+  it('#7 calls the complexity figure window completeness, not confidence', () => {
+    const base = readyResult();
+    const r = {
+      ...base,
+      complexity: {
+        band: 'moderate', vrmMedian: 0.03, vrmIqr: 0.02, vrmWindowCells: 3, vrmWindowGroundM: 3,
+        vrmText: 'vrm', tpiRadiusCells: 5, tpiRadiusGroundM: 5, tpiDominantClass: 'Flat', tpiText: 'tpi',
+        zUnitLabel: 'm', slopeAspectConvention: 'c', confidence: 99, warnings: [],
+      },
+    } as unknown as AnalyseContoursResult;
+    const c = buildTerrainReportContent(r, OPTS);
+    expect(labels(c, 'Terrain Assessment')).not.toContain('Complexity confidence');
+    expect(rowValue(c, 'Terrain Assessment', 'Complexity window completeness')).toBe('99/100');
+  });
+
+  it('#8 carries the registry evidence level per product, from the export resolver', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const byLabel = Object.fromEntries(c.products.map((p) => [p.label, p.evidence]));
+    // DTM claim: the SAME resolution the provenance stamps.
+    expect(byLabel['DTM/DEM export']).toBe('E4 — Cross-implementation validated (baseline)');
+    expect(c.provenance.evidenceResolution?.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(byLabel['Contours']).toBe('E4 — Cross-implementation validated (baseline)');
+    expect(byLabel['Map sheet']).toBe('E4 — Cross-implementation validated (baseline)');
+    expect(byLabel['Profiles']).toBe('E4 — Cross-implementation validated (baseline)');
+    expect(byLabel['Measurements']).toBe('no single registered claim');
+    expect(byLabel['Terrain review']).toBe('no single registered claim');
+    const ps = section(c, 'Terrain Products Available');
+    expect(ps.rows.find((r) => r.label === 'Contours')?.value).toBe(
+      'Available · Evidence level: E4 — Cross-implementation validated (baseline)',
+    );
+  });
+
+  it('#9 carries the panel tooltips as Definitions, single-sourced', async () => {
+    const { METRIC_TOOLTIPS } = await import('../src/terrain/contour/contourCopy');
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    expect(c.definitions).toEqual(Object.values(METRIC_TOOLTIPS));
+  });
+
+  it('#10 calls the cols·cell figure a grid extent', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    expect(labels(c, 'Dataset Statistics')).not.toContain('Footprint (extent)');
+    expect(rowValue(c, 'Dataset Statistics', 'Grid extent')).toBe('200 × 150 m');
+  });
+
+  it('#11 qualifies the USGS density reference with its basis', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    expect(rowValue(c, 'Quality Metrics', 'USGS density reference')).toBe(
+      '>= QL2 floor (stride-scaled ground density)',
+    );
+  });
+
+  it('#12 prints Coverage mode once and no constant Export note', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const all = c.sections.flatMap((s) => s.rows.filter((r) => r.label === 'Coverage mode'));
+    expect(all).toHaveLength(1);
+    expect(labels(c, 'Terrain Assessment')).not.toContain('Export note');
+    expect(allValues(c)).not.toMatch(/ready to hand off/);
+    const p = buildTerrainReportContent(previewResult(), OPTS);
+    expect(rowValue(p, 'Terrain Assessment', 'Export note')).toMatch(/datum/i);
   });
 });

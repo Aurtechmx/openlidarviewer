@@ -27,6 +27,8 @@
  *                             and the panel can never grade a product apart.
  *   - How to improve        ← {@link explainLimitations} fixes (only when the
  *                             surface is not fully-good).
+ *   - Definitions           ← {@link METRIC_TOOLTIPS} — the panel's own metric
+ *                             tooltips, imported so the two never drift.
  *   - Footer                ← {@link provenanceLines} + the not-survey-grade note.
  *
  * Honesty contract (non-negotiable, mirrors the rest of the terrain stack):
@@ -47,7 +49,10 @@ import { recommendedWorkflows, type WorkflowItem } from '../contour/recommendedW
 import { terrainProducts } from '../contour/terrainProducts';
 import { explainLimitations } from '../contour/whyNotReasons';
 import type { DatasetIntelligence } from '../datasetIntelligence';
+import { METRIC_TOOLTIPS } from '../contour/contourCopy';
 import { horizontalUnitLabel } from '../../units/units';
+import { EVIDENCE_REGISTRY } from '../../validation/claimRegistry.generated';
+import { evidenceLabel, type EvidenceLevel } from '../../validation/evidenceLevel';
 import {
   buildExportProvenance,
   provenanceLines,
@@ -86,6 +91,13 @@ export interface TerrainReportProduct {
   readonly availability: 'Available' | 'Preview' | 'Blocked';
   /** Short, honest qualifier for Preview / Blocked products (absent for Available). */
   readonly note?: string;
+  /**
+   * Evidence level of the product's registered claim, e.g.
+   * "E4 — Cross-implementation validated (baseline)". The DTM claim carries the
+   * export resolver's effective level; every other claim prints its registry
+   * baseline. Products without a single registered claim say so.
+   */
+  readonly evidence: string;
 }
 
 /**
@@ -128,7 +140,55 @@ export interface TerrainReportContent {
   readonly provenanceLines: ReadonlyArray<string>;
   /** The standing not-survey-grade note ({@link NOT_SURVEY_GRADE_NOTE}). */
   readonly notSurveyGrade: string;
+  /** The panel's metric tooltips ({@link METRIC_TOOLTIPS}), printed as Definitions. */
+  readonly definitions: ReadonlyArray<string>;
 }
+
+/**
+ * Product label → registered claim id. Only products whose deliverable maps
+ * to ONE registry claim are listed; the rest print "no single registered
+ * claim" rather than a level picked from several. Map sheet shares the
+ * CONTOURS claim (MAP_SHEET_CLAIM in mapSheetPdf.ts).
+ */
+const PRODUCT_CLAIM: Readonly<Record<string, string>> = {
+  Profiles: 'MEAS-PROFILE',
+  'DTM/DEM export': 'DTM',
+  Contours: 'CONTOURS',
+  'Map sheet': 'CONTOURS',
+};
+
+/** "E4 — Cross-implementation validated" from the registry level id. */
+function fmtLevel(level: EvidenceLevel): string {
+  return `${level.slice(0, 2)} — ${evidenceLabel(level)}`;
+}
+
+/**
+ * The evidence line for one product. The DTM claim reuses the SAME resolution
+ * the provenance was stamped from (scoped overlay included); any other claim
+ * prints its registry baseline and says so — the report path carries no
+ * artifact context to resolve them against.
+ */
+function productEvidence(label: string, provenance: ExportProvenance): string {
+  const claimId = PRODUCT_CLAIM[label];
+  if (claimId == null) return 'no single registered claim';
+  const res = provenance.evidenceResolution;
+  if (res && res.claimId === claimId && res.effectiveEvidence != null) {
+    return res.matchedStudy != null
+      ? `${fmtLevel(res.effectiveEvidence)} (in-scope study ${res.matchedStudy})`
+      : `${fmtLevel(res.effectiveEvidence)} (baseline)`;
+  }
+  const entry = EVIDENCE_REGISTRY[claimId];
+  return entry ? `${fmtLevel(entry.current)} (baseline)` : 'unregistered (E0)';
+}
+
+/**
+ * The spatially-blocked hold-out parameters analyseContours runs with —
+ * echoed as text so the disclosure line names the real procedure. Mirrors
+ * BLOCKED_CELL_CAP / BLOCKED_POINT_CAP / blockSize / folds / the 32-point
+ * floor in analyseContours.ts; a change there must be mirrored here.
+ */
+const BLOCKED_CV_TEXT =
+  '8-cell blocks, 4 folds, ground set strided to <= 20,000 points, skipped on grids over 250,000 cells';
 
 /** Format a metre value at 2 dp, or an em-dash when absent (never fabricated). */
 function fmtM(v: number | null | undefined): string {
@@ -202,10 +262,13 @@ export function buildTerrainReportContent(
   };
 
   // ── Dataset Statistics ──────────────────────────────────────────────────
-  // Footprint = grid extent (cols/rows × cell size). Honest when the grid is
-  // absent. Classification availability is inferred from whether the run
-  // dropped any classified non-ground returns (excludedByClassification > 0)
-  // OR a non-zero count was supplied — we say "yes" / "no" plainly.
+  // Grid extent = cols/rows × cell size (up to one cell of padding per axis,
+  // so not the point footprint). Honest when the grid is absent. "Non-ground
+  // classes excluded" is whether the run dropped classified non-ground returns
+  // (excludedByClassification > 0); the ground SOURCE is a separate fact —
+  // despike is off only on the trusted class-2 path (analyseContours:
+  // despikeApplied = !trust.trust), so generationParams.despike === false is
+  // the result's own record that ASPRS class 2 built the DTM.
   const cols = Number.isFinite(dtm?.cols) ? dtm.cols : null;
   const rows = Number.isFinite(dtm?.rows) ? dtm.rows : null;
   const cell = Number.isFinite(dtm?.cellSizeM) && dtm.cellSizeM > 0 ? dtm.cellSizeM : null;
@@ -216,25 +279,42 @@ export function buildTerrainReportContent(
     isGeographic: opts.isGeographic,
     linearUnit: opts.linearUnit,
   });
-  const footprint =
+  const gridExtent =
     cols != null && rows != null && cell != null
       ? `${Math.round(cols * cell).toLocaleString()} × ${Math.round(rows * cell).toLocaleString()} ${footprintUnit}`
       : DASH;
   const density = provenance.pointDensityPerM2;
-  const classified =
+  const classesExcluded =
     (result.excludedByClassification ?? 0) > 0 ? 'Yes' : 'No';
+  const groundTrusted = result.generationParams?.despike === false;
+  const groundSource = groundTrusted
+    ? 'ASPRS class 2 (trusted)'
+    : 'SMRF filter (classification not trusted)';
 
   // Dataset Intelligence bucket rows — present ONLY when the caller passed the
-  // card's summary through. The labels are the card's own strings (already
-  // honest: 'unknown' buckets render as "—"), so the PDF and the Inspector can
-  // never disagree on a bucket.
+  // card's summary through. The labels are the card's own strings, so the PDF
+  // and the Inspector can never disagree on a bucket. A row whose bucket is
+  // 'unknown' is OMITTED: the card renders "—" for it, and a dash in a report
+  // reads as a pending measurement rather than an absent signal.
   const intel = opts.intelligence ?? null;
+  const densityLabel =
+    intel?.density.basis === 'volumetric'
+      ? 'Volumetric point density (all returns, bounding box)'
+      : 'Areal point density (all returns, header footprint)';
   const intelligenceRows: TerrainReportRow[] = intel
     ? [
-        { label: 'Point density (class)', value: intel.density.label },
-        { label: 'Terrain complexity', value: intel.complexity.label },
-        { label: 'Ground visibility', value: intel.groundVisibility.label },
-        { label: 'Metric stability', value: intel.confidence.label },
+        ...(intel.density.bucket !== 'unknown'
+          ? [{ label: densityLabel, value: intel.density.label }]
+          : []),
+        ...(intel.complexity.bucket !== 'unknown'
+          ? [{ label: 'Terrain complexity', value: intel.complexity.label }]
+          : []),
+        ...(intel.groundVisibility.bucket !== 'unknown'
+          ? [{ label: 'Ground visibility', value: intel.groundVisibility.label }]
+          : []),
+        ...(intel.confidence.band !== 'unknown'
+          ? [{ label: 'Metric stability', value: intel.confidence.label }]
+          : []),
       ]
     : [];
 
@@ -248,16 +328,17 @@ export function buildTerrainReportContent(
       // file-scale density is the 'Ground density' row below.
       { label: 'Ground points', value: fmtInt(dtm?.sourcePointCount) },
       { label: 'Used in DTM', value: fmtInt(dtm?.analyzedPointCount) },
-      { label: 'Footprint (extent)', value: footprint },
+      { label: 'Grid extent', value: gridExtent },
       {
-        label: 'Ground density',
+        label: 'Ground density (measured cells, stride-scaled)',
         value: density != null ? `${density.toFixed(1)} pts/m²` : DASH,
       },
       ...intelligenceRows,
       { label: 'Coverage mode', value: provenance.coverageMode },
       { label: 'Horizontal CRS', value: provenance.horizontalCrs },
       { label: 'Vertical datum', value: provenance.verticalDatum },
-      { label: 'Classification available', value: classified },
+      { label: 'Non-ground classes excluded', value: classesExcluded },
+      { label: 'Ground source', value: groundSource },
       { label: 'Generated', value: fmtGenerated(provenance.generated) },
       {
         label: 'Software',
@@ -269,8 +350,12 @@ export function buildTerrainReportContent(
   // ── Terrain Assessment ──────────────────────────────────────────────────
   // Derived complexity rows (v0.5.4) source the SAME pre-formatted strings
   // the provenance stamps and the Analyse panel renders (metric, window in
-  // cells AND ground metres, Z units, derived confidence). A run that
-  // measured nothing renders an honest em-dash, never a fabricated band.
+  // cells AND ground metres, Z units). The 0–100 figure is window
+  // completeness (valid fraction × mean window support; interpolated cells
+  // count as valid — complexityEnvelope.ts), not a confidence in the metric.
+  // A run that measured nothing renders an honest em-dash, never a
+  // fabricated band. The Export note row exists only when the engine gave a
+  // reason; a Ready run prints no stand-in sentence.
   const cx = provenance.complexity;
   const assessmentSection: TerrainReportSection = {
     title: 'Terrain Assessment',
@@ -282,26 +367,25 @@ export function buildTerrainReportContent(
       },
       { label: 'Reason', value: assessment.reason },
       { label: 'Export readiness', value: assessment.exportReadiness },
-      {
-        label: 'Export note',
-        value: assessment.exportReason ? assessment.exportReason : 'ready to hand off',
-      },
+      ...(assessment.exportReason
+        ? [{ label: 'Export note', value: assessment.exportReason }]
+        : []),
       { label: 'Ruggedness (VRM)', value: cx ? cx.vrmText : DASH },
       { label: 'Landform (TPI)', value: cx ? cx.tpiText : DASH },
       {
-        label: 'Complexity confidence',
-        value: cx ? `${cx.confidence}/100 (derived from data support)` : DASH,
+        label: 'Complexity window completeness',
+        value: cx ? `${cx.confidence}/100` : DASH,
       },
     ],
   };
 
   // ── Coverage Analysis ───────────────────────────────────────────────────
   // The gate's measured/interpolated/empty/edge ratios + mean confidence and
-  // ground visibility — the same figures the panel's coverage block shows.
+  // ground share — the same figures the panel's coverage block shows. Coverage
+  // mode is printed once, under Dataset Statistics.
   const coverageSection: TerrainReportSection = {
     title: 'Coverage Analysis',
     rows: [
-      { label: 'Coverage mode', value: provenance.coverageMode },
       // These three are shares of the WHOLE grid and sum to 100%. The verdict
       // and the gate reasons quote interpolatedOfSurfaceRatio instead, which
       // excludes empty cells, so both bases appear here and each says which one
@@ -318,10 +402,16 @@ export function buildTerrainReportContent(
       { label: 'Edge risk', value: fmtPct(q?.edgeRiskRatio) },
       {
         // Not the same quantity as the "Ground visibility" bucket in Dataset
-        // Statistics, which is a categorical read. This is the classifier's
-        // ground share of all returns.
-        label: 'Ground returns (of all returns)',
-        value: fmtPct(q?.groundPointRatio),
+        // Statistics, which is a categorical read. groundPointRatio is
+        // gf.groundPointCount / gf.sourcePointCount (analyseContours): on the
+        // SMRF path the numerator is SMRF-labelled ground of the analysed
+        // stride sample and the denominator is that sample AFTER
+        // excludeNonGroundClasses dropped classes 3-7/18 — not all returns,
+        // not the ground class. On the trusted class-2 path both counts are
+        // the class-2 set, so the ratio is a meaningless 100%; say what
+        // happened instead of printing it.
+        label: 'Ground share of analysed candidates (after class exclusion)',
+        value: groundTrusted ? 'class 2 trusted' : fmtPct(q?.groundPointRatio),
       },
       {
         label: 'Mean confidence',
@@ -345,15 +435,34 @@ export function buildTerrainReportContent(
   // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
   const pctOf = (x: number): string => `${Math.round(x * 100)}%`;
   const relM = result.reliabilitySplit?.measured;
-  const reliabilityValue =
-    relM && relM.n >= 5 && Number.isFinite(relM.reliability)
-      ? `${pctOf(relM.reliability)} (95% CI ${pctOf(relM.ciLow)}-${pctOf(relM.ciHigh)}, |dz| <= ${fmtM(relM.tolerance)})`
-      : DASH;
+  // The reliability tolerance IS the hold-out RMSEz (analyseContours:
+  // reliabilityTolerance = validation.rmse), so the row is the share of
+  // measured-cell residuals within 1 × RMSEz — ~68-76% for any Gaussian —
+  // and is labelled as that, never as an independent tolerance.
+  const hasRel = relM != null && relM.n >= 5 && Number.isFinite(relM.reliability);
+  const reliabilityLabel = hasRel
+    ? `Within 1 × hold-out RMSEz (${fmtM(relM.tolerance)})`
+    : 'Within 1 × hold-out RMSEz';
+  const reliabilityValue = hasRel
+    ? `${pctOf(relM.reliability)} of measured-cell hold-out residuals (95% CI ${pctOf(relM.ciLow)}-${pctOf(relM.ciHigh)})`
+    : DASH;
   const blk = result.blockedAccuracy;
-  const blockedValue =
-    blk && blk.n > 0 && Number.isFinite(blk.rmse)
-      ? `${fmtM(blk.rmse)} (95% CI ${fmtM(blk.ciLow)}-${fmtM(blk.ciHigh)})`
-      : DASH;
+  const hasBlk = blk != null && blk.n > 0 && Number.isFinite(blk.rmse);
+  const blockedValue = hasBlk
+    ? `${fmtM(blk.rmse)} (95% CI ${fmtM(blk.ciLow)}-${fmtM(blk.ciHigh)})`
+    : DASH;
+  // One line that says what each RMSE tests, so the two figures are never
+  // read as competing estimates of the same thing. Parameters are the ones
+  // analyseContours runs with (BLOCKED_CV_TEXT).
+  const rmseText = hasAcc ? fmtM(provenance.accuracy?.rmseZM) : null;
+  const accuracyBases =
+    rmseText != null && rmseText !== DASH
+      ? `Random hold-out RMSEz (${rmseText}) tests interpolation between neighbouring ground points and feeds NVA/VVA. ` +
+        `Blocked spatial CV (${BLOCKED_CV_TEXT}) tests extrapolation across held-out blocks; ` +
+        (hasBlk
+          ? `quote the blocked figure (${fmtM(blk.rmse)}) for map-scale use.`
+          : 'it was not run on this grid, so no map-scale figure is available.')
+      : null;
   const qualitySection: TerrainReportSection = {
     title: 'Quality Metrics',
     rows: [
@@ -365,9 +474,14 @@ export function buildTerrainReportContent(
       { label: 'VVA-style (95th pct, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
       // Measured-cell empirical reliability (Wilson CI) and the less optimistic
       // spatially-blocked RMSE — the same numbers the Analyse panel surfaces.
-      { label: 'Measured reliability', value: reliabilityValue },
+      { label: reliabilityLabel, value: reliabilityValue },
       { label: 'Blocked RMSE (spatial CV)', value: blockedValue },
-      { label: 'USGS density reference', value: qlValue === DASH ? DASH : `>= ${qlValue} floor` },
+      ...(accuracyBases != null ? [{ label: 'Accuracy bases', value: accuracyBases }] : []),
+      // The stride-scaled ground density caveat used to live only in Warnings.
+      {
+        label: 'USGS density reference',
+        value: qlValue === DASH ? DASH : `>= ${qlValue} floor (stride-scaled ground density)`,
+      },
     ],
   };
 
@@ -415,11 +529,14 @@ export function buildTerrainReportContent(
   // 'Ready' renames to 'Available' (the report speaks in take-away
   // vocabulary); Ready rows carry no reason in the view, so they carry no
   // note here either — a ready product needs no excuse.
+  // Each row also carries its claim's evidence level (productEvidence).
   const products: TerrainReportProduct[] = terrainProducts(assessment, workflowItems).map(
-    (p) =>
-      p.statusWord === 'Ready' || p.reason == null
-        ? { label: p.label, availability: p.statusWord === 'Ready' ? ('Available' as const) : p.statusWord }
-        : { label: p.label, availability: p.statusWord, note: p.reason },
+    (p) => {
+      const evidence = productEvidence(p.label, provenance);
+      return p.statusWord === 'Ready' || p.reason == null
+        ? { label: p.label, availability: p.statusWord === 'Ready' ? ('Available' as const) : p.statusWord, evidence }
+        : { label: p.label, availability: p.statusWord, note: p.reason, evidence };
+    },
   );
 
   // The workflow + products lists are ALSO surfaced as label/value sections so
@@ -437,7 +554,7 @@ export function buildTerrainReportContent(
     title: 'Terrain Products Available',
     rows: products.map((p) => ({
       label: p.label,
-      value: p.note ? `${p.availability} — ${p.note}` : p.availability,
+      value: `${p.note ? `${p.availability} — ${p.note}` : p.availability} · Evidence level: ${p.evidence}`,
     })),
   };
 
@@ -460,5 +577,7 @@ export function buildTerrainReportContent(
     provenance,
     provenanceLines: provenanceLines(provenance),
     notSurveyGrade: NOT_SURVEY_GRADE_NOTE,
+    // The panel's tooltips verbatim — imported, never retyped.
+    definitions: Object.values(METRIC_TOOLTIPS),
   };
 }
