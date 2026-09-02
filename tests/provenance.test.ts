@@ -329,3 +329,44 @@ describe('provenance — vendor tokens match however the producer punctuates', (
     expect(line).toContain('5 registered scan stations');
   });
 });
+
+describe('manned-aircraft ALS is not read as a drone', () => {
+  // A USGS 3DEP forest tile: 53.7 M points over 1 km², Quantum Spatial in
+  // system_identifier, LasMonkey in generating_software. The build under
+  // test called it "Drone-mounted LiDAR (UAV ALS)" and applied UAV bounds.
+  const rogue = (over: Partial<ScanSignals>): ScanSignals => ({
+    sourceFormat: 'laz',
+    pointCount: 53_670_848,
+    extent: [1000, 1000, 371.1],
+    densityPerSqM: 53.7,
+    ...over,
+  });
+
+  it('reads the 3DEP contractor name in system_identifier as airborne', () => {
+    const f = classify(rogue({ sensorString: 'Quantum Spatial' }));
+    expect(f.captureType).toBe('aerial-als');
+    expect(f.confidence).toBe('high');
+  });
+
+  it('reads LasMonkey in generating_software as airborne', () => {
+    const f = classify(rogue({ softwareString: 'LasMonkey 2.6.2' }));
+    expect(f.captureType).toBe('aerial-als');
+  });
+
+  it('reads a dense cloud at project-tile scale as airborne from geometry alone', () => {
+    const f = classify(rogue({}));
+    expect(f.captureType).toBe('aerial-als');
+    expect(f.confidence).toBe('medium');
+    expect(f.signals.join(' ')).toMatch(/project-tile scale/);
+  });
+
+  it('keeps a dense cloud at site scale (10 ha) as drone', () => {
+    const f = classify(rogue({ extent: [316, 320, 40], densityPerSqM: 84 }));
+    expect(f.captureType).toBe('drone-lidar');
+  });
+
+  it('still reads Leica ALS as airborne rather than the bare Leica TLS token', () => {
+    const f = classify(rogue({ sensorString: 'Leica ALS80' }));
+    expect(f.captureType).toBe('aerial-als');
+  });
+});
