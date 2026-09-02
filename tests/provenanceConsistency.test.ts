@@ -507,9 +507,7 @@ describe('provenance consistency — export-ready run', () => {
     // complexity caveats join the report warnings (deduped, order kept).
     expect(reportRow(report, 'Terrain Assessment', 'Ruggedness (VRM)')).toBe(cx.vrmText);
     expect(reportRow(report, 'Terrain Assessment', 'Landform (TPI)')).toBe(cx.tpiText);
-    expect(reportRow(report, 'Terrain Assessment', 'Complexity confidence')).toBe(
-      '82/100 (derived from data support)',
-    );
+    expect(reportRow(report, 'Terrain Assessment', 'Complexity window completeness')).toBe('82/100');
     expect(report.warnings).toContain(cx.caveats[0]);
   });
 });

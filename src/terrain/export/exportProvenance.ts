@@ -794,8 +794,10 @@ export function provenanceLines(p: ExportProvenance): string[] {
         ? `${p.accuracy.usgsDensityReferenceFloor} density floor (reference)`
         : 'unknown',
     ),
+    // Ground-return density over measured cells, stride-scaled — not the
+    // scan's all-returns point density.
     kv(
-      'Point density',
+      'Ground density',
       p.pointDensityPerM2 != null ? `${p.pointDensityPerM2.toFixed(1)} pts/m²` : 'unknown',
     ),
   ];
