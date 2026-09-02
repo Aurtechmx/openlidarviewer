@@ -96,7 +96,7 @@ export class ClassLegendPanel {
   /** True when the shown classification was OLV-derived, not producer-carried. */
   private _derived = false;
 
-  /** "Counts accrue as the cloud streams" caption (hidden unless streaming). */
+  /** "Counts from unique decoded nodes" caption (hidden unless streaming). */
   private readonly _streamingNote: HTMLElement;
 
   /** "Counts cover the loaded display sample" caption (hidden unless sampled). */
@@ -143,16 +143,17 @@ export class ClassLegendPanel {
     this._provenance.setAttribute('role', 'note');
 
     // Streaming caption — for a COPC/EPT scan the per-class counts are a
-    // RUNNING TALLY over the nodes decoded so far (the legend folds new counts
-    // as nodes arrive), so they exceed the currently-resident point count and
-    // are not full-file totals. Shown only while streaming so a reviewer never
-    // reads "Building 7,833" as an authoritative whole-cloud figure.
+    // RUNNING TALLY over the UNIQUE nodes decoded so far (the host's session
+    // ledger folds each node id in once), so they exceed the currently-resident
+    // point count and are not full-source totals. Naming that denominator is
+    // the point: it is neither the resident set nor the file, and a reviewer
+    // must not read "Building 7,833" as an authoritative whole-cloud figure.
     // Distinct class from the "Derived (heuristic)" caption (olv-cl-derived) —
     // they're independent captions that can show at the same time, and tests /
     // styling must be able to target each on its own. Shares the caption CSS.
     this._streamingNote = el('div', {
       className: 'olv-cl-streamnote olv-hidden',
-      text: 'Counts accrue as the cloud streams — points decoded so far, not full-file totals.',
+      text: 'Counts from unique decoded nodes seen so far, not full-source totals.',
     });
     this._streamingNote.setAttribute('role', 'note');
 
@@ -328,9 +329,10 @@ export class ClassLegendPanel {
   }
 
   /**
-   * Show or hide the "Counts accrue as the cloud streams" caption. The host
-   * calls this with `true` for a streaming COPC/EPT scan, so the per-class
-   * counts (a running tally over decoded nodes) never read as full-file totals.
+   * Show or hide the "Counts from unique decoded nodes" caption. The host calls
+   * this with `true` for a streaming COPC/EPT scan, so the per-class counts (a
+   * running tally over the unique nodes the session decoded) never read as
+   * full-source totals.
    */
   setStreamingMode(on: boolean): void {
     this._streamingNote.classList.toggle('olv-hidden', !on);

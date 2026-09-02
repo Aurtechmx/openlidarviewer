@@ -2325,26 +2325,23 @@ function refreshScopedReport(): void {
   const cloud = scans.activeCloud();
   if (cloud) inspector.setReport(runModules(cloud, currentClassScope(cloud)));
 }
-// Streaming node-ready: fold each newly-resident node's classification into the
-// legend so a class first seen at depth appears as a new row. The legend keeps
-// its current visibility (default visible, but left hidden if the user isolated
-// a class), so a late arrival never silently re-reveals hidden points.
+// Streaming node-ready: fold each newly-decoded node's classification into the
+// legend so a class first seen at depth appears as a new row. The session ledger
+// counts each node id once, so an evicted node that streams back in is not added
+// twice. The legend keeps its current visibility (default visible, but left
+// hidden if the user isolated a class), so a late arrival never re-reveals points.
 // Deferred: `viewer` is null until the lazy Viewer chunk resolves, so this hook
 // must be attached inside viewerLoaded (a top-level `viewer.*` write throws at
 // module load and breaks startup — caught by lint:main-deferral).
 void viewerLoaded.then(() => {
-  viewer.onStreamingNodeClasses = (classes) => {
+  viewer.onStreamingNodeClasses = (nodeId, classes) => {
+    const fresh = runtime.streamingClasses.record(nodeId, classes);
+    if (!fresh) return; // already counted this session: an evicted node re-decoded
     if (!classLegendPanel.hasClasses()) {
-      // First node to carry classification on this streaming scan — seed + show.
-      classLegendPanel.setClasses(countClasses(classes));
-      // Streaming counts are a running tally over decoded nodes (folded below
-      // as more arrive), not full-file totals — disclose that in the legend.
-      // setClasses() resets the flag, so set it after seeding.
+      classLegendPanel.setClasses(fresh); // clears the streaming flag, re-set next
       classLegendPanel.setStreamingMode(true);
       if (classLegendPanel.hasClasses()) classLegendPanel.show();
-    } else {
-      classLegendPanel.mergeClasses(countClasses(classes));
-    }
+    } else classLegendPanel.mergeClasses(fresh);
     // A late-arriving class can change the present-class total, so refresh the
     // inspector's scope stamp ("k of M classes") to keep M accurate.
     syncInspectClassScope();
@@ -4954,6 +4951,7 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
 function closeStreaming(): void {
   // A new streaming scan must re-seed its filter controls from its own data.
   streamingFilterSeeded = false;
+  runtime.streamingClasses.reset(); // a node id is unique only within its own source
   // Finalize the benchmark (if any) before tearing the session down — we
   // want the final cache snapshot and peak resident counters to be observed.
   // The post-session report is logged only under `?benchmark=1`; `?debug=1`
@@ -5249,6 +5247,7 @@ function resetToEmptyState(): void {
   // Hide + clear the class legend (and Process Studio) so neither lingers with a
   // stale scan after close. v0.4.1.
   classLegendPanel.setClasses(new Map());
+  runtime.streamingClasses.reset(); // no scan, so no streamed class tally either
   classLegendPanel.hide();
   hideReclassifyUi();
   // Clear the inspector's copy/JSON scope stamp now there's no active filter.
@@ -5457,6 +5456,7 @@ function removeCloud(id: string): void {
 function clearOpenStaticLayers(): void {
   lastDerivedConfidence = null;
   lastStreamingReportCloud = null; // every streaming open commits before calling this, so a streaming→streaming swap retires the previous scan's report here too; that path never reaches `closeStreaming`
+  runtime.streamingClasses.reset(); // and its streamed class tally with it, so B's node ids start clean
   for (const id of viewer.clouds()) {
     viewer.removeCloud(id);
     inspector.removeCloud(id);
