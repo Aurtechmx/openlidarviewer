@@ -420,6 +420,7 @@ export const loadLasLoader = () => import('./io/loadLas');
 export const loadContextMenu = () => import('./ui/contextMenu');
 export const loadCommandPalette = () => import('./ui/CommandPalette');
 export const loadShortcutSheet = () => import('./ui/ShortcutSheet');
+export const loadTour = () => import('./ui/onboarding/bootTour');
 export const loadMeasurementExport = () => import('./export/measurementExport');
 export const loadMeasurementReport = () => import('./export/measurementReport');
 export const loadKmlExport = () => import('./export/kmlExport');

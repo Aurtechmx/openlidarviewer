@@ -40,7 +40,8 @@ import {
 } from './ui/themes';
 import type { CommandPalette } from './ui/CommandPalette';
 import type { ShortcutSheet } from './ui/ShortcutSheet';
-import { bootTour, type TourHandle } from './ui/onboarding/bootTour';
+import type { TourHandle } from './ui/onboarding/bootTour';
+import { createTourLauncher } from './app/tourLauncher';
 import { findDuplicateIds } from './ui/actionRegistry';
 import { buildActionRegistry } from './app/actionDefinitions';
 import { toggleTool } from './app/toggleTool';
@@ -225,6 +226,7 @@ import {
   loadExportStudio,
   loadReportEngine,
   loadDebugOverlay,
+  loadTour,
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
   loadViewer,
@@ -484,15 +486,17 @@ const catalogPanel = new CatalogPanel({
   },
 });
 
-// Assigned when the tour boots (below); the splash chip calls through it.
-let tour: TourHandle | null = null;
+// v0.3.9 onboarding tour, offered from the splash chip and the command
+// palette, imposed never. Deferred: the chunk boots on first start or
+// replay (app/tourLauncher.ts); boot logic lives in ui/onboarding/bootTour.ts.
+const tour: TourHandle = createTourLauncher(loadTour);
 
 const stage = new Stage(app, {
   embed,
   samples: SAMPLES,
   demoSample: DEMO_SAMPLE,
   onSample: loadFromUrl,
-  onStartTour: () => tour?.start(),
+  onStartTour: () => tour.start(),
   onOpenFile: (file) => void handleFile(file),
   // Return the promise so Stage's inline error handler can show a
   // contextual, plain-English message under the URL input + offer a Retry
@@ -1444,10 +1448,6 @@ function ensureShortcutSheet(): Promise<ShortcutSheet> {
   }
   return shortcutSheetLoading;
 }
-
-// v0.3.9 — onboarding tour; offered from the splash chip and the command
-// palette, imposed never. Boot logic lives in ui/onboarding/bootTour.ts.
-tour = bootTour();
 
 /**
  * Replay-time dispatcher — routes a recorded event back through the
