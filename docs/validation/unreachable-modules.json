@@ -284,6 +284,13 @@
       "why": "The canonical descriptor of the delivered DTM method plus a SHA-256 method digest, for the external-validation and export-provenance paths: a stamped digest can be compared against a fresh resolve to prove the delivered method has not drifted. The scoped-evidence resolver and the E5 reduce path will read it, but neither construction is wired into the application graph yet, so only its test imports it.",
       "graduation": "Export provenance stamps dtmMethodDigest into the DTM evidence context, or the E5 reduce path resolves the descriptor to verify the candidate method, at which point the application graph reaches it.",
       "review": "2027-02-28"
+    },
+    {
+      "path": "src/science/dtmProductDigest.ts",
+      "status": "validation-only",
+      "why": "A SHA-256 over the delivered DTM surface itself — grid geometry, CRS codes, the explicit little-endian Z bytes, the per-cell coverage bytes and an optional method digest — so two runs can be proven to have produced the SAME surface. It complements liveDtmDescriptor.dtmMethodDigest, which proves only that the same algorithm was configured, not that the heights match. It reuses the repository's byte-wise sha256Hex and canonicalize and changes no numerical result. No export or validation harness constructs a product digest yet, so only its own test imports it; kept out of the eager graph because index.html's bundle has near-zero headroom.",
+      "graduation": "Export provenance or a reproduction harness digests an emitted DTM surface and records the value beside the method digest, at which point the application graph reaches it through src/lazyChunks.ts.",
+      "review": "2027-02-28"
     }
   ]
 }
