@@ -26,7 +26,7 @@ import {
   type ColorLegendHost,
   type ColorLegendStreaming,
 } from '../src/render/colorLegend';
-import type { ColorMode } from '../src/render/colorModes';
+import { DEFAULT_ELEVATION_PALETTE, type ColorMode } from '../src/render/colorModes';
 import type { ActiveColorbar } from '../src/render/activeColorbar';
 import { PointCloud } from '../src/model/PointCloud';
 import type { StreamingColorRanges } from '../src/render/streaming/streamingColors';
@@ -135,7 +135,9 @@ describe('colorLegend.activeColorbar — static path', () => {
     expect(bar!.spec.min).toBe(1000);
     expect(bar!.spec.max).toBe(1030);
     expect(bar!.spec.unit).toBe('m');
-    expect(bar!.spec.palette).toBe('turbo');
+    // The legend must sample whatever ramp the elevation colouring uses, so
+    // this asserts the constant rather than a palette name.
+    expect(bar!.spec.palette).toBe(DEFAULT_ELEVATION_PALETTE);
     // trim 0 ⇒ true extremes, no window note.
     expect(bar!.note).toBeUndefined();
   });
