@@ -175,21 +175,17 @@ export async function loadLas(
     // Lazy chunk: pulls laz-perf + the embedded WASM only when a `.laz`
     // file is actually opened. Uncompressed `.las` files never download it.
     const { decodeLaz } = await import('./lazDecode');
-    // A full-resolution decode (stride 1) can fan the file's chunks across a
-    // worker pool — byte-for-byte the same points, produced in parallel. It is
-    // opt-in and fails closed: `decodeLazPooled` returns null (engaging no
-    // worker) unless pooling is enabled, and for any file its chunk table
-    // cannot describe, so `decodeLaz` stays the default and the fallback. A
-    // strided fast-load stays on `decodeLaz`, which SAMPLES records the chunked
-    // path would fully decode.
-    const pooled =
-      stride === 1
-        ? await (await import('./heavy/worker/lazChunkWorkerClient')).decodeLazPooled(
-            buffer,
-            header,
-            origin,
-          )
-        : null;
+    // The file's chunks can be fanned across a worker pool — byte-for-byte the
+    // same points, produced in parallel. This holds at any stride: laz-perf
+    // cannot skip records either way, so the pooled path decompresses exactly
+    // what `decodeLaz` does and keeps the same stratified sample, only spread
+    // over cores. It fails closed — `decodeLazPooled` returns null (engaging no
+    // worker) for a small unflagged file, for a session that refused pooling,
+    // and for any file its chunk table cannot describe — so `decodeLaz` stays
+    // the fallback for all three.
+    const pooled = await (
+      await import('./heavy/worker/lazChunkWorkerClient')
+    ).decodeLazPooled(buffer, header, origin, { stride, onProgress });
     raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress));
   } else {
     raw = decodeLas(buffer, header, origin, stride, onProgress);

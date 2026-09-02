@@ -30,6 +30,7 @@ describe('parseDevFlags — defaults', () => {
       angularPrediction: true,
       streamingCommitMode: 'immediate',
       decodePool: false,
+      decodePoolOff: false,
       decodeWorkers: null,
       residentStickiness: false,
     });
@@ -81,6 +82,7 @@ describe('parseDevFlags — the program §P0 flag set', () => {
       angularPrediction: false,
       streamingCommitMode: 'immediate',
       decodePool: false,
+      decodePoolOff: false,
       decodeWorkers: null,
       residentStickiness: false,
     });

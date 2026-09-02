@@ -22,6 +22,7 @@ import {
   readDecodePoolEnvironment,
   DECODE_POOL_HARD_CAP,
   DECODE_POOL_MOBILE_CAP,
+  decodeLazPoolEnabled,
   type DecodeFormat,
 } from '../src/io/workerPool/decodePoolSize';
 
@@ -251,6 +252,39 @@ describe('resolveDecodePoolSize — the opt-in rule', () => {
   it('never throws in a DOM-free environment', () => {
     expect(() => resolveDecodePoolSize('copc', OFF)).not.toThrow();
     expect(() => resolveDecodePoolSize('ept', { decodePool: true, decodeWorkers: null })).not.toThrow();
+  });
+});
+
+describe('decodeLazPoolEnabled — the whole-file LAZ decode gate', () => {
+  const OFF = { decodePool: false, decodeWorkers: null };
+
+  it('engages the pool for a large file with no flag at all', () => {
+    // The one decode path that pools by default. A big LAZ decoded on one core
+    // is the defect this exists for, and the chunked result is the same bytes.
+    expect(decodeLazPoolEnabled(OFF, true)).toBe(true);
+  });
+
+  it('leaves a small file on the single-threaded path unless asked', () => {
+    expect(decodeLazPoolEnabled(OFF, false)).toBe(false);
+    expect(decodeLazPoolEnabled({ decodePool: true, decodeWorkers: null }, false)).toBe(true);
+    expect(decodeLazPoolEnabled({ decodePool: false, decodeWorkers: 2 }, false)).toBe(true);
+  });
+
+  it('?decodePool=off refuses pooling however it was asked for', () => {
+    for (const flags of [
+      { decodePool: false, decodeWorkers: null, decodePoolOff: true },
+      { decodePool: true, decodeWorkers: null, decodePoolOff: true },
+      { decodePool: false, decodeWorkers: 4, decodePoolOff: true },
+    ]) {
+      expect(decodeLazPoolEnabled(flags, true)).toBe(false);
+      expect(decodeLazPoolEnabled(flags, false)).toBe(false);
+    }
+  });
+
+  it('?decodePool=off collapses the COPC/EPT clients to one worker too', () => {
+    expect(
+      resolveDecodePoolSize('copc', { decodePool: true, decodeWorkers: 4, decodePoolOff: true }),
+    ).toBe(1);
   });
 });
 
