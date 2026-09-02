@@ -279,7 +279,7 @@ describe('sanitiseForPdf — WinAnsi glyph policy', () => {
     const { runs } = await renderRuns(tikalInputs());
     const all = runs.map((r) => r.text).join('\n');
     expect(all).toContain('pts/m\xB2');            // ² as WinAnsi 0xB2, not "^2"
-    expect(all).toContain('1.96 \xD7 RMSEz');      // × as WinAnsi 0xD7, not "x"
+    expect(all).toContain('1.0 \xD7 GSD');          // × as WinAnsi 0xD7, not "x"
     expect(all).toContain('\x97');                 // — as CP1252 0x97, not "--"
     expect(all).not.toContain('m^2');
     expect(all).not.toContain('--');

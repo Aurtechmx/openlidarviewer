@@ -2,7 +2,8 @@
  * reportFindings.test.ts
  *
  * Pins the honest synthesis in `buildInspectionSummary`:
- *   - density is only compared against USGS QL tiers when the classifier has
+ *   - all-returns density is never graded against a USGS QL (pulse-density)
+ *     floor; the ungraded context bar appears only when the classifier has
  *     itself cited QL literature (airborne-ALS) — never for TLS / phone /
  *     unknown / no-provenance scans;
  *   - vertical accuracy is ALWAYS reported unmeasured;
@@ -63,29 +64,26 @@ function find(summary: ReturnType<typeof buildInspectionSummary>, label: string)
 }
 
 describe('buildInspectionSummary — density tier gating', () => {
-  it('reports the QL1 density floor for airborne ALS at >= 8 pts/m²', () => {
+  it('never grades all-returns density against a USGS QL floor (pulse density is not recorded)', () => {
+    for (const d of [16, 4, 1]) {
+      const s = buildInspectionSummary(meta({ density: d }), alsProvenance());
+      const f = find(s, 'Point density (all returns)');
+      expect(f?.tier).toBe('info');
+      expect(f?.detail).toBe(
+        `All-returns density ${d.toFixed(1)} pts/m² over the bounding-box footprint. ` +
+          'USGS QL floors are defined on nominal pulse density, which this file does not record; not evaluated.',
+      );
+      expect(f?.detail).not.toMatch(/at or above|below the/i);
+    }
+  });
+
+  it('keeps the pulse-density floor bar as ungraded context for airborne ALS', () => {
     const s = buildInspectionSummary(meta({ density: 16 }), alsProvenance());
-    const d = find(s, 'Point density (all returns)');
-    expect(d?.tier).toBe('met');
-    expect(d?.detail).toMatch(/QL1/);
-    expect(d?.source).toMatch(/USGS/);
-    expect(s.densityBar?.measured).toBe(16);
+    expect(s.densityBar?.caption).toBe('USGS pulse-density floors (context, not graded)');
+    expect(s.densityBar?.thresholds.map((t) => t.label)).toEqual(['QL2', 'QL1']);
   });
 
-  it('reports the QL2 density floor (below QL1) for airborne ALS between 2 and 8', () => {
-    const s = buildInspectionSummary(meta({ density: 4 }), alsProvenance());
-    const d = find(s, 'Point density (all returns)');
-    expect(d?.tier).toBe('met');
-    expect(d?.detail).toMatch(/QL2/);
-    expect(d?.detail).toMatch(/below the QL1 floor \(≥ 8 pts\/m²\)/i);
-  });
 
-  it('flags below-QL2 as caution for airborne ALS under 2 pts/m²', () => {
-    const s = buildInspectionSummary(meta({ density: 1 }), alsProvenance());
-    const d = find(s, 'Point density (all returns)');
-    expect(d?.tier).toBe('caution');
-    expect(d?.detail).toMatch(/below the USGS QL2 density floor \(≥ 2 pts\/m²\)/i);
-  });
 
   it('does NOT apply QL tiers for TLS (no QL literature cited)', () => {
     const s = buildInspectionSummary(meta({ density: 16 }), tlsProvenance());
@@ -118,8 +116,11 @@ describe('buildInspectionSummary — honesty invariants', () => {
       const v = find(s, 'Vertical accuracy');
       expect(v?.value).toBe('—');
       expect(v?.tier).toBe('unknown');
-      expect(v?.detail).toMatch(/ground-control/i);
-      expect(v?.detail).toMatch(/1\.96/);
+      expect(v?.detail).toBe(
+        'Not evaluated in this report. A hold-out RMSEz appears in the Terrain report when ' +
+          'terrain analysis has run; neither replaces independent ground-control checkpoints.',
+      );
+      expect(v?.detail).not.toMatch(/1\.96/);
     }
   });
 
@@ -145,9 +146,18 @@ describe('buildInspectionSummary — honesty invariants', () => {
     expect(g?.value).toMatch(/No CRS/);
   });
 
-  it('marks georeference met when a CRS is declared', () => {
+  it('states a declared CRS as a fact (info), not a met threshold', () => {
     const s = buildInspectionSummary(meta());
-    expect(find(s, 'Georeference')?.tier).toBe('met');
+    expect(find(s, 'Georeference')?.tier).toBe('info');
+    expect(s.findings.some((f) => f.tier === 'met')).toBe(false);
+  });
+
+  it('names the extent as a bounding box and the count as the file record count', () => {
+    const s = buildInspectionSummary(meta());
+    const e = find(s, 'Bounding-box extent');
+    expect(e?.value).toBe('100.0 ha (not surveyed area)');
+    expect(e?.detail).toBe('15.7 M points delivered (file record count).');
+    expect(find(s, 'Coverage')).toBeUndefined();
   });
 
   it('flags a missing classification channel as a caution', () => {
@@ -174,10 +184,9 @@ describe('buildInspectionSummary — density states the threshold, not the quali
     }
   });
 
-  it('keeps the density floor each comparison was made against', () => {
-    expect(detail(16)).toMatch(/QL1 density floor \(≥ 8 pts\/m²\)/);
-    expect(detail(4)).toMatch(/QL2 density floor \(≥ 2 pts\/m²\)/);
-    expect(detail(4)).toMatch(/below the QL1 floor/i);
-    expect(detail(1)).toMatch(/below the USGS QL2 density floor \(≥ 2 pts\/m²\)/i);
+  it('states the basis (all returns over the bounding box) on every density row', () => {
+    for (const d of [16, 4, 1]) expect(detail(d)).toMatch(/over the bounding-box footprint/);
+    const s = buildInspectionSummary(meta({ density: 16 }), tlsProvenance());
+    expect(find(s, 'Point density (all returns)')?.detail).toMatch(/over the bounding-box footprint/);
   });
 });

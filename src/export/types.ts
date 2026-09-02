@@ -125,6 +125,13 @@ export interface ExportSceneAdapter {
    */
   classificationAssignedFraction?(): number | null;
   /**
+   * The colour-provenance line for `mode` — the same statement the on-screen
+   * legend shows ("Colour is applied by the viewer, not recorded by the scan.")
+   * for every mode whose colour the viewer applied, or null for the scan's own
+   * recorded colour (RGB). Optional: adapters without it stamp no line.
+   */
+  colorProvenanceNote?(mode: ColorMode): string | null;
+  /**
    * Does any loaded cloud carry per-point normals? Drives the Normal Map
    * exporter's `isAvailable` gate. Streaming COPC + EPT sources never carry
    * normals (LAS/LAZ doesn't reserve a field for them and EPT writers rarely

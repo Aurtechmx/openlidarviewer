@@ -12,19 +12,18 @@
  *  - It reports what was *measured*. Point density, extent and attribute
  *    presence are read straight from the loaded cloud. They are stated, not
  *    judged.
- *  - A density floor is a threshold, not a quality level. A 3DEP quality level
- *    also carries vertical accuracy against independent checkpoints, coverage
- *    and collection requirements nothing here validates, so the findings say
- *    where the density sits relative to the QL1 / QL2 floors and stop there.
- *  - It only compares density against the USGS QL1 / QL2 floors when the
- *    capture-type classifier has *itself* cited USGS QL literature for this
- *    scan (an airborne-ALS delivery). The Scan Acceptance template
- *    deliberately bakes in no QL thresholds because they would be misapplied
- *    to TLS / phone / cropped subsets; this module honours the same line by
- *    gating the tier on the classifier's own applicability decision.
+ *  - A density floor is a threshold, not a quality level — and the density
+ *    this report holds is ALL RETURNS over the bounding-box footprint. USGS
+ *    QL floors are defined on nominal PULSE density, which the file does not
+ *    record (a multi-return forest tile at 10 returns/m² may be 3–4 pulses/m²),
+ *    so no finding is ever graded against a QL floor: the density row is
+ *    stated as a fact and the QL bar, where the classifier cited USGS QL
+ *    literature for an airborne delivery, is drawn as ungraded context only.
+ *    `terrain/quality/demAccuracyStandards.ts` refuses the same comparison for
+ *    the same reason.
  *  - Vertical accuracy is *never* asserted. The cloud cannot tell us RMSEz
- *    without ground control, so that finding is always rendered "—, requires
- *    ground-control validation". This is the centre of the deliverable: it
+ *    without ground control, so that finding is always rendered "—, not
+ *    evaluated in this report". This is the centre of the deliverable: it
  *    says plainly what the scan cannot prove on its own.
  *
  * Pure data: no DOM, no pdf-lib, no I/O. Deterministic — tests pin it.
@@ -64,12 +63,15 @@ export interface ReportInspectionSummary {
   /** What the report does NOT establish — always non-empty. */
   readonly caveats: readonly string[];
   /**
-   * Optional density-bar datum: the measured density against the USGS QL
-   * thresholds. Present ONLY when the QL comparison is applicable (see the
+   * Optional density-bar datum: the measured all-returns density drawn
+   * against the USGS QL pulse-density floors as CONTEXT, not a grade. Present
+   * ONLY when the classifier cited USGS QL literature for this scan (see the
    * gating rule above), so the renderer never draws a bar implying a
    * standard that doesn't apply to this capture type.
    */
   readonly densityBar?: {
+    /** Bar caption; names the floors and states that nothing is graded. */
+    readonly caption: string;
     readonly measured: number;
     readonly unit: string;
     readonly thresholds: readonly { readonly label: string; readonly value: number }[];
@@ -86,16 +88,17 @@ const USGS_QL1_PTS_PER_M2 = 8;
 const USGS_QL2_PTS_PER_M2 = 2;
 const USGS_DENSITY_SOURCE = 'Lohani & Ghosh 2017 §6 (USGS Lidar Base Spec)';
 /**
- * The technical report's density is the all-returns total over the footprint —
- * the nominal delivery density USGS QL tiers are defined against. The terrain /
- * DEM products instead grade **bare-earth (ground) density**, which is far
- * lower under canopy, so the two reports can legitimately land on different QL
- * verdicts for the same scan. Naming the basis on each keeps that from reading
- * as a contradiction.
+ * The technical report's density is the all-returns record count over the
+ * bounding-box footprint. USGS QL tiers are defined on nominal PULSE density,
+ * which the file does not record, so the row states the number and its basis
+ * and grades nothing. The terrain / DEM products separately grade
+ * **bare-earth (ground) density**, which is far lower under canopy.
  */
 const DENSITY_LABEL = 'Point density (all returns)';
-const GROUND_BASIS_NOTE =
-  ' Terrain/DEM products grade bare-earth ground density separately.';
+const DENSITY_BASIS = 'over the bounding-box footprint';
+const QL_NOT_EVALUATED =
+  'USGS QL floors are defined on nominal pulse density, which this file does not record; not evaluated.';
+const DENSITY_BAR_CAPTION = 'USGS pulse-density floors (context, not graded)';
 
 /**
  * The QL density comparison is applicable only when the classifier has cited
@@ -160,33 +163,17 @@ function densityFinding(
     return {
       label: DENSITY_LABEL,
       value,
-      detail: 'No capture-type density standard applied to this scan.',
+      detail: `All-returns density ${value} ${DENSITY_BASIS}. No capture-type density standard applied to this scan.`,
       tier: 'info',
     };
   }
-  if (d >= USGS_QL1_PTS_PER_M2) {
-    return {
-      label: DENSITY_LABEL,
-      value,
-      detail: `All-returns density is at or above the USGS QL1 density floor (≥ ${USGS_QL1_PTS_PER_M2} pts/m²).${GROUND_BASIS_NOTE}`,
-      tier: 'met',
-      source: USGS_DENSITY_SOURCE,
-    };
-  }
-  if (d >= USGS_QL2_PTS_PER_M2) {
-    return {
-      label: DENSITY_LABEL,
-      value,
-      detail: `All-returns density is at or above the USGS QL2 density floor (≥ ${USGS_QL2_PTS_PER_M2} pts/m²) and below the QL1 floor (≥ ${USGS_QL1_PTS_PER_M2} pts/m²).${GROUND_BASIS_NOTE}`,
-      tier: 'met',
-      source: USGS_DENSITY_SOURCE,
-    };
-  }
+  // Airborne delivery: the QL floors are the relevant literature, but they are
+  // pulse-density floors and this is a returns count — stated, never graded.
   return {
     label: DENSITY_LABEL,
     value,
-    detail: `All-returns density is below the USGS QL2 density floor (≥ ${USGS_QL2_PTS_PER_M2} pts/m²).${GROUND_BASIS_NOTE}`,
-    tier: 'caution',
+    detail: `All-returns density ${value} ${DENSITY_BASIS}. ${QL_NOT_EVALUATED}`,
+    tier: 'info',
     source: USGS_DENSITY_SOURCE,
   };
 }
@@ -213,15 +200,18 @@ export function buildInspectionSummary(
 
   const findings: ReportFinding[] = [];
 
-  // 1. Coverage / scale.
+  // 1. Extent / scale — the bounding box, which is not a surveyed area, and
+  //    the file's record count, which is what was delivered, not what was
+  //    captured.
+  const extent = formatArea(area);
   findings.push(
     {
-      label: 'Coverage',
-      value: formatArea(area),
+      label: 'Bounding-box extent',
+      value: Number.isFinite(area) && area > 0 ? `${extent} (not surveyed area)` : extent,
       detail:
         metadata.sourcePointCount === null
           ? 'Point count unknown from source metadata.'
-          : `${formatCount(metadata.sourcePointCount)} captured.`,
+          : `${formatCount(metadata.sourcePointCount)} delivered (file record count).`,
       tier: 'info',
     },
     // 2. Point density — the one genuinely quantitative finding.
@@ -244,13 +234,13 @@ export function buildInspectionSummary(
       : 'No classification channel — ground / feature extraction needs one.',
   });
 
-  // 4. Georeference.
+  // 4. Georeference — a declared CRS name is a fact, not a met threshold.
   if (metadata.crsName && metadata.crsName.length > 0) {
     findings.push({
       label: 'Georeference',
       value: metadata.crsName,
       detail: metadata.crsUnit ? `Linear unit: ${metadata.crsUnit}.` : undefined,
-      tier: 'met',
+      tier: 'info',
     });
   } else {
     findings.push({
@@ -265,7 +255,9 @@ export function buildInspectionSummary(
   findings.push({
     label: 'Vertical accuracy',
     value: '—',
-    detail: 'Not measured. Requires ground-control validation (NVA = 1.96 × RMSEz).',
+    detail:
+      'Not evaluated in this report. A hold-out RMSEz appears in the Terrain report when ' +
+      'terrain analysis has run; neither replaces independent ground-control checkpoints.',
     tier: 'unknown',
   });
 
@@ -286,6 +278,7 @@ export function buildInspectionSummary(
   const densityBar =
     qlApplies && Number.isFinite(metadata.density) && metadata.density > 0
       ? {
+          caption: DENSITY_BAR_CAPTION,
           measured: metadata.density,
           unit: 'pts/m²',
           thresholds: [

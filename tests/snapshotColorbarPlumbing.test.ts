@@ -29,6 +29,7 @@ import type {
   ExportSceneAdapter,
 } from '../src/export/types';
 import { Viewer } from '../src/render/Viewer';
+import { DERIVED_COLOR_NOTE } from '../src/render/colorModeProvenance';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // #1 — runStudioExport requests the colorbar on the adapter snapshot
@@ -145,5 +146,14 @@ describe('Viewer export adapter → viewer.snapshot', () => {
       probe: false,
     });
     expect(sink.opts!.colorbar).toBe(false);
+  });
+});
+
+describe('Viewer export adapter → colour-provenance note for the scan-report card', () => {
+  it('returns the legend line for a derived mode and null for recorded RGB', () => {
+    const adapter = adapterOverFakeViewer({});
+    expect(adapter.colorProvenanceNote?.('elevation')).toBe(DERIVED_COLOR_NOTE);
+    expect(adapter.colorProvenanceNote?.('intensity')).toBe(DERIVED_COLOR_NOTE);
+    expect(adapter.colorProvenanceNote?.('rgb')).toBeNull();
   });
 });
