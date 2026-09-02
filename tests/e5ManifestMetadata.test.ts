@@ -4,9 +4,9 @@
  * Two metadata errors are pinned closed here. First, the geoid identifier must
  * survive in full: a WKT that says GEOID12B must not be recorded as GEOID12 — the
  * revision letter changes which model was applied. Second, the LAS header
- * creation date is not the acquisition date; the manifest must name it as
- * creation and leave acquisition an explicit unknown, never presenting a 2021
- * file-write as the 2019 Rogue flight.
+ * creation date is not the acquisition date; the manifest names it as creation
+ * and records acquisition from the authoritative USGS WESM provider metadata (the
+ * 2019 Rogue flight), never presenting the 2021 file-write as the flight year.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -31,9 +31,9 @@ describe('E5 manifest metadata correctness', () => {
     expect(parseGeoid('...Geoid12...')).toBe('GEOID12'); // no letter → no invented one
   });
 
-  for (const [name, expectedGeoid, expectedFrame] of [
-    ['ROGUE25', 'GEOID12B', 6339],
-    ['HOUSTON17', 'GEOID18', 6344],
+  for (const [name, expectedGeoid, expectedFrame, expectedAcqYear] of [
+    ['ROGUE25', 'GEOID12B', 6339, 2019],
+    ['HOUSTON17', 'GEOID18', 6344, null],
   ] as const) {
     const m = load(name);
 
@@ -42,13 +42,18 @@ describe('E5 manifest metadata correctness', () => {
       for (const t of m.tiles) expect(t.geoidModel).toBe(expectedGeoid);
     });
 
-    it(`${name} names LAS creation date as creation, not acquisition`, () => {
+    it(`${name} names LAS creation date as creation, and acquisition from WESM`, () => {
       expect(m.summary).not.toHaveProperty('captureYears');
       for (const t of m.tiles) {
         expect(t).not.toHaveProperty('captureYear');
         expect(t).toHaveProperty('fileCreationYear');
-        expect(t.acquisitionYear).toBeNull();
-        expect(t.acquisitionDateSource).toBe('not-established');
+        // Acquisition is sourced authoritatively from USGS WESM (the provider
+        // work-unit metadata), never the LAS creation field: Rogue's 2019 flight;
+        // Houston's window crosses a calendar year, so its single year stays null.
+        expect(t.acquisitionYear).toBe(expectedAcqYear);
+        expect(t.acquisitionDateSource).toBe('usgs-wesm');
+        // The file-write year is never presented as the acquisition year.
+        if (t.acquisitionYear !== null) expect(t.acquisitionYear).not.toBe(t.fileCreationYear);
       }
     });
 
