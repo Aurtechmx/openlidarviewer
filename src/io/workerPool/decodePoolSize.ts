@@ -141,6 +141,8 @@ export interface DecodePoolFlags {
   readonly decodePool: boolean;
   /** `?decodeWorkers=N` — an explicit count, or null when unspecified. */
   readonly decodeWorkers: number | null;
+  /** `?decodePool=off` — pooled decoding refused, however it was asked for. */
+  readonly decodePoolOff?: boolean;
 }
 
 /**
@@ -177,7 +179,24 @@ export function resolveDecodePoolSize(
  * a browser run has measured the trade.
  */
 export function decodePoolOptedIn(flags: DecodePoolFlags, explicitSize?: number): boolean {
-  return explicitSize !== undefined || flags.decodePool || flags.decodeWorkers !== null;
+  // An explicit size is code asking directly (a test pinning a pool), not a URL,
+  // so it stands ahead of the session's refusal; every flag path is behind it.
+  if (explicitSize !== undefined) return true;
+  if (flags.decodePoolOff) return false;
+  return flags.decodePool || flags.decodeWorkers !== null;
+}
+
+/**
+ * Whether the whole-file LAZ decode should engage the pool. This is the ONE
+ * decode path that pools without a flag: `eligible` is the loader's size test,
+ * and a file over it decodes across workers by default because the alternative
+ * is a minute of one core. `?decodePool=off` refuses it; the opt-in flags still
+ * engage the pool for a file under the threshold, and `?decodeWorkers=N` still
+ * pins the count.
+ */
+export function decodeLazPoolEnabled(flags: DecodePoolFlags, eligible: boolean): boolean {
+  if (flags.decodePoolOff) return false;
+  return eligible || decodePoolOptedIn(flags);
 }
 
 /** The device signals the policy needs, as read from the live environment. */

@@ -13,15 +13,17 @@
  *   ?uploadQueue=off         parse-only, see Staged below
  *   ?angularPrediction=off   parse-only, see Staged below
  *   ?decodePool=on           OPT-IN: pooled COPC/EPT decode workers
+ *   ?decodePool=off          OPT-OUT: no pooled decoding, whatever asked
  *   ?decodeWorkers=N         OPT-IN: pooled decode with exactly N (1-4) workers
  *
- * `decodePool` runs the other way round from the flags above: it is OFF by
- * default and can only be turned ON. Both decode clients ship on the historical
- * single-worker path until a browser measurement on a real COPC/EPT dataset
- * shows pooled decoding behaving under a fast camera sweep — throughput and the
- * memory cost of one laz-perf WASM heap per worker. Either flag enables it:
- * `?decodePool=on` uses the device-aware size policy, `?decodeWorkers=N` pins
- * the count and implies the pool is on.
+ * `decodePool` runs the other way round from the flags above: absent it, the
+ * COPC/EPT decode clients ship on the historical single-worker path until a
+ * browser measurement on a real dataset shows pooled decoding behaving under a
+ * fast camera sweep — throughput and the memory cost of one laz-perf WASM heap
+ * per worker. Either flag enables it: `?decodePool=on` uses the device-aware
+ * size policy, `?decodeWorkers=N` pins the count and implies the pool is on.
+ * The whole-file LAZ decode is the one path that engages the pool without a
+ * flag, for a large file; `?decodePool=off` is how a session refuses it.
  *
  * Consumer status, kept honest — a flag with no consumer changes nothing:
  *   - Live: `handPan` (NavController pan mode, the G/Digit4 bindings, the
@@ -91,6 +93,13 @@ export interface DevFlags {
    */
   decodePool: boolean;
   /**
+   * `?decodePool=off` — pooled decoding refused for the session. Distinct from
+   * `decodePool: false`, which only means "not asked for": the whole-file LAZ
+   * path engages the pool on its own for a large file, and this is the switch
+   * that puts such a session back on the single-threaded `decodeLaz`.
+   */
+  decodePoolOff: boolean;
+  /**
    * Resident-stickiness in the budget selection. OFF by default: absent the
    * flag, selection is the plain greedy fill it has always been. `?stickiness=on`
    * gives an already-resident, non-refining node a small score bonus so
@@ -127,6 +136,7 @@ export const DEV_FLAG_DEFAULTS: Readonly<DevFlags> = Object.freeze({
   // unverified change on the default decode path is the mistake the multi-layer
   // mount already made once.
   decodePool: false,
+  decodePoolOff: false,
   decodeWorkers: null,
   // Stickiness changes what stays on screen at the budget boundary, and flicker
   // is not observable from Node, so it stays opt-in until a browser run on a
@@ -176,6 +186,17 @@ function parseOptIn(value: string | null): boolean {
 }
 
 /**
+ * The explicit OFF half of an opt-in flag. Absence is not "off" — it leaves the
+ * decision to whoever reads the flag — so only a spelled-out negative counts,
+ * and anything unrecognised reads as unspecified.
+ */
+function parseOptOut(value: string | null): boolean {
+  if (value === null) return false;
+  const v = value.trim().toLowerCase();
+  return v === 'off' || v === '0' || v === 'false';
+}
+
+/**
  * Decode worker count. Only a whole number in `[1, 4]` counts; absence, a
  * fraction, a negative, a huge value and outright garbage all read as null so
  * the device policy decides. The upper bound mirrors
@@ -212,6 +233,7 @@ export function parseDevFlags(search: string | URLSearchParams): DevFlags {
     angularPrediction: parseOnOff(params.get('angularPrediction')),
     streamingCommitMode: parseCommitMode(params.get('streamingCommitMode')),
     decodePool: parseOptIn(params.get('decodePool')),
+    decodePoolOff: parseOptOut(params.get('decodePool')),
     residentStickiness: parseOptIn(params.get('stickiness')),
     decodeWorkers: parseWorkerCount(params.get('decodeWorkers')),
   };
