@@ -29,6 +29,7 @@ function writeValidFixture(root: string): void {
     'OpenLiDARViewer v0.6.7 and later is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only).',
   ].join('\n\n'));
   w('src/main.ts', 'console.log(`OpenLiDARViewer v${x} — open source under the AGPL-3.0-only license.`);\n');
+  w('docs-site/.vitepress/config.mts', "export default { themeConfig: { footer: { message: 'AGPL-3.0-only licensed. Local-first: the viewer never uploads your data.' } } };\n");
   w('docs/releases/RELEASE_NOTES_v0.6.7.md', '# v0.6.7\n## Licensing change\nFirst release under AGPL-3.0-only.\n');
 }
 
@@ -88,6 +89,14 @@ describe('lint:license boundary', () => {
     // The valid fixture's MANIFEST already carries "released under MIT through
     // v0.6.6"; that historical sentence must not trip the guard.
     expect(checkLicense(root)).toEqual([]);
+  });
+
+  it('rejects a docs-site footer that still claims MIT', () => {
+    writeFileSync(
+      resolve(root, 'docs-site/.vitepress/config.mts'),
+      "export default { themeConfig: { footer: { message: 'MIT licensed. Local-first: the viewer never uploads your data.' } } };\n",
+    );
+    expect(checkLicense(root).some((p: string) => /config\.mts footer/.test(p))).toBe(true);
   });
 
   it('rejects codemeta.json declaring the MIT SPDX URL', () => {

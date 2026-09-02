@@ -92,6 +92,13 @@ export function checkLicense(root) {
   must(!/under the MIT license/.test(main), 'src/main.ts console banner still claims the MIT license.');
   must(/AGPL-3\.0-only license/.test(main), 'src/main.ts console banner does not name AGPL-3.0-only.');
 
+  // The docs site's VitePress theme footer. It renders on every published docs
+  // page, so a stale "MIT licensed" there is a wrong-license public declaration
+  // just like the manifest surfaces above. lint:license did not read it before.
+  const docsSiteConfig = read('docs-site/.vitepress/config.mts') || '';
+  must(!/\bMIT licensed\b/.test(docsSiteConfig), 'docs-site/.vitepress/config.mts footer still claims "MIT licensed" as the current license.');
+  must(/AGPL-3\.0-only/.test(docsSiteConfig), 'docs-site/.vitepress/config.mts footer does not name AGPL-3.0-only.');
+
   if (version) {
     const notes = read(`docs/releases/RELEASE_NOTES_v${version}.md`);
     must(notes != null, `docs/releases/RELEASE_NOTES_v${version}.md is missing.`);
