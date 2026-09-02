@@ -12,7 +12,7 @@
  *   SCENE=/path/tile.laz ID=OLV-DS-090 npx tsx scripts/gen-real-scene-decode-stats.mjs
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { parseLasHeader } from '../src/io/lasHeader.ts';
 import { decodeLaz } from '../src/io/lazDecode.ts';
 
@@ -39,8 +39,12 @@ for (let i=0;i<n;i++){
 const olv = { count:n, xmin, xmax, ymin, ymax, zmin, zmax, zmean: zsum/n, classHistogram: hist };
 
 // PDAL reference
-const pj = JSON.parse(execSync(`pdal info --stats ${JSON.stringify(SCENE)}`, {encoding:'utf8', maxBuffer:1<<28}));
-const md = JSON.parse(execSync(`pdal info --metadata ${JSON.stringify(SCENE)}`, {encoding:'utf8', maxBuffer:1<<28})).metadata;
+// argv form, no shell: SCENE comes from the environment and must never be
+// interpolated into a command line.
+const pdalInfo = (flag) =>
+  JSON.parse(execFileSync('pdal', ['info', flag, SCENE], { encoding: 'utf8', maxBuffer: 1 << 28 }));
+const pj = pdalInfo('--stats');
+const md = pdalInfo('--metadata').metadata;
 const by = {}; for (const s of pj.stats.statistic) by[s.name]=s;
 const pdal = {
   count: by.X.count,
