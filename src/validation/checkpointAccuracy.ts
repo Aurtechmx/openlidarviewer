@@ -29,6 +29,8 @@
  * Pure arithmetic over plain arrays. No I/O, no DOM.
  */
 
+import { NeumaierSum } from '../process/numerics';
+
 /**
  * How a checkpoint was used. Only `independent` may enter an accuracy figure.
  *
@@ -376,14 +378,16 @@ function statsOf(
   const n = residuals.length;
   if (n === 0) return EMPTY_STATS;
 
-  let sum = 0;
-  let sumSq = 0;
+  // Compensated accumulation: a long residual list mixing large and small
+  // magnitudes loses low-order bits under naive `sum += r`.
+  const sumAcc = new NeumaierSum();
+  const sumSqAcc = new NeumaierSum();
   for (let i = 0; i < n; i++) {
-    sum += residuals[i];
-    sumSq += residuals[i] * residuals[i];
+    sumAcc.add(residuals[i]);
+    sumSqAcc.add(residuals[i] * residuals[i]);
   }
-  const bias = sum / n;
-  const rmse = Math.sqrt(sumSq / n);
+  const bias = sumAcc.total / n;
+  const rmse = Math.sqrt(sumSqAcc.total / n);
 
   const sorted = [...residuals].sort((a, b) => a - b);
   const median = quantileSorted(sorted, 0.5);
@@ -395,12 +399,12 @@ function statsOf(
   // spread to estimate, so the interval is null rather than zero-width.
   let standardError: number | null = null;
   if (n > 1) {
-    let ss = 0;
+    const ssAcc = new NeumaierSum();
     for (let i = 0; i < n; i++) {
       const d = residuals[i] - bias;
-      ss += d * d;
+      ssAcc.add(d * d);
     }
-    standardError = Math.sqrt(ss / (n - 1)) / Math.sqrt(n);
+    standardError = Math.sqrt(ssAcc.total / (n - 1)) / Math.sqrt(n);
   }
 
   // Coverage of the reference uncertainty over the group. sigmaCount counts the

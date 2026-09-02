@@ -28,7 +28,7 @@
       "onlyOlv": 0,
       "withinToleranceFraction": 1,
       "maxAbsErrorM": 0.000003662109378410605,
-      "rmseM": 0.0000022006538538650567,
+      "rmseM": 0.0000022006538538650372,
       "meanSignedErrorM": 0
     },
     {
@@ -60,7 +60,7 @@
       "onlyOlv": 0,
       "withinToleranceFraction": 1,
       "maxAbsErrorM": 0.000003662109378410605,
-      "rmseM": 0.0000022006538538650546,
+      "rmseM": 0.0000022006538538650372,
       "meanSignedErrorM": 0
     }
   ],

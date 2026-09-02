@@ -173,7 +173,7 @@
   "derivedArtifacts": [
     {
       "path": "validation/cross-implementation/pdal-pipeline/results-dtm.json",
-      "sha256": "2d4867f4a32cd5d49ac570f3484c92538aa9c2bd7ac1187b8ce0819011c1fd35",
+      "sha256": "76ba4084c528fb9f846bc735fd702023ccf0af901eaf746c4f0620265c56798e",
       "derivedFrom": [
         "validation/cross-implementation/pdal-pipeline/fixtures/pc-06-bare-plane.csv",
         "validation/cross-implementation/pdal-pipeline/fixtures/pc-07-bare-rolling.csv",

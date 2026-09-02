@@ -443,3 +443,42 @@ describe('checkpointAccuracy partial reference-uncertainty coverage', () => {
     expect(r.pooled.combinedRmse).toBeNull();
   });
 });
+
+describe('checkpointAccuracy compensated summation', () => {
+  // Residuals [1e16, 1, -1e16]: the true sum is 1, so the true bias is 1/3.
+  // Naive accumulation loses the 1 entirely (1e16 + 1 rounds to 1e16, then
+  // -1e16 cancels to 0), reporting bias 0. The Neumaier accumulator keeps it.
+  it('keeps the bias where a naive running sum cancels to zero', () => {
+    const r = checkpointAccuracy(
+      [
+        { id: 'big+', reference: 0, measured: 1e16, usage: 'independent' },
+        { id: 'one', reference: 0, measured: 1, usage: 'independent' },
+        { id: 'big-', reference: 0, measured: -1e16, usage: 'independent' },
+      ],
+      { minSample: 3 },
+    );
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    // Reference: exact integer arithmetic (1e16 and 1 are exact doubles).
+    expect(r.pooled.bias).toBeCloseTo(1 / 3, 12);
+  });
+
+  it('does not drift over a long alternating tail behind a large head', () => {
+    // Head 1e8 followed by 2000 alternating ±0.1 pairs and one final +1:
+    // the exact sum is 1e8 + 1. Each ±0.1 pair cancels exactly in real
+    // arithmetic; naive floating addition against the 1e8 head leaks rounding
+    // error every step, while the compensated bias stays at the true mean.
+    const checkpoints = [{ id: 'head', reference: 0, measured: 1e8, usage: 'independent' as const }];
+    for (let i = 0; i < 2000; i++) {
+      checkpoints.push({ id: `p${i}`, reference: 0, measured: 0.1, usage: 'independent' as const });
+      checkpoints.push({ id: `m${i}`, reference: 0, measured: -0.1, usage: 'independent' as const });
+    }
+    checkpoints.push({ id: 'tail', reference: 0, measured: 1, usage: 'independent' as const });
+    const r = checkpointAccuracy(checkpoints, { minSample: 3 });
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    const n = checkpoints.length;
+    // Reference sum computed by pairing: (1e8 + 1) exactly.
+    expect(r.pooled.bias! * n).toBeCloseTo(1e8 + 1, 6);
+  });
+});
