@@ -114,9 +114,23 @@ export interface DensityColors {
  * than the data. Returns 0 (the caller's explicit "unknown" value) for fewer
  * than two points or a degenerate footprint.
  */
-export function estimatePlanimetricSpacing(positions: Float32Array): number {
+export interface XyBounds {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
+
+/**
+ * One-pass XY bounding box of an interleaved xyz buffer, or null when it holds
+ * no points. The same scan appears a dozen times across the tree with each
+ * caller's own clamping bolted on; this copy is shared by the density-mode
+ * spacing estimate and the local-density auto-parameters, which keep their own
+ * downstream arithmetic so neither caller's numbers move.
+ */
+export function xyBounds(positions: Float32Array): XyBounds | null {
   const n = Math.floor(positions.length / 3);
-  if (n < 2) return 0;
+  if (n === 0) return null;
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -129,7 +143,15 @@ export function estimatePlanimetricSpacing(positions: Float32Array): number {
     if (y < minY) minY = y;
     if (y > maxY) maxY = y;
   }
-  const area = (maxX - minX) * (maxY - minY);
+  return { minX, maxX, minY, maxY };
+}
+
+export function estimatePlanimetricSpacing(positions: Float32Array): number {
+  const n = Math.floor(positions.length / 3);
+  if (n < 2) return 0;
+  const b = xyBounds(positions);
+  if (b === null) return 0;
+  const area = (b.maxX - b.minX) * (b.maxY - b.minY);
   if (!Number.isFinite(area) || area <= 0) return 0;
   return Math.sqrt(area / n);
 }
