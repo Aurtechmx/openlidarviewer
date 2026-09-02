@@ -105,6 +105,58 @@ const sortedBox = (a: number, b: number, c: number): BoxDims => {
   return { lengthM: s[0], widthM: s[1], heightM: s[2] };
 };
 
+/**
+ * The median nearest-neighbour spacing probe on its own, for callers that need
+ * the scan's effective resolution and nothing else (the QA cloud-quality
+ * signal). Same estimator {@link objectMetrics} embeds: a strided probe
+ * subsample, brute-force nearest neighbour, the median, then the √(P/N)
+ * density correction when `positions` is itself a uniform sample of a larger
+ * scan (pass that scan's count as `sourcePointCount`). Returns the spacing in
+ * the units of `positions`, or 0 when it cannot be measured. Deterministic and
+ * O(probe²), independent of the cloud size.
+ */
+export function medianNeighbourSpacing(
+  positions: Float32Array | ReadonlyArray<number>,
+  params: Pick<ObjectMetricsParams, 'probeSamples' | 'sourcePointCount'> = {},
+): number {
+  const n = Math.floor(positions.length / 3);
+  if (n < 4) return 0;
+  const probeN = Math.min(n, Math.max(50, Math.floor(params.probeSamples ?? 2000)));
+  const stride = Math.max(1, Math.floor(n / probeN));
+  const px: number[] = [], py: number[] = [], pz: number[] = [];
+  for (let i = 0; i < n; i += stride) {
+    const b = i * 3;
+    const x = positions[b], y = positions[b + 1], z = positions[b + 2];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    px.push(x); py.push(y); pz.push(z);
+  }
+  const P = px.length;
+  if (P < 2) return 0;
+  const nnDist: number[] = [];
+  for (let i = 0; i < P; i++) {
+    let best = Infinity;
+    for (let j = 0; j < P; j++) {
+      if (j === i) continue;
+      const dx = px[i] - px[j], dy = py[i] - py[j], dz = pz[i] - pz[j];
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < best) best = d2;
+    }
+    if (Number.isFinite(best)) nnDist.push(Math.sqrt(best));
+  }
+  nnDist.sort((a, b) => a - b);
+  const probeSpacing = nnDist.length ? nnDist[Math.floor(nnDist.length / 2)] : 0;
+  // The probe measures P points of a scan of N; for a uniform sample of a 2-D
+  // manifold spacing scales as 1/√density, so the scan's spacing is the
+  // probe's × √(P/N). Same correction as objectMetrics above.
+  const fullCount = Math.max(
+    n,
+    Number.isFinite(params.sourcePointCount) && (params.sourcePointCount as number) > 0
+      ? Math.floor(params.sourcePointCount as number)
+      : 0,
+  );
+  return fullCount > P ? probeSpacing * Math.sqrt(P / fullCount) : probeSpacing;
+}
+
 export function objectMetrics(
   positions: Float32Array | ReadonlyArray<number>,
   params: ObjectMetricsParams = {},
