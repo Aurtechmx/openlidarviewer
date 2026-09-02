@@ -52,7 +52,9 @@ describe('buildScanFitness — scorecard tones', () => {
 
   it('density buckets at the USGS QL floors (2 and 8 pts/m²)', () => {
     expect(tone(buildScanFitness(base({ groundDensityPerM2: 9 })), 'density')).toBe('ready');
-    expect(tone(buildScanFitness(base({ groundDensityPerM2: 3 })), 'density')).toBe('okay');
+    // 3 pts/m² clears the QL2 reference: 'ready', the same band the assessment chip gives it.
+    expect(tone(buildScanFitness(base({ groundDensityPerM2: 3 })), 'density')).toBe('ready');
+    expect(tone(buildScanFitness(base({ groundDensityPerM2: 1.3 })), 'density')).toBe('okay');
     expect(tone(buildScanFitness(base({ groundDensityPerM2: 0.9 })), 'density')).toBe('review');
   });
 

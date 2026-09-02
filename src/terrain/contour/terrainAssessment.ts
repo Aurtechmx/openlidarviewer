@@ -111,6 +111,15 @@ export interface TerrainAssessment {
   readonly notRecommendedFor: string;
   /** Real values behind the verdict, each with a plain label + rating. */
   readonly supportingMetrics: ReadonlyArray<SupportingMetric>;
+  /**
+   * The ACTUAL causes of a below-Good surface verdict, in the order they are
+   * applied: the surface caps that fired (each quoting its figure — the same
+   * strings `reason` joins) followed by any supporting metric rated 'poor' that
+   * no cap already names (DTM quality, vertical RMSE — the two that feed the
+   * Limited rule without a cap of their own). Empty for Good and Blocked.
+   * Disclosure only: nothing here changes a status.
+   */
+  readonly limiters?: ReadonlyArray<string>;
 }
 
 /** Status ordering for capping (Good is best). */
@@ -319,6 +328,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   // ── reason (one plain line) ───────────────────────────────────────────
   const gateReason = q.reasons?.find((r) => r && r.trim().length > 0);
   let reason: string;
+  const limiters: string[] = [];
   if (status === 'Blocked') {
     reason = noUsableDtm
       ? 'No usable bare-earth surface — too little measured ground to contour.'
@@ -342,6 +352,14 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     // description.
     if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of measured cells lie within a few cells of the data boundary, where neighbour support is thinnest`);
     if (density < LOW_DENSITY_PER_M2) caps.push('ground returns are sparse');
+    // Every cap above has a matching 'poor' chip; only these two poor chips
+    // have no cap of their own, yet count toward the Limited rule.
+    limiters.push(...caps);
+    for (const m of supportingMetrics) {
+      if (m.rating !== 'poor') continue;
+      if (m.label === 'DTM quality') limiters.push(`DTM quality ${m.value} is rated poor`);
+      else if (m.label === 'Vertical RMSE') limiters.push(`vertical RMSE ${m.value} is rated poor`);
+    }
     if (coverageMode === 'resident-only') {
       // PARTIAL STREAM: lead with the honest "only part has loaded" framing, not
       // the sparse interpolation / edge figures (which are streaming artefacts
@@ -427,6 +445,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     useCaution,
     notRecommendedFor,
     supportingMetrics,
+    limiters,
   };
 }
 

@@ -95,6 +95,40 @@ export interface FitnessInputs {
    * density.
    */
   readonly densityReferenceFloor?: string | null;
+  /**
+   * What the grade actually ran on. `coverageMode` stays the surface-coverage
+   * verdict (it feeds the assessment's Preview cap and must not move); this is
+   * the separate, disclosed BASIS: a strided sample of the loaded cloud is not
+   * "the full cloud" even when the grid coverage reads 'full'. Optional —
+   * absent keeps the legacy coverageMode-only wording.
+   */
+  readonly gradedBasis?: {
+    /** True when the analysis strided the loaded cloud down to a sample. */
+    readonly sampled: boolean;
+    /** Points the grade ran on (the strided sample), or null when unknown. */
+    readonly gradedPointCount: number | null;
+    /** Ground returns the DTM actually analysed, when the sample size is unknown. */
+    readonly analysedGroundCount?: number | null;
+    /** Points resident in the viewer for this scan, when known. */
+    readonly residentPointCount?: number | null;
+  };
+  /**
+   * Mean analysed ground returns per MEASURED cell (unscaled counts). Below
+   * `REGULARITY_MIN_COUNTS` the per-cell counts are integer-quantised at a
+   * handful per cell and the median/mean readout carries no regularity
+   * information, so it is withheld (the hint says why). Optional — absent
+   * keeps the readout.
+   */
+  readonly meanCountsPerMeasuredCell?: number | null;
+  /**
+   * The assessment's OWN cause list for its verdict (`TerrainAssessment.
+   * limiters`) — the caps and poor-rated metrics that actually produced the
+   * status word. When present and non-empty the verdict's lead clause and its
+   * "+N more" count come from here, so the sentence names what capped the
+   * verdict rather than the highest-priority reviewed scorecard row. Absent or
+   * empty ⇒ the scorecard-priority fallback.
+   */
+  readonly assessmentLimiters?: ReadonlyArray<string>;
 }
 
 /** One traffic-light row in the scorecard. */
@@ -104,6 +138,11 @@ export interface FitnessDimension {
   readonly tone: FitnessTone;
   /** One-line plain-language summary with a benchmark where possible. */
   readonly summary: string;
+  /**
+   * Longer disclosure for the row's tooltip (basis, denominator, why a readout
+   * is withheld). Absent ⇒ the summary is the hint.
+   */
+  readonly hint?: string;
 }
 
 /** The full verdict-led fitness model the panel renders. */
@@ -146,12 +185,32 @@ const worst = (a: FitnessTone, b: FitnessTone): FitnessTone => (SEVERITY[a] >= S
  */
 const QL2_DENSITY = 2;
 const QL1_DENSITY = 8;
+/**
+ * Scorecard TONE bands — the SAME bands the assessment's supporting-metric
+ * chips use (terrainAssessment: bandHigh(density, 2, 1.0) and bandLow(rmse,
+ * 0.1, 0.25)), so one number never carries two tones across the panel. The
+ * chip bands feed the assessment's Limited rule and stay where they are; these
+ * mirror them.
+ */
+const DENSITY_READY = QL2_DENSITY;
+const DENSITY_OKAY = 1.0;
 /** Coverage fractions where the measured surface is trustworthy vs sparse. */
 const COVERAGE_READY = 0.8;
 const COVERAGE_OKAY = 0.5;
 /** Vertical RMSE thresholds (metres-equivalent) for ready/okay. */
 const RMSE_READY = 0.1;
-const RMSE_OKAY = 0.3;
+const RMSE_OKAY = 0.25;
+/**
+ * The density-reference badge's own gates — unchanged from before the tone
+ * bands were aligned to the chips (density ≥ QL2, RMSE ≤ 0.3 m), so aligning
+ * the row tones neither earns nor loses a badge.
+ */
+const BADGE_DENSITY_MIN = QL2_DENSITY;
+const BADGE_RMSE_MAX = 0.3;
+/** Mean analysed returns per measured cell below which median/mean is withheld. */
+const REGULARITY_MIN_COUNTS = 10;
+/** Disclosed on every density row: ground returns are not pulses. */
+const DENSITY_BASIS_NOTE = 'Ground returns only; the USGS figure counts pulses of all classes.';
 /** Unclassified fraction below which the cloud is well classified. */
 const UNCLASSIFIED_OKAY = 0.1;
 /**
@@ -166,6 +225,11 @@ const UNVERIFIED_UNIT_CAVEAT =
 
 function pct(frac: number): number {
   return Math.round(frac * 100);
+}
+
+/** Thousands-grouped integer (locale-independent, so tests and exports agree). */
+function fmtInt(n: number): string {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 function georefDimension(inp: FitnessInputs): FitnessDimension {
@@ -185,9 +249,11 @@ function coverageDimension(f: number | null): FitnessDimension {
   else tone = 'review';
   const measured = pct(f);
   let summary: string;
-  if (tone === 'ready') summary = `${measured}% of the surface is measured ground — well covered.`;
-  else if (tone === 'okay') summary = `${measured}% measured; the rest is interpolated between gaps.`;
-  else summary = `Only ${measured}% is measured ground — ${100 - measured}% is interpolated, so the surface is mostly inferred.`;
+  // Denominator disclosed: the fraction is of COVERED cells (measured +
+  // interpolated), not of the whole grid — empty cells are outside it.
+  if (tone === 'ready') summary = `${measured}% of covered cells are measured ground — well covered.`;
+  else if (tone === 'okay') summary = `${measured}% of covered cells measured; the rest is interpolated between gaps.`;
+  else summary = `Only ${measured}% of covered cells is measured ground — ${100 - measured}% is interpolated, so the surface is mostly inferred.`;
   return { key: 'coverage', label: 'Coverage', tone, summary };
 }
 
@@ -208,7 +274,12 @@ function densityRegularity(mean: number, median: number | null | undefined): str
   return ` Median ${densityRound(median)} ground pts/m² (median/mean ${ratio.toFixed(2)}).`;
 }
 
-function densityDimension(d: number | null, median: number | null | undefined, unitKnown: boolean): FitnessDimension {
+function densityDimension(
+  d: number | null,
+  median: number | null | undefined,
+  unitKnown: boolean,
+  meanCounts: number | null | undefined,
+): FitnessDimension {
   if (d == null) return { key: 'density', label: 'Ground detail', tone: 'review', summary: 'Ground density unknown.' };
   // Fail closed on an unverified scale: a pts/m² figure derived off an inert
   // placeholder factor is not assertable, so hold the metric verdict rather than
@@ -222,20 +293,33 @@ function densityDimension(d: number | null, median: number | null | undefined, u
     };
   }
   let tone: FitnessTone;
-  if (d >= QL1_DENSITY) tone = 'ready';
-  else if (d >= QL2_DENSITY) tone = 'okay';
+  if (d >= DENSITY_READY) tone = 'ready';
+  else if (d >= DENSITY_OKAY) tone = 'okay';
   else tone = 'review';
   const v = densityRound(d);
   // "reference" (not "floor met"/"quality level") — this is ground-return
   // density measured against a pulse-density figure, not a QL determination.
   let summary: string;
-  if (tone === 'ready') summary = `${v} ground pts/m² — clears the ${QL1_DENSITY} pts/m² QL1 pulse-density reference.`;
-  else if (tone === 'okay') summary = `${v} ground pts/m² — clears the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
-  else summary = `${v} ground pts/m² — below the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
+  if (d >= QL1_DENSITY) summary = `${v} ground pts/m² — clears the ${QL1_DENSITY} pts/m² QL1 pulse-density reference.`;
+  else if (tone === 'ready') summary = `${v} ground pts/m² — clears the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
+  else if (tone === 'okay') summary = `${v} ground pts/m² — below the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
+  else summary = `${v} ground pts/m² — below the ${QL2_DENSITY} pts/m² QL2 pulse-density reference; sparse ground.`;
   // Median vs mean, when the median is supplied — a regularity signal only; the
-  // tone above still buckets on the mean.
-  summary += densityRegularity(d, median);
-  return { key: 'density', label: 'Ground detail', tone, summary };
+  // tone above still buckets on the mean. Withheld when the per-cell counts are
+  // too few to carry regularity information (integer-quantised at a handful of
+  // returns per cell); the hint says so.
+  let hint = `${summary} ${DENSITY_BASIS_NOTE}`;
+  const tooFewCounts =
+    meanCounts != null && Number.isFinite(meanCounts) && meanCounts < REGULARITY_MIN_COUNTS;
+  if (tooFewCounts) {
+    if (median != null && Number.isFinite(median)) {
+      hint += ` Median/mean not shown: about ${Math.round(meanCounts as number)} returns per measured cell, too few for the per-cell counts to carry regularity information.`;
+    }
+  } else {
+    summary += densityRegularity(d, median);
+    hint = `${summary} ${DENSITY_BASIS_NOTE}`;
+  }
+  return { key: 'density', label: 'Ground detail', tone, summary, hint };
 }
 
 function accuracyDimension(rmse: number | null, unit: string, unitToMetres: number, unitKnown: boolean): FitnessDimension {
@@ -260,11 +344,13 @@ function accuracyDimension(rmse: number | null, unit: string, unitToMetres: numb
   if (rmseM <= RMSE_READY) tone = 'ready';
   else if (rmseM <= RMSE_OKAY) tone = 'okay';
   else tone = 'review';
-  const v = `±${rmse.toFixed(2)} ${unit}`;
+  // An RMSE is a dispersion statistic, not a symmetric "±" bound — print it as
+  // what it is, and name the basis (internal hold-out, not checkpoints).
+  const v = `RMSE ${rmse.toFixed(2)} ${unit} (internal hold-out)`;
   let summary: string;
-  if (tone === 'ready') summary = `${v} vertical (held-out check) — tight.`;
-  else if (tone === 'okay') summary = `${v} vertical (held-out check) — moderate.`;
-  else summary = `${v} vertical (held-out check) — loose.`;
+  if (tone === 'ready') summary = `${v} — tight.`;
+  else if (tone === 'okay') summary = `${v} — moderate.`;
+  else summary = `${v} — loose.`;
   return { key: 'accuracy', label: 'Vertical accuracy', tone, summary };
 }
 
@@ -297,6 +383,28 @@ function integrityDimension(inp: FitnessInputs): FitnessDimension {
     const mode = inp.coverageMode === 'resident-only' ? 'the streamed-in part' : 'a sample';
     return { key: 'integrity', label: 'Integrity', tone: 'okay', summary: `Graded on ${mode} of the cloud, not the whole dataset.` };
   }
+  // A 'full' coverage mode says the grid spans the extent; it does not say every
+  // point was graded. When the analysis strided the loaded cloud, say so — with
+  // the sample size and, when known, how much of the cloud is resident.
+  const basis = inp.gradedBasis;
+  if (basis?.sampled) {
+    const n = basis.gradedPointCount;
+    const size = n != null && Number.isFinite(n) ? `a ${fmtInt(n)}-point sample` : 'a sample';
+    const ground =
+      n == null && basis.analysedGroundCount != null && Number.isFinite(basis.analysedGroundCount)
+        ? `: ${fmtInt(basis.analysedGroundCount)} ground returns analysed`
+        : '';
+    const resident =
+      basis.residentPointCount != null && Number.isFinite(basis.residentPointCount)
+        ? ` (${fmtInt(basis.residentPointCount)} points resident)`
+        : '';
+    return {
+      key: 'integrity',
+      label: 'Integrity',
+      tone: 'okay',
+      summary: `Graded on ${size} of the loaded cloud${ground}${resident}.`,
+    };
+  }
   return { key: 'integrity', label: 'Integrity', tone: 'ready', summary: 'Graded on the full cloud.' };
 }
 
@@ -326,7 +434,7 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   const dimensions: FitnessDimension[] = [
     georefDimension(inp),
     coverageDimension(inp.measuredFraction),
-    densityDimension(inp.groundDensityPerM2, inp.medianGroundDensityPerM2, unitKnown),
+    densityDimension(inp.groundDensityPerM2, inp.medianGroundDensityPerM2, unitKnown, inp.meanCountsPerMeasuredCell),
     accuracyDimension(inp.verticalRmse, unit, unitToMetres, unitKnown),
     classificationDimension(inp.unclassifiedFraction, inp.hasGroundClass),
     integrityDimension(inp),
@@ -354,16 +462,28 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   // The verdict's LEAD WORD mirrors the authoritative fitness tier (the gate's
   // status) so it never disagrees with the hero verdict — a 'Limited' scan must
   // not read as "Preview only". The clause then names the biggest limitation.
+  // The assessment's own cause list wins when it has one: those are the caps
+  // and poor-rated metrics that actually produced the status word, so the
+  // clause names the real limiter (and "+N more" counts the real causes). The
+  // scorecard-priority pick is the fallback only.
+  const causes = (inp.assessmentLimiters ?? []).filter((c) => c.trim().length > 0);
+  const leadCause = causes[0];
   const lead = reviews[0];
-  const more = reviews.length > 1 ? ` (+${reviews.length - 1} more to review)` : '';
-  const limiterClause = lead ? ` — ${limiterPhrase[lead.key]}${more}` : '';
+  let limiterClause: string;
+  if (leadCause) {
+    const more = causes.length > 1 ? ` (+${causes.length - 1} more to review)` : '';
+    limiterClause = ` — ${leadCause}${more}`;
+  } else {
+    const more = reviews.length > 1 ? ` (+${reviews.length - 1} more to review)` : '';
+    limiterClause = lead ? ` — ${limiterPhrase[lead.key]}${more}` : '';
+  }
   let verdict: string;
   if (inp.status === 'Blocked') {
     verdict = 'Not usable for terrain products as-is.';
   } else if (inp.status === 'Limited') {
-    verdict = lead ? `Limited${limiterClause}.` : 'Limited — not export-ready as-is.';
+    verdict = limiterClause ? `Limited${limiterClause}.` : 'Limited — not export-ready as-is.';
   } else if (inp.status === 'Preview') {
-    verdict = lead ? `Preview only${limiterClause}.` : 'Preview — re-run on the full cloud for a settled grade.';
+    verdict = limiterClause ? `Preview only${limiterClause}.` : 'Preview — re-run on the full cloud for a settled grade.';
   } else if (reviews.length === 0) {
     verdict = 'Ready for terrain products — coverage, density and accuracy all pass.';
   } else {
@@ -381,10 +501,14 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   // partial/streaming sample would misrepresent the density. It names the 3DEP
   // pulse-density FLOOR the ground-return density clears as a REFERENCE, never a
   // quality-level grade (ground-return density is not a pulse determination).
-  const densTone = dimensions.find((d) => d.key === 'density')!.tone;
-  const accTone = dimensions.find((d) => d.key === 'accuracy')!.tone;
+  // Gated on the badge's OWN thresholds (not the row tones, which mirror the
+  // assessment chips) so the badge is earned exactly where it was before.
+  const badgeDensityOk =
+    unitKnown && inp.groundDensityPerM2 != null && inp.groundDensityPerM2 >= BADGE_DENSITY_MIN;
+  const badgeAccuracyOk =
+    unitKnown && inp.verticalRmse != null && inp.verticalRmse * unitToMetres <= BADGE_RMSE_MAX;
   const tierBadge =
-    inp.densityReferenceFloor && !provisional && densTone !== 'review' && accTone !== 'review' && inp.crsKnown
+    inp.densityReferenceFloor && !provisional && badgeDensityOk && badgeAccuracyOk && inp.crsKnown
       ? `≥ ${inp.densityReferenceFloor} density reference`
       : null;
 

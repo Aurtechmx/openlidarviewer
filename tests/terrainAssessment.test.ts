@@ -497,3 +497,26 @@ describe('terrainAssessment', () => {
     expect(a.status).toBe('Good');
   });
 });
+
+describe('terrainAssessment — limiters name the actual causes of the verdict', () => {
+  it('a Limited surface driven by two poor metrics lists the boundary cap and the poor RMSE, not density', () => {
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        reasons: ['Preview only: mean confidence is low.'],
+        score: 60,
+        meanDensity: 1.3,
+        edgeRiskRatio: 0.79,
+        rmseZM: 0.66,
+      }),
+    );
+    expect(a.status).toBe('Limited');
+    expect(a.limiters).toEqual([
+      '79% of measured cells sit at the edge of the data, where the surface is least supported',
+      'vertical RMSE 0.66 m is rated poor',
+    ]);
+  });
+  it('a Good surface has no limiters', () => {
+    expect(terrainAssessment(fixture()).limiters).toEqual([]);
+  });
+});

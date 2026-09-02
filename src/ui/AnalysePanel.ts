@@ -3177,6 +3177,20 @@ export class AnalysePanel {
     // assumption instead of stamping a bare "pts/m²" / "m".
     const fitLinearUnit = this._cb.getMapContext?.()?.linearUnit;
     const unitKnown = fitLinearUnit != null && fitLinearUnit !== 'unknown';
+    // What the grade ran on. The grid's coverageMode reads 'full' whenever the
+    // grid spans the extent, but the gather strides a large cloud down to a
+    // sample first; the core records that stride as its density-scaling
+    // warning, and the ground filter's analysed count (+ the returns it
+    // excluded by class) is the size of that sample.
+    const strided = r.warnings.some((w) => w.includes('uniform-stride assumption'));
+    const scanId = this._cb.getActiveScanId?.() ?? null;
+    const residentPointCount = scanId ? (this._cb.getFeatureCloud?.(scanId)?.pointCount ?? null) : null;
+    // Mean analysed returns per MEASURED cell, from the grid's own per-cell
+    // counts (unscaled). Gates the median/mean regularity readout.
+    let countSum = 0;
+    for (let i = 0; i < r.dtm.counts.length; i++) if (r.dtm.coverage[i] === 2) countSum += r.dtm.counts[i];
+    const meanCountsPerMeasuredCell =
+      r.cellMetrics.measuredCellCount > 0 ? countSum / r.cellMetrics.measuredCellCount : null;
     const inputs: FitnessInputs = {
       status: a.status,
       score: a.scoreKnown ? a.score : null,
@@ -3200,6 +3214,16 @@ export class AnalysePanel {
       hasGroundClass: hasClass,
       coverageMode: r.dtm.coverageMode,
       densityReferenceFloor: densityFloor,
+      // The result does not carry the strided sample size itself, so the row
+      // states the ground returns the DTM analysed and the resident count.
+      gradedBasis: {
+        sampled: strided,
+        gradedPointCount: null,
+        analysedGroundCount: r.dtm.analyzedPointCount,
+        residentPointCount,
+      },
+      meanCountsPerMeasuredCell,
+      assessmentLimiters: a.limiters,
     };
     const f = buildScanFitness(inputs);
 
@@ -3221,7 +3245,7 @@ export class AnalysePanel {
         tone,
         el('span', { className: 'olv-fit-sum', text: d.summary }),
       );
-      this._hint(row, d.summary);
+      this._hint(row, d.hint ?? d.summary);
       grid.append(row);
     }
     this._fitnessRow.append(grid);
