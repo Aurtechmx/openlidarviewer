@@ -468,15 +468,8 @@ export interface AnalyseContoursResult {
   /** Per-cell metric rollup: density, completeness, edge risk. */
   readonly cellMetrics: CellMetricsSummary;
   /** Classified vegetation/building/noise returns dropped before ground filtering. */
-  /**
-   * Share of source returns carrying ASPRS class 0 (created, never classified)
-   * or 1 (unclassified), or null when the scan has no classification at all.
-   * A file can be fully classified in the sense that every point holds a code
-   * and still be almost entirely code 1, which is what a raw airborne tile
-   * usually is; the fitness panel needs the measured share rather than the
-   * mere presence of the attribute.
-   */
-  readonly unclassifiedFraction: number | null;
+  /** Passed through unchanged from `TerrainCore`. */
+  readonly unclassifiedFraction: TerrainCore['unclassifiedFraction'];
   readonly excludedByClassification: number;
   /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
   readonly accuracyStandards: DemAccuracyStandards;
