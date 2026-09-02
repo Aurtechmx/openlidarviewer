@@ -6,7 +6,7 @@
 # No case is marked covered without a test that actually runs it.
 
 schemaVersion: 1
-softwareVersion: 0.5.9
+softwareVersion: 0.6.7
 
 # ── Analytic cases (§24.1) — closed-form isolines, E3 self-consistency ────────
 analytic:
@@ -76,12 +76,14 @@ synthetic:
 
 # ── Cross-implementation (§24.3) — E4, requires external reference outputs ─────
 cross-implementation:
-  status: pending
+  status: covered
   note: >-
-    Requires independent contour extraction from the same raster (for example
-    PDAL/GDAL). The harness exists at src/validation/crossCheck.ts with every
-    reference slot pending; no external reference outputs are bundled and none
-    were fabricated. Until run, no case here is above E3.
+    Executed against GDAL gdal_contour on the analytic tilted-plane DEM under
+    PROTO-CONTOUR-GDAL-ANALYTIC-PLANE (study
+    OLV-XS-002-CONTOURS-GDAL-PLANE, tests/contourCrossCheck.test.ts); the
+    CONTOURS claim carries E4 in docs/validation/claim-register.yaml on that
+    study. Reference slots beyond the plane case stay pending; none were
+    fabricated.
 
 # ── External datasets (§24.4) ─────────────────────────────────────────────────
 external:

@@ -8,11 +8,13 @@
  * and a few Mexico / international entries because the catalog seam
  * is designed to expand.
  *
- * This is NOT a complete EPSG database. proj4js carries its own
- * universe of definitions; this list is just the picker's preset
- * menu. Users who need an EPSG not in the registry can type the
- * numeric code in the override panel and the converter will fetch
- * the proj4 definition lazily.
+ * This is NOT a complete EPSG database, and there is no lazy fetch:
+ * the converter resolves a code against the static table and the
+ * UTM/MGA parametric ranges in `convert/epsg.ts`, offline, and
+ * returns null for everything else. A picker entry outside that set
+ * labels the frame correctly but cannot reproject through it. Users
+ * can still type any numeric code in the override panel; whether it
+ * converts is decided by `epsg.ts`.
  *
  * Pure data — no I/O, no DOM. Loads with the shell (~3 KB gzipped).
  */
@@ -204,10 +206,11 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
 
   // ── European national LiDAR programmes surfaced by the curated catalog ──
   // Each of these projected CRSs is the native frame of one or more
-  // public-LiDAR programmes that ship via FLAI Open LiDAR Data. The
-  // converter resolves them via proj4js at first use; carrying the
-  // labels here means the override panel reads "Lambert 72" instead
-  // of "EPSG:31370".
+  // public-LiDAR programmes that ship via FLAI Open LiDAR Data. Most
+  // are OUTSIDE the static proj4 table in `convert/epsg.ts`, so they
+  // label the frame without enabling reprojection; carrying them here
+  // means the override panel reads "Lambert 72" instead of
+  // "EPSG:31370".
   {
     epsg: 2056,
     label: 'CH1903+ / LV95 (Switzerland)',

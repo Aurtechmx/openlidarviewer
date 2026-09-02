@@ -22,6 +22,21 @@ identifiers:
     value: "10.5281/zenodo.21693643"
     description: "Version DOI for the archived v0.6.2 release"
   - type: doi
+    value: "10.5281/zenodo.21744415"
+    description: "Version DOI for the archived v0.6.3 release"
+  - type: doi
+    value: "10.5281/zenodo.21845718"
+    description: "Version DOI for the archived v0.6.4 release"
+  - type: doi
+    value: "10.5281/zenodo.21933671"
+    description: "Version DOI for the archived v0.6.5 release"
+  - type: doi
+    value: "10.5281/zenodo.22062629"
+    description: "Version DOI for the archived v0.6.6 release"
+  - type: doi
+    value: "10.5281/zenodo.22155876"
+    description: "Version DOI for the archived v0.6.7 release"
+  - type: doi
     value: "10.5281/zenodo.21544619"
     description: "Concept DOI, resolves to the newest version"
   - type: swh

@@ -22,7 +22,7 @@ the paper that specifies it.
 
 | Id | Ver | Method | Citation |
 |---|---|---|---|
-| `olv.ground.smrf` | 1 | SMRF ground extraction | Pingel, Clarke & McBride (2013) |
+| `olv.ground.smrf` | 1 | SMRF-derived ground extraction; the shipped opening rule is the project's own cut-surface variant, which diverges from the published object-mask (see `groundFilter.ts`) | after Pingel, Clarke & McBride (2013) |
 | `olv.terrain.slope-horn` | 1 | Horn slope & aspect | Horn (1981) |
 | `olv.terrain.vrm` | 1 | Vector Ruggedness Measure | Sappington et al. (2007) |
 | `olv.terrain.tpi` | 1 | Topographic Position Index | Weiss (2001) |
@@ -32,7 +32,7 @@ the paper that specifies it.
 | `olv.contour.generalize.terrain-adaptive` | 1 | Terrain-adaptive contour generalization | internal (feature-scaled DP) |
 | `olv.class.derived-heuristic` | 3 | Derived point classification (heuristic) | Zhang et al. (2003); internal composition |
 | `olv.topology.linkage-record` | 1 | Source acquisition topology linkage record | internal (provenance record) |
-| `olv.dtm.idw-fill` | 1 | DTM raster + IDW void fill | internal (standard IDW) |
+| `olv.dtm.idw-fill` | 1 | DTM raster + void fill; the shipped fill is geodesic, an Euclidean IDW prefill only seeds it (see `methodRegistry.ts`) | internal |
 | `olv.validation.holdout-rmse` | 2 | Hold-out vertical accuracy (classify-inside-fold) | ASPRS (2014) formulas, hold-out basis |
 | `olv.validation.spatial-block` | 2 | Spatial-block cross-validation | Roberts et al. (2017) |
 | `olv.validation.reliability-wilson` | 1 | Measured-cell reliability | Wilson (1927) |

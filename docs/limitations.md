@@ -17,8 +17,9 @@ ships a confidence-aware bare-earth DTM with derived DSM, canopy height
 (CHM = DSM − DTM), slope, hillshade, evidence-graded contours, and a
 georeferenced DEM export (Esri ASCII Grid + GeoTIFF). Each analysis carries
 a Terrain Assessment verdict — Good / Preview / Limited / Blocked — and a
-per-cell confidence that is **calibrated against measured hold-out error**,
-not asserted. That confidence is a data-quality estimate, not a survey
+per-cell confidence whose **measured** cells are calibrated against hold-out
+error; interpolated cells keep their geometric estimate, which is not
+calibrated against anything. That confidence is a data-quality estimate, not a survey
 certification: it does not stand in for a licensed surveyor, ground control,
 datum validation, or regulatory acceptance. Treat terrain products and DEM
 exports as deliverable-ready only when the assessment reads **Good**;
