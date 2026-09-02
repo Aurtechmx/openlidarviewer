@@ -10,7 +10,7 @@
 import { clamp, clamp01 } from '../numeric';
 import type { PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
-import { densityForChunk, defaultCellSizeForSpacing } from './densityColors';
+import { densityForChunk, densityCellSizeFor } from './densityColors';
 import { computeElevationRange, computeScalarRange } from './elevationRange';
 import {
   coverageColorForConfidence,
@@ -54,8 +54,9 @@ export type ColorMode =
    */
   | 'returnNumber'
   /**
-   * Density heatmap — perceptual hot-cold colouring of points-per-m² in a
-   * horizontal voxel grid. Surfaces coverage gaps an analyst would otherwise
+   * Density heatmap — perceptual hot-cold colouring of points per cell in a
+   * horizontal grid binned at the cloud's own estimated spacing (relative
+   * ramp, source horizontal units). Surfaces coverage gaps an analyst would otherwise
    * miss in the single global density figure on the Scan Report. Always
    * available because it derives from positions alone.
    */
@@ -897,14 +898,14 @@ export function colorForMode(
 
     // ── density (heatmap) ───────────────────────────────────────────────────
     case 'density': {
-      // Cell size derived from the cloud's spacing when known; otherwise
-      // default to a metre. `densityForChunk` clamps internally to safe
-      // bounds, so a missing spacing value still produces a valid heatmap.
-      const spacing = (cloud as { spacing?: number }).spacing ?? 0;
-      const cellSize = defaultCellSizeForSpacing(spacing);
+      // Bin size from the cloud's own estimated planimetric spacing. The
+      // previous code read a `spacing` field PointCloud has never carried, so
+      // every cloud fell to the 1-unit default and a sparse airborne scan
+      // rendered as per-point speckle instead of a density read.
+      const positions = sourcePositions(cloud);
       return densityForChunk({
-        positions: sourcePositions(cloud),
-        cellSize,
+        positions,
+        cellSize: densityCellSizeFor(positions),
       }).colors;
     }
 

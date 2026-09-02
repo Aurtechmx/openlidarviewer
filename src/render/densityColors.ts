@@ -101,6 +101,49 @@ export interface DensityColors {
  * Returns a flat interleaved RGB buffer plus a small stats record useful
  * for an inspector overlay (mean / max).
  */
+/**
+ * Average planimetric spacing of a cloud, estimated in one pass from its own
+ * XY extent: sqrt(footprint area / point count).
+ *
+ * The heatmap needs SOME spacing to size its bins, and no loader records one;
+ * the old call site read a `spacing` field that has never existed on
+ * PointCloud, so every cloud binned at the 1-unit fallback and a sparse
+ * airborne scan rendered as per-point speckle rather than a density read.
+ * A bbox estimate is deliberately crude: it under-reads spacing when the
+ * footprint is mostly empty, which only makes the bins finer, never coarser
+ * than the data. Returns 0 (the caller's explicit "unknown" value) for fewer
+ * than two points or a degenerate footprint.
+ */
+export function estimatePlanimetricSpacing(positions: Float32Array): number {
+  const n = Math.floor(positions.length / 3);
+  if (n < 2) return 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const area = (maxX - minX) * (maxY - minY);
+  if (!Number.isFinite(area) || area <= 0) return 0;
+  return Math.sqrt(area / n);
+}
+
+/**
+ * The bin size the density mode should use for `positions`: the default cell
+ * for the cloud's own estimated spacing. Exported as the seam the colour path
+ * calls, so a test can pin that the heatmap bins from measured spacing rather
+ * than a constant.
+ */
+export function densityCellSizeFor(positions: Float32Array): number {
+  return defaultCellSizeForSpacing(estimatePlanimetricSpacing(positions));
+}
+
 export function densityForChunk(input: DensityInput): DensityColors {
   const positions = input.positions;
   const cellSize = Math.max(1e-6, input.cellSize);

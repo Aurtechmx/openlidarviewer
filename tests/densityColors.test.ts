@@ -9,6 +9,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   densityForChunk,
   defaultCellSizeForSpacing,
+  estimatePlanimetricSpacing,
+  densityCellSizeFor,
 } from '../src/render/densityColors';
 
 function pack(points: ReadonlyArray<readonly [number, number, number]>): Float32Array {
@@ -137,5 +139,37 @@ describe('defaultCellSizeForSpacing', () => {
     expect(defaultCellSizeForSpacing(0)).toBe(1);
     expect(defaultCellSizeForSpacing(-1)).toBe(1);
     expect(defaultCellSizeForSpacing(NaN)).toBe(1);
+  });
+});
+
+describe('estimatePlanimetricSpacing', () => {
+  it('recovers the spacing of a regular grid from its own extent', () => {
+    // 30x30 grid at 2-unit spacing: footprint 58x58, 900 points,
+    // sqrt(3364/900) = 1.93 — within 5% of the true 2.
+    const pts: Array<readonly [number, number, number]> = [];
+    for (let iy = 0; iy < 30; iy++)
+      for (let ix = 0; ix < 30; ix++) pts.push([ix * 2, iy * 2, 0]);
+    const est = estimatePlanimetricSpacing(pack(pts));
+    expect(est).toBeGreaterThan(1.8);
+    expect(est).toBeLessThan(2.05);
+  });
+
+  it('returns 0 for the degenerate cases the caller reads as unknown', () => {
+    expect(estimatePlanimetricSpacing(new Float32Array(0))).toBe(0);
+    expect(estimatePlanimetricSpacing(pack([[1, 2, 3]]))).toBe(0);
+    // Collinear cloud: zero-area footprint.
+    expect(estimatePlanimetricSpacing(pack([[0, 0, 0], [1, 0, 0], [2, 0, 9]]))).toBe(0);
+  });
+});
+
+describe('densityCellSizeFor', () => {
+  it('bins at the default multiple of the estimated spacing, not the 1-unit fallback', () => {
+    const pts: Array<readonly [number, number, number]> = [];
+    for (let iy = 0; iy < 30; iy++)
+      for (let ix = 0; ix < 30; ix++) pts.push([ix * 2, iy * 2, 0]);
+    const cell = densityCellSizeFor(pack(pts));
+    // 5x the ~1.93 estimate; the defect this pins against was a constant 1.
+    expect(cell).toBeGreaterThan(9);
+    expect(cell).toBeLessThan(10.5);
   });
 });
