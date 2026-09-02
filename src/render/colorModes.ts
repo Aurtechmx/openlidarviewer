@@ -123,7 +123,7 @@ export type ElevationPalette = 'cividis' | 'viridis' | 'inferno' | 'turbo' | 'cl
 /**
  * The default palette.
  *
- * Cividis, which rises from L* 13 to 91 without ever going backwards. Turbo
+ * Viridis, which rises from L* 15 to 91 without ever going backwards. Turbo
  * held this default from v0.3.7 for its contrast on low-relief field scans, but
  * measured on the stops below it reverses lightness on 19 of 63 sampled steps
  * and ends about as dark as it starts (L* 12 to 24, peaking at 91 in the
@@ -132,12 +132,18 @@ export type ElevationPalette = 'cividis' | 'viridis' | 'inferno' | 'turbo' | 'cl
  * print, and to a reader with colour-vision deficiency, while the mid-ramp
  * brightness peak reads as a ridge the terrain does not have.
  *
+ * Viridis over Cividis for the blue to green to yellow progression a reader
+ * expects from a terrain ramp; Cividis holds to the blue-yellow axis and reads
+ * flatter here. Cividis stays the scalar default, where its stricter
+ * colour-vision safety matters more than terrain familiarity, and it remains
+ * one click away for a reader who wants it.
+ *
  * The contrast Turbo was chosen for is a range problem, and the height-trim
- * slider is the instrument for it — narrowing the range raises contrast without
- * inventing structure. Turbo stays in the catalogue for a reader who selects it
- * deliberately. `lint:palette-lightness` holds this property.
+ * slider is the instrument for it: narrowing the range raises contrast without
+ * inventing structure. Turbo stays in the catalogue for deliberate selection.
+ * `lint:palette-lightness` holds this property.
  */
-export const DEFAULT_ELEVATION_PALETTE: ElevationPalette = 'cividis';
+export const DEFAULT_ELEVATION_PALETTE: ElevationPalette = 'viridis';
 
 /**
  * The default palette for the generic scalar modes (gpsTime, returnNumber,
