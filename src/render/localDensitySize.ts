@@ -16,6 +16,8 @@
  * size multiplier in `[minScale, maxScale]`.
  */
 
+import { xyBounds } from './densityColors';
+
 /** Inputs to `localDensitySizes`. */
 export interface LocalDensitySizeInput {
   /** Interleaved x/y/z point positions (Float32Array length is 3 · N). */
@@ -57,21 +59,10 @@ export function autoDensitySizeParams(positions: Float32Array): {
   referenceDensity: number;
 } {
   const n = positions.length / 3;
-  if (n === 0) return { cellSize: 1, referenceDensity: 1 };
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (let i = 0; i < n; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  const width = Math.max(maxX - minX, 1e-6);
-  const height = Math.max(maxY - minY, 1e-6);
+  const b = xyBounds(positions);
+  if (n === 0 || b === null) return { cellSize: 1, referenceDensity: 1 };
+  const width = Math.max(b.maxX - b.minX, 1e-6);
+  const height = Math.max(b.maxY - b.minY, 1e-6);
   const area = width * height;
   const referenceDensity = Math.max(1e-9, n / area);
   // Mean inter-point spacing ≈ sqrt(area / n); a cell a few spacings wide holds
