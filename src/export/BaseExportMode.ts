@@ -272,15 +272,25 @@ export function baseReportRows(
 /**
  * Build the scan-report data record an exporter feeds into the corner card.
  * Pulls common fields from the adapter and merges in mode-specific rows.
+ * `colorMode` is the mode the export FORCED; the adapter's colour-provenance
+ * note (the on-screen legend's own line) is added for every mode whose colour
+ * the viewer applied rather than the scan recorded. Omitted (older callers /
+ * tests) ⇒ no line, so their cards are unchanged.
  */
 export function buildScanReport(
   title: string,
   adapter: ExportSceneAdapter,
   extraRows: readonly ScanReportRow[] = [],
   classScopeStamp = '',
+  colorMode?: ColorMode,
 ): ScanReportData {
   const aabb = adapter.localBoundsAabb();
   const rows: ScanReportRow[] = [...baseReportRows(adapter, aabb), ...extraRows];
+  const colourNote =
+    colorMode !== undefined ? (adapter.colorProvenanceNote?.(colorMode) ?? null) : null;
+  if (colourNote) {
+    rows.push({ label: 'Colour', value: colourNote });
+  }
   // Class-filter honesty row — appended only while a filter narrows the live
   // view, so an unfiltered export's card is byte-identical to before. Pairs
   // with the top-of-image banner; the card row makes the figures' scope
@@ -405,7 +415,7 @@ export async function runStudioExport(
   // Empty when no class is hidden, so the banner + card row are no-ops and the
   // export stays byte-identical to the pre-feature image.
   const classScopeStamp = context.classScopeStamp ?? '';
-  const report = buildScanReport(reportTitle, context.adapter, extraReportRows, classScopeStamp);
+  const report = buildScanReport(reportTitle, context.adapter, extraReportRows, classScopeStamp, colorMode);
   const withReport = await composeScanReportOntoBlob(blob, report, 'bottom-right');
   // Draw the "showing N of M classes" caveat banner across the top of the
   // raster while a filter is active — the escape-hatch closure: a filtered

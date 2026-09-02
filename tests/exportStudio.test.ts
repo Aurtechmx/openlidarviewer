@@ -14,6 +14,7 @@
 
 import { test, expect, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
+import { DERIVED_COLOR_NOTE, isDerivedColorMode } from '../src/render/colorModeProvenance';
 import {
   ExportRegistry,
   defaultExportRegistry,
@@ -63,6 +64,7 @@ function stubAdapter(opts: {
     hasIntensity: () => opts.hasIntensity ?? false,
     hasClassification: () => opts.hasClassification ?? false,
     hasNormals: () => opts.hasNormals ?? false,
+    colorProvenanceNote: (mode) => (isDerivedColorMode(mode) ? DERIVED_COLOR_NOTE : null),
     localBoundsAabb: () => (opts.aabb === undefined ? [0, 0, 0, 10, 10, 5] : opts.aabb),
     dataBoundsAabb: () => (opts.aabb === undefined ? [0, 0, 0, 10, 10, 5] : opts.aabb),
     // v0.3.2-Studio additions — exporters now delegate the actual render +
@@ -176,6 +178,17 @@ test('buildScanReport: active class filter ⇒ appends a Class filter row', () =
   const row = report.rows.find((r) => r.label === 'Class filter');
   expect(row).toBeDefined();
   expect(row?.value).toBe('Ground + Building · 2 of 5 classes');
+});
+
+test('buildScanReport: a derived colour mode adds the viewer-colour line; rgb / no mode add nothing', () => {
+  const adapter = stubAdapter({ sourceName: 'colour-fixture', sourcePointCount: 4 });
+  const line = DERIVED_COLOR_NOTE;
+  const rowsOf = (mode?: 'rgb' | 'elevation' | 'intensity') =>
+    buildScanReport('Height Map', adapter, [], '', mode).rows;
+  expect(rowsOf('elevation').find((r) => r.label === 'Colour')?.value).toBe(line);
+  expect(rowsOf('intensity').find((r) => r.label === 'Colour')?.value).toBe(line);
+  expect(rowsOf('rgb').find((r) => r.label === 'Colour')).toBeUndefined();
+  expect(JSON.stringify(rowsOf(undefined))).toBe(JSON.stringify(rowsOf('rgb')));
 });
 
 test('availableModes + unavailableModes — capability gating round-trip', () => {

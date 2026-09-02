@@ -47,6 +47,7 @@ import type { DropZone } from '../ui/DropZone';
 import type { ScanService } from './ScanService';
 import type { loadReportEngine } from '../lazyChunks';
 import { streamingFormatToken } from '../render/streaming/StreamingSource';
+import { classificationCoverage } from '../render/class/classificationCoverage';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure decisions the extraction exposes — decidable without a Viewer, the report
@@ -206,6 +207,29 @@ export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
  * follow-on Studio-panel dialog). The engineering-
  * inspection template renders cleanly without visuals.
  */
+/**
+ * The classification facts the dataset-summary row states beyond presence:
+ * the share of ASPRS 0/1 codes (same rule as the on-screen scan report and the
+ * Classify gate) and whether the viewer derived the classification. The share
+ * is counted on the held points, which are a display sample when the loader
+ * strided the file — the flag says so.
+ */
+function classificationShare(cloud: {
+  readonly classification?: ArrayLike<number> | null;
+  readonly pointCount: number;
+  readonly declaredPointCount?: number;
+  readonly classificationIsDerived?: boolean;
+}): Pick<MetadataInputs, 'unclassifiedFraction' | 'unclassifiedOfDisplaySample' | 'classificationDerived'> {
+  if (!cloud.classification || !(cloud.pointCount > 0)) return {};
+  const { unclassified } = classificationCoverage(cloud.classification, cloud.pointCount);
+  return {
+    unclassifiedFraction: unclassified / cloud.pointCount,
+    unclassifiedOfDisplaySample:
+      cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount,
+    ...(cloud.classificationIsDerived ? { classificationDerived: true } : {}),
+  };
+}
+
 export async function generateReportPdf(templateId: string, deps: ReportExportDeps): Promise<void> {
   // the report flow needs the Viewer state; ensure it's loaded.
   await deps.viewerReady;
@@ -316,6 +340,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       hasRgb: !!staticCloud.colors,
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,
+      ...classificationShare(staticCloud),
       ...(activeCrsLabel ? { crsName: activeCrsLabel, crsUnit: activeCrs?.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.

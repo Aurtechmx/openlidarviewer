@@ -88,7 +88,7 @@ describe('buildDatasetSummary — fail closed on an unconfirmed unit', () => {
 describe('buildInspectionSummary — fail closed on an unconfirmed unit', () => {
   it('reports unknown extent rather than a source-unit² area as m²', () => {
     const s = buildInspectionSummary(UNCONFIRMED);
-    const coverage = s.findings.find((f) => f.label === 'Coverage');
+    const coverage = s.findings.find((f) => f.label === 'Bounding-box extent');
     expect(coverage?.value).toBe('unknown extent');
     expect(s.headline).toMatch(/unknown extent/);
   });
@@ -98,5 +98,46 @@ describe('buildInspectionSummary — fail closed on an unconfirmed unit', () => 
     const d = s.findings.find((f) => f.label === 'Point density (all returns)');
     expect(d?.value).toBe('—');
     expect(s.densityBar).toBeUndefined();
+  });
+});
+
+describe('buildDatasetSummary — classification row states share and origin', () => {
+  it('prints presence only when no share is available', () => {
+    expect(rowMap(CONFIRMED).get('Classification')).toBe('Yes');
+  });
+
+  it('prints the unclassified share (ASPRS 0/1) next to presence', () => {
+    const rows = buildDatasetSummary({ ...CONFIRMED, unclassifiedFraction: 0.953 });
+    expect(rows.find((r) => r.label === 'Classification')?.value).toBe(
+      'Yes — 95.3 % ASPRS code 0/1 (unclassified)',
+    );
+  });
+
+  it('says every point carries a class when the unclassified share is zero', () => {
+    const rows = buildDatasetSummary({ ...CONFIRMED, unclassifiedFraction: 0 });
+    expect(rows.find((r) => r.label === 'Classification')?.value).toBe(
+      'Yes — every point carries a class',
+    );
+  });
+
+  it('marks a viewer-derived classification and a display-sample share', () => {
+    const rows = buildDatasetSummary({
+      ...CONFIRMED,
+      unclassifiedFraction: 0.12,
+      unclassifiedOfDisplaySample: true,
+      classificationDerived: true,
+    });
+    expect(rows.find((r) => r.label === 'Classification')?.value).toBe(
+      'Yes — derived by the viewer (heuristic); 12.0 % ASPRS code 0/1 (unclassified, of display sample)',
+    );
+  });
+
+  it('never prints a share for an absent channel', () => {
+    const rows = buildDatasetSummary({
+      ...CONFIRMED,
+      hasClassification: false,
+      unclassifiedFraction: 1,
+    });
+    expect(rows.find((r) => r.label === 'Classification')?.value).toBe('No');
   });
 });

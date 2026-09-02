@@ -7,7 +7,7 @@
  *
  *   - Survey Summary is genuinely compact: it names the capture type
  *     (compact provenance) but contains NO "Signals" list, NO "Expected
- *     accuracy (cited literature)" block, NO Annotations section and NO
+ *     ranges for this capture type (literature)" block, NO Annotations section and NO
  *     "Declared source metadata" section.
  *   - Technical Report is the complete record: it contains all of them.
  *   - The shared dataset block renders exactly ONCE per report in both.
@@ -140,7 +140,7 @@ describe('survey-summary golden (compact)', () => {
     expect(text).toContain('Golden-fixture technical note.');
     // NO detail blocks: signals, cited accuracy, annotations, declared metadata.
     expect(text).not.toContain('Signals');
-    expect(text).not.toContain('Expected accuracy (cited literature)');
+    expect(text).not.toContain('Expected ranges for this capture type');
     expect(text).not.toContain('Annotations (');
     expect(text).not.toContain('Spalling at pier base');
     expect(text).not.toContain('Declared source metadata');
@@ -160,7 +160,8 @@ describe('technical-report golden (complete)', () => {
     expect(text).toContain('Golden-fixture technical note.');
     // Full provenance detail: signals + literature-cited bounds.
     expect(text).toContain('Signals');
-    expect(text).toContain('Expected accuracy (cited literature)');
+    expect(text).toContain('Expected ranges for this capture type (literature)');
+    expect(text).toContain('not measured on this scan');
     expect(text).toContain('source:');
     // Annotations + the v0.5.4 declared-metadata section.
     expect(text).toContain('Annotations (1)');
@@ -188,7 +189,8 @@ describe('legacy template ids render via the engine', () => {
     const { templateId, text } = await renderText(makeInputs(legacy));
     expect(templateId).toBe(expected);
     // The mapped template's signature detail block is present.
-    expect(text).toContain('Expected accuracy (cited literature)');
+    expect(text).toContain('Expected ranges for this capture type (literature)');
+    expect(text).toContain('not measured on this scan');
   });
 
   it('scan-acceptance now resolves to the real Scan QA successor', async () => {

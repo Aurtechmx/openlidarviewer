@@ -26,6 +26,17 @@ export interface MetadataInputs {
   readonly hasRgb: boolean;
   readonly hasIntensity: boolean;
   readonly hasClassification: boolean;
+  /**
+   * Share of points carrying ASPRS code 0 (Created) or 1 (Unclassified) — the
+   * same rule as `render/class/classificationCoverage`. Absent when the channel
+   * is missing or the share cannot be counted (streaming), in which case the
+   * row states presence only.
+   */
+  readonly unclassifiedFraction?: number;
+  /** `unclassifiedFraction` was counted on the display sample, not the file. */
+  readonly unclassifiedOfDisplaySample?: boolean;
+  /** The classification was derived in the viewer (heuristic), not supplied. */
+  readonly classificationDerived?: boolean;
   /** CRS label + linear unit when the source carries projection metadata. */
   readonly crsName?: string;
   readonly crsUnit?: string;
@@ -102,6 +113,28 @@ function formatCompactCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return `${Math.round(n)}`;
+}
+
+/**
+ * "Yes" alone states presence, which a reader takes for a classified cloud.
+ * When the share of ASPRS 0/1 codes is known it is printed next to presence,
+ * and a viewer-derived classification says so, so the row states what the
+ * on-screen scan report states.
+ */
+function classificationValue(inputs: MetadataInputs): string {
+  if (!inputs.hasClassification) return 'No';
+  const parts: string[] = [];
+  if (inputs.classificationDerived) parts.push('derived by the viewer (heuristic)');
+  const u = inputs.unclassifiedFraction;
+  if (u !== undefined && Number.isFinite(u)) {
+    if (u <= 0) {
+      parts.push('every point carries a class');
+    } else {
+      const scope = inputs.unclassifiedOfDisplaySample ? ', of display sample' : '';
+      parts.push(`${(u * 100).toFixed(1)} % ASPRS code 0/1 (unclassified${scope})`);
+    }
+  }
+  return parts.length > 0 ? `Yes — ${parts.join('; ')}` : 'Yes';
 }
 
 /**
@@ -186,7 +219,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   rows.push(
     { label: 'RGB',            value: inputs.hasRgb ? 'Yes' : 'No' },
     { label: 'Intensity',      value: inputs.hasIntensity ? 'Yes' : 'No' },
-    { label: 'Classification', value: inputs.hasClassification ? 'Yes' : 'No' },
+    { label: 'Classification', value: classificationValue(inputs) },
   );
   if (inputs.crsName) {
     rows.push({ label: 'CRS',   value: inputs.crsName });

@@ -151,6 +151,18 @@ const DISCLAIMER =
   'Your scan may differ — validate against ground control if survey-grade ' +
   'accuracy is required.';
 
+/** Source string for the USGS Lidar Base Specification (QL floors, RMSEz, NVA). */
+const USGS_LBS_SOURCE = 'USGS Lidar Base Specification';
+
+/**
+ * The airborne disclaimer carries the viewer's own statement about the figure
+ * it reports, so that statement is never attributed to a cited paper.
+ */
+const AERIAL_DISCLAIMER =
+  DISCLAIMER +
+  ' The NVA-style figure this viewer reports in the Terrain report comes from ' +
+  'internally withheld points (hold-out), not independent checkpoints.';
+
 /**
  * Classify a loaded scan from its metadata signals. Pure function — same
  * inputs always produce the same fingerprint.
@@ -529,12 +541,12 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
       // unbounded, it does not claim to resolve the overlap.
       if (signals.densityPerSqM > PHONE_LIDAR_MAX_DENSITY_PER_SQM) {
         return terrestrialFingerprint('medium', [
-          `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² bounding-box footprint`,
+          `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² over a ${footprintArea.toFixed(0)} m² bounding-box footprint`,
           `Above the ${PHONE_LIDAR_MAX_DENSITY_PER_SQM} pts/m² a phone flash pattern reaches at its closest range`,
         ]);
       }
       return phoneLidarFingerprint('medium', [
-        `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² bounding-box footprint`,
+        `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² over a ${footprintArea.toFixed(0)} m² bounding-box footprint`,
       ]);
     }
 
@@ -572,7 +584,7 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
     if (signals.densityPerSqM >= 50 && footprintArea > 2000) {
       const veryDense = signals.densityPerSqM > 1000;
       return droneLidarFingerprint(veryDense ? 'high' : 'medium', [
-        `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${(footprintArea / 10000).toFixed(2)} ha bounding-box mapping footprint`,
+        `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² over a ${(footprintArea / 10000).toFixed(1)} ha bounding-box mapping footprint`,
       ]);
     }
 
@@ -586,7 +598,7 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
       signals.pointCount > 1_000_000
     ) {
       return terrestrialFingerprint('medium', [
-        `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² with ${signals.pointCount.toLocaleString()} points`,
+        `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² with ${signals.pointCount.toLocaleString()} points`,
       ]);
     }
   }
@@ -745,19 +757,16 @@ function aerialAlsFingerprint(
       },
       {
         label: 'Vertical accuracy (RMSEz)',
-        value: '≤ 10 cm typical for QL1 / QL2 deliveries',
-        source: 'Lohani & Ghosh 2017 §6',
+        value: 'RMSEz ≤ 10 cm required (NVA ≤ 19.6 cm) for QL1 and QL2 deliveries',
+        source: `${USGS_LBS_SOURCE}; Lohani & Ghosh 2017 §6`,
       },
       {
         label: 'NVA formula',
-        value:
-          'NVA = 1.96 × RMSEz (non-vegetated, normal distribution). This ' +
-          'viewer reports an NVA-STYLE figure from internally withheld ' +
-          'points (hold-out), not independent checkpoints.',
-        source: 'Lohani & Ghosh 2017 §6',
+        value: 'NVA = 1.96 × RMSEz (non-vegetated, normal distribution)',
+        source: USGS_LBS_SOURCE,
       },
     ],
-    disclaimer: DISCLAIMER,
+    disclaimer: AERIAL_DISCLAIMER,
   };
 }
 

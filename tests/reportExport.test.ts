@@ -308,6 +308,32 @@ describe('generateReportPdf — the report assembly body', () => {
     expect(setError).not.toHaveBeenCalled();
   });
 
+  it('carries the unclassified share (ASPRS 0/1) and the derived flag, scoped to the display sample', async () => {
+    // 1000 resident of 2000 declared: the share is counted on the display
+    // sample and must say so. Codes: 6 ground (2), 4 unclassified (0/1).
+    const classification = new Uint8Array(1000);
+    for (let i = 0; i < 1000; i++) classification[i] = i % 10 < 6 ? 2 : (i % 2 ? 1 : 0);
+    const classified = { ...staticCloud, classification, classificationIsDerived: true };
+    const { deps, composeReportInputs } = makeReportDeps({
+      staticCloud: classified as unknown as typeof staticCloud,
+    });
+    await generateReportPdf('technical-report', deps);
+    const inputs = composeReportInputs.mock.calls[0]![0] as ReportInputs;
+    expect(inputs.metadata.hasClassification).toBe(true);
+    expect(inputs.metadata.unclassifiedFraction).toBeCloseTo(0.4, 6);
+    expect(inputs.metadata.unclassifiedOfDisplaySample).toBe(true);
+    expect(inputs.metadata.classificationDerived).toBe(true);
+  });
+
+  it('omits the unclassified share when the cloud carries no classification', async () => {
+    const { deps, composeReportInputs } = makeReportDeps({ staticCloud });
+    await generateReportPdf('technical-report', deps);
+    const inputs = composeReportInputs.mock.calls[0]![0] as ReportInputs;
+    expect(inputs.metadata.hasClassification).toBe(false);
+    expect(inputs.metadata.unclassifiedFraction).toBeUndefined();
+    expect(inputs.metadata.classificationDerived).toBeUndefined();
+  });
+
   it('assembles a streaming-cloud report from the resident preview', async () => {
     const { deps, composeReportInputs } = makeReportDeps({
       streamingCloud,

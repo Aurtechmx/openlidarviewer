@@ -17,6 +17,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   captureSnapshot,
+  colorbarBurnInNotes,
   canvasToBlob,
   resolveSnapshotPlan,
   fastPathEligible,
@@ -179,5 +180,27 @@ describe('captureSnapshot — fast path', () => {
     await expect(captureSnapshot(h)).rejects.toThrow(
       'Viewer.snapshot(): canvas.toBlob returned null',
     );
+  });
+});
+
+describe('colorbarBurnInNotes — the lines under the burned-in colour bar', () => {
+  const bar = (mode: string, note?: string): ActiveColorbar =>
+    ({ mode, spec: { min: 0, max: 1 }, note } as unknown as ActiveColorbar);
+
+  it('keeps the window note and adds the derived-colour line for a non-RGB mode', () => {
+    expect(colorbarBurnInNotes(bar('elevation', 'p5–p95 window'))).toEqual([
+      'p5–p95 window',
+      'Colour is applied by the viewer, not recorded by the scan.',
+    ]);
+  });
+
+  it('emits the derived-colour line alone when there is no window note', () => {
+    expect(colorbarBurnInNotes(bar('intensity'))).toEqual([
+      'Colour is applied by the viewer, not recorded by the scan.',
+    ]);
+  });
+
+  it('adds nothing for measured (RGB) colour', () => {
+    expect(colorbarBurnInNotes(bar('rgb', 'p5–p95 window'))).toEqual(['p5–p95 window']);
   });
 });

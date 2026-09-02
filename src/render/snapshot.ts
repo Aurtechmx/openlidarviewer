@@ -21,6 +21,7 @@ import { classificationText, intensityText, rgbText, type PointInfo } from './po
 import { computeScaleBar, pixelsPerMetreAt } from './scaleBar';
 import { burnInColorbarLayout, type ActiveColorbar } from './activeColorbar';
 import { colorbarStops, niceTicks, formatColorbarValue } from './colorbar';
+import { DERIVED_COLOR_NOTE, isDerivedColorMode } from './colorModeProvenance';
 
 export interface SnapshotOptions {
   /** Include the annotation markers. */
@@ -534,6 +535,18 @@ function drawScaleBar(
  * is white with a dark stroke — the same treatment as the scale bar — so it
  * reads on any cloud colour without needing a backing card.
  */
+/**
+ * The lines burned in beneath the colour bar: the legend's own note (window /
+ * normalisation) when it has one, then the derived-colour statement for every
+ * mode whose colour the viewer applied. Pure — tested apart from the canvas.
+ */
+export function colorbarBurnInNotes(active: ActiveColorbar): readonly string[] {
+  const notes: string[] = [];
+  if (active.note) notes.push(active.note);
+  if (isDerivedColorMode(active.mode)) notes.push(DERIVED_COLOR_NOTE);
+  return notes;
+}
+
 function drawColorbar(
   ctx: CanvasRenderingContext2D,
   out: HTMLCanvasElement,
@@ -564,10 +577,20 @@ function drawColorbar(
   const title = spec.unit ? `${spec.label} (${spec.unit})` : spec.label;
   const titleY = L.barY - Math.round(L.titleFontSize * 0.6);
   strokedText(title, L.barX + L.barWidth, titleY);
-  // Honesty note under the bar, smaller — e.g. "p5–p95 window".
-  if (active.note) {
-    ctx.font = font(Math.max(9, Math.round(L.fontSize * 0.85)));
-    strokedText(active.note, L.barX + L.barWidth, L.barY + L.barHeight + Math.round(L.fontSize * 1.4));
+  // Notes under the bar, smaller — the window note (e.g. "p5–p95 window")
+  // and, for every non-RGB mode, that the colour is the viewer's, not the
+  // scan's. Same string the on-screen legend shows.
+  const notes = colorbarBurnInNotes(active);
+  if (notes.length > 0) {
+    const noteSize = Math.max(9, Math.round(L.fontSize * 0.85));
+    ctx.font = font(noteSize);
+    notes.forEach((note, i) => {
+      strokedText(
+        note,
+        L.barX + L.barWidth,
+        L.barY + L.barHeight + Math.round(L.fontSize * 1.4) + i * Math.round(noteSize * 1.25),
+      );
+    });
   }
 
   // The ramp — adjacent rects sampled from the SAME stops the SVG gradient

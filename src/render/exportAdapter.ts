@@ -32,6 +32,7 @@ import { linearUnitLabel } from '../io/crs';
 // the Inspector card and the PDF report read.
 import { captureProvenance } from '../diagnostics/captureProvenance';
 import { classificationCoverage } from './class/classificationCoverage';
+import { DERIVED_COLOR_NOTE, isDerivedColorMode } from './colorModeProvenance';
 
 /**
  * The per-cloud slice the adapter reads — a structural subset of the Viewer's
@@ -327,6 +328,9 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         assigned += producer;
       }
       return total > 0 ? assigned / total : null;
+    },
+    colorProvenanceNote(mode: ColorMode): string | null {
+      return isDerivedColorMode(mode) ? DERIVED_COLOR_NOTE : null;
     },
     hasNormals(): boolean {
       // Dispatch on the abstract `availableColorModes()` for streaming, exactly

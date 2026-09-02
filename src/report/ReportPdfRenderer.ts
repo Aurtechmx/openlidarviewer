@@ -770,10 +770,11 @@ function drawFinding(
 }
 
 /**
- * Small horizontal density bar: measured density against the USGS QL
- * thresholds, with labelled tick marks. Drawn only when the summary carries a
- * `densityBar` (i.e. the QL comparison is applicable), so the graphic never
- * implies a standard that doesn't apply to this capture type.
+ * Small horizontal density bar: measured all-returns density drawn against the
+ * USGS QL pulse-density floors as context, with labelled tick marks. Drawn
+ * only when the summary carries a `densityBar` (an airborne delivery), so the
+ * graphic never implies a standard that doesn't apply to this capture type;
+ * the caption states that nothing is graded.
  */
 function drawDensityBar(
   cursor: PageCursor,
@@ -794,8 +795,8 @@ function drawDensityBar(
   const top = cursor.y - 4;
   const rule = rgb(theme.rule.r, theme.rule.g, theme.rule.b);
 
-  // Caption.
-  cursor.page.drawText('Density vs USGS quality levels', {
+  // Caption — names the floors and states that nothing is graded.
+  cursor.page.drawText(sanitiseForPdf(bar.caption), {
     x: x0, y: top - BODY_FONT_SIZE + 2, size: BODY_FONT_SIZE - 1, font: bold,
     color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
   });
@@ -916,7 +917,7 @@ async function renderDatasetSummary(
  *
  * v0.5.5 P12 — `opts.compact` (the `provenance-compact` section, Survey
  * Summary) renders ONLY the capture-type headline + the disclaimer. The
- * signal list and the "Expected accuracy (cited literature)" block are
+ * signal list and the "Expected ranges for this capture type" block are
  * Technical Report detail; the compact form names the capture type
  * without restating the evidence chain.
  *
@@ -975,7 +976,7 @@ async function renderProvenance(
   // Literature-cited accuracy bounds — the Research-Derived ribbon.
   if (!opts?.compact && p.bounds.length > 0) {
     cursor = ensureSpace(cursor, 16 + p.bounds.length * 28, doc, accent, theme, organisation);
-    cursor.page.drawText('Expected accuracy (cited literature)', {
+    cursor.page.drawText('Expected ranges for this capture type (literature) — not measured on this scan', {
       x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
       size: BODY_FONT_SIZE, font: bold,
       color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
