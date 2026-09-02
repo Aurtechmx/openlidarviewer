@@ -220,14 +220,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.volume.stockpile-area-grid': {
     id: 'olv.volume.stockpile-area-grid',
-    version: 1,
+    version: 2,
     name: 'Area-weighted stockpile volume (grid integration)',
     summary:
       'Cut-fill volume by integrating over a regular horizontal grid: each cell ' +
       'contributes its polygon-clipped area times a robust (median) surface height ' +
       'above the base, so a density gradient in the cloud does not bias the result. ' +
       'Unobserved cells reduce reported coverage rather than reading as zero. ' +
-      'Distinct from olv.volume.stockpile, which is the point-sample estimator.',
+      'Distinct from olv.volume.stockpile, which is the point-sample estimator. ' +
+      'v2 excludes cells whose centre falls outside a concave footprint and ' +
+      'evaluates a tilted base at each clipped cell polygon centroid; v1 summed ' +
+      'every bounding-region cell against a cell-centre base, so a v1 figure does ' +
+      'not carry the v2 meaning.',
     citation:
       'Internal composition (area-weighted DEM-of-difference integration; ' +
       'Sutherland & Hodgman (1974) polygon clipping); standard earthworks method.',
