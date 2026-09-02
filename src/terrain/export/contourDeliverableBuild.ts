@@ -8,10 +8,11 @@
  *
  * Scope: the deliverable bundles the CURRENT contour geometry (honestly
  * labelled analytical vs cartographic by its actual style), the DTM raster, the
- * cartographic DXF (when the geometry is cartographic), the validation JSON, the
- * Contour Studio settings JSON, provenance, a README and checksums. The rasters
- * beyond the DTM (hillshade / support / uncertainty) stay OMITTED with honest
- * reasons — never shipped as empty placeholders. Widening the set is additive.
+ * support raster (the DTM's per-cell provenance, serialized), the cartographic
+ * DXF (when the geometry is cartographic), the validation JSON, the Contour
+ * Studio settings JSON, provenance, a README and checksums. The remaining
+ * rasters (hillshade / uncertainty) stay OMITTED with honest reasons — never
+ * shipped as empty placeholders. Widening the set is additive.
  *
  * Pure and synchronous given the result: no DOM, no I/O. Reuses the same
  * serializers every other export uses, so a file in the package is byte-for-byte
@@ -85,7 +86,7 @@ const OMISSION_REASONS: Partial<Record<PackageRole, string>> = {
   'contour-map-pdf': 'Export separately via the Map sheet (PDF) product.',
   'contours-cartographic-dxf': 'Included only with a cartographic contour export.',
   'hillshade-raster': 'A shaded-relief raster is not yet part of this package.',
-  'support-raster': 'A per-cell support raster is not yet part of this package.',
+  'support-raster': 'Requires a DTM grid; none was produced for this scan.',
   'uncertainty-raster': 'A per-cell uncertainty raster is not yet part of this package.',
 };
 
@@ -103,6 +104,16 @@ interface GatheredDeliverable {
   readonly horizontalUnit: 'ft' | 'm';
   /** Elevation unit label — a declared Z unit ('m'|'ft'|'units') or 'unknown'. */
   readonly verticalUnit: string;
+  /**
+   * Per-cell support split as a share of ALL DTM cells, tallied from
+   * dtm.coverage (0 = unsupported/void, 1 = interpolated, 2 = measured) — the
+   * same states the Support.tif serializes. Null when there is no DTM.
+   */
+  readonly supportPct: {
+    readonly measuredPct: number;
+    readonly interpolatedPct: number;
+    readonly unsupportedPct: number;
+  } | null;
   readonly bytes: Map<PackageRole, Uint8Array>;
 }
 
@@ -161,6 +172,7 @@ function gatherDeliverable(
     vScale != null && Number.isFinite(vScale) && vScale > 0 ? verticalUnitLabel(vScale) : 'unknown';
 
   const bytes = new Map<PackageRole, Uint8Array>();
+  let supportPct: GatheredDeliverable['supportPct'] = null;
 
   if (hasContours && model) {
     // A `.geojson` in the package makes the same promise as one on disk: RFC
@@ -229,6 +241,49 @@ function gatherDeliverable(
         verticalUnitCode: verticalUnitGeoKeyCode(dtm.verticalUnitToMetres),
       }),
     );
+
+    // Support raster — a categorical byte map on the SAME grid/CRS as the DTM,
+    // serializing the per-cell provenance dtm.coverage already carries: 0 =
+    // unsupported/void, 1 = interpolated, 2 = measured. Purely derived; no
+    // surface height is read or touched. A full (all-ones) write mask keeps every
+    // cell, since 0 is a real class (unsupported), not NODATA; noData 255 sits
+    // outside {0,1,2} and is never written. No vertical CRS/unit — it is a
+    // classification grid, not an elevation.
+    const cov = dtm.coverage;
+    const supportMask = new Uint8Array(cov.length).fill(1);
+    bytes.set(
+      'support-raster',
+      writeGeoTiff({
+        values: cov,
+        coverage: supportMask,
+        cols: dtm.cols,
+        rows: dtm.rows,
+        cellSize: dtm.cellSizeM,
+        xllCorner: ox + dtm.originH1,
+        yllCorner: oy + dtm.originH2,
+        noData: 255,
+        epsg: dtm.horizontalEpsg ?? parseEpsg(dtm.crs),
+        isGeographic: opts.isGeographic ?? false,
+        band: 'uint8',
+      }),
+    );
+
+    // Coverage percentages for the README, tallied from the SAME array the
+    // raster serializes, so the two never disagree.
+    let measured = 0;
+    let interpolated = 0;
+    for (let i = 0; i < cov.length; i++) {
+      if (cov[i] === 2) measured++;
+      else if (cov[i] === 1) interpolated++;
+    }
+    const total = cov.length > 0 ? cov.length : 1;
+    const measuredPct = (measured / total) * 100;
+    const interpolatedPct = (interpolated / total) * 100;
+    supportPct = {
+      measuredPct,
+      interpolatedPct,
+      unsupportedPct: Math.max(0, 100 - measuredPct - interpolatedPct),
+    };
   }
 
   bytes.set('provenance-json', enc(JSON.stringify(provenanceJson(provenance), null, 2)));
@@ -270,7 +325,7 @@ function gatherDeliverable(
     );
   }
 
-  return { basename, provenance, isAnalytical, hasContours, dtm, horizontalUnit, verticalUnit, bytes };
+  return { basename, provenance, isAnalytical, hasContours, dtm, horizontalUnit, verticalUnit, supportPct, bytes };
 }
 
 /** Assemble the package manifest for a gathered deliverable. `pdf` flips when
@@ -281,7 +336,8 @@ function manifestFor(g: GatheredDeliverable, opts: DeliverableBuildOptions, pdf:
     decision: opts.decision,
     // Availability is read from the bytes actually gathered, so the manifest and
     // README can never claim a file the ZIP does not carry (or omit one it does).
-    // The rasters beyond the DTM have no producer yet, so they stay false.
+    // Support ships whenever a DTM does; hillshade / uncertainty have no producer
+    // yet, so they stay false.
     available: {
       pdf,
       analyticalGeojson: g.bytes.has('contours-analytical-geojson'),
@@ -290,12 +346,13 @@ function manifestFor(g: GatheredDeliverable, opts: DeliverableBuildOptions, pdf:
       cartographicDxf: g.bytes.has('contours-cartographic-dxf'),
       dtm: g.bytes.has('dtm-raster'),
       hillshade: false,
-      support: false,
+      support: g.bytes.has('support-raster'),
       uncertainty: false,
       validationJson: g.bytes.has('validation-json'),
       provenanceJson: g.bytes.has('provenance-json'),
       studioJson: g.bytes.has('contour-studio-json'),
     },
+    supportCoverage: g.supportPct ?? undefined,
     omissionReasons: OMISSION_REASONS,
     provenance: {
       crs: g.provenance.horizontalCrs,

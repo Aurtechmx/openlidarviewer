@@ -155,6 +155,16 @@ export interface PackageInput {
   };
   /** One-line citation recommendation for the README. */
   readonly citation: string;
+  /**
+   * Per-cell support split (percent of ALL DTM cells), from the same coverage
+   * states the Support raster serializes. Present only when a DTM — and thus a
+   * support raster — is in the package; the README then reports the split.
+   */
+  readonly supportCoverage?: {
+    readonly measuredPct: number;
+    readonly interpolatedPct: number;
+    readonly unsupportedPct: number;
+  };
 }
 
 interface FileSpec { role: PackageRole; ext: string; label: string; available: (a: PackageAvailability) => boolean; desc: string }
@@ -241,6 +251,24 @@ function buildReadme(stem: string, entries: readonly PackageEntry[], input: Pack
     '  Analytical contours are exact isolines of the terrain grid (use for GIS and',
     '  reproducibility). Cartographic contours are generalized and labelled for legible',
     '  maps; they are derived from the analytical geometry and are not exact.',
+  );
+
+  const sc = input.supportCoverage;
+  if (sc) {
+    const pct = (v: number): string => `${v.toFixed(1)}%`;
+    lines.push(
+      '',
+      'Surface support',
+      '  Per-cell provenance recorded in the Support raster, as a share of all DTM cells:',
+      `    Measured:     ${pct(sc.measuredPct)}`,
+      `    Interpolated: ${pct(sc.interpolatedPct)}`,
+      `    Unsupported:  ${pct(sc.unsupportedPct)}`,
+      '  Measured cells hold at least one ground return; interpolated cells are filled from',
+      '  nearby measured cells; unsupported cells have no reachable data.',
+    );
+  }
+
+  lines.push(
     '',
     'Validation scope',
     '  Validation is internal (hold-out) only. No independent field checkpoints were',

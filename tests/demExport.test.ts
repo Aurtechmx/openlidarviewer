@@ -316,6 +316,61 @@ describe('buildDemPackage', () => {
     expect(prov.software).toBe('OpenLiDARViewer');
   });
 
+  it('emits Support.tif — a uint8 coverage map matching dtm.coverage, on the DTM grid, with README percentages', () => {
+    const zip = buildContourDeliverableFromResult(fixtureResult(), {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-12T00:00:00.000Z'),
+      exportPermit: null,
+    });
+
+    const support = extractEntry(zip, 'site_Support.tif');
+    expect(support, 'Support.tif must be in the package').not.toBeNull();
+    const stags = readTiffTags(support!);
+    // Single-band uint8 raster.
+    expect(stags.get(258)).toBe(8); // BitsPerSample
+    expect(stags.get(339)).toBe(1); // SampleFormat = unsigned integer
+    expect(stags.get(277)).toBe(1); // SamplesPerPixel
+    expect(stags.get(279)).toBe(COLS * ROWS * 1); // StripByteCounts = cols*rows bytes
+
+    // The byte at each pixel is the CellCoverage code — north row first, exactly
+    // as dtm.coverage records it. COV=[2,2,1,0] (row0=south) ⇒ north-first [1,0,2,2].
+    const strip = stags.get(273)!;
+    const cells = Array.from(support!.subarray(strip, strip + COLS * ROWS));
+    expect(cells).toEqual([1, 0, 2, 2]);
+    for (const v of cells) expect([0, 1, 2]).toContain(v);
+
+    // Grid + CRS match the DTM: same dimensions, same CRS, byte-identical
+    // ModelPixelScale (cell size) and ModelTiepoint (origin) as DTM.tif.
+    const dtmTif = extractEntry(zip, 'site_DTM.tif')!;
+    const dtags = readTiffTags(dtmTif);
+    expect(stags.get(256)).toBe(dtags.get(256)); // ImageWidth
+    expect(stags.get(257)).toBe(dtags.get(257)); // ImageLength
+    expect(readTiffCrsEpsg(support!)).toBe(readTiffCrsEpsg(dtmTif));
+    const geom = (bytes: Uint8Array, tags: Map<number, number>): string => {
+      const scale = Array.from(bytes.subarray(tags.get(33550)!, tags.get(33550)! + 24));
+      const tie = Array.from(bytes.subarray(tags.get(33922)!, tags.get(33922)! + 48));
+      return JSON.stringify([scale, tie]);
+    };
+    expect(geom(support!, stags)).toBe(geom(dtmTif, dtags));
+
+    // README reports the coverage split, and the three percentages sum to ~100.
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site_README.txt')!);
+    expect(readme).toMatch(/Surface support/);
+    const pcts = [...readme.matchAll(/(Measured|Interpolated|Unsupported):\s+([\d.]+)%/g)];
+    expect(pcts.length).toBe(3);
+    const sum = pcts.reduce((a, m) => a + Number(m[2]), 0);
+    expect(sum).toBeCloseTo(100, 1);
+    // For this fixture (COV=[2,2,1,0]): 50 / 25 / 25.
+    expect(readme).toMatch(/Measured:\s+50\.0%/);
+    expect(readme).toMatch(/Interpolated:\s+25\.0%/);
+    expect(readme).toMatch(/Unsupported:\s+25\.0%/);
+  });
+
   it('the async builder produces a complete deliverable from a real analysed result', async () => {
     // buildContourDeliverableFromResultAsync is the streamed path the Contour
     // Studio UI uses; unlike the DEM-only fixture it reads the full ValidationReport
