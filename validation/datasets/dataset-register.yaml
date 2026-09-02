@@ -2345,6 +2345,757 @@ datasets:
     evidenceRole: reference-labelling
     storage: acquired
     localPath: not-vendored
+  # ── USGS 3DEP Rogue River-Siskiyou 2019, the remaining 24 tiles ─────────────
+  # OLV-DS-091 registered the one tile used before the dev/holdout split was
+  # frozen. These are its 24 siblings, the rest of the ROGUE25 collection that
+  # validation/e5/manifests/ROGUE25.input.json pins. Same programme, same
+  # licence, same acquisition; each hash was recomputed from the bytes on disk
+  # and agrees with the manifest. `split` records dev or holdout membership so a
+  # reader can tell which tiles a study was allowed to look at.
+  - datasetId: OLV-DS-093-ROGUE-SISKIYOU-2019-10TDM3449
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM3449"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 841d20f45458c974e9559207acf88816c6ea3f375cb2261819c2cc9609fb05d4
+    sourceBytes: 107720798
+    format: laz
+    pointCount: 22297293
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3449.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 10.2% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 108 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-094-ROGUE-SISKIYOU-2019-10TDM3846
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM3846"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: a5b08f543f12a965aafb69b0984fd0d939428c16d48ee56dc8e0213252dea89e
+    sourceBytes: 164286489
+    format: laz
+    pointCount: 30776581
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3846.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.9% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 164 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-095-ROGUE-SISKIYOU-2019-10TDM3847
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM3847"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 01533fd14536eda2d8e12209bcf28e41ac7096fcd781ef00217471db62340511
+    sourceBytes: 173894018
+    format: laz
+    pointCount: 31773897
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3847.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.1% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 174 MB, not vendored; ROGUE25 membership is holdout."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-096-ROGUE-SISKIYOU-2019-10TDM4544
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM4544"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: b31ad5cf1e38028f299cb096c42d4ff4971bc7df8a61e2ae8d7e10c1996215a2
+    sourceBytes: 341952041
+    format: laz
+    pointCount: 69354174
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4544.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.5% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 342 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-097-ROGUE-SISKIYOU-2019-10TDM4643
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM4643"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 5e1515bc02bf048c18576c3b613d14f150931a5eb0943a11bf2bb83978597fb0
+    sourceBytes: 244995286
+    format: laz
+    pointCount: 47170656
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4643.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.4% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 245 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-098-ROGUE-SISKIYOU-2019-10TDM4647
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM4647"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 2f961da5f485ad38cc0f2676c126ae1c287fdec779b9e6b70372c521d6f14276
+    sourceBytes: 248503252
+    format: laz
+    pointCount: 53670848
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4647.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 5.9% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 249 MB, not vendored; ROGUE25 membership is holdout."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-099-ROGUE-SISKIYOU-2019-10TDM4648
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM4648"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: e196d76c8953b16ac625cbaf6c9bbc991a2d40b70e0d923f133821b9bfe7fc4d
+    sourceBytes: 208733964
+    format: laz
+    pointCount: 47245343
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4648.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 6.0% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 209 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-100-ROGUE-SISKIYOU-2019-10TDM4849
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM4849"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 7079f83f209be1a46b44a343857ee1d5cee9e8100d602a95dd5489e2bc50b0ac
+    sourceBytes: 192630066
+    format: laz
+    pointCount: 37468919
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4849.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 6.3% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 193 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-101-ROGUE-SISKIYOU-2019-10TDM4853
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM4853"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 2d918692cf60d2c26d835dd9376b259bc1347300271ab96c0208dfc27ee39127
+    sourceBytes: 193097919
+    format: laz
+    pointCount: 37903645
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM4853.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 8.6% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 193 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-102-ROGUE-SISKIYOU-2019-10TDM5450
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM5450"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 8e0e5877e8d697ca8b3957c8d1e23ccf89af373353978840e2bc87f9a500125c
+    sourceBytes: 236223343
+    format: laz
+    pointCount: 45821142
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5450.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 6.8% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 236 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-103-ROGUE-SISKIYOU-2019-10TDM5458
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM5458"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: c4772da1adf5967df5b815ae8ab677af2150b7a57f44bb9519aa04f7d1607c4a
+    sourceBytes: 200172123
+    format: laz
+    pointCount: 37802034
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5458.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 7.3% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 200 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-104-ROGUE-SISKIYOU-2019-10TDM5959
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM5959"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: da0de7a9048e3acb91a7f1b533f441a81012182d16b4c4f5aef5078b534386da
+    sourceBytes: 136843624
+    format: laz
+    pointCount: 25689218
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM5959.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 5.0% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 137 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-105-ROGUE-SISKIYOU-2019-10TDM6151
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6151"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: edf7a0c890b2e0a11a059b45929708f5cf9ae15558480d78a0f7f58373013f04
+    sourceBytes: 383239973
+    format: laz
+    pointCount: 76082117
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6151.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.9% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 383 MB, not vendored; ROGUE25 membership is holdout."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-106-ROGUE-SISKIYOU-2019-10TDM6152
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6152"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 10480ed0eb0f965214fee6cef4860a2a4e60df4303f65269322aff14d1cc0689
+    sourceBytes: 358089751
+    format: laz
+    pointCount: 69897450
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6152.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.9% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 358 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-107-ROGUE-SISKIYOU-2019-10TDM6159
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6159"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: a1b1753cfd06a03b80dfc0d7073a4e48f079f1a218919501811d3fe5791abe79
+    sourceBytes: 314622475
+    format: laz
+    pointCount: 58728342
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6159.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 3.5% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 315 MB, not vendored; ROGUE25 membership is holdout."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-108-ROGUE-SISKIYOU-2019-10TDM6161
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6161"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: bb4a3f6be595d2c800173537eaef8360088b0619b995a89281fa208015b7f8ac
+    sourceBytes: 201301400
+    format: laz
+    pointCount: 37333283
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6161.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 3.7% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 201 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-109-ROGUE-SISKIYOU-2019-10TDM6252
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6252"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: a8cc9fc5c6ec17155c3956df0f92eaea035b1c45801c24d2a73ae1cfb31dd422
+    sourceBytes: 199996761
+    format: laz
+    pointCount: 39565481
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6252.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 8.0% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 200 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-110-ROGUE-SISKIYOU-2019-10TDM6265
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6265"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 5236afb85553ae239cebf0e843cd4f00d7d6a925b6ef9389892bfb8d90e5359a
+    sourceBytes: 190742049
+    format: laz
+    pointCount: 35310263
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6265.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.2% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 191 MB, not vendored; ROGUE25 membership is holdout."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-111-ROGUE-SISKIYOU-2019-10TDM6455
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6455"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: d933b811da0eb80e405f6e6b648109c9bf578553a6a6186b062c39772a53bfca
+    sourceBytes: 480015273
+    format: laz
+    pointCount: 89567533
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6455.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 2.6% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 480 MB, not vendored; ROGUE25 membership is holdout."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-112-ROGUE-SISKIYOU-2019-10TDM6470
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6470"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 81660a63c140381e9353ba2032b289092d3dcce817e677643af9832fa30f95f0
+    sourceBytes: 176000743
+    format: laz
+    pointCount: 34826747
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6470.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 7.4% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 176 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-113-ROGUE-SISKIYOU-2019-10TDM6564
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6564"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 8e2b5a163c5b71661bdb0c7c5c4af5bb1316943012eb90d34eacbe05a44f816e
+    sourceBytes: 265960334
+    format: laz
+    pointCount: 49445417
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6564.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.1% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 266 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-114-ROGUE-SISKIYOU-2019-10TDM6762
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM6762"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 5cf81bf0d584faa260d86f81c68c5ed50c8ad448af8fbd5e5ba7ce13fd92b7c6
+    sourceBytes: 374245418
+    format: laz
+    pointCount: 71660280
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM6762.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 4.1% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 374 MB, not vendored; ROGUE25 membership is holdout."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-115-ROGUE-SISKIYOU-2019-10TDM7851
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM7851"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: 2cae8f32917c88ab0929871b645d18b96d2a97b8cd43e3614c298c500e497041
+    sourceBytes: 190115073
+    format: laz
+    pointCount: 39143991
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM7851.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 7.8% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 190 MB, not vendored; ROGUE25 membership is development."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
+  - datasetId: OLV-DS-116-ROGUE-SISKIYOU-2019-10TDM8061
+    title: "USGS 3DEP Rogue River-Siskiyou National Forest 2019, LAS 1.4 tile 10TDM8061"
+    sourceUrl: https://www.fisheries.noaa.gov/inport/item/64356
+    landingPage: https://www.fisheries.noaa.gov/inport/item/64356
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-09-02
+    sourceSha256: be12c943fa614cda9529c001d48c0c271e33df2df32fd5928c19f7a8287876f5
+    sourceBytes: 370513429
+    format: laz
+    pointCount: 69097051
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: 2019-01-01
+    horizontalCrs: "EPSG:6339 NAD83(2011) / UTM zone 10N"
+    verticalCrs: "EPSG:5703 NAVD88 (GEOID12B)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.16
+    terrainClasses: [mountainous, forested-slope]
+    landCoverClasses: [coniferous-forest, dense-canopy, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "USDA Forest Service / U.S. Geological Survey 3D Elevation Program (3DEP)"
+    citation: "2019 USFS Lidar: Rogue River-Siskiyou National Forest (CA, OR). USGS 3DEP Lidar Point Cloud, tile USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM8061.laz. Public domain (work of the U.S. Government). NOAA InPort catalog item 64356, retrieved 2026-09-02."
+    knownLimitations: "Producer ground class (ASPRS 2) is a reference labelling, not surveyed ground truth: 3.5% of returns on this tile. The distributed LAZ vertical datum may differ from the acquisition NAVD88(GEOID12B) in the metadata. 371 MB, not vendored; ROGUE25 membership is holdout."
+    evidenceRole: reference-labelling
+    storage: acquired
+    localPath: not-vendored
   # ── libE57Format self-test corpus (asmaloney/libE57Format-test-data, CC0-1.0) ──
   # Exercised by tests/e57LibE57FormatCorpus.test.ts. Files live under that
   # repo's `self/` directory, which carries CC0-1.0 (the repo's `reference/`
