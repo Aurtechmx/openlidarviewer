@@ -30,6 +30,7 @@ import { writeFloatColorsInto } from '../colorEncode';
 import { computeElevationRange, computeScalarRange } from '../elevationRange';
 import type { StreamingColorRanges } from './streamingColors';
 import type { RgbAppearance } from '../rgbAppearance';
+import { markNodeResolution } from '../streamingLodSize';
 
 /**
  * Node dissolve tunables. A freshly resident node materialises over `FADE_MS`
@@ -193,6 +194,16 @@ export class StreamingRenderer {
   >();
   /** Pending requestAnimationFrame handle for the next fade tick, if any. */
   private _fadeRafHandle: number | null = null;
+  /** This source's octree — read once, lazily, for the root reference below. */
+  private readonly _octree: StreamingSource['octree'];
+  /**
+   * The reference (root) node resolution for THIS source, resolved once and
+   * cached. Node resolution means different things per format, so it is only
+   * ever used as the denominator of a same-source ratio — never compared with
+   * another source's. `0` means the hierarchy could not state one, which the
+   * ratio reads as "no display compensation".
+   */
+  private _rootResolution: number | null = null;
 
   constructor(
     host: StreamingRendererHost,
@@ -204,6 +215,7 @@ export class StreamingRenderer {
     this._mode = mode;
     this._fadeIn = options.fadeIn ?? false;
     this._now = options.now ?? nowMs;
+    this._octree = cloud.octree;
     // Elevation range from the TIGHT data bounds, not the octree cube. A COPC
     // cube barely over-reports, but an EPT cube is cubic around a thin terrain
     // slab, so its Z can be tens of thousands of metres tall while the data
@@ -378,6 +390,12 @@ export class StreamingRenderer {
       decoded.classification ?? null,
       decoded.intensity ?? null,
     );
+    // Coarse-LOD display compensation: record this node's resolution and its
+    // source's root reference on the material, for the size-graph fold the
+    // Viewer applies. Display only — no decoded value is touched.
+    const lodMaterial = handle.material as unknown as { userData?: Record<string, unknown> };
+    lodMaterial.userData ??= {};
+    markNodeResolution(lodMaterial.userData, node.record.spacing, this._rootReferenceResolution());
     this._host.addStreamingMesh(handle.mesh, decoded, node.record.key.depth, node.record.id);
     // A node whose replace frontier said "withheld" before its mesh existed is
     // hidden on creation, so it does not flash for the frame before the next
@@ -393,6 +411,27 @@ export class StreamingRenderer {
     // fallback covers a no-rAF environment). A settled node keeps the plain
     // graph — the dither fold is dropped the moment it finishes.
     if (this._fadeIn) this._startFade(handle.mesh);
+  }
+
+  /**
+   * The root reference resolution for this source: the resolution of the
+   * shallowest node the hierarchy knows. Resolved ONCE per source and cached —
+   * never re-scanned, and never read per frame. `0` when the hierarchy states
+   * nothing usable, which disables compensation for this source.
+   */
+  private _rootReferenceResolution(): number {
+    if (this._rootResolution !== null) return this._rootResolution;
+    let bestDepth = Number.POSITIVE_INFINITY;
+    let resolution = 0;
+    for (const node of this._octree?.nodes?.() ?? []) {
+      const depth = node.record.depth;
+      const spacing = node.record.spacing;
+      if (depth >= bestDepth || !Number.isFinite(spacing) || spacing <= 0) continue;
+      bestDepth = depth;
+      resolution = spacing;
+    }
+    this._rootResolution = resolution;
+    return resolution;
   }
 
   /**

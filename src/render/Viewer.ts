@@ -58,7 +58,6 @@ import {
   length,
   smoothstep,
   step,
-  positionView,
   positionGeometry,
   perspectiveDepthToViewZ,
 } from 'three/tsl';
@@ -114,7 +113,7 @@ import type { RefinementReadiness } from './streaming/refinementReadiness';
 import { readDevFlags } from '../perf/devFlags';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
-import { ensureDensitySizes, pointSizeBaseNode } from './densityPointSize';
+import { buildAdaptiveSizeNode, CoarseLodSizeNodes, ensureDensitySizes, pointSizeBaseNode } from './densityPointSize';
 import {
   splatRadiusMultiplier,
   splatForcesAlphaToCoverage,
@@ -677,30 +676,6 @@ function buildEdlOutputNode(
 }
 
 /**
- * Build the adaptive point-size node: a point's pixel size is `base × ref /
- * eyeDistance`, clamped to `[minSizePx, base × maxSizeFactor]`. Mirrors
- * `adaptivePointSize` in `pointStyle.ts`. `positionView` is the point's
- * instance centre in view space, so `-z` is its eye-space distance.
- */
-function buildAdaptiveSizeNode(
-  base: TslNode,
-  attnRef: TslNode,
-  orthoDist: TslNode,
-  orthoFlag: TslNode,
-): TslNode {
-  // Perspective: divide by each point's own eye distance so far points shrink.
-  // Orthographic: there is no perspective divide, so every point takes the
-  // SAME size — divide by the camera's distance to the target (a uniform)
-  // instead, which makes points scale with zoom but not with depth. `orthoFlag`
-  // is exactly 0 or 1, so `mix` selects one divisor with no blending.
-  const eyeDist: TslNode = max((positionView as TslNode).z.negate(), float(1e-4));
-  const divisor: TslNode = mix(eyeDist, orthoDist, orthoFlag);
-  const attenuated: TslNode = base.mul(attnRef).div(divisor);
-  const maxSize: TslNode = base.mul(POINT_STYLE_DEFAULTS.maxSizeFactor);
-  return attenuated.clamp(float(POINT_STYLE_DEFAULTS.minSizePx), maxSize);
-}
-
-/**
  * Build the circular point-mask opacity node: `positionGeometry.xy` is the
  * sprite-quad coordinate in [-0.5, 0.5]², so the point renders as a round dot
  * with a soft, antialiased rim instead of a hard square.
@@ -981,6 +956,17 @@ export class Viewer {
     this._attnRef,
     this._orthoSizeDist,
     this._orthoSizeFlag,
+  );
+  /**
+   * Coarse-LOD display compensation for streamed nodes (`streamingLodSize.ts`):
+   * one shared phase-gain uniform plus a per-streaming-material relative-
+   * resolution uniform. Static clouds are never registered, so their size graph
+   * is byte-identical to the pre-compensation one.
+   */
+  private readonly _lodSize = new CoarseLodSizeNodes(
+    uniform,
+    this._pointSizeUniform,
+    float(POINT_STYLE_DEFAULTS.minSizePx),
   );
 
   // ── Class visibility (GPU mask) ───────────────────────────────────────────
@@ -1863,6 +1849,8 @@ export class Viewer {
     this._scene.add(mesh);
     this._streamingMeshes.add(mesh);
     this._streamingPickData.set(mesh, { decoded, depth, key });
+    const lodMaterial = mesh.material as THREE.PointsNodeMaterial;
+    if (this._lodSize.register(lodMaterial)) this._applySizeMode(lodMaterial);
   }
 
   /**
@@ -1890,6 +1878,7 @@ export class Viewer {
     this._scene.remove(mesh);
     this._streamingMeshes.delete(mesh);
     this._streamingPickData.delete(mesh);
+    this._lodSize.forget(mesh.material as THREE.PointsNodeMaterial);
     mesh.geometry.dispose();
     (mesh.material as THREE.Material).dispose();
   }
@@ -5132,7 +5121,11 @@ export class Viewer {
     // A streaming node mid-dissolve folds a per-point opaque dither (same
     // size×mask shape as the filters); dropped again the moment it settles.
     const foldFade = this._materialsWithFade.has(material);
-    if (!foldClass && !foldElev && !foldInten && !foldFade) {
+    // A streamed node folds its coarse-LOD display multiplier; never in `fixed`
+    // mode, and never on a static cloud (which is not registered at all), so the
+    // no-fold fast path below still resolves to exactly `base` for static clouds.
+    const foldLod = this._lodSize.has(material, this._pointSizeMode);
+    if (!foldClass && !foldElev && !foldInten && !foldFade && !foldLod) {
       material.sizeNode = base as typeof material.sizeNode;
       return;
     }
@@ -5140,6 +5133,7 @@ export class Viewer {
     // `materialPointSize` (the node form of `material.size`) so the pixel size is
     // preserved while the mask(s) multiply it, then fold each active multiplier.
     let node: TslNode = base ?? materialPointSize;
+    if (foldLod) node = this._lodSize.apply(node, material);
     if (foldElev) node = node.mul(this._elevGpu.maskMultiplier(material));
     if (foldClass) node = node.mul(this._classMaskMultiplier());
     if (foldInten) node = node.mul(this._intenMaskMultiplier());
@@ -6317,8 +6311,14 @@ export class Viewer {
       isTweening: () => this._nav.isTweening,
       activityUntilMs: () => this._renderGate.activityUntilMs,
       edlEnabled: () => this._edlEnabled,
-      applyAdaptiveDpr: (moving, delta, nowMs, rendered) =>
-        this._updateRefinementAndDpr(moving, delta, nowMs, rendered),
+      applyAdaptiveDpr: (moving, delta, nowMs, rendered) => {
+        this._updateRefinementAndDpr(moving, delta, nowMs, rendered);
+        // Shared coarse-LOD gain follows the live phase — a uniform write, so
+        // no material rebuilds. Reads the same tracker the scheduler does
+        // (advances with DPR off); flag off means `full-refine`, the identity.
+        const p = this._refinementPhasesEnabled ? this._phases.phase : 'full-refine';
+        this._lodSize.setPhase(p);
+      },
       noteRendered: () => this._renderGate.noteRendered(),
       noteSkipped: () => this._renderGate.noteSkipped(),
       renderEdl: () => { this._syncActiveCamera(); this._post.render(); },

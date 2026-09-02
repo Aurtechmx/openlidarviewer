@@ -13,9 +13,13 @@
  * measurement.
  */
 import * as THREE from 'three/webgpu';
-import { attribute } from 'three/tsl';
+import { attribute, float, max, mix, positionView } from 'three/tsl';
 import { localDensitySizes, autoDensitySizeParams } from './localDensitySize';
-import type { PointSizeMode } from './pointStyle';
+import { POINT_STYLE_DEFAULTS, type PointSizeMode } from './pointStyle';
+
+// The coarse-LOD display fold is part of the same size-graph wiring seam, so it
+// reaches the Viewer through this module rather than as a second direct import.
+export { CoarseLodSizeNodes } from './streamingLodSize';
 
 // Broad TSL node type, matching how Viewer.ts bridges the three/tsl graph.
 type TslNode = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -68,4 +72,28 @@ export function pointSizeBaseNode(
   const density = mode === 'density' && material.userData?.[DENSITY_SIZE_FLAG] === true;
   if (density) return adaptiveNode.mul(attribute('aSize'));
   return mode === 'fixed' ? null : adaptiveNode;
+}
+
+/**
+ * Build the adaptive point-size node: a point's pixel size is `base × ref /
+ * eyeDistance`, clamped to `[minSizePx, base × maxSizeFactor]`. Mirrors
+ * `adaptivePointSize` in `pointStyle.ts`. `positionView` is the point's
+ * instance centre in view space, so `-z` is its eye-space distance.
+ */
+export function buildAdaptiveSizeNode(
+  base: TslNode,
+  attnRef: TslNode,
+  orthoDist: TslNode,
+  orthoFlag: TslNode,
+): TslNode {
+  // Perspective: divide by each point's own eye distance so far points shrink.
+  // Orthographic: there is no perspective divide, so every point takes the
+  // SAME size — divide by the camera's distance to the target (a uniform)
+  // instead, which makes points scale with zoom but not with depth. `orthoFlag`
+  // is exactly 0 or 1, so `mix` selects one divisor with no blending.
+  const eyeDist: TslNode = max((positionView as TslNode).z.negate(), float(1e-4));
+  const divisor: TslNode = mix(eyeDist, orthoDist, orthoFlag);
+  const attenuated: TslNode = base.mul(attnRef).div(divisor);
+  const maxSize: TslNode = base.mul(POINT_STYLE_DEFAULTS.maxSizeFactor);
+  return attenuated.clamp(float(POINT_STYLE_DEFAULTS.minSizePx), maxSize);
 }
