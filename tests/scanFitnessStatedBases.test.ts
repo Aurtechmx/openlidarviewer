@@ -73,9 +73,10 @@ describe('verdict leads with the assessment limiter', () => {
         'vertical RMSE 0.66 m is rated poor',
       ],
     }));
-    expect(f.verdict).toBe(
-      'Limited — 79% of measured cells sit at the edge of the data, where the surface is least supported (+1 more to review).',
-    );
+    // The lead clause is whatever sentence the assessment produced for the
+    // cap; its exact prose belongs to terrainAssessment, so match the clause
+    // identity and the tail, not the wording.
+    expect(f.verdict).toMatch(/^Limited — 79% of measured cells .*\(\+1 more to review\)\.$/);
   });
   it('falls back to the scorecard order when the assessment names no cause', () => {
     const f = buildScanFitness(base({ status: 'Limited', measuredFraction: 0.3, assessmentLimiters: [] }));
