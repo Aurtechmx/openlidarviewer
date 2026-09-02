@@ -102,7 +102,7 @@ import { deriveClassificationAsync } from './render/class/deriveClassificationAs
 import { classifierOptions } from './render/class/classifierCues';
 import { classificationCoverage } from './render/class/classificationCoverage';
 import type { DeriveClassificationOptions } from './render/class/deriveClassification';
-import { footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
+import { densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 // ObjectPanel is lazy-mounted on first scan load (v0.6 P1, step 2): only the
@@ -1704,7 +1704,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
     areaM2,
     surfaceTier: facts?.surfaceTier,
     products: facts?.products,
-    density: di?.density.bucket,
+    ...densityStoryFields(di?.density),
     groundVisibility: di?.groundVisibility.bucket,
     coverageMode: di?.coverage.bucket,
     crsKnown: facts?.crsKnown ?? metaCrsKnown,

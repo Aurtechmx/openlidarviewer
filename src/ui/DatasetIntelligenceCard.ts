@@ -27,9 +27,40 @@ import {
   signalTier,
   type DatasetIntelligence,
   type DatasetIntelligenceInput,
+  type DensityBasis,
 } from '../terrain/datasetIntelligence';
 
 const EMPTY_TEXT = 'Terrain Intelligence unavailable for this dataset.';
+
+/**
+ * The density row's term + tooltip, one per measure the tier can come from.
+ *
+ * A wide, thin airborne tile has most of its bounding box filled with empty
+ * air, so its points-per-m³ reads far below what the scan actually delivers on
+ * the ground; that reading is tiered on points per footprint m² instead. The
+ * row is named after whichever measure was used, because a pts/m² number under
+ * a "volumetric" heading states the wrong unit. `'none'` (no reading at all)
+ * keeps the volumetric wording, matching the "—" the value shows.
+ */
+export const DENSITY_ROW = {
+  volumetric: {
+    label: 'Volumetric point density',
+    tooltip:
+      'Points per cubic metre (pts/m³), derived from the loader-declared point ' +
+      'count and the bounding-box volume — not areal pts/m². Bucket label: ' +
+      'sparse / moderate / dense / very dense.',
+  },
+  areal: {
+    label: 'Areal point density',
+    tooltip:
+      'Points per square metre (pts/m²) of bounding-box footprint, derived from ' +
+      'the loader-declared point count. Used instead of pts/m³ because this ' +
+      'scan is flat: its bounding box is mostly empty air, which understates a ' +
+      'per-volume reading. Bands follow the USGS 3DEP density floors ' +
+      '(QL2 2 pts/m², QL1 8 pts/m²); the bucket is a density word, not a ' +
+      'quality level.',
+  },
+} as const;
 
 /**
  * v0.3.10 trust-pass — "Terrain Confidence" can be misread as
@@ -62,6 +93,7 @@ export class DatasetIntelligenceCard {
   private readonly _detailsBody: HTMLElement;
 
   private readonly _densityValue: HTMLElement;
+  private readonly _densityName: HTMLElement;
   private readonly _complexityValue: HTMLElement;
   private readonly _groundValue: HTMLElement;
   private readonly _coverageValue: HTMLElement;
@@ -82,6 +114,15 @@ export class DatasetIntelligenceCard {
     // `<dt>/<dd>` pair is explicitly allowed by HTML 5.2 for
     // grouping, and preserves the existing flex-row CSS layout.
     this._densityValue = el('dd', { className: 'olv-di-row-value' });
+    // The density row's TERM is written by `_applyDensityBasis` on every
+    // render, since the row is named after the measure behind the tier.
+    this._densityName = el('dt', {
+      className: 'olv-di-row-name',
+      text: DENSITY_ROW.volumetric.label,
+    });
+    this._densityName.title = DENSITY_ROW.volumetric.tooltip;
+    this._densityName.style.cursor = 'help';
+    this._densityName.setAttribute('aria-describedby', '');
     this._complexityValue = el('dd', { className: 'olv-di-row-value' });
     this._groundValue = el('dd', { className: 'olv-di-row-value' });
     this._coverageValue = el('dd', { className: 'olv-di-row-value' });
@@ -113,13 +154,7 @@ export class DatasetIntelligenceCard {
     // to a first-time user; the tooltips disambiguate without adding
     // visible clutter to the panel.
     this._rows = el('dl', { className: 'olv-di-rows' }, [
-      this._row(
-        'Volumetric point density',
-        this._densityValue,
-        'Points per cubic metre (pts/m³), derived from the loader-declared point ' +
-          'count and the bounding-box volume — not areal pts/m². Bucket label: ' +
-          'sparse / moderate / dense / very dense.',
-      ),
+      el('div', { className: 'olv-di-row' }, [this._densityName, this._densityValue]),
       this._row(
         'Terrain Complexity',
         this._complexityValue,
@@ -236,6 +271,18 @@ export class DatasetIntelligenceCard {
   // ── private ──────────────────────────────────────────────────────
 
   /**
+   * Name the density row after the measure the tier actually came from. A flat
+   * airborne tile is tiered on points per m², and calling that reading
+   * "volumetric" would misreport the unit the number is in.
+   */
+  private _applyDensityBasis(basis: DensityBasis): void {
+    const copy = basis === 'areal' ? DENSITY_ROW.areal : DENSITY_ROW.volumetric;
+    this._densityName.textContent = copy.label;
+    this._densityName.title = copy.tooltip;
+    this._densityName.dataset.basis = basis;
+  }
+
+  /**
    * Build one term / definition row. The `<div class="olv-di-row">`
    * wrapper between `<dl>` and the `<dt>/<dd>` pair is allowed per
    * HTML 5.2 for grouping; it lets the existing flex layout keep
@@ -271,6 +318,7 @@ export class DatasetIntelligenceCard {
     // `data-bucket` keeps the exact bucket (semantics / tests); `data-tier`
     // drives the quiet colour accent through the honest signal-tier mapping so
     // a descriptive axis (complexity) is never coloured as good/bad.
+    this._applyDensityBasis(intel.density.basis);
     this._densityValue.textContent = intel.density.label;
     this._densityValue.dataset.bucket = intel.density.bucket;
     this._densityValue.dataset.tier = signalTier('density', intel.density.bucket);

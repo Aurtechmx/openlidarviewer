@@ -86,6 +86,39 @@ export interface InspectorCardRefreshers {
   noteTerrainComplexity(derived: DerivedComplexity | null): void;
 }
 
+/** The CRS fields the unit conversions below read. */
+type UnitCrs =
+  | { readonly linearUnit?: string; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number }
+  | null
+  | undefined;
+
+/**
+ * The bbox spans `[x, y, z]` in METRES, or `undefined` under the same
+ * fail-closed unit gate as {@link metresCubedBbox}. The spans carry the SHAPE
+ * the volume alone loses: a wide, thin airborne swath and a compact tower can
+ * share a volume, and only the former should be tiered on points per m².
+ * A zero vertical span is kept (a perfectly flat sheet is still a valid
+ * footprint); a zero horizontal span is not, since it has no area.
+ */
+function metresBboxSpans(
+  dx: number,
+  dy: number,
+  dz: number,
+  crs: UnitCrs,
+): [number, number, number] | undefined {
+  if (!isLinearUnitKnown(crs)) return undefined;
+  const mpu = crs?.linearUnitToMetres;
+  if (!Number.isFinite(mpu) || (mpu as number) <= 0) return undefined;
+  const vmpuRaw = crs?.verticalUnitToMetres ?? mpu;
+  if (!Number.isFinite(vmpuRaw) || (vmpuRaw as number) <= 0) return undefined;
+  const sx = dx * (mpu as number);
+  const sy = dy * (mpu as number);
+  const sz = dz * (vmpuRaw as number);
+  if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(sz)) return undefined;
+  if (sx <= 0 || sy <= 0 || sz < 0) return undefined;
+  return [sx, sy, sz];
+}
+
 /**
  * The bounding-box volume in cubic METRES, or `undefined` when the CRS declares
  * no usable linear unit. FAIL CLOSED: an unknown-unit CRS carries the inert
@@ -101,17 +134,11 @@ function metresCubedBbox(
   dx: number,
   dy: number,
   dz: number,
-  crs:
-    | { readonly linearUnit?: string; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number }
-    | null
-    | undefined,
+  crs: UnitCrs,
 ): number | undefined {
-  if (!isLinearUnitKnown(crs)) return undefined;
-  const mpu = crs?.linearUnitToMetres;
-  if (!Number.isFinite(mpu) || (mpu as number) <= 0) return undefined;
-  const vmpuRaw = crs?.verticalUnitToMetres ?? mpu;
-  if (!Number.isFinite(vmpuRaw) || (vmpuRaw as number) <= 0) return undefined;
-  const v = dx * dy * dz * (mpu as number) * (mpu as number) * (vmpuRaw as number);
+  const spans = metresBboxSpans(dx, dy, dz, crs);
+  if (!spans) return undefined;
+  const v = spans[0] * spans[1] * spans[2];
   return Number.isFinite(v) && v > 0 ? v : undefined;
 }
 
@@ -210,9 +237,11 @@ export function createInspectorCardRefreshers(
       // CRS declares a REAL linear unit. An unknown-unit CRS carries the inert
       // placeholder factor 1, so multiplying by it would feed raw source-unit³
       // (feet³, degrees³) into the per-m³ bucketing and mis-tier the density.
-      // When the unit is unconfirmed, `bboxVolume` is left undefined and
-      // `classifyDensity` renders "—" rather than a wrong tier.
-      const bboxVolume = metresCubedBbox(dx, dy, dz, resolvedCrs ? resolvedCrs() : cloud.metadata?.crs);
+      // When the unit is unconfirmed, both the volume and the spans are left
+      // undefined and the density row renders "—" rather than a wrong tier.
+      const crsForUnits = resolvedCrs ? resolvedCrs() : cloud.metadata?.crs;
+      const bboxSpansM = metresBboxSpans(dx, dy, dz, crsForUnits);
+      const bboxVolume = metresCubedBbox(dx, dy, dz, crsForUnits);
       // Density numerator is the file's declared total, back-scaled when the
       // loader strided for display — matching the Scan Report, not the smaller
       // in-memory sample that would under-report the tier.
@@ -221,6 +250,11 @@ export function createInspectorCardRefreshers(
       const summary: Parameters<Inspector['setDatasetIntelligence']>[0] = {
         pointCount: n,
         bboxVolume,
+        // The spans let the summariser tier a flat airborne tile on points per
+        // footprint m². Per-m³ alone reads a wide thin swath as "Sparse" even
+        // when its pts/m² is a comfortable QL1, because most of the bounding
+        // box is empty air between the ground and the flight line.
+        bboxSpansM,
         coverageMeta: {
           coverage: 'full',
           sourcePointCount: n,
@@ -262,6 +296,7 @@ export function createInspectorCardRefreshers(
       const hMin = cloud.metadata?.header?.min;
       const hMax = cloud.metadata?.header?.max;
       let bboxVolume: number | undefined;
+      let bboxSpansM: [number, number, number] | undefined;
       if (hMin && hMax && hMin.length >= 3 && hMax.length >= 3) {
         const dx = hMax[0] - hMin[0];
         const dy = hMax[1] - hMin[1];
@@ -271,13 +306,17 @@ export function createInspectorCardRefreshers(
         // the per-m³ bucketing dropped a genuine QL1 survey a whole tier. The
         // header carries source units; the CRS carries the factors. FAIL CLOSED
         // on the unit exactly as the static path does — an unknown-unit CRS
-        // leaves `bboxVolume` undefined rather than feeding raw feet³ / degrees³
-        // into the per-m³ bucketing.
-        bboxVolume = metresCubedBbox(dx, dy, dz, resolvedCrs ? resolvedCrs() : (cloud.crs?.() ?? null));
+        // leaves the volume and the spans undefined rather than feeding raw
+        // feet³ / degrees³ into the bucketing.
+        const crsForUnits = resolvedCrs ? resolvedCrs() : (cloud.crs?.() ?? null);
+        bboxSpansM = metresBboxSpans(dx, dy, dz, crsForUnits);
+        bboxVolume = metresCubedBbox(dx, dy, dz, crsForUnits);
       }
       const summary = {
         pointCount: sourcePoints,
         bboxVolume,
+        // Same reason as the static path: a flat swath is tiered on pts/m².
+        bboxSpansM,
         coverageMeta: {
           coverage: 'resident-only' as const,
           sourcePointCount: sourcePoints ?? 0,

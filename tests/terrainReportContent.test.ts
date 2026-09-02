@@ -236,7 +236,7 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     // Hand-built summary in the card's own vocabulary — the report must echo
     // the labels verbatim (they are the card's strings, not re-derived).
     const intelligence: DatasetIntelligence = {
-      density: { bucket: 'dense', label: 'Dense' },
+      density: { bucket: 'dense', label: 'Dense', basis: 'volumetric' },
       complexity: { bucket: 'moderate', label: 'Moderate' },
       groundVisibility: { bucket: 'good', label: 'Good' },
       coverage: { bucket: 'full', label: 'Full Dataset' },
