@@ -5,7 +5,9 @@
 import { describe, it, expect } from 'vitest';
 import { resolveActiveScanFacts, signalsFromLive } from '../src/app/processStudioMount';
 import type { LiveScanAccessors } from '../src/app/processStudioMount';
+import { deriveScanFacts } from '../src/process/scanFacts';
 import type { RawScanSignals } from '../src/process/scanFacts';
+import { runQaChecks } from '../src/qa/qaChecks';
 import type { CrsInfo } from '../src/io/crs';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import { preflightSnapshot } from '../src/app/toolPreflightInput';
@@ -192,5 +194,140 @@ describe('a streaming source with no stated point total', () => {
     });
     const distance = preflights.find((p) => p.tool === 'measure-distance');
     expect(distance?.status).not.toBe('blocked');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QA signal wiring: median spacing and full classification
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `tests/qaChecks.test.ts` pins the checks; this pins the WIRING. The mount
+ * used to supply neither `medianSpacing` nor a `full` classification, so the
+ * CLOUD_QUALITY check could only ever answer "not measured yet" and the
+ * CLASSIFICATION check could never pass, whatever the loaded scan carried.
+ * The live signals now measure spacing from the active static cloud's own
+ * positions (converted to metres through the resolved unit) and state `full`
+ * when a producer classification leaves no point unclassified.
+ */
+
+/** A flat 10 x 10 grid at 1.0 source-unit spacing, z = 0. */
+function gridPositions(): Float32Array {
+  const out = new Float32Array(10 * 10 * 3);
+  let k = 0;
+  for (let gy = 0; gy < 10; gy++) {
+    for (let gx = 0; gx < 10; gx++) {
+      out[k++] = gx;
+      out[k++] = gy;
+      out[k++] = 0;
+    }
+  }
+  return out;
+}
+
+const footCrs = { ...metreCrs, linearUnit: 'foot', linearUnitToMetres: 0.3048 } as CrsInfo;
+
+function staticGridScan(overrides: Partial<LiveScanAccessors> = {}): LiveScanAccessors {
+  return {
+    ...noScan,
+    getActivePointCount: () => 100,
+    getResolvedCrs: () => metreCrs,
+    getActiveCloudData: () => ({ positions: gridPositions() }),
+    ...overrides,
+  };
+}
+
+describe('signalsFromLive measures median spacing for the QA cloud-quality check', () => {
+  it('carries the probed spacing, in metres, on a static cloud with a known unit', () => {
+    const sig = signalsFromLive(staticGridScan())!;
+    expect(sig.medianSpacing).toBeCloseTo(1.0, 6);
+    const checks = runQaChecks(deriveScanFacts(sig));
+    const quality = checks.find((c) => c.id === 'CLOUD_QUALITY')!;
+    expect(quality.status).toBe('pass');
+    expect(quality.reason).toContain('1.00 m');
+  });
+
+  it('converts a foot-unit CRS into metres rather than stamping source units', () => {
+    const sig = signalsFromLive(staticGridScan({ getResolvedCrs: () => footCrs }))!;
+    expect(sig.medianSpacing).toBeCloseTo(0.3048, 6);
+  });
+
+  it('corrects for a display sample using the header-declared total', () => {
+    // The loaded 100 points are a uniform sample of a declared 400-point file,
+    // so the file's spacing is the probe's x sqrt(100/400) = half.
+    const sig = signalsFromLive(
+      staticGridScan({
+        getActiveCloudData: () => ({ positions: gridPositions(), declaredPointCount: 400 }),
+      }),
+    )!;
+    expect(sig.medianSpacing).toBeCloseTo(0.5, 6);
+  });
+
+  it('withholds spacing when the linear unit is unknown, fail-closed', () => {
+    const sig = signalsFromLive(staticGridScan({ getResolvedCrs: () => null }))!;
+    expect(sig.medianSpacing).toBeUndefined();
+  });
+
+  it('withholds spacing for a streaming scan (no resident buffer to probe)', () => {
+    const sig = signalsFromLive(
+      staticGridScan({ hasStreamingSource: () => true, getStreamingPointCount: () => 1000 }),
+    )!;
+    expect(sig.kind).toBe('streaming');
+    expect(sig.medianSpacing).toBeUndefined();
+  });
+
+  it('withholds spacing when the shell offers no cloud data', () => {
+    const sig = signalsFromLive(staticGridScan({ getActiveCloudData: undefined }))!;
+    expect(sig.medianSpacing).toBeUndefined();
+  });
+
+  it('degrades a throwing data read to an unstated spacing, never a lost scan', () => {
+    const sig = signalsFromLive(
+      staticGridScan({ getActiveCloudData: () => { throw new Error('buffer gone'); } }),
+    );
+    expect(sig).not.toBeNull();
+    expect(sig?.medianSpacing).toBeUndefined();
+  });
+});
+
+describe('signalsFromLive states a full classification when the producer left none unclassified', () => {
+  it('emits full for a static producer classification with no class 0 or 1', () => {
+    const sig = signalsFromLive(staticGridScan({ getPresentClassCodes: () => [2, 3, 6] }))!;
+    expect(sig.classification).toBe('full');
+    const checks = runQaChecks(deriveScanFacts(sig));
+    expect(checks.find((c) => c.id === 'CLASSIFICATION')?.status).toBe('pass');
+  });
+
+  it('stays partial while class 1 (unclassified) points remain', () => {
+    const sig = signalsFromLive(staticGridScan({ getPresentClassCodes: () => [1, 2, 6] }))!;
+    expect(sig.classification).toBe('partial');
+  });
+
+  it('stays partial while class 0 (never classified) points remain', () => {
+    const sig = signalsFromLive(staticGridScan({ getPresentClassCodes: () => [0, 2] }))!;
+    expect(sig.classification).toBe('partial');
+  });
+
+  it('never claims full for a derived classification (a heuristic, not a survey)', () => {
+    const sig = signalsFromLive(
+      staticGridScan({ getPresentClassCodes: () => [2, 6], getClassificationDerived: () => true }),
+    )!;
+    expect(sig.classification).toBe('partial');
+  });
+
+  it('never claims full for a streaming scan (the legend tallies decoded nodes only)', () => {
+    const sig = signalsFromLive(
+      staticGridScan({
+        hasStreamingSource: () => true,
+        getStreamingPointCount: () => 1000,
+        getPresentClassCodes: () => [2, 6],
+      }),
+    )!;
+    expect(sig.classification).toBe('partial');
+  });
+
+  it('still reports none for an unclassified cloud', () => {
+    const sig = signalsFromLive(staticGridScan())!;
+    expect(sig.classification).toBe('none');
   });
 });

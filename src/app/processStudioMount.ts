@@ -41,6 +41,8 @@ import type { PreflightLiveReads } from './toolPreflightInput';
 import type { PreflightActionHost } from './preflightActions';
 import type { PreflightActionRunner, PreflightView } from './toolPreflightRuntime';
 import { loadToolPreflight } from '../lazyChunks';
+import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import { medianNeighbourSpacing } from '../terrain/objectMetrics';
 
 /** LAS standard classification codes the panel keys ground/building on. */
 const CLASS_GROUND = 2;
@@ -75,14 +77,54 @@ export interface LiveScanAccessors {
   /** True when the present classification was DERIVED by OLV (heuristic), not
    *  carried by the producer. Distinguishes trusted vs derived ground/buildings. */
   getClassificationDerived(): boolean;
+  /**
+   * The active STATIC cloud's raw positions (local, source units) and the point
+   * total its header declared, for the one cheap probe this module runs: median
+   * nearest-neighbour spacing. Optional, and null when no static cloud is
+   * loaded; either absence simply leaves `medianSpacing` unstated, which the QA
+   * cloud-quality check reads as review ("not measured yet"), never a figure.
+   */
+  getActiveCloudData?():
+    | { readonly positions: Float32Array; readonly declaredPointCount?: number | null }
+    | null
+    | undefined;
+}
+
+/**
+ * Per-buffer memo of the spacing probe, in SOURCE units. A cloud's positions
+ * buffer is immutable once loaded, so one probe per buffer is exact for its
+ * life; the metre conversion stays OUTSIDE the memo so a later CRS override
+ * re-scales the same measurement instead of re-probing (or worse, keeping the
+ * old unit). WeakMap, so a closed scan's entry goes with its buffer.
+ */
+const spacingProbeCache = new WeakMap<Float32Array, number>();
+
+/** The memoised probe. Loaded positions can be a uniform display sample of the
+ *  file, so the header's declared total feeds the estimator's √(P/N) density
+ *  correction and the figure describes the SCAN, not the sample. */
+function probedSpacingSourceUnits(data: {
+  readonly positions: Float32Array;
+  readonly declaredPointCount?: number | null;
+}): number {
+  const hit = spacingProbeCache.get(data.positions);
+  if (hit !== undefined) return hit;
+  const value = medianNeighbourSpacing(data.positions, {
+    sourcePointCount: data.declaredPointCount ?? undefined,
+  });
+  spacingProbeCache.set(data.positions, value);
+  return value;
 }
 
 /**
  * Build the loose signal set from live accessors, fail-closed. A streaming
  * source wins over a static cloud (it is the active scan when mounted). Returns
- * null when nothing is loaded. Classification is reported as `partial` whenever
- * any class code is present — the conservative floor, never `full` — and ground
- * / building trust follows only from the actual class-2 / class-6 codes.
+ * null when nothing is loaded. Classification presence starts at the `partial`
+ * floor whenever any class code is present, rises to `full` only when a STATIC
+ * cloud's producer classification leaves no point in class 0 (never classified)
+ * or class 1 (unclassified), so every point carries a real class, and ground
+ * / building trust follows only from the actual class-2 / class-6 codes. A
+ * streaming legend tallies decoded nodes only, and a derived classification is
+ * a heuristic, so neither can prove fullness; both stay at `partial`.
  *
  * PRESENCE AND SIZE ARE SEPARATE. Whether a scan is loaded comes from the
  * mounted source; how many points it has comes from the format. A format that
@@ -102,15 +144,46 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
   const classificationProvenance = !hasClasses
     ? 'none'
     : (a.getClassificationDerived() ? 'derived' : 'producer');
+  // Presence: `full` needs a static cloud, a producer classification and no
+  // class 0 / class 1 in the legend, i.e. every loaded point carries a real
+  // class. Anything weaker stays at the `partial` floor as before.
+  const classification = !hasClasses
+    ? 'none'
+    : classificationProvenance === 'producer' &&
+        !isStreaming &&
+        !codes.includes(0) &&
+        !codes.includes(1)
+      ? 'full'
+      : 'partial';
+  const crs = a.getResolvedCrs() ?? null;
+  // Median spacing, in METRES: the memoised probe over the static cloud's
+  // positions, scaled by the resolved unit. Withheld (leaving the QA check at
+  // its honest "not measured" review) for a streaming scan, an absent data
+  // read, an unknown linear unit, or a probe that measured nothing. A throwing
+  // read also withholds it rather than costing the whole signal set.
+  let medianSpacing: number | undefined;
+  if (!isStreaming && crs != null && isLinearUnitKnown(crs)) {
+    try {
+      const data = a.getActiveCloudData?.();
+      const u2m = crs.linearUnitToMetres;
+      if (data != null && Number.isFinite(u2m) && u2m > 0) {
+        const spacing = probedSpacingSourceUnits(data) * u2m;
+        if (Number.isFinite(spacing) && spacing > 0) medianSpacing = spacing;
+      }
+    } catch {
+      medianSpacing = undefined;
+    }
+  }
   const pointCount = isStreaming ? streamPts : staticPts;
   return {
     kind: isStreaming ? 'streaming' : 'static',
     // Omitted, not zeroed, when the source states no total: `RawScanSignals`
     // leaves `pointCount` optional precisely so an unstated size stays unstated.
     ...(pointCount == null ? {} : { pointCount }),
-    crs: a.getResolvedCrs() ?? null,
-    classification: hasClasses ? 'partial' : 'none',
+    crs,
+    classification,
     classificationProvenance,
+    ...(medianSpacing === undefined ? {} : { medianSpacing }),
     groundClassified: codes.includes(CLASS_GROUND),
     hasBuildingClass: codes.includes(CLASS_BUILDING),
   };
@@ -248,8 +321,19 @@ export interface StudioViewer {
  */
 export interface ProcessStudioShell {
   getViewer(): StudioViewer;
-  /** The active STATIC cloud, or null when none is loaded. */
-  getActiveCloud(): { readonly pointCount: number } | null | undefined;
+  /**
+   * The active STATIC cloud, or null when none is loaded. `positions` and
+   * `declaredPointCount` are structurally optional (a fake without them reads
+   * as "no data", so spacing stays unstated); the live cloud carries both.
+   */
+  getActiveCloud():
+    | {
+        readonly pointCount: number;
+        readonly positions?: Float32Array;
+        readonly declaredPointCount?: number;
+      }
+    | null
+    | undefined;
   /** The active scan's id (streaming-aware), so companion layers exclude it. */
   getActiveLayerId(): string | null;
   /** The CRS service: the active scan's resolved CRS and its spatial context. */
@@ -314,6 +398,15 @@ export function createProcessStudioFromShell(shell: ProcessStudioShell): Mounted
     getResolvedCrs: () => shell.crsService.current(),
     getPresentClassCodes: () => shell.classLegend.presentCodes(),
     getClassificationDerived: () => shell.classLegend.classificationIsDerived(),
+    // The spacing probe's input: the active static cloud's own buffer and its
+    // header-declared total. A cloud without positions (or no cloud) is "no
+    // data", and the spacing signal stays unstated.
+    getActiveCloudData: () => {
+      const cloud = shell.getActiveCloud();
+      return cloud?.positions
+        ? { positions: cloud.positions, declaredPointCount: cloud.declaredPointCount ?? null }
+        : null;
+    },
   };
   return createProcessStudio({
     getSignals: () => signalsFromLive(accessors),
