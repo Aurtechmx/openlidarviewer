@@ -15,11 +15,13 @@
 
 import { clamp01 } from '../numeric';
 import { el, formatCount } from './dom';
+import { streamingViewStatus, type StreamingViewStatus } from './streamingViewStatus';
 import { CURATED_LICENSE_LABELS, curatedCreditFor } from '../io/catalog/curatedLocations';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 import type { CrsLinearUnit } from '../io/crs';
+import type { StreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
 
 /**
  * The CRS facts the spacing row needs to state its unit honestly — a structural
@@ -276,9 +278,6 @@ export class StreamingPanel {
   private readonly _progressFill: HTMLElement;
   private readonly _progressNodes: HTMLElement;
   private readonly _progressPoints: HTMLElement;
-  // Sticky terminal state: once "Streaming ready" lands, the bar reads 100%
-  // and stops reacting to late jitter in the counters.
-  private _streamReady = false;
   private readonly _summary: HTMLElement;
   private readonly _nodes: HTMLElement;
   private readonly _points: HTMLElement;
@@ -314,7 +313,7 @@ export class StreamingPanel {
     this._progressFill = el('div', { className: 'olv-stream-prog-fill' });
     this._progressTrack = el('div', { className: 'olv-stream-prog-track' }, [this._progressFill]);
     this._progressTrack.setAttribute('role', 'progressbar');
-    this._progressTrack.setAttribute('aria-label', 'Resident detail loaded');
+    this._progressTrack.setAttribute('aria-label', 'Current view detail resident');
     this._progressTrack.setAttribute('aria-valuemin', '0');
     this._progressTrack.setAttribute('aria-valuemax', '100');
     this._progressNodes = el('span', { className: 'olv-stream-prog-nodes', text: '—' });
@@ -457,7 +456,6 @@ export class StreamingPanel {
     this._paused = false;
     this._pause.textContent = 'Pause';
     // Reset the progress treatment for the next scan.
-    this._streamReady = false;
     this._progress.classList.add('olv-hidden');
     this._progressTrack.classList.remove('olv-stream-prog-shimmer');
     this._progressFill.style.width = '0%';
@@ -470,13 +468,6 @@ export class StreamingPanel {
     this._gradeResult.classList.remove('olv-streaming-grade-error');
   }
 
-  /**
-   * Set the high-level load phase line.
-   *
-   * The terminal "Streaming ready" phase latches a sticky 100% on the bar
-   * (`_streamReady`) so the determinate fill reads full and stops reacting to
-   * late counter jitter; any earlier phase un-latches it.
-   */
   /**
    * Show the credit a curated source requires, for the URL being streamed.
    *
@@ -500,18 +491,51 @@ export class StreamingPanel {
     }
   }
 
+  /**
+   * Set the high-level load phase line for the OPENING stages — reading
+   * metadata, building the hierarchy — where no wanted set exists yet and the
+   * scheduler has no verdict to give. Once diagnostics exist,
+   * {@link setViewStatus} owns this line and nothing latches: readiness is a
+   * property of the current view and is revoked when that view changes.
+   */
   setPhase(phase: string): void {
     this._phase.textContent = phase;
-    const ready = phase === 'Streaming ready';
-    if (ready !== this._streamReady) {
-      this._streamReady = ready;
-      if (ready) {
-        // Full, determinate, no shimmer — the load has genuinely settled.
-        this._progress.classList.remove('olv-hidden');
-        this._progressTrack.classList.remove('olv-stream-prog-shimmer');
-        this._progressFill.style.width = '100%';
-        this._progressTrack.setAttribute('aria-valuenow', '100');
-      }
+  }
+
+  /** Whether the user has paused streaming. */
+  get paused(): boolean {
+    return this._paused;
+  }
+
+  /**
+   * Render the current-view line from ONE scheduler diagnostics snapshot. The
+   * panel holds the pause flag, so the caller passes only the snapshot and both
+   * halves of the model come from the same instant.
+   */
+  setViewDiagnostics(diagnostics: StreamingDiagnostics): void {
+    this.setViewStatus(streamingViewStatus(diagnostics, this._paused));
+  }
+
+  /**
+   * Render one current-view readiness model: the headline, the resident share
+   * of the WANTED set, and the compact counts. The whole line comes from a
+   * single snapshot, so the words and the bar always describe the same instant,
+   * and a later snapshot can move the bar back down.
+   */
+  setViewStatus(view: StreamingViewStatus): void {
+    this._phase.textContent = view.headline;
+    this._progress.classList.remove('olv-hidden');
+    this._progressNodes.textContent = view.detail;
+    if (view.determinate && view.fraction != null) {
+      this._progressTrack.classList.remove('olv-stream-prog-shimmer');
+      const pct = Math.round(view.fraction * 100);
+      this._progressFill.style.width = `${pct}%`;
+      this._progressTrack.setAttribute('aria-valuenow', String(pct));
+    } else {
+      // No wanted set — indeterminate shimmer, no fabricated percentage.
+      this._progressTrack.classList.add('olv-stream-prog-shimmer');
+      this._progressFill.style.width = '0%';
+      this._progressTrack.removeAttribute('aria-valuenow');
     }
   }
 
@@ -686,32 +710,11 @@ export class StreamingPanel {
       status.sourcePoints === null ? 'Unknown' : formatCount(status.sourcePoints)
     }`;
     this._cache.textContent = formatBytes(status.cacheBytes);
-    this._updateProgress(status);
-  }
-
-  /**
-   * Drive the progress bar from the live counters. Determinate (brand-gradient
-   * fill at resident/known fraction) when the total node count is known; the
-   * indeterminate shimmer otherwise. Once "Streaming ready" has latched, the
-   * bar stays full — the load is settled and late jitter must not pull it back.
-   */
-  private _updateProgress(status: StreamingStatus): void {
-    if (this._streamReady) return;
-    const p = streamingProgress(status);
-    this._progress.classList.remove('olv-hidden');
-    this._progressNodes.textContent = p.nodesLabel;
-    this._progressPoints.textContent = p.pointsLabel;
-    if (p.determinate && p.fraction != null) {
-      this._progressTrack.classList.remove('olv-stream-prog-shimmer');
-      const pct = Math.round(p.fraction * 100);
-      this._progressFill.style.width = `${pct}%`;
-      this._progressTrack.setAttribute('aria-valuenow', String(pct));
-    } else {
-      // Total unknown — honest indeterminate shimmer, no fabricated percentage.
-      this._progressTrack.classList.add('olv-stream-prog-shimmer');
-      this._progressFill.style.width = '0%';
-      this._progressTrack.removeAttribute('aria-valuenow');
-    }
+    // Source/cache context only. The progress bar belongs to the current view
+    // (`setViewStatus`): resident-over-known is the share of the HIERARCHY held
+    // in memory, never a download-completion percentage for a source the
+    // scheduler only ever fetches a view's worth of.
+    this._progressPoints.textContent = streamingProgress(status).pointsLabel;
   }
 
   private _statRow(label: string, value: HTMLElement): HTMLElement {

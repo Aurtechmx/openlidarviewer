@@ -6,7 +6,7 @@
  * reason — i.e. the settled verdict IS interior — yet the SELECTED segment is
  * still Auto. The settled soft-commit never landed.
  *
- * Root cause: the "Streaming ready" poll fired the settle one-shot on the
+ * Root cause: the settled-view poll fired the settle one-shot on the
  * FIRST scheduler-idle frame and spent it unconditionally. The scheduler
  * often reads idle at the root level (depth 0) long before the cloud fills
  * in, so the one-shot ran on a sparse frame whose verdict was terrain
@@ -107,7 +107,7 @@ function seg(root: FakeEl, value: ScanTypeOverride): FakeEl {
 /**
  * A miniature of the `src/main.ts` host: the exact `applyScanRoute` wiring —
  * planner call, commit application, `setScanType` mirroring, spend decision —
- * plus the "Streaming ready" poll's depth-gated one-shot. The planner, the
+ * plus the settled-view poll's depth-gated one-shot. The planner, the
  * spend rule, the depth gate, and the control are the REAL modules; only the
  * geometry gather is replaced by the verdict the classifier would return.
  */
@@ -175,7 +175,7 @@ function makeHost(control: ScanTypeControl) {
     );
     return spent;
   }
-  /** The "Streaming ready" poll's one-shot: depth gate + change-gated retry. */
+  /** The settled-view poll's one-shot: depth gate + change-gated retry. */
   function readyPoll(
     cloud: { hierarchyMaxDepth: number; deepestResident: number; residentPoints?: number },
     detected: SpaceKind | null,

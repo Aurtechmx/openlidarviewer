@@ -97,7 +97,7 @@ test('opens a real COPC file and streams it progressively', async ({ page }) => 
   await expect(panel).toBeVisible({ timeout: 60_000 });
 
   // Nodes stream in — the panel reaches a refining or ready phase.
-  await expect(panel).toContainText(/Refining|Streaming ready/, { timeout: 60_000 });
+  await expect(panel).toContainText(/Refining current view|Current view ready/, { timeout: 60_000 });
 
   // The empty state is gone and navigation is live.
   await expect(page.locator('.olv-empty')).toBeHidden();
@@ -124,7 +124,7 @@ test('inspects a per-point readout on a streaming COPC node', async ({ page }) =
   const panel = page.locator('.olv-streaming-panel');
   await expect(panel).toBeVisible({ timeout: 60_000 });
   // Wait for resident nodes to refine so the meshes are dense enough to hit.
-  await expect(panel).toContainText(/Refining|Streaming ready/, { timeout: 60_000 });
+  await expect(panel).toContainText(/Refining current view|Current view ready/, { timeout: 60_000 });
   await page.waitForTimeout(2_500); // let the framing tween settle
 
   // Enter the Inspect tool — enabled on a streaming scan in v0.3.0.
