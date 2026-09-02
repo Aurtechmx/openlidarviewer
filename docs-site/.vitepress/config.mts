@@ -225,7 +225,7 @@ export default defineConfig({
     socialLinks: [{ icon: 'github', link: GITHUB }],
 
     footer: {
-      message: 'MIT licensed. Local-first: the viewer never uploads your data.',
+      message: 'AGPL-3.0-only licensed. Local-first: the viewer never uploads your data.',
       copyright: `© Aurtech — OpenLiDARViewer v${pkg.version}`,
     },
 
