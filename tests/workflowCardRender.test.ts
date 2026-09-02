@@ -210,3 +210,25 @@ describe('renderWhyDetails', () => {
     expect(node).toBeNull();
   });
 });
+
+describe('renderTerrainProducts — grouped under two shared-grade headings', () => {
+  const GROUPED: TerrainProduct[] = [
+    { label: 'Profiles', status: 'preview', statusWord: 'Preview', displayWord: 'Limited', glyph: '⚠', productClass: 'inspection' },
+    { label: 'Measurements', status: 'preview', statusWord: 'Preview', displayWord: 'Limited', glyph: '⚠', productClass: 'inspection' },
+    { label: 'DTM/DEM export', status: 'preview', statusWord: 'Preview', glyph: '⚠', productClass: 'deliverable' },
+    { label: 'Contours', status: 'preview', statusWord: 'Preview', glyph: '⚠', productClass: 'deliverable' },
+  ];
+  it('renders one list per class with a heading that says the grade is shared', async () => {
+    const { renderTerrainProducts } = await load();
+    const card = renderTerrainProducts(GROUPED) as unknown as FakeEl;
+    expect(card.findTag('ul')).toHaveLength(2);
+    const heads = card.findAll('olv-analyse-products-group-head');
+    expect(heads.map((h) => h.textContent)).toEqual([
+      'Inspection products — one shared grade',
+      'Deliverable products — one shared grade',
+    ]);
+    expect(card.findTag('li')).toHaveLength(GROUPED.length);
+    const words = card.findAll('olv-analyse-product-status');
+    expect(words.map((w) => w.textContent)).toEqual(['Limited', 'Limited', 'Preview', 'Preview']);
+  });
+});

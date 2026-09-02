@@ -497,3 +497,27 @@ describe('terrainAssessment', () => {
     expect(a.status).toBe('Good');
   });
 });
+
+describe('terrainAssessment — limiters name the actual causes of the verdict', () => {
+  it('a Limited surface driven by two poor metrics lists the boundary cap and the poor RMSE, not density', () => {
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        reasons: ['Preview only: mean confidence is low.'],
+        score: 60,
+        meanDensity: 1.3,
+        edgeRiskRatio: 0.79,
+        rmseZM: 0.66,
+      }),
+    );
+    expect(a.status).toBe('Limited');
+    // The boundary cap's prose belongs to terrainAssessment (PR #886 rewords
+    // it); pin which causes fired and in what order, not how they read.
+    expect(a.limiters).toHaveLength(2);
+    expect(a.limiters?.[0]).toMatch(/^79% of measured cells /);
+    expect(a.limiters?.[1]).toBe('vertical RMSE 0.66 m is rated poor');
+  });
+  it('a Good surface has no limiters', () => {
+    expect(terrainAssessment(fixture()).limiters).toEqual([]);
+  });
+});

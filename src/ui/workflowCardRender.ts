@@ -81,6 +81,29 @@ export function renderTerrainProducts(
 ): HTMLElement {
   const card = el('div', { className: 'olv-analyse-products' });
   card.append(el('div', { className: 'olv-analyse-products-head', text: 'Terrain products' }));
+  // Six rows carry TWO grades (inspection / deliverable). When the rows say
+  // which, group them under a heading that says the grade is shared, so six
+  // rows never read as six assessments. Rows without a class render as one
+  // flat list (legacy callers).
+  const classed = products.some((p) => p.productClass != null);
+  if (classed) {
+    const groups: Array<[TerrainProduct['productClass'], string]> = [
+      ['inspection', 'Inspection products — one shared grade'],
+      ['deliverable', 'Deliverable products — one shared grade'],
+    ];
+    for (const [cls, heading] of groups) {
+      const rows = products.filter((p) => p.productClass === cls);
+      if (rows.length === 0) continue;
+      card.append(el('div', { className: 'olv-analyse-why-subhead olv-analyse-products-group-head', text: heading }));
+      card.append(productList(rows, sharedReason));
+    }
+    return card;
+  }
+  card.append(productList(products, sharedReason));
+  return card;
+}
+
+function productList(products: ReadonlyArray<TerrainProduct>, sharedReason?: string): HTMLElement {
   const list = el('ul', { className: 'olv-analyse-products-list' });
   for (const p of products) {
     const row = el('li', { className: `olv-analyse-product is-${p.status}` });
@@ -90,7 +113,7 @@ export function renderTerrainProducts(
     head.append(
       glyph,
       el('span', { className: 'olv-analyse-product-label', text: p.label }),
-      el('span', { className: 'olv-analyse-product-status', text: p.statusWord }),
+      el('span', { className: 'olv-analyse-product-status', text: p.displayWord ?? p.statusWord }),
     );
     row.append(head);
     // De-dup: when a product is held back by the SAME surface reason already
@@ -108,8 +131,7 @@ export function renderTerrainProducts(
     }
     list.append(row);
   }
-  card.append(list);
-  return card;
+  return list;
 }
 
 /**

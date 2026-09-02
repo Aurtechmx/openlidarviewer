@@ -31,8 +31,16 @@ import {
   type ReadinessTier,
 } from '../quality/readinessEngine';
 
-/** The product-status word — the deliverable vocabulary, not the grade one. */
+/**
+ * The product-status word — the deliverable vocabulary for deliverable rows;
+ * inspection rows on a Limited surface carry the hero's own word ('Limited')
+ * so the list never says "Preview" under a "Limited" headline. Same grade
+ * underneath (caution) — only the word differs.
+ */
 export type ProductStatusWord = ReadinessTier;
+
+/** The word the on-screen row prints: the status word, or 'Limited' (see `displayWord`). */
+export type ProductDisplayWord = ReadinessTier | 'Limited';
 
 /** One row of the Terrain Products list. */
 export interface TerrainProduct {
@@ -42,6 +50,18 @@ export interface TerrainProduct {
   readonly status: 'ready' | 'preview' | 'blocked';
   /** The textual verdict — carried as TEXT so the row is never colour-only. */
   readonly statusWord: ProductStatusWord;
+  /**
+   * The word the row RENDERS. Equal to `statusWord` except for inspection rows
+   * on a Limited surface, which print 'Limited' (the hero's word) instead of
+   * the export-axis 'Preview'. Same grade underneath; only the word differs.
+   */
+  readonly displayWord?: ProductDisplayWord;
+  /**
+   * Which of the TWO grades this row carries: the inspection grade (surface
+   * quality) or the deliverable grade (export readiness). Six rows, two
+   * grades — the view groups on this so six rows never imply six assessments.
+   */
+  readonly productClass?: 'inspection' | 'deliverable';
   /** ✓ / ⚠ / ✕, decorative beside the status word. */
   readonly glyph: '✓' | '⚠' | '✕';
   /**
@@ -101,9 +121,12 @@ export function terrainProducts(
   workflows: ReadonlyArray<WorkflowItem>,
 ): TerrainProduct[] {
   return workflows.map((w) => {
+    const productClass: TerrainProduct['productClass'] = DELIVERABLE_LABELS.has(w.label)
+      ? 'deliverable'
+      : 'inspection';
     const reason = productReasonFor({
       status: w.status,
-      productClass: DELIVERABLE_LABELS.has(w.label) ? 'deliverable' : 'inspection',
+      productClass,
       surfaceTier: assessment.status,
       surfaceReason: assessment.reason,
       exportReason: assessment.exportReason,
@@ -112,7 +135,14 @@ export function terrainProducts(
     return {
       label: PRODUCT_LABEL[w.label] ?? w.label,
       status: STATUS_KEY[w.status],
+      productClass,
       statusWord: statusWordFor(w.status),
+      // Inspection rows are graded off the surface tier; when that tier is
+      // Limited, print Limited (the hero's word), not the export-axis "Preview".
+      displayWord:
+        productClass === 'inspection' && w.status === 'caution' && assessment.status === 'Limited'
+          ? 'Limited'
+          : statusWordFor(w.status),
       glyph: glyphFor(w.status),
       ...(reason != null ? { reason } : {}),
     };

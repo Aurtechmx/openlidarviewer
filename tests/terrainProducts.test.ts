@@ -92,7 +92,11 @@ describe('terrainProducts', () => {
     });
     const products = terrainProducts(a, recommendedWorkflows(a));
     for (const p of products) {
+      // Inspection rows carry the hero's own word (Limited); deliverable rows
+      // keep the export vocabulary (Preview). Same grade underneath, no new one.
       expect(p.statusWord).toBe('Preview');
+      expect(p.displayWord).toBe(p.productClass === 'inspection' ? 'Limited' : 'Preview');
+      expect(p.status).toBe('preview');
       // The figure-quoting surface line wins over both the generic note
       // ("preview only — additional validation recommended") and the unquantified
       // export framing — and arrives byte-identical, never shortened.
@@ -166,5 +170,21 @@ describe('terrainProducts', () => {
     const a = assessment({});
     const products = terrainProducts(a, [{ label: 'Future workflow', status: 'good' }]);
     expect(products[0].label).toBe('Future workflow');
+  });
+});
+
+describe('terrainProducts — six rows, two grades, said plainly', () => {
+  it('every row names its class so the view can group six rows under two shared grades', () => {
+    const a = assessment({ status: 'Preview', exportReadiness: 'Preview', exportReason: 'x' });
+    const products = terrainProducts(a, recommendedWorkflows(a));
+    expect(products.map((p) => p.productClass)).toEqual([
+      'inspection', 'inspection', 'inspection', 'deliverable', 'deliverable', 'deliverable',
+    ]);
+  });
+  it('inspection rows say Limited only when the surface is Limited', () => {
+    const preview = terrainProducts(assessment({ status: 'Preview', exportReadiness: 'Preview', exportReason: 'x' }), recommendedWorkflows(assessment({ status: 'Preview', exportReadiness: 'Preview', exportReason: 'x' })));
+    expect(preview.filter((p) => p.productClass === 'inspection').every((p) => p.displayWord === 'Ready')).toBe(true);
+    const blocked = assessment({ status: 'Blocked', exportReadiness: 'Blocked', exportReason: 'x', reason: 'gate' });
+    expect(terrainProducts(blocked, recommendedWorkflows(blocked)).every((p) => p.displayWord === 'Blocked')).toBe(true);
   });
 });
