@@ -26,6 +26,7 @@ import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 import { sha256Hex } from './sha256';
+import { verticalUnitLabel } from '../../units/units';
 
 /**
  * Build a `SHA256SUMS` integrity manifest over `entries`, in the standard
@@ -56,15 +57,16 @@ function projectedUnitLabel(unit: DemLinearUnit | undefined): string {
 }
 
 /**
- * Plain vertical-unit label. The DTM grid stores elevations in the scan's
- * SOURCE vertical units (only the validation RMSEz is converted to metres), so
- * a foot-based CRS — whose vertical axis shares the linear unit family — carries
- * elevations in feet, not metres. An omitted / metre / unknown unit keeps the
- * standing metre default for back-compat.
+ * Elevation-unit word for the README, mapped from the units.ts short label
+ * (`'m'` / `'ft'` / `'units'`). The DTM stores Z in the scan's SOURCE vertical
+ * units, so the label is derived from the resolved VERTICAL factor
+ * (`dtm.verticalUnitToMetres`), never the horizontal one — a compound CRS (metre
+ * plan over a foot height, or the reverse) would otherwise stamp the README and
+ * the GeoTIFF vertical GeoKey with different units for the SAME zip. `'units'`
+ * (an absent / degenerate factor) reads `'unknown'`, the fail-closed contract
+ * the contour deliverable already uses — never a fabricated metre.
  */
-function verticalUnitLabel(unit: DemLinearUnit | undefined): string {
-  return unit === 'foot' || unit === 'us-survey-foot' ? 'feet' : 'metres';
-}
+const ELEVATION_UNIT_NAME = { m: 'metres', ft: 'feet', units: 'unknown' } as const;
 
 export interface DemPackageOptions {
   /**
@@ -233,11 +235,15 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // resolved projected linear unit (m, or ft on a foot CRS) — the grid's
   // cellSizeM is stored in SOURCE units, so a foot CRS must read "ft" not "m".
   const hUnit = isGeographic ? 'degrees' : projectedUnitLabel(opts.linearUnit);
-  // Elevation unit: the DTM stores Z in SOURCE vertical units, so a PROJECTED
-  // foot-based CRS carries elevations in feet. A geographic frame keeps the
-  // standing metre assumption for heights (its horizontal unit is degrees; the
-  // vertical unit is conventionally metres and is not separately resolved here).
-  const zUnit = isGeographic ? 'metres' : verticalUnitLabel(opts.linearUnit);
+  // Elevation unit: the DTM stores Z in SOURCE vertical units, so the label
+  // comes from the resolved VERTICAL factor — NOT opts.linearUnit (horizontal),
+  // which is what the GeoTIFF's vertical GeoKey (4099) already keys off. Honoured
+  // in both branches: a geographic frame's cells are degrees but its heights
+  // still carry the declared vertical unit. An absent / degenerate factor reads
+  // 'unknown' (fail-closed), never a fabricated metre.
+  const zUnit = dtm.verticalUnitToMetres == null
+    ? 'unknown'
+    : ELEVATION_UNIT_NAME[verticalUnitLabel(dtm.verticalUnitToMetres)];
   const reasons = quality?.reasons ?? [];
   const exportReasons = quality?.exportReasons ?? [];
   const warnings = result.warnings ?? [];
