@@ -55,3 +55,13 @@ export function isDerivedColorMode(mode: ColorMode): boolean {
  * something the survey recorded.
  */
 export const DERIVED_COLOR_NOTE = 'Colour is applied by the viewer, not recorded by the scan.';
+
+/**
+ * The qualifier for classification mode specifically. The plain derived note
+ * can be read as the class codes themselves being a viewer invention; they are
+ * not — the codes are the scan's own per-point attribute, only the palette is
+ * chosen here. (A heuristically derived classification is flagged as such in
+ * the Classes panel, which owns that provenance.)
+ */
+export const CLASSIFICATION_COLOR_NOTE =
+  'Palette is applied by the viewer; class codes are recorded by the scan (derived classes are marked in the Classes panel).';

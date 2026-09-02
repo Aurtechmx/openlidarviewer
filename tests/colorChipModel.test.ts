@@ -12,9 +12,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildColorChipModel,
+  buildColorChipNote,
   COVERAGE_DISABLED_TITLE,
   ANALYSIS_GATED_MODES,
 } from '../src/ui/colorChipModel';
+import {
+  DERIVED_COLOR_NOTE,
+  CLASSIFICATION_COLOR_NOTE,
+} from '../src/render/colorModeProvenance';
 import type { ColorMode } from '../src/render/colorModes';
 
 const DATA_MODES: ColorMode[] = ['rgb', 'elevation', 'classification', 'density'];
@@ -110,5 +115,35 @@ describe('buildColorChipModel', () => {
     expect(chips[chips.length - 2].mode).toBe('coverage');
     expect(chips[chips.length - 1].mode).toBe('confidence');
     expect(chips.find((c) => c.mode === 'gpsTime')!.active).toBe(true);
+  });
+});
+
+describe('buildColorChipNote — stated bases', () => {
+  it('classification says the palette is the viewer’s but the class codes are the scan’s', () => {
+    const note = buildColorChipNote('classification', false);
+    expect(note).toBe(CLASSIFICATION_COLOR_NOTE);
+    expect(note).toMatch(/class codes are recorded by the scan/);
+    expect(note).not.toBe(DERIVED_COLOR_NOTE);
+  });
+
+  it('other derived modes keep the plain derived note', () => {
+    expect(buildColorChipNote('elevation', false)).toBe(DERIVED_COLOR_NOTE);
+  });
+
+  it('surfaces the opening-choice reason as one sentence after provenance', () => {
+    const reason =
+      'coloured by height — the scan carries classes, but too few points are classified to read';
+    const note = buildColorChipNote('elevation', false, reason);
+    expect(note.indexOf(DERIVED_COLOR_NOTE)).toBe(0);
+    expect(note).toContain('Opened ' + reason + '.');
+    // Gate note still last.
+    const all = buildColorChipNote('elevation', true, reason);
+    expect(all.endsWith('to enable Coverage and Confidence.')).toBe(true);
+    expect(all.indexOf('Opened ')).toBeLessThan(all.indexOf('Run terrain analysis first'));
+  });
+
+  it('a blank reason adds nothing', () => {
+    expect(buildColorChipNote('rgb', false, '')).toBe('');
+    expect(buildColorChipNote('rgb', false, undefined)).toBe('');
   });
 });

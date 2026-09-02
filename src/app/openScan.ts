@@ -474,7 +474,8 @@ export async function attachStaticCloud(
   // classification → intensity → elevation), gated so it never picks a mode
   // the cloud can't render, nor an RGB array too uniform to read. The rail
   // syncs off `mode` below, so this seam keeps render and chips in step.
-  const mode = recommendColorMode(result.cloud).mode;
+  const recommended = recommendColorMode(result.cloud);
+  const mode = recommended.mode;
   deps.setCurrentColorMode(mode);
   viewer.setColorMode(id, mode);
 
@@ -522,7 +523,9 @@ export async function attachStaticCloud(
     deps.inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null, deps.layerIdentity.stableIdFor(id));
     deps.setLayerVisible(id, true);
     deps.layerService.refreshCrsFlags();
-    deps.inspector.setColorModes(availableModes(result.cloud), mode);
+    // The reason travels with the mode so the rail can say why a scan opened
+    // in it (e.g. Class passed over on a barely-classified tile).
+    deps.inspector.setColorModes(availableModes(result.cloud), mode, recommended.reason);
     deps.inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
     deps.inspector.setElevationExtent(viewer.elevationExtent());
     deps.inspector.setIntensityExtent(viewer.intensityExtent());

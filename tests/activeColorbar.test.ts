@@ -266,7 +266,7 @@ describe('rampRangeForMode — single source with colorForMode', () => {
     const cloud = makeScalarCloud();
     const trimmed = rampRangeForMode('elevation', cloud, { heightPercentileTrim: 25 });
     const raw = rampRangeForMode('elevation', cloud, { heightPercentileTrim: 0 });
-    expect(raw).toEqual({ min: 0, max: 30 });
+    expect(raw).toMatchObject({ min: 0, max: 30 });
     expect(trimmed!.min).toBeGreaterThanOrEqual(raw!.min);
     expect(trimmed!.max).toBeLessThanOrEqual(raw!.max);
   });
@@ -283,5 +283,24 @@ describe('rampRangeForMode — single source with colorForMode', () => {
     expect(rampRangeForMode('returnNumber', bare)).toBeNull();
     expect(rampRangeForMode('rgb', makeScalarCloud())).toBeNull();
     expect(rampRangeForMode('classification', makeScalarCloud())).toBeNull();
+  });
+});
+
+describe('buildActiveColorbarSpec — stated sample bases', () => {
+  it('elevation names the percentile sample when the range carries its count', () => {
+    const bar = buildActiveColorbarSpec(
+      src({ mode: 'elevation', trimPercent: 5, sampleCount: 50_000 }),
+    );
+    expect(bar!.note).toBe('p5–p95 of a 50,000-point sample of the loaded cloud');
+  });
+
+  it('elevation keeps the bare window note when no sample count is known (streaming)', () => {
+    const bar = buildActiveColorbarSpec(src({ mode: 'elevation', trimPercent: 5 }));
+    expect(bar!.note).toBe('p5–p95 window');
+  });
+
+  it('intensity says its raw window is the loaded sample range', () => {
+    const bar = buildActiveColorbarSpec(src({ mode: 'intensity' }));
+    expect(bar!.note).toBe('loaded sample range');
   });
 });

@@ -739,7 +739,7 @@ export function rampRangeForMode(
   mode: ColorMode,
   cloud: PointCloud,
   opts?: ColorForModeOptions,
-): { min: number; max: number } | null {
+): { min: number; max: number; sampleCount?: number } | null {
   const n = cloud.pointCount;
   switch (mode) {
     case 'intensity': {
@@ -774,7 +774,9 @@ export function rampRangeForMode(
         upperPercentile: 100 - trim,
         upAxis,
       });
-      return { min: r.minZ, max: r.maxZ };
+      // `sampleCount` is the strided percentile sample the window came from —
+      // passed through untouched so the legend can name it.
+      return { min: r.minZ, max: r.maxZ, sampleCount: r.sampleCount };
     }
     default:
       return null;

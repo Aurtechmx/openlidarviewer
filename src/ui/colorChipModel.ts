@@ -12,7 +12,11 @@
  */
 
 import type { ColorMode } from '../render/colorModes';
-import { isDerivedColorMode, DERIVED_COLOR_NOTE } from '../render/colorModeProvenance';
+import {
+  isDerivedColorMode,
+  DERIVED_COLOR_NOTE,
+  CLASSIFICATION_COLOR_NOTE,
+} from '../render/colorModeProvenance';
 
 /** Tooltip shown on a gated chip while it is disabled (no analysis yet). */
 export const COVERAGE_DISABLED_TITLE = 'Run terrain analysis first';
@@ -75,12 +79,27 @@ export function buildColorChipModel(
  * yet. Both are surfaced in the flow rather than only as a chip `title`, which
  * never appears on touch.
  *
+ * Classification gets its own provenance line: the generic one reads as if the
+ * class codes were invented here, when only the palette is.
+ *
+ * `openingReason`, when given, is the recommender's one-line rationale for the
+ * mode a scan opened in (e.g. why Class was passed over on a barely-classified
+ * tile). It sits between provenance and the gate note as one sentence, and
+ * the caller drops it once the analyst picks a mode by hand.
+ *
  * Returns an empty string when there is nothing to say, so the caller can key
  * the row's visibility off the result.
  */
-export function buildColorChipNote(activeMode: ColorMode, anyGatedDisabled: boolean): string {
+export function buildColorChipNote(
+  activeMode: ColorMode,
+  anyGatedDisabled: boolean,
+  openingReason?: string,
+): string {
   const notes: string[] = [];
-  if (isDerivedColorMode(activeMode)) notes.push(DERIVED_COLOR_NOTE);
+  if (activeMode === 'classification') notes.push(CLASSIFICATION_COLOR_NOTE);
+  else if (isDerivedColorMode(activeMode)) notes.push(DERIVED_COLOR_NOTE);
+  const reason = openingReason?.trim();
+  if (reason) notes.push(`Opened ${reason.replace(/\.+$/, '')}.`);
   if (anyGatedDisabled) notes.push(`${COVERAGE_DISABLED_TITLE} to enable Coverage and Confidence.`);
   return notes.join(' ');
 }
