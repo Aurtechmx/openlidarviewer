@@ -18,8 +18,9 @@ GeoTIFF: one ordinary file, organised so a viewer can read it incrementally.
    octree cube, the point spacing, the scale/offset, and where the hierarchy
    lives — all from a single small range read.
 3. **Read the hierarchy.** The octree hierarchy is an *index*, not point data:
-   a few tens of kilobytes even for a multi-gigabyte cloud. It is read in full
-   so the viewer knows every node's location and extent.
+   a few tens of kilobytes even for a multi-gigabyte cloud. It is read up to
+   a 4,096-page cap, comfortably past a multi-gigabyte cloud's index; a
+   hierarchy that exceeds the cap is reported incomplete, never silently cut.
 4. **Stream.** A coarse view renders almost immediately. As the camera moves,
    a view-dependent scheduler decides which octree nodes to load next.
 

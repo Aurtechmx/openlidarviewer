@@ -25,4 +25,4 @@ Seventeen products reached **E4**. Five are algorithm checks against GDAL, three
 
 ## What would raise the ceiling
 
-Running the cross-implementation harness against independent reference outputs (E4), and a field validation against surveyed checkpoints (E5+). Both are mechanisms that exist or are documented; neither has been executed, so no claim currently depends on them.
+A prospective field validation against surveyed checkpoints (E5). The cross-implementation harness has been executed: seventeen claims carry E4 on agreement with GDAL, PDAL, GRASS or R, per the register. Retrospective field comparisons exist too (Marsh Island, 101 surveyed checkpoints; Coconino, 13), but they were found after the fact rather than preregistered, so no claim stands at E5 and the ceiling stays where a prospective study would move it.
