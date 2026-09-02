@@ -3192,10 +3192,11 @@ export class AnalysePanel {
       unit: 'm',
       unitToMetres: 1,
       unitKnown,
-      // The contour result doesn't carry the full class histogram; the presence
-      // of classified returns dropped before ground filtering tells us the
-      // source WAS classified (else ground was derived).
-      unclassifiedFraction: hasClass ? 0 : null,
+      // The measured share of ASPRS 0/1 returns, not the mere presence of the
+      // attribute. A raw airborne tile carries a code on every point and is
+      // still almost entirely code 1; reporting 0 there stamped a green
+      // "0% unclassified" on a scan that was 95% unclassified.
+      unclassifiedFraction: r.unclassifiedFraction,
       hasGroundClass: hasClass,
       coverageMode: r.dtm.coverageMode,
       densityReferenceFloor: densityFloor,
