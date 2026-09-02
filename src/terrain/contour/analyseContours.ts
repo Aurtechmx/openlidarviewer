@@ -672,6 +672,46 @@ export function resolveGroundFilterParams(
  * Accepts a Float32Array of XYZ triples (boxed once internally) or a
  * `TerrainPoint[]`. Deterministic.
  */
+/**
+ * Options for the DtmSurfaceModel the spatially-blocked hold-out rebuilds its
+ * fold surfaces with.
+ *
+ * Exported as a pure seam so a test can pin the invariant dtmSurfaceModel.ts
+ * states in caps: the validator MUST be handed the SAME `despike` and
+ * `verticalUnitToMetres` the shipped surface used, or every fold scores a
+ * surface the viewer never delivered. The trusted class-2 path turns the
+ * despike OFF because a steep survey node is data, not a blunder, and the
+ * vertical scale sizes the despike floor and the confidence roughness on
+ * foot-vertical scans. A statistic cannot guard this: geometry the despike
+ * would remove is also geometry a held-out block cannot predict, so the two
+ * effects are confounded in any end-to-end RMSE.
+ */
+export function blockedHoldoutModelOptions(
+  dtm: { originH1: number; originH2: number; cols: number; rows: number; cellSizeM: number },
+  aggregation: DtmAggregation,
+  despikeApplied: boolean,
+  params: Pick<
+    TerrainCoreParams,
+    'isGeographic' | 'latitudeDeg' | 'horizontalUnitToMetres' | 'verticalUnitToMetres'
+  >,
+): ConstructorParameters<typeof DtmSurfaceModel>[0] {
+  return {
+    grid: {
+      originH1: dtm.originH1,
+      originH2: dtm.originH2,
+      cols: dtm.cols,
+      rows: dtm.rows,
+      cellSizeM: dtm.cellSizeM,
+    },
+    aggregation,
+    despike: despikeApplied,
+    verticalUnitToMetres: params.verticalUnitToMetres,
+    isGeographic: params.isGeographic,
+    latitudeDeg: params.latitudeDeg,
+    horizontalUnitToMetres: params.horizontalUnitToMetres,
+  };
+}
+
 export function computeTerrainCore(
   input: TerrainPointInput,
   params: TerrainCoreParams,
@@ -893,19 +933,9 @@ export function computeTerrainCore(
     const stride = Math.max(1, Math.ceil(groundXYZ.length / BLOCKED_POINT_CAP));
     const sampled = stride > 1 ? groundXYZ.filter((_, i) => i % stride === 0) : groundXYZ;
     if (sampled.length >= 32) {
-      const model = new DtmSurfaceModel({
-        grid: {
-          originH1: dtm.originH1,
-          originH2: dtm.originH2,
-          cols: dtm.cols,
-          rows: dtm.rows,
-          cellSizeM: dtm.cellSizeM,
-        },
-        aggregation,
-        isGeographic: params.isGeographic,
-        latitudeDeg: params.latitudeDeg,
-        horizontalUnitToMetres: params.horizontalUnitToMetres,
-      });
+      const model = new DtmSurfaceModel(
+        blockedHoldoutModelOptions(dtm, aggregation, despikeApplied, params),
+      );
       const raw = spatialBlockHoldout(sampled, model, {
         blockSize: dtm.cellSizeM * 8,
         folds: 4,
