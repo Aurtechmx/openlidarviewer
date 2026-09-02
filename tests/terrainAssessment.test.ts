@@ -511,10 +511,11 @@ describe('terrainAssessment — limiters name the actual causes of the verdict',
       }),
     );
     expect(a.status).toBe('Limited');
-    expect(a.limiters).toEqual([
-      '79% of measured cells sit at the edge of the data, where the surface is least supported',
-      'vertical RMSE 0.66 m is rated poor',
-    ]);
+    // The boundary cap's prose belongs to terrainAssessment (PR #886 rewords
+    // it); pin which causes fired and in what order, not how they read.
+    expect(a.limiters).toHaveLength(2);
+    expect(a.limiters?.[0]).toMatch(/^79% of measured cells /);
+    expect(a.limiters?.[1]).toBe('vertical RMSE 0.66 m is rated poor');
   });
   it('a Good surface has no limiters', () => {
     expect(terrainAssessment(fixture()).limiters).toEqual([]);
