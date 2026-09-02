@@ -29,6 +29,20 @@
       "why": "Both branches are gather output: the denser re-gather, or the space-export context that was itself copied from a gather. Extracted verbatim from main.ts; the carrier is passed in so both reads stay here."
     },
     {
+      "file": "src/app/processStudioMount.ts",
+      "symbol": "createProcessStudioFromShell.getActiveCloudData",
+      "frame": "source-local",
+      "reads": 2,
+      "why": "Hands the active static cloud's own buffer (plus its header-declared total) to the spacing probe. The shell type keeps positions structurally optional so a test fake without them reads as no data; a real accessor would force the concrete PointCloud through the seam."
+    },
+    {
+      "file": "src/app/processStudioMount.ts",
+      "symbol": "probedSpacingSourceUnits",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "The spacing probe measures nearest-neighbour distance in the cloud's own source units (the QA signal converts to metres afterwards through the resolved CRS), and the buffer doubles as the memo key so a repaint never re-probes. Translation-invariant, so any frame gives the same figure; source-local is what the structural shell hands over."
+    },
+    {
       "file": "src/app/terrainAnalysisRunner.ts",
       "symbol": "createTerrainAnalysisRunner.buildResultForExport",
       "frame": "project-local",

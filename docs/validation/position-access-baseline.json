@@ -1,9 +1,10 @@
 {
-  "total": 155,
+  "total": 160,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/featureExtractionInput.ts": 1,
     "src/app/floorPlanPositions.ts": 4,
+    "src/app/processStudioMount.ts": 5,
     "src/app/terrainAnalysisRunner.ts": 3,
     "src/io/copc/copcChunkDecode.ts": 1,
     "src/io/heavy/chunkedLazSource.ts": 1,
