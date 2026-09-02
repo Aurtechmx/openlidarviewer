@@ -31,7 +31,7 @@
       "maxHeightAboveGroundM": 7.916999816894531,
       "withinToleranceFraction": 1,
       "maxAbsErrorM": 0.000003784179682497779,
-      "rmseM": 0.000002183820831363381,
+      "rmseM": 0.0000021838208313633712,
       "meanSignedErrorM": 1.5744628892093716e-7
     },
     {
@@ -49,7 +49,7 @@
       "maxHeightAboveGroundM": 8.271003723144531,
       "withinToleranceFraction": 1,
       "maxAbsErrorM": 0.000003784179682497779,
-      "rmseM": 0.0000021470998586194545,
+      "rmseM": 0.000002147099858619457,
       "meanSignedErrorM": -1.3818359235528988e-8
     },
     {
@@ -67,7 +67,7 @@
       "maxHeightAboveGroundM": 8.944999694824219,
       "withinToleranceFraction": 1,
       "maxAbsErrorM": 0.000003784179682497779,
-      "rmseM": 0.000002148685786946998,
+      "rmseM": 0.000002148685786946977,
       "meanSignedErrorM": -1.420898401534032e-8
     }
   ],
