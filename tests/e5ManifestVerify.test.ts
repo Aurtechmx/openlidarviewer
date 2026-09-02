@@ -10,11 +10,13 @@ import {
   verifyManifest,
   collectionDigestOf,
   tileIdOf,
+  loadWesmLedger,
   // @ts-expect-error — plain .mjs verifier, no type declarations.
 } from '../scripts/e5/verify-input-manifest.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MDIR = resolve(ROOT, 'validation/e5/manifests');
+const WESM = loadWesmLedger(resolve(MDIR, 'wesm-acquisition.json')) as Map<string, Record<string, unknown>>;
 
 /** A minimal but internally consistent two-tile manifest. */
 function goodManifest() {
@@ -236,12 +238,75 @@ describe('E5 manifest verifier', () => {
     expect(r.errors.join('\n')).toMatch(/allTilesHaveGround=false but 0 tile/);
   });
 
+  it('catches a non-null acquisitionYear left as not-established', () => {
+    const m = goodManifest();
+    (m.tiles[0] as Record<string, unknown>).acquisitionYear = 2019; // year but placeholder source
+    m.summary.acquisitionYears = [2019];
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/needs an authoritative acquisitionDateSource/);
+  });
+
+  it('accepts a non-null acquisitionYear with an authoritative source', () => {
+    const m = goodManifest();
+    for (const t of m.tiles) {
+      (t as Record<string, unknown>).acquisitionYear = 2019; // window year, distinct from creation 2021
+      t.acquisitionDateSource = 'usgs-wesm';
+    }
+    m.summary.acquisitionYears = [2019];
+    const r = verifyManifest(m, { expectedCount: 2 });
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('cross-checks a matching WESM frame', () => {
+    const m = goodManifest();
+    const wesm = {
+      horizontalEpsg: 6339,
+      verticalEpsg: 5703,
+      geoidModel: 'GEOID12B',
+      acquisitionYear: null,
+    };
+    const r = verifyManifest(m, { expectedCount: 2, wesm });
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('catches a WESM geoid mismatch (guards Houston units 1-3 vs unit 4)', () => {
+    const m = goodManifest();
+    const wesm = {
+      horizontalEpsg: 6339,
+      verticalEpsg: 5703,
+      geoidModel: 'GEOID18', // ledger disagrees with the members' GEOID12B
+      acquisitionYear: null,
+    };
+    const r = verifyManifest(m, { expectedCount: 2, wesm });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/WESM geoidModel mismatch/);
+  });
+
+  it('catches an acquisitionYear that disagrees with the WESM ledger', () => {
+    const m = goodManifest();
+    const wesm = {
+      horizontalEpsg: 6339,
+      verticalEpsg: 5703,
+      geoidModel: 'GEOID12B',
+      acquisitionYear: 2019, // ledger says 2019, tiles say null
+    };
+    const r = verifyManifest(m, { expectedCount: 2, wesm });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join('\n')).toMatch(/acquisitionYear .* ≠ WESM ledger 2019/);
+  });
+
   it.each([
-    ['ROGUE25.input.json', 25],
-    ['HOUSTON17.input.json', 17],
-  ])('committed manifest %s passes', (file, count) => {
-    const m = JSON.parse(readFileSync(resolve(MDIR, file), 'utf8'));
-    const r = verifyManifest(m, { expectedCount: count });
+    ['ROGUE25.input.json', 25, 'ROGUE25', 2019],
+    ['HOUSTON17.input.json', 17, 'HOUSTON17', null],
+  ])('committed manifest %s passes with its WESM ledger', (file, count, id, year) => {
+    const m = JSON.parse(readFileSync(resolve(MDIR, file as string), 'utf8'));
+    const wesm = WESM.get(id as string);
+    expect(wesm).toBeTruthy();
+    expect((wesm as Record<string, unknown>).acquisitionYear ?? null).toBe(year);
+    const r = verifyManifest(m, { expectedCount: count, wesm });
     expect(r.errors).toEqual([]);
     expect(r.ok).toBe(true);
   });
