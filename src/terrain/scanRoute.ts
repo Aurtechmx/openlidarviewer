@@ -56,7 +56,7 @@ export interface ScanRouteInput {
   /**
    * True when this evaluation runs on SETTLED geometry — the open-time call
    * for a static (fully loaded) file, or the one-shot re-evaluation fired
-   * when a streaming cloud reaches "Streaming ready". A settled verdict is
+   * when a streaming cloud's current view is ready. A settled verdict is
    * the one the "Treat as" control soft-commits to (see `commitDetected`);
    * sparse mid-stream frames (false) only ever route, never commit.
    */
@@ -168,7 +168,7 @@ export function planScanRoute(input: ScanRouteInput): ScanRoutePlan {
 }
 
 /**
- * The octree depth the resident set must reach before a "Streaming ready"
+ * The octree depth the resident set must reach before a current-view-ready
  * idle poll counts as GENUINELY settled — the gate in front of the streaming
  * settle one-shot (`applyScanRoute(false, true)` in `src/main.ts`).
  *
@@ -194,7 +194,7 @@ export function settleTargetDepth(hierarchyMaxDepth: number): number {
  * verdict re-arms the one-shot (see {@link settleOneShotSpent}), so without a
  * cap a scan whose gather permanently fails — or whose early-node verdict is
  * permanently refused by the no-flip guard — would re-classify on every
- * "Streaming ready" poll forever. After this many attempts the one-shot is
+ * current-view-ready poll forever. After this many attempts the one-shot is
  * spent regardless; the pill simply stays on Auto, which is the honest state.
  */
 export const SETTLE_RETRY_CAP = 40;

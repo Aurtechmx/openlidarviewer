@@ -39,7 +39,7 @@ test.describe('streaming-resident caveat caption (autzen COPC required)', () => 
     // The streaming panel appears once metadata + hierarchy are read.
     const panel = page.locator('.olv-streaming-panel');
     await expect(panel).toBeVisible({ timeout: 60_000 });
-    await expect(panel).toContainText(/Refining|Streaming ready/, { timeout: 60_000 });
+    await expect(panel).toContainText(/Refining current view|Current view ready/, { timeout: 60_000 });
 
     // Enter measurement mode and pick the Profile kind. The profile
     // sampler needs two points; we drop them at deterministic NDC

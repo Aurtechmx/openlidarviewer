@@ -2946,7 +2946,7 @@ const SCAN_REROUTE_GROWTH = 1.4;
 // verdict and pins the routing like `routing.overridden` so a streaming
 // re-evaluation can't flip it. Per-session, reset to 'auto' on every new scan.
 // One-shot guard: re-evaluate the scan type once the streaming cloud has fully
-// settled ("Streaming ready"), so a verdict decided on a sparse early frame is
+// settled (current view ready), so a verdict decided on a sparse early frame is
 // corrected on representative geometry. Reset per scan.
 let streamingSettledRouted = false;
 // Settled-evaluation bookkeeping for the re-arming one-shot (v0.4.5b fix —
@@ -3023,7 +3023,7 @@ function treatAsDisabledFor(
  * (`settleOneShotSpent`): true once the settled verdict LANDED (the planner
  * applied it or the soft-commit fired) — or once no commit can ever come
  * (pinned / manual override) — false when the verdict was REFUSED by the
- * routing guards or the frame was undecidable, so the "Streaming ready" poll
+ * routing guards or the frame was undecidable, so the settled-view poll
  * keeps the one-shot armed and retries on fuller geometry (bounded by
  * SETTLE_RETRY_CAP). Non-settled callers ignore the value.
  */
@@ -5029,6 +5029,10 @@ function startStreamingStatusPolling(): void {
     const scheduler = viewer.streamingScheduler;
     if (!cloud || !scheduler) return;
     const counts = cloud.counts();
+    // ONE snapshot per tick: the panel line, the bar and the settle one-shot
+    // all read the same instant, and the same wanted-set verdict the renderer's
+    // phase machine acts on.
+    const diag = scheduler.diagnostics();
     streamingPanel.setStatus({
       loadedNodes: counts.resident,
       knownNodes: counts.known,
@@ -5036,19 +5040,15 @@ function startStreamingStatusPolling(): void {
       sourcePoints: cloud.sourcePointCount,
       cacheBytes: scheduler.cacheStats().byteSize,
     });
-    if (counts.resident === 0) {
-      streamingPanel.setPhase('Streaming coarse geometry…');
-    } else if (counts.loading > 0 || counts.queued > 0 || counts.decoded > 0) {
-      streamingPanel.setPhase('Refining visible detail…');
-    } else {
-      streamingPanel.setPhase('Streaming ready');
-      // First time the stream GENUINELY settles, re-evaluate the scan type on
+    streamingPanel.setViewDiagnostics(diag);
+    if (diag.readinessPhase === 'settled') {
+      // First settled current-view verdict: re-evaluate the scan type on
       // the now fully-resident cloud — a sparse early frame can misread a
       // 360 / house as terrain or object. One-shot per scan; a manual "Treat
       // as" override or a "run anyway" pin make this a no-op (and spend it).
       //
       // Two guards keep the one-shot THE settled verdict (v0.4.5 fix — the
-      // pill stayed on Auto after "Streaming ready" because a transient idle
+      // pill stayed on Auto after the ready poll because a transient idle
       // had silently spent the one-shot without committing):
       //   1. DEPTH GATE — the scheduler often reads idle at the root level
       //      (depth 0) long before the cloud fills in (same reality the

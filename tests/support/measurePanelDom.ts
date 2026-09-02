@@ -83,6 +83,10 @@ export class FakeEl {
   setAttribute(n: string, v: string): void {
     this.attrs.set(n, v);
   }
+  removeAttribute(n: string): void {
+    this.attrs.delete(n);
+  }
+
   hasAttribute(n: string): boolean {
     return this.attrs.has(n);
   }
@@ -154,3 +158,26 @@ export function installFakeDom(): void {
   g.ResizeObserver = FakeResizeObserver;
 }
 
+/**
+ * First descendant (or `root` itself) carrying `cls` in its className, else
+ * undefined. Shared by the panel tests so each one does not re-declare a DOM
+ * stub; the recording `FakeEl` above is the single implementation.
+ */
+export function byClass(root: FakeEl, cls: string): FakeEl | undefined {
+  if (root.className.split(' ').includes(cls)) return root;
+  for (const child of root.children) {
+    const hit = byClass(child, cls);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/** First descendant whose own text contains `substr`, else undefined. */
+export function findContaining(root: FakeEl, substr: string): FakeEl | undefined {
+  if (typeof root.textContent === 'string' && root.textContent.includes(substr)) return root;
+  for (const child of root.children) {
+    const hit = findContaining(child, substr);
+    if (hit) return hit;
+  }
+  return undefined;
+}
