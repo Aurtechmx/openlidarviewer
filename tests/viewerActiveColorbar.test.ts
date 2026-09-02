@@ -332,3 +332,16 @@ describe('colorLegend.intensityExtent', () => {
     expect(buildColorLegend(host(state)).intensityExtent()).toBeNull();
   });
 });
+
+describe('colorLegend.activeColorbar — sample basis passthrough', () => {
+  it('static elevation reports the percentile sample count computeElevationRange used', () => {
+    const bar = activeColorbar({ ...staticCloud('elevation'), heightPercentileTrim: 5 });
+    // 4 points → the stride sample holds all 4; the note states that count.
+    expect(bar!.note).toBe('p5–p95 of a 4-point sample of the loaded cloud');
+  });
+
+  it('streaming elevation has no resident sample count and keeps the window note', () => {
+    const bar = activeColorbar(streamingState('elevation', true));
+    expect(bar!.note).toBe('p5–p95 window');
+  });
+});

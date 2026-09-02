@@ -189,7 +189,7 @@ const MODE_TITLES: Record<ColorMode, string> = {
   elevation: 'Colour points by height — low to high',
   classification: 'Colour points by their ASPRS classification code',
   normal: 'Colour points by surface-normal direction',
-  density: 'Colour points by local coverage — dark = sparse, bright = dense',
+  density: 'Colour points by local point density of the loaded sample — dark = sparse, bright = dense',
   gpsTime: 'Colour points by GPS acquisition time — dark early, bright late (Cividis)',
   returnNumber: 'Colour points by return number — dark first return, bright last (Cividis)',
   coverage:
@@ -336,6 +336,8 @@ interface RangeFilter {
  */
 function buildRangeFilter(opts: {
   title: string;
+  /** Optional one-line note under the fields naming what the seeded bounds are. */
+  caption?: string;
   /** Noun for the input aria-labels, e.g. 'elevation' or 'intensity'. */
   unit: string;
   resetTitle: string;
@@ -360,6 +362,7 @@ function buildRangeFilter(opts: {
       el('span', { className: 'olv-elev-cap', text: 'Max' }),
       maxInput,
     ]),
+    ...(opts.caption ? [el('p', { className: 'olv-chips-note', text: opts.caption })] : []),
     reset,
   ]);
   const sectionEl = section(opts.title, body);
@@ -974,12 +977,16 @@ export class Inspector {
     // "Colour trim" and tooltip'd to keep it distinct from the Elevation filter
     // below, which is what actually hides points.
     this._heightTrimRow.title =
-      'Clips the top and bottom of the elevation colour ramp so outliers don’t ' +
-      'wash out the gradient. This only affects colour — to hide points by ' +
-      'height, use the Elevation filter.';
+      'Clips the top and bottom of the elevation colour ramp (sets the colourbar ' +
+      'window) so outliers don’t wash out the gradient. This only affects colour — ' +
+      'to hide points by height, use the Elevation filter.';
     this._heightTrimSlider.setAttribute('aria-label', 'Elevation colour-ramp trim (percent)');
     this._heightTrimRow.replaceChildren(
-      el('span', { className: 'olv-height-trim-name', text: 'Colour trim' }),
+      el('span', {
+        className: 'olv-height-trim-name',
+        text: 'Colour trim',
+        title: 'Sets the colourbar window',
+      }),
       this._heightTrimSlider,
       this._heightTrimLabel,
     );
@@ -1010,12 +1017,13 @@ export class Inspector {
     const resetTitle = 'Clear the filter and show every point in this scan';
     this._elevFilter = buildRangeFilter({
       title: 'Elevation filter',
+      caption: 'Loaded sample extent; colour window is trimmed separately (Colour trim).',
       unit: 'elevation',
       resetTitle,
       onApply: (r) => this._cb.onElevationFilter?.(r),
     });
     this._intenFilter = buildRangeFilter({
-      title: 'Intensity filter',
+      title: 'Intensity filter (loaded sample range)',
       unit: 'intensity',
       resetTitle,
       onApply: (r) => this._cb.onIntensityFilter?.(r),
@@ -1709,13 +1717,24 @@ export class Inspector {
    */
   private _coverageAvailable = false;
 
-  /** Render the color-mode chips, marking `active` as selected. */
-  setColorModes(modes: ColorMode[], active: ColorMode): void {
+  /**
+   * The recommender's one-line rationale for the mode the scan opened in, or
+   * null once the analyst has picked a mode by hand (the sentence describes
+   * the opening choice only).
+   */
+  private _openingReason: string | null = null;
+
+  /**
+   * Render the color-mode chips, marking `active` as selected. `openingReason`
+   * is shown beneath the rail as one sentence until the user changes mode.
+   */
+  setColorModes(modes: ColorMode[], active: ColorMode, openingReason?: string): void {
     // The Coverage / Confidence modes are analysis-gated, not data-gated, so
     // they are never part of the per-cloud `availableModes` list — track the
     // data modes separately and always append the gated chips below.
     this._modes = modes.filter((m) => !ANALYSIS_GATED_MODES.includes(m));
     this._activeMode = active;
+    this._openingReason = openingReason ?? null;
     this._renderColorChips();
   }
 
@@ -1751,6 +1770,7 @@ export class Inspector {
         for (const other of this._chips.children) other.classList.remove('olv-chip-active');
         chip.classList.add('olv-chip-active');
         this._activeMode = mode;
+        this._openingReason = null;
         this._cb.onColorMode(mode);
         // v0.3.7 final-polish — show the trim slider when the analyst
         // picks Height. Other modes don't honour the slider so hiding
@@ -1765,7 +1785,11 @@ export class Inspector {
     // one is active. The provenance line comes first: it describes what the
     // analyst is looking at right now, while the gate note describes a mode
     // they cannot select yet.
-    const note = buildColorChipNote(this._activeMode, anyGatedDisabled);
+    const note = buildColorChipNote(
+      this._activeMode,
+      anyGatedDisabled,
+      this._openingReason ?? undefined,
+    );
     this._chipsNote.textContent = note;
     this._chipsNote.classList.toggle('olv-hidden', note === '');
     // Initial visibility for the trim row — track the active mode.

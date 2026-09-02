@@ -10,14 +10,19 @@
  *
  * Per-mode honesty rules (each is a deliberate scientific decision):
  *
- *   - **elevation** — the default elevation ramp (Turbo, exactly what
- *     `colorByElevation` paints), the CRS-declared unit or NO unit at all
- *     (an unknown unit must never be presented as metres), and a
- *     "p5–p95 window" note whenever the percentile trim narrowed the ramp,
- *     so a reader knows the endpoints are not the true extremes.
+ *   - **elevation** — the default elevation ramp (`DEFAULT_ELEVATION_PALETTE`,
+ *     Viridis — exactly what `colorByElevation` paints), the CRS-declared
+ *     unit or NO unit at all (an unknown unit must never be presented as
+ *     metres), and a percentile note whenever the trim narrowed the ramp,
+ *     so a reader knows the endpoints are not the true extremes. When the
+ *     range carries the count of the strided sample the percentiles were
+ *     taken from (`computeElevationRange` caps it at 50 000 values of the
+ *     loaded cloud), the note names that sample; otherwise it is the bare
+ *     "p5–p95 window".
  *   - **intensity** — a GRAYSCALE bar, because `colorByIntensity` paints
- *     grayscale; and no unit, because LAS intensity is a dimensionless DN
- *     whose scaling the app cannot vouch for.
+ *     grayscale; no unit, because LAS intensity is a dimensionless DN
+ *     whose scaling the app cannot vouch for; and a "loaded sample range"
+ *     note, because the raw min/max is scanned over the resident points.
  *   - **gpsTime** — normalised to seconds from the ramp window's start.
  *     Absolute GPS adjusted standard times are ~3e8 s, so raw ticks would be
  *     unreadable noise; the colour pass already normalises against the
@@ -61,6 +66,13 @@ export interface ActiveColorbarSource {
    * the endpoints are never mistaken for true min/max.
    */
   readonly trimPercent?: number;
+  /**
+   * How many values the percentile trim was taken over — the strided sample
+   * `computeElevationRange` sorted (≤ 50 000), NOT the loaded point count.
+   * Absent when the window was not computed here (streaming reseed, the
+   * project-shared scale), in which case the note stays a bare window.
+   */
+  readonly sampleCount?: number;
   /**
    * Elevation unit label from the CRS service ('m' / 'ft'), or null when the
    * CRS (or its vertical unit) is unknown. Honesty rule: null ⇒ the legend
@@ -106,6 +118,11 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
 
   switch (source.mode) {
     case 'elevation': {
+      const n = source.sampleCount;
+      const sampleNote =
+        windowNote && typeof n === 'number' && Number.isFinite(n) && n > 0
+          ? `${windowNote.replace(' window', '')} of a ${n.toLocaleString('en-US')}-point sample of the loaded cloud`
+          : windowNote;
       return {
         mode: 'elevation',
         spec: {
@@ -117,7 +134,7 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
           // suffix entirely — the honesty rule made structural.
           unit: source.elevationUnit || undefined,
         },
-        note: windowNote ?? undefined,
+        note: sampleNote ?? undefined,
       };
     }
     case 'intensity': {
@@ -129,7 +146,7 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
           max: range.max,
           label: 'Intensity',
         },
-        note: windowNote ?? undefined,
+        note: windowNote ? `${windowNote}, loaded sample range` : 'loaded sample range',
       };
     }
     case 'gpsTime': {

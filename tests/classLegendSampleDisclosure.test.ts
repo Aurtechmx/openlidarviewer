@@ -207,3 +207,19 @@ describe('Capture provenance — the density footprint names its basis', () => {
     expect(signals).toMatch(/bounding.box/i);
   });
 });
+
+describe('Classes legend — every figure names the loaded sample', () => {
+  it('the count tooltip says the figure is loaded points, not a live shown count', () => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(COUNTS, { loaded: LOADED, declared: LOADED });
+    const count = (panel.element as unknown as FakeEl).querySelector('span.olv-cl-count');
+    expect(count?.title).toBe('Loaded points (display sample)');
+  });
+
+  it('the sample caption says Solo and hide scope the loaded sample', () => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(COUNTS, { loaded: LOADED, declared: 47_900_000 });
+    expect(caption(panel)?.textContent ?? '').toMatch(/Solo/);
+    expect(caption(panel)?.textContent ?? '').toMatch(/loaded display sample/);
+  });
+});

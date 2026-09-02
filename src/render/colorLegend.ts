@@ -167,6 +167,9 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
         mode,
         range: display,
         trimPercent,
+        // The shared window is not this cloud's percentile pass, so its
+        // sample count does not describe it.
+        sampleCount: shared ? undefined : range.sampleCount,
         elevationUnit: host.elevationUnitLabel(),
       });
     },

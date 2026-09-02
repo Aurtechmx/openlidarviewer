@@ -3,16 +3,18 @@
  *
  * The Classification legend — one row per ASPRS class actually present in the
  * loaded scan (a positive point count), each carrying the renderer's class
- * colour swatch, the ASPRS name, a live "shown" point count, and a visibility
- * checkbox. A per-row "Solo" affordance isolates a single class; a "Show all"
+ * colour swatch, the ASPRS name, the class's loaded point count, and a
+ * visibility checkbox. A per-row "Solo" affordance isolates a single class; a "Show all"
  * button clears any filter; and a persistent banner appears only while a filter
  * is active so the user always knows the view is partial.
  *
  * DISPLAY ONLY. The panel owns a `ClassVisibility` and reports every change
  * back through `onChange` — the host (main.ts) applies the mask to the GPU and
  * re-renders the legend. The panel never touches three.js, the GPU, or the
- * analysis pipeline; counts are labelled as "shown" (post-downsample, resident)
- * points, never full-cloud totals.
+ * analysis pipeline. Counts are the LOADED (display-sample) points per class,
+ * set once in `setClasses` from the resident buffer: hiding or Solo'ing a
+ * class, or an elevation / intensity filter, does not recompute them, and they
+ * are never full-cloud totals.
  *
  * A dumb view in the same vocabulary as MeasurePanel / AnalysePanel: a
  * `readonly element`, an `el(...)`-built DOM, collapsible head, and
@@ -161,7 +163,7 @@ export class ClassLegendPanel {
     // basis as the Scan Report's "Loaded N (display sample)" row.
     this._sampleNote = el('div', {
       className: 'olv-cl-samplenote olv-hidden',
-      text: 'Counts cover the loaded display sample — not the full cloud.',
+      text: 'Counts, Solo and hide act on the loaded display sample — not the full cloud.',
     });
     this._sampleNote.setAttribute('role', 'note');
 
@@ -446,7 +448,7 @@ export class ClassLegendPanel {
     const count = el('span', {
       className: 'olv-cl-count',
       text: (this._counts.get(code) ?? 0).toLocaleString(),
-      title: 'Shown points (post-downsample)',
+      title: 'Loaded points (display sample)',
     });
 
     // Solo — isolate this one class. ClassVisibility.isolate hides every other
