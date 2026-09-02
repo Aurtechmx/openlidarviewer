@@ -75,7 +75,7 @@
     }
   ],
   "metrics": {
-    "toleranceAbs": 0.00005,
+    "toleranceAbs": 5e-05,
     "toleranceUnit": "metre",
     "minimumComparableCells": 7500,
     "requiredWithinToleranceFraction": 1
@@ -86,9 +86,9 @@
     "comparableCells": 7500,
     "skippedCells": 0,
     "withinToleranceFraction": 1,
-    "maxAbsDiff": 0.000003784179682497779,
-    "rmse": 0.0000021599353259922987,
-    "meanDiff": 4.313964855668928e-8
+    "maxAbsDiff": 3.784179682497779e-06,
+    "rmse": 2.1599353259922987e-06,
+    "meanDiff": 4.313964855668928e-08
   },
   "rawArtifacts": [
     {
@@ -175,7 +175,7 @@
   "derivedArtifacts": [
     {
       "path": "validation/cross-implementation/pdal-pipeline/results-dsm.json",
-      "sha256": "0f4136c9742e9675911d40f1d4c67684574c48b67ccb560b8577e25d8c5844ad",
+      "sha256": "e946d22d6461253ec622afacfda818f18abfae532406042acded957f5fd70d26",
       "derivedFrom": [
         "validation/cross-implementation/pdal-pipeline/fixtures/pc-09-plane-structures.csv",
         "validation/cross-implementation/pdal-pipeline/fixtures/pc-10-rolling-structures.csv",
