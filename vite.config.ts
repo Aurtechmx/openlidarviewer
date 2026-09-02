@@ -486,6 +486,15 @@ export default defineConfig(({ mode }) => ({
           // reaching gradeForConfidence — can't let the heuristic hoist it into
           // the eager index bundle and blow its budget.
           if (id.includes('/terrain/ground/cellConfidence')) return 'cellConfidence';
+          // LocalFileRangeSource is reached only through lazyChunks' dynamic
+          // import, and rolldown emits it as its own chunk today. Pinning it
+          // states that boundary explicitly: rolldown 1.2.6 changed its
+          // inlining heuristic and began folding this module into the shell,
+          // putting the out-of-core reader into the bundle every visitor
+          // downloads first. Same reason cellConfidence is pinned above.
+          if (id.includes('/io/range/LocalFileRangeSource')) {
+            return 'LocalFileRangeSource';
+          }
           return undefined;
         },
       },
