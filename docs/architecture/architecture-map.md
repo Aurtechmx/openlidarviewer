@@ -197,8 +197,14 @@ that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,418)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,409)** — the constructor and a handful of large
 methods dominate:
+
+The count fell by 9 with the refinement-phase seam: the P6 phase bookkeeping —
+the park timestamp, the readiness-verdict mapping and the transition call — was
+inline in the adaptive-DPR branch, so it advanced only when DPR did. It now
+lives in `src/render/refinementPhaseState.ts`, which the Viewer advances every
+frame and both consumers (DPR, the streaming scheduler) read.
 
 The count fell by 37 with the profile seam. The constructor held the whole
 profile-sampler walk — eligibility, the streaming gate, the buffer

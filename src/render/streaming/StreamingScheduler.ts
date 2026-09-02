@@ -41,6 +41,11 @@ import type { EvictionCandidate, EvictionHysteresis } from './evictionPolicy';
 import { evaluateRefinementReadiness, type SchedulerReadinessFacts } from './refinementReadiness';
 import { buildStreamingDiagnostics, type StreamingDiagnostics } from './streamingDiagnostics';
 import { computeReplaceHidden } from './replaceFrontier';
+import {
+  phaseFocusStrength,
+  phaseSelectionFactor,
+  type RefinementPhase,
+} from '../refinementPhase';
 
 /** Renderer-facing callbacks the scheduler drives. */
 export interface SchedulerCallbacks {
@@ -79,6 +84,20 @@ export interface SchedulerView {
    * keep working; when omitted, FPS pressure stays neutral.
    */
   frameTimeMs?: number;
+  /**
+   * The P6 refinement phase this tick (`refinementPhase.ts`). It sets the
+   * selection-budget multiplier and, during `center-refine`, a bounded
+   * centre bias on within-level ordering. Optional: omitted, the scheduler
+   * behaves exactly as it did before the phase wiring (full budget, no bias).
+   */
+  refinementPhase?: RefinementPhase;
+  /**
+   * Viewport size in CSS pixels. Only the aspect is used, and only to weight
+   * the centre metric; a missing or degenerate value disables centre weighting
+   * rather than guessing an aspect.
+   */
+  viewportWidthPx?: number;
+  viewportHeightPx?: number;
 }
 
 /** Live scheduler counters for diagnostics. */
@@ -635,6 +654,16 @@ export class StreamingScheduler {
   // move or the 60-tick forced rescore (~seconds of lag under exactly the
   // GPU-bound case the back-off targets).
   private _lastSigFpsFactor = -1;
+  /**
+   * Phase + viewport aspect actually used by scoring, as of the last full
+   * rescore. Both are scoring inputs now, so the stable-camera fast path must
+   * treat a phase transition (or a resize that moves the centre metric) as a
+   * signature change — a cached wanted set must never outlive a state the
+   * score depends on. `0` records "aspect did not participate this tick",
+   * which keeps a resize during a bias-free phase off the rescore path.
+   */
+  private _lastSigPhase: RefinementPhase | undefined = undefined;
+  private _lastSigFocusAspect = 0;
   private _lastSigStoreSize = -1;
   /** Last full rescore's wanted set (reused while the signature stays equal). */
   private _lastWanted: ReadonlySet<string> | null = null;
@@ -1068,6 +1097,28 @@ export class StreamingScheduler {
       store.setState(node, 'unloaded');
     }
 
+    // P6 refinement phase (optional). The phase sets how much of the point
+    // budget the wanted-set selection may spend this tick, and — during
+    // `center-refine` only — a bounded centre bias on within-level ordering.
+    // Neither touches the admission ceiling, the decode ceiling, the GPU
+    // ceiling or the cache capacity: this is arrival ORDER and how many nodes
+    // are asked for, nothing else.
+    const phase = view.refinementPhase;
+    const focusStrength = phase === undefined ? 0 : phaseFocusStrength(phase);
+    const selectionFactor = phase === undefined ? 1 : phaseSelectionFactor(phase);
+    const viewportW = view.viewportWidthPx;
+    const viewportH = view.viewportHeightPx;
+    const focusUsable =
+      focusStrength > 0 &&
+      typeof viewportW === 'number' &&
+      typeof viewportH === 'number' &&
+      Number.isFinite(viewportW) &&
+      Number.isFinite(viewportH) &&
+      viewportW > 0 &&
+      viewportH > 0;
+    // 0 = "the centre metric did not read the viewport this tick".
+    const focusAspect = focusUsable ? (viewportW as number) / (viewportH as number) : 0;
+
     // stable-camera fast path. If the scheduling
     // signature is bit-identical to last tick's AND the periodic forced
     // rescore isn't due, reuse the cached `_lastScored` and `_lastWanted`.
@@ -1087,6 +1138,8 @@ export class StreamingScheduler {
       this._pointBudget === this._lastSigBudget &&
       this._pressureDepthReduction === this._lastSigPressureReduction &&
       this._fpsBudgetFactor === this._lastSigFpsFactor &&
+      phase === this._lastSigPhase &&
+      focusAspect === this._lastSigFocusAspect &&
       // The store keeps growing while hierarchy loads (lazy COPC pages, the
       // progressive EPT walk) — a new node must invalidate the cached wanted
       // set even under a perfectly still camera, or it can't stream until the
@@ -1121,6 +1174,10 @@ export class StreamingScheduler {
             depth: node.record.depth,
             cameraPos: view.cameraPosition,
             depthCap,
+            focusStrength: focusUsable ? focusStrength : 0,
+            viewProjection: focusUsable ? view.viewProjection : undefined,
+            viewportWidthPx: viewportW,
+            viewportHeightPx: viewportH,
           });
         }
         node.score = score;
@@ -1139,9 +1196,11 @@ export class StreamingScheduler {
       // fewer nodes resident. The factor multiplies in [0.5, 1.0] and
       // composes with the memory pressure adapter (depth cap reduction)
       // that runs independently on the resident-set side.
+      // The phase factor rides here with the FPS factor: both scale only the
+      // SELECTION target, never any ceiling.
       const fpsAdjustedBudget = Math.max(
         1,
-        Math.floor(this._pointBudget * this._fpsBudgetFactor),
+        Math.floor(this._pointBudget * this._fpsBudgetFactor * selectionFactor),
       );
       // Resident stickiness (opt-in). A node already on screen keeps a small
       // bonus so score noise at the budget boundary cannot bump it out and pay
@@ -1185,6 +1244,8 @@ export class StreamingScheduler {
       this._lastSigBudget = this._pointBudget;
       this._lastSigPressureReduction = this._pressureDepthReduction;
       this._lastSigFpsFactor = this._fpsBudgetFactor;
+      this._lastSigPhase = phase;
+      this._lastSigFocusAspect = focusAspect;
       this._lastSigStoreSize = store.size;
       this._lastScored = freshScored;
       this._lastWanted = freshWanted;

@@ -108,11 +108,7 @@ import {
   DPR_FULL_REDUCTION_ANGULAR,
 } from './adaptiveDpr';
 import { maxPixelRatio } from './quality/pixelRatioCeiling';
-import {
-  nextRefinementPhase,
-  phaseDprScale,
-  type RefinementPhase,
-} from './refinementPhase';
+import { RefinementPhaseTracker } from './refinementPhaseState';
 import { evaluateRefinementReadiness } from './streaming/refinementReadiness';
 import type { RefinementReadiness } from './streaming/refinementReadiness';
 import { readDevFlags } from '../perf/devFlags';
@@ -527,14 +523,6 @@ const QUAD_INDEX = [0, 1, 2, 0, 2, 3];
  * the streaming scheduler keeps its cadence — only the actual
  * GPU `render()` call is gated.
  */
-/**
- * P6 proxy (until the P4 scheduler emits real coverage / spacing signals): ms
- * after the camera parks at which the center is treated as "refined", so the
- * refinement phase reaches `full-refine` and DPR steps up to full resolution.
- * Kept short so the view re-sharpens promptly after navigation stops.
- */
-const PHASE_CENTER_PROXY_MS = 250;
-
 /** Default vertical field of view, in degrees — the camera's construction value. */
 const DEFAULT_FOV = 60;
 
@@ -816,10 +804,12 @@ export class Viewer {
   private _lastDprChangeMs = 0;
   /** `?refinementPhase` dev flag (default on) — drive DPR by discrete phases (P6). */
   private readonly _refinementPhasesEnabled: boolean = readDevFlags().refinementPhase;
-  /** Current P6 refinement phase. */
-  private _phase: RefinementPhase = 'moving';
-  /** performance.now() when the camera last parked (0 while moving). */
-  private _settledAtMs = 0;
+  /**
+   * The single P6 refinement-phase state. Advanced once per frame regardless of
+   * the DPR decision, and read by both consumers — adaptive DPR here and the
+   * streaming scheduler in `_tickStreaming`.
+   */
+  private readonly _phases = new RefinementPhaseTracker();
   /**
    * Performance timestamp until which the renderer stays at full
    * rAF rate. Bumped on every user input via `_bumpRenderActivity`.
@@ -6158,10 +6148,17 @@ export class Viewer {
     // tells the scheduler to skip FPS adaptation until real measurements
     // arrive (i.e., during the first few RAF ticks).
     const frameMs = this._smoothedFrameMs();
+    // P6 — hand the scheduler the live phase and the viewport it should measure
+    // "centre" against. Gated on the same `?refinementPhase` flag that gates the
+    // DPR consumer, so one flag turns the whole phase behaviour off.
+    const canvas = this._canvas;
     this._streaming.scheduler.update({
       viewProjection: this._streamingViewProj.elements,
       cameraPosition: this._streamingCamPos,
       frameTimeMs: frameMs > 0 ? frameMs : undefined,
+      refinementPhase: this._refinementPhasesEnabled ? this._phases.phase : undefined,
+      viewportWidthPx: canvas.clientWidth,
+      viewportHeightPx: canvas.clientHeight,
     });
   }
 
@@ -6222,7 +6219,10 @@ export class Viewer {
   }
 
   /**
-   * P5 — set the renderer's device-pixel-ratio for this frame. Full resolution
+   * Advance the P6 refinement phase, then set the renderer's device-pixel-ratio
+   * for this frame from it. The phase advances on EVERY call — the scheduler
+   * reads it too — while the DPR half is skipped unless the frame renders and
+   * the `?adaptiveDpr` flag is on. Full resolution
    * when parked; a reduced ratio while moving, driven by the camera's angular
    * speed (the P3 signal). `setPixelRatio` reallocates the drawing buffer, so
    * `shouldApplyDpr` sharpens immediately on park but rate-limits reductions.
@@ -6230,7 +6230,19 @@ export class Viewer {
    * to desync with the resize handler). No-op unless the frame renders and the
    * `?adaptiveDpr` flag is on; DPR-only, so it is camera-agnostic (ortho-safe).
    */
-  private _applyAdaptiveDpr(moving: boolean, dt: number, nowMs: number, rendered: boolean): void {
+  private _updateRefinementAndDpr(
+    moving: boolean,
+    dt: number,
+    nowMs: number,
+    rendered: boolean,
+  ): void {
+    // Phase bookkeeping first, and unconditionally: the streaming scheduler
+    // reads the phase on ticks this method returns early from.
+    const phase = this._phases.advance({
+      moving,
+      nowMs,
+      readiness: this.refinementReadiness(),
+    });
     if (!this._adaptiveDpr || !rendered) return;
     const q = this._camera.quaternion;
     this._curCamQuat[0] = q.x;
@@ -6253,33 +6265,12 @@ export class Viewer {
 
     let target: number;
     if (this._refinementPhasesEnabled) {
-      // P6 — step DPR by discrete refinement phase. With a streaming scheduler
-      // active the coverage / central-refine signals come from the WANTED-SET
-      // readiness verdict, so full resolution is reached only when the requested
-      // nodes are resident, not after a fixed time over a half-loaded cloud.
-      // Without a verdict (static cloud, or before the first cull) the
-      // elapsed-time proxy stands in; there is nothing to wait on there.
-      if (moving) this._settledAtMs = 0;
-      else if (this._settledAtMs === 0) this._settledAtMs = nowMs;
-      const msSinceSettle = moving ? 0 : nowMs - this._settledAtMs;
-      const readiness = this.refinementReadiness();
-      const coverageComplete =
-        readiness && readiness.phase !== 'unknown'
-          ? readiness.phase === 'settling' || readiness.phase === 'settled'
-          : msSinceSettle >= SETTLE_MS;
-      const centralRefined =
-        readiness && readiness.phase !== 'unknown'
-          ? readiness.phase === 'settled'
-          : msSinceSettle >= PHASE_CENTER_PROXY_MS;
-      this._phase = nextRefinementPhase(this._phase, {
-        moving,
-        msSinceSettle,
-        settleMs: SETTLE_MS,
-        coverageComplete,
-        centralRefined,
-      });
-      target = Math.max(floor, maxDpr * phaseDprScale(this._phase));
-      if (this._phase === 'moving' && angularSpeed > 0) {
+      // P6 — step DPR by discrete refinement phase. The tracker decides when
+      // the phase advances (from the wanted-set readiness verdict where there
+      // is one, an elapsed-time proxy where there is not); this branch only
+      // reads the resolution fraction the current phase asks for.
+      target = Math.max(floor, maxDpr * this._phases.dprScale);
+      if (phase === 'moving' && angularSpeed > 0) {
         // P3 — faster rotation pulls the moving-phase resolution toward the floor.
         const t = Math.min(1, angularSpeed / DPR_FULL_REDUCTION_ANGULAR);
         target = Math.max(floor, target + (floor - target) * t);
@@ -6327,7 +6318,7 @@ export class Viewer {
       activityUntilMs: () => this._renderGate.activityUntilMs,
       edlEnabled: () => this._edlEnabled,
       applyAdaptiveDpr: (moving, delta, nowMs, rendered) =>
-        this._applyAdaptiveDpr(moving, delta, nowMs, rendered),
+        this._updateRefinementAndDpr(moving, delta, nowMs, rendered),
       noteRendered: () => this._renderGate.noteRendered(),
       noteSkipped: () => this._renderGate.noteSkipped(),
       renderEdl: () => { this._syncActiveCamera(); this._post.render(); },

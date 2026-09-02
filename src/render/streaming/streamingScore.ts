@@ -12,6 +12,7 @@
  * Pure — no DOM, no three.js — fully unit-tested in Node.
  */
 
+import { centerWeight } from '../refinementPhase';
 import type { Box6 } from '../../io/copc/copcTypes';
 
 /** A plane `[a, b, c, d]`; a point is inside when `a·x + b·y + c·z + d ≥ 0`. */
@@ -88,6 +89,69 @@ export function projectedSize(box: Box6, cam: readonly [number, number, number])
   return boxDiagonal(box) / Math.max(distanceToBox(box, cam), 1e-3);
 }
 
+/**
+ * How close a box lands to the centre of the view, in `[0, 1]` — 1 when the
+ * box covers the centre, falling to 0 at the viewport edge.
+ *
+ * The 8 local-space AABB corners are projected through the column-major
+ * view-projection; the NDC axis-aligned rectangle of the VALID corners is then
+ * reduced to the point nearest the origin, which is what `centerWeight` scores.
+ * Taking the nearest point of the RECTANGLE rather than the box's projected
+ * centre is what makes a large node crossing the middle of the screen rank as
+ * central even when its geometric centre is off to one side.
+ *
+ * Fails conservatively: a box straddling the camera plane, a non-finite matrix,
+ * a short matrix, or a degenerate viewport all return 1 — the neutral maximum.
+ * Near-camera geometry is exactly the case that produces a negative clip `w`,
+ * so a "no opinion" answer here must never be the low-priority one.
+ */
+export function projectedBoxCenterWeight(
+  box: Box6,
+  viewProjection: ArrayLike<number>,
+  widthPx: number,
+  heightPx: number,
+): number {
+  const m = viewProjection;
+  if (m.length < 16) return 1;
+  if (
+    !Number.isFinite(widthPx) ||
+    !Number.isFinite(heightPx) ||
+    widthPx <= 0 ||
+    heightPx <= 0
+  ) {
+    return 1;
+  }
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let c = 0; c < 8; c++) {
+    const x = box[c & 1 ? 3 : 0];
+    const y = box[c & 2 ? 4 : 1];
+    const z = box[c & 4 ? 5 : 2];
+    const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+    // A corner at or behind the camera plane makes the divide meaningless —
+    // and a box with any such corner is close enough to matter, so give up and
+    // return the neutral maximum rather than a half-projected rectangle.
+    if (!(w > 1e-9) || !Number.isFinite(w)) return 1;
+    const nx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
+    const ny = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) return 1;
+    if (nx < minX) minX = nx;
+    if (nx > maxX) maxX = nx;
+    if (ny < minY) minY = ny;
+    if (ny > maxY) maxY = ny;
+  }
+  // Nearest point of the NDC rectangle to the screen centre.
+  const px = Math.min(Math.max(0, minX), maxX);
+  const py = Math.min(Math.max(0, minY), maxY);
+  const aspect = widthPx / heightPx;
+  if (!Number.isFinite(aspect) || aspect <= 0) return 1;
+  const aspectWx = aspect >= 1 ? aspect : 1;
+  const aspectWy = aspect >= 1 ? 1 : 1 / aspect;
+  return centerWeight(px, py, aspectWx, aspectWy);
+}
+
 /** Inputs for a node's streaming priority score. */
 export interface NodeScoreInput {
   bounds: Box6;
@@ -95,6 +159,17 @@ export interface NodeScoreInput {
   cameraPos: readonly [number, number, number];
   /** The maximum depth to load this tick — deeper nodes score 0. */
   depthCap: number;
+  /**
+   * Centre-bias strength in `[0, 1)` — see `PHASE_FOCUS_STRENGTH`. Omitted or
+   * 0 (every phase but `center-refine`, and every caller that predates the
+   * phase wiring) scores exactly as before.
+   */
+  focusStrength?: number;
+  /** Column-major view-projection, required for the centre weighting. */
+  viewProjection?: ArrayLike<number>;
+  /** Viewport size in CSS pixels — only the aspect is used. */
+  viewportWidthPx?: number;
+  viewportHeightPx?: number;
 }
 
 /**
@@ -123,6 +198,25 @@ export const SIZE_TERM_MAX = DEPTH_WEIGHT - 1;
 export const SIZE_TERM_SCALE = 1000;
 
 /**
+ * The projected size after the phase's centre bias. Any missing or unusable
+ * input (no strength, no matrix, no viewport) returns the raw size, so the
+ * legacy scoring path is bit-identical.
+ */
+function focusedProjectedSize(ps: number, input: NodeScoreInput): number {
+  const strength = input.focusStrength;
+  if (typeof strength !== 'number' || !(strength > 0) || !input.viewProjection) return ps;
+  const cw = projectedBoxCenterWeight(
+    input.bounds,
+    input.viewProjection,
+    input.viewportWidthPx ?? Number.NaN,
+    input.viewportHeightPx ?? Number.NaN,
+  );
+  const factor = 1 - Math.min(strength, 1) * (1 - cw);
+  if (!Number.isFinite(factor) || factor <= 0) return ps;
+  return ps * factor;
+}
+
+/**
  * A node's streaming priority — higher loads sooner.
  *
  * The score is `depthContribution + sizeTerm`, where:
@@ -141,7 +235,12 @@ export function nodeScore(input: NodeScoreInput): number {
   // is false, so a `score > 0` budget selector would admit the garbage node.
   // Reject it explicitly.
   if (!Number.isFinite(ps)) return 0;
-  const sizeTerm = Math.min(Math.round(ps * SIZE_TERM_SCALE), SIZE_TERM_MAX);
+  // Focus-aware ordering WITHIN a level. `focusFactor ∈ (0, 1]` because
+  // `focusStrength ∈ [0, 1)` and `centerWeight ∈ [0, 1]`, so the focused
+  // projected size is never larger than the raw one and never negative — the
+  // size term stays inside `[0, SIZE_TERM_MAX]` and coarse-first is untouched.
+  const focused = focusedProjectedSize(ps, input);
+  const sizeTerm = Math.min(Math.round(focused * SIZE_TERM_SCALE), SIZE_TERM_MAX);
   const depthContribution =
     (input.depthCap - input.depth + 1) * DEPTH_WEIGHT;
   return depthContribution + sizeTerm;
