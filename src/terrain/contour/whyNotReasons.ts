@@ -105,16 +105,14 @@ export function explainLimitations(result: AnalyseContoursResult): Limitations {
   // the gate's cell-status tally: the fraction of ALL covered cells whose
   // status is 'edgeRisk' (interpolated cells far from any measurement). It is
   // NOT cellMetrics.boundaryMeasuredRatio (measured cells near the raster
-  // boundary), despite what an earlier version of this comment claimed. The
-  // cause wording below still uses the boundary-measured phrasing, pinned by a
-  // regression test; reconciling the figure and the phrasing is a separate,
-  // behaviour-changing fix.
+  // boundary), which terrainAssessment words separately. The wording here
+  // describes the gate figure it reads.
   const edgeFrac = finite(q.edgeRiskRatio);
   if (Number.isFinite(edgeFrac) && edgeFrac > HIGH_EDGE_FRACTION) {
     emit(
       'edge',
-      `${pct(edgeFrac)} of measured cells sit at the edge of the data, where the surface is least supported.`,
-      'Extend capture past the area of interest so the edges sit on well-supported measured ground.',
+      `${pct(edgeFrac)} of the covered surface is interpolated at a long reach from any measured cell.`,
+      'Extend capture past the area of interest so the surface is supported by measured ground throughout.',
     );
   }
 

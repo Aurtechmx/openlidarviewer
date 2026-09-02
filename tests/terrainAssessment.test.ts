@@ -467,7 +467,7 @@ describe('terrainAssessment', () => {
     it('the reason quotes the SAME percentages as the chips', () => {
       expect(a.reason).toMatch(/^Insufficient quality/);
       expect(a.reason).toContain('72% of the surface is interpolated');
-      expect(a.reason).toContain('53% of measured cells sit at the edge of the data');
+      expect(a.reason).toContain('53% of measured cells lie within a few cells of the data boundary');
     });
 
     it('no longer mislabels boundary-measured cells as "a long interpolation"', () => {
