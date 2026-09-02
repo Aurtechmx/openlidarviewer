@@ -106,6 +106,30 @@ const sortedBox = (a: number, b: number, c: number): BoxDims => {
 };
 
 /**
+ * Median nearest-neighbour distance of a probe set, brute force. The shared
+ * core of the two spacing estimators below: each supplies its own probe
+ * arrays (their sampling and finite-filtering differ, deliberately) and its
+ * own √(P/N) correction, so extracting more than this loop would change one
+ * caller's numbers. Returns 0 for an empty probe.
+ */
+function medianNnDistance(px: number[], py: number[], pz: number[]): number {
+  const P = px.length;
+  const nnDist: number[] = [];
+  for (let i = 0; i < P; i++) {
+    let best = Infinity;
+    for (let j = 0; j < P; j++) {
+      if (j === i) continue;
+      const dx = px[i] - px[j], dy = py[i] - py[j], dz = pz[i] - pz[j];
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < best) best = d2;
+    }
+    if (Number.isFinite(best)) nnDist.push(Math.sqrt(best));
+  }
+  nnDist.sort((a, b) => a - b);
+  return nnDist.length ? nnDist[Math.floor(nnDist.length / 2)] : 0;
+}
+
+/**
  * The median nearest-neighbour spacing probe on its own, for callers that need
  * the scan's effective resolution and nothing else (the QA cloud-quality
  * signal). Same estimator {@link objectMetrics} embeds: a strided probe
@@ -132,19 +156,7 @@ export function medianNeighbourSpacing(
   }
   const P = px.length;
   if (P < 2) return 0;
-  const nnDist: number[] = [];
-  for (let i = 0; i < P; i++) {
-    let best = Infinity;
-    for (let j = 0; j < P; j++) {
-      if (j === i) continue;
-      const dx = px[i] - px[j], dy = py[i] - py[j], dz = pz[i] - pz[j];
-      const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 < best) best = d2;
-    }
-    if (Number.isFinite(best)) nnDist.push(Math.sqrt(best));
-  }
-  nnDist.sort((a, b) => a - b);
-  const probeSpacing = nnDist.length ? nnDist[Math.floor(nnDist.length / 2)] : 0;
+  const probeSpacing = medianNnDistance(px, py, pz);
   // The probe measures P points of a scan of N; for a uniform sample of a 2-D
   // manifold spacing scales as 1/√density, so the scan's spacing is the
   // probe's × √(P/N). Same correction as objectMetrics above.
@@ -228,19 +240,7 @@ export function objectMetrics(
   const px: number[] = [], py: number[] = [], pz: number[] = [];
   for (let i = 0; i < m; i += pStride) { px.push(sx[i]); py.push(sy[i]); pz.push(sz[i]); }
   const P = px.length;
-  const nnDist: number[] = [];
-  for (let i = 0; i < P; i++) {
-    let best = Infinity;
-    for (let j = 0; j < P; j++) {
-      if (j === i) continue;
-      const dx = px[i] - px[j], dy = py[i] - py[j], dz = pz[i] - pz[j];
-      const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 < best) best = d2;
-    }
-    if (Number.isFinite(best)) nnDist.push(Math.sqrt(best));
-  }
-  nnDist.sort((a, b) => a - b);
-  const probeSpacingM = nnDist.length ? nnDist[Math.floor(nnDist.length / 2)] : 0;
+  const probeSpacingM = medianNnDistance(px, py, pz);
   // The probe measures the spacing of P points; the SCAN has N (≥ P) points
   // over the same surface. For uniform sampling of a 2-D manifold (what a
   // scanned surface is) spacing scales as 1/√density, so the scan's spacing is
