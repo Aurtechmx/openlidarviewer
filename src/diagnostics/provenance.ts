@@ -374,10 +374,24 @@ function normaliseVendorString(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/**
+ * Production suites that only appear on manned-aircraft deliveries: the
+ * TerraSolid family and GeoCue drive the classification step of most
+ * national programmes, and LasMonkey is the tiling/QC tool the USGS 3DEP
+ * contractors write into `generating_software`. LAStools is deliberately
+ * absent; it processes everything from phone scans to ALS.
+ */
+const AERIAL_ALS_SOFTWARE = ['lasmonkey', 'terrascan', 'terrasolid', 'geocue'];
+
 function matchSoftwareString(sw: string | undefined): ProvenanceFingerprint | null {
   if (!sw) return null;
   const lower = normaliseVendorString(sw);
 
+  for (const tag of AERIAL_ALS_SOFTWARE) {
+    if (lower.includes(tag)) {
+      return aerialAlsFingerprint('high', [`Software: ${sw}`]);
+    }
+  }
   for (const tag of PHONE_LIDAR_SOFTWARE) {
     if (lower.includes(tag)) {
       return phoneLidarFingerprint('high', [`Software: ${sw}`]);
@@ -401,6 +415,12 @@ function matchSoftwareString(sw: string | undefined): ProvenanceFingerprint | nu
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PHONE_LIDAR_SENSORS = ['iphone', 'ipad', 'ios', 'arkit', 'vcsel'];
+/**
+ * Airborne instruments, plus the 3DEP contractors who write their company
+ * name into `system_identifier` (Quantum Spatial/NV5 do on every Rogue tile).
+ * Checked before the TLS list so 'leica als' is not swallowed by 'leica'.
+ */
+const AERIAL_ALS_SENSORS = ['quantum spatial', 'nv5', 'optech', 'leica als', 'riegl vq', 'riegl lms'];
 const TLS_SENSORS = ['faro focus', 'leica', 'riegl vz', 'trimble x'];
 const DRONE_LIDAR_SENSORS = ['velodyne', 'dji l1', 'dji l2', 'riegl mini', 'phoenix'];
 const SPACEBORNE_SENSORS = ['gedi', 'icesat', 'atlas', 'calipso', 'atlid'];
@@ -409,6 +429,11 @@ function matchSensorString(sensor: string | undefined): ProvenanceFingerprint | 
   if (!sensor) return null;
   const lower = normaliseVendorString(sensor);
 
+  for (const tag of AERIAL_ALS_SENSORS) {
+    if (lower.includes(tag)) {
+      return aerialAlsFingerprint('high', [`Sensor: ${sensor}`]);
+    }
+  }
   for (const tag of PHONE_LIDAR_SENSORS) {
     if (lower.includes(tag)) {
       return phoneLidarFingerprint('high', [`Sensor: ${sensor}`]);
@@ -472,6 +497,13 @@ function matchFormat(signals: ScanSignals): ProvenanceFingerprint | null {
  */
 const PHONE_LIDAR_MAX_DENSITY_PER_SQM = 7225;
 
+/**
+ * Footprint at which a dense cloud reads as a manned-aircraft tile rather
+ * than a UAV mapping file: half a standard 1 km² USGS 3DEP tile. Drone
+ * files in this repo's fixtures and the Ruzgienė 2025 sites are ≤ 10 ha.
+ */
+const PROJECT_TILE_MIN_AREA_SQM = 500_000;
+
 function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
   // High density on a small extent is the iPhone-LiDAR signature. Luetzenburg
   // 2021 reports 7,225 pts/m² at 25 cm down to 150 pts/m² at 2.5 m for the
@@ -526,6 +558,17 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
     // high density across thousands of square metres. Very high density over an
     // open footprint is the strongest low-altitude-UAV signature, so it reads
     // 'high'; the literature band (100–1000) stays 'medium'.
+    // Above 50 pts/m² density no longer separates manned ALS from UAV: a
+    // multi-return forest tile of a QL1 programme lands at 50-80 pts/m² of
+    // all returns (this repo's Rogue tiles read 53.7). Footprint does.
+    // USGS 3DEP delivers 1 km² tiles (100 ha) and drone mapping files sit
+    // well under 50 ha, so a dense cloud at project-tile scale is airborne.
+    if (signals.densityPerSqM >= 50 && footprintArea >= PROJECT_TILE_MIN_AREA_SQM) {
+      return aerialAlsFingerprint('medium', [
+        `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² over a ${(footprintArea / 10000).toFixed(1)} ha bounding-box footprint`,
+        'Footprint at project-tile scale (≥ 50 ha): USGS 3DEP tiles are 1 km²',
+      ]);
+    }
     if (signals.densityPerSqM >= 50 && footprintArea > 2000) {
       const veryDense = signals.densityPerSqM > 1000;
       return droneLidarFingerprint(veryDense ? 'high' : 'medium', [

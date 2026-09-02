@@ -247,7 +247,7 @@ describe('capture type — what counts as declared ground-based evidence', () =>
 });
 
 describe('capture type — the other bands are unchanged', () => {
-  it('a genuine airborne LAS delivery still reads aerial ALS', () => {
+  it('a genuine airborne LAS delivery still reads aerial ALS, from the declared instrument', () => {
     const s = signalsForStaticCloud({
       sourceFormat: 'laz',
       pointCount: 6_400_000,
@@ -257,6 +257,21 @@ describe('capture type — the other bands are unchanged', () => {
     const fp = classify(s);
     expect(s.sensorString).toBe('Optech Galaxy T2000');
     expect(s.declaredGroundInstrument).toBeUndefined();
+    expect(fp.captureType).toBe('aerial-als');
+    // The header names an airborne instrument, so the answer is declared
+    // rather than inferred from the 2 pts/m² density band it used to fall to.
+    expect(fp.confidence).toBe('high');
+    expect(fp.signals).toContain('Sensor: Optech Galaxy T2000');
+  });
+
+  it('a genuine airborne LAS delivery with no sensor string still reads aerial ALS from density', () => {
+    const s = signalsForStaticCloud({
+      sourceFormat: 'laz',
+      pointCount: 6_400_000,
+      bounds: () => ({ min: [0, 0, 0], max: [2000, 1600, 240] }),
+      metadata: {},
+    });
+    const fp = classify(s);
     expect(fp.captureType).toBe('aerial-als');
     expect(fp.confidence).toBe('medium');
     expect(fp.signals).toContain('Density: 2.0 pts/m² over a 320.0 ha bounding-box footprint');
