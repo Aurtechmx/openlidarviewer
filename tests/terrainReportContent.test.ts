@@ -84,7 +84,7 @@ function readyResult(): AnalyseContoursResult {
       groundPointRatio: 0.6,
     },
     qualityScore: { score: 85 },
-    cellMetrics: { meanDensity: 4.2, edgeRiskRatio: 0.02 },
+    cellMetrics: { meanDensity: 4.2, boundaryMeasuredRatio: 0.02 },
     cellStatusTally: {
       measured: 90,
       interpolated: 5,
@@ -154,7 +154,7 @@ function previewResult(): AnalyseContoursResult {
       groundPointRatio: 0.6,
     },
     qualityScore: { score: 41 },
-    cellMetrics: { meanDensity: 1.4, edgeRiskRatio: 0.05 },
+    cellMetrics: { meanDensity: 1.4, boundaryMeasuredRatio: 0.05 },
     cellStatusTally: {
       measured: 40,
       interpolated: 40,

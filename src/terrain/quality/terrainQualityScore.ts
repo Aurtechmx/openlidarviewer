@@ -32,8 +32,8 @@ export interface TerrainQualityInput {
   readonly holdoutRmseM: number | null;
   /** Ground returns / all returns, 0..1, or null when unknown. */
   readonly groundPointRatio: number | null;
-  /** Fraction of measured cells on the survey boundary, 0..1. */
-  readonly edgeRiskRatio: number;
+  /** Fraction of measured cells on the survey boundary, 0..1 (cellMetrics.boundaryMeasuredRatio). */
+  readonly boundaryMeasuredRatio: number;
   /** Mean ground returns per square metre. */
   readonly meanDensity: number;
   /** DTM cell size (metres) — converts density to returns/cell. */
@@ -111,7 +111,7 @@ export function terrainQualityScore(input: TerrainQualityInput): TerrainQualityS
       label: 'Edge support',
       weight: 0.1,
       neutral: false,
-      score: clamp01(1 - input.edgeRiskRatio),
+      score: clamp01(1 - input.boundaryMeasuredRatio),
     },
     {
       label: 'Ground returns',

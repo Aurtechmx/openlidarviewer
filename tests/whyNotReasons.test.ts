@@ -114,14 +114,14 @@ describe('explainLimitations', () => {
   });
 
   it('does NOT mislabel the boundary-measured edge metric as "long interpolation"', () => {
-    // REGRESSION: q.edgeRiskRatio is wired from cellMetrics.edgeRiskRatio
-    // (analyseContours), i.e. MEASURED cells that sit near the data boundary —
-    // they have real returns, just least neighbour support. The "Why?" cause
-    // must NOT describe them with the gate's tally-metric phrasing ("a long
-    // interpolation from real returns"), which belongs to dtmCellStatus
-    // 'edgeRisk' (interpolated cells far from any measurement). This keeps the
-    // wording fix consistent with terrainAssessment, which renders in the same
-    // surface-quality section directly above this "Why?" panel.
+    // REGRESSION: pins the boundary-measured phrasing over the gate's
+    // tally-metric phrasing ("a long interpolation from real returns"). NOTE:
+    // q here is the gate report, so q.edgeRiskRatio is actually the gate's
+    // cell-status tally (dtmCellStatus 'edgeRisk'), not
+    // cellMetrics.boundaryMeasuredRatio as this comment once claimed; the
+    // engine reads the gate figure while wording it as the boundary metric.
+    // Reconciling figure and phrasing is a separate behaviour-changing fix
+    // (see the matching note in whyNotReasons.ts).
     const r = fixture({ edgeRiskRatio: 0.53 });
     expect(causeText(r)).not.toMatch(/long interpolation/i);
     expect(causeText(r)).toMatch(/53% of measured cells sit at the edge of the data/);

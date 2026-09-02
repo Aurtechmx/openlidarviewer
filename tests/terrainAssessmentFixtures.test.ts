@@ -161,8 +161,8 @@ describe('terrain VERDICT truth — edge-clipped coverage is reflected', () => {
   });
 
   it('introduces more edge risk than full coverage of the same extent', () => {
-    expect(clipped.cellMetrics.edgeRiskRatio).toBeGreaterThan(full.cellMetrics.edgeRiskRatio);
-    expect(metric(a.supportingMetrics, 'Edge risk').rating).not.toBe('good');
+    expect(clipped.cellMetrics.boundaryMeasuredRatio).toBeGreaterThan(full.cellMetrics.boundaryMeasuredRatio);
+    expect(metric(a.supportingMetrics, 'Boundary share').rating).not.toBe('good');
   });
 });
 

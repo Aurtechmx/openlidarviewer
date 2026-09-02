@@ -35,14 +35,19 @@ export interface CellMetricsSummary {
   readonly medianDensity: number;
   /** Mean local completeness (0..1) over measured cells. */
   readonly meanCompleteness: number;
-  /** Fraction of measured cells within `edgeThresholdCells` of the boundary. */
-  readonly edgeRiskRatio: number;
+  /**
+   * Fraction of measured cells within `edgeThresholdCells` of the raster
+   * boundary. Boundary proximity of MEASURED cells (they have real returns,
+   * just the least neighbour support). Not the dtmCellStatus 'edgeRisk'
+   * vocabulary, which tallies interpolated cells far from any measurement.
+   */
+  readonly boundaryMeasuredRatio: number;
 }
 
 export interface CellMetricsParams {
   /** Neighbourhood radius (cells) for local completeness. Default 1 (3×3). */
   readonly completenessRadius?: number;
-  /** Edge-distance (cells) at/below which a measured cell counts as edge-risk. Default 2. */
+  /** Edge-distance (cells) at/below which a measured cell counts as boundary-proximate. Default 2. */
   readonly edgeThresholdCells?: number;
   /**
    * Metres per source horizontal unit, so point densities read as genuine
@@ -174,7 +179,7 @@ export function computeCellMetrics(
   const densities: number[] = [];
   let densSum = 0;
   let compSum = 0;
-  let edgeRisk = 0;
+  let boundaryMeasured = 0;
   let measuredCount = 0;
   for (let i = 0; i < n; i++) {
     if (!measured[i]) continue;
@@ -182,7 +187,7 @@ export function computeCellMetrics(
     densSum += pointDensity[i];
     densities.push(pointDensity[i]);
     compSum += localCompleteness[i];
-    if (edgeDistanceCells[i] <= edgeThreshold) edgeRisk++;
+    if (edgeDistanceCells[i] <= edgeThreshold) boundaryMeasured++;
   }
   densities.sort((a, b) => a - b);
   // True median: for an even count, average the two central values rather than
@@ -200,7 +205,7 @@ export function computeCellMetrics(
       meanDensity: measuredCount ? densSum / measuredCount : 0,
       medianDensity: median,
       meanCompleteness: measuredCount ? compSum / measuredCount : 0,
-      edgeRiskRatio: measuredCount ? edgeRisk / measuredCount : 0,
+      boundaryMeasuredRatio: measuredCount ? boundaryMeasured / measuredCount : 0,
     },
   };
 }

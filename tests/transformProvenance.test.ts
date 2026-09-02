@@ -228,7 +228,7 @@ describe('ExportProvenance — discloses a supplied transform, carries none othe
         crsKnown: true, datumKnown: true, coverageMode: 'full', reasons: [], exportReasons: [],
       },
       qualityScore: { score: 85 },
-      cellMetrics: { meanDensity: 4.2, edgeRiskRatio: 0.02 },
+      cellMetrics: { meanDensity: 4.2, boundaryMeasuredRatio: 0.02 },
       cellStatusTally: { measured: 90, interpolated: 5, lowConfidence: 0, edgeRisk: 0, empty: 5, total: 100 },
       generationParams: { interpolation: 'geodesic', contourStyle: 'smooth', smoothing: true, despike: true, aggregation: 'median' },
       warnings: [],

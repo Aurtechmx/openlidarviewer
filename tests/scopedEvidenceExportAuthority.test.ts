@@ -79,7 +79,7 @@ function readyResult(): AnalyseContoursResult {
     model: { ...frame, intervalM: 1, contourStyle: 'smooth' },
     accuracyStandards, quality,
     qualityScore: { score: 85 },
-    cellMetrics: { meanDensity: 4.2, edgeRiskRatio: 0.02 },
+    cellMetrics: { meanDensity: 4.2, boundaryMeasuredRatio: 0.02 },
     cellStatusTally, generationParams,
     warnings: [],
   } as unknown as AnalyseContoursResult;

@@ -15,7 +15,7 @@ const base: TerrainQualityInput = {
   meanCellConfidence: 95,
   holdoutRmseM: 0.02,
   groundPointRatio: 0.8,
-  edgeRiskRatio: 0.05,
+  boundaryMeasuredRatio: 0.05,
   meanDensity: 4,
   cellSizeM: 1,
 };
@@ -39,7 +39,7 @@ describe('terrainQualityScore', () => {
       meanCellConfidence: 20,
       holdoutRmseM: 0.5,
       groundPointRatio: 0.1,
-      edgeRiskRatio: 0.8,
+      boundaryMeasuredRatio: 0.8,
       meanDensity: 0.2,
       cellSizeM: 1,
     });
@@ -72,7 +72,7 @@ describe('terrainQualityScore', () => {
         meanCellConfidence: cov * 100,
         holdoutRmseM: null,
         groundPointRatio: null,
-        edgeRiskRatio: 1 - cov,
+        boundaryMeasuredRatio: 1 - cov,
         meanDensity: cov * 4,
         cellSizeM: 1,
       }).band,

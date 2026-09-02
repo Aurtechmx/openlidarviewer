@@ -17,7 +17,9 @@ interface FixtureOpts {
   score?: number;
   interpolatedFraction?: number; // 0..1 of covered cells that are NOT measured
   emptyFraction?: number; // 0..1 of grid that is empty
-  edgeRiskRatio?: number; // 0..1 of measured cells on the boundary
+  // 0..1 of measured cells on the boundary. Wired to BOTH the gate report's
+  // edgeRiskRatio and cellMetrics.boundaryMeasuredRatio in the fixture.
+  edgeRiskRatio?: number;
   crs?: string | null;
   verticalDatum?: string | null;
   coverageMode?: TerrainCoverageMode;
@@ -73,7 +75,7 @@ function fixture(o: FixtureOpts = {}): AnalyseContoursResult {
     meanDensity: o.meanDensity ?? 6,
     medianDensity: o.meanDensity ?? 6,
     meanCompleteness: 0.9,
-    edgeRiskRatio: edge,
+    boundaryMeasuredRatio: edge,
   };
   const rmseZM = o.rmseZM === undefined ? 0.08 : o.rmseZM;
   const accuracyStandards: Partial<DemAccuracyStandards> = {
@@ -269,7 +271,7 @@ describe('terrainAssessment', () => {
       'DTM quality',
       'Interpolation',
       'Empty cells',
-      'Edge risk',
+      'Boundary share',
       'Vertical RMSE',
       'CRS',
       'Vertical datum',
@@ -416,7 +418,7 @@ describe('terrainAssessment', () => {
   // Limited score floor, so Limited comes from the 2-poor-metric rule AND the
   // severe-gap rule, interp 0.72 > 0.6), (b) that the reason sentence quotes the
   // SAME numbers the chips show, and (c) the wording fix: cellMetrics'
-  // edgeRiskRatio counts MEASURED cells near the data boundary, so the reason
+  // boundaryMeasuredRatio counts MEASURED cells near the data boundary, so the reason
   // must no longer call them "a long interpolation from real returns" (that
   // phrase belongs to the gate's tally-based edgeRisk cell status only).
   describe('interior-360 field case (Limited 52/100)', () => {
@@ -444,7 +446,7 @@ describe('terrainAssessment', () => {
       // (0.72 > 0.6) — both must independently hold for these numbers.
       const poor = a.supportingMetrics.filter((m) => m.rating === 'poor').map((m) => m.label);
       expect(poor).toContain('Interpolation');
-      expect(poor).toContain('Edge risk');
+      expect(poor).toContain('Boundary share');
       expect(poor.length).toBeGreaterThanOrEqual(2);
     });
 
@@ -456,7 +458,7 @@ describe('terrainAssessment', () => {
       expect(findMetric(a.supportingMetrics, 'DTM quality')?.rating).toBe('fair');
       expect(findMetric(a.supportingMetrics, 'Interpolation')?.value).toBe('72%');
       expect(findMetric(a.supportingMetrics, 'Empty cells')?.value).toBe('0%');
-      expect(findMetric(a.supportingMetrics, 'Edge risk')?.value).toBe('53%');
+      expect(findMetric(a.supportingMetrics, 'Boundary share')?.value).toBe('53%');
       expect(findMetric(a.supportingMetrics, 'Vertical RMSE')?.value).toBe('0.15 m');
       expect(findMetric(a.supportingMetrics, 'Vertical RMSE')?.rating).toBe('fair');
       expect(findMetric(a.supportingMetrics, 'CRS')?.value).toBe('unknown');
@@ -469,7 +471,7 @@ describe('terrainAssessment', () => {
     });
 
     it('no longer mislabels boundary-measured cells as "a long interpolation"', () => {
-      // cellMetrics.edgeRiskRatio cells ARE measured (they have real returns,
+      // cellMetrics.boundaryMeasuredRatio cells ARE measured (they have real returns,
       // just near the data edge) — calling them interpolated was untrue.
       expect(a.reason).not.toMatch(/long interpolation/i);
     });
