@@ -116,6 +116,30 @@ export function phaseSelectionFactor(phase: RefinementPhase): number {
 }
 
 /**
+ * How hard the streaming scheduler pulls node ordering toward the viewed centre,
+ * per phase, in `[0, 1)`. Only `center-refine` biases: while moving and while
+ * building coverage the whole viewport matters equally, and `full-refine` is by
+ * definition the phase that stops preferring the middle.
+ *
+ * The value multiplies into the score's BOUNDED projected-size term as
+ * `1 - focusStrength * (1 - centerWeight)`, so an edge node is demoted within
+ * its own depth level and never across one: the factor lies in `(0, 1]`, which
+ * can only shrink a size term that was already `< DEPTH_WEIGHT`. Coarse-first
+ * therefore holds for every strength in `[0, 1)`.
+ */
+export const PHASE_FOCUS_STRENGTH: Readonly<Record<RefinementPhase, number>> = {
+  moving: 0,
+  coverage: 0,
+  'center-refine': 0.32,
+  'full-refine': 0,
+};
+
+/** Centre-bias strength for the given phase (see {@link PHASE_FOCUS_STRENGTH}). */
+export function phaseFocusStrength(phase: RefinementPhase): number {
+  return PHASE_FOCUS_STRENGTH[phase];
+}
+
+/**
  * Center weighting for a node's projected position (§P6). `projX/projY` are the
  * node's NDC position; `aspectWx/aspectWy` scale the axes so "center distance"
  * accounts for the viewport aspect. Returns `clamp(1 − centerDistance, 0, 1)`:

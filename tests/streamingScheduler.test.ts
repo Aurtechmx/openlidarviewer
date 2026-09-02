@@ -1209,3 +1209,105 @@ test('a cached chunk is handed to the decoder as a copy, never the cache-held bu
   expect(fresh.size).toBeGreaterThan(0);
   for (const chunk of seen) expect(fresh.has(chunk)).toBe(false);
 });
+
+// --- focus-aware refinement (P6 phase wiring) --------------------------------
+
+test('the phase selection factor shrinks the wanted set, coarse-first order intact', async () => {
+  const cloud = await openCloud();
+  const mk = () =>
+    new StreamingScheduler(
+      cloud,
+      fakeDecoder,
+      { onNodeReady: () => {}, onNodeEvicted: () => {} },
+      { ...streamingBudgets('balanced', false), pointBudget: 4_000 },
+      { now: () => 0 },
+    );
+  const counts: number[] = [];
+  for (const phase of ['moving', 'coverage', 'center-refine', 'full-refine'] as const) {
+    const s = mk();
+    s.update({
+      viewProjection: WIDE,
+      cameraPosition: [0, 0, 0],
+      refinementPhase: phase,
+      viewportWidthPx: 1000,
+      viewportHeightPx: 800,
+    });
+    counts.push(s.readinessFacts().wantedCount);
+  }
+  // Strictly ordered by the existing PHASE_SELECTION_FACTOR table: a coarser
+  // phase asks for fewer nodes than a finer one.
+  for (let i = 1; i < counts.length; i++) {
+    expect(counts[i]).toBeGreaterThanOrEqual(counts[i - 1]);
+  }
+  // And the table is actually biting, not just tying everywhere: the coarsest
+  // phase asks for strictly fewer nodes than the finest.
+  expect(counts[0]).toBeLessThan(counts[3]);
+  // Omitting the phase behaves exactly like full-refine (legacy callers).
+  const legacy = mk();
+  legacy.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(legacy.readinessFacts().wantedCount).toBe(counts[3]);
+});
+
+test('a phase change alone forces a full rescore', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  const view = {
+    viewProjection: WIDE,
+    cameraPosition: [0, 0, 0] as [number, number, number],
+    viewportWidthPx: 1000,
+    viewportHeightPx: 800,
+  };
+  scheduler.update({ ...view, refinementPhase: 'coverage' });
+  await drain(scheduler);
+  const baseline = scheduler.stats().fullRescoreCount;
+
+  clock += 16;
+  scheduler.update({ ...view, refinementPhase: 'coverage' });
+  expect(scheduler.stats().fullRescoreCount).toBe(baseline);
+
+  clock += 16;
+  scheduler.update({ ...view, refinementPhase: 'center-refine' });
+  expect(scheduler.stats().fullRescoreCount).toBe(baseline + 1);
+});
+
+test('a viewport aspect change forces a rescore only where it changes weighting', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  const base = { viewProjection: WIDE, cameraPosition: [0, 0, 0] as [number, number, number] };
+  scheduler.update({ ...base, refinementPhase: 'center-refine', viewportWidthPx: 1000, viewportHeightPx: 800 });
+  await drain(scheduler);
+  let n = scheduler.stats().fullRescoreCount;
+
+  // Same aspect, different pixel counts — weighting is unchanged, no rescore.
+  clock += 16;
+  scheduler.update({ ...base, refinementPhase: 'center-refine', viewportWidthPx: 500, viewportHeightPx: 400 });
+  expect(scheduler.stats().fullRescoreCount).toBe(n);
+
+  // A real aspect change alters the centre metric — rescore.
+  clock += 16;
+  scheduler.update({ ...base, refinementPhase: 'center-refine', viewportWidthPx: 500, viewportHeightPx: 900 });
+  expect(scheduler.stats().fullRescoreCount).toBe(n + 1);
+  n = scheduler.stats().fullRescoreCount;
+
+  // In a phase with no focus weighting, aspect is not a scoring input.
+  clock += 16;
+  scheduler.update({ ...base, refinementPhase: 'coverage', viewportWidthPx: 500, viewportHeightPx: 900 });
+  n = scheduler.stats().fullRescoreCount;
+  clock += 16;
+  scheduler.update({ ...base, refinementPhase: 'coverage', viewportWidthPx: 1600, viewportHeightPx: 400 });
+  expect(scheduler.stats().fullRescoreCount).toBe(n);
+});
