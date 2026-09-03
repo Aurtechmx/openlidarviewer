@@ -259,3 +259,103 @@ describe('ObjectPanel — space / object routing', () => {
     expect(all.some((e) => e.className.includes('olv-object-run-anyway'))).toBe(true);
   });
 });
+
+// ── Angular coverage is a shape signature, not a capture defect ─────────────
+// The panel warned "Parts of the surface (often the underside / occluded sides)
+// were not captured." below 65%. A sheet-like scan bins into the near-equatorial
+// band only, so it can never clear 65% however completely it was captured, and
+// the warning fabricated a defect report for a complete tile.
+describe('ObjectPanel - the occlusion warning is gated on shape', () => {
+  const OCCLUSION_WARNING = 'Parts of the surface';
+
+  /** Hand-built metrics: the gate is about labels, never the computation. */
+  function box(L: number, W: number, H: number, coveragePct: number): {
+    pointCount: number;
+    obb: { lengthM: number; widthM: number; heightM: number };
+    aabb: { lengthM: number; widthM: number; heightM: number };
+    longestDimensionM: number;
+    envelopeVolumeM3: number;
+    surfaceAreaM2: number;
+    medianSpacingM: number;
+    completenessPct: number;
+  } {
+    return {
+      pointCount: 59_029,
+      obb: { lengthM: L, widthM: W, heightM: H },
+      aabb: { lengthM: L, widthM: W, heightM: H },
+      longestDimensionM: L,
+      envelopeVolumeM3: L * W * H,
+      surfaceAreaM2: 2 * (L * W + L * H + W * H),
+      medianSpacingM: 0.42,
+      completenessPct: coveragePct,
+    };
+  }
+
+  it('a sheet-like scan at 56% gets no occlusion warning', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const panel = new ObjectPanel();
+    // The field case: a 1270 x 977 x 268 m terrain tile reporting 56%.
+    panel.showObject(box(1270.87, 977.35, 268.22, 56), null, null);
+    const text = (panel.element as unknown as FakeEl).textContent;
+    expect(text).not.toContain(OCCLUSION_WARNING);
+  });
+
+  it('a compact object that really is short of returns still gets it', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const panel = new ObjectPanel();
+    panel.showObject(box(1.2, 1.1, 0.9, 41), null, null);
+    const text = (panel.element as unknown as FakeEl).textContent;
+    expect(text).toContain(OCCLUSION_WARNING);
+  });
+
+  it('names the row angular coverage, never a completeness', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { ANGULAR_COVERAGE_LABEL } = await import('../src/terrain/objectMetrics');
+    const panel = new ObjectPanel();
+    panel.showObject(box(1.2, 1.1, 0.9, 88), null, null);
+    const text = (panel.element as unknown as FakeEl).textContent;
+    expect(text).toContain(ANGULAR_COVERAGE_LABEL);
+    expect(text).not.toMatch(/completeness/i);
+  });
+});
+
+// ── One name for the two point populations ─────────────────────────────────
+// The report says "measured / loaded"; the panel still said "used / source",
+// and "source" invited the reader to treat a display sample as the whole file.
+describe('ObjectPanel - point populations are named as the report names them', () => {
+  function room2(W = 14, D = 29, H = 5, step = 0.5): Float32Array {
+    const t: number[] = [];
+    const push = (x: number, y: number, z: number): void => { t.push(x, y, z); };
+    for (let x = 0; x <= W; x += step)
+      for (let y = 0; y <= D; y += step) { push(x, y, 0); push(x, y, H); }
+    for (let z = 0; z <= H; z += step)
+      for (let x = 0; x <= W; x += step) { push(x, 0, z); push(x, D, z); }
+    for (let z = 0; z <= H; z += step)
+      for (let y = 0; y <= D; y += step) { push(0, y, z); push(W, y, z); }
+    return Float32Array.from(t);
+  }
+
+  it('uses the report label verbatim and never calls the loaded sample "source"', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
+    const { classifyScanShape } = await import('../src/terrain/scanShape');
+    const { buildSpaceReportContent } = await import(
+      '../src/terrain/space/spaceReportLayout'
+    );
+    const pos = room2();
+    const shape = classifyScanShape(pos);
+    const space = spaceMetrics(pos, {
+      upAxis: shape.up, spaceKind: 'interior', sourcePointCount: 1_888_921,
+    });
+    const reportLabel = buildSpaceReportContent({ space, name: 'Populations' })
+      .sections.flatMap((s) => s.rows)
+      .find((r) => r.label.startsWith('Points'))!.label;
+
+    const panel = new ObjectPanel();
+    panel.showSpace(space, shape);
+    const text = (panel.element as unknown as FakeEl).textContent;
+    expect(text).toContain(reportLabel);
+    expect(text).toMatch(/measured/i);
+    expect(text).not.toContain('Points (used');
+  });
+});

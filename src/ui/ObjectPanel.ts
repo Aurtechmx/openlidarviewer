@@ -8,18 +8,26 @@
  *   - interior → a room report: dimensions, floor area, ceiling height,
  *     enclosed volume, floor/wall/ceiling planes, storeys, capture quality;
  *   - object   → the object measurements (oriented box, envelope volume, scan
- *     resolution, completeness) plus capture quality.
+ *     resolution, angular coverage) plus capture quality.
  *
  * Both surface honest caveats and an escape hatch to run the terrain pipeline
  * anyway if the auto-detector got it wrong.
  */
 
-import type { ObjectMetrics } from '../terrain/objectMetrics';
+import {
+  type ObjectMetrics,
+  type BoxDims,
+  ANGULAR_COVERAGE_LABEL,
+  ANGULAR_COVERAGE_HINT,
+  OBJECT_ENVELOPE_VOLUME_HINT,
+  OBJECT_SURFACE_AREA_HINT,
+} from '../terrain/objectMetrics';
 import type { SpaceMetrics } from '../terrain/spaceMetrics';
 import {
   metresToFeet,
   sqMetresToSqFeet,
   cubicMetresToCubicFeet,
+  magnitudeFixed,
 } from '../terrain/spaceMetrics';
 import type { ScanShape, SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
@@ -113,12 +121,35 @@ const areaMft = (v: number): string =>
 const volMft = (v: number): string =>
   Number.isFinite(v) ? `${Math.round(v).toLocaleString()} m³ (${Math.round(cubicMetresToCubicFeet(v)).toLocaleString()} ft³)` : '—';
 // Object-scale variants — compact scans are routinely < 1 m² / < 1 m³, where
-// the interior path's integer rounding would erase the figure, so keep two
-// decimals in metres while reusing the same exact metre→foot conversions.
+// the interior path's integer rounding would erase the figure. The precision
+// follows the MAGNITUDE (magnitudeFixed): two decimals keep a sub-cubic-metre
+// object readable, and a hundred-million-cubic-metre envelope stops claiming
+// centimetre resolution it never had. Same exact metre→foot conversions.
 const areaMftFine = (v: number): string =>
-  Number.isFinite(v) ? `${v.toFixed(2)} m² (${sqMetresToSqFeet(v).toFixed(1)} ft²)` : '—';
+  Number.isFinite(v)
+    ? `${magnitudeFixed(v, 2)} m² (${magnitudeFixed(sqMetresToSqFeet(v), 1)} ft²)`
+    : '—';
 const volMftFine = (v: number): string =>
-  Number.isFinite(v) ? `${v.toFixed(2)} m³ (${cubicMetresToCubicFeet(v).toFixed(1)} ft³)` : '—';
+  Number.isFinite(v)
+    ? `${magnitudeFixed(v, 2)} m³ (${magnitudeFixed(cubicMetresToCubicFeet(v), 1)} ft³)`
+    : '—';
+
+/**
+ * True when the scan is a SHEET: its shortest oriented-box side is a small
+ * fraction of its longest.
+ *
+ * Angular coverage bins directions about the centroid, so a single-sided
+ * surface (a terrain tile, a wall, a floor) fills only the near-equatorial band
+ * and cannot approach 100% however completely it was captured. The field case
+ * is a 1270 x 977 x 268 m terrain tile: a ratio of 0.21, reporting 56% with
+ * nothing missing. Below the threshold the occlusion warning can never be
+ * cleared, so it is not shown at all.
+ */
+const SHEET_ASPECT = 0.25;
+export function isSheetLikeScan(obb: BoxDims): boolean {
+  const { lengthM: L, heightM: H } = obb;
+  return Number.isFinite(L) && Number.isFinite(H) && L > 0 && H / L < SHEET_ASPECT;
+}
 
 export class ObjectPanel {
   readonly element: HTMLElement;
@@ -198,8 +229,11 @@ export class ObjectPanel {
   private _quality(q: SpaceMetrics['quality']): void {
     this._body.append(
       el('div', { className: 'olv-object-subhead', text: 'Capture quality' }),
-      this._row('Points (used · source)', `${i0(q.sampledPointCount)} · ${i0(q.sourcePointCount)}`,
-        'Points used for this analysis and the total they were sampled from.'),
+      // Named exactly as the report names them (spaceReportLayout
+      // captureSection). The second number is the LOADED / resident population,
+      // not the file's declared total, so neither surface calls it "source".
+      this._row('Points (measured / loaded)', `${i0(q.sampledPointCount)} · ${i0(q.sourcePointCount)}`,
+        'Points measured for this analysis and the loaded population they were sampled from.'),
       this._row('Density · spacing', `${q.densityPerM2.toFixed(1)} pts/m² · ~${cm(q.meanSpacingM)}`,
         'Approximate areal density and mean point spacing.'),
       // HONESTY: coveragePct is occupied-cells / (cols*rows) over the scan's
@@ -544,14 +578,19 @@ export class ObjectPanel {
         `${m1(a.lengthM)} × ${m1(a.widthM)} × ${m1(a.heightM)} m`,
         `${metresToFeet(a.lengthM).toFixed(1)} × ${metresToFeet(a.widthM).toFixed(1)} × ${metresToFeet(a.heightM).toFixed(1)} ft — box aligned to the scan axes.`),
       this._row('Envelope volume', volMftFine(metrics.envelopeVolumeM3),
-        'Bounding envelope — not a solid volume. A point cloud has no watertight interior.'),
+        OBJECT_ENVELOPE_VOLUME_HINT),
       this._row('Bounding surface area', areaMftFine(metrics.surfaceAreaM2),
-        'Bounding-box surface area (approximate) — the envelope’s skin, not the object’s true (mesh) surface.'),
+        OBJECT_SURFACE_AREA_HINT),
       this._row('Points · spacing', `${metrics.pointCount.toLocaleString()} · ~${cm(metrics.medianSpacingM)}`),
-      this._row('Scan completeness', `${Math.round(metrics.completenessPct)}% of directions`,
-        'Share of viewing directions around the object that have returns.'),
+      // Was "Scan completeness", which read as capture completeness. The ratio
+      // bins directions about the centroid, so its ceiling is the shape of the
+      // point set, not how much of the object was scanned.
+      this._row(ANGULAR_COVERAGE_LABEL, `${Math.round(metrics.completenessPct)}% of directions`,
+        ANGULAR_COVERAGE_HINT),
     );
-    if (metrics.completenessPct < 65) {
+    // Only a scan that COULD reach full angular coverage can be short of it. A
+    // sheet never can, so warning about its underside invents a capture defect.
+    if (metrics.completenessPct < 65 && !isSheetLikeScan(metrics.obb)) {
       this._body.append(el('div', {
         className: 'olv-object-note is-warn',
         text: 'Parts of the surface (often the underside / occluded sides) were not captured.',

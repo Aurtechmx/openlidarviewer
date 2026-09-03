@@ -10,9 +10,17 @@ import { describe, it, expect } from 'vitest';
 import { buildSpaceReportContent } from '../src/terrain/space/spaceReportLayout';
 import { knownUnit, unknownUnit } from '../src/units/units';
 import { spaceMetrics } from '../src/terrain/spaceMetrics';
-import { objectMetrics } from '../src/terrain/objectMetrics';
 import { classifyScanShape } from '../src/terrain/scanShape';
 import { NOT_SURVEY_GRADE_NOTE } from '../src/terrain/export/exportProvenance';
+import { evidenceNote } from '../src/validation/exportEvidenceNote';
+import {
+  objectMetrics,
+  ANGULAR_COVERAGE_LABEL,
+  ANGULAR_COVERAGE_HINT,
+  OBJECT_ENVELOPE_VOLUME_HINT,
+  OBJECT_SURFACE_AREA_HINT,
+  type ObjectMetrics,
+} from '../src/terrain/objectMetrics';
 
 function room(W = 14, D = 29, H = 5, step = 0.5): Float32Array {
   const t: number[] = [];
@@ -108,7 +116,7 @@ describe('buildSpaceReportContent — object', () => {
     const text = allText(content);
     for (const field of [
       'Sculpture', 'Oriented', 'Axis-aligned', 'Largest dimension',
-      'Envelope volume', 'Bounding surface area', 'Scan completeness', 'Capture quality',
+      'Envelope volume', 'Bounding surface area', 'Angular coverage', 'Capture quality',
     ]) {
       expect(text, `missing "${field}"`).toContain(field);
     }
@@ -341,5 +349,171 @@ describe('buildSpaceReportContent — point populations are named honestly', () 
     const notes = content.caveats.join(' | ');
     expect(notes).not.toContain('full 1,888,921-point scan');
     expect(notes).not.toMatch(/full [\d,]+-point scan/);
+  });
+});
+
+// ── The report may only claim what it actually measures ─────────────────────
+// The footer stamped `evidenceNote('MEAS-AREA')`, and MEAS-AREA is E4, so the
+// space report printed "cross-implementation validated against an independent
+// implementation" over a PCA envelope volume, an oriented-box surface area, an
+// angular-coverage ratio and a sampled density. MEAS-AREA is the shoelace area
+// of a user polygon; it covers none of those figures.
+describe('buildSpaceReportContent - evidence claim matches the product', () => {
+  const obj = cubeShell();
+  const content = buildSpaceReportContent({
+    space: spaceMetrics(obj, {
+      upAxis: 'z', spaceKind: 'object', hasRgb: true, unitToMetres: 1, unitKnown: true,
+    }),
+    object: objectMetrics(obj),
+    name: 'Claim',
+  });
+  const evidenceLine = (): string =>
+    content.provenanceLines.find((l) => l.startsWith('Evidence'))!;
+
+  it('still stamps an Evidence line', () => {
+    expect(evidenceLine()).toBeDefined();
+  });
+
+  it('never asserts cross-implementation or independent-implementation validation', () => {
+    const line = evidenceLine();
+    // The MEAS-AREA strong branch, in both of its affirmative shapes.
+    expect(line).not.toMatch(/cross-implementation validated/i);
+    expect(line).not.toMatch(/validated against an independent implementation/i);
+    expect(line).not.toMatch(/\bfield-validated\b/i);
+    // What it says instead: the absence of both, stated outright.
+    expect(line).toMatch(/no cross-implementation/i);
+  });
+
+  it('is not the MEAS-AREA polygon note', () => {
+    expect(evidenceLine()).not.toContain(evidenceNote('MEAS-AREA'));
+  });
+
+  it('says plainly that the figures are unvalidated envelope estimates', () => {
+    const line = evidenceLine();
+    expect(line).toMatch(/unvalidated/i);
+    expect(line).toMatch(/envelope/i);
+  });
+});
+
+// ── "Scan completeness" measured angular coverage, not capture completeness ──
+// 24x12 direction bins about the centroid: a sheet occupies only the
+// near-equatorial band, so the ratio is a shape signature, not missing data.
+describe('buildSpaceReportContent - the coverage row is named for what it measures', () => {
+  const obj = cubeShell();
+  const rows = buildSpaceReportContent({
+    space: spaceMetrics(obj, {
+      upAxis: 'z', spaceKind: 'object', hasRgb: true, unitToMetres: 1, unitKnown: true,
+    }),
+    object: objectMetrics(obj),
+    name: 'Coverage',
+  }).sections.flatMap((s) => s.rows);
+
+  it('no row calls the ratio a completeness', () => {
+    for (const r of rows) {
+      expect(`${r.label} ${r.value} ${r.hint ?? ''}`).not.toMatch(/completeness/i);
+    }
+  });
+
+  it('names it angular coverage about the centroid', () => {
+    const row = rows.find((r) => r.label === ANGULAR_COVERAGE_LABEL);
+    expect(row, 'angular-coverage row missing').toBeDefined();
+    expect(row!.value).toMatch(/%/);
+    expect(row!.hint).toBe(ANGULAR_COVERAGE_HINT);
+  });
+});
+
+// ── Per-row qualifiers must survive into the PDF content model ──────────────
+// The panel disclosed "Bounding envelope, not a solid volume" and "the
+// envelope's skin, not the object's true (mesh) surface"; ReportRow had no
+// hint field, so neither reached the export.
+describe('buildSpaceReportContent - envelope rows carry their qualifier', () => {
+  const obj = cubeShell();
+  const rows = buildSpaceReportContent({
+    space: spaceMetrics(obj, {
+      upAxis: 'z', spaceKind: 'object', hasRgb: true, unitToMetres: 1, unitKnown: true,
+    }),
+    object: objectMetrics(obj),
+    name: 'Qualifiers',
+  }).sections.flatMap((s) => s.rows);
+
+  it('envelope volume states it is not a solid volume', () => {
+    const row = rows.find((r) => r.label === 'Envelope volume')!;
+    expect(row.hint).toBe(OBJECT_ENVELOPE_VOLUME_HINT);
+    expect(row.hint).toMatch(/not a solid volume/);
+  });
+
+  it('bounding surface area states it is the envelope skin, not a mesh surface', () => {
+    const row = rows.find((r) => r.label === 'Bounding surface area')!;
+    expect(row.hint).toBe(OBJECT_SURFACE_AREA_HINT);
+    expect(row.hint).toMatch(/skin/);
+  });
+});
+
+// ── Printed precision follows the magnitude ─────────────────────────────────
+// Two decimals unconditionally put ten significant figures on a 333 million m3
+// envelope derived from a 59k-point sample.
+describe('buildSpaceReportContent - fine precision follows the magnitude', () => {
+  const shell = cubeShell();
+  const metricSpace = spaceMetrics(shell, {
+    upAxis: 'z', spaceKind: 'object', hasRgb: true, unitToMetres: 1, unitKnown: true,
+  });
+  const box = (L: number, W: number, H: number, pointCount: number): ObjectMetrics => ({
+    pointCount,
+    obb: { lengthM: L, widthM: W, heightM: H },
+    aabb: { lengthM: L, widthM: W, heightM: H },
+    longestDimensionM: L,
+    envelopeVolumeM3: L * W * H,
+    surfaceAreaM2: 2 * (L * W + L * H + W * H),
+    medianSpacingM: 0.42,
+    completenessPct: 56,
+  });
+  const valueOf = (object: ObjectMetrics, label: string): string =>
+    buildSpaceReportContent({ space: metricSpace, object, name: 'Precision' })
+      .sections.flatMap((s) => s.rows)
+      .find((r) => r.label === label)!.value;
+
+  // The field case: a 1270 x 977 x 268 m terrain envelope over a 59k sample.
+  const huge = box(1270.87, 977.35, 268.22, 59_029);
+  // A compact object scan, where two decimals are the whole figure.
+  const small = box(1, 0.7, 0.6, 41_000);
+
+  it('a hundred-million-cubic-metre envelope prints no decimals', () => {
+    const v = valueOf(huge, 'Envelope volume');
+    expect(v).toContain('333,151,984');
+    expect(v).not.toMatch(/\d\.\d\d\s*m³/);
+  });
+
+  it('a large bounding surface area prints no decimals either', () => {
+    const v = valueOf(huge, 'Bounding surface area');
+    expect(v).toContain('3,690,205');
+    expect(v).not.toMatch(/\d\.\d\d\s*m²/);
+  });
+
+  it('a sub-cubic-metre object still keeps two decimals', () => {
+    expect(valueOf(small, 'Envelope volume')).toMatch(/^0\.42 m³/);
+  });
+
+  it('the VALUE is unchanged, only the printed digits', () => {
+    // 0.42 m3 rounds to 0 at zero decimals; the small branch must not.
+    expect(valueOf(small, 'Envelope volume')).not.toMatch(/^0 m³/);
+  });
+});
+
+// ── The provenance footer must not fabricate zeros ──────────────────────────
+// `space?.quality.sampledPointCount ?? 0` rendered "Points  0 measured /
+// 0 loaded" for the no-measurements branch, against the file's own rule that an
+// absent value reads as a dash.
+describe('buildSpaceReportContent - absent counts are dashes, never zeros', () => {
+  const content = buildSpaceReportContent({ space: null, name: 'Empty' });
+
+  it('carries null counts rather than fabricated zeros', () => {
+    expect(content.provenance.measuredPointCount).toBeNull();
+    expect(content.provenance.loadedPointCount).toBeNull();
+  });
+
+  it('renders the Points line with dashes', () => {
+    const line = content.provenanceLines.find((l) => l.startsWith('Points'))!;
+    expect(line).toContain('—');
+    expect(line).not.toMatch(/\b0\b/);
   });
 });
