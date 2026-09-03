@@ -33,6 +33,35 @@ export const sqMetresToSqFeet = (a: number): number => a * FT_PER_M * FT_PER_M;
 export const cubicMetresToCubicFeet = (v: number): number => v * FT_PER_M * FT_PER_M * FT_PER_M;
 
 /**
+ * Decimal places for a "fine" area / volume figure, chosen from its MAGNITUDE.
+ *
+ * The object rows used two decimals unconditionally because a compact scan is
+ * routinely under 1 m2 / 1 m3, where integer rounding erases the figure. Applied
+ * to a 333,151,984 m3 bounding envelope derived from a 59k-point sample, the
+ * same rule printed ten significant figures and claimed a cubic-centimetre
+ * resolution the estimate does not have.
+ */
+function fineDecimals(v: number): number {
+  const a = Math.abs(v);
+  if (a < 100) return 2;
+  if (a < 10_000) return 1;
+  return 0;
+}
+
+/**
+ * A fine figure printed at the decimal count its magnitude supports, capped at
+ * `maxDecimals` (2 for the metre column, 1 for the foot column, matching what
+ * those columns have always printed at object scale). At zero decimals the
+ * figure groups its thousands like the coarse rows.
+ *
+ * Only the printed digits change. The VALUE is the caller's, untouched.
+ */
+export function magnitudeFixed(v: number, maxDecimals: number): string {
+  const d = Math.min(maxDecimals, fineDecimals(v));
+  return d === 0 ? Math.round(v).toLocaleString() : v.toFixed(d);
+}
+
+/**
  * L × W × H, in metres. Length ≥ width, height vertical.
  *
  * L and W are the sides of the minimum-area rectangle around the horizontal

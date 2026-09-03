@@ -111,6 +111,13 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
       text(row.label, labelX, y, 9.5, bold, DIM);
       text(row.value, valueX, y, 9.5, font, INK);
       y -= 14;
+      // The per-row qualifier the panel shows as a tooltip. Without it the
+      // sheet printed a bare envelope volume and a bare bounding surface area,
+      // so a reader had no way to tell either one from a solid measurement.
+      if (row.hint) {
+        y = drawWrapped(page, font, row.hint, valueX, y, PW - M - valueX, 7, DIM);
+        y -= 1;
+      }
     }
     y -= 8;
   }

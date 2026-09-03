@@ -10,9 +10,12 @@
  *   - envelope volume (the OBB volume) — an honest bound, NOT a solid volume
  *     (a point cloud has no watertight interior; that needs a mesh);
  *   - median nearest-neighbour spacing — the scan's effective resolution;
- *   - angular completeness — the fraction of viewing directions around the
- *     object's centroid that actually have returns, i.e. how much of the
- *     surface was captured vs occluded / missed;
+ *   - angular coverage: the fraction of direction bins around the point set's
+ *     centroid that have returns. It describes the SHAPE of the point set, not
+ *     how much of the object was captured: a sheet (a terrain tile, a wall, a
+ *     floor) fills only the near-equatorial band, so it cannot approach 100%
+ *     however completely it was scanned. Reading it as capture completeness
+ *     turned a complete tile's 56% into a fabricated occlusion report;
  *   - longest dimension — max(L, W, H) of the OBB, the "how big is it"
  *     headline figure capture apps lead with;
  *   - bounding-box surface area — 2(LW + LH + WH) of the OBB, an APPROXIMATE
@@ -43,14 +46,42 @@ export interface ObjectMetrics {
   readonly surfaceAreaM2: number;
   /** Median nearest-neighbour distance (scan resolution). */
   readonly medianSpacingM: number;
-  /** 0..100 — share of viewing directions around the centroid with returns. */
+  /**
+   * 0..100. Share of the 24x12 direction bins around the centroid with
+   * returns. ANGULAR COVERAGE, not capture completeness: the ceiling is set by
+   * the point set's shape, so a sheet-like scan reads low with nothing missing.
+   * The name is kept for compatibility; every label reads "angular coverage".
+   */
   readonly completenessPct: number;
 }
+
+/**
+ * The row labels and per-row qualifiers the on-screen panel and the report PDF
+ * BOTH print, so the two surfaces state the same thing about the same number.
+ * They lived only in ObjectPanel, so the export shipped a bare envelope volume
+ * and a bare bounding surface area with nothing saying what either one is.
+ */
+export const ANGULAR_COVERAGE_LABEL = 'Angular coverage';
+
+/** What the coverage ratio measures, and why a low value is not a defect. */
+export const ANGULAR_COVERAGE_HINT =
+  'Share of the direction bins around the point set’s centroid that have ' +
+  'returns. It follows the shape of the scan: a flat or sheet-like surface fills ' +
+  'only part of the sphere however completely it was captured.';
+
+/** Kept verbatim from the panel: the envelope volume is not a solid volume. */
+export const OBJECT_ENVELOPE_VOLUME_HINT =
+  'Bounding envelope — not a solid volume. A point cloud has no watertight interior.';
+
+/** Kept verbatim from the panel: the surface area is the envelope's skin. */
+export const OBJECT_SURFACE_AREA_HINT =
+  'Bounding-box surface area (approximate) — the envelope’s skin, not the ' +
+  'object’s true (mesh) surface.';
 
 export interface ObjectMetricsParams {
   /** Max points sampled for bounds / PCA. Default 60000. */
   readonly maxSamples?: number;
-  /** Points sampled for the O(n²) spacing/completeness passes. Default 2000. */
+  /** Points sampled for the O(n²) spacing / angular-coverage passes. Default 2000. */
   readonly probeSamples?: number;
   /**
    * Honest source/resident point count when `positions` is itself already a
@@ -256,7 +287,9 @@ export function objectMetrics(
   const medianSpacingM =
     P > 0 && fullCount > P ? probeSpacingM * Math.sqrt(P / fullCount) : probeSpacingM;
 
-  // ── angular completeness — share of direction bins (from centroid) hit ──
+  // ── angular coverage: share of direction bins (from centroid) hit ──
+  // A shape statistic. A sheet occupies the near-equatorial band only, so its
+  // ceiling is well under 100% with nothing missing from the capture.
   const LON = 24, LAT = 12;
   const bins = new Uint8Array(LON * LAT);
   for (let i = 0; i < m; i++) {

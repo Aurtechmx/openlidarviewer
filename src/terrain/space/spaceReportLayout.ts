@@ -27,16 +27,33 @@ import {
   sqMetresToSqFeet,
   cubicMetresToCubicFeet,
   resolveLinearUnitScale,
+  magnitudeFixed,
 } from '../spaceMetrics';
-import type { ObjectMetrics } from '../objectMetrics';
+import {
+  type ObjectMetrics,
+  ANGULAR_COVERAGE_LABEL,
+  ANGULAR_COVERAGE_HINT,
+  OBJECT_ENVELOPE_VOLUME_HINT,
+  OBJECT_SURFACE_AREA_HINT,
+} from '../objectMetrics';
 import { SOFTWARE_NAME, NOT_SURVEY_GRADE_NOTE } from '../export/exportProvenance';
-import { evidenceNote } from '../../validation/exportEvidenceNote';
 import { type LinearUnitScale, UNIT_FACTORS } from '../../units/units';
 
-/** One label/value line in a report section. */
+/**
+ * One label/value line in a report section, with the OPTIONAL per-row qualifier
+ * that says what the number is.
+ *
+ * The panel carried those qualifiers as tooltips ("Bounding envelope, not a
+ * solid volume"; "the envelope's skin, not the object's true (mesh) surface")
+ * and the row type had no field for them, so the export printed a bare envelope
+ * volume and a bare bounding surface area with nothing naming either one. The
+ * hint rides the row so both surfaces read from the same string.
+ */
 export interface ReportRow {
   readonly label: string;
   readonly value: string;
+  /** Qualifier printed under the value; single-sourced with the panel. */
+  readonly hint?: string;
 }
 
 /** A titled block of rows. */
@@ -56,14 +73,20 @@ export interface SpaceReportProvenance {
   readonly scanType: string;
   /** 'metres' / 'feet (source) → metres' etc. */
   readonly units: string;
-  /** Points actually measured (the subset the metrics were computed over). */
-  readonly measuredPointCount: number;
+  /**
+   * Points actually measured (the subset the metrics were computed over), or
+   * null when there are no measurements. NEVER 0 as a stand-in for absent: the
+   * no-measurements branch used to render "Points  0 measured / 0 loaded",
+   * which reads as a scan that loaded nothing rather than one not yet measured.
+   */
+  readonly measuredPointCount: number | null;
   /**
    * The LOADED / resident population that subset was drawn from. Never the
    * file's declared total: a display-sampled or still-streaming load holds far
-   * fewer points than the file, so this must not be printed as "source".
+   * fewer points than the file, so this must not be printed as "source". Null
+   * when absent, for the same reason as {@link measuredPointCount}.
    */
-  readonly loadedPointCount: number;
+  readonly loadedPointCount: number | null;
   readonly notSurveyGrade: string;
 }
 
@@ -149,9 +172,9 @@ interface UnitFormat {
   readonly area: (v: Num) => string;
   /** A coarse (rounded) volume. */
   readonly vol: (v: Num) => string;
-  /** A fine (2 dp) area. */
+  /** A fine area, printed at the precision its magnitude supports. */
   readonly areaFine: (v: Num) => string;
-  /** A fine (2 dp) volume. */
+  /** A fine volume, printed at the precision its magnitude supports. */
   readonly volFine: (v: Num) => string;
   /** Mean point spacing. */
   readonly spacing: (v: Num) => string;
@@ -174,8 +197,14 @@ const METRIC_FORMAT: UnitFormat = {
     ok(v)
       ? `${Math.round(v).toLocaleString()} m³ (${Math.round(cubicMetresToCubicFeet(v)).toLocaleString()} ft³)`
       : DASH,
-  areaFine: (v) => (ok(v) ? `${v.toFixed(2)} m² (${sqMetresToSqFeet(v).toFixed(1)} ft²)` : DASH),
-  volFine: (v) => (ok(v) ? `${v.toFixed(2)} m³ (${cubicMetresToCubicFeet(v).toFixed(1)} ft³)` : DASH),
+  areaFine: (v) =>
+    ok(v)
+      ? `${magnitudeFixed(v, 2)} m² (${magnitudeFixed(sqMetresToSqFeet(v), 1)} ft²)`
+      : DASH,
+  volFine: (v) =>
+    ok(v)
+      ? `${magnitudeFixed(v, 2)} m³ (${magnitudeFixed(cubicMetresToCubicFeet(v), 1)} ft³)`
+      : DASH,
   spacing: (v) => (ok(v) ? `${(v * 100).toFixed(1)} cm` : DASH),
   density: (v) => (ok(v) ? `${v.toFixed(1)} pts/m²` : DASH),
 };
@@ -193,8 +222,8 @@ const SOURCE_FORMAT: UnitFormat = {
   len: (v) => (ok(v) ? `${v.toFixed(1)} ${SU}` : DASH),
   area: (v) => (ok(v) ? `${Math.round(v).toLocaleString()} ${SU_SQ}` : DASH),
   vol: (v) => (ok(v) ? `${Math.round(v).toLocaleString()} ${SU_CU}` : DASH),
-  areaFine: (v) => (ok(v) ? `${v.toFixed(2)} ${SU_SQ}` : DASH),
-  volFine: (v) => (ok(v) ? `${v.toFixed(2)} ${SU_CU}` : DASH),
+  areaFine: (v) => (ok(v) ? `${magnitudeFixed(v, 2)} ${SU_SQ}` : DASH),
+  volFine: (v) => (ok(v) ? `${magnitudeFixed(v, 2)} ${SU_CU}` : DASH),
   spacing: (v) => (ok(v) ? `${v.toFixed(3)} ${SU}` : DASH),
   density: (v) => (ok(v) ? `${v.toFixed(1)} pts per square source unit` : DASH),
 };
@@ -333,9 +362,24 @@ function objectContent(input: SpaceReportInput, scale: LinearUnitScale): SpaceRe
         value: f.tripleBare(aabb.lengthM, aabb.widthM, aabb.heightM),
       },
       { label: 'Largest dimension', value: f.len(o.longestDimensionM) },
-      { label: 'Envelope volume', value: f.volFine(o.envelopeVolumeM3) },
-      { label: 'Bounding surface area', value: f.areaFine(o.surfaceAreaM2) },
-      { label: 'Scan completeness', value: `${Math.round(o.completenessPct)}% of directions` },
+      {
+        label: 'Envelope volume',
+        value: f.volFine(o.envelopeVolumeM3),
+        hint: OBJECT_ENVELOPE_VOLUME_HINT,
+      },
+      {
+        label: 'Bounding surface area',
+        value: f.areaFine(o.surfaceAreaM2),
+        hint: OBJECT_SURFACE_AREA_HINT,
+      },
+      // Was "Scan completeness ... % of directions", which read as capture
+      // completeness. The figure bins directions about the centroid, so its
+      // ceiling is the shape of the point set, not how much was captured.
+      {
+        label: ANGULAR_COVERAGE_LABEL,
+        value: `${Math.round(o.completenessPct)}% of directions about the centroid`,
+        hint: ANGULAR_COVERAGE_HINT,
+      },
     ],
   };
   const sections: ReportSection[] = [dims];
@@ -360,8 +404,8 @@ function assemble(
     source: input.name ?? null,
     scanType,
     units: unitsLabel(scale),
-    measuredPointCount: space?.quality.sampledPointCount ?? 0,
-    loadedPointCount: space?.quality.sourcePointCount ?? 0,
+    measuredPointCount: space?.quality.sampledPointCount ?? null,
+    loadedPointCount: space?.quality.sourcePointCount ?? null,
     notSurveyGrade: NOT_SURVEY_GRADE_NOTE,
   };
   return {
@@ -373,6 +417,30 @@ function assemble(
     caveats: space ? [...space.reasons] : [],
   };
 }
+
+/**
+ * The evidence stamp for the space / object report.
+ *
+ * This footer used to print `evidenceNote('MEAS-AREA')`. MEAS-AREA is at
+ * E4_CROSS_IMPLEMENTATION_VALIDATED, so the note took the strong branch and
+ * told the reader the product was "cross-implementation validated against an
+ * independent implementation". MEAS-AREA is the planimetric shoelace area of a
+ * user-drawn polygon, checked against OGR_GEOM_AREA on a planar-polygon
+ * fixture. This report's headline figures are a PCA envelope volume, an
+ * oriented-box surface area, an angular-coverage ratio and a sampled density.
+ * The polygon claim covers none of them.
+ *
+ * No entry in the claim registry does: the VOL- claims are point-sample volumes
+ * measured against a base surface, which is a different estimator again. So the
+ * report makes NO cross-validation claim and states what its figures actually
+ * are. Registering a claim for these products is the way to change this line.
+ */
+export const SPACE_REPORT_EVIDENCE_NOTE =
+  'Evidence: unvalidated envelope estimate. The areas, volumes, angular ' +
+  'coverage and density here are bounding-envelope and grid estimates from the ' +
+  'loaded point sample. No registered claim covers them, so they carry no ' +
+  'cross-implementation and no field validation. Do not present this as a ' +
+  'validated deliverable.';
 
 /** Plain `Key  Value` provenance lines for the report footer. */
 export function spaceProvenanceLines(p: SpaceReportProvenance): string[] {
@@ -389,10 +457,7 @@ export function spaceProvenanceLines(p: SpaceReportProvenance): string[] {
     kv('Units', p.units),
     kv('Points', `${i0(p.measuredPointCount)} measured / ${i0(p.loadedPointCount)} loaded in viewer`),
     kv('Note', p.notSurveyGrade),
-    // Route the space/object report through the ONE evidence gate (PR6): its
-    // dimensional figures sit below their required level, so the report states
-    // the exploratory verdict rather than shipping with no gate stamp.
-    kv('Evidence', evidenceNote('MEAS-AREA')),
+    kv('Evidence', SPACE_REPORT_EVIDENCE_NOTE),
   ];
 }
 

@@ -143,4 +143,23 @@ describe('buildSpaceReportPdf', () => {
     });
     expect(isPdf(bytes)).toBe(true);
   });
+
+  it('prints the per-row envelope qualifiers on the page', async () => {
+    // The panel disclosed "not a solid volume" and "the envelope's skin"; the
+    // PDF carried neither, so the export read as if the two figures were plain
+    // measurements. Both qualifiers must reach the page.
+    const pos = cubeShell();
+    const space = spaceMetrics(pos, { upAxis: 'z', spaceKind: 'object', hasRgb: false });
+    const bytes = await buildSpaceReportPdf({
+      space,
+      object: objectMetrics(pos),
+      name: 'Sculpture',
+      softwareVersion: '0.4.3',
+      metricVersion: 'v0.4.1',
+    });
+    const page = (await extractTextOps(bytes)).map((o) => o.text).join(' ');
+    expect(page).toContain('not a solid volume');
+    expect(page).toContain("envelope's skin");
+    expect(page).not.toMatch(/completeness/i);
+  });
 });
