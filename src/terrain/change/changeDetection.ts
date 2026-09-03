@@ -89,15 +89,15 @@ export interface ChangeStats {
    * Σ Δz·cellArea. Per Anderson, this is the statistically correct net —
    * uncorrelated sub-LoD noise of both signs is free to cancel, instead of
    * being clipped to zero on one side only. This is the primary net figure
-   * (`olv.change.dtm-difference@2`); `netVolumeM3` above is kept unchanged
+   * (`olv.change.dtm-difference.raw-net@1`); `netVolumeM3` above is kept
    * for `@1` provenance.
    */
   readonly rawNetVolumeM3: number;
-  /** Alias of {@link gainVolumeM3} under the `@2` naming (above-LoD gain). */
+  /** Alias of {@link gainVolumeM3} under `.raw-net@1` (above-LoD gain). */
   readonly detectableGainVolumeM3: number;
-  /** Alias of {@link lossVolumeM3} under the `@2` naming (above-LoD loss). */
+  /** Alias of {@link lossVolumeM3} under `.raw-net@1` (above-LoD loss). */
   readonly detectableLossVolumeM3: number;
-  /** Alias of {@link netVolumeM3} under the `@2` naming (thresholded net, for gross/net comparison). */
+  /** Alias of {@link netVolumeM3} under `.raw-net@1` (thresholded net, for gross/net comparison). */
   readonly detectableNetVolumeM3: number;
   /** Fraction of comparable cells whose |Δ| exceeds the LoD (same value as {@link significantFraction}, named for `@2`'s gross/net reconciliation). */
   readonly areaAboveLoDFraction: number;

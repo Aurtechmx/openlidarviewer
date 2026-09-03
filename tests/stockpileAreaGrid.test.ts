@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { methodRef, methodTag } from '../src/science/methodRegistry';
 import {
   stockpileAreaGrid,
   clippedCellArea,
@@ -293,5 +294,37 @@ describe('deriveCellSize', () => {
     // Clamps: a tiny cloud does not produce an unbounded cell.
     expect(deriveCellSize(1e9, 1, 0.05, 50)).toBe(50);
     expect(deriveCellSize(0, 0)).toBe(50); // degenerate → max
+  });
+});
+
+describe('the stamped method comes from the registry, not a literal', () => {
+  const expected = methodTag(methodRef('olv.volume.stockpile-area-grid'));
+  const SIDE = 10;
+  const base = { kind: 'constant', zM: 0 } as const;
+
+  it('agrees with METHOD_REGISTRY on a normal result', () => {
+    const r = stockpileAreaGrid({
+      points: sample(SIDE, 60, () => 2),
+      polygon: square(SIDE),
+      base,
+      cellSizeM: 0.5,
+    });
+    expect(r.method).toBe(expected);
+    expect(r.method).not.toContain('@1');
+  });
+
+  it('agrees on a result with no usable points', () => {
+    const r = stockpileAreaGrid({
+      points: [],
+      polygon: square(SIDE),
+      base,
+      cellSizeM: 0.5,
+    });
+    expect(r.method).toBe(expected);
+  });
+
+  it('carries the version the registry declares', () => {
+    const ref = methodRef('olv.volume.stockpile-area-grid');
+    expect(expected).toBe(`olv.volume.stockpile-area-grid@${ref.version}`);
   });
 });
