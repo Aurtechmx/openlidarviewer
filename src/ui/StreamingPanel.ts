@@ -195,10 +195,20 @@ export function spacingRowFor(
   if (crs?.linearUnit === 'foot' || crs?.linearUnit === 'us-survey-foot') {
     // Spacing is in feet; convert to metres so the number is comparable.
     const factor = crs.linearUnitToMetres;
-    const metres = Number.isFinite(factor) ? spacing * (factor as number) : spacing;
+    // A foot CRS that carries no usable metre factor cannot be converted, and
+    // the unconverted figure is feet. Returning it under " m" was the same
+    // ~3.28x overstatement this function exists to stop, arrived at from the
+    // other side, so the missing factor fails closed to source units instead.
+    if (factor === undefined || !Number.isFinite(factor) || factor <= 0) {
+      return {
+        label: 'Spacing',
+        value: `${spacing.toFixed(2)} (source units)`,
+        title: 'Foot CRS declares no usable metre factor — spacing shown in the source units, not metres.',
+      };
+    }
     return {
       label: 'Spacing',
-      value: `${metres.toFixed(2)} m`,
+      value: `${(spacing * factor).toFixed(2)} m`,
       title: 'Root-node point spacing, converted from the source foot unit to metres.',
     };
   }

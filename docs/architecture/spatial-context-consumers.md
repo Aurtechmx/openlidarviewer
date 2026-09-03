@@ -68,7 +68,7 @@ has re-opened the divergence this closes.
 | 12 | Measurement labels | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `isGeographic`, `verticalMetresPerUnit` |
 | 13 | Elevation colorbars | migrated | `src/main.ts`, `src/app/terrainAnalysisRunner.ts` | `verticalMetresPerUnit`, `kind` |
 | 14 | Classification | migrated | `src/render/class/classifierCues.ts` | `linearUnitToMetres`, `verticalMetresPerUnit` |
-| 15 | Streaming scan-report extents | migrated | `src/analysis/streamingExtentRows.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit` |
+| 15 | Streaming scan report | migrated | `src/analysis/streamingExtentRows.ts`, `src/app/streamingScanReport.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit`, `isGeographic` |
 | 16 | Tool preflight | migrated | `src/process/toolPreflight.ts` | `metricClaimsPermitted`, `verticalReferenceKnown`, `crsName` |
 | 17 | Cross-CRS project placement | migrated | `src/geo/projectPlacement.ts` | vertical verdict delegated to `src/geo/frameCompatibility.ts` |
 

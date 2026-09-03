@@ -78,3 +78,13 @@ test('undefined format is treated as COPC and still gates on the unit', () => {
   expect(spacingRowFor(undefined, 0.5, METRE).value).toBe('0.50 m');
   expect(spacingRowFor(undefined, 0.5, UNKNOWN).value).toBe('0.50 (source units)');
 });
+
+test('COPC + foot CRS with no usable metre factor: FAILS CLOSED, never "m"', () => {
+  // The conversion cannot run, and the unconverted number is feet: labelling it
+  // metres would overstate the spacing ~3.28x, the very drift this row gates.
+  for (const factor of [undefined, Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+    const r = spacingRowFor('copc', 4, { linearUnit: 'foot', linearUnitToMetres: factor, isGeographic: false });
+    expect(r.value).toBe('4.00 (source units)');
+    expect(r.value).not.toMatch(/\bm\b/);
+  }
+});
