@@ -1804,7 +1804,7 @@ const keyBindingDeps: KeyBindingDeps = {
     measureFinish: () => viewer?.measure.finishCurrent(),
     measureUndoPoint: () => viewer?.measure.undoLastPoint(),
     onEscape: () => {
-      let handled = false;
+      let handled = reclassifyUi?.disarm() === true; // a separately owned lasso
       if (lassoVolumeTool.enabled) {
         lassoVolumeTool.disable();
         viewer?.setLassoMode(false);

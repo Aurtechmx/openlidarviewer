@@ -49,6 +49,8 @@ export interface ReclassifyUi {
   setVisible(visible: boolean): void;
   /** Re-sync the undo/redo enabled state from the Viewer history. */
   refresh(): void;
+  /** Disarm the lasso if it is armed. True when it had been armed. */
+  disarm(): boolean;
   dispose(): void;
 }
 
@@ -167,6 +169,12 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   refresh();
 
   return {
+    disarm(): boolean {
+      if (!tool.enabled) return false;
+      tool.disable();
+      armBtn.classList.remove('olv-mkind-active');
+      return true;
+    },
     element,
     setVisible: (visible: boolean) => element.classList.toggle('olv-hidden', !visible),
     refresh,
