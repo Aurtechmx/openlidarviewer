@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { objectMetrics } from '../src/terrain/objectMetrics';
 import { resolveLinearUnitScale, spaceMetrics } from '../src/terrain/spaceMetrics';
 import { positionsInMetres, scalePositions } from '../src/terrain/sourceScale';
@@ -130,5 +131,27 @@ describe('ObjectPanel - an unknown unit prints no metre, foot or centimetre clai
     const text = (panel.element as unknown as FakeEl).textContent;
     expect(text).toMatch(/\bm\b/);
     expect(text).toMatch(/\bft\b/);
+  });
+});
+
+describe('the call site itself is normalised, not just the helper', () => {
+  // The defect was never in objectMetrics; it was that main.ts handed it raw
+  // source-unit positions while spaceMetrics scaled the same buffer first.
+  // Both accept `Float32Array | ReadonlyArray<number>`, so removing the wrapper
+  // type-checks and every helper test still passes. This reads the wiring.
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+
+  it('passes objectMetrics positions converted to metres', () => {
+    const call = /objectMetrics\(\s*([^,]+),/.exec(main);
+    expect(call, 'objectMetrics call site not found in main.ts').toBeTruthy();
+    expect(call![1]).toMatch(/positionsInMetres\(/);
+  });
+
+  it('resolves the scale from the CRS unit-known flag, not the bare factor', () => {
+    expect(main).toMatch(/resolveLinearUnitScale\(\s*unitToMetres,\s*spaceCtx\.linearUnitKnown\s*\)/);
+  });
+
+  it('never hands objectMetrics the raw gathered buffer', () => {
+    expect(main).not.toMatch(/objectMetrics\(\s*gathered\.positions/);
   });
 });
