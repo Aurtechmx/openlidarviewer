@@ -16,6 +16,7 @@
  * only so this module stays tree-shakeable.
  */
 
+import { FT_PER_M } from '../units/units';
 import type { Measurement, UnitSystem, Vec3 } from '../render/measure/types';
 import type { ReportMeasurementRow, ReportProfileDeliverableExtras } from './types';
 import {
@@ -63,7 +64,7 @@ function formatLinear(metres: number, system: UnitSystem): string {
   // carries the same significant figures the panel and CSV do — a sub-centimetre
   // separation no longer rounds to `0.00`.
   if (system === 'imperial') {
-    const ft = metres * 3.28084;
+    const ft = metres * FT_PER_M;
     if (ft >= 5280) {
       const mi = ft / 5280;
       return `${mi.toFixed(displayDecimals(mi, 3, 4))} mi`;

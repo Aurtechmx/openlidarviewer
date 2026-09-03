@@ -126,9 +126,9 @@ import { pdfInfoDate } from '../../pdfInfoDate';
 // kept out of the builder so the geometry of the sheet can be asserted
 // without reading a PDF back.
 import { buildStationBand } from './profileSheetLayout';
+// Metres → feet, single-sourced: this module used to keep its own copy.
+import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 
-/** Same constant the format/summary modules keep module-local. */
-const FEET_PER_METRE = 3.280839895013123;
 
 export interface ProfilePdfInput {
   /**

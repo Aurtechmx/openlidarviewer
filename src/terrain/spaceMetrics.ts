@@ -29,8 +29,8 @@ export { positionsInMetres } from './sourceScale';
 import { type LinearUnitScale, knownUnit, unknownUnit } from '../units/units';
 import { denseFootprintBbox } from './space/floorplan/wallSlice';
 
-/** Exact metre→foot factor (1 ft = 0.3048 m). */
-const FT_PER_M = 1 / 0.3048;
+// Exact metre→foot factor, single-sourced from the units module.
+import { FT_PER_M } from '../units/units';
 
 export const metresToFeet = (m: number): number => m * FT_PER_M;
 export const sqMetresToSqFeet = (a: number): number => a * FT_PER_M * FT_PER_M;

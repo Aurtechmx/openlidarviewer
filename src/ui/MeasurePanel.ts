@@ -80,8 +80,9 @@ import {
   PROFILE_SAMPLE_COUNT_OPTIONS,
 } from '../render/measure/profileSampler';
 
-/** Metres → feet — the same factor the chart's imperial labels use. */
-const FT_PER_M = 3.28084;
+// Metres → feet for every imperial label and for round-tripping a typed
+// corridor width. Exact and shared, so the panel and the report agree.
+import { FT_PER_M } from '../units/units';
 
 /**
  * The profile chart used to be 36 px tall,
@@ -1992,7 +1993,7 @@ function renderProfileChart(
 
   const formatChainage = (m: number): string => {
     if (system === 'imperial') {
-      const ft = m * 3.28084;
+      const ft = m * FT_PER_M;
       return ft >= 5280 ? `${(ft / 5280).toFixed(1)} mi` : `${Math.round(ft)} ft`;
     }
     return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
@@ -2003,7 +2004,7 @@ function renderProfileChart(
   // same rule the metric branch applies to metres.
   const elevDecimalsFt = (() => {
     if (yTicks.length >= 2) {
-      const stepFt = Math.abs(yTicks[1] - yTicks[0]) * 3.28084;
+      const stepFt = Math.abs(yTicks[1] - yTicks[0]) * FT_PER_M;
       if (stepFt >= 1) return 0;
       if (stepFt >= 0.1) return 1;
       return 2;
@@ -2014,7 +2015,7 @@ function renderProfileChart(
   // picks its decimals from the axis step. It is deliberately not the shared
   // `formatElevation` — a name it once shadowed by coincidence.
   const elevTickLabel = (m: number): string => {
-    if (system === 'imperial') return `${(m * 3.28084).toFixed(elevDecimalsFt)} ft`;
+    if (system === 'imperial') return `${(m * FT_PER_M).toFixed(elevDecimalsFt)} ft`;
     return `${m.toFixed(elevDecimals)} m`;
   };
 

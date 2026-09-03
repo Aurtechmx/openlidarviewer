@@ -13,6 +13,8 @@
  */
 
 import type { UnitSystem } from './types';
+// Metres → feet, single-sourced: this module used to keep its own copy.
+import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 
 /**
  * The measurement stack's honest limitation on a GEOGRAPHIC (degree) CRS.
@@ -63,7 +65,6 @@ export const DATUM_CONFLICT_MEASURE_NOTICE =
   'gain/loss are unaffected; absolute values are not elevations. Load the ' +
   'clouds one at a time to read true elevations.';
 
-const FEET_PER_METRE = 3.280839895013123;
 const SQFT_PER_SQM = FEET_PER_METRE * FEET_PER_METRE;
 const SQFT_PER_ACRE = 43_560;
 const FEET_PER_MILE = 5_280;
@@ -107,8 +108,16 @@ export function displayDecimals(
 ): number {
   const abs = Math.abs(displayValue);
   if (!(abs > 0) || !Number.isFinite(abs)) return minDecimals;
+  // Band on the value as it will be PRINTED, not on the raw float. An exact
+  // 10 ft span round-tripped through a foot CRS arrives as 9.999999999999998,
+  // one ulp below the decade, and banding on that raw value awarded a sixth
+  // significant digit ("10.0000 ft") — more precision than the policy allows.
+  // Rounding to the policy's own figure count first puts a value that PRINTS
+  // as 10.000 in the same band as 10, whichever side of the decade the float
+  // landed on.
+  const banded = Math.abs(Number(abs.toPrecision(DISPLAY_SIG_FIGS)));
   // leadingPlace: 0 for 1–9.99, 1 for 10–99.99, −1 for 0.1–0.99, …
-  const leadingPlace = Math.floor(Math.log10(abs));
+  const leadingPlace = Math.floor(Math.log10(banded));
   const forSigFigs = DISPLAY_SIG_FIGS - 1 - leadingPlace;
   return Math.min(maxDecimals, Math.max(minDecimals, forSigFigs));
 }
