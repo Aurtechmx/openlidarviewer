@@ -8,35 +8,8 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { FakeEl } from './support/objectPanelDom';
 
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly classList = { toggle(): void { /* no-op */ } };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void { this.children.push(...kids); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
-  addEventListener(): void { /* no-op */ }
-  /** Recursively collect every descendant whose textContent equals `label`. */
-  findByText(label: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this._text === label) out.push(this);
-    for (const c of this.children) out.push(...c.findByText(label));
-    return out;
-  }
-}
 
 beforeAll(() => {
   (globalThis as unknown as { document: unknown }).document = {

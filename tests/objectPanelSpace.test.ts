@@ -9,29 +9,9 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { FakeEl } from './support/objectPanelDom';
 
 /** A tiny fake element supporting only the surface ObjectPanel touches. */
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly classList = { toggle(): void { /* no-op */ } };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void { this.children.push(...kids); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
-  addEventListener(): void { /* no-op */ }
-}
 
 /** Depth-first flatten of a FakeEl tree (self included). */
 function flatten(root: FakeEl, acc: FakeEl[] = []): FakeEl[] {
