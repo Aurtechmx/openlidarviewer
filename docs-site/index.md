@@ -8,7 +8,7 @@ hero:
   actions:
     - theme: brand
       text: Open the viewer
-      link: https://lidar.aurtech.mx/
+      link: https://app.openlidarviewer.org/
     - theme: alt
       text: Quickstart
       link: /guide/

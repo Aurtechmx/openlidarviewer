@@ -59,6 +59,18 @@ statically imported today, and that is a refactor rather than a tuning step.
 lint holds both at exactly those counts, so neither can grow; a change that adds
 to one has to take the same amount back out.
 
+## Multi-layer mounting is enabled, with a precision refinement outstanding
+
+Physical multi-layer mounting ships enabled. Two georeferenced layers declaring
+the same projected CRS mount into one shared project frame at their real
+separation, non-destructively, and each boundary recovers the world coordinate
+in the frame it names. One item is a precision refinement rather than a
+correctness defect: for far-apart mounts the renderer should fold `renderOrigin`
+out on the CPU per mesh so the Float32 residual on the GPU stays small. The
+mount-precision gate refuses a placement past 1 mm, so one that cannot hold a
+millimetre never mounts. Incompatible layers carry no placement and stay in
+their own frame.
+
 ## No cross-CRS reprojection
 
 Unchanged from prior releases. Scans must share a coordinate reference system to

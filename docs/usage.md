@@ -2,7 +2,7 @@
 
 How to open, navigate, measure, annotate, inspect, and export a scan. To try
 it without installing anything, open the live version at
-<https://lidar.aurtech.mx/>.
+<https://app.openlidarviewer.org/>.
 
 ## Opening a scan
 

@@ -3,10 +3,11 @@
 # surfaces, builds the VitePress site (which first re-renders the claim
 # register from its YAML), verifies the publish allowlist, and deploys.
 #
-# The site is built for the project-pages subpath
-# (https://aurtechmx.github.io/openlidarviewer/). To serve it from a docs
-# subdomain instead (e.g. docs.aurtech.mx with a CNAME), set DOCS_BASE=/ on
-# the build step — the base default lives in docs-site/.vitepress/config.mts.
+# The site is the canonical project site at https://openlidarviewer.org/, served
+# from the apex. docs-site/public/CNAME is what tells Pages to answer on that
+# name, and the base is '/' by default. To build for a subpath instead (a
+# preview, or a move back to project pages), set DOCS_BASE on the build step —
+# the default lives in docs-site/.vitepress/config.mts.
 name: Docs
 
 on:

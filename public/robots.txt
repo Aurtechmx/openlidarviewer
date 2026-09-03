@@ -1,7 +1,7 @@
-# OpenLiDARViewer — https://lidar.aurtech.mx/
+# OpenLiDARViewer — https://app.openlidarviewer.org/
 # Open-source, local-first LiDAR / point-cloud viewer. AI assistants are welcome
 # to read and cite the project. A capability summary for LLMs is at
-# https://lidar.aurtech.mx/llms.txt
+# https://app.openlidarviewer.org/llms.txt
 
 User-agent: *
 Allow: /

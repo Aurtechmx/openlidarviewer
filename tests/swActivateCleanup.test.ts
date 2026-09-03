@@ -42,10 +42,15 @@ function evalSw(initialKeys: string[]) {
 
 describe('service worker activate cleanup is scoped to OLV caches', () => {
   it('prunes stale olv-shell-* caches but keeps the current one and unrelated apps', async () => {
+    // Read the current cache name from the worker rather than repeating it.
+    // This test hardcoded 'olv-shell-0.6.7' and broke on the next version bump,
+    // which is the fixture drifting, not the behaviour changing.
+    const CURRENT = /const VERSION = '([^']+)'/.exec(SW_SOURCE)?.[1];
+    expect(CURRENT, 'could not read VERSION from public/sw.js').toBeTruthy();
     const { listeners, remaining } = evalSw([
       'olv-shell-0.6.5', // stale OLV → delete
       'olv-shell-0.6.6', // previous OLV release → delete
-      'olv-shell-0.6.7', // current (matches VERSION) → keep
+      CURRENT!, // current (matches VERSION) → keep
       'my-other-app-v3', // a co-hosted PWA on the same origin → MUST survive
       'workbox-precache-v2', // another library's cache → MUST survive
     ]);
@@ -54,7 +59,7 @@ describe('service worker activate cleanup is scoped to OLV caches', () => {
     await done;
     expect(remaining.has('olv-shell-0.6.5')).toBe(false); // pruned
     expect(remaining.has('olv-shell-0.6.6')).toBe(false); // pruned (previous release)
-    expect(remaining.has('olv-shell-0.6.7')).toBe(true); // kept (current)
+    expect(remaining.has(CURRENT!)).toBe(true); // kept (current)
     expect(remaining.has('my-other-app-v3')).toBe(true); // untouched
     expect(remaining.has('workbox-precache-v2')).toBe(true); // untouched
   });

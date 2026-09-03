@@ -29,7 +29,7 @@
     },
     {
       "relation": "isDescribedBy",
-      "identifier": "https://lidar.aurtech.mx/",
+      "identifier": "https://openlidarviewer.org/",
       "resource_type": "other"
     },
     {

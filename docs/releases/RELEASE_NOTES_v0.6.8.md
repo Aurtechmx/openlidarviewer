@@ -95,6 +95,24 @@ tested but not wired into a user path, and are registered as unreachable rather
 than described as delivered. Touch gestures are verified on Chromium only.
 `KNOWN_LIMITATIONS_v0.6.8.md` carries the full list.
 
+## The project has its own domain
+
+OpenLiDARViewer is now at its own name rather than under a company subdomain.
+
+- Project and documentation: <https://openlidarviewer.org/>
+- Live viewer: <https://app.openlidarviewer.org/>
+- Source: <https://github.com/Aurtechmx/openlidarviewer>
+
+`lidar.aurtech.mx` keeps working. It answers with a permanent redirect to the
+new application host, carrying the path and query across, so a deep link
+published in an earlier release, a Zenodo record or a paper still resolves.
+
+Release notes, evidence records and manifests from earlier versions still name
+the host they shipped with. Those are statements about what was true at the
+time, and rewriting them would make the record dishonest, so they are left
+alone. A lint holds the current metadata together and exempts the historical
+paths by name.
+
 ## Licensing
 
 Unchanged from v0.6.7: OpenLiDARViewer is distributed under AGPL-3.0-only.

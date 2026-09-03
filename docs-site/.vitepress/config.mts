@@ -89,11 +89,11 @@ export default defineConfig({
   title: 'OpenLiDARViewer',
   description: pkg.description,
 
-  // Project-pages subpath (https://aurtechmx.github.io/openlidarviewer/).
-  // If the site later moves to its own docs subdomain (e.g. docs.aurtech.mx
-  // via a CNAME on the Pages branch), set DOCS_BASE=/ in the docs workflow —
-  // nothing else changes.
-  base: process.env.DOCS_BASE ?? '/openlidarviewer/',
+  // The docs are the canonical project site at https://openlidarviewer.org/,
+  // served from the apex, so the base is the root rather than the old
+  // project-pages subpath. docs-site/public/CNAME is what tells GitHub Pages to
+  // answer on that name; DOCS_BASE still overrides for a subpath preview.
+  base: process.env.DOCS_BASE ?? '/',
 
   // The canonical documents also link to files that exist only in the
   // repository (source files, the developer manual, other unpublished docs).
