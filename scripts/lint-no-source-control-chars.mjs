@@ -38,7 +38,7 @@ const GIT = requireBinaryOnPath('git');
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Extensions this repository ships as readable source. */
-const SOURCE_EXTENSIONS = ['.ts', '.mjs', '.js', '.json', '.md', '.css', '.html', '.yml'];
+const SOURCE_EXTENSIONS = ['.ts', '.mjs', '.js', '.json', '.md', '.css', '.html', '.yml', '.yaml', '.py', '.sh'];
 
 /** Directories a filesystem walk must not enter: never tracked, or generated. */
 const WALK_SKIP = new Set([
@@ -57,9 +57,7 @@ const WALK_SKIP = new Set([
  * Files that describe the byte rather than contain one.
  *
  * This file names the range it rejects, and it does so in prose and in code,
- * so it must not be read as a finding against itself.
  */
-const DESCRIBES_THE_PATTERN = new Set(['scripts/lint-no-source-control-chars.mjs']);
 
 /** True when a byte is a C0 control other than tab, LF or CR. */
 function isForbidden(byte) {
@@ -132,7 +130,6 @@ const problems = [];
 let scanned = 0;
 for (const file of trackedFiles()) {
   if (!isSourceFile(file)) continue;
-  if (DESCRIBES_THE_PATTERN.has(file)) continue;
   scanned += 1;
   for (const hit of findings(file)) {
     const hex = `0x${hit.byte.toString(16).padStart(2, '0').toUpperCase()}`;

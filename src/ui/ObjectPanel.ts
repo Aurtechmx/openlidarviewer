@@ -20,6 +20,7 @@ import {
   ANGULAR_COVERAGE_HINT,
   OBJECT_ENVELOPE_VOLUME_HINT,
   OBJECT_SURFACE_AREA_HINT,
+  OBJECT_ORIENTED_UNVALIDATED_HINT,
 } from '../terrain/objectMetrics';
 import type { SpaceMetrics } from '../terrain/spaceMetrics';
 import {
@@ -613,8 +614,8 @@ export class ObjectPanel {
     this._body.append(
       this._row('Dimensions (oriented)', f.triple(o.lengthM, o.widthM, o.heightM),
         `${f.tripleHint(o.lengthM, o.widthM, o.heightM)}tight box from the object’s own principal axes.`),
-      this._row('Largest dimension', f.len(metrics.longestDimensionM),
-        'Longest side of the oriented box — the headline size figure.'),
+      this._row('Largest dimension (unvalidated)', f.len(metrics.longestDimensionM),
+        OBJECT_ORIENTED_UNVALIDATED_HINT),
       this._row('Axis-aligned', f.triple(a.lengthM, a.widthM, a.heightM),
         `${f.tripleHint(a.lengthM, a.widthM, a.heightM)}box aligned to the scan axes.`),
       this._row('Envelope volume', f.volFine(metrics.envelopeVolumeM3),

@@ -70,6 +70,19 @@ export const ANGULAR_COVERAGE_HINT =
   'only part of the sphere however completely it was captured.';
 
 /** Kept verbatim from the panel: the envelope volume is not a solid volume. */
+/**
+ * The oriented box is fitted by PCA, which on a broadly flat or symmetric point
+ * set drifts toward the footprint diagonal: on a square survey tile its longest
+ * side reads about a quarter over the tile's true extent while its shortest
+ * reads under. spaceMetrics abandoned this estimator for its own dimensions for
+ * that reason; the object path still uses it, so the figure is labelled
+ * unvalidated rather than presented as a measurement.
+ */
+export const OBJECT_ORIENTED_UNVALIDATED_HINT =
+  'Longest side of the oriented box, the headline size figure. The box is fitted '
+  + 'by principal axes, which drift toward the diagonal on flat or symmetric point '
+  + 'sets, so treat this as an unvalidated estimate rather than a measured extent.';
+
 export const OBJECT_ENVELOPE_VOLUME_HINT =
   'Bounding envelope — not a solid volume. A point cloud has no watertight interior.';
 
