@@ -69,6 +69,8 @@ jobs:
         run: npm run lint:no-tracked-ignored
       - name: No tracked file names the build machine
         run: npm run lint:no-host-paths
+      - name: No source file embeds a raw control byte
+        run: npm run lint:no-source-control-chars
       - name: Generated claim registry is committed (regenerate → no diff)
         run: npm run gen:claim-registry && git diff --exit-code
       - name: Bucket partition integrity (every test file in exactly one bucket)
