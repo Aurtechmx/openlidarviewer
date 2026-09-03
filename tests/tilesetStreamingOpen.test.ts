@@ -62,6 +62,7 @@ function deps(doc = DOC) {
         setReport,
         setStreamingMode: vi.fn(),
         setDetail: vi.fn(),
+        setStreamingDetail: vi.fn(),
         element: { classList: { remove: vi.fn(), add: vi.fn() } },
       },
       classLegendPanel: {
@@ -315,10 +316,23 @@ describe('controls a tileset cannot support are not presented', () => {
   it('never prints a point count the format does not state', async () => {
     // `inspector.setDetail(n, n)` renders "N / N points" with a percentage bar.
     // A tileset states no total, so both arguments would be null: the bar reads
-    // 100% and the text is a figure nothing measured. COPC and EPT call it
-    // because they declare a total; this path must not.
+    // 100% and the text is a figure nothing measured. The static seam means a
+    // fully held cloud, so no streaming open reaches it.
     const t = await opened();
     expect(t.d.inspector.setDetail).not.toHaveBeenCalled();
+  });
+
+  it('states the resident count and that the source declares no total', async () => {
+    // Silence was leaving whichever streaming scan opened before this one in
+    // the Detail readout, its point total included. An undeclared total has to
+    // be published as undeclared, which is what clears the previous figure.
+    const t = await opened();
+    const calls = (t.d.inspector.setStreamingDetail as unknown as {
+      mock: { calls: { 0: { sourcePointCount: number | null; sourcePointCountKnown: boolean } }[] };
+    }).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0][0].sourcePointCount).toBeNull();
+    expect(calls[0][0].sourcePointCountKnown).toBe(false);
   });
 
   it('does not push a density and coverage card built from a total of zero', async () => {

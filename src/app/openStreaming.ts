@@ -230,6 +230,43 @@ export function activateCommittedStreamingCloud(
 }
 
 /**
+ * Publish the Inspector's Detail readout for a streaming source.
+ *
+ * Every streaming open used to write this row itself as
+ * `setDetail(sourcePointCount, sourcePointCount)` — the SOURCE total in both
+ * the "shown" and the "total" position of a seam whose meaning is "part of a
+ * cloud the viewer holds". An 89.6 M point COPC therefore read
+ * "89.6M / 89.6M points" at 100 % from the first frame, over a scene holding a
+ * few million points, and the 3D Tiles open had no honest way to fill it at all
+ * so it wrote nothing and left the previous scan's figure standing.
+ *
+ * One helper, taking the counts the SOURCE states about itself, so the four
+ * opens and the status tick cannot drift into four different readings. The
+ * declaration flag is derived here, in the one place that knows the contract:
+ * `StreamingSource.sourcePointCount` is `null` exactly when the source cannot
+ * state a total, and null is never coerced to zero.
+ *
+ * Wrapped in try/catch like the other Inspector publishes on these paths: the
+ * readout is one row, and a throw in it must not cost the scan report, the
+ * Analyse rail or the status poll that follow.
+ */
+export function publishStreamingDetail(
+  inspector: Pick<Inspector, 'setStreamingDetail'>,
+  counts: { readonly residentPointCount: number; readonly sourcePointCount: number | null },
+  debug = false,
+): void {
+  try {
+    inspector.setStreamingDetail({
+      residentPointCount: counts.residentPointCount,
+      sourcePointCount: counts.sourcePointCount,
+      sourcePointCountKnown: counts.sourcePointCount !== null,
+    });
+  } catch (err) {
+    if (debug) console.warn('[inspector] setStreamingDetail threw', err);
+  }
+}
+
+/**
  * Switch the Inspector and the Export panel into STREAMING layout and open the
  * image-export gate for the freshly attached cloud.
  *
@@ -573,8 +610,7 @@ export async function openStreamingCopc(
   // classification, so those buttons stay dark at the source. Shared with the
   // EPT and tileset opens.
   enterStreamingInspectorMode(deps, viewer.availableImageExportModes());
-  try { deps.inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
-  catch (err) { if (deps.debug) console.warn('[inspector] setDetail (streaming) threw', err); }
+  publishStreamingDetail(deps.inspector, cloud, deps.debug);
   deps.setLastStreamingReportCloud(cloud);
   try { deps.inspector.setReport(deps.runStreamingModules(cloud, deps.classLegendPanel.getVisibility().isFiltered())); }
   catch (err) { if (deps.debug) console.warn('[inspector] setReport (streaming) threw', err); }
@@ -854,8 +890,7 @@ export async function handleRemoteEpt(
     // Per-mode gating comes off the live viewer — EPT streams almost never
     // carry normals.
     enterStreamingInspectorMode(deps, viewer.availableImageExportModes());
-    try { deps.inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
-    catch (err) { if (deps.debug) console.warn('[inspector] setDetail (streaming) threw', err); }
+    publishStreamingDetail(deps.inspector, cloud, deps.debug);
     try {
       // Shape-adapt the EPT cloud's metadata for the streaming-report
       // synthesizer. EPT's bounds live on `detection.metadata.bounds`;

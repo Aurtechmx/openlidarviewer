@@ -55,6 +55,7 @@ import { revealStreamingScanChrome } from '../ui/streamingScanReveal';
 import {
   activateCommittedStreamingCloud,
   enterStreamingInspectorMode,
+  publishStreamingDetail,
   resetClassificationUi,
   type OpenStreamingDeps,
   type StreamingReportInput,
@@ -669,9 +670,11 @@ async function attachStreamingScan(
  *    nodes become resident), NOT the inapplicable-hidden tileset case.
  *  - the streaming Inspector / Export layout and the image-export gate
  *    (`enterStreamingInspectorMode`), off the live viewer's availability.
- *  - `inspector.setDetail` and the streaming Scan Report with the REAL total:
- *    the store states its tile total, so both show a measured count rather than
- *    the tileset's "not stated by the source".
+ *  - the Inspector's streaming Detail readout and the Scan Report with the REAL
+ *    total: the store states its tile total, so both show a measured count
+ *    rather than the tileset's "not stated by the source". The readout states
+ *    it as the SOURCE figure against the separately-counted resident set, not
+ *    as the number of points on the GPU.
  *  - `activateCommittedStreamingCloud` (usage, provenance, CRS), the Analyse
  *    rail, the export pre-warm, a fresh saved-views list, the status poll.
  *
@@ -695,11 +698,7 @@ function revealHeavyStreamingSurfaces(source: OlvTileSource, s: OpenStreamingDep
   resetClassificationUi(s);
   enterStreamingInspectorMode(s, viewer.availableImageExportModes());
 
-  try {
-    s.inspector.setDetail(source.sourcePointCount, source.sourcePointCount);
-  } catch (err) {
-    if (s.debug) console.warn('[inspector] setDetail (heavy) threw', err);
-  }
+  publishStreamingDetail(s.inspector, source, s.debug);
   const reportCloud: StreamingReportInput = {
     kind: source.kind,
     name: source.name,
