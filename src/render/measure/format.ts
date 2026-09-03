@@ -13,6 +13,8 @@
  */
 
 import type { UnitSystem } from './types';
+// Metres → feet, single-sourced: this module used to keep its own copy.
+import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 
 /**
  * The measurement stack's honest limitation on a GEOGRAPHIC (degree) CRS.
@@ -63,7 +65,6 @@ export const DATUM_CONFLICT_MEASURE_NOTICE =
   'gain/loss are unaffected; absolute values are not elevations. Load the ' +
   'clouds one at a time to read true elevations.';
 
-const FEET_PER_METRE = 3.280839895013123;
 const SQFT_PER_SQM = FEET_PER_METRE * FEET_PER_METRE;
 const SQFT_PER_ACRE = 43_560;
 const FEET_PER_MILE = 5_280;

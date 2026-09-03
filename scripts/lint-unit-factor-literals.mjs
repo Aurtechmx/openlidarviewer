@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 /**
  * lint-unit-factor-literals.mjs — a unit conversion factor must be imported
- * from `src/units/units.ts`, never written as a rounded literal.
+ * from `src/units/units.ts`, never written as a numeric literal.
  *
- * The Measure panel and the report measurement section each declared their own
- * `3.28084` while `spaceMetrics` and the space-report PDF converted through the
- * exact `0.3048`, so one length converted two different ways depending on the
- * surface. Nothing caught it: the unit tests read the shared constant, which
- * was correct, and never the literal the panel actually multiplied by.
+ * The Measure panel and the report section each declared a rounded 3.28084
+ * while three profile/format modules kept their own 16-digit
+ * `FEET_PER_METRE`, and `spaceMetrics` converted through the exact 0.3048.
+ * Six declarations of one constant, two of them spelled differently enough
+ * that a pattern written for one could not see the others.
+ *
+ * So this lint compares VALUES, not spellings: every decimal literal in
+ * source is parsed and measured against the factors the units module owns.
+ * A rule that matched text would keep missing the next spelling, which is how
+ * the first version of this file passed green with three offenders in tree.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
@@ -18,16 +23,32 @@ const SRC = join(ROOT, 'src');
 const UNITS = join('src', 'units', 'units.ts');
 
 /**
- * Rounded spellings of factors whose exact form the units module owns. The
- * exact forms (0.3048, 1200/3937) stay legal: they ARE the definition, and
- * parsers legitimately compare a CRS scale against them.
+ * Derived factors the units module exports. The DEFINITIONS (0.3048 and
+ * 1200/3937) stay legal everywhere: they are what a CRS scale is compared
+ * against, and writing one is not a duplicated conversion.
  */
-const BANNED = [
-  { pattern: /\b3\.28084\b/, exact: 'FT_PER_M', of: 'metres → feet' },
-  { pattern: /\b3\.280839?\b/, exact: 'FT_PER_M', of: 'metres → feet' },
-  { pattern: /\b57\.29578\b/, exact: 'UNIT_FACTORS.DEG_PER_RAD', of: 'radians → degrees' },
-  { pattern: /\b0\.0174533\b/, exact: 'UNIT_FACTORS.DEG_PER_RAD', of: 'degrees → radians' },
+const OWNED = [
+  { value: 1 / 0.3048, importAs: 'FT_PER_M', of: 'metres → feet' },
+  { value: 180 / Math.PI, importAs: 'UNIT_FACTORS.DEG_PER_RAD', of: 'radians → degrees' },
+  { value: Math.PI / 180, importAs: 'degToRad', of: 'degrees → radians' },
 ];
+
+/** Within 0.1 %: catches every spelling from five significant digits up. */
+const TOLERANCE = 1e-3;
+
+/**
+ * Blank out comments AND string literals while preserving line numbers. Prose
+ * must not fail the gate, and a number inside a string is not a conversion —
+ * an EPSG WKT block quotes `UNIT["degree",0.0174532925199433,…]` as data.
+ */
+function stripNonCode(text) {
+  let out = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+  out = out.replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+  out = out.replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (m) =>
+    m.replace(/[^\n]/g, ' '),
+  );
+  return out;
+}
 
 function walk(dir, acc = []) {
   for (const name of readdirSync(dir)) {
@@ -44,21 +65,27 @@ for (const file of walk(SRC)) {
   const rel = relative(ROOT, file);
   if (rel === UNITS) continue;
   scanned += 1;
-  const lines = readFileSync(file, 'utf8').split('\n');
-  lines.forEach((line, i) => {
-    // A comment may name a rounded factor to explain one; only code counts.
-    const code = line.replace(/\/\/.*$/, '').replace(/\/\*[\s\S]*?\*\//g, '');
-    for (const { pattern, exact, of } of BANNED) {
-      if (pattern.test(code)) {
-        failures.push(`${rel}:${i + 1} — rounded ${of} factor; import ${exact} from units/units instead\n    ${line.trim()}`);
+  const raw = readFileSync(file, 'utf8');
+  const lines = stripNonCode(raw).split('\n');
+  lines.forEach((code, i) => {
+    for (const m of code.matchAll(/\b\d+\.\d+\b/g)) {
+      const n = Number(m[0]);
+      if (!Number.isFinite(n)) continue;
+      for (const { value, importAs, of } of OWNED) {
+        if (Math.abs(n - value) / value < TOLERANCE) {
+          failures.push(
+            `${rel}:${i + 1} — ${m[0]} is the ${of} factor; import ${importAs} from units/units\n` +
+              `      ${raw.split('\n')[i].trim()}`,
+          );
+        }
       }
     }
   });
 }
 
 if (failures.length > 0) {
-  console.error(`lint:unit-factor-literals FAILED — ${failures.length} rounded conversion factor(s):\n`);
+  console.error(`lint:unit-factor-literals FAILED — ${failures.length} inlined conversion factor(s):\n`);
   for (const f of failures) console.error(`  ${f}`);
   process.exit(1);
 }
-console.log(`lint:unit-factor-literals OK — ${scanned} files, no rounded conversion factors.`);
+console.log(`lint:unit-factor-literals OK — ${scanned} files, no inlined conversion factors.`);

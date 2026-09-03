@@ -23,8 +23,10 @@ describe('metre→foot factor is single-sourced and exact', () => {
     expect(FT_PER_M).not.toBe(3.28084);
   });
 
-  it('no source file redeclares the rounded literal', () => {
-    const offenders = SURFACES.filter((f) => readFileSync(f, 'utf8').includes('3.28084'));
+  it('no surface redeclares the factor, in any spelling', () => {
+    // Spellings matter: a pattern written for 3.28084 could not see
+    // 3.280839895013123, which is how three offenders survived the first gate.
+    const offenders = SURFACES.filter((f) => /=\s*3\.2808\d*/.test(readFileSync(f, 'utf8')));
     expect(offenders).toEqual([]);
   });
 
@@ -58,8 +60,16 @@ describe('metre→foot factor is single-sourced and exact', () => {
   });
 });
 
+/**
+ * Every surface that converts metres to feet. Six of these each declared the
+ * factor themselves: two as a rounded 3.28084, three as a 16-digit
+ * FEET_PER_METRE, one as its own 1/0.3048.
+ */
 const SURFACES = [
   'src/ui/MeasurePanel.ts',
   'src/report/ReportMeasurementSection.ts',
   'src/terrain/spaceMetrics.ts',
+  'src/render/measure/format.ts',
+  'src/render/measure/profilePdf.ts',
+  'src/render/measure/profileSummary.ts',
 ];

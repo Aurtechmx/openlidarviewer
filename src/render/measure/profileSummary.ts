@@ -28,8 +28,9 @@ import { formatElevation, formatLength } from './format';
 // number differently.
 import { heightLabel } from '../../geo/height';
 import type { VerticalReference } from '../../geo/height';
+// Metres → feet, single-sourced: this module used to keep its own copy.
+import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 
-const FEET_PER_METRE = 3.280839895013123;
 
 /** A located elevation extreme along the section. */
 export interface ProfileExtreme {
