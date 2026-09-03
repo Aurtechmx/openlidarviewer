@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { FakeEl, allTitles } from './support/objectPanelDom';
 import { readFileSync } from 'node:fs';
 import { objectMetrics } from '../src/terrain/objectMetrics';
 import { resolveLinearUnitScale, spaceMetrics } from '../src/terrain/spaceMetrics';
@@ -67,34 +68,7 @@ describe('object metrics are normalised to metres before measuring', () => {
 });
 
 // ── The panel must not print a metre claim it cannot support ────────────────
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly classList = { toggle(): void { /* no-op */ }, remove(): void { /* no-op */ } };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void { this.children.push(...kids); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
-  addEventListener(): void { /* no-op */ }
-}
 
-/** Every title/hint string in the rendered tree, joined. */
-function allTitles(root: FakeEl, acc: string[] = []): string[] {
-  if (root.title) acc.push(root.title);
-  for (const c of root.children) allTitles(c, acc);
-  return acc;
-}
 
 beforeAll(() => {
   (globalThis as unknown as { document: unknown }).document = {
