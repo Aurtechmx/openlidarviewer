@@ -8,6 +8,7 @@ import { isZUpFormat } from '../../io/sniffFormat';
 import { heightLabel } from '../../geo/height';
 import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
 import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
+import { displaySample, DISPLAY_SAMPLE_DENSITY_BASIS } from '../../model/displaySample';
 
 function rowInfo(label: string, value: string): AnalysisRow {
   return { label, value, status: 'info' };
@@ -150,32 +151,28 @@ export const scanReport: AnalysisModule = {
     // `sampled`: the file holds more points than the buffer, whatever the
     // scope. `strided`: the unfiltered report back-scales density/spacing to
     // the declared total (a class subset keeps the decoded basis).
-    const sampled = declaredN !== undefined && declaredN > totalN;
+    //
+    // Don't hide the sampling: name the subset actually held in memory AND
+    // every reduction that produced it, so the header count, the Health
+    // Check's decoded count and this row reconcile in one sentence. The
+    // sentence itself lives in `model/displaySample`, because the exported PDF
+    // has to state the same reduction and two hand-written versions of it
+    // drift apart.
+    const sample = displaySample(cloud);
+    const sampled = sample !== null;
     const strided = subset === null && sampled;
     const reportedN = strided ? (declaredN as number) : n;
 
-    if (sampled) {
+    if (sample) {
       // The file's count is a whole-file fact: it does not change with the
       // class scope, so it carries no scope stamp, and it stays on the panel
       // when a class is solo'd — otherwise a filtered report reads its visible
       // sample count as the file's total and the sampling disappears with it.
       rows.push(rowInfo('Point Count', (declaredN as number).toLocaleString('en-US')));
-      // Don't hide the sampling: name the subset actually held in memory AND
-      // every reduction that produced it, so the header count, the Health
-      // Check's decoded count and this row reconcile in one sentence. A
-      // voxel-reduced buffer holds one averaged centroid per occupied voxel.
-      const decoded = cloud.decodedPointCount;
-      const loaded = totalN.toLocaleString('en-US');
-      const how =
-        decoded !== undefined && decoded > totalN
-          ? `stride to ${decoded.toLocaleString('en-US')}, then voxel-reduced to ${loaded} centroids`
-          : cloud.loadStride !== undefined && cloud.loadStride > 1
-            ? `1-in-${cloud.loadStride} stride`
-            : 'stride';
-      rows.push(rowInfo('Loaded', `${loaded} (display sample: ${how})`));
+      rows.push(rowInfo('Loaded', sample.value));
       if (subset !== null) {
         rows.push(
-          withScope(rowInfo('Visible', `${n.toLocaleString('en-US')} of the ${loaded}-point display sample`), scope),
+          withScope(rowInfo('Visible', `${n.toLocaleString('en-US')} of the ${sample.loaded}-point display sample`), scope),
         );
       }
     } else {
@@ -224,7 +221,7 @@ export const scanReport: AnalysisModule = {
     // Both figures are nominal averages (count ÷ footprint), and on a strided
     // load they mix bases — the header's count over the SAMPLE's footprint —
     // so the row says so rather than reading as a measured density.
-    const mixedBasis = strided ? ' (mean: declared count over the display-sample footprint)' : '';
+    const mixedBasis = strided ? DISPLAY_SAMPLE_DENSITY_BASIS : '';
     if (footprintArea <= 0 || reportedN === 0) {
       rows.push(withScope(rowWarn('Density', 'N/A (degenerate footprint)'), scope));
     } else {

@@ -48,6 +48,7 @@ import type { ScanService } from './ScanService';
 import type { loadReportEngine } from '../lazyChunks';
 import { streamingFormatToken } from '../render/streaming/StreamingSource';
 import { classificationCoverage } from '../render/class/classificationCoverage';
+import { displaySample } from '../model/displaySample';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure decisions the extraction exposes — decidable without a Viewer, the report
@@ -314,6 +315,14 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // FILE — use the declared total (and the density that follows from it) when
     // striding reduced the in-memory count, matching the Scan Report panel.
     const fileN = reportPointCount(staticCloud.declaredPointCount, staticCloud.pointCount);
+    // The reader has to be told, because the file-scale count and the
+    // sample-scale geometry land on the same page. `bounds()` above spans the
+    // IN-MEMORY buffer, so the extents describe the display sample and the
+    // density below divides `fileN` by that sample's footprint. The streaming
+    // path discloses its own partial decode through `streamingResident`; this
+    // is the static twin, and it borrows the Scan Report panel's sentence so
+    // the panel and the PDF cannot name one reduction two ways.
+    const sample = displaySample(staticCloud);
     // Same one-context rule as the streaming path above — RESOLVED active CRS,
     // not the file's declared metadata, so an override drives the report's units.
     // Footprint + density in metres / pts·m⁻² (see reportFootprint): a foot-CRS
@@ -341,6 +350,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,
       ...classificationShare(staticCloud),
+      ...(sample ? { displaySampleNote: sample.value } : {}),
       ...(activeCrsLabel ? { crsName: activeCrsLabel, crsUnit: activeCrs?.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.

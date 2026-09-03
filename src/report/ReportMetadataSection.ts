@@ -11,6 +11,10 @@
  */
 
 import type { ReportDatasetRow } from './types';
+import {
+  DISPLAY_SAMPLE_DENSITY_BASIS,
+  DISPLAY_SAMPLE_EXTENT_BASIS,
+} from '../model/displaySample';
 
 /** What `buildDatasetSummary` needs to know about the scan. */
 export interface MetadataInputs {
@@ -80,7 +84,27 @@ export interface MetadataInputs {
     /** Total known octree nodes in the hierarchy. */
     readonly totalNodes: number;
   };
+  /**
+   * Display-sample disclosure for a STATIC cloud the loader reduced: the
+   * streaming block's counterpart, and needed for the same reason. A strided
+   * LAZ reaches this section with the FILE's declared total in
+   * `sourcePointCount` and the SAMPLE's bounding box in `width`/`depth`/
+   * `height`, because `PointCloud.bounds()` spans the in-memory buffer.
+   * `density` is therefore the declared count over the sample's footprint, a
+   * mixed basis.
+   *
+   * The value is the Scan Report panel's own "Loaded" row, built by
+   * `model/displaySample` so the panel and the PDF state one reduction in one
+   * sentence. When set, the summary adds that row below the file total and
+   * qualifies the rows the sample's geometry produced. Absent whenever the
+   * buffer holds every declared point, which keeps a fully-loaded scan's row
+   * list byte-identical to before.
+   */
+  readonly displaySampleNote?: string;
 }
+
+/** Rows whose value comes out of the cloud's bounding box. */
+const EXTENT_LABELS: ReadonlySet<string> = new Set(['Width', 'Depth', 'Height']);
 
 /** Format a metre value: km / m / cm depending on magnitude. */
 function formatMetres(m: number): string {
@@ -191,6 +215,14 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
           : `${formatCompactCount(sr.points)} of ${formatCompactCount(total)} pts${pctPart} — streaming preview`,
     });
   }
+  // Display-sample disclosure for a static load, the streaming row's static
+  // twin. Reads directly below the full-file "Points" total for the same reason
+  // that one does, and in the Scan Report panel's own words, so two surfaces
+  // describing one scan cannot describe two different reductions.
+  const sampleNote = inputs.displaySampleNote?.trim();
+  if (sampleNote) {
+    rows.push({ label: 'Loaded', value: sampleNote });
+  }
   // FAIL CLOSED on an unconfirmed linear unit. When the CRS declares no real
   // linear unit the extents are raw source-unit spans, not metres — a warning
   // row discloses that, the extents carry a "(source units)" suffix instead of
@@ -211,10 +243,24 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
       { label: 'Height', value: formatMetres(inputs.height) },
     );
   }
+  // The extents above span the display sample's bounding box, not the file's.
+  // Applied after the unit branches rather than inside them: the unit decision
+  // and the sampling decision are independent, and each row states both.
+  if (sampleNote) {
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]!;
+      if (!EXTENT_LABELS.has(r.label)) continue;
+      rows[i] = { label: r.label, value: `${r.value}${DISPLAY_SAMPLE_EXTENT_BASIS}` };
+    }
+  }
   if (Number.isFinite(inputs.density) && inputs.density > 0) {
     // One decimal — same as the Inspection-summary finding and the on-screen
     // panel. Integer rounding printed 2.586 as "3", disagreeing with them.
-    rows.push({ label: 'Density', value: `${inputs.density.toFixed(1)} pts/m²` });
+    // On a sampled load the figure divides the FILE's declared count by the
+    // SAMPLE's footprint, so it says so in the panel's words rather than
+    // reading as a measured density.
+    const basis = sampleNote ? DISPLAY_SAMPLE_DENSITY_BASIS : '';
+    rows.push({ label: 'Density', value: `${inputs.density.toFixed(1)} pts/m²${basis}` });
   }
   rows.push(
     { label: 'RGB',            value: inputs.hasRgb ? 'Yes' : 'No' },
