@@ -1,9 +1,10 @@
-# Dependency audit (v0.6.7)
+# Dependency audit (v0.6.8)
 
 This is the committed dependency baseline for OpenLiDARViewer, re-verified for
-v0.6.7 on 2026-08-28 (UTC) from the committed `package-lock.json`. The v0.6.7
-cycle added and removed no runtime or development package, so the resolved set
-below is unchanged from v0.6.3. It is a baseline, not
+v0.6.8 on 2026-09-03 (UTC) from the committed `package-lock.json`. The v0.6.8
+cycle added and removed no runtime package, and moved three: `@loaders.gl/core`
+4.4.4 to 4.4.5, `@loaders.gl/obj` 4.4.3 to 4.4.5 and `@loaders.gl/ply` 4.4.4 to
+4.4.5. The production set is 56 components either side. It is a baseline, not
 the per-release record: the exact commit, toolchain, and lockfile hash for a
 published release live in the release manifest and the exact-tag evidence
 attached to that release. A committed document cannot name the commit it ships
@@ -13,18 +14,19 @@ Since v0.6.0 the three bundled font packages moved from 5.2.8 to 5.3.0. No
 package was added or removed, and no other bundled package changed.
 
 The development toolchain moved after that baseline was taken: TypeScript to
-7.0.2, Vite to 8.2.1, and Playwright to 1.62.1. All three are development-only
-and none reaches the deployed app, so the runtime dependency set above is
-unaffected.
+7.0.2, Vite to 8.2.1, and Playwright to 1.62.1. The v0.6.8 cycle moved it again,
+most visibly Babel from 7 to 8 across the Stryker mutation tooling. None of it
+is development-only by accident: none reaches the deployed app, which is why the
+production component set above is unaffected by any of it.
 
 | Field | Value |
 |---|---|
-| Release line | v0.6.7 |
+| Release line | v0.6.8 |
 | Baseline date (UTC) | 2026-07-25 |
 | Canonical Node | 22.18.0 (`.nvmrc`) |
 | Canonical npm | 10.9.3 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.7`, 56 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.8`, 56 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](../../sbom.json). Licences are credited in

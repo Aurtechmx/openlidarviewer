@@ -2,6 +2,35 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.8] - 2026-09-03
+
+### Added
+
+- A heavy local file indexed into the Origin Private File System is found again on reopen instead of rebuilt. The cache is keyed by a whole-file SHA-256, so an edited file is a miss and never a wrong hit; a cheaper locator only decides whether computing that digest is worth it. Eviction skips any store another tab holds open and refuses to act when liveness cannot be determined, and a janitor sweeps stores an earlier session abandoned.
+- Streaming reports readiness for the current view rather than the whole source, orders within-level refinement toward the centre of the view, and compensates point size while coarse nodes stand in for fine ones.
+- A scientific artifact passport binds an exported product to its method, inputs and software. An evidence boundary inspector shows where a claim's support ends. The delivered DTM surface carries a SHA-256 of the surface itself, and contours export as a package with a DXF, a validation record and the Contour Studio settings.
+- A Scan QA report replaces the retired acceptance checklist, stating the coordinate-quality verdict, classification provenance, the attributes the cloud carries and what the report does not establish.
+- Derived analytical layers are listed in the Layers panel; hillshade can be styled with an elevation ramp; a coordinate readout follows the probe; the profile section filters its scatter by attribute and can draw its sample corridor in 3D; building and wire candidates open in a review surface; a findings ledger persists across a session.
+- 3D Tiles using REPLACE refinement render correctly, hiding a parent only once every child is resident, and the 1.1 `contents[]` array on a tile is read.
+
+### Changed
+
+- Scan output names the population each number describes. A strided load carries the declared count, the decoded subset and a smaller analysis gather, and rows across the Scan Report, the dataset card, the Analyse fitness summary and the terrain and technical PDFs previously stated a figure without saying which. Classification reports its measured unclassified share rather than a hardcoded zero, the dataset card reports the resident count labelled `display-sample` rather than the declared count labelled `full`, and "Captured" and "Capture Sensor" are now "File created" and "System identifier", which is what those header fields hold.
+- The canonical toolchain moves to Node 22.18.0 with npm 10.9.3, and the verifier reads the pin instead of a hardcoded version.
+
+### Fixed
+
+- Six modules each declared their own metre-to-foot factor, two of them rounded, so one length converted two ways depending on the surface that displayed it. A lint now compares conversion factors by value rather than by spelling.
+- Adaptive precision banded on the raw float, so a value one unit in the last place below a decade gained a spurious significant digit and an exact 10 ft span read `10.0000 ft`.
+- A focused resize grip resized its panel and orbited the camera at once, because the camera's focus guard recognised only input, textarea and select elements.
+- The reclassify lasso painted above the panels and swallowed clicks meant for them.
+- Object metrics measured in source units and labelled the result metres.
+- Two tabs indexing heavy files at once could drop each other's cache-map entries, leaving a promoted store on disk that nothing referenced.
+
+### Evidence
+
+- No product changed evidence level. The register holds 33 claims: 2 at E1, 5 at E2, 9 at E3 and 17 at E4, with none at E5. The E5 work this cycle registers the Rogue tiles, makes the dev and holdout split deterministic and exposure-honest, and recomputes manifest invariants. The holdout has not been run.
+
 ## [0.6.7] - 2026-08-29
 
 ### Licensing
