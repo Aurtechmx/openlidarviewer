@@ -120,7 +120,7 @@ import {
   type ScanTypeOverride,
 } from './terrain/scanRoute';
 import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
-import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
+import { spaceMetrics, resolveLinearUnitScale, positionsInMetres, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
@@ -3121,11 +3121,11 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       ? streamingCloud.availableColorModes().includes('rgb')
       : !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
     // Compute REAL metrics for the EFFECTIVE type — when forced, the report
-    // reflects what's actually there for that interpretation; nothing fabricated.
-    // The active scan's context, so a foot-based CRS reports honest metre/feet
-    // dimensions from the same object the terrain core reads.
+    // reflects what's actually there; nothing fabricated. The active scan's
+    // context makes a foot CRS report honest metre/feet dimensions.
     const spaceCtx = crsService.context();
     const unitToMetres = spaceCtx.linearUnitToMetres;
+    const objectScale = resolveLinearUnitScale(unitToMetres, spaceCtx.linearUnitKnown);
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
       spaceKind: effective === 'interior' ? 'interior' : 'object',
@@ -3138,12 +3138,12 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       residentOnly: gathered.residentOnly,
     });
     const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
-    // Same stride honesty as spaceMetrics above: the gather caps at 60 k, so
-    // the spacing probe must be corrected against the SCAN's resident count or
-    // the reported resolution describes the subsample (√(N/P) too coarse).
+    // Same stride honesty as spaceMetrics above (the gather caps at 60 k), and
+    // the SAME unit authority: a known foot CRS is scaled to metres before the
+    // measurement runs, while an unknown unit stays in the file's own units.
     const object =
       spaceKind === 'object'
-        ? objectMetrics(gathered.positions, { sourcePointCount: gathered.totalPoints })
+        ? objectMetrics(positionsInMetres(gathered.positions, objectScale), { sourcePointCount: gathered.totalPoints })
         : null;
     // Track the content for hydration; apply now (no-op if not yet mounted).
     if (spaceKind === 'interior') {
