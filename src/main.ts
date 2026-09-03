@@ -111,10 +111,10 @@ import { classificationLabel } from './render/pointInfo';
 import type { ObjectPanel } from './ui/ObjectPanel';
 import { MobileSheet } from './ui/MobileSheet';
 import { DesktopWorkspace, type WorkspaceMode } from './ui/workspace/DesktopWorkspace';
-import { classifyScanShape } from './terrain/scanShape';
-import type { SpaceKind } from './terrain/scanShape';
+import { classifyScanShape, type SpaceKind } from './terrain/scanShape';
 import {
   planScanRoute,
+  scanTypeRecord,
   settleOneShotSpent,
   settleTargetDepth,
   type ScanTypeOverride,
@@ -2394,7 +2394,7 @@ interface SpaceExportContext {
   readonly positions: Float32Array;
   readonly space: SpaceMetrics;
   readonly object: ObjectMetrics | null;
-  readonly spaceKind: 'interior' | 'object';
+  readonly scanType: ReturnType<typeof scanTypeRecord>;
   readonly unitToMetres: number;
   readonly upAxis: SpaceMetrics['up'];
   readonly basename: string;
@@ -2475,16 +2475,15 @@ function newObjectPanel(
     setScanTypeOverride('terrain');
   },
   onScanTypeChange: (override) => setScanTypeOverride(override),
-  // Build + download the one-page Space / Object report (lazy pdf-lib). For an
-  // interior scan, the density-derived floor-plan sketch is embedded too. The
-  // small dedicated provenance is built inside buildSpaceReportPdf from these
-  // exact inputs, so the PDF can never disagree with the panel.
+  // Build + download the one-page Space / Object report (lazy pdf-lib); an
+  // interior scan embeds the floor-plan sketch too. The cached scan-type record
+  // rides along with the route standing NOW, so the PDF states its own route.
   onExportReport: async () => {
     const ctx = lastSpaceExport;
     if (!ctx) return;
     const { buildSpaceReportPdf } = await loadSpaceReportPdf();
     let floorPlan = null;
-    if (ctx.spaceKind === 'interior') {
+    if (ctx.scanType.layout === 'interior') {
       const { extractFloorPlan } = await loadFloorPlan();
       // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
       // tracing (see FLOORPLAN_GATHER_POINTS).
@@ -2507,6 +2506,7 @@ function newObjectPanel(
       generatedAt: new Date(),
       unitToMetres: ctx.unitToMetres,
       floorPlan,
+      scanType: { record: ctx.scanType, current: captureProvenance.verdict() },
       // The embedded plan's dimension line follows the live measurement unit
       // system, exactly like the standalone SVG sheet below.
       unitSystem: viewer.measure.unitSystem,
@@ -2519,7 +2519,7 @@ function newObjectPanel(
   // Dimension / scale-bar units follow the live measurement unit system.
   onExportFloorPlan: async () => {
     const ctx = lastSpaceExport;
-    if (!ctx || ctx.spaceKind !== 'interior') return;
+    if (!ctx || ctx.scanType.layout !== 'interior') return;
     const { extractFloorPlan, floorPlanSvg } = await loadFloorPlan();
     // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
     // tracing (see FLOORPLAN_GATHER_POINTS).
@@ -3109,7 +3109,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   captureProvenance.setVerdict(effective);
 
   const isNonTerrain = plan.showObjectPanel;
-  if (isNonTerrain && shape && gathered) {
+  if (isNonTerrain && effective && shape && gathered) {
     const activeCloud = scans.activeCloud();
     // RGB presence: a STREAMING COPC/EPT carries its colours in the streamed
     // nodes, not the static `activeCloud.colors`, so checking the static buffer
@@ -3126,9 +3126,10 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     // dimensions from the same object the terrain core reads.
     const spaceCtx = crsService.context();
     const unitToMetres = spaceCtx.linearUnitToMetres;
+    const scanType = scanTypeRecord(effective, detected, routing.typeOverride, scanDetectionCommitted);
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
-      spaceKind: effective === 'interior' ? 'interior' : 'object',
+      spaceKind: scanType.layout,
       unitToMetres,
       unitKnown: spaceCtx.linearUnitKnown,
       hasRgb,
@@ -3137,16 +3138,15 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       // the caveats with the stronger "Preliminary — partial stream" note.
       residentOnly: gathered.residentOnly,
     });
-    const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
     // Same stride honesty as spaceMetrics above: the gather caps at 60 k, so
     // the spacing probe must be corrected against the SCAN's resident count or
     // the reported resolution describes the subsample (√(N/P) too coarse).
     const object =
-      spaceKind === 'object'
+      scanType.layout === 'object'
         ? objectMetrics(gathered.positions, { sourcePointCount: gathered.totalPoints })
         : null;
     // Track the content for hydration; apply now (no-op if not yet mounted).
-    if (spaceKind === 'interior') {
+    if (scanType.layout === 'interior') {
       objectContent = { kind: 'space', args: [space, shape] };
       objectPanel?.showSpace(space, shape);
     } else {
@@ -3154,13 +3154,13 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       objectPanel?.showObject(object, space, shape);
     }
     // Cache the EXACT inputs behind the on-screen report so the panel's export
-    // buttons (Report PDF / Floor plan preview) build from the same positions + metrics +
-    // unit factor — copied so a later streaming buffer reuse can't corrupt it.
+    // buttons build from the same positions (copied against a later streaming
+    // buffer reuse), metrics, unit factor and scan-type record.
     lastSpaceExport = {
       positions: Float32Array.from(gathered.positions),
       space,
       object,
-      spaceKind,
+      scanType,
       unitToMetres,
       upAxis: shape.up,
       basename: lastCloudName || 'scan',

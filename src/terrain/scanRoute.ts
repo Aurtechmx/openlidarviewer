@@ -38,6 +38,62 @@ export function resolveScanRoute(
   return override;
 }
 
+/** The two layouts the Space / Object report renders. */
+export type SpaceReportLayout = 'interior' | 'object';
+
+/**
+ * Which report layout a routed scan type renders as. There are three scan types
+ * and only two layouts, so `terrain` renders with the object envelope.
+ *
+ * That collapse used to be an anonymous ternary at the report's call site
+ * (`effective === 'interior' ? 'interior' : 'object'`), which made the layout
+ * choice and the RECORDED scan type the same value: a terrain-routed scan
+ * reached the artifact stamped "Scan type: Object" while the on-screen
+ * "Treat scan as" pill read Terrain. Naming the collapse separates the two: the
+ * layout still collapses, {@link ScanTypeRecord} keeps the real kind.
+ */
+export function spaceLayoutKind(routed: SpaceKind): SpaceReportLayout {
+  return routed === 'interior' ? 'interior' : 'object';
+}
+
+/**
+ * The routing state a Space / Object report's figures were computed under, so
+ * the artifact states the route it was built for and a reader can reconcile it
+ * against the "Treat scan as" control.
+ */
+export interface ScanTypeRecord {
+  /** The effective scan type behind the figures. The REAL kind, uncollapsed. */
+  readonly routed: SpaceKind;
+  /** What the shape classifier concluded, or null when it was undecidable. */
+  readonly detected: SpaceKind | null;
+  /** The manual "Treat as" choice standing when the figures were computed. */
+  readonly override: ScanTypeOverride;
+  /** True when a SETTLED auto verdict had soft-committed the control's pill. */
+  readonly committed: boolean;
+  /** Which of the report's two layouts {@link ScanTypeRecord.routed} renders as. */
+  readonly layout: SpaceReportLayout;
+}
+
+/**
+ * Build a {@link ScanTypeRecord}. A commit only means anything under `auto`,
+ * exactly as the control presents it, so a manual pick records `committed`
+ * false however the host's soft-commit flag happens to stand.
+ */
+export function scanTypeRecord(
+  routed: SpaceKind,
+  detected: SpaceKind | null,
+  override: ScanTypeOverride,
+  committed: boolean,
+): ScanTypeRecord {
+  return {
+    routed,
+    detected,
+    override,
+    committed: override === 'auto' && committed,
+    layout: spaceLayoutKind(routed),
+  };
+}
+
 /** Inputs to {@link planScanRoute} — the host's routing state, flattened. */
 export interface ScanRouteInput {
   /** What the shape classifier said, or null when it had nothing to say. */

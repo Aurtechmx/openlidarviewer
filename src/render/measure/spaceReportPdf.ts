@@ -23,9 +23,24 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf
 import type { SpaceMetrics } from '../../terrain/spaceMetrics';
 import type { ObjectMetrics } from '../../terrain/objectMetrics';
 import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
+import { scanTypeProvenance } from '../../terrain/space/scanTypeProvenance';
+import type { ScanTypeRecord } from '../../terrain/scanRoute';
+import type { SpaceKind } from '../../terrain/scanShape';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
 import { pdfInfoDate } from '../../pdfInfoDate';
+
+/**
+ * The scan-type provenance the host hands the report: the routing state the
+ * figures were computed under, plus the route standing when the report was
+ * built. The two differ when a "Treat as" pick lands while the export handler
+ * is awaiting its lazy chunk, which is how a report reading "Object" reached a
+ * user whose pill said Terrain. Omitted ⇒ the page is built exactly as before.
+ */
+export interface SpaceReportScanType {
+  readonly record: ScanTypeRecord;
+  readonly current: SpaceKind | null;
+}
 
 export interface SpaceReportPdfInput {
   readonly space: SpaceMetrics | null;
@@ -43,6 +58,14 @@ export interface SpaceReportPdfInput {
    * feet first. Default 'metric'.
    */
   readonly unitSystem?: PlanUnitSystem;
+  /**
+   * Scan-type provenance. The layout module still names the report's two
+   * PRESENTATIONS ('Interior space' / 'Object') and has no field for the
+   * routed {@link SpaceKind}, so the renderer states the routed kind on that
+   * footer line instead (see `withScanType`) and discloses an object envelope
+   * drawn over a terrain-routed scan.
+   */
+  readonly scanType?: SpaceReportScanType | null;
 }
 
 const INK = rgb(0.12, 0.14, 0.18);
@@ -65,6 +88,9 @@ function safe(s: string): string {
 /** Build the Space / Object report PDF and return its bytes. */
 export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<Uint8Array> {
   const content = buildSpaceReportContent(input);
+  const scanType = input.scanType
+    ? scanTypeProvenance(input.scanType.record, input.scanType.current)
+    : null;
   const doc = await PDFDocument.create();
   // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
   // DisplayDocTitle flag so a screen reader / PDF viewer announces the report
@@ -100,6 +126,16 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   y -= 24;
   page.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 1, color: FRAME });
   y -= 18;
+
+  // ── Routing disclosure ──
+  // An object-envelope layout over a terrain-routed scan. The report still
+  // prints (suppressing it would leave the user with no artifact and no
+  // explanation); it states up front that the figures below bound a volume
+  // rather than describe an object.
+  if (scanType?.disclosure) {
+    y = drawWrapped(page, bold, scanType.disclosure, M, y, PW - 2 * M, 9, WARN);
+    y -= 8;
+  }
 
   // ── Sections (label / value rows) ──
   const labelX = M;
@@ -144,7 +180,7 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   // M - 4), wrapping upward from there.
   const footerW = PW - 2 * M;
   const stampIndent = 24;
-  const stamp = content.provenanceLines.flatMap((line) =>
+  const stamp = withScanType(content.provenanceLines, scanType?.lines).flatMap((line) =>
     wrapStampLine(font, line, footerW, 7.5, stampIndent).map((seg, i) => ({
       seg,
       x: i === 0 ? M : M + stampIndent,
@@ -167,6 +203,31 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   }
 
   return doc.save();
+}
+
+/**
+ * Put the routed scan type in place of the layout's presentation-only one.
+ *
+ * `spaceReportLayout` names the report's two PRESENTATIONS ('Interior space' /
+ * 'Object') and has no field for the routed {@link SpaceKind}, so a terrain
+ * scan rendered with the object envelope reaches the footer stamped "Object".
+ * Until that module carries the record itself, the renderer states the routed
+ * kind, the detector's verdict and the override on that line. Replacement, not
+ * addition: the stamp is bottom-anchored and the tall interior report (three
+ * sections, an embedded plan and caveats) already reaches it, so the block has
+ * to cost no height. No lines ⇒ the original array; no `Scan type` line to
+ * replace ⇒ appended.
+ */
+function withScanType(
+  lines: ReadonlyArray<string>,
+  replacement: ReadonlyArray<string> | undefined,
+): string[] {
+  const out = [...lines];
+  if (!replacement || replacement.length === 0) return out;
+  const at = out.findIndex((l) => l.startsWith('Scan type'));
+  if (at < 0) out.push(...replacement);
+  else out.splice(at, 1, ...replacement);
+  return out;
 }
 
 /**
