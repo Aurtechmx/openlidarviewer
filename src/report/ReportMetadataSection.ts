@@ -82,15 +82,6 @@ export interface MetadataInputs {
   };
 }
 
-/** Format a metre value: km / m / cm depending on magnitude. */
-function formatMetres(m: number): string {
-  if (!Number.isFinite(m)) return 'unknown';
-  if (m >= 1000) return `${(m / 1000).toFixed(2)} km`;
-  if (m >= 10) return `${m.toFixed(1)} m`;
-  if (m >= 1) return `${m.toFixed(2)} m`;
-  return `${(m * 100).toFixed(1)} cm`;
-}
-
 /**
  * Format a raw source-unit extent — used when the CRS declares no real linear
  * unit. No km/m/cm scaling and no "m" label: the magnitude's unit is unknown,
@@ -99,6 +90,55 @@ function formatMetres(m: number): string {
 function formatSourceUnits(n: number): string {
   if (!Number.isFinite(n)) return 'unknown';
   return `${n.toFixed(1)} (source units)`;
+}
+
+/**
+ * Width, Depth and Height describe ONE bounding box, so they share one unit.
+ * Formatting each independently let a 1000 m depth cross the km threshold while
+ * its 922 m and 331 m siblings stayed in metres, so the report read
+ * "922.0 m / 1.00 km / 330.6 m" for one box while the on-screen Scan Report
+ * showed 1000.0 m for the same depth. The unit is chosen from the LARGEST
+ * dimension and applied to all three, so the figures stay comparable by eye.
+ */
+export function extentRows(inputs: {
+  readonly width: number;
+  readonly depth: number;
+  readonly height: number;
+  readonly unitKnown: boolean;
+}): Array<{ label: string; value: string }> {
+  const labels = ['Width', 'Depth', 'Height'] as const;
+  const dims = [inputs.width, inputs.depth, inputs.height];
+  if (!inputs.unitKnown) {
+    return labels.map((label, i) => ({ label, value: formatSourceUnits(dims[i]) }));
+  }
+  const finite = dims.filter((d) => Number.isFinite(d));
+  const largest = finite.length > 0 ? Math.max(...finite) : Number.NaN;
+  // One scale for the whole group, picked from the largest dimension. km starts
+  // at 10 km, not 1 km: a 1 km survey tile reads 1000.0 m on screen, and the
+  // report must not render that same depth as 1.00 km.
+  const base = !Number.isFinite(largest)
+    ? { div: 1, unit: 'm' }
+    : largest >= 10_000
+      ? { div: 1000, unit: 'km' }
+      : largest >= 1
+        ? { div: 1, unit: 'm' }
+        : { div: 0.01, unit: 'cm' };
+  // Decimals come from the SMALLEST side, so a thin box does not round its own
+  // thickness away once every side shares one unit: a 2500 x 78.8 x 0.05 m box
+  // reads 0.050 m, not 0.1 m.
+  const smallest = finite.filter((d) => d > 0).reduce((a, b) => Math.min(a, b), Infinity);
+  const scaledSmall = Number.isFinite(smallest) ? smallest / base.div : Number.NaN;
+  const dp = !Number.isFinite(scaledSmall) || scaledSmall >= 10
+    ? 1
+    : Math.min(3, Math.max(1, Math.ceil(-Math.log10(scaledSmall)) + 1));
+  const scale = { ...base, dp };
+  return labels.map((label, i) => {
+    const v = dims[i];
+    return {
+      label,
+      value: Number.isFinite(v) ? `${(v / scale.div).toFixed(scale.dp)} ${scale.unit}` : 'unknown',
+    };
+  });
 }
 
 /** Pretty-format an integer point count with locale separators. */
@@ -198,19 +238,16 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   // confirmed unit (or the absent default) is byte-identical to before.
   const unitsUnconfirmed = inputs.extentUnitStatus === 'unknown';
   if (unitsUnconfirmed) {
-    rows.push(
-      { label: 'Units',  value: 'Unconfirmed — extents in source units' },
-      { label: 'Width',  value: formatSourceUnits(inputs.width) },
-      { label: 'Depth',  value: formatSourceUnits(inputs.depth) },
-      { label: 'Height', value: formatSourceUnits(inputs.height) },
-    );
-  } else {
-    rows.push(
-      { label: 'Width',  value: formatMetres(inputs.width) },
-      { label: 'Depth',  value: formatMetres(inputs.depth) },
-      { label: 'Height', value: formatMetres(inputs.height) },
-    );
+    rows.push({ label: 'Units', value: 'Unconfirmed — extents in source units' });
   }
+  rows.push(
+    ...extentRows({
+      width: inputs.width,
+      depth: inputs.depth,
+      height: inputs.height,
+      unitKnown: !unitsUnconfirmed,
+    }),
+  );
   if (Number.isFinite(inputs.density) && inputs.density > 0) {
     // One decimal — same as the Inspection-summary finding and the on-screen
     // panel. Integer rounding printed 2.586 as "3", disagreeing with them.
