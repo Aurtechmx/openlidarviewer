@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { FT_PER_M, UNIT_FACTORS } from '../src/units/units';
+import { displayDecimals } from '../src/render/measure/format';
 
 /**
  * The Measure panel and the report section each used to declare their own
@@ -33,16 +34,27 @@ describe('metre→foot factor is single-sourced and exact', () => {
     }
   });
 
-  it('leaves every displayed value byte-identical at real magnitudes', () => {
-    // Why this matters: the fix is a correctness change landing during a
-    // science freeze, so it must not move a number a user reads. The two
-    // factors differ by ~3.2e-8 relative, so a 2-decimal foot string only
-    // diverges above ~1.6e5 ft (~48 km) — beyond any scan extent, but
-    // asserted rather than assumed.
+  it('leaves a fixed-decimal foot value identical at real magnitudes', () => {
+    // The two factors differ by ~3.2e-8 relative, so at a FIXED decimal count
+    // they agree until ~1.6e5 ft (~48 km), beyond any scan extent.
     const ROUNDED = 3.28084;
     for (const m of [0.001, 0.01, 0.5, 1, 12.7, 100, 999.99, 1500, 10_000, 30_000]) {
       expect((m * FT_PER_M).toFixed(2), `${m} m`).toBe((m * ROUNDED).toFixed(2));
     }
+  });
+
+  it('does NOT leave adaptive-precision output identical across a decade', () => {
+    // The honest limit of the claim above. Under adaptive precision the two
+    // factors land on opposite sides of a decade for an exact 10 ft span: the
+    // exact factor gives 9.999999999999998 and the rounded one 10.00000032.
+    // Banding on the raw float awarded the exact value a sixth significant
+    // digit, which is why `displayDecimals` bands on the printed value —
+    // otherwise this fix would have changed a reported string.
+    const exact = 3.048 * FT_PER_M;
+    const rounded = 3.048 * 3.28084;
+    expect(Math.floor(Math.log10(exact))).not.toBe(Math.floor(Math.log10(rounded)));
+    expect(displayDecimals(exact, 2, 4)).toBe(displayDecimals(rounded, 2, 4));
+    expect(exact.toFixed(displayDecimals(exact, 2, 4))).toBe('10.000');
   });
 });
 
