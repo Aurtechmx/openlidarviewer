@@ -567,9 +567,15 @@ export class MeasurePanel {
       if (e.key === 'ArrowLeft') {
         this._setRailWidth(this._railWidthPx() - step);
         e.preventDefault();
+        // The grip consumed this key. Without stopping it, the event still
+        // reached NavController's window listener, whose focus guard tests
+        // INPUT/TEXTAREA/SELECT by tag name and so does not recognise a
+        // focused separator: the rail resized and the camera orbited at once.
+        e.stopPropagation();
       } else if (e.key === 'ArrowRight') {
         this._setRailWidth(this._railWidthPx() + step);
         e.preventDefault();
+        e.stopPropagation();
       }
     });
     return handle;
