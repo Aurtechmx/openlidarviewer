@@ -214,16 +214,33 @@ export function verifyStagedRelease(dir, opts = {}) {
     if (evidence.tag !== expectedTag) note(`evidence tag ${evidence.tag} != ${expectedTag}`);
     if (evidence.releaseAuthoritative !== true) note('evidence is not release-authoritative');
     if (evidence.gateExit !== 0) note(`evidence gate exit is ${evidence.gateExit}`);
-    const major = Number(String(evidence.nodeVersion ?? '').replace(/^v/, '').split('.')[0]);
-    if (major !== 22) note(`evidence Node major is ${major}, expected 22`);
+    // The EXACT canonical runtime, read independently from .nvmrc rather than
+    // trusting whatever produced the JSON. A major-only test let evidence
+    // naming v22.17.1 satisfy a tree pinned to 22.18.0, since both are major
+    // 22. This mirrors the npm comparison below, which is already exact.
+    let canonicalNode = null;
+    try {
+      canonicalNode = readFileSync(resolve(ROOT, '.nvmrc'), 'utf8').trim();
+    } catch {
+      note('.nvmrc is unreadable, so the canonical Node version cannot be checked');
+    }
+    if (canonicalNode !== null && evidence.nodeVersion !== `v${canonicalNode}`) {
+      note(
+        `evidence Node is ${evidence.nodeVersion ?? 'unknown'}, expected v${canonicalNode} (.nvmrc)`,
+      );
+    }
     // Fail closed: evidence with NO npm version recorded is evidence that
     // skipped the toolchain assertion, not evidence that passed it.
-    let expectedNpm = '10.9.2';
+    // No literal default: a stale fallback silently accepted the previous pin
+    // when packageManager could not be read. Unreadable means unchecked.
+    let expectedNpm = null;
     try {
       const pm = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).packageManager;
       expectedNpm = String(pm ?? '').split('@')[1] || expectedNpm;
     } catch { /* fall back to the last known pin */ }
-    if (evidence.npmVersion !== expectedNpm) {
+    if (expectedNpm === null) {
+      note('package.json declares no packageManager, so the npm pin cannot be checked');
+    } else if (evidence.npmVersion !== expectedNpm) {
       note(`evidence npm is ${evidence.npmVersion ?? 'unknown'}, expected ${expectedNpm}`);
     }
     // Every mandatory stage must be recorded as passed. gateExit alone once

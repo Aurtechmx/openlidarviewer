@@ -23,7 +23,7 @@
   ],
   "runtimePlatform": [
     "Web browser (WebGPU, WebGL 2)",
-    "Node.js 22.17.1"
+    "Node.js 22.18.0"
   ],
   "operatingSystem": [
     "Any (browser)"

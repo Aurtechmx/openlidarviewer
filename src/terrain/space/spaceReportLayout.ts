@@ -35,6 +35,7 @@ import {
   ANGULAR_COVERAGE_HINT,
   OBJECT_ENVELOPE_VOLUME_HINT,
   OBJECT_SURFACE_AREA_HINT,
+  OBJECT_ORIENTED_UNVALIDATED_HINT,
 } from '../objectMetrics';
 import { SOFTWARE_NAME, NOT_SURVEY_GRADE_NOTE } from '../export/exportProvenance';
 import { type LinearUnitScale, UNIT_FACTORS } from '../../units/units';
@@ -361,7 +362,8 @@ function objectContent(input: SpaceReportInput, scale: LinearUnitScale): SpaceRe
         label: 'Axis-aligned (L x W x H)',
         value: f.tripleBare(aabb.lengthM, aabb.widthM, aabb.heightM),
       },
-      { label: 'Largest dimension', value: f.len(o.longestDimensionM) },
+      { label: 'Largest dimension (unvalidated)', value: f.len(o.longestDimensionM),
+        hint: OBJECT_ORIENTED_UNVALIDATED_HINT },
       {
         label: 'Envelope volume',
         value: f.volFine(o.envelopeVolumeM3),

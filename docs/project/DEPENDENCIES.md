@@ -21,8 +21,8 @@ unaffected.
 |---|---|
 | Release line | v0.6.7 |
 | Baseline date (UTC) | 2026-07-25 |
-| Canonical Node | 22.17.1 (`.nvmrc`) |
-| Canonical npm | 10.9.2 (`package.json` `packageManager`) |
+| Canonical Node | 22.18.0 (`.nvmrc`) |
+| Canonical npm | 10.9.3 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
 | SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.7`, 56 components |
 
@@ -151,7 +151,7 @@ be re-validated against one variable.
 ## How to reproduce
 
 ```
-nvm use          # 22.17.1, from .nvmrc
+nvm use          # 22.18.0, from .nvmrc
 npm ci
 npm audit --omit=dev --audit-level=high   # production set: expect 0
 npm audit                                 # full dev tree: expect the advisory above

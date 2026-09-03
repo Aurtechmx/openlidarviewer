@@ -20,6 +20,18 @@ import { binaryOnPath } from '../scripts/lib/binaryOnPath.mjs';
 // @ts-expect-error — plain .mjs script, no types
 import { verifyStagedRelease } from '../scripts/verify-release-assets.mjs';
 
+/**
+ * The canonical runtime, read from the repo's own pin. Hardcoding it here let
+ * the fixture drift: it said v22.11.0 while .nvmrc moved on, and the verifier's
+ * major-only test could not tell the difference.
+ */
+const CANONICAL_NODE = readFileSync(new URL('../.nvmrc', import.meta.url), 'utf8').trim();
+
+/** The canonical npm, from packageManager, for the same reason. */
+const CANONICAL_NPM = String(
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).packageManager ?? '',
+).split('@')[1];
+
 const VERSION = '0.6.0-alpha.3';
 const TAG = `v${VERSION}`;
 const COMMIT = 'c'.repeat(40);
@@ -108,8 +120,8 @@ function evidenceRecord(over: Record<string, unknown> = {}) {
     commit: COMMIT,
     releaseAuthoritative: true,
     gateExit: 0,
-    nodeVersion: 'v22.11.0',
-    npmVersion: '10.9.2',
+    nodeVersion: `v${CANONICAL_NODE}`,
+    npmVersion: CANONICAL_NPM,
     total: { passed: 5797, skipped: 16 },
     bundle: { liveEntryKiB: 713, ceilingKiB: 720 },
     science: { e4ClaimCount: 2, e4Claims: [...EXPECTED_E4], suppliedReferenceSlots: 2 },
@@ -241,10 +253,17 @@ describeZip('release:verify — provenance', () => {
     failsWith('not release-authoritative');
   });
 
-  it('rejects evidence produced on the wrong Node major', () => {
-    stageRelease({ evidence: { nodeVersion: 'v26.0.0' } });
-    failsWith('Node major');
-  });
+  it('rejects evidence produced on a different Node major', () => {
+      stageRelease({ evidence: { nodeVersion: 'v26.0.0' } });
+      failsWith('expected v');
+    });
+
+    it('rejects evidence from the same major but a different Node version', () => {
+      // The defect the exact check exists for: v22.17.1 against a tree pinned
+      // to 22.18.0 shares a major, so a major-only test accepted it.
+      stageRelease({ evidence: { nodeVersion: 'v22.17.1' } });
+      failsWith('expected v');
+    });
 
   it('rejects a mismatched tag', () => {
     stageRelease({ evidence: { tag: 'v0.5.9' } });
