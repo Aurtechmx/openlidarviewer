@@ -44,6 +44,22 @@ export interface ClassEditResult {
   changedCount: number;
   /** Total points in the buffer. */
   pointCount: number;
+  /**
+   * Points the selection DID contain that an active visibility rule (class /
+   * elevation / intensity filter, or the clip box) removed before the edit ran.
+   * Set only by the screen-lasso path, which is the one that intersects a
+   * selection with visibility; zero and `undefined` both mean "nothing was
+   * held back". Without it a filtered-out edit and an empty selection are the
+   * same `changedCount: 0` and the UI cannot tell the user which happened.
+   */
+  hiddenByFilters?: number;
+  /**
+   * Points the selection contained BEFORE the visibility intersection above.
+   * Screen-lasso path only. Lets a caller separate "the lasso was empty" from
+   * "everything inside already carried the target class", which are otherwise
+   * the same `changedCount: 0`.
+   */
+  selectedCount?: number;
 }
 
 /**

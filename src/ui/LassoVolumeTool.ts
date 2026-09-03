@@ -124,7 +124,9 @@ export class LassoVolumeTool {
     this._svg.setAttribute(
       'style',
       'position:absolute;inset:0;width:100%;height:100%;' +
-        'cursor:crosshair;z-index:3;touch-action:none;',
+        // Below `.olv-overlay` (--z-scene-overlay: 2), a stacking context holding
+        // every panel: at 3 the armed lasso covered the UI and ate its clicks.
+        'cursor:crosshair;z-index:var(--z-content);touch-action:none;',
     );
     this._path = document.createElementNS(SVG_NS, 'path') as SVGPathElement;
     // Read the canonical accent token off :root so the lasso overlay

@@ -3173,14 +3173,14 @@ export class Viewer {
     // The buffer is source-local; the camera sees the project frame.
     const project = (x: number, y: number, z: number) => toScreen(x + off[0], y + off[1], z + off[2]);
     const indices = selectByLasso({ lasso, positions: entry.cloud.positions, project });
-    // An EDIT must only touch points the user can currently see. The lasso
-    // projector already drops points behind the camera, but not points hidden
-    // by the clip box or the visibility filters — the raw selection
-    // permanently rewrote invisible points (reclassify-invisible-points
-    // finding, Critical). Apply the same visibility rules click-picking
-    // enforces: the pure `clipKeepsPoint` contract the GPU clip planes
-    // realise, and the class + elevation + intensity filter accept, so screen
-    // and edit agree point-for-point. In-place filter — no hot-path allocation.
+    // An EDIT must only touch points the user can currently see: the projector
+    // drops points behind the camera, the clip box and the visibility filters
+    // hide the rest, and the raw selection rewrote those invisibly
+    // (reclassify-invisible-points finding, Critical). Same rules click-picking
+    // enforces (`clipKeepsPoint` + the class/elevation/intensity accept), in
+    // place so the hot path allocates nothing. `inside` lets the caller say how
+    // many points the filters held back instead of reporting an empty lasso.
+    const inside = indices.length;
     const clip = this._clip;
     filterSelectionToVisible(indices, entry.cloud.positions, {
       keepPoint: clip?.enabled
@@ -3202,7 +3202,7 @@ export class Viewer {
       this._refreshClassificationColours(id);
       this._markClassificationEdited(id);
     }
-    return result;
+    return { ...result, hiddenByFilters: inside - indices.length, selectedCount: inside };
   }
 
   /**

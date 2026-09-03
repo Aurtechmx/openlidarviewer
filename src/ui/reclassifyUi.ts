@@ -15,6 +15,7 @@
 
 import { el } from './dom';
 import { LassoVolumeTool } from './LassoVolumeTool';
+import { reclassifyOutcome } from './reclassifyOutcome';
 import { noteEdit } from './undoRouter';
 import type { Viewer } from '../render/Viewer';
 
@@ -48,6 +49,8 @@ export interface ReclassifyUi {
   setVisible(visible: boolean): void;
   /** Re-sync the undo/redo enabled state from the Viewer history. */
   refresh(): void;
+  /** Disarm the lasso if it is armed. True when it had been armed. */
+  disarm(): boolean;
   dispose(): void;
 }
 
@@ -111,11 +114,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
       const cls = Number(select.value);
       const r = v.reclassifyLasso(id, lasso, cls);
       if (r.changedCount > 0) noteEdit('classification');
-      toast(
-        r.changedCount > 0
-          ? `Reclassified ${r.changedCount.toLocaleString()} points → class ${cls}.`
-          : 'Reclassify — no points inside the lasso.',
-      );
+      toast(reclassifyOutcome(r, cls));
       refresh();
     },
     onCancel: () => {
@@ -170,6 +169,12 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   refresh();
 
   return {
+    disarm(): boolean {
+      if (!tool.enabled) return false;
+      tool.disable();
+      armBtn.classList.remove('olv-mkind-active');
+      return true;
+    },
     element,
     setVisible: (visible: boolean) => element.classList.toggle('olv-hidden', !visible),
     refresh,
