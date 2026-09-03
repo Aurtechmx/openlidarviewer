@@ -741,7 +741,7 @@ export class StreamingScheduler {
    */
   private _hasReplace = false;
   /** The last replace-frontier hidden set, to emit only on a real change. */
-  private _lastHiddenKey = ' ';
+  private _lastHiddenKey = '\0';
 
   /**
    * A node's bounds in local render space, computed on first use and cached.

@@ -336,10 +336,10 @@ export function collectRegisterProblems(ctx) {
     }
     const covered = new Set();
     for (const s of supporting) {
-      for (const entry of s.scope?.supported ?? []) covered.add(`${entry.datasetId} ${entry.parameterSetId}`);
+      for (const entry of s.scope?.supported ?? []) covered.add(`${entry.datasetId}\0${entry.parameterSetId}`);
     }
     for (const entry of c.scope.supported) {
-      if (!covered.has(`${entry.datasetId} ${entry.parameterSetId}`)) {
+      if (!covered.has(`${entry.datasetId}\0${entry.parameterSetId}`)) {
         add('C4-SCOPE-EXCEEDS-STUDY', `Claim ${c.id}: scope.supported approves datasetId "${entry.datasetId}" with parameterSetId "${entry.parameterSetId}", which no supporting study supports. A claim may not approve more than the studies behind it measured.`);
       }
     }
