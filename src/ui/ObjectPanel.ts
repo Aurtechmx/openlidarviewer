@@ -16,7 +16,6 @@
 
 import {
   type ObjectMetrics,
-  type BoxDims,
   ANGULAR_COVERAGE_LABEL,
   ANGULAR_COVERAGE_HINT,
   OBJECT_ENVELOPE_VOLUME_HINT,
@@ -135,21 +134,59 @@ const volMftFine = (v: number): string =>
     : '—';
 
 /**
- * True when the scan is a SHEET: its shortest oriented-box side is a small
- * fraction of its longest.
+ * The unit-dependent value formatters for the OBJECT report, chosen once from
+ * the scale the metrics were computed under.
  *
- * Angular coverage bins directions about the centroid, so a single-sided
- * surface (a terrain tile, a wall, a floor) fills only the near-equatorial band
- * and cannot approach 100% however completely it was captured. The field case
- * is a 1270 x 977 x 268 m terrain tile: a ratio of 0.21, reporting 56% with
- * nothing missing. Below the threshold the occlusion warning can never be
- * cleared, so it is not shown at all.
+ * The panel used to stamp " m", " ft" and " cm" on every figure regardless of
+ * the source frame. Two defects rode on that: a foot CRS was measured in feet
+ * and labelled metres, and a scan whose linear unit never resolved was labelled
+ * metres on nothing at all. The host now normalises KNOWN units to metres
+ * before measuring; an UNKNOWN unit stays in the file's own units, and this
+ * record drops the metric suffixes and the foot conversion for it. Same
+ * approach as the report layout's UnitFormat (spaceReportLayout.ts).
  */
-const SHEET_ASPECT = 0.25;
-export function isSheetLikeScan(obb: BoxDims): boolean {
-  const { lengthM: L, heightM: H } = obb;
-  return Number.isFinite(L) && Number.isFinite(H) && L > 0 && H / L < SHEET_ASPECT;
+interface ObjectUnitFormat {
+  /** L x W x H, the row value. */
+  readonly triple: (l: number, w: number, h: number) => string;
+  /** The row hint's leading conversion, empty when there is none. */
+  readonly tripleHint: (l: number, w: number, h: number) => string;
+  /** A single length. */
+  readonly len: (v: number) => string;
+  /** A fine area. */
+  readonly areaFine: (v: number) => string;
+  /** A fine volume. */
+  readonly volFine: (v: number) => string;
+  /** Mean / median point spacing. */
+  readonly spacing: (v: number) => string;
+  /** Areal point density. */
+  readonly density: (v: number) => string;
 }
+
+/** Source-unit qualifiers: dimensionality without a metre claim. */
+const SU = '(source units)';
+const SU_SQ = '(square source units)';
+const SU_CU = '(cubic source units)';
+
+const METRIC_FORMAT: ObjectUnitFormat = {
+  triple: (l, w, h) => `${m1(l)} × ${m1(w)} × ${m1(h)} m`,
+  tripleHint: (l, w, h) =>
+    `${metresToFeet(l).toFixed(1)} × ${metresToFeet(w).toFixed(1)} × ${metresToFeet(h).toFixed(1)} ft — `,
+  len: mft,
+  areaFine: areaMftFine,
+  volFine: volMftFine,
+  spacing: cm,
+  density: (v) => (Number.isFinite(v) ? `${v.toFixed(1)} pts/m²` : '—'),
+};
+
+const SOURCE_FORMAT: ObjectUnitFormat = {
+  triple: (l, w, h) => `${m1(l)} × ${m1(w)} × ${m1(h)}  ${SU}`,
+  tripleHint: () => '',
+  len: (v) => (Number.isFinite(v) ? `${v.toFixed(1)} ${SU}` : '—'),
+  areaFine: (v) => (Number.isFinite(v) ? `${magnitudeFixed(v, 2)} ${SU_SQ}` : '—'),
+  volFine: (v) => (Number.isFinite(v) ? `${magnitudeFixed(v, 2)} ${SU_CU}` : '—'),
+  spacing: (v) => (Number.isFinite(v) ? `${v.toFixed(3)} ${SU}` : '—'),
+  density: (v) => (Number.isFinite(v) ? `${v.toFixed(1)} pts per square source unit` : '—'),
+};
 
 export class ObjectPanel {
   readonly element: HTMLElement;
@@ -226,7 +263,7 @@ export class ObjectPanel {
     ]);
   }
 
-  private _quality(q: SpaceMetrics['quality']): void {
+  private _quality(q: SpaceMetrics['quality'], f: ObjectUnitFormat = METRIC_FORMAT): void {
     this._body.append(
       el('div', { className: 'olv-object-subhead', text: 'Capture quality' }),
       // Named exactly as the report names them (spaceReportLayout
@@ -234,7 +271,7 @@ export class ObjectPanel {
       // not the file's declared total, so neither surface calls it "source".
       this._row('Points (measured / loaded)', `${i0(q.sampledPointCount)} · ${i0(q.sourcePointCount)}`,
         'Points measured for this analysis and the loaded population they were sampled from.'),
-      this._row('Density · spacing', `${q.densityPerM2.toFixed(1)} pts/m² · ~${cm(q.meanSpacingM)}`,
+      this._row('Density · spacing', `${f.density(q.densityPerM2)} · ~${f.spacing(q.meanSpacingM)}`,
         'Approximate areal density and mean point spacing.'),
       // HONESTY: coveragePct is occupied-cells / (cols*rows) over the scan's
       // axis-aligned BOUNDING-BOX grid (spaceMetrics.ts) — a fill ratio of the
@@ -568,36 +605,31 @@ export class ObjectPanel {
     }
     const o = metrics.obb;
     const a = metrics.aabb;
+    // The scale the figures were COMPUTED under, straight off the metrics the
+    // CRS authority produced. A known unit was normalised to metres before
+    // measuring; an unknown one was left in source units and is labelled so.
+    // No space metrics (the back-compat shim) keeps the legacy metric render.
+    const f = space && !space.linearUnit.known ? SOURCE_FORMAT : METRIC_FORMAT;
     this._body.append(
-      this._row('Dimensions (oriented)',
-        `${m1(o.lengthM)} × ${m1(o.widthM)} × ${m1(o.heightM)} m`,
-        `${metresToFeet(o.lengthM).toFixed(1)} × ${metresToFeet(o.widthM).toFixed(1)} × ${metresToFeet(o.heightM).toFixed(1)} ft — tight box from the object’s own principal axes.`),
-      this._row('Largest dimension', mft(metrics.longestDimensionM),
+      this._row('Dimensions (oriented)', f.triple(o.lengthM, o.widthM, o.heightM),
+        `${f.tripleHint(o.lengthM, o.widthM, o.heightM)}tight box from the object’s own principal axes.`),
+      this._row('Largest dimension', f.len(metrics.longestDimensionM),
         'Longest side of the oriented box — the headline size figure.'),
-      this._row('Axis-aligned',
-        `${m1(a.lengthM)} × ${m1(a.widthM)} × ${m1(a.heightM)} m`,
-        `${metresToFeet(a.lengthM).toFixed(1)} × ${metresToFeet(a.widthM).toFixed(1)} × ${metresToFeet(a.heightM).toFixed(1)} ft — box aligned to the scan axes.`),
-      this._row('Envelope volume', volMftFine(metrics.envelopeVolumeM3),
+      this._row('Axis-aligned', f.triple(a.lengthM, a.widthM, a.heightM),
+        `${f.tripleHint(a.lengthM, a.widthM, a.heightM)}box aligned to the scan axes.`),
+      this._row('Envelope volume', f.volFine(metrics.envelopeVolumeM3),
         OBJECT_ENVELOPE_VOLUME_HINT),
-      this._row('Bounding surface area', areaMftFine(metrics.surfaceAreaM2),
+      this._row('Bounding surface area', f.areaFine(metrics.surfaceAreaM2),
         OBJECT_SURFACE_AREA_HINT),
-      this._row('Points · spacing', `${metrics.pointCount.toLocaleString()} · ~${cm(metrics.medianSpacingM)}`),
+      this._row('Points · spacing', `${metrics.pointCount.toLocaleString()} · ~${f.spacing(metrics.medianSpacingM)}`),
       // Was "Scan completeness", which read as capture completeness. The ratio
       // bins directions about the centroid, so its ceiling is the shape of the
       // point set, not how much of the object was scanned.
       this._row(ANGULAR_COVERAGE_LABEL, `${Math.round(metrics.completenessPct)}% of directions`,
         ANGULAR_COVERAGE_HINT),
     );
-    // Only a scan that COULD reach full angular coverage can be short of it. A
-    // sheet never can, so warning about its underside invents a capture defect.
-    if (metrics.completenessPct < 65 && !isSheetLikeScan(metrics.obb)) {
-      this._body.append(el('div', {
-        className: 'olv-object-note is-warn',
-        text: 'Parts of the surface (often the underside / occluded sides) were not captured.',
-      }));
-    }
     if (space) {
-      this._quality(space.quality);
+      this._quality(space.quality, f);
       this._caveats(space.reasons);
     }
     // Object export row: Report PDF only (no floor plan for objects).

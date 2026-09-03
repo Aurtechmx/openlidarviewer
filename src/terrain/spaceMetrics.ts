@@ -22,6 +22,10 @@
 
 import { footprintRect, type Axis } from './scanShape';
 import { objectMetrics } from './objectMetrics';
+import { scalePositions } from './sourceScale';
+// Re-exported so the Object-panel host reaches the ONE scaling implementation
+// through the module that already owns the unit resolution.
+export { positionsInMetres } from './sourceScale';
 import { type LinearUnitScale, knownUnit, unknownUnit } from '../units/units';
 import { denseFootprintBbox } from './space/floorplan/wallSlice';
 
@@ -593,7 +597,7 @@ export function spaceMetrics(
     enclosedVolumeM3 = floorAreaM2 * ceilingHeightM;
   } else if (spaceKind === 'object') {
     // Open object: fall back to the OBB envelope volume (in metres).
-    const om = objectMetrics(u2m === 1 ? positions : scaleCopy(positions, u2m), { maxSamples });
+    const om = objectMetrics(u2m === 1 ? positions : scalePositions(positions, u2m), { maxSamples });
     enclosedVolumeM3 = om.envelopeVolumeM3 > 0 ? om.envelopeVolumeM3 : dims.lengthM * dims.widthM * dims.heightM;
   } else {
     enclosedVolumeM3 = null;
@@ -643,11 +647,4 @@ export function spaceMetrics(
     },
     storyCount, quality, linearUnit, reasons,
   };
-}
-
-/** Copy positions scaled by `s` (only used when a unit conversion is needed). */
-function scaleCopy(positions: Float32Array | ReadonlyArray<number>, s: number): Float32Array {
-  const out = new Float32Array(positions.length);
-  for (let i = 0; i < positions.length; i++) out[i] = positions[i] * s;
-  return out;
 }

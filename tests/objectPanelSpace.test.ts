@@ -122,7 +122,11 @@ describe('ObjectPanel — space / object routing', () => {
     const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
 
     const pos = cubeShell();
-    const space = spaceMetrics(pos, { upAxis: 'z', spaceKind: 'object', hasRgb: true });
+    // A DECLARED metre CRS: the metric render is only honest when the unit
+    // authority actually resolved a linear unit.
+    const space = spaceMetrics(pos, {
+      upAxis: 'z', spaceKind: 'object', hasRgb: true, unitToMetres: 1, unitKnown: true,
+    });
 
     const panel = new ObjectPanel();
     panel.showObject(objectMetrics(pos), space, null);
@@ -262,11 +266,12 @@ describe('ObjectPanel — space / object routing', () => {
 
 // ── Angular coverage is a shape signature, not a capture defect ─────────────
 // The panel warned "Parts of the surface (often the underside / occluded sides)
-// were not captured." below 65%. A sheet-like scan bins into the near-equatorial
-// band only, so it can never clear 65% however completely it was captured, and
-// the warning fabricated a defect report for a complete tile.
-describe('ObjectPanel - the occlusion warning is gated on shape', () => {
-  const OCCLUSION_WARNING = 'Parts of the surface';
+// were not captured." below 65%. The statistic is angular coverage about the
+// centroid, which a concave, elongated, open or anisotropically sampled object
+// depresses just as readily as occlusion does. It cannot separate those causes,
+// so no capture conclusion is drawn from it at any value.
+describe('ObjectPanel - angular coverage draws no capture conclusion', () => {
+  const CAPTURE_CLAIM = /were not captured|underside|occluded/i;
 
   /** Hand-built metrics: the gate is about labels, never the computation. */
   function box(L: number, W: number, H: number, coveragePct: number): {
@@ -291,31 +296,36 @@ describe('ObjectPanel - the occlusion warning is gated on shape', () => {
     };
   }
 
-  it('a sheet-like scan at 56% gets no occlusion warning', async () => {
+  async function render(L: number, W: number, H: number, pct: number): Promise<string> {
     const { ObjectPanel } = await import('../src/ui/ObjectPanel');
     const panel = new ObjectPanel();
+    panel.showObject(box(L, W, H, pct), null, null);
+    const root = panel.element as unknown as FakeEl;
+    const titles = flatten(root).map((e) => e.title).filter(Boolean).join(' ');
+    return `${root.textContent} ${titles}`;
+  }
+
+  it('a low-coverage sheet draws no missing-capture conclusion', async () => {
     // The field case: a 1270 x 977 x 268 m terrain tile reporting 56%.
-    panel.showObject(box(1270.87, 977.35, 268.22, 56), null, null);
-    const text = (panel.element as unknown as FakeEl).textContent;
-    expect(text).not.toContain(OCCLUSION_WARNING);
+    expect(await render(1270.87, 977.35, 268.22, 56)).not.toMatch(CAPTURE_CLAIM);
   });
 
-  it('a compact object that really is short of returns still gets it', async () => {
-    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
-    const panel = new ObjectPanel();
-    panel.showObject(box(1.2, 1.1, 0.9, 41), null, null);
-    const text = (panel.element as unknown as FakeEl).textContent;
-    expect(text).toContain(OCCLUSION_WARNING);
+  it('a low-coverage compact object draws no missing-capture conclusion', async () => {
+    expect(await render(1.2, 1.1, 0.9, 41)).not.toMatch(CAPTURE_CLAIM);
   });
 
-  it('names the row angular coverage, never a completeness', async () => {
-    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
-    const { ANGULAR_COVERAGE_LABEL } = await import('../src/terrain/objectMetrics');
-    const panel = new ObjectPanel();
-    panel.showObject(box(1.2, 1.1, 0.9, 88), null, null);
-    const text = (panel.element as unknown as FakeEl).textContent;
-    expect(text).toContain(ANGULAR_COVERAGE_LABEL);
-    expect(text).not.toMatch(/completeness/i);
+  it('a high-coverage object makes no completeness claim either', async () => {
+    expect(await render(1.2, 1.1, 0.9, 88)).not.toMatch(/completeness/i);
+  });
+
+  it('every case shows the angular coverage label and its basis', async () => {
+    const { ANGULAR_COVERAGE_LABEL, ANGULAR_COVERAGE_HINT } =
+      await import('../src/terrain/objectMetrics');
+    for (const pct of [41, 56, 88]) {
+      const text = await render(1.2, 1.1, 0.9, pct);
+      expect(text).toContain(ANGULAR_COVERAGE_LABEL);
+      expect(text).toContain(ANGULAR_COVERAGE_HINT);
+    }
   });
 });
 
