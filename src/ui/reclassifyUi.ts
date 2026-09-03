@@ -15,6 +15,7 @@
 
 import { el } from './dom';
 import { LassoVolumeTool } from './LassoVolumeTool';
+import { reclassifyOutcome } from './reclassifyOutcome';
 import { noteEdit } from './undoRouter';
 import type { Viewer } from '../render/Viewer';
 
@@ -111,11 +112,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
       const cls = Number(select.value);
       const r = v.reclassifyLasso(id, lasso, cls);
       if (r.changedCount > 0) noteEdit('classification');
-      toast(
-        r.changedCount > 0
-          ? `Reclassified ${r.changedCount.toLocaleString()} points → class ${cls}.`
-          : 'Reclassify — no points inside the lasso.',
-      );
+      toast(reclassifyOutcome(r, cls));
       refresh();
     },
     onCancel: () => {

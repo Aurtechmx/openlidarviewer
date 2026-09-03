@@ -372,6 +372,25 @@ export class ClassLegendPanel {
     this._render();
   }
 
+  /**
+   * Replace the per-class counts after an IN-PLACE class edit (lasso / polygon
+   * reclassify, class swap, and their undo/redo). The counts the panel showed
+   * describe a classification that no longer exists.
+   *
+   * Unlike {@link setClasses} this keeps the visibility state, the derived /
+   * streaming / sampled captions and the sample basis: the user's own edit is
+   * no reason to clear the class filter they set before it, and the counts are
+   * still scoped to the same loaded sample. Unlike {@link mergeClasses} it
+   * replaces rather than accumulates, because an edit MOVES points between
+   * classes instead of adding new ones. Does NOT emit `onChange`: visibility
+   * is untouched.
+   */
+  replaceCounts(counts: Map<number, number>): void {
+    this._counts = new Map(counts);
+    if (this._presentCodes().length > 0) this._hasChannel = true;
+    this._render();
+  }
+
   /** Whether the panel currently has any class rows to show. */
   hasClasses(): boolean {
     return this._hasChannel;

@@ -96,7 +96,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { toClassBuffer } from './render/class/classBuffer';
+import { classCountsOf, noteClassificationEdited } from './app/classLegendRefresh';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { classifierOptions } from './render/class/classifierCues';
 import { classificationCoverage } from './render/class/classificationCoverage';
@@ -2634,21 +2634,21 @@ const terrainRunner = createTerrainAnalysisRunner({
   },
 });
 
-// Honesty guard: a manual classification edit changes the bare-earth surface, so
-// any cached terrain core / on-screen grade computed from the old classes is now
-// stale. Drop the cache (and abort any in-flight compute) the moment an edit
-// lands, so the next Analyse recomputes against the edited classes instead of
-// serving a number that silently no longer matches what's on screen.
+// Honesty guard: a manual class edit changes the bare-earth surface, so the
+// cached terrain core and any on-screen grade from the old classes go stale the
+// moment it lands, and it moves points between classes, so the Classes panel
+// counts still describe the pre-edit buffer. `noteClassificationEdited` settles
+// all three: drop the cache (aborting any in-flight compute) so the next
+// Analyse recomputes against the edited classes, caveat the result still on
+// screen, and recount the legend. The recount stops a landed edit reading as a
+// refusal on a height-coloured scan, where the legend is the only place it shows.
 void viewerLoaded.then((v) => {
-  v.onClassificationEdited = () => {
-    terrainRunner.abortAndClearCache();
-    // The cache is gone but the RENDERED result/contours are not — without a
-    // caveat they read as current while reflecting the previous classes. The
-    // panel no-ops when nothing is on screen; a completed re-run clears it.
-    analysePanel?.setStaleNotice(
-      'Classification edited — results reflect the previous classification. Re-run Analyse to refresh.',
-    );
-  };
+  v.onClassificationEdited = (id) => noteClassificationEdited({
+    classification: v.getCloud(id)?.classification,
+    legend: classLegendPanel,
+    clearTerrainCache: () => terrainRunner.abortAndClearCache(),
+    noteStale: (m) => analysePanel?.setStaleNotice(m),
+  });
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -3315,7 +3315,7 @@ function revealAnalysePanel(name: string, settled = true): void {
  */
 function refreshClassLegend(classification?: ArrayLike<number>, sample?: { readonly loaded: number; readonly declared?: number }): void {
   if (classification && classification.length > 0) {
-    classLegendPanel.setClasses(countClasses(toClassBuffer(classification)), sample);
+    classLegendPanel.setClasses(classCountsOf(classification), sample);
   } else {
     classLegendPanel.setClasses(new Map(), sample);
   }
