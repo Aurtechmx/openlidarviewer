@@ -145,7 +145,13 @@ schemaVersion: 1
 # pending, max difference under 8e-6 m. It rests on the two already-validated
 # grids and the same below-half-a-cell radius, so it adds the differencing
 # arithmetic and not ground classification or real canopy.
-softwareVersion: 0.6.7
+# 0.6.8 moves no claim. The cycle's work is engineering and provenance: the
+# out-of-core cache, streaming readiness, the artifact passport, and a pass over
+# scan output that names the population each reported number describes. The E5
+# work registers the Rogue tiles and makes the dev/holdout split deterministic
+# and exposure-honest; the holdout has not been run, so no product advances
+# beyond E4 and the register stands at 17 there and none at E5.
+softwareVersion: 0.6.8
 generated: 2026-07-26
 validationOwner: A. Urias / Aurtech
 
