@@ -837,9 +837,20 @@ export class NavController {
   // ─────────────────────────────────────────────────────────────────────────
 
   private _handleKeyDown(e: KeyboardEvent): void {
-    // Never steal keys while the user is typing in a form control.
+    // Never act on a key another control already handled. Tag-name matching
+    // alone cannot see a focused custom widget (the Measurements rail's resize
+    // grip is a div with role="separator"), so a widget that resized on an
+    // arrow key also orbited the camera. `defaultPrevented` is the general
+    // signal and covers every such control, present and future.
+    if (e.defaultPrevented) return;
+    // Never steal keys while the user is typing in a form control. contenteditable
+    // is a text surface too, and has no tag name of its own to match on.
     const el = document.activeElement;
     if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+    // Duck-typed, not `instanceof HTMLElement`: that constructor does not exist
+    // in the headless environment the nav tests run in, so the check threw
+    // there instead of falling through.
+    if ((el as { isContentEditable?: boolean } | null)?.isContentEditable === true) return;
     if (!this._hasCloud || !this._inputEnabled) return;
 
     // Mode + shortcut keys work in any mode. Digit4 joins the Digit1/2/3
