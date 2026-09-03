@@ -22,6 +22,7 @@
 
 import { footprintRect, type Axis } from './scanShape';
 import { objectMetrics } from './objectMetrics';
+import { type LinearUnitScale, knownUnit, unknownUnit } from '../units/units';
 import { denseFootprintBbox } from './space/floorplan/wallSlice';
 
 /** Exact metre→foot factor (1 ft = 0.3048 m). */
@@ -62,11 +63,16 @@ export interface PlaneReport {
 export interface CaptureQuality {
   /** Points actually used (after striding to the sample budget). */
   readonly sampledPointCount: number;
-  /** Source / resident point count the sample was drawn from. */
+  /**
+   * The LOADED / resident population the measured subset was drawn from. This
+   * is what the viewer holds, NOT the file's declared point total: a
+   * display-sampled load or a partially streamed cloud both report the resident
+   * count here, so no consumer may label it "source" or "the full scan".
+   */
   readonly sourcePointCount: number;
   /**
-   * Points per m² of occupied footprint, describing the SCAN: the sampled
-   * count is scaled back up by the known stride (sourcePointCount /
+   * Points per m² of occupied footprint, describing the LOADED sample: the
+   * measured count is scaled back up by the known stride (sourcePointCount /
    * sampledPointCount — uniform striding, so the ratio IS the stride). The
    * pre-v0.4.5 figure divided only the sample by the area, under-reporting
    * density by the stride factor (100× at stride 100).
@@ -94,8 +100,40 @@ export interface SpaceMetrics {
   /** Storey / level count from well-separated floor peaks (≥ ~2.2 m apart). */
   readonly storyCount: number;
   readonly quality: CaptureQuality;
+  /**
+   * The AUTHORITATIVE source-unit scale these figures were computed under,
+   * carried on the result so every consumer (panel, report, PDF) reads the same
+   * known/unknown verdict instead of guessing it from the factor's value. A
+   * factor of 1 alone cannot tell a declared metre CRS from an unknown scan;
+   * `SpaceMetricsParams.unitKnown` can, and it is resolved here once.
+   */
+  readonly linearUnit: LinearUnitScale;
   /** Honesty caveats + basis strings. */
   readonly reasons: readonly string[];
+}
+
+/**
+ * Resolve the source frame's linear-unit scale from the CRS-authority flag,
+ * falling back to the legacy bare factor for callers that predate the flag.
+ *
+ * `unitKnown === true` is the CRS authority speaking, so a factor of exactly 1
+ * is a DECLARED metre CRS and prints metres. `unitKnown === false` is an
+ * explicit "not resolved" and is always unknown. When the flag is absent the
+ * legacy bridge applies: a finite non-unit factor was supplied deliberately
+ * from a known linear unit, while a bare 1 is ambiguous and fails closed to
+ * unknown rather than fabricating a metre claim.
+ */
+export function resolveLinearUnitScale(
+  unitToMetres: number | undefined,
+  unitKnown: boolean | undefined,
+): LinearUnitScale {
+  const usable =
+    unitToMetres != null && Number.isFinite(unitToMetres) && unitToMetres > 0
+      ? unitToMetres
+      : null;
+  if (unitKnown === true) return knownUnit(usable ?? 1);
+  if (unitKnown === false) return unknownUnit();
+  return usable != null && usable !== 1 ? knownUnit(usable) : unknownUnit();
 }
 
 export interface SpaceMetricsParams {
@@ -119,7 +157,7 @@ export interface SpaceMetricsParams {
   readonly unitKnown?: boolean;
   /** Whether the scan carries colour. */
   readonly hasRgb?: boolean;
-  /** Honest source/resident count the sample was drawn from. */
+  /** Honest loaded/resident count the measured subset was drawn from. */
   readonly sourcePointCount?: number;
   /**
    * True when the analysed points are the resident subset of a still-streaming
@@ -251,6 +289,8 @@ export function spaceMetrics(
   const n = Math.floor(positions.length / 3);
   const sourcePointCount = params.sourcePointCount ?? n;
 
+  const linearUnit = resolveLinearUnitScale(params.unitToMetres, params.unitKnown);
+
   const reasons: string[] = [params.residentOnly ? PARTIAL_STREAM_CAVEAT : STREAM_CAVEAT];
   // Fail closed on an unverified scale: when the caller knows the linear unit is
   // NOT resolved, every metre figure below is an assume-metres default, so
@@ -267,7 +307,7 @@ export function spaceMetrics(
     dims: { lengthM: 0, widthM: 0, heightM: 0 },
     floorAreaM2: 0, ceilingHeightM: null, enclosedVolumeM3: null,
     planes: { floorPresent: false, floorAreaM2: null, ceilingPresent: false, ceilingAreaM2: null, wallCoveragePct: 0, dominantWallDirections: 0 },
-    storyCount: 0, quality: blankQuality,
+    storyCount: 0, quality: blankQuality, linearUnit,
     reasons: [...reasons, 'Too few points to measure this space yet.'],
   };
   if (n < 16) return blank;
@@ -545,8 +585,10 @@ export function spaceMetrics(
   };
   if (sampleScale > 1) {
     reasons.push(
-      `Density and spacing are scaled from a ${m.toLocaleString()}-point sample to the full ` +
-        `${sourcePointCount.toLocaleString()}-point scan (uniform-stride assumption).`,
+      `Density and spacing are scaled from a ${m.toLocaleString()}-point measured subset ` +
+        `to the ${sourcePointCount.toLocaleString()}-point loaded sample ` +
+        `(uniform-stride assumption). The loaded sample is what the viewer holds, ` +
+        `which may itself be a subset of the file.`,
     );
   }
 
@@ -570,7 +612,7 @@ export function spaceMetrics(
       ceilingAreaM2: ceilingPresent ? ceilCells * cellArea : null,
       wallCoveragePct, dominantWallDirections,
     },
-    storyCount, quality, reasons,
+    storyCount, quality, linearUnit, reasons,
   };
 }
 

@@ -429,3 +429,66 @@ describe('spaceMetrics — reported dimensions', () => {
     expect(m.dims.lengthM).toBeCloseTo(shape.extent[2] / shape.aspect, 6);
   });
 });
+
+// ── The resolved linear-unit scale rides ON the metrics ─────────────────────
+// A factor of exactly 1 cannot tell a DECLARED metre CRS from an unknown local
+// scan, so consumers that only saw the factor read a real EPSG:6339 tile as
+// unverified. The CRS authority already knows the difference (`unitKnown`,
+// taken from SpatialContext.linearUnitKnown), so the verdict is resolved once
+// here and carried on the result instead of being re-inferred downstream.
+describe('spaceMetrics — the authoritative linear-unit scale', () => {
+  it('a DECLARED metre CRS (factor 1, unitKnown true) is KNOWN', () => {
+    const m = spaceMetrics(room(), {
+      upAxis: 'z', spaceKind: 'interior', unitToMetres: 1, unitKnown: true,
+    });
+    expect(m.linearUnit).toEqual({ known: true, metresPerUnit: 1 });
+  });
+
+  it('an explicitly unresolved unit stays UNKNOWN (fail closed)', () => {
+    const m = spaceMetrics(room(), {
+      upAxis: 'z', spaceKind: 'interior', unitToMetres: 1, unitKnown: false,
+    });
+    expect(m.linearUnit.known).toBe(false);
+  });
+
+  it('a legacy caller with no flag still fails closed at factor 1', () => {
+    expect(spaceMetrics(room(), { upAxis: 'z', spaceKind: 'interior' }).linearUnit.known)
+      .toBe(false);
+  });
+
+  it('a legacy caller with a foot factor stays KNOWN', () => {
+    const m = spaceMetrics(room(), {
+      upAxis: 'z', spaceKind: 'interior', unitToMetres: 0.3048,
+    });
+    expect(m.linearUnit).toEqual({ known: true, metresPerUnit: 0.3048 });
+  });
+
+  it('the too-few-points blank result carries the same verdict', () => {
+    const m = spaceMetrics(new Float32Array([0, 0, 0]), {
+      upAxis: 'z', spaceKind: 'interior', unitToMetres: 1, unitKnown: true,
+    });
+    expect(m.linearUnit).toEqual({ known: true, metresPerUnit: 1 });
+  });
+});
+
+// ── The stride caveat named the LOADED sample "the full scan" ───────────────
+describe('spaceMetrics — the stride caveat names the loaded sample', () => {
+  const m = spaceMetrics(room(), {
+    upAxis: 'z', spaceKind: 'interior', sourcePointCount: 1_888_921,
+  });
+  const caveat = m.reasons.find((r) => /scaled from a/.test(r))!;
+
+  it('calls the larger population the loaded sample, not the full scan', () => {
+    expect(caveat).toBeDefined();
+    expect(caveat).toContain('loaded sample');
+    expect(caveat).not.toMatch(/full [\d,]+-point scan/);
+  });
+
+  it('names the measured subset for what it is', () => {
+    expect(caveat).toContain('measured subset');
+  });
+
+  it('says the loaded sample may itself be a subset of the file', () => {
+    expect(caveat).toMatch(/subset of the file/);
+  });
+});
