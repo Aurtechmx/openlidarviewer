@@ -47,7 +47,13 @@ const allText = (c: ReturnType<typeof buildSpaceReportContent>): string =>
 describe('buildSpaceReportContent — interior', () => {
   const pos = room();
   const shape = classifyScanShape(pos);
-  const space = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior', hasRgb: true });
+  // A DECLARED metre CRS (`unitKnown: true`), so the m + ft rows below are
+  // asserted against a scan whose scale the CRS authority actually resolved.
+  // Without the flag the scale is unverified and the rows print source units.
+  const space = spaceMetrics(pos, {
+    upAxis: shape.up, spaceKind: 'interior', hasRgb: true,
+    unitToMetres: 1, unitKnown: true,
+  });
   const content = buildSpaceReportContent({
     space,
     name: 'House 360',
@@ -86,7 +92,9 @@ describe('buildSpaceReportContent — interior', () => {
 
 describe('buildSpaceReportContent — object', () => {
   const pos = cubeShell();
-  const space = spaceMetrics(pos, { upAxis: 'z', spaceKind: 'object', hasRgb: true });
+  const space = spaceMetrics(pos, {
+    upAxis: 'z', spaceKind: 'object', hasRgb: true, unitToMetres: 1, unitKnown: true,
+  });
   const content = buildSpaceReportContent({
     space,
     object: objectMetrics(pos),
@@ -187,5 +195,151 @@ describe('buildSpaceReportContent — graceful (ceiling)', () => {
     expect(ceilingRow).toBeDefined();
     // null metric renders as an em-dash, never a fabricated zero.
     if (space.ceilingHeightM == null) expect(ceilingRow!.value).toBe('—');
+  });
+});
+
+// ── Unit suffixes must follow the SCALE, not the row ────────────────────────
+// Field defect: a real EPSG:6339 export printed "1270.87 x 977.35 x 268.22 m
+// (4169.5 x 3206.5 x 880.0 ft)" on the same page as
+// "Units  source units (scale unverified ...)". Every length / area / volume
+// row stamped m + ft with no reference to the scale at all, so an unverified
+// unit was published as metres AND converted to feet on top of it.
+const rowValues = (c: ReturnType<typeof buildSpaceReportContent>): string[] =>
+  c.sections.flatMap((s) => s.rows.map((r) => r.value));
+
+/** Any physical-unit suffix a scale-unverified report must never print. */
+const UNIT_CLAIM = /\b(m|ft|cm)\b|m²|m³|ft²|ft³/;
+
+describe('buildSpaceReportContent — unit suffixes follow the scale', () => {
+  const pos = room();
+  const shape = classifyScanShape(pos);
+  const obj = cubeShell();
+
+  const unknownInterior = buildSpaceReportContent({
+    space: spaceMetrics(pos, {
+      upAxis: shape.up, spaceKind: 'interior', hasRgb: true, unitKnown: false,
+    }),
+    name: 'Unverified scan',
+  });
+  const unknownObject = buildSpaceReportContent({
+    space: spaceMetrics(obj, { upAxis: 'z', spaceKind: 'object', hasRgb: true, unitKnown: false }),
+    object: objectMetrics(obj),
+    name: 'Unverified object',
+  });
+
+  it('an UNKNOWN scale prints no metre, foot or centimetre suffix anywhere', () => {
+    for (const content of [unknownInterior, unknownObject]) {
+      for (const value of rowValues(content)) {
+        expect(value, `unit claim in "${value}"`).not.toMatch(UNIT_CLAIM);
+      }
+    }
+  });
+
+  it('an UNKNOWN scale states the numbers are in source units', () => {
+    for (const content of [unknownInterior, unknownObject]) {
+      expect(rowValues(content).join(' | ')).toContain('source unit');
+      expect(content.provenance.units).toContain('source units');
+    }
+  });
+
+  it('an UNKNOWN scale never converts to feet', () => {
+    for (const content of [unknownInterior, unknownObject]) {
+      expect(rowValues(content).join(' | ')).not.toContain('ft');
+    }
+  });
+
+  it('a KNOWN metre CRS prints metres and does NOT disclaim the scale', () => {
+    const content = buildSpaceReportContent({
+      space: spaceMetrics(pos, {
+        upAxis: shape.up, spaceKind: 'interior', hasRgb: true,
+        unitToMetres: 1, unitKnown: true,
+      }),
+      name: 'NAD83(2011) / UTM 10N',
+    });
+    expect(content.provenance.units).toBe('metres');
+    expect(content.provenance.units).not.toContain('scale unverified');
+    const values = rowValues(content).join(' | ');
+    expect(values).toMatch(/\bm\b/);
+    expect(values).toMatch(/ft\)/);
+  });
+
+  it('a KNOWN foot CRS keeps the existing metre + foot conversion', () => {
+    const content = buildSpaceReportContent({
+      space: spaceMetrics(obj, {
+        upAxis: 'z', spaceKind: 'object', hasRgb: true,
+        unitToMetres: 0.3048, unitKnown: true,
+      }),
+      object: objectMetrics(obj),
+      name: 'Foot CRS',
+    });
+    expect(content.provenance.units).toBe('feet (source) → metres');
+    const values = rowValues(content).join(' | ');
+    expect(values).toMatch(/\bm\b/);
+    expect(values).toMatch(/ft³/);
+    expect(values).toMatch(/ft²/);
+  });
+
+  // The invariant that failed in the field, asserted directly.
+  it('never disclaims the scale and stamps a unit suffix on the same report', () => {
+    const cases = [
+      { unitKnown: false, unitToMetres: 1 },
+      { unitKnown: true, unitToMetres: 1 },
+      { unitKnown: true, unitToMetres: 0.3048 },
+      { unitKnown: undefined, unitToMetres: undefined },
+    ] as const;
+    for (const c of cases) {
+      const content = buildSpaceReportContent({
+        space: spaceMetrics(pos, {
+          upAxis: shape.up, spaceKind: 'interior', hasRgb: true,
+          unitToMetres: c.unitToMetres, unitKnown: c.unitKnown,
+        }),
+        name: 'Invariant',
+      });
+      const disclaims = content.provenance.units.includes('scale unverified');
+      const claims = rowValues(content).some((v) => UNIT_CLAIM.test(v));
+      expect(
+        disclaims && claims,
+        `units="${content.provenance.units}" but a row still stamps a unit`,
+      ).toBe(false);
+    }
+  });
+});
+
+// ── The "source" population was the LOADED display sample, not the file ─────
+// The field export read "59,029 / 1,888,921" while the file held 37,333,283
+// points, so "source" named the resident display sample and the notes called
+// it "the full scan".
+describe('buildSpaceReportContent — point populations are named honestly', () => {
+  const pos = room();
+  const shape = classifyScanShape(pos);
+  const content = buildSpaceReportContent({
+    space: spaceMetrics(pos, {
+      upAxis: shape.up, spaceKind: 'interior', hasRgb: true,
+      unitToMetres: 1, unitKnown: true, sourcePointCount: 1_888_921,
+    }),
+    name: 'Populations',
+  });
+  const pointsRow = content.sections
+    .flatMap((s) => s.rows)
+    .find((r) => r.label.startsWith('Points'))!;
+
+  it('names the measured subset and the loaded sample distinctly', () => {
+    expect(pointsRow).toBeDefined();
+    expect(`${pointsRow.label} ${pointsRow.value}`).toMatch(/measured/i);
+    expect(`${pointsRow.label} ${pointsRow.value}`).toMatch(/loaded/i);
+  });
+
+  it('never calls the loaded sample "source"', () => {
+    expect(`${pointsRow.label} ${pointsRow.value}`).not.toMatch(/source/i);
+    const pointsLine = content.provenanceLines.find((l) => l.startsWith('Points'))!;
+    expect(pointsLine).toBeDefined();
+    expect(pointsLine).not.toMatch(/source/i);
+    expect(pointsLine).toMatch(/loaded/i);
+  });
+
+  it('never calls the loaded sample "the full scan"', () => {
+    const notes = content.caveats.join(' | ');
+    expect(notes).not.toContain('full 1,888,921-point scan');
+    expect(notes).not.toMatch(/full [\d,]+-point scan/);
   });
 });
