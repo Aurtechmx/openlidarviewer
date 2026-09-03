@@ -174,6 +174,14 @@ export const sqMetresToSqFeet = (a: SqMetres): number => raw(a) / (M_PER_FT * M_
 export const cubicMetresToCubicFeet = (v: CubicMetres): number =>
   raw(v) / (M_PER_FT * M_PER_FT * M_PER_FT);
 
+/**
+ * Exact metres→feet reciprocal, as a PLAIN number for the display and report
+ * formatters that work in unbranded metres. Exported so no surface redeclares
+ * it: a rounded 3.28084 used to live in the Measure panel and the report
+ * section, which made the same length convert two different ways.
+ */
+export const FT_PER_M = 1 / M_PER_FT;
+
 /** The exact factors, exposed for tests and for callers that must document them. */
 export const UNIT_FACTORS = {
   M_PER_FT,
