@@ -2,7 +2,7 @@
 
 > A browser-native, local-first LiDAR and point-cloud viewer. Open a `.las`, `.laz`, or `.copc.laz` scan (or a remote COPC / Entwine EPT `ept.json` URL) in a browser tab, then inspect, navigate in 3D, colour, measure, analyse terrain, classify, annotate, and export. Everything runs on the user's device. Files stay local, and it needs no account. AGPL-3.0-only licensed and citable (Zenodo DOI).
 
-Live app: https://lidar.aurtech.mx/ · Source: https://github.com/Aurtechmx/openlidarviewer · DOI: https://doi.org/10.5281/zenodo.21544619
+Live app: https://app.openlidarviewer.org/ · Source: https://github.com/Aurtechmx/openlidarviewer · DOI: https://doi.org/10.5281/zenodo.21544619
 
 ## What it does
 
@@ -32,7 +32,7 @@ Live app: https://lidar.aurtech.mx/ · Source: https://github.com/Aurtechmx/open
 
 - [README](https://github.com/Aurtechmx/openlidarviewer/blob/main/README.md): full feature list and positioning
 - [User Guide](https://github.com/Aurtechmx/openlidarviewer/blob/main/docs/USER_GUIDE.md): open a scan, measure, analyse terrain, compare scans, share
-- [Documentation site](https://aurtechmx.github.io/openlidarviewer/): guide, supported-format matrix, scientific validation, reproducibility, reference
-- [Live app](https://lidar.aurtech.mx/): open a scan in the browser
+- [Documentation site](https://openlidarviewer.org/): guide, supported-format matrix, scientific validation, reproducibility, reference
+- [Live app](https://app.openlidarviewer.org/): open a scan in the browser
 - [Zenodo record (DOI 10.5281/zenodo.21544619)](https://doi.org/10.5281/zenodo.21544619): citable archive
 - [Releases](https://github.com/Aurtechmx/openlidarviewer/releases): changelog and per-release notes

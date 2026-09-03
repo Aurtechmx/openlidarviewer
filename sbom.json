@@ -3,9 +3,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
   "version": 1,
-  "serialNumber": "urn:uuid:387723d0-71db-437a-8bd8-95f642d42665",
+  "serialNumber": "urn:uuid:d4fe248d-5327-41b6-8f42-86f899cb671a",
   "metadata": {
-    "timestamp": "2026-09-03T17:06:44.458Z",
+    "timestamp": "2026-09-03T19:31:05.925Z",
     "tools": {
       "components": [
         {
@@ -118,7 +118,7 @@
           "comment": "as detected from PackageJson property \"repository.url\""
         },
         {
-          "url": "https://lidar.aurtech.mx/",
+          "url": "https://openlidarviewer.org/",
           "type": "website",
           "comment": "as detected from PackageJson property \"homepage\""
         },
