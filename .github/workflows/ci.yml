@@ -129,6 +129,8 @@ jobs:
       # step's diff.
       - name: Docs site builds (renders the claim register, checks the allowlist)
         run: npm run docs:build
+      - name: Method literals match the registry
+        run: npm run lint:method-literals
       # Two DISTINCT size contracts, both enforced:
       #  • test:build  → PLAIN build + chunk-isolation (only vendor-three-webgpu
       #    may exceed the 500 KiB isolation threshold).

@@ -31,6 +31,24 @@
  */
 
 /** A point already projected to the horizontal plane: map x/y plus height z. */
+import { methodRef, methodTag } from '../../science/methodRegistry';
+
+/**
+ * The method tag stamped on every result, DERIVED from METHOD_REGISTRY rather
+ * than written out. The registry moved this estimator to v2 (concave-footprint
+ * cell exclusion, tilted base evaluated at each clipped cell centroid) while
+ * three literals here still read `@1`, so a v2 figure carried v1 provenance,
+ * which the registry entry states does not mean the same thing. Deriving it
+ * means the next version bump reaches the results instead of stopping at the
+ * registry.
+ */
+const METHOD: StockpileAreaGridMethod = methodTag(
+  methodRef('olv.volume.stockpile-area-grid'),
+) as StockpileAreaGridMethod;
+
+/** The registered id with whatever version the registry currently declares. */
+export type StockpileAreaGridMethod = `olv.volume.stockpile-area-grid@${number}`;
+
 export interface AreaGridPoint {
   readonly x: number;
   readonly y: number;
@@ -91,7 +109,7 @@ export interface StockpileCell {
 
 export interface StockpileAreaGridResult {
   /** Method id + version, for provenance. */
-  readonly method: 'olv.volume.stockpile-area-grid@1';
+  readonly method: StockpileAreaGridMethod;
   /** Fill (above base) volume in m³, over SUPPORTED area only. */
   readonly fillM3: number;
   /** Cut (below base) volume in m³, over supported area only. */
@@ -316,7 +334,7 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
     if (v.y > ymax) ymax = v.y;
   }
   const emptyResult = (): StockpileAreaGridResult => ({
-    method: 'olv.volume.stockpile-area-grid@1',
+    method: METHOD,
     fillM3: 0, cutM3: 0, netM3: 0,
     cellSizeM: input.cellSizeM ?? maxCell, cellSizeDerived: input.cellSizeM == null,
     polygonAreaM2: polyAreaSrc * unit * unit,
@@ -399,7 +417,7 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
   const unitVol = unit * unit * unit;
 
   return {
-    method: 'olv.volume.stockpile-area-grid@1',
+    method: METHOD,
     fillM3: fillSrc * unitVol,
     cutM3: cutSrc * unitVol,
     netM3: (fillSrc - cutSrc) * unitVol,
