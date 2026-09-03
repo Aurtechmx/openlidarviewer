@@ -48,6 +48,34 @@ export function storeLockName(storeName: string): string {
   return `${LOCK_PREFIX}${storeName}`;
 }
 
+/**
+ * The lock the cache MAP file is mutated under. Distinct from any store's own
+ * lock: a store lock is held shared for as long as a tab keeps that store open,
+ * whereas this one is taken exclusively for the moment a read-modify-write of
+ * `ooc-cache-map.json` takes, and released immediately.
+ */
+const MAP_LOCK_NAME = `${LOCK_PREFIX}cache-map`;
+
+/**
+ * Run a cache-map read-modify-write under an exclusive lock.
+ *
+ * Without this, two tabs opening heavy files concurrently interleave as
+ * read(M0) / read(M0) / write(M1) / write(M0+own), and the first tab's committed
+ * entry is lost even though its store was promoted and retained — a store on
+ * disk that no map references, reclaimed only by the janitor's stale sweep.
+ *
+ * With no lock manager the body still runs, unguarded. That is exactly the
+ * behaviour before this lock existed, so a browser without Web Locks is no worse
+ * off; it is not a silent correctness claim.
+ */
+export function withCacheMapLock<T>(
+  locks: LockManagerLike | null,
+  body: () => Promise<T>,
+): Promise<T> {
+  if (!locks) return body();
+  return locks.request(MAP_LOCK_NAME, { mode: 'exclusive' }, () => body());
+}
+
 /** The store name behind a lock name, or null if it is not one of ours. */
 function storeNameFromLock(lockName: string): string | null {
   return lockName.startsWith(LOCK_PREFIX) ? lockName.slice(LOCK_PREFIX.length) : null;

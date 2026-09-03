@@ -26,6 +26,7 @@ import { canonicalJson } from '../../canonicalHash';
 import { TILE_STORE_SCHEMA_VERSION } from './tileStore';
 import { FINGERPRINT_VERSION } from './fileFingerprint';
 import { readOpfsText, writeOpfsText, type OpfsDirHandle } from './opfsSpillStore';
+import { withCacheMapLock, type LockManagerLike } from './oocStoreLiveness';
 
 /** Bumped when the map's own shape changes, so an old record parses to empty.
  *  v2 adds the authoritative `sourceContentSha256` to every entry. */
@@ -237,4 +238,21 @@ export async function readCacheMap(root: OpfsDirHandle): Promise<OocCacheMap> {
 /** Write the map to the OPFS root (atomic via the OPFS writable swap). */
 export async function writeCacheMap(root: OpfsDirHandle, map: OocCacheMap): Promise<void> {
   await writeOpfsText(root, CACHE_MAP_FILE, serializeCacheMap(map));
+}
+
+/**
+ * Atomically apply `mutate` to the persisted map: re-read INSIDE the lock, so
+ * the write is based on what is on disk now rather than on a copy read before
+ * the lock was taken. Callers that hold a map read from earlier must not pass it
+ * in; that stale copy is what the lock exists to discard.
+ */
+export async function mutateCacheMap(
+  locks: LockManagerLike | null,
+  root: OpfsDirHandle,
+  mutate: (current: OocCacheMap) => OocCacheMap | Promise<OocCacheMap>,
+): Promise<void> {
+  await withCacheMapLock(locks, async () => {
+    const next = await mutate(await readCacheMap(root));
+    await writeCacheMap(root, next);
+  });
 }

@@ -42,8 +42,8 @@
  * is the largest tile rather than a second store, which the reserve below
  * already covers many times over.
  *
- * Nothing in the application calls this yet. It is the check that has to exist
- * before any file is routed to local indexing, not the routing itself.
+ * `heavyLasExecutor` runs this before every index build, so a file is routed to
+ * local indexing only once the space it needs has been accounted for.
  */
 
 import { formatByteSize } from '../formatByteSize';

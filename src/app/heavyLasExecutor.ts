@@ -34,7 +34,7 @@ import {
 import { fingerprintFromRange, sourceContentDigestFromRange } from '../io/heavy/fileFingerprint';
 import {
   readCacheMap,
-  writeCacheMap,
+  mutateCacheMap,
   lookupEntry,
   verifiedEntry,
   upsertEntry,
@@ -254,6 +254,7 @@ async function tryReopen(
   file: File,
   deps: HeavyLasBridgeDeps,
   signal: AbortSignal,
+  locks: ReturnType<typeof resolveLockManager>,
 ): Promise<HeavyOpenResult | null> {
   const map = await readCacheMap(root);
   // Reuse is authorised by the whole-file content digest, not the quick locator:
@@ -265,7 +266,9 @@ async function tryReopen(
   if (!opened) {
     // The map named a store that is no longer usable; drop the stale entry so a
     // later open does not keep chasing it, then build fresh.
-    await writeCacheMap(root, removeByStoreName(map, entry.storeName)).catch(() => {});
+    await mutateCacheMap(locks, root, (current) =>
+      removeByStoreName(current, entry.storeName),
+    ).catch(() => {});
     return null;
   }
   try {
@@ -276,9 +279,8 @@ async function tryReopen(
     if (deps.debug) console.warn('[heavy-las] cache reopen attach failed; rebuilding', err);
     return null;
   }
-  await writeCacheMap(
-    root,
-    touchEntry(map, sourceContentSha256, generation, Date.now()),
+  await mutateCacheMap(locks, root, (current) =>
+    touchEntry(current, sourceContentSha256, generation, Date.now()),
   ).catch(() => {});
   return { status: 'attached', source: opened.source, decoder: opened.decoder };
 }
@@ -302,24 +304,32 @@ async function recordAndEvict(
   try {
     const now = Date.now();
     const tileBytes = reader.manifest.pointCount * reader.recordBytes;
-    let map = upsertEntry(await readCacheMap(root), {
-      fingerprint,
-      sourceContentSha256,
-      storeName,
-      generation,
-      createdAt: now,
-      lastUsedAt: now,
-      pointCount: reader.manifest.pointCount,
-      tileBytes,
-    });
-    const live = await liveStoreNames(locks);
-    if (live) {
-      for (const name of selectEvictions(map.entries, { budgetBytes: CACHE_BUDGET_BYTES, liveNames: live })) {
-        await removeOpfsStore(root, name).catch(() => {});
-        map = removeByStoreName(map, name);
+    // Record and evict as ONE locked read-modify-write. Two tabs promoting
+    // stores at the same time otherwise both read the same map and the second
+    // write drops the first tab's entry, orphaning a store that is retained on
+    // disk but referenced by nothing. Eviction belongs inside the same lock: it
+    // deletes stores, so two concurrent passes could each decide to remove what
+    // the other just recorded.
+    await mutateCacheMap(locks, root, async (current) => {
+      let map = upsertEntry(current, {
+        fingerprint,
+        sourceContentSha256,
+        storeName,
+        generation,
+        createdAt: now,
+        lastUsedAt: now,
+        pointCount: reader.manifest.pointCount,
+        tileBytes,
+      });
+      const live = await liveStoreNames(locks);
+      if (live) {
+        for (const name of selectEvictions(map.entries, { budgetBytes: CACHE_BUDGET_BYTES, liveNames: live })) {
+          await removeOpfsStore(root, name).catch(() => {});
+          map = removeByStoreName(map, name);
+        }
       }
-    }
-    await writeCacheMap(root, map);
+      return map;
+    });
     return true;
   } catch {
     return false;
@@ -405,7 +415,7 @@ export async function executeHeavyLasBuild(
       const digest = await sourceDigest();
       if (signal.aborted) return { status: 'cancelled' };
       if (digest) {
-        const reopened = await tryReopen(root, generation, digest, file, deps, signal);
+        const reopened = await tryReopen(root, generation, digest, file, deps, signal, resolveLockManager());
         if (reopened) return reopened;
       }
     }
