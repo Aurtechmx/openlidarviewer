@@ -290,18 +290,24 @@ describe('buildDatasetSummary', () => {
     expect(points?.value).toBe('9,600,000');
   });
 
-  it('formats metres by magnitude (km / m / cm)', () => {
+  it('renders one box in ONE unit, however extreme its aspect ratio', () => {
+    // This case used to print "2.50 km", "78.8 m" and "5.0 cm": three units for
+    // three sides of one bounding box, which no reader can compare by eye. The
+    // group now shares the unit of its largest side and takes its decimals from
+    // the smallest, so the thin axis survives.
     const rows = buildDatasetSummary({
       fileName: 's', format: 'COPC', sourcePointCount: 100,
-      width: 2500,    // → 2.50 km
-      depth: 78.8,    // → 78.8 m
-      height: 0.05,   // → 5.0 cm
+      width: 2500,
+      depth: 78.8,
+      height: 0.05,
       density: NaN,
       hasRgb: false, hasIntensity: false, hasClassification: false,
     });
-    expect(rows.find((r) => r.label === 'Width')?.value).toBe('2.50 km');
-    expect(rows.find((r) => r.label === 'Depth')?.value).toBe('78.8 m');
-    expect(rows.find((r) => r.label === 'Height')?.value).toBe('5.0 cm');
+    const v = (l: string) => rows.find((r) => r.label === l)?.value ?? '';
+    const units = new Set(['Width', 'Depth', 'Height'].map((l) => v(l).replace(/^[\d.]+\s*/, '')));
+    expect(units).toEqual(new Set(['m']));
+    expect(v('Height')).not.toBe('0.1 m');
+    expect(Number.parseFloat(v('Height'))).toBeCloseTo(0.05, 3);
   });
 
   it('omits CRS rows when not supplied', () => {
