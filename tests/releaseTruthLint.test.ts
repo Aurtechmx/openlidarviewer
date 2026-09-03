@@ -102,7 +102,11 @@ describe('lint:release-truth', () => {
   it('fails when the dependency audit drops the canonical toolchain', () => {
     // The heading check caught a doc titled for the wrong release; this one
     // catches a doc titled correctly while recording a stale runtime.
-    const doc = realRead(DEPS)!.replace(/22\.17\.1/g, '26.0.0');
+    // Mutate the CANONICAL version read from the pin, not a literal: this test
+    // hardcoded 22.17.1 and stopped exercising the check when .nvmrc moved on,
+    // because the replace no longer touched the canonical row.
+    const canonical = realRead('.nvmrc')!.trim();
+    const doc = realRead(DEPS)!.split(canonical).join('26.0.0');
     const problems = problemsFor(withOverride(DEPS, doc));
     expect(problems.some((p) => p.includes('canonical Node'))).toBe(true);
   });

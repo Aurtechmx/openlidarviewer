@@ -75,7 +75,7 @@ npm audit --omit=dev --audit-level=high
 found 0 vulnerabilities
 ```
 
-Run under Node 22.17.1 / npm 10.9.2 on the baseline date. The deploy archive
+Run under Node 22.17.1 / npm 10.9.2, the toolchain canonical on the baseline date. The deploy archive
 carries no known advisories. This audit describes the artifact users receive;
 the release workflow repeats it on the exact tagged commit and records the
 result in the attached evidence.
