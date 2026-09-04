@@ -2596,7 +2596,7 @@ const terrainRunner = createTerrainAnalysisRunner({
   // entry point (onRun / onSelectInterval callbacks, the "run anyway" hatches)
   // fires only after the panel has mounted, so this always resolves non-null.
   getAnalysePanel: () => analysePanel,
-  getActiveId: () => scans.activeId,
+  getActiveId: () => scans.activeExportTargetId(), // streaming leaves activeId null
   crsService,
   // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
   // so the 3D "Coverage" colour mode (and its colourblind-safe "Confidence"
@@ -4545,8 +4545,8 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
 async function exportSession(): Promise<void> {
   let stem = 'openlidarviewer';
   await writeScanScopedExport({
-    requestedScanId: scans.activeId,
-    activeScanId: () => scans.activeId,
+    requestedScanId: scans.activeExportTargetId(), // streaming leaves activeId null
+    activeScanId: () => scans.activeExportTargetId(),
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()) }),
