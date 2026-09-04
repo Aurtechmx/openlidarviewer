@@ -23,6 +23,11 @@ const read = (rel: string): string => strip(readFileSync(resolve(__dirname, '..'
 const MEASURE = read('src/app/measurementExportActions.ts');
 const KML = read('src/app/kmlActions.ts');
 const SESSION = read('src/app/sessionIo.ts');
+const VIEWER = read('src/render/Viewer.ts');
+const BASEMODE = read('src/export/BaseExportMode.ts');
+const MEASUREPANEL = read('src/ui/MeasurePanel.ts');
+const ANALYSE = read('src/ui/AnalysePanel.ts');
+const MAIN = read('src/main.ts');
 
 /** The body of an exported async function, to its closing brace at col 0. */
 function fnBody(src: string, name: string): string {
@@ -31,6 +36,15 @@ function fnBody(src: string, name: string): string {
   const rest = src.slice(at);
   const end = rest.indexOf('\n}\n');
   return rest.slice(0, end === -1 ? rest.length : end);
+}
+
+/** A class method's body, cut at the next member so a window cannot overrun. */
+function memberBody(src: string, signature: string): string {
+  const at = src.indexOf(signature);
+  expect(at, `${signature} not found`).toBeGreaterThan(-1);
+  const rest = src.slice(at + signature.length);
+  const next = rest.search(/\n  (private|public|protected|async|[A-Za-z_]+\()/);
+  return rest.slice(0, next === -1 ? rest.length : next);
 }
 
 /** Everything after the first `await` in a body. */
@@ -88,5 +102,60 @@ describe('session import never attaches one scan’s work to another', () => {
     const checkAt = afterOwnership.indexOf('if (targetChanged())');
     expect(checkAt, 'no check after the ownership await').toBeGreaterThan(-1);
     expect(checkAt, 'check must precede the mutation').toBeLessThan(mutateAt);
+  });
+});
+
+describe('figure and report exports describe the scan they captured', () => {
+  it('the export adapter is built before the Studio chunk loads', () => {
+    // Built after, it described whatever scan was active when the chunk
+    // resolved: the caller's filename came from A, the pixels and report from B.
+    const at = VIEWER.indexOf('async exportImage(');
+    expect(at).toBeGreaterThan(-1);
+    const body = VIEWER.slice(at, at + 700);
+    const adapterAt = body.indexOf('_buildExportAdapter()');
+    const awaitAt = body.indexOf('await loadExportStudio()');
+    expect(adapterAt).toBeGreaterThan(-1);
+    expect(awaitAt).toBeGreaterThan(-1);
+    expect(adapterAt, 'adapter must be built before the await').toBeLessThan(awaitAt);
+  });
+
+  it('figure provenance is sourced when the pixels are taken', () => {
+    // Read after the compositing awaits, a view change or scan swap while the
+    // report and banner were drawn stamped another view's camera and CRS.
+    const captureAt = BASEMODE.indexOf('const blob = capture.blob;');
+    const stampAt = BASEMODE.indexOf('stampFigureProvenanceOntoBlob(');
+    expect(captureAt).toBeGreaterThan(-1);
+    const between = BASEMODE.slice(captureAt, stampAt);
+    expect(between).toMatch(/figureViewContext\?\.\(\)/);
+    expect(between).toMatch(/adapter\.crsLabel\(\)/);
+    // ...and not re-read at stamping time.
+    expect(BASEMODE.slice(stampAt)).not.toMatch(/adapter\.crsLabel\(\)/);
+  });
+
+  it('the profile sheet captures its CRS and unit system first', () => {
+    const body = memberBody(MEASUREPANEL, 'private async _buildProfileSheet(');
+    const awaitAt = body.indexOf('await loadProfilePdf()');
+    expect(awaitAt).toBeGreaterThan(-1);
+    expect(body.slice(awaitAt)).not.toMatch(/getProfileExportContext\(\)/);
+    expect(body.slice(awaitAt)).not.toMatch(/getUnitSystem\(\)/);
+  });
+
+  it('the terrain report captures the Inspector summary first', () => {
+    // Anchored on the DEFINITION and cut at the next member: the first mention
+    // is a call site, and a fixed window overran into a sibling method that
+    // legitimately reads live state at render time.
+    const body = memberBody(ANALYSE, 'private async _exportTerrainReport(');
+    const awaitAt = body.indexOf('await loadTerrainReportPdf()');
+    expect(awaitAt).toBeGreaterThan(-1);
+    expect(body.slice(awaitAt)).not.toMatch(/getDatasetIntelligence\?\.\(\)/);
+  });
+
+  it('the plain snapshot captures scope and view with the pixels', () => {
+    const at = MAIN.indexOf('composeClassScopeBannerOntoBlob(blob');
+    expect(at).toBeGreaterThan(-1);
+    const after = MAIN.slice(at);
+    const studioAt = after.indexOf('await loadExportStudio()');
+    expect(studioAt).toBeGreaterThan(-1);
+    expect(after.slice(studioAt)).not.toMatch(/viewer\.figureViewContext\(\)/);
   });
 });

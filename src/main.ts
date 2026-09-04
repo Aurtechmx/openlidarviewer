@@ -5505,7 +5505,10 @@ async function saveSnapshot(): Promise<void> {
     // banner the Studio export path uses so a filtered snapshot can't leave the
     // app undisclosed. With an empty stamp (nothing hidden) the helper returns
     // the input Blob unchanged, keeping the snapshot byte-identical to before.
-    let stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
+    // Scope stamp and view provenance belong to the captured pixels, so both are
+    // read here rather than after the Studio chunk await below.
+    const scope = currentClassScopeStamp(); const figureView = viewer.figureViewContext();
+    let stamped = await composeClassScopeBannerOntoBlob(blob, scope);
     // Embed figure provenance (build / CRS / colormap / camera / clip) as PNG
     // text chunks — the same chunks every Studio export carries, so a saved
     // view can answer "which build drew you, seen from where?" months later.
@@ -5514,10 +5517,7 @@ async function saveSnapshot(): Promise<void> {
     // because the snapshot itself must never sink on a metadata enrichment.
     try {
       const studio = await loadExportStudio();
-      stamped = await studio.stampFigureProvenanceOntoBlob(
-        stamped,
-        viewer.figureViewContext(),
-      );
+      stamped = await studio.stampFigureProvenanceOntoBlob(stamped, figureView);
     } catch (err) {
       console.warn('[snapshot] provenance stamping skipped:', err);
     }

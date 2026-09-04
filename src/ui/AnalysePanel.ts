@@ -2763,6 +2763,11 @@ export class AnalysePanel {
     // describes the scan its verdicts were computed on.
     const basename = this._cb.getExportBasename?.() ?? 'terrain';
     const mapCtx = this._cb.getMapContext?.() ?? {};
+    // The Inspector card's summary belongs to the same snapshot. It was read
+    // inside the builder call, i.e. AFTER the chunk await, so a scan swap while
+    // pdf-lib loaded gave this scan's verdicts the other scan's Dataset
+    // Statistics — the two facts above were hoisted and this one was not.
+    const intelligence = this._cb.getDatasetIntelligence?.() ?? null;
     try {
       const { buildTerrainReportPdf } = await loadTerrainReportPdf();
       // The renderer assembles the content from the SAME result the panel shows,
@@ -2774,10 +2779,10 @@ export class AnalysePanel {
         generatedAt: new Date(),
         softwareVersion: __APP_VERSION__,
         metricVersion: TERRAIN_METRIC_VERSION,
-        // The Inspector card's CURRENT bucket summary (or null) — the report's
-        // Dataset Statistics rows must be the card's own strings, never a
-        // re-derivation that could disagree with what the user saw on screen.
-        intelligence: this._cb.getDatasetIntelligence?.() ?? null,
+        // The Inspector card's bucket summary as it stood when the export began
+        // — the report's Dataset Statistics rows must be the card's own
+        // strings, never a re-derivation that could disagree with the screen.
+        intelligence,
         // The §19 evidence-gate permit the Studio resolved for this report (DTM
         // claim), stamped into the provenance footer. null via the direct
         // convenience button, which keeps its own availability.
