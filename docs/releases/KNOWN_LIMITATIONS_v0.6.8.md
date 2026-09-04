@@ -55,7 +55,7 @@ statically imported today, and that is a refactor rather than a tuning step.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,529 lines and `src/render/Viewer.ts` is 6,409. A shrink-only
+`src/main.ts` is 5,529 lines and `src/render/Viewer.ts` is 6,407. A shrink-only
 lint holds both at exactly those counts, so neither can grow; a change that adds
 to one has to take the same amount back out.
 

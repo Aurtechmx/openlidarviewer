@@ -786,6 +786,11 @@ export class MeasurePanel {
    */
   private async _buildProfileSheet(s: MeasurementSummary): Promise<void> {
     if (!s.profileChart || s.profileChart.length < 2) return;
+    // The frame the section was measured in, captured with it. Both were read
+    // after the chunk await, so a scan swap while pdf-lib loaded labelled this
+    // profile's geometry with the next scan's CRS and unit system.
+    const context = this._cb.getProfileExportContext ? this._cb.getProfileExportContext() : null;
+    const unitSystem = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
     const { buildProfilePdf } = await loadProfilePdf();
     // Assembled in ONE place, shared with the docked workbench's own export
     // control. What a second assembly drops is the CRS, the unit system and
@@ -793,8 +798,8 @@ export class MeasurePanel {
     // cannot recover from anywhere else.
     const bytes = await buildProfilePdf(
       profilePdfInputFor(s, {
-        context: this._cb.getProfileExportContext ? this._cb.getProfileExportContext() : null,
-        unitSystem: this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
+        context,
+        unitSystem,
         // The clock is read HERE, at the app boundary. The builder takes the
         // stamp as a parameter so the same sheet is the same bytes.
         generatedAt: new Date(),
