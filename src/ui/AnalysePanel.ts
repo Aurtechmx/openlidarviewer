@@ -170,8 +170,12 @@ import type {
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
 import {
+  analysisFreshnessBreach,
+  FRESHNESS_REFUSALS,
+  type AnalysisFreshnessStamp,
+} from '../science/analysisFreshness';
+import {
   sameExportTarget,
-  TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL,
 } from '../export/exportScanIdentity';
 import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
 import type { ContourExportAdapter, ContourExportHost } from './contourExportAdapter';
@@ -233,6 +237,10 @@ export interface AnalysePanelCallbacks {
    * tell the two apart and behaves as before.
    */
   getActiveScanId?: () => string | null;
+  /** Classification edit epoch for the active cloud. Omitted ⇒ treated as 0. */
+  activeClassificationEpoch?: () => number;
+  /** Active spatial-frame revision (CrsService). Omitted ⇒ treated as 0. */
+  crsRevision?: () => number;
   /**
    * The loaded cloud for a scan, or null. The panel offers the feature-candidate
    * review launcher when the cloud carries a classification; the (lazy) review
@@ -411,6 +419,8 @@ export class AnalysePanel {
    * it would be stamped with come from two different scans.
    */
   private _resultScanId: string | null = null;
+  /** State the on-screen result was computed under; gates every export. */
+  private _resultStamp: AnalysisFreshnessStamp | null = null;
   /** The "Colour 3D by confidence" toggle button + its current on/off state, so
    *  its label always shows the way back to the original colour. */
   private _confidenceColorBtn?: HTMLButtonElement;
@@ -854,6 +864,16 @@ export class AnalysePanel {
     // result while its own dataset guard still holds, so the active id here IS
     // the id the analysis ran against.
     this._resultScanId = result ? this._cb.getActiveScanId?.() ?? null : null;
+    // Mint the freshness stamp with the result. Scan identity alone let an
+    // edited classification or a changed CRS through behind a caveat.
+    this._resultStamp = result
+      ? {
+          targetId: this._resultScanId,
+          classificationEpoch: this._cb.activeClassificationEpoch?.() ?? 0,
+          crsRevision: this._cb.crsRevision?.() ?? 0,
+          coverageMode: result.dtm.coverageMode,
+        }
+      : null;
     // Any update supersedes a pending staleness caveat: a fresh result was
     // computed against the edited classes, and a clear removes the result
     // the caveat was about.
@@ -2375,8 +2395,19 @@ export class AnalysePanel {
    */
   private _refuseForeignScanExport(): boolean {
     if (!this._result || !this._cb.getActiveScanId) return false;
-    if (sameExportTarget(this._resultScanId, this._cb.getActiveScanId())) return false;
-    this.setStaleNotice(TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL);
+    // Every fact the result was computed under, not just the scan. A stale
+    // classification or frame used to export behind a caveat.
+    const breach = analysisFreshnessBreach(
+      this._resultStamp,
+      {
+        targetId: this._cb.getActiveScanId(),
+        classificationEpoch: this._cb.activeClassificationEpoch?.() ?? 0,
+        crsRevision: this._cb.crsRevision?.() ?? 0,
+      },
+      sameExportTarget,
+    );
+    if (breach === null) return false;
+    this.setStaleNotice(FRESHNESS_REFUSALS[breach]);
     return true;
   }
 
