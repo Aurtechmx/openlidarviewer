@@ -15,6 +15,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
+import { verticalSuffixFromLabel } from '../../units/units';
 import type { ContourFeatureModel, ContourFeature } from '../../terrain/contour/contourFeatureModel';
 import type { Annotation, AnnotationType } from '../annotate/types';
 import { buildAnnotationReport, type AnnotationReportRow } from './annotationReportTable';
@@ -331,19 +332,25 @@ export function scaleBarUnit(
 ): { unit: string; divisor: number } {
   const isFootUnit = linearUnit === 'foot' || linearUnit === 'us-survey-foot';
   if (isFootUnit) return { unit: 'ft', divisor: 1 };
+  // An unresolved frame is not metres. It also cannot be grouped into km:
+  // dividing by 1000 only means anything once the unit is known, so an unknown
+  // unit keeps its own magnitude and says so.
+  if (linearUnit !== 'metre') return { unit: 'units', divisor: 1 };
   const groupKm = totalGround >= 1000;
   return { unit: groupKm ? 'km' : 'm', divisor: groupKm ? 1000 : 1 };
 }
 
 /**
- * The plain linear-unit label (ft / m) for the SOURCE units the map is drawn
- * in. Single-sourced so the contour-interval row, the scale bar and the notes
- * never disagree about the unit. A non-georeferenced scan is still treated as
- * metric (the app's standing default everywhere — measurements, scale bar), so
- * the interval reads "0.5 m", not a hedged "(units)".
+ * The plain linear-unit label for the SOURCE units the map is drawn in.
+ * Single-sourced so the scale bar and the notes never disagree about the unit.
+ *
+ * A non-georeferenced scan used to be treated as metric here, so the sheet read
+ * "0.5 m" rather than a hedged form. That put a metre claim on the same page as
+ * "Horizontal CRS: not georeferenced". An unresolved frame now reads 'units'.
  */
 export function mapLinearUnitLabel(linearUnit: MapSheetInput['linearUnit']): string {
-  return linearUnit === 'foot' || linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+  if (linearUnit === 'foot' || linearUnit === 'us-survey-foot') return 'ft';
+  return linearUnit === 'metre' ? 'm' : 'units';
 }
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
@@ -1010,7 +1017,16 @@ function drawTitleBlock(
   const rows: Array<[string, string]> = [
     ['Horizontal CRS', crsStr],
     ['Vertical datum', datumStr],
-    ['Contour interval', interval != null && Number.isFinite(interval) ? `${interval} ${mapLinearUnitLabel(input.linearUnit)}` : '—'],
+    // A contour interval is an ELEVATION spacing, so it takes the vertical
+    // label, never the horizontal one. Routing it through the horizontal helper
+    // printed "5 m" while this sheet's own notes said "(vertical unit
+    // unverified)" for the same number.
+    [
+      'Contour interval',
+      interval != null && Number.isFinite(interval)
+        ? `${interval}${verticalSuffixFromLabel(prov?.verticalUnitLabel ?? prov?.contourIntervalUnit ?? prov?.complexity?.zUnit)}`
+        : '—',
+    ],
     ['Approx. scale', scaleN > 0 ? `1:${scaleN.toLocaleString()}` : '—'],
     ['Generated', generatedStr],
     ['Prepared by', input.preparedBy ?? '—'],
@@ -1081,6 +1097,9 @@ function drawTitleBlock(
   const rxr = PW - M - 4;
   rightText('Survey accuracy', rxr, topY - 16, 9, bold);
   page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize('Survey accuracy', 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
+  // KNOWN GAP: stamped ' m' unconditionally. See the note on the terrain
+  // report's fmtM — the honest suffix needs the vertical unit on every
+  // provenance construction path.
   const fmtM = (v: number | null | undefined): string => (v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—');
   // Accuracy rows, single-sourced from provenance when present (its accuracy
   // block is null when the run measured none, in which case every figure reads

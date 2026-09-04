@@ -1038,7 +1038,10 @@ describe('unit integrity: declared-unit contract', () => {
     expect(horizontalUnitLabel({ linearUnit: 'foot' })).toBe('ft');
     expect(horizontalUnitLabel({ linearUnit: 'us-survey-foot' })).toBe('ft');
     expect(horizontalUnitLabel({ linearUnit: 'metre' })).toBe('m');
-    expect(horizontalUnitLabel({})).toBe('m');
+    // An unresolved frame is NOT metres. This asserted 'm' as a "default" and
+    // is what let "1,000 x 1,000 m" print beside "not georeferenced".
+    expect(horizontalUnitLabel({})).toBe('units');
+    expect(horizontalUnitLabel({ linearUnit: 'unknown' })).toBe('units');
   });
 
   /**

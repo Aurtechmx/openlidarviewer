@@ -552,3 +552,21 @@
   .olv-touch-hint { transition: none; }
 }
 
+/* ── iOS Safari auto-zoom on focus ───────────────────────────────────────────
+ * Safari zooms the whole page when a focused text control is under 16px, and
+ * does NOT zoom back out on blur: the user is left in a zoomed viewport with
+ * the layout shifted. Every input here inherits a token between 11px and 15px,
+ * so opening the URL field, renaming a layer or using the converter triggered
+ * it. `max()` keeps the desktop size wherever the token is already larger.
+ * Coarse-pointer only, so desktop density is untouched. */
+@media (pointer: coarse) {
+  input[type='text'],
+  input[type='search'],
+  input[type='url'],
+  input[type='number'],
+  input[type='email'],
+  select,
+  textarea {
+    font-size: max(16px, var(--text-md));
+  }
+}

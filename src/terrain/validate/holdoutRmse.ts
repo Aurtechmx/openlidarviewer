@@ -296,7 +296,12 @@ export function holdoutValidateDtm(
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     verticalUnitToMetres: params.verticalUnitToMetres,
   });
-  // Residuals are reported in metres regardless of the source vertical unit.
+  // Residuals are reported in metres WHEN the source vertical unit is known.
+  // When it is not, this falls back to 1, which means the residual stays in the
+  // source unit and only equals metres if the source happened to be metric.
+  // Callers must not label the result 'm' on that basis — the export writers
+  // hedge via verticalSuffixFromLabel. This comment previously claimed metres
+  // unconditionally, which is what let a false 'm' reach the reports.
   const vMetres =
     Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0
       ? (params.verticalUnitToMetres as number)

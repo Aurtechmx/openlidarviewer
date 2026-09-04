@@ -141,17 +141,22 @@ export const degToRad = (d: Degrees): Radians => radians(raw(d) / DEG_PER_RAD);
  * Horizontal-unit label for a value carried in a source frame's OWN linear unit
  * (grid cell size, footprint extent), NOT in metres. A geographic frame reads
  * `'degrees'`; a projected foot CRS (international or US survey) reads `'ft'`;
- * every other case keeps the standing `'m'` default for back-compat, mirroring
- * the DEM / DXF seams (`unitToMetres` defaults to 1). Horizontal is the one axis
- * where an unresolved frame keeps `'m'` — the honest "never assert metres" rule
- * applies to the VERTICAL label below.
+ * a declared metre CRS reads `'m'`; an UNRESOLVED frame reads `'units'`.
+ *
+ * This axis used to keep `'m'` for an unresolved frame, for back-compat with the
+ * DEM / DXF seams whose `unitToMetres` defaults to 1. That made a map sheet print
+ * "1,000 x 1,000 m" on the same page as "Horizontal CRS: not georeferenced", and
+ * a scale bar in metres for a scan whose unit nothing had established. The
+ * "never assert metres" rule the vertical label follows applies here too: a
+ * number carried in an unknown unit is labelled as being in unknown units.
  */
 export function horizontalUnitLabel(opts: {
   readonly isGeographic?: boolean | null;
   readonly linearUnit?: string | null;
 }): string {
   if (opts.isGeographic) return 'degrees';
-  return opts.linearUnit === 'foot' || opts.linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+  if (opts.linearUnit === 'foot' || opts.linearUnit === 'us-survey-foot') return 'ft';
+  return opts.linearUnit === 'metre' ? 'm' : 'units';
 }
 
 /**
@@ -167,6 +172,25 @@ export function verticalUnitSuffix(metresPerUnit: number | null | undefined): st
     return ' (vertical unit unverified)';
   }
   return ` ${verticalUnitLabel(metresPerUnit)}`;
+}
+
+/**
+ * Suffix for a vertical value whose unit was resolved earlier and PERSISTED as a
+ * label rather than as a scale. `ExportProvenance` stores the resolved Z unit
+ * this way (`contourIntervalUnit`), so a consumer holding a provenance record
+ * can hedge exactly as {@link verticalUnitSuffix} does without re-deriving the
+ * scale — and cannot accidentally fall back to metres when the record says the
+ * unit was never established.
+ */
+export function verticalSuffixFromLabel(label: string | null | undefined): string {
+  // 'z-units' is the vocabulary ExportProvenance.zUnit uses for a resolved but
+  // non-metric, non-foot axis; 'units' is the units-module spelling. Both are
+  // resolved states and are echoed as-is. Anything else — 'unknown', null,
+  // absent — never established a unit and must not be printed as one.
+  if (label === 'm' || label === 'ft' || label === 'units' || label === 'z-units') {
+    return ` ${label}`;
+  }
+  return ' (vertical unit unverified)';
 }
 
 // ── Area / volume, derived from the exact linear factor. ─────────────────────

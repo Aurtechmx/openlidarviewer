@@ -85,6 +85,10 @@ function readyResult(): AnalyseContoursResult {
     },
     intervalM: 1,
     surface: { canopy: { heightM: new Float32Array([0, 5, NaN, NaN]) } },
+    // The source Z scale. buildExportProvenance derives the unit LABEL from it;
+    // without it the writers hedge every vertical figure, which is correct for a
+    // run whose axis never resolved.
+    verticalUnitToMetres: 1,
     model: {
       crs: 'EPSG:32610', verticalDatum: 'EPSG:5703', intervalM: 1,
       contourStyle: 'smooth', coverageMode: 'full', features: [{}, {}],
