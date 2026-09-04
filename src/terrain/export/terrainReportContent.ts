@@ -191,6 +191,11 @@ const BLOCKED_CV_TEXT =
   '8-cell blocks, 4 folds, ground set strided to <= 20,000 points, skipped on grids over 250,000 cells';
 
 /** Format a metre value at 2 dp, or an em-dash when absent (never fabricated). */
+// KNOWN GAP: these vertical figures are stamped ' m' unconditionally, while
+// holdoutRmse scales residuals by 1 when the source Z unit is unresolved. The
+// honest suffix needs the vertical unit threaded onto every ExportProvenance
+// construction path, which this record does not yet carry — see
+// ExportProvenance.verticalUnitLabel, added for that purpose.
 function fmtM(v: number | null | undefined): string {
   return v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : DASH;
 }
@@ -434,6 +439,9 @@ export function buildTerrainReportContent(
   // Phase 4 honesty figures, single-sourced from the same result the panel
   // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
   const pctOf = (x: number): string => `${Math.round(x * 100)}%`;
+  // Source Z-unit scale for every vertical figure below. Null when the frame
+  // never resolved one, which is what makes the suffix hedge instead of
+  // claiming metres.
   const relM = result.reliabilitySplit?.measured;
   // The reliability tolerance IS the hold-out RMSEz (analyseContours:
   // reliabilityTolerance = validation.rmse), so the row is the share of

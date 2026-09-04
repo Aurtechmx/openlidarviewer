@@ -180,6 +180,10 @@ const OPTS = {
   generatedAt: '2026-06-05T00:00:00.000Z',
   softwareVersion: '9.9.9',
   metricVersion: 'v0.4.1',
+  // Declares the horizontal frame. Without it the grid extent reads "units",
+  // which is the honest answer for a frame that never resolved one — so a
+  // fixture asserting "200 x 150 m" has to say the CRS is metric.
+  linearUnit: 'metre',
 } as const;
 
 /** Collect every value string in a content's sections. */

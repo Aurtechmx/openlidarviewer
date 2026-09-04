@@ -242,6 +242,20 @@ export interface ExportProvenance {
   readonly contourRequestedIntervalM: number | null;
   /** Vertical-unit label for the interval ('m' | 'ft' | 'units'); absent/'unknown' ⇒ unverified. */
   readonly contourIntervalUnit?: string;
+  /**
+   * The resolved SOURCE vertical unit for this run ('m' / 'ft' / 'units'), or
+   * 'unknown' when the Z axis never resolved one.
+   *
+   * Every vertical figure a consumer prints — RMSEz, NVA, VVA, blocked RMSE,
+   * a contour interval — is in this unit. The record previously carried the
+   * unit only on `contourIntervalUnit` (contour-specific) and inside the
+   * nullable `complexity` block, so a report with neither had no way to know,
+   * and its formatters stamped a hardcoded 'm' on values that are only metres
+   * if the unit resolved. Deliberately NOT serialised by `provenanceJson`: it
+   * is derived from state already recorded there, and adding a key would move
+   * every manifest digest.
+   */
+  readonly verticalUnitLabel?: string;
   /** Contour shape style the geometry was produced with, or null when unknown. */
   readonly contourStyle: ContourShapeStyle | null;
   /** Human label for {@link contourStyle}, or 'unknown'. */
@@ -476,6 +490,14 @@ export function buildExportProvenance(
     // The interval is in the SOURCE vertical unit; label it from the resolved
     // Z-axis scale (never a hard-coded metre) and say "unknown" when unresolved.
     contourIntervalUnit:
+      opts.verticalUnitToMetres != null &&
+      Number.isFinite(opts.verticalUnitToMetres) &&
+      opts.verticalUnitToMetres > 0
+        ? verticalUnitLabel(opts.verticalUnitToMetres)
+        : 'unknown',
+    // Same resolution, kept as a first-class field so a consumer that prints a
+    // vertical figure without touching contours can still label it honestly.
+    verticalUnitLabel:
       opts.verticalUnitToMetres != null &&
       Number.isFinite(opts.verticalUnitToMetres) &&
       opts.verticalUnitToMetres > 0

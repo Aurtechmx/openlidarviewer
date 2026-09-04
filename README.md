@@ -217,7 +217,7 @@ For large datasets, stream **COPC** (`.copc.laz`) or **EPT** (`ept.json`), which
 
 That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (ASTM E2807, tested against Trimble exports) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings (ASCII, binary, binary-compressed). Large COPC and EPT datasets stream progressively, locally or over HTTP range requests from a URL, with bounded memory and no full-file load.
 
-Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. The per-format detail, including scanner and app compatibility, is the format matrix at the [docs site](https://openlidarviewer.org/formats/) (source: [`docs/supported-formats.md`](docs/supported-formats.md)).
+Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. The per-format detail, including scanner and app compatibility, is the format matrix in [`docs/supported-formats.md`](docs/supported-formats.md).
 </details>
 
 <details>
@@ -374,7 +374,7 @@ No. WebGPU is the primary path and it falls back to WebGL 2 automatically.
 
 OpenLiDARViewer started as an experiment: how far can modern browser technology go in making LiDAR and point-cloud data easy to reach? It explores browser-native rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, and local-first workflows. The aim is not to replace full GIS or survey-grade processing, but to give people a fast, approachable way to open, inspect, navigate, measure, and present point clouds. See [`docs/research-notes.md`](docs/research-notes.md).
 
-The current release is **v0.6.8**. The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release highlights live in the [Releases section of the docs site](https://openlidarviewer.org/releases/).
+The current release is **v0.6.8**. The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release records live in [`docs/releases/`](docs/releases/).
 
 ### Help test OpenLiDARViewer
 

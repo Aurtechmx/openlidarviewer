@@ -52,8 +52,7 @@ const model: ContourFeatureModel = {
 };
 
 describe('scaleBarUnit — label follows the source CRS (label-vs-value)', () => {
-  it('labels metres, grouping to km past 1000 (metric default)', () => {
-    expect(scaleBarUnit(200, undefined)).toEqual({ unit: 'm', divisor: 1 });
+  it('labels metres, grouping to km past 1000, on a DECLARED metre CRS', () => {
     expect(scaleBarUnit(200, 'metre')).toEqual({ unit: 'm', divisor: 1 });
     expect(scaleBarUnit(2000, 'metre')).toEqual({ unit: 'km', divisor: 1000 });
   });
@@ -63,17 +62,24 @@ describe('scaleBarUnit — label follows the source CRS (label-vs-value)', () =>
     expect(scaleBarUnit(2000, 'us-survey-foot')).toEqual({ unit: 'ft', divisor: 1 });
     expect(scaleBarUnit(50, 'foot')).toEqual({ unit: 'ft', divisor: 1 });
   });
-  it('keeps the metre default for an unresolved (unknown) unit (back-compat)', () => {
-    expect(scaleBarUnit(200, 'unknown')).toEqual({ unit: 'm', divisor: 1 });
-    expect(scaleBarUnit(2000, 'unknown')).toEqual({ unit: 'km', divisor: 1000 });
+  it('does NOT assert metres for an unresolved unit, and cannot group it', () => {
+    // This previously kept a metre default "for back-compat", which put a metre
+    // scale bar on a sheet whose own title block said "not georeferenced".
+    // Grouping is dropped with it: dividing by 1000 to reach "km" only means
+    // something once the unit is known.
+    expect(scaleBarUnit(200, 'unknown')).toEqual({ unit: 'units', divisor: 1 });
+    expect(scaleBarUnit(2000, 'unknown')).toEqual({ unit: 'units', divisor: 1 });
+    expect(scaleBarUnit(200, undefined)).toEqual({ unit: 'units', divisor: 1 });
   });
 });
 
 describe('mapLinearUnitLabel — contour-interval unit matches the scale bar', () => {
-  it('reads "m" for metric, unknown, and undefined (the standing default)', () => {
+  it('reads "m" only for a DECLARED metre CRS', () => {
     expect(mapLinearUnitLabel('metre')).toBe('m');
-    expect(mapLinearUnitLabel('unknown')).toBe('m');
-    expect(mapLinearUnitLabel(undefined)).toBe('m');
+  });
+  it('reads "units" for an unresolved or absent unit, never a false "m"', () => {
+    expect(mapLinearUnitLabel('unknown')).toBe('units');
+    expect(mapLinearUnitLabel(undefined)).toBe('units');
   });
   it('reads "ft" for both foot variants', () => {
     expect(mapLinearUnitLabel('foot')).toBe('ft');
