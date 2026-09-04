@@ -87,19 +87,29 @@ export async function exportMeasurementIntegrityReport(
   const ms = measure.getMeasurements();
   if (ms.length === 0) return;
   const geo = deps.geo();
+  // Every scan-bound fact is read BEFORE the lazy import, so the report is one
+  // scan's account of itself. The frame, unit scales, class epoch and
+  // unit-known flag were read AFTER the await, so a scan swap while the chunk
+  // loaded signed A's geometry and name with B's up vector, unit scale and
+  // classification epoch — inside a file called an integrity report.
+  const worldUp = measure.worldUp;
+  const unitToMetres = measure.unitToMetres;
+  const verticalUnitToMetres = measure.verticalUnitToMetres;
+  const classificationEpoch = deps.activeClassificationEpoch();
+  // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
+  const crsKnown = measure.crsKnown;
   const { integrityReportFile } = await deps.loadMeasurementReport();
   const f = integrityReportFile(
     ms,
-    measure.worldUp,
-    measure.unitToMetres,
-    measure.verticalUnitToMetres,
+    worldUp,
+    unitToMetres,
+    verticalUnitToMetres,
     geo.name ? deps.baseName(geo.name) : 'scan',
     geo.crsName,
     deps.now(),
-    deps.activeClassificationEpoch(),
+    classificationEpoch,
     deps.appVersion,
-    // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
-    measure.crsKnown,
+    crsKnown,
   );
   deps.downloadText(f.filename, f.text);
 }
@@ -116,8 +126,13 @@ export async function collectMeasurementFindings(
   const { measure } = deps;
   const ms = measure.getMeasurements();
   if (ms.length === 0) return [];
+  // Same discipline: the frame the measurements were taken in, captured with
+  // them rather than re-read after the import.
+  const worldUp = measure.worldUp;
+  const unitToMetres = measure.unitToMetres;
+  const verticalUnitToMetres = measure.verticalUnitToMetres;
   const { measurementsToFindings } = await deps.loadMeasurementReport();
-  return measurementsToFindings(ms, measure.worldUp, measure.unitToMetres, measure.verticalUnitToMetres);
+  return measurementsToFindings(ms, worldUp, unitToMetres, verticalUnitToMetres);
 }
 
 /** Export the curated findings ledger as the signed integrity report (JSON). */
@@ -127,15 +142,17 @@ export async function exportFindingsReport(
 ): Promise<void> {
   if (findings.length === 0) return;
   const geo = deps.geo();
+  const classificationEpoch = deps.activeClassificationEpoch();
+  const crsKnown = deps.measure.crsKnown;
   const { findingsReportFile } = await deps.loadMeasurementReport();
   const f = findingsReportFile(
     findings,
     geo.name ? deps.baseName(geo.name) : 'scan',
     geo.crsName,
     deps.now(),
-    deps.activeClassificationEpoch(),
+    classificationEpoch,
     deps.appVersion,
-    deps.measure.crsKnown,
+    crsKnown,
   );
   deps.downloadText(f.filename, f.text);
 }
