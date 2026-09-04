@@ -172,6 +172,7 @@ import { permitStamp } from '../export/permitStamp';
 import {
   analysisFreshnessBreach,
   FRESHNESS_REFUSALS,
+  type FreshnessBreach,
   type AnalysisFreshnessStamp,
 } from '../science/analysisFreshness';
 import {
@@ -855,6 +856,25 @@ export class AnalysePanel {
    */
   currentResult(): AnalyseContoursResult | null {
     return this._result;
+  }
+
+  /**
+   * The result only when it may be ATTRIBUTED — null when the export gate
+   * would refuse it. Distinct from {@link currentResult}, which reports what is
+   * on screen: the panel deliberately keeps a result when another scan becomes
+   * active, and refusing an export must not discard the user's work.
+   *
+   * The two were the same accessor and the session manifest read it, so saving
+   * scan B embedded scan A's processing manifest beside B's own scan summary —
+   * a provenance record describing inputs that did not produce the session it
+   * travels in. The same applies to a same-scan result gone stale through a
+   * classification edit or a CRS change. A session with no manifest is honest;
+   * one with the wrong manifest is not.
+   *
+   * Any export that stamps provenance must read THIS one.
+   */
+  currentResultForProvenance(): AnalyseContoursResult | null {
+    return this._freshnessBreach() === null ? this._result : null;
   }
 
   /** Re-render from a fresh analysis result (or clear when null). */
@@ -2393,11 +2413,14 @@ export class AnalysePanel {
    * Called at the head of every export path AND again after any regeneration
    * await, since a scan can be opened while contours are being rebuilt.
    */
-  private _refuseForeignScanExport(): boolean {
-    if (!this._result || !this._cb.getActiveScanId) return false;
-    // Every fact the result was computed under, not just the scan. A stale
-    // classification or frame used to export behind a caveat.
-    const breach = analysisFreshnessBreach(
+  /**
+   * Which fact the on-screen result is stale against, or null when current.
+   * One computation, shared by the export gate and {@link currentResult}, so a
+   * consumer cannot accidentally read a result the gate would have refused.
+   */
+  private _freshnessBreach(): FreshnessBreach {
+    if (!this._result || !this._cb.getActiveScanId) return null;
+    return analysisFreshnessBreach(
       this._resultStamp,
       {
         targetId: this._cb.getActiveScanId(),
@@ -2406,6 +2429,10 @@ export class AnalysePanel {
       },
       sameExportTarget,
     );
+  }
+
+  private _refuseForeignScanExport(): boolean {
+    const breach = this._freshnessBreach();
     if (breach === null) return false;
     this.setStaleNotice(FRESHNESS_REFUSALS[breach]);
     return true;

@@ -4604,7 +4604,7 @@ async function exportSession(): Promise<void> {
       let processingManifest: unknown;
       // Null-safe: saving a session before any scan (or before the panel's chunk
       // resolves) simply carries no analysis manifest.
-      const analysed = analysePanel?.currentResult() ?? null;
+      const analysed = analysePanel?.currentResultForProvenance() ?? null;
       if (analysed) {
         processingManifest = processingManifestFromProvenance(
           buildExportProvenance(analysed, {
