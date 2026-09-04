@@ -631,7 +631,12 @@ export function createTerrainAnalysisRunner(
       const vScale = verticalMetresPerUnit(ctx, 'horizontal') ?? null;
       const vUnitKnown = vScale != null;
       analysePanel.setContourFrame({
-        streaming: false,
+        // Read the coverage the RESULT recorded, not a second boolean derived
+        // beside it. This was hardcoded false, so a resident-only streaming
+        // analysis presented itself to Contour Studio as a complete scan and
+        // the launcher — which caps a streaming frame to exploratory — never
+        // saw the condition it exists to catch.
+        streaming: result.dtm.coverageMode === 'resident-only',
         crsProjected: ctx.kind === 'projected',
         verticalUnitsKnown: vUnitKnown,
         verticalUnitToMetres: vUnitKnown ? vScale : null,
