@@ -133,33 +133,63 @@ export function buildContourReviewSummary(
   });
 
   // ── Interval (unit-safe, PR3) ─────────────────────────────────────────────
-  const recommendedIntervalSource = result.gate.recommendedM ?? grid.contourIntervalM;
-  if (recommendedIntervalSource != null && Number.isFinite(recommendedIntervalSource) && recommendedIntervalSource > 0) {
+  // Review the interval that SHIPS, not the one the gate would have picked.
+  // `result.intervalM` is `explicit ?? gate.recommendedM` (analyseContours), and
+  // it is what contourDeliverableBuild writes into the DXF, the GeoJSON and
+  // ContourStudio.json. This row used to read `gate.recommendedM` alone, which
+  // analyseContours documents as "a function of cell size, relief and the
+  // measured RMSE only — NOT of the chosen interval". So whenever a user set
+  // their own interval, the review evaluated one number while the deliverable
+  // carried another, and the verdict beside it described an interval that was
+  // not in the file.
+  const shippedIntervalSource =
+    result.intervalM ?? result.gate.recommendedM ?? grid.contourIntervalM;
+  if (shippedIntervalSource != null && Number.isFinite(shippedIntervalSource) && shippedIntervalSource > 0) {
     const def = buildContourLevelDefinition({
-      intervalSource: recommendedIntervalSource,
+      intervalSource: shippedIntervalSource,
       baseSource: 0,
       verticalUnit: input.verticalUnit,
       sourceUnitLabel: input.sourceUnitLabel,
     });
     const claim = contourUnitClaim(def, { crsProjected: input.crsProjected });
-    // The interval gate must have approved a metric interval for support to be
-    // claimed. When gate.recommendedM is null we fell back to the grid's
-    // geometry-only suggestion, which the gate did not endorse — so even on a
-    // known-unit projected frame the interval is cartographic-only, never
-    // "supported (internal)". Gating the label on gate approval keeps the
-    // review from overstating support the interval gate refused.
+    // Support is the GATE's verdict on the interval that ships, not on the one
+    // it recommended. The gate scores each candidate in `options`, so the
+    // shipped value is looked up there and carries that option's own verdict
+    // and reason. A value the gate never scored (a free-typed interval) was not
+    // evaluated at all, so it cannot claim support — it reads cartographic-only
+    // and says why, rather than inheriting the recommendation's verdict.
     const gateRecommended = result.gate.recommendedM;
-    const gateApprovedInterval =
-      gateRecommended != null && Number.isFinite(gateRecommended) && gateRecommended > 0;
+    // `gateIntervals` picks `recommendedM` out of the SUPPORTED candidates, so
+    // the recommendation is approved by construction and needs no lookup.
+    const isGateRecommendation =
+      gateRecommended != null &&
+      Number.isFinite(gateRecommended) &&
+      Math.abs(gateRecommended - shippedIntervalSource) < 1e-9;
+    const gateOption = result.gate.options.find(
+      (o) => Number.isFinite(o.intervalM) && Math.abs(o.intervalM - shippedIntervalSource) < 1e-9,
+    );
+    const gateApprovedInterval = isGateRecommendation || gateOption?.supported === true;
     const supported = claim === 'metric-supported' && gateApprovedInterval;
     const rmse = result.validation.rmse;
     const rationale: string[] = [];
     if (Number.isFinite(rmse)) rationale.push(`Internal vertical RMSE ${num(rmse)} m.`);
     rationale.push(
       supported
-        ? 'Recommended for the current scale and internal terrain evidence.'
-        : 'Cartographic recommendation only (no metric support claimed).',
+        ? 'Supported for the current scale and internal terrain evidence.'
+        : 'Cartographic only (no metric support claimed).',
     );
+    // Name the specific refusal when the gate scored this interval and declined
+    // it, and say so plainly when the gate never scored it.
+    if (!gateApprovedInterval) {
+      rationale.push(
+        gateOption != null && gateOption.reason !== ''
+          ? gateOption.reason
+          : 'This interval was not among the gate-evaluated options, so no internal support is claimed for it.',
+      );
+    }
+    if (gateRecommended != null && !isGateRecommendation) {
+      rationale.push(`Gate recommendation for this surface: ${num(gateRecommended)}.`);
+    }
     for (const w of result.gate.warnings) rationale.push(w);
     rows.push({
       key: 'interval',

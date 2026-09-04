@@ -20,6 +20,7 @@ function resultStub(over: {
   measured?: number; interpolated?: number; empty?: number; total?: number;
   lowConfidence?: number; edgeRisk?: number; groundIsDerived?: boolean;
   cellSizeM?: number; contourIntervalM?: number; recommendedM?: number | null;
+  intervalM?: number | null; gateOptions?: { intervalM: number; supported: boolean; reason: string }[];
   reasons?: string[]; rmse?: number; gateWarnings?: string[];
 }): AnalyseContoursResult {
   return {
@@ -36,7 +37,8 @@ function resultStub(over: {
       pointSpacingM: 0.2,
       reasons: over.reasons ?? ['Recommended from median ground spacing and memory budget.'],
     },
-    gate: { options: [], recommendedM: 'recommendedM' in over ? (over.recommendedM ?? null) : 0.5, warnings: over.gateWarnings ?? [] },
+    intervalM: 'intervalM' in over ? over.intervalM : undefined,
+    gate: { options: over.gateOptions ?? [], recommendedM: 'recommendedM' in over ? (over.recommendedM ?? null) : 0.5, warnings: over.gateWarnings ?? [] },
     validation: { rmse: over.rmse ?? 0.09 },
   } as unknown as AnalyseContoursResult;
 }
@@ -197,3 +199,53 @@ describe('ground source provenance', () => {
     expect(sourceRow(true).confidence).not.toBe('high');
   });
 });
+
+/**
+ * The review row used to read `gate.recommendedM` alone, while the DXF, the
+ * GeoJSON and ContourStudio.json all ship `result.intervalM` — which is the
+ * user's explicit interval when they set one. A reviewer comparing the screen
+ * to the file saw two different intervals, and the verdict on screen described
+ * a number that was not in the deliverable.
+ */
+describe('interval row describes the interval that ships', () => {
+  it('shows the user\'s explicit interval, not the gate recommendation', () => {
+    const rows = buildContourReviewSummary(
+      resultStub({ recommendedM: 5, intervalM: 2 }),
+      metreInput(AVAILABLE),
+    ).rows;
+    const interval = rows.find((r) => r.key === 'interval')!;
+    expect(interval.value).toContain('2');
+    expect(interval.value).not.toContain('5 m ');
+  });
+
+  it('refuses internal support for an interval the gate never scored', () => {
+    const rows = buildContourReviewSummary(
+      resultStub({ recommendedM: 5, intervalM: 2 }),
+      metreInput(AVAILABLE),
+    ).rows;
+    const interval = rows.find((r) => r.key === 'interval')!;
+    expect(interval.value).toContain('cartographic-only');
+    expect(interval.rationale.join(' ')).toMatch(/not among the gate-evaluated options/);
+    expect(interval.rationale.join(' ')).toMatch(/Gate recommendation for this surface: 5/);
+  });
+
+  it('carries the gate\'s own refusal reason when it scored and declined it', () => {
+    const rows = buildContourReviewSummary(
+      resultStub({
+        recommendedM: 5,
+        intervalM: 2,
+        gateOptions: [{ intervalM: 2, supported: false, reason: 'finer than 2x the measured error' }],
+      }),
+      metreInput(AVAILABLE),
+    ).rows;
+    const interval = rows.find((r) => r.key === 'interval')!;
+    expect(interval.value).toContain('cartographic-only');
+    expect(interval.rationale.join(' ')).toContain('finer than 2x the measured error');
+  });
+
+  it('claims support when the shipped interval IS the gate recommendation', () => {
+    const rows = buildContourReviewSummary(resultStub({ recommendedM: 0.5, intervalM: 0.5 }), metreInput(AVAILABLE)).rows;
+    expect(rows.find((r) => r.key === 'interval')!.value).toContain('supported (internal)');
+  });
+});
+
