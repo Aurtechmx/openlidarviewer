@@ -261,14 +261,19 @@ export async function exportScanFootprintKml(deps: KmlActionDeps): Promise<void>
     deps.setError(`Scan area export stopped. ${axisRefusal}`);
     return;
   }
-  const { buildFootprintKml, KmlCoordinateError } = await deps.loadKmlExport();
   // Prefer the true outline (convex hull of the resident points) when the scan
   // can back one; fall back to the extent's bounding rectangle otherwise. A
   // degenerate hull (too few points, collinear) throws ScanFootprintError, which
   // the shared catch below turns into a refusal — it does NOT silently drop to
   // the rectangle, because a scan whose points enclose no area has no honest
   // outline of either shape.
+  //
+  // Read BEFORE the loader await, with the CRS, origin and extent it belongs
+  // to. It was read after, so a scan swap during the lazy import produced a
+  // polygon from B's points labelled with A's CRS and extent — the sibling site
+  // export already captures its whole input before loading the serializer.
   const hullPositions = deps.scanHullPositions();
+  const { buildFootprintKml, KmlCoordinateError } = await deps.loadKmlExport();
   let text: string;
   try {
     const localRing = hullPositions
