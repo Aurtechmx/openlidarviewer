@@ -321,8 +321,26 @@ export class CrsService {
 
   // ── private ────────────────────────────────────────────────────────
 
+  /**
+   * Monotonic count of active-CRS changes. Not an identity: it answers only
+   * "is this the same frame the result was computed under", which is what a
+   * freshness check needs. Starts at 0 and never resets.
+   */
+  private _crsRevision = 0;
+
+  /** The current spatial-frame revision. See {@link _crsRevision}. */
+  crsRevision(): number {
+    return this._crsRevision;
+  }
+
   private _setCurrent(next: ResolvedCrs | null): void {
     this._current = next;
+    // Every change to the active CRS advances the revision. A terrain result is
+    // computed under one spatial frame — projected/geographic kind, horizontal
+    // and vertical scale, datum — so a result minted at revision N describes a
+    // frame that revision N+1 may have replaced. Scan identity alone cannot see
+    // that: an override changes the frame without changing the scan.
+    this._crsRevision += 1;
     // Drop the memoised context so the next `context()` read rebuilds from the
     // CRS that just landed. Invalidate rather than recompute: a scan swap that
     // no one asks a spatial question about should not pay for one.
