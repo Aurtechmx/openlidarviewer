@@ -13,7 +13,7 @@ Since v0.6.0 the three bundled font packages moved from 5.2.8 to 5.3.0. No
 package was added or removed, and no other bundled package changed.
 
 The development toolchain moved after that baseline was taken: TypeScript to
-7.0.2, Vite to 8.2.1, and Playwright to 1.62.1. All three are development-only
+7.0.2, Vite to 8.2.2, and Playwright to 1.62.1. All three are development-only
 and none reaches the deployed app, so the runtime dependency set above is
 unaffected.
 
@@ -63,7 +63,7 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | @vitest/coverage-v8 | ^4.1.11 | 4.1.11 | MIT |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
-| vite | ^8.2.1 | 8.2.1 | MIT |
+| vite | ^8.2.2 | 8.2.2 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
 | vitest | ^4.1.7 | 4.1.11 | MIT |
@@ -115,7 +115,7 @@ through `overrides` rather than waiting on the packages that depend on them:
 | brace-expansion | 1.1.15 | 1.1.16 | CVE-2026-13149, exponential-time expansion |
 
 The `vite` override is scoped to `vitepress` alone. The application builds on
-Vite 8.2.1 and is not affected by it. `npm run docs:build` passes on the
+Vite 8.2.2 and is not affected by it. `npm run docs:build` passes on the
 overridden tree.
 
 ## Stubbed to prune
