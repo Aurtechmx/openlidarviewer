@@ -151,10 +151,33 @@ describe('dismissing the navigation legend keeps the view controls', () => {
   });
 
   it('closes the whole panel when its close control is used', async () => {
+    // Exercises the close control's own path. This called toggleHelp(), which
+    // is H's path, and H now cycles the LEGEND rather than the panel — so the
+    // test would have passed while the × did something else entirely.
     const { root, bar } = await navbar();
-    bar.toggleHelp();
+    bar.dismissPanel();
     const hud = root.byClass('olv-nav-hud')[0]!;
     expect(hud.classList.contains('olv-hidden')).toBe(true);
+  });
+
+  it('starts with the legend collapsed, and H cycles it without hiding the controls', async () => {
+    // The panel is anchored bottom-centre and stacks upward, so the legend's
+    // height is what reaches over the scan. It is help, so it is opt-in.
+    const { root, bar } = await navbar();
+    const hud = root.byClass('olv-nav-hud')[0]!;
+    const legend = root.byClass('olv-legend')[0]!;
+    expect(hud.classList.contains('olv-nav-hud-collapsed')).toBe(true);
+    expect(legend.classList.contains('olv-hidden')).toBe(true);
+    expect(hud.classList.contains('olv-hidden')).toBe(false);
+
+    bar.toggleHelp();
+    expect(legend.classList.contains('olv-hidden')).toBe(false);
+
+    bar.toggleHelp();
+    expect(legend.classList.contains('olv-hidden')).toBe(true);
+    // The Camera and Views rows are controls, not help: H never takes them away.
+    expect(hud.classList.contains('olv-hidden')).toBe(false);
+    expect(root.byClass('olv-cam-presets-row').length).toBeGreaterThanOrEqual(2);
   });
 
   it('leaves the standard views reachable from the command palette', async () => {

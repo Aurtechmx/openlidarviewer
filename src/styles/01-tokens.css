@@ -78,14 +78,27 @@
    *   --text-2xl 20  panel titles
    *   --text-3xl 28  display figures
    */
-  --text-2xs: 10px;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-md: 13px;
-  --text-lg: 14px;
-  --text-xl: 16px;
-  --text-2xl: 20px;
-  --text-3xl: 28px;
+  /* Type scale. Eight names, but only the DISTINCT values below are steps a
+   * reader can actually see. 10/11 differ by 1.10 and 12/13/14 by 1.08 — under
+   * the threshold of perception, so those were three names for one level, not
+   * three levels. Adjacent steps now differ by at least 1.14.
+   *
+   * 2xs and md are kept as ALIASES so ~150 call sites did not have to churn in
+   * a release branch; they resolve to the neighbouring real step. Prefer the
+   * canonical names in new code.
+   *
+   * Not yet fixed: 11px still carries ~75% of the app's text, so the floor of
+   * this scale is doing the work a 12–13px body should. Raising it is a
+   * deliberate re-typing pass, not a token edit — every dense chip and badge
+   * has to be re-checked for overflow. */
+  --text-2xs: 11px; /* alias of --text-xs */
+  --text-xs: 11px; /* dense chips, badges, table cells */
+  --text-sm: 12px; /* secondary rows */
+  --text-md: 14px; /* alias of --text-lg */
+  --text-lg: 14px; /* emphasis, values */
+  --text-xl: 16px; /* panel titles */
+  --text-2xl: 20px; /* section headings */
+  --text-3xl: 28px; /* display */
 
   /*
    * Radius scale — four corner radii plus a pill. Drawn from the
