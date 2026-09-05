@@ -4,16 +4,27 @@
  * Each footprint's traced ring becomes a Polygon feature carrying its area,
  * centroid and, honestly, its DERIVED status: these are candidates extracted
  * from classified points, not surveyed building outlines, and the property set
- * says so. Coordinates are written in the source projected frame (the same
- * frame the points were gridded in); the CRS is recorded in a `metadata` member
- * rather than reprojected here, matching how the contour export keeps the survey
- * grid rather than forcing lon/lat. Pure, no IO.
+ * says so.
+ *
+ * Coordinates are WGS 84 longitude/latitude, which is what RFC 7946 means, and
+ * there is no `crs` member because the RFC removed it. This used to write the
+ * ring's RENDER-LOCAL coordinates while a `metadata.crs` declared them to be in
+ * the source projected frame. They were neither: extraction runs on the
+ * recentred buffer, so a UTM scan exported a building at coordinates near the
+ * grid origin labelled as easting/northing, and a reader placed it hundreds of
+ * kilometres from the site. The caller reprojects, and refuses when it cannot —
+ * the same rule the contour writer and the scan-footprint KML already follow.
+ * Pure, no IO.
  */
 
 import type { Pt2 } from './footprintTrace';
 
 export interface FootprintFeatureInput {
-  /** Closed outer ring in projected coordinates (first vertex not repeated). */
+  /**
+   * Closed outer ring in WGS 84 lon/lat (first vertex not repeated). The caller
+   * converts; passing render-local or projected points here writes a file whose
+   * coordinates do not mean what the format says they mean.
+   */
   readonly ring: readonly Pt2[];
   /** Cell-count area in the source frame's own unit squared. Always present. */
   readonly areaSource: number;
@@ -33,8 +44,13 @@ export interface FootprintFeatureInput {
 }
 
 export interface FootprintGeoJsonOptions {
-  /** Source CRS label (e.g. "EPSG:3301"), recorded as provenance. */
-  readonly crs?: string | null;
+  /**
+   * Source CRS label (e.g. "EPSG:3301"), recorded as provenance ONLY — the
+   * coordinates are lon/lat. RFC 7946 removed the `crs` member precisely so a
+   * reader never has to ask which frame a position is in, so this must never
+   * be written back as one.
+   */
+  readonly sourceCrsLabel?: string | null;
   /** Method/version stamp for the extraction. */
   readonly method?: string;
 }
@@ -49,7 +65,7 @@ export function footprintsToGeoJson(
   options: FootprintGeoJsonOptions = {},
 ): {
   type: 'FeatureCollection';
-  metadata: { crs: string | null; product: string; note: string };
+  metadata: { extractedFromCrs?: string; product: string; note: string };
   features: Array<Record<string, unknown>>;
 } {
   const features = footprints
@@ -79,9 +95,11 @@ export function footprintsToGeoJson(
   return {
     type: 'FeatureCollection',
     metadata: {
-      crs: options.crs ?? null,
+      // Provenance, not a coordinate declaration: which frame the footprints
+      // were EXTRACTED in, before reprojection.
+      ...(options.sourceCrsLabel ? { extractedFromCrs: options.sourceCrsLabel } : {}),
       product: 'building-footprint-candidates',
-      note: 'Derived footprint candidates from classified building points; not surveyed outlines. Coordinates are in the source projected frame.',
+      note: 'Derived footprint candidates from classified building points; not surveyed outlines. Coordinates are WGS 84 longitude/latitude per RFC 7946.',
     },
     features,
   };

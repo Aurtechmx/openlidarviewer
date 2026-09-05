@@ -9,9 +9,9 @@ const square = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 6 }, { x: 0, y: 6 }
 
 describe('footprintsToGeoJson', () => {
   it('emits a closed Polygon feature per footprint with derived provenance', () => {
-    const gj = footprintsToGeoJson([{ ring: square, areaSource: 60, areaM2: 60, centroidX: 5, centroidY: 3, id: 'b1' }], { crs: 'EPSG:3301' });
+    const gj = footprintsToGeoJson([{ ring: square, areaSource: 60, areaM2: 60, centroidX: 5, centroidY: 3, id: 'b1' }], { sourceCrsLabel: 'EPSG:3301' });
     expect(gj.type).toBe('FeatureCollection');
-    expect(gj.metadata.crs).toBe('EPSG:3301');
+    expect(gj.metadata.extractedFromCrs).toBe('EPSG:3301');
     expect(gj.features).toHaveLength(1);
     const f = gj.features[0] as { id: string; geometry: { type: string; coordinates: number[][][] }; properties: Record<string, unknown> };
     expect(f.id).toBe('b1');
@@ -31,9 +31,9 @@ describe('footprintsToGeoJson', () => {
     expect(gj.features).toHaveLength(0);
   });
 
-  it('records a null CRS when none is supplied, and never invents one', () => {
+  it('omits the extraction CRS when none is supplied, and never invents one', () => {
     const gj = footprintsToGeoJson([{ ring: square, areaSource: 60, areaM2: 60, centroidX: 5, centroidY: 3 }]);
-    expect(gj.metadata.crs).toBeNull();
+    expect(gj.metadata.extractedFromCrs).toBeUndefined();
     // Coordinates are the source projected values, not reprojected.
     const ring = (gj.features[0] as { geometry: { coordinates: number[][][] } }).geometry.coordinates[0];
     expect(ring[1]).toEqual([10, 0]);
