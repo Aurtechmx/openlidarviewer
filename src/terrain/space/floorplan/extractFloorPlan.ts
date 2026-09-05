@@ -221,6 +221,17 @@ export interface FloorPlanParams {
   readonly upAxis: Axis;
   /** Scale from source units to metres (default 1 — assume metres). */
   readonly unitToMetres?: number;
+  /**
+   * Whether that scale is CONFIRMED by the frame.
+   *
+   * `unitToMetres` is an inert 1 for a local or unknown-unit scan — which is the
+   * ordinary state of the phone and raw-scanner captures this feature exists
+   * for. The Space panel and the report's numeric table both disclose that; the
+   * plan DRAWING did not, and printed "10.0 m (32.8 ft)" dimension lines with
+   * nothing behind the metre. Default true keeps every georeferenced caller
+   * unchanged.
+   */
+  readonly unitKnown?: boolean;
   /** Max points to sample. Default 300 000 (the wallSlice default). */
   readonly maxSamples?: number;
   /** Wall band bottom / top, metres above the floor. Defaults 0.7 / 1.8. */
@@ -673,6 +684,15 @@ export function extractFloorPlan(
   }
 
   const reasons: string[] = [];
+  // FIRST, so it is read before any dimension is trusted: every length and area
+  // on this sheet is drawn from an unconfirmed scale. The wording matches the
+  // Space panel's caveat, which the same scan already shows.
+  if (params.unitKnown === false) {
+    reasons.push(
+      'Coordinate units are unverified — the dimensions and areas on this plan assume metres. '
+      + 'Confirm the source CRS before relying on the figures.',
+    );
+  }
   // Basis line: the band offsets ACTUALLY used (the widened retry shows its
   // real numbers), and an honest distinction between a detected floor plane
   // and a percentile-estimated anchor.

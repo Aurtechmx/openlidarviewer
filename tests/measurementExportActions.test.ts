@@ -51,6 +51,7 @@ function deps(over: Partial<MeasurementExportActionDeps> = {}): Recorded {
       unitToMetres: 1,
       verticalUnitToMetres: 1,
       crsKnown: true,
+    geographicCrs: false,
     },
     geo: () => {
       order.push('geo');
@@ -122,6 +123,7 @@ describe('exportMeasurementsFile — landing local points in the source frame', 
         unitToMetres: 1,
         verticalUnitToMetres: 0.3048,
         crsKnown: true,
+    geographicCrs: false,
       },
     });
     await exportMeasurementsFile('csv', r.deps);
@@ -138,6 +140,7 @@ describe('exportMeasurementsFile — landing local points in the source frame', 
         unitToMetres: 1,
         verticalUnitToMetres: 1,
         crsKnown: false,
+    geographicCrs: false,
       },
     });
     await exportMeasurementsFile('geojson', r.deps);
@@ -181,6 +184,7 @@ describe('exportMeasurementsFile — landing local points in the source frame', 
         unitToMetres: 1,
         verticalUnitToMetres: 1,
         crsKnown: true,
+    geographicCrs: false,
       },
       loadMeasurementExport: load as unknown as MeasurementExportActionDeps['loadMeasurementExport'],
     });
@@ -218,6 +222,7 @@ describe('exportMeasurementIntegrityReport — a reproducible signed report', ()
         unitToMetres: 1,
         verticalUnitToMetres: 1,
         crsKnown: false,
+    geographicCrs: false,
       },
     });
     await exportMeasurementIntegrityReport(r.deps);
@@ -240,6 +245,7 @@ describe('exportMeasurementIntegrityReport — a reproducible signed report', ()
         unitToMetres: 1,
         verticalUnitToMetres: 1,
         crsKnown: true,
+    geographicCrs: false,
       },
     });
     await exportMeasurementIntegrityReport(r.deps);

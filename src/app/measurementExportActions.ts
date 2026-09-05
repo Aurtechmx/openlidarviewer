@@ -23,6 +23,16 @@ export interface MeasureExportView {
   readonly verticalUnitToMetres: number;
   /** True when the scan's linear scale is known — drives the M1 units caveat. */
   readonly crsKnown: boolean;
+  /**
+   * True when the horizontal frame is ANGULAR (lon/lat degrees).
+   *
+   * The controller has always tracked this and grades measurements on it, but
+   * the export view did not expose it, so the export hardcoded `false`. Two
+   * things went wrong from that: the GeoJSON kept a named CRS member it should
+   * have suppressed, and a degree difference was carried into the metre-named
+   * columns by a scalar factor that cannot exist for an angular frame.
+   */
+  readonly geographicCrs: boolean;
 }
 
 export interface MeasurementExportActionDeps {
@@ -67,10 +77,13 @@ export async function exportMeasurementsFile(
     unitToMetres: measure.unitToMetres,
     verticalUnitToMetres: measure.verticalUnitToMetres,
     crsName: geo.crsName,
-    geographic: false,
+    // The RESOLVED frame's own answer, not a literal. A geographic frame has no
+    // scalar metres-per-unit at all, so it is neither verified nor convertible.
+    geographic: measure.geographicCrs,
     // A local / unknown-unit scan has an inert factor of 1, so the `_m` columns
-    // are nominal, not metres — the evidence note then says so (M1).
-    unitsVerified: measure.crsKnown,
+    // are nominal, not metres — the evidence note then says so (M1). An angular
+    // frame is unverified for a stronger reason: no scalar could make it metres.
+    unitsVerified: measure.crsKnown && !measure.geographicCrs,
   };
   const { measurementsToGeoJSON, measurementsToCsv } = await deps.loadMeasurementExport();
   const text =

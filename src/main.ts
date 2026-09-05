@@ -2150,18 +2150,16 @@ function newAnalysePanel(
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
         // scale note says ft — and a local/unresolved frame stamps an honest
-        // "unitless" rather than asserting metres. Undefined before a CRS
-        // resolves ⇒ serializeContours keeps its standing metre default.
+        // "unitless" rather than asserting metres. Undefined before a CRS resolves
+        // ⇒ serializeContours keeps its standing metre default.
         linearUnit: cur?.linearUnit,
         resolvedUnitToMetres: ctx.linearUnitKnown ? ctx.linearUnitToMetres : undefined, // RESOLVED, not declared
         resolvedCrsLabel: cur ? (cur.epsg != null ? `EPSG:${cur.epsg}` : cur.name ?? null) : null,
-        // Source frame → WGS 84 lon/lat, from the SAME resolved CRS and origin the
-        // rest of this context uses; absent when it cannot be converted, and the
-        // exports then refuse. Anchored at the scan's origin, which the converter
-        // probes — (0,0) fails every UTM grid. TWO of them, named for the frame
-        // they ACCEPT: contours arrive shifted to world, extraction render-local.
-        // One name served both; the subtract cancelled the add, so footprints
-        // landed at the projection origin.
+        // Source frame → WGS 84 lon/lat, from the resolved CRS and origin the rest of
+        // this context uses; absent when it cannot be converted. Anchored at the
+        // scan's origin, which the converter probes: (0,0) fails every UTM grid.
+        // TWO of them, named for the frame they ACCEPT — contours arrive in world,
+        // extraction render-local; one name served both, landing footprints at 0,0.
         ...(() => {
           const o = origin ?? null;
           const local = o && cur ? makeLocalToLonLat(cur, [o[0], o[1], o[2]]) : null;
@@ -2396,6 +2394,8 @@ interface SpaceExportContext {
   readonly object: ObjectMetrics | null;
   readonly spaceKind: 'interior' | 'object';
   readonly unitToMetres: number;
+  /** Whether that factor is confirmed; an inert 1 must not print as metres. */
+  readonly unitKnown: boolean;
   readonly upAxis: SpaceMetrics['up'];
   readonly basename: string;
 }
@@ -2490,7 +2490,7 @@ function newObjectPanel(
       // tracing (see FLOORPLAN_GATHER_POINTS).
       floorPlan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
         upAxis: ctx.upAxis,
-        unitToMetres: ctx.unitToMetres,
+        unitToMetres: ctx.unitToMetres, unitKnown: ctx.unitKnown,
         maxSamples: FLOORPLAN_GATHER_POINTS,
         ...FLOORPLAN_OPTIONS,
         // User-tunable wall-snapping + adaptive-band selections from the panel
@@ -2525,7 +2525,7 @@ function newObjectPanel(
     // tracing (see FLOORPLAN_GATHER_POINTS).
     const plan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
       upAxis: ctx.upAxis,
-      unitToMetres: ctx.unitToMetres,
+      unitToMetres: ctx.unitToMetres, unitKnown: ctx.unitKnown,
       maxSamples: FLOORPLAN_GATHER_POINTS,
       ...FLOORPLAN_OPTIONS,
       // User-tunable wall-snapping + adaptive-band selections from the panel
@@ -3128,8 +3128,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
       spaceKind: effective === 'interior' ? 'interior' : 'object',
-      unitToMetres,
-      unitKnown: spaceCtx.linearUnitKnown,
+      unitToMetres, unitKnown: spaceCtx.linearUnitKnown,
       hasRgb,
       sourcePointCount: gathered.totalPoints,
       // A still-streaming cloud is measured on its resident subset only — lead
@@ -3161,6 +3160,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       object,
       spaceKind,
       unitToMetres,
+      unitKnown: spaceCtx.linearUnitKnown,
       upAxis: shape.up,
       basename: lastCloudName || 'scan',
     };
