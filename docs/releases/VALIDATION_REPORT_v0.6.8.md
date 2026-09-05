@@ -3,7 +3,7 @@
 ## No product changed evidence level
 
 The register holds 34 claims: 2 at E1, 6 at E2, 9 at E3 and 17 at E4. Nothing
-reached E5. No claim changed level. One claim was ADDED at E2:
+reached E5. No claim changed level. One claim was added at E2:
 CONTOURS-CARTOGRAPHIC separates the generalized contour line from the analytical
 one, which had been carrying the analytical geometry's E4 cross-check even though
 generalization deliberately moves vertices off the line that study measured. That
