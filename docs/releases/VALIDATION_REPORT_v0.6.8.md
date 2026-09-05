@@ -2,9 +2,13 @@
 
 ## No product changed evidence level
 
-The register holds 33 claims at the same levels it held at v0.6.7: 2 at E1, 5 at
-E2, 9 at E3 and 17 at E4. Nothing reached E5. This release promotes no claim, so
-there is no new cross-implementation or field result to report, and the
+The register holds 34 claims: 2 at E1, 6 at E2, 9 at E3 and 17 at E4. Nothing
+reached E5. No claim changed level. One claim was ADDED at E2:
+CONTOURS-CARTOGRAPHIC separates the generalized contour line from the analytical
+one, which had been carrying the analytical geometry's E4 cross-check even though
+generalization deliberately moves vertices off the line that study measured. That
+is a correction to what was claimed, not a new result. This release promotes no
+claim, so there is no new cross-implementation or field result to report, and the
 scientific invariance gate confirms the terrain products are unchanged. Ten
 commits in this cycle carry an `e5` prefix, and every one of them prepares the
 Rogue holdout rather than reporting it: the tiles are registered, the split is

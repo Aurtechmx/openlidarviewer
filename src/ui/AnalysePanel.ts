@@ -2516,7 +2516,7 @@ export class AnalysePanel {
       // result when the style already matches), then serialize with the unified
       // provenance derived from that SAME result.
       const result = await this._resultForExport();
-      const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance }] =
+      const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance, contourArtifactClaims }] =
         await Promise.all([loadContourDownload(), loadExportProvenance()]);
       // Re-verify after the regeneration: the captured context is the right one
       // for `basename`/`mapCtx`, but a scan opened during the rebuild means the
@@ -2535,6 +2535,9 @@ export class AnalysePanel {
         // §19: stamp the evidence-gate permit that authorised this file, so the
         // artifact records the decision (validated / exploratory + watermark).
         exportPermit: permitStamp(permit),
+        // What the file actually contains: the geometry AND the surface it was
+        // cut from. The evidence resolves to whichever is weaker.
+        evidenceClaimIds: contourArtifactClaims(result),
       });
       // World-frame registration: the analysis runs in the cloud's recentred
       // LOCAL frame, so exports must add the load-time origin back (the same
@@ -3149,7 +3152,7 @@ export class AnalysePanel {
     const annotations = opts.includeAnnotations ? this._cb.getAnnotations?.() ?? [] : [];
     const sceneUpAxis = mapCtx?.sceneUpAxis ?? 'z';
     const { buildMapSheetPdf } = await loadMapSheetPdf();
-    const { buildExportProvenance } = await loadExportProvenance();
+    const { buildExportProvenance, contourArtifactClaims } = await loadExportProvenance();
     // The unified provenance, derived from the SAME result the sheet plots, so
     // the title block's CRS / datum / style / accuracy / readiness / date can't
     // drift from the GeoJSON / DXF / SVG / DEM exports of this scan.
@@ -3160,6 +3163,9 @@ export class AnalysePanel {
       metricVersion: TERRAIN_METRIC_VERSION,
       // Stamp the permit into the sheet's provenance (title-block honesty).
       exportPermit: permitStamp(permit),
+      // A map sheet plots the contours over the DTM; it claims no more than the
+      // weaker of the two.
+      evidenceClaimIds: contourArtifactClaims(result),
     });
     const bytes = await buildMapSheetPdf({
       model: result.model,

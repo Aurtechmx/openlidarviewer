@@ -23,6 +23,7 @@ vi.mock('../src/render/streaming/sampleGrade', () => ({
 
 import { runFullCloudGrade } from '../src/render/streaming/runFullCloudGradeAction';
 import { summarizeSampleGrade } from '../src/render/streaming/sampleGrade';
+import { spatialContextFrom } from '../src/geo/SpatialContext';
 
 function makePanel() {
   return {
@@ -42,8 +43,13 @@ const mkViewer = (cloud: FakeViewer['streamingCloud'], decoder: unknown = {}): F
   streamingCloud: cloud,
   streamingDecoder: decoder,
 });
+/**
+ * The RESOLVED frame is now an argument. The default mirrors a scan with no
+ * resolved CRS, which is what these guard tests assume.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const run = (viewer: FakeViewer, panel: any) => runFullCloudGrade({ viewer, panel } as any);
+const run = (viewer: FakeViewer, panel: any, crs: unknown = null) =>
+  runFullCloudGrade({ viewer, panel, context: spatialContextFrom(crs as never) } as any);
 
 describe('runFullCloudGrade — stale-cloud guard', () => {
   beforeEach(() => gradeFullCloud.mockReset());
@@ -93,15 +99,17 @@ describe('runFullCloudGrade — unit-confirmation gate', () => {
     vi.mocked(summarizeSampleGrade).mockClear();
   });
 
-  // The action builds the scan's ONE SpatialContext from `source.crs()`, and
-  // the facade reads the whole CrsInfo, so these stand-ins carry the fields a
-  // real detection always supplies. The unit columns under test are unchanged.
+  // The action is HANDED the scan's ONE SpatialContext (built at the app
+  // boundary from the resolved CRS), and the facade reads the whole CrsInfo, so
+  // these stand-ins carry the fields a real detection always supplies.
   const CRS_BASE = { source: 'wkt' as const, name: 'Test CRS', isGeographic: false };
 
-  const runWithCrs = async (crs: unknown) => {
-    const cloud = { crs: () => crs } as FakeViewer['streamingCloud'];
+  const runWithCrs = async (crs: unknown, sourceCrs: unknown = crs) => {
+    // `sourceCrs` is what the FILE declares; `crs` is what the app resolved to.
+    // They differ only in the override test below.
+    const cloud = { crs: () => sourceCrs } as FakeViewer['streamingCloud'];
     const panel = makePanel();
-    await run(mkViewer(cloud), panel);
+    await run(mkViewer(cloud), panel, crs);
     return panel;
   };
 
@@ -123,6 +131,26 @@ describe('runFullCloudGrade — unit-confirmation gate', () => {
   it('summarises confirmed for a foot CRS', async () => {
     await runWithCrs({ ...CRS_BASE, linearUnit: 'foot', linearUnitToMetres: 0.3048 });
     expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(true);
+  });
+
+  it('grades in the RESOLVED frame, not the one the file declares', async () => {
+    // The operator has overridden a file that declares no usable unit with a
+    // real metre CRS. Reading the header here would gate the grade off the
+    // declaration the app has already replaced, so the figures would be labelled
+    // "per source unit" for a scan the rest of the app measures in metres.
+    await runWithCrs(
+      { ...CRS_BASE, linearUnit: 'metre', linearUnitToMetres: 1 },
+      { ...CRS_BASE, linearUnit: 'unknown', linearUnitToMetres: 1 },
+    );
+    expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(true);
+  });
+
+  it('does not claim metres just because the FILE declares them', async () => {
+    // The mirror case, and the one that matters more: the header says metres,
+    // the operator resolved to Local coordinates. The grade must follow the
+    // resolution and stop claiming an SI unit.
+    await runWithCrs(null, { ...CRS_BASE, linearUnit: 'metre', linearUnitToMetres: 1 });
+    expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(false);
   });
 });
 

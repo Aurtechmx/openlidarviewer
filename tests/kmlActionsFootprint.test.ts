@@ -66,6 +66,9 @@ function recorder(
     hasViewer: () => true,
     geo: () => ({ origin, crsName: crs?.name, name: 'quarry-north.laz' }),
     crsCurrent: () => crs,
+    // The factory's scans are Z-up unless a reading says otherwise; the site
+    // KML reads this independently of the extent reading.
+    upAxis: () => reading?.upAxis ?? 'z',
     annotations: () => [],
     measurements: () => [],
     viewpoints: () => [],

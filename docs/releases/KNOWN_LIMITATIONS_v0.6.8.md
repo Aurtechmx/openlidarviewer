@@ -2,8 +2,10 @@
 
 ## No evidence promotion this cycle
 
-The register holds 33 claims: 2 at E1, 5 at E2, 9 at E3 and 17 at E4. No product
-is at E5, and none moved this cycle. The E5 work in v0.6.8 is preparation, not
+The register holds 34 claims: 2 at E1, 6 at E2, 9 at E3 and 17 at E4. No product
+is at E5, and none moved this cycle. One was added: generalized contours are now
+their own claim at E2, because the cross-implementation study behind the CONTOURS
+E4 ran on the analytical geometry and a simplified line is not covered by it. The E5 work in v0.6.8 is preparation, not
 promotion: the Rogue tiles are registered, the dev and holdout split is
 deterministic and exposure-honest, and the manifests recompute their class
 histogram and ground invariants. The holdout itself has not been run. A product

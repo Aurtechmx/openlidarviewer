@@ -21,7 +21,12 @@
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import { epsgFromCrsLabel } from '../../export/crsIdentifier';
-import { buildExportProvenance, provenanceLines, type ExportPermitStamp } from './exportProvenance';
+import {
+  buildExportProvenance,
+  provenanceLines,
+  dtmArtifactClaims,
+  type ExportPermitStamp,
+} from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
@@ -220,6 +225,8 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     softwareVersion: opts.softwareVersion,
     metricVersion: opts.metricVersion,
     exportPermit: opts.exportPermit ?? null,
+    // The raster, plus the hold-out accuracy figure when the README prints one.
+    evidenceClaimIds: dtmArtifactClaims(result),
   });
 
   const cov = (() => {

@@ -31,6 +31,7 @@ import {
   footprintConvexHullRing,
   footprintLonLatRing,
   footprintRectangleRing,
+  lonLatUpAxisRefusal,
   footprintUpAxisRefusal,
   ScanFootprintError,
   type FootprintExtent,
@@ -85,6 +86,12 @@ export interface KmlActionDeps {
   readonly worldUp: () => Vec3;
   /** Render-units to metres for the measurement metrics. */
   readonly unitToMetres: () => number;
+  /**
+   * The resolved up-axis of the active scan. Read independently of
+   * {@link scanExtent} because the site KML places features without needing an
+   * extent, yet is built on the same X/Y-is-horizontal assumption.
+   */
+  readonly upAxis: () => SpatialUpAxis;
   /** The active scan's horizontal extent in LOCAL space, or null when none. */
   readonly scanExtent: () => ScanExtentReading | null;
   /**
@@ -141,6 +148,11 @@ export function siteKmlStatus(deps: KmlActionDeps): KmlActionStatus {
       reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
     };
   }
+  // A known CRS is not enough: the placement also assumes X/Y is the ground
+  // plane. The footprint export has always refused a Y-up scan for this reason;
+  // the site KML converts the same way and must refuse on the same ground.
+  const axisRefusal = lonLatUpAxisRefusal(deps.upAxis());
+  if (axisRefusal) return { ready: false, reason: axisRefusal };
   return { ready: true, reason: '' };
 }
 
@@ -151,6 +163,13 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   const crs = deps.crsCurrent();
   const toLonLat = makeLocalToLonLat(crs, geo.origin);
   if (!toLonLat) return; // gated by siteKmlStatus; defensive no-op if reached
+  // Re-checked here, not just in the status: the status renders the button, and
+  // the axis can resolve differently by the time it is clicked.
+  const axisRefusal = lonLatUpAxisRefusal(deps.upAxis());
+  if (axisRefusal) {
+    deps.setError(axisRefusal);
+    return;
+  }
   // Every input is read BEFORE the serialiser import. The origin and CRS above
   // were already captured pre-await while the features, up vector and unit scale
   // were read after it, so a placement made (or a scan opened) during the import

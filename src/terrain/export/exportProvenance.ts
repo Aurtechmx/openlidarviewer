@@ -38,6 +38,7 @@ import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
 import { exportGate, EVIDENCE_REGISTRY } from '../../validation/evidenceRegistry';
 import { evidenceRank, INDEPENDENCE_FLOOR } from '../../validation/evidenceLevel';
+import { governingClaim } from '../../validation/evidenceComposition';
 import {
   resolveExportEvidence,
   type EvidenceContext,
@@ -376,8 +377,23 @@ export interface ExportProvenanceOptions {
   /**
    * The DTM-family claim id to resolve scope-aware evidence for. Defaults to
    * 'DTM' when an evidence context or method digest is supplied.
+   *
+   * Prefer {@link evidenceClaimIds} for anything holding more than one product;
+   * this single-claim form remains for a path that genuinely ships one.
    */
   readonly evidenceClaimId?: string;
+  /**
+   * EVERY product this artifact contains. The evidence resolves against the
+   * weakest constituent (see `governingClaim`), because a reader may claim no
+   * more about a bundle than about the least-supported thing inside it. A
+   * contour cut from a DTM carries the DTM's shortfall whether or not the file
+   * mentions it.
+   *
+   * Takes precedence over `evidenceClaimId`. Omit both and the resolution falls
+   * back to 'DTM' — correct only for a DTM-only artifact, which is why the
+   * bundle paths now name their contents explicitly.
+   */
+  readonly evidenceClaimIds?: readonly string[];
   /** Digest of the method that produced this artifact — the method-match anchor. */
   readonly methodDigest?: string | null;
   /** The artifact context checked against registered study envelopes. */
@@ -533,6 +549,46 @@ export function buildExportProvenance(
 }
 
 /**
+ * What a contour artifact actually contains, as claim ids.
+ *
+ * Always the surface it was cut from: the register's own CONTOURS assumption is
+ * "depends on DTM validity", and a contour cannot be better evidenced than the
+ * grid whose cells produced it. The geometry claim then follows the style that
+ * really ran — a generalized line is `CONTOURS-CARTOGRAPHIC`, because the GDAL
+ * cross-check that earned CONTOURS its E4 ran on the ANALYTICAL geometry and
+ * generalization deliberately moves vertices off it.
+ *
+ * A hold-out accuracy figure is its own claim: printing an RMSEz makes a
+ * statement the artifact must be able to support.
+ */
+export function contourArtifactClaims(result: AnalyseContoursResult): string[] {
+  const style = result.generationParams?.contourStyle ?? result.model?.contourStyle ?? null;
+  // 'crisp' is the analytical geometry; every other style has been generalized.
+  const geometry = style === 'crisp' ? 'CONTOURS' : 'CONTOURS-CARTOGRAPHIC';
+  const ids = [geometry, 'DTM'];
+  if (result.accuracyStandards?.rmseZM != null) ids.push('HOLDOUT-RMSE');
+  return ids;
+}
+
+/** What a DTM raster package contains. */
+export function dtmArtifactClaims(result: AnalyseContoursResult): string[] {
+  const ids = ['DTM'];
+  if (result.accuracyStandards?.rmseZM != null) ids.push('HOLDOUT-RMSE');
+  return ids;
+}
+
+/**
+ * The ONE claim every evidence surface on this artifact resolves against. A
+ * declared constituent set composes to its weakest member; a single declared
+ * claim is used as given; nothing declared falls back to 'DTM'.
+ */
+function resolveClaimId(opts: ExportProvenanceOptions): string {
+  const ids = opts.evidenceClaimIds;
+  if (ids != null && ids.length > 0) return governingClaim(ids);
+  return opts.evidenceClaimId ?? 'DTM';
+}
+
+/**
  * The single authoritative evidence resolution for this export (§18). Composes
  * the scoped overlay, the baseline registry gate and the note into one object
  * via {@link resolveExportEvidence}, keyed on whatever artifact context the path
@@ -542,7 +598,7 @@ export function buildExportProvenance(
  * is byte-identical to before, while every surface now reads the SAME object.
  */
 function buildEvidenceResolution(opts: ExportProvenanceOptions): ExportEvidenceResolution {
-  const claimId = opts.evidenceClaimId ?? 'DTM';
+  const claimId = resolveClaimId(opts);
   const hasSignal =
     opts.evidenceContext != null || (opts.methodDigest != null && opts.methodDigest !== '');
   const context: EvidenceContext | undefined = hasSignal
@@ -566,7 +622,7 @@ function buildScopedEvidence(opts: ExportProvenanceOptions): ExportScopedEvidenc
   const hasSignal =
     opts.evidenceContext != null || (opts.methodDigest != null && opts.methodDigest !== '');
   if (!hasSignal) return null;
-  const claimId = opts.evidenceClaimId ?? 'DTM';
+  const claimId = resolveClaimId(opts);
   const context: EvidenceContext = {
     ...(opts.evidenceContext ?? {}),
     ...(opts.methodDigest != null && opts.evidenceContext?.methodDigest == null

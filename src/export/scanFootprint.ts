@@ -115,6 +115,40 @@ export function footprintCrsRefusal(crs: FootprintCrs | null | undefined): strin
 }
 
 /**
+ * Why this scan's up-axis makes a lon/lat placement impossible, or null when it
+ * does not.
+ *
+ * {@link makeLocalToLonLat} hands the local point's X and Y to the projection as
+ * easting and northing, and takes Z as height. That pairing is the ground plane
+ * in a Z-up frame and nowhere else. A Y-up source — a phone scan, a glTF- or
+ * OBJ-derived cloud — keeps its horizontal plane on X/Z, so every converted
+ * position would be built from one horizontal axis and the ELEVATION axis: a
+ * measurement 3 m above the ground moves 3 m north on the map.
+ *
+ * The result still looks like a coordinate, which is why this refuses instead of
+ * adapting. Swapping the accessors here would fix nothing on its own — the
+ * origin the local frame is offset from was captured in the same X/Y convention,
+ * so a correct Y-up placement needs the whole local-to-CRS derivation redone.
+ *
+ * `'unknown'` refuses too: an undetected axis is not evidence of Z-up.
+ *
+ * The scan-footprint export has gated on this since it shipped
+ * (`footprintUpAxisRefusal`); this is the same rule stated where the assumption
+ * actually lives, so every consumer of the mapper can reach it.
+ */
+export function lonLatUpAxisRefusal(upAxis: SpatialUpAxis | null | undefined): string | null {
+  if (upAxis === 'z') return null;
+  if (upAxis === 'y') {
+    return 'This scan is stored Y-up, so its horizontal plane is not the X/Y pair a lat/lon '
+      + 'placement is built from. Every feature would be positioned using its height as a '
+      + 'northing, so nothing is written for Y-up sources.';
+  }
+  return "The scan's up-axis was not determined, so there is no way to tell which two axes are "
+    + 'horizontal. Features placed from the wrong pair would still look like plausible '
+    + 'coordinates on the map, so nothing is written.';
+}
+
+/**
  * Why this scan's up-axis makes a footprint impossible, or null when it does not.
  *
  * The extent is read off local X/Y, and every downstream step — the ring, the
