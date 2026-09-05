@@ -2153,21 +2153,21 @@ function newAnalysePanel(
         // "unitless" rather than asserting metres. Undefined before a CRS
         // resolves ⇒ serializeContours keeps its standing metre default.
         linearUnit: cur?.linearUnit,
-        // Source frame → WGS 84 lon/lat, for the RFC 7946 contour GeoJSON.
-        // Built from the SAME resolved CRS and world origin the rest of this
-        // context uses, so the standard export and the native one describe one
-        // scan. Null when the CRS cannot be converted — the export then refuses
-        // rather than writing eastings into a longitude field.
-        // Anchored at the scan's own origin, because the converter probes the
-        // anchor to decide whether it can work at all — probing (0,0) would
-        // fail every UTM grid. Contour coordinates arrive already shifted to
-        // world, so they are re-localised against that same anchor here.
-        toLonLat: (() => {
-          if (!origin || !cur) return undefined;
-          const m = makeLocalToLonLat(cur, [origin[0], origin[1], origin[2]]);
-          if (!m) return undefined;
-          return (p: readonly [number, number, number]): [number, number, number] =>
-            m([p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]]);
+        resolvedUnitToMetres: ctx.linearUnitKnown ? ctx.linearUnitToMetres : undefined, // RESOLVED, not declared
+        resolvedCrsLabel: cur ? (cur.epsg != null ? `EPSG:${cur.epsg}` : cur.name ?? null) : null,
+        // Source frame → WGS 84 lon/lat, from the SAME resolved CRS and origin the
+        // rest of this context uses; absent when it cannot be converted, and the
+        // exports then refuse. Anchored at the scan's origin, which the converter
+        // probes — (0,0) fails every UTM grid. TWO of them, named for the frame
+        // they ACCEPT: contours arrive shifted to world, extraction render-local.
+        // One name served both; the subtract cancelled the add, so footprints
+        // landed at the projection origin.
+        ...(() => {
+          const o = origin ?? null;
+          const local = o && cur ? makeLocalToLonLat(cur, [o[0], o[1], o[2]]) : null;
+          if (!o || !local) return {};
+          const w = (p: readonly [number, number, number]): [number, number, number] => local([p[0] - o[0], p[1] - o[1], p[2] - o[2]]);
+          return { localToLonLat: local, worldToLonLat: w };
         })(),
         // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
         // it declares one, else the horizontal linear factor when the frame is
@@ -2695,8 +2695,7 @@ const kmlDeps: KmlActionDeps = {
   hasViewer: () => Boolean(viewer),
   geo: exportGeoContext,
   crsCurrent: () => crsService.current(),
-  // The RESOLVED axis, from the same context every other consumer reads.
-  upAxis: () => crsService.context().upAxis,
+  upAxis: () => crsService.context().upAxis, // RESOLVED axis
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
   measurements: () => viewer?.measure.getMeasurements() ?? [],
   viewpoints: () => viewBookmarks.savedViews.map(
@@ -2884,6 +2883,7 @@ const exportPanel = new ExportPanel({
     if (!viewer) return [];
     return collectMeasurementFindings(measurementExportActionDeps(viewer));
   },
+  activeFindingsTargetId: () => scans.activeExportTargetId(), // ledger owner
   exportFindingsReport: async (findings) => {
     if (!viewer) return;
     await exportFindingsReport(measurementExportActionDeps(viewer), findings);

@@ -292,7 +292,14 @@ export interface AnalysePanelCallbacks {
      * Undefined when the CRS cannot be converted; the export then refuses
      * rather than writing projected numbers into degree fields.
      */
-    toLonLat?: (p: readonly [number, number, number]) => [number, number, number];
+    /** RENDER-LOCAL source coordinates to WGS 84 lon/lat. */
+    localToLonLat?: (p: readonly [number, number, number]) => [number, number, number];
+    /** WORLD (origin-restored) source coordinates to WGS 84 lon/lat. */
+    worldToLonLat?: (p: readonly [number, number, number]) => [number, number, number];
+    /** Metres per source unit, from the RESOLVED frame; undefined when unknown. */
+    resolvedUnitToMetres?: number;
+    /** The resolved frame's label, for provenance. Never the declared one. */
+    resolvedCrsLabel?: string | null;
     /** CRS WKT for the DEM export's .prj sidecar, when known. */
     wkt?: string | null;
     /**
@@ -780,7 +787,15 @@ export class AnalysePanel {
           // GeoJSON uses, origin restore included. Footprints wrote their
           // render-local coordinates under a georeferenced label; they now take
           // the seam that already exists, and refuse where it refuses.
-          toLonLat: fctx.toLonLat ?? null,
+          // Extraction runs on the RECENTRED buffer, so it needs the local converter.
+          toLonLat: fctx.localToLonLat ?? null,
+          // The RESOLVED frame, so a user CRS correction reaches the metric
+          // twins and the provenance label instead of the file's declaration.
+          unitToMetres: fctx.resolvedUnitToMetres,
+          crsLabel: fctx.resolvedCrsLabel ?? null,
+          // X/Y is the horizontal plane only in a Z-up frame; the extraction's
+          // 2D coordinates go to a mapper with that contract.
+          upAxis: fctx.sceneUpAxis ?? 'unknown',
           launcherHost: this._featureLauncher,
           reviewHost: this._featureReview,
           onLaunch: () => this._featureReview.classList.remove('olv-hidden'),
@@ -2554,7 +2569,7 @@ export class AnalysePanel {
           // Resolved CRS unit → DXF $INSUNITS + the SVG scale note, so a
           // foot-based CRS stamps feet instead of the metre default.
           linearUnit: mapCtx?.linearUnit,
-          toLonLat: mapCtx?.toLonLat,
+          toLonLat: mapCtx?.worldToLonLat,
         }),
       );
     } catch (err) {

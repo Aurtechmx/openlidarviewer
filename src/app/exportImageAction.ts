@@ -19,6 +19,7 @@ import type { Viewer } from '../render/Viewer';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { loadPngWorldFile } from '../lazyChunks';
 import { triggerDownload } from '../io/download';
+import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
 
 /** The progress surface the action drives (a `DropZone`, structurally). */
 export interface ExportImageProgress {
@@ -51,7 +52,13 @@ export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps)
   const viewer = deps.getViewer();
   if (!viewer) return;
   const progress = deps.getProgress();
-  const sourceName = deps.scans.activeId ? viewer.getCloud(deps.scans.activeId)?.name : viewer.streamingCloud?.name;
+  // The target this export was ASKED for. The Studio chunk loads across an
+  // await and the scene adapter reads live state through closures, so nothing
+  // stops the user opening another scan in the gap: the pixels would come from
+  // the new scan while the filename and class-scope stamp below describe this
+  // one. Captured here, compared before anything is written.
+  const requestedTarget = deps.scans.activeId;
+  const sourceName = requestedTarget ? viewer.getCloud(requestedTarget)?.name : viewer.streamingCloud?.name;
   const base = sourceName ? deps.baseName(sourceName) : 'openlidarviewer';
   const label = MODE_LABEL[mode] ?? mode;
   progress.setProgress(`Exporting ${label}…`);
@@ -60,6 +67,12 @@ export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps)
     // "showing N of M classes" banner; empty when nothing is hidden.
     .exportImage(mode, {}, deps.currentClassScopeStamp())
     .then(async (result) => {
+      // The scan moved while the Studio loaded or rendered. The bytes in hand
+      // describe whatever is on screen now; the name and stamp describe what was
+      // asked for. There is no honest file to write from that pair.
+      if (!sameExportTarget(requestedTarget, deps.scans.activeId)) {
+        throw new Error(EXPORT_SCAN_CHANGED_REFUSAL);
+      }
       // Georeferenced ortho path: when the exporter returned world-file data
       // (true top-down ortho frame + known world origin + CRS WKT), the download
       // is one ZIP — PNG + `.pgw` + `.prj` — that QGIS/ArcGIS place directly.

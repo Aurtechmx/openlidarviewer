@@ -41,6 +41,8 @@ import { footprintsToGeoJson } from '../features/footprintGeoJson';
 import { methodRef, methodTag } from '../science/methodRegistry';
 import { triggerDownload } from '../io/download';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
+import { lonLatUpAxisRefusal } from '../export/scanFootprint';
+import type { SpatialUpAxis } from '../geo/SpatialContext';
 import { el } from './dom';
 
 export interface MountFeatureCandidatesOptions {
@@ -53,6 +55,21 @@ export interface MountFeatureCandidatesOptions {
    * degree fields.
    */
   readonly toLonLat: LocalToLonLatSourceZ | null;
+  /**
+   * Metres per source unit from the RESOLVED frame, or undefined when the frame
+   * states none. The extraction had derived this from `cloud.metadata.crs` — the
+   * file's DECLARATION — so a scan the user re-declared kept producing areas and
+   * spans in the rejected unit while the rest of the app used the correction.
+   */
+  readonly unitToMetres?: number;
+  /** The RESOLVED frame's label, for GeoJSON provenance. Never the declared one. */
+  readonly crsLabel: string | null;
+  /**
+   * The scan's up-axis. Extraction itself is axis-aware, but its 2D output goes
+   * to a converter whose contract is X = easting, Y = northing, so a geographic
+   * export from a non-Z-up scan is refused rather than placed from the wrong pair.
+   */
+  readonly upAxis: SpatialUpAxis;
   /** Where the launcher card is rendered. */
   readonly launcherHost: HTMLElement;
   /** The container the review list is rendered into, revealed on launch. */
@@ -84,11 +101,12 @@ export function mountFeatureCandidates(
   const review = new CandidateReviewStore();
   // A CRS label for the GeoJSON provenance, or null when the scan is not
   // georeferenced. Prefer the EPSG code, else the CRS's own best-effort name.
-  const toLonLat = opts.toLonLat;
+  // A geographic export needs BOTH a convertible frame and a Z-up one.
+  const axisRefusal = lonLatUpAxisRefusal(opts.upAxis);
+  const toLonLat = axisRefusal === null ? opts.toLonLat : null;
   // Provenance label only: which frame the extraction ran in. The coordinates
   // written are lon/lat, so this is never a coordinate declaration.
-  const crs = cloud.metadata?.crs;
-  const crsLabel = crs ? (crs.epsg != null ? `EPSG:${crs.epsg}` : crs.name) : null;
+  const crsLabel = opts.crsLabel;
   let built = false;
 
   const card = el('div', { className: 'olv-feature-launcher' });
@@ -104,7 +122,9 @@ export function mountFeatureCandidates(
 
   // Read the building/wire points once, here, so the gate that showed this
   // launcher (any classification present) is separated from the specific fact.
-  const input = buildFeatureExtractionInput(cloud);
+  // The resolved frame is authoritative even when it states no unit: the metric
+  // twins then read as unknown rather than reverting to the file's declaration.
+  const input = buildFeatureExtractionInput(cloud, { metresPerUnit: opts.unitToMetres ?? null });
   if (!input) {
     card.append(
       el('div', {
@@ -138,7 +158,7 @@ export function mountFeatureCandidates(
   button.addEventListener('click', () => {
     if (!built) {
       built = true;
-      reviewHost.replaceChildren(buildReview(input, review, crsLabel, toLonLat));
+      reviewHost.replaceChildren(buildReview(input, review, crsLabel, toLonLat, axisRefusal));
     }
     onLaunch();
   });
@@ -160,6 +180,7 @@ function buildReview(
   review: CandidateReviewStore,
   crsLabel: string | null,
   toLonLat: LocalToLonLatSourceZ | null,
+  axisRefusal: string | null,
 ): HTMLElement {
   const root = el('div', { className: 'olv-feature-review' });
 
@@ -180,7 +201,7 @@ function buildReview(
   const conductor = extractConductorCandidate(input.conductorPoints, input.unit, input.up);
   const conductors = conductor ? [conductor] : [];
 
-  root.append(renderBuildingSection(buildings, review, crsLabel, toLonLat));
+  root.append(renderBuildingSection(buildings, review, crsLabel, toLonLat, axisRefusal));
   root.append(renderConductorSection(conductors, input.conductorPoints.length, review));
   return root;
 }
@@ -226,6 +247,7 @@ function renderBuildingSection(
   review: CandidateReviewStore,
   crsLabel: string | null,
   toLonLat: LocalToLonLatSourceZ | null,
+  axisRefusal: string | null,
 ): HTMLElement {
   const section = el('div', { className: 'olv-feature-section' });
   section.append(
@@ -253,7 +275,7 @@ function renderBuildingSection(
     row.append(statusChips(b.id, review, row));
     section.append(row);
   }
-  section.append(buildFootprintExport(buildings, review, crsLabel, toLonLat));
+  section.append(buildFootprintExport(buildings, review, crsLabel, toLonLat, axisRefusal));
   return section;
 }
 
@@ -306,6 +328,8 @@ function buildFootprintExport(
   review: CandidateReviewStore,
   crsLabel: string | null,
   toLonLat: LocalToLonLatSourceZ | null,
+  /** Why no geographic export is possible, when the reason is the up-axis. */
+  axisRefusal: string | null,
 ): HTMLElement {
   const wrap = el('div', { className: 'olv-feature-export' });
   const status = el('div', { className: 'olv-feature-export-status', text: '' });
@@ -320,10 +344,12 @@ function buildFootprintExport(
     // georeferencing failure would send the user to do something that cannot
     // help, so the frame is checked on its own and says what is actually wrong.
     if (!toLonLat) {
-      status.textContent =
-        'Not exported — this scan has no coordinate reference system that can be '
-        + 'converted to longitude and latitude, and GeoJSON positions are defined '
-        + 'in WGS 84. Assign or correct the CRS, then export.';
+      // Two different reasons, and sending the user to fix the CRS when the real
+      // problem is the up-axis would waste their time.
+      status.textContent = axisRefusal
+        ?? 'Not exported — this scan has no coordinate reference system that can be '
+          + 'converted to longitude and latitude, and GeoJSON positions are defined '
+          + 'in WGS 84. Assign or correct the CRS, then export.';
       return;
     }
     const geojson = acceptedFootprintGeoJson(buildings, review, crsLabel, toLonLat);
