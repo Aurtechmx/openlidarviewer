@@ -118,3 +118,41 @@ export async function writeScanScopedExport<D>(io: ScanScopedExportIo<D>): Promi
   }
   io.write(text);
 }
+
+/**
+ * ── Space / Object exports ───────────────────────────────────────────────────
+ *
+ * The same rule, for the space side. Both space exports capture the routing
+ * context, await a lazy chunk (the report path pulls pdf-lib), and only THEN
+ * gather positions — and the gather prefers a fresh dense read whenever it is
+ * larger than the captured snapshot, which for a 60k capture and a 300k
+ * re-gather is the ordinary case rather than the edge. Scan opens are additive,
+ * so that read can return the newly opened scan or both fused, while the name,
+ * metrics, unit factor and up-axis still come from the captured one.
+ *
+ * The frame counts for the same reason: every dimension in the captured metrics
+ * was scaled by the unit factor resolved when they ran.
+ */
+
+/** The identity a captured space/object context carries. */
+export interface SpaceContextStamp {
+  readonly targetId: string | null;
+  readonly crsRevision: number;
+}
+
+/** Refusal when the scan or the frame moved while the export's chunk loaded. */
+export const SPACE_CONTEXT_MOVED =
+  'The scan or its coordinate system changed while this export was preparing, so the '
+  + 'measurements and the geometry would come from different states. Re-run the analysis.';
+
+/**
+ * True when the capture still matches live state. Compared on the same two facts
+ * every other export boundary uses, so one rule governs them all.
+ */
+export function spaceContextStillCurrent(
+  stamp: SpaceContextStamp,
+  now: SpaceContextStamp,
+): boolean {
+  return sameExportTarget(stamp.targetId, now.targetId)
+    && stamp.crsRevision === now.crsRevision;
+}

@@ -31,7 +31,7 @@ import type { CrsService } from '../geo/CrsService';
  *
  * A full `CrsService` satisfies this, so no caller changes.
  */
-export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context'>;
+export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context' | 'crsRevision'>;
 // The one spatial context this pipeline reads its unit / datum / axis facts
 // from, plus the named vertical-fallback policy that replaces the local
 // `verticalUnitToMetres ?? linearUnitToMetres` chains.
@@ -524,8 +524,18 @@ export function createTerrainAnalysisRunner(
     // must not touch the UI — the newer run (or the reset) owns it now.
     const runToken = ++terrainRunToken;
     const runDatasetId = getActiveId();
+    // The FRAME the core is computed in. `deriveCoreParams` reads the spatial
+    // context below and bakes its unit and datum facts into the run, so a CRS
+    // change mid-run means the finished result describes a frame the app has
+    // replaced. Without this term the result still landed, and the panel then
+    // stamped it with the CURRENT revision — a result computed under one frame,
+    // recorded as current under another, and passed by the freshness gate.
+    const runCrsRevision = crsService.crsRevision();
     const isStale = (): boolean =>
-      runToken !== terrainRunToken || getActiveId() !== runDatasetId || !analysePanel.isVisible();
+      runToken !== terrainRunToken
+      || getActiveId() !== runDatasetId
+      || crsService.crsRevision() !== runCrsRevision
+      || !analysePanel.isVisible();
     /**
      * Bail on a stale run, releasing the busy state when nothing else owns it.
      *
@@ -616,7 +626,10 @@ export function createTerrainAnalysisRunner(
       // leave the busy/skeleton state to whoever owns it now.
       if (bail()) return;
       analysePanel.setBusy(false);
-      analysePanel.update(result);
+      // The stamp comes FROM the computation. Manufacturing it in the panel from
+      // whatever was live at land time is how a superseded frame got recorded as
+      // current in the first place.
+      analysePanel.update(result, { targetId: runDatasetId, crsRevision: runCrsRevision });
       // Contour Studio launcher: hand the panel the CRS frame facts (projected
       // vs geographic, vertical unit known) that live here on the CRS service.
       // The panel lazily loads the launcher (adapter + render), computes the

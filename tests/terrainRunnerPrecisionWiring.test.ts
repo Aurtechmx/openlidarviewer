@@ -84,7 +84,9 @@ function runnerOver(span: number, onFrame: (f: Frame) => void) {
     verticalUnitToMetres: 1,
   } as const;
   const context = spatialContextFrom(resolved as unknown as Parameters<typeof spatialContextFrom>[0]);
-  const fakeCrs: Pick<CrsService, 'current' | 'context'> = {
+  const fakeCrs: Pick<CrsService, 'current' | 'context' | 'crsRevision'> = {
+  // The frame revision the run is pinned to; constant in these doubles.
+  crsRevision: () => 0,
     current: () => resolved as unknown as ReturnType<CrsService['current']>,
     context: () => context,
   };

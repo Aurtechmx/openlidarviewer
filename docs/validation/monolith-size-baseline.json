@@ -1,7 +1,7 @@
 {
   "files": {
     "src/main.ts": {
-      "lines": 5529,
+      "lines": 5547,
       "goal": 2500
     },
     "src/render/Viewer.ts": {

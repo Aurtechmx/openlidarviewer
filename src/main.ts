@@ -124,7 +124,7 @@ import { spaceMetrics, resolveLinearUnitScale, positionsInMetres, type SpaceMetr
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
-import { writeScanScopedExport, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
+import { writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
   crsIsKnown,
   exportScanFootprintKml,
@@ -1520,6 +1520,8 @@ async function runDeriveClassification(): Promise<void> {
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
   const deriveOptions = classifierOptions(cloud, crsService.context());
+    // The frame is baked into these thresholds (physical metres → source units).
+    const deriveCrsRevision = crsService.crsRevision();
 
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
@@ -1535,7 +1537,7 @@ async function runDeriveClassification(): Promise<void> {
       // not a hang. (Off-thread, so the UI repaints between phases.)
       (phase) => showLassoToast(`Classify · ${phase}…`),
     );
-    if (id !== scans.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    if (id !== scans.activeId || viewer.getCloud(id) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return;
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
@@ -1608,6 +1610,8 @@ async function runFillUnclassified(): Promise<void> {
     existingClassification: cloud.classification,
     ...classifierOptions(cloud, crsService.context()),
   };
+  // See the Classify path: the frame is baked into these thresholds.
+  const deriveCrsRevision = crsService.crsRevision();
 
   classifyRunning = true;
   showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
@@ -1621,7 +1625,7 @@ async function runFillUnclassified(): Promise<void> {
       undefined,
       (phase) => showLassoToast(`Fill unclassified · ${phase}…`),
     );
-    if (id !== scans.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    if (id !== scans.activeId || viewer.getCloud(id) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return;
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
@@ -2394,8 +2398,9 @@ interface SpaceExportContext {
   readonly object: ObjectMetrics | null;
   readonly spaceKind: 'interior' | 'object';
   readonly unitToMetres: number;
-  /** Whether that factor is confirmed; an inert 1 must not print as metres. */
-  readonly unitKnown: boolean;
+  readonly unitKnown: boolean; // an inert 1 must not print as metres
+  /** The scan and frame these metrics were computed under. */
+  readonly targetId: string | null; readonly crsRevision: number;
   readonly upAxis: SpaceMetrics['up'];
   readonly basename: string;
 }
@@ -2408,6 +2413,10 @@ let lastSpaceExport: SpaceExportContext | null = null;
 // Floor-plan extraction therefore re-gathers at the terrain-analysis budget;
 // the routing snapshot stays as the metrics source AND the fallback when the
 // fresh gather fails (e.g. mid-stream).
+/** Live identity for the space-export freshness check. */
+const spaceCtxCurrent = (c: SpaceExportContext): boolean =>
+  spaceContextStillCurrent(c, { targetId: scans.activeExportTargetId(), crsRevision: crsService.crsRevision() });
+
 const FLOORPLAN_GATHER_POINTS = 300_000;
 
 /**
@@ -2483,6 +2492,7 @@ function newObjectPanel(
     const ctx = lastSpaceExport;
     if (!ctx) return;
     const { buildSpaceReportPdf } = await loadSpaceReportPdf();
+    if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
     let floorPlan = null;
     if (ctx.spaceKind === 'interior') {
       const { extractFloorPlan } = await loadFloorPlan();
@@ -2521,6 +2531,7 @@ function newObjectPanel(
     const ctx = lastSpaceExport;
     if (!ctx || ctx.spaceKind !== 'interior') return;
     const { extractFloorPlan, floorPlanSvg } = await loadFloorPlan();
+    if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
     // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
     // tracing (see FLOORPLAN_GATHER_POINTS).
     const plan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
@@ -2901,6 +2912,11 @@ const exportPanel = new ExportPanel({
 // once here to seed the initial (no-scan ⇒ collapsed) state.
 crsService.subscribe((resolved) => {
   exportPanel.setCrsKnown(crsIsKnown(resolved));
+  // Both froze unit factors from the OLD frame: the grade decodes for seconds
+  // guarded only on its streaming source, and every space/object dimension was
+  // scaled by the superseded factor. Cancel one, invalidate the other.
+  cancelFullCloudGrade();
+  lastSpaceExport = null;
   if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } // reveal on scan load, hide + reset produced on close
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
@@ -3159,6 +3175,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       space,
       object,
       spaceKind,
+      targetId: scans.activeExportTargetId(), crsRevision: crsService.crsRevision(),
       unitToMetres,
       unitKnown: spaceCtx.linearUnitKnown,
       upAxis: shape.up,
@@ -5218,6 +5235,7 @@ function resetToEmptyState(): void {
   objectPanel?.setVisible(false);
   objectDesiredVisible = false;
   objectContent = null;
+  lastSpaceExport = null; // it outlived the scan it describes
   // Hide the Measurements panel and drop its tracked desired state so a fresh
   // open starts hidden. Null-safe: the panel is lazy-mounted, so a reset before
   // any scan simply has nothing to clear.

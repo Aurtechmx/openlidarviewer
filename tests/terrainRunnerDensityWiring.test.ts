@@ -73,6 +73,7 @@ function makeRunner(
   // / datum / axis from the ResolvedCrs, so the fake answers that too. A null
   // CRS resolves to the explicit unknown frame, exactly as in production.
   const fakeCrs = {
+    crsRevision: () => 0,
     current: () => null,
     context: () => spatialContextFrom(null),
   } as unknown as CrsService;
