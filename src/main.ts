@@ -5346,10 +5346,10 @@ function compareLoadedLayers(): void {
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     try {
-      const { ctxA, comparable, frames, beforeCloud, afterCloud } = prepareEpochFrames(crsService, a, b);
+      const { ctxA, comparable, reason, frames, beforeCloud, afterCloud } = prepareEpochFrames(crsService, a, b);
       if (!comparable) {
         inspector.setCompareResult(
-          epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`),
+          epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`, reason ?? 'vertical-unit'),
         );
         inspector.setDifferenceAvailable(false);
         return;

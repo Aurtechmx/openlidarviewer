@@ -275,6 +275,17 @@ export interface EpochFrameFacts {
   readonly isGeographic: boolean;
   /** Metres per horizontal source unit as declared (1 is the placeholder when unknown). */
   readonly linearUnitToMetres: number;
+  /**
+   * Metres per VERTICAL source unit, when the frame declares one of its own.
+   *
+   * Dropped here before, so the epoch DTM scaled Z by the horizontal factor. On
+   * a compound frame (foot heights over a metre grid — GeoTIFF key 4099, or a
+   * VERT_CS UNIT) that applied the SMRF filter's physical 0.5 m / 2.5 m ground
+   * tolerances as feet, roughly 3.3x too tight, changing which points were
+   * taken as ground. Undefined leaves the consumer on the horizontal factor,
+   * which is correct for every single-unit frame.
+   */
+  readonly verticalUnitToMetres?: number;
 }
 
 /**
@@ -289,6 +300,9 @@ export function epochFrameFacts(ctx: SpatialContext): EpochFrameFacts {
     verticalDatum: ctx.verticalDatum ?? null,
     isGeographic: ctx.isGeographic,
     linearUnitToMetres: ctx.linearUnitToMetres,
+    ...(Number.isFinite(ctx.verticalUnitToMetres) && (ctx.verticalUnitToMetres as number) > 0
+      ? { verticalUnitToMetres: ctx.verticalUnitToMetres as number }
+      : {}),
   };
 }
 

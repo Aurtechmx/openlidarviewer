@@ -217,6 +217,19 @@ function sampleWorld(
   positions: Float32Array,
   origin: readonly [number, number, number],
   maxSamples: number,
+  /**
+   * Z multiplier that puts the vertical axis in the SAME unit as X/Y.
+   *
+   * ICP's correspondence search is fully 3-D — `icpRegister`'s `nearest` sums
+   * dx²+dy²+dz² — so a compound frame with foot heights over a metre grid fed
+   * it a distorted distance: a 1-unit vertical separation counted as 1 when it
+   * was really 0.3048 horizontal-equivalent. That biased which points paired
+   * with which, the trimmed-inlier ranking, the convergence test and the
+   * reported residual. The solved transform is constrained to yaw + x/y with
+   * translation[2] zeroed, so scaling Z here needs no inverse afterwards — it
+   * only removes the anisotropy from the fit.
+   */
+  zScale: number,
 ): Vec3[] {
   const n = (positions.length / 3) | 0;
   if (n === 0) return [];
@@ -228,7 +241,7 @@ function sampleWorld(
   for (let i = 0; i < n; i += stride) {
     const x = positions[i * 3] + ox;
     const y = positions[i * 3 + 1] + oy;
-    const z = positions[i * 3 + 2] + oz;
+    const z = (positions[i * 3 + 2] + oz) * zScale;
     if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) out.push([x, y, z]);
   }
   return out;
@@ -309,8 +322,17 @@ export function alignEpochClouds(
   const horizontalUnitUnknown = options.horizontalUnitKnown === false;
 
   const maxSamples = options.maxSamples ?? 1500;
-  const beforeSample = sampleWorld(before.positions, before.origin ?? ZERO, maxSamples);
-  const afterSample = sampleWorld(after.positions, after.origin ?? ZERO, maxSamples);
+  // One isotropic space for the fit. `1` for every single-unit frame, so a
+  // metre or foot scan is sampled exactly as before.
+  const zScaleOf = (c: EpochCloud): number => {
+    const h = Number.isFinite(c.linearUnitToMetres) && (c.linearUnitToMetres as number) > 0
+      ? (c.linearUnitToMetres as number) : 1;
+    const v = Number.isFinite(c.verticalUnitToMetres) && (c.verticalUnitToMetres as number) > 0
+      ? (c.verticalUnitToMetres as number) : h;
+    return v / h;
+  };
+  const beforeSample = sampleWorld(before.positions, before.origin ?? ZERO, maxSamples, zScaleOf(before));
+  const afterSample = sampleWorld(after.positions, after.origin ?? ZERO, maxSamples, zScaleOf(after));
 
   if (beforeSample.length < 3 || afterSample.length < 3) {
     return { after, alignment: NO_ALIGNMENT };

@@ -54,12 +54,23 @@ import { measurementMetrics } from '../export/measurementExport';
 // Formatters
 // ─────────────────────────────────────────────────────────────────────────────
 
-function formatLinear(metres: number, system: UnitSystem): string {
+/**
+ * The label an UNVERIFIED scale may carry. The measurement engine runs on an
+ * inert factor of 1 when the frame states no linear unit, so the number is the
+ * raw source coordinate difference — real, but not metres, and not convertible
+ * to feet either. Naming the unit it actually is beats naming one it might not
+ * be. Matches the wording the CSV / GeoJSON exports already ship.
+ */
+const SOURCE_UNIT = 'source units';
+
+function formatLinear(metres: number, system: UnitSystem, verified = true): string {
   // A non-finite length is not a length. Without this the cm branch below
   // printed "NaN cm" and the km branch "Infinity km" into the PDF, while
   // `formatVolume` two functions down already returned an em dash for the same
   // input.
   if (!Number.isFinite(metres)) return '—';
+  // No confirmed scale: report the source figure, convert nothing, claim nothing.
+  if (!verified) return `${metres.toFixed(displayDecimals(metres, 2, 4))} ${SOURCE_UNIT}`;
   // Adaptive precision through the shared measure policy, so a report length
   // carries the same significant figures the panel and CSV do — a sub-centimetre
   // separation no longer rounds to `0.00`.
@@ -87,13 +98,27 @@ function formatLinear(metres: number, system: UnitSystem): string {
  * "—" where the headline number should have lived. See
  * `computeValue` below for the call sites.
  */
-function formatVolume(cubicMetres: number, system: UnitSystem): string {
+function formatVolume(cubicMetres: number, system: UnitSystem, verified = true): string {
   if (!Number.isFinite(cubicMetres)) return '—';
+  if (!verified) return `${cubicMetres.toFixed(displayDecimals(cubicMetres, 2, 4))} ${SOURCE_UNIT}³`;
   if (system === 'imperial') {
     const cuYd = cubicMetres * 1.30795;
     return `${cuYd.toFixed(displayDecimals(cuYd, 2, 4))} yd³`;
   }
   return `${cubicMetres.toFixed(displayDecimals(cubicMetres, 2, 4))} m³`;
+}
+
+/**
+ * `formatArea` is shared with the live overlay, so the honesty gate wraps it
+ * here rather than changing a function other surfaces depend on.
+ */
+function formatAreaHonest(m2: number, system: UnitSystem, verified: boolean): string {
+  if (!verified) {
+    return Number.isFinite(m2)
+      ? `${m2.toFixed(displayDecimals(m2, 2, 4))} ${SOURCE_UNIT}²`
+      : '—';
+  }
+  return formatArea(m2, system);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,6 +141,8 @@ function computeValue(
   up: Vec3,
   unitToMetres: number,
   verticalToMetres: number,
+  /** False when the frame states no linear unit; nothing may be called metres. */
+  verified: boolean,
 ): string {
   // One shared, up-axis- and compound-CRS-correct computation for every kind;
   // this function only formats the metre values it returns (M6).
@@ -127,11 +154,11 @@ function computeValue(
     case 'distance':
     case 'polyline':
     case 'profile':
-      return mm.length_m != null ? formatLinear(mm.length_m, system) : '—';
+      return mm.length_m != null ? formatLinear(mm.length_m, system, verified) : '—';
     case 'area':
-      return mm.area_m2 != null ? formatArea(mm.area_m2, system) : '—';
+      return mm.area_m2 != null ? formatAreaHonest(mm.area_m2, system, verified) : '—';
     case 'height':
-      return mm.vertical_m != null ? formatLinear(Math.abs(mm.vertical_m), system) : '—';
+      return mm.vertical_m != null ? formatLinear(Math.abs(mm.vertical_m), system, verified) : '—';
     case 'angle':
       return mm.angle_deg != null ? `${mm.angle_deg.toFixed(1)}°` : '—';
     case 'slope':
@@ -141,16 +168,16 @@ function computeValue(
       if (mm.grade_pct != null) return `${mm.grade_pct.toFixed(2)}%`;
       return mm.rise_m != null ? 'vertical' : '—';
     case 'box':
-      return mm.volume_m3 != null ? formatVolume(mm.volume_m3, system) : '—';
+      return mm.volume_m3 != null ? formatVolume(mm.volume_m3, system, verified) : '—';
     case 'volume': {
       // Mirror the live headline exactly (see MeasureController._headlineText)
       // so the PDF and the panel agree to the digit.
       if (mm.area_m2 == null) return '—';
-      const area = formatArea(mm.area_m2, system);
+      const area = formatAreaHonest(mm.area_m2, system, verified);
       if (mm.cut_m3 == null) return `${area} footprint · cut/fill —`;
-      const fill = formatVolume(Math.max(0, mm.fill_m3 ?? 0), system);
-      const cut = formatVolume(Math.max(0, mm.cut_m3 ?? 0), system);
-      const net = formatVolume(Math.abs(mm.net_m3 ?? 0), system);
+      const fill = formatVolume(Math.max(0, mm.fill_m3 ?? 0), system, verified);
+      const cut = formatVolume(Math.max(0, mm.cut_m3 ?? 0), system, verified);
+      const net = formatVolume(Math.abs(mm.net_m3 ?? 0), system, verified);
       const netSign = (mm.net_m3 ?? 0) < 0 ? 'cut' : 'fill';
       return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
     }
@@ -176,6 +203,8 @@ function buildProfileExtras(
   // line that contradicted its own headline and the live tool (M6 completion).
   up: Vec3,
   vf: number,
+  /** False when the frame states no linear unit; see `computeValue`. */
+  verified: boolean,
 ): ReportProfileDeliverableExtras | undefined {
   if (m.kind !== 'profile' || m.points.length < 2) return undefined;
   const a = m.points[0];
@@ -205,7 +234,7 @@ function buildProfileExtras(
   // headline, and `Δh` scales by the vertical factor (compound CRS), not `f`.
   const mm = measurementMetrics(m, up, f, vf, 6);
   const fmtM = (v: number | undefined): string =>
-    v != null ? formatLinear(v, system) : '—';
+    v != null ? formatLinear(v, system, verified) : '—';
   const summaryLine =
     `Horizontal ${fmtM(mm.horizontal_m)} · ` +
     `3D ${fmtM(mm.length_m)} · ` +
@@ -213,7 +242,7 @@ function buildProfileExtras(
     `${mm.grade_pct != null ? `${mm.grade_pct.toFixed(2)}%` : '—'} grade`;
 
   const stationsLine = stations
-    .map((s) => formatLinear(s.chainage * f, system))
+    .map((s) => formatLinear(s.chainage * f, system, verified))
     .join(' · ');
 
   const signPrefix = (v: number): string => (v >= 0 ? '+' : '');
@@ -239,7 +268,7 @@ function buildProfileExtras(
   return {
     summary: summaryLine,
     stations: stationsLine,
-    stationInterval: `Station interval ${formatLinear(interval * f, system)} (${stations.length} stations)`,
+    stationInterval: `Station interval ${formatLinear(interval * f, system, verified)} (${stations.length} stations)`,
     slopeSummary: slopeLine,
     coverageCaveat: m.profileChartResidentOnly
       ? 'Resident-node analysis only — profile may refine as streaming loads.'
@@ -287,14 +316,24 @@ export function buildMeasurementRows(
   // single-unit so existing callers are unchanged.
   worldUp: Vec3 = [0, 0, 1],
   verticalToMetres = unitToMetres,
+  /**
+   * Whether the scan's linear scale is CONFIRMED. When the frame states no
+   * unit, the engine runs on an inert factor of 1, so the values below are
+   * source-coordinate figures. They were still printed as "m" / "m²" / "m³",
+   * in the same PDF whose dataset summary reads "Units: Unconfirmed — extents
+   * in source units". Defaults true so every georeferenced caller is unchanged.
+   */
+  unitsVerified = true,
 ): readonly ReportMeasurementRow[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   const vf = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : f;
   return measurements.map((m) => ({
     name: m.name,
     kind: m.kind,
-    value: computeValue(m, unitSystem, worldUp, f, vf),
+    value: computeValue(m, unitSystem, worldUp, f, vf, unitsVerified),
     pointCount: m.points.length,
-    profileExtras: m.kind === 'profile' ? buildProfileExtras(m, unitSystem, f, worldUp, vf) : undefined,
+    profileExtras: m.kind === 'profile'
+      ? buildProfileExtras(m, unitSystem, f, worldUp, vf, unitsVerified)
+      : undefined,
   }));
 }

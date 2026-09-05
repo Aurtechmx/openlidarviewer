@@ -26,14 +26,17 @@ import type { ClipBox } from '../src/render/clip/clipBox';
 const hoisted = vi.hoisted(() => ({
   /** Every cloud handed to the converter, so a test can see what was written. */
   converted: [] as { pointCount: number }[],
+  /** The ConvertOptions each export actually reached the writer with. */
+  options: [] as Record<string, unknown>[],
   /** Filenames that reached the browser download helper. */
   downloads: [] as string[],
 }));
 
 vi.mock('../src/lazyChunks', () => ({
   loadConvertEngine: async () => ({
-    convertCloud: (cloud: { pointCount: number }) => {
+    convertCloud: (cloud: { pointCount: number }, options: Record<string, unknown>) => {
       hoisted.converted.push(cloud);
+      hoisted.options.push(options);
       return {
         file: { filename: 'scan.las', bytes: new Uint8Array([0]), mime: 'application/octet-stream' },
         report: { pointCount: cloud.pointCount, crsNote: 'CRS kept', log: [] },
@@ -111,6 +114,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   hoisted.converted.length = 0;
+  hoisted.options.length = 0;
   hoisted.downloads.length = 0;
 });
 
@@ -148,6 +152,24 @@ function enableFullRes(root: FakeEl): void {
 
 function statusText(root: FakeEl): string {
   return root.findByClass('olv-export-status')[0]?.textContent ?? '';
+}
+
+/** Click the format pill whose label contains `label` (pills are `olv-bc-pill`). */
+function pickFormat(root: FakeEl, label: string): void {
+  const pill = root.findByClass('olv-bc-pill')
+    .find((p) => p.textContent.toLowerCase().includes(label.toLowerCase()));
+  expect(pill, `format pill ${label} missing`).toBeDefined();
+  pill!.fire('click');
+}
+
+/** Toggle the checkbox whose label mentions `text`. */
+function setCheckbox(root: FakeEl, text: string, on: boolean): void {
+  const label = root.findByClass('olv-export-fullres-label')
+    .find((l) => l.textContent.toLowerCase().includes(text.toLowerCase()));
+  expect(label, `checkbox "${text}" missing`).toBeDefined();
+  const box = label!.children[0];
+  box.checked = on;
+  box.fire('change');
 }
 
 /** Press Export and wait for the async export to settle. */
@@ -271,5 +293,83 @@ describe('ExportPanel — full-resolution export re-verifies before it writes', 
     await pressExport(root);
 
     expect(hoisted.downloads).toEqual(['scan.las']);
+  });
+});
+
+describe('ExportPanel — the request is frozen at click time', () => {
+  /**
+   * Only the Export BUTTON is disabled while an export runs. The format pills,
+   * the CRS pills, both checkboxes and the EPSG inputs stay live, and every one
+   * of those was read AFTER the multi-second full-resolution decode. So the file
+   * could be written to a request the user never made: pressed as LAS, written
+   * as XYZ; pressed with classification excluded, written with it included.
+   */
+  it('converts with the format chosen at click time, not one picked mid-decode', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const cloud = twoPointCloud();
+    let root!: FakeEl;
+    const panel = new ExportPanel({
+      getCloud: () => cloud,
+      hasFullSource: () => true,
+      isReduced: () => true,
+      getFullCloud: async () => {
+        // The user changes their mind while the decode runs.
+        pickFormat(root, 'xyz');
+        return cloud;
+      },
+      getActiveScanId: () => 'scan-a',
+    });
+    root = panel.element as unknown as FakeEl;
+    enableFullRes(root);
+    pickFormat(root, 'las');
+    await pressExport(root);
+
+    expect(hoisted.options.length, 'the export should have run').toBe(1);
+    expect(hoisted.options[0].format, 'the mid-decode format reached the writer').not.toBe('xyz');
+  });
+
+  it('never writes classification the request excluded', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const cloud = twoPointCloud();
+    let root!: FakeEl;
+    const panel = new ExportPanel({
+      getCloud: () => cloud,
+      hasFullSource: () => true,
+      isReduced: () => true,
+      getFullCloud: async () => {
+        // Re-ticked AFTER the class gate has already judged the request.
+        setCheckbox(root, 'classification', true);
+        return cloud;
+      },
+      getActiveScanId: () => 'scan-a',
+    });
+    root = panel.element as unknown as FakeEl;
+    enableFullRes(root);
+    setCheckbox(root, 'classification', false);
+    await pressExport(root);
+
+    if (hoisted.options.length > 0) {
+      // Either the request's own choice was honoured...
+      expect(hoisted.options[0].omitClassification).toBe(true);
+    } else {
+      // ...or the transaction refused. Both are honest; a silent mix is not.
+      expect(statusText(root)).toMatch(/scan|classification|refus/i);
+    }
+  });
+
+  it('a clean run still exports, so the freeze is not a blanket refusal', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const cloud = twoPointCloud();
+    const panel = new ExportPanel({
+      getCloud: () => cloud,
+      hasFullSource: () => true,
+      isReduced: () => true,
+      getFullCloud: async () => cloud,
+      getActiveScanId: () => 'scan-a',
+    });
+    const root = panel.element as unknown as FakeEl;
+    enableFullRes(root);
+    await pressExport(root);
+    expect(hoisted.downloads.length).toBe(1);
   });
 });

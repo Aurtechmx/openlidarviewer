@@ -16,6 +16,7 @@
  */
 
 import type { CrsInfo } from '../io/crs';
+import { sceneUpAxisPolicy, type SourceFormat } from '../io/sniffFormat';
 import type { CrsService } from '../geo/CrsService';
 import { spatialContextFrom, type SpatialContext } from '../geo/SpatialContext';
 import {
@@ -29,6 +30,8 @@ import {
 /** The minimal epoch-cloud shape the frame prep reads. */
 export interface EpochFrameInput {
   readonly name: string;
+  /** The loader's format tag, for the up-axis contract. */
+  readonly sourceFormat?: SourceFormat;
   readonly positions: Float32Array;
   readonly sourceOrigin?: readonly [number, number, number];
   readonly metadata?: { readonly crs?: CrsInfo | null } | null;
@@ -43,15 +46,55 @@ export type PreparedEpochCloud = {
 export interface PreparedEpochFrames {
   /** The BEFORE epoch's context — its vertical factor scales the Δz result. */
   readonly ctxA: SpatialContext;
-  /** False when the two epochs declare different (known) vertical units. */
+  /** False when the epochs cannot be honestly compared; `reason` says why. */
   readonly comparable: boolean;
+  /** Why the comparison was refused, or null when it may proceed. */
+  readonly reason: EpochRefusal | null;
   readonly frames: EpochFrameOptions;
   readonly beforeCloud: PreparedEpochCloud;
   readonly afterCloud: PreparedEpochCloud;
 }
 
-/** Compare-panel lines shown when the two epochs declare different vertical units. */
-export function epochUnitMismatchLines(header: string): string[] {
+/** Why a comparison was refused. */
+export type EpochRefusal = 'vertical-unit' | 'up-axis';
+
+/**
+ * Whether BOTH epochs are Z-up, which the change pipeline requires.
+ *
+ * `compareEpochs` reads X/Y as the ground plane and Z as elevation, and says so
+ * (`verticalAxis: 'z'`, hard-coded). The terrain-analysis path earns that
+ * assumption — `Viewer.gatherTerrainPositions` runs up-axis detection and
+ * rotates a Y-up mesh into the canonical frame first. The compare path never
+ * did: it handed the raw buffers straight in, so a Y-up PLY/OBJ/glTF pair
+ * produced a ground filter, a DTM and a change surface built from one
+ * horizontal axis and the elevation axis. The output looked entirely ordinary.
+ *
+ * This refuses rather than rotating. Canonicalising here would mean rotating
+ * each buffer AND its origin, and carrying that through the aligner and the
+ * ASCII raster — a change that has to be validated, not assumed, and one this
+ * release does not make. Mesh formats carry no mandated up-axis, so a mesh on
+ * either side is enough to withhold the comparison.
+ */
+function epochUpAxisContractHolds(a: EpochFrameInput, b: EpochFrameInput): boolean {
+  const formats = [a.sourceFormat, b.sourceFormat].filter(
+    (f): f is SourceFormat => f !== undefined,
+  );
+  // An unstated format is not evidence of Z-up.
+  if (formats.length !== 2) return false;
+  return sceneUpAxisPolicy(formats, false)?.kind === 'z';
+}
+
+/** Compare-panel lines shown when the two epochs cannot be compared. */
+export function epochUnitMismatchLines(header: string, reason: EpochRefusal = 'vertical-unit'): string[] {
+  if (reason === 'up-axis') {
+    return [
+      header,
+      'Cannot compare — the change pipeline measures elevation on Z, and at least one ' +
+        'of these epochs is a mesh format with no declared up-axis. Comparing them ' +
+        'could difference a horizontal axis and report it as height change. ' +
+        'Re-export both epochs in a Z-up survey format first.',
+    ];
+  }
   return [
     header,
     'Cannot compare — the two epochs declare different vertical units. ' +
@@ -71,9 +114,12 @@ export function prepareEpochFrames(
   const ctxB = spatialContextFrom(
     crsService.resolveFor({ name: b.name, detected: b.metadata?.crs ?? undefined, source: 'las-vlr' }),
   );
+  const unitsOk = epochVerticalScalesComparable(ctxA, ctxB);
+  const axisOk = epochUpAxisContractHolds(a, b);
   return {
     ctxA,
-    comparable: epochVerticalScalesComparable(ctxA, ctxB),
+    comparable: unitsOk && axisOk,
+    reason: !unitsOk ? 'vertical-unit' : (!axisOk ? 'up-axis' : null),
     frames: epochFrameOptions(ctxA, ctxB),
     beforeCloud: { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA) },
     afterCloud: { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB) },
