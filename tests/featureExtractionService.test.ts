@@ -200,7 +200,7 @@ describe('FeatureExtractionService — the traced ring', () => {
         centroidY: c.centroid[1],
         id: c.id,
       })),
-      { crs: 'EPSG:32610' },
+      { sourceCrsLabel: 'EPSG:32610' },
     );
     expect(fc.features).toHaveLength(1);
     const geom = fc.features[0].geometry as { type: string; coordinates: number[][][] };

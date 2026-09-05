@@ -773,8 +773,14 @@ export class AnalysePanel {
     void loadFeatureCandidatesMount()
       .then((m) => {
         if (token !== this._featureToken) return;
+        const fctx = this._cb.getMapContext?.() ?? {};
         this._featureMounted = m.mountFeatureCandidates({
           cloud,
+          // The SAME source-frame -> WGS 84 converter the RFC 7946 contour
+          // GeoJSON uses, origin restore included. Footprints wrote their
+          // render-local coordinates under a georeferenced label; they now take
+          // the seam that already exists, and refuse where it refuses.
+          toLonLat: fctx.toLonLat ?? null,
           launcherHost: this._featureLauncher,
           reviewHost: this._featureReview,
           onLaunch: () => this._featureReview.classList.remove('olv-hidden'),
