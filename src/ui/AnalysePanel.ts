@@ -465,6 +465,9 @@ export class AnalysePanel {
   private readonly _featureReview: HTMLElement;
   private _featureMounted: MountedFeatureCandidates | null = null;
   private _featureScanId: string | null = null;
+  /** Classification epoch and CRS revision the feature workspace was built at. */
+  private _featureEpoch = -1;
+  private _featureCrsRev = -1;
   private _featureToken = 0;
   private readonly _contourLauncher: HTMLElement;
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
@@ -773,9 +776,24 @@ export class AnalysePanel {
       this._teardownFeatures();
       return;
     }
-    if (this._featureScanId === scanId && this._featureMounted) return;
+    // The mount SNAPSHOTS the extraction input, and building candidates are
+    // keyed on ASPRS class 6, so a reclassification changes the candidate set
+    // outright. Keying on the scan alone left the pre-edit footprints on screen
+    // and exportable — the terrain result goes stale on the same event, this did
+    // not. The CRS revision counts too: the mount also captures the frame's
+    // converter and metric scale.
+    const epoch = this._cb.activeClassificationEpoch?.() ?? 0;
+    const crsRev = this._cb.crsRevision?.() ?? 0;
+    if (
+      this._featureScanId === scanId
+      && this._featureEpoch === epoch
+      && this._featureCrsRev === crsRev
+      && this._featureMounted
+    ) return;
     this._teardownFeatures();
     this._featureScanId = scanId;
+    this._featureEpoch = epoch;
+    this._featureCrsRev = crsRev;
     const token = ++this._featureToken;
     void loadFeatureCandidatesMount()
       .then((m) => {
@@ -866,6 +884,13 @@ export class AnalysePanel {
     const show = text != null && this._result != null;
     this._staleNotice.textContent = show ? text : '';
     this._staleNotice.classList.toggle('olv-hidden', !show);
+    // The SAME event that makes the terrain result stale invalidates the
+    // feature workspace: its candidates were extracted from ASPRS class 6 at
+    // mount time, so a class edit can change them outright. Re-keying here
+    // rebuilds it (or tears it down) instead of leaving pre-edit footprints
+    // on screen and exportable. Guarded on `text` so clearing a notice after a
+    // fresh run does not churn the mount.
+    if (text != null) this._refreshFeatureLauncher();
   }
 
   /**

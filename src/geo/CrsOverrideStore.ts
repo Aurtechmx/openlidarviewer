@@ -47,6 +47,40 @@ export interface CrsOverride {
    * — in both cases there is no evidence either way and the override applies.
    */
   readonly detectedEpsg?: number;
+  /**
+   * Whether the declaration above was actually OBSERVED when the override was
+   * made, as opposed to simply missing from the record.
+   *
+   * `detectedEpsg: undefined` conflated two different states: a legacy entry
+   * written before that field existed (no evidence either way) and a file that
+   * positively declared NO CRS (evidence: this dataset had none). The second is
+   * the common case for the scans a user overrides, so the guard fell open
+   * exactly where it was needed — a later unrelated file of the same name, also
+   * declaring nothing, matched and inherited the first one's frame.
+   *
+   * `true` with `detectedEpsg` absent therefore means "declared nothing", which
+   * a file declaring an EPSG can be told apart from. Absent entirely marks a
+   * legacy record, which keeps its previous fail-open behaviour rather than
+   * dropping a choice the user really made.
+   */
+  readonly detectedEpsgObserved?: boolean;
+  /**
+   * The dataset's own size and shape when the override was made: source point
+   * count, and the x/y/z spans of its bounds.
+   *
+   * The name is not an identity. Two unrelated files called `points.laz`, both
+   * declaring no CRS, matched on every other field the record held, so the
+   * first one's frame was applied to the second — internally consistent
+   * coordinates in the wrong place on Earth. These two facts are already in
+   * hand wherever the override is resolved, and the session-restore path
+   * (`matchSessionToScan`) fingerprints a scan on exactly the same pair.
+   *
+   * Absent on legacy entries, which keep their previous behaviour.
+   */
+  readonly identity?: {
+    readonly pointCount?: number;
+    readonly extent?: readonly [number, number, number];
+  };
 }
 
 interface StoredEnvelope {

@@ -117,6 +117,22 @@ export interface KmlActionDeps {
 const NOT_SURVEY_GRADE =
   'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.';
 
+/**
+ * Whether a length in this frame may be labelled metres.
+ *
+ * Requires a PROJECTED frame with a declared linear unit. A geographic frame is
+ * excluded on its own terms: its coordinates are angular, so there is no scalar
+ * metres-per-unit to apply, and 0.001 degrees is not a distance a factor of 1
+ * turns into metres.
+ */
+function linearScaleIsMetric(resolved: ResolvedCrs | null): boolean {
+  return resolved != null
+    && resolved.kind === 'projected'
+    && resolved.linearUnit !== 'unknown'
+    && Number.isFinite(resolved.linearUnitToMetres)
+    && resolved.linearUnitToMetres > 0;
+}
+
 /** True when the resolved CRS is a real-world frame (projected / geographic). */
 export function crsIsKnown(resolved: ResolvedCrs | null): boolean {
   return resolved != null && (resolved.kind === 'projected' || resolved.kind === 'geographic');
@@ -182,9 +198,12 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     // the measurements, so the injected transform places them correctly.
     viewpoints: deps.viewpoints(),
     crsName: geo.crsName ?? crs?.name ?? null,
-    // The exporter reports metres (keys end in _m); unitToMetres scales render
-    // units, so the label is always metres.
-    unitLabel: 'm',
+    // The label follows the RESOLVED frame rather than asserting metres. A
+    // projected frame with a known unit converts; a local or unknown-unit scan
+    // has an inert factor of 1, and an angular frame has no scalar factor at
+    // all, so neither may be published as metres in a file a reader will take
+    // at face value.
+    unitLabel: linearScaleIsMetric(crs) ? 'm' : 'source units (scale unverified)',
     up: deps.worldUp(),
     unitToMetres: deps.unitToMetres(),
     // The RESOLVED vertical unit, not the measurement controller's. That one
