@@ -2695,14 +2695,13 @@ const kmlDeps: KmlActionDeps = {
   hasViewer: () => Boolean(viewer),
   geo: exportGeoContext,
   crsCurrent: () => crsService.current(),
+  // The RESOLVED axis, from the same context every other consumer reads.
+  upAxis: () => crsService.context().upAxis,
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
   measurements: () => viewer?.measure.getMeasurements() ?? [],
-  viewpoints: () =>
-    viewBookmarks.savedViews.map((v) => ({
-      name: v.name,
-      position: v.pose.position,
-      target: v.pose.target,
-    })),
+  viewpoints: () => viewBookmarks.savedViews.map(
+    (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
+  ),
   worldUp: () => viewer.measure.worldUp,
   unitToMetres: () => viewer.measure.unitToMetres,
   // Static: the bounds of the points actually loaded. Streaming: the LAS header
@@ -3948,6 +3947,7 @@ async function runFullCloudGradeAction(): Promise<void> {
       panel: streamingPanel,
       signal: fullCloudGradeController.signal,
       debug,
+      context: crsService.context(), // the resolved frame, not the file's claim
     });
   } finally {
     fullCloudGradeRunning = false;

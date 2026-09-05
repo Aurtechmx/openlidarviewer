@@ -46,6 +46,7 @@ describe('exportSiteKml — one reading of the session, then the write', () => {
       hasViewer: () => true,
       geo: () => ({ origin: [0, 0, 0] as [number, number, number], crsName: 'WGS 84', name: 'site.las' }),
       crsCurrent: () => GEOGRAPHIC,
+      upAxis: () => 'z',
       annotations: () => [],
       measurements: () => measurements,
       viewpoints: () => [],

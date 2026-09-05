@@ -24,7 +24,12 @@ import type { ExportPermitStamp } from './exportProvenance';
 import type { ScientificExportDecision } from '../../export/exportManifest';
 import type { ContourWorldOrigin } from '../contour/contourFeatureModel';
 import type { DxfLinearUnit } from '../contour/dxfContours';
-import { buildExportProvenance, provenanceJson, analysisRecordFromProvenance } from './exportProvenance';
+import {
+  buildExportProvenance,
+  provenanceJson,
+  analysisRecordFromProvenance,
+  contourArtifactClaims,
+} from './exportProvenance';
 import { buildContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
 import { buildContourStudioPdf } from './contourStudioPdf';
 import { serializeContours } from '../contour/contourDownload';
@@ -149,6 +154,10 @@ function gatherDeliverable(
     deliverablePurpose: opts.deliverablePurpose ?? null,
     // Label the contour interval in the real vertical unit, not a hard-coded metre.
     verticalUnitToMetres: opts.verticalUnitToMetres,
+    // A bundle is never stronger than its weakest file. It carries the DTM
+    // raster and the support raster alongside the geometry, so the DTM's own
+    // shortfall against its required level governs the whole package.
+    evidenceClaimIds: contourArtifactClaims(result),
   });
 
   // Honest geometry role: label the bundled GeoJSON by its ACTUAL style, so a

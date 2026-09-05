@@ -588,6 +588,36 @@ claims:
         - "Interpolated stretches. They are graded dashed rather than solid, which marks them, and marking is not measuring."
         - "Survey-grade contours."
 
+  - claimId: CONTOURS-CARTOGRAPHIC
+    product: Contours (cartographic / generalized)
+    algorithm: Douglas-Peucker generalization of the analytical contours
+    methodId: olv.contour.generalize
+    algorithmVersion: v0.6.x
+    claim: "Analytical contours simplified for legibility, with per-feature displacement recorded."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/contourGeometryProduct.test.ts, tests/contourAdaptiveGeneralize.test.ts, tests/generalizationRecord.test.ts]
+    supportingDatasets: [synthetic contour geometry]
+    supportingStudies: []
+    units: [metres]
+    crsDatum: metric
+    assumptions: ["depends on DTM validity", "depends on the analytical contours it simplifies"]
+    failureModes: ["tolerance too large collapses a closed ring", "displacement moves a line off the measured iso-elevation"]
+    exportAllowed: true
+    userLabel: "Generalized contours"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Contours simplified by Douglas-Peucker at a recorded tolerance, with per-feature displacement measured and bounded by that tolerance."
+    prohibitedClaim: ["survey-grade contours", "cross-implemented contours", "contours agreeing with GDAL within 0.05 m"]
+    scope:
+      supported: []
+      unsupported:
+        - "The CONTOURS cross-implementation. That study (OLV-XS-002-CONTOURS-GDAL-PLANE) ran on the ANALYTICAL geometry; generalization deliberately moves vertices away from it, so the 0.05 m agreement does not carry over."
+        - "Iso-elevation position. A generalized vertex is displaced from the elevation it is labelled with, by up to the recorded tolerance."
+        - "Real terrain. The evidence is synthetic geometry."
+        - "Survey-grade contours."
+
   # ── Terrain descriptors ─────────────────────────────────────────────────────
   - claimId: SLOPE-RASTER
     product: Slope raster
