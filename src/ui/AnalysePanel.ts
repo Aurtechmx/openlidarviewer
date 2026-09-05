@@ -924,19 +924,31 @@ export class AnalysePanel {
   }
 
   /** Re-render from a fresh analysis result (or clear when null). */
-  update(result: AnalyseContoursResult | null): void {
+  update(
+    result: AnalyseContoursResult | null,
+    /**
+     * The dataset and frame the COMPUTATION ran under, supplied by the runner.
+     *
+     * Reading these from live state at land time was wrong: a CRS change while
+     * the core ran off-thread meant the result was computed under one revision
+     * and stamped with the next, so the freshness gate passed a result whose
+     * frame the app had already replaced. Omitted by callers with no computation
+     * behind them, which fall back to live state as before.
+     */
+    computed?: { readonly targetId: string | null; readonly crsRevision: number },
+  ): void {
     this._result = result;
     // Bind the result to the scan it was computed on. The runner only lands a
     // result while its own dataset guard still holds, so the active id here IS
     // the id the analysis ran against.
-    this._resultScanId = result ? this._cb.getActiveScanId?.() ?? null : null;
+    this._resultScanId = result ? computed?.targetId ?? this._cb.getActiveScanId?.() ?? null : null;
     // Mint the freshness stamp with the result. Scan identity alone let an
     // edited classification or a changed CRS through behind a caveat.
     this._resultStamp = result
       ? {
           targetId: this._resultScanId,
           classificationEpoch: this._cb.activeClassificationEpoch?.() ?? 0,
-          crsRevision: this._cb.crsRevision?.() ?? 0,
+          crsRevision: computed?.crsRevision ?? this._cb.crsRevision?.() ?? 0,
           coverageMode: result.dtm.coverageMode,
         }
       : null;
