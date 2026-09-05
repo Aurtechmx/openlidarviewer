@@ -86,12 +86,29 @@ function unitOf(cloud: PointCloud): LinearUnitScale {
  */
 export function buildFeatureExtractionInput(
   cloud: PointCloud | null | undefined,
+  /**
+   * The RESOLVED frame's metric scale, when the caller has one.
+   *
+   * PRESENT means authoritative, including `metresPerUnit: null` — a resolved
+   * frame that states no unit leaves the metric twins unknown rather than
+   * falling back to the file's declaration. The cloud's own `metadata.crs` is
+   * that declaration, and a user who has corrected it must not still get areas
+   * computed in the unit they rejected.
+   *
+   * ABSENT keeps the legacy behaviour for callers with no resolved frame to
+   * offer, which still fails closed to unknown when no CRS is declared.
+   */
+  unitAuthority?: { readonly metresPerUnit: number | null },
 ): FeatureExtractionInput | null {
   if (!cloud) return null;
   const classification = cloud.classification;
   const positions = cloud.positions;
   if (!classification || positions.length === 0) return null;
-  const unit = unitOf(cloud);
+  const unit = unitAuthority
+    ? (unitAuthority.metresPerUnit != null && unitAuthority.metresPerUnit > 0
+      ? knownUnit(unitAuthority.metresPerUnit)
+      : unknownUnit())
+    : unitOf(cloud);
 
   const zUp = isZUpFormat(cloud.sourceFormat);
   // The second horizontal axis by up axis; the first is always x.

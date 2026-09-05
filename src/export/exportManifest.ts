@@ -24,6 +24,7 @@
  * `ExportDecision`.
  */
 
+import { governingClaim } from '../validation/evidenceComposition';
 import {
   evidenceStatus as registryEvidenceStatus,
   type EvidenceStatus,
@@ -47,28 +48,37 @@ export type ScientificProduct =
 export interface ScientificExporterRegistration {
   readonly exporterId: string;
   readonly product: ScientificProduct;
-  /** The claim-register id this product's evidence is governed by. */
-  readonly claimId: string;
+  /**
+   * EVERY claim this product's evidence rests on. The permit resolves the
+   * weakest (`governingClaim`) — the same composition the provenance stamp uses,
+   * so authorization and provenance can never disagree about one artifact.
+   *
+   * Before this, every contour exporter named the analytical CONTOURS claim
+   * alone. A generalized line could be authorised as "Internal validation" while
+   * its own provenance stamped it exploratory, and the deliverable package was
+   * authorised on CONTOURS while carrying a DTM that had not met its bar.
+   */
+  readonly claimIds: readonly string[];
   /** Structural marker: a registered scientific exporter always gates. */
   readonly requiresEvidenceDecision: true;
 }
 
 /** The registered scientific exporters. A product not here cannot be exported. */
 export const SCIENTIFIC_EXPORTERS: readonly ScientificExporterRegistration[] = [
-  { exporterId: 'contour.pdf', product: 'contour-map-pdf', claimId: 'CONTOURS', requiresEvidenceDecision: true },
-  { exporterId: 'contour.geojson.analytical', product: 'contours-geojson-analytical', claimId: 'CONTOURS', requiresEvidenceDecision: true },
-  { exporterId: 'contour.geojson.cartographic', product: 'contours-geojson-cartographic', claimId: 'CONTOURS', requiresEvidenceDecision: true },
-  { exporterId: 'contour.dxf.cartographic', product: 'contours-dxf-cartographic', claimId: 'CONTOURS', requiresEvidenceDecision: true },
+  { exporterId: 'contour.pdf', product: 'contour-map-pdf', claimIds: ['CONTOURS-CARTOGRAPHIC', 'DTM'], requiresEvidenceDecision: true },
+  { exporterId: 'contour.geojson.analytical', product: 'contours-geojson-analytical', claimIds: ['CONTOURS', 'DTM'], requiresEvidenceDecision: true },
+  { exporterId: 'contour.geojson.cartographic', product: 'contours-geojson-cartographic', claimIds: ['CONTOURS-CARTOGRAPHIC', 'DTM'], requiresEvidenceDecision: true },
+  { exporterId: 'contour.dxf.cartographic', product: 'contours-dxf-cartographic', claimIds: ['CONTOURS-CARTOGRAPHIC', 'DTM'], requiresEvidenceDecision: true },
   // SVG is a cartographic vector sheet (never analytical): a smoothed/rounded
   // print line is stamped as such, so it shares the CONTOURS claim but is
   // registered distinctly so it can never be minted as exact analytical geometry.
-  { exporterId: 'contour.svg.cartographic', product: 'contours-svg-cartographic', claimId: 'CONTOURS', requiresEvidenceDecision: true },
-  { exporterId: 'contour.dem', product: 'dtm-raster', claimId: 'DTM', requiresEvidenceDecision: true },
-  { exporterId: 'contour.package', product: 'deliverable-package', claimId: 'CONTOURS', requiresEvidenceDecision: true },
+  { exporterId: 'contour.svg.cartographic', product: 'contours-svg-cartographic', claimIds: ['CONTOURS-CARTOGRAPHIC', 'DTM'], requiresEvidenceDecision: true },
+  { exporterId: 'contour.dem', product: 'dtm-raster', claimIds: ['DTM'], requiresEvidenceDecision: true },
+  { exporterId: 'contour.package', product: 'deliverable-package', claimIds: ['CONTOURS', 'CONTOURS-CARTOGRAPHIC', 'DTM'], requiresEvidenceDecision: true },
   // The terrain intelligence report presents the DTM-derived analysis (verdicts,
   // coverage, accuracy), so its evidence is governed by the same DTM claim as
   // the raster — the report can never claim more than the surface it summarises.
-  { exporterId: 'contour.report', product: 'terrain-intelligence-report', claimId: 'DTM', requiresEvidenceDecision: true },
+  { exporterId: 'contour.report', product: 'terrain-intelligence-report', claimIds: ['DTM'], requiresEvidenceDecision: true },
 ] as const;
 
 export function exporterRegistration(exporterId: string): ScientificExporterRegistration | undefined {
@@ -140,7 +150,9 @@ export function resolveExportDecision(
     return { status: 'blocked', reasons: ctx.precision.reasons };
   }
 
-  const status = (ctx.evidenceStatusOf ?? registryEvidenceStatus)(reg.claimId);
+  // The weakest constituent governs. Same rule, same helper, as the provenance
+  // stamp — so a file's permit and its Evidence line cannot contradict.
+  const status = (ctx.evidenceStatusOf ?? registryEvidenceStatus)(governingClaim(reg.claimIds));
   if (status === 'refused') {
     return { status: 'blocked', reasons: [`The ${reg.product} product is not exportable at its current evidence level.`] };
   }

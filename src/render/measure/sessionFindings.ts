@@ -20,6 +20,40 @@ import type { ChangeVolumeUncertainty } from '../../terrain/change/changeUncerta
 
 export class SessionFindings {
   private readonly _findings: ReportFinding[] = [];
+  /**
+   * The scan every finding in this ledger was measured on.
+   *
+   * The ledger deliberately outlives a panel re-render, and nothing bounded it
+   * to a scan. Findings measured on A therefore survived opening B, and the
+   * report they were exported into took its dataset name, CRS and
+   * classification epoch from B — one manifest describing one dataset, filled
+   * with another dataset's numbers. The report schema has no way to express
+   * that, so the ledger must not be able to reach that state.
+   *
+   * `null` means "no findings yet"; the first `add` claims the ledger.
+   */
+  private _ownerId: string | null = null;
+
+  /** The scan this ledger belongs to, or null while it is empty. */
+  get ownerId(): string | null {
+    return this._ownerId;
+  }
+
+  /**
+   * Bind the ledger to the active scan, dropping findings measured on another.
+   *
+   * Called when the export target changes. Returns the number of findings
+   * discarded so the caller can tell the user rather than silently losing work.
+   * Re-asserting the SAME owner keeps everything, so an idle re-render costs
+   * nothing.
+   */
+  retarget(targetId: string | null): number {
+    if (targetId === this._ownerId) return 0;
+    const dropped = this._findings.length;
+    this._findings.length = 0;
+    this._ownerId = targetId;
+    return dropped;
+  }
 
   add(finding: ReportFinding): void {
     this._findings.push(finding);
@@ -45,6 +79,7 @@ export class SessionFindings {
 
   clear(): void {
     this._findings.length = 0;
+    this._ownerId = null;
   }
 }
 

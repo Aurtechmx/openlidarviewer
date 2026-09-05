@@ -181,9 +181,38 @@ function declaredGroundInstrument(cloud: StaticCloudShape): string | undefined {
   return reasons.length > 0 ? reasons.join(', ') : undefined;
 }
 
-/** A valid linear-unit → metres factor, or 1 (treat the source as metres). */
-function unitFactor(v: number | undefined): number {
-  return Number.isFinite(v) && (v as number) > 0 ? (v as number) : 1;
+/**
+ * A valid linear-unit → metres factor, or `null` when the frame states none.
+ *
+ * This used to return 1 — "treat the source as metres" — for an unknown unit.
+ * The factor scales the extent that becomes the footprint area and the pts/m²
+ * density, and those two numbers are what the capture classifier reads to infer
+ * whether a scan is phone, terrestrial, drone or aerial LiDAR, and then to
+ * attach literature-derived accuracy expectations to that inference. A local or
+ * unitless cloud in feet, millimetres or arbitrary units was therefore graded as
+ * if its numbers were metres, and a confident capture-type call was made from
+ * it. There is no honest metric figure without a known unit, so this fails
+ * closed and the callers omit the metric signals entirely.
+ */
+function unitFactor(v: number | undefined): number | null {
+  return Number.isFinite(v) && (v as number) > 0 ? (v as number) : null;
+}
+
+/**
+ * The metric scale these signals may use: the RESOLVED frame's factor when the
+ * caller supplies one, else the cloud's own declaration. Present-but-null means
+ * resolved-and-unitless, which is authoritative — it must not fall back to the
+ * declaration the user has already replaced.
+ */
+export interface SignalUnitAuthority {
+  readonly metresPerUnit: number | null;
+}
+
+function factorFrom(
+  authority: SignalUnitAuthority | undefined,
+  declared: number | undefined,
+): number | null {
+  return authority ? unitFactor(authority.metresPerUnit ?? undefined) : unitFactor(declared);
 }
 
 /**
@@ -194,7 +223,10 @@ function unitFactor(v: number | undefined): number {
  * converted to a missing-extent signal rather than allowed to abort the
  * post-load chain.
  */
-export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
+export function signalsForStaticCloud(
+  cloud: StaticCloudShape,
+  unitAuthority?: SignalUnitAuthority,
+): ScanSignals {
   let extent: readonly [number, number, number] | undefined;
   if (typeof cloud.bounds === 'function') {
     try {
@@ -211,8 +243,11 @@ export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
   // Convert raw CRS-unit extent → metres so the capture-type / USGS-QL
   // classifier sees metres (its contract), matching the report path. A foot CRS
   // would otherwise be graded against pts/ft² density and ft² footprint.
-  const f = unitFactor(cloud.metadata?.crs?.linearUnitToMetres);
-  if (extent) extent = [extent[0] * f, extent[1] * f, extent[2] * f] as const;
+  const f = factorFrom(unitAuthority, cloud.metadata?.crs?.linearUnitToMetres);
+  // No known unit, no metric extent. Every downstream figure — footprint area,
+  // pts/m², the capture-type call they drive — is metric by definition.
+  if (f === null) extent = undefined;
+  else if (extent) extent = [extent[0] * f, extent[1] * f, extent[2] * f] as const;
   // File scale: prefer the declared total over the strided display count so the
   // density (and the capture-type call it drives) describes the whole file.
   const fileN =
@@ -248,7 +283,10 @@ export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
  * is partial; the source-declared point count + the cloud's local extent
  * carry the signal even though only a thin shell is in memory.
  */
-export function signalsForStreamingCloud(cloud: StreamingCloudShape): ScanSignals {
+export function signalsForStreamingCloud(
+  cloud: StreamingCloudShape,
+  unitAuthority?: SignalUnitAuthority,
+): ScanSignals {
   let extent: readonly [number, number, number] | undefined;
   let density: number | undefined;
   // Prefer the tight data AABB; the cube (`localBounds`) is only a last resort.
@@ -258,10 +296,15 @@ export function signalsForStreamingCloud(cloud: StreamingCloudShape): ScanSignal
       const b = boundsFn();
       // Convert raw CRS-unit extent → metres (see the static path) so the
       // classifier and its USGS-QL density tier are graded in metres.
-      const f = unitFactor(cloud.crs?.()?.linearUnitToMetres);
-      extent = [(b[3] - b[0]) * f, (b[4] - b[1]) * f, (b[5] - b[2]) * f];
-      if (extent[0] > 0 && extent[1] > 0 && cloud.sourcePointCount) {
-        density = cloud.sourcePointCount / (extent[0] * extent[1]);
+      const f = factorFrom(unitAuthority, cloud.crs?.()?.linearUnitToMetres);
+      if (f === null) {
+        // Same rule as the static path: an unknown unit makes no metric claim.
+        extent = undefined;
+      } else {
+        extent = [(b[3] - b[0]) * f, (b[4] - b[1]) * f, (b[5] - b[2]) * f];
+        if (extent[0] > 0 && extent[1] > 0 && cloud.sourcePointCount) {
+          density = cloud.sourcePointCount / (extent[0] * extent[1]);
+        }
       }
     } catch {
       extent = undefined;

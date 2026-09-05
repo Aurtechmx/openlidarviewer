@@ -204,6 +204,24 @@ export function createInspectorCardRefreshers(
     else inspector.clearProvenance();
   });
 
+  /**
+   * The capture signals' unit authority, or `undefined` when this factory was
+   * built without a resolved frame.
+   *
+   * `undefined` is NOT a metric claim — the signal builder then reads the
+   * cloud's declared CRS and still fails closed when that states no unit. It
+   * exists because the pure factory tests construct refreshers with no CRS
+   * service, which is the contract documented on `resolvedCrs` above. Production
+   * always supplies one, so production is always authoritative.
+   */
+  function captureUnitAuthority(): { readonly metresPerUnit: number | null } | undefined {
+    if (!resolvedCrs) return undefined;
+    const c = resolvedCrs();
+    if (!c || c.linearUnit === 'unknown') return { metresPerUnit: null };
+    const f = c.linearUnitToMetres;
+    return { metresPerUnit: typeof f === 'number' && Number.isFinite(f) && f > 0 ? f : null };
+  }
+
   function refreshProvenance(
     cloud: {
       readonly sourceFormat: string;
@@ -211,7 +229,11 @@ export function createInspectorCardRefreshers(
     },
     layerId: string,
   ): void {
-    captureProvenance.setScan({ layerId, signals: signalsForStaticCloud(cloud as never) });
+    // The RESOLVED frame decides whether metric signals may exist at all.
+    captureProvenance.setScan({
+      layerId,
+      signals: signalsForStaticCloud(cloud as never, captureUnitAuthority()),
+    });
   }
 
   function refreshProvenanceFromStreaming(cloud: {
@@ -222,7 +244,10 @@ export function createInspectorCardRefreshers(
   }): void {
     // A streaming open closes the static layers, so the streaming source is the
     // whole scene and carries no static layer id.
-    captureProvenance.setScan({ layerId: null, signals: signalsForStreamingCloud(cloud as never) });
+    captureProvenance.setScan({
+      layerId: null,
+      signals: signalsForStreamingCloud(cloud as never, captureUnitAuthority()),
+    });
   }
 
   /**

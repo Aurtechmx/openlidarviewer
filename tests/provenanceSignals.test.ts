@@ -29,6 +29,8 @@ describe('signalsForStaticCloud — bounds is a method', () => {
         min: [0, 0, 0],
         max: [100, 200, 30],
       }),
+      // A declared unit: without one there is no metric extent to compute.
+      metadata: { crs: { linearUnitToMetres: 1 } },
     });
     expect(s.extent).toEqual([100, 200, 30]);
     // density = 1_000_000 / (100 * 200) = 50 pts/m²
@@ -92,6 +94,7 @@ describe('signalsForStaticCloud — bounds is a method', () => {
       pointCount: 3_714_345,
       declaredPointCount: 9_597_830,
       bounds: () => ({ min: [0, 0, 0], max: [78.8, 124.4, 18.9] }),
+      metadata: { crs: { linearUnitToMetres: 1 } },
     });
     expect(s.pointCount).toBe(9_597_830);
     // 9_597_830 / (78.8 * 124.4) ≈ 979, not the strided ≈ 379
@@ -143,6 +146,7 @@ describe('signalsForStreamingCloud', () => {
       kind: 'copc',
       sourcePointCount: 4_000_000,
       localBounds: () => [0, 0, 0, 200, 200, 50],
+      crs: () => ({ linearUnitToMetres: 1 }),
     });
     expect(s.sourceFormat).toBe('copc');
     expect(s.extent).toEqual([200, 200, 50]);

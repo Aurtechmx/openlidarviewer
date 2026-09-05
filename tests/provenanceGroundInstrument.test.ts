@@ -66,7 +66,11 @@ function mineCloud(metadata: StaticCloudShape['metadata']): StaticCloudShape {
     sourceFormat: 'e57',
     pointCount: MINE_POINTS,
     bounds: () => MINE_EXTENT,
-    metadata,
+    // A DECLARED metre unit. These tests are about what the capture classifier
+    // infers, so the scan must be one whose extent is actually in metres; a
+    // cloud with no declared unit now yields no metric signals at all (see
+    // provenanceUnitAuthority.test.ts), which is a different question.
+    metadata: { ...metadata, crs: { linearUnitToMetres: 1 } },
   };
 }
 
@@ -252,7 +256,7 @@ describe('capture type — the other bands are unchanged', () => {
       sourceFormat: 'laz',
       pointCount: 6_400_000,
       bounds: () => ({ min: [0, 0, 0], max: [2000, 1600, 240] }),
-      metadata: { captureSensor: 'Optech Galaxy T2000' },
+      metadata: { captureSensor: 'Optech Galaxy T2000', crs: { linearUnitToMetres: 1 } },
     });
     const fp = classify(s);
     expect(s.sensorString).toBe('Optech Galaxy T2000');
@@ -269,7 +273,7 @@ describe('capture type — the other bands are unchanged', () => {
       sourceFormat: 'laz',
       pointCount: 6_400_000,
       bounds: () => ({ min: [0, 0, 0], max: [2000, 1600, 240] }),
-      metadata: {},
+      metadata: { crs: { linearUnitToMetres: 1 } },
     });
     const fp = classify(s);
     expect(fp.captureType).toBe('aerial-als');
@@ -330,6 +334,7 @@ describe('capture type — the other bands are unchanged', () => {
         sourceFormat: 'ply',
         pointCount: 55_000,
         bounds: () => ({ min: [0, 0, 0], max: [2.4, 3.1, 2.5] }),
+        metadata: { crs: { linearUnitToMetres: 1 } },
       }),
     );
     expect(fp.captureType).toBe('terrestrial');
@@ -339,6 +344,7 @@ describe('capture type — the other bands are unchanged', () => {
           sourceFormat: 'ply',
           pointCount: 22_000,
           bounds: () => ({ min: [0, 0, 0], max: [2.4, 3.1, 2.5] }),
+          metadata: { crs: { linearUnitToMetres: 1 } },
         }),
       ).captureType,
     ).toBe('iphone-lidar');

@@ -125,6 +125,12 @@ export interface ExportPanelCallbacks {
    * Measurements group.
    */
   collectMeasurementFindings?: () => Promise<readonly ReportFinding[]>;
+  /**
+   * The scan the findings ledger belongs to. The ledger outlives a re-render by
+   * design, so without an owner a finding measured on one scan could be
+   * exported into a report stamped with another scan's identity.
+   */
+  activeFindingsTargetId?: () => string | null;
   /** Export the curated findings ledger as the signed integrity report (JSON). */
   exportFindingsReport?: (findings: readonly ReportFinding[]) => void;
   /**
@@ -686,12 +692,41 @@ export class ExportPanel {
         this._findings = new SessionFindings();
         this._findingsPanel = buildFindingsPanel({
           findings: this._findings,
-          collectMeasurements: () => this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]),
-          exportReport: (f) => this._cb.exportFindingsReport?.(f),
+          // Bind the ledger to the scan BEFORE anything is added to or read from
+          // it. A report describes one dataset, so a ledger holding another
+          // scan's numbers has no honest representation in it.
+          collectMeasurements: () => {
+            this._retargetFindings();
+            return this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]);
+          },
+          exportReport: (f) => {
+            if (this._retargetFindings() > 0) {
+              // The ledger has just been emptied, so `f` describes a scan that is
+              // no longer active. Refuse rather than sign it as this one.
+              this._setStatus(
+                'Report not written — the findings were measured on a different scan than the one '
+                + 'now open, and a report describes a single dataset. Re-collect on this scan.',
+                'error',
+              );
+              this._findingsPanel?.refresh();
+              return;
+            }
+            this._cb.exportFindingsReport?.(f);
+          },
         });
         slot.append(this._findingsPanel.element);
       },
     );
+  }
+
+  /**
+   * Re-bind the findings ledger to the active scan. Returns how many findings
+   * were discarded because they belonged to another scan (0 in the normal case,
+   * so an idle call is free).
+   */
+  private _retargetFindings(): number {
+    if (!this._findings) return 0;
+    return this._findings.retarget(this._cb.activeFindingsTargetId?.() ?? null);
   }
 
   private _productGroup(label: string, actions: HTMLElement, hint?: string): HTMLElement {

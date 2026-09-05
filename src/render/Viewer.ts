@@ -4698,7 +4698,7 @@ export class Viewer {
     options: ExportOptions = {},
     classScopeStamp = '',
   ): Promise<ExportResult> {
-    const adapter = this._buildExportAdapter(); // before the await: reads the active scan
+    const adapter = this._buildExportAdapter(); // LIVE closures: snapshots NOTHING (gate: exportImageAction)
     const studio = await loadExportStudio();
     return studio.renderExport(
       mode,
