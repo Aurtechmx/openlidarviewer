@@ -67,6 +67,14 @@ export interface ComposeReportInputs {
    */
   readonly worldUp?: readonly [number, number, number];
   readonly verticalToMetres?: number;
+  /**
+   * Whether the scan's linear scale is CONFIRMED (`MeasureController.crsKnown`).
+   * The tabular measurement exports already carry this as `unitsVerified`; the
+   * PDF did not, so its measurement rows asserted metres on a scan whose unit
+   * the app does not know. Defaults true, leaving every georeferenced report
+   * byte-identical.
+   */
+  readonly unitsVerified?: boolean;
   readonly technicalNotes?: string;
   /**
    * Provenance fingerprint from the classifier. When supplied AND the
@@ -129,6 +137,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
       input.unitToMetres ?? 1,
       input.worldUp ? [...input.worldUp] : [0, 0, 1],
       input.verticalToMetres ?? input.unitToMetres ?? 1,
+      input.unitsVerified ?? true,
     ),
     technicalNotes: input.technicalNotes,
     provenance: input.provenance,

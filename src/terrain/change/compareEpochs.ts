@@ -50,6 +50,21 @@ export interface EpochCloud {
   readonly isGeographic?: boolean | null;
   /** Metres per source horizontal unit (~0.3048 for feet). Default 1. */
   readonly linearUnitToMetres?: number | null;
+  /**
+   * Metres per source VERTICAL unit, when the frame declares one of its own.
+   *
+   * Z had been scaled by the HORIZONTAL factor. On a compound frame — foot
+   * heights over a metre grid, which GeoTIFF key 4099 and a VERT_CS UNIT both
+   * express — that made the SMRF ground tolerances wrong by the ratio between
+   * the two: the physical 0.5 m / 2.5 m limits were applied as 0.5 / 2.5 feet,
+   * about 3.3x too tight, so the filter kept the wrong points as ground. The
+   * differenced elevations were already scaled correctly downstream; this is
+   * about which points the surfaces were built from in the first place.
+   *
+   * Null / omitted falls back to the horizontal factor, which is right for
+   * every single-unit frame and keeps existing callers unchanged.
+   */
+  readonly verticalUnitToMetres?: number | null;
 }
 
 /** The shared grid spec both epochs are rasterised onto. */
@@ -161,11 +176,15 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
     : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
       ? cloud.linearUnitToMetres
       : 1;
+  // Z on its OWN declared scale where the frame states one; the horizontal
+  // verdict is a fallback, not a substitute.
   const vertToMetres = cloud.isGeographic
     ? 1
-    : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
-      ? cloud.linearUnitToMetres
-      : 1;
+    : Number.isFinite(cloud.verticalUnitToMetres) && (cloud.verticalUnitToMetres as number) > 0
+      ? (cloud.verticalUnitToMetres as number)
+      : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
+        ? cloud.linearUnitToMetres
+        : 1;
   // The 0.5 m / 2.5 m SMRF tolerances are physical; convert to source vertical
   // units so a foot frame keeps its physical ground tolerance (a geographic
   // frame's z is already metric, so zPerMetre is 1 there).
