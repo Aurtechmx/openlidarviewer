@@ -89,6 +89,8 @@ describe('source geometry stays byte-identical', () => {
       'bounds',
       'classification',
       'classificationIsDerived',
+      'derivedClassificationFrameInvalid',
+      'markDerivedClassificationFrameInvalid',
       'pointCount',
       'projectXYZ',
       'rebaseQuantum',

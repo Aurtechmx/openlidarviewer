@@ -196,10 +196,8 @@ import {
 } from './measure/profileSectionSeam';
 import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
-  integrableClouds,
-  isIntegrable,
-  streamingMayCombine,
-  sourceClassifiesGround,
+  integrableClouds, isIntegrable, streamingMayCombine, sourceClassifiesGround,
+  analysisClassification,
 } from './integrableClouds';
 import type { LayerCompatibility } from '../model/layerCompatibility';
 import {
@@ -2386,7 +2384,7 @@ export class Viewer {
     // Match the picker: only visible, unlocked clouds contribute to the surface.
     for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
-        const cls = alignedClass(cloud.classification, cloud.positions);
+        const cls = analysisClassification(cloud, cloud.positions.length);
         if (cls) {
           anyClass = true;
           if (!cloud.classificationIsDerived && sourceClassifiesGround(cls)) {
@@ -3077,7 +3075,7 @@ export class Viewer {
   /** Mark DERIVED classifications stale after a frame change (see CLASS_FRAME_STALE_NOTICE). */
   invalidateDerivedClassificationsForFrame(): string[] {
     const marked: string[] = [];
-    for (const [id, e] of this._clouds) if (e.cloud.classificationIsDerived) { this._classEpochs.bump(id); marked.push(id); }
+    for (const [id, e] of this._clouds) if (e.cloud.classificationIsDerived) { e.cloud.markDerivedClassificationFrameInvalid(); this._classEpochs.bump(id); marked.push(id); }
     return marked;
   }
 

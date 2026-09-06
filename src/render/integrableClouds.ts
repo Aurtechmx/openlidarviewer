@@ -129,3 +129,46 @@ export function sourceClassifiesGround(cls: ArrayLike<number> | undefined | null
   for (let i = 0; i < cls.length; i++) if (cls[i] === ASPRS_GROUND) return true;
   return false;
 }
+
+/**
+ * Which classification a terrain gather may hand to a NEW analytical
+ * computation. Two independent reasons to withhold an array that exists:
+ *
+ *   ALIGNMENT. A class array whose length does not match the point count maps
+ *   codes to the wrong points, and every downstream product — bare-earth
+ *   selection, contours, volumes, export provenance — is then wrong in a way
+ *   nothing downstream can detect.
+ *
+ *   FRAME. A DERIVED classification restates physical metre thresholds in the
+ *   source frame's units, so its codes only mean what they say in the frame
+ *   they were derived under. Marking prior RESULTS stale does not address this:
+ *   the array is an INPUT, and `terrainAnalysisRunner` captures `crsRevision`
+ *   when a run STARTS, so a run begun after the frame change compares the new
+ *   revision against itself and passes. Withholding the input closes it.
+ *
+ * Withholding is not deletion. The codes stay on the cloud for the legend, the
+ * class colours and the user's editing work; the analysis proceeds as it would
+ * for an unclassified scan until a re-derive under the current frame restores
+ * them. A producer's classification is never withheld on frame grounds.
+ */
+/** The read surface this needs from a cloud. */
+export interface ClassifiedSource {
+  readonly classification?: ArrayLike<number>;
+  readonly classificationIsDerived: boolean;
+  readonly derivedClassificationFrameInvalid: boolean;
+}
+
+/**
+ * The classification `cloud` may contribute to an analysis over a position
+ * buffer of `positionsLength` floats (three per point), or undefined when it
+ * has none, when the array is misaligned, or when derived codes belong to a
+ * replaced frame.
+ */
+export function analysisClassification(
+  cloud: ClassifiedSource,
+  positionsLength: number,
+): ArrayLike<number> | undefined {
+  if (cloud.classificationIsDerived && cloud.derivedClassificationFrameInvalid) return undefined;
+  const cls = cloud.classification;
+  return cls?.length === positionsLength / 3 ? cls : undefined;
+}

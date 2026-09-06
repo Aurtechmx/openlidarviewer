@@ -86,16 +86,17 @@ the number in `scripts/check-bundle-budget.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,558 lines and `src/render/Viewer.ts` is 6,426. A lint fails
+`src/main.ts` is 5,558 lines and `src/render/Viewer.ts` is 6,424. A lint fails
 the build when either file passes its recorded baseline, so neither may grow
 beyond the number banked for it. The `--update` flag banks a drop and refuses a
 raise, so raising a baseline is a hand edit to
 `docs/validation/monolith-size-baseline.json` and always shows up in the diff.
 
 Both baselines were raised inside this cycle: `src/main.ts` in three steps from
-5,529 to 5,558, and `src/render/Viewer.ts` in two from 6,407 to 6,426. Measured
+5,529 to 5,558, and `src/render/Viewer.ts` in two from 6,407 to 6,426, then
+lowered to 6,424 when the classification-input rule moved out of it. Measured
 against v0.6.7 the shell is smaller, 5,675 then against 5,558 now, and the
-renderer larger, 6,419 then against 6,426 now.
+renderer larger, 6,419 then against 6,424 now.
 
 Most of what those raises paid for is the frame-freshness wiring: a
 coordinate-system change now invalidates a running terrain analysis, a running
