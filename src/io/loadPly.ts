@@ -16,6 +16,7 @@
 
 import { parse } from '@loaders.gl/core';
 import { PLYLoader } from '@loaders.gl/ply';
+import { LOCAL_ONLY_LOADER_OPTIONS } from './loaderConfig';
 import { PointCloud } from '../model/PointCloud';
 import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 
@@ -93,7 +94,7 @@ function isAsciiSpace(c: number): boolean {
  * @param name   Display name (defaults to `"cloud.ply"`).
  */
 export async function loadPly(buffer: ArrayBuffer, name = 'cloud.ply'): Promise<PointCloud> {
-  const mesh = await parse(buffer, PLYLoader);
+  const mesh = await parse(buffer, PLYLoader, LOCAL_ONLY_LOADER_OPTIONS);
   const attributes = mesh.attributes;
 
   const positionAttr = attributes.POSITION;
