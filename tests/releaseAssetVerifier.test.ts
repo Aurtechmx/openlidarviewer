@@ -139,6 +139,8 @@ function stageRelease(opts: {
   extraFiles?: Record<string, string>;
   deployFiles?: Record<string, string>;
   sourceFiles?: Record<string, string>;
+  /** Overrides merged into the smoke result; `null` stages none at all. */
+  smoke?: Record<string, unknown> | null;
 } = {}) {
   const srcZip = join(dir, `openlidarviewer-v${VERSION}-source-20260722-1346.zip`);
   const depZip = join(dir, `openlidarviewer-v${VERSION}-deploy-20260722-1346-root.zip`);
@@ -155,6 +157,18 @@ function stageRelease(opts: {
   const evName = `test-evidence-v${VERSION}.json`;
   writeFileSync(join(dir, evName), JSON.stringify(ev));
 
+  // The deploy-smoke result, bound by digest to the archive just built. `null`
+  // stages none, which is how "the archive was never started" is expressed.
+  const smokeName = `smoke-deploy-v${VERSION}.json`;
+  const smokeDefault = {
+    schemaVersion: 1, project: 'openlidarviewer', version: VERSION, tag: TAG,
+    gitCommit: COMMIT, archive: depZip.split('/').pop(), sha256: sha(depZip),
+    checks: ['archive-extracts', 'smoke.spec.ts', 'lazyChunkLoad.spec.ts'],
+    ok: true, generatedAt: '2026-07-22T13:46:00.000Z',
+  };
+  const smoke = opts.smoke === null ? null : { ...smokeDefault, ...(opts.smoke ?? {}) };
+  if (smoke) writeFileSync(join(dir, smokeName), JSON.stringify(smoke));
+
   for (const [n, b] of Object.entries(opts.extraFiles ?? {})) writeFileSync(join(dir, n), b);
 
   const payload = {
@@ -162,6 +176,7 @@ function stageRelease(opts: {
     sbom: join(dir, 'sbom.json'), evidence: join(dir, evName),
     gateLog: join(dir, 'gate.log'), gateLogSha256: join(dir, 'gate.log.sha256'),
     releaseNotes: join(dir, `RELEASE_NOTES_v${VERSION}.md`),
+    ...(smoke ? { deploySmoke: join(dir, smokeName) } : {}),
   };
   const artifacts = Object.fromEntries(
     Object.entries(payload).map(([k, p]) => [
@@ -439,5 +454,76 @@ describeZip('release:verify — archive contents', () => {
     stageRelease();
     writeFileSync(join(dir, `openlidarviewer-v${VERSION}-source-20260722-1346.zip`), 'not a zip');
     failsWith('source zip');
+  });
+});
+
+describeZip('the deploy archive must have been started', () => {
+  /** The shared verify, plus the tag identity the smoke result is bound to. */
+  const verifySmoke = () =>
+    verifyStagedRelease(dir, {
+      version: VERSION, expectedE4Claims: EXPECTED_E4, tagCommit: COMMIT,
+    }) as { ok: boolean; problems: string[] };
+
+  // Every other rule reads the archive as a file. These cover the one that
+  // requires a browser to have opened it, and that the result names THESE
+  // bytes: the chain used to smoke a build, then package a second build and
+  // ship that, so the archive users download had never been run.
+
+  it('passes when the result matches the staged archive', () => {
+    stageRelease();
+    const r = verifySmoke();
+    expect(r.problems).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('rejects a staged set with no smoke result at all', () => {
+    stageRelease({ smoke: null });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /missing required asset: deploySmoke/.test(p))).toBe(true);
+  });
+
+  it('rejects a result that does not record a pass', () => {
+    stageRelease({ smoke: { ok: false } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /does not record a pass/.test(p))).toBe(true);
+  });
+
+  it('rejects a result whose digest is not the staged archive', () => {
+    // The stale case: a real pass, from the previous packaging run. Every file
+    // is individually valid and only the digest disagrees.
+    stageRelease({ smoke: { sha256: 'd'.repeat(64) } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /deploy-smoke tested sha256/.test(p))).toBe(true);
+  });
+
+  it('rejects a result naming a different archive filename', () => {
+    stageRelease({ smoke: { archive: `openlidarviewer-v${VERSION}-deploy-19990101-0000-root.zip` } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /deploy-smoke tested .*19990101/.test(p))).toBe(true);
+  });
+
+  it('rejects a result from another commit', () => {
+    stageRelease({ smoke: { gitCommit: 'a'.repeat(40) } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /not the release commit/.test(p))).toBe(true);
+  });
+
+  it('rejects a result carrying no executed checks', () => {
+    stageRelease({ smoke: { checks: [] } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /names no executed checks/.test(p))).toBe(true);
+  });
+
+  it('rejects a result for another release identity', () => {
+    stageRelease({ smoke: { tag: 'v0.0.1' } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /deploy-smoke tag/.test(p))).toBe(true);
   });
 });

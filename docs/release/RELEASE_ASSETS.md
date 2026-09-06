@@ -15,6 +15,7 @@ A published prerelease attaches exactly these, and nothing else:
 | `openlidarviewer-v<version>-deploy-<ts>-root.zip` | The built site, contents at the archive ROOT (not wrapped in `dist/`) |
 | `sbom.json` | CycloneDX 1.6 SBOM for the production dependency set |
 | `test-evidence-v<version>.json` | The authoritative record of the exact-tag gate run |
+| `smoke-deploy-v<version>.json` | The record of the deploy archive being started in a browser, bound to that archive's SHA-256 |
 | `gate.log` | The full gate output the evidence was derived from |
 | `gate.log.sha256` | Hash of that log |
 | `release-manifest-v<version>.json` | Binds tag, commit, toolchain, and every payload hash |
@@ -25,6 +26,24 @@ A published prerelease attaches exactly these, and nothing else:
 previous cut is the failure that survives every other check, because each file
 is individually valid and only the SET is wrong.
 
+## The deploy archive is started, not just hashed
+
+Every other check reads the deploy zip as a file. `smoke-deploy-v<version>.json`
+records that a browser opened it: the release ran its smoke against a BUILD, then
+packaged a second build and shipped that, so the archive a user downloads had
+never been started. That gap hid a real defect. The shipped bundle fetched a
+loaders.gl worker from a CDN, which the deploy's own Content-Security-Policy
+blocks, and no leg could see it because `vite preview` applies no CSP.
+
+The workflow runs `npm run test:smoke:deploy -- <the packaged zip>` after
+packaging and before the payload is assembled, and nothing rebuilds or
+repackages afterwards. The result names the archive, its SHA-256, the commit and
+the checks that ran. `release:verify` requires it to be present, to record a
+pass, to name executed checks, and to match the staged archive by BOTH filename
+and digest, at the release's own tag and commit. A missing, failed, stale or
+mismatched result fails the closed-set check, which blocks release-ready and so
+blocks publication.
+
 ## How the hashes chain
 
 There is a cycle to avoid here, and the resolution is not guessable, so it is
@@ -32,7 +51,7 @@ stated plainly:
 
 ```
 release-manifest → hashes every PAYLOAD asset (zips, sbom, evidence,
-                   gate.log, gate.log.sha256, release notes)
+                   gate.log, gate.log.sha256, release notes, deploy smoke)
                    — never itself, never SHA256SUMS
 SHA256SUMS       → hashes everything, the manifest included
 ```

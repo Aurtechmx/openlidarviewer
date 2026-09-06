@@ -20,7 +20,14 @@
  * release would put an untested dependency in the path of the test that exists
  * to prove the release untested-dependency-free.
  *
- * Usage: node scripts/serve-deploy-bytes.mjs <root-dir> [port]
+ * The root and port arrive as OLV_DEPLOY_ROOT / OLV_DEPLOY_PORT rather than as
+ * argv, because Playwright's `webServer.command` is a shell string: a directory
+ * containing a space would split into two arguments there, and the extraction
+ * directory is a system temp path this script does not choose. Environment
+ * variables carry the value verbatim, with no quoting to get right.
+ *
+ * Usage: OLV_DEPLOY_ROOT=<dir> [OLV_DEPLOY_PORT=<port>] node scripts/serve-deploy-bytes.mjs
+ *        (argv still works for a manual run: <root-dir> [port])
  */
 
 import { createServer } from 'node:http';
@@ -28,8 +35,12 @@ import { readFile, stat } from 'node:fs/promises';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, extname, normalize, resolve, sep } from 'node:path';
 
-const ROOT = resolve(process.argv[2] ?? '.');
-const PORT = Number(process.argv[3] ?? 4173);
+const ROOT = resolve(process.env.OLV_DEPLOY_ROOT ?? process.argv[2] ?? '.');
+const PORT = Number(process.env.OLV_DEPLOY_PORT ?? process.argv[3] ?? 4173);
+if (!existsSync(ROOT)) {
+  console.error(`serve-deploy-bytes: ${ROOT} does not exist`);
+  process.exit(1);
+}
 
 const TYPES = new Map(Object.entries({
   '.html': 'text/html; charset=utf-8',
@@ -115,7 +126,25 @@ const server = createServer(async (req, res) => {
   res.writeHead(200).end(body);
 });
 
-server.listen(PORT, () => {
-  console.log(`serve-deploy-bytes: ${ROOT} on http://localhost:${PORT}`
+// An occupied port must END the run, not be worked around. Playwright is told
+// never to reuse an existing server in deploy-root mode, so a port already in
+// use means something else would answer for the archive; exiting non-zero makes
+// the webServer command fail and takes the smoke down with it.
+server.on('error', (err) => {
+  const why = err.code === 'EADDRINUSE'
+    ? `port ${PORT} is already in use — refusing to let another server answer for the archive`
+    : String(err.message ?? err);
+  console.error(`serve-deploy-bytes: ${why}`);
+  process.exit(1);
+});
+
+// Loopback only, and named explicitly. Binding every interface let this
+// process take a port that was already in use on 127.0.0.1: the two sockets do
+// not collide, no EADDRINUSE is raised, and which server answers `localhost` is
+// then a matter of resolution order. The smoke would sometimes be driving
+// whatever else was listening. It also has no business being reachable off the
+// machine.
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`serve-deploy-bytes: ${ROOT} on http://127.0.0.1:${PORT}`
     + ` (${SECTIONS.length} _headers section(s) applied)`);
 });

@@ -46,6 +46,7 @@ const SINGLETONS = {
   gateLog: /^gate\.log$/,
   gateLogSha256: /^gate\.log\.sha256$/,
   releaseNotes: /^RELEASE_NOTES_v.+\.md$/,
+  deploySmoke: /^smoke-deploy-v.+\.json$/,
   checksums: /^SHA256SUMS$/,
 };
 
@@ -387,6 +388,52 @@ export function verifyStagedRelease(dir, opts = {}) {
       if (dupes.length) note(`source zip has duplicate entries: ${dupes[0]}`);
     }
   }
+  // ── The deploy archive was STARTED, and these are the bytes that were ────
+  //
+  // Every other check here reads the archive as a file. This one requires that
+  // a browser opened it: the release chain gated on a smoke against a BUILD,
+  // then packaged a second build and shipped that, so the archive users
+  // download had never been run. The result is bound by digest, because a
+  // result that does not name this file's bytes is a result about other bytes.
+  if (found.deploySmoke) {
+    let smoke = null;
+    try {
+      smoke = JSON.parse(readFileSync(resolve(dir, found.deploySmoke), 'utf8'));
+    } catch { note('deploy-smoke result is not valid JSON'); }
+    if (smoke) {
+      if (smoke.ok !== true) note('deploy-smoke result does not record a pass');
+      if (!Array.isArray(smoke.checks) || smoke.checks.length === 0) {
+        note('deploy-smoke result names no executed checks');
+      }
+      if (smoke.version !== pkgVersion) {
+        note(`deploy-smoke version ${smoke.version} != ${pkgVersion}`);
+      }
+      if (smoke.tag !== expectedTag) note(`deploy-smoke tag ${smoke.tag} != ${expectedTag}`);
+      if (found.deployZip) {
+        // Named the file that is actually staged, and hashed to the same bytes.
+        // Either half alone is defeatable: a filename match says nothing about
+        // content, and a digest with no filename could describe a different
+        // archive that happens to be staged elsewhere.
+        if (smoke.archive !== found.deployZip) {
+          note(`deploy-smoke tested ${smoke.archive}, but ${found.deployZip} is staged`);
+        }
+        const staged = sha256(resolve(dir, found.deployZip));
+        if (smoke.sha256 !== staged) {
+          note(
+            `deploy-smoke tested sha256 ${String(smoke.sha256).slice(0, 16)}…, ` +
+              `but the staged archive is ${staged.slice(0, 16)}…`,
+          );
+        }
+      }
+      // The release identity the smoke ran under has to be the one shipping.
+      const releaseCommit = opts.tagCommit ?? manifest?.gitCommit ?? null;
+      if (releaseCommit && smoke.gitCommit && smoke.gitCommit !== releaseCommit) {
+        note(`deploy-smoke ran at ${String(smoke.gitCommit).slice(0, 12)}, not the release commit ${String(releaseCommit).slice(0, 12)}`);
+      }
+      if (releaseCommit && !smoke.gitCommit) note('deploy-smoke result names no commit');
+    }
+  }
+
   if (found.deployZip && !opts.skipZipContents) {
     let entries = null;
     try { entries = zipEntries(resolve(dir, found.deployZip)); }
