@@ -53,7 +53,7 @@ describe('loaders.gl call sites', () => {
 
   it('passes the options to the glTF parse', async () => {
     const { loadGltf } = await import('../src/io/loadGltf');
-    await loadGltf(new ArrayBuffer(8)).catch(() => {});
+    await loadGltf(new ArrayBuffer(8), 'glb').catch(() => {});
     expect(parse).toHaveBeenCalledWith(expect.anything(), expect.anything(), LOCAL_ONLY_LOADER_OPTIONS);
   });
 });
