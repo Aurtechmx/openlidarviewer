@@ -49,8 +49,8 @@ their green is a fact about this commit and not a guarantee the gate enforces.
   limitations.
 - The registration stack and the stockpile area-grid estimator have unit tests
   and no user path, so nothing here validates them as features.
-- Three measurement figures have a documented basis problem that this release
-  did not correct, listed in `KNOWN_LIMITATIONS_v0.6.8.md`. They are labelled in
-  the interface with the population they describe.
+- Five measurement figures have a documented basis problem that this release
+  did not correct, listed in `KNOWN_LIMITATIONS_v0.6.8.md` together with what
+  each one discloses.
 - Mutation testing runs on its own schedule and is not part of this gate. The
   record cites its last result and the commit it was measured at.

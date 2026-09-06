@@ -43,7 +43,7 @@ The blocking browser gate is Chromium. Firefox and WebKit run the full
 deterministic suite, and a regression in either would not by itself stop a
 release. Both were green when this release was cut.
 
-## Three measurement figures with a known basis problem
+## Five measurement figures with a known basis problem
 
 - The Analyse ground density and its quality-level chip derive from the resident
   gather, while the Scan Report back-scales to the declared count. The two
@@ -54,6 +54,18 @@ release. Both were green when this release was cut.
 - The oriented bounding box derived by principal components overstates length on
   an elongated footprint. It is labelled unvalidated rather than presented as a
   measurement.
+- A measurement CSV or GeoJSON names its columns `length_m`, `area_m2` and
+  `volume_m3` whatever the scan's linear unit turns out to be. When the unit is
+  unconfirmed the same row carries `units-unverified (source render units, not
+  metres)` in its evidence field, so the row prints the retraction while the
+  column name still asserts metres. A reader sees both; a program reading the
+  header sees only the assertion.
+- The floor-plan wall band is a physical slice 0.7 to 1.8 m above the detected
+  floor. When the linear unit is unconfirmed the scale falls back to an inert 1
+  and those metres are applied to source coordinates, so on a foot-unit capture
+  the band sits about 0.21 to 0.55 m above the floor and traces skirting rather
+  than wall. The plan and the report both state that the units are unverified;
+  neither states that the extraction itself moved.
 
 Each would move a published verdict, so each is recorded here rather than
 changed under the freeze.
@@ -74,21 +86,25 @@ the number in `scripts/check-bundle-budget.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,558 lines and `src/render/Viewer.ts` is 6,426. A shrink-only
-lint holds both at exactly those counts. It has no flag to raise a baseline, so
-growth is only ever a hand edit to the recorded number, visible in the diff and
-never automatic.
+`src/main.ts` is 5,558 lines and `src/render/Viewer.ts` is 6,426. A lint fails
+the build when either file passes its recorded baseline, so neither may grow
+beyond the number banked for it. Raising a baseline is an edit to
+`docs/validation/monolith-size-baseline.json` and shows up in the diff. The
+`--update` flag writes whatever the files currently measure, in either
+direction, so what stops it banking a raise is review and not the script.
 
-Both took such an edit in this cycle. The recorded baselines moved from 5,529 to
-5,558 for `src/main.ts`, and from 6,409 to 6,426 for `src/render/Viewer.ts`.
+Both baselines were raised inside this cycle: `src/main.ts` in three steps from
+5,529 to 5,558, and `src/render/Viewer.ts` in two from 6,407 to 6,426. Measured
+against v0.6.7 the shell is smaller, 5,675 then against 5,558 now, and the
+renderer larger, 6,419 then against 6,426 now.
 
-Most of that is the frame-freshness wiring: a coordinate-system change now
-invalidates a running terrain analysis, a running classification derive, an
-in-flight full-cloud grade and a captured space or object measurement. It also
-marks a COMPLETED derived classification stale, because the classifier converts
-physical thresholds into source units, so those classes only mean what they say
-in the frame they were derived under. The classes are kept and the analyses
-built on them go stale; nothing is discarded.
+Most of what those raises paid for is the frame-freshness wiring: a
+coordinate-system change now invalidates a running terrain analysis, a running
+classification derive, an in-flight full-cloud grade and a captured space or
+object measurement. It also marks a COMPLETED derived classification stale,
+because the classifier converts physical thresholds into source units, so those
+classes only mean what they say in the frame they were derived under. The
+classes are kept and the analyses built on them go stale; nothing is discarded.
 
 The rest closes two multi-layer defects. New work placed while several layers
 are mounted is now stamped in the project frame, which is the frame its
@@ -115,6 +131,16 @@ their own frame.
 
 Unchanged from prior releases. Scans must share a coordinate reference system to
 be compared; the viewer refuses rather than approximating.
+
+## A correction to the v0.6.7 limitations
+
+`KNOWN_LIMITATIONS_v0.6.7.md` records `HOLDOUT-RMSE` and `NVA-VVA` as recomputed
+in base R 4.4.1. The two study manifests those claims rest on,
+`ACCURACY-RMSE-R-RESIDUALS` and `ACCURACY-NVA95-R-RESIDUALS`, both record
+`R version 4.6.1 (2026-06-24)`, and both already did so at the v0.6.7 tag, so
+the prose was wrong on the day it shipped. The version that ran is 4.6.1.
+`MEAS-PROFILE` cites R 4.4.1, which its own manifest confirms, and is
+unaffected. The v0.6.7 file is left as it was published.
 
 ## Inherited limits
 

@@ -14,8 +14,10 @@
  * This guard backs the honest half of that: the files may SHRINK, never grow.
  * It stops the monoliths quietly re-accreting the code a decomposition step
  * just removed, without forcing vanity extraction to chase a number. When a
- * step legitimately lowers a count, run with --update to bank it; there is no
- * flag to raise a baseline, so growth is always a deliberate, hand-edited act.
+ * step legitimately lowers a count, run with --update to bank it. --update
+ * writes whatever the files currently measure, in either direction, so it can
+ * bank a raise as readily as a drop; what holds the ratchet is review of the
+ * baseline diff, not this script.
  *
  * A directional ceiling stays in the baseline as `goal`, recorded for context
  * only — this guard never enforces it. Reaching it is the architecture map's
