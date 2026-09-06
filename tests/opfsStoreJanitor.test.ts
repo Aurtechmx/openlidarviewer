@@ -24,6 +24,7 @@ import {
   selectOrphanPromoted,
   DEFAULT_STALE_MS,
 } from '../src/io/heavy/opfsStoreJanitor';
+import { storeLockName, type LockManagerLike } from '../src/io/heavy/oocStoreLiveness';
 
 const NOW = 1_000_000_000_000;
 
@@ -110,6 +111,26 @@ describe('selectOrphanPromoted', () => {
   });
 });
 
+/** A lock manager where nothing is held, so every exclusive request succeeds. */
+function freeLocks(): LockManagerLike {
+  return {
+    async request(name, _options, cb) { return cb({ name }); },
+    async query() { return { held: [] }; },
+  };
+}
+
+/** A lock manager where `busy` names stores a live tab already holds. */
+function heldLocks(busy: ReadonlySet<string>): LockManagerLike {
+  return {
+    async request(name, options, cb) {
+      const contended = [...busy].some((s) => storeLockName(s) === name);
+      if (contended && options.ifAvailable) return cb(null);
+      return cb({ name });
+    },
+    async query() { return { held: [...busy].map((name) => ({ name })) }; },
+  };
+}
+
 describe('sweepPromotedOrphans', () => {
   it('removes a stale orphan, but keeps referenced, live, fresh, and unknown-age promoted stores', async () => {
     const opfs = fakeOpfs();
@@ -122,6 +143,7 @@ describe('sweepPromotedOrphans', () => {
     const removed = await sweepPromotedOrphans(opfs.root, {
       referenced: new Set(['ooc-referenced-100-b']),
       live: new Set(['ooc-live-100-c']),
+      locks: freeLocks(),
       now: NOW,
     });
 
@@ -130,5 +152,39 @@ describe('sweepPromotedOrphans', () => {
     for (const kept of ['ooc-referenced-100-b', 'ooc-live-100-c', 'ooc-fresh-100-d', 'ooc-nolease-100-e']) {
       expect(opfs.topLevel()).toContain(kept);
     }
+  });
+
+  it('THE SNAPSHOT RACE: keeps a store a tab opened after `live` was sampled', async () => {
+    // `live` is read once, before the sweep. A tab that opens a store after
+    // that read is absent from the set, so on the snapshot alone this store
+    // reads as a stale orphan and was deleted out from under a live reader.
+    // Deleting under the store's own exclusive lock re-tests residency at the
+    // moment of deletion, and the held shared lock refuses it.
+    const opfs = fakeOpfs();
+    await makeStore(opfs.root, 'ooc-latecomer-100-f', NOW - DEFAULT_STALE_MS - 60_000);
+    const locks = heldLocks(new Set(['ooc-latecomer-100-f']));
+
+    const removed = await sweepPromotedOrphans(opfs.root, {
+      referenced: new Set(),
+      live: new Set(), // the stale snapshot: the reader is not in it
+      locks,
+      now: NOW,
+    });
+
+    expect(removed).toEqual([]);
+    expect(opfs.topLevel()).toContain('ooc-latecomer-100-f');
+  });
+
+  it('sweeps nothing at all without a lock manager', async () => {
+    // Missing liveness must prevent destructive cleanup, never enable it.
+    const opfs = fakeOpfs();
+    await makeStore(opfs.root, 'ooc-orphan-100-g', NOW - DEFAULT_STALE_MS - 60_000);
+
+    const removed = await sweepPromotedOrphans(opfs.root, {
+      referenced: new Set(), live: new Set(), locks: null, now: NOW,
+    });
+
+    expect(removed).toEqual([]);
+    expect(opfs.topLevel()).toContain('ooc-orphan-100-g');
   });
 });

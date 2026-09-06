@@ -208,11 +208,26 @@ async function reopenFromCache(
   storeName: string,
   file: File,
 ): Promise<{ source: OlvTileSource; decoder: TileChunkDecoder } | null> {
+  // RESIDENCY IS TAKEN FIRST, before the directory is even looked up. Taken
+  // after the reads, it left a window: an evictor in another tab could win the
+  // exclusive lock and delete the store between the last read and the grant,
+  // and this path would then hand back a reader over a directory that no longer
+  // exists — a hit on a store that was gone. Holding shared residency across
+  // the lookup and the reads makes the eviction attempt fail instead
+  // (`removeStoreIfIdle` asks for exclusive with `ifAvailable`), so the store
+  // cannot vanish underneath a reopen that is already committed to it.
+  const locks = resolveLockManager();
+  const releaseResidency = locks ? await acquireStoreResidency(locks, storeName) : null;
+  /** Give the lock back on every path that does not return a live source. */
+  const miss = async (): Promise<null> => {
+    await releaseResidency?.();
+    return null;
+  };
   let dir: OpfsDirHandle;
   try {
     dir = await root.getDirectoryHandle(storeName);
   } catch {
-    return null; // store evicted out from under the map
+    return miss(); // store evicted before we held residency
   }
   let reader: ReturnType<typeof openTileStore>;
   try {
@@ -228,11 +243,9 @@ async function reopenFromCache(
     // which the caller treats as a miss"; this is that promise made true.
     reader = openTileStore(manifestJson, hierarchy);
   } catch {
-    return null; // artifacts missing, unreadable, or unusable → rebuild
+    return miss(); // artifacts missing, unreadable, or unusable → rebuild
   }
   const spill = opfsSpillStore(dir);
-  const locks = resolveLockManager();
-  const releaseResidency = locks ? await acquireStoreResidency(locks, storeName) : null;
   const source = new OlvTileSource({
     id: `ooc-${storeName}`,
     name: file.name,
@@ -447,7 +460,7 @@ export async function executeHeavyLasBuild(
       if (!live) return;
       const map = await readCacheMap(root);
       const referenced = new Set(map.entries.map((e) => e.storeName));
-      await sweepPromotedOrphans(root, { referenced, live, debug: deps.debug });
+      await sweepPromotedOrphans(root, { referenced, live, locks: resolveLockManager(), debug: deps.debug });
     })().catch(() => {});
   }
 

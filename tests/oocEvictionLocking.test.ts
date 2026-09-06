@@ -22,18 +22,41 @@ import {
   type LockManagerLike,
 } from '../src/io/heavy/oocStoreLiveness';
 
-/** A fake Web Locks manager modelling shared/exclusive grants and ifAvailable. */
+/**
+ * A fake Web Locks manager modelling shared/exclusive grants, ifAvailable, and
+ * QUEUEING.
+ *
+ * The queue is the part that matters. An earlier fake consulted its grant rule
+ * only under `ifAvailable` and handed a blocking request the lock immediately,
+ * so a blocking exclusive request ran straight through a held shared lock. That
+ * is the opposite of what Web Locks does, and it made every contention test
+ * vacuous: the interleaving under test could not occur, because nothing ever
+ * waited. A blocking request now parks until the lock is actually free.
+ */
 function fakeLocks(): LockManagerLike {
   const held = new Map<string, { shared: number; exclusive: boolean }>();
+  const waiters: Array<() => void> = [];
   const canGrant = (name: string, mode: string): boolean => {
     const h = held.get(name);
     if (!h) return true;
     return mode === 'exclusive' ? h.shared === 0 && !h.exclusive : !h.exclusive;
   };
+  /** Wake parked requests so each re-tests its own grant condition. */
+  const pump = (): void => {
+    const woken = waiters.splice(0, waiters.length);
+    for (const w of woken) w();
+  };
   return {
     async request(name, options, cb) {
       const mode = options.mode ?? 'exclusive';
-      if (options.ifAvailable && !canGrant(name, mode)) return cb(null);
+      if (!canGrant(name, mode)) {
+        // Non-blocking callers are told "busy" and never queue.
+        if (options.ifAvailable) return cb(null);
+        // Blocking callers wait for a release, then re-contend.
+        while (!canGrant(name, mode)) {
+          await new Promise<void>((r) => { waiters.push(r); });
+        }
+      }
       const h = held.get(name) ?? { shared: 0, exclusive: false };
       if (mode === 'exclusive') h.exclusive = true;
       else h.shared += 1;
@@ -45,6 +68,7 @@ function fakeLocks(): LockManagerLike {
         if (mode === 'exclusive') g.exclusive = false;
         else g.shared -= 1;
         if (g.shared === 0 && !g.exclusive) held.delete(name);
+        pump();
       }
     },
     async query() {
@@ -108,6 +132,33 @@ describe('removeStoreIfIdle', () => {
     const locks = fakeLocks();
     await removeStoreIfIdle(locks, 'ooc-a', async () => { throw new Error('boom'); });
     expect(await removeStoreIfIdle(locks, 'ooc-a', async () => {})).toBe(true);
+  });
+
+  it('makes a BLOCKING exclusive request wait for a held shared lock', async () => {
+    // The invariant `reopenFromCache` now relies on. It takes shared residency
+    // BEFORE looking the directory up, so an evictor cannot delete the store
+    // between the last read and the grant. That only holds if a conflicting
+    // request genuinely waits, which is also what proves this fake is faithful
+    // enough for the contention tests above to mean anything.
+    const locks = fakeLocks();
+    const order: string[] = [];
+    let releaseReader = (): void => {};
+    const readerDone = new Promise<void>((r) => { releaseReader = r; });
+    const reader = locks.request('ooc-a', { mode: 'shared' }, async () => {
+      order.push('reader-in');
+      await readerDone;
+      order.push('reader-out');
+    });
+    // Let the shared lock be taken before the exclusive request contends.
+    await Promise.resolve();
+    const evictor = locks.request('ooc-a', { mode: 'exclusive' }, async () => {
+      order.push('evictor-in');
+    });
+    await Promise.resolve();
+    expect(order).toEqual(['reader-in']);
+    releaseReader();
+    await Promise.all([reader, evictor]);
+    expect(order).toEqual(['reader-in', 'reader-out', 'evictor-in']);
   });
 
   it('locks the store itself, not some other name', async () => {
