@@ -136,13 +136,30 @@ export function datasetIdentity(cloud: {
   readonly sourceDeclaredPointCount?: number;
   readonly pointCount?: number;
   readonly bounds?: () => { readonly min: readonly number[]; readonly max: readonly number[] };
+  // A STREAMING source states the same two facts in its own shape: a declared
+  // source total, and bounds as one flat [minX,minY,minZ,maxX,maxY,maxZ]. It
+  // was left out, so a streaming scan reached the resolver with no identity at
+  // all and two same-named COPC/EPT datasets still collided on a remembered
+  // override — the very case the static path was fixed for.
+  readonly sourcePointCount?: number | null;
+  readonly dataBounds?: () => readonly number[] | null | undefined;
+  readonly localBounds?: () => readonly number[] | null | undefined;
 } | null | undefined): ResolveForScanInput['identity'] {
   if (!cloud) return undefined;
-  const pointCount = cloud.sourceDeclaredPointCount ?? cloud.declaredPointCount ?? cloud.pointCount;
+  const pointCount = cloud.sourceDeclaredPointCount
+    ?? cloud.declaredPointCount
+    ?? cloud.sourcePointCount
+    ?? cloud.pointCount
+    ?? undefined;
   let extent: [number, number, number] | undefined;
   try {
     const b = cloud.bounds?.();
     if (b) extent = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
+    else {
+      // Prefer the tight data bounds; the octree cube is a last resort.
+      const f = (cloud.dataBounds ?? cloud.localBounds)?.();
+      if (f && f.length >= 6) extent = [f[3] - f[0], f[4] - f[1], f[5] - f[2]];
+    }
   } catch {
     extent = undefined;
   }

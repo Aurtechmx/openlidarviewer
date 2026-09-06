@@ -2304,15 +2304,13 @@ export class Viewer {
 
   /** Return an array of all currently loaded cloud IDs. */
   /**
-   * Whether every layer that would CONTRIBUTE to a terrain gather shares one
-   * source origin. False means the assembled surface lives in the project
-   * frame, which no single layer's origin names, so an exporter must not anchor
-   * to one. Same `integrableClouds` filter the gather itself applies, so a
-   * hidden or locked layer is not counted against it.
+   * Whether every CONTRIBUTING layer shares one source origin. False means the
+   * surface is in the project frame, which no layer's origin names, so an
+   * exporter must not anchor to one. Same `integrableClouds` filter as the
+   * gather, so a hidden layer is not counted against it.
    */
   terrainFrameIsSingleOrigin(): boolean {
-    const os = integrableClouds(this._clouds.values())
-      .map((e) => e.cloud.sourceOrigin)
+    const os = integrableClouds(this._clouds.values()).map((e) => e.cloud.sourceOrigin)
       .filter((o): o is readonly [number, number, number] => Array.isArray(o));
     return os.every((o) => o[0] === os[0][0] && o[1] === os[0][1] && o[2] === os[0][2]);
   }
@@ -3074,6 +3072,13 @@ export class Viewer {
   private _markClassificationEdited(id: string): void {
     this._classEpochs.bump(id);
     this.onClassificationEdited?.(id);
+  }
+
+  /** Mark DERIVED classifications stale after a frame change (see CLASS_FRAME_STALE_NOTICE). */
+  invalidateDerivedClassificationsForFrame(): string[] {
+    const marked: string[] = [];
+    for (const [id, e] of this._clouds) if (e.cloud.classificationIsDerived) { this._classEpochs.bump(id); marked.push(id); }
+    return marked;
   }
 
   /** The cloud's classification edit epoch (0 = never edited). */

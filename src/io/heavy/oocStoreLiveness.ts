@@ -130,6 +130,46 @@ export function isStoreBusy(locks: LockManagerLike | null, storeName: string): P
 }
 
 /**
+ * Delete a store while holding its EXCLUSIVE lock, and report whether it went.
+ *
+ * An eviction pass previously chose victims from a `liveStoreNames` snapshot and
+ * then deleted them unlocked. That snapshot names a different lock from the
+ * store's own, so a reader in another tab could take shared residency in the
+ * gap and have the directory removed underneath it. Checking `isStoreBusy` first
+ * would not help: the answer is stale the moment it returns. The lock has to be
+ * HELD across the eligibility decision and the delete, which is what this does.
+ *
+ * `ifAvailable: true` is a correctness requirement, not an optimisation. The
+ * caller runs inside the cache-map lock, while a reopen takes the store lock
+ * first and the map lock second; a blocking exclusive request here would close
+ * that cycle and deadlock. A null grant means busy, and a busy store is kept.
+ *
+ * Returns false when the store is busy, when there is no lock manager (never
+ * guess at liveness), or when the delete itself fails — so the caller can leave
+ * the cache-map entry in place rather than orphaning a store that still exists.
+ */
+export async function removeStoreIfIdle(
+  locks: LockManagerLike | null,
+  storeName: string,
+  remove: (name: string) => Promise<void>,
+): Promise<boolean> {
+  if (!locks) return false;
+  return locks.request(
+    storeLockName(storeName),
+    { mode: 'exclusive', ifAvailable: true },
+    async (lock) => {
+      if (lock === null) return false; // another tab holds it — keep it
+      try {
+        await remove(storeName);
+        return true;
+      } catch {
+        return false; // still on disk; the map must keep pointing at it
+      }
+    },
+  );
+}
+
+/**
  * The set of store names currently held by any tab, for an eviction pass to skip.
  * Null when liveness cannot be determined (no lock manager) — the caller must
  * then evict nothing.

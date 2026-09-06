@@ -23,8 +23,8 @@
  * script was removed names a file that is correctly absent.
  */
 
+import { distributedFiles } from './helpers/repoFiles';
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
@@ -44,9 +44,8 @@ const COMMENT = /^\s*(?:\/\/|\/\*|\*|#|<!--)/;
 const RETIRED = /\bretired\b|\bremoved\b|\bdeleted\b|no longer/i;
 
 function trackedFiles(): string[] {
-  return execFileSync('git', ['ls-files'], { cwd: REPO_ROOT, encoding: 'utf8' })
-    .split('\n')
-    .filter((f) => f !== '' && SCANNED.test(f))
+  return distributedFiles()
+    .filter((f) => SCANNED.test(f))
     .filter((f) => !HISTORICAL.some((re) => re.test(f)));
 }
 

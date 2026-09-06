@@ -20,6 +20,15 @@ reaches them. They are recorded in `docs/validation/unreachable-modules.json`,
 which a lint enforces, so they are inventory rather than a delivered feature. Do
 not read the registration work as epoch alignment you can run.
 
+Three provenance modules are in the same state: the scientific artifact passport
+(`scientificArtifactPassport`), the evidence boundary inspector
+(`evidenceBoundaryInspector`) and the DTM surface digest (`dtmProductDigest`).
+No export constructs a passport, no interface renders the inspector, and no
+delivered surface is passed to the digest. Earlier drafts of this release's
+notes described all three as delivered, including a DTM surface carrying its own
+SHA-256; that wording is corrected. The report and manifest digests that do ship
+are unaffected and remain real.
+
 ## Touch is verified on one engine
 
 Pinch, rotate and two-finger gestures are exercised end to end on Chromium only.
@@ -65,22 +74,27 @@ the number in `scripts/check-bundle-budget.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,557 lines and `src/render/Viewer.ts` is 6,421. A shrink-only
+`src/main.ts` is 5,558 lines and `src/render/Viewer.ts` is 6,426. A shrink-only
 lint holds both at exactly those counts. It has no flag to raise a baseline, so
 growth is only ever a hand edit to the recorded number, visible in the diff and
 never automatic.
 
 Both took such an edit in this cycle. The recorded baselines moved from 5,529 to
-5,557 for `src/main.ts`, and from 6,409 to 6,421 for `src/render/Viewer.ts`.
+5,558 for `src/main.ts`, and from 6,409 to 6,426 for `src/render/Viewer.ts`.
 
-Most of that is the frame-freshness wiring: an in-flight CRS change now
+Most of that is the frame-freshness wiring: a coordinate-system change now
 invalidates a running terrain analysis, a running classification derive, an
-in-flight full-cloud grade and a captured space or object measurement. The rest
-closes two multi-layer defects. New work placed while several layers are mounted
-is now stamped in the project frame, which is the frame its coordinates were
-already in; and a terrain export whose contributing layers disagree on their
-origin publishes no world origin at all, rather than anchoring the combined
-surface to whichever layer happened to be active.
+in-flight full-cloud grade and a captured space or object measurement. It also
+marks a COMPLETED derived classification stale, because the classifier converts
+physical thresholds into source units, so those classes only mean what they say
+in the frame they were derived under. The classes are kept and the analyses
+built on them go stale; nothing is discarded.
+
+The rest closes two multi-layer defects. New work placed while several layers
+are mounted is now stamped in the project frame, which is the frame its
+coordinates were already in; and a terrain export whose contributing layers
+disagree on their origin publishes no world origin at all, rather than anchoring
+the combined surface to whichever layer happened to be active.
 
 Every one of those handles lives in the shell or the viewer, which is why the
 wiring does. The decomposition is that much more overdue.

@@ -47,6 +47,7 @@ import {
   resolveLockManager,
   acquireStoreResidency,
   liveStoreNames,
+  removeStoreIfIdle,
 } from '../io/heavy/oocStoreLiveness';
 import { OlvTileSource, PreviewCloudSource } from '../io/heavy/OlvTileSource';
 import { buildPreviewSample } from '../io/heavy/previewSampler';
@@ -213,16 +214,23 @@ async function reopenFromCache(
   } catch {
     return null; // store evicted out from under the map
   }
-  let manifestJson: string;
-  let hierarchy: string;
+  let reader: ReturnType<typeof openTileStore>;
   try {
-    manifestJson = await readOpfsText(dir, TILE_MANIFEST_NAME);
-    hierarchy = await readOpfsText(dir, TILE_HIERARCHY_NAME);
+    const manifestJson = await readOpfsText(dir, TILE_MANIFEST_NAME);
+    const hierarchy = await readOpfsText(dir, TILE_HIERARCHY_NAME);
+    // PARSING BELONGS INSIDE THIS BOUNDARY, not after it. Both parsers fail
+    // closed by design, so a truncated or edited manifest throws — and outside
+    // the catch that throw escaped every caller, so a corrupt cache entry did
+    // not read as a miss, it refused the open. Worse, it threw before the stale
+    // entry was dropped, so the same file failed identically on every later
+    // attempt: unopenable until site data was cleared. The docstring above
+    // already promised "artifacts cannot be read (a partial or corrupt store),
+    // which the caller treats as a miss"; this is that promise made true.
+    reader = openTileStore(manifestJson, hierarchy);
   } catch {
-    return null; // artifacts missing / unreadable → rebuild
+    return null; // artifacts missing, unreadable, or unusable → rebuild
   }
   const spill = opfsSpillStore(dir);
-  const reader = openTileStore(manifestJson, hierarchy);
   const locks = resolveLockManager();
   const releaseResidency = locks ? await acquireStoreResidency(locks, storeName) : null;
   const source = new OlvTileSource({
@@ -324,8 +332,15 @@ async function recordAndEvict(
       const live = await liveStoreNames(locks);
       if (live) {
         for (const name of selectEvictions(map.entries, { budgetBytes: CACHE_BUDGET_BYTES, liveNames: live })) {
-          await removeOpfsStore(root, name).catch(() => {});
-          map = removeByStoreName(map, name);
+          // The snapshot above narrows the candidates; it cannot decide them.
+          // It names a different lock from the store's own, so a reader can take
+          // residency between the snapshot and the delete. The exclusive lock is
+          // held ACROSS the removal, and the map entry is dropped only when the
+          // store actually went — a swallowed failure used to leave the bytes on
+          // disk with nothing pointing at them.
+          if (await removeStoreIfIdle(locks, name, (n) => removeOpfsStore(root, n))) {
+            map = removeByStoreName(map, name);
+          }
         }
       }
       return map;

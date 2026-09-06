@@ -49,6 +49,29 @@ export interface ClassEditNotifyDeps {
   readonly noteStale: (message: string) => void;
 }
 
+/**
+ * The caveat carried when the FRAME changed under a derived classification.
+ *
+ * Distinct from the edit notice because the classes were not edited: their
+ * basis was. `classifierOptions` restates physical metre thresholds in source
+ * units, so a derived classification only means what it says in the frame it
+ * was derived under. The in-flight race is already refused; this is the
+ * completed one — classes derived under revision 10 stayed attached, and a
+ * later analysis consumed them as current after the operator corrected the
+ * frame.
+ *
+ * `Viewer.invalidateDerivedClassificationsForFrame` bumps the classification
+ * epoch rather than deleting anything: the bytes are the user's work and a
+ * derive costs seconds, while the epoch is what every downstream freshness gate
+ * already reads, so results built on them go stale and exports refuse. The
+ * points stay on screen until Classify is re-run. Producer classifications
+ * carry no frame-dependent thresholds and are left alone.
+ */
+export const CLASS_FRAME_STALE_NOTICE =
+  'Coordinate system changed. The derived classification was computed with '
+  + 'thresholds converted under the previous frame, so anything built on it is '
+  + 'no longer current; re-run Classify, then Analyse.';
+
 /** The caveat an on-screen Analyse result carries once the classes move under it. */
 export const CLASS_EDIT_STALE_NOTICE =
   'Classification edited. Results reflect the previous classification; re-run Analyse to refresh.';
@@ -64,4 +87,22 @@ export function noteClassificationEdited(deps: ClassEditNotifyDeps): void {
   deps.noteStale(CLASS_EDIT_STALE_NOTICE);
   const cls = deps.classification;
   if (cls && cls.length > 0) deps.legend.replaceCounts(classCountsOf(cls));
+}
+
+/** What a frame change owes a derived classification. See the notice above. */
+export interface FrameChangeInvalidateDeps {
+  readonly invalidate: () => readonly string[];
+  readonly clearTerrainCache: () => void;
+  readonly noteStale: (message: string) => void;
+}
+
+/**
+ * Mark derived classifications stale after a frame change, and tell the user.
+ * A no-op when nothing was derived, so a CRS change on a producer-classified
+ * scan costs nothing and says nothing.
+ */
+export function noteDerivedClassesFrameChanged(deps: FrameChangeInvalidateDeps): void {
+  if (deps.invalidate().length === 0) return;
+  deps.clearTerrainCache();
+  deps.noteStale(CLASS_FRAME_STALE_NOTICE);
 }

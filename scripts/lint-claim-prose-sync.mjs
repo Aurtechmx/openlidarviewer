@@ -74,6 +74,20 @@ export const TRUTH_DOCS = [
   'docs/validation/terrain-validation-matrix.md',
   'docs/validation/EVIDENCE_MODEL.md',
   'ARTIFACT_EVALUATION.md',
+  // Two of the most-read statements of the total were not scanned at all, which
+  // is why each still said 33 after a claim was added. The README is the first
+  // place a reader meets the number and the docs-site page is the one the
+  // project publishes; both describe only the current release, so the whole
+  // file can be held to the live register.
+  //
+  // CHANGELOG.md is deliberately NOT here. It is one file holding every
+  // release, and its frozen sections state the totals that were true when they
+  // shipped — "Twelve products are now at E4" under [0.6.6] is history, not
+  // drift. Scanning it whole would demand rewriting those, which is the one
+  // thing the release-truth rules exist to prevent. Holding its current section
+  // to the register needs section-scoped reading, which this rule does not have.
+  'README.md',
+  `docs-site/releases/v${PKG_VERSION}.md`,
 ];
 
 const NUMBER_WORDS = [
@@ -148,7 +162,13 @@ const TOTAL_FORMS = [
   `\\bof\\s+the\\s+(${TOTAL_NUMBER})\\s+(?:currently\\s+)?registered\\s+claims\\b${RUNG_TAIL}`,
   `\\bof\\s+the\\s+(${TOTAL_NUMBER})\\s+claims\\s+in\\s+the\\s+(?:claim\\s+)?register\\b${RUNG_TAIL}`,
   `\\ball\\s+(${TOTAL_NUMBER})\\s+registered\\s+claims\\b${RUNG_TAIL}`,
-  `\\bthe\\s+(?:claim\\s+)?register\\s+(?:holds|contains|lists|has)\\s+(${TOTAL_NUMBER})\\s+claims\\b${RUNG_TAIL}`,
+  // The adverb slot is not decoration. The sentence that shipped past this rule
+  // was "the register STILL holds 33 claims": `\s+` cannot span a word, so one
+  // adverb between the subject and the verb slid the whole match off, in the
+  // two documents that state the total most publicly. Allow up to two such
+  // words rather than enumerating them, since the next one will be "now" or
+  // "again" and the rule should not need editing to survive a synonym.
+  `\\bthe\\s+(?:claim\\s+)?register\\s+(?:\\w+\\s+){0,2}?(?:holds|contains|lists|has)\\s+(${TOTAL_NUMBER})\\s+claims\\b${RUNG_TAIL}`,
 ];
 
 /**

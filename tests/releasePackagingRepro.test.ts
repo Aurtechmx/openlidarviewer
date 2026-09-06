@@ -13,6 +13,7 @@
  * would be exactly the kind of unverified assertion this suite exists to catch.
  */
 
+import { hasGitRepo } from './helpers/repoFiles';
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, readdirSync, readFileSync } from 'node:fs';
@@ -38,7 +39,12 @@ function cutSource(epoch: string): { dir: string; zip: string; name: string } {
 }
 
 describe('release packaging is reproducible', () => {
-  it('produces a byte-identical source archive for the same commit', () => {
+  // This one genuinely needs history: it asks whether two cuts of the SAME
+  // COMMIT agree, and an extracted archive has no commit to cut twice. Skipped
+  // with a reason rather than failed, matching how verify-archive-portability
+  // reports its repo-only checks. The sibling test below needs no repository
+  // and keeps covering the naming rule in archive shape.
+  it.skipIf(!hasGitRepo())('produces a byte-identical source archive for the same commit', () => {
     const epoch = execFileSync('git', ['show', '-s', '--format=%ct', 'HEAD'], {
       cwd: ROOT,
       encoding: 'utf8',

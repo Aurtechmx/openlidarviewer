@@ -1,7 +1,7 @@
 # OpenLiDARViewer v0.6.8
 
 An engineering and provenance release. No product changed evidence level this
-cycle: the register still holds 33 claims, 17 of them at E4, none at E5. The
+cycle: the register holds 34 claims, 17 of them at E4, none at E5. The
 work went into what the viewer tells you about its own numbers, into reopening
 a heavy local file without rebuilding its index, and into a body of
 externally-checkable provenance.
@@ -50,15 +50,16 @@ totals are reported from the scheduler that owns them.
 
 ## Provenance you can check
 
-- A scientific artifact passport binds an exported product to the method, the
-  inputs and the software that produced it.
-- An evidence boundary inspector shows where a claim's support ends.
-- The delivered DTM surface carries a SHA-256 of the surface itself.
 - Contours export as a complete package with a DXF, a validation record and the
   Contour Studio settings.
 - A Scan QA report replaces the retired acceptance checklist, stating the
   coordinate-quality verdict, classification provenance and what the report does
   not establish.
+
+A scientific artifact passport, an evidence boundary inspector and a SHA-256
+over the DTM surface are implemented and tested, but no user path reaches them
+in v0.6.8. They are recorded in `docs/validation/unreachable-modules.json`,
+which a lint enforces, so they are inventory rather than delivered features.
 
 ## Interface
 
@@ -90,7 +91,8 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
 ## Known limitations
 
 The evidence ceiling is unchanged: 17 products at E4, none at E5. The
-registration stack and the stockpile area-grid estimator are implemented and
+registration stack, the stockpile area-grid estimator, the artifact passport,
+the evidence boundary inspector and the DTM surface digest are implemented and
 tested but not wired into a user path, and are registered as unreachable rather
 than described as delivered. Touch gestures are verified on Chromium only.
 `KNOWN_LIMITATIONS_v0.6.8.md` carries the full list.

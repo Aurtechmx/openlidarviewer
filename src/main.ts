@@ -96,7 +96,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { classCountsOf, noteClassificationEdited } from './app/classLegendRefresh';
+import { classCountsOf, noteClassificationEdited, noteDerivedClassesFrameChanged } from './app/classLegendRefresh';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { classifierOptions } from './render/class/classifierCues';
 import { classificationCoverage } from './render/class/classificationCoverage';
@@ -2927,6 +2927,7 @@ crsService.subscribe((resolved) => {
   // scaled by the superseded factor. Cancel one, invalidate the other.
   cancelFullCloudGrade();
   lastSpaceExport = null;
+  noteDerivedClassesFrameChanged({ invalidate: () => viewer?.invalidateDerivedClassificationsForFrame() ?? [], clearTerrainCache: () => terrainRunner.abortAndClearCache(), noteStale: (m) => analysePanel?.setStaleNotice(m) });
   if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } // reveal on scan load, hide + reset produced on close
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));

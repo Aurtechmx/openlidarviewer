@@ -82,6 +82,10 @@ export interface CrsCoordinator {
     readonly kind: StreamingSourceKind;
     readonly renderOrigin?: readonly [number, number, number];
     crs(): CrsInfo | undefined;
+    /** Source total + bounds, for telling two same-named streams apart. */
+    readonly sourcePointCount?: number | null;
+    dataBounds?(): readonly number[] | null | undefined;
+    localBounds?(): readonly number[] | null | undefined;
   }): void;
   /** Handle a user CRS override picked from the Inspector. */
   handleCrsOverride(override: {
@@ -160,6 +164,10 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     readonly kind: StreamingSourceKind;
     readonly renderOrigin?: readonly [number, number, number];
     crs(): CrsInfo | undefined;
+    /** Source total + bounds, for telling two same-named streams apart. */
+    readonly sourcePointCount?: number | null;
+    dataBounds?(): readonly number[] | null | undefined;
+    localBounds?(): readonly number[] | null | undefined;
   }): void {
     const source: CrsSource = crsSourceForKind(cloud.kind);
     trackDataset(cloud.name);
@@ -169,6 +177,9 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       name: cloud.name,
       detected: cloud.crs(),
       source,
+      // The static path already does this. Without it a remembered override
+      // keyed on the filename reattaches to any same-named stream.
+      identity: datasetIdentity(cloud),
     });
     if (isViewerReady()) {
       try {
