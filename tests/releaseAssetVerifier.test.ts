@@ -19,6 +19,11 @@ import { resolve, join } from 'node:path';
 import { binaryOnPath } from '../scripts/lib/binaryOnPath.mjs';
 // @ts-expect-error — plain .mjs script, no types
 import { verifyStagedRelease } from '../scripts/verify-release-assets.mjs';
+// @ts-expect-error — plain .mjs script, no types
+import { REQUIRED_SMOKE_CHECKS } from '../scripts/lib/deploySmokeContract.mjs';
+
+/** The contract both the producer and the verifier are written against. */
+const REQUIRED_CHECKS: string[] = [...REQUIRED_SMOKE_CHECKS];
 
 /**
  * The canonical runtime, read from the repo's own pin. Hardcoding it here let
@@ -163,7 +168,7 @@ function stageRelease(opts: {
   const smokeDefault = {
     schemaVersion: 1, project: 'openlidarviewer', version: VERSION, tag: TAG,
     gitCommit: COMMIT, archive: depZip.split('/').pop(), sha256: sha(depZip),
-    checks: ['archive-extracts', 'smoke.spec.ts', 'lazyChunkLoad.spec.ts'],
+    checks: [...REQUIRED_CHECKS],
     ok: true, generatedAt: '2026-07-22T13:46:00.000Z',
   };
   const smoke = opts.smoke === null ? null : { ...smokeDefault, ...(opts.smoke ?? {}) };
@@ -513,8 +518,74 @@ describeZip('the deploy archive must have been started', () => {
     expect(r.problems.some((p: string) => /not the release commit/.test(p))).toBe(true);
   });
 
-  it('rejects a result carrying no executed checks', () => {
+  // JSON has four falsy values a `if (parsed)` guard cannot distinguish from a
+  // parse failure, and the original verifier skipped EVERY smoke check for all
+  // of them. An array is the fifth shape that is not a record.
+  it.each([
+    ['null', 'null'],
+    ['false', 'false'],
+    ['zero', '0'],
+    ['an empty string', '""'],
+    ['an array', '[]'],
+  ])('rejects a result that is %s rather than an object', (_label, body) => {
+    stageRelease();
+    writeFileSync(join(dir, `smoke-deploy-v${VERSION}.json`), body);
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /must be a JSON object/.test(p))).toBe(true);
+  });
+
+  it('rejects a result whose ok is truthy but not true', () => {
+    stageRelease({ smoke: { ok: 'yes' } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /does not record a pass/.test(p))).toBe(true);
+  });
+
+  it('rejects a result from an unsupported schema', () => {
+    stageRelease({ smoke: { schemaVersion: 99 } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /schemaVersion/.test(p))).toBe(true);
+  });
+
+  it('rejects a result naming another project', () => {
+    stageRelease({ smoke: { project: 'some-other-tool' } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /names project/.test(p))).toBe(true);
+  });
+
+  // The rule that a non-empty `checks` array was enough: a record naming one
+  // trivial check satisfied it while no browser had opened the archive.
+  it.each(['smoke.spec.ts', 'lazyChunkLoad.spec.ts'])(
+    'rejects a result missing the %s browser check',
+    (missing) => {
+      stageRelease({ smoke: { checks: REQUIRED_CHECKS.filter((c) => c !== missing) } });
+      const r = verifySmoke();
+      expect(r.ok).toBe(false);
+      expect(r.problems.some((p: string) => p.includes(`missing required check(s): ${missing}`))).toBe(true);
+    },
+  );
+
+  it('rejects a non-empty checks array that names no browser check at all', () => {
+    stageRelease({ smoke: { checks: ['something-cheap'] } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => /missing required check/.test(p))).toBe(true);
+  });
+
+  it('rejects an empty checks array by naming every check it lacks', () => {
     stageRelease({ smoke: { checks: [] } });
+    const r = verifySmoke();
+    expect(r.ok).toBe(false);
+    const missing = r.problems.find((p: string) => /missing required check/.test(p));
+    expect(missing).toBeDefined();
+    for (const c of REQUIRED_CHECKS) expect(missing).toContain(c);
+  });
+
+  it('rejects a checks field that is not an array', () => {
+    stageRelease({ smoke: { checks: 'smoke.spec.ts' } });
     const r = verifySmoke();
     expect(r.ok).toBe(false);
     expect(r.problems.some((p: string) => /names no executed checks/.test(p))).toBe(true);

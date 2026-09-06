@@ -28,11 +28,14 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:net';
 import {
-  readFileSync, writeFileSync, existsSync, readdirSync, mkdtempSync, rmSync,
+  readFileSync, writeFileSync, renameSync, existsSync, readdirSync, mkdtempSync, rmSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  DEPLOY_SMOKE_SCHEMA_VERSION, DEPLOY_SMOKE_PROJECT, REQUIRED_SMOKE_CHECKS,
+} from './lib/deploySmokeContract.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RELEASE = join(ROOT, 'release');
@@ -41,21 +44,18 @@ const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const VERSION = PKG.version;
 const RESULT_FILE = join(RELEASE, `smoke-deploy-v${VERSION}.json`);
 
-/** The checks this run performs, in order. Recorded in the result. */
-const CHECKS = [
-  'archive-listed-in-checksums',
-  'archive-digest-matches-checksums',
-  'archive-extracts',
-  'archive-has-index-html',
-  'smoke.spec.ts',
-  'lazyChunkLoad.spec.ts',
-];
+// The result of the PREVIOUS run is deleted before anything else happens.
+// Clearing it only inside fail() was not enough: a throw from unzip, from port
+// allocation or from Playwright skipped that path entirely, the process exited
+// non-zero, and the earlier success record stayed on disk still claiming `ok`
+// for an archive this run never validated. Removing it up front means the file
+// exists only when THIS run wrote it.
+rmSync(RESULT_FILE, { force: true });
 
 const fail = (msg) => {
   console.error(`smoke:deploy FAILED — ${msg}`);
-  // A failure writes NO result. An absent result and a failed one are the same
-  // thing to the verifier, and writing `ok: false` would leave a file that a
-  // later green run could be mistaken for.
+  // Belt and braces: nothing should have written it by now, but an absent
+  // result and a failed one must be the same thing to the verifier.
   rmSync(RESULT_FILE, { force: true });
   process.exit(1);
 };
@@ -140,22 +140,37 @@ try {
     },
   );
 
+  // Written only here, after every required check has passed, and written
+  // atomically: a partial file from an interrupted write would be a result the
+  // verifier reads as malformed rather than as absent, which is a worse
+  // failure to diagnose than no file at all.
   const result = {
-    schemaVersion: 1,
-    project: 'openlidarviewer',
+    schemaVersion: DEPLOY_SMOKE_SCHEMA_VERSION,
+    project: DEPLOY_SMOKE_PROJECT,
     version: VERSION,
     tag: `v${VERSION}`,
     gitCommit: headCommit(),
     archive: basename(zip),
     sha256: digest,
-    checks: CHECKS,
+    checks: [...REQUIRED_SMOKE_CHECKS],
     ok: true,
     nodeVersion: process.version,
     generatedAt: new Date().toISOString(),
   };
-  writeFileSync(RESULT_FILE, `${JSON.stringify(result, null, 2)}\n`);
+  const tmp = `${RESULT_FILE}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(result, null, 2)}\n`);
+  renameSync(tmp, RESULT_FILE);
   console.log(`\nsmoke:deploy OK — ${result.archive} sha256:${digest}`);
   console.log(`  result: ${RESULT_FILE}`);
+} catch (err) {
+  // Any throw on the way — extraction, port allocation, Playwright's non-zero
+  // exit — must end as a failure with no result behind it.
+  console.error(`smoke:deploy FAILED — ${err?.message ?? err}`);
+  rmSync(RESULT_FILE, { force: true });
+  rmSync(`${RESULT_FILE}.tmp`, { force: true });
+  process.exitCode = 1;
 } finally {
+  // Runs on the success path and on every failure path, so a failed run does
+  // not leave the extracted archive behind.
   rmSync(work, { recursive: true, force: true });
 }

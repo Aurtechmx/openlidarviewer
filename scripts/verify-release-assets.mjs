@@ -21,6 +21,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { deploySmokeStructureProblems } from './lib/deploySmokeContract.mjs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // eslint-disable-next-line import/no-relative-packages — same repo, ships in the archive
@@ -396,15 +397,24 @@ export function verifyStagedRelease(dir, opts = {}) {
   // download had never been run. The result is bound by digest, because a
   // result that does not name this file's bytes is a result about other bytes.
   if (found.deploySmoke) {
-    let smoke = null;
+    // `parsed` starts as a sentinel, not null: JSON.parse legitimately returns
+    // null for a file containing `null`, and the original code could not tell
+    // that apart from "did not parse". Both then took the `if (smoke)` branch
+    // as false and skipped EVERY check below, so a result file containing
+    // `null`, `false`, `0` or `""` passed the release.
+    const UNPARSED = Symbol('unparsed');
+    let smoke = UNPARSED;
     try {
       smoke = JSON.parse(readFileSync(resolve(dir, found.deploySmoke), 'utf8'));
     } catch { note('deploy-smoke result is not valid JSON'); }
-    if (smoke) {
-      if (smoke.ok !== true) note('deploy-smoke result does not record a pass');
-      if (!Array.isArray(smoke.checks) || smoke.checks.length === 0) {
-        note('deploy-smoke result names no executed checks');
-      }
+    if (smoke !== UNPARSED) {
+      // Structure, schema, project identity, the pass flag and the required
+      // check names, all from the contract the producer writes against.
+      for (const p of deploySmokeStructureProblems(smoke)) note(p);
+    }
+    // Identity and binding need a well-formed object; the structure pass above
+    // has already reported why it is not one.
+    if (smoke !== UNPARSED && smoke !== null && typeof smoke === 'object' && !Array.isArray(smoke)) {
       if (smoke.version !== pkgVersion) {
         note(`deploy-smoke version ${smoke.version} != ${pkgVersion}`);
       }

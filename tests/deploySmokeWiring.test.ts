@@ -20,7 +20,10 @@
 import { describe, it, expect } from 'vitest';
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync, existsSync, readdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -139,5 +142,107 @@ describe('the release workflow', () => {
   it('does not repackage after the smoke has passed', () => {
     const smoke = at('npm run test:smoke:deploy');
     expect(yml.indexOf('npm run package', smoke)).toBe(-1);
+  });
+});
+
+/**
+ * The producer must never leave a success behind a failure.
+ *
+ * Clearing the result only inside `fail()` covered the explicit refusals and
+ * nothing else: a throw from unzip, from port allocation or from Playwright
+ * skipped that path, the process exited non-zero, and the PREVIOUS run's record
+ * stayed on disk still claiming `ok` for an archive this run never validated.
+ *
+ * Each case stages a stale success first, so a passing assertion means the file
+ * was actively removed rather than never written.
+ *
+ * The script resolves its paths from its own location, so these run in a
+ * throwaway tree holding only what it reads. Nothing here can touch release/.
+ */
+describe('smoke-deploy-zip leaves no stale success', () => {
+  const STALE = {
+    schemaVersion: 1, project: 'openlidarviewer', version: '0.6.8', tag: 'v0.6.8',
+    gitCommit: 'f'.repeat(40), archive: 'previous-run.zip', sha256: 'e'.repeat(64),
+    checks: ['smoke.spec.ts'], ok: true,
+  };
+
+  /** A sandbox with the script, its contract, a package.json and a release dir. */
+  function sandbox(zipBody: Buffer | string): { dir: string; zip: string; result: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'olv-producer-'));
+    mkdirSync(join(dir, 'scripts/lib'), { recursive: true });
+    mkdirSync(join(dir, 'release'), { recursive: true });
+    cpSync(join(ROOT, 'scripts/smoke-deploy-zip.mjs'), join(dir, 'scripts/smoke-deploy-zip.mjs'));
+    cpSync(
+      join(ROOT, 'scripts/lib/deploySmokeContract.mjs'),
+      join(dir, 'scripts/lib/deploySmokeContract.mjs'),
+    );
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ version: '0.6.8' }));
+
+    const zipName = 'openlidarviewer-v0.6.8-deploy-20260101-0000-root.zip';
+    const zip = join(dir, 'release', zipName);
+    writeFileSync(zip, zipBody);
+    const digest = createHash('sha256').update(readFileSync(zip)).digest('hex');
+    writeFileSync(join(dir, 'release/SHA256SUMS'), `${digest}  ${zipName}\n`);
+
+    // The stale success from an earlier, real run.
+    const result = join(dir, 'release/smoke-deploy-v0.6.8.json');
+    writeFileSync(result, JSON.stringify(STALE));
+    return { dir, zip, result };
+  }
+
+  const run = (dir: string, zip: string, env: Record<string, string> = {}) => {
+    try {
+      execFileSync(process.execPath, ['scripts/smoke-deploy-zip.mjs', zip], {
+        cwd: dir, stdio: 'pipe', env: { ...process.env, ...env },
+      });
+      return 0;
+    } catch (e) {
+      return (e as { status?: number }).status ?? -1;
+    }
+  };
+
+  it('removes it when extraction throws', () => {
+    // Hashes correctly and is listed, so it passes every check up to unzip.
+    const { dir, zip, result } = sandbox('this is not a zip archive');
+    try {
+      expect(existsSync(result)).toBe(true);
+      expect(run(dir, zip)).not.toBe(0);
+      expect(existsSync(result)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('removes it when the browser step fails', () => {
+    // A real zip, so extraction succeeds and the run reaches Playwright. `npx`
+    // is stubbed to fail, which is how a failing spec reaches this script: a
+    // non-zero exit from the child, thrown by execFileSync.
+    const src = mkdtempSync(join(tmpdir(), 'olv-zipsrc-'));
+    writeFileSync(join(src, 'index.html'), '<!doctype html>');
+    const zipPath = join(mkdtempSync(join(tmpdir(), 'olv-zipout-')), 'a.zip');
+    execFileSync('zip', ['-rqX', zipPath, '.'], { cwd: src });
+    const { dir, zip, result } = sandbox(readFileSync(zipPath));
+
+    const binDir = mkdtempSync(join(tmpdir(), 'olv-bin-'));
+    writeFileSync(join(binDir, 'npx'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    try {
+      expect(existsSync(result)).toBe(true);
+      expect(run(dir, zip, { PATH: `${binDir}:${process.env.PATH}` })).not.toBe(0);
+      expect(existsSync(result)).toBe(false);
+    } finally {
+      for (const d of [dir, src, binDir, dirname(zipPath)]) {
+        rmSync(d, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('leaves no partial temp file behind', () => {
+    const { dir, zip } = sandbox('not a zip');
+    try {
+      run(dir, zip);
+      expect(readdirSync(join(dir, 'release')).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
