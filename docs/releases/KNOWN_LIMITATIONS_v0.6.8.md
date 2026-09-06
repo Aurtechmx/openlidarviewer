@@ -70,8 +70,8 @@ lint holds both at exactly those counts. It has no flag to raise a baseline, so
 growth is only ever a hand edit to the recorded number, visible in the diff and
 never automatic.
 
-Both took such an edit in this cycle. `src/main.ts` grew by 28 lines and
-`src/render/Viewer.ts` by 14.
+Both took such an edit in this cycle. The recorded baselines moved from 5,529 to
+5,557 for `src/main.ts`, and from 6,409 to 6,421 for `src/render/Viewer.ts`.
 
 Most of that is the frame-freshness wiring: an in-flight CRS change now
 invalidates a running terrain analysis, a running classification derive, an
