@@ -88,10 +88,9 @@ the number in `scripts/check-bundle-budget.mjs`.
 
 `src/main.ts` is 5,558 lines and `src/render/Viewer.ts` is 6,426. A lint fails
 the build when either file passes its recorded baseline, so neither may grow
-beyond the number banked for it. Raising a baseline is an edit to
-`docs/validation/monolith-size-baseline.json` and shows up in the diff. The
-`--update` flag writes whatever the files currently measure, in either
-direction, so what stops it banking a raise is review and not the script.
+beyond the number banked for it. The `--update` flag banks a drop and refuses a
+raise, so raising a baseline is a hand edit to
+`docs/validation/monolith-size-baseline.json` and always shows up in the diff.
 
 Both baselines were raised inside this cycle: `src/main.ts` in three steps from
 5,529 to 5,558, and `src/render/Viewer.ts` in two from 6,407 to 6,426. Measured
