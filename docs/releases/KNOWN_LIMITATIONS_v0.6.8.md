@@ -65,16 +65,25 @@ the number in `scripts/check-bundle-budget.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,547 lines and `src/render/Viewer.ts` is 6,407. A shrink-only
+`src/main.ts` is 5,557 lines and `src/render/Viewer.ts` is 6,421. A shrink-only
 lint holds both at exactly those counts. It has no flag to raise a baseline, so
 growth is only ever a hand edit to the recorded number, visible in the diff and
 never automatic.
 
-`src/main.ts` took such an edit in this cycle, growing by 18 lines. The addition
-is the frame-freshness wiring: an in-flight CRS change now invalidates a running
-terrain analysis, a running classification derive, an in-flight full-cloud grade
-and a captured space or object measurement. Those handles live in the shell, so
-the wiring does too. The decomposition is that much more overdue.
+Both took such an edit in this cycle. `src/main.ts` grew by 28 lines and
+`src/render/Viewer.ts` by 14.
+
+Most of that is the frame-freshness wiring: an in-flight CRS change now
+invalidates a running terrain analysis, a running classification derive, an
+in-flight full-cloud grade and a captured space or object measurement. The rest
+closes two multi-layer defects. New work placed while several layers are mounted
+is now stamped in the project frame, which is the frame its coordinates were
+already in; and a terrain export whose contributing layers disagree on their
+origin publishes no world origin at all, rather than anchoring the combined
+surface to whichever layer happened to be active.
+
+Every one of those handles lives in the shell or the viewer, which is why the
+wiring does. The decomposition is that much more overdue.
 
 ## Multi-layer mounting is enabled, with a precision refinement outstanding
 

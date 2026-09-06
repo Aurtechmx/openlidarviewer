@@ -2303,6 +2303,20 @@ export class Viewer {
   }
 
   /** Return an array of all currently loaded cloud IDs. */
+  /**
+   * Whether every layer that would CONTRIBUTE to a terrain gather shares one
+   * source origin. False means the assembled surface lives in the project
+   * frame, which no single layer's origin names, so an exporter must not anchor
+   * to one. Same `integrableClouds` filter the gather itself applies, so a
+   * hidden or locked layer is not counted against it.
+   */
+  terrainFrameIsSingleOrigin(): boolean {
+    const os = integrableClouds(this._clouds.values())
+      .map((e) => e.cloud.sourceOrigin)
+      .filter((o): o is readonly [number, number, number] => Array.isArray(o));
+    return os.every((o) => o[0] === os[0][0] && o[1] === os[0][1] && o[2] === os[0][2]);
+  }
+
   clouds(): string[] {
     return [...this._clouds.keys()];
   }

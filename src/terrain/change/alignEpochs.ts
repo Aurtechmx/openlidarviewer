@@ -427,6 +427,11 @@ export function alignEpochClouds(
     // confidence roughness slope read it downstream.
     isGeographic: after.isGeographic,
     linearUnitToMetres: after.linearUnitToMetres,
+    // The VERTICAL factor too. Omitting it let a compound frame (foot heights
+    // over a metre grid) lose its own Z scale the moment alignment succeeded,
+    // so the ground filter downstream fell back to the horizontal factor and
+    // the same pair was interpreted differently aligned than unaligned.
+    verticalUnitToMetres: after.verticalUnitToMetres,
   };
   return {
     after: aligned,

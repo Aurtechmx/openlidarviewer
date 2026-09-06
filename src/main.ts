@@ -2130,7 +2130,14 @@ function newAnalysePanel(
       // active, so a contour export from a streamed scan keeps its world
       // origin and EPSG stamp instead of silently degrading to local frame.
       const streaming = cloud ? null : viewer.streamingCloud;
-      const origin = cloud?.origin ?? streaming?.renderOrigin;
+      // The gather folds every mounted layer's placement in, so a multi-layer
+      // analysis is computed in the PROJECT frame — which the active layer's
+      // own origin does not name. Anchoring the export to it would translate
+      // the whole surface by that layer's offset from the project origin. When
+      // the contributing layers disagree, publish no origin: serializeContours
+      // then omits the CRS stamp rather than georeferencing to the wrong one,
+      // the same refusal `exportAdapter.georefContext` already makes.
+      const origin = viewer.terrainFrameIsSingleOrigin() ? (cloud?.origin ?? streaming?.renderOrigin) : undefined;
       const cur = crsService.current();
       // The ONE context for this export, so sheet, DXF and GeoJSON describe one
       // frame. `cur` survives only where the RESOLVED object is itself needed
@@ -2496,6 +2503,9 @@ function newObjectPanel(
     let floorPlan = null;
     if (ctx.spaceKind === 'interior') {
       const { extractFloorPlan } = await loadFloorPlan();
+      // A SECOND await, and the gather below reads live state, so the check is
+      // owed again here: guarding only the first one left the same window open.
+      if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
       // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
       // tracing (see FLOORPLAN_GATHER_POINTS).
       floorPlan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {

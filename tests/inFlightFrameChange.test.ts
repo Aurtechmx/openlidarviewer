@@ -93,8 +93,23 @@ describe('space exports refuse a moved scan or frame', () => {
     expect(spaceContextStillCurrent(stamp, { targetId: 'scan-a', crsRevision: 5 })).toBe(false);
   });
 
-  it('both space handlers apply it after their awaits', async () => {
+  it('every space handler guards EVERY await that precedes a live read', async () => {
     const src = await import('node:fs').then((fs) => fs.readFileSync('src/main.ts', 'utf8'));
-    expect((src.match(/if \(!spaceCtxCurrent\(ctx\)\) throw new Error\(SPACE_CONTEXT_MOVED\)/g) ?? [])).toHaveLength(2);
+    const guard = /if \(!spaceCtxCurrent\(ctx\)\) throw new Error\(SPACE_CONTEXT_MOVED\)/g;
+    const handler = (start: string, end: string): string => {
+      const i = src.indexOf(start);
+      expect(i, `handler ${start} not found`).toBeGreaterThan(0);
+      return src.slice(i, src.indexOf(end, i));
+    };
+    // The report handler awaits twice before it reads live state — the PDF
+    // chunk, then the floor-plan chunk — so it owes two checks. Counting the
+    // file as a whole would let one handler's guards cover for another's.
+    const report = handler('onExportReport: async ()', 'const bytes = await buildSpaceReportPdf');
+    expect((report.match(guard) ?? []).length,
+      'the report handler must guard both of its awaits').toBe(2);
+    // The standalone floor plan awaits once.
+    const plan = handler('onExportFloorPlan: async ()', 'downloadFileBytes(');
+    expect((plan.match(guard) ?? []).length,
+      'the floor-plan handler must guard its await').toBe(1);
   });
 });

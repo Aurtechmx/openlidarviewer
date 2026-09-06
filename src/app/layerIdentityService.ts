@@ -41,7 +41,7 @@ import {
   type LayerFingerprint,
   type LayerRecord,
 } from '../model/layerIdentity';
-import { hasDistinguishingSourceFacts, sourceLocalOwnership } from '../model/workOwnership';
+import { hasDistinguishingSourceFacts, projectFrameOwnership } from '../model/workOwnership';
 import type { WorkOwnership } from '../model/workOwnership';
 
 /**
@@ -142,7 +142,16 @@ export function createLayerIdentityService(
     // An active layer with no proven identity gets no owner rather than a
     // guessed one — a wrong owner moves saved work, a missing one does not.
     if (!record) return undefined;
-    return sourceLocalOwnership(record.layerId);
+    // PROJECT frame, not source-local. Reaching this line means more than one
+    // layer is mounted, and a picked point has already been lifted into the
+    // shared project frame by `placePoint` before it ever reaches the measure
+    // or annotation controller. Calling those coordinates source-local was a
+    // false statement about them, and false in every case rather than only when
+    // the active layer differs from the picked one: `projectOrigin` is a
+    // per-axis floor across the mounted set, so it need not equal ANY single
+    // layer's origin. The layer id stays as the disclosure of which layer was
+    // active; the frame now says what the numbers actually are.
+    return projectFrameOwnership({ layerId: record.layerId });
   };
 
   const ensureStoresWired = (

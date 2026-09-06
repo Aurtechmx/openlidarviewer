@@ -127,18 +127,25 @@ describe('LayerIdentityService — the owner stamped on new work', () => {
     expect(svc.ownerForNewWork(null, 2)).toBeUndefined();
   });
 
-  it('stamps the active layer, by stable id in its source-local frame, once a second layer joins', () => {
+  it('stamps the active layer, by stable id, in the PROJECT frame once a second layer joins', () => {
+    // Reaching this state means two layers are mounted, and a picked point has
+    // already been lifted into the shared project frame by `placePoint` before
+    // any controller sees it. Calling those coordinates source-local was a false
+    // statement about them — and false in every case, not only when the active
+    // layer differs from the picked one, because the project origin is a
+    // per-axis floor across the mounted set and need not equal any one layer's.
     const svc = createLayerIdentityService({ generateId: counter() });
     svc.bindOnLoad('cloud_0', FACTS_A, 'survey.laz');
     svc.bindOnLoad('cloud_1', FACTS_B_SAME_NAME, 'survey.laz');
     expect(svc.ownerForNewWork('cloud_0', 2)).toEqual({
       layerId: 'layer_test_0',
-      frame: 'source-local',
+      frame: 'project',
     });
-    // Switching the active layer switches whom new work is attributed to.
+    // Switching the active layer switches whom new work is attributed to; the
+    // frame does not change, because the coordinates do not.
     expect(svc.ownerForNewWork('cloud_1', 2)).toEqual({
       layerId: 'layer_test_1',
-      frame: 'source-local',
+      frame: 'project',
     });
   });
 });
@@ -163,8 +170,8 @@ describe('LayerIdentityService — wiring the work stores', () => {
     expect(provider()).toBeUndefined();
     // A second layer joins and the provider follows the live state with no rewire.
     count = 2;
-    expect(provider()).toEqual({ layerId: 'layer_test_0', frame: 'source-local' });
+    expect(provider()).toEqual({ layerId: 'layer_test_0', frame: 'project' });
     active = 'cloud_1';
-    expect(provider()).toEqual({ layerId: 'layer_test_1', frame: 'source-local' });
+    expect(provider()).toEqual({ layerId: 'layer_test_1', frame: 'project' });
   });
 });

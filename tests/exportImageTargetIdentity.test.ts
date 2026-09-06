@@ -16,17 +16,26 @@ import { describe, it, expect, vi } from 'vitest';
 import { exportImageAction } from '../src/app/exportImageAction';
 import { EXPORT_SCAN_CHANGED_REFUSAL } from '../src/export/exportScanIdentity';
 
-function harness(opts: { swapTo?: string | null } = {}) {
+function harness(opts: { swapTo?: string | null; streaming?: boolean } = {}) {
   const downloads: string[] = [];
   const errors: string[] = [];
-  const scans = { activeId: 'scan-A' as string | null };
+  // `activeId` is null for a streaming scan by design; `target` is the
+  // streaming-aware identity the guard must compare.
+  const scans = {
+    activeId: (opts.streaming ? null : 'scan-A') as string | null,
+    target: (opts.streaming ? 'streaming-scan_1' : 'scan-A') as string | null,
+    activeExportTargetId: () => scans.target,
+  };
   const viewer = {
     getCloud: (id: string) => ({ name: `${id}.laz` }),
-    streamingCloud: null,
+    streamingCloud: opts.streaming ? { name: 'stream-a.copc.laz' } : null,
     exportImage: vi.fn(async () => {
       // The Studio chunk resolves a turn later. The user opens another scan.
       await new Promise((r) => setTimeout(r, 0));
-      if (opts.swapTo !== undefined) scans.activeId = opts.swapTo;
+      if (opts.swapTo !== undefined) {
+        scans.target = opts.swapTo;
+        if (!opts.streaming) scans.activeId = opts.swapTo;
+      }
       return { blob: new Blob(['pixels']), worldFile: null };
     }),
   };
@@ -68,5 +77,34 @@ describe('exportImageAction — scan identity across the Studio await', () => {
     exportImageAction('height-map' as never, h.deps as never);
     await vi.waitFor(() => expect(h.errors.length).toBeGreaterThan(0), { timeout: 2000 });
     expect(h.errors[0]).toContain(EXPORT_SCAN_CHANGED_REFUSAL);
+  });
+});
+
+describe('exportImageAction — streaming scans are distinguishable', () => {
+  /**
+   * `activeId` is null for EVERY streaming scan, so a guard comparing it saw
+   * `sameExportTarget(null, null)` and passed a streaming-to-streaming swap.
+   * `activeExportTargetId()` exists precisely to close that, and its own
+   * docstring says so; this path had not adopted it.
+   */
+  it('REFUSES a streaming A to streaming B swap', async () => {
+    const h = harness({ streaming: true, swapTo: 'streaming-scan_2' });
+    exportImageAction('height-map' as never, h.deps as never);
+    await vi.waitFor(() => expect(h.errors.length).toBeGreaterThan(0), { timeout: 2000 });
+    expect(h.errors[0]).toContain(EXPORT_SCAN_CHANGED_REFUSAL);
+  });
+
+  it('does NOT refuse when the same streaming scan stays active', async () => {
+    const h = harness({ streaming: true });
+    exportImageAction('height-map' as never, h.deps as never);
+    await vi.waitFor(() => expect(h.viewer.exportImage).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 5));
+    for (const e of h.errors) expect(e).not.toContain(EXPORT_SCAN_CHANGED_REFUSAL);
+  });
+
+  it('raw activeId could not tell the two streams apart', () => {
+    // The reason the guard needed a second accessor, stated as a fact.
+    const a = null; const b = null;
+    expect(a === b, 'two streaming scans both report activeId null').toBe(true);
   });
 });

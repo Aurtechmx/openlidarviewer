@@ -32,7 +32,17 @@ export interface ExportImageActionDeps {
   readonly getViewer: () => Viewer | null;
   /** The progress surface (assigned later in boot than the panel). */
   readonly getProgress: () => ExportImageProgress;
-  readonly scans: { readonly activeId: string | null };
+  /**
+   * `activeId` names the static scan (and the filename below reads it);
+   * `activeExportTargetId` is the streaming-aware identity the guard compares.
+   * Raw `activeId` is null for EVERY streaming scan, so `sameExportTarget(null,
+   * null)` hid a streaming-to-streaming swap — the exact blind spot the second
+   * accessor exists to close.
+   */
+  readonly scans: {
+    readonly activeId: string | null;
+    readonly activeExportTargetId: () => string | null;
+  };
   readonly baseName: (name: string) => string;
   readonly currentClassScopeStamp: () => string;
 }
@@ -57,8 +67,9 @@ export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps)
   // stops the user opening another scan in the gap: the pixels would come from
   // the new scan while the filename and class-scope stamp below describe this
   // one. Captured here, compared before anything is written.
-  const requestedTarget = deps.scans.activeId;
-  const sourceName = requestedTarget ? viewer.getCloud(requestedTarget)?.name : viewer.streamingCloud?.name;
+  const requestedTarget = deps.scans.activeExportTargetId();
+  const staticId = deps.scans.activeId;
+  const sourceName = staticId ? viewer.getCloud(staticId)?.name : viewer.streamingCloud?.name;
   const base = sourceName ? deps.baseName(sourceName) : 'openlidarviewer';
   const label = MODE_LABEL[mode] ?? mode;
   progress.setProgress(`Exporting ${label}…`);
@@ -70,7 +81,7 @@ export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps)
       // The scan moved while the Studio loaded or rendered. The bytes in hand
       // describe whatever is on screen now; the name and stamp describe what was
       // asked for. There is no honest file to write from that pair.
-      if (!sameExportTarget(requestedTarget, deps.scans.activeId)) {
+      if (!sameExportTarget(requestedTarget, deps.scans.activeExportTargetId())) {
         throw new Error(EXPORT_SCAN_CHANGED_REFUSAL);
       }
       // Georeferenced ortho path: when the exporter returned world-file data
