@@ -122,16 +122,24 @@ export default defineConfig({
     // dynamic-import / worker-URL string literals, chunk-isolation regressions —
     // that the plain build can never surface. Default stays the plain build for
     // the fast e2e loop.
-    command: process.env.SMOKE_LIVE
-      ? 'npm run build:live && npm run preview'
-      : 'npm run build && npm run preview',
+    // OLV_DEPLOY_ROOT serves an already-extracted deploy bundle and builds
+    // NOTHING. It is how the smoke reaches the bytes that actually ship: the
+    // normal legs test a build, packaging then produces a second build, and the
+    // archive users download had never been started. See
+    // scripts/smoke-deploy-zip.mjs, which sets this and binds the run to the
+    // archive's SHA-256.
+    command: process.env.OLV_DEPLOY_ROOT
+      ? `node scripts/serve-deploy-bytes.mjs ${process.env.OLV_DEPLOY_ROOT} 4173`
+      : process.env.SMOKE_LIVE
+        ? 'npm run build:live && npm run preview'
+        : 'npm run build && npm run preview',
     // The `?test=1` seam (`window.__OLV_TEST_API__`) is compiled in only when
     // OLV_TEST_SEAM=1 is set at build time; without it the block is dropped by
     // the minifier and every spec that drives the viewer programmatically
     // fails. The SMOKE_LIVE build is deliberately left without it: that leg
     // boots the artifact users are served, and its two specs never use the
     // seam. Playwright merges this over process.env for the spawned command.
-    env: process.env.SMOKE_LIVE ? {} : { OLV_TEST_SEAM: '1' },
+    env: process.env.SMOKE_LIVE || process.env.OLV_DEPLOY_ROOT ? {} : { OLV_TEST_SEAM: '1' },
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
