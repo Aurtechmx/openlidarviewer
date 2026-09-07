@@ -80,7 +80,27 @@ export function interpolatedCaption(tally: GradeTally): string {
   if (!Number.isFinite(tally.interpolatedFraction) || tally.totalLength === 0) {
     return 'No contours drawn.';
   }
-  const pct = Math.round(tally.interpolatedFraction * 100);
+  const pct = gradePercent(tally.interpolatedFraction);
   if (pct === 0) return 'All contour length is from confident, measured terrain.';
   return `${pct}% of contour length is interpolated (dashed) or uncertain (gap).`;
+}
+
+/**
+ * A share of contour length as a whole percent that never rounds away the
+ * exception.
+ *
+ * Plain rounding turns a fraction into a universal claim at both ends. 0.998
+ * became "100%", printed on a sheet that drew thirty solid contours; 0.004
+ * became 0%, which this module then worded as "ALL contour length is from
+ * confident, measured terrain" while some of it was not. Both are statements
+ * about every metre of the deliverable, made from a number that says otherwise.
+ *
+ * So 0 and 100 are reserved for the exact cases. Anything strictly between
+ * lands in 1..99, and a reader who sees 99% knows something is not in it.
+ */
+export function gradePercent(fraction: number): number {
+  if (!Number.isFinite(fraction)) return Number.NaN;
+  if (fraction <= 0) return 0;
+  if (fraction >= 1) return 100;
+  return Math.min(99, Math.max(1, Math.round(fraction * 100)));
 }

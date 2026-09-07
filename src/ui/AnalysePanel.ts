@@ -2584,6 +2584,14 @@ export class AnalysePanel {
         // exported (analytical vs generalized) + the purpose that chose it.
         contourMethod: provenanceExtra?.contourMethod,
         deliverablePurpose: provenanceExtra?.deliverablePurpose,
+        // The vertical scale the geometry was actually resolved under, which
+        // this path used to omit. Without it the provenance fell to "unknown"
+        // while the SAME file carried `elevationUnit: metre` on every feature
+        // and `zUnit: m` in its complexity block — one deliverable answering
+        // the same question two ways, because one of two sibling export paths
+        // passed the scale and this one did not. Undefined still means unknown,
+        // which is what an unresolved frame must say.
+        verticalUnitToMetres: mapCtx?.verticalUnitToMetres,
         // §19: stamp the evidence-gate permit that authorised this file, so the
         // artifact records the decision (validated / exploratory + watermark).
         exportPermit: permitStamp(permit),
@@ -3213,6 +3221,12 @@ export class AnalysePanel {
       generatedAt: opts.generatedAt,
       softwareVersion: __APP_VERSION__,
       metricVersion: TERRAIN_METRIC_VERSION,
+      // The resolved vertical scale, which this call omitted. Without it the
+      // title block hedged "10 (vertical unit unverified)" while the notes line
+      // ten rows below on the SAME sheet read "interval 10 m" — the sheet
+      // hedging and asserting the unit at once, which is precisely the drift
+      // the comment above says this shared provenance prevents.
+      verticalUnitToMetres: mapCtx?.verticalUnitToMetres,
       // Stamp the permit into the sheet's provenance (title-block honesty).
       exportPermit: permitStamp(permit),
       // A map sheet plots the contours over the DTM; it claims no more than the

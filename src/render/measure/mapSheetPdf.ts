@@ -26,6 +26,7 @@ import {
 import { decimalsForInterval, type ContourLabel } from '../../terrain/contour/labelPlacement';
 import { placeContourLabels } from '../../terrain/contourStudio/contourLabelEngine';
 import { contourShapeStyleLabel } from '../../terrain/contour/contourShapeStyle';
+import { gradePercent } from '../../terrain/contour/evidenceGrade';
 import type { DemAccuracyStandards } from '../../terrain/quality/demAccuracyStandards';
 import type { ExportProvenance } from '../../terrain/export/exportProvenance';
 import {
@@ -1076,9 +1077,16 @@ function drawTitleBlock(
   // Interpolated fraction is NaN when there is no contour length to measure
   // against (an empty contour set). Report that honestly rather than collapsing
   // it to a fabricated 0%.
+  // The number is the share of length that is NOT solid, which is the two
+  // swatches immediately above: dashed (interpolated) AND gap (uncertain).
+  // Printed as "interpolated" alone it contradicted the legend and the data —
+  // on a real sheet it read "100% interpolated" while 504 of the drawn features
+  // carried `provenance: measured`, and thirty solid contours were on the page.
+  // gradePercent keeps 100 for the exact case, so "99%" is what a sheet with
+  // any solid line can say.
   const interpFraction = input.model.interpolatedFraction;
   const interpLine = Number.isFinite(interpFraction)
-    ? `${Math.round(interpFraction * 100)}% interpolated (by length)`
+    ? `${gradePercent(interpFraction)}% interpolated or uncertain (by length)`
     : 'Interpolated fraction — not measured (no contours)';
   text(interpLine, mxx, topY - 88, 6.5, font, DIM);
   // Honest stamp of the shape style applied to the plotted contours, sourced
