@@ -37,6 +37,21 @@ grant the permission they use to read their result. The gesture arithmetic is
 unit-tested independently of any engine, so what is unverified is the
 integration, not the maths.
 
+## Hovering the canvas changes the shading pipeline
+
+Every pointer move over the canvas opens a 350 ms render-activity window, and
+the renderer reads that window as camera movement, so Eye Dome Lighting turns
+off and comes back once it lapses. Moving the mouse across a parked scene
+therefore changes its shading without changing the view. The same signal feeds
+the adaptive resolution and refinement decisions.
+
+Separating "this frame needs drawing" from "the camera is moving" means two
+windows and a decision at each of the eleven places that currently open one.
+That is a change to the render-quality policy, and its effect is a visual one
+that this release cannot verify: the touch and rendering legs run headless, and
+what a reader would need to see is whether the brightness pops. It is recorded
+here rather than changed unverified under the freeze.
+
 ## Firefox and WebKit are advisory in CI
 
 The blocking browser gate is Chromium. Firefox and WebKit run the full

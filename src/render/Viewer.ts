@@ -1565,12 +1565,15 @@ export class Viewer {
       // Capture so moves keep arriving if the finger slides off before lift.
       try { canvas.setPointerCapture(e.pointerId); } catch { /* pointerup still arrives */ }
     };
-    this._onCanvasPointerUp = (e) => {
-      if (e.pointerType !== 'touch') return;
+    // Shared by the up and cancel paths; true when this was a touch we tracked.
+    const endTouch = (e: PointerEvent): boolean => {
+      if (e.pointerType !== 'touch') return false;
       this._touchTracker.up(e.pointerId);
-      try {
-        canvas.releasePointerCapture(e.pointerId);
-      } catch { /* already released */ }
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* released */ }
+      return true;
+    };
+    this._onCanvasPointerUp = (e) => {
+      if (!endTouch(e)) return;
       // Double-tap → focus-on-point (touch equivalent of the desktop dblclick).
       if (this._toolMode === 'none') {
         const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
@@ -1578,7 +1581,8 @@ export class Viewer {
         if (focus) this._handleDoubleClick({ offsetX: focus.x, offsetY: focus.y } as MouseEvent);
       }
     };
-    this._onCanvasPointerCancel = this._onCanvasPointerUp;
+    // A cancel is NOT an up: aliased above, it completed a tap never made.
+    this._onCanvasPointerCancel = (e) => { if (endTouch(e)) this._tapGate.cancel(); };
     this._onWindowKeyDown = (e) => {
       this._bumpRenderActivity();
       if (e.code === 'Escape' && this._toolMode !== 'none') this._setToolMode('none');
@@ -5619,17 +5623,13 @@ export class Viewer {
 
     // ── twist / yaw around world up ────────────────────────────────────
     if (delta.dTwist !== 0) {
-      // Yaw rotates the (camera − target) vector around the world up
-      // axis. World up is +Z in the OpenLiDARViewer convention.
-      const ox = cam.position.x - tgt.x;
-      const oy = cam.position.y - tgt.y;
-      const oz = cam.position.z - tgt.z;
-      // 2D rotation in the XY plane keeps Z (height) constant.
-      const c = Math.cos(delta.dTwist);
-      const s = Math.sin(delta.dTwist);
-      const nx = ox * c - oy * s;
-      const ny = ox * s + oy * c;
-      cam.position.set(tgt.x + nx, tgt.y + ny, tgt.z + oz);
+      // Yaw rotates the (camera − target) vector around the world up AXIS,
+      // whichever it is now. A fixed XY-plane rotation was written when +Z was
+      // the only up; on a Y-up cloud (a phone scan) that plane is vertical, so
+      // a 90° twist from (10, 5, 0) moved the camera to y = 10.
+      const axis = this._worldUp.clone().normalize();
+      const off = cam.position.clone().sub(tgt).applyAxisAngle(axis, delta.dTwist);
+      cam.position.copy(tgt).add(off);
     }
 
     // ── pan / centroid drift ───────────────────────────────────────────

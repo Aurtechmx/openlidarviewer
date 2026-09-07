@@ -977,7 +977,33 @@ export class NavController {
     if (!this._inputEnabled) return;
     if (this._mode !== 'walk' && this._mode !== 'fly') return;
     if (this._locked) this._exitPointerLock();
-    else void this._canvas.requestPointerLock();
+    else this._requestPointerLock();
+  }
+
+  /**
+   * Ask for the pointer lock without letting its absence break the click.
+   *
+   * `requestPointerLock` is not everywhere: a canvas that does not implement it
+   * threw a TypeError straight out of the click handler, and the browser can
+   * also reject the returned promise (a user gesture the browser did not
+   * accept, a permissions policy, an already-exiting lock). Neither case is
+   * exceptional enough to break navigation — Orbit and Pan still work, and the
+   * mode indicator already tells the user where they are. Failing quietly here
+   * leaves them somewhere usable rather than throwing on a tap.
+   */
+  private _requestPointerLock(): void {
+    const canvas = this._canvas as HTMLCanvasElement & {
+      requestPointerLock?: () => Promise<void> | void;
+    };
+    if (typeof canvas.requestPointerLock !== 'function') return;
+    try {
+      const p = canvas.requestPointerLock();
+      if (p && typeof (p as Promise<void>).catch === 'function') {
+        (p as Promise<void>).catch(() => {});
+      }
+    } catch {
+      // Synchronous refusal; the mode stays selected and orbit still responds.
+    }
   }
 
   private _handlePointerLockChange(): void {
