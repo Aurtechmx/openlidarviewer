@@ -115,7 +115,13 @@ function headCommit() {
 const work = mkdtempSync(join(tmpdir(), 'olv-deploy-smoke-'));
 try {
   execFileSync('unzip', ['-q', zip, '-d', work], { stdio: 'inherit' });
-  if (!existsSync(join(work, 'index.html'))) fail('the archive has no index.html at its root');
+  // THROWN, not fail(): fail() calls process.exit, which ends the process
+  // immediately and skips the finally below, so this refusal left its
+  // extraction directory behind. Inside the try, an Error routes through the
+  // catch (non-zero exit, no result) and the finally (cleanup) already here.
+  if (!existsSync(join(work, 'index.html'))) {
+    throw new Error('the archive has no index.html at its root');
+  }
 
   const port = await freePort();
   console.log(`smoke:deploy — ${basename(zip)}\n  sha256 ${digest}\n  port ${port}`);

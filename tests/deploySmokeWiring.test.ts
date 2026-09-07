@@ -246,3 +246,56 @@ describe('smoke-deploy-zip leaves no stale success', () => {
     }
   });
 });
+
+/**
+ * A refusal must clean up after itself.
+ *
+ * The missing-index check called `fail()`, which calls process.exit, and that
+ * ends the process before the `finally` that removes the extraction directory.
+ * The refusal was correct and left no success evidence, but every rejected
+ * archive leaked a full copy of itself into the temp directory. Throwing routes
+ * the same refusal through the catch and the finally that already exist.
+ */
+describe('a refused archive leaves nothing behind', () => {
+  it('removes its extraction directory when the archive has no index.html', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'olv-producer-'));
+    const tmpHome = mkdtempSync(join(tmpdir(), 'olv-tmphome-'));
+    try {
+      mkdirSync(join(dir, 'scripts/lib'), { recursive: true });
+      mkdirSync(join(dir, 'release'), { recursive: true });
+      cpSync(join(ROOT, 'scripts/smoke-deploy-zip.mjs'), join(dir, 'scripts/smoke-deploy-zip.mjs'));
+      cpSync(
+        join(ROOT, 'scripts/lib/deploySmokeContract.mjs'),
+        join(dir, 'scripts/lib/deploySmokeContract.mjs'),
+      );
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ version: '0.6.8' }));
+
+      // A real zip that simply has no index.html at its root.
+      const src = mkdtempSync(join(tmpdir(), 'olv-noindex-'));
+      writeFileSync(join(src, 'readme.txt'), 'no entry point here');
+      const name = 'openlidarviewer-v0.6.8-deploy-20260101-0000-root.zip';
+      const zip = join(dir, 'release', name);
+      execFileSync('zip', ['-rqX', zip, '.'], { cwd: src });
+      rmSync(src, { recursive: true, force: true });
+      const sum = createHash('sha256').update(readFileSync(zip)).digest('hex');
+      writeFileSync(join(dir, 'release/SHA256SUMS'), `${sum}  ${name}\n`);
+
+      // TMPDIR points at a directory of our own, so the extraction this run
+      // makes is the only thing that can appear in it.
+      let code = 0;
+      try {
+        execFileSync(process.execPath, ['scripts/smoke-deploy-zip.mjs', zip], {
+          cwd: dir, stdio: 'pipe', env: { ...process.env, TMPDIR: tmpHome },
+        });
+      } catch (e) {
+        code = (e as { status?: number }).status ?? -1;
+      }
+      expect(code).not.toBe(0);
+      expect(readdirSync(tmpHome).filter((f) => f.startsWith('olv-deploy-smoke-'))).toEqual([]);
+      expect(existsSync(join(dir, 'release/smoke-deploy-v0.6.8.json'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(tmpHome, { recursive: true, force: true });
+    }
+  });
+});
