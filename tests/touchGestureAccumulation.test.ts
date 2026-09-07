@@ -115,3 +115,40 @@ describe('changing fingers re-anchors rather than jumping', () => {
     expect(t.move(1, 0, 41)).toBeNull();
   });
 });
+
+describe('a stray event does not discard accumulated movement', () => {
+  it('treats an up for a finger that was never down as a real no-op', () => {
+    // The contract on `up` says an unknown id is a no-op — "an up can outlive
+    // its down". Re-anchoring on it made that false: the stray event reset all
+    // three components and a slow pan lost a third of its travel.
+    const pan = (stray: boolean): number => {
+      const t = twoDown();
+      let sum = 0;
+      for (let y = 1; y <= 20; y += 1) {
+        if (stray && y === 10) t.up(99);
+        for (const d of [t.move(1, 0, y), t.move(2, 100, y)]) if (d) sum += d.dPan.y;
+      }
+      return sum;
+    };
+    expect(pan(true)).toBe(pan(false));
+  });
+
+  it('treats a repeat down for a tracked finger as a position report', () => {
+    const t = twoDown();
+    let sum = 0;
+    for (let y = 1; y <= 20; y += 1) {
+      if (y === 10) t.down(1, 0, y); // same finger, no up in between
+      for (const d of [t.move(1, 0, y), t.move(2, 100, y)]) if (d) sum += d.dPan.y;
+    }
+    expect(sum).toBeGreaterThan(20 - DEFAULT_GESTURE_THRESHOLDS.panDeadZone * 2);
+  });
+
+  it('still re-anchors when a finger genuinely leaves the pair', () => {
+    const t = twoDown();
+    t.move(1, 0, 4); // sub-threshold, accumulating
+    t.up(2);         // the pair is gone
+    t.down(3, 200, 200);
+    // Measured from the NEW pair, not from anything the old one had banked.
+    expect(t.move(1, 0, 5)).toBeNull();
+  });
+});

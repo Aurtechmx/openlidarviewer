@@ -71,13 +71,22 @@ export class TouchTracker {
 
   /** Record a finger going down at canvas-local (x, y). */
   down(id: number, x: number, y: number): void {
+    // Re-anchor only when the PAIR changes. A repeat down for a finger already
+    // tracked is a position report, not a new gesture, and re-anchoring on it
+    // would throw away whatever the components had accumulated.
+    const joined = !this._points.has(id);
     this._points.set(id, { x, y });
-    this._resetBaselines();
+    if (joined) this._resetBaselines();
   }
 
   /** Drop a finger. Unknown id is a no-op — an up can outlive its down. */
   up(id: number): void {
-    this._points.delete(id);
+    // `delete` reports whether anything was actually tracked. Re-anchoring
+    // unconditionally made this method the opposite of the no-op its contract
+    // promises: an up for a finger that was never down re-anchored all three
+    // components mid-gesture, and a slow pan lost a third of its travel to a
+    // stray event it was documented to ignore.
+    if (!this._points.delete(id)) return;
     this._resetBaselines();
   }
 

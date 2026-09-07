@@ -76,11 +76,6 @@ const T_LONG = 4;
 const T_DOUBLE = 12;
 const T_ASCII = 2;
 
-/** Bytes per element of each TIFF field type this writer emits. */
-const TYPE_BYTES: Readonly<Record<number, number>> = {
-  [T_ASCII]: 1, [T_SHORT]: 2, [T_LONG]: 4, [T_DOUBLE]: 8,
-};
-
 /**
  * A classic-TIFF field whose whole payload fits in four bytes is stored IN the
  * IFD entry's value field; only a larger payload is stored elsewhere and
@@ -95,10 +90,19 @@ const TYPE_BYTES: Readonly<Record<number, number>> = {
  * value. Pillow read the same offset bytes as text.
  */
 const INLINE_LIMIT = 4;
-const payloadBytes = (t: { type: number; count: number }): number =>
-  (TYPE_BYTES[t.type] ?? 0) * t.count;
-const isInline = (t: { type: number; count: number }): boolean =>
-  payloadBytes(t) <= INLINE_LIMIT;
+
+/**
+ * Whether a tag's payload goes in the entry, decided by the LENGTH OF THE BYTES
+ * ABOUT TO BE WRITTEN rather than by `type × count`.
+ *
+ * The two agree for every tag this writer emits — checked across both band
+ * types — but only one of them bounds the write. `TYPE_BYTES[type] ?? 0` yields
+ * zero for a type not in the table, which would call a 48-byte payload inline
+ * and let `out.set` run it over the following IFD entries: silent corruption,
+ * in a file whose whole point is being readable by someone else. Measuring the
+ * blob makes the write in-bounds by construction.
+ */
+const isInline = (blob: Uint8Array): boolean => blob.length <= INLINE_LIMIT;
 
 interface Tag {
   tag: number;
@@ -218,7 +222,7 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
   let cursor = align2(ifdStart + ifdSize);
   for (const t of tags) {
     // An inline blob occupies no space out here; its bytes go into the entry.
-    if (t.blob && !isInline(t)) {
+    if (t.blob && !isInline(t.blob)) {
       t.value = cursor;
       cursor = align2(cursor + t.blob.length);
     }
@@ -245,7 +249,7 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
     dv.setUint16(p + 2, t.type, true);
     dv.setUint32(p + 4, t.count, true);
     if (t.blob) {
-      if (isInline(t)) {
+      if (isInline(t.blob)) {
         // The blob is already in file byte order, so its bytes go straight in,
         // left-aligned, with the remainder of the four left zero.
         out.set(t.blob, p + 8);
@@ -263,7 +267,7 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
 
   // Overflow blobs — the inline ones are already in their IFD entries.
   for (const t of tags) {
-    if (t.blob && !isInline(t)) out.set(t.blob, t.value);
+    if (t.blob && !isInline(t.blob)) out.set(t.blob, t.value);
   }
 
   // Image strip — row 0 = NORTH (grid row rows-1-r). Float32 LE by default; a
