@@ -2591,7 +2591,7 @@ export class AnalysePanel {
         // the same question two ways, because one of two sibling export paths
         // passed the scale and this one did not. Undefined still means unknown,
         // which is what an unresolved frame must say.
-        verticalUnitToMetres: mapCtx?.verticalUnitToMetres,
+        verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
         // §19: stamp the evidence-gate permit that authorised this file, so the
         // artifact records the decision (validated / exploratory + watermark).
         exportPermit: permitStamp(permit),
@@ -2713,6 +2713,8 @@ export class AnalysePanel {
     try {
       const { buildDemPackage } = await loadDemPackage();
       const bytes = buildDemPackage(r, {
+        // Same resolved scale as the GeoJSON / DXF / sheet / report.
+        verticalUnitToMetres: ctx.verticalUnitToMetres ?? null,
         worldOrigin: ctx.worldOrigin ?? null,
         basename,
         wkt: ctx.wkt ?? null,
@@ -2844,6 +2846,9 @@ export class AnalysePanel {
       // header / footer (CRS, datum, verdicts, accuracy, date) can never drift
       // from the GeoJSON / DXF / map sheet / DEM exports of this scan.
       const bytes = await buildTerrainReportPdf(r, {
+        // The same resolved scale the GeoJSON, DXF and map sheet stamp, so the
+        // report's vertical figures are labelled from one answer.
+        verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
         basename,
         generatedAt: new Date(),
         softwareVersion: __APP_VERSION__,
@@ -3226,7 +3231,7 @@ export class AnalysePanel {
       // ten rows below on the SAME sheet read "interval 10 m" — the sheet
       // hedging and asserting the unit at once, which is precisely the drift
       // the comment above says this shared provenance prevents.
-      verticalUnitToMetres: mapCtx?.verticalUnitToMetres,
+      verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
       // Stamp the permit into the sheet's provenance (title-block honesty).
       exportPermit: permitStamp(permit),
       // A map sheet plots the contours over the DTM; it claims no more than the

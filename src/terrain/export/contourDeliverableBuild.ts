@@ -153,7 +153,7 @@ function gatherDeliverable(
     contourMethod: opts.contourMethod ?? null,
     deliverablePurpose: opts.deliverablePurpose ?? null,
     // Label the contour interval in the real vertical unit, not a hard-coded metre.
-    verticalUnitToMetres: opts.verticalUnitToMetres,
+    verticalUnitToMetres: opts.verticalUnitToMetres ?? null,
     // A bundle is never stronger than its weakest file. It carries the DTM
     // raster and the support raster alongside the geometry, so the DTM's own
     // shortfall against its required level governs the whole package.

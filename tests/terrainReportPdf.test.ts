@@ -106,7 +106,7 @@ function previewResult(): AnalyseContoursResult {
   } as unknown as AnalyseContoursResult;
 }
 
-const OPTS = { basename: 'site-42', generatedAt: '2026-06-05T00:00:00.000Z', softwareVersion: '9.9.9', metricVersion: 'v0.4.1' } as const;
+const OPTS = { verticalUnitToMetres: null, basename: 'site-42', generatedAt: '2026-06-05T00:00:00.000Z', softwareVersion: '9.9.9', metricVersion: 'v0.4.1' } as const;
 
 const isPdf = (bytes: Uint8Array): boolean =>
   bytes.length > 800 &&

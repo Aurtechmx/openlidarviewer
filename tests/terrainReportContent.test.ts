@@ -176,6 +176,7 @@ function previewResult(): AnalyseContoursResult {
 }
 
 const OPTS = {
+  verticalUnitToMetres: null,
   basename: 'site-42',
   generatedAt: '2026-06-05T00:00:00.000Z',
   softwareVersion: '9.9.9',
@@ -449,8 +450,7 @@ describe('buildTerrainReportContent — honest nulls', () => {
 
 describe('buildTerrainReportContent — §19 permit stamp in provenance', () => {
   it('stamps the resolved evidence-gate permit into the provenance footer', () => {
-    const c = buildTerrainReportContent(readyResult(), {
-      ...OPTS,
+    const c = buildTerrainReportContent(readyResult(), { ...OPTS,
       exportPermit: {
         status: 'exploratory',
         label: 'Exploratory',

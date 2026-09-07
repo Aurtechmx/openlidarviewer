@@ -608,7 +608,7 @@ export function runOlvPipeline(options: PipelineRunOptions): PipelineRun {
       const provenance = buildExportProvenance(result, {
         basename: options.basename ?? null,
         generatedAt,
-        verticalUnitToMetres: analysisParams.verticalUnitToMetres,
+        verticalUnitToMetres: analysisParams.verticalUnitToMetres ?? null,
       });
       products.provenance = provenance;
       const record = analysisRecordFromProvenance(provenance);

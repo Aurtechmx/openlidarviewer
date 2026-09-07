@@ -4637,7 +4637,7 @@ async function exportSession(): Promise<void> {
         processingManifest = processingManifestFromProvenance(
           buildExportProvenance(analysed, {
             basename: exportFileName ? baseName(exportFileName) : null,
-            generatedAt: new Date(),
+            generatedAt: new Date(), verticalUnitToMetres: verticalMetresPerUnit(crsService.context(), 'horizontal-when-known') ?? null,
             softwareVersion: __APP_VERSION__,
             metricVersion: TERRAIN_METRIC_VERSION,
           }), cloud?.organizedRange);

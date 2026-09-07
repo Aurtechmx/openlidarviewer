@@ -83,6 +83,8 @@ export interface DemPackageOptions {
   readonly worldOrigin?: { readonly x: number; readonly y: number; readonly z?: number } | null;
   /** Base filename (no extension) for the entries. Default 'terrain'. */
   readonly basename?: string;
+  /** Metres per source vertical unit, or null when the frame resolved none. */
+  readonly verticalUnitToMetres?: number | null;
   /** CRS WKT for the .prj sidecar, when available. */
   readonly wkt?: string | null;
   /** True when the horizontal CRS is geographic (lat/lon, degree cells). */
@@ -175,6 +177,8 @@ export interface DemReadmeOptions {
   readonly result: AnalyseContoursResult;
   readonly basename: string;
   readonly isGeographic: boolean;
+  /** Metres per source vertical unit, or null when the frame resolved none. */
+  readonly verticalUnitToMetres?: number | null;
   /**
    * Resolved linear unit of a projected CRS (ignored when `isGeographic`).
    * Omitted ⇒ the standing metre assumption.
@@ -220,6 +224,10 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // README's reference frame, verdicts, accuracy, software + version and date
   // are word-for-word identical to the GeoJSON / DXF / SVG / map sheet.
   const p = buildExportProvenance(result, {
+    // Threaded, not defaulted: the README's reference frame is only "word-for-
+    // word identical" to the other exports if it is stamped from the same
+    // resolved scale they are.
+    verticalUnitToMetres: opts.verticalUnitToMetres ?? null,
     basename,
     generatedAt: opts.generationDateIso,
     softwareVersion: opts.softwareVersion,
@@ -435,6 +443,7 @@ export function buildDemPackage(
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
   }
   const readme = buildDemReadme({
+    verticalUnitToMetres: options.verticalUnitToMetres ?? null,
     result,
     basename,
     isGeographic,

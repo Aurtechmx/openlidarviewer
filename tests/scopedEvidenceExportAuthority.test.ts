@@ -87,6 +87,7 @@ function readyResult(): AnalyseContoursResult {
 
 function buildFor(context: EvidenceContext | undefined) {
   return buildExportProvenance(readyResult(), {
+    verticalUnitToMetres: null,
     basename: 'scan',
     generatedAt: '2026-01-01T00:00:00.000Z',
     softwareVersion: '0.6.9',

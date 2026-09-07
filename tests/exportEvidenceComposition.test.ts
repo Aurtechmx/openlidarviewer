@@ -74,6 +74,7 @@ describe('contourArtifactClaims', () => {
 describe('a stamped export resolves the composed claim', () => {
   const stampFor = (r: AnalyseContoursResult, ids: readonly string[]): string | undefined =>
     buildExportProvenance(r, {
+      verticalUnitToMetres: null,
       generatedAt: '2026-09-05T00:00:00.000Z',
       methodDigest: 'deadbeef',
       evidenceClaimIds: ids,
@@ -94,13 +95,15 @@ describe('a stamped export resolves the composed claim', () => {
 
   it('leaves a path that declares nothing exactly as it was', () => {
     const r = result('crisp');
-    const before = buildExportProvenance(r, { generatedAt: '2026-09-05T00:00:00.000Z', methodDigest: 'deadbeef' });
+    const before = buildExportProvenance(r, {
+      verticalUnitToMetres: null, generatedAt: '2026-09-05T00:00:00.000Z', methodDigest: 'deadbeef' });
     expect(before.scopedEvidence?.claimId).toBe('DTM');
   });
 
   it('never reports an effective level above the governing constituent', () => {
     const r = result('smooth', true);
     const p = buildExportProvenance(r, {
+      verticalUnitToMetres: null,
       generatedAt: '2026-09-05T00:00:00.000Z',
       methodDigest: 'deadbeef',
       evidenceClaimIds: contourArtifactClaims(r),

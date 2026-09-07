@@ -89,7 +89,12 @@ function isContent(x: unknown): x is TerrainReportContent {
  */
 export async function buildTerrainReportPdf(
   input: TerrainReportContent | AnalyseContoursResult,
-  opts: TerrainReportContentOptions = {},
+  // Defaulted EXPLICITLY to "no scale resolved" rather than to `{}`. A caller
+  // that passes no options at all still gets today's honest answer; a caller
+  // that passes an options object must now state the scale, because omitting it
+  // from a populated object is the mistake that shipped a file saying
+  // `contourIntervalUnit: unknown` beside `elevationUnit: metre`.
+  opts: TerrainReportContentOptions = { verticalUnitToMetres: null },
 ): Promise<Uint8Array> {
   const content = isContent(input) ? input : buildTerrainReportContent(input, opts);
 

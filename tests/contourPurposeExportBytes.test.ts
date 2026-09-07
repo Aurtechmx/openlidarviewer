@@ -211,6 +211,7 @@ describe('purpose selection changes the exported contour bytes (release-notes co
     for (const [purpose, exp] of Object.entries(expected)) {
       const { result, intent } = resultForPurpose(purpose as ContourStudioPurpose);
       const prov = buildExportProvenance(result, {
+        verticalUnitToMetres: null,
         contourMethod: intent.methodTag,
         deliverablePurpose: intent.purpose,
       });

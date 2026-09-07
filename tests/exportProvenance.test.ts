@@ -59,7 +59,8 @@ it('labels the contour interval in the resolved vertical unit, never a hard-code
   expect(metre).toMatch(/Contour interval\s+1 m\b/);
   const foot = provenanceLines(buildExportProvenance(readyResult(), { ...OPTS, verticalUnitToMetres: 0.3048 })).join('\n');
   expect(foot).toMatch(/Contour interval\s+1 ft\b/);
-  const unknown = provenanceLines(buildExportProvenance(readyResult(), { basename: 'site', softwareVersion: '9.9.9', metricVersion: 'v0.4.1' })).join('\n');
+  const unknown = provenanceLines(buildExportProvenance(readyResult(), {
+    verticalUnitToMetres: null, basename: 'site', softwareVersion: '9.9.9', metricVersion: 'v0.4.1' })).join('\n');
   expect(unknown).toMatch(/Contour interval\s+1 \(vertical unit unverified\)/);
 });
 

@@ -360,7 +360,19 @@ export interface ExportProvenanceOptions {
    * (m / ft) instead of a hard-coded metre; absent ⇒ the interval is labelled
    * "vertical unit unverified" rather than falsely stamped metres.
    */
-  readonly verticalUnitToMetres?: number | null;
+  /**
+   * Metres per source vertical unit, or null when the frame never resolved one.
+   *
+   * REQUIRED, and nullable rather than optional, because the difference between
+   * "we know it is unknown" and "nobody passed it" is the whole point. As an
+   * optional field it read the same either way: two call sites omitted it and
+   * shipped files that said `contourIntervalUnit: unknown` beside
+   * `elevationUnit: metre` on every feature, and a map sheet whose title block
+   * hedged "10 (vertical unit unverified)" ten rows above a note reading
+   * "interval 10 m". Forgetting is now a compile error; declaring it unknown
+   * stays one word.
+   */
+  readonly verticalUnitToMetres: number | null;
   /**
    * The evidence-gate permit the export was minted under (from
    * `resolveContourExportPermit`). Stamped into the file so the artifact records
@@ -421,7 +433,12 @@ function toIso(at: Date | string | null | undefined): string {
  */
 export function buildExportProvenance(
   result: AnalyseContoursResult,
-  opts: ExportProvenanceOptions = {},
+  // Defaulted EXPLICITLY to "no scale resolved" rather than to `{}`. A caller
+  // that passes no options at all still gets today's honest answer; a caller
+  // that passes an options object must now state the scale, because omitting it
+  // from a populated object is the mistake that shipped a file saying
+  // `contourIntervalUnit: unknown` beside `elevationUnit: metre`.
+  opts: ExportProvenanceOptions = { verticalUnitToMetres: null },
 ): ExportProvenance {
   // Surface-quality + export-readiness verdicts come from the SAME top-level
   // assessment the panel renders, so a file never disagrees with the UI.

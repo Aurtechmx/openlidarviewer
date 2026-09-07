@@ -57,6 +57,7 @@ import type {
 // ── the ONE run every exporter is driven from ───────────────────────────────
 
 const OPTS = {
+  verticalUnitToMetres: null,
   basename: 'site',
   generatedAt: '2026-06-05T00:00:00.000Z',
   softwareVersion: '9.9.9',
