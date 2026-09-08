@@ -247,6 +247,19 @@ export interface AccuracyStats {
   readonly nmad: number | null;
   readonly p90AbsResidual: number | null;
   readonly p95AbsResidual: number | null;
+  /**
+   * Which quantile definition produced `medianResidual`, `nmad`, `p90` and
+   * `p95`. Nearest rank, so every reported value is an observed residual rather
+   * than an interpolated one no checkpoint exhibits.
+   *
+   * This project holds two conventions on purpose: src/terrain/quantile.ts
+   * interpolates (type 7, R's default) and this module takes the nearest rank.
+   * tests/statisticsRAgreement.test.ts pins both against R and records that
+   * neither is wrong — but that the same residuals can carry different values
+   * under the same label, and that "what is not defensible is a report that
+   * does not say which". The record says which.
+   */
+  readonly quantileConvention: 'nearest-rank';
   readonly maxAbsResidual: number | null;
   /** Confidence interval on the bias. null when the sample cannot support one. */
   readonly biasCiLower: number | null;
@@ -353,6 +366,7 @@ const EMPTY_STATS: AccuracyStats = {
   bias: null,
   rmse: null,
   medianResidual: null,
+  quantileConvention: 'nearest-rank',
   nmad: null,
   p90AbsResidual: null,
   p95AbsResidual: null,
@@ -445,6 +459,7 @@ function statsOf(
     bias,
     rmse,
     medianResidual: median,
+    quantileConvention: 'nearest-rank',
     nmad,
     p90AbsResidual: quantileSorted(abs, 0.9),
     p95AbsResidual: quantileSorted(abs, 0.95),

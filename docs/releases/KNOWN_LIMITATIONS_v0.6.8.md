@@ -56,7 +56,7 @@ here rather than changed unverified under the freeze.
 
 The blocking browser gate is Chromium. Firefox and WebKit run the full
 deterministic suite, and a regression in either would not by itself stop a
-release. Both were green when this release was cut.
+release. Both are green on the commit this document describes. The release has not been cut, so nothing here reports a tagged run.
 
 ## Five measurement figures with a known basis problem
 
