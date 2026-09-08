@@ -648,7 +648,7 @@ claims:
         - datasetId: OLV-DS-001-ANALYTIC-DEM
           parameterSetId: PS-HORN-DEG-METRE-NOEDGES
       unsupported:
-        - "The one-cell border. The 24-fixture GDAL matrix measured a shortfall of up to 16.2 degrees there against gdaldem -compute_edges, with the bias always negative, on the whole outer ring."
+        - "The one-cell border, where the documented gdaldem command omits -compute_edges and the reference leaves it undefined. The 24-fixture matrix once measured a shortfall of up to 16.2 degrees there against gdaldem -compute_edges; that was an edge-policy defect in this project's kernel, it was fixed, and the matrix now asserts agreement on the whole ring to about 9e-4 degree. The border stays outside this claim because the SUPPORTING study does not compute edges, not because a shortfall stands."
         - "Nodata neighbourhoods. The same matrix found that gdaldem propagates nodata through the 3x3 window while this project substitutes the centre value and answers for every halo cell, biasing slope toward zero near a hole and leaving no marker in the output."
         - "Slopes above about 16.4 degrees, the steepest the supporting fixture reaches."
         - "Geographic grids. The supporting study is a metre grid with no CRS in its header, so the per-axis cell-metre path is not exercised by it."

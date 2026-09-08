@@ -346,15 +346,34 @@ export function epochFrameOptions(
  * against a plain metre UTM epoch was permitted, and 100 ft against the
  * physically identical 30.48 m reported a 21 m change instead of zero.
  *
- * Genuinely unknown on either side still permits: there is no evidence of a
- * mismatch, so the shared-factor path stands as before.
+ * Unknown is not permission. Two cases used to pass on the grounds that there
+ * was no evidence of a mismatch, and both could reach a metre-denominated Δz:
+ *
+ *   - A DECLARED but degenerate vertical unit (zero, negative, non-finite). The
+ *     file states a scale and states it wrongly, and `main.ts` hands the change
+ *     pipeline `ctxA.verticalUnitToMetres` — that same corrupt number — as the
+ *     shared factor. Wrong on its face, whatever the other epoch says.
+ *   - Exactly ONE side resolving. The unresolved side cannot be shown to match
+ *     the resolved one, yet a single factor is applied to both.
+ *
+ * Neither side declaring anything still permits, and that case is closed
+ * downstream rather than here: an undeclared vertical resolves to `undefined`
+ * under `'horizontal-when-known'` only when that epoch's HORIZONTAL unit is also
+ * unknown, and {@link epochFrameOptions} ands the two horizontal flags, so
+ * `compareDtms` sees `horizontalUnitKnown: false` and withholds every metre
+ * figure. Refusing here as well would remove the unreferenced-pair comparison
+ * without removing a single number that survives to a user.
  */
 export function epochVerticalScalesComparable(
   before: SpatialContext,
   after: SpatialContext,
 ): boolean {
+  for (const ctx of [before, after]) {
+    if (ctx.verticalUnitToMetres !== undefined && !ctx.verticalScaleKnown) return false;
+  }
   const vb = verticalMetresPerUnit(before, 'horizontal-when-known');
   const va = verticalMetresPerUnit(after, 'horizontal-when-known');
+  if ((vb === undefined) !== (va === undefined)) return false;
   if (vb === undefined || va === undefined) return true;
   return Math.abs(vb - va) <= 1e-9 * Math.max(vb, va);
 }

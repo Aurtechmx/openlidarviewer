@@ -123,16 +123,46 @@ describe('compareDtms', () => {
 });
 
 describe('summarizeChange', () => {
-  it('leads with the not-co-registered warning when alignment fails', () => {
-    // Triggered by an ORIGIN OFFSET — an indicative case where the numbers
-    // still print with a caveat. This test previously used a CRS mismatch as
-    // the trigger and asserted the numbers printed anyway; a PROVEN mismatch
-    // now refuses them (see the frame-incompatibility suite below).
+  it('refuses the figures when the grids are provably not one grid', () => {
+    // An ORIGIN OFFSET is a MEASURED defect, not an unconfirmed one: cell (i,j)
+    // of one grid is not the ground under cell (i,j) of the other, so a
+    // cell-for-cell subtraction returns the terrain's own slope across the
+    // offset as elevation change. The contaminant is systematic and signed, so
+    // it survives every aggregate. This used to print the volumes under a
+    // caveat; a caveat above a m³ figure does not stop the figure being quoted.
     const a = grid([1, 1], 2, 1);
     const b = grid([2, 2], 2, 1, { originH1: 10 });
     const lines = summarizeChange(compareDtms(a, b));
+    expect(lines[0]).toContain('Not comparable');
+    expect(lines.some((l) => l.includes('Net volume change'))).toBe(false);
+    expect(lines.some((l) => /offset by about/.test(l))).toBe(true);
+  });
+
+  it('still reports under a caveat when the frame is merely UNCONFIRMED', () => {
+    // The refusal above must not swallow this case. One grid, same origin, same
+    // cell size — but neither states a CRS, so the two cannot be CONFIRMED to
+    // share a frame. Absence of evidence is not a measured defect: the metre
+    // figures are real metres of the two surfaces, and the open question is
+    // whether they describe the same place. That stays indicative, not refused.
+    const a = grid([1, 1, 1, 1], 2, 2, { crs: null, verticalDatum: null });
+    const b = grid([2, 2, 2, 2], 2, 2, { crs: null, verticalDatum: null });
+    const cmp = compareDtms(a, b);
+    expect(cmp.gridMisaligned).toBe(false);
+    expect(cmp.coregistered).toBe(false);
+    const lines = summarizeChange(cmp);
     expect(lines[0]).toContain('Not co-registered');
     expect(lines.some((l) => l.includes('Net volume change'))).toBe(true);
+  });
+
+  it('treats a sub-cell origin offset as a defect, not as alignment', () => {
+    // Half a cell of slack passed the old check, so two surfaces offset by 0.49
+    // of a cell were differenced cell-for-cell and called co-registered.
+    const a = grid([1, 1, 1, 1], 2, 2);
+    const b = grid([2, 2, 2, 2], 2, 2, { originH1: 0.49 });
+    expect(compareDtms(a, b).gridMisaligned).toBe(true);
+    // And an origin that IS the same number still aligns, so the tolerance has
+    // not simply been set to zero-tolerance-on-everything.
+    expect(compareDtms(a, grid([2, 2, 2, 2], 2, 2)).gridMisaligned).toBe(false);
   });
 
   it('omits the warning and reports volumes when fully aligned', () => {

@@ -97,8 +97,13 @@ export function epochUnitMismatchLines(header: string, reason: EpochRefusal = 'v
   }
   return [
     header,
-    'Cannot compare — the two epochs declare different vertical units. ' +
-      'Re-export them in a common vertical unit first.',
+    // Covers all three refusals the vertical-scale check now makes: a proven
+    // mismatch, a scale resolved on one side only, and a declared but
+    // degenerate factor. Naming only the mismatch would have described the
+    // other two wrongly.
+    'Cannot compare — the two epochs are not on a common vertical scale: they ' +
+      'declare different vertical units, or only one of them states a usable ' +
+      'unit at all. Re-export both in a common, declared vertical unit first.',
   ];
 }
 

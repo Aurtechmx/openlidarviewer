@@ -5418,9 +5418,9 @@ function compareLoadedLayers(): void {
       // export otherwise carries foot geometry with metre values, and any GIS
       // volume mixes ft² with m). Metre / compound-metre-horizontal CRS ⇒ 1, a
       // byte-identical no-op; OLV never reprojects, so the grid unit stays source.
-      // A provably frame-incompatible pair reports no numbers, so it must not
-      // hand out a difference raster either.
-      if (cmp.frameIncompatible) {
+      // The whole co-registration verdict, not just a proven frame clash: see
+      // EpochComparison.coregistered for why the file is stricter than the panel.
+      if (!cmp.coregistered) {
         inspector.setDifferenceAvailable(false);
         return;
       }
