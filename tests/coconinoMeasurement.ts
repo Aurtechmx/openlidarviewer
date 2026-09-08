@@ -26,6 +26,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { rasterizeDtm } from '../src/terrain/ground/rasterizeDtm';
+import { quantileSorted } from '../src/terrain/quantile';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 
 const FIELD = resolve(__dirname, '../validation/terrain-field');
@@ -96,19 +97,20 @@ export interface CoconinoMetrics {
 const round2 = (x: number): number => Math.round(x * 100) / 100;
 
 /**
- * Linear-interpolated percentile of |residual|.
+ * Percentile of |residual|, delegated to the project's shared type-7 helper.
  *
- * This is the function the VVA gate judges against, so the reported p95 is the
- * one the release tested. The 2026-08-09 files used a nearest-rank percentile
- * instead, which is why their p95 and max read as the same number; two
- * definitions of "p95" for one dataset is the drift this module removes.
+ * src/terrain/quantile.ts is the one percentile convention for terrain figures
+ * and its header asks that a new need import it rather than re-derive its own,
+ * which an earlier audit found three files doing. This wrapper exists only to
+ * name what is being ranked; the arithmetic is not repeated here.
+ *
+ * The 2026-08-09 Coconino files used a nearest-rank percentile, which is why
+ * their p95 and max read as the same number. On these 58 residuals the two
+ * conventions differ by 2.55 cm at p95, so the artifacts record which one they
+ * used.
  */
-export function percentileAbs(sortedAbs: readonly number[], q: number): number {
-  if (sortedAbs.length === 0) return Number.NaN;
-  const idx = q * (sortedAbs.length - 1);
-  const lo = Math.floor(idx), hi = Math.ceil(idx);
-  return sortedAbs[lo] + (sortedAbs[hi] - sortedAbs[lo]) * (idx - lo);
-}
+export const percentileAbs = (sortedAbs: readonly number[], q: number): number =>
+  sortedAbs.length === 0 ? Number.NaN : quantileSorted(sortedAbs, q);
 
 /** Median of an already-sorted array; the mean of the two middles when even. */
 function medianOf(sorted: readonly number[]): number {

@@ -68,10 +68,12 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   'olv.ground.smrf': {
     id: 'olv.ground.smrf',
     version: 1,
-    name: 'Simple Morphological Filter (SMRF) ground extraction',
+    name: 'SMRF-core progressive morphological ground extraction',
     summary:
       'Grid-native progressive morphological opening that separates ground from ' +
-      'object returns on a rasterised surface.',
+      'object returns on a rasterised surface. It implements the SUBSET of ' +
+      'Pingel et al. (2013) the claim register scopes it to, without the ' +
+      'net-cutting refinement pass, so it is not the full reference pipeline.',
     citation: 'Pingel, Clarke & McBride (2013), doi:10.1016/j.isprsjprs.2012.12.002',
     category: 'ground',
     implementation: ['src/terrain/ground/groundFilter.ts'],

@@ -12,8 +12,11 @@
  * `rasterizeDtm` maps row = floor((y − origin) / cell), so row+1 is one
  * cell NORTH (unlike image rasters, where row+1 is south). Hence:
  *
- *   dz/dx = ((zE + 2·zE + zE) − (zW + 2·zW + zW)) / (8·cell)   [weighted]
- *   dz/dy = ((zN + 2·zN + zN) − (zS + 2·zS + zS)) / (8·cell)   [= +∂z/∂northing]
+ * Neighbours are lettered a b c / d e f / g h i with the SOUTH row first, so
+ * a = SW, c = SE, g = NW, i = NE, and e is the centre cell:
+ *
+ *   dz/dx = ((c + 2·f + i) − (a + 2·d + g)) / (8·cell)   [east column − west]
+ *   dz/dy = ((g + 2·h + i) − (a + 2·b + c)) / (8·cell)   [= +∂z/∂northing]
  *   slope = hypot(dz/dx, dz/dy)            (rise/run, dimensionless)
  *   aspect = atan2(−dz/dy, −dz/dx)         (radians, math frame, downslope)
  *

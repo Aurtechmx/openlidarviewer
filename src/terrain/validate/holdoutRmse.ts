@@ -329,10 +329,13 @@ export function holdoutValidateDtm(
   // and robust spread (NMAD), which absolute-only stats hide: a surface sitting
   // uniformly 8 cm low has a large bias but its RMSE alone looks like noise.
   const allSigned: number[] = [];
-  let sumSigned = 0;
-  // Compensated so the aggregate RMSE stays accurate over a large held-out set.
+  // Compensated so the aggregate RMSE, bias and MAE stay accurate over a large
+  // held-out set. The signed and absolute sums used to be naive `+=` while every
+  // stratified aggregate below was compensated, so the comment there claiming
+  // parity with "the headline figure" was the one thing it did not hold for.
+  const sumSignedAcc = new NeumaierSum();
   const sumSqAcc = new NeumaierSum();
-  let sumAbs = 0;
+  const sumAbsAcc = new NeumaierSum();
   let covered = 0;
   let uncovered = 0;
   // Every residual aggregate is compensated, so a stratum's RMSE/MAE carries the
@@ -410,9 +413,9 @@ export function holdoutValidateDtm(
     const sq = residual * residual;
     allAbs.push(abs);
     allSigned.push(residual);
-    sumSigned += residual;
+    sumSignedAcc.add(residual);
     sumSqAcc.add(sq);
-    sumAbs += abs;
+    sumAbsAcc.add(abs);
     covered++;
     const grade = gradeForConfidence(predConf);
     bandSumSq[grade].add(sq);
@@ -443,7 +446,7 @@ export function holdoutValidateDtm(
   }
 
   const rmse = Math.sqrt(sumSqAcc.total / covered);
-  const mae = sumAbs / covered;
+  const mae = sumAbsAcc.total / covered;
   allAbs.sort((a, b) => a - b);
   // Project-wide type-7 quantile (was nearest-rank — one of the three
   // conventions the v0.4.3 audit flagged; see src/terrain/quantile.ts).
@@ -481,7 +484,7 @@ export function holdoutValidateDtm(
 
   // Signed BIAS: the mean signed residual. A non-zero bias is a systematic
   // vertical offset (the surface sits high or low), which RMSE/MAE cannot show.
-  const bias = sumSigned / covered;
+  const bias = sumSignedAcc.total / covered;
   // NMAD: 1.4826 × median(|residual − median(residual)|). A robust, outlier-
   // resistant spread — the ASPRS-recommended companion to RMSE for LiDAR error,
   // and the honest number to trust when residuals are non-normal.
