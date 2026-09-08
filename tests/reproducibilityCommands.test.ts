@@ -1,19 +1,19 @@
 /**
  * reproducibilityCommands.test.ts — the reproduction instructions name commands
- * that exist, and describe the gate the gate script actually is.
+ * that exist, and describe the gate scripts/gate.sh actually runs.
  *
  * REPRODUCIBILITY_v0.6.8.md told a reader to run `npm run gate` for "the whole
  * battery". `scripts/gate.sh` defaults to OLV_GATE_MODE=development, which runs
  * the static gate and nothing else: no e2e, no docs build, no production audit,
  * no fixture checksums, no coverage. The published coverage and e2e figures come
  * from release mode, which only .github/workflows/release.yml selected. The same
- * document was internally inconsistent about it — one row already said "a
- * blocking stage of the release-mode gate" while the instructions above never
- * mentioned that a mode existed.
+ * document was already inconsistent about it: one row said "a blocking stage of
+ * the release-mode gate" while the instructions above it never mentioned that a
+ * mode existed.
  *
  * Nothing checked the prose against the script, so this does. It reads the
- * stages out of gate.sh rather than restating them, which is the only version of
- * this check that cannot itself go stale.
+ * stages out of gate.sh rather than restating them, so the check cannot go stale
+ * on its own.
  */
 
 import { describe, it, expect } from 'vitest';

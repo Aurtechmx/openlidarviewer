@@ -2,7 +2,7 @@
  "purpose": "Why each published Coconino checkpoint does or does not enter the reported metric. One entry per checkpoint in the project-report table. No checkpoint is excluded for the size of its residual.",
  "publishedCheckpointTable": "validation/terrain-field/references/coconino-b19-2019__checkpoints.json",
  "publishedCheckpointCount": 121,
- "exclusionRule": "A checkpoint enters the frozen universe iff its Albers (E,N) falls inside a downloaded tile's header bounds and that tile carried class-2 ground at the checkpoint. Of those, one whose 1 m DTM cell holds no classified ground is rejected and reported; the rest are the usable, evaluated subset. Membership and rejection are both decided without reference to the residual.",
+ "exclusionRule": "A checkpoint enters the frozen universe iff its Albers (E,N) falls inside a downloaded tile's header bounds and that tile carried class-2 ground at the checkpoint. Of those, any whose 1 m DTM cell holds no classified ground is rejected and reported; the rest are the usable, evaluated subset. Membership and rejection are both decided without reference to the residual.",
  "stateTally": {
   "excluded-outside-downloaded-tiles": 61,
   "measured": 58,

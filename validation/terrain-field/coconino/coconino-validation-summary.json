@@ -25,7 +25,7 @@
   "inFrozenUniverse": 60,
   "rejectedNoGroundInCell": 2,
   "usableEvaluated": 58,
-  "note": "The metrics below are computed over the 58 usable checkpoints — the evaluated subset, not the total checkpoint population. Per-checkpoint reasons: coconino-eligibility.json."
+  "note": "The metrics below are computed over the 58 usable checkpoints. That is the evaluated subset, not the total checkpoint population. Per-checkpoint reasons: coconino-eligibility.json."
  },
  "dtm": {
   "cellSizeM": 1,
@@ -73,11 +73,11 @@
   "basis": "USGS/NDEP-ASPRS vertical accuracy. NVA at the 95% confidence level (1.96 x RMSEz, errors approximately Gaussian on open ground); VVA at the 95th percentile, which by definition tolerates the top 5% of vegetated returns as a non-Gaussian tail.",
   "nvaClassM": 0.3,
   "vvaClassM": 0.6,
-  "percentileMethod": "linear interpolation between order statistics of |residual| — the same function the accuracy gate judges against"
+  "percentileMethod": "Linear interpolation between order statistics of |residual|, the same function the accuracy gate judges against."
  },
  "limitations": [
-  "2 of 60 checkpoints (2 VVA) were rejected for carrying no classified ground in their 1 m DTM cell. Every rejection is VVA, and the rejection rule is the absence of a ground return, which is the condition the VVA class exists to test. The missingness is informative: the VVA statistics are conditional on a ground return existing at the checkpoint, so they describe vegetated ground that the bare-earth surface reached, not vegetated ground in general.",
-  "The universe covers 57 of the 109 tiles the frozen checkpoint table requires, so it is a partial subset of the project. Which tiles are required is a pure function of the checkpoint table and the tiling rule (required-tiles.json); no tile is selected by its result, and membership is fixed before any residual is computed.",
+  "2 of 60 checkpoints (2 VVA) were rejected for carrying no classified ground in their 1 m DTM cell. Every rejection is VVA, and the rule that rejects them is the absence of a ground return, which is the condition the VVA class exists to test. The missingness is therefore informative: the VVA statistics are conditional on a ground return existing at the checkpoint, so they describe vegetated ground the bare-earth surface reached rather than vegetated ground in general.",
+  "The universe holds 57 of the 109 tiles the frozen checkpoint table requires, so it covers part of the project rather than all of it. Which tiles are required is a pure function of the checkpoint table and the tiling rule (required-tiles.json); no tile is selected by its result, and membership is fixed before any residual is computed.",
   "Found third-party checkpoints, not a survey preregistered against an OLV protocol. This caps the determination below E5 regardless of sample size."
  ],
  "evidenceIndependence": {

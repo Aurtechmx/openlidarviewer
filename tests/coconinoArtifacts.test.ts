@@ -2,13 +2,13 @@
  * coconinoArtifacts.test.ts — the shipped Coconino files say what the
  * measurement says, or the release fails.
  *
- * v0.6.8 was about to ship a universe of 60 checkpoints across 57 tiles beside a
- * metrics block, a validation summary, a results CSV and a README table that all
- * described 13 checkpoints across 8 tiles. The 60-point rebuild (2026-08-14) was
- * meant to replace the 13-point study (2026-08-09); the rebuild script carried
- * the old `metrics` key forward with `prev.update(...)`, and the accuracy gate
- * logged its numbers to the console instead of writing a file, so nothing in the
- * repo could notice. One JSON file stated both populations at once.
+ * The universe was rebuilt to 60 checkpoints across 57 tiles (2026-08-14),
+ * replacing a 13-point, 8-tile study (2026-08-09). The metrics block, the
+ * validation summary, the results CSV and the README table kept describing the
+ * study it replaced: the rebuild script carried the old `metrics` key forward
+ * with `prev.update(...)`, and the accuracy gate logged its numbers to the
+ * console instead of writing a file, so nothing in the repo could notice. One
+ * JSON file stated both populations at once.
  *
  * Every artifact here is written from tests/coconinoMeasurement.ts, the same
  * module the accuracy gate measures with, and this file asserts that what is
@@ -105,7 +105,7 @@ function buildEligibility(
     purpose: 'Why each published Coconino checkpoint does or does not enter the reported metric. One entry per checkpoint in the project-report table. No checkpoint is excluded for the size of its residual.',
     publishedCheckpointTable: `validation/terrain-field/references/${basename(PATHS.published)}`,
     publishedCheckpointCount: published.length,
-    exclusionRule: "A checkpoint enters the frozen universe iff its Albers (E,N) falls inside a downloaded tile's header bounds and that tile carried class-2 ground at the checkpoint. Of those, one whose 1 m DTM cell holds no classified ground is rejected and reported; the rest are the usable, evaluated subset. Membership and rejection are both decided without reference to the residual.",
+    exclusionRule: "A checkpoint enters the frozen universe iff its Albers (E,N) falls inside a downloaded tile's header bounds and that tile carried class-2 ground at the checkpoint. Of those, any whose 1 m DTM cell holds no classified ground is rejected and reported; the rest are the usable, evaluated subset. Membership and rejection are both decided without reference to the residual.",
     stateTally,
     checkpoints,
   };
@@ -114,13 +114,12 @@ function buildEligibility(
 /**
  * How the rejections fall across the strata.
  *
- * Both rejections are VVA, and the rejection rule is "no classified ground in
- * the cell" — the condition VVA exists to measure. The missingness is therefore
- * informative, not incidental: the VVA figures are conditional on a ground
- * return existing, and the checkpoints most likely to be rejected are the ones
- * under the densest canopy. That is a limit on what the VVA number means, and
- * it is computed here rather than asserted, so it cannot survive the data
- * changing underneath it.
+ * The rejection rule is "no classified ground in the cell", which is the
+ * condition the VVA class exists to measure, so a rejection that lands only on
+ * VVA points is informative missingness rather than an incidental gap: the VVA
+ * figures are conditional on a ground return existing at all. That is a limit on
+ * what the VVA number means. It is recomputed from the results on every run, so
+ * it tracks the data instead of going stale the way a written-in caveat would.
  */
 function rejectionCaveat(results: readonly CheckpointResult[]): string | null {
   const rejected = results.filter((r) => r.state === 'rejected-no-ground');
@@ -131,7 +130,7 @@ function rejectionCaveat(results: readonly CheckpointResult[]): string | null {
   const onlyVVA = tally.size === 1 && tally.has('VVA');
   return `${rejected.length} of ${results.length} checkpoints (${parts}) were rejected for carrying no classified ground in their 1 m DTM cell.`
     + (onlyVVA
-      ? ' Every rejection is VVA, and the rejection rule is the absence of a ground return, which is the condition the VVA class exists to test. The missingness is informative: the VVA statistics are conditional on a ground return existing at the checkpoint, so they describe vegetated ground that the bare-earth surface reached, not vegetated ground in general.'
+      ? ' Every rejection is VVA, and the rule that rejects them is the absence of a ground return, which is the condition the VVA class exists to test. The missingness is therefore informative: the VVA statistics are conditional on a ground return existing at the checkpoint, so they describe vegetated ground the bare-earth surface reached rather than vegetated ground in general.'
       : ' The rejection rule is the absence of a ground return, so treat the per-stratum figures as conditional on a ground return existing.');
 }
 
@@ -170,7 +169,7 @@ function buildSummary(
       inFrozenUniverse: metrics.candidate,
       rejectedNoGroundInCell: metrics.rejected,
       usableEvaluated: metrics.usable,
-      note: `The metrics below are computed over the ${metrics.usable} usable checkpoints — the evaluated subset, not the total checkpoint population. Per-checkpoint reasons: ${basename(PATHS.eligibility)}.`,
+      note: `The metrics below are computed over the ${metrics.usable} usable checkpoints. That is the evaluated subset, not the total checkpoint population. Per-checkpoint reasons: ${basename(PATHS.eligibility)}.`,
     },
     dtm: {
       cellSizeM: CELL_M,
@@ -181,11 +180,11 @@ function buildSummary(
       basis: 'USGS/NDEP-ASPRS vertical accuracy. NVA at the 95% confidence level (1.96 x RMSEz, errors approximately Gaussian on open ground); VVA at the 95th percentile, which by definition tolerates the top 5% of vegetated returns as a non-Gaussian tail.',
       nvaClassM: CLASS_M.NVA,
       vvaClassM: CLASS_M.VVA,
-      percentileMethod: 'linear interpolation between order statistics of |residual| — the same function the accuracy gate judges against',
+      percentileMethod: 'Linear interpolation between order statistics of |residual|, the same function the accuracy gate judges against.',
     },
     limitations: [
       ...(rejectionNote === null ? [] : [rejectionNote]),
-      `The universe covers ${universe.downloadedTiles.length} of the 109 tiles the frozen checkpoint table requires, so it is a partial subset of the project. Which tiles are required is a pure function of the checkpoint table and the tiling rule (required-tiles.json); no tile is selected by its result, and membership is fixed before any residual is computed.`,
+      `The universe holds ${universe.downloadedTiles.length} of the 109 tiles the frozen checkpoint table requires, so it covers part of the project rather than all of it. Which tiles are required is a pure function of the checkpoint table and the tiling rule (required-tiles.json); no tile is selected by its result, and membership is fixed before any residual is computed.`,
       'Found third-party checkpoints, not a survey preregistered against an OLV protocol. This caps the determination below E5 regardless of sample size.',
     ],
     evidenceIndependence: universe.evidenceIndependence,
@@ -241,9 +240,9 @@ describe('the shipped Coconino artifacts agree with the measurement', () => {
 
     // ── every committed artifact equals what the measurement produced ────────
     expect(readJson(PATHS.metrics)).toEqual(metrics);
-    // The universe states membership, never statistics: a "metrics" key here is
-    // the exact shape of the defect — a population and a set of numbers over a
-    // different population, in one file, with no writer able to reconcile them.
+    // The universe states membership, never statistics. A "metrics" key here is
+    // the defect itself: one population and a set of numbers over a different
+    // population, in one file, with no writer able to reconcile them.
     expect(readJson<Record<string, unknown>>(PATHS.universe)).not.toHaveProperty('metrics');
     expect(readFileSync(PATHS.results, 'utf8')).toBe(csvOut);
     expect(readJson(PATHS.eligibility)).toEqual(eligibilityOut);
