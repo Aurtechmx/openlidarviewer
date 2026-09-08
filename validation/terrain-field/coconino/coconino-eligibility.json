@@ -1,0 +1,860 @@
+{
+ "purpose": "Why each published Coconino checkpoint does or does not enter the reported metric. One entry per checkpoint in the project-report table. No checkpoint is excluded for the size of its residual.",
+ "publishedCheckpointTable": "validation/terrain-field/references/coconino-b19-2019__checkpoints.json",
+ "publishedCheckpointCount": 121,
+ "exclusionRule": "A checkpoint enters the frozen universe iff its Albers (E,N) falls inside a downloaded tile's header bounds and that tile carried class-2 ground at the checkpoint. Of those, one whose 1 m DTM cell holds no classified ground is rejected and reported; the rest are the usable, evaluated subset. Membership and rejection are both decided without reference to the residual.",
+ "stateTally": {
+  "excluded-outside-downloaded-tiles": 61,
+  "measured": 58,
+  "rejected-no-ground": 2
+ },
+ "checkpoints": [
+  {
+   "id": "BE01",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE02",
+   "type": "NVA",
+   "tile": "w1401n1430",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE03",
+   "type": "NVA",
+   "tile": "w1411n1473",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE04",
+   "type": "NVA",
+   "tile": "w1398n1475",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE05",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE06",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE07",
+   "type": "NVA",
+   "tile": "w1403n1396",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE08",
+   "type": "NVA",
+   "tile": "w1396n1473",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE09",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE10",
+   "type": "NVA",
+   "tile": "w1403n1408",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE12",
+   "type": "NVA",
+   "tile": "w1413n1501",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE13",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE14",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE15",
+   "type": "NVA",
+   "tile": "w1400n1473",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE16",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE17",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE18",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BE19",
+   "type": "NVA",
+   "tile": "w1401n1450",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BE20",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "OT01",
+   "type": "NVA",
+   "tile": "w1411n1494",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT02",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "OT03",
+   "type": "NVA",
+   "tile": "w1413n1494",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT04",
+   "type": "NVA",
+   "tile": "w1397n1434",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT05",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "OT06",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "OT07",
+   "type": "NVA",
+   "tile": "w1404n1493",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT08",
+   "type": "NVA",
+   "tile": "w1408n1470",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT09",
+   "type": "NVA",
+   "tile": "w1398n1468",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT10",
+   "type": "NVA",
+   "tile": "w1409n1490",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT11",
+   "type": "NVA",
+   "tile": "w1398n1455",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT12",
+   "type": "NVA",
+   "tile": "w1402n1490",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT13",
+   "type": "NVA",
+   "tile": "w1396n1478",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT14",
+   "type": "NVA",
+   "tile": "w1397n1486",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT15",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "OT16",
+   "type": "NVA",
+   "tile": "w1395n1484",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT17",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "OT18",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "OT19",
+   "type": "NVA",
+   "tile": "w1413n1468",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "OT20",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "UR01",
+   "type": "NVA",
+   "tile": "w1396n1483",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR02",
+   "type": "NVA",
+   "tile": "w1397n1480",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR03",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "UR04",
+   "type": "NVA",
+   "tile": "w1396n1471",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR05",
+   "type": "NVA",
+   "tile": "w1396n1465",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR06",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "UR07",
+   "type": "NVA",
+   "tile": "w1402n1466",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR08",
+   "type": "NVA",
+   "tile": "w1406n1464",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR09",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "UR10",
+   "type": "NVA",
+   "tile": "w1396n1430",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR11",
+   "type": "NVA",
+   "tile": "w1412n1436",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR12",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "UR13",
+   "type": "NVA",
+   "tile": "w1409n1462",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR14",
+   "type": "NVA",
+   "tile": "w1412n1429",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR15",
+   "type": "NVA",
+   "tile": "w1410n1420",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR16",
+   "type": "NVA",
+   "tile": "w1395n1420",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR17",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "UR18",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "UR19",
+   "type": "NVA",
+   "tile": "w1409n1388",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "UR20",
+   "type": "NVA",
+   "tile": "w1410n1460",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "XNVA101",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "XNVA102",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "XNVA103",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "XNVA104",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "XNVA105",
+   "type": "NVA",
+   "tile": "w1398n1449",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "XNVA501",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "XNVA502",
+   "type": "NVA",
+   "tile": "w1406n1416",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "XNVA503",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "XNVA701",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "XNVA702",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "XNVA703",
+   "type": "NVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR01",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR02",
+   "type": "VVA",
+   "tile": "w1399n1427",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BR03",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR04",
+   "type": "VVA",
+   "tile": "w1413n1489",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BR05",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR06",
+   "type": "VVA",
+   "tile": "w1405n1487",
+   "state": "rejected-no-ground",
+   "reason": "In the frozen universe and in the crop, but its 1 m DTM cell carried no classified ground, so there is no DTM elevation to compare against. Rejected and reported, not dropped."
+  },
+  {
+   "id": "BR07",
+   "type": "VVA",
+   "tile": "w1396n1482",
+   "state": "rejected-no-ground",
+   "reason": "In the frozen universe and in the crop, but its 1 m DTM cell carried no classified ground, so there is no DTM elevation to compare against. Rejected and reported, not dropped."
+  },
+  {
+   "id": "BR08",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR09",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR10",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR11",
+   "type": "VVA",
+   "tile": "w1410n1480",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BR12",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR13",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR14",
+   "type": "VVA",
+   "tile": "w1403n1467",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "BR15",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR16",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "BR17",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG01",
+   "type": "VVA",
+   "tile": "w1409n1460",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "HG02",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG03",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG04",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG05",
+   "type": "VVA",
+   "tile": "w1413n1466",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "HG06",
+   "type": "VVA",
+   "tile": "w1412n1464",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "HG07",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG08",
+   "type": "VVA",
+   "tile": "w1403n1454",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "HG09",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG10",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG11",
+   "type": "VVA",
+   "tile": "w1396n1437",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "HG12",
+   "type": "VVA",
+   "tile": "w1397n1432",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "HG13",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG14",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG15",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG16",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "HG17",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "TR01",
+   "type": "VVA",
+   "tile": "w1412n1433",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR02",
+   "type": "VVA",
+   "tile": "w1400n1483",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR03",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "TR04",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "TR05",
+   "type": "VVA",
+   "tile": "w1409n1425",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR06",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "TR07",
+   "type": "VVA",
+   "tile": "w1398n1449",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR08",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "TR09",
+   "type": "VVA",
+   "tile": "w1406n1416",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR10",
+   "type": "VVA",
+   "tile": "w1401n1450",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR11",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "TR12",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "TR13",
+   "type": "VVA",
+   "tile": null,
+   "state": "excluded-outside-downloaded-tiles",
+   "reason": "Its Albers (E,N) falls outside every downloaded tile, so it is not in the frozen universe. Membership follows tile coverage alone and is fixed before any residual is computed."
+  },
+  {
+   "id": "TR14",
+   "type": "VVA",
+   "tile": "w1406n1494",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR15",
+   "type": "VVA",
+   "tile": "w1413n1492",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR16",
+   "type": "VVA",
+   "tile": "w1405n1469",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  },
+  {
+   "id": "TR17",
+   "type": "VVA",
+   "tile": "w1411n1455",
+   "state": "measured",
+   "reason": "In a downloaded tile; its 1 m DTM cell carried classified ground."
+  }
+ ]
+}

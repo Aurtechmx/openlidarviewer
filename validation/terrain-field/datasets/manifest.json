@@ -119,10 +119,10 @@
    "verticalDatum": "NAVD88 orthometric (Geoid12B)",
    "units": "metre",
    "sensor": "Optech Galaxy Prime airborne LiDAR (summer 2019, leaf-on); ground survey NVA/VVA checkpoints held separate from the 12 LiDAR Control Points",
-   "independentCheckpoints": "121 project-wide (1 inside tile w1407n1486: TR03, a vegetated/VVA checkpoint at 2567.66 m)",
+   "independentCheckpoints": "121 project-wide; 60 fall inside the 57 downloaded tiles of the frozen universe (coconino/input-universe.json, which hashes every one), of which 58 are usable and 2 are rejected for having no classified ground in their DTM cell",
    "terrain": "steep forested plateau, Coconino National Forest (~2500-2730 m NAVD88); bare-earth under canopy",
    "licence": "Public domain (U.S. Geological Survey / The National Map); no use constraints",
-   "role": "absolute vertical accuracy vs INDEPENDENT surveyed VVA/NVA checkpoints (same NAVD88 datum as the cloud; no reconciliation); the forested VVA case complements the flat-marsh Marsh Island leg"
+   "role": "absolute vertical accuracy vs INDEPENDENT surveyed VVA/NVA checkpoints (same NAVD88 datum as the cloud; no reconciliation); the forested case complements the flat-marsh Marsh Island leg. sourceFile above is the slope/aspect cross-implementation crop; the checkpoint leg spans 57 tiles, each hashed in coconino/input-universe.json"
   }
  ]
 }

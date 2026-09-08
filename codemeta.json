@@ -99,7 +99,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/core",
       "name": "@loaders.gl/core",
-      "version": "^4.4.4",
+      "version": "^4.4.5",
       "provider": {
         "@type": "Organization",
         "name": "npm",
@@ -123,7 +123,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/obj",
       "name": "@loaders.gl/obj",
-      "version": "^4.4.2",
+      "version": "^4.4.5",
       "provider": {
         "@type": "Organization",
         "name": "npm",
@@ -135,7 +135,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/ply",
       "name": "@loaders.gl/ply",
-      "version": "^4.4.4",
+      "version": "^4.4.5",
       "provider": {
         "@type": "Organization",
         "name": "npm",
