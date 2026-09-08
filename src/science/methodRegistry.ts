@@ -165,11 +165,11 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     name: 'Spatial-block cross-validation',
     summary:
       'Blocks the extent at a fixed data-anchored origin, holds out whole blocks, ' +
-      'and reports RMSE/MAE with a block-bootstrap confidence interval. Not a ' +
-      'like-for-like contrast with random hold-out as this project runs them: the ' +
-      'random pass re-classifies ground on the training points only, the blocked ' +
-      'pass keeps the whole-cloud classification, so the two differ in treatment ' +
-      'as well as in geometry and neither is guaranteed the larger.',
+      'and reports RMSE/MAE with a block-bootstrap confidence interval. Whether it ' +
+      'is a like-for-like contrast with random hold-out depends on the path: each ' +
+      'figure records the ground classification it used, and they agree only when ' +
+      'the source classification is trusted. Where they differ the contrast changes ' +
+      'treatment as well as geometry, and neither is guaranteed the larger.',
     citation: 'Roberts et al. (2017), doi:10.1111/ecog.02881 (spatial block CV)',
     category: 'validation',
     implementation: ['src/terrain/validate/spatialBlockHoldout.ts'],

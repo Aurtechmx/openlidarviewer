@@ -39,6 +39,7 @@
  */
 
 import { NeumaierSum } from '../../process/numerics';
+import type { ClassificationScope } from './ValidationReport';
 
 export interface XYZ {
   readonly x: number;
@@ -71,6 +72,19 @@ export interface SpatialBlockOptions {
   readonly bootstrapN?: number;
   /** Confidence level for the interval, 0..1. Default 0.95. */
   readonly ciLevel?: number;
+  /**
+   * Which ground classification the scored point set came from, echoed onto the
+   * result. Default `'whole-cloud'`.
+   *
+   * This module scores whatever points it is handed and cannot see where their
+   * ground membership came from, but a reader comparing this figure against a
+   * random hold-out needs to know whether the two share a treatment. Without it
+   * every consumer stated the SMRF case — random re-classifies on the training
+   * points, blocked keeps the whole-cloud mask — as though it were universal,
+   * which is false on the trusted-survey path where both use the same fixed
+   * source classification and no classifier runs at all.
+   */
+  readonly classificationScope?: ClassificationScope;
 }
 
 export interface SpatialBlockResult {
@@ -93,6 +107,13 @@ export interface SpatialBlockResult {
   readonly ciHigh: number;
   /** The CI level used (echoed for the report). */
   readonly ciLevel: number;
+  /**
+   * The ground classification the scored points came from. Compare against a
+   * {@link ValidationReport}'s own `classificationScope` before reading the two
+   * figures as a geometry contrast: when they differ, the contrast changes
+   * treatment as well as geometry.
+   */
+  readonly classificationScope: ClassificationScope;
   readonly warnings: readonly string[];
 }
 
@@ -288,6 +309,7 @@ export function spatialBlockHoldout(
 
   return {
     method: 'spatial-block-cv',
+    classificationScope: opts.classificationScope ?? 'whole-cloud',
     rmse,
     mae,
     n: residuals.length,
@@ -309,6 +331,7 @@ function degenerate(
 ): SpatialBlockResult {
   return {
     method: 'spatial-block-cv',
+    classificationScope: opts.classificationScope ?? 'whole-cloud',
     rmse: Number.NaN,
     mae: Number.NaN,
     n: 0,

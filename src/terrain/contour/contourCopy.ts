@@ -22,6 +22,7 @@
 
 import { EVIDENCE_THRESHOLDS, type ContourDisplayGrade } from '../ground/cellConfidence';
 import type { IntervalOption, IntervalGateResult } from './intervalGate';
+import type { ClassificationScope } from '../validate/ValidationReport';
 
 /** Plain-language names for the Analyse features. */
 export const ANALYSE_LABELS = {
@@ -85,25 +86,73 @@ export const METRIC_TOOLTIPS = {
 } as const;
 
 /**
- * What the spatially-blocked hold-out figure means beside the random one.
+ * What the spatially-blocked hold-out figure means beside the random one, for
+ * the treatments the two figures ACTUALLY ran under.
  *
- * The previous wording claimed the blocked pass predicts "across a real gap",
- * that it "runs larger" than the random hold-out, and that the random figure is
- * "optimistic". None of the three survives inspection. The withheld blocks are
- * data the scan HAS, not a gap it lacks. And the two passes do not differ only
- * in geometry: the random hold-out re-runs ground classification on the training
- * points alone, while the blocked pass scores against the whole-cloud
- * classification, so they estimate different quantities and their order is not
- * fixed. Naming both treatments is what lets a reader interpret the difference.
+ * Three claims were removed from the original wording. It said the blocked pass
+ * predicts "across a real gap" — the withheld blocks are data the scan has. It
+ * said the blocked figure "runs larger" — a tendency under spatial
+ * autocorrelation, not an identity, and not something this project measures. And
+ * it called the random figure "optimistic because withheld points sit among
+ * their neighbours", attributing the difference to geometry alone.
+ *
+ * The replacement then asserted the SMRF case for every scan: random
+ * re-classifies on the training points, blocked keeps the whole-cloud mask. That
+ * is false on the trusted-survey path, where both use the source's own class-2
+ * set and no classifier runs at all — so the text announced a treatment
+ * difference that did not exist, and hid that this path gives the CLEANER
+ * contrast of the two. The wording is now derived from the two scopes.
  */
-export const BLOCKED_RMSE_HINT =
-  'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks ' +
-  'withheld and scored on them, so it measures sensitivity to withholding ' +
-  'contiguous geometry rather than scattered points. Not a like-for-like ' +
-  'contrast with the random hold-out above — that figure re-runs ground ' +
-  'classification on the training points only, this one keeps the whole-cloud ' +
-  'classification, so the two estimate different quantities and either can be ' +
-  'the larger. Both are data-quality diagnostics, not field-checkpoint accuracy.';
+export function blockedRmseHint(
+  randomScope: ClassificationScope,
+  blockedScope: ClassificationScope,
+): string {
+  const base =
+    'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks '
+    + 'withheld and scored on them, so it measures sensitivity to withholding '
+    + 'contiguous geometry rather than scattered points. ';
+  const shared =
+    randomScope === blockedScope
+      ? randomScope === 'fixed-source-classification'
+        ? 'Both figures use the source ground classification, and no classifier is '
+          + 'run for either, so the contrast changes withholding geometry while '
+          + 'holding classification treatment fixed. '
+        : 'Both figures use the same ground classification, so the contrast changes '
+          + 'withholding geometry alone. '
+      : `The two are not like-for-like: the random hold-out uses ${scopeWords(randomScope)} `
+        + `and this pass uses ${scopeWords(blockedScope)}, so the contrast changes `
+        + 'classification treatment as well as geometry and either can be the larger. ';
+  return `${base}${shared}Both are data-quality diagnostics, not field-checkpoint accuracy.`;
+}
+
+/**
+ * The treatment-contrast sentence alone, for surfaces that supply their own
+ * surrounding prose (the PDF report). Same derivation as
+ * {@link blockedRmseHint}, so the screen and the document never describe one
+ * comparison two different ways.
+ */
+export function blockedTreatmentContrast(
+  randomScope: ClassificationScope,
+  blockedScope: ClassificationScope,
+): string {
+  if (randomScope === blockedScope) {
+    return randomScope === 'fixed-source-classification'
+      ? 'Both use the source ground classification and neither runs a classifier, so the '
+        + 'contrast changes withholding geometry while holding classification treatment fixed.'
+      : 'Both use the same ground classification, so the contrast changes withholding '
+        + 'geometry alone.';
+  }
+  return `The two are not like-for-like: the random hold-out uses ${scopeWords(randomScope)} `
+    + `and the blocked pass uses ${scopeWords(blockedScope)}, so they estimate different `
+    + 'quantities and neither is guaranteed the larger.';
+}
+
+/** Plain-language name for a classification treatment, for the hint above. */
+function scopeWords(scope: ClassificationScope): string {
+  if (scope === 'train-only') return 'ground re-classified on the training points only';
+  if (scope === 'fixed-source-classification') return 'the source ground classification';
+  return 'the whole-cloud ground classification';
+}
 
 /**
  * What each DISPLAY grade means, in plain words. The grade is a CONFIDENCE band

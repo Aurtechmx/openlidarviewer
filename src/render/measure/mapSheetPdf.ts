@@ -6,8 +6,13 @@
  * dashed where interpolated) over a clean sheet, wrapped in a cartographic
  * collar: a coordinate graticule with UTM-style tick labels, a round scale bar,
  * a north arrow, a legend that explains the line types, and a title block
- * carrying the CRS, vertical datum, map scale, date, and the validated ASPRS /
- * USGS 3DEP accuracy (NVA / VVA / Quality Level) with an honest readiness note.
+ * carrying the CRS, vertical datum, map scale, date, and the accuracy block with
+ * an honest readiness note. That block is NOT a standards determination: the NVA
+ * and VVA figures apply the ASPRS 2014 formulas to internally withheld ground
+ * points rather than independent survey checkpoints, and the density line names
+ * which USGS 3DEP nominal-pulse-density floor the measured GROUND-return density
+ * clears, as context. Calling it "validated ASPRS / USGS 3DEP accuracy" claimed
+ * a conformance assessment nothing here performs.
  *
  * Pure: pdf-lib only (no DOM / canvas), so it produces bytes anywhere and is
  * unit-testable. pdf-lib is imported here so the whole module lands in its own

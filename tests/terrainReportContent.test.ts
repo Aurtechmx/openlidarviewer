@@ -626,9 +626,15 @@ describe('buildTerrainReportContent — every row names its basis', () => {
 
   it('#4 bridges the random hold-out and the blocked spatial CV with their true parameters', () => {
     const base = readyResult();
+    // SMRF path: the two figures ran under DIFFERENT classifications, so the
+    // report must say the contrast is not like-for-like.
     const r = {
       ...base,
-      blockedAccuracy: { n: 4, rmse: 3.87, mae: 2.1, ciLow: 3.5, ciHigh: 4.2 },
+      validation: { ...base.validation, classificationScope: 'train-only' },
+      blockedAccuracy: {
+        n: 4, rmse: 3.87, mae: 2.1, ciLow: 3.5, ciHigh: 4.2,
+        classificationScope: 'whole-cloud',
+      },
     } as unknown as AnalyseContoursResult;
     const c = buildTerrainReportContent(r, OPTS);
     const v = rowValue(c, 'Quality Metrics', 'Accuracy bases') ?? '';
@@ -646,9 +652,28 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(v).not.toMatch(/extrapolation across held-out blocks/);
     expect(v).not.toMatch(/for map-scale use/);
     expect(v).toMatch(/not like-for-like/);
-    expect(v).toMatch(/re-classifies ground on the training points only/);
+    expect(v).toMatch(/ground re-classified on the training points only/);
+    expect(v).toMatch(/the whole-cloud ground classification/);
     expect(v).toMatch(/neither is guaranteed the larger/);
     expect(v).toMatch(/blocked 3\.87 m/);
+
+    // Trusted class-2 path: BOTH figures use the source classification and no
+    // classifier runs for either, so there is no treatment difference to report.
+    // The wording above was written for the SMRF case and stated for every scan,
+    // which told trusted-path readers about a difference that did not exist.
+    const trusted = {
+      ...base,
+      validation: { ...base.validation, classificationScope: 'fixed-source-classification' },
+      blockedAccuracy: {
+        n: 4, rmse: 3.87, mae: 2.1, ciLow: 3.5, ciHigh: 4.2,
+        classificationScope: 'fixed-source-classification',
+      },
+    } as unknown as AnalyseContoursResult;
+    const tv = rowValue(buildTerrainReportContent(trusted, OPTS), 'Quality Metrics', 'Accuracy bases') ?? '';
+    expect(tv, 'the trusted path was told it had a treatment difference')
+      .not.toMatch(/not like-for-like/);
+    expect(tv).toMatch(/neither runs a classifier/);
+    expect(tv).toMatch(/holding classification treatment fixed/);
   });
 
   it('#5 names the two density bases apart', () => {

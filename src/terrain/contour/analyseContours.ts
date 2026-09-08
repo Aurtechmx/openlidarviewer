@@ -384,7 +384,12 @@ export interface TerrainCore {
    */
   readonly unclassifiedFraction: number | null;
   readonly excludedByClassification: number;
-  /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
+  /**
+   * ASPRS-2014-style hold-out figures (NVA, VVA) plus the USGS 3DEP density
+   * REFERENCE. Not a standards determination: the formulas are applied to
+   * internally withheld ground points rather than independent checkpoints, and
+   * ground-return density is not nominal pulse density.
+   */
   readonly accuracyStandards: DemAccuracyStandards;
   /** Surface models: top-surface DSM, height-above-ground, slope, hillshade. */
   readonly surface: {
@@ -505,7 +510,12 @@ export interface AnalyseContoursResult {
   /** Passed through unchanged from `TerrainCore`. */
   readonly unclassifiedFraction: TerrainCore['unclassifiedFraction'];
   readonly excludedByClassification: number;
-  /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
+  /**
+   * ASPRS-2014-style hold-out figures (NVA, VVA) plus the USGS 3DEP density
+   * REFERENCE. Not a standards determination: the formulas are applied to
+   * internally withheld ground points rather than independent checkpoints, and
+   * ground-return density is not nominal pulse density.
+   */
   readonly accuracyStandards: DemAccuracyStandards;
   /** Surface models: top-surface DSM, height-above-ground, slope, hillshade. */
   readonly surface: {
@@ -1055,6 +1065,18 @@ export function computeTerrainCore(
         blockSize: dtm.cellSizeM * 8,
         folds: 4,
         seed: params.holdoutSeed ?? 1,
+        // The blocked pass scores against `gf.isGround`, whatever produced it.
+        // On the SMRF path that is the whole-cloud mask, so it differs from the
+        // random hold-out's train-only re-run. On the trusted path it is the
+        // source's own class-2 set — the SAME classification the random pass
+        // uses — so there both figures hold classification fixed and the
+        // contrast is geometry alone. Stating one of those two cases for both
+        // told trusted-path readers there was a treatment difference when there
+        // was none.
+        classificationScope:
+          reclassificationKind === 'fixed-source-classification'
+            ? 'fixed-source-classification'
+            : 'whole-cloud',
       });
       // Scale residual-derived figures from source vertical units to metres.
       blockedAccuracy = {

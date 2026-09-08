@@ -63,7 +63,7 @@ import {
   ANALYSE_LABELS,
   GRADE_MEANING,
   METRIC_TOOLTIPS,
-  BLOCKED_RMSE_HINT,
+  blockedRmseHint,
   NOT_SURVEY_GRADE,
   confidenceWord,
   describeIntervalOption,
@@ -2445,7 +2445,7 @@ export class AnalysePanel {
           className: 'olv-analyse-blocked',
           text: `Blocked RMSE: ${fmtR(blocked.rmse)} ${zUnit} (95% CI ${fmtR(blocked.ciLow)}–${fmtR(blocked.ciHigh)})`,
         }),
-        BLOCKED_RMSE_HINT,
+        blockedRmseHint(v.classificationScope, blocked.classificationScope),
       ));
     }
   }

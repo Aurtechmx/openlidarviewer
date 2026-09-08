@@ -49,7 +49,7 @@ import { recommendedWorkflows, type WorkflowItem } from '../contour/recommendedW
 import { terrainProducts } from '../contour/terrainProducts';
 import { explainLimitations } from '../contour/whyNotReasons';
 import type { DatasetIntelligence } from '../datasetIntelligence';
-import { METRIC_TOOLTIPS } from '../contour/contourCopy';
+import { METRIC_TOOLTIPS, blockedTreatmentContrast } from '../contour/contourCopy';
 import { horizontalUnitLabel } from '../../units/units';
 import { EVIDENCE_REGISTRY } from '../../validation/claimRegistry.generated';
 import { evidenceLabel, type EvidenceLevel } from '../../validation/evidenceLevel';
@@ -190,12 +190,16 @@ function productEvidence(label: string, provenance: ExportProvenance): string {
 const BLOCKED_CV_TEXT =
   '8-cell blocks, 4 folds, ground set strided to <= 20,000 points, skipped on grids over 250,000 cells';
 
-/** Format a metre value at 2 dp, or an em-dash when absent (never fabricated). */
-// KNOWN GAP: these vertical figures are stamped ' m' unconditionally, while
-// holdoutRmse scales residuals by 1 when the source Z unit is unresolved. The
-// honest suffix needs the vertical unit threaded onto every ExportProvenance
-// construction path, which this record does not yet carry — see
-// ExportProvenance.verticalUnitLabel, added for that purpose.
+/**
+ * Format a metre value at 2 dp, or an em-dash when absent (never fabricated).
+ *
+ * The ' m' suffix is unconditional here and that is now SOUND, where it used to
+ * be a documented gap. Every value this formats — `rmseZM`, `nvaM`, `vvaM`, and
+ * nothing else — is withheld as null by `analyseContours` unless the frame
+ * resolved a vertical scale, so an unresolved frame reaches this function with
+ * null and prints the dash. Keep that true: a caller that routes some other
+ * residual-derived figure through here reopens the gap.
+ */
 function fmtM(v: number | null | undefined): string {
   return v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : DASH;
 }
@@ -474,14 +478,27 @@ export function buildTerrainReportContent(
   // One line that says what each RMSE tests, so the two figures are never
   // read as competing estimates of the same thing. Parameters are the ones
   // analyseContours runs with (BLOCKED_CV_TEXT).
+  // The SAME two scopes the panel hint reads, so the PDF and the screen cannot
+  // describe one comparison two ways.
+  // Both scopes or neither. Defaulting a missing one would state a treatment
+  // contrast nothing established, which is the failure this whole line exists
+  // to avoid; an absent scope simply drops the sentence.
+  const randomScope = result.validation?.classificationScope;
+  const blockedScope = blk?.classificationScope;
+  const treatmentContrast =
+    randomScope != null && blockedScope != null
+      ? `${blockedTreatmentContrast(randomScope, blockedScope)} `
+      : '';
   const rmseText = hasAcc ? fmtM(provenance.accuracy?.rmseZM) : null;
   const accuracyBases =
     rmseText != null && rmseText !== DASH
       ? `Random hold-out RMSEz (${rmseText}) tests interpolation between neighbouring ground points and feeds NVA/VVA. ` +
         `Blocked spatial CV (${BLOCKED_CV_TEXT}) withholds whole blocks instead of scattered points. ` +
-        'The two are not like-for-like: the random pass re-classifies ground on the training ' +
-        'points only, the blocked pass keeps the whole-cloud classification, so they estimate ' +
-        'different quantities and neither is guaranteed the larger. ' +
+        // Derived from the two scopes, not asserted. Stating the SMRF case for
+        // every scan told trusted-survey readers there was a classification
+        // difference between the two figures when both use the source's own
+        // class-2 set and no classifier runs for either.
+        treatmentContrast +
         (hasBlk
           ? `Report both figures (blocked ${fmtZ(blk.rmse)}) with the treatment each one ran under; ` +
             'neither is a field-checkpoint accuracy.'

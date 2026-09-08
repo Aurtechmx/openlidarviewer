@@ -20,6 +20,7 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { analyseContours, type AnalyseContoursParams } from '../src/terrain/contour/analyseContours';
+import { blockedRmseHint } from '../src/terrain/contour/contourCopy';
 
 /** A gentle slope dense enough for the hold-out to produce a figure. */
 function slope(): Float32Array {
@@ -64,6 +65,47 @@ describe('the record says which classification actually ran', () => {
     expect(r.validation.sampleSize, 'the fixture must actually validate').toBeGreaterThan(0);
     expect(r.validation.classificationScope).toBe('fixed-source-classification');
     expect(r.validation.warnings.join(' ')).toMatch(/no classifier was re-run/i);
+  });
+
+  it('the blocked pass records the classification it actually scored against', () => {
+    // SMRF path: blocked scores against the whole-cloud mask while random
+    // re-classifies on the training points, so the two DO differ in treatment.
+    const { pts } = classifiedSlope();
+    const smrf = analyseContours(pts, {
+      ...BASE, horizontalUnitToMetres: 1, verticalUnitToMetres: 1,
+    });
+    expect(smrf.blockedAccuracy, 'the fixture must produce a blocked figure').not.toBeNull();
+    expect(smrf.validation.classificationScope).toBe('train-only');
+    expect(smrf.blockedAccuracy?.classificationScope).toBe('whole-cloud');
+
+    // Trusted path: blocked scores against the SAME trusted class-2 ground set
+    // the random pass uses, so there is no treatment difference at all. The
+    // wording asserted one, because it was written for the SMRF case and fixed.
+    const { pts: p2, cls } = classifiedSlope();
+    const trusted = analyseContours(p2, {
+      ...BASE,
+      horizontalUnitToMetres: 1,
+      verticalUnitToMetres: 1,
+      classification: cls,
+      trustGroundClassification: true,
+    });
+    expect(trusted.blockedAccuracy).not.toBeNull();
+    expect(trusted.validation.classificationScope).toBe('fixed-source-classification');
+    expect(trusted.blockedAccuracy?.classificationScope).toBe('fixed-source-classification');
+
+    // And the copy follows the scopes rather than restating one case.
+    const smrfHint = blockedRmseHint(
+      smrf.validation.classificationScope,
+      smrf.blockedAccuracy!.classificationScope,
+    );
+    expect(smrfHint).toMatch(/not like-for-like/);
+    const trustedHint = blockedRmseHint(
+      trusted.validation.classificationScope,
+      trusted.blockedAccuracy!.classificationScope,
+    );
+    expect(trustedHint, 'the trusted path was told it had a treatment difference')
+      .not.toMatch(/not like-for-like/);
+    expect(trustedHint).toMatch(/holding classification treatment fixed/);
   });
 
   it('still reports train-only when a classifier really is re-run', () => {
