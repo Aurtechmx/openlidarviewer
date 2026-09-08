@@ -13,12 +13,18 @@ The frozen validation snapshot under `validation/snapshot/` is the 0.6.2 validat
 
 ## Running the gate
 
+`scripts/gate.sh` has two modes and `OLV_GATE_MODE` selects them. Both write `release/gate.log` and end in a literal `GATE EXIT: <code>` line.
+
 ```
-npm run gate          # the whole battery, then a literal "GATE EXIT: <code>"
-npm run test:release:tag   # the gate plus the full Playwright suite; run before tagging
+npm run gate                          # development (the default): the static gate only
+OLV_GATE_MODE=release npm run gate    # every mandatory release stage
 ```
 
-`npm run gate` is the only command whose result should be quoted. It writes `release/gate.log`, prints its own exit status, and regenerates `docs/validation/test-evidence.json` from that log, but only when the run passed, so a failing gate cannot refresh the figures it failed to earn.
+Development mode runs the static gate and regenerates the committed `docs/validation/test-evidence.json`. Release mode runs the static gate and then deterministic e2e, the documentation build, the production audit, the fixture checksums and coverage; it writes `release/test-evidence-v0.6.8.json`, leaves every tracked file byte-identical, and is what `.github/workflows/release.yml` runs at the tag. Mutation stays on its own scheduled workflow unless `OLV_GATE_MUTATION=1`.
+
+The figures published for this release come from release mode. Development mode never runs coverage or e2e, so it cannot reproduce them.
+
+Only a gate run should be quoted, and only a passing one refreshes evidence, so a failing gate cannot refresh the figures it failed to earn. `npm run test:release:tag` is not a gate run: it chains the static stage and the full Playwright suite directly, printing no `GATE EXIT:` line, writing no `release/gate.log` and regenerating no evidence.
 
 Every test count in these documents is read out of that evidence file and checked by `npm run lint:evidence`. Do not type the numbers in.
 
@@ -38,7 +44,7 @@ git checkout v0.6.8
 nvm use                 # reads .nvmrc
 npm ci
 git diff --exit-code -- package-lock.json   # a clean install must not rewrite it
-npm run gate                                 # require the literal GATE EXIT: 0
+OLV_GATE_MODE=release npm run gate           # require the literal GATE EXIT: 0
 ```
 
 The runtime dependency set is unchanged from v0.6.6, the SBOM carries over, and `docs/project/DEPENDENCIES.md` records the re-verification for this release.
@@ -70,13 +76,14 @@ Test counts and the bundle size are not reproduced in this table. They live in `
 | Reported figure | Command |
 |---|---|
 | Per-bucket and total test counts | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded, so a run prints per-shard totals that sum to the recorded figures) |
-| Full gate `GATE EXIT: 0` | `npm run test:release` |
+| Full gate `GATE EXIT: 0` | `OLV_GATE_MODE=release npm run gate`. Only `scripts/gate.sh` writes that line; `npm run test:release` is the static stage it runs first and prints none. |
 | Deterministic e2e counts (blocking project) | `npm run test:e2e` |
 | GPU e2e (advisory project) | `npm run test:e2e:gpu` |
 | Live entry size against its ceiling | `npm run build:live && npm run check:bundle` |
 | Coverage | `npm run coverage` (also a blocking stage of the release-mode gate; read the current figures from the coverage stage of `release/gate.log`) |
 | Mutation score over the numeric core | `npm run mutation` |
 | Building ground-support gate evaluation | `npx tsx scripts/eval-building-gate.ts` (see `docs/validation/building-support-gate-eval.md`) |
+| Deploy-archive smoke (`smoke-deploy-v0.6.8.json`) | `npm run test:smoke:deploy -- <deploy zip>`, which serves the archive's own bytes |
 | Documentation build | `npm run docs:build` |
 | SBOM (CycloneDX, root `0.6.8`, production scope) | `npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json` |
 | Production dependency audit | `npm audit --omit dev` |

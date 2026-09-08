@@ -65,8 +65,13 @@ Everything happens on your machine; no data leaves the browser.
 ```bash
 git checkout v0.6.8
 nvm use && npm ci
-npm run gate
+OLV_GATE_MODE=release npm run gate
 ```
+
+That is the mode the published figures come from. Plain `npm run gate` is the
+development default: it runs the static gate only, so it is quicker but does not
+reproduce coverage or the e2e counts. Either way, read the verdict from the
+`GATE EXIT:` line.
 
 If you downloaded the release assets, check the set itself — this rebuilds
 nothing:
