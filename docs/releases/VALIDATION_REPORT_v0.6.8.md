@@ -24,9 +24,10 @@ changes a terrain number.
 
 The invariance gate is the load-bearing check here.
 
-The DTM method digests and the 255-file validation fingerprint are unchanged.
-That is what establishes that a release touching 568 files and 190 commits moved
-no surface, no contour and no derived raster. A gate that only ran the tests
+The DTM method digests are unchanged. That is what establishes that a release
+of this size moved no surface, no contour and no derived raster. The file and
+commit counts are deliberately not quoted here: they keep moving until the tag,
+and a number that is wrong on the day it is read is worse than no number. A gate that only ran the tests
 would not have shown it.
 
 ## What was tested for v0.6.8

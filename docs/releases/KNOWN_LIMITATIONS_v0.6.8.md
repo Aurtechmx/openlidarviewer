@@ -81,6 +81,13 @@ release. Both were green when this release was cut.
   the band sits about 0.21 to 0.55 m above the floor and traces skirting rather
   than wall. The plan and the report both state that the units are unverified;
   neither states that the extraction itself moved.
+- The grid and contour-interval recommender picks from metre ladders, but the
+  extent and relief it reads are in the source horizontal and vertical units.
+  On a foot-unit capture it therefore sizes the site about 3.3 times too large
+  and advises accordingly. The recommendation is advisory: nothing applies it,
+  and the DTM, the contours and every exported figure are computed from the
+  grid the user actually chooses, so no committed result depends on it. What a
+  reader of a non-metre scan sees is worse advice than a metre scan gets.
 
 Each would move a published verdict, so each is recorded here rather than
 changed under the freeze.

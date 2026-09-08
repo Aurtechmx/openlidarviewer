@@ -127,7 +127,12 @@ export function buildContourReviewSummary(
   rows.push({
     key: 'grid',
     label: 'Grid',
-    value: `${num(grid.cellSizeM)} m · recommended`,
+    // The cell size is in the SOURCE horizontal unit, which is not
+    // guaranteed to be metres. The Analyse panel labels the same value from
+    // the resolved CRS; this surface has no CRS context, so it names the
+    // basis instead of asserting one. A false ' m' here and an honest 'ft'
+    // there is the same number described two ways.
+    value: `${num(grid.cellSizeM)} · recommended (source horizontal unit)`,
     rationale: grid.reasons.length > 0 ? grid.reasons : ['Recommended from ground spacing and memory budget.'],
     confidence: 'high',
   });

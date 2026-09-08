@@ -66,7 +66,13 @@ describe('buildContourReviewSummary', () => {
   it('surfaces the grid recommendation with its engine rationale', () => {
     const s = buildContourReviewSummary(resultStub({ cellSizeM: 0.25, reasons: ['spacing rationale'] }), metreInput(AVAILABLE));
     const grid = s.rows.find((r) => r.key === 'grid')!;
-    expect(grid.value).toContain('0.25 m');
+    expect(grid.value).toContain('0.25');
+    // The cell size is in the SOURCE horizontal unit. This row asserted ' m'
+    // for every scan while the Analyse panel labelled the same value from the
+    // resolved CRS, so a foot capture read as feet in one surface and metres in
+    // the other. With no CRS context here, the row names its basis instead.
+    expect(grid.value).not.toMatch(/\d\s*m\b/);
+    expect(grid.value).toContain('source horizontal unit');
     expect(grid.rationale).toContain('spacing rationale');
   });
 
