@@ -78,9 +78,15 @@ export interface ZoneError {
  *    reconstructs a withheld point under DENSE sampling. It is NOT external
  *    accuracy and must not be printed as one.
  *  - `cell-reconstruction` — a whole cell's returns are withheld together.
- *  - `spatial-gap` — spatially-blocked hold-out: a whole region is withheld, so
- *    the estimate reflects performance in genuine gaps, not interpolation between
- *    dense neighbours.
+ *  - `spatial-gap` — spatially-blocked hold-out: complete blocks are assigned to
+ *    folds, which changes the spatial arrangement and the local availability of
+ *    training support. It does NOT guarantee a minimum separation: a scored
+ *    point beside a block boundary can lie arbitrarily close to a training point
+ *    in the neighbouring block, so the effective train-test distance varies
+ *    within a block and approaches zero at its edges. The contrast against a
+ *    random hold-out measures sensitivity to withholding geometry under the
+ *    stated protocol. Whether it reports a larger error is an empirical result
+ *    of a given run, not a property of the method.
  *  - `external-checkpoint` — residuals against INDEPENDENT survey checkpoints
  *    measured by a higher-accuracy method. Only this estimand may back an ASPRS
  *    conformance claim.
@@ -102,6 +108,22 @@ export interface ValidationReport {
    * `point-reconstruction` report is not external accuracy.
    */
   readonly estimand: HoldoutEstimand;
+  /**
+   * Which points the ground classification saw, for the surface this report
+   * scores. `'train-only'` means the classifier was re-run WITHOUT the held-out
+   * points, so the estimand is split-then-classify-then-fit.
+   * `'whole-cloud'` means the classification already covered every point, so it
+   * is classify-then-split-then-fit and the held-out points influenced the mask
+   * that defines ground.
+   *
+   * Recorded for the same reason {@link HoldoutEstimand} is a closed union: a
+   * caller that requested train-only reclassification and hit a failed or empty
+   * reclassifier previously received a full-cloud figure with a warning
+   * appended, and a warning string does not stop a panel or a paper quoting the
+   * number as though the requested treatment had run. Two reports may only be
+   * compared as a geometry contrast when this field agrees.
+   */
+  readonly classificationScope: 'whole-cloud' | 'train-only';
   /** Root-mean-square vertical residual across all covered held-out points. */
   readonly rmse: number;
   /** Mean absolute residual. */

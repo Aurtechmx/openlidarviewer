@@ -81,7 +81,9 @@
 #     claims to E4; all remaining reference slots are pending, each awaiting a
 #     real PDAL/GDAL/CloudCompare reference committed.
 #   - Honest estimators: src/terrain/validate/spatialBlockHoldout.ts
-#     (spatially-blocked hold-out, less optimistic than random point hold-out,
+#     (spatially-blocked hold-out, which withholds whole blocks rather than
+#     scattered points and so measures sensitivity to withholding geometry;
+#     whether it reports a larger error is an empirical result, not a property,
 #     with a bootstrap CI) and src/terrain/validate/reliabilitySplit.ts
 #     (measured-cell empirical reliability + Wilson CI, kept distinct from
 #     interpolated model-based support).

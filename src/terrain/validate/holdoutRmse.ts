@@ -218,6 +218,11 @@ export function holdoutValidateDtm(
   // leak, not a reworded warning. Otherwise keep the full-cloud train set and
   // re-state the documented limitation.
   let fitTrain: TerrainPoint[] = train;
+  // Set to 'train-only' ONLY where the reclassifier actually produced the mask
+  // the surface was fitted from. Both failure paths below leave it at
+  // 'whole-cloud', so a report can never say the requested treatment ran when
+  // it did not — the warning strings alone did not stop that.
+  let classificationScope: 'whole-cloud' | 'train-only' = 'whole-cloud';
   if (params.reclassifyGround) {
     const isHeldOut = new Uint8Array(points.length);
     for (const idx of testIdx) isHeldOut[idx] = 1;
@@ -249,6 +254,7 @@ export function holdoutValidateDtm(
           FULL_CLOUD_CLASSIFICATION_WARNING,
         );
       } else {
+        classificationScope = 'train-only';
         fitTrain = reTrain;
         warnings.push(
           'ground classification re-run on training points only (held-out points excluded from the classifier); surface-fit classification leak removed',
@@ -495,6 +501,7 @@ export function holdoutValidateDtm(
     // this estimates local reconstruction under dense sampling, never external
     // checkpoint accuracy. Typed so no consumer can relabel it.
     estimand: 'point-reconstruction',
+    classificationScope,
     rmse,
     mae,
     p95,
@@ -530,6 +537,8 @@ function normalizedMedianAbsDeviation(values: readonly number[]): number {
 function emptyReport(holdoutFraction: number, warnings: string[]): ValidationReport {
   return {
     estimand: 'point-reconstruction',
+    // Nothing was fitted, so no train-only classification ran.
+    classificationScope: 'whole-cloud',
     rmse: Number.NaN,
     mae: Number.NaN,
     p95: Number.NaN,

@@ -466,7 +466,9 @@ export interface AnalyseContoursResult {
    *  support, at τ = the calibration tolerance. Null when unstated. */
   readonly reliabilitySplit: ReliabilitySplit | null;
   /** Spatially-blocked hold-out RMSE (metres) + bootstrap CI, or null when
-   *  skipped. A less optimistic accuracy estimate than the random hold-out. */
+   *  skipped. Withholds whole blocks rather than scattered points, so it
+   *  measures sensitivity to withholding geometry; a larger figure than the
+   *  random hold-out is a result of a given run, not a guarantee. */
   readonly blockedAccuracy: SpatialBlockResult | null;
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
@@ -990,8 +992,9 @@ export function computeTerrainCore(
         )
       : null;
 
-  // Spatially-blocked hold-out — a less optimistic accuracy estimate that
-  // predicts across whole withheld blocks (see spatialBlockHoldout). It costs k
+  // Spatially-blocked hold-out — withholds whole blocks rather than scattered
+  // points (see spatialBlockHoldout), so it measures sensitivity to withholding
+  // geometry rather than guaranteeing any separation. It costs k
   // DTM rebuilds, so it is bounded: skipped on grids over CELL_CAP cells, and
   // the ground set is strided to POINT_CAP points. Diagnostic only; reported in
   // metres. Null when skipped or when there aren't enough blocks to split.

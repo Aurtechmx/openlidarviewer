@@ -128,3 +128,42 @@ describe('detectChange — co-registration honesty', () => {
     expect(detectChange(grid(3, 3, 1, 0), grid(3, 3, 1, 1)).aligned).toBe(true);
   });
 });
+
+// ── Absence of evidence is not measured zero ────────────────────────────────
+// With no cell populated in both epochs the derived statistics were 0: net
+// change 0, mean |change| 0, significant fraction 0%. Those read as "we
+// measured no change" when the truth is "no comparison was possible". Counts
+// stay 0 because they are genuinely zero counts.
+describe('no comparable cells yields no estimate, not zero', () => {
+  const disjoint = () => {
+    // Two 2x2 grids whose populated cells never coincide.
+    const a = { width: 2, height: 2, cellSizeM: 1, values: Float32Array.from([1, NaN, NaN, NaN]) };
+    const b = { width: 2, height: 2, cellSizeM: 1, values: Float32Array.from([NaN, 1, NaN, NaN]) };
+    return detectChange(a, b, { levelOfDetectionM: 0.1 });
+  };
+
+  it('reports zero comparable cells', () => {
+    expect(disjoint().stats.comparable).toBe(0);
+  });
+
+  it('leaves every derived quantity undefined rather than zero', () => {
+    const s = disjoint().stats;
+    for (const [name, v] of Object.entries({
+      significantFraction: s.significantFraction,
+      areaAboveLoDFraction: s.areaAboveLoDFraction,
+      meanAbsChangeM: s.meanAbsChangeM,
+      netVolumeM3: s.netVolumeM3,
+      rawNetVolumeM3: s.rawNetVolumeM3,
+      gainVolumeM3: s.gainVolumeM3,
+      lossVolumeM3: s.lossVolumeM3,
+    })) {
+      expect(Number.isNaN(v), `${name} is ${v}, which reads as a measured zero`).toBe(true);
+    }
+  });
+
+  it('keeps the counts at zero, because those really are zero', () => {
+    const s = disjoint().stats;
+    expect(s.gained).toBe(0);
+    expect(s.lost).toBe(0);
+  });
+});

@@ -260,5 +260,27 @@ describe('holdoutValidateDtm — train-only reclassification (classify-before-sp
     });
     expect(r.warnings.some((w) => /invalid mask/i.test(w))).toBe(true);
     expect(r.warnings.some((w) => /classification used the full cloud/i.test(w))).toBe(true);
+    // A warning does not stop a caller quoting the number. The RECORD must say
+    // which treatment produced it: train-only was requested and whole-cloud ran.
+    expect(r.classificationScope).toBe('whole-cloud');
+  });
+
+  it('reports train-only scope only when the reclassifier actually produced the mask', () => {
+    const { points, isGround } = leakScenario();
+    const succeeded = holdoutValidateDtm(points, isGround, {
+      cellSizeM: 1, holdoutFraction: 0.3, seed: 5, reclassifyGround: leakClassifier,
+    });
+    expect(succeeded.classificationScope).toBe('train-only');
+
+    // An empty reclassification is the other silent substitution: the surface
+    // is fitted from the whole cloud, and the report says so.
+    const empty = holdoutValidateDtm(points, isGround, {
+      cellSizeM: 1,
+      holdoutFraction: 0.3,
+      seed: 5,
+      reclassifyGround: (p) => new Uint8Array(p.length),
+    });
+    expect(empty.classificationScope).toBe('whole-cloud');
+    expect(empty.warnings.some((w) => /no ground points/i.test(w))).toBe(true);
   });
 });

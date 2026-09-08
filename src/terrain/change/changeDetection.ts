@@ -215,22 +215,31 @@ export function detectChange(
   }
 
   const unchanged = comparable - gained - lost;
+  // With nothing comparable there is no estimate, and zero is the one value a
+  // reader will mistake for one. Every derived quantity below is NaN in that
+  // case — the same convention ValidationReport already uses for a statistic
+  // with no sample. The COUNTS stay 0 because they are genuinely zero counts:
+  // no cell gained, no cell was compared. The volumes and the means are not
+  // zero change; they are undefined because no comparison was possible.
+  const noSample = comparable === 0;
+  const perComparable = (total: number): number => (noSample ? Number.NaN : total / comparable);
+  const volume = (v: number): number => (noSample ? Number.NaN : v);
   const stats: ChangeStats = {
     cells: W * H,
     comparable,
     gained,
     lost,
     unchanged,
-    significantFraction: comparable > 0 ? (gained + lost) / comparable : 0,
-    gainVolumeM3,
-    lossVolumeM3,
-    netVolumeM3: gainVolumeM3 - lossVolumeM3,
-    rawNetVolumeM3,
-    detectableGainVolumeM3: gainVolumeM3,
-    detectableLossVolumeM3: lossVolumeM3,
-    detectableNetVolumeM3: gainVolumeM3 - lossVolumeM3,
-    areaAboveLoDFraction: comparable > 0 ? (gained + lost) / comparable : 0,
-    meanAbsChangeM: comparable > 0 ? absSum / comparable : 0,
+    significantFraction: perComparable(gained + lost),
+    gainVolumeM3: volume(gainVolumeM3),
+    lossVolumeM3: volume(lossVolumeM3),
+    netVolumeM3: volume(gainVolumeM3 - lossVolumeM3),
+    rawNetVolumeM3: volume(rawNetVolumeM3),
+    detectableGainVolumeM3: volume(gainVolumeM3),
+    detectableLossVolumeM3: volume(lossVolumeM3),
+    detectableNetVolumeM3: volume(gainVolumeM3 - lossVolumeM3),
+    areaAboveLoDFraction: perComparable(gained + lost),
+    meanAbsChangeM: perComparable(absSum),
     maxGainM,
     maxLossM,
   };

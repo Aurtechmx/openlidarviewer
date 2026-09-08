@@ -6,9 +6,13 @@
  * randomly withheld point is surrounded by training points from the same cell,
  * so the surface predicts it almost for free. The reported RMSE is optimistic
  * relative to how the DTM performs over a region with no nearby ground truth
- * (a real gap, a void, an unscanned strip).
+ * (a void, an unscanned strip).
  *
- * Spatial-block cross-validation removes that leakage: it partitions the extent
+ * Spatial-block cross-validation changes that support pattern rather than
+ * eliminating it: withholding whole blocks removes a block's own returns, but a
+ * point near a block edge still has training returns just across the boundary,
+ * so the effective separation varies within a block and approaches zero at its
+ * edges. It partitions the extent
  * into blocks, withholds WHOLE blocks, and scores the held-out block from a
  * surface trained only on the other blocks. The model must then predict across
  * a gap the size of a block, which is the case a user actually cares about.
