@@ -282,8 +282,13 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     const hM = ctx.horizontalUnitToMetres;
     if (hM && hM > 0) {
       const u = changeVolumeUncertainty({
-        netVolumeM3: s.netVolumeM3,
-        significantCells: s.gained + s.lost,
+        // The band must qualify the figure the line above REPORTS, which is
+        // the raw net over every comparable cell. It qualified the thresholded
+        // net over above-LoD cells only: a different estimand, and one whose
+        // count is zero whenever every cell changes below the level of
+        // detection, collapsing the band while the reported net is non-zero.
+        netVolumeM3: s.rawNetVolumeM3,
+        contributingCells: s.comparable,
         cellAreaM2: (result.cellSizeM * hM) * (result.cellSizeM * hM),
         cellSigmaM: cellSigmaFromLoD(comparison.levelOfDetectionM),
         registrationSigmaM: ctx.registrationSigmaM ?? 0,

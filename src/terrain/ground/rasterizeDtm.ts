@@ -129,6 +129,17 @@ export function rasterizeDtm(
     aggregation === 'median' || aggregation === 'percentile' || aggregation === 'robust';
   const percentile = aggregation === 'percentile' ? clampUnit(params.percentile ?? 0.5) : 0.5;
 
+  // A mask shorter than the point list reads `undefined` past its end, and
+  // `undefined !== 1` skips silently — so a 50,000-element mask over 100,000
+  // points drops half the cloud from the surface and reports nothing. The
+  // caller and the point list must agree on how many points there are.
+  if (isGround.length !== points.length) {
+    throw new RangeError(
+      `rasterizeDtm: ground mask has ${isGround.length} entries for ${points.length} points. `
+      + 'A shorter mask silently excludes every point past its end.',
+    );
+  }
+
   // Collect the ground returns (finite only).
   const gx: number[] = [];
   const gy: number[] = [];

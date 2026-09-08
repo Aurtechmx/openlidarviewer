@@ -237,3 +237,29 @@ describe('rasterizeDtm — robust cell aggregation', () => {
     }
   });
 });
+
+// ── The ground mask must cover the point list ───────────────────────────────
+// `isGround[i] !== 1` skips, and reading past the end of a short mask yields
+// `undefined`, which is also `!== 1`. So a mask shorter than the point list
+// silently excluded every point past its end — 50,000 entries over 100,000
+// points dropped half the cloud from the surface and reported nothing.
+describe('rasterizeDtm refuses a mask that does not cover the points', () => {
+  const pts = [
+    { x: 0, y: 0, z: 1 }, { x: 1, y: 0, z: 1 },
+    { x: 0, y: 1, z: 1 }, { x: 1, y: 1, z: 1 },
+  ];
+
+  it('throws when the mask is shorter than the point list', () => {
+    expect(() => rasterizeDtm(pts, new Uint8Array([1, 1]), { cellSizeM: 1 }))
+      .toThrow(/ground mask has 2 entries for 4 points/);
+  });
+
+  it('throws when the mask is longer, which is the same disagreement', () => {
+    expect(() => rasterizeDtm(pts, new Uint8Array(8).fill(1), { cellSizeM: 1 }))
+      .toThrow(/ground mask has 8 entries for 4 points/);
+  });
+
+  it('accepts a matching mask, so the guard is not blanket', () => {
+    expect(() => rasterizeDtm(pts, new Uint8Array(4).fill(1), { cellSizeM: 1 })).not.toThrow();
+  });
+});

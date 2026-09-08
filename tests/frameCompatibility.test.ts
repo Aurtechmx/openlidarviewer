@@ -258,10 +258,30 @@ describe('epochVerticalScalesComparable', () => {
     expect(epochVerticalScalesComparable(withVertical(0.3048), withVertical(1))).toBe(false);
   });
 
-  it('permits when either vertical scale is unknown (no evidence of a mismatch)', () => {
-    // A plain UTM context carries no known vertical scale.
+  it('permits when the EFFECTIVE scales agree, declared or inherited', () => {
+    // A plain metre UTM context declares no separate vertical unit, so Z rides
+    // the horizontal one: its effective vertical scale is 1, the same as an
+    // explicitly declared metre vertical.
     expect(epochVerticalScalesComparable(metreUtm(), withVertical(1))).toBe(true);
-    expect(epochVerticalScalesComparable(withVertical(0.3048), metreUtm())).toBe(true);
     expect(epochVerticalScalesComparable(metreUtm(), metreUtm())).toBe(true);
+  });
+
+  it('REFUSES a declared foot vertical against a metre CRS that declares none', () => {
+    // This returned true while the check read `verticalScaleKnown` instead of
+    // the effective scale: absence of a SEPARATE vertical unit was treated as
+    // no evidence, when for a single-unit CRS it is positive evidence that Z is
+    // in the horizontal unit. 100 ft and the physically identical 30.48 m then
+    // differenced to a 21 m change instead of zero.
+    expect(epochVerticalScalesComparable(withVertical(0.3048), metreUtm())).toBe(false);
+    expect(epochVerticalScalesComparable(metreUtm(), withVertical(0.3048))).toBe(false);
+  });
+
+  it('still permits when a scale is genuinely unknown on either side', () => {
+    // No CRS at all: neither a declared vertical unit nor a known horizontal
+    // one, so there is no evidence of a mismatch and the shared-factor path
+    // stands, exactly as before.
+    const noCrs = spatialContextFrom(null);
+    expect(epochVerticalScalesComparable(noCrs, withVertical(0.3048))).toBe(true);
+    expect(epochVerticalScalesComparable(withVertical(1), noCrs)).toBe(true);
   });
 });

@@ -28,6 +28,7 @@
 
 import { resolveVerticalEpsg } from './height';
 import type { SpatialContext } from './SpatialContext';
+import { verticalMetresPerUnit } from './SpatialContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The verdict
@@ -332,18 +333,28 @@ export function epochFrameOptions(
  *
  * The change pipeline computes `(afterZ - beforeZ) * verticalUnitToMetres` with
  * a SINGLE factor — valid only when both epochs share the vertical scale. If
- * both declare a vertical unit and they differ (metres vs feet), subtracting
- * the raw source-unit Z values before normalising is meaningless, so the caller
- * must refuse rather than report a wrong elevation change. When either scale is
- * unknown there is no evidence of a mismatch, so the shared-factor path stands.
+ * the two differ (metres vs feet), subtracting the raw source-unit Z values
+ * before normalising is meaningless, so the caller must refuse rather than
+ * report a wrong elevation change.
+ *
+ * The scale compared is the EFFECTIVE one, via
+ * {@link verticalMetresPerUnit}(`'horizontal-when-known'`): a declared vertical
+ * unit when there is one, otherwise the horizontal unit when THAT is known,
+ * because a single-unit CRS puts Z on the horizontal unit. This read its own
+ * `verticalScaleKnown` flags instead and returned true whenever either epoch
+ * declared no SEPARATE vertical unit — so a foot-vertical epoch differenced
+ * against a plain metre UTM epoch was permitted, and 100 ft against the
+ * physically identical 30.48 m reported a 21 m change instead of zero.
+ *
+ * Genuinely unknown on either side still permits: there is no evidence of a
+ * mismatch, so the shared-factor path stands as before.
  */
 export function epochVerticalScalesComparable(
   before: SpatialContext,
   after: SpatialContext,
 ): boolean {
-  if (!before.verticalScaleKnown || !after.verticalScaleKnown) return true;
-  const vb = before.verticalUnitToMetres;
-  const va = after.verticalUnitToMetres;
+  const vb = verticalMetresPerUnit(before, 'horizontal-when-known');
+  const va = verticalMetresPerUnit(after, 'horizontal-when-known');
   if (vb === undefined || va === undefined) return true;
   return Math.abs(vb - va) <= 1e-9 * Math.max(vb, va);
 }

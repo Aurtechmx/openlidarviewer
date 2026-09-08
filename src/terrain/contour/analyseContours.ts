@@ -418,7 +418,8 @@ export interface TerrainCore {
   readonly interpolation: 'idw' | 'geodesic';
   /** Per-cell aggregation the live + hold-out DTM rasters used (provenance). */
   readonly aggregation: DtmAggregation;
-  /** True when the blunder-only despike pass ran (always true today). */
+  /** True when the blunder-only despike pass ran. The trusted authoritative-
+   *  classification path deliberately skips it, so this is not always true. */
   readonly despikeApplied: boolean;
   /** Resolved horizontal CRS (echoed for the contour stage + result). */
   readonly crs: string | null;

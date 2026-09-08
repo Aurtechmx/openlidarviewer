@@ -216,6 +216,13 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
       cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
         ? cloud.linearUnitToMetres
         : 1,
+    // The SAME factor the ground-filter thresholds above are scaled by. It was
+    // omitted here, so a compound frame (metre horizontal, foot vertical)
+    // classified correctly and then despiked and scored on the wrong scale:
+    // despike's 0.30 m blunder floor became 0.30 FEET (~0.091 m) and removed
+    // real sub-30 cm relief, and cell confidence read its roughness rise in
+    // source units. Both consumers are inside buildSurfaceFromRaster.
+    verticalUnitToMetres: vertToMetres,
   }).dtm;
 }
 
