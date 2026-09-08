@@ -53,6 +53,25 @@ BASE_URL = ("https://rockyweb.usgs.gov/vdelivery/Datasets/Staged/Elevation/LPC/"
             "Projects/AZ_Coconino_2019_B19/AZ_Coconino_B1_2019/LAZ/")
 TILE_FILE = "USGS_LPC_AZ_Coconino_2019_B19_{tile}.laz"
 
+REGISTER = ROOT / "docs/validation/claim-register.yaml"
+
+
+def dtm_level():
+    """The DTM claim's CURRENT evidence level, read from the claim register.
+
+    Hard-coding it is what let this study ship "DTM stays E3" through the
+    v0.6.6 promotion to E4. A one-line scan beats a YAML dependency here: the
+    register is a flat list and the DTM block is the only one under that id.
+    """
+    lines = REGISTER.read_text().split("\n")
+    for i, line in enumerate(lines):
+        if line.strip().lstrip("- ").strip() == "claimId: DTM":
+            for j in range(i, min(i + 12, len(lines))):
+                if "currentEvidence:" in lines[j]:
+                    return lines[j].split("currentEvidence:")[1].strip()
+    raise SystemExit("claim-register.yaml has no DTM currentEvidence; refusing to guess")
+
+
 F7_MIN_TOTAL = 40
 F7_MIN_PER_STRATUM = 12
 F10_REASON = (
@@ -154,6 +173,12 @@ def rebuild_universe(cached_tiles):
     nva = sum(1 for c in matched if c["type"] == "NVA")
     vva = n - nva
 
+    # CANDIDATE coverage, not the accuracy sample. A matched checkpoint whose
+    # DTM cell holds no classified ground is rejected downstream, so the
+    # evaluated sample is smaller than this and can fail F7 while the candidate
+    # universe passes it. tests/coconinoArtifacts.test.ts evaluates the gate that
+    # governs the reported statistics, on the usable subset; this one only says
+    # whether enough tiles have been downloaded to make that sample possible.
     f7_met = n >= F7_MIN_TOTAL and nva >= F7_MIN_PER_STRATUM and vva >= F7_MIN_PER_STRATUM
     reasons = [F10_REASON] + ([] if f7_met else [f7_reason(n, nva, vva)])
 
@@ -171,7 +196,13 @@ def rebuild_universe(cached_tiles):
     # fails while they and this universe disagree.
     prev.pop("metrics", None)
     prev["evidenceDetermination"] = {
-        "achievedLevel": prev["evidenceDetermination"]["achievedLevel"],
+        # Read from the claim register rather than carried forward: this field
+        # said "E3_SYNTHETICALLY_VALIDATED (unchanged)" for a DTM the register
+        # promoted to E4 in v0.6.6, so the study contradicted the ladder it
+        # cited. What Coconino adds is external checkpoint agreement BELOW the
+        # grade line; it moves nothing on its own.
+        "achievedLevel": (f"{dtm_level()} (unchanged by this study); Coconino is recorded as "
+                          "EXTERNAL CHECKPOINT AGREEMENT below the grade line"),
         "e5Reached": False,  # F10 unmet; found checkpoints cannot preregister
         "limitingReasons": reasons,
         "confounders": {"sharedSolutionWithReference": False, "checkpointLeakage": False},
@@ -183,9 +214,11 @@ def rebuild_universe(cached_tiles):
                        f"({nva} NVA, {vva} VVA) inside the downloaded tiles. "
                        + ("F7 sample size met; " if f7_met else "F7 not yet met; ")
                        + "E5 still blocked by F10 (found checkpoints cannot be preregistered). "
-                       "DTM stays E3 pending the tier decision. The residual metrics, and the "
-                       "usable subset they are computed over, are in coconino-metrics.json; "
-                       "per-checkpoint eligibility is in coconino-eligibility.json."),
+                       f"The DTM claim stays at its registered {dtm_level()}; this study adds "
+                       "external checkpoint agreement and promotes nothing. The residual metrics, "
+                       "and the usable subset they are computed over, are in "
+                       "coconino-metrics.json; per-checkpoint eligibility is in "
+                       "coconino-eligibility.json."),
     }
     UNIVERSE.write_text(json.dumps(prev, indent=1) + "\n")
     return n, nva, vva, f7_met

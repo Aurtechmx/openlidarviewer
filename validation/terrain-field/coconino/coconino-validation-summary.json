@@ -14,7 +14,7 @@
  "matchRule": "A checkpoint is IN the universe iff its Albers (E,N) falls inside a downloaded tile's header bounds. Membership frozen here, before any residual is computed. No checkpoint removed for a large error.",
  "inputUniverse": {
   "file": "validation/terrain-field/coconino/input-universe.json",
-  "sha256": "460344abce8dbb7b154f2b5f1589bafa8bd9209c029348fdef80b021e1e3a557",
+  "sha256": "d20e2bc59bb54e8fbc204b1bac5b1bed98f4040b61c323d7665f60b8e5071d50",
   "downloadedTileCount": 57,
   "matchedCheckpointCount": 60,
   "matchedNVA": 38,
@@ -67,7 +67,20 @@
   },
   "candidate": 60,
   "usable": 58,
-  "rejected": 2
+  "rejected": 2,
+  "coverage": {
+   "overall": 0.9667,
+   "NVA": 1,
+   "VVA": 0.9091
+  }
+ },
+ "sampleSizeGate": {
+  "basis": "USGS/NDEP: at least 20 NVA and at least 12 per stratum for a formal vertical-accuracy statement. Evaluated on the USABLE subset, which is the sample the statistics are computed over, not on the matched candidates. The candidate universe can clear the gate while the evaluated sample does not, because a checkpoint with no ground in its cell is rejected after membership is fixed.",
+  "minNVA": 20,
+  "minPerStratum": 12,
+  "usableNVA": 38,
+  "usableVVA": 20,
+  "met": true
  },
  "accuracyStatement": {
   "basis": "USGS/NDEP-ASPRS vertical accuracy. NVA at the 95% confidence level (1.96 x RMSEz, errors approximately Gaussian on open ground); VVA at the 95th percentile, which by definition tolerates the top 5% of vegetated returns as a non-Gaussian tail.",
@@ -90,7 +103,7 @@
   "note": "NVA/VVA accuracy checkpoints held separate from the 12 LiDAR Control Points; the DTM was produced by the unchanged production terrain path with no reference to these checkpoints."
  },
  "evidenceDetermination": {
-  "achievedLevel": "E3_SYNTHETICALLY_VALIDATED (unchanged); recorded as strong EXTERNAL CHECKPOINT AGREEMENT below the grade line",
+  "achievedLevel": "E4_CROSS_IMPLEMENTATION_VALIDATED (unchanged by this study); Coconino is recorded as EXTERNAL CHECKPOINT AGREEMENT below the grade line",
   "e5Reached": false,
   "limitingReasons": [
    "PREREGISTRATION (verify-field-study F10): the USGS Coconino survey is 2019; an OLV protocol registers 2026, so registeredAt > fieldwork.startedAt. Found third-party checkpoints cannot satisfy the repo's E5 preregistration bar, which requires the checkpoint survey to be frozen against the protocol before fieldwork."
@@ -99,6 +112,6 @@
    "sharedSolutionWithReference": false,
    "checkpointLeakage": false
   },
-  "conclusion": "Frozen universe of 60 independent USGS checkpoints (38 NVA, 22 VVA) inside the downloaded tiles. F7 sample size met; E5 still blocked by F10 (found checkpoints cannot be preregistered). DTM stays E3 pending the tier decision. The residual metrics, and the usable subset they are computed over, are in coconino-metrics.json; per-checkpoint eligibility is in coconino-eligibility.json."
+  "conclusion": "Frozen universe of 60 independent USGS checkpoints (38 NVA, 22 VVA) inside the downloaded tiles. F7 sample size met; E5 still blocked by F10 (found checkpoints cannot be preregistered). The DTM claim stays at its registered E4_CROSS_IMPLEMENTATION_VALIDATED; this study adds external checkpoint agreement and promotes nothing. The residual metrics, and the usable subset they are computed over, are in coconino-metrics.json; per-checkpoint eligibility is in coconino-eligibility.json."
  }
 }

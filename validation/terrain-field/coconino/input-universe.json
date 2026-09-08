@@ -1479,7 +1479,7 @@
   "note": "NVA/VVA accuracy checkpoints held separate from the 12 LiDAR Control Points; the DTM was produced by the unchanged production terrain path with no reference to these checkpoints."
  },
  "evidenceDetermination": {
-  "achievedLevel": "E3_SYNTHETICALLY_VALIDATED (unchanged); recorded as strong EXTERNAL CHECKPOINT AGREEMENT below the grade line",
+  "achievedLevel": "E4_CROSS_IMPLEMENTATION_VALIDATED (unchanged by this study); Coconino is recorded as EXTERNAL CHECKPOINT AGREEMENT below the grade line",
   "e5Reached": false,
   "limitingReasons": [
    "PREREGISTRATION (verify-field-study F10): the USGS Coconino survey is 2019; an OLV protocol registers 2026, so registeredAt > fieldwork.startedAt. Found third-party checkpoints cannot satisfy the repo's E5 preregistration bar, which requires the checkpoint survey to be frozen against the protocol before fieldwork."
@@ -1488,6 +1488,6 @@
    "sharedSolutionWithReference": false,
    "checkpointLeakage": false
   },
-  "conclusion": "Frozen universe of 60 independent USGS checkpoints (38 NVA, 22 VVA) inside the downloaded tiles. F7 sample size met; E5 still blocked by F10 (found checkpoints cannot be preregistered). DTM stays E3 pending the tier decision. The residual metrics, and the usable subset they are computed over, are in coconino-metrics.json; per-checkpoint eligibility is in coconino-eligibility.json."
+  "conclusion": "Frozen universe of 60 independent USGS checkpoints (38 NVA, 22 VVA) inside the downloaded tiles. F7 sample size met; E5 still blocked by F10 (found checkpoints cannot be preregistered). The DTM claim stays at its registered E4_CROSS_IMPLEMENTATION_VALIDATED; this study adds external checkpoint agreement and promotes nothing. The residual metrics, and the usable subset they are computed over, are in coconino-metrics.json; per-checkpoint eligibility is in coconino-eligibility.json."
  }
 }

@@ -25,8 +25,11 @@
  *
  * A record is DATA, passed to {@link resolveEvidence}; the resolver never reads
  * files. The shipped runtime record set {@link SCOPED_EVIDENCE_RECORDS} is EMPTY:
- * no real field study exists yet, so no committed record may raise any real
- * artifact above its baseline. Records are only ever created after a real, frozen
+ * no E5-qualified scoped study is registered yet, so no committed record may
+ * raise any real artifact above its baseline. Real external checkpoint studies
+ * DO exist under `validation/terrain-field/` (Marsh Island, Coconino); none was
+ * preregistered against a protocol frozen before its survey, which is what the
+ * E5 bar asks for, so none of them mints a record here. Records are only ever created after a real, frozen
  * study, and any file committed under `validation/evidence/scoped/` before then is
  * an `EXAMPLE-` template that is structurally incapable of matching a real
  * artifact.

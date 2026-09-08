@@ -34,5 +34,10 @@
  },
  "candidate": 60,
  "usable": 58,
- "rejected": 2
+ "rejected": 2,
+ "coverage": {
+  "overall": 0.9667,
+  "NVA": 1,
+  "VVA": 0.9091
+ }
 }

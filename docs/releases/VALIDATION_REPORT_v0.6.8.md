@@ -53,8 +53,14 @@ is a fact about this commit and not a guarantee the gate enforces.
 
 ## What was NOT tested, and is not claimed
 
-- No field accuracy result. No product is at E5, and the Rogue holdout has not
-  been run.
+- No field accuracy result that promotes a product. External checkpoint results
+  against surveyed ground do exist and ship with the release: Marsh Island, 101
+  usable RTK check shots at 2.8 cm RMSE, and Coconino, 58 usable independent
+  USGS checkpoints at 11.11 cm pooled RMSEz, each with its metrics and its
+  per-checkpoint eligibility record. Neither promotes a claim. Marsh Island is
+  capped by the shared-solution confounder, and Coconino uses found third-party
+  checkpoints that no protocol preregistered. No product is at E5, and the Rogue
+  holdout has not been run.
 - Touch gestures were not exercised on WebKit or Firefox. See the known
   limitations.
 - The registration stack and the stockpile area-grid estimator have unit tests

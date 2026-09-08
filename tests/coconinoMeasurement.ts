@@ -92,6 +92,15 @@ export interface CoconinoMetrics {
   readonly usable: number;
   /** No classified ground in the cell. Never a rejection for a large error. */
   readonly rejected: number;
+  /**
+   * Share of candidates that yielded a DTM value, overall and per stratum.
+   *
+   * Reported beside the error statistics because the two rejections are both
+   * VVA: the statistics are conditional on a ground surface existing, and the
+   * rate at which one exists is itself a result. A reader who sees only the
+   * error figures cannot tell that VVA availability was 20 of 22.
+   */
+  readonly coverage: { readonly overall: number; readonly NVA: number; readonly VVA: number };
 }
 
 const round2 = (x: number): number => Math.round(x * 100) / 100;
@@ -204,6 +213,11 @@ export const residualsOf = (
 /** The funnel and the statistics, from the measured results. */
 export function metricsOf(results: readonly CheckpointResult[]): CoconinoMetrics {
   const usable = results.filter((r) => r.state === 'measured').length;
+  const share = (type?: 'NVA' | 'VVA'): number => {
+    const of = results.filter((r) => (type ? r.type === type : true));
+    return of.length === 0 ? Number.NaN
+      : Math.round((of.filter((r) => r.state === 'measured').length / of.length) * 1e4) / 1e4;
+  };
   return {
     overall: statsOf(residualsOf(results)),
     NVA: statsOf(residualsOf(results, 'NVA')),
@@ -211,6 +225,7 @@ export function metricsOf(results: readonly CheckpointResult[]): CoconinoMetrics
     candidate: results.length,
     usable,
     rejected: results.length - usable,
+    coverage: { overall: share(), NVA: share('NVA'), VVA: share('VVA') },
   };
 }
 

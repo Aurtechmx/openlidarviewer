@@ -24,7 +24,7 @@
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import {
   PATHS, CELL_M, computeCoconino, rmseOf, percentileAbs, residualsOf,
   type CheckpointResult, type CoconinoMetrics,
@@ -34,6 +34,9 @@ const WRITE = process.env.COCONINO_WRITE === '1';
 
 /** USGS/NDEP-ASPRS vertical-accuracy classes for this project. Spec, not fitted. */
 const CLASS_M = { NVA: 0.3, VVA: 0.6 } as const;
+
+/** USGS/NDEP sample-size minimums for a formal vertical-accuracy statement. */
+const F7 = { minNVA: 20, minPerStratum: 12 } as const;
 
 /** Files SHA256SUMS pins, in the order the digest file lists them. */
 const PINNED = [
@@ -176,6 +179,14 @@ function buildSummary(
       method: 'Production rasterizeDtm, point-in-cell mean over class-2 ground. Each checkpoint is compared to the cell containing it: nearest cell, no interpolation.',
     },
     metrics,
+    sampleSizeGate: {
+      basis: 'USGS/NDEP: at least 20 NVA and at least 12 per stratum for a formal vertical-accuracy statement. Evaluated on the USABLE subset, which is the sample the statistics are computed over, not on the matched candidates. The candidate universe can clear the gate while the evaluated sample does not, because a checkpoint with no ground in its cell is rejected after membership is fixed.',
+      minNVA: F7.minNVA,
+      minPerStratum: F7.minPerStratum,
+      usableNVA: metrics.NVA.n,
+      usableVVA: metrics.VVA.n,
+      met: metrics.NVA.n >= F7.minNVA && metrics.VVA.n >= F7.minPerStratum,
+    },
     accuracyStatement: {
       basis: 'USGS/NDEP-ASPRS vertical accuracy. NVA at the 95% confidence level (1.96 x RMSEz, errors approximately Gaussian on open ground); VVA at the 95th percentile, which by definition tolerates the top 5% of vegetated returns as a non-Gaussian tail.',
       nvaClassM: CLASS_M.NVA,
@@ -190,6 +201,23 @@ function buildSummary(
     evidenceIndependence: universe.evidenceIndependence,
     evidenceDetermination: universe.evidenceDetermination,
   };
+}
+
+/**
+ * The DTM claim's current evidence level, read from the claim register.
+ *
+ * The Coconino artifacts said "E3_SYNTHETICALLY_VALIDATED (unchanged)" and "DTM
+ * stays E3" for a claim the register promoted to E4 in v0.6.6, because the
+ * ingest script hard-coded the level. A study may not contradict the ladder it
+ * cites, so the level is read here rather than retyped.
+ */
+function registeredDtmLevel(): string {
+  const lines = readFileSync(resolve(__dirname, '../docs/validation/claim-register.yaml'), 'utf8').split('\n');
+  const at = lines.findIndex((l) => l.trim().replace(/^-\s*/, '') === 'claimId: DTM');
+  expect(at, 'the claim register has no DTM claim').toBeGreaterThan(-1);
+  const level = lines.slice(at, at + 12).find((l) => l.includes('currentEvidence:'));
+  expect(level, 'the DTM claim records no currentEvidence').toBeDefined();
+  return (level as string).split('currentEvidence:')[1].trim();
 }
 
 /** The Coconino leg of the terrain-field README, without its neighbours. */
@@ -275,6 +303,26 @@ describe('the shipped Coconino artifacts agree with the measurement', () => {
       expect(digest, `SHA256SUMS is stale for ${name}`)
         .toBe(sha256(join(dirname(PATHS.sums), name)));
     }
+
+    // ── the study does not contradict the ladder it cites ──────────────────
+    const dtmLevel = registeredDtmLevel();
+    const determination = JSON.stringify(universe.evidenceDetermination);
+    expect(determination, `the universe's evidence determination does not name the DTM's registered ${dtmLevel}`)
+      .toContain(dtmLevel);
+    for (const stale of ['E3_SYNTHETICALLY_VALIDATED', 'stays E3']) {
+      expect(determination, `the universe still claims "${stale}" while the register says ${dtmLevel}`)
+        .not.toContain(stale);
+    }
+
+    // ── the sample-size gate is judged on the sample the statistics use ─────
+    const gate = readJson<{ sampleSizeGate: Record<string, number | boolean> }>(PATHS.summary).sampleSizeGate;
+    expect(gate.usableNVA).toBe(metrics.NVA.n);
+    expect(gate.usableVVA).toBe(metrics.VVA.n);
+    expect(gate.met).toBe(metrics.NVA.n >= F7.minNVA && metrics.VVA.n >= F7.minPerStratum);
+    // Coverage is a result, not a footnote: it is what the error figures are
+    // conditional on, and both rejections fell in the same stratum.
+    expect(metrics.coverage.overall).toBe(Math.round((metrics.usable / metrics.candidate) * 1e4) / 1e4);
+    expect(metrics.coverage.VVA).toBeLessThanOrEqual(1);
 
     // ── the required-tile manifest describes THIS universe ─────────────────
     // required-tiles.json sat at "13 checkpoints covered, F7 not met" through
