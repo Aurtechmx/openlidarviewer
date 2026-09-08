@@ -52,3 +52,10 @@ behind its output. The hold-out vertical accuracy uses the ASPRS 2014 formulas
 on internally withheld points, not independent survey checkpoints, and the
 evidence registry still governs whether any product may be presented as
 validated. See `docs/validation/` and the evidence model.
+
+Naming those formulas is not a conformance statement. They are the edition-1
+(2014) forms, reproduced as diagnostics on withheld observations; ASPRS has
+published later editions of the positional-accuracy standards, and OLV does not
+claim conformance with any edition of them. The claim register prohibits
+"ASPRS NVA/VVA compliance" outright, because conformance presumes independent
+checkpoints this project does not have.

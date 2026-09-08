@@ -40,6 +40,15 @@
  * the covariance branch in {@link changeVolumeUncertainty} for the formula
  * and its documented approximation.
  *
+ * NOTHING SHIPPED SELECTS `covariance`. The one call site, `compareDtms`, passes
+ * no model and exposes no way for a caller to choose one, so every figure OLV
+ * emits uses `independent-cells`. That is what lets the claim register state
+ * that the random term assumes independent per-cell errors and that spatial
+ * correlation is unquantified. Wiring this branch to a user path would make the
+ * software able to produce what that register lists under `prohibitedClaim` as
+ * "quantified spatially-correlated uncertainty", so it is a claim-register
+ * change first and a UI change second.
+ *
  * Pure, deterministic. Sits beside {@link detectChange}: that computes the
  * volume, this bounds it.
  */
