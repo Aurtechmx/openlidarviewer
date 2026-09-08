@@ -23,6 +23,8 @@
  * visualises this is a separate, browser-verified layer.
  */
 
+import { NeumaierSum } from '../../process/numerics';
+
 /** A regular elevation grid. `values[y*width + x]` in metres; NaN = empty cell. */
 export interface ChangeGrid {
   readonly width: number;
@@ -177,10 +179,15 @@ export function detectChange(
   let comparable = 0;
   let gained = 0;
   let lost = 0;
-  let gainVolumeM3 = 0;
-  let lossVolumeM3 = 0;
-  let rawNetVolumeM3 = 0;
-  let absSum = 0;
+  // Compensated: a large grid sums hundreds of thousands of cell volumes, and a
+  // naive running total loses low-order bits in proportion to how far the
+  // accumulator has drifted from the addend. That also makes the result depend
+  // on traversal order, which two runs over the same data should not. The
+  // hold-out aggregates are compensated for the same reason.
+  const gainAcc = new NeumaierSum();
+  const lossAcc = new NeumaierSum();
+  const rawNetAcc = new NeumaierSum();
+  const absAcc = new NeumaierSum();
   let maxGainM = 0;
   let maxLossM = 0;
 
@@ -197,23 +204,27 @@ export function detectChange(
       const d = (bv - av) * vM; // elevation difference in metres
       diff[oi] = d;
       comparable++;
-      absSum += Math.abs(d);
+      absAcc.add(Math.abs(d));
       if (d > maxGainM) maxGainM = d;
       if (d < maxLossM) maxLossM = d;
       // rawNetVolumeM3 integrates EVERY comparable cell, thresholded or not —
       // the correct net estimator (Anderson, USGS pubs.usgs.gov/publication/70202166):
       // uncorrelated sub-LoD noise of both signs is free to cancel here, unlike
       // the thresholded gain/loss volumes below.
-      rawNetVolumeM3 += d * cellArea;
+      rawNetAcc.add(d * cellArea);
       // Detectable (above-LoD) gain/loss volumes — correct for GROSS
       // erosion/deposition, where thresholding out the noise floor stops
       // sub-LoD jitter from inflating cut/fill in either direction.
-      if (d > lod) { classes[oi] = 1; gained++; gainVolumeM3 += d * cellArea; }
-      else if (d < -lod) { classes[oi] = -1; lost++; lossVolumeM3 += -d * cellArea; }
+      if (d > lod) { classes[oi] = 1; gained++; gainAcc.add(d * cellArea); }
+      else if (d < -lod) { classes[oi] = -1; lost++; lossAcc.add(-d * cellArea); }
       else classes[oi] = 0;
     }
   }
 
+  const gainVolumeM3 = gainAcc.total;
+  const lossVolumeM3 = lossAcc.total;
+  const rawNetVolumeM3 = rawNetAcc.total;
+  const absSum = absAcc.total;
   const unchanged = comparable - gained - lost;
   // With nothing comparable there is no estimate, and zero is the one value a
   // reader will mistake for one. Every derived quantity below is NaN in that

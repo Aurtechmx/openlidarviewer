@@ -1126,9 +1126,21 @@ export function computeTerrainCore(
   }).summary;
   // Express the validated accuracy in ASPRS/USGS 3DEP terms (NVA, VVA, QL) so
   // the surface can be judged against recognised accuracy standards.
+  //
+  // Withheld entirely when no vertical scale resolved. holdoutRmse computes
+  // `residual = (z - predicted) * verticalUnitToMetres` and falls back to an
+  // inert 1, so on an unresolved frame the residuals are in SOURCE Z units.
+  // Every field below is named `rmseZM`, `nvaM`, `vvaM`: a property whose name
+  // ends in M must never hold a value that might be feet or scanner units, and
+  // a consumer reading those names has no way to discover that it does. All
+  // three are already `number | null` and every consumer has a null path, so
+  // the honest answer costs nothing but the figure itself.
+  const verticalScaleResolved =
+    Number.isFinite(params.verticalUnitToMetres)
+    && (params.verticalUnitToMetres as number) > 0;
   const accuracyStandards = demAccuracyStandards(
-    Number.isFinite(validation.rmse) ? validation.rmse : null,
-    Number.isFinite(validation.p95) ? validation.p95 : null,
+    verticalScaleResolved && Number.isFinite(validation.rmse) ? validation.rmse : null,
+    verticalScaleResolved && Number.isFinite(validation.p95) ? validation.p95 : null,
     cellMetrics.meanDensity,
   );
   // Stride honesty: when the gather strided the cloud, the ground density (and
