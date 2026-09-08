@@ -32,6 +32,11 @@ function flat(height: number): DtmGrid {
     cellSizeM: 1,
     originH1: 0,
     originH2: 0,
+    // A CONFIRMED frame. Without it the comparison is merely unconfirmed, and
+    // summarizeChange withholds every figure — including the band this test is
+    // about — so the fixture would pass or fail for the wrong reason.
+    crs: 'EPSG:32610',
+    verticalDatum: 'EPSG:5703',
   } as unknown as DtmGrid;
 }
 

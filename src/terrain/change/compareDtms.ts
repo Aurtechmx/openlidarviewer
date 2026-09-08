@@ -73,9 +73,11 @@ export interface EpochComparison {
    * same world origin (to floating-point representation — half a cell of slack
    * used to pass, and half a cell of misregistration is not co-registration),
    * and declare the same CRS + vertical datum where both are known. When false,
-   * `coregistrationNotes` says why. A false verdict from an UNCONFIRMED frame
-   * leaves the figures standing under a caveat; a false verdict from a MEASURED
-   * grid defect sets `gridMisaligned` and withholds them.
+   * `coregistrationNotes` says why, and `summarizeChange` reports no cut/fill
+   * volume and no elevation difference — an unconfirmed frame is not a proven
+   * mismatch, but it is not enough to publish a terrain-change measurement
+   * either. `gridMisaligned` distinguishes a MEASURED grid defect from an
+   * unconfirmed frame so each gets its own diagnosis.
    *
    * The difference-raster EXPORT is gated on this whole verdict rather than on
    * the provable subset, and so is stricter than the panel. An .asc is a bare
@@ -98,10 +100,10 @@ export interface EpochComparison {
   /**
    * True when the two grids PROVABLY sit in different frames — a differing
    * horizontal CRS, or a differing vertical datum. Different in kind from an
-   * unknown frame: absence of evidence stays "indicative, not measured", but a
-   * Δz between UTM 12N and 13N, or between NAVD88 and ellipsoidal heights,
-   * describes nothing, and `summarizeChange` withholds the numbers rather than
-   * captioning them.
+   * unknown frame, which is merely unconfirmed: a Δz between UTM 12N and 13N, or
+   * between NAVD88 and ellipsoidal heights, describes nothing at all. Both
+   * withhold the numbers; this one says the frames are known to differ, so the
+   * fix is to reproject rather than to state what is missing.
    */
   readonly frameIncompatible: boolean;
   /**
@@ -224,7 +226,7 @@ export function compareDtms(
     const which = !a.crs && !b.crs ? 'both epochs' : 'one epoch';
     notes.push(
       `Horizontal CRS is unknown for ${which} — the grids can't be confirmed to share a ` +
-        `frame, so treat the difference as unverified, not measured.`,
+        `frame.`,
     );
   }
 
@@ -242,7 +244,7 @@ export function compareDtms(
     const which = !a.verticalDatum && !b.verticalDatum ? 'both epochs' : 'one epoch';
     notes.push(
       `Vertical datum is unknown for ${which} — heights can't be confirmed on a common ` +
-        `reference, so the elevation difference is unverified.`,
+        `reference.`,
     );
   }
 
@@ -323,7 +325,27 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     return lines;
   }
   if (!coregistered) {
-    lines.push('⚠ Not co-registered — treat the difference as indicative, not measured.');
+    // Everything that falls short of a confirmed common frame: an unstated CRS,
+    // an unstated vertical datum, a geographic grid. None of these PROVES a
+    // mismatch — but a cut/fill volume is a measurement, and absence of evidence
+    // that two epochs describe the same place is not evidence that they do.
+    //
+    // This printed the volumes under "treat as indicative, not measured". That
+    // is the defensible GIS posture and the wrong one for a figure that leaves
+    // this process: the caveat is a line of prose above a m³ number, and the
+    // number is what gets quoted, pasted and published. The same reasoning
+    // already withholds the figures for a proven frame clash, an unknown linear
+    // unit and a measured grid defect; an unconfirmed frame was the last member
+    // of that family still answering with numbers.
+    lines.push(
+      '✗ Not comparable — the two epochs cannot be confirmed to share a frame, so no ' +
+        'cut/fill volume or elevation difference is reported. The difference raster is ' +
+        'still available to LOOK at; it is not a measurement until the frame is stated.',
+    );
+    for (const note of coregistrationNotes) lines.push(`• ${note}`);
+    for (const w of result.warnings) lines.push(`• ${w}`);
+    lines.push(COREGISTRATION_CHECKLIST);
+    return lines;
   }
   if (comparison.volumesComputable === false) {
     // Degree² cell areas: no m³ figure exists — the refusal line replaces it.
@@ -393,6 +415,5 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
   // Co-registration checklist — spell out what a MEASURED (not indicative)
   // change comparison needs, so the user knows exactly what to fix. Shown only
   // when the result isn't co-registered, where it's actionable.
-  if (!coregistered) lines.push(COREGISTRATION_CHECKLIST);
   return lines;
 }
