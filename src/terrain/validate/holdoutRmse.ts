@@ -116,8 +116,10 @@ export interface HoldoutParams {
    *
    * Must be pure and deterministic (same inputs → same mask) to keep the report
    * reproducible. If it throws, returns a wrong-length mask, or yields no ground
-   * points, the run falls back to the supplied full-cloud mask and re-states the
-   * documented limitation in `warnings`.
+   * points, the run REFUSES: supplying this hook selects the split→classify→fit
+   * estimand, and delivering the whole-cloud one under the same field names
+   * would answer a question the caller did not ask. The report comes back with
+   * `sampleSize 0` and an `unavailableReason`, never another estimand's number.
    */
   readonly reclassifyGround?: (
     points: ReadonlyArray<TerrainPoint>,
@@ -133,6 +135,15 @@ export interface HoldoutParams {
  */
 const FULL_CLOUD_CLASSIFICATION_WARNING =
   'hold-out withholds points from the surface fit only; ground classification used the full cloud (mild optimism vs classify-inside-fold)';
+
+/**
+ * Refusal when a supplied train-only reclassifier could not produce the mask.
+ * The alternative — reporting the whole-cloud figure — answers a different
+ * question under the same field name, which is the substitution this module
+ * exists to prevent.
+ */
+const TRAIN_ONLY_REFUSED =
+  'train-only ground classification was requested but could not be produced; no hold-out statistic is reported (the full-cloud figure estimates a different quantity)';
 
 /** Small, fast, deterministic PRNG (mulberry32). */
 function mulberry32(seed: number): () => number {
@@ -163,10 +174,40 @@ export function holdoutValidateDtm(
   const vertical: VerticalAxis = params.verticalAxis ?? 'z';
   const { getH1, getH2, getV } = axisGetters(vertical);
 
-  let holdoutFraction = params.holdoutFraction ?? 0.2;
+  // Statistical parameters are REFUSED, not repaired. Substituting a working
+  // default for a caller's invalid split fraction, cell size or seed produces a
+  // number for a design nobody chose, and the report carries no field saying the
+  // design was changed — only a warning line, which the panels do not render.
+  // The blocked validator already refuses these; this is the same rule.
+  const holdoutFraction = params.holdoutFraction ?? 0.2;
   if (!Number.isFinite(holdoutFraction) || holdoutFraction <= 0 || holdoutFraction >= 1) {
-    warnings.push(`holdoutFraction invalid (${holdoutFraction}); using 0.2`);
-    holdoutFraction = 0.2;
+    const why = `holdoutFraction must be a finite fraction in (0,1); got ${holdoutFraction}`;
+    warnings.push(why);
+    return emptyReport(Number.NaN, warnings, why);
+  }
+  if (!(params.cellSizeM > 0) || !Number.isFinite(params.cellSizeM)) {
+    const why = `cellSizeM must be a finite positive length; got ${params.cellSizeM}`;
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
+  }
+  if (params.seed !== undefined && !(Number.isInteger(params.seed) && params.seed >= 0)) {
+    // mulberry32 does `seed >>> 0`, which silently maps a fractional or negative
+    // seed onto some other seed. Two runs recorded as different seeds could then
+    // be the same split, and a recorded seed would not reproduce its own run.
+    const why = `seed must be a non-negative integer; got ${params.seed}`;
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
+  }
+  if (isGround.length !== points.length) {
+    // A mask shorter than the cloud reads `undefined` past its end, which is
+    // `!== 1`, so every point beyond it is silently treated as non-ground: the
+    // validated sample quietly becomes a prefix of the one the caller meant.
+    // `rasterizeDtm` already refuses this; the validator must not be laxer than
+    // the rasterizer it feeds.
+    const why =
+      `ground mask length (${isGround.length}) does not match the point count (${points.length})`;
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
   }
 
   // Collect finite ground returns, keeping each one's index back into the
@@ -233,10 +274,13 @@ export function holdoutValidateDtm(
       newMask = null;
     }
     if (newMask?.length !== points.length) {
-      warnings.push(
-        'reclassifyGround returned an invalid mask; falling back to full-cloud classification',
-        FULL_CLOUD_CLASSIFICATION_WARNING,
-      );
+      // Refuse. The caller asked for split→classify→fit; the classifier did not
+      // deliver, and the whole-cloud number is a DIFFERENT estimand. Reporting
+      // it here under `rmse` would substitute one for the other silently — the
+      // `classificationScope` label disclosed the substitution but nothing
+      // obliged a consumer to read it.
+      warnings.push(TRAIN_ONLY_REFUSED, 'reclassifyGround returned an invalid mask');
+      return emptyReport(holdoutFraction, warnings, TRAIN_ONLY_REFUSED);
     } else {
       const reTrain: TerrainPoint[] = [];
       for (let i = 0; i < points.length; i++) {
@@ -249,10 +293,13 @@ export function holdoutValidateDtm(
         reTrain.push(p);
       }
       if (reTrain.length === 0) {
+        // Same refusal, other failure mode: a classifier that finds no ground in
+        // the training set has not produced the requested treatment either.
         warnings.push(
-          'train-only reclassification produced no ground points; falling back to full-cloud classification',
-          FULL_CLOUD_CLASSIFICATION_WARNING,
+          TRAIN_ONLY_REFUSED,
+          'train-only reclassification produced no ground points',
         );
+        return emptyReport(holdoutFraction, warnings, TRAIN_ONLY_REFUSED);
       } else {
         classificationScope = 'train-only';
         fitTrain = reTrain;
@@ -278,8 +325,8 @@ export function holdoutValidateDtm(
     if (h1 > maxH1) maxH1 = h1;
     if (h2 > maxH2) maxH2 = h2;
   }
-  const cellSizeM = params.cellSizeM > 0 ? params.cellSizeM : 1;
-  if (!(params.cellSizeM > 0)) warnings.push(`cellSizeM invalid; using ${cellSizeM}`);
+  // Validated at entry — a non-positive or non-finite cell size refused there.
+  const cellSizeM = params.cellSizeM;
   const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
   const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
 
@@ -502,6 +549,8 @@ export function holdoutValidateDtm(
     // checkpoint accuracy. Typed so no consumer can relabel it.
     estimand: 'point-reconstruction',
     classificationScope,
+    // A statistic WAS produced.
+    unavailableReason: null,
     rmse,
     mae,
     p95,
@@ -534,11 +583,16 @@ function normalizedMedianAbsDeviation(values: readonly number[]): number {
   return 1.4826 * quantileSorted(dev, 0.5);
 }
 
-function emptyReport(holdoutFraction: number, warnings: string[]): ValidationReport {
+function emptyReport(
+  holdoutFraction: number,
+  warnings: string[],
+  unavailableReason = 'too few ground returns to cross-validate',
+): ValidationReport {
   return {
     estimand: 'point-reconstruction',
     // Nothing was fitted, so no train-only classification ran.
     classificationScope: 'whole-cloud',
+    unavailableReason,
     rmse: Number.NaN,
     mae: Number.NaN,
     p95: Number.NaN,

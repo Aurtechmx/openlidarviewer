@@ -124,6 +124,15 @@ export interface ValidationReport {
    * compared as a geometry contrast when this field agrees.
    */
   readonly classificationScope: 'whole-cloud' | 'train-only';
+  /**
+   * Why no statistic is reported, or null when one is. `sampleSize 0` alone
+   * says a figure is missing but not which cause, so every renderer had to
+   * guess a reason; the honest ones now read it from here. Set whenever the
+   * run refuses: too few ground returns, an invalid statistical parameter, a
+   * mask that does not match the cloud, or a requested train-only
+   * classification that could not be produced.
+   */
+  readonly unavailableReason: string | null;
   /** Root-mean-square vertical residual across all covered held-out points. */
   readonly rmse: number;
   /** Mean absolute residual. */

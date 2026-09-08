@@ -20,6 +20,7 @@ function report(
   return {
     estimand: 'point-reconstruction',
   classificationScope: 'whole-cloud',
+  unavailableReason: null,
     rmse,
     mae: rmse * 0.8,
     p95,

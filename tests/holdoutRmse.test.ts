@@ -135,11 +135,44 @@ describe('holdoutValidateDtm', () => {
     expect(r.warnings.join(' ')).toMatch(/too few/i);
   });
 
-  it('clamps an invalid hold-out fraction with a warning', () => {
+  it('refuses an invalid hold-out fraction instead of substituting 0.2', () => {
+    // Repairing it produced a real RMSE for a split design the caller never
+    // chose, under a `holdoutFraction` field that then read 0.2 as though that
+    // had been asked for. The only trace was a warning line, which no panel
+    // renders. A statistical parameter is refused, not corrected.
     const { points, mask } = surface(() => 1);
     const r = holdoutValidateDtm(points, mask, { cellSizeM: 1, holdoutFraction: 1.5 });
-    expect(r.holdoutFraction).toBe(0.2);
-    expect(r.warnings.join(' ')).toMatch(/holdoutFraction/i);
+    expect(r.sampleSize, 'a figure was produced for a design nobody chose').toBe(0);
+    expect(r.unavailableReason).toMatch(/holdoutFraction/i);
+  });
+
+  it('refuses a non-positive cell size instead of substituting 1', () => {
+    const { points, mask } = surface(() => 1);
+    const r = holdoutValidateDtm(points, mask, { cellSizeM: 0 });
+    expect(r.sampleSize).toBe(0);
+    expect(r.unavailableReason).toMatch(/cellSizeM/i);
+  });
+
+  it('refuses a seed mulberry32 would silently rewrite', () => {
+    // `seed >>> 0` maps -1 to 4294967295 and 2.5 to 2, so a recorded seed would
+    // not reproduce its own split and two "different" seeds could be one split.
+    const { points, mask } = surface(() => 1);
+    for (const seed of [-1, 2.5, Number.NaN]) {
+      const r = holdoutValidateDtm(points, mask, { cellSizeM: 1, seed });
+      expect(r.sampleSize, `seed ${seed} was accepted`).toBe(0);
+      expect(r.unavailableReason).toMatch(/seed/i);
+    }
+  });
+
+  it('refuses a ground mask that does not cover the cloud', () => {
+    // A short mask reads `undefined` past its end, which is `!== 1`, so every
+    // point beyond it silently becomes non-ground: the validated sample turns
+    // into a prefix of the intended one with no field saying so.
+    const { points, mask } = surface(() => 1);
+    const half = mask.slice(0, Math.floor(mask.length / 2));
+    const r = holdoutValidateDtm(points, half, { cellSizeM: 1 });
+    expect(r.sampleSize, 'half a mask silently validated half a cloud').toBe(0);
+    expect(r.unavailableReason).toMatch(/mask length/i);
   });
 });
 
@@ -250,7 +283,12 @@ describe('holdoutValidateDtm — train-only reclassification (classify-before-sp
     expect(a.sampleSize).toBe(b.sampleSize);
   });
 
-  it('falls back to the full-cloud disclosure when the reclassifier returns an invalid mask', () => {
+  it('refuses rather than answering with the whole-cloud estimand when the mask is invalid', () => {
+    // Supplying `reclassifyGround` SELECTS split -> classify -> fit. If that
+    // cannot be produced, the whole-cloud figure is an answer to a different
+    // question, and it used to arrive in the same `rmse` field with a warning
+    // appended. Labelling it `classificationScope: 'whole-cloud'` disclosed the
+    // substitution but did not stop a panel or a paper quoting the number.
     const { points, isGround } = leakScenario();
     const r = holdoutValidateDtm(points, isGround, {
       cellSizeM: 1,
@@ -258,29 +296,30 @@ describe('holdoutValidateDtm — train-only reclassification (classify-before-sp
       seed: 1,
       reclassifyGround: () => new Uint8Array(3), // wrong length
     });
+    expect(r.sampleSize, 'a whole-cloud figure was returned for a train-only request').toBe(0);
+    expect(Number.isNaN(r.rmse)).toBe(true);
+    expect(r.unavailableReason).toMatch(/train-only/i);
     expect(r.warnings.some((w) => /invalid mask/i.test(w))).toBe(true);
-    expect(r.warnings.some((w) => /classification used the full cloud/i.test(w))).toBe(true);
-    // A warning does not stop a caller quoting the number. The RECORD must say
-    // which treatment produced it: train-only was requested and whole-cloud ran.
-    expect(r.classificationScope).toBe('whole-cloud');
   });
 
-  it('reports train-only scope only when the reclassifier actually produced the mask', () => {
+  it('refuses when the train-only classifier finds no ground', () => {
     const { points, isGround } = leakScenario();
     const succeeded = holdoutValidateDtm(points, isGround, {
       cellSizeM: 1, holdoutFraction: 0.3, seed: 5, reclassifyGround: leakClassifier,
     });
+    // The refusals below prove nothing if the success path stopped working.
     expect(succeeded.classificationScope).toBe('train-only');
+    expect(succeeded.sampleSize).toBeGreaterThan(0);
+    expect(succeeded.unavailableReason).toBeNull();
 
-    // An empty reclassification is the other silent substitution: the surface
-    // is fitted from the whole cloud, and the report says so.
     const empty = holdoutValidateDtm(points, isGround, {
       cellSizeM: 1,
       holdoutFraction: 0.3,
       seed: 5,
       reclassifyGround: (p) => new Uint8Array(p.length),
     });
-    expect(empty.classificationScope).toBe('whole-cloud');
+    expect(empty.sampleSize).toBe(0);
+    expect(empty.unavailableReason).toMatch(/train-only/i);
     expect(empty.warnings.some((w) => /no ground points/i.test(w))).toBe(true);
   });
 });
