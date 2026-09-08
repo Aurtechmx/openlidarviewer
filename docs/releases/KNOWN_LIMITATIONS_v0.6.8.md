@@ -69,25 +69,22 @@ release. Both are green on the commit this document describes. The release has n
 - The oriented bounding box derived by principal components overstates length on
   an elongated footprint. It is labelled unvalidated rather than presented as a
   measurement.
-- A measurement CSV or GeoJSON names its columns `length_m`, `area_m2` and
-  `volume_m3` whatever the scan's linear unit turns out to be. When the unit is
-  unconfirmed the same row carries `units-unverified (source render units, not
-  metres)` in its evidence field, so the row prints the retraction while the
-  column name still asserts metres. A reader sees both; a program reading the
-  header sees only the assertion.
-- The floor-plan wall band is a physical slice 0.7 to 1.8 m above the detected
-  floor. When the linear unit is unconfirmed the scale falls back to an inert 1
-  and those metres are applied to source coordinates, so on a foot-unit capture
-  the band sits about 0.21 to 0.55 m above the floor and traces skirting rather
-  than wall. The plan and the report both state that the units are unverified;
-  neither states that the extraction itself moved.
-- The grid and contour-interval recommender picks from metre ladders, but the
-  extent and relief it reads are in the source horizontal and vertical units.
-  On a foot-unit capture it therefore sizes the site about 3.3 times too large
-  and advises accordingly. The recommendation is advisory: nothing applies it,
-  and the DTM, the contours and every exported figure are computed from the
-  grid the user actually chooses, so no committed result depends on it. What a
-  reader of a non-metre scan sees is worse advice than a metre scan gets.
+- Three unit defects that were recorded here are now fixed, and all three fail
+  closed on an unresolved linear unit rather than presenting a metric figure.
+  A measurement CSV or GeoJSON named its columns `length_m`, `area_m2` and
+  `volume_m3` whatever the scan's unit turned out to be, so a row printed the
+  `units-unverified` retraction in its evidence field while the column name
+  still asserted metres to any program parsing the header; with no resolved
+  scale those columns are now `length_source`, `area_source2` and
+  `volume_source3`. The floor-plan wall band is a physical slice 0.7 to 1.8 m
+  above the detected floor, and an inert scale of 1 applied those metres to
+  source coordinates, so a foot-unit capture traced skirting at roughly 0.21 to
+  0.55 m instead of wall. That changed which points were analysed, not merely
+  how they were labelled, so the plan is refused outright until the CRS is
+  confirmed. The grid and contour-interval recommender reads extent and relief
+  that are in source units and picks from metre ladders, which sized a foot
+  capture about 3.3 times too large; those inputs are converted now, and the
+  recommendation is withheld entirely when no scale resolves.
 
 Each would move a published verdict, so each is recorded here rather than
 changed under the freeze.

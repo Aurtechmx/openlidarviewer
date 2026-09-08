@@ -232,6 +232,9 @@ export function measurementsToGeoJSON(
   measurements: readonly Measurement[],
   ctx: MeasurementExportContext,
 ): string {
+  // Same rule as the CSV: with no resolved scale the property names say source
+  // units rather than asserting metres to a parser.
+  const unitsKnown = ctx.unitsVerified ?? true;
   const features = measurements
     .map((m) => {
       const geometry = geometryFor(m, ctx);
@@ -240,7 +243,9 @@ export function measurementsToGeoJSON(
         id: m.id,
         name: m.name,
         kind: m.kind,
-        ...measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres),
+        ...(unitsKnown
+          ? measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres)
+          : inSourceUnits(measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres))),
       };
       if (ctx.crsName) properties.crs = ctx.crsName;
       return { type: 'Feature' as const, geometry, properties };
@@ -278,6 +283,35 @@ export function measurementsToGeoJSON(
  * of measurements can never read as a validated deliverable when the registry
  * says it is only exploratory.
  */
+/**
+ * What a unit-bearing column is called when the scan's linear scale was never
+ * resolved.
+ *
+ * A row used to carry `length_m` beside an evidence cell reading
+ * "units-unverified (source render units, not metres)". A human reads both; a
+ * program reading the header reads metres and is not told otherwise. The value
+ * is a source-unit number in that case, so the column says so. Longest suffix
+ * first: `_m3` and `_m2` must not be matched as `_m`.
+ */
+const SOURCE_UNIT_SUFFIXES: ReadonlyArray<readonly [string, string]> = [
+  ['_m3', '_source3'],
+  ['_m2', '_source2'],
+  ['_m', '_source'],
+];
+
+/** A metric column name, rewritten to name the source unit instead. */
+export function sourceUnitKey(key: string): string {
+  for (const [metric, source] of SOURCE_UNIT_SUFFIXES) {
+    if (key.endsWith(metric)) return `${key.slice(0, -metric.length)}${source}`;
+  }
+  return key;
+}
+
+/** Rewrite every unit-bearing key of a metrics record. Unitless keys pass through. */
+function inSourceUnits<T>(metrics: Record<string, T>): Record<string, T> {
+  return Object.fromEntries(Object.entries(metrics).map(([k, v]) => [sourceUnitKey(k), v]));
+}
+
 const CSV_COLUMNS = [
   'id', 'name', 'kind', 'vertices',
   'length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m',
@@ -307,18 +341,23 @@ export function measurementsToCsv(
   measurements: readonly Measurement[],
   ctx: MeasurementExportContext,
 ): string {
-  const rows: string[] = [CSV_COLUMNS.join(',')];
+  // With no resolved scale the values are source-unit numbers, so the header
+  // names them that way rather than asserting metres a parser would believe.
+  const unitsKnown = ctx.unitsVerified ?? true;
+  const columns = unitsKnown ? CSV_COLUMNS : CSV_COLUMNS.map(sourceUnitKey);
+  const rows: string[] = [columns.join(',')];
   // Route the CSV through the SAME one gate the GeoJSON path uses (PR §19):
   // measurements sit below their required evidence level, so every row carries
   // the exploratory verdict rather than leaving with no gate stamp at all.
   // The gate token, plus a units-unverified marker when the scan has no known
   // scale so a spreadsheet reader sees the same caveat the GeoJSON note carries
   // — the `_m` columns then read as nominal, not confirmed metres (M1).
-  const evidence = (ctx.unitsVerified ?? true)
+  const evidence = unitsKnown
     ? evidenceStatus('MEAS-DISTANCE')
     : `${evidenceStatus('MEAS-DISTANCE')}; units-unverified (source render units, not metres)`;
   for (const m of measurements) {
-    const metrics = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+    const raw = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+    const metrics = unitsKnown ? raw : inSourceUnits(raw);
     const base: Record<string, string | number> = {
       id: m.id,
       name: m.name,
@@ -327,7 +366,7 @@ export function measurementsToCsv(
       ...metrics,
       evidence,
     };
-    rows.push(CSV_COLUMNS.map((c) => (c in base ? csvCell(base[c]) : '')).join(','));
+    rows.push(columns.map((c) => (c in base ? csvCell(base[c]) : '')).join(','));
   }
   return rows.join('\n');
 }

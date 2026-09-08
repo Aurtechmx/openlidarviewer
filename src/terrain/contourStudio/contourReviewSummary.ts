@@ -123,19 +123,29 @@ export function buildContourReviewSummary(
   });
 
   // ── Grid ────────────────────────────────────────────────────────────────
+  // Null when no linear unit resolved: the recommender picks from metre
+  // ladders, so it is withheld rather than run on unconverted source
+  // coordinates. The row still appears, saying why there is no number.
   const grid = result.gridRecommendation;
-  rows.push({
-    key: 'grid',
-    label: 'Grid',
-    // The cell size is in the SOURCE horizontal unit, which is not
-    // guaranteed to be metres. The Analyse panel labels the same value from
-    // the resolved CRS; this surface has no CRS context, so it names the
-    // basis instead of asserting one. A false ' m' here and an honest 'ft'
-    // there is the same number described two ways.
-    value: `${num(grid.cellSizeM)} · recommended (source horizontal unit)`,
-    rationale: grid.reasons.length > 0 ? grid.reasons : ['Recommended from ground spacing and memory budget.'],
-    confidence: 'high',
-  });
+  rows.push(grid === null
+    ? {
+      key: 'grid',
+      label: 'Grid',
+      value: 'no recommendation',
+      rationale: [
+        'The grid and interval ladders are in metres, and this scan has no resolved '
+        + 'linear unit, so any recommendation would be sized for the wrong site. '
+        + 'Confirm the source CRS to get one.',
+      ],
+      confidence: 'low',
+    }
+    : {
+      key: 'grid',
+      label: 'Grid',
+      value: `${num(grid.cellSizeM)} m · recommended`,
+      rationale: grid.reasons.length > 0 ? grid.reasons : ['Recommended from ground spacing and memory budget.'],
+      confidence: 'high',
+    });
 
   // ── Interval (unit-safe, PR3) ─────────────────────────────────────────────
   // Review the interval that SHIPS, not the one the gate would have picked.
@@ -148,7 +158,7 @@ export function buildContourReviewSummary(
   // carried another, and the verdict beside it described an interval that was
   // not in the file.
   const shippedIntervalSource =
-    result.intervalM ?? result.gate.recommendedM ?? grid.contourIntervalM;
+    result.intervalM ?? result.gate.recommendedM ?? grid?.contourIntervalM ?? null;
   if (shippedIntervalSource != null && Number.isFinite(shippedIntervalSource) && shippedIntervalSource > 0) {
     const def = buildContourLevelDefinition({
       intervalSource: shippedIntervalSource,

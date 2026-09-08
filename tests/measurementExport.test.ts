@@ -278,8 +278,37 @@ describe('unverified units caveat (M1)', () => {
       measurementsToGeoJSON([DISTANCE], { ...CTX, unitsVerified: false }),
     );
     expect(unverified.evidence).toMatch(/units unverified/i);
-    // The value is still emitted — the geometry is real, only the unit label is nominal.
-    expect(unverified.features[0].properties.length_m).toBe(5);
+    // The value is still emitted — the geometry is real — but under a name that
+    // does not assert metres. The row used to read `length_m: 5` beside an
+    // evidence string saying the units were unverified: a human read both, a
+    // parser read metres.
+    const props = unverified.features[0].properties as Record<string, unknown>;
+    expect(props.length_source).toBe(5);
+    expect(props.length_m).toBeUndefined();
+    for (const key of Object.keys(props)) {
+      expect(key, `${key} asserts a metric unit on an unverified scale`).not.toMatch(/_m[23]?$/);
+    }
+  });
+
+  it('renames every unit-bearing column when the scale is unresolved, and only then', () => {
+    // Area and volume carry the squared and cubed suffixes, which must not be
+    // matched as a bare `_m`; unitless columns are untouched.
+    const csv = measurementsToCsv([DISTANCE], { ...CTX, unitsVerified: false });
+    const header = csv.split('\n')[0].split(',');
+    expect(header).toContain('length_source');
+    expect(header).toContain('area_source2');
+    expect(header).toContain('volume_source3');
+    expect(header).toContain('grade_pct');
+    expect(header).toContain('angle_deg');
+    for (const col of header) {
+      expect(col, `${col} asserts a metric unit on an unverified scale`).not.toMatch(/_m[23]?$/);
+    }
+    // A resolved scale keeps the metric names exactly as before.
+    const known = measurementsToCsv([DISTANCE], CTX).split('\n')[0].split(',');
+    expect(known).toContain('length_m');
+    expect(known).toContain('area_m2');
+    expect(known).toContain('volume_m3');
+    expect(known).not.toContain('length_source');
   });
 
   it('CSV evidence column carries the caveat only when the scale is unverified', () => {

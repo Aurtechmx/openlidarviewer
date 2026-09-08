@@ -58,4 +58,25 @@ describe('floor plan basis lines', () => {
     expect(Array.isArray(plan.reasons)).toBe(true);
     expect(plan.reasons.filter((r) => UNIT_CAVEAT.test(r))).toHaveLength(1);
   });
+
+  // ── The caveat is not the whole guard ────────────────────────────────────
+  // The assertions above pass whether the plan is refused or merely annotated,
+  // so on their own they cannot tell the two apart. The wall slice is a
+  // PHYSICAL band 0.7-1.8 m above the floor; with an unresolved unit those
+  // metres land on raw source coordinates and a foot capture traces skirting at
+  // roughly 0.21-0.55 m. Because that changes which points are analysed, the
+  // plan is refused rather than annotated, and these pin that.
+  it('extracts nothing when the unit is unresolved', () => {
+    const plan = extractFloorPlan(room(), { upAxis: 'z', unitToMetres: 1, unitKnown: false });
+    expect(plan.wallRings).toHaveLength(0);
+    expect(plan.floorRings).toHaveLength(0);
+    expect(plan.rooms).toHaveLength(0);
+    expect(plan.openSpaceAreaM2).toBe(0);
+  });
+
+  it('still extracts a plan when the unit IS resolved, so the guard is not vacuous', () => {
+    const plan = extractFloorPlan(room(), { upAxis: 'z', unitToMetres: 1, unitKnown: true });
+    expect(plan.wallRings.length, 'the fixture must produce walls, or the refusal proves nothing')
+      .toBeGreaterThan(0);
+  });
 });

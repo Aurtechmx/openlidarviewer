@@ -439,6 +439,18 @@ export interface TerrainCore {
     readonly widthM: number;
     readonly depthM: number;
     readonly reliefM: number;
+    /**
+     * Whether the extents above are genuinely metres.
+     *
+     * `cellSizeM` is in the SOURCE horizontal unit despite its name, and the
+     * raw elevation range is in the source vertical unit. These fields used to
+     * carry those numbers unconverted into a recommender that selects from
+     * metre ladders, so a US-survey-foot capture was sized about 3.3 times too
+     * large and advised accordingly. They are converted now; when no scale
+     * resolves, the conversion is an inert 1 and this is false, which withholds
+     * the recommendation rather than dressing source units as metres.
+     */
+    readonly unitResolved: boolean;
   };
   /** Ordered core warnings (classification, ground, despike, void-fill). The
    *  contour stage appends its interval-dependent warnings after these. */
@@ -498,7 +510,8 @@ export interface AnalyseContoursResult {
    */
   readonly complexity: TerrainComplexitySummary | null;
   /** Recommended DTM grid + contour interval for this dataset. */
-  readonly gridRecommendation: GridRecommendation;
+  /** Withheld (null) when no linear unit resolved — the ladders are metres. */
+  readonly gridRecommendation: GridRecommendation | null;
   readonly gate: IntervalGateResult;
   /**
    * The interval of the contour levels actually emitted. Coarser than
@@ -581,6 +594,49 @@ interface GroundTrustDecision {
  * requires EVERY candidate to be class-2, so a cloud with unclassified ground
  * stays on the SMRF path and nothing is silently dropped.
  */
+/**
+ * Grid-recommendation geometry, converted to real metres.
+ *
+ * The recommender selects a cell size and a contour interval from metre
+ * ladders, so it must be handed metres. `cellSizeM` is in the SOURCE horizontal
+ * unit despite its name, and the elevation range is in the source vertical
+ * unit; both used to reach the recommender unconverted, so a US-survey-foot
+ * capture was sized about 3.3 times too large and advised accordingly. A
+ * geographic frame converts through METRES_PER_DEGREE, a projected frame
+ * through its linear unit, and anything else has no scale to convert by and
+ * reports that instead of pretending to one.
+ */
+function gridGeometryInMetres(
+  params: {
+    isGeographic?: boolean;
+    horizontalUnitToMetres?: number;
+    verticalUnitToMetres?: number;
+  },
+  dtm: { cols: number; rows: number; cellSizeM: number },
+  pointCount: number,
+  elevationRangeSourceUnits: number,
+): {
+  pointCount: number; widthM: number; depthM: number; reliefM: number; unitResolved: boolean;
+} {
+  const geographic = params.isGeographic === true;
+  const horiz = params.horizontalUnitToMetres;
+  const horizOk = typeof horiz === 'number' && Number.isFinite(horiz) && horiz > 0;
+  const horizResolved = geographic || horizOk;
+  const horizToM = geographic ? METRES_PER_DEGREE : (horizOk ? horiz : 1);
+  const vert = params.verticalUnitToMetres;
+  const vertOk = typeof vert === 'number' && Number.isFinite(vert) && vert > 0;
+  // The vertical falls back to the horizontal scale for a single-unit frame,
+  // which is what the other unit resolution in this file does.
+  const vertToM = vertOk ? vert : horizToM;
+  return {
+    pointCount,
+    widthM: dtm.cols * dtm.cellSizeM * horizToM,
+    depthM: dtm.rows * dtm.cellSizeM * horizToM,
+    reliefM: elevationRangeSourceUnits * vertToM,
+    unitResolved: horizResolved,
+  };
+}
+
 function resolveGroundTrust(
   points: ReadonlyArray<TerrainPoint>,
   classification: ReadonlyArray<number> | Uint8Array | undefined,
@@ -1235,12 +1291,7 @@ export function computeTerrainCore(
     verticalDatum,
     verticalUnitToMetres: params.verticalUnitToMetres ?? null,
     cellSizeM: params.cellSizeM,
-    gridGeometry: {
-      pointCount: gf.analyzedPointCount,
-      widthM: dtm.cols * dtm.cellSizeM,
-      depthM: dtm.rows * dtm.cellSizeM,
-      reliefM: elevationRangeM,
-    },
+    gridGeometry: gridGeometryInMetres(params, dtm, gf.analyzedPointCount, elevationRangeM),
     coreWarnings: warnings,
   };
 }
@@ -1285,13 +1336,19 @@ export function contoursFromCore(
 
   // The grid + interval recommendation reads the requested interval, so it is
   // part of the interval stage (the geometry inputs come from the core).
-  const gridRecommendation = recommendGrid({
-    pointCount: core.gridGeometry.pointCount,
-    widthM: core.gridGeometry.widthM,
-    depthM: core.gridGeometry.depthM,
-    reliefM: core.gridGeometry.reliefM,
-    requestedIntervalM: intervalParams.intervalM ?? null,
-  });
+  // Withheld outright when no linear scale resolved: the ladders are metre
+  // ladders, so advising from unconverted source coordinates would recommend a
+  // cell size and an interval chosen for a site of the wrong size. No
+  // recommendation is honest; a confident wrong one is not.
+  const gridRecommendation = core.gridGeometry.unitResolved
+    ? recommendGrid({
+      pointCount: core.gridGeometry.pointCount,
+      widthM: core.gridGeometry.widthM,
+      depthM: core.gridGeometry.depthM,
+      reliefM: core.gridGeometry.reliefM,
+      requestedIntervalM: intervalParams.intervalM ?? null,
+    })
+    : null;
 
   // Choose the interval: explicit > recommended.
   const intervalM = intervalParams.intervalM ?? gate.recommendedM ?? null;

@@ -190,7 +190,7 @@ import {
 } from './scanTypeControl';
 import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFitness';
 import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
-import { horizontalUnitLabel, verticalUnitSuffix, verticalUnitLabel } from '../units/units';
+import { verticalUnitSuffix, verticalUnitLabel } from '../units/units';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
@@ -3418,21 +3418,25 @@ export class AnalysePanel {
   private _renderRecommend(): void {
     this._recommendRow.replaceChildren();
     const g = this._result!.gridRecommendation;
-    // The grid cell size is in the source HORIZONTAL unit and the contour
-    // interval in the source VERTICAL unit — neither is guaranteed metres. Label
-    // each from the resolved CRS so a foot / geographic frame never reads a false
-    // "m", and an unresolved vertical shows an honest "unverified" form.
-    const ctx = this._cb.getMapContext?.() ?? {};
-    const gridUnit = horizontalUnitLabel({
-      isGeographic: ctx.isGeographic,
-      linearUnit: ctx.linearUnit,
-    });
-    const intervalSuffix = verticalUnitSuffix(ctx.verticalUnitToMetres);
+    // Withheld when no linear unit resolved: the ladders are metre ladders, so
+    // any number would be chosen for a site of the wrong size.
+    if (g === null) {
+      this._recommendRow.append(el('div', {
+        className: 'olv-analyse-reco',
+        text: 'No grid recommendation — confirm the source CRS first (the ladders are in metres).',
+      }));
+      return;
+    }
+    // Both figures come from METRE ladders, and analyseContours now converts the
+    // extent and relief before consulting them. So the recommended grid and
+    // interval ARE metres whatever the source frame is. This row used to label
+    // them from the source CRS, which was right while the recommender was fed
+    // source units and is the wrong way round now that it is not.
     this._recommendRow.append(
-      el('div', { className: 'olv-analyse-reco', text: `Recommended grid: ${g.cellSizeM} ${gridUnit}` }),
+      el('div', { className: 'olv-analyse-reco', text: `Recommended grid: ${g.cellSizeM} m` }),
       el('div', {
         className: 'olv-analyse-reco',
-        text: `Recommended contour interval: ${g.contourIntervalM}${intervalSuffix}`,
+        text: `Recommended contour interval: ${g.contourIntervalM} m`,
       }),
     );
   }
