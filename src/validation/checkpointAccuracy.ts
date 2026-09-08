@@ -210,15 +210,15 @@ export const DEFAULT_CI_Z = 1.96;
 export const CI_ASSUMPTION = 'normal-approximation-independent-samples';
 
 /**
- * Whether a caller-supplied `combine` returned something publishable.
+ * Whether a caller-supplied `combine` returned a usable combined uncertainty.
  *
  * The hook's OUTPUT is an input to this record. A combined uncertainty is a
  * root-sum-square-like quantity: finite, non-negative, and never smaller than
  * the observed RMSE it combines, because adding a reference term cannot reduce
  * the total. Without this a hook returning NaN, a negative, or a shrunken figure
- * was published verbatim alongside `uncertaintyCombinationId` — the id a reader
- * would trust the number by. The slack lets a zero reference term return the
- * observed value to within rounding, which is a legitimate result.
+ * went into the record verbatim next to `uncertaintyCombinationId`, the id a
+ * consumer identifies the number by. The slack lets a zero reference term
+ * return the observed value to within rounding, which is a legitimate result.
  */
 function combinedUncertaintyIsSound(combined: number, observedRmse: number): boolean {
   const SLACK = 1e-9;
