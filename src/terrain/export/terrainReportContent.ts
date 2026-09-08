@@ -444,9 +444,16 @@ export function buildTerrainReportContent(
   // Phase 4 honesty figures, single-sourced from the same result the panel
   // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
   const pctOf = (x: number): string => `${Math.round(x * 100)}%`;
-  // Source Z-unit scale for every vertical figure below. Null when the frame
-  // never resolved one, which is what makes the suffix hedge instead of
-  // claiming metres.
+  // Vertical suffix for the residual-derived figures below. `holdoutRmse`
+  // scales residuals by verticalUnitToMetres and falls back to an inert 1, so on
+  // a frame that resolved no vertical scale they stay in the source Z unit. The
+  // ASPRS rows above are already withheld there (rmseZM/nvaM/vvaM come back
+  // null), but the blocked RMSE and the reliability tolerance are read straight
+  // off the result and were formatted with a fixed " m". ASCII only, as above.
+  const fmtZ = (v: number | null | undefined): string =>
+    v != null && Number.isFinite(v)
+      ? `${v.toFixed(2)}${result.verticalScaleResolved ? ' m' : ' source Z units'}`
+      : DASH;
   const relM = result.reliabilitySplit?.measured;
   // The reliability tolerance IS the hold-out RMSEz (analyseContours:
   // reliabilityTolerance = validation.rmse), so the row is the share of
@@ -454,7 +461,7 @@ export function buildTerrainReportContent(
   // and is labelled as that, never as an independent tolerance.
   const hasRel = relM != null && relM.n >= 5 && Number.isFinite(relM.reliability);
   const reliabilityLabel = hasRel
-    ? `Within 1 × hold-out RMSEz (${fmtM(relM.tolerance)})`
+    ? `Within 1 × hold-out RMSEz (${fmtZ(relM.tolerance)})`
     : 'Within 1 × hold-out RMSEz';
   const reliabilityValue = hasRel
     ? `${pctOf(relM.reliability)} of measured-cell hold-out residuals (95% CI ${pctOf(relM.ciLow)}-${pctOf(relM.ciHigh)})`
@@ -462,7 +469,7 @@ export function buildTerrainReportContent(
   const blk = result.blockedAccuracy;
   const hasBlk = blk != null && blk.n > 0 && Number.isFinite(blk.rmse);
   const blockedValue = hasBlk
-    ? `${fmtM(blk.rmse)} (95% CI ${fmtM(blk.ciLow)}-${fmtM(blk.ciHigh)})`
+    ? `${fmtZ(blk.rmse)} (95% CI ${fmtZ(blk.ciLow)}-${fmtZ(blk.ciHigh)})`
     : DASH;
   // One line that says what each RMSE tests, so the two figures are never
   // read as competing estimates of the same thing. Parameters are the ones
@@ -473,7 +480,7 @@ export function buildTerrainReportContent(
       ? `Random hold-out RMSEz (${rmseText}) tests interpolation between neighbouring ground points and feeds NVA/VVA. ` +
         `Blocked spatial CV (${BLOCKED_CV_TEXT}) tests extrapolation across held-out blocks; ` +
         (hasBlk
-          ? `quote the blocked figure (${fmtM(blk.rmse)}) for map-scale use.`
+          ? `quote the blocked figure (${fmtZ(blk.rmse)}) for map-scale use.`
           : 'it was not run on this grid, so no map-scale figure is available.')
       : null;
   const qualitySection: TerrainReportSection = {

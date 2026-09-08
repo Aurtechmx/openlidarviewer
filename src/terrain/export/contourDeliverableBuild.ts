@@ -438,7 +438,13 @@ export async function buildContourDeliverableFromResultAsync(
     support: { measuredPct, interpolatedPct, unsupportedPct },
     validation: {
       mode: validation.method,
-      rmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+      // A field named M holds metres. `holdoutRmse` scales residuals by
+      // verticalUnitToMetres and falls back to an inert 1, so on a frame that
+      // resolved no vertical scale the figure is in the source Z unit — and the
+      // PDF prints "Vertical unit: unknown" two pages earlier while captioning
+      // this one "m". Withheld there, as the ASPRS standards already are.
+      rmseM:
+        result.verticalScaleResolved && Number.isFinite(validation.rmse) ? validation.rmse : null,
       sampleSize: validation.sampleSize,
       // Hold-out only — no independent field checkpoints are supplied here.
       independentCheckpoints: false,

@@ -62,6 +62,10 @@ function readyResult(): AnalyseContoursResult {
       coverageMode: 'full',
       features: [{}, {}],
     },
+    // A frame that RESOLVED its vertical scale, which is what makes the
+    // metre-named standards below legitimate. Every residual-derived figure in
+    // the report reads this flag for its suffix.
+    verticalScaleResolved: true,
     accuracyStandards: {
       rmseZM: 0.14,
       nvaM: 0.27,
@@ -568,6 +572,32 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(rowValue(c, 'Quality Metrics', 'Within 1 × hold-out RMSEz (0.66 m)')).toBe(
       '76% of measured-cell hold-out residuals (95% CI 75%-76%)',
     );
+  });
+
+  it('#2b does not call the blocked RMSE or the tolerance metres on an unresolved frame', () => {
+    // The ASPRS rows (rmseZM / nvaM / vvaM) are already withheld when no
+    // vertical scale resolved. The blocked RMSE and the reliability tolerance
+    // are read straight off the result and were formatted with a fixed " m", so
+    // the report withheld the standard while printing the quantity it is
+    // computed from, in metres, two rows below.
+    const base = readyResult();
+    const r = {
+      ...base,
+      verticalScaleResolved: false,
+      accuracyStandards: { ...base.accuracyStandards, rmseZM: null, nvaM: null, vvaM: null },
+      reliabilitySplit: {
+        measured: { n: 500, reliability: 0.76, ciLow: 0.75, ciHigh: 0.76, tolerance: 0.66 },
+        interpolated: null,
+      },
+      blockedAccuracy: { n: 400, rmse: 0.31, mae: 0.2, ciLow: 0.25, ciHigh: 0.36, folds: 4 },
+    } as unknown as AnalyseContoursResult;
+    const c = buildTerrainReportContent(r, OPTS);
+    const blocked = rowValue(c, 'Quality Metrics', 'Blocked RMSE (spatial CV)');
+    expect(blocked, 'the blocked RMSE was captioned m on an unresolved frame')
+      .not.toMatch(/[\d.] m\b/);
+    expect(blocked).toMatch(/source Z units/);
+    expect(labels(c, 'Quality Metrics').join(' | '))
+      .not.toMatch(/Within 1 × hold-out RMSEz \([\d.]+ m\)/);
   });
 
   it('#3 omits an intelligence row whose bucket is unknown instead of printing a dash', () => {

@@ -220,8 +220,12 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   const groundRatio = Number.isFinite(q.groundPointRatio) ? q.groundPointRatio : Number.NaN;
   const crsKnown = crs != null;
   const datumKnown = datum != null;
-  const rmse = acc?.rmseZM;
-  const rmseKnown = rmse != null && Number.isFinite(rmse);
+  // Named for the field it comes from, not shortened: `rmseZM` is withheld by
+  // `analyseContours` when the frame resolved no vertical scale, so a
+  // null-guarded read of it cannot print a source-unit number as metres. The
+  // name is what carries that guarantee to the caption below.
+  const rmseZM = acc?.rmseZM;
+  const rmseKnown = rmseZM != null && Number.isFinite(rmseZM);
   const noUsableDtm = coveredCells === 0;
 
   // ── baseline status from the gate ─────────────────────────────────────
@@ -282,8 +286,8 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     },
     {
       label: 'Vertical RMSE',
-      value: rmseKnown ? `${(rmse as number).toFixed(2)} m` : 'unknown',
-      rating: !rmseKnown ? 'unknown' : bandLow(rmse as number, 0.1, 0.25),
+      value: rmseKnown ? `${(rmseZM as number).toFixed(2)} m` : 'unknown',
+      rating: !rmseKnown ? 'unknown' : bandLow(rmseZM as number, 0.1, 0.25),
     },
     {
       label: 'CRS',

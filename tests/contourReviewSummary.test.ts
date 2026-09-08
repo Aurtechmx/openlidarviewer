@@ -22,6 +22,7 @@ function resultStub(over: {
   cellSizeM?: number; contourIntervalM?: number; recommendedM?: number | null;
   intervalM?: number | null; gateOptions?: { intervalM: number; supported: boolean; reason: string }[];
   reasons?: string[]; rmse?: number; gateWarnings?: string[];
+  verticalScaleResolved?: boolean;
 }): AnalyseContoursResult {
   return {
     cellStatusTally: {
@@ -40,6 +41,9 @@ function resultStub(over: {
     intervalM: 'intervalM' in over ? over.intervalM : undefined,
     gate: { options: over.gateOptions ?? [], recommendedM: 'recommendedM' in over ? (over.recommendedM ?? null) : 0.5, warnings: over.gateWarnings ?? [] },
     validation: { rmse: over.rmse ?? 0.09 },
+    // Default to a frame that resolved its vertical scale, which is what makes
+    // the metre captions on the RMSE rows legitimate.
+    verticalScaleResolved: over.verticalScaleResolved ?? true,
   } as unknown as AnalyseContoursResult;
 }
 
@@ -72,6 +76,21 @@ describe('buildContourReviewSummary', () => {
     // exists is in metres, whatever the source frame is.
     expect(grid.value).toContain('0.25 m');
     expect(grid.rationale).toContain('spacing rationale');
+  });
+
+  it('does not caption the validation RMSE metres on an unresolved vertical scale', () => {
+    // `holdoutRmse` scales residuals by verticalUnitToMetres and falls back to
+    // an inert 1, so on a frame that resolved no vertical scale this figure is
+    // in the source Z unit. The row said "m" either way.
+    const resolved = buildContourReviewSummary(resultStub({ rmse: 0.09 }), metreInput(AVAILABLE));
+    expect(resolved.rows.find((r) => r.key === 'validation')!.value).toContain('0.09 m');
+
+    const unresolved = buildContourReviewSummary(
+      resultStub({ rmse: 0.09, verticalScaleResolved: false }), metreInput(AVAILABLE),
+    );
+    const row = unresolved.rows.find((r) => r.key === 'validation')!;
+    expect(row.value, 'a source-unit residual was captioned m').not.toMatch(/[\d.] m\b/);
+    expect(row.value).toContain('source Z units');
   });
 
   it('interval row is metric-supported on a projected metre CRS', () => {

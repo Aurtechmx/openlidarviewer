@@ -74,6 +74,16 @@ function num(n: number): string {
   return Number.parseFloat(n.toFixed(3)).toString();
 }
 
+/**
+ * Unit for a hold-out residual. `holdoutRmse` scales residuals by
+ * verticalUnitToMetres and falls back to an inert 1, so a frame that resolved no
+ * vertical scale leaves them in the source Z unit. The review bar captioned them
+ * "m" either way.
+ */
+function zUnit(result: AnalyseContoursResult): string {
+  return result.verticalScaleResolved ? 'm' : 'source Z units';
+}
+
 /** Build the review-bar rows from a completed analysis result. Pure. */
 export function buildContourReviewSummary(
   result: AnalyseContoursResult,
@@ -187,7 +197,9 @@ export function buildContourReviewSummary(
     const supported = claim === 'metric-supported' && gateApprovedInterval;
     const rmse = result.validation.rmse;
     const rationale: string[] = [];
-    if (Number.isFinite(rmse)) rationale.push(`Internal vertical RMSE ${num(rmse)} m.`);
+    if (Number.isFinite(rmse)) {
+      rationale.push(`Internal vertical RMSE ${num(rmse)} ${zUnit(result)}.`);
+    }
     rationale.push(
       supported
         ? 'Supported for the current scale and internal terrain evidence.'
@@ -259,7 +271,9 @@ export function buildContourReviewSummary(
   rows.push({
     key: 'validation',
     label: 'Validation',
-    value: Number.isFinite(rmse) ? `Spatial internal · RMSE ${num(rmse)} m` : 'Spatial internal',
+    value: Number.isFinite(rmse)
+      ? `Spatial internal · RMSE ${num(rmse)} ${zUnit(result)}`
+      : 'Spatial internal',
     rationale: ['Internal hold-out validation only — no independent checkpoints were provided.'],
     confidence: 'medium',
   });

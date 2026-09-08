@@ -17,6 +17,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { analyseContours, type AnalyseContoursParams } from '../src/terrain/contour/analyseContours';
 
 /** A gentle slope dense enough for the hold-out to produce a figure. */
@@ -57,5 +59,51 @@ describe('metre-named accuracy fields require a resolved vertical scale', () => 
       ...BASE, horizontalUnitToMetres: 1, verticalUnitToMetres: 0.3048,
     });
     expect(r.accuracyStandards.rmseZM).not.toBeNull();
+  });
+});
+
+/**
+ * The same defect was found five times on five surfaces — the Analyse panel's
+ * four rows, the terrain report, the contour review bar, the deliverable PDF and
+ * the ASPRS standards themselves. Each was fixed where it was found, which is
+ * how it kept reappearing. This sweeps for the sixth.
+ *
+ * The rule: a hold-out RMSE may only be captioned "m" where the caption is
+ * conditional on the resolved vertical scale, or where the value comes from a
+ * field the analysis already withholds on an unresolved frame (`rmseZM`,
+ * `rmseM` — the `*M` contract).
+ */
+const SRC = resolve(__dirname, '..', 'src');
+
+function tsFilesUnder(dir: string, acc: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) tsFilesUnder(full, acc);
+    else if (full.endsWith('.ts')) acc.push(full);
+  }
+  return acc;
+}
+
+/** A template hole naming an rmse, followed within a few characters by a bare m. */
+const CAPTIONED = /\$\{[^}]*[Rr]mse[^}]*\}[^`$]{0,4}\bm\b/g;
+
+describe('no surface captions a hold-out RMSE as metres unconditionally', () => {
+  it('every metre-captioned RMSE is gated on the resolved scale or on a *M field', () => {
+    const offenders: string[] = [];
+    for (const file of tsFilesUnder(SRC)) {
+      const text = readFileSync(file, 'utf8');
+      for (const m of text.matchAll(CAPTIONED)) {
+        // Reading a `*M` field is sufficient on its own: those are withheld by
+        // `analyseContours` when no vertical scale resolved, so a null-guarded
+        // read of one cannot print a source-unit number.
+        if (/rmseZM|rmseM\b/.test(m[0])) continue;
+        const line = text.slice(0, m.index).split('\n').length;
+        // Otherwise the file must consult the flag.
+        if (text.includes('verticalScaleResolved')) continue;
+        offenders.push(`${relative(SRC, file)}:${line}  ${m[0].trim()}`);
+      }
+    }
+    expect(offenders, `metre caption on a possibly source-unit RMSE:\n${offenders.join('\n')}`)
+      .toEqual([]);
   });
 });
