@@ -8,8 +8,11 @@ CONTOURS-CARTOGRAPHIC separates the generalized contour line from the analytical
 one, which had been carrying the analytical geometry's E4 cross-check even though
 generalization deliberately moves vertices off the line that study measured. That
 is a correction to what was claimed, not a new result. This release promotes no
-claim, so there is no new cross-implementation or field result to report, and the
-scientific invariance gate confirms the terrain products are unchanged. Ten
+claim, so there is no new cross-implementation or field result to report. The
+terrain regression suites found no change in the outputs they exercise, and the
+registered DTM method identity is unchanged; exact cell-for-cell product identity
+is not claimed, and the method digest cannot establish it (two runs can share a
+digest and deliver different heights). Ten
 commits in this cycle carry an `e5` prefix, and every one of them prepares the
 Rogue holdout rather than reporting it: the tiles are registered, the split is
 deterministic and exposure-honest, and the manifests recompute their invariants.
@@ -53,9 +56,14 @@ release. Until that run exists, treat every figure here as a development-channel
 measurement of this commit rather than as release evidence, and cite the
 attached record instead once it does.
 
-Cross-browser runs on Chromium, Firefox, WebKit and Windows are green on this
-commit, and Firefox and WebKit are advisory rather than blocking, so their green
-is a fact about this commit and not a guarantee the gate enforces.
+Cross-browser runs on Chromium, Firefox, WebKit and Windows were executed for
+this work, and Firefox and WebKit are advisory rather than blocking. This
+document does not assert them as a verified property of this commit, because the
+committed evidence carries `workflow`, `workflowRunId` and `workflowSha` as null:
+the gate that produced it ran locally, so there is no run a reader can trace. The
+mutation record shows what the traceable form looks like — it carries its own
+`workflowRunUrl`. The authoritative exact-tag run fills those fields, and the
+claim belongs in the record that has them, not here.
 
 ## What was NOT tested, and is not claimed
 

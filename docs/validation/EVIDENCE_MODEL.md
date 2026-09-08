@@ -152,10 +152,15 @@ when the mechanism is actually run against real data and the result committed.
   each an independent GDAL comparison on a frozen analytic fixture; every other
   slot ships `pending`. No reference output is bundled for a slot that has not
   been compared, and none is fabricated.
-- **Honest internal error.** `src/terrain/validate/spatialBlockHoldout.ts`
-  replaces random point hold-out (optimistic) with spatially-blocked hold-out and
-  a bootstrap CI. It still is not field accuracy (E5); it is a less-biased E3
-  diagnostic.
+- **Honest internal error.** `src/terrain/validate/spatialBlockHoldout.ts` adds a
+  spatially-blocked hold-out with a bootstrap CI alongside the random point
+  hold-out. It complements rather than replaces it: blocking changes the spatial
+  arrangement of the withheld support, and the resulting contrast is
+  protocol-dependent, not a bias correction. Whether the blocked figure comes out
+  larger is a result of a given run. The two are only a geometry contrast when
+  their recorded `classificationScope` agrees, which it does on the
+  trusted-source-classification path and does not on the SMRF path. Neither is
+  field accuracy (E5).
 - **Reliability vs support.** `src/terrain/validate/reliabilitySplit.ts` reports
   measured-cell empirical reliability with a Wilson interval, kept separate from
   interpolated-cell model support, which carries no calibrated-probability claim.

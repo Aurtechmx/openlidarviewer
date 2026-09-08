@@ -18,4 +18,5 @@ The committed benchmark and calibration outputs under `benchmarks/out/` are rege
 
 - No proprietary dataset is required to build, test, or run OpenLiDARViewer.
 - Bundled fixtures are synthetic or explicitly licensed (see `docs/project/THIRD_PARTY_NOTICES.md`).
-- External point clouds are user-supplied or streamed from third-party open-data hosts; this repository redistributes none of them.
+- External RAW point clouds are user-supplied or streamed from third-party open-data hosts; this repository redistributes none of them.
+- Small DERIVED validation artifacts from those public datasets ARE redistributed, under `validation/terrain-field/`: ground-return crops (`crops/*.f32`), their crop manifests, and checkpoint/reference records. They exist so the terrain-field comparisons are reproducible without a multi-gigabyte download. Each one's source, licence and attribution is listed under "Derived scientific validation data" in `docs/project/THIRD_PARTY_NOTICES.md`.
