@@ -222,15 +222,20 @@ const PARTIAL_STREAM_CAVEAT =
   'Preliminary — only the streamed-in part of the scan has been measured so far; dimensions, areas and volumes will change as more loads. Let the full cloud stream in, then re-run.';
 /**
  * Caveat for a scan whose source linear unit could not be confirmed as metres
- * (no CRS, or a CRS that names no resolved linear unit). Every figure here is
- * labelled "m" / "m²" / "m³" / "pts/m²", but with an unverified scale that claim
- * is an assumption, so say so plainly instead of asserting metres. Recognised by
- * ObjectPanel._caveats to surface it as the visible lead. Parallels the
- * measurement-trust "unknown CRS" gate and the space-report PDF's
- * "scale unverified — not asserted as metres" provenance line.
+ * (no CRS, or a CRS that names no resolved linear unit). The figures are then
+ * computed on the file's OWN coordinates and reported in those units, not in
+ * metres — this line says which units they are, and what to do about it.
+ *
+ * It used to say the figures "assume metres" while the panel printed them as
+ * metres with a foot conversion beside them. A caveat that concedes an
+ * assumption underneath a figure stated in metric units does not undo the
+ * figure. Both surfaces now report source units, so the caveat describes what is
+ * on screen. Recognised by ObjectPanel._caveats to surface it as the visible
+ * lead. Parallels the measurement-trust "unknown CRS" gate and the space-report
+ * PDF's "scale unverified — not asserted as metres" provenance line.
  */
 const UNVERIFIED_UNIT_CAVEAT =
-  'Coordinate units are unverified — dimensions, areas, volumes and densities assume metres. Confirm the source CRS before relying on the figures.';
+  'Coordinate units are unverified, so dimensions, areas, volumes and densities are reported in the source file\'s own units, not in metres. Confirm the source CRS to state them in metres.';
 
 const upOffsets = (a: Axis): { v: number; h1: number; h2: number } => {
   if (a === 'x') return { v: 0, h1: 1, h2: 2 };

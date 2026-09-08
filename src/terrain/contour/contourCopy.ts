@@ -85,6 +85,27 @@ export const METRIC_TOOLTIPS = {
 } as const;
 
 /**
+ * What the spatially-blocked hold-out figure means beside the random one.
+ *
+ * The previous wording claimed the blocked pass predicts "across a real gap",
+ * that it "runs larger" than the random hold-out, and that the random figure is
+ * "optimistic". None of the three survives inspection. The withheld blocks are
+ * data the scan HAS, not a gap it lacks. And the two passes do not differ only
+ * in geometry: the random hold-out re-runs ground classification on the training
+ * points alone, while the blocked pass scores against the whole-cloud
+ * classification, so they estimate different quantities and their order is not
+ * fixed. Naming both treatments is what lets a reader interpret the difference.
+ */
+export const BLOCKED_RMSE_HINT =
+  'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks ' +
+  'withheld and scored on them, so it measures sensitivity to withholding ' +
+  'contiguous geometry rather than scattered points. Not a like-for-like ' +
+  'contrast with the random hold-out above — that figure re-runs ground ' +
+  'classification on the training points only, this one keeps the whole-cloud ' +
+  'classification, so the two estimate different quantities and either can be ' +
+  'the larger. Both are data-quality diagnostics, not field-checkpoint accuracy.';
+
+/**
  * What each DISPLAY grade means, in plain words. The grade is a CONFIDENCE band
  * (how firmly the line is drawn), not source provenance: a solid line is
  * high-confidence terrain, not a claim that every point under it was measured.

@@ -63,6 +63,7 @@ import {
   ANALYSE_LABELS,
   GRADE_MEANING,
   METRIC_TOOLTIPS,
+  BLOCKED_RMSE_HINT,
   NOT_SURVEY_GRADE,
   confidenceWord,
   describeIntervalOption,
@@ -2319,10 +2320,19 @@ export class AnalysePanel {
     this._validationRow.replaceChildren();
     const v = this._result?.validation;
     if (!v) return;
+    // Every figure on this row is a hold-out residual, and a residual is only in
+    // metres when the frame stated a vertical scale. Without one the analysis
+    // leaves the residuals in the source Z unit, so the caption must too — a
+    // scanner-unit number captioned "m" is the failure this row used to ship.
+    const zUnit = this._result?.verticalScaleResolved === false ? 'source Z units' : 'm';
     const rmse = formatHonestValue({
       value: Number.isFinite(v.rmse) ? v.rmse : null,
-      units: 'm',
-      reasonWhenAbsent: 'Not enough ground points to cross-validate.',
+      units: zUnit,
+      // The report knows why it has no figure — too few ground returns, an
+      // invalid parameter, or a requested train-only classification that could
+      // not be produced. Guessing one reason here printed a false explanation
+      // for the other three.
+      reasonWhenAbsent: v.unavailableReason ?? 'Not enough ground points to cross-validate.',
     });
     const cal = this._result?.confidenceOrdering;
     let calText: string;
@@ -2394,7 +2404,7 @@ export class AnalysePanel {
     if (slopeParts.length > 1) {
       this._validationRow.append(el('div', {
         className: 'olv-analyse-strata',
-        text: `RMSE by slope: ${slopeParts.join(' · ')} m`,
+        text: `RMSE by slope: ${slopeParts.join(' · ')} ${zUnit}`,
       }));
     }
     const zoneParts = (v.perZone ?? [])
@@ -2403,7 +2413,7 @@ export class AnalysePanel {
     if (zoneParts.length > 1) {
       this._validationRow.append(el('div', {
         className: 'olv-analyse-strata',
-        text: `RMSE by zone: ${zoneParts.join(' · ')} m`,
+        text: `RMSE by zone: ${zoneParts.join(' · ')} ${zUnit}`,
       }));
     }
 
@@ -2417,23 +2427,25 @@ export class AnalysePanel {
       this._validationRow.append(this._hint(
         el('div', {
           className: 'olv-analyse-reliability',
-          text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz| ≤ ${fmtR(m.tolerance)} m`,
+          text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz| ≤ ${fmtR(m.tolerance)} ${zUnit}`,
         }),
         'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% confidence interval. Interpolated (void-filled) cells are model support, not a measured reliability.',
       ));
     }
 
-    // Spatially-blocked hold-out RMSE — a less optimistic accuracy estimate than
-    // the random hold-out above, since it predicts across whole withheld blocks
-    // (Phase 4). Shown with its bootstrap CI when it was computed.
+    // Spatially-blocked hold-out RMSE. NOT a like-for-like contrast with the
+    // random hold-out above: that one re-runs ground classification on the
+    // training points only, while this one scores against the whole-cloud
+    // classification, so the two differ in treatment as well as in geometry.
+    // The copy says so rather than attributing the gap to the geometry alone.
     const blocked = this._result?.blockedAccuracy;
     if (blocked && blocked.n > 0 && Number.isFinite(blocked.rmse)) {
       this._validationRow.append(this._hint(
         el('div', {
           className: 'olv-analyse-blocked',
-          text: `Blocked RMSE: ${fmtR(blocked.rmse)} m (95% CI ${fmtR(blocked.ciLow)}–${fmtR(blocked.ciHigh)})`,
+          text: `Blocked RMSE: ${fmtR(blocked.rmse)} ${zUnit} (95% CI ${fmtR(blocked.ciLow)}–${fmtR(blocked.ciHigh)})`,
         }),
-        'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks withheld, then scored on them, so it measures how the DTM predicts across a real gap. It runs larger than the random hold-out RMSE, which is optimistic because withheld points sit among their neighbours. Still a data-quality diagnostic, not field-checkpoint accuracy.',
+        BLOCKED_RMSE_HINT,
       ));
     }
   }

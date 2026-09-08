@@ -352,6 +352,13 @@ export interface TerrainCore {
    * field accuracy.
    */
   readonly blockedAccuracy: SpatialBlockResult | null;
+  /**
+   * True when the frame stated a usable vertical scale, so every residual-derived
+   * figure here (`validation`, `blockedAccuracy`, `accuracyStandards`) is in
+   * METRES. False means the residuals stayed in the source Z unit — feet,
+   * millimetres, arbitrary scanner units — and no renderer may caption them "m".
+   */
+  readonly verticalScaleResolved: boolean;
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -470,6 +477,13 @@ export interface AnalyseContoursResult {
    *  measures sensitivity to withholding geometry; a larger figure than the
    *  random hold-out is a result of a given run, not a guarantee. */
   readonly blockedAccuracy: SpatialBlockResult | null;
+  /**
+   * True when the frame stated a usable vertical scale, so every residual-derived
+   * figure here (`validation`, `blockedAccuracy`, `accuracyStandards`) is in
+   * METRES. False means the residuals stayed in the source Z unit — feet,
+   * millimetres, arbitrary scanner units — and no renderer may caption them "m".
+   */
+  readonly verticalScaleResolved: boolean;
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -1000,10 +1014,14 @@ export function computeTerrainCore(
   // metres. Null when skipped or when there aren't enough blocks to split.
   const BLOCKED_CELL_CAP = 250_000; // ~500×500 grid
   const BLOCKED_POINT_CAP = 20_000;
-  const vMetresB =
-    Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0
-      ? (params.verticalUnitToMetres as number)
-      : 1;
+  // ONE resolution of "does this frame state a vertical scale", read by the
+  // blocked hold-out below, the metre-named accuracy standards further down and
+  // the panel that labels both. Three copies of this expression drifted apart
+  // before: the standards were withheld on an unresolved frame while the blocked
+  // RMSE beside them kept a source-unit number captioned "m".
+  const verticalScaleResolved =
+    Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0;
+  const vMetresB = verticalScaleResolved ? (params.verticalUnitToMetres as number) : 1;
   let blockedAccuracy: SpatialBlockResult | null = null;
   if (dtm.cols * dtm.rows <= BLOCKED_CELL_CAP) {
     const { getH1, getH2, getV } = axisGetters(verticalAxis);
@@ -1135,9 +1153,6 @@ export function computeTerrainCore(
   // a consumer reading those names has no way to discover that it does. All
   // three are already `number | null` and every consumer has a null path, so
   // the honest answer costs nothing but the figure itself.
-  const verticalScaleResolved =
-    Number.isFinite(params.verticalUnitToMetres)
-    && (params.verticalUnitToMetres as number) > 0;
   const accuracyStandards = demAccuracyStandards(
     verticalScaleResolved && Number.isFinite(validation.rmse) ? validation.rmse : null,
     verticalScaleResolved && Number.isFinite(validation.p95) ? validation.p95 : null,
@@ -1292,6 +1307,7 @@ export function computeTerrainCore(
     unclassifiedFraction,
     excludedByClassification: classFilter.excludedCount,
     accuracyStandards,
+    verticalScaleResolved,
     surface,
     cellStatusTally,
     complexity,
@@ -1398,6 +1414,7 @@ export function contoursFromCore(
       validation: core.validation,
       reliabilitySplit: core.reliabilitySplit,
       blockedAccuracy: core.blockedAccuracy,
+      verticalScaleResolved: core.verticalScaleResolved,
       confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
@@ -1492,6 +1509,7 @@ export function contoursFromCore(
     validation: core.validation,
     reliabilitySplit: core.reliabilitySplit,
     blockedAccuracy: core.blockedAccuracy,
+    verticalScaleResolved: core.verticalScaleResolved,
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,
