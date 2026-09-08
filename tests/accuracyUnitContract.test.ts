@@ -32,6 +32,52 @@ function slope(): Float32Array {
 
 const BASE: AnalyseContoursParams = { cellSizeM: 1, crs: 'EPSG:32610', verticalDatum: 'EPSG:5703' };
 
+describe('the record says which classification actually ran', () => {
+  /** A slope whose points all carry ASPRS class 2, so the trusted path takes over. */
+  function classifiedSlope(): { pts: Float32Array; cls: Uint8Array } {
+    const pts: number[] = [];
+    for (let x = 0; x <= 30; x += 0.5) {
+      for (let y = 0; y <= 30; y += 0.5) {
+        pts.push(x, y, 10 + x * 0.04 + ((x * 3 + y * 7) % 4) * 0.01);
+      }
+    }
+    return {
+      pts: new Float32Array(pts),
+      cls: Uint8Array.from({ length: pts.length / 3 }, () => 2),
+    };
+  }
+
+  it('reports fixed-source-classification when class 2 was trusted, not train-only', () => {
+    // The trusted-survey path hands the validator an ALL-GROUND pseudo-mask,
+    // because the source's class-2 labels are authoritative and independent of
+    // the split. At the hold-out boundary that is indistinguishable from a real
+    // train-only re-run, so validation.json claimed a classifier had run on the
+    // training points when none had run at all.
+    const { pts, cls } = classifiedSlope();
+    const r = analyseContours(pts, {
+      ...BASE,
+      horizontalUnitToMetres: 1,
+      verticalUnitToMetres: 1,
+      classification: cls,
+      trustGroundClassification: true,
+    });
+    expect(r.validation.sampleSize, 'the fixture must actually validate').toBeGreaterThan(0);
+    expect(r.validation.classificationScope).toBe('fixed-source-classification');
+    expect(r.validation.warnings.join(' ')).toMatch(/no classifier was re-run/i);
+  });
+
+  it('still reports train-only when a classifier really is re-run', () => {
+    // Same surface, no trusted classification: the SMRF path supplies a real
+    // train-only reclassifier, so the refusal above is not simply blanket.
+    const { pts } = classifiedSlope();
+    const r = analyseContours(pts, {
+      ...BASE, horizontalUnitToMetres: 1, verticalUnitToMetres: 1,
+    });
+    expect(r.validation.sampleSize).toBeGreaterThan(0);
+    expect(r.validation.classificationScope).toBe('train-only');
+  });
+});
+
 describe('metre-named accuracy fields require a resolved vertical scale', () => {
   it('reports them on a frame that states its vertical unit', () => {
     const r = analyseContours(slope(), {

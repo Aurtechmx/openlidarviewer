@@ -14,10 +14,18 @@
  * so the effective separation varies within a block and approaches zero at its
  * edges. It partitions the extent
  * into blocks, withholds WHOLE blocks, and scores the held-out block from a
- * surface trained only on the other blocks. The model must then predict across
- * a gap the size of a block, which is the case a user actually cares about.
- * Spatially-structured error makes the blocked RMSE larger than the random one;
- * the gap between them is the optimism the random estimate hides.
+ * surface trained only on the other blocks. The withheld block is data the scan
+ * HAS; calling it "a gap the size of a block" described a hole the survey does
+ * not contain, and the separation it actually imposes is the varying one above.
+ *
+ * The blocked RMSE is often larger than a random hold-out under spatial
+ * autocorrelation, but that is a tendency, not an identity, and it is not
+ * measured here: this module scores whatever mask its caller supplies. In
+ * `analyseContours` the two figures do not even share a treatment — the random
+ * hold-out re-runs ground classification on the training points only, while the
+ * blocked pass keeps the whole-cloud classification — so they estimate different
+ * quantities and either can come out the larger. Reporting the difference as
+ * "the optimism the random estimate hides" attributed it to geometry alone.
  *
  * The surface model is INJECTED (`SurfaceModel`) so this core stays pure and
  * unit-testable with a trivial predictor. The real caller passes a DTM

@@ -637,8 +637,18 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(v).toMatch(/feeds NVA\/VVA/);
     expect(v).toMatch(/8-cell blocks, 4 folds/);
     expect(v).toMatch(/<= 20,000 points/);
-    expect(v).toMatch(/extrapolation across held-out blocks/);
-    expect(v).toMatch(/blocked figure \(3\.87 m\) for map-scale use/);
+    // The report used to call the blocked pass a test of "extrapolation across
+    // held-out blocks" and tell the reader to quote it "for map-scale use". The
+    // withheld blocks are data the scan HAS, and the two figures do not share a
+    // treatment: random re-classifies ground on the training points only, the
+    // blocked pass keeps the whole-cloud classification. Recommending one over
+    // the other asserted an ordering this project does not measure.
+    expect(v).not.toMatch(/extrapolation across held-out blocks/);
+    expect(v).not.toMatch(/for map-scale use/);
+    expect(v).toMatch(/not like-for-like/);
+    expect(v).toMatch(/re-classifies ground on the training points only/);
+    expect(v).toMatch(/neither is guaranteed the larger/);
+    expect(v).toMatch(/blocked 3\.87 m/);
   });
 
   it('#5 names the two density bases apart', () => {

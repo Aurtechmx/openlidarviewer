@@ -478,10 +478,14 @@ export function buildTerrainReportContent(
   const accuracyBases =
     rmseText != null && rmseText !== DASH
       ? `Random hold-out RMSEz (${rmseText}) tests interpolation between neighbouring ground points and feeds NVA/VVA. ` +
-        `Blocked spatial CV (${BLOCKED_CV_TEXT}) tests extrapolation across held-out blocks; ` +
+        `Blocked spatial CV (${BLOCKED_CV_TEXT}) withholds whole blocks instead of scattered points. ` +
+        'The two are not like-for-like: the random pass re-classifies ground on the training ' +
+        'points only, the blocked pass keeps the whole-cloud classification, so they estimate ' +
+        'different quantities and neither is guaranteed the larger. ' +
         (hasBlk
-          ? `quote the blocked figure (${fmtZ(blk.rmse)}) for map-scale use.`
-          : 'it was not run on this grid, so no map-scale figure is available.')
+          ? `Report both figures (blocked ${fmtZ(blk.rmse)}) with the treatment each one ran under; ` +
+            'neither is a field-checkpoint accuracy.'
+          : 'The blocked pass was not run on this grid.')
       : null;
   const qualitySection: TerrainReportSection = {
     title: 'Quality Metrics',
@@ -492,8 +496,10 @@ export function buildTerrainReportContent(
       // figures via the ASPRS formulas, never a checkpoint assessment.
       { label: 'NVA-style (95%, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
       { label: 'VVA-style (95th pct, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
-      // Measured-cell empirical reliability (Wilson CI) and the less optimistic
-      // spatially-blocked RMSE — the same numbers the Analyse panel surfaces.
+      // Measured-cell empirical reliability (Wilson CI) and the spatially-blocked
+      // RMSE — the same numbers the Analyse panel surfaces. "Less optimistic"
+      // was the old wording here and it asserted an ordering this project does
+      // not measure; the Accuracy bases row states what each figure ran under.
       { label: reliabilityLabel, value: reliabilityValue },
       { label: 'Blocked RMSE (spatial CV)', value: blockedValue },
       ...(accuracyBases != null ? [{ label: 'Accuracy bases', value: accuracyBases }] : []),

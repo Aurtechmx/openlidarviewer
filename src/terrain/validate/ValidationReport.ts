@@ -67,7 +67,23 @@ export interface ZoneError {
   readonly mae: number;
 }
 
-/** The result of a hold-out cross-validation pass. */
+/**
+ * Which ground classification the validated surface was fitted from.
+ *
+ * - `whole-cloud` — the mask the caller supplied, produced with the held-out
+ *   points in view. The held-out points helped decide their own ground
+ *   membership: a mild optimism, stated rather than hidden.
+ * - `train-only` — a classifier was RE-RUN on the training points alone, so the
+ *   held-out points influenced neither the classification nor the fit.
+ * - `fixed-source-classification` — no classifier ran. The source's own ground
+ *   labels (ASPRS class 2) were treated as authoritative, and being independent
+ *   of the split there is no classification leak to remove. This read
+ *   `train-only` until v0.6.8: the trusted-survey path supplies an all-ground
+ *   pseudo-reclassifier, which is indistinguishable from a real re-run at the
+ *   hold-out boundary, so the record claimed a classifier ran when none did.
+ */
+export type ClassificationScope = 'whole-cloud' | 'train-only' | 'fixed-source-classification';
+
 /**
  * What a validation report actually ESTIMATES — the estimand. The four are not
  * interchangeable accuracy figures, and a report typed as one must never be read
@@ -101,6 +117,7 @@ export type HoldoutEstimand =
   | 'spatial-gap'
   | 'external-checkpoint';
 
+/** The result of a hold-out cross-validation pass. */
 export interface ValidationReport {
   /**
    * What this report estimates. See {@link HoldoutEstimand}. A consumer that
@@ -110,11 +127,7 @@ export interface ValidationReport {
   readonly estimand: HoldoutEstimand;
   /**
    * Which points the ground classification saw, for the surface this report
-   * scores. `'train-only'` means the classifier was re-run WITHOUT the held-out
-   * points, so the estimand is split-then-classify-then-fit.
-   * `'whole-cloud'` means the classification already covered every point, so it
-   * is classify-then-split-then-fit and the held-out points influenced the mask
-   * that defines ground.
+   * scores — see {@link ClassificationScope} for the three cases.
    *
    * Recorded for the same reason {@link HoldoutEstimand} is a closed union: a
    * caller that requested train-only reclassification and hit a failed or empty
@@ -123,7 +136,7 @@ export interface ValidationReport {
    * number as though the requested treatment had run. Two reports may only be
    * compared as a geometry contrast when this field agrees.
    */
-  readonly classificationScope: 'whole-cloud' | 'train-only';
+  readonly classificationScope: ClassificationScope;
   /**
    * Why no statistic is reported, or null when one is. `sampleSize 0` alone
    * says a figure is missing but not which cause, so every renderer had to

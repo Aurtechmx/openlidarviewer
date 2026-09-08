@@ -345,11 +345,13 @@ export interface TerrainCore {
    */
   readonly reliabilitySplit: ReliabilitySplit | null;
   /**
-   * Spatially-blocked hold-out RMSE (in metres) with a bootstrap CI — a less
-   * optimistic accuracy estimate than the random point hold-out, since it
-   * predicts across whole withheld blocks. Null when skipped (grid too large
-   * to afford the k rebuilds, or too few blocks to split). Diagnostic, not
-   * field accuracy.
+   * Spatially-blocked hold-out RMSE (in metres) with a bootstrap CI. NOT a
+   * like-for-like contrast with `validation`: that pass re-runs ground
+   * classification on the training points only, this one scores against the
+   * whole-cloud classification, so the two estimate different quantities and
+   * neither is guaranteed the larger. Null when skipped (grid too large to
+   * afford the k rebuilds, or too few blocks to split). Diagnostic, not field
+   * accuracy.
    */
   readonly blockedAccuracy: SpatialBlockResult | null;
   /**
@@ -475,7 +477,10 @@ export interface AnalyseContoursResult {
   /** Spatially-blocked hold-out RMSE (metres) + bootstrap CI, or null when
    *  skipped. Withholds whole blocks rather than scattered points, so it
    *  measures sensitivity to withholding geometry; a larger figure than the
-   *  random hold-out is a result of a given run, not a guarantee. */
+   *  random hold-out is a result of a given run, not a guarantee. The two also
+   *  differ in TREATMENT — `validation` re-classifies ground on the training
+   *  points only, this scores against the whole-cloud classification — so the
+   *  difference between them is not attributable to geometry alone. */
   readonly blockedAccuracy: SpatialBlockResult | null;
   /**
    * True when the frame stated a usable vertical scale, so every residual-derived
@@ -873,6 +878,8 @@ export function computeTerrainCore(
   let reclassifyForHoldout:
     | ((points: ReadonlyArray<TerrainPoint>, isHeldOut: Uint8Array) => Uint8Array | ReadonlyArray<number>)
     | undefined;
+  /** What that hook represents, for the report's classificationScope. */
+  let reclassificationKind: 'train-only' | 'fixed-source-classification' = 'train-only';
   if (trust.trust) {
     groundPtsForSurface = trust.groundPoints;
     gf = groundFromTrustedClassification(groundPtsForSurface, {
@@ -890,6 +897,11 @@ export function computeTerrainCore(
     // exist here. Feed the validator an all-ground mask (it excludes held-out
     // points from the fit itself), so it validates the delivered surface.
     reclassifyForHoldout = (pts) => new Uint8Array(pts.length).fill(1);
+    // NOT a re-run classifier, and the record must not read as one. The hook
+    // above is an all-ground pseudo-mask, indistinguishable at the hold-out
+    // boundary from a real train-only pass, which made validation.json report
+    // `train-only` for a path where no classifier ran at all.
+    reclassificationKind = 'fixed-source-classification';
   } else {
     groundPtsForSurface = groundPts;
     gf = classifyGroundSmrf(groundPtsForSurface, groundParams);
@@ -987,6 +999,7 @@ export function computeTerrainCore(
     // an all-ground mask (no SMRF), so the hold-out validates the exact class-2
     // surface the user receives.
     reclassifyGround: reclassifyForHoldout,
+    reclassificationKind,
   });
   const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);

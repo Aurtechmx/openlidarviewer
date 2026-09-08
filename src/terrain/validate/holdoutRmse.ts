@@ -33,6 +33,7 @@ import { hornSlope } from '../ground/terrainDerivatives';
 import { quantileSorted } from '../quantile';
 import type {
   BandError,
+  ClassificationScope,
   ConfidenceSample,
   SlopeBand,
   SlopeBandError,
@@ -125,6 +126,18 @@ export interface HoldoutParams {
     points: ReadonlyArray<TerrainPoint>,
     isHeldOut: Uint8Array,
   ) => Uint8Array | ReadonlyArray<number>;
+  /**
+   * What the `reclassifyGround` hook REPRESENTS, recorded as the report's
+   * {@link ClassificationScope} when it succeeds. Default `'train-only'`.
+   *
+   * This module cannot tell the difference from the inside: a hook that re-runs
+   * a classifier over the training points and a hook that returns an all-ground
+   * mask because the source's class-2 labels are authoritative both hand back a
+   * mask of the right length. The trusted-survey path supplies the latter, and
+   * the record said `train-only` — claiming a classifier ran when none did. The
+   * caller knows which it is, so the caller states it.
+   */
+  readonly reclassificationKind?: Exclude<ClassificationScope, 'whole-cloud'>;
 }
 
 /**
@@ -263,7 +276,7 @@ export function holdoutValidateDtm(
   // the surface was fitted from. Both failure paths below leave it at
   // 'whole-cloud', so a report can never say the requested treatment ran when
   // it did not — the warning strings alone did not stop that.
-  let classificationScope: 'whole-cloud' | 'train-only' = 'whole-cloud';
+  let classificationScope: ClassificationScope = 'whole-cloud';
   if (params.reclassifyGround) {
     const isHeldOut = new Uint8Array(points.length);
     for (const idx of testIdx) isHeldOut[idx] = 1;
@@ -301,10 +314,12 @@ export function holdoutValidateDtm(
         );
         return emptyReport(holdoutFraction, warnings, TRAIN_ONLY_REFUSED);
       } else {
-        classificationScope = 'train-only';
+        classificationScope = params.reclassificationKind ?? 'train-only';
         fitTrain = reTrain;
         warnings.push(
-          'ground classification re-run on training points only (held-out points excluded from the classifier); surface-fit classification leak removed',
+          classificationScope === 'fixed-source-classification'
+            ? 'ground membership taken from the source classification, which is independent of the split, so there is no surface-fit classification leak to remove; no classifier was re-run'
+            : 'ground classification re-run on training points only (held-out points excluded from the classifier); surface-fit classification leak removed',
         );
       }
     }
