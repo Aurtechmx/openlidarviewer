@@ -61,7 +61,6 @@ If you cannot find something below, the directory listing is still the full pict
 | --- | --- |
 | [performance.md](performance.md) | What governs frame rate, and how the viewer adapts when a device runs short. |
 | [benchmarks.md](benchmarks.md) | Field measurements from opening real scans. Not a formal benchmark suite. |
-| [bundle-budget.md](bundle-budget.md) | The shipped bundle size, and the audit that set the target. |
 | [architecture/heavy-cloud-native.md](architecture/heavy-cloud-native.md) | How very large clouds are handled without loading them whole. |
 | [project/CLAIMS_AND_LIMITATIONS.md](project/CLAIMS_AND_LIMITATIONS.md) | The claims the project makes, and the ones it deliberately does not. |
 | [releases/KNOWN_LIMITATIONS_v0.6.8.md](releases/KNOWN_LIMITATIONS_v0.6.8.md) | Known limitations as of the current release. |

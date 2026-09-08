@@ -1,6 +1,6 @@
 # OpenLiDARViewer
 
-<p align="center"><img src="docs/assets/olv-hero.png" alt="OpenLiDARViewer, local-first point-cloud exploration, trusted spatial context in the browser" width="100%"></p>
+<p align="center"><img src="docs/assets/olv-hero.png" alt="OpenLiDARViewer: local-first point-cloud exploration in the browser" width="100%"></p>
 
 A browser-native LiDAR and point-cloud viewer for fast local inspection, 3D navigation, measurement, and terrain analysis. Local-first, cited, honest about what it can't tell you.
 
@@ -148,7 +148,7 @@ Open the Measure tool, pick a kind from the toolbar, and place points directly o
 - **Point inspection**: click a point to read its coordinates and attributes (LAS return number, point source ID, GPS time, and UTM + lat/lon when a CRS is known), with one-click copy, or hover with the live probe for a click-free readout
 - Capture provenance from LAS/LAZ and E57 headers (sensor, source software, date), shown in the Scan Report when the file carries it
 
-Measurement is meant for visual inspection and research, not survey-grade use. Treat it as survey-grade only if you have validated it against survey-grade data and procedures.
+Measurement is meant for visual inspection and research, not survey-grade use. OLV makes no survey-grade claim; if accuracy matters, check against ground control using your own procedures.
 </details>
 
 <details>
@@ -215,7 +215,7 @@ For large datasets, stream **COPC** (`.copc.laz`) or **EPT** (`ept.json`), which
 <details>
 <summary><b>Format matrix and compatibility notes</b></summary>
 
-That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (ASTM E2807, tested against Trimble exports) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings (ASCII, binary, binary-compressed). Large COPC and EPT datasets stream progressively, locally or over HTTP range requests from a URL, with bounded memory and no full-file load.
+That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (the ASTM E2807 format; a subset, read-tested against Trimble exports, with no conformance to that standard claimed) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings (ASCII, binary, binary-compressed). Large COPC and EPT datasets stream progressively, locally or over HTTP range requests from a URL, with bounded memory and no full-file load.
 
 Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. The per-format detail, including scanner and app compatibility, is the format matrix in [`docs/supported-formats.md`](docs/supported-formats.md).
 </details>
@@ -285,7 +285,7 @@ A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
 Each assumes a single drag-and-drop or URL open, with everything happening locally in the browser.
 
 - **Large streaming dataset review.** Open COPC (`.copc.laz`) or EPT (`ept.json`), local file or remote URL. Navigate at interactive frame rates against datasets far larger than browser memory; the scheduler streams only what the current view needs.
-- **Inspection reporting.** Annotate findings, measure distances / areas / slopes / angles / profiles, then export a multi-page PDF report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Two templates and brand-aware accent + logo support.
+- **Inspection reporting.** Annotate findings, measure distances / areas / slopes / angles / profiles, then export a multi-page PDF report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Three templates and brand-aware accent + logo support.
 - **Terrain analysis.** Export height maps from drone LiDAR with legend customisation and unit-system control, useful for slope review, elevation comparison, and quick topographic figures. Cross-section profiles report 3D length, horizontal distance, vertical drop, and grade across any two picked points.
 - **Classification QA.** Export classification maps, toggle the colour mode to highlight specific classes, place annotations on misclassified regions, and round-trip the working state through `.olvsession`.
 - **Mobile scan review.** Open lightweight datasets (`.glb`, `.ply`, `.obj` from Polycam, Scaniverse, or similar) on tablets or phones. The viewer adapts rendering detail and EDL defaults for weaker GPUs so a phone scan is readable from the first frame.
@@ -405,7 +405,7 @@ OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 
 **Data:** the streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo and GURS national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
 
-**Standards & formats:** ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems). Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-perf, COPC, and Entwine this viewer relies on.
+**Format specifications OLV builds against (no conformance claimed):** ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems). Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-perf, COPC, and Entwine this viewer relies on.
 
 ## Citation & research collaboration
 
@@ -420,5 +420,3 @@ OpenLiDARViewer v0.6.7 and later is licensed under the GNU Affero General Public
 Commercial licensing may be available separately from Aur Technologies for eligible components and use cases such as closed-source embedding, OEM redistribution, or proprietary integration. See [LICENSING.md](LICENSING.md), [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md), and [THIRD_PARTY_NOTICES.md](docs/project/THIRD_PARTY_NOTICES.md).
 
 If you use OpenLiDARViewer in research, a [CITATION.cff](CITATION.cff) is included. Developed by Aur Technologies ([aurtech.mx](https://aurtech.mx)).
-</content>
-</invoke>

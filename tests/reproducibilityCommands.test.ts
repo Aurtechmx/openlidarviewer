@@ -23,8 +23,20 @@ import { resolve } from 'node:path';
 const ROOT = resolve(__dirname, '..');
 const read = (p: string): string => readFileSync(resolve(ROOT, p), 'utf8');
 
-/** The documents that tell a reader what to run to reproduce a published figure. */
-const DOCS = ['docs/releases/REPRODUCIBILITY_v0.6.8.md', 'REVIEWER_QUICKSTART.md'] as const;
+/**
+ * The documents that tell a reader what to run to reproduce a published figure.
+ *
+ * REPRODUCIBILITY.md and ARTIFACT_EVALUATION.md were outside this list and both
+ * drifted: each named `npm run test:release` as the authoritative gate, which is
+ * the static stage and prints no verdict line. A guard that covers two of the
+ * four documents a reviewer actually opens is a guard with a hole in it.
+ */
+const DOCS = [
+  'docs/releases/REPRODUCIBILITY_v0.6.8.md',
+  'REVIEWER_QUICKSTART.md',
+  'REPRODUCIBILITY.md',
+  'ARTIFACT_EVALUATION.md',
+] as const;
 
 const GATE_SH = 'scripts/gate.sh';
 
@@ -98,6 +110,30 @@ describe('the reproduction instructions match the gate script', () => {
         if (claimsAScript === null) continue;
         expect(claimsAScript[1], `${path} credits "npm run ${claimsAScript[1]}" with the GATE EXIT line`)
           .toBe('gate');
+      }
+    }
+  });
+
+  it('calls only the gate command the gate', () => {
+    // The GATE EXIT check above fires only on lines mentioning that line, so
+    // "The authoritative deterministic gate is `npm run test:release`" sailed
+    // past it. Both constructions are matched here, and both must name `gate`:
+    //   "<the ... gate> is `npm run X`"   and   "`npm run X` runs the ... gate"
+    // Adjacency matters. A sentence may mention a command and the gate without
+    // equating them ("a clone stops partway into `npm run test:e2e` or the full
+    // release gate"), and that is not a defect.
+    const NAMES_IT =
+      /(?:authoritative[\w -]*gate|the (?:whole|full|entire|complete) (?:release )?gate)[^.`]{0,24}\bis\b[^.`]{0,24}`(?:[A-Z_]+=\S+ )?npm run ([\w:]+)`/i;
+    const RUNS_IT =
+      /`(?:[A-Z_]+=\S+ )?npm run ([\w:]+)`[^.`]{0,40}\bruns\b[^.`]{0,40}(?:authoritative[\w -]*gate|the (?:whole|full|entire|complete) (?:release )?gate)/i;
+    for (const path of DOCS) {
+      for (const line of read(path).split('\n')) {
+        for (const re of [NAMES_IT, RUNS_IT]) {
+          const named = re.exec(line);
+          if (named === null) continue;
+          expect(named[1], `${path} calls "npm run ${named[1]}" the authoritative gate; only "gate" runs every stage`)
+            .toBe('gate');
+        }
       }
     }
   });

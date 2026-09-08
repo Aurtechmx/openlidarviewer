@@ -147,8 +147,8 @@ when the mechanism is actually run against real data and the result committed.
 
 - **E3 → E4 (cross-implementation).** `src/validation/crossCheck.ts` compares our
   grid to an independent tool's grid within a stated tolerance. The procedure is
-  in [`cross-implementation.md`](./cross-implementation.md). Four reference slots
-  are supplied, `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` and `CONTOURS`,
+  in [`cross-implementation.md`](./cross-implementation.md). Seventeen reference slots
+  are supplied (the count the claim register carries; it is the source), `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` and `CONTOURS`,
   each an independent GDAL comparison on a frozen analytic fixture; every other
   slot ships `pending`. No reference output is bundled for a slot that has not
   been compared, and none is fabricated.

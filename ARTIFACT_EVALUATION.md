@@ -8,7 +8,7 @@ A local-first, browser-native LiDAR and point-cloud viewer with terrain analysis
 
 ## Requirements
 
-- Node.js 22 (see `.nvmrc` / `package.json` `engines`).
+- Node.js 22.18.0, pinned in `.nvmrc`. `package.json` `engines` also admits Node >=24.11.0; 22.18.0 is the canonical toolchain.
 - A Chromium-based browser with WebGPU for the interactive and end-to-end portions (a WebGL2 fallback exists). The unit/integration suite and the reproduction pack need only Node.
 
 ## Reproduce (no device beyond Node)
@@ -22,7 +22,7 @@ npm run repro          # regenerates the analytic figures under benchmarks/out/
 npm run build:live && npm run check:bundle
 ```
 
-`npm run test:release` runs the whole gate in one command.
+`OLV_GATE_MODE=release npm run gate` runs the full release gate in one command; `npm run test:release` is its static stage.
 
 ## Claims and their evidence
 

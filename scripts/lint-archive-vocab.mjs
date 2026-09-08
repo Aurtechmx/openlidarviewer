@@ -22,7 +22,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
-import { findSecret, findNarration } from './lib/hygienePatterns.mjs';
+import { findSecret, findNarration, findMarkup, findRoadmapPromise } from './lib/hygienePatterns.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
@@ -123,6 +123,8 @@ function shippedFiles() {
 
 const shipped = shippedFiles();
 const SHIPPED_COUNT = shipped.length;
+const VERSION = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version;
+
 const problems = [];
 for (const rel of shipped) {
   const full = resolve(ROOT, rel);
@@ -138,6 +140,13 @@ for (const rel of shipped) {
   // AI_ASSISTANCE.md legitimately discusses AI assistance at a policy level, so
   // it is exempt from the narration scan (never from the secret scans).
   const narrationExempt = rel.endsWith('AI_ASSISTANCE.md');
+  // A frozen record may promise a release that has since happened: that is what
+  // it recorded on the day, and the project does not rewrite published history.
+  // CHANGELOG sections and superseded release documents are therefore exempt
+  // from the roadmap check. The CURRENT release's documents are not.
+  const roadmapExempt =
+    rel === 'CHANGELOG.md' ||
+    (rel.startsWith('docs/releases/') && !rel.includes(`v${VERSION}`));
   const lines = readFileSync(full, 'utf8').split('\n');
   lines.forEach((line, i) => {
     const secret = line.match(LEAKED_URL_SECRET);
@@ -150,6 +159,18 @@ for (const rel of shipped) {
     if (cred) {
       problems.push(
         `  • ${rel}:${i + 1}: a ${cred} in a shipped file — remove it and rotate the credential (treat it as leaked).`,
+      );
+    }
+    const markup = findMarkup(line);
+    if (markup) {
+      problems.push(
+        `  • ${rel}:${i + 1}: "${markup}" — tool-call transcript markup in a shipped file; delete the tag.`,
+      );
+    }
+    const promise = roadmapExempt ? null : findRoadmapPromise(line);
+    if (promise) {
+      problems.push(
+        `  • ${rel}:${i + 1}: "${promise}" — a promise about an unbuilt release in a shipped file; state what the software does now, or say plainly that it is not supported.`,
       );
     }
     if (!narrationExempt) {

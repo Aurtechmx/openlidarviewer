@@ -4000,8 +4000,8 @@ export class Viewer {
    * colours are stashed so {@link clearSelectionHighlight} can revert.
    *
    * Static clouds only — streaming highlights need per-mesh indexing
-   * (the streaming renderer owns its own colour buffers) and are
-   * deferred to a follow-up cut.
+   * (the streaming renderer owns its own colour buffers) and are not
+   * supported.
    */
   setSelectionHighlight(
     perCloud: ReadonlyMap<string, ReadonlyArray<number>>,

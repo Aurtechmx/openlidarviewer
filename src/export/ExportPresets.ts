@@ -127,10 +127,9 @@ const normalQa: ExportPreset = {
   } satisfies NormalMapOptions,
 };
 
-// Depth and contour presets intentionally absent. Their underlying modes
-// are not registered in the default export registry yet (see
-// `export/index.ts`); restoring the presets is part of the proper depth-
-// buffer + marching-squares contour implementation in a future release.
+// Depth and contour presets intentionally absent: their underlying modes
+// are not registered in the default export registry (see `export/index.ts`),
+// so a preset naming them would offer a mode no exporter serves.
 
 /** The full preset catalogue, in default display order. */
 export const EXPORT_PRESETS: readonly ExportPreset[] = [

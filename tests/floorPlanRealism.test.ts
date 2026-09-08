@@ -306,11 +306,7 @@ describe('removeSpikes', () => {
   });
 
   it('cuts the deeper flank back to the base on an asymmetric spike', () => {
-    const ring: Ring = [
-      [0, 0], [10, 0], [10, 5], [6, 5.2], [5.9, 5.2], [5.9, 4.5], [0, 4.5],
-    ];
-    // Spike at the top: up 0.2 (from y=5 — wait, flanks are [10,5]→[6,5.2]?) —
-    // use a clean one: tip [6,5.2]→[5.9,5.2] (0.1), flanks 0.2 up / 0.7 down.
+    // Tip [6,5.2]→[5.9,5.2] (0.1 m, under MIN_SPUR_M); flanks 0.2 m up, 0.7 m down.
     const ring2: Ring = [
       [0, 0], [10, 0], [10, 5], [6, 5], [6, 5.2], [5.9, 5.2], [5.9, 4.5], [0, 4.5],
     ];
@@ -318,7 +314,6 @@ describe('removeSpikes', () => {
     expect(Math.max(...out.map((p) => p[1]))).toBeLessThanOrEqual(5 + 1e-9);
     // The longer flank survives below the base line (the wall edge continues).
     expect(out.some((p) => Math.abs(p[1] - 4.5) < 1e-9)).toBe(true);
-    void ring;
   });
 
   it('preserves a door jamb: short end cap, metres-long flanks', () => {
