@@ -124,9 +124,41 @@ export function spatialBlockHoldout(
   model: SurfaceModel,
   opts: SpatialBlockOptions,
 ): SpatialBlockResult {
+  // Every statistical parameter is REFUSED rather than repaired.
+  //
+  // A blockSize of 0 became 1 with a warning, a NaN fold count propagated
+  // through Math.min/Math.max, bootstrapN was floored, and ciLevel was accepted
+  // at any value including 0, 1 and 1.5. Each of those manufactures a
+  // valid-looking statistic from an invalid specification, and a warning string
+  // beside a number is not a refusal: the caller still receives an RMSE and a
+  // confidence interval it can quote. These are caller errors, not data
+  // conditions, so they throw where a bad input is written rather than
+  // surfacing as a result that has to be believed.
+  const bad = (what: string, got: unknown): never => {
+    throw new RangeError(`spatialBlockHoldout: ${what}, got ${String(got)}.`);
+  };
+  if (!(Number.isFinite(opts.blockSize) && opts.blockSize > 0)) {
+    bad('blockSize must be a finite number greater than 0', opts.blockSize);
+  }
+  if (opts.folds !== undefined
+    && !(Number.isInteger(opts.folds) && opts.folds >= 2)) {
+    bad('folds must be an integer of at least 2', opts.folds);
+  }
+  if (opts.seed !== undefined
+    && !(Number.isInteger(opts.seed) && opts.seed >= 0)) {
+    bad('seed must be a non-negative integer', opts.seed);
+  }
+  if (opts.bootstrapN !== undefined
+    && !(Number.isInteger(opts.bootstrapN) && opts.bootstrapN >= 0)) {
+    bad('bootstrapN must be a non-negative integer', opts.bootstrapN);
+  }
+  if (opts.ciLevel !== undefined
+    && !(Number.isFinite(opts.ciLevel) && opts.ciLevel > 0 && opts.ciLevel < 1)) {
+    bad('ciLevel must lie strictly between 0 and 1', opts.ciLevel);
+  }
+
   const warnings: string[] = [];
-  const blockSize = opts.blockSize > 0 ? opts.blockSize : 1;
-  if (!(opts.blockSize > 0)) warnings.push(`blockSize invalid; using ${blockSize}`);
+  const blockSize = opts.blockSize;
 
   const finite = points.filter(
     (p) => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z),
@@ -217,7 +249,7 @@ export function spatialBlockHoldout(
   // recompute RMSE over the pooled residuals. Resampling individual residuals
   // (an iid bootstrap) would ignore the spatial correlation within a block and
   // report an interval that is too tight; the block is the exchangeable unit.
-  const B = Math.max(0, Math.floor(opts.bootstrapN ?? 1000));
+  const B = opts.bootstrapN ?? 1000;
   const ciLevel = opts.ciLevel ?? 0.95;
   let ciLow = rmse;
   let ciHigh = rmse;

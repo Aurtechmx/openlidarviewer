@@ -24,8 +24,13 @@ changes a terrain number.
 
 The invariance gate is the load-bearing check here.
 
-The DTM method digests are unchanged. That is what establishes that a release
-of this size moved no surface, no contour and no derived raster. The file and
+The registered DTM method identity is unchanged, and the terrain suites report
+no change in the outputs they test. Those are two separate statements and
+neither implies the other: a method digest proves the configuration is the same,
+and `src/science/dtmProductDigest.ts` says plainly that two runs can share one
+and still deliver different heights. Cell-for-cell product identity is not
+claimed here, because the digest that would establish it is not wired into this
+release. The file and
 commit counts are deliberately not quoted here: they keep moving until the tag,
 and a number that is wrong on the day it is read is worse than no number. A gate that only ran the tests
 would not have shown it.
@@ -66,8 +71,10 @@ is a fact about this commit and not a guarantee the gate enforces.
   limitations.
 - The registration stack and the stockpile area-grid estimator have unit tests
   and no user path, so nothing here validates them as features.
-- Five measurement figures have a documented basis problem that this release
-  did not correct, listed in `KNOWN_LIMITATIONS_v0.6.8.md` together with what
-  each one discloses.
+- Three measurement figures have a documented basis problem that this release
+  did not correct: the resident-versus-declared density basis, the boundary
+  share, and the principal-component bounding box. Each is listed in
+  `KNOWN_LIMITATIONS_v0.6.8.md` with what it discloses. Three others recorded
+  there, all unit defects, were corrected in this release and now fail closed.
 - Mutation testing runs on its own schedule and is not part of this gate. The
   record cites its last result and the commit it was measured at.

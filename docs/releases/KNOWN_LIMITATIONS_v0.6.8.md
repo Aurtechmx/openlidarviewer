@@ -58,7 +58,7 @@ The blocking browser gate is Chromium. Firefox and WebKit run the full
 deterministic suite, and a regression in either would not by itself stop a
 release. Both are green on the commit this document describes. The release has not been cut, so nothing here reports a tagged run.
 
-## Five measurement figures with a known basis problem
+## Remaining measurement basis limitations
 
 - The Analyse ground density and its quality-level chip derive from the resident
   gather, while the Scan Report back-scales to the declared count. The two

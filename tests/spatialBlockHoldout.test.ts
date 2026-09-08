@@ -119,3 +119,51 @@ describe('spatial-block hold-out', () => {
     expect(r.n).toBe(0);
   });
 });
+
+// ── Invalid specifications are refused, not repaired ────────────────────────
+// blockSize 0 became 1 with a warning, a NaN fold count propagated through
+// Math.min/Math.max, bootstrapN was floored and ciLevel was accepted at any
+// value. Each produced a valid-looking RMSE and confidence interval from an
+// invalid specification, and a warning string beside a number is not a refusal:
+// the caller still gets a statistic it can quote.
+describe('spatialBlockHoldout refuses an invalid specification', () => {
+  const run = (opts: Record<string, unknown>) =>
+    () => spatialBlockHoldout(planeGrid(), new NearestModel(),
+      { blockSize: 5, ...opts } as never);
+
+  it('refuses a non-positive or non-finite block size', () => {
+    for (const blockSize of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(run({ blockSize }), `blockSize ${blockSize}`).toThrow(/blockSize must be/);
+    }
+  });
+
+  it('refuses a fold count that is not an integer of at least 2', () => {
+    for (const folds of [1, 0, -3, 2.5, Number.NaN]) {
+      expect(run({ folds }), `folds ${folds}`).toThrow(/folds must be/);
+    }
+  });
+
+  it('refuses a seed that is not a non-negative integer', () => {
+    for (const seed of [-1, 1.5, Number.NaN]) {
+      expect(run({ seed }), `seed ${seed}`).toThrow(/seed must be/);
+    }
+  });
+
+  it('refuses a bootstrap count that is not a non-negative integer', () => {
+    for (const bootstrapN of [-1, 10.5, Number.NaN]) {
+      expect(run({ bootstrapN }), `bootstrapN ${bootstrapN}`).toThrow(/bootstrapN must be/);
+    }
+  });
+
+  it('refuses a confidence level outside (0, 1)', () => {
+    // 0 and 1 are excluded: an interval of zero width and one of infinite
+    // width are both specifications nobody means.
+    for (const ciLevel of [0, 1, -0.5, 1.5, Number.NaN]) {
+      expect(run({ ciLevel }), `ciLevel ${ciLevel}`).toThrow(/ciLevel must/);
+    }
+  });
+
+  it('accepts a valid specification, so the guard is not blanket', () => {
+    expect(run({ folds: 3, seed: 7, bootstrapN: 50, ciLevel: 0.9 })).not.toThrow();
+  });
+});
