@@ -29,6 +29,10 @@ const report = (over: Partial<ValidationReport> = {}): ValidationReport => ({
   method: 'holdout-cross-validation',
   coverageMode: 'measured-only',
   warnings: ['near-flat areas excluded'],
+  // The treatment that produced the figures, and the absence of a refusal —
+  // both now travel with the package.
+  classificationScope: 'whole-cloud',
+  unavailableReason: null,
   ...over,
 }) as ValidationReport;
 
@@ -50,6 +54,24 @@ describe('validationDeliverableJson', () => {
     expect(j.independentCheckpoints).toBe(false);
     expect(String(j.scope)).toMatch(/internal hold-out/i);
     expect(String(j.scope)).toMatch(/not survey-grade/i);
+  });
+
+  it('records WHICH treatment produced the figures, and why there are none', () => {
+    // The package shipped the numbers without either field. A reader could not
+    // tell a train-only hold-out from a whole-cloud one — the distinction
+    // `classificationScope` exists to carry — nor a scan with too few ground
+    // returns from a refused statistical parameter.
+    const ran = validationDeliverableJson(report());
+    expect(ran.classificationScope).toBe('whole-cloud');
+    expect(ran.unavailableReason).toBeNull();
+
+    const refused = validationDeliverableJson(
+      report({ sampleSize: 0, rmse: NaN, holdoutFraction: NaN,
+        unavailableReason: 'cellSizeM must be a finite positive length; got 0' }),
+    );
+    expect(refused.unavailableReason).toMatch(/cellSizeM/);
+    expect(refused.holdoutFraction, 'a refused run emitted a bare NaN fraction').toBeNull();
+    expect(JSON.stringify(refused)).not.toContain('NaN');
   });
 
   it('reports a non-finite statistic as null, never NaN', () => {

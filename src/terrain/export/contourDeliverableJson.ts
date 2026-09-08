@@ -37,7 +37,15 @@ export function validationDeliverableJson(v: ValidationReport): Record<string, u
     nmad: finiteOrNull(v.nmad),
     sampleSize: v.sampleSize,
     uncoveredCount: v.uncoveredCount,
-    holdoutFraction: v.holdoutFraction,
+    // A refused run carries no fraction, so this follows the same finite-or-null
+    // rule as the statistics rather than emitting a bare NaN.
+    holdoutFraction: finiteOrNull(v.holdoutFraction),
+    // WHICH TREATMENT produced the figures, and why there are none when there
+    // are none. The package shipped the numbers without either: a reader could
+    // not tell a train-only hold-out from a whole-cloud one, nor a scan with too
+    // few ground returns from a refused statistical parameter.
+    classificationScope: v.classificationScope,
+    unavailableReason: v.unavailableReason,
     perBand: v.perBand,
     perSlopeBand: v.perSlopeBand ?? null,
     perZone: v.perZone ?? null,
@@ -72,7 +80,7 @@ export interface ContourStudioJsonContext {
 /** Schema version of the {@link contourStudioDeliverableJson} payload. */
 export const CONTOUR_STUDIO_JSON_SCHEMA = 2;
 /** Schema version of the {@link validationDeliverableJson} payload. */
-export const VALIDATION_JSON_SCHEMA = 1;
+export const VALIDATION_JSON_SCHEMA = 2;
 
 /**
  * The ContourStudio.json payload: the exact settings that produced this
