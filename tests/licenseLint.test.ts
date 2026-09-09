@@ -75,6 +75,34 @@ describe('lint:license boundary', () => {
     expect(problems.some((p: string) => /CITATION\.cff/.test(p))).toBe(true);
   });
 
+  it('rejects a .zenodo.json identity relation to a Software Heritage snapshot', () => {
+    // A snapshot names the whole repository on one archival visit. No visit of
+    // a release can precede its tag, so `isIdenticalTo swh:1:snp:` committed
+    // before tagging asserts identity with a state the release is not.
+    // v0.6.7 shipped one; this is the check that did not exist.
+    writeFileSync(resolve(root, '.zenodo.json'), JSON.stringify({
+      title: 'x', upload_type: 'software', license: 'AGPL-3.0-only',
+      related_identifiers: [
+        { relation: 'isIdenticalTo', identifier: 'swh:1:snp:7b496fd207adaae61d5add4137e7d4eb781a1f83', resource_type: 'software' },
+      ],
+    }, null, 2));
+    expect(checkLicense(root).some((p: string) => /swh:1:snp:.*swh:1:rel:/.test(p))).toBe(true);
+  });
+
+  it('accepts a release or directory identifier, and any non-identity relation', () => {
+    // The guard is about the IDENTITY claim, not about naming the archive at
+    // all: a release SWHID resolved from the tag is exactly what belongs here,
+    // and a snapshot under `references` asserts nothing false.
+    writeFileSync(resolve(root, '.zenodo.json'), JSON.stringify({
+      title: 'x', upload_type: 'software', license: 'AGPL-3.0-only',
+      related_identifiers: [
+        { relation: 'isIdenticalTo', identifier: 'swh:1:rel:0000000000000000000000000000000000000000', resource_type: 'software' },
+        { relation: 'references', identifier: 'swh:1:snp:7b496fd207adaae61d5add4137e7d4eb781a1f83', resource_type: 'software' },
+      ],
+    }, null, 2));
+    expect(checkLicense(root).some((p: string) => /swh:1:/.test(p))).toBe(false);
+  });
+
   it('rejects .zenodo.json declaring MIT', () => {
     writeFileSync(resolve(root, '.zenodo.json'), JSON.stringify({ title: 'x', upload_type: 'software', license: 'MIT' }, null, 2));
     expect(checkLicense(root).some((p: string) => /\.zenodo\.json license/.test(p))).toBe(true);
