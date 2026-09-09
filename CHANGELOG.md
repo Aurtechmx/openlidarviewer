@@ -17,6 +17,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 - Scan output names the population each number describes. A strided load carries the declared count, the decoded subset and a smaller analysis gather, and rows across the Scan Report, the dataset card, the Analyse fitness summary and the terrain and technical PDFs previously stated a figure without saying which. Classification reports its measured unclassified share rather than a hardcoded zero, the dataset card reports the resident count labelled `display-sample` rather than the declared count labelled `full`, and "Captured" and "Capture Sensor" are now "File created" and "System identifier", which is what those header fields hold.
 - The canonical toolchain moves to Node 22.18.0 with npm 10.9.3, and the verifier reads the pin instead of a hardcoded version.
+- The hold-out validation refuses an invalid split fraction, cell size or seed, a ground mask that does not cover the cloud, and a requested train-only reclassification that could not be produced, reporting the reason instead of substituting a default or the whole-cloud figure. Its record names which ground classification the surface was fitted from: `whole-cloud`, `train-only`, or `fixed-source-classification` when class 2 was trusted, and the spatially blocked figure records the same. The panel and report describe the contrast between the two figures from those records rather than asserting that the blocked figure predicts across a gap or runs larger.
+- Residual figures are captioned in the unit they are in. On a frame with no stated vertical scale the panel, the terrain PDF, the review bar and `validation.json` say source Z units, and the ASPRS-style RMSEz, NVA and VVA fields are withheld.
+- Two-epoch change reports no cut and fill volume and no elevation difference when the epochs cannot be confirmed to share a frame, when their grids differ in cell size, dimensions or origin, or when only one epoch's vertical scale resolves. The difference raster is exported only from a fully co-registered pair. Volumes use compensated sums, no comparable cells yields no value rather than zero, and the uncertainty band describes the raw net it accompanies.
+- Checkpoint accuracy validates the per-stratum minimum and the output of a supplied uncertainty combination, refusing the record when either is unusable.
 
 ### Fixed
 
@@ -26,6 +30,16 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - The reclassify lasso painted above the panels and swallowed clicks meant for them.
 - Object metrics measured in source units and labelled the result metres.
 - Two tabs indexing heavy files at once could drop each other's cache-map entries, leaving a promoted store on disk that nothing referenced.
+- The interior scan panel printed source-unit dimensions, areas and volumes as metres and feet when the unit was unknown.
+- Measurement CSV and GeoJSON columns named `length_m`, `area_m2` and `volume_m3` on an unresolved unit are now `length_source`, `area_source2` and `volume_source3`; the dimensioned floor plan is refused and the grid recommendation withheld on the same condition.
+- The epoch surface builder dropped the vertical unit factor, so a foot-vertical compound frame despiked at about 0.09 m instead of 0.30 m.
+- Contour deliverables stated a unit and a grade that disagreed with the analysis that produced them.
+- GeoTIFF fields that fit inline are written inline, and clip provenance is kept through the export.
+- Slow touch gestures are kept, yaw rotates around world up, and ending a gesture cancels cleanly.
+- The no-CDN loader options reach every parse call.
+- Derived classes computed under a later-invalidated frame are withheld from a new analysis.
+- The Coconino checkpoint artifacts state the universe they measure and agree with the register's DTM evidence level; the slope claim no longer records a border shortfall the corrected kernel and its matrix have closed.
+- `THREATS_TO_VALIDITY.md` and `DATA_AVAILABILITY.md` said the repository redistributes no external data while eight derived validation files are committed; both now distinguish raw clouds from derived crops, and `THIRD_PARTY_NOTICES.md` attributes each derived file, which CC BY 4.0 requires for the Estonian Land Board tile.
 
 ### Evidence
 

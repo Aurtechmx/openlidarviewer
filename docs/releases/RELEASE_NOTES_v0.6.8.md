@@ -48,6 +48,39 @@ compensates while coarse nodes stand in for fine ones, so a refining view reads
 as refining rather than as sparse. Residency, decode retries and upload-queue
 totals are reported from the scheduler that owns them.
 
+## Validation and change figures refuse rather than substitute
+
+Several analysis outputs used to answer with a number under a caveat when the
+input did not support one. Each now reports no figure and states why, because a
+caveat is a line of prose above a number, and the number is what gets quoted.
+
+- The hold-out validation refuses an invalid split fraction, cell size or seed,
+  a ground mask that does not cover the cloud, and a requested train-only
+  reclassification that could not be produced. It used to substitute a default
+  or the whole-cloud figure in the same field. The report carries the reason.
+- Every residual figure is captioned in the unit it is in. When the frame
+  states no vertical scale, the Analyse panel, the terrain PDF, the review bar
+  and the exported `validation.json` say source Z units, and the ASPRS-style
+  RMSEz, NVA and VVA fields are withheld rather than labelled metres.
+- `validation.json` records which ground classification the validated surface
+  was fitted from: the whole cloud, a classifier re-run on the training points
+  only, or the source's own classification when class 2 was trusted. The
+  spatially blocked figure records the same, and the panel and report describe
+  the contrast between the two figures from those records. The earlier wording
+  said the blocked figure predicts across a real gap and runs larger; neither
+  is measured.
+- Two-epoch change reports no cut and fill volume and no elevation difference
+  when the two epochs cannot be confirmed to share a frame, when their grids
+  differ in cell size, dimensions or origin, or when one epoch's vertical scale
+  resolves and the other's does not. The difference raster can still be viewed
+  and is exported only from a fully co-registered pair. Volumes are summed with
+  compensated arithmetic, a comparison with no comparable cells reports no
+  value rather than zero, and the uncertainty band describes the raw net it is
+  printed beside.
+- Checkpoint accuracy validates the per-stratum minimum and the output of a
+  caller-supplied uncertainty combination, and refuses the record when either
+  is unusable.
+
 ## Provenance you can check
 
 - Contours export as a complete package with a DXF, a validation record and the
@@ -55,6 +88,16 @@ totals are reported from the scheduler that owns them.
 - A Scan QA report replaces the retired acceptance checklist, stating the
   coordinate-quality verdict, classification provenance and what the report does
   not establish.
+- The Coconino checkpoint artifacts state the universe they measure and agree
+  with the evidence level the claim register assigns the DTM.
+- `docs/project/THIRD_PARTY_NOTICES.md` lists every derived validation file
+  committed under `validation/terrain-field/` with its source, licence and DOI.
+  Raw source clouds are not redistributed; the derived crops and checkpoint
+  records are, and the two documents which stated otherwise now say so.
+- The slope claim no longer records a 16.2 degree border shortfall against
+  `gdaldem -compute_edges`; the kernel was corrected and the matrix asserts
+  agreement on the border ring. The border stays outside the claim because the
+  supporting study does not compute edges.
 
 A scientific artifact passport, an evidence boundary inspector and a SHA-256
 over the DTM surface are implemented and tested, but no user path reaches them
@@ -87,6 +130,28 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
 - The reclassify lasso painted above the panels and swallowed clicks meant for
   them.
 - Object metrics measured in source units and labelled the result metres.
+- The interior scan panel did the same for dimensions, floor area, ceiling
+  height and enclosed volume, printing metres and feet on an unknown unit.
+- A measurement CSV or GeoJSON named its columns `length_m`, `area_m2` and
+  `volume_m3` on a scan whose unit never resolved. Those columns are now
+  `length_source`, `area_source2` and `volume_source3`, the dimensioned floor
+  plan is refused on the same condition, and the grid recommendation is
+  withheld rather than sized from source coordinates against a metre ladder.
+- The epoch surface builder dropped the vertical unit factor, so a compound
+  frame with a foot vertical despiked at a floor of about 0.09 m instead of
+  0.30 m.
+- Contour deliverables stated a unit and a grade that disagreed with the
+  analysis that produced them.
+- GeoTIFF fields short enough to fit inline are written inline, and clip
+  provenance is kept through the export.
+- Slow touch gestures are kept, yaw rotates around world up, and ending a
+  gesture cancels cleanly.
+- The no-CDN loader options reach every parse call, so a build configured to
+  fetch nothing fetches nothing.
+- Derived classes computed under a frame that was later invalidated are
+  withheld from a new analysis instead of carried into it.
+- The quantile convention each statistic uses is named in its record, and two
+  accumulators that summed naively are compensated.
 
 ## Known limitations
 
