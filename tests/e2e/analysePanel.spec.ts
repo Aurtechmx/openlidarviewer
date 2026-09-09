@@ -110,9 +110,16 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   await expect(page.locator('.olv-analyse-relief-toggle')).toContainText(/Multi-directional/i);
   await expect(page.locator('.olv-analyse-sample').first()).toBeVisible();
   await expect(page.locator('.olv-analyse-surface-dl').first()).toContainText(/Export PNG/i);
-  // Recommended grid + interval lines (inside the now-open Details).
-  await expect(page.locator('.olv-analyse-reco', { hasText: /Recommended grid/i })).toBeVisible();
-  await expect(page.locator('.olv-analyse-reco', { hasText: /contour interval/i })).toBeVisible();
+  // The grid and interval recommendation are WITHHELD here, and the row says
+  // why: the dropped PLY carries no CRS, the ladders are metre ladders, and a
+  // recommendation sized from raw coordinates was the defect. This spec used to
+  // expect "Recommended grid: N m" on that scan, which the analysis produced
+  // only because the live path handed it a placeholder scale of 1 and it read
+  // that as a resolved unit. The resolved case is covered by the runner-level
+  // unit test with a metre CRS.
+  await expect(page.locator('.olv-analyse-reco', { hasText: /No grid recommendation/i })).toBeVisible();
+  await expect(page.locator('.olv-analyse-reco', { hasText: /Recommended grid/i })).toHaveCount(0);
+  await expect(page.locator('.olv-analyse-reco', { hasText: /contour interval/i })).toHaveCount(0);
 
   // Export gating (v0.5.9): the export controls no longer sit inline. They are
   // the Contour Studio workspace's export bar, mounted inside the gated
