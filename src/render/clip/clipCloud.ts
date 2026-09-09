@@ -80,7 +80,10 @@ export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
     metadata: cloud.metadata,
   });
   if (derived && classification) {
-    subset.attachDerivedClassification(Uint8Array.from(classification));
+    // `classification` is the fresh buffer filterChannel just allocated and
+    // attach stores by reference, so copying it again doubled the channel's
+    // peak memory on a full-resolution export for nothing.
+    subset.attachDerivedClassification(classification);
     // Order matters: attaching marks the codes freshly derived, which is right
     // for a new derive and wrong for a copy. A subset of stale codes is stale.
     if (cloud.derivedClassificationFrameInvalid) {

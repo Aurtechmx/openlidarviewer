@@ -115,6 +115,26 @@ describe('exportMeasurementsFile — landing local points in the source frame', 
     expect(ctx.geographic).toBe(false);
   });
 
+  it('marks a geographic frame unverified for metric columns', async () => {
+    // Every fixture set geographicCrs: false, so the guard that stops a lon/lat
+    // scan exporting degree differences under `length_m` was never exercised;
+    // reverting it to a `geographic: false` literal left the suite green.
+    const r = deps({
+      measure: {
+        getMeasurements: () => [distance('m1', [1, 2, 3], [4, 5, 6])],
+        worldUp: [0, 0, 1],
+        unitToMetres: 1,
+        verticalUnitToMetres: 1,
+        crsKnown: true,
+        geographicCrs: true,
+      },
+    });
+    await exportMeasurementsFile('csv', r.deps);
+    const ctx = r.csvCalls[0].ctx;
+    expect(ctx.geographic).toBe(true);
+    expect(ctx.unitsVerified, 'a geographic frame was treated as metre-verified').toBe(false);
+  });
+
   it('keeps a separate vertical factor for a compound CRS', async () => {
     const r = deps({
       measure: {
