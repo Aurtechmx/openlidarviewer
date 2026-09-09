@@ -239,8 +239,9 @@ export function holdoutValidateDtm(
   }
 
   if (ground.length < 4) {
-    warnings.push('too few ground returns to cross-validate');
-    return emptyReport(holdoutFraction, warnings);
+    const why = 'too few ground returns to cross-validate';
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
   }
 
   // Deterministic split. Iterate by index (identical RNG draw order to the
@@ -260,8 +261,9 @@ export function holdoutValidateDtm(
     }
   }
   if (train.length === 0 || test.length === 0) {
-    warnings.push('split produced an empty train or test set');
-    return emptyReport(holdoutFraction, warnings);
+    const why = 'split produced an empty train or test set';
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
   }
 
   // The DTM below is fit from `fitTrain`. The hold-out already withholds points
@@ -509,8 +511,9 @@ export function holdoutValidateDtm(
   }
 
   if (covered === 0) {
-    warnings.push('no held-out points landed in a covered cell');
-    return { ...emptyReport(holdoutFraction, warnings), uncoveredCount: uncovered };
+    const why = 'no held-out points landed in a covered cell';
+    warnings.push(why);
+    return { ...emptyReport(holdoutFraction, warnings, why), uncoveredCount: uncovered };
   }
 
   const rmse = Math.sqrt(sumSqAcc.total / covered);
@@ -598,10 +601,17 @@ function normalizedMedianAbsDeviation(values: readonly number[]): number {
   return 1.4826 * quantileSorted(dev, 0.5);
 }
 
+/**
+ * The refused report. `unavailableReason` is REQUIRED: while it defaulted to
+ * "too few ground returns", two refusals that had nothing to do with ground
+ * returns (an empty split, no held-out point on a covered cell) took the
+ * default, and the panel printed that false explanation beside a warnings
+ * list that said otherwise. The compiler now refuses a refusal with no reason.
+ */
 function emptyReport(
   holdoutFraction: number,
   warnings: string[],
-  unavailableReason = 'too few ground returns to cross-validate',
+  unavailableReason: string,
 ): ValidationReport {
   return {
     estimand: 'point-reconstruction',

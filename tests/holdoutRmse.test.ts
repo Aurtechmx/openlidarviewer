@@ -164,6 +164,25 @@ describe('holdoutValidateDtm', () => {
     }
   });
 
+  it('states the refusal it actually made, not the nearest one', () => {
+    // Four ground points and a split fraction of 0.999 send every point to the
+    // test set, so the train set is empty. That refusal pushed its own warning
+    // but returned the report with the DEFAULT reason, and the panel printed
+    // "too few ground returns to cross-validate" for a run that had enough
+    // returns and an empty split. The reason must be the warning.
+    const points = [
+      { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 1, y: 1, z: 0 },
+    ];
+    const r = holdoutValidateDtm(points, new Uint8Array([1, 1, 1, 1]), {
+      cellSizeM: 1, holdoutFraction: 0.999, seed: 1,
+    });
+    expect(r.sampleSize).toBe(0);
+    expect(r.warnings.join(' '), 'the fixture did not produce an empty split')
+      .toMatch(/empty train or test set/);
+    expect(r.unavailableReason).toMatch(/empty train or test set/);
+    expect(r.unavailableReason).not.toMatch(/too few ground returns/);
+  });
+
   it('refuses a ground mask that does not cover the cloud', () => {
     // A short mask reads `undefined` past its end, which is `!== 1`, so every
     // point beyond it silently becomes non-ground: the validated sample turns
