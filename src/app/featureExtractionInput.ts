@@ -101,6 +101,11 @@ export function buildFeatureExtractionInput(
   unitAuthority?: { readonly metresPerUnit: number | null },
 ): FeatureExtractionInput | null {
   if (!cloud) return null;
+  // A derived classification computed under a frame that has since changed is
+  // withheld from the terrain gather; it was still read here, so building and
+  // conductor candidates were re-extracted from the invalidated codes on the
+  // very CRS change that invalidated them, and exported under the new frame.
+  if (cloud.classificationIsDerived && cloud.derivedClassificationFrameInvalid) return null;
   const classification = cloud.classification;
   const positions = cloud.positions;
   if (!classification || positions.length === 0) return null;

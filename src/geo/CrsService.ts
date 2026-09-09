@@ -196,6 +196,26 @@ export interface ResolveForScanInput {
  * Listeners receive `null` when the active scan closes and a fresh
  * `ResolvedCrs` after every successful resolve / override change.
  */
+/**
+ * Structural equality of two resolved CRS records. Plain data only (strings,
+ * numbers, booleans, optional fields), compared key by key so that an
+ * `undefined` field and an absent one read the same. Any differing fact,
+ * including `source` and `userConfirmed`, is a different frame: the metric
+ * claims a frame permits depend on them.
+ */
+function sameResolvedCrs(a: ResolvedCrs, b: ResolvedCrs): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    const va = (a as unknown as Record<string, unknown>)[k];
+    const vb = (b as unknown as Record<string, unknown>)[k];
+    if (va === vb) continue;
+    if (va == null && vb == null) continue;
+    if (typeof va === 'number' && typeof vb === 'number' && Number.isNaN(va) && Number.isNaN(vb)) continue;
+    return false;
+  }
+  return true;
+}
+
 export class CrsService {
   private readonly _port: CrsOverridePort;
   private readonly _listeners: Set<CrsListener> = new Set();
@@ -457,12 +477,27 @@ export class CrsService {
   }
 
   private _setCurrent(next: ResolvedCrs | null): void {
+    const prev = this._current;
     this._current = next;
-    // Every change to the active CRS advances the revision. A terrain result is
+    // Every CHANGE to the active CRS advances the revision. A terrain result is
     // computed under one spatial frame — projected/geographic kind, horizontal
     // and vertical scale, datum — so a result minted at revision N describes a
     // frame that revision N+1 may have replaced. Scan identity alone cannot see
     // that: an override changes the frame without changing the scan.
+    //
+    // A re-resolution that lands the SAME frame is not a change. This bumped on
+    // every call, so opening a second tile of one survey, or re-applying the
+    // override already in force, advanced the revision: the freshness stamps
+    // then refused the on-screen result as "coordinate system changed", every
+    // derived classification was marked frame-invalid and the terrain cache
+    // dropped, for a frame that had not moved. Equality is over the whole
+    // resolved record, so any fact that differs still counts as a change.
+    if (prev !== null && next !== null && sameResolvedCrs(prev, next)) {
+      for (const fn of this._listeners) {
+        try { fn(next); } catch { /* see below */ }
+      }
+      return;
+    }
     this._crsRevision += 1;
     // Drop the memoised context so the next `context()` read rebuilds from the
     // CRS that just landed. Invalidate rather than recompute: a scan swap that

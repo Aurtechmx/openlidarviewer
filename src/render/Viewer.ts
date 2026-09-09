@@ -30,6 +30,8 @@
  */
 
 import * as THREE from 'three/webgpu';
+
+const TWIST_AXIS = new THREE.Vector3(), TWIST_OFFSET = new THREE.Vector3(); // twist scratch, per pointermove
 import type { ColorModeHost } from './colorModeSupport';
 import { applyInspectionPreset, type PresetApplication, type PresetApplyHost } from './presetApplication';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -250,7 +252,7 @@ import {
   isIdentityPlacement,
   accumulatorOffset,
   rayOriginToLayer,
-  placePoint,
+  placePoint, contributorsShareOneOrigin,
 } from './layerPlacement';
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import {
@@ -2312,9 +2314,7 @@ export class Viewer {
    * gather, so a hidden layer is not counted against it.
    */
   terrainFrameIsSingleOrigin(): boolean {
-    const os = integrableClouds(this._clouds.values()).map((e) => e.cloud.sourceOrigin)
-      .filter((o): o is readonly [number, number, number] => Array.isArray(o));
-    return os.every((o) => o[0] === os[0][0] && o[1] === os[0][1] && o[2] === os[0][2]);
+    return contributorsShareOneOrigin(integrableClouds(this._clouds.values()));
   }
 
   clouds(): string[] {
@@ -5627,9 +5627,9 @@ export class Viewer {
       // whichever it is now. A fixed XY-plane rotation was written when +Z was
       // the only up; on a Y-up cloud (a phone scan) that plane is vertical, so
       // a 90° twist from (10, 5, 0) moved the camera to y = 10.
-      const axis = this._worldUp.clone().normalize();
-      const off = cam.position.clone().sub(tgt).applyAxisAngle(axis, delta.dTwist);
-      cam.position.copy(tgt).add(off);
+      TWIST_AXIS.copy(this._worldUp).normalize();
+      TWIST_OFFSET.copy(cam.position).sub(tgt).applyAxisAngle(TWIST_AXIS, delta.dTwist);
+      cam.position.copy(tgt).add(TWIST_OFFSET);
     }
 
     // ── pan / centroid drift ───────────────────────────────────────────

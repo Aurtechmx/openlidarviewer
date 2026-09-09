@@ -14,6 +14,7 @@ import {
   accumulatorOffset,
   mergePlacedBounds,
   placeBufferInto,
+  contributorsShareOneOrigin,
 } from '../src/render/layerPlacement';
 import {
   createProjectFrame,
@@ -135,5 +136,44 @@ describe('placeBufferInto', () => {
     const next = placeBufferInto(dest, 3, src, IDENTITY);
     expect(Array.from(dest)).toEqual([1, 1, 1, 7, 8, 9]);
     expect(next).toBe(6);
+  });
+});
+
+describe('contributorsShareOneOrigin', () => {
+  const O: readonly [number, number, number] = [500_000, 4_000_000, 100];
+  const placed = {
+    sourceOrigin: O,
+    sourceToProject: [1000, 0, 0] as const,
+    projectToSource: [-1000, 0, 0] as const,
+  };
+
+  it('is true for unplaced contributors sharing one origin', () => {
+    expect(contributorsShareOneOrigin([
+      { placement: null, cloud: { sourceOrigin: O } },
+      { placement: null, cloud: { sourceOrigin: [500_000, 4_000_000, 100] } },
+    ])).toBe(true);
+  });
+
+  it('is false when the origins differ', () => {
+    expect(contributorsShareOneOrigin([
+      { placement: null, cloud: { sourceOrigin: O } },
+      { placement: null, cloud: { sourceOrigin: [501_000, 4_000_000, 100] } },
+    ])).toBe(false);
+  });
+
+  it('is false for a single PLACED contributor, whose surface is in the project frame', () => {
+    // One visible placed layer beside a hidden anchor: the origins trivially
+    // agree (there is one), but the gather folded the placement in, so the
+    // surface sits at sourceOrigin + sourceToProject, not at sourceOrigin.
+    // Anchoring the export at sourceOrigin shifted every coordinate by 1 km.
+    expect(contributorsShareOneOrigin([
+      { placement: placed, cloud: { sourceOrigin: O } },
+    ])).toBe(false);
+  });
+
+  it('treats an identity placement as unplaced', () => {
+    expect(contributorsShareOneOrigin([
+      { placement: { sourceOrigin: O, sourceToProject: [0, 0, 0], projectToSource: [0, 0, 0] }, cloud: { sourceOrigin: O } },
+    ])).toBe(true);
   });
 });

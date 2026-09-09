@@ -96,7 +96,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { classCountsOf, noteClassificationEdited, noteDerivedClassesFrameChanged } from './app/classLegendRefresh';
+import { classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { classifierOptions } from './render/class/classifierCues';
 import { classificationCoverage } from './render/class/classificationCoverage';
@@ -2920,15 +2920,13 @@ const exportPanel = new ExportPanel({
 // assign / reproject, so the step collapses to a one-line note. A georeferenced
 // scan behaves exactly as before. Fires on every resolve / override change, plus
 // once here to seed the initial (no-scan ⇒ collapsed) state.
-crsService.subscribe((resolved) => {
-  exportPanel.setCrsKnown(crsIsKnown(resolved));
-  // Both froze unit factors from the OLD frame: the grade decodes for seconds
-  // guarded only on its streaming source, and every space/object dimension was
-  // scaled by the superseded factor. Cancel one, invalidate the other.
-  cancelFullCloudGrade();
-  lastSpaceExport = null;
-  noteDerivedClassesFrameChanged({ invalidate: () => viewer?.invalidateDerivedClassificationsForFrame() ?? [], clearTerrainCache: () => terrainRunner.abortAndClearCache(), noteStale: (m) => analysePanel?.setStaleNotice(m) });
-  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } // reveal on scan load, hide + reset produced on close
+wireFrameChange({
+  crsService,
+  onResolved: (resolved) => { exportPanel.setCrsKnown(crsIsKnown(resolved)); if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } }, // reveal on scan load, hide + reset produced on close
+  cancelFullCloudGrade: () => cancelFullCloudGrade(),
+  invalidate: () => viewer?.invalidateDerivedClassificationsForFrame() ?? [],
+  clearTerrainCache: () => terrainRunner.abortAndClearCache(),
+  noteStale: (m) => analysePanel?.setStaleNotice(m),
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
@@ -5420,7 +5418,8 @@ function compareLoadedLayers(): void {
       // byte-identical no-op; OLV never reprojects, so the grid unit stays source.
       // The whole co-registration verdict, not just a proven frame clash: see
       // EpochComparison.coregistered for why the file is stricter than the panel.
-      if (!cmp.coregistered) {
+      if (!cmp.coregistered || cmp.result.stats.comparable === 0) {
+        // An all-NaN raster is not a difference; it was offered for download.
         inspector.setDifferenceAvailable(false);
         return;
       }

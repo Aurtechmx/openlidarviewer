@@ -25,6 +25,7 @@
  * unit-testable without a Viewer or a panel.
  */
 
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { countClasses } from '../render/class/classHistogram';
 import { toClassBuffer } from '../render/class/classBuffer';
 
@@ -105,4 +106,46 @@ export function noteDerivedClassesFrameChanged(deps: FrameChangeInvalidateDeps):
   if (deps.invalidate().length === 0) return;
   deps.clearTerrainCache();
   deps.noteStale(CLASS_FRAME_STALE_NOTICE);
+}
+
+// ── Frame-change wiring ──────────────────────────────────────────────────────
+// `CrsService` broadcasts on every resolution; the frame changes only when its
+// revision does. The cascade below is destructive (it cancels the full-cloud
+// grade, marks every derived classification frame-invalid and drops the
+// terrain cache), and it used to be the subscriber body, so opening a second
+// tile of one survey did all of that to the first tile for a frame that had not
+// moved. Lives here because it exists to call noteDerivedClassesFrameChanged.
+
+export interface FrameChangeDeps {
+  readonly crsService: {
+    subscribe(fn: (resolved: ResolvedCrs | null) => void): void;
+    crsRevision(): number;
+  };
+  /** Runs on EVERY broadcast, before the revision check. */
+  readonly onResolved: (resolved: ResolvedCrs | null) => void;
+  /** The full-cloud grade froze unit factors from the old frame. */
+  readonly cancelFullCloudGrade: () => void;
+  readonly invalidate: () => ReadonlyArray<string>;
+  readonly clearTerrainCache: () => void;
+  readonly noteStale: (message: string) => void;
+}
+
+/** Subscribe the frame-change cascade; returns nothing, the service holds it. */
+export function wireFrameChange(deps: FrameChangeDeps): void {
+  let seen = deps.crsService.crsRevision();
+  deps.crsService.subscribe((resolved) => {
+    deps.onResolved(resolved);
+    const rev = deps.crsService.crsRevision();
+    if (rev === seen) return;
+    seen = rev;
+    // The space context is NOT nulled here: its crsRevision stamp already
+    // refuses a stale export with a message that says why, and nulling it
+    // turned the Report PDF and Floor plan buttons into silent no-ops.
+    deps.cancelFullCloudGrade();
+    noteDerivedClassesFrameChanged({
+      invalidate: deps.invalidate,
+      clearTerrainCache: deps.clearTerrainCache,
+      noteStale: deps.noteStale,
+    });
+  });
 }
