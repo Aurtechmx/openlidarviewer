@@ -1191,6 +1191,9 @@ export function computeTerrainCore(
     tally: cellStatusTally,
     meanCellConfidence: dtm.meanConfidence,
     holdoutRmseM: rmseMetres,
+    // Validated in the source unit is still validated; only the METRE value
+    // is withheld above.
+    holdoutValidated: Number.isFinite(validation.rmse),
     groundPointRatio,
     coverageMode: dtm.coverageMode,
     crs,
