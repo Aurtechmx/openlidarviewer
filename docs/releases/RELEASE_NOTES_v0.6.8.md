@@ -80,6 +80,22 @@ caveat is a line of prose above a number, and the number is what gets quoted.
 - Checkpoint accuracy validates the per-stratum minimum and the output of a
   caller-supplied uncertainty combination, and refuses the record when either
   is unusable.
+- The analysis is told whether the frame resolved a scale, separately from the
+  scale factor it uses for geometry. The live path supplies a placeholder factor
+  of 1 for a scan with no CRS, and the analysis derived "resolved" from that
+  factor, so none of the withholding above was reachable from the application
+  until the two facts were stated apart.
+- A comparison in which no cell is measured in both epochs reports that, rather
+  than a NaN volume, and offers no difference raster. A geographic pair keeps
+  its elevation differences and withholds only the volumes, as before.
+- Re-resolving the same coordinate system, which opening a second tile of one
+  survey does, no longer counts as a frame change: derived classifications stay
+  valid, the terrain cache is kept, and the on-screen result is not refused as
+  stale. A derived classification the frame has invalidated is withheld from
+  building and wire extraction as it already was from terrain.
+- A terrain export from a layer that carries a project placement publishes no
+  origin rather than the layer's own, which would have translated every
+  coordinate by the placement offset.
 
 ## Provenance you can check
 
@@ -152,6 +168,14 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
   withheld from a new analysis instead of carried into it.
 - The quantile convention each statistic uses is named in its record, and two
   accumulators that summed naively are compensated.
+- The DEM README, the contour deliverable and the readiness card labelled an
+  unresolved unit as metres; each now says "units" or "source Z units".
+- A full three-axis epoch alignment on a compound frame applied the solved
+  vertical shift in the fit's scaled Z rather than in raw Z.
+- The grid recommendation on a geographic frame multiplied relief by the metres
+  per degree and ignored the cosine of latitude in the width.
+- After a coordinate-system override the interior report and floor-plan buttons
+  did nothing; they now refuse with the reason.
 
 ## Known limitations
 

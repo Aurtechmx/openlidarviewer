@@ -47,7 +47,7 @@ git diff --exit-code -- package-lock.json   # a clean install must not rewrite i
 OLV_GATE_MODE=release npm run gate           # require the literal GATE EXIT: 0
 ```
 
-The runtime dependency set is unchanged from v0.6.6, the SBOM carries over, and `docs/project/DEPENDENCIES.md` records the re-verification for this release.
+The runtime dependency set added and removed no package this cycle and moved three (`@loaders.gl/core`, `@loaders.gl/obj` and `@loaders.gl/ply` to 4.4.5), so the SBOM differs from v0.6.7's in those three components; `docs/project/DEPENDENCIES.md` records the audit for this release.
 
 ## Two kinds of evidence, and which one to cite
 

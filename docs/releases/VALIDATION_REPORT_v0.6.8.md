@@ -33,10 +33,9 @@ neither implies the other: a method digest proves the configuration is the same,
 and `src/science/dtmProductDigest.ts` says plainly that two runs can share one
 and still deliver different heights. Cell-for-cell product identity is not
 claimed here, because the digest that would establish it is not wired into this
-release. The file and
-commit counts are deliberately not quoted here: they keep moving until the tag,
-and a number that is wrong on the day it is read is worse than no number. A gate that only ran the tests
-would not have shown it.
+release. File and commit
+counts are not part of this report; the release manifest carries them at the
+tag. A gate that only ran the tests would not have shown it.
 
 ## What was tested for v0.6.8
 
@@ -61,7 +60,7 @@ this work, and Firefox and WebKit are advisory rather than blocking. This
 document does not assert them as a verified property of this commit, because the
 committed evidence carries `workflow`, `workflowRunId` and `workflowSha` as null:
 the gate that produced it ran locally, so there is no run a reader can trace. The
-mutation record shows what the traceable form looks like — it carries its own
+mutation record shows what the traceable form looks like, since it carries its own
 `workflowRunUrl`. The authoritative exact-tag run fills those fields, and the
 claim belongs in the record that has them, not here.
 

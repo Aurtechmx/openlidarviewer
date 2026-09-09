@@ -21,6 +21,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Residual figures are captioned in the unit they are in. On a frame with no stated vertical scale the panel, the terrain PDF, the review bar and `validation.json` say source Z units, and the ASPRS-style RMSEz, NVA and VVA fields are withheld.
 - Two-epoch change reports no cut and fill volume and no elevation difference when the epochs cannot be confirmed to share a frame, when their grids differ in cell size, dimensions or origin, or when only one epoch's vertical scale resolves. The difference raster is exported only from a fully co-registered pair. Volumes use compensated sums, no comparable cells yields no value rather than zero, and the uncertainty band describes the raw net it accompanies.
 - Checkpoint accuracy validates the per-stratum minimum and the output of a supplied uncertainty combination, refusing the record when either is unusable.
+- The analysis receives whether the frame resolved a scale separately from the geometry factor, so the unit withholding above is reachable from the application; a placeholder factor of 1 had made it dead code on the live path.
+- A comparison with no cell measured in both epochs reports that instead of a NaN volume and offers no raster; a geographic pair keeps its elevation differences.
+- Re-resolving an unchanged coordinate system does not count as a frame change, so derived classifications, the terrain cache and the on-screen result survive an additive layer open; an invalidated derived classification is withheld from feature extraction.
+- A terrain export from a placed layer publishes no origin rather than the layer's own.
 
 ### Fixed
 
@@ -39,6 +43,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - The no-CDN loader options reach every parse call.
 - Derived classes computed under a later-invalidated frame are withheld from a new analysis.
 - The Coconino checkpoint artifacts state the universe they measure and agree with the register's DTM evidence level; the slope claim no longer records a border shortfall the corrected kernel and its matrix have closed.
+- The DEM README, the contour deliverable and the readiness card labelled an unresolved unit as metres.
+- A full three-axis epoch alignment on a compound frame applied the solved vertical shift in scaled rather than raw Z.
+- The geographic grid recommendation multiplied relief by metres per degree and ignored the cosine of latitude.
+- After a coordinate-system override the interior report and floor-plan buttons did nothing instead of refusing with a reason.
 - `THREATS_TO_VALIDITY.md` and `DATA_AVAILABILITY.md` said the repository redistributes no external data while eight derived validation files are committed; both now distinguish raw clouds from derived crops, and `THIRD_PARTY_NOTICES.md` attributes each derived file, which CC BY 4.0 requires for the Estonian Land Board tile.
 
 ### Evidence

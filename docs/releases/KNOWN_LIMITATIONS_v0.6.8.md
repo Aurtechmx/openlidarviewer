@@ -91,6 +91,29 @@ rather than changed under the freeze. The unit defects were changed, because a
 figure labelled in a unit it is not in is a false statement rather than a
 verdict.
 
+## What the refusals withhold
+
+- A floor plan is refused for a scan whose linear unit never resolved, which
+  includes every local-frame interior capture without a CRS. The wall slice is
+  a physical band 0.7 to 1.8 m above the floor and cannot be placed in an
+  unknown unit. There is no control yet for declaring a unit without declaring
+  a CRS, so a metre-unit phone capture loses the plan until one is added.
+- The hold-out validation refuses when the train-only classifier finds no
+  ground in the training subset. On a very sparse cloud the whole-cloud
+  classifier can find ground where the train-only one does not; no figure is
+  reported in that case, and no whole-cloud figure stands in for it.
+- A two-epoch comparison on a geographic frame builds its surfaces with the
+  vertical factor held at 1 even when the frame declares a foot vertical, so
+  the ground-filter thresholds and the despike floor run in feet there while
+  the Analyse panel on the same scan converts them. The elevation differences
+  are still scaled by the declared factor. The two paths resolve the vertical
+  factor differently on a geographic frame.
+- Contour, DEM and package exports carry the evidence status of the
+  least-supported product they contain, and every one of them contains the DTM,
+  which is at E4 with E5 required. The "Internal validation" badge is therefore
+  not reachable for any export in this release; a contour cut from a DTM cannot
+  be better supported than the DTM.
+
 ## The shell has little headroom
 
 The eager bundle measures 803 KiB against an 812 KiB ceiling, above its own
@@ -99,24 +122,22 @@ statically imported today, and that is a refactor rather than a tuning step.
 
 The ceiling moved from 800 to 812 in this cycle. What grew is the
 frame-freshness wiring described under the monoliths below, and it sits in the
-eager shell because the shell holds the handles it has to invalidate. The lazy
-seam was weighed as the alternative and not taken: making the module registry
-asynchronous turns two synchronous error guards into escaping rejections, and
-the compiler does not flag that. Every raise of this ceiling is recorded beside
-the number in `scripts/check-bundle-budget.mjs`.
+eager shell because the shell holds the handles it has to invalidate. Every
+raise of this ceiling is recorded beside the number in
+`scripts/check-bundle-budget.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,558 lines and `src/render/Viewer.ts` is 6,424. A lint fails
+`src/main.ts` is 5,557 lines and `src/render/Viewer.ts` is 6,424. A lint fails
 the build when either file passes its recorded baseline, so neither may grow
 beyond the number banked for it. The `--update` flag banks a drop and refuses a
 raise, so raising a baseline is a hand edit to
 `docs/validation/monolith-size-baseline.json` and always shows up in the diff.
 
 Both baselines were raised inside this cycle: `src/main.ts` in three steps from
-5,529 to 5,558, and `src/render/Viewer.ts` in two from 6,407 to 6,426, then
+5,529 to 5,557, and `src/render/Viewer.ts` in two from 6,407 to 6,426, then
 lowered to 6,424 when the classification-input rule moved out of it. Measured
-against v0.6.7 the shell is smaller, 5,675 then against 5,558 now, and the
+against v0.6.7 the shell is smaller, 5,675 then against 5,557 now, and the
 renderer larger, 6,419 then against 6,424 now.
 
 Most of what those raises paid for is the frame-freshness wiring: a

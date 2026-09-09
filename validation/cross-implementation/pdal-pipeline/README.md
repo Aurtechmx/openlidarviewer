@@ -186,7 +186,7 @@ Recorded per study in `results-ground-filter.json` and `results-dtm.json` under
 `fixtures/pc-16-estonia-boreal.csv` and `pdal/pc-16-estonia-boreal__smrf.csv` are
 the only real-survey data in this directory. They are a crop of Estonian Land
 Board national LiDAR, 2020, tile 568539 (Tava area), CC BY 4.0, DOI
-10.5281/zenodo.19232743 — the acquisition registered as `EST-ELB-TAVA-2020` in
+10.5281/zenodo.19232743, the acquisition registered as `EST-ELB-TAVA-2020` in
 `validation/terrain-field/datasets/manifest.json`, which carries its full
 provenance. Both files are pinned by the digest manifests beside them. The
 attribution the licence requires travels with the archive through this note and
