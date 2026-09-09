@@ -626,6 +626,10 @@ interface GroundTrustDecision {
   readonly requestedButUnavailable: boolean;
 }
 
+/** Refusal when an explicit trust request finds no source ground. */
+export const TRUSTED_GROUND_UNAVAILABLE =
+  'trusted source-ground treatment unavailable: trustGroundClassification was requested and no ASPRS class 2 (ground) points are present; no substitute ground filter was run';
+
 /**
  * Decide whether to trust an existing ground classification (see
  * {@link TerrainCoreParams.trustGroundClassification}) and, when so, select the
@@ -903,11 +907,15 @@ export function computeTerrainCore(
     groundPts.length,
     params.trustGroundClassification,
   );
+  // An EXPLICIT trust request with no class-2 points is refused, not replaced.
+  // This fell back to the SMRF filter under a warning, so a run that asked for
+  // the source classification received a surface from a different algorithm
+  // under the same field names — the substitution the train-only hold-out
+  // refusal already removes. Auto mode may still choose SMRF; explicit true
+  // fails closed: no ground set, an empty surface, a blocked verdict.
   if (trust.requestedButUnavailable) {
-    warnings.push(
-      'trustGroundClassification was requested but no ASPRS class 2 (ground) ' +
-        'points are present; falling back to the SMRF ground filter.',
-    );
+    warnings.push(TRUSTED_GROUND_UNAVAILABLE);
+    groundPts = [];
   }
   let groundPtsForSurface: ReadonlyArray<TerrainPoint>;
   let gf: GroundFilterResult;
@@ -1172,10 +1180,17 @@ export function computeTerrainCore(
   const cellStatusTally = tallyCellStatus(classifyCellStatus(dtm));
   const groundPointRatio =
     gf.sourcePointCount > 0 ? gf.groundPointCount / gf.sourcePointCount : Number.NaN;
+  // The gate's RMSE field means metres and is judged against a metre floor.
+  // On a frame with no resolved vertical scale the residual is in source Z
+  // units and used to be handed over regardless, so a foot residual was judged
+  // as a metre one. NaN reads as "no figure" there; null does the same below.
+  const rmseMetres = verticalScaleResolved && Number.isFinite(validation.rmse)
+    ? validation.rmse
+    : Number.NaN;
   const quality = evaluateDtmQuality({
     tally: cellStatusTally,
     meanCellConfidence: dtm.meanConfidence,
-    holdoutRmseM: validation.rmse,
+    holdoutRmseM: rmseMetres,
     groundPointRatio,
     coverageMode: dtm.coverageMode,
     crs,
@@ -1246,11 +1261,17 @@ export function computeTerrainCore(
   const qualityScore = terrainQualityScore({
     measuredOfCovered: coveredCells > 0 ? cellStatusTally.measured / coveredCells : 0,
     meanCellConfidence: Number.isFinite(dtm.meanConfidence) ? dtm.meanConfidence : 0,
-    holdoutRmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+    holdoutRmseM: Number.isFinite(rmseMetres) ? rmseMetres : null,
     groundPointRatio: Number.isFinite(groundPointRatio) ? groundPointRatio : null,
     boundaryMeasuredRatio: cellMetrics.boundaryMeasuredRatio,
     meanDensity: cellMetrics.meanDensity,
-    cellSizeM: params.cellSizeM,
+    // The score multiplies density by cell area. The density is per m² where a
+    // horizontal scale resolved (cellMetrics converts with the same factor), so
+    // the cell edge must be in metres too: a 1 ft cell handed over as 1 read as
+    // 1 m², overstating returns per cell by 1/0.3048², about 10.8×. Without a
+    // resolved scale both stay in source units and the product is still
+    // returns per cell.
+    cellSizeM: params.cellSizeM * horizUnitToMetres,
   });
 
   // Surface models — a top-surface DSM (all returns) on the DTM grid, the

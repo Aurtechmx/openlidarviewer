@@ -120,6 +120,69 @@ describe('the record says which classification actually ran', () => {
   });
 });
 
+describe('an explicit trust of the source ground fails closed', () => {
+  it('runs no substitute ground filter when class 2 is absent', () => {
+    // Every point is class 1. Explicit trust used to fall back to the SMRF
+    // filter under a warning, so the run delivered a surface from an algorithm
+    // it did not request under the same field names.
+    const pts: number[] = [];
+    for (let x = 0; x <= 30; x += 0.5) for (let y = 0; y <= 30; y += 0.5) pts.push(x, y, 10 + x * 0.04);
+    const cls = Uint8Array.from({ length: pts.length / 3 }, () => 1);
+    const r = analyseContours(new Float32Array(pts), {
+      ...BASE, horizontalUnitToMetres: 1, verticalUnitToMetres: 1,
+      classification: cls, trustGroundClassification: true,
+    });
+    expect(r.warnings.join(' ')).toMatch(/trusted source-ground treatment unavailable/);
+    expect(r.warnings.join(' ')).not.toMatch(/falling back to the SMRF/);
+    expect(r.validation.sampleSize, 'a substitute surface was validated').toBe(0);
+    expect(r.quality.readiness).toBe('blocked');
+    // Auto mode on the same cloud still classifies, so the refusal is specific
+    // to the explicit request.
+    const auto = analyseContours(new Float32Array(pts), {
+      ...BASE, horizontalUnitToMetres: 1, verticalUnitToMetres: 1, classification: cls,
+    });
+    expect(auto.validation.sampleSize).toBeGreaterThan(0);
+  });
+});
+
+describe('the quality score reads metre inputs only where metres resolved', () => {
+  it('withholds the RMSE from the metre floor on an unresolved vertical scale', () => {
+    const unresolved = analyseContours(slope(), { ...BASE, horizontalUnitToMetres: 1 });
+    // The gate's own metric record carries what it was judged on.
+    expect(Number.isNaN(unresolved.quality.holdoutRmseM),
+      'a source-unit residual was judged against the 0.15 m floor').toBe(true);
+    const resolved = analyseContours(slope(), { ...BASE, horizontalUnitToMetres: 1, verticalUnitToMetres: 1 });
+    expect(Number.isFinite(resolved.quality.holdoutRmseM)).toBe(true);
+  });
+
+  it('scores one site the same whether it is described in metres or in feet', () => {
+    // The density is per m² where a horizontal scale resolved; the cell edge
+    // the score multiplied it by was still in source units, so a foot cell
+    // read as a metre cell and returns per cell were overstated ~10.8×.
+    const FT = 0.3048;
+    // The raster's origin is the data minimum, so one anchor point at (0, 0)
+    // pins it there and every other point, at odd metres on a 2 m grid, sits
+    // at a cell CENTRE ((2k+1)/2 = k + 0.5). Without the anchor the points sat
+    // on cell edges and the non-representable foot coordinates flipped 175 of
+    // 400 cells by float rounding, which changed coverage and confidence and
+    // hid the density term this test is about.
+    const site = (unitsPerMetre: number): Float32Array => {
+      const out: number[] = [0, 0, 10 * unitsPerMetre];
+      for (let x = 1; x < 40; x += 2) for (let y = 1; y < 40; y += 2) {
+        out.push(x * unitsPerMetre, y * unitsPerMetre, (10 + x * 0.05) * unitsPerMetre);
+      }
+      return new Float32Array(out);
+    };
+    const metres = analyseContours(site(1), {
+      ...BASE, cellSizeM: 2, horizontalUnitToMetres: 1, verticalUnitToMetres: 1,
+    });
+    const feet = analyseContours(site(1 / FT), {
+      ...BASE, cellSizeM: 2 / FT, horizontalUnitToMetres: FT, verticalUnitToMetres: FT,
+    });
+    expect(feet.qualityScore.score).toBeCloseTo(metres.qualityScore.score, 0);
+  });
+});
+
 describe('metre-named accuracy fields require a resolved vertical scale', () => {
   it('reports them on a frame that states its vertical unit', () => {
     const r = analyseContours(slope(), {
