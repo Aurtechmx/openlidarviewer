@@ -137,7 +137,9 @@ describe('compareEpochClouds', () => {
     );
     expect(cmp).not.toBeNull();
     expect(cmp!.volumesComputable).toBe(false);
-    expect(cmp!.coregistered).toBe(false); // the refusal note forces the caveat path
+    // Co-registration is not in doubt for two EPSG:4326 epochs on one grid; the
+    // degree note withholds the VOLUME and the summary keeps the Δz figures.
+    expect(cmp!.coregistered).toBe(true);
     expect(cmp!.coregistrationNotes.join(' ')).toMatch(/degree/i);
     const text = summarizeChange(cmp!).join('\n');
     expect(text).not.toContain('Net volume change'); // no m³ figure at all

@@ -65,16 +65,27 @@ describe('derived classification stakes its frame too', () => {
 });
 
 describe('a frame change cancels or invalidates what it invalidates', () => {
-  it('the CRS subscriber cancels an in-flight grade and drops the space capture', async () => {
-    const src = await import('node:fs').then((fs) => fs.readFileSync('src/main.ts', 'utf8'));
-    // There are several CRS subscribers; the frame-invalidation one is whichever
-    // carries both effects, so assert on the file and on their adjacency rather
-    // than on a fixed ordinal.
-    const i = src.indexOf('cancelFullCloudGrade();');
-    expect(i, 'no CRS-driven grade cancel').toBeGreaterThan(0);
-    const around = src.slice(Math.max(0, i - 700), i + 200);
-    expect(around).toMatch(/crsService\.subscribe/);
-    expect(around).toMatch(/lastSpaceExport = null/);
+  it('the frame-change wiring cancels an in-flight grade and leaves the space capture to its stamp', async () => {
+    const fs = await import('node:fs');
+    const main = fs.readFileSync('src/main.ts', 'utf8');
+    // The cascade is wired through wireFrameChange, which subscribes to the
+    // service and runs it only on a revision change. The shell hands it the
+    // grade cancel; the wiring module owns the subscription.
+    const i = main.indexOf('wireFrameChange({');
+    expect(i, 'the shell no longer wires the frame change').toBeGreaterThan(0);
+    const block = main.slice(i, i + 900);
+    expect(block).toMatch(/crsService,/);
+    expect(block).toMatch(/cancelFullCloudGrade: \(\) => cancelFullCloudGrade\(\)/);
+    const wiring = fs.readFileSync('src/app/classLegendRefresh.ts', 'utf8');
+    const w = wiring.indexOf('export function wireFrameChange');
+    expect(w).toBeGreaterThan(0);
+    expect(wiring.slice(w, w + 900)).toMatch(/crsService\.subscribe/);
+    expect(wiring.slice(w, w + 900)).toMatch(/deps\.cancelFullCloudGrade\(\)/);
+    // The space capture is NOT nulled on a frame change: nulling it made the
+    // Report PDF and Floor plan buttons silent no-ops. Its crsRevision stamp
+    // refuses a stale export with a message instead.
+    expect(block).not.toMatch(/lastSpaceExport = null/);
+    expect(main).toMatch(/spaceCtxCurrent\(/);
   });
 });
 

@@ -63,12 +63,20 @@ describe('the viewer marks only DERIVED classifications', () => {
     expect(body).not.toMatch(/delete|splice|= null|applyDerivedClassification/);
   });
 
-  it('is wired to the CRS subscriber in the shell', async () => {
-    const src = await import('node:fs').then((fs) => fs.readFileSync('src/main.ts', 'utf8'));
-    const i = src.indexOf('cancelFullCloudGrade();');
+  it('is wired to the frame change through the shell', async () => {
+    const fs = await import('node:fs');
+    const main = fs.readFileSync('src/main.ts', 'utf8');
+    const i = main.indexOf('wireFrameChange({');
     expect(i).toBeGreaterThan(0);
-    const around = src.slice(Math.max(0, i - 800), i + 500);
-    expect(around).toMatch(/crsService\.subscribe/);
-    expect(around).toMatch(/noteDerivedClassesFrameChanged/);
+    const block = main.slice(i, i + 900);
+    expect(block).toMatch(/invalidateDerivedClassificationsForFrame/);
+    expect(block).toMatch(/abortAndClearCache/);
+    // The wiring subscribes and calls the invalidation helper on a revision change.
+    const wiring = fs.readFileSync('src/app/classLegendRefresh.ts', 'utf8');
+    const w = wiring.indexOf('export function wireFrameChange');
+    const body = wiring.slice(w, w + 900);
+    expect(body).toMatch(/crsService\.subscribe/);
+    expect(body).toMatch(/noteDerivedClassesFrameChanged\(/);
+    expect(body).toMatch(/if \(rev === seen\) return;/);
   });
 });

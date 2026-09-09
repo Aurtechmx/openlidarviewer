@@ -55,7 +55,6 @@ describe('the co-registration verdict covers every case the summary refuses', ()
         compareDtms(grid(10, { verticalDatum: null }), grid(10.5, { verticalDatum: null }))],
       ['unknown linear unit',
         compareDtms(grid(10), grid(10.5), { horizontalUnitKnown: false })],
-      ['geographic grid', compareDtms(grid(10), grid(10.5), { isGeographic: true })],
       ['offset origins', compareDtms(grid(10), grid(10.5, { originH1: 0.49 }))],
       ['differing CRS', compareDtms(grid(10), grid(10.5, { crs: 'EPSG:32613' }))],
     ];
@@ -64,6 +63,14 @@ describe('the co-registration verdict covers every case the summary refuses', ()
     }
     // And a clean pair still IS co-registered, so the gate is not simply closed.
     expect(compareDtms(grid(10), grid(10.5)).coregistered).toBe(true);
+    // A geographic pair is co-registered: both frames are known and equal. What
+    // the degree grid withholds is the VOLUME, through volumesComputable, and the
+    // summary keeps the elevation differences. Counting the degree note against
+    // co-registration once swept every EPSG:4326 pair into "cannot be confirmed
+    // to share a frame", which is false.
+    const geo = compareDtms(grid(10), grid(10.5), { isGeographic: true });
+    expect(geo.coregistered).toBe(true);
+    expect(geo.volumesComputable).toBe(false);
   });
 });
 
@@ -77,7 +84,9 @@ describe('main.ts gates the difference raster on that whole verdict', () => {
       .toBeGreaterThan(start);
     const between = main.slice(start, offer);
     expect(between, 'the difference raster is offered without checking co-registration')
-      .toMatch(/if\s*\(\s*!\s*cmp\.coregistered\s*\)/);
+      .toMatch(/if\s*\(\s*!\s*cmp\.coregistered\b/);
+    // And on a comparison in which nothing was compared, which is an all-NaN raster.
+    expect(between).toMatch(/cmp\.result\.stats\.comparable === 0/);
     // Narrowing it back to the provable subset is the regression this guards.
     expect(between).not.toMatch(/if\s*\(\s*cmp\.frameIncompatible\s*\)\s*\{\s*\n\s*inspector\.setDifferenceAvailable\(false\)/);
   });
