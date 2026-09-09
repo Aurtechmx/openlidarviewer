@@ -107,22 +107,15 @@ export function blockedRmseHint(
   randomScope: ClassificationScope,
   blockedScope: ClassificationScope,
 ): string {
-  const base =
-    'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks '
+  // ONE treatment sentence, shared with the PDF report. This function carried
+  // its own wording of the same three-way case beside blockedTreatmentContrast,
+  // so the screen and the document already described one comparison in two
+  // spellings the day both were written.
+  return 'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks '
     + 'withheld and scored on them, so it measures sensitivity to withholding '
-    + 'contiguous geometry rather than scattered points. ';
-  const shared =
-    randomScope === blockedScope
-      ? randomScope === 'fixed-source-classification'
-        ? 'Both figures use the source ground classification, and no classifier is '
-          + 'run for either, so the contrast changes withholding geometry while '
-          + 'holding classification treatment fixed. '
-        : 'Both figures use the same ground classification, so the contrast changes '
-          + 'withholding geometry alone. '
-      : `The two are not like-for-like: the random hold-out uses ${scopeWords(randomScope)} `
-        + `and this pass uses ${scopeWords(blockedScope)}, so the contrast changes `
-        + 'classification treatment as well as geometry and either can be the larger. ';
-  return `${base}${shared}Both are data-quality diagnostics, not field-checkpoint accuracy.`;
+    + 'contiguous geometry rather than scattered points. '
+    + `${blockedTreatmentContrast(randomScope, blockedScope)} `
+    + 'Both are data-quality diagnostics, not field-checkpoint accuracy.';
 }
 
 /**

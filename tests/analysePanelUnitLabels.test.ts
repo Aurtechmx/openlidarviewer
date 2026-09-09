@@ -149,6 +149,6 @@ describe('the blocked hold-out is not described as the random one plus a gap', (
     expect(blocked).not.toMatch(/runs larger/);
     expect(blocked).not.toMatch(/is optimistic/);
     expect(blocked).toMatch(/classification/);
-    expect(blocked).toMatch(/either can be the larger/);
+    expect(blocked).toMatch(/neither is guaranteed the larger/);
   });
 });
