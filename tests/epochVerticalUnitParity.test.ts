@@ -55,6 +55,46 @@ const footVerticalEpoch = (): EpochCloud => ({
   verticalUnitToMetres: M_PER_FT,
 });
 
+/** The same site on a GEOGRAPHIC frame: degrees horizontally, Z declared. */
+const geoEpoch = (zScale: number): EpochCloud => ({
+  // 40 x 40 m expressed in degrees at the equator, so the shared grid is fine.
+  positions: (() => {
+    const src = site(zScale);
+    const out = new Float32Array(src.length);
+    const DEG = 1 / 111_320;
+    for (let i = 0; i < src.length; i += 3) {
+      out[i] = src[i] * DEG; out[i + 1] = src[i + 1] * DEG; out[i + 2] = src[i + 2];
+    }
+    return out;
+  })(),
+  crs: 'EPSG:4326',
+  verticalDatum: 'EPSG:5703',
+  isGeographic: true,
+  verticalUnitToMetres: zScale,
+});
+
+describe('a geographic frame honours its declared vertical scale', () => {
+  it('produces the same epoch surface from a metre-Z and a foot-Z description', () => {
+    // dtmOnGrid forced the vertical factor to 1 on a geographic frame, so a
+    // foot-vertical compound frame ran the SMRF thresholds and the despike
+    // floor in feet while the Analyse panel converted them for the same scan.
+    const inMetres = buildSharedEpochDtms(geoEpoch(1), geoEpoch(1));
+    const inFeet = buildSharedEpochDtms(geoEpoch(M_PER_FT), geoEpoch(M_PER_FT));
+    expect(inMetres).not.toBeNull();
+    expect(inFeet).not.toBeNull();
+    const m = (inMetres as NonNullable<typeof inMetres>).before;
+    const f = (inFeet as NonNullable<typeof inFeet>).before;
+    const measured = (g: { z: Float32Array }): number => [...g.z].filter((v) => Number.isFinite(v)).length;
+    expect(measured(f), 'the foot description lost cells the metre description kept').toBe(measured(m));
+    let maxDelta = 0;
+    for (let i = 0; i < m.z.length; i++) {
+      if (!Number.isFinite(m.z[i]) || !Number.isFinite(f.z[i])) continue;
+      maxDelta = Math.max(maxDelta, Math.abs(m.z[i] - f.z[i] * M_PER_FT));
+    }
+    expect(maxDelta).toBeLessThan(1e-3);
+  });
+});
+
 describe('the epoch DTM is invariant to how the vertical unit is described', () => {
   it('produces the same surface from a metre-Z and a foot-Z description of one site', () => {
     const inMetres = buildSharedEpochDtms(metreEpoch(), metreEpoch());

@@ -178,13 +178,22 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
       : 1;
   // Z on its OWN declared scale where the frame states one; the horizontal
   // verdict is a fallback, not a substitute.
-  const vertToMetres = cloud.isGeographic
-    ? 1
-    : Number.isFinite(cloud.verticalUnitToMetres) && (cloud.verticalUnitToMetres as number) > 0
+  // The geographic test governs the HORIZONTAL conversion only. A declared
+  // vertical scale wins whatever the horizontal kind: geographic degrees over a
+  // foot vertical is a valid compound frame, and forcing its z factor to 1 ran
+  // the SMRF thresholds, the despike floor and the cell confidence in feet
+  // while the Analyse panel converted them for the same scan. Without a
+  // declared vertical, a geographic frame's z is metric by convention and a
+  // projected frame's falls back to its horizontal unit — the rule
+  // resolveGroundFilterParams applies.
+  const vertToMetres =
+    Number.isFinite(cloud.verticalUnitToMetres) && (cloud.verticalUnitToMetres as number) > 0
       ? (cloud.verticalUnitToMetres as number)
-      : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
-        ? cloud.linearUnitToMetres
-        : 1;
+      : cloud.isGeographic
+        ? 1
+        : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
+          ? cloud.linearUnitToMetres
+          : 1;
   // The 0.5 m / 2.5 m SMRF tolerances are physical; convert to source vertical
   // units so a foot frame keeps its physical ground tolerance (a geographic
   // frame's z is already metric, so zPerMetre is 1 there).
