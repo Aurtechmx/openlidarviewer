@@ -58,9 +58,14 @@ export type DemLinearUnit = 'metre' | 'foot' | 'us-survey-foot' | 'unknown';
  * back-compat (the terrain stack's `unitToMetres` defaults to 1).
  */
 function projectedUnitLabel(unit: DemLinearUnit | undefined): string {
-  // 'unknown' and undefined are not metres. The README printed "Cell size 1 m"
-  // for a scan whose unit never resolved.
-  return horizontalUnitLabel({ isGeographic: false, linearUnit: unit ?? null });
+  // Two different absences. `undefined` is a projected CRS with no UNIT clause,
+  // and the WKT default for that is the metre, a convention this project pins
+  // deliberately and the README tests state. `'unknown'` is a resolved frame
+  // that could not determine the unit, which the previous ternary also read as
+  // metres: the README printed "Cell size 1 m" for a scan whose unit never
+  // resolved. Only the second is not metres.
+  if (unit === undefined) return 'm';
+  return horizontalUnitLabel({ isGeographic: false, linearUnit: unit });
 }
 
 /**

@@ -173,9 +173,12 @@ function gatherDeliverable(
 
   const dtm = result.dtm ?? null;
   const hasContours = (model?.features.length ?? 0) > 0;
-  // The one formatter that fails closed on an unknown unit; this line was a
-  // hand copy that labelled 'unknown' as 'm'.
-  const horizontalUnit = horizontalUnitLabel({ isGeographic: opts.isGeographic, linearUnit: opts.linearUnit });
+  // `undefined` is a projected CRS with no UNIT clause, metre by the WKT
+  // default this project pins; `'unknown'` is a resolved frame that could not
+  // determine the unit, which the previous ternary also labelled 'm'.
+  const horizontalUnit = opts.linearUnit === undefined && !opts.isGeographic
+    ? 'm'
+    : horizontalUnitLabel({ isGeographic: opts.isGeographic, linearUnit: opts.linearUnit });
   // Elevation unit is reported ONLY from a separately-declared Z axis — never
   // copied from the horizontal unit. Undeclared ⇒ honest 'unknown', matching the
   // convention the live Contour Studio uses (unknownUnit()).
