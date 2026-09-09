@@ -93,6 +93,20 @@ The tested, packaged, evidenced and manifested commit are then one object.
 committed **development** record. It is marked `releaseAuthoritative: false`
 and must not be cited as release evidence.
 
+## The Software Heritage identifier
+
+`.zenodo.json` carries no Software Heritage relation at tag time, and a lint
+refuses one. A snapshot identifier (`swh:1:snp:`) names the whole repository as
+archived on one visit, and no visit of a release can precede its tag, so an
+`isIdenticalTo` relation written before the tag names a state the release is
+not. v0.6.7 shipped one that predated its own tag.
+
+After the tag is public, request an archival visit at
+<https://archive.softwareheritage.org/save/>, wait for the visit to complete,
+and add the RELEASE identifier (`swh:1:rel:`, resolved from the tag) to the
+Zenodo record as a metadata edit. Zenodo permits metadata edits without a new
+version, so the deposit's files and DOI are unchanged.
+
 ## Reproducing the source archive
 
 The source archive is byte-reproducible: names and entry timestamps come from

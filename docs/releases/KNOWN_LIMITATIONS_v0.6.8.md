@@ -86,8 +86,10 @@ release. Both are green on the commit this document describes. The release has n
   capture about 3.3 times too large; those inputs are converted now, and the
   recommendation is withheld entirely when no scale resolves.
 
-Each would move a published verdict, so each is recorded here rather than
-changed under the freeze.
+The first three would each move a published verdict, so they are recorded here
+rather than changed under the freeze. The unit defects were changed, because a
+figure labelled in a unit it is not in is a false statement rather than a
+verdict.
 
 ## The shell has little headroom
 
