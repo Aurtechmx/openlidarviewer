@@ -62,7 +62,15 @@ export function gridErrorStats(
 ): GridErrorStats {
   const nodata = options.nodata ?? Number.NaN;
   const errorOf = options.errorOf ?? ((a: number, b: number) => a - b);
-  const n = Math.min(ours.length, ref.length);
+  // Unequal arrays are refused, not truncated. A defective implementation
+  // that emitted 90,000 of 100,000 cells was scored over the 90,000 it
+  // produced, and the missing tenth vanished from the evidence.
+  if (ours.length !== ref.length) {
+    throw new RangeError(
+      `gridErrorStats: ${ours.length} candidate values against ${ref.length} reference values — length mismatch.`,
+    );
+  }
+  const n = ours.length;
   let refValued = 0;
   let count = 0;
   let sumAbs = 0;

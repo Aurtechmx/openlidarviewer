@@ -42,7 +42,20 @@ export function excludeNonGroundClasses(
   classification: ReadonlyArray<number> | Uint8Array | null | undefined,
   excluded: ReadonlyArray<number> = NON_GROUND_CLASSES,
 ): ClassificationFilterResult {
-  if (classification?.length !== points.length || excluded.length === 0) {
+  // Two different absences. No classification at all is the valid
+  // unclassified path and keeps every point. A classification that IS
+  // supplied but does not cover the cloud is corrupt or misaligned, and used
+  // to take the same branch: 999,999 codes on 1,000,000 points silently kept
+  // vegetation and buildings in the ground candidate set. rasterizeDtm
+  // already refuses a mask of the wrong length; the filter that feeds it
+  // must not be laxer.
+  if (classification != null && classification.length !== points.length) {
+    throw new RangeError(
+      `excludeNonGroundClasses: ${classification.length} classification codes for ` +
+        `${points.length} points — length mismatch.`,
+    );
+  }
+  if (classification == null || excluded.length === 0) {
     return { points: points.slice(), excludedCount: 0, byClass: {} };
   }
   const drop = new Set(excluded);

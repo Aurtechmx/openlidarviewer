@@ -23,11 +23,21 @@ describe('excludeNonGroundClasses', () => {
     expect(r.byClass).toEqual({ 5: 1, 6: 1, 7: 1 });
   });
 
-  it('keeps everything when classification is absent or misaligned', () => {
+  it('keeps everything when classification is absent, or the exclude set is empty', () => {
     const pts = [p(0, 1), p(1, 2)];
     expect(excludeNonGroundClasses(pts, null).excludedCount).toBe(0);
-    expect(excludeNonGroundClasses(pts, [5]).points).toHaveLength(2); // wrong length → keep all
+    expect(excludeNonGroundClasses(pts, undefined).excludedCount).toBe(0);
     expect(excludeNonGroundClasses(pts, [5, 6], []).excludedCount).toBe(0); // empty exclude set
+  });
+
+  it('refuses a classification that does not cover the cloud', () => {
+    // A wrong-length mask took the same branch as an absent one and kept every
+    // point, so 999,999 codes on 1,000,000 points silently kept vegetation and
+    // buildings in the ground candidate set. Absent is the unclassified path;
+    // misaligned is corrupt input.
+    const pts = [p(0, 1), p(1, 2)];
+    expect(() => excludeNonGroundClasses(pts, [5])).toThrow(/length mismatch/);
+    expect(() => excludeNonGroundClasses(pts, new Uint8Array([5, 5, 5]))).toThrow(/length mismatch/);
   });
 
   it('treats the 255 no-class sentinel as keep', () => {

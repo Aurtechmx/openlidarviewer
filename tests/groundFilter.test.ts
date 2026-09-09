@@ -159,10 +159,13 @@ describe('classifyGroundSmrf — degenerate inputs', () => {
     expect(res.isGround[1]).toBe(0);
   });
 
-  it('clamps invalid params with a warning', () => {
+  it('refuses an invalid parameter instead of repairing it under a warning', () => {
+    // A cell size of 0 became 1 with a warning, so the caller received a
+    // classification under a grid it did not specify. The primitive refuses;
+    // normalisation belongs to the caller.
     const points: TerrainPoint[] = [{ x: 0, y: 0, z: 0 }];
-    const res = classifyGroundSmrf(points, { ...PARAMS, cellSizeM: 0 });
-    expect(res.warnings.join(' ')).toMatch(/cellSizeM/i);
+    expect(() => classifyGroundSmrf(points, { ...PARAMS, cellSizeM: 0 })).toThrow(/cellSizeM/);
+    expect(() => classifyGroundSmrf(points, { ...PARAMS, slope: -1 })).toThrow(/slope/);
   });
 
   it('respects a Y-up vertical axis', () => {
@@ -334,17 +337,18 @@ describe('opening mode', () => {
     expect(r.objectCells.length).toBe(r.cols * r.rows);
   });
 
-  it('falls back with a warning on an unrecognised mode or element', () => {
+  it('refuses an unrecognised mode or element instead of substituting the shipped one', () => {
+    // An unknown mode ran the shipped rule under a warning, so a caller that
+    // named a rule it did not get received a surface from a different one.
     const { points, params } = slopingScene(4);
-    const bad = classifyGroundSmrf(points, {
-      ...params,
-      openingMode: 'nonsense' as unknown as 'cut-surface',
-      structuringElement: 'hexagon' as unknown as 'square',
-    });
-    const good = classifyGroundSmrf(points, params);
-    expect(bad.warnings.some((w) => w.includes('openingMode invalid'))).toBe(true);
-    expect(bad.warnings.some((w) => w.includes('structuringElement invalid'))).toBe(true);
-    expect(Array.from(bad.groundSurface)).toEqual(Array.from(good.groundSurface));
+    expect(() => classifyGroundSmrf(points, {
+      ...params, openingMode: 'nonsense' as unknown as 'cut-surface',
+    })).toThrow(/openingMode/);
+    expect(() => classifyGroundSmrf(points, {
+      ...params, structuringElement: 'hexagon' as unknown as 'square',
+    })).toThrow(/structuringElement/);
+    // The valid call is unchanged.
+    expect(classifyGroundSmrf(points, params).groundPointCount).toBeGreaterThan(0);
   });
 });
 

@@ -202,9 +202,11 @@ describe('rasterizeDtm — robust cell aggregation', () => {
     it('defaults to median when percentile omitted', () => {
       expect(rasterizeDtm(pts, g, { grid, aggregation: 'percentile' }).z[0]).toBe(3);
     });
-    it('clamps out-of-range p (p=2 → max, p=-1 → min)', () => {
-      expect(p(2)).toBe(5);
-      expect(p(-1)).toBe(1);
+    it('refuses an out-of-range p instead of clamping it', () => {
+      // p=2 was clamped to the maximum and p=-1 to the minimum, so the
+      // aggregate answered a different question from the one specified.
+      expect(() => p(2)).toThrow(/percentile/);
+      expect(() => p(-1)).toThrow(/percentile/);
     });
   });
 

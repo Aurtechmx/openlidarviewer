@@ -127,7 +127,15 @@ export function rasterizeDtm(
   // small per-cell list and reduce it once at the end.
   const needsLists =
     aggregation === 'median' || aggregation === 'percentile' || aggregation === 'robust';
-  const percentile = aggregation === 'percentile' ? clampUnit(params.percentile ?? 0.5) : 0.5;
+  if (
+    aggregation === 'percentile' && params.percentile !== undefined
+    && !(Number.isFinite(params.percentile) && params.percentile >= 0 && params.percentile <= 1)
+  ) {
+    // A percentile outside [0, 1] was clamped; the aggregate then answered a
+    // different question from the one specified.
+    throw new RangeError(`rasterizeDtm: percentile must lie in [0, 1]; got ${params.percentile}`);
+  }
+  const percentile = aggregation === 'percentile' ? (params.percentile ?? 0.5) : 0.5;
 
   // A mask shorter than the point list reads `undefined` past its end, and
   // `undefined !== 1` skips silently — so a 50,000-element mask over 100,000
@@ -158,12 +166,22 @@ export function rasterizeDtm(
 
   // Resolve the grid.
   let grid = params.grid;
+  if (grid && !(Number.isFinite(grid.cellSizeM) && grid.cellSizeM > 0)) {
+    // The explicit grid is the caller's specification; a non-positive cell
+    // size there is impossible, not a value to repair.
+    throw new RangeError(`rasterizeDtm: grid.cellSizeM must be a finite positive length; got ${grid.cellSizeM}`);
+  }
   if (!grid) {
     if (analyzed === 0) {
       warnings.push('no ground returns — empty DTM');
       return emptyRaster(params.cellSizeM ?? 1, warnings);
     }
-    const cellSizeM = finitePositive(params.cellSizeM ?? 1, 1, 'cellSizeM', warnings);
+    if (params.cellSizeM !== undefined && !(Number.isFinite(params.cellSizeM) && params.cellSizeM > 0)) {
+      // A bad cell size was repaired to 1 with a warning; the raster then
+      // described a grid nobody asked for. Refuse the specification instead.
+      throw new RangeError(`rasterizeDtm: cellSizeM must be a finite positive length; got ${params.cellSizeM}`);
+    }
+    const cellSizeM = params.cellSizeM ?? 1;
     let minH1 = Infinity;
     let minH2 = Infinity;
     let maxH1 = -Infinity;
@@ -310,19 +328,7 @@ function emptyRaster(cellSizeM: number, warnings: string[]): DemRaster {
   };
 }
 
-function finitePositive(v: number, fallback: number, name: string, warnings: string[]): number {
-  if (Number.isFinite(v) && v > 0) return v;
-  warnings.push(`${name} invalid (${v}); using ${fallback}`);
-  return fallback;
-}
 
-/** Clamp a fraction to [0, 1]; non-finite collapses to 0.5 (median). */
-function clampUnit(p: number): number {
-  if (!Number.isFinite(p)) return 0.5;
-  if (p < 0) return 0;
-  if (p > 1) return 1;
-  return p;
-}
 
 // Quantiles use the project-wide type-7 helper (`../quantile`) — the local
 // copy this file used to carry was one of the three conventions the v0.4.3
