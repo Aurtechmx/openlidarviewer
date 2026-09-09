@@ -25,6 +25,9 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - A comparison with no cell measured in both epochs reports that instead of a NaN volume and offers no raster; a geographic pair keeps its elevation differences.
 - Re-resolving an unchanged coordinate system does not count as a frame change, so derived classifications, the terrain cache and the on-screen result survive an additive layer open; an invalidated derived classification is withheld from feature extraction.
 - A terrain export from a placed layer publishes no origin rather than the layer's own.
+- The kernel refuses impossible specifications instead of repairing them (cell size, percentile, ground-filter parameters, a classification that does not cover the cloud, an ASCII grid header that does not match its arrays), and the two evaluation kernels refuse unequal arrays rather than scoring the shorter one.
+- An explicit trust of the source ground classification is refused when no class 2 points exist; no substitute filter runs.
+- A two-epoch comparison honours a declared vertical scale on a geographic frame; the quality score judges the RMSE against its metre floor only on a resolved vertical scale and multiplies density by a cell area in the density's unit.
 
 ### Fixed
 

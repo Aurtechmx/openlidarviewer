@@ -102,12 +102,6 @@ verdict.
   ground in the training subset. On a very sparse cloud the whole-cloud
   classifier can find ground where the train-only one does not; no figure is
   reported in that case, and no whole-cloud figure stands in for it.
-- A two-epoch comparison on a geographic frame builds its surfaces with the
-  vertical factor held at 1 even when the frame declares a foot vertical, so
-  the ground-filter thresholds and the despike floor run in feet there while
-  the Analyse panel on the same scan converts them. The elevation differences
-  are still scaled by the declared factor. The two paths resolve the vertical
-  factor differently on a geographic frame.
 - Contour, DEM and package exports carry the evidence status of the
   least-supported product they contain, and every one of them contains the DTM,
   which is at E4 with E5 required. The "Internal validation" badge is therefore

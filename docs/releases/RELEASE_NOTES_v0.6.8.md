@@ -96,6 +96,21 @@ caveat is a line of prose above a number, and the number is what gets quoted.
 - A terrain export from a layer that carries a project placement publishes no
   origin rather than the layer's own, which would have translated every
   coordinate by the placement offset.
+- The reusable kernel refuses impossible specifications instead of repairing
+  them: a non-positive cell size, a percentile outside 0 to 1, a malformed
+  ground-filter parameter, a classification that does not cover the cloud, an
+  ASCII grid whose header does not match its arrays. The two evaluation kernels
+  that scored the shorter of two arrays refuse unequal arrays, so an
+  implementation that emits fewer cells than the reference cannot be graded
+  over the cells it produced.
+- An explicit request to trust the source ground classification is refused
+  when no class 2 points exist; no substitute ground filter runs, and the
+  verdict is blocked. Automatic mode still chooses.
+- A two-epoch comparison honours a declared vertical scale on a geographic
+  frame, so a foot vertical over degree coordinates is filtered and despiked in
+  metres as the Analyse panel does. The quality score judges the hold-out RMSE
+  against its metre floor only when the vertical scale resolved, and multiplies
+  density by a cell area in the density's own unit.
 
 ## Provenance you can check
 
