@@ -68,6 +68,13 @@ if (isCliEntry(import.meta.url)) {
   const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null;
   const grown = collectGrowth(current, baseline);
 
+  if (baseline === null && !process.argv.includes('--update')) {
+    // A missing baseline used to be written silently at the CURRENT counts and
+    // the run exited 0: delete the file, grow the monolith, and the shrink-only
+    // ratchet banked the growth on the very run meant to catch it.
+    console.error(`lint:monolith-size FAILED\n\n  ${BASELINE} is missing. It is a hand-edited record; restore it from git, or run --update deliberately.`);
+    process.exit(1);
+  }
   if (process.argv.includes('--update') || baseline === null) {
     // Refuse before writing. --update is the command the failure message tells
     // an operator to run, so banking a raise here would let the guard undo

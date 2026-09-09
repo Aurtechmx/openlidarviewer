@@ -95,7 +95,16 @@ const matches = (pattern, urlPath) => (
 );
 
 const server = createServer(async (req, res) => {
-  const urlPath = decodeURIComponent((req.url ?? '/').split('?')[0]);
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent((req.url ?? '/').split('?')[0]);
+  } catch {
+    // A malformed percent-escape threw inside the async handler; the rejection
+    // was unhandled and Node exited, so every later smoke request saw
+    // ECONNREFUSED and the archive was blamed for a server crash.
+    res.writeHead(400).end();
+    return;
+  }
   // Contain the served path inside ROOT: a `..` segment in a request must not
   // reach a file the archive does not contain, or the smoke would pass on bytes
   // that are not in the bundle.

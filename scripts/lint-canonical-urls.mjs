@@ -123,9 +123,13 @@ const STRICT_SURFACES = [
   'package.json', 'codemeta.json', 'CITATION.cff', '.zenodo.json', 'index.html',
   'public/llms.txt', 'public/robots.txt', 'docs-site/index.md', 'src/ui/Stage.ts',
 ];
+// The current release's notes and page are derived from package.json, not
+// spelled: a literal stops being scanned the moment the version rolls, and the
+// lint keeps reporting agreement over a file nobody edits any more.
+const PKG_VERSION = JSON.parse(read('package.json') ?? '{}').version;
 const PROSE_SURFACES = [
   'README.md', 'docs/usage.md', 'docs-site/guide/index.md',
-  'docs/releases/RELEASE_NOTES_v0.6.8.md', 'docs-site/releases/v0.6.8.md',
+  `docs/releases/RELEASE_NOTES_v${PKG_VERSION}.md`, `docs-site/releases/v${PKG_VERSION}.md`,
 ];
 /** Wording that marks a mention as historical rather than as a destination. */
 const MOVED = /redirect|keeps working|previous host|formerly|used to|no longer|moved|earlier release/i;
