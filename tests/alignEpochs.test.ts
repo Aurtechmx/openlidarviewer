@@ -69,6 +69,26 @@ describe('alignEpochClouds', () => {
     expect(minZDelta).toBeGreaterThan(0.45); // the +0.5 vertical change survives
   });
 
+  test('horizontalOnly:false applies the vertical shift in raw Z on a compound frame', () => {
+    // Metre horizontal, foot vertical: the fit runs with Z scaled by 0.3048, so
+    // its translation[2] is in scaled units. It was applied to raw foot Z
+    // unscaled, leaving ~70% of a vertical offset behind while the metre figure
+    // in the summary read correctly.
+    const base = scatter(200);
+    const FT = 0.3048;
+    const compound = (pts: P[]) => ({
+      ...cloudFrom(pts), linearUnitToMetres: 1, verticalUnitToMetres: FT,
+    });
+    const after = compound(base.map(([x, y, z]) => [x + 3, y - 2, z + 10] as P)); // +10 ft
+    const r = alignEpochClouds(compound(base), after, { horizontalOnly: false });
+    expect(r.alignment.applied).toBe(true);
+    let maxDz = 0;
+    for (let i = 0; i < base.length; i++) {
+      maxDz = Math.max(maxDz, Math.abs(r.after.positions[i * 3 + 2] - base[i][2]));
+    }
+    expect(maxDz, 'the vertical offset was not removed in raw Z').toBeLessThan(0.5);
+  });
+
   test('horizontalOnly:false applies the full 3-D transform (z included)', () => {
     const base = scatter(200);
     const after = cloudFrom(base.map(([x, y, z]) => [x + 3, y - 2, z + 0.5] as P));

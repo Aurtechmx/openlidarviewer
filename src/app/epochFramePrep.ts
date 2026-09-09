@@ -103,7 +103,8 @@ export function epochUnitMismatchLines(header: string, reason: EpochRefusal = 'v
     // other two wrongly.
     'Cannot compare — the two epochs are not on a common vertical scale: they ' +
       'declare different vertical units, or only one of them states a usable ' +
-      'unit at all. Re-export both in a common, declared vertical unit first.',
+      'unit at all. Declare the missing frame (a CRS override in the Inspector ' +
+      'names the unit), or re-export both in one declared vertical unit.',
   ];
 }
 

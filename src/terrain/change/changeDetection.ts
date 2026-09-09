@@ -251,8 +251,10 @@ export function detectChange(
     detectableNetVolumeM3: volume(gainVolumeM3 - lossVolumeM3),
     areaAboveLoDFraction: perComparable(gained + lost),
     meanAbsChangeM: perComparable(absSum),
-    maxGainM,
-    maxLossM,
+    // The extremes were left at their initial 0 while every other figure went
+    // NaN, so an empty comparison reported a definite "largest gain 0.00 m".
+    maxGainM: volume(maxGainM),
+    maxLossM: volume(maxLossM),
   };
 
   if (comparable === 0) {

@@ -161,6 +161,40 @@ describe('summarizeChange', () => {
     expect(lines.some((l) => /Needs for a measured result/.test(l))).toBe(true);
   });
 
+  it('says "nothing compared" instead of printing NaN when no cell overlaps', () => {
+    // Two co-registered tiles whose footprints do not overlap: every frame check
+    // passes and comparable is 0. detectChange reports NaN per-cell aggregates
+    // there, and the summary printed them through toFixed as "NaN m³" beside a
+    // band that called the undefined figure "below the threshold".
+    const a = grid([1, NaN, 1, NaN], 2, 2);
+    const b = grid([NaN, 2, NaN, 2], 2, 2);
+    const cmp = compareDtms(a, b);
+    expect(cmp.coregistered).toBe(true);
+    expect(cmp.result.stats.comparable).toBe(0);
+    expect(Number.isNaN(cmp.result.stats.maxGainM), 'an empty comparison reported a definite largest gain')
+      .toBe(true);
+    const lines = summarizeChange(cmp, { horizontalUnitToMetres: 1 });
+    expect(lines[0]).toMatch(/Nothing compared/);
+    expect(lines.join(' '), 'a NaN reached the summary').not.toMatch(/NaN/);
+    expect(lines.join(' ')).not.toMatch(/Net volume change/);
+  });
+
+  it('keeps the elevation differences for a geographic pair and withholds only volumes', () => {
+    // Both epochs declare EPSG:4326 and one datum on one grid: nothing about the
+    // frame is unconfirmed. The degree-grid note explains a withheld VOLUME, and
+    // counting it against co-registration swept this pair into "cannot be
+    // confirmed to share a frame", a false statement, and dropped the Δz lines
+    // the note itself says remain valid.
+    const a = grid([1, 1, 1, 1], 2, 2, { crs: 'EPSG:4326', verticalDatum: 'EPSG:5703' });
+    const b = grid([2, 2, 2, 2], 2, 2, { crs: 'EPSG:4326', verticalDatum: 'EPSG:5703' });
+    const cmp = compareDtms(a, b, { isGeographic: true });
+    expect(cmp.coregistered, 'a geographic pair was called unconfirmed').toBe(true);
+    const lines = summarizeChange(cmp);
+    expect(lines.join(' ')).not.toMatch(/cannot be confirmed to share a frame/);
+    expect(lines.some((l) => /not computable on a geographic/.test(l))).toBe(true);
+    expect(lines.some((l) => /Largest gain/.test(l)), 'the Δz statistics were dropped').toBe(true);
+  });
+
   it('treats a sub-cell origin offset as a defect, not as alignment', () => {
     // Half a cell of slack passed the old check, so two surfaces offset by 0.49
     // of a cell were differenced cell-for-cell and called co-registered.

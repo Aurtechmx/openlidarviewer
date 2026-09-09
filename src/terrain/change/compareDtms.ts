@@ -145,6 +145,11 @@ export function compareDtms(
   // path, because two same-CRS geographic epochs would otherwise pass every
   // check and ship the bogus volume with no warning at all.
   const volumesComputable = options.isGeographic !== true;
+  // The degree-grid note explains a withheld VOLUME; it is not a doubt about the
+  // frame. Counting it against co-registration swept every geographic pair into
+  // "cannot be confirmed to share a frame", a false statement for two epochs
+  // that both declare EPSG:4326 and one datum, and withheld the elevation
+  // differences the note itself says remain valid.
   if (!volumesComputable) {
     notes.push(
       'Geographic (degree) grid — cell areas are in degrees², so cut/fill volumes ' +
@@ -251,7 +256,8 @@ export function compareDtms(
   const result = detectChange(dtmToChangeGrid(a), dtmToChangeGrid(b), options);
   // The raster mismatch (cell size / dims) is already in result.warnings; the
   // overall co-registration verdict folds those in too.
-  const coregistered = result.aligned && notes.length === 0;
+  const geographicNoteCount = volumesComputable ? 0 : 1;
+  const coregistered = result.aligned && notes.length - geographicNoteCount === 0;
   const gridMisaligned = !result.aligned || originsOffset;
   const levelOfDetectionM = Math.max(0, options.levelOfDetectionM ?? DEFAULT_LOD_M);
   return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable, frameIncompatible, horizontalUnitUnknown, gridMisaligned };
@@ -322,6 +328,21 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     for (const note of coregistrationNotes) lines.push(`• ${note}`);
     for (const w of result.warnings) lines.push(`• ${w}`);
     lines.push(COREGISTRATION_CHECKLIST);
+    return lines;
+  }
+  if (s.comparable === 0) {
+    // No cell is measured in both epochs. detectChange reports NaN for every
+    // per-cell aggregate here, and this printed those through toFixed as
+    // "NaN m³" beside a band that called the undefined figure "below the
+    // threshold". Two adjacent tiles of one survey reach this path with every
+    // frame check passing.
+    lines.push(
+      '✗ Nothing compared — no cell holds a measured height in both epochs, so no ' +
+        'cut/fill volume or elevation difference exists to report. The two footprints ' +
+        'do not overlap on the shared grid.',
+    );
+    for (const w of result.warnings) lines.push(`• ${w}`);
+    for (const note of coregistrationNotes) lines.push(`• ${note}`);
     return lines;
   }
   if (!coregistered) {

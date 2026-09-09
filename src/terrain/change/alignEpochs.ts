@@ -415,9 +415,16 @@ export function alignEpochClouds(
   // (horizontalOnly), apply yaw + x/y only and keep z, so a real vertical change
   // is preserved rather than absorbed into the fit's z-shift.
   const horizontalOnly = options.horizontalOnly ?? true;
+  // The fit ran in a space whose Z was scaled by zScale (metres per vertical
+  // unit over metres per horizontal unit), so translation[2] is in that scaled
+  // space and must come back to raw source Z before it is applied. The default
+  // path zeroes it and never needed the inverse; the full 3-D path applied the
+  // scaled shift to raw Z, leaving zScale-1 of the offset behind on a compound
+  // frame while reporting the correct metre figure.
+  const zBack = zScaleOf(after);
   const applied: Pick<IcpResult, 'yawRad' | 'translation'> = horizontalOnly
     ? { yawRad: fit.yawRad, translation: [fit.translation[0], fit.translation[1], 0] }
-    : { yawRad: fit.yawRad, translation: fit.translation };
+    : { yawRad: fit.yawRad, translation: [fit.translation[0], fit.translation[1], fit.translation[2] / zBack] };
   const aligned: EpochCloud = {
     positions: transformedLocal(after.positions, after.origin ?? ZERO, applied),
     origin: after.origin ?? ZERO,
