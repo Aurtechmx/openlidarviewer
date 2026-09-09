@@ -31,7 +31,7 @@ import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 import { sha256Hex } from './sha256';
-import { verticalUnitLabel } from '../../units/units';
+import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 
 /**
  * Build a `SHA256SUMS` integrity manifest over `entries`, in the standard
@@ -58,7 +58,9 @@ export type DemLinearUnit = 'metre' | 'foot' | 'us-survey-foot' | 'unknown';
  * back-compat (the terrain stack's `unitToMetres` defaults to 1).
  */
 function projectedUnitLabel(unit: DemLinearUnit | undefined): string {
-  return unit === 'foot' || unit === 'us-survey-foot' ? 'ft' : 'm';
+  // 'unknown' and undefined are not metres. The README printed "Cell size 1 m"
+  // for a scan whose unit never resolved.
+  return horizontalUnitLabel({ isGeographic: false, linearUnit: unit ?? null });
 }
 
 /**

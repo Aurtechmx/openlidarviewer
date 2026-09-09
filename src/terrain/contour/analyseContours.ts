@@ -155,6 +155,21 @@ export interface TerrainCoreParams {
    */
   readonly verticalUnitToMetres?: number;
   /**
+   * Whether the frame actually RESOLVED a vertical scale, stated separately from
+   * the factor above. The live runner supplies the factor under the GeoTIFF
+   * policy, which for an unresolved frame is the inert placeholder 1, because
+   * the raster geometry (thresholds, despike floor, cell floors) must stay
+   * self-consistent whatever the unit is. That is the right factor for
+   * geometry and the wrong evidence for a claim: deriving "resolved" from the
+   * factor's finiteness made every unit-withholding branch in this analysis
+   * unreachable from the application, which never passes an undefined factor.
+   * When omitted, the factor test stands in, which is what direct-call tests
+   * exercise.
+   */
+  readonly verticalScaleKnown?: boolean;
+  /** Same statement for the horizontal scale; see {@link verticalScaleKnown}. */
+  readonly horizontalScaleKnown?: boolean;
+  /**
    * Metres per source horizontal unit (1 for metre data, ~0.3048 for feet).
    * Densities, cell areas and slope runs are scaled by this so a feet-based
    * projected CRS reports genuine pts/m² and correct slope, mirroring
@@ -487,13 +502,8 @@ export interface AnalyseContoursResult {
    *  points only, this scores against the whole-cloud classification — so the
    *  difference between them is not attributable to geometry alone. */
   readonly blockedAccuracy: SpatialBlockResult | null;
-  /**
-   * True when the frame stated a usable vertical scale, so every residual-derived
-   * figure here (`validation`, `blockedAccuracy`, `accuracyStandards`) is in
-   * METRES. False means the residuals stayed in the source Z unit — feet,
-   * millimetres, arbitrary scanner units — and no renderer may caption them "m".
-   */
-  readonly verticalScaleResolved: boolean;
+  /** Passed through from the core. */
+  readonly verticalScaleResolved: TerrainCore['verticalScaleResolved'];
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -643,6 +653,9 @@ function gridGeometryInMetres(
     isGeographic?: boolean;
     horizontalUnitToMetres?: number;
     verticalUnitToMetres?: number;
+    horizontalScaleKnown?: boolean;
+    verticalScaleKnown?: boolean;
+    latitudeDeg?: number | null;
   },
   dtm: { cols: number; rows: number; cellSizeM: number },
   pointCount: number,
@@ -653,16 +666,29 @@ function gridGeometryInMetres(
   const geographic = params.isGeographic === true;
   const horiz = params.horizontalUnitToMetres;
   const horizOk = typeof horiz === 'number' && Number.isFinite(horiz) && horiz > 0;
-  const horizResolved = geographic || horizOk;
+  // The frame's statement wins over the factor test: the live runner passes the
+  // placeholder 1 for an unresolved projected frame, which is finite and
+  // positive, so the factor alone called every unreferenced scan resolved.
+  const horizResolved = geographic || (params.horizontalScaleKnown ?? horizOk);
   const horizToM = geographic ? METRES_PER_DEGREE : (horizOk ? horiz : 1);
+  // A geographic frame's east-west extent shrinks by cos(latitude), the same
+  // correction the density figure in this file already applies. Without it a
+  // site at 60 degrees north reported twice its true width.
+  const lat = params.latitudeDeg;
+  const ewScale =
+    geographic && typeof lat === 'number' && Number.isFinite(lat)
+      ? Math.max(Math.cos((lat * Math.PI) / 180), 1e-6)
+      : 1;
   const vert = params.verticalUnitToMetres;
   const vertOk = typeof vert === 'number' && Number.isFinite(vert) && vert > 0;
-  // The vertical falls back to the horizontal scale for a single-unit frame,
-  // which is what the other unit resolution in this file does.
-  const vertToM = vertOk ? vert : horizToM;
+  // A geographic frame's z is already metric by convention (the other unit
+  // resolutions in this file fall back to 1 there); a projected frame's vertical
+  // falls back to its horizontal scale. Falling back to METRES_PER_DEGREE here
+  // multiplied a geographic relief by 111,320.
+  const vertToM = vertOk ? vert : (geographic ? 1 : horizToM);
   return {
     pointCount,
-    widthM: dtm.cols * dtm.cellSizeM * horizToM,
+    widthM: dtm.cols * dtm.cellSizeM * horizToM * ewScale,
     depthM: dtm.rows * dtm.cellSizeM * horizToM,
     reliefM: elevationRangeSourceUnits * vertToM,
     unitResolved: horizResolved,
@@ -1042,9 +1068,13 @@ export function computeTerrainCore(
   // the panel that labels both. Three copies of this expression drifted apart
   // before: the standards were withheld on an unresolved frame while the blocked
   // RMSE beside them kept a source-unit number captioned "m".
-  const verticalScaleResolved =
+  const verticalFactorUsable =
     Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0;
-  const vMetresB = verticalScaleResolved ? (params.verticalUnitToMetres as number) : 1;
+  // The frame's own statement wins; the factor test is the fallback for direct
+  // callers that pass no flag. A placeholder factor of 1 is finite and positive,
+  // which is exactly why the flag has to travel separately.
+  const verticalScaleResolved = params.verticalScaleKnown ?? verticalFactorUsable;
+  const vMetresB = verticalFactorUsable ? (params.verticalUnitToMetres as number) : 1;
   let blockedAccuracy: SpatialBlockResult | null = null;
   if (dtm.cols * dtm.rows <= BLOCKED_CELL_CAP) {
     const { getH1, getH2, getV } = axisGetters(verticalAxis);

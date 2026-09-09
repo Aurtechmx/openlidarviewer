@@ -35,7 +35,7 @@ import { buildContourStudioPdf } from './contourStudioPdf';
 import { serializeContours } from '../contour/contourDownload';
 import { dxfContours } from '../contour/dxfContours';
 import { validationDeliverableJson, contourStudioDeliverableJson } from './contourDeliverableJson';
-import { verticalUnitLabel } from '../../units/units';
+import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { parseEpsg } from './demPackage';
 import {
@@ -106,7 +106,8 @@ interface GatheredDeliverable {
   readonly isAnalytical: boolean;
   readonly hasContours: boolean;
   readonly dtm: AnalyseContoursResult['dtm'] | null;
-  readonly horizontalUnit: 'ft' | 'm';
+  /** Horizontal unit label: 'm' | 'ft' | 'units' | 'degrees', never 'm' for an unknown unit. */
+  readonly horizontalUnit: string;
   /** Elevation unit label — a declared Z unit ('m'|'ft'|'units') or 'unknown'. */
   readonly verticalUnit: string;
   /**
@@ -172,7 +173,9 @@ function gatherDeliverable(
 
   const dtm = result.dtm ?? null;
   const hasContours = (model?.features.length ?? 0) > 0;
-  const horizontalUnit = opts.linearUnit === 'foot' || opts.linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+  // The one formatter that fails closed on an unknown unit; this line was a
+  // hand copy that labelled 'unknown' as 'm'.
+  const horizontalUnit = horizontalUnitLabel({ isGeographic: opts.isGeographic, linearUnit: opts.linearUnit });
   // Elevation unit is reported ONLY from a separately-declared Z axis — never
   // copied from the horizontal unit. Undeclared ⇒ honest 'unknown', matching the
   // convention the live Contour Studio uses (unknownUnit()).

@@ -186,8 +186,13 @@ describe('no surface captions a hold-out RMSE as metres unconditionally', () => 
         // read of one cannot print a source-unit number.
         if (/rmseZM|rmseM\b/.test(m[0])) continue;
         const line = text.slice(0, m.index).split('\n').length;
-        // Otherwise the file must consult the flag.
-        if (text.includes('verticalScaleResolved')) continue;
+        // Otherwise the CAPTION ITSELF must be gated: the flag has to appear
+        // within a few lines of the metre literal. Exempting the whole file once
+        // it mentioned the flag anywhere let a second, ungated caption in the
+        // same file pass, which is the sixth surface this sweep exists to find.
+        const lines = text.split('\n');
+        const window = lines.slice(Math.max(0, line - 6), line + 2).join('\n');
+        if (/verticalScaleResolved|zUnit\b|fmtZ\b|zUnitLabel/.test(window)) continue;
         offenders.push(`${relative(SRC, file)}:${line}  ${m[0].trim()}`);
       }
     }

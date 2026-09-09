@@ -161,6 +161,14 @@ export function deriveCoreParams(
     // HERE, and it is named rather than re-spelled as a `??` chain.
     verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal') ?? 1,
     horizontalUnitToMetres: ctx.linearUnitToMetres,
+    // The two FACTS beside the two FACTORS. The factors above are the GeoTIFF
+    // geometry policy and are never undefined; the core derived "resolved" from
+    // their finiteness, so on a scan with no CRS (placeholder factor 1) every
+    // unit-withholding branch was unreachable from here: the panel captioned
+    // source-unit residuals "m", the ASPRS fields were populated, and the metre
+    // grid ladder was applied to raw coordinates. These read the claim policy.
+    verticalScaleKnown: verticalMetresPerUnit(ctx, 'horizontal-when-known') !== undefined,
+    horizontalScaleKnown: ctx.linearUnitKnown,
     verticalDatum: ctx.verticalDatum ?? null,
     classification,
     samplePointScale,
@@ -641,7 +649,10 @@ export function createTerrainAnalysisRunner(
       // unit: foot data can have a known datum). Carry the REAL scale + label so
       // Contour Studio labels a foot interval "ft", never "m". Unknown unit →
       // the launcher caps to exploratory and claims no metric-supported interval.
-      const vScale = verticalMetresPerUnit(ctx, 'horizontal') ?? null;
+      // Claim policy, not geometry policy: under 'horizontal' an unresolved
+      // frame returned the placeholder 1 and the launcher labelled a scan with
+      // no CRS as having a known vertical unit.
+      const vScale = verticalMetresPerUnit(ctx, 'horizontal-when-known') ?? null;
       const vUnitKnown = vScale != null;
       analysePanel.setContourFrame({
         // Read the coverage the RESULT recorded, not a second boolean derived
