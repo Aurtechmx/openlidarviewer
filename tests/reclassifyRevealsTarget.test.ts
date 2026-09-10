@@ -4,67 +4,82 @@
  * A lasso reclassify only edits points the user can currently see — the guard
  * that stops it rewriting points hidden behind a filter. Reclassifying INTO a
  * class the filter hides therefore landed the edit and hid its own result in
- * the same frame: the points vanished, the panel counts still described the
- * classification from before, and the tool read as inert while it was working.
+ * the same frame: the points vanished and the tool read as inert.
  *
- * The legend is recounted and the target class revealed. The recount runs
- * first, so the row that appears carries a real number rather than the count it
- * had before the edit.
+ * Driven through the REAL `ClassLegendPanel`. A first version of this test used
+ * a fake legend whose `setClasses` merely recorded counts, and it passed while
+ * the code under it reset the user's filter, cleared the derived-provenance
+ * caption and emitted no change event — so the panel would have said a class
+ * was visible while the GPU mask still hid it. A stub that models less than the
+ * real surface proves less than it appears to.
  */
-import { describe, it, expect } from 'vitest';
-import { afterClassEdit } from '../src/app/classLegendRefresh';
+
+import { describe, it, expect, beforeAll } from 'vitest';
+import { ClassLegendPanel } from '../src/ui/ClassLegendPanel';
+import { FakeEl, installFakeDom } from './support/measurePanelDom';
+import { afterClassEdit, noteClassificationEdited } from '../src/app/classLegendRefresh';
 import { reclassifyOutcome } from '../src/ui/reclassifyOutcome';
 
-/** A legend that records what it was told, with a settable hidden set. */
-function legend(hidden: readonly number[]) {
-  const hiddenSet = new Set(hidden);
-  const calls: { counts?: Map<number, number>; sample?: { loaded: number; declared?: number } } = {};
-  return {
-    hiddenSet,
-    calls,
-    setClasses(counts: Map<number, number>, sample?: { loaded: number; declared?: number }) {
-      calls.counts = counts;
-      calls.sample = sample;
-    },
-    revealClass(code: number): boolean {
-      if (!hiddenSet.has(code)) return false;
-      hiddenSet.delete(code);
-      return true;
-    },
-  };
+beforeAll(() => {
+  installFakeDom();
+  const g = globalThis as unknown as { document: Record<string, unknown> };
+  g.document.createDocumentFragment = (): FakeEl => new FakeEl('#fragment');
+});
+
+const COUNTS = new Map<number, number>([[1, 1_781_973], [2, 153_215], [6, 21_057], [7, 4_477]]);
+
+/** The panel as the user left it: a derived classification with 6 and 7 hidden. */
+function panelWithFilter(): { panel: ClassLegendPanel; hiddenSeen: number[][] } {
+  const panel = new ClassLegendPanel();
+  panel.setClasses(COUNTS, { loaded: 1_960_722, declared: 39_143_991 });
+  panel.setDerivedProvenance(true, { confidencePct: 71, warnings: [] });
+  panel.applyFilter([6, 7]);
+  const hiddenSeen: number[][] = [];
+  panel.onChange((v) => hiddenSeen.push(v.hiddenCodes()));
+  return { panel, hiddenSeen };
 }
 
-// Six points: four unclassified, two already class 6 — the shape after a lasso
-// turned four code-1 returns into buildings.
-const cloud = {
-  classification: Uint8Array.from([1, 1, 6, 6, 1, 1]),
-  pointCount: 6,
-  declaredPointCount: 12,
-};
+describe('revealing the class a lasso reclassify wrote into', () => {
+  it('shows the target and leaves every other hidden class hidden', () => {
+    const { panel } = panelWithFilter();
+    expect(afterClassEdit(panel, 6)).toBe(true);
+    expect(panel.getVisibility().hiddenCodes(), 'the reveal opened the wrong filter').toEqual([7]);
+  });
 
-describe('the class legend follows a lasso reclassify', () => {
-  it('reveals the target class when the filter was hiding it', () => {
-    const l = legend([6]);
-    expect(afterClassEdit(l, cloud, 6)).toBe(true);
-    expect(l.hiddenSet.has(6), 'the edit stayed invisible').toBe(false);
+  it('tells the renderer, so the mask cannot disagree with the panel', () => {
+    // `setClasses` emits nothing, which is why it must not be used here: the
+    // legend would read "6 visible" while the GPU still hid it.
+    const { panel, hiddenSeen } = panelWithFilter();
+    afterClassEdit(panel, 6);
+    expect(hiddenSeen, 'no change event reached the host').toEqual([[7]]);
+  });
+
+  it('keeps the derived-provenance flag the capability model reads', () => {
+    const { panel } = panelWithFilter();
+    afterClassEdit(panel, 6);
+    expect(panel.classificationIsDerived(), 'a derived classification read as authoritative').toBe(true);
   });
 
   it('reports no reveal when the target was already visible', () => {
-    expect(afterClassEdit(legend([]), cloud, 6)).toBe(false);
+    const { panel, hiddenSeen } = panelWithFilter();
+    expect(afterClassEdit(panel, 2)).toBe(false);
+    expect(hiddenSeen).toEqual([]);
   });
 
-  it('recounts from the edited classification, not the counts before it', () => {
-    const l = legend([6]);
-    afterClassEdit(l, cloud, 6);
-    expect(l.calls.counts?.get(6), 'the revealed row carried a stale count').toBe(2);
-    expect(l.calls.counts?.get(1)).toBe(4);
-    expect(l.calls.sample).toEqual({ loaded: 6, declared: 12 });
-  });
-
-  it('reveals without recounting when the cloud carries no classification', () => {
-    const l = legend([6]);
-    expect(afterClassEdit(l, { pointCount: 6 }, 6)).toBe(true);
-    expect(l.calls.counts).toBeUndefined();
+  it('leaves the counts to the notifier that already recounts', () => {
+    // reclassifyLasso fires onClassificationEdited before it returns, and that
+    // path recounts through replaceCounts, which keeps the filter. Recounting
+    // again in the reveal would undo it.
+    const { panel } = panelWithFilter();
+    noteClassificationEdited({
+      classification: Uint8Array.from([1, 6, 6, 2]),
+      legend: panel,
+      clearTerrainCache: () => {},
+      noteStale: () => {},
+    });
+    afterClassEdit(panel, 6);
+    expect(panel.getVisibility().hiddenCodes()).toEqual([7]);
+    expect(panel.classificationIsDerived()).toBe(true);
   });
 });
 
@@ -76,7 +91,6 @@ describe('the toast says the filter was opened', () => {
   });
 
   it('stays quiet about the filter when nothing was revealed', () => {
-    const msg = reclassifyOutcome({ changedCount: 4, pointCount: 6 }, 6, false);
-    expect(msg).toBe('Reclassified 4 points → class 6.');
+    expect(reclassifyOutcome({ changedCount: 4, pointCount: 6 }, 6, false)).toBe('Reclassified 4 points → class 6.');
   });
 });

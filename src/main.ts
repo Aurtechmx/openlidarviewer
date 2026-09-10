@@ -2271,7 +2271,7 @@ async function showReclassifyUi(): Promise<void> {
         getActiveId: () => scans.activeId,
         onToast: showLassoToast,
         onAutoClassify: () => runDeriveClassification(),
-        onReclassified: (cls) => afterClassEdit(classLegendPanel, scans.activeCloud(), cls),
+        onReclassified: (cls) => afterClassEdit(classLegendPanel, cls),
       });
       classLegendPanel.element.after(ui.element);
       reclassifyUi = ui;

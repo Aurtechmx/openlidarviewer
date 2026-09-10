@@ -222,9 +222,8 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
   to the code that produced it.
 - A lasso reclassify only edits points the user can see, so reclassifying into a
   class the filter was hiding landed the edit and hid its own result in the same
-  frame. The legend is recounted and the target class revealed, and the toast
-  says so. The per-class counts were stale after any lasso edit; only the derive
-  and fill paths recounted them.
+  frame. The target class is revealed and the toast says so; every other hidden
+  class stays hidden and the derived-provenance caption survives.
 - The map sheet's density row names the quantity it measures. The USGS floors are
   nominal pulse density and the figure beside them is measured ground-return
   density, which the technical report for the same scan declines to grade against

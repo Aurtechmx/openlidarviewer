@@ -133,39 +133,27 @@ export interface FrameChangeDeps {
 /** Subscribe the frame-change cascade; returns nothing, the service holds it. */
 /** The legend surface {@link afterClassEdit} drives. */
 export interface ClassLegendSurface {
-  setClasses(counts: Map<number, number>, sample?: { loaded: number; declared?: number }): void;
   revealClass(code: number): boolean;
 }
 
-/** The active cloud's facts {@link afterClassEdit} reads. */
-export interface ClassEditCloud {
-  readonly classification?: ArrayLike<number> | null;
-  readonly pointCount?: number;
-  readonly declaredPointCount?: number;
-}
-
 /**
- * Bring the class legend back in step with a lasso reclassify, and report
- * whether the target class had to be revealed.
+ * Show the class a lasso reclassify wrote into, and report whether it had been
+ * hidden.
  *
- * Two things went stale after an edit. The per-class counts still described the
- * classification before it, so a class that gained points kept its old number
- * and a class that had none stayed off the list entirely. And the edit only
- * touches points the user can see, so reclassifying INTO a filtered-out class
- * hid its own result in the same frame: the tool looked inert while it was
- * working. Recount first, so a revealed row carries a real number.
+ * The edit only touches points the user can currently see, which is what stops
+ * a lasso rewriting points behind a filter. Reclassifying INTO a filtered-out
+ * class therefore landed the edit and hid its own result in the same frame: the
+ * tool looked inert while it was working.
+ *
+ * This does NOT recount. `Viewer.reclassifyLasso` fires `onClassificationEdited`
+ * before it returns, and {@link noteClassificationEdited} already recounts
+ * through `replaceCounts`, which keeps the user's filter and the derived /
+ * streaming / sampled captions. Recounting again here through `setClasses`
+ * would reset all of them — and silently, because `setClasses` emits no change
+ * event, so the legend would say a class is visible while the GPU mask still
+ * hid it.
  */
-export function afterClassEdit(
-  legend: ClassLegendSurface,
-  cloud: ClassEditCloud | null | undefined,
-  targetClass: number,
-): boolean {
-  if (cloud?.classification) {
-    legend.setClasses(countClasses(toClassBuffer(cloud.classification)), {
-      loaded: cloud.pointCount ?? cloud.classification.length,
-      declared: cloud.declaredPointCount,
-    });
-  }
+export function afterClassEdit(legend: ClassLegendSurface, targetClass: number): boolean {
   return legend.revealClass(targetClass);
 }
 
