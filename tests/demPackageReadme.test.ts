@@ -269,3 +269,52 @@ describe('buildDemReadme — honest gating caveat', () => {
     expect(txt).not.toMatch(/PRELIMINARY/);
   });
 });
+
+/**
+ * The elevation unit on the live no-CRS path.
+ *
+ * `deriveCoreParams` supplies the GEOMETRY factor `verticalMetresPerUnit(ctx,
+ * 'horizontal') ?? 1`, so a scan with no CRS reaches `analyseContours` with
+ * `verticalUnitToMetres: 1` and `verticalScaleKnown: false`. The README's
+ * elevation label read that geometry factor and printed "metres", while the
+ * same README's Provenance block — built from the CLAIM factor the panel
+ * threads in as `verticalUnitToMetres` — printed "(vertical unit unverified)"
+ * and the cell size printed "units". The `== null` branch was dead: the live
+ * path never produces it.
+ *
+ * Driven through `analyseContours` rather than a hand-set `null`, so the
+ * placeholder is the one production actually passes.
+ */
+describe('buildDemReadme — elevation unit on the live unresolved-frame path', () => {
+  async function unresolvedFrameResult(): Promise<AnalyseContoursResult> {
+    const { analyseContours } = await import('../src/terrain/contour/analyseContours');
+    const pts: { x: number; y: number; z: number }[] = [];
+    for (let x = 0; x <= 30; x++) {
+      for (let y = 0; y <= 30; y++) {
+        const dx = x - 15; const dy = y - 15;
+        pts.push({ x, y, z: 6 * Math.exp(-(dx * dx + dy * dy) / 140) });
+      }
+    }
+    return analyseContours(pts, {
+      cellSizeM: 2,
+      // What the runner passes for a scan with no CRS: the inert placeholder
+      // factor beside the fact that no vertical scale is known.
+      horizontalUnitToMetres: 1,
+      verticalUnitToMetres: 1,
+      verticalScaleKnown: false,
+      horizontalScaleKnown: false,
+    } as unknown as Parameters<typeof analyseContours>[1]);
+  }
+
+  it('says unknown, not metres, when no vertical scale resolved', async () => {
+    const txt = buildDemReadme({
+      result: await unresolvedFrameResult(),
+      ...OPTS,
+      // The panel threads the CLAIM factor; unresolved ⇒ null.
+      verticalUnitToMetres: null,
+      linearUnit: 'unknown',
+    });
+    expect(txt).toMatch(/Elevation unit unknown/);
+    expect(txt).not.toMatch(/Elevation unit metres/);
+  });
+});

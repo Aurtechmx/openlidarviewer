@@ -71,8 +71,8 @@ function projectedUnitLabel(unit: DemLinearUnit | undefined): string {
 /**
  * Elevation-unit word for the README, mapped from the units.ts short label
  * (`'m'` / `'ft'` / `'units'`). The DTM stores Z in the scan's SOURCE vertical
- * units, so the label is derived from the resolved VERTICAL factor
- * (`dtm.verticalUnitToMetres`), never the horizontal one — a compound CRS (metre
+ * units, so the label is derived from the resolved VERTICAL factor the caller
+ * CLAIMS (`opts.verticalUnitToMetres`), never the horizontal one — a compound CRS (metre
  * plan over a foot height, or the reverse) would otherwise stamp the README and
  * the GeoTIFF vertical GeoKey with different units for the SAME zip. `'units'`
  * (an absent / degenerate factor) reads `'unknown'`, the fail-closed contract
@@ -263,9 +263,19 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // in both branches: a geographic frame's cells are degrees but its heights
   // still carry the declared vertical unit. An absent / degenerate factor reads
   // 'unknown' (fail-closed), never a fabricated metre.
-  const zUnit = dtm.verticalUnitToMetres == null
+  // `dtm.verticalUnitToMetres` is the GEOMETRY factor the runner pins to the
+  // inert placeholder 1 for a scan with no CRS, so reading it here printed
+  // "metres" for a frame whose own Provenance block, built from the CLAIM
+  // factor threaded in as `opts.verticalUnitToMetres`, said the vertical unit
+  // was unverified. Read the claim, gated on the result's own statement that a
+  // vertical scale resolved; fall back to the geometry factor only when the
+  // caller states no claim at all (a legacy direct call).
+  const zFactor = result.verticalScaleResolved === false
+    ? null
+    : (opts.verticalUnitToMetres ?? dtm.verticalUnitToMetres ?? null);
+  const zUnit = zFactor == null
     ? 'unknown'
-    : ELEVATION_UNIT_NAME[verticalUnitLabel(dtm.verticalUnitToMetres)];
+    : ELEVATION_UNIT_NAME[verticalUnitLabel(zFactor)];
   const reasons = quality?.reasons ?? [];
   const exportReasons = quality?.exportReasons ?? [];
   const warnings = result.warnings ?? [];
