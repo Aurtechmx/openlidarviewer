@@ -1386,6 +1386,7 @@ export function computeTerrainCore(
           analyzedPointCount: dtm.analyzedPointCount,
         },
         groundDensityPerM2: cellMetrics.meanDensity,
+        horizontalScaleResolved: gridGeometry.unitResolved,
       })
     : null;
 

@@ -154,6 +154,13 @@ export interface ComplexitySummaryInput {
   readonly meta?: ComplexityMetaInput;
   /** Scan-scaled ground density in pts/m², for the cited reliability caveat. */
   readonly groundDensityPerM2?: number | null;
+  /**
+   * Did the frame resolve a horizontal scale? The cell sizes above carry an
+   * inert factor of 1 when it did not, so they are source units — and both the
+   * ground-window statements and the cited pts/m² density threshold are metric.
+   * Default true, matching a caller that states its scale.
+   */
+  readonly horizontalScaleResolved?: boolean;
 }
 
 /**
@@ -240,8 +247,16 @@ export function summariseTerrainComplexity(
   // (stated as unknown) when the caller could not resolve metres.
   const cx = input.cellMetresX;
   const cy = input.cellMetresY;
-  const cellMetres =
+  const cellSize =
     Number.isFinite(cx) && cx > 0 && Number.isFinite(cy) && cy > 0 ? (cx + cy) / 2 : null;
+  // The window/radius are stated in GROUND METRES, so they are withheld unless
+  // a horizontal scale resolved: on a frame with none the cell size above is
+  // the raw source figure with an inert factor of 1 applied, and "3×3-cell
+  // window (30 m)" for a scan whose own extents read source units states a
+  // ground distance nothing measured. The radius SELECTION below still reads
+  // the raw size, so no figure changes — only what is claimed about it.
+  const horizontalResolved = input.horizontalScaleResolved !== false;
+  const cellMetres = horizontalResolved ? cellSize : null;
 
   // VRM over the EXISTING Horn grids — 3×3, the Sappington et al. window.
   const vrm = computeVRM(input.slope, input.aspect, cols, rows, {
@@ -252,7 +267,7 @@ export function summariseTerrainComplexity(
   if (vrm.validCellCount === 0) return null;
 
   // TPI over the DTM heights, radius aimed at ~10 m and honestly reported.
-  const radiusCells = pickTpiRadiusCells(cellMetres ?? Number.NaN);
+  const radiusCells = pickTpiRadiusCells(cellSize ?? Number.NaN);
   const tpi = computeTPI(input.z, cols, rows, {
     radiusCells,
     slope: input.slope,
@@ -311,11 +326,25 @@ export function summariseTerrainComplexity(
     warnings.push(w);
   }
   const density =
-    input.groundDensityPerM2 != null && Number.isFinite(input.groundDensityPerM2) && input.groundDensityPerM2 > 0
+    horizontalResolved &&
+    input.groundDensityPerM2 != null &&
+    Number.isFinite(input.groundDensityPerM2) &&
+    input.groundDensityPerM2 > 0
       ? input.groundDensityPerM2
       : null;
-  const caveat = densityReliabilityCaveat(density);
-  if (caveat) warnings.push(caveat);
+  if (!horizontalResolved) {
+    // The threshold is pts/m² and the density is per source unit squared, so it
+    // cannot be applied. Said out loud: a scan that simply produced no caveat
+    // would read as one that cleared the threshold.
+    warnings.push(
+      'point density is per source unit squared on this frame — no linear unit resolved — '
+      + 'so the ≥4 pts/m² reliability threshold (Münzinger et al. 2022, '
+      + 'doi:10.1016/j.ufug.2022.127637) could not be applied; treat complexity as indicative',
+    );
+  } else {
+    const caveat = densityReliabilityCaveat(density);
+    if (caveat) warnings.push(caveat);
+  }
 
   return {
     vrmMedian: vrm.summary.median,
