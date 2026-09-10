@@ -20,11 +20,8 @@
 import { el } from './dom';
 import { loadQualityPanel } from '../lazyChunks';
 import type { QualityPanel } from './QualityPanel';
-// Value import: the tooltip states the same scope the panel does. QualityPanel
-// is lazily loaded for its DOM, but this constant is a string — importing it
-// eagerly costs nothing the bundle notices and keeps one wording.
-import { QUALITY_SCOPE_NOTE } from './QualityPanel';
 import {
+  QUALITY_SCOPE_NOTE,
   resolveQualitySettings,
   type QualityDevice,
   type QualityPreference,
