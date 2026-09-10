@@ -106,6 +106,17 @@
   }
 }
 
+/* The Layers section is the Inspector's own node, re-parented into Data mode.
+   Inside the Inspector it sits on that panel's surface; in the rail it is a
+   top-level child with nothing behind it, so its rows and group headers read
+   straight over the point cloud. Same card surface the sibling panels carry. */
+.olv-ws-mode > .olv-layers-section {
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+
 /* Persistent "Add dataset" affordance. The Stage reveals it with the first
    scan (hideEmptyState); once the empty state is gone, drag-and-drop is the
    only way to open a second dataset — and a phone has none — so this is the

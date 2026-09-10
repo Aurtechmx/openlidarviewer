@@ -972,6 +972,10 @@ export class Inspector {
     // Detail, Provenance, Coordinate system, Scan report — work
     // uniformly against either source type.
     this._layersSection = section('Layers', this._layers);
+    // The workspace re-parents this node into the Data mode, where it is a
+    // top-level rail child with nothing painted behind it; the class is what
+    // gives it a surface there. Inert inside the Inspector's own panel.
+    this._layersSection.classList.add('olv-layers-section');
     // The group control sits above the rows, so "New group" is reachable
     // whether or not any group exists yet.
     this._layersSection.insertBefore(this._groupBar, this._layers);

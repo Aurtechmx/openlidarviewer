@@ -89,14 +89,12 @@ verdict.
   reported in that case, and no whole-cloud figure stands in for it.
 - A scan with no resolved linear unit reports no ground-return density, no USGS
   3DEP density-floor comparison, no metre RMSEz, NVA or VVA, and no ground
-  window or radius for the complexity figures. All of those are metric
-  statements and the coordinates are in source units, so they are withheld
-  rather than stated under an assumed metre. The residual: the TPI radius is
-  chosen from a ~10 m target applied to the raw cell size, so on such a frame
-  the window it selects is sized by a number whose unit is unknown. The radius
-  in cells is reported beside every TPI figure, and the ground distance is not.
-  Selecting it differently would move a computed figure, which this release does
-  not do.
+  window or radius for the complexity figures. Those are metric statements over
+  source-unit coordinates. One residual stays: the TPI radius is chosen from a
+  10 m target divided by the raw cell size, so on such a frame the window is
+  sized by a number of unknown unit. The radius in cells is reported beside
+  every TPI figure and the ground distance is withheld; changing the selection
+  would move a computed figure, which this release does not do.
 - Contour, DEM and package exports carry the evidence status of the
   least-supported product they contain, and every one of them contains the DTM,
   which is at E4 with E5 required. The "Internal validation" badge is therefore
