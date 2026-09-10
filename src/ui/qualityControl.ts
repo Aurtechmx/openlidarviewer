@@ -20,6 +20,10 @@
 import { el } from './dom';
 import { loadQualityPanel } from '../lazyChunks';
 import type { QualityPanel } from './QualityPanel';
+// Value import: the tooltip states the same scope the panel does. QualityPanel
+// is lazily loaded for its DOM, but this constant is a string — importing it
+// eagerly costs nothing the bundle notices and keeps one wording.
+import { QUALITY_SCOPE_NOTE } from './QualityPanel';
 import {
   resolveQualitySettings,
   type QualityDevice,
@@ -83,7 +87,10 @@ export class QualityControl {
     this._button = el('button', {
       className: 'olv-quality-button',
       unsafeHtml: ICON_QUALITY,
-      title: 'Performance',
+      // The label alone said nothing about what the control changes. It trades
+      // rendering speed against visual detail, and the second sentence is the
+      // one people actually need: it does not touch a measured figure.
+      title: `Performance — trade rendering speed against visual detail. ${QUALITY_SCOPE_NOTE}`,
       ariaLabel: 'Performance settings',
     }) as HTMLButtonElement;
     this._button.type = 'button';

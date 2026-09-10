@@ -93,6 +93,16 @@ function checkboxRow(
   return { element, input };
 }
 
+/**
+ * What the Performance control does and does not touch. Stated on the panel and
+ * shortened into the button's tooltip, from here, so the two cannot drift into
+ * describing different scopes.
+ */
+export const QUALITY_SCOPE_NOTE =
+  'Display and streaming only. Measurements, terrain products, exports '
+  + 'and reported claims are computed from the loaded data and do not '
+  + 'change with this setting.';
+
 export class QualityPanel {
   /** The popover root. The controller anchors it under the header button. */
   readonly element: HTMLElement;
@@ -176,13 +186,7 @@ export class QualityPanel {
           this._followButton,
         ]),
       ),
-      el('p', {
-        className: 'olv-quality-note',
-        text:
-          'Display and streaming only. Measurements, terrain products, exports '
-          + 'and reported claims are computed from the loaded data and do not '
-          + 'change with this setting.',
-      }),
+      el('p', { className: 'olv-quality-note', text: QUALITY_SCOPE_NOTE }),
     ]);
     this.element.setAttribute('role', 'dialog');
     this.element.setAttribute('aria-label', 'Performance');
