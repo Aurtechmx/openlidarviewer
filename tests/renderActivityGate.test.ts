@@ -13,7 +13,14 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { RenderActivityGate, RENDER_HOLDOVER_MS, IDLE_HEARTBEAT_FRAMES } from '../src/render/renderActivityGate';
+import {
+  RenderActivityGate,
+  CameraPoseWatch,
+  poseDrivesCamera,
+  RENDER_HOLDOVER_MS,
+  IDLE_HEARTBEAT_FRAMES,
+  type CameraPose,
+} from '../src/render/renderActivityGate';
 
 /** A parked gate: no input, heartbeat freshly reset, nothing streaming. */
 function parked(): RenderActivityGate {
@@ -97,5 +104,60 @@ describe('RenderActivityGate', () => {
     expect(g.activityUntilMs).toBe(1500 + RENDER_HOLDOVER_MS);
     g.bump(2000);
     expect(g.activityUntilMs).toBe(2000 + RENDER_HOLDOVER_MS);
+  });
+});
+
+/**
+ * The two deadlines, and who may extend which.
+ *
+ * The render deadline answers "keep drawing" and every input extends it. The
+ * camera deadline answers "is the camera moving" and gates EDL, the adaptive
+ * pixel ratio and the refinement phase. Reading one for the other made a
+ * pointer move over a parked scene change its shading.
+ */
+describe('RenderActivityGate — the render and camera deadlines are separate', () => {
+  it('bump extends the render deadline and leaves the camera one alone', () => {
+    const g = new RenderActivityGate();
+    g.bump(1000);
+    expect(g.activityUntilMs).toBe(1000 + RENDER_HOLDOVER_MS);
+    expect(g.cameraUntilMs).toBe(0);
+  });
+
+  it('bumpCamera extends both — camera motion always wants full-rate frames', () => {
+    const g = new RenderActivityGate();
+    g.bumpCamera(1000);
+    expect(g.activityUntilMs).toBe(1000 + RENDER_HOLDOVER_MS);
+    expect(g.cameraUntilMs).toBe(1000 + RENDER_HOLDOVER_MS);
+  });
+});
+
+describe('the pose watch answers only for the modes that need it', () => {
+  const pose = (x: number): CameraPose => ({
+    position: { x, y: 0, z: 0 },
+    quaternion: { x: 0, y: 0, z: 0, w: 1 },
+  });
+
+  it('reports the first sample as no movement, then any exact difference', () => {
+    const w = new CameraPoseWatch();
+    expect(w.moved(pose(0))).toBe(false);
+    expect(w.moved(pose(0))).toBe(false);
+    // Exact comparison: the damping tail's sub-pixel steps count as movement,
+    // which is why the caller must not consult it under OrbitControls.
+    expect(w.moved(pose(1e-12))).toBe(true);
+  });
+
+  it('speaks for walk and fly, which bypass OrbitControls', () => {
+    expect(poseDrivesCamera('walk')).toBe(true);
+    expect(poseDrivesCamera('fly')).toBe(true);
+  });
+
+  it('stays silent for orbit and pan, where the settle gate decides', () => {
+    // Orbit and pan run `controls.update()` every frame, and damping keeps
+    // changing the transform by amounts far below a pixel long after the view
+    // has come to rest. Letting the pose comparison speak there would re-arm
+    // camera activity that DampingSettleGate had just withheld, holding EDL
+    // and the reduced pixel ratio for seconds after a gesture ends.
+    expect(poseDrivesCamera('orbit')).toBe(false);
+    expect(poseDrivesCamera('pan')).toBe(false);
   });
 });

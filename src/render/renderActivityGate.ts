@@ -52,8 +52,35 @@ export interface CameraPose {
   readonly quaternion: { readonly x: number; readonly y: number; readonly z: number; readonly w: number };
 }
 
+/**
+ * Does this navigation mode move the camera outside OrbitControls?
+ *
+ * Only walk and fly do: they set `controls.enabled = false` and write the
+ * camera transform directly, so no 'change' event carries their motion and the
+ * pose comparison is the only signal. Orbit and pan go through the controls,
+ * where {@link DampingSettleGate} decides when the damping tail has fallen
+ * below the perceptual threshold — and the pose comparison must not overrule
+ * that, or the tail's sub-pixel float changes would hold the camera "moving"
+ * for seconds after the view has visibly come to rest.
+ */
+export function poseDrivesCamera(mode: string): boolean {
+  return mode === 'walk' || mode === 'fly';
+}
+
 export class CameraPoseWatch {
   private _last: readonly number[] | null = null;
+
+  /**
+   * Did the camera move under a mode that OrbitControls does not speak for?
+   *
+   * The pose is sampled on every call regardless of mode, so the baseline
+   * stays current across a mode switch; the answer is withheld under orbit and
+   * pan, where {@link poseDrivesCamera} explains why.
+   */
+  movedOutsideControls(camera: CameraPose, mode: string): boolean {
+    const moved = this.moved(camera);
+    return moved && poseDrivesCamera(mode);
+  }
 
   /** Record this frame's pose and report whether it differs from the last. */
   moved(camera: CameraPose): boolean {

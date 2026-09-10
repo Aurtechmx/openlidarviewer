@@ -785,8 +785,7 @@ export class Viewer {
    * Past this point, the loop falls back to a heartbeat render.
    */
   private readonly _renderGate = new RenderActivityGate();
-  /** Camera pose across frames — the motion signal OrbitControls cannot give. */
-  private readonly _camPose = new CameraPoseWatch();
+  private readonly _camPose = new CameraPoseWatch(); // walk / fly motion signal
   /** Damping-tail measure behind the OrbitControls 'change' activity bump. */
   private readonly _settleGate = new DampingSettleGate();
   /**
@@ -6191,9 +6190,9 @@ export class Viewer {
 
   /**
    * The camera moved: hold full rate AND let the motion-gated effects stand
-   * down. Called only from the OrbitControls 'change' listener, so hovering,
-   * a colour-mode switch or a resize keeps EDL and the pixel ratio where they
-   * are instead of flashing the scene.
+   * down. Reached from the controls 'change' listener (behind the settle gate)
+   * and from the walk / fly pose comparison — never from hovering, a
+   * colour-mode switch or a resize, which would flash the scene.
    */
   private _bumpCameraActivity(): void {
     this._renderGate.bumpCamera(this._nowMs());
@@ -6312,11 +6311,12 @@ export class Viewer {
         return this._timer.getDelta();
       },
       recordFrame: (delta) => this._recordFrame(delta),
+      // Walk / fly move the camera with OrbitControls disabled, so no 'change'
+      // event carries their motion; under orbit and pan the settle gate owns
+      // the verdict and the pose comparison stays quiet.
       updateNav: (delta) => {
         this._nav.update(delta);
-        // Walk / fly drive the camera directly, with OrbitControls disabled, so
-        // no 'change' event carries their motion. The pose comparison does.
-        if (this._camPose.moved(this._camera)) this._bumpCameraActivity();
+        if (this._camPose.movedOutsideControls(this._camera, this._nav.mode)) this._bumpCameraActivity();
       },
       maintainOrbitCenter: () => this._maintainOrbitCenter(),
       updateAdaptiveEdl: () => this._updateAdaptiveEdl(),

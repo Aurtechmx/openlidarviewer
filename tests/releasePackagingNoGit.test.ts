@@ -14,24 +14,50 @@
  * The repository's own archives are cut with git present, so no published zip
  * lost them. The fallback is the path someone else takes: re-packaging an
  * extracted source archive, which has no history. That is exactly the
- * reproduction this release asks reviewers to perform.
+ * reproduction this release asks reviewers to perform — and it is why this
+ * test may not need a repository itself. An earlier version built its fixture
+ * with `git archive HEAD`, which fails inside the very archive it covers.
  *
- * The sibling reproducibility test skips without a repository, so nothing
- * covered this. Here the missing repository is the point: the fixture removes
- * `.git` deliberately.
+ * So the fixture is synthetic and the exclusions are READ OUT OF `package.sh`:
+ * the patterns under test are the shipped ones, and re-unanchoring any of them
+ * fails here.
  */
 
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Tracked files that live under a directory named `release`. */
-const TRACKED_UNDER_RELEASE = [
+/**
+ * The `--exclude` patterns from the rsync fallback in `scripts/package.sh`,
+ * parsed from the script itself so this test cannot drift from what ships.
+ */
+function fallbackExcludes(): string[] {
+  const sh = readFileSync(join(ROOT, 'scripts/package.sh'), 'utf8');
+  const start = sh.indexOf('rsync -a');
+  expect(start, 'no rsync fallback found in scripts/package.sh').toBeGreaterThan(-1);
+  const block = sh.slice(start, sh.indexOf('"$TMP/source/$SRC_PREFIX/"', start));
+  const out = [...block.matchAll(/--exclude\s+'?([^'\s\\]+)'?/g)].map((m) => m[1]);
+  expect(out.length, 'the fallback exclusion list parsed empty').toBeGreaterThan(5);
+  return out;
+}
+
+/** A tree with a file at each path, directories created as needed. */
+function tree(paths: readonly string[]): string {
+  const dir = mkdtempSync(join(tmpdir(), 'olv-nogit-'));
+  for (const rel of paths) {
+    mkdirSync(join(dir, dirname(rel)), { recursive: true });
+    writeFileSync(join(dir, rel), `${rel}\n`);
+  }
+  return dir;
+}
+
+/** Files that live under a directory named `release` and MUST be archived. */
+const KEEP = [
   'docs/release/RELEASE_ASSETS.md',
   'docs/release/ERRATUM_v0.6.2.md',
   'validation/snapshot/evidence/archive-portability/release/archive-portability.json',
@@ -39,49 +65,31 @@ const TRACKED_UNDER_RELEASE = [
   'validation/snapshot/evidence/limitations/docs/release/ERRATUM_v0.6.2.md.txt',
 ];
 
-/**
- * Extract `git archive` of HEAD — the very tree a reviewer downloads — into a
- * workspace with no `.git`, add the generated root `release/` the exclusion
- * exists to drop, then cut a source-only package from it.
- */
-function cutWithoutGit(): { work: string; entries: string[] } {
-  const work = mkdtempSync(join(tmpdir(), 'olv-nogit-'));
-  const tree = join(work, 'tree');
-  execFileSync('bash', [
-    '-c',
-    'mkdir -p "$2" && git -C "$1" archive --format=tar HEAD | tar -x -C "$2" && ' +
-      // The script under test is the working tree's, not the one HEAD happens
-      // to carry — otherwise a fix to package.sh could not turn this green
-      // until after it was committed.
-      'cp "$1/scripts/package.sh" "$2/scripts/package.sh" && ' +
-      'mkdir -p "$2/release" && echo generated > "$2/release/openlidarviewer-generated.zip"',
-    '_', ROOT, tree,
-  ], { maxBuffer: 64 * 1024 * 1024 });
-  const out = join(work, 'out');
-  execFileSync('bash', [join(tree, 'scripts/package.sh'), out, '--source-only'], {
-    cwd: tree,
-    env: { ...process.env, SOURCE_DATE_EPOCH: '1700000000' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const zip = readdirSync(out).find((n) => /-source-.*\.zip$/.test(n))!;
-  const entries = execFileSync('unzip', ['-Z1', join(out, zip)], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-    .split('\n')
-    .filter(Boolean)
-    .map((p) => p.replace(/^openlidarviewer-v[^/]+\//, ''));
-  return { work, entries };
-}
+/** Generated output the exclusions exist to drop. */
+const DROP = [
+  'release/openlidarviewer-generated.zip',
+  'coverage/index.html',
+  'test-results/trace.zip',
+  'docs-site/.vitepress/dist/index.html',
+];
 
 describe('the no-git packaging fallback', () => {
-  it('keeps tracked release documentation and drops only the generated root release/', () => {
-    const { work, entries } = cutWithoutGit();
+  it('keeps tracked release documentation and drops the generated output', () => {
+    const src = tree([...KEEP, ...DROP, 'package.json']);
+    const dest = mkdtempSync(join(tmpdir(), 'olv-nogit-out-'));
     try {
-      for (const f of TRACKED_UNDER_RELEASE) {
-        expect(entries, `${f} was dropped by the rsync exclusion`).toContain(f);
+      execFileSync('rsync', ['-a', ...fallbackExcludes().flatMap((e) => ['--exclude', e]), './', `${dest}/`], {
+        cwd: src,
+      });
+      for (const f of KEEP) {
+        expect(existsSync(join(dest, f)), `${f} was dropped by the rsync exclusions`).toBe(true);
       }
-      expect(entries.some((e) => e.startsWith('release/'))).toBe(false);
+      for (const f of DROP) {
+        expect(existsSync(join(dest, f)), `${f} reached the archive`).toBe(false);
+      }
     } finally {
-      rmSync(work, { recursive: true, force: true });
+      rmSync(src, { recursive: true, force: true });
+      rmSync(dest, { recursive: true, force: true });
     }
-  }, 300_000);
+  });
 });
