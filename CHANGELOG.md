@@ -32,6 +32,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 ### Fixed
 
 - A scan with no resolved linear unit states no metric figure it cannot measure. Withheld: the ground-return density and its USGS 3DEP floor comparison, the metre RMSEz, NVA and VVA on a map sheet, the complexity window and radius in ground metres, and the density threshold that caps readiness. The complexity summary now says the pts/m² threshold could not be applied; producing no caveat had read as clearing it.
+- The contour map sheet prints the build that drew it, in the footer, from the same provenance every other export stamps. A printed sheet could not be traced to the code that produced it.
 - Moving the mouse over a parked scene changed its shading: pointer movement read as camera movement, so Eye Dome Lighting cut out and the pixel ratio dropped for a third of a second. Colour-mode switches, filter changes and canvas resizes did the same. Camera motion now carries its own signal, and walk and fly, which move the camera outside the orbit controls, are read from the camera pose each frame.
 - Six modules each declared their own metre-to-foot factor, two of them rounded, so one length converted two ways depending on the surface that displayed it. A lint now compares conversion factors by value rather than by spelling.
 - Adaptive precision banded on the raw float, so a value one unit in the last place below a decade gained a spurious significant digit and an exact 10 ft span read `10.0000 ft`.

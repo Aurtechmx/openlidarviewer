@@ -217,6 +217,9 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
 - The Performance control's tooltip was the word "Performance". It states what
   the control trades and that it touches no measured figure. A produced product
   named where it exports from.
+- The contour map sheet prints the build that drew it, which every other
+  provenance-bearing export already carried. A printed sheet could not be traced
+  to the code that produced it.
 
 ## Known limitations
 
