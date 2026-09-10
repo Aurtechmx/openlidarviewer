@@ -1172,4 +1172,20 @@ function drawTitleBlock(
   const evStartY = topY - 84 - noteWrapped.length * 8 - 5;
   evWrapped.forEach((ln, i) => rightText(ln, rxr, evStartY - i * 8, 6, font, evColor));
   rightText('OpenLiDARViewer - terrain analysis', rxr, M - 9, 6, font, DIM);
+  // Which build drew this sheet. Every other provenance-bearing export carries
+  // it; the sheet did not, so a printed map could not be traced to the code
+  // that produced it — the question that sent one back for a second look. It
+  // sits centred on the footer baseline between the deliverable label and the
+  // software credit, and is drawn only when it fits between them, so a long
+  // build string cannot collide with either.
+  if (prov?.build) {
+    const buildStr = safe(prov.build);
+    const w = font.widthOfTextAtSize(buildStr, 5.5);
+    const leftEdge = M + (input.purpose ? bold.widthOfTextAtSize(safe(`Deliverable - ${input.purpose.label}`), 6) : 0);
+    const rightEdge = rxr - font.widthOfTextAtSize('OpenLiDARViewer - terrain analysis', 6);
+    const centre = (leftEdge + rightEdge) / 2 - w / 2;
+    if (centre > leftEdge + 8 && centre + w < rightEdge - 8) {
+      text(buildStr, centre, M - 9, 5.5, font, DIM);
+    }
+  }
 }

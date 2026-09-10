@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { inflateSync } from 'node:zlib';
 import {
   buildMapSheetPdf,
   readinessNote,
@@ -386,5 +387,46 @@ describe('buildMapSheetPdf — purpose deliverable content', () => {
     const a = await buildMapSheetPdf({ model, labels: [], provenance: PROV, purpose: engineering });
     const b = await buildMapSheetPdf({ model, labels: [], provenance: PROV, purpose: survey });
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(false);
+  });
+});
+
+/**
+ * The sheet says which build drew it.
+ *
+ * Every other provenance-bearing export carries the build line; a printed map
+ * did not, so a sheet whose figures looked wrong could not be traced to the
+ * code that produced it — a question that cost a round of investigation over a
+ * PDF nobody could attribute.
+ */
+describe('buildMapSheetPdf — build identity', () => {
+  /** Every text run drawn into the PDF, decoded from its content streams. */
+  const drawnText = (bytes: Uint8Array): string => {
+    const buf = Buffer.from(bytes);
+    let out = '';
+    for (const seg of buf.toString('latin1').split(/stream\r?\n/).slice(1)) {
+      const raw = seg.split('endstream')[0];
+      let content: string;
+      try {
+        content = inflateSync(Buffer.from(raw, 'latin1')).toString('latin1');
+      } catch {
+        continue;
+      }
+      for (const m of content.matchAll(/<([0-9A-Fa-f]*)> Tj/g)) {
+        out += Buffer.from(m[1]!, 'hex').toString('latin1');
+      }
+    }
+    return out;
+  };
+
+  it('prints the provenance build line on the sheet', async () => {
+    const bytes = await buildMapSheetPdf({ model, labels: [], provenance: PROV });
+    expect(drawnText(bytes)).toContain(PROV.build);
+  });
+
+  it('prints nothing when no provenance was supplied', async () => {
+    const withProv = await buildMapSheetPdf({ model, labels: [], provenance: PROV, generatedAt: new Date(0) });
+    const without = await buildMapSheetPdf({ model, labels: [], generatedAt: new Date(0) });
+    expect(drawnText(withProv)).toContain(PROV.build);
+    expect(drawnText(without)).not.toContain(PROV.build);
   });
 });
