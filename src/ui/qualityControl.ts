@@ -211,5 +211,11 @@ export class QualityControl {
     this._open = open;
     this._button.setAttribute('aria-expanded', open ? 'true' : 'false');
     this._button.classList.toggle('olv-quality-button-open', open);
+    // The header carries its own z-index, which makes it a stacking context: a
+    // panel opened from inside it cannot paint above the rails however high its
+    // own z-index reads, and this one opened underneath the right rail. Lift
+    // the header itself while the panel is open. The header stays
+    // click-through, so nothing beneath it loses a click.
+    this.element.closest('.olv-topbar')?.classList.toggle('olv-topbar-popover-open', open);
   }
 }

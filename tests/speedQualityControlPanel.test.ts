@@ -83,8 +83,27 @@ class FakeEl {
   }
   setAttribute(name: string, value: string): void { this.attrs.set(name, value); }
   getAttribute(name: string): string | null { return this.attrs.get(name) ?? null; }
+  /** Set by append, so `closest` can walk up the way a real node does. */
+  parent: FakeEl | null = null;
   append(...kids: Array<FakeEl | string>): void {
-    for (const k of kids) if (k instanceof FakeEl) this.children.push(k);
+    for (const k of kids) {
+      if (!(k instanceof FakeEl)) continue;
+      k.parent = this;
+      this.children.push(k);
+    }
+  }
+  /**
+   * Nearest ancestor-or-self carrying a class. Only the `.class` form the
+   * production code uses is supported; anything else throws rather than
+   * quietly answering null, which would let a selector typo pass this stub.
+   */
+  closest(selector: string): FakeEl | null {
+    if (!selector.startsWith('.')) throw new Error(`FakeEl.closest: unsupported selector ${selector}`);
+    const want = selector.slice(1);
+    for (let node: FakeEl | null = this; node; node = node.parent) {
+      if (node.className.split(/\s+/).includes(want)) return node;
+    }
+    return null;
   }
   addEventListener(type: string, fn: () => void): void {
     const list = this.listeners.get(type) ?? [];

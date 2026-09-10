@@ -615,6 +615,12 @@ button:disabled { cursor: not-allowed; }
   z-index: var(--z-topbar);
   pointer-events: none;
 }
+/* The header's own z-index makes it a stacking context, so a popover opened
+   from it is capped at the header's layer however high its own z-index reads —
+   the Performance panel opened underneath the right rail and looked broken.
+   While a header popover is open the header is lifted above the panels; it
+   stays click-through, so nothing beneath it loses a click. */
+.olv-topbar-popover-open { z-index: var(--z-popover); }
 .olv-topbar > * { pointer-events: auto; }
 .olv-wordmark { display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-lg); font-weight: 500; }
 /* The official brand mark (public/brand-mark.svg, via <img>) beside the
@@ -692,7 +698,7 @@ button:disabled { cursor: not-allowed; }
 .olv-quality-button-open { color: var(--accent); background: var(--accent-soft); }
 .olv-quality-pop {
   position: absolute; top: calc(100% + var(--space-md)); right: 0;
-  z-index: var(--z-dock);
+  z-index: var(--z-popover);
   width: 280px; max-width: calc(100vw - var(--space-4xl));
   display: flex; flex-direction: column; gap: var(--space-md);
   padding: var(--space-xl);
