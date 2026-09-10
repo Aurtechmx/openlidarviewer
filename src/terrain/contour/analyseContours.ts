@@ -522,6 +522,13 @@ export interface AnalyseContoursResult {
   readonly blockedAccuracy: SpatialBlockResult | null;
   /** Passed through from the core. */
   readonly verticalScaleResolved: TerrainCore['verticalScaleResolved'];
+  /**
+   * Did a HORIZONTAL scale resolve? Densities and areas are per source unit
+   * squared until one does, so a consumer that compares a density against a
+   * per-square-metre threshold — or prints one — has to read this first.
+   * `gridGeometry` itself is core-only, so this is how the fact leaves it.
+   */
+  readonly horizontalScaleResolved: TerrainCore['gridGeometry']['unitResolved'];
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -1530,6 +1537,7 @@ export function contoursFromCore(
       reliabilitySplit: core.reliabilitySplit,
       blockedAccuracy: core.blockedAccuracy,
       verticalScaleResolved: core.verticalScaleResolved,
+      horizontalScaleResolved: core.gridGeometry.unitResolved,
       confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
@@ -1625,6 +1633,7 @@ export function contoursFromCore(
     reliabilitySplit: core.reliabilitySplit,
     blockedAccuracy: core.blockedAccuracy,
     verticalScaleResolved: core.verticalScaleResolved,
+    horizontalScaleResolved: core.gridGeometry.unitResolved,
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,

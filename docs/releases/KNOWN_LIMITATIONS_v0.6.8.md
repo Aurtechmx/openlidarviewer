@@ -105,7 +105,7 @@ verdict.
 
 ## The shell has little headroom
 
-The eager bundle measures 803 KiB against an 812 KiB ceiling, above its own
+The eager bundle measures 804 KiB against an 812 KiB ceiling, above its own
 warning threshold. The fix is a lazy seam for the report builders, which are
 statically imported today, and that is a refactor rather than a tuning step.
 
