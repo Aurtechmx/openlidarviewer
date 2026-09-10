@@ -656,7 +656,7 @@ describe('complexity on a frame with no resolved horizontal scale', () => {
   };
   const run = (horizontalScaleResolved: boolean) => {
     const g = grid();
-    const sa = hornSlopeAspect(g.z, g.cols, g.rows, 2, 2, 1, g.coverage);
+    const sa = hornSlopeAspect(g.z, g.cols, g.rows, 2, 2, 1);
     return summariseTerrainComplexity({
       z: g.z, coverage: g.coverage, cols: g.cols, rows: g.rows,
       slope: sa.slope, aspect: sa.aspect,
