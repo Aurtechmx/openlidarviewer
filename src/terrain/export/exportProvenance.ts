@@ -485,21 +485,15 @@ export function buildExportProvenance(
           rmseZM: acc.rmseZM,
           nvaM: acc.nvaM ?? null,
           vvaM: acc.vvaM ?? null,
-          // The USGS floors are pulses per SQUARE METRE. The density they are
-          // compared against is per source unit squared until a horizontal
-          // scale resolves, so an unresolved frame cites no floor rather than
-          // grading source units against a metric one.
-          usgsDensityReferenceFloor:
-            result.horizontalScaleResolved === false
-              ? 'none'
-              : acc.densityReferenceFloorsMet[0] ?? 'none',
+          // The floors list is empty on a frame with no horizontal scale —
+          // demAccuracyStandards withholds the comparison there, because the
+          // density is per source unit squared and the 3DEP floors are pulses
+          // per square metre. Decided once, at the producer.
+          usgsDensityReferenceFloor: acc.densityReferenceFloorsMet[0] ?? 'none',
         }
       : null;
   const pointDensityPerM2 =
-    acc &&
-    result.horizontalScaleResolved !== false &&
-    Number.isFinite(acc.pointDensityPerM2) &&
-    acc.pointDensityPerM2 > 0
+    acc && Number.isFinite(acc.pointDensityPerM2) && acc.pointDensityPerM2 > 0
       ? acc.pointDensityPerM2
       : null;
 

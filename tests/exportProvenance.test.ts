@@ -462,7 +462,12 @@ describe('provenance accuracy is withheld on a frame that states no scale', () =
   const unresolved = (over: Record<string, unknown> = {}): AnalyseContoursResult => ({
     ...(readyResult() as unknown as Record<string, unknown>),
     verticalScaleResolved: false,
-    horizontalScaleResolved: false,
+    // What demAccuracyStandards produces on a frame with no horizontal scale:
+    // no density, no floor cleared.
+    accuracyStandards: {
+      rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 0,
+      densityReferenceFloorsMet: [], densityReferenceNote: 'source units',
+    },
     dtm: { coverageMode: 'full', meanConfidence: 82 },
     model: { intervalM: 10, contourStyle: 'generalized', coverageMode: 'full' },
     ...over,

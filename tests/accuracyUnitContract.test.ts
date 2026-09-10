@@ -203,6 +203,20 @@ describe('metre-named accuracy fields require a resolved vertical scale', () => 
     expect(r.accuracyStandards.vvaM).toBeNull();
   });
 
+  it('cites no 3DEP density floor when no horizontal scale resolved', () => {
+    // Density is returns per CELL AREA, and the cell size is in source units
+    // until a horizontal scale resolves; the 3DEP floors are pulses per square
+    // metre. Driven from the live entry point rather than the producer, so a
+    // frame that reaches it with the placeholder factor is the one under test.
+    const r = analyseContours(slope(), {
+      ...BASE, verticalUnitToMetres: 1, horizontalUnitToMetres: 1,
+      verticalScaleKnown: false, horizontalScaleKnown: false,
+    } as unknown as Parameters<typeof analyseContours>[1]);
+    expect(r.accuracyStandards.densityReferenceFloorsMet,
+      'source-unit density was graded against a metric floor').toEqual([]);
+    expect(r.accuracyStandards.pointDensityPerM2).toBe(0);
+  });
+
   it('a foot frame still reports, because feet convert to metres', () => {
     // Withholding is for an UNRESOLVED scale, not a non-metre one: a declared
     // foot vertical is a known scale and converts exactly.

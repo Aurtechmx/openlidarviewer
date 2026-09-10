@@ -65,12 +65,12 @@ describe('samplePointScale through the terrain pipeline', () => {
     // subsample alone (≈ 1 pt/m²) does not. With the scale the QL judgment
     // must match the full-resolution run's density basis.
     const quarter = strided(full, 4);
-    const unscaled = analyseContours(quarter, { cellSizeM: CELL, crs: 'EPSG:32611' });
-    const scaled = analyseContours(quarter, {
-      cellSizeM: CELL,
-      crs: 'EPSG:32611',
-      samplePointScale: 4,
-    });
+    // The 3DEP floors are pulses per square metre, so the density reference is
+    // withheld unless the frame states a horizontal scale. The runner always
+    // passes one; a CRS name alone is a test-only shape.
+    const frame = { cellSizeM: CELL, crs: 'EPSG:32611', horizontalUnitToMetres: 1 };
+    const unscaled = analyseContours(quarter, frame);
+    const scaled = analyseContours(quarter, { ...frame, samplePointScale: 4 });
     expect(unscaled.accuracyStandards.pointDensityPerM2).toBeLessThan(2);
     expect(scaled.accuracyStandards.pointDensityPerM2).toBeGreaterThan(2);
   });

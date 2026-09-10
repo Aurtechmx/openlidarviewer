@@ -504,12 +504,6 @@ export interface AnalyseContoursResult {
   readonly blockedAccuracy: SpatialBlockResult | null;
   /** Passed through from the core. */
   readonly verticalScaleResolved: TerrainCore['verticalScaleResolved'];
-  /**
-   * Did a HORIZONTAL scale resolve? Densities and areas are per source unit
-   * squared until it does, so a consumer comparing one against a pts/m²
-   * reference needs this beside the figure.
-   */
-  readonly horizontalScaleResolved: TerrainCore['gridGeometry']['unitResolved'];
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -1242,10 +1236,17 @@ export function computeTerrainCore(
   // a consumer reading those names has no way to discover that it does. All
   // three are already `number | null` and every consumer has a null path, so
   // the honest answer costs nothing but the figure itself.
+  // Computed here rather than inline in the returned object: the density
+  // reference below needs its horizontal-unit verdict.
+  const gridGeometry = gridGeometryInMetres(params, dtm, gf.analyzedPointCount, elevationRangeM);
   const accuracyStandards = demAccuracyStandards(
     verticalScaleResolved && Number.isFinite(validation.rmse) ? validation.rmse : null,
     verticalScaleResolved && Number.isFinite(validation.p95) ? validation.p95 : null,
     cellMetrics.meanDensity,
+    // The density's own unit question, which the vertical flags above do not
+    // answer: the figure is per source unit squared until a horizontal scale
+    // resolves.
+    gridGeometry.unitResolved,
   );
   // Stride honesty: when the gather strided the cloud, the ground density (and
   // therefore the USGS 3DEP density reference derived from it) is a uniform-stride
@@ -1418,7 +1419,7 @@ export function computeTerrainCore(
     verticalDatum,
     verticalUnitToMetres: params.verticalUnitToMetres ?? null,
     cellSizeM: params.cellSizeM,
-    gridGeometry: gridGeometryInMetres(params, dtm, gf.analyzedPointCount, elevationRangeM),
+    gridGeometry,
     coreWarnings: warnings,
   };
 }
@@ -1510,7 +1511,6 @@ export function contoursFromCore(
       reliabilitySplit: core.reliabilitySplit,
       blockedAccuracy: core.blockedAccuracy,
       verticalScaleResolved: core.verticalScaleResolved,
-      horizontalScaleResolved: core.gridGeometry.unitResolved,
       confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
@@ -1606,7 +1606,6 @@ export function contoursFromCore(
     reliabilitySplit: core.reliabilitySplit,
     blockedAccuracy: core.blockedAccuracy,
     verticalScaleResolved: core.verticalScaleResolved,
-    horizontalScaleResolved: core.gridGeometry.unitResolved,
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,
