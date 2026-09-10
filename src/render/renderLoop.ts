@@ -58,6 +58,8 @@ export interface RenderLoopHost {
   isTweening(): boolean;
   /** The render-activity holdover deadline (ms), for the motion signal. */
   activityUntilMs(): number;
+  /** The camera-motion deadline — hover and scene edits do not extend it. */
+  cameraActivityUntilMs(): number;
   /** Is Eye-Dome Lighting enabled at all? */
   edlEnabled(): boolean;
   /** Pick this frame's device-pixel-ratio before the render uses it. */
@@ -152,9 +154,11 @@ export function runRenderFrame(host: RenderLoopHost): void {
   const rendered = host.shouldRenderFrame();
   const nowMs = frameNow();
   // Suspend EDL while the camera moves: its full-screen post-process is the
-  // dominant per-frame cost during orbit/pan/fly. `moving` reuses the same
-  // motion signal the frame-rate throttle uses, so the two never disagree.
-  const moving = cameraIsMoving(host.isTweening(), nowMs, host.activityUntilMs());
+  // dominant per-frame cost during orbit/pan/fly. This reads the CAMERA
+  // deadline, not the render one: pointer moves, colour-mode switches and
+  // resizes all ask the loop to keep drawing, and reading that as motion
+  // dropped EDL and the pixel ratio over a scene that never moved.
+  const moving = cameraIsMoving(host.isTweening(), nowMs, host.cameraActivityUntilMs());
   const wantEdl = edlActiveThisFrame(host.edlEnabled(), moving);
   // Pick this frame's DPR before rendering so the render uses it.
   host.applyAdaptiveDpr(moving, delta, nowMs, rendered);

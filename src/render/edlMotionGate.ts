@@ -15,16 +15,20 @@
 
 /**
  * Is the camera moving this frame? True while a camera tween animates, or while
- * recent pointer/wheel/key input is still inside its render-holdover window
- * (`now < activityUntilMs`). This is the same motion signal the frame-rate
- * throttle uses, so EDL gating and full-rate rendering agree on "moving".
+ * camera input is still inside its holdover window (`now < cameraUntilMs`).
+ *
+ * The deadline is the CAMERA one, which only OrbitControls' 'change' extends —
+ * not the render deadline, which every input extends. The two were one signal,
+ * so hovering a stationary cloud read as motion: EDL cut out and the pixel
+ * ratio dropped for the holdover, then both snapped back, which is the
+ * brightness pop on hover.
  */
 export function cameraIsMoving(
   isTweening: boolean,
   now: number,
-  activityUntilMs: number,
+  cameraUntilMs: number,
 ): boolean {
-  return isTweening || now < activityUntilMs;
+  return isTweening || now < cameraUntilMs;
 }
 
 /**

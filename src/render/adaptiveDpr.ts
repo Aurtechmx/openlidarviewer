@@ -103,3 +103,37 @@ export function shouldApplyDpr(
   if (quantizedTarget > appliedDpr) return true; // sharpen immediately
   return nowMs - lastChangeMs >= minIntervalMs; // rate-limit reductions
 }
+
+/** Inputs to {@link refinementDprTarget}. */
+export interface RefinementDprInput {
+  /** Highest ratio this device and the budget allow. */
+  readonly maxDpr: number;
+  /** Lowest ratio motion may reduce to. */
+  readonly floor: number;
+  /** P6 discrete phases on, or the continuous P5 mapping. */
+  readonly phasesEnabled: boolean;
+  /** Resolution fraction the current phase asks for (P6 only). */
+  readonly dprScale: number;
+  /** The current refinement phase (P6 only). */
+  readonly phase: string;
+  readonly moving: boolean;
+  readonly angularSpeed: number;
+}
+
+/**
+ * This frame's pixel ratio, quantised. Two mappings behind one seam: the P6
+ * discrete phases scale `maxDpr` by the phase's fraction and pull toward the
+ * floor as rotation speeds up (P3), while the flag-off path is the continuous
+ * P5 mapping. Pure — lifted out of the Viewer so both branches are testable
+ * without a renderer.
+ */
+export function refinementDprTarget(input: RefinementDprInput): number {
+  const { maxDpr, floor, dprScale, phase, moving, angularSpeed } = input;
+  if (!input.phasesEnabled) return quantizeDpr(targetPixelRatio({ maxDpr, moving, angularSpeed }));
+  let target = Math.max(floor, maxDpr * dprScale);
+  if (phase === 'moving' && angularSpeed > 0) {
+    const t = Math.min(1, angularSpeed / DPR_FULL_REDUCTION_ANGULAR);
+    target = Math.max(floor, target + (floor - target) * t);
+  }
+  return quantizeDpr(target);
+}

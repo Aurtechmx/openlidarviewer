@@ -37,21 +37,6 @@ grant the permission they use to read their result. The gesture arithmetic is
 unit-tested independently of any engine, so what is unverified is the
 integration, not the maths.
 
-## Hovering the canvas changes the shading pipeline
-
-Every pointer move over the canvas opens a 350 ms render-activity window, and
-the renderer reads that window as camera movement, so Eye Dome Lighting turns
-off and comes back once it lapses. Moving the mouse across a parked scene
-therefore changes its shading without changing the view. The same signal feeds
-the adaptive resolution and refinement decisions.
-
-Separating "this frame needs drawing" from "the camera is moving" means two
-windows and a decision at each of the eleven places that currently open one.
-That is a change to the render-quality policy, and its effect is a visual one
-that this release cannot verify: the touch and rendering legs run headless, and
-what a reader would need to see is whether the brightness pops. It is recorded
-here rather than changed unverified under the freeze.
-
 ## Firefox and WebKit are advisory in CI
 
 The blocking browser gate is Chromium. Firefox and WebKit run the full
@@ -122,7 +107,7 @@ raise of this ceiling is recorded beside the number in
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,557 lines and `src/render/Viewer.ts` is 6,424. A lint fails
+`src/main.ts` is 5,557 lines and `src/render/Viewer.ts` is 6,423. A lint fails
 the build when either file passes its recorded baseline, so neither may grow
 beyond the number banked for it. The `--update` flag banks a drop and refuses a
 raise, so raising a baseline is a hand edit to
@@ -130,9 +115,10 @@ raise, so raising a baseline is a hand edit to
 
 Both baselines were raised inside this cycle: `src/main.ts` in three steps from
 5,529 to 5,557, and `src/render/Viewer.ts` in two from 6,407 to 6,426, then
-lowered to 6,424 when the classification-input rule moved out of it. Measured
+lowered to 6,423 as the classification-input rule and the pixel-ratio target
+moved out of it. Measured
 against v0.6.7 the shell is smaller, 5,675 then against 5,557 now, and the
-renderer larger, 6,419 then against 6,424 now.
+renderer larger, 6,419 then against 6,423 now.
 
 Most of what those raises paid for is the frame-freshness wiring: a
 coordinate-system change now invalidates a running terrain analysis, a running

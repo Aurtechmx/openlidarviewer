@@ -31,6 +31,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Moving the mouse over a parked scene changed its shading. Every pointer move extended the render-activity window, which the renderer read as camera movement, so Eye Dome Lighting cut out and the pixel ratio dropped for 350 ms and then both came back. Colour-mode switches, filter changes and canvas resizes did the same. The camera now carries its own signal, extended by the controls and by a per-frame pose comparison that also catches walk and fly, which drive the camera with the controls disabled.
 - Six modules each declared their own metre-to-foot factor, two of them rounded, so one length converted two ways depending on the surface that displayed it. A lint now compares conversion factors by value rather than by spelling.
 - Adaptive precision banded on the raw float, so a value one unit in the last place below a decade gained a spurious significant digit and an exact 10 ft span read `10.0000 ft`.
 - A focused resize grip resized its panel and orbited the camera at once, because the camera's focus guard recognised only input, textarea and select elements.

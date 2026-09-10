@@ -33,8 +33,49 @@ export interface RenderActivitySignals {
   readonly streamingBusy: boolean;
 }
 
+/**
+ * Did the camera's pose change since the last frame?
+ *
+ * Walk and fly modes take the camera away from OrbitControls (`controls.enabled
+ * = false`) and drive position and orientation directly, so the 'change' event
+ * that carries the orbit/pan/dolly motion signal never fires there. Comparing
+ * the pose across frames catches that motion — and any other source — without
+ * the Viewer having to enumerate them.
+ *
+ * The comparison is exact rather than epsilon-based: a pose that differs at all
+ * is motion, and the effects this gates (EDL, pixel ratio) hold for the
+ * holdover window afterwards, so a sub-pixel drift cannot flap them frame to
+ * frame. The camera is read structurally, so this stays free of three.js.
+ */
+export interface CameraPose {
+  readonly position: { readonly x: number; readonly y: number; readonly z: number };
+  readonly quaternion: { readonly x: number; readonly y: number; readonly z: number; readonly w: number };
+}
+
+export class CameraPoseWatch {
+  private _last: readonly number[] | null = null;
+
+  /** Record this frame's pose and report whether it differs from the last. */
+  moved(camera: CameraPose): boolean {
+    const { position: p, quaternion: q } = camera;
+    const pose = [p.x, p.y, p.z, q.x, q.y, q.z, q.w];
+    const prev = this._last;
+    this._last = pose;
+    if (prev === null) return false;
+    for (let i = 0; i < pose.length; i++) if (prev[i] !== pose[i]) return true;
+    return false;
+  }
+}
+
 export class RenderActivityGate {
   private _activityUntilMs = 0;
+  // A SECOND deadline, extended only by input that actually moves the camera.
+  // The render deadline above answers "keep drawing"; hovering a stationary
+  // cloud, switching colour mode and resizing all answer yes to that. They are
+  // not motion, and reading the render deadline as motion suspended EDL and
+  // dropped the pixel ratio for 350 ms on a plain mouse move — a visible
+  // brightness pop over a scene that never moved.
+  private _cameraUntilMs = 0;
   // Starts armed so the very first loop iteration draws — otherwise the scene
   // would not appear until the first input.
   private _idleHeartbeat = IDLE_HEARTBEAT_FRAMES;
@@ -44,9 +85,28 @@ export class RenderActivityGate {
     return this._activityUntilMs;
   }
 
+  /**
+   * The camera-motion deadline, exposed for the EDL / adaptive-DPR signal.
+   * Distinct from {@link activityUntilMs}: this one is extended only by camera
+   * motion.
+   */
+  get cameraUntilMs(): number {
+    return this._cameraUntilMs;
+  }
+
   /** Extend the full-rate window after an input. `now` is `performance.now()`. */
   bump(now: number): void {
     this._activityUntilMs = now + RENDER_HOLDOVER_MS;
+  }
+
+  /**
+   * Extend BOTH windows: the camera moved, so the loop draws at full rate and
+   * the motion-gated effects stand down. Camera motion always wants full-rate
+   * frames, so this never has to be paired with {@link bump}.
+   */
+  bumpCamera(now: number): void {
+    this._activityUntilMs = now + RENDER_HOLDOVER_MS;
+    this._cameraUntilMs = now + RENDER_HOLDOVER_MS;
   }
 
   /**

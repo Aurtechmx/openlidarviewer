@@ -29,6 +29,7 @@ function makeHost(over: Partial<RenderLoopHost> = {}): RenderLoopHost {
     isTweening: () => false,
     // Parked by default: frameNow() > 0, so cameraIsMoving is false.
     activityUntilMs: () => 0,
+    cameraActivityUntilMs: () => 0,
     edlEnabled: () => false,
     applyAdaptiveDpr: vi.fn(),
     noteRendered: vi.fn(),
@@ -61,7 +62,7 @@ function makeHost(over: Partial<RenderLoopHost> = {}): RenderLoopHost {
   };
 }
 
-const MOVING = () => Number.POSITIVE_INFINITY; // activityUntilMs → now < it → moving
+const MOVING = () => Number.POSITIVE_INFINITY; // cameraActivityUntilMs → now < it → moving
 
 describe('runRenderFrame — CPU pipeline runs every frame', () => {
   it('advances the clock and drives nav/orbit/EDL even when the frame is skipped', () => {
@@ -82,7 +83,7 @@ describe('runRenderFrame — CPU pipeline runs every frame', () => {
 
 describe('runRenderFrame — paint path', () => {
   it('renders through EDL when parked and EDL is enabled', () => {
-    const host = makeHost({ edlEnabled: () => true, activityUntilMs: () => 0 });
+    const host = makeHost({ edlEnabled: () => true, cameraActivityUntilMs: () => 0 });
     runRenderFrame(host);
 
     expect(host.renderEdl).toHaveBeenCalledTimes(1);
@@ -92,7 +93,7 @@ describe('runRenderFrame — paint path', () => {
   });
 
   it('renders the scene directly while moving, even with EDL enabled', () => {
-    const host = makeHost({ edlEnabled: () => true, activityUntilMs: MOVING });
+    const host = makeHost({ edlEnabled: () => true, cameraActivityUntilMs: MOVING });
     runRenderFrame(host);
 
     expect(host.renderScene).toHaveBeenCalledTimes(1);
@@ -115,7 +116,7 @@ describe('runRenderFrame — idle throttle and EDL snap-back', () => {
     const host = makeHost({
       shouldRenderFrame: () => false, // idle this frame
       edlEnabled: () => true,
-      activityUntilMs: () => 0, // parked
+      cameraActivityUntilMs: () => 0, // parked
       edlPaintedAtRest: () => false, // last paint was EDL-off (was moving)
     });
     runRenderFrame(host);
@@ -130,7 +131,7 @@ describe('runRenderFrame — idle throttle and EDL snap-back', () => {
     const host = makeHost({
       shouldRenderFrame: () => false,
       edlEnabled: () => true,
-      activityUntilMs: () => 0,
+      cameraActivityUntilMs: () => 0,
       edlPaintedAtRest: () => true, // already snapped back
     });
     runRenderFrame(host);
@@ -311,5 +312,27 @@ describe('runRenderFrame — overlay re-projection gating', () => {
     expect(host.renderMeasureOverlay).not.toHaveBeenCalled();
     expect(host.renderInspectOverlay).not.toHaveBeenCalled();
     expect(host.renderAnnotateOverlay).not.toHaveBeenCalled();
+  });
+});
+
+describe('runRenderFrame — hover is not camera motion', () => {
+  /**
+   * A pointer move over a stationary cloud extends the RENDER deadline (the
+   * loop must draw for the hover highlight) but not the CAMERA one. Reading
+   * the render deadline as motion suspended EDL and dropped the pixel ratio
+   * for the holdover, then restored both — the brightness pop on hover.
+   */
+  it('keeps EDL and the parked DPR while only the render deadline is live', () => {
+    const host = makeHost({
+      edlEnabled: () => true,
+      activityUntilMs: () => Number.POSITIVE_INFINITY, // hover keeps drawing
+      cameraActivityUntilMs: () => 0, // the camera never moved
+    });
+    runRenderFrame(host);
+
+    expect(host.renderEdl).toHaveBeenCalledTimes(1);
+    expect(host.renderScene).not.toHaveBeenCalled();
+    expect(host.setEdlPaintedAtRest).toHaveBeenCalledWith(true);
+    expect(host.applyAdaptiveDpr).toHaveBeenCalledWith(false, expect.any(Number), expect.any(Number), true);
   });
 });

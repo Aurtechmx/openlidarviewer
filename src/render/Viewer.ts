@@ -101,13 +101,7 @@ import { runRenderFrame, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { angularVelocity } from './angularVelocity';
-import {
-  targetPixelRatio,
-  quantizeDpr,
-  shouldApplyDpr,
-  DPR_MOTION_FLOOR,
-  DPR_FULL_REDUCTION_ANGULAR,
-} from './adaptiveDpr';
+import { refinementDprTarget, shouldApplyDpr, DPR_MOTION_FLOOR } from './adaptiveDpr';
 import { maxPixelRatio } from './quality/pixelRatioCeiling';
 import { RefinementPhaseTracker } from './refinementPhaseState';
 import { evaluateRefinementReadiness } from './streaming/refinementReadiness';
@@ -228,7 +222,7 @@ import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import { TouchTapGate } from './touchTapGate';
-import { RenderActivityGate, DampingSettleGate } from './renderActivityGate';
+import { RenderActivityGate, DampingSettleGate, CameraPoseWatch } from './renderActivityGate';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
@@ -791,6 +785,8 @@ export class Viewer {
    * Past this point, the loop falls back to a heartbeat render.
    */
   private readonly _renderGate = new RenderActivityGate();
+  /** Camera pose across frames — the motion signal OrbitControls cannot give. */
+  private readonly _camPose = new CameraPoseWatch();
   /** Damping-tail measure behind the OrbitControls 'change' activity bump. */
   private readonly _settleGate = new DampingSettleGate();
   /**
@@ -1308,15 +1304,16 @@ export class Viewer {
     // `DampingSettleGate` withholds the bump once that tail is under a pixel.
     this._controls.addEventListener('change', () => {
       if (this._settleGate.arms(this._camera, this._controls, canvas.clientHeight || 600)) {
-        this._bumpRenderActivity();
+        // The ONE camera-motion signal. Orbit, pan, dolly, the fly controller's
+        // `controls.update()` and the damping tail all arrive here; nothing
+        // else moves the camera except a tween, which the loop reads directly.
+        this._bumpCameraActivity();
       }
     });
     this._controls.addEventListener('start', () => { this._userInteracting = true; });
     this._controls.addEventListener('end', () => {
       this._userInteracting = false;
-      this._lastInteractMs = (typeof performance !== 'undefined' && performance.now)
-        ? performance.now()
-        : Date.now();
+      this._lastInteractMs = this._nowMs();
     });
 
     // ── Navigation controller ─────────────────────────────────────────────
@@ -1578,7 +1575,7 @@ export class Viewer {
       if (!endTouch(e)) return;
       // Double-tap → focus-on-point (touch equivalent of the desktop dblclick).
       if (this._toolMode === 'none') {
-        const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+        const now = this._nowMs();
         const focus = this._tapGate.up(this._touchTracker.size, now, e.offsetX, e.offsetY);
         if (focus) this._handleDoubleClick({ offsetX: focus.x, offsetY: focus.y } as MouseEvent);
       }
@@ -5484,9 +5481,7 @@ export class Viewer {
     // The hand-tool grab and the custom orbit drag both bypass OrbitControls, so
     // the `_userInteracting` gate never sees them; suspend the clamp during either
     // and stamp the settle window on release so it doesn't yank the target.
-    const nowMs = (typeof performance !== 'undefined' && performance.now)
-      ? performance.now()
-      : Date.now();
+    const nowMs = this._nowMs();
     if (this._nav.panDragging || this._nav.orbitDragging) {
       this._panWasDragging = true;
       return;
@@ -6191,10 +6186,24 @@ export class Viewer {
    * renderer responsive.
    */
   private _bumpRenderActivity(): void {
-    const now = (typeof performance !== 'undefined' && performance.now)
+    this._renderGate.bump(this._nowMs());
+  }
+
+  /**
+   * The camera moved: hold full rate AND let the motion-gated effects stand
+   * down. Called only from the OrbitControls 'change' listener, so hovering,
+   * a colour-mode switch or a resize keeps EDL and the pixel ratio where they
+   * are instead of flashing the scene.
+   */
+  private _bumpCameraActivity(): void {
+    this._renderGate.bumpCamera(this._nowMs());
+  }
+
+  /** `performance.now()` where it exists, wall clock otherwise. */
+  private _nowMs(): number {
+    return (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-    this._renderGate.bump(now);
   }
 
   /**
@@ -6211,9 +6220,7 @@ export class Viewer {
    * orbit-pivot maintenance) so resume-on-input is glitch-free.
    */
   private _shouldRenderFrame(): boolean {
-    const now = (typeof performance !== 'undefined' && performance.now)
-      ? performance.now()
-      : Date.now();
+    const now = this._nowMs();
     // Streaming counts as busy when the scheduler has in-flight or queued
     // fetches, so freshly-decoded nodes reach the screen without latency.
     let streamingBusy = false;
@@ -6272,24 +6279,10 @@ export class Viewer {
     );
     const floor = Math.min(maxDpr, DPR_MOTION_FLOOR);
 
-    let target: number;
-    if (this._refinementPhasesEnabled) {
-      // P6 — step DPR by discrete refinement phase. The tracker decides when
-      // the phase advances (from the wanted-set readiness verdict where there
-      // is one, an elapsed-time proxy where there is not); this branch only
-      // reads the resolution fraction the current phase asks for.
-      target = Math.max(floor, maxDpr * this._phases.dprScale);
-      if (phase === 'moving' && angularSpeed > 0) {
-        // P3 — faster rotation pulls the moving-phase resolution toward the floor.
-        const t = Math.min(1, angularSpeed / DPR_FULL_REDUCTION_ANGULAR);
-        target = Math.max(floor, target + (floor - target) * t);
-      }
-    } else {
-      // Flag off: the continuous P5 mapping (no discrete phases).
-      target = targetPixelRatio({ maxDpr, moving, angularSpeed });
-    }
-
-    target = quantizeDpr(target);
+    const target = refinementDprTarget({
+      maxDpr, floor, phasesEnabled: this._refinementPhasesEnabled,
+      dprScale: this._phases.dprScale, phase, moving, angularSpeed,
+    });
     const applied = this._renderer.getPixelRatio();
     if (shouldApplyDpr(applied, target, nowMs, this._lastDprChangeMs)) {
       this._renderer.setPixelRatio(target);
@@ -6319,12 +6312,18 @@ export class Viewer {
         return this._timer.getDelta();
       },
       recordFrame: (delta) => this._recordFrame(delta),
-      updateNav: (delta) => this._nav.update(delta),
+      updateNav: (delta) => {
+        this._nav.update(delta);
+        // Walk / fly drive the camera directly, with OrbitControls disabled, so
+        // no 'change' event carries their motion. The pose comparison does.
+        if (this._camPose.moved(this._camera)) this._bumpCameraActivity();
+      },
       maintainOrbitCenter: () => this._maintainOrbitCenter(),
       updateAdaptiveEdl: () => this._updateAdaptiveEdl(),
       shouldRenderFrame: () => this._shouldRenderFrame(),
       isTweening: () => this._nav.isTweening,
       activityUntilMs: () => this._renderGate.activityUntilMs,
+      cameraActivityUntilMs: () => this._renderGate.cameraUntilMs,
       edlEnabled: () => this._edlEnabled,
       applyAdaptiveDpr: (moving, delta, nowMs, rendered) => {
         this._updateRefinementAndDpr(moving, delta, nowMs, rendered);
