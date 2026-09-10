@@ -430,3 +430,47 @@ describe('buildMapSheetPdf — build identity', () => {
     expect(drawnText(without)).not.toContain(PROV.build);
   });
 });
+
+/**
+ * The density row names the quantity it measures.
+ *
+ * The 3DEP floors are nominal PULSE density; this figure is measured
+ * GROUND-RETURN density, which is not the same determination. Labelled
+ * "USGS density ref" the row read as a pulse-density grade, and the technical
+ * report for the same scan refuses to grade its all-returns density against
+ * those floors — two documents from one session, apparently disagreeing.
+ *
+ * The row also has to fit its column: the accuracy block is right-aligned in a
+ * fixed strip, and an overlong row runs into the legend beside it.
+ */
+describe('buildMapSheetPdf — the density reference names its basis', () => {
+  const drawn = (bytes: Uint8Array): string => {
+    let out = '';
+    for (const seg of Buffer.from(bytes).toString('latin1').split(/stream\r?\n/).slice(1)) {
+      let content: string;
+      try {
+        content = inflateSync(Buffer.from(seg.split('endstream')[0], 'latin1')).toString('latin1');
+      } catch { continue; }
+      for (const m of content.matchAll(/<([0-9A-Fa-f]*)> Tj/g)) out += Buffer.from(m[1]!, 'hex').toString('latin1');
+    }
+    return out;
+  };
+
+  it('says ground-return density, not a bare USGS density reference', async () => {
+    const prov = { ...PROV, accuracy: { rmseZM: 1, nvaM: 1.96, vvaM: 2.1, usgsDensityReferenceFloor: 'QL3' } } as typeof PROV;
+    const text = drawn(await buildMapSheetPdf({ model, labels: [], provenance: prov }));
+    expect(text).toContain('Ground-return density ref');
+    expect(text).toContain('>= USGS QL3');
+    expect(text, 'the unqualified label read as a pulse-density grade').not.toContain('USGS density ref');
+  });
+
+  it('fits the accuracy column at its longest', async () => {
+    const { PDFDocument, StandardFonts } = await import('pdf-lib');
+    const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
+    // Portrait letter is the narrowest sheet: the column runs from 72% of the
+    // content width to the right margin, and the rows are drawn at 7.5pt.
+    const column = (612 - 36 - 4) - (36 + (612 - 72) * 0.72);
+    const longest = 'Ground-return density ref:  >= USGS QL0';
+    expect(font.widthOfTextAtSize(longest, 7.5)).toBeLessThan(column);
+  });
+});

@@ -1126,7 +1126,18 @@ function drawTitleBlock(
         ['NVA-style (95%, hold-out)', fmtM(prov.accuracy?.nvaM)],
         ['VVA-style (95th pct, hold-out)', fmtM(prov.accuracy?.vvaM)],
         ['RMSEz', fmtM(prov.accuracy?.rmseZM)],
-        ['USGS density ref', prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none' ? `>= ${prov.accuracy.usgsDensityReferenceFloor} floor` : '—'],
+        // Named for the quantity it measures. "USGS density ref" alone read as a
+        // pulse-density grade, which this is not: the 3DEP floors are nominal
+        // PULSE density and this figure is measured GROUND-RETURN density. The
+        // technical report for the same scan refuses to grade its all-returns
+        // density against these floors, so an unqualified row here put two of
+        // this session's own documents in apparent disagreement.
+        [
+          'Ground-return density ref',
+          prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none'
+            ? `>= USGS ${prov.accuracy.usgsDensityReferenceFloor}`
+            : '—',
+        ],
       ]
     : (() => {
         const a = input.accuracy ?? null;
@@ -1135,8 +1146,8 @@ function drawTitleBlock(
           ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
           ['RMSEz', fmtM(a?.rmseZM)],
           [
-            'USGS density ref',
-            a && a.densityReferenceFloorsMet.length > 0 ? `>= ${a.densityReferenceFloorsMet[0]} floor` : '—',
+            'Ground-return density ref',
+            a && a.densityReferenceFloorsMet.length > 0 ? `>= USGS ${a.densityReferenceFloorsMet[0]}` : '—',
           ],
         ];
       })();
