@@ -80,6 +80,15 @@ caveat is a line of prose above a number, and the number is what gets quoted.
 - Checkpoint accuracy validates the per-stratum minimum and the output of a
   caller-supplied uncertainty combination, and refuses the record when either
   is unusable.
+- A frame that resolves no linear unit states no figure that would be metric.
+  Withheld: the ground-return density and the USGS 3DEP floor it was compared
+  against, the metre RMSEz, NVA and VVA a contour map sheet printed beside its
+  own "vertical unit unverified" note, the complexity window and radius in
+  ground metres, and the density threshold that caps the readiness verdict. The
+  last of those decided a status, so two scans identical but for their source
+  unit were graded differently. The complexity summary states that the pts/m²
+  reliability threshold could not be applied; producing no caveat had read as
+  clearing it.
 - The analysis is told whether the frame resolved a scale, separately from the
   scale factor it uses for geometry. The live path supplies a placeholder factor
   of 1 for a scan with no CRS, and the analysis derived "resolved" from that
@@ -191,6 +200,23 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
   per degree and ignored the cosine of latitude in the width.
 - After a coordinate-system override the interior report and floor-plan buttons
   did nothing; they now refuse with the reason.
+- Moving the mouse over a parked scene changed its shading. Pointer movement
+  read as camera movement, so Eye Dome Lighting cut out and the pixel ratio
+  dropped for a third of a second; a colour-mode switch, a filter change and a
+  canvas resize did the same. Camera motion carries its own signal now, and
+  walk and fly, which move the camera outside the orbit controls, are read from
+  the camera pose each frame.
+- The Layers panel is re-parented out of the Inspector into the workspace rail,
+  where nothing was painted behind it, so its group headers and rows read over
+  the point cloud.
+- Packaging a source tree that has no repository dropped every tracked file
+  under a directory named `release`, including the archive-portability and
+  build-identity evidence, because the exclusion matched any path segment
+  rather than the generated root. Archives cut from the repository were never
+  affected; re-packaging an extracted archive was.
+- The Performance control's tooltip was the word "Performance". It states what
+  the control trades and that it touches no measured figure. A produced product
+  named where it exports from.
 
 ## Known limitations
 
