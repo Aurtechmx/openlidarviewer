@@ -487,6 +487,24 @@ export interface TerrainCore {
   readonly coreWarnings: ReadonlyArray<string>;
 }
 
+/**
+ * The spatially-blocked cross-validation's parameters, in one place.
+ *
+ * The terrain report prints them as prose so a reader can reproduce the figure.
+ * They were literals here and a sentence there, which is a claim with no
+ * producer that can check it: change the block size and the report keeps
+ * stating the old one. The report builds its sentence from this object.
+ */
+export const BLOCKED_CV_PARAMS = {
+  /** Block edge, in DTM cells. */
+  blockCells: 8,
+  folds: 4,
+  /** Ground points are strided down to this many before the folds run. */
+  pointCap: 20_000,
+  /** Grids larger than this skip the blocked pass entirely. */
+  cellCap: 250_000,
+} as const;
+
 /** Everything the UI needs from one analysis pass. */
 export interface AnalyseContoursResult {
   readonly dtm: DtmGrid;
@@ -1069,8 +1087,8 @@ export function computeTerrainCore(
   // DTM rebuilds, so it is bounded: skipped on grids over CELL_CAP cells, and
   // the ground set is strided to POINT_CAP points. Diagnostic only; reported in
   // metres. Null when skipped or when there aren't enough blocks to split.
-  const BLOCKED_CELL_CAP = 250_000; // ~500×500 grid
-  const BLOCKED_POINT_CAP = 20_000;
+  const BLOCKED_CELL_CAP = BLOCKED_CV_PARAMS.cellCap;
+  const BLOCKED_POINT_CAP = BLOCKED_CV_PARAMS.pointCap;
   // ONE resolution of "does this frame state a vertical scale", read by the
   // blocked hold-out below, the metre-named accuracy standards further down and
   // the panel that labels both. Three copies of this expression drifted apart
@@ -1100,8 +1118,8 @@ export function computeTerrainCore(
         blockedHoldoutModelOptions(dtm, aggregation, despikeApplied, params),
       );
       const raw = spatialBlockHoldout(sampled, model, {
-        blockSize: dtm.cellSizeM * 8,
-        folds: 4,
+        blockSize: dtm.cellSizeM * BLOCKED_CV_PARAMS.blockCells,
+        folds: BLOCKED_CV_PARAMS.folds,
         seed: params.holdoutSeed ?? 1,
         // The blocked pass scores against `gf.isGround`, whatever produced it.
         // On the SMRF path that is the whole-cloud mask, so it differs from the

@@ -39,6 +39,10 @@
  */
 
 import { NeumaierSum } from '../../process/numerics';
+// THE project percentile convention. This module had its own type-7 copy, which
+// quantile.ts's own note forbids: two spellings of one convention agree until
+// one is edited.
+import { quantileSorted } from '../quantile';
 import type { ClassificationScope } from './ValidationReport';
 
 export interface XYZ {
@@ -133,17 +137,6 @@ function rmseOf(residuals: readonly number[]): number {
   const s = new NeumaierSum();
   for (const r of residuals) s.add(r * r);
   return Math.sqrt(s.total / residuals.length);
-}
-
-/** Percentile of a pre-sorted array by linear interpolation (type-7). */
-function percentileSorted(sorted: readonly number[], p: number): number {
-  if (sorted.length === 0) return Number.NaN;
-  if (sorted.length === 1) return sorted[0];
-  const idx = (sorted.length - 1) * p;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
 /**
@@ -303,8 +296,8 @@ export function spatialBlockHoldout(
     }
     boot.sort((a, b) => a - b);
     const alpha = (1 - ciLevel) / 2;
-    ciLow = percentileSorted(boot, alpha);
-    ciHigh = percentileSorted(boot, 1 - alpha);
+    ciLow = quantileSorted(boot, alpha);
+    ciHigh = quantileSorted(boot, 1 - alpha);
   }
 
   return {

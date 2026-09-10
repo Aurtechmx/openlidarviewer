@@ -777,3 +777,26 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(rowValue(p, 'Terrain Assessment', 'Export note')).toMatch(/datum/i);
   });
 });
+
+/**
+ * The disclosed cross-validation parameters are the ones that ran.
+ *
+ * The report prints them so a reader can reproduce the blocked figure. They
+ * used to be literals in the analysis and a sentence in the report — two
+ * statements of one fact, with nothing to keep them equal. Changing the block
+ * size would have left the report quoting the old one.
+ */
+describe('the blocked cross-validation prose is built from the parameters', () => {
+  it('quotes the block size, fold count and both caps the analysis uses', async () => {
+    const { BLOCKED_CV_PARAMS } = await import('../src/terrain/contour/analyseContours');
+    const content = buildTerrainReportContent(readyResult(), OPTS);
+    const basis = content.sections
+      .flatMap((s) => s.rows)
+      .map((r) => r.value)
+      .join('\n');
+    expect(basis).toContain(`${BLOCKED_CV_PARAMS.blockCells}-cell blocks`);
+    expect(basis).toContain(`${BLOCKED_CV_PARAMS.folds} folds`);
+    expect(basis).toContain(BLOCKED_CV_PARAMS.pointCap.toLocaleString('en-US'));
+    expect(basis).toContain(BLOCKED_CV_PARAMS.cellCap.toLocaleString('en-US'));
+  });
+});

@@ -42,7 +42,7 @@
  * so the two can never drift.
  */
 
-import type { AnalyseContoursResult } from '../contour/analyseContours';
+import { BLOCKED_CV_PARAMS, type AnalyseContoursResult } from '../contour/analyseContours';
 import { terrainAssessment } from '../contour/terrainAssessment';
 import { readinessLine } from '../quality/readinessEngine';
 import { recommendedWorkflows, type WorkflowItem } from '../contour/recommendedWorkflow';
@@ -188,7 +188,9 @@ function productEvidence(label: string, provenance: ExportProvenance): string {
  * floor in analyseContours.ts; a change there must be mirrored here.
  */
 const BLOCKED_CV_TEXT =
-  '8-cell blocks, 4 folds, ground set strided to <= 20,000 points, skipped on grids over 250,000 cells';
+  `${BLOCKED_CV_PARAMS.blockCells}-cell blocks, ${BLOCKED_CV_PARAMS.folds} folds, `
+  + `ground set strided to <= ${BLOCKED_CV_PARAMS.pointCap.toLocaleString('en-US')} points, `
+  + `skipped on grids over ${BLOCKED_CV_PARAMS.cellCap.toLocaleString('en-US')} cells`;
 
 /**
  * Format a metre value at 2 dp, or an em-dash when absent (never fabricated).
@@ -253,7 +255,6 @@ export function buildTerrainReportContent(
 
   const dtm = result.dtm;
   const q = result.quality;
-  const acc = result.accuracyStandards ?? null;
   const hasAcc = provenance.accuracy != null;
 
   // ── Executive Summary ───────────────────────────────────────────────────
@@ -440,11 +441,15 @@ export function buildTerrainReportContent(
   // ── Quality Metrics ─────────────────────────────────────────────────────
   // ASPRS / USGS 3DEP vocabulary, honestly null-able: when the run measured no
   // RMSEz the whole block reads em-dash / unknown rather than a fabricated zero.
-  const qlFallback = acc && acc.densityReferenceFloorsMet.length > 0 ? acc.densityReferenceFloorsMet[0] : DASH;
+  // ONE source. The fallback read the raw result when the provenance carried no
+  // accuracy block, which is a second path to a figure the provenance had just
+  // withheld — the shape of every unit leak on this page. The floors are empty
+  // on a frame with no horizontal scale (demAccuracyStandards decides that
+  // once), so the dash here means the same thing the provenance means.
   const qlValue =
     hasAcc && provenance.accuracy && provenance.accuracy.usgsDensityReferenceFloor !== 'none'
       ? provenance.accuracy.usgsDensityReferenceFloor
-      : qlFallback;
+      : DASH;
   // Phase 4 honesty figures, single-sourced from the same result the panel
   // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
   const pctOf = (x: number): string => `${Math.round(x * 100)}%`;
@@ -454,9 +459,14 @@ export function buildTerrainReportContent(
   // ASPRS rows above are already withheld there (rmseZM/nvaM/vvaM come back
   // null), but the blocked RMSE and the reliability tolerance are read straight
   // off the result and were formatted with a fixed " m". ASCII only, as above.
+  // BOTH frames, for the reason the ASPRS rows below read the provenance: the
+  // analysis states the scale it fitted under, the provenance states the one
+  // this document is stamped with, and a report whose RMSEz row reads '—' while
+  // its blocked RMSE two rows down reads ' m' describes two frames at once.
+  const zInMetres = result.verticalScaleResolved && provenance.verticalUnitLabel !== 'unknown';
   const fmtZ = (v: number | null | undefined): string =>
     v != null && Number.isFinite(v)
-      ? `${v.toFixed(2)}${result.verticalScaleResolved ? ' m' : ' source Z units'}`
+      ? `${v.toFixed(2)}${zInMetres ? ' m' : ' source Z units'}`
       : DASH;
   const relM = result.reliabilitySplit?.measured;
   // The reliability tolerance IS the hold-out RMSEz (analyseContours:
