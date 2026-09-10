@@ -79,9 +79,16 @@ function num(n: number): string {
  * verticalUnitToMetres and falls back to an inert 1, so a frame that resolved no
  * vertical scale leaves them in the source Z unit. The review bar captioned them
  * "m" either way.
+ *
+ * BOTH frames have to state a vertical scale: the one the surface was fitted
+ * under and the one the Studio is looking at now. They are the same frame for a
+ * single scan, and when they are not — the analysis kept while the active scan
+ * changed — the number on the bar belongs to neither. A sheet exported from the
+ * same state already withholds its metre accuracy on the live frame, so reading
+ * only the result's put the bar and the sheet in disagreement.
  */
-function zUnit(result: AnalyseContoursResult): string {
-  return result.verticalScaleResolved ? 'm' : 'source Z units';
+function zUnit(result: AnalyseContoursResult, input: ContourReviewInput): string {
+  return result.verticalScaleResolved && input.verticalUnit.known ? 'm' : 'source Z units';
 }
 
 /** Build the review-bar rows from a completed analysis result. Pure. */
@@ -198,7 +205,7 @@ export function buildContourReviewSummary(
     const rmse = result.validation.rmse;
     const rationale: string[] = [];
     if (Number.isFinite(rmse)) {
-      rationale.push(`Internal vertical RMSE ${num(rmse)} ${zUnit(result)}.`);
+      rationale.push(`Internal vertical RMSE ${num(rmse)} ${zUnit(result, input)}.`);
     }
     rationale.push(
       supported
@@ -272,7 +279,7 @@ export function buildContourReviewSummary(
     key: 'validation',
     label: 'Validation',
     value: Number.isFinite(rmse)
-      ? `Spatial internal · RMSE ${num(rmse)} ${zUnit(result)}`
+      ? `Spatial internal · RMSE ${num(rmse)} ${zUnit(result, input)}`
       : 'Spatial internal',
     rationale: ['Internal hold-out validation only — no independent checkpoints were provided.'],
     confidence: 'medium',

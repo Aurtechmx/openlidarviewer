@@ -504,6 +504,12 @@ export interface AnalyseContoursResult {
   readonly blockedAccuracy: SpatialBlockResult | null;
   /** Passed through from the core. */
   readonly verticalScaleResolved: TerrainCore['verticalScaleResolved'];
+  /**
+   * Did a HORIZONTAL scale resolve? Densities and areas are per source unit
+   * squared until it does, so a consumer comparing one against a pts/m²
+   * reference needs this beside the figure.
+   */
+  readonly horizontalScaleResolved: TerrainCore['gridGeometry']['unitResolved'];
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -1504,6 +1510,7 @@ export function contoursFromCore(
       reliabilitySplit: core.reliabilitySplit,
       blockedAccuracy: core.blockedAccuracy,
       verticalScaleResolved: core.verticalScaleResolved,
+      horizontalScaleResolved: core.gridGeometry.unitResolved,
       confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
@@ -1599,6 +1606,7 @@ export function contoursFromCore(
     reliabilitySplit: core.reliabilitySplit,
     blockedAccuracy: core.blockedAccuracy,
     verticalScaleResolved: core.verticalScaleResolved,
+    horizontalScaleResolved: core.gridGeometry.unitResolved,
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,

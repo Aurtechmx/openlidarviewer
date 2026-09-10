@@ -272,3 +272,27 @@ describe('interval row describes the interval that ships', () => {
   });
 });
 
+
+/**
+ * The validation row reads BOTH frames.
+ *
+ * A contour sheet exported from a scan whose CRS never resolved printed "RMSEz
+ * 0.71 m" while the same sheet's title block said the vertical unit was
+ * unverified. The sheet's provenance now withholds that figure on the live
+ * frame; the review bar was reading only the frame the surface was fitted
+ * under, so the two would have disagreed on screen and on paper.
+ */
+describe('the validation row will not caption a residual "m" on an unverified frame', () => {
+  it('says source Z units when the studio frame states no vertical scale', () => {
+    const input: ContourReviewInput = { ...metreInput(EXPLORATORY), verticalUnit: unknownUnit() };
+    const s = buildContourReviewSummary(resultStub({ rmse: 0.715 }), input);
+    const validation = s.rows.find((r) => r.key === 'validation')!;
+    expect(validation.value).toContain('0.715 source Z units');
+    expect(validation.value).not.toMatch(/0\.715 m\b/);
+  });
+
+  it('says metres when both the analysis and the studio frame resolved one', () => {
+    const s = buildContourReviewSummary(resultStub({ rmse: 0.715 }), metreInput(AVAILABLE));
+    expect(s.rows.find((r) => r.key === 'validation')!.value).toContain('0.715 m');
+  });
+});

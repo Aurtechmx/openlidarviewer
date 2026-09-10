@@ -1110,9 +1110,10 @@ function drawTitleBlock(
   const rxr = PW - M - 4;
   rightText('Survey accuracy', rxr, topY - 16, 9, bold);
   page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize('Survey accuracy', 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
-  // KNOWN GAP: stamped ' m' unconditionally. See the note on the terrain
-  // report's fmtM — the honest suffix needs the vertical unit on every
-  // provenance construction path.
+  // ' m' is unconditional and correct here: these figures are metres by
+  // construction (a hold-out residual times the resolved vertical factor), and
+  // the provenance withholds the whole accuracy block when no vertical scale
+  // resolved, so an unverified frame reaches this formatter with nulls.
   const fmtM = (v: number | null | undefined): string => (v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—');
   // Accuracy rows, single-sourced from provenance when present (its accuracy
   // block is null when the run measured none, in which case every figure reads

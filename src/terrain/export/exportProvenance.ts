@@ -465,18 +465,41 @@ export function buildExportProvenance(
 
   // Accuracy is present only when the hold-out validation measured an RMSEz;
   // otherwise the whole block is null (never a fabricated zero).
+  //
+  // AND only when THIS provenance resolved the vertical scale it is about to
+  // label everything else with. The two were decided independently: a sheet
+  // built from a frame that states no vertical unit printed "interval 10
+  // (vertical unit unverified)" in one row and "RMSEz: 0.71 m" three rows
+  // below, from the same object. Whatever produced a metre-named figure
+  // upstream, a provenance whose own vertical unit reads "unknown" may not
+  // carry one — the consumers all have a null path and print '—'.
+  const verticalScaleStated =
+    opts.verticalUnitToMetres != null &&
+    Number.isFinite(opts.verticalUnitToMetres) &&
+    opts.verticalUnitToMetres > 0 &&
+    result.verticalScaleResolved !== false;
   const acc = result.accuracyStandards ?? null;
   const accuracy: ExportProvenanceAccuracy | null =
-    acc?.rmseZM != null && Number.isFinite(acc.rmseZM)
+    verticalScaleStated && acc?.rmseZM != null && Number.isFinite(acc.rmseZM)
       ? {
           rmseZM: acc.rmseZM,
           nvaM: acc.nvaM ?? null,
           vvaM: acc.vvaM ?? null,
-          usgsDensityReferenceFloor: acc.densityReferenceFloorsMet[0] ?? 'none',
+          // The USGS floors are pulses per SQUARE METRE. The density they are
+          // compared against is per source unit squared until a horizontal
+          // scale resolves, so an unresolved frame cites no floor rather than
+          // grading source units against a metric one.
+          usgsDensityReferenceFloor:
+            result.horizontalScaleResolved === false
+              ? 'none'
+              : acc.densityReferenceFloorsMet[0] ?? 'none',
         }
       : null;
   const pointDensityPerM2 =
-    acc && Number.isFinite(acc.pointDensityPerM2) && acc.pointDensityPerM2 > 0
+    acc &&
+    result.horizontalScaleResolved !== false &&
+    Number.isFinite(acc.pointDensityPerM2) &&
+    acc.pointDensityPerM2 > 0
       ? acc.pointDensityPerM2
       : null;
 

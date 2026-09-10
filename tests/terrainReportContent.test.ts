@@ -180,7 +180,10 @@ function previewResult(): AnalyseContoursResult {
 }
 
 const OPTS = {
-  verticalUnitToMetres: null,
+  // Stated for the same reason the horizontal frame below is: the fixture
+  // asserts metre RMSEz / NVA / VVA rows, and provenance withholds those on a
+  // frame that never resolved a vertical scale.
+  verticalUnitToMetres: 1,
   basename: 'site-42',
   generatedAt: '2026-06-05T00:00:00.000Z',
   softwareVersion: '9.9.9',
