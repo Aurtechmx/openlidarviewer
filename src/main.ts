@@ -96,7 +96,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
+import { afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { classifierOptions } from './render/class/classifierCues';
 import { classificationCoverage } from './render/class/classificationCoverage';
@@ -2254,8 +2254,7 @@ const processStudio = createProcessStudioFromShell({
 
 // Manual classification-edit panel — lazy-loaded below the legend on first
 // classification. `showReclassifyUi()` on availability; `hideReclassifyUi()` on detach.
-let reclassifyUi: ReclassifyUi | null = null;
-let reclassifyUiLoading: Promise<void> | null = null;
+let reclassifyUi: ReclassifyUi | null = null, reclassifyUiLoading: Promise<void> | null = null;
 async function showReclassifyUi(): Promise<void> {
   if (reclassifyUi) {
     reclassifyUi.setVisible(true);
@@ -2272,6 +2271,7 @@ async function showReclassifyUi(): Promise<void> {
         getActiveId: () => scans.activeId,
         onToast: showLassoToast,
         onAutoClassify: () => runDeriveClassification(),
+        onReclassified: (cls) => afterClassEdit(classLegendPanel, scans.activeCloud(), cls),
       });
       classLegendPanel.element.after(ui.element);
       reclassifyUi = ui;

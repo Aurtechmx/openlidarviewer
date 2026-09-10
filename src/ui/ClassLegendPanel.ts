@@ -276,6 +276,23 @@ export class ClassLegendPanel {
   }
 
   /**
+   * Show a class that is currently hidden, and report whether it had been.
+   *
+   * A lasso reclassify only edits points the user can see, so the target class
+   * may itself be filtered out — the edit then lands and its result vanishes in
+   * the same frame, which reads as a tool that did nothing. Revealing the
+   * target is how the edit stays visible. Emits `onChange` so the host reapplies
+   * the GPU mask, exactly as {@link applyFilter} does.
+   */
+  revealClass(code: number): boolean {
+    if (this._visibility.isVisible(code)) return false;
+    this._visibility.setVisible(code, true);
+    this._render();
+    this._onChange?.(this._visibility);
+    return true;
+  }
+
+  /**
    * Reset the panel for a freshly loaded scan: a brand-new visibility state
    * (everything shown) and the given per-class "shown" counts. Pass an empty
    * map (or omit) when the cloud carries no classification channel — the panel

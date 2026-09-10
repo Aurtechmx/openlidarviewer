@@ -131,6 +131,44 @@ export interface FrameChangeDeps {
 }
 
 /** Subscribe the frame-change cascade; returns nothing, the service holds it. */
+/** The legend surface {@link afterClassEdit} drives. */
+export interface ClassLegendSurface {
+  setClasses(counts: Map<number, number>, sample?: { loaded: number; declared?: number }): void;
+  revealClass(code: number): boolean;
+}
+
+/** The active cloud's facts {@link afterClassEdit} reads. */
+export interface ClassEditCloud {
+  readonly classification?: ArrayLike<number> | null;
+  readonly pointCount?: number;
+  readonly declaredPointCount?: number;
+}
+
+/**
+ * Bring the class legend back in step with a lasso reclassify, and report
+ * whether the target class had to be revealed.
+ *
+ * Two things went stale after an edit. The per-class counts still described the
+ * classification before it, so a class that gained points kept its old number
+ * and a class that had none stayed off the list entirely. And the edit only
+ * touches points the user can see, so reclassifying INTO a filtered-out class
+ * hid its own result in the same frame: the tool looked inert while it was
+ * working. Recount first, so a revealed row carries a real number.
+ */
+export function afterClassEdit(
+  legend: ClassLegendSurface,
+  cloud: ClassEditCloud | null | undefined,
+  targetClass: number,
+): boolean {
+  if (cloud?.classification) {
+    legend.setClasses(countClasses(toClassBuffer(cloud.classification)), {
+      loaded: cloud.pointCount ?? cloud.classification.length,
+      declared: cloud.declaredPointCount,
+    });
+  }
+  return legend.revealClass(targetClass);
+}
+
 export function wireFrameChange(deps: FrameChangeDeps): void {
   let seen = deps.crsService.crsRevision();
   deps.crsService.subscribe((resolved) => {
