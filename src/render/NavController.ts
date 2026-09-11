@@ -997,10 +997,10 @@ export class NavController {
     };
     if (typeof canvas.requestPointerLock !== 'function') return;
     try {
-      const p = canvas.requestPointerLock();
-      if (p && typeof (p as Promise<void>).catch === 'function') {
-        (p as Promise<void>).catch(() => {});
-      }
+      // Promise.resolve normalises both shapes the method has: older browsers
+      // return nothing, newer ones a promise that can reject. The call itself
+      // still happens synchronously, which the user gesture requires.
+      void Promise.resolve(canvas.requestPointerLock()).catch(() => {});
     } catch {
       // Synchronous refusal; the mode stays selected and orbit still responds.
     }
