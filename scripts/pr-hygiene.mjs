@@ -105,15 +105,21 @@ export const NARRATION_PATTERNS = [
 ];
 
 /**
- * Find process narration in a body of authored text.
+ * Find process narration in a body of AUTHORED text.
  *
  * Fenced code blocks and quoted lines are exempt: a diff, a log excerpt or a
  * quoted error legitimately contains any wording at all, and flagging those
  * would push authors to stop pasting the evidence that makes a PR reviewable.
+ *
+ * `<details>` blocks are exempt for the same reason and a sharper one: that is
+ * where a dependency bot pastes an upstream changelog, which nobody here wrote.
+ * A vitest release note crediting a contributor failed this check on the word
+ * "Claude" — the check was reading someone else's prose as this PR's narration.
  */
 export function collectNarrationProblems(text, label = 'text') {
   if (!text) return [];
   const stripped = String(text)
+    .replace(/<details[\s\S]*?<\/details>/gi, ' ')
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/^\s*>.*$/gm, ' ')
     .replace(/`[^`\n]*`/g, ' ');
