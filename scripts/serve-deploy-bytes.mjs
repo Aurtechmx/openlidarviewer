@@ -32,7 +32,7 @@
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, extname, normalize, resolve, sep } from 'node:path';
 
 const ROOT = resolve(process.env.OLV_DEPLOY_ROOT ?? process.argv[2] ?? '.');
@@ -41,6 +41,32 @@ if (!existsSync(ROOT)) {
   console.error(`serve-deploy-bytes: ${ROOT} does not exist`);
   process.exit(1);
 }
+
+/**
+ * Every file the archive contains, keyed by its request path.
+ *
+ * The server answers from this map and never builds a path out of the request.
+ * A containment check on a path derived from the URL is the usual shape and it
+ * has to be re-proved at each use, which is how the directory fallback ended up
+ * opening a value the check upstream had not seen. A lookup cannot escape the
+ * root because nothing outside the walk is in it, and the walk runs once over
+ * the extracted bundle the smoke is about to read.
+ */
+function indexArchive(root) {
+  const files = new Map();
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const abs = join(dir, entry.name);
+      const key = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) walk(abs, key);
+      else if (entry.isFile()) files.set(key, abs);
+    }
+  };
+  walk(root, '');
+  return files;
+}
+
+const FILES = indexArchive(ROOT);
 
 const TYPES = new Map(Object.entries({
   '.html': 'text/html; charset=utf-8',
@@ -108,41 +134,23 @@ const server = createServer(async (req, res) => {
   // Contain the served path inside ROOT: a `..` segment in a request must not
   // reach a file the archive does not contain, or the smoke would pass on bytes
   // that are not in the bundle.
-  const rel = normalize(urlPath).replace(/^([/\\])+/, '');
-  const target = resolve(ROOT, rel === '' ? 'index.html' : rel);
-  if (target !== ROOT && !target.startsWith(ROOT + sep)) {
-    res.writeHead(403).end('forbidden');
+  // The request names an entry in the archive index or it names nothing. A
+  // `..` segment cannot reach outside the bundle because no path outside the
+  // walk is in the map, and the smoke would otherwise pass on bytes the archive
+  // does not contain.
+  const rel = normalize(urlPath).replace(/^([/\\])+/, '').split(sep).join('/');
+  const file = FILES.get(rel === '' ? 'index.html' : rel)
+    ?? FILES.get(rel === '' ? 'index.html' : `${rel}/index.html`);
+  if (file === undefined) {
+    res.writeHead(404).end('not found');
     return;
   }
-  // Re-contain after the directory fallback. `join(target, 'index.html')` cannot
-  // escape a contained target, but the containment proof has to travel with the
-  // value actually opened — the check above proved `target`, and the two lines
-  // below open `file`. One predicate, applied to what is used.
-  const contained = (p) => p === ROOT || p.startsWith(ROOT + sep);
-  // Read first, and treat "this is a directory" as the read's own answer. The
-  // previous shape asked stat() what the path was and then opened it, so the
-  // two calls could disagree about a path that changed between them; here the
-  // only fact used is the one the open itself returned.
-  let file = target;
   let body;
   try {
     body = await readFile(file);
-  } catch (err) {
-    if (err?.code !== 'EISDIR') {
-      res.writeHead(404).end('not found');
-      return;
-    }
-    file = join(target, 'index.html');
-    if (!contained(file)) {
-      res.writeHead(403).end('forbidden');
-      return;
-    }
-    try {
-      body = await readFile(file);
-    } catch {
-      res.writeHead(404).end('not found');
-      return;
-    }
+  } catch {
+    res.writeHead(404).end('not found');
+    return;
   }
   for (const s of SECTIONS) {
     if (matches(s.path, urlPath)) for (const [k, v] of s.headers) res.setHeader(k, v);
