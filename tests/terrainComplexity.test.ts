@@ -687,3 +687,28 @@ describe('complexity on a frame with no resolved horizontal scale', () => {
     expect(unresolved.tpiRadiusCells).toBe(resolved.tpiRadiusCells);
   });
 });
+
+/**
+ * A cell whose slope never resolved is not a flat cell.
+ *
+ * The class pass is gated on a slope grid being supplied — its header says "no
+ * silent default" — and then read a non-finite slope as 0, which is the one
+ * value that decides flat from middle-slope. A cell with no slope measurement
+ * could therefore be labelled FLAT. It is nodata, like a cell with no TPI.
+ */
+describe('TPI classes on a cell with no finite slope', () => {
+  test('leaves the class as nodata instead of calling it flat', () => {
+    const cols = 5; const rows = 5; const n = cols * rows;
+    const z = new Float32Array(n);
+    for (let i = 0; i < n; i++) z[i] = (i % cols) * 0.5;
+    const slope = new Float32Array(n).fill(0.4);
+    const centre = 2 * cols + 2;
+    slope[centre] = Number.NaN;
+    const out = computeTPI(z, cols, rows, { radiusCells: 1, slope });
+    expect(out.classes, 'no class grid was derived').not.toBeNull();
+    expect(out.classes![centre], 'an unmeasured slope was classified as terrain').toBe(0);
+    // A neighbour with a real slope still classifies, so the guard is not
+    // blanking the grid.
+    expect(out.classes!.some((c) => c !== 0)).toBe(true);
+  });
+});

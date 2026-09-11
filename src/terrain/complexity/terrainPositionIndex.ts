@@ -257,8 +257,14 @@ export function computeTPI(
     for (let i = 0; i < n; i++) {
       const s = stdTpi[i];
       if (!Number.isFinite(s)) continue;
+      // A non-finite slope is an absent measurement, not a flat cell. Reading
+      // it as 0 handed `classify` the one value that decides flat-vs-middle,
+      // so a cell whose slope never resolved could be labelled FLAT — a silent
+      // default in the one pass whose header says there is none. It stays 0
+      // (nodata), like a cell with no TPI.
       const sl = slope[i];
-      classes[i] = classify(s, Number.isFinite(sl) ? sl : 0);
+      if (!Number.isFinite(sl)) continue;
+      classes[i] = classify(s, sl);
     }
   } else if (slope != null) {
     warnings.push('slope grid shorter than cols×rows — slope-position classes not derived');

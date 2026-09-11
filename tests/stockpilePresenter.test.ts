@@ -31,14 +31,14 @@ function result(over: Partial<StockpileVolumeResult> = {}): StockpileVolumeResul
 }
 
 describe('presentStockpile', () => {
-  test('headline carries the volume, its ± band, and an explicit (1σ) label', () => {
+  test('headline carries the volume and its band, named as a model band', () => {
     // "± 41" alone reads as a hard bound; the presenter must say it is one
     // standard deviation.
     const v = presentStockpile(result());
-    expect(v.headline).toBe('1,254 m³ ± 41 m³ (1σ)');
+    expect(v.headline).toBe('1,254 m³ ± 41 m³ (model band)');
     expect(v.relative).toBe('±3.3%');
     expect(v.confidence).toBe('medium');
-    expect(v.confidenceLabel).toBe('Medium');
+    expect(v.confidenceLabel).toBe('Uneven sampling');
   });
 
   test('breakdown rows show the math (footprint, base, both error terms)', () => {
@@ -72,7 +72,7 @@ describe('presentStockpile', () => {
     const unknown = presentStockpile(result({ densityUnitKnown: false }));
     expect(unknown.unitVerified).toBe(false);
     expect(stockpileToastLine(unknown)).toBe(
-      'Stockpile: 1,254 m³ ± 41 m³ (1σ) (±3.3%) · Medium confidence · units unverified (assumes metres)',
+      'Stockpile: 1,254 m³ ± 41 m³ (model band) (±3.3%) · Uneven sampling · units unverified (assumes metres)',
     );
   });
 
@@ -80,7 +80,7 @@ describe('presentStockpile', () => {
     // Same native figures, but in feet → volume in m³ is value × 0.3048³.
     const v = presentStockpile(result({ volume: 1000, sigma: 0 }), { lin: 0.3048 });
     // 1000 ft³ ≈ 28 m³.
-    expect(v.headline).toBe('28 m³ ± 0 m³ (1σ)');
+    expect(v.headline).toBe('28 m³ ± 0 m³ (model band)');
   });
 
   test('explicit base reads "(set)", not "(lowest ground)"', () => {
@@ -94,7 +94,7 @@ describe('presentStockpile', () => {
 
   test('toast line is a single readable summary', () => {
     expect(stockpileToastLine(presentStockpile(result()))).toBe(
-      'Stockpile: 1,254 m³ ± 41 m³ (1σ) (±3.3%) · Medium confidence',
+      'Stockpile: 1,254 m³ ± 41 m³ (model band) (±3.3%) · Uneven sampling',
     );
   });
 
@@ -146,5 +146,25 @@ describe('presentStockpile — compound CRS vertical factor', () => {
     const row = (label: string) => v.rows.find((r) => r.label === label)?.value ?? '';
     expect(row('Sampling error')).toContain('5'); // 18 × 0.3048 = 5.49
     expect(row('Base-plane error')).toContain('8'); // 25 × 0.3048 = 7.62
+  });
+});
+
+/**
+ * The words on screen stay inside what the register approves.
+ *
+ * The line read "± 41 m³ (1σ) · High confidence", which is the vocabulary of a
+ * calibrated interval. VOL-STOCKPILE approves "Exploratory volume preview;
+ * spatial correlation and base uncertainty unquantified" and prohibits a
+ * "validated uncertainty interval": the sample term assumes independent
+ * thickness observations where LiDAR returns are spatially correlated, and the
+ * base term is a heuristic spread that is zero for an explicit base.
+ */
+describe('the stockpile line does not promise a coverage interval', () => {
+  test('names the band as a model band and the grade as a sampling verdict', () => {
+    const view = presentStockpile(result());
+    expect(view.headline).not.toMatch(/1σ/);
+    expect(view.headline).toContain('model band');
+    expect(stockpileToastLine(view)).not.toMatch(/confidence/i);
+    expect(stockpileToastLine(view)).toMatch(/sampling/i);
   });
 });

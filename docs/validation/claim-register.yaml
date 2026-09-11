@@ -449,7 +449,7 @@ claims:
       supported: []
       unsupported:
         - "Real terrain. The evidence is synthetic known-truth fixtures, and synthetic validation is not field validation."
-        - "Field-validated (surveyed-ground) precision and recall. External reference-label agreement (OpenGF expert labels, ASPRS producer class-2 ground on real airborne scenes) HAS been measured and reported with its weak regimes intact (mountain F1 near 0.5, dense-canopy precision near 0.34, building roofs read as ground), but reference labels are a classifier's output, not survey checkpoints, so field accuracy stays unmeasured and E5 unreached."
+        - "Field-validated (surveyed-ground) precision and recall. External reference-label agreement against OpenGF expert labels and ASPRS producer class-2 ground HAS been measured on real airborne scenes, with its weak regimes intact (mountain F1 near 0.5, dense-canopy precision near 0.34, building roofs read as ground) — but it was measured on the DERIVED-CLASSIFICATION heuristic (`src/render/class/deriveClassification`), which shares no code with this filter and carries no claim of its own, so it is not evidence about this claim in either direction. Reference labels are also a classifier's output rather than survey checkpoints, so field accuracy stays unmeasured and E5 unreached."
         - "Steep sparse terrain, dense low vegetation and complex roofs, the cases the fixtures do not contain."
         - "The name SMRF unqualified. A subset of the stages is implemented and the output metadata says which."
 

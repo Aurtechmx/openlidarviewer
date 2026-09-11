@@ -1,6 +1,14 @@
 /**
- * groundFilterProducerAgreement.test.ts — OLV's ground filter vs an INDEPENDENT
- * producer ground classification on a real airborne scene.
+ * groundFilterProducerAgreement.test.ts — OLV's DERIVED-CLASSIFICATION
+ * heuristic vs an INDEPENDENT producer ground classification on a real
+ * airborne scene.
+ *
+ * WHICH ALGORITHM. This scores `deriveClassification`
+ * (src/render/class/deriveClassification), the classifier behind Auto-classify
+ * and the class legend. It is NOT `classifyGroundSmrf` (src/terrain/ground/
+ * groundFilter), the terrain surface's ground filter, and the two share no
+ * code. A number here says nothing about the GROUND-FILTER claim in either
+ * direction; the register records that boundary.
  *
  * Every ground-filter check the project ships today is against a SYNTHETIC scene
  * (ground membership known by construction) or an AGREEMENT with another
