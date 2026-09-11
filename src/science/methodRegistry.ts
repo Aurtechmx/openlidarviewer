@@ -215,10 +215,14 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   'olv.volume.stockpile': {
     id: 'olv.volume.stockpile',
     version: 1,
-    name: 'Stockpile cut-fill volume with 1σ band',
+    name: 'Stockpile cut-fill volume with model sensitivity band',
     summary:
       'Cut-fill prism volume of a footprint above a fitted base plane, with a ' +
-      'propagated 1σ volume uncertainty of area·σ(thickness)/√N.',
+      'model sensitivity band combining the independent-sample thickness term ' +
+      'area·σ(thickness)/√N and a heuristic base-height term. The arithmetic is ' +
+      'a standard deviation of that model; it is not calibrated coverage, ' +
+      'because the thickness samples are spatially correlated and the base term ' +
+      'is a spread rather than a measured error.',
     citation: 'Internal composition (prismatic cut-fill); standard earthworks method.',
     category: 'volume',
     implementation: ['src/render/measure/stockpileVolume.ts'],

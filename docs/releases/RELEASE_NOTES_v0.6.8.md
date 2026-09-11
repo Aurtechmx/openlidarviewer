@@ -215,8 +215,10 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
   rather than the generated root. Archives cut from the repository were never
   affected; re-packaging an extracted archive was.
 - The Performance control's tooltip was the word "Performance". It states what
-  the control trades and that it touches no measured figure. A produced product
-  named where it exports from.
+  the control trades: the computation applied to a given point set does not
+  change, and on a streamed scan the resident-point budget does, so a
+  resident-only measurement, analysis or export reads whatever is resident when
+  it runs. A produced product named where it exports from.
 - The contour map sheet prints the build that drew it, which every other
   provenance-bearing export already carried. A printed sheet could not be traced
   to the code that produced it.
