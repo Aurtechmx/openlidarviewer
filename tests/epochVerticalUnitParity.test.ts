@@ -92,7 +92,11 @@ describe('a geographic frame honours its declared vertical scale', () => {
       maxDelta = Math.max(maxDelta, Math.abs(m.z[i] - f.z[i] * M_PER_FT));
     }
     expect(maxDelta).toBeLessThan(1e-3);
-  });
+    // Four full ground-filter + DTM builds. Comfortably inside the default
+    // timeout on its own, and past it under v8 coverage instrumentation, which
+    // is where CI runs it: the assertions were never the failure, the clock
+    // was.
+  }, 120_000);
 });
 
 describe('the epoch DTM is invariant to how the vertical unit is described', () => {
@@ -122,5 +126,7 @@ describe('the epoch DTM is invariant to how the vertical unit is described', () 
       maxDelta = Math.max(maxDelta, Math.abs(m.z[i] - f.z[i] * M_PER_FT));
     }
     expect(maxDelta, 'heights disagree beyond float32 tolerance').toBeLessThan(1e-3);
-  });
+    // See the sibling above: four ground-filter + DTM builds, timed out under
+    // coverage instrumentation rather than failing an assertion.
+  }, 120_000);
 });
