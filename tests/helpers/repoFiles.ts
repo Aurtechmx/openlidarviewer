@@ -25,7 +25,17 @@ import { readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { binaryOnPath } from '../../scripts/lib/binaryOnPath.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/**
+ * Absolute path to git, or null where it is absent — an extracted archive on a
+ * machine without it. Spawning by bare name lets whatever PATH holds decide
+ * which program runs; scripts/lib/binaryOnPath.mjs states the reasoning and
+ * every script here already goes through it.
+ */
+const GIT: string | null = binaryOnPath('git');
 
 /** Directories a walk must not enter: never tracked, or generated. */
 const WALK_SKIP = new Set([
@@ -35,8 +45,9 @@ const WALK_SKIP = new Set([
 
 /** True when this process is inside a git work tree. */
 export function hasGitRepo(): boolean {
+  if (GIT === null) return false;
   try {
-    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: ROOT, stdio: 'pipe' });
+    execFileSync(GIT, ['rev-parse', '--is-inside-work-tree'], { cwd: ROOT, stdio: 'pipe' });
     return true;
   } catch {
     return false;
@@ -66,8 +77,9 @@ function walkFiles(): string[] {
  * IS the shipped set, so the assertions stay meaningful rather than skipped.
  */
 export function distributedFiles(): string[] {
+  if (GIT === null) return walkFiles();
   try {
-    return execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' })
+    return execFileSync(GIT, ['ls-files'], { cwd: ROOT, encoding: 'utf8' })
       .split('\n')
       .filter((f) => f !== '');
   } catch {

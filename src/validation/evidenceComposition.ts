@@ -77,12 +77,29 @@ export function governingClaim(claimIds: readonly string[]): string {
   let best = unique[0];
   for (const id of unique.slice(1)) {
     const [sa, sb] = [gateSeverity(id), gateSeverity(best)];
-    if (sa !== sb) { if (sa > sb) best = id; continue; }
+    if (sa !== sb) {
+      if (sa > sb) {
+        best = id;
+      }
+      continue;
+    }
     const [fa, fb] = [shortfall(id), shortfall(best)];
-    if (fa !== fb) { if (fa > fb) best = id; continue; }
+    if (fa !== fb) {
+      if (fa > fb) {
+        best = id;
+      }
+      continue;
+    }
     const [ra, rb] = [currentRank(id), currentRank(best)];
-    if (ra !== rb) { if (ra < rb) best = id; continue; }
-    if (id < best) best = id;
+    if (ra !== rb) {
+      if (ra < rb) {
+        best = id;
+      }
+      continue;
+    }
+    if (id < best) {
+      best = id;
+    }
   }
   return best;
 }
