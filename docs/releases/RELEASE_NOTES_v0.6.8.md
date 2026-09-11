@@ -220,6 +220,18 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
 - The contour map sheet prints the build that drew it, which every other
   provenance-bearing export already carried. A printed sheet could not be traced
   to the code that produced it.
+- A stockpile preview stated its band as `± x m³ (1σ)` beside a High/Medium/Low
+  confidence word, which reads as a calibrated interval on the volume. The
+  register approves an exploratory preview with spatial correlation and base
+  uncertainty unquantified, so the band is named a model band and the grade
+  names what it measures: how well the footprint was sampled.
+- A TPI slope-position class read a non-finite slope as zero, the value that
+  separates flat from middle-slope, so a cell whose slope never resolved could
+  be labelled flat. It stays nodata.
+- The external reference-label agreement measured on real airborne scenes
+  (OpenGF expert labels, producer class-2 ground) is recorded against the
+  derived-classification heuristic that produced it, not the terrain ground
+  filter, which shares no code with it.
 - A lasso reclassify only edits points the user can see, so reclassifying into a
   class the filter was hiding landed the edit and hid its own result in the same
   frame. The target class is revealed and the toast says so; every other hidden
