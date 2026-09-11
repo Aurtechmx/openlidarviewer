@@ -25,7 +25,7 @@ import { join } from 'node:path';
 
 // Kept on one line: @ts-expect-error applies to the line that follows it.
 // @ts-expect-error — plain .mjs script, no types
-import { collectHygieneProblems, collectNarrationProblems, observeBranch, REDUNDANT_LIMIT } from '../scripts/pr-hygiene.mjs';
+import { collectHygieneProblems, collectNarrationProblems, observeBranch, REDUNDANT_LIMIT, NARRATION_PATTERNS } from '../scripts/pr-hygiene.mjs';
 
 interface Report { errors: string[]; warnings: string[] }
 
@@ -286,5 +286,29 @@ describe('H7 process narration', () => {
   it('reads empty and missing text as nothing to report', () => {
     expect(collectNarrationProblems('')).toEqual([]);
     expect(collectNarrationProblems(undefined as unknown as string)).toEqual([]);
+  });
+});
+
+/**
+ * The thinking-aloud opener is a sentence opener, so it is capitalised.
+ *
+ * Matching case-insensitively at a line start also caught ordinary prose that
+ * wrapped there: "whether or not a finger was\nactually tracked" describes what
+ * the software does and contains no deliberation, and it failed the check on a
+ * commit that had none. The openers themselves still fail, wherever they sit.
+ */
+describe('narration — the deliberation opener', () => {
+  const deliberation = (NARRATION_PATTERNS as ReadonlyArray<{ id: string; re: RegExp }>)
+    .find((p) => p.id === 'deliberation')!;
+
+  it('does not fire on a wrapped mid-sentence word', () => {
+    const body = 'TouchTracker.up re-anchored every component whether or not a finger was\nactually tracked.';
+    expect(deliberation.re.test(body), 'ordinary prose read as deliberation').toBe(false);
+  });
+
+  it('still fires on a real opener, at the start and mid-body', () => {
+    expect(deliberation.re.test('Actually, the second attempt worked')).toBe(true);
+    expect(deliberation.re.test('a line\nHmm, this needs another look')).toBe(true);
+    expect(deliberation.re.test('a line\nLet me try the other seam')).toBe(true);
   });
 });

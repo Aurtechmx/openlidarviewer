@@ -31,7 +31,14 @@ export const CANONICAL = {
 };
 
 /** The superseded hosts. Present in history, never in current metadata. */
-const SUPERSEDED = [/lidar\.aurtech\.mx/, /aurtechmx\.github\.io\/openlidarviewer/];
+// Bounded on both sides. An unanchored host pattern also matches a host that
+// merely ENDS with it — `lidar.aurtech.mx.example.com` — so the lint would have
+// reported a stale host where a different one stood. The boundaries keep the
+// match anywhere in prose while requiring the host itself.
+const SUPERSEDED = [
+  /(?:^|[^\w.-])lidar\.aurtech\.mx(?![\w.-])/,
+  /(?:^|[^\w.-])aurtechmx\.github\.io\/openlidarviewer(?![\w-])/,
+];
 
 /**
  * Paths whose job is to preserve what was true earlier. A release note for a

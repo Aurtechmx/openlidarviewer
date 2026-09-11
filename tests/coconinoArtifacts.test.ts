@@ -231,7 +231,11 @@ function coconinoSection(readme: string): string {
 describe('the shipped Coconino artifacts agree with the measurement', () => {
   const inputsPresent = existsSync(PATHS.ground) && existsSync(PATHS.matched) && existsSync(PATHS.universe);
 
-  (inputsPresent ? it : it.skip)('metrics, universe, summary, eligibility, results and README state one population', () => {
+  // `it.skipIf` rather than a conditional around `it`: the same behaviour, and
+  // it is the form the rest of the suite uses (see releasePackagingRepro). A
+  // static analyser reading `(cond ? it : it.skip)(...)` sees no test call at
+  // all and reports the file as having none.
+  it.skipIf(!inputsPresent)('metrics, universe, summary, eligibility, results and README state one population', () => {
     const { results, metrics } = computeCoconino();
     const universe = readJson<Universe>(PATHS.universe);
     const published = readJson<{ checkpoints: PublishedCheckpoint[] }>(PATHS.published).checkpoints;

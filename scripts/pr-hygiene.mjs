@@ -87,7 +87,12 @@ export const NARRATION_PATTERNS = [
     // the construction is what matters and the adverb is incidental.
     re: /\b(?:I|we)\s+(?:\w+ly\s+|then\s+|first\s+|initially\s+|also\s+|originally\s+){0,2}(?:tried|realized|realised|noticed|decided|thought|discovered|found|started|began|went\s+with|opted|assumed|expected)\b/i,
     why: 'first-person process narration' },
-  { id: 'deliberation', re: /(?:^|\n)\s*(?:Actually|Wait|Hmm|Let me|Let's see|On reflection|Turns out|It turns out)\b/i,
+  // Case-SENSITIVE, unlike its siblings. A thinking-aloud opener starts a
+  // sentence, so it is capitalised; matching case-insensitively at a line start
+  // also caught ordinary prose that happened to wrap there — "whether or not a
+  // finger was\nactually tracked" is a description of software behaviour, not
+  // deliberation, and it failed the check on a commit that contained none.
+  { id: 'deliberation', re: /(?:^|\n)\s*(?:Actually|Wait|Hmm|Let me|Let's see|On reflection|Turns out|It turns out)\b/,
     why: 'thinking-aloud opener' },
   { id: 'instruction-echo', re: /\b(?:as\s+(?:you\s+)?(?:requested|asked)|per\s+your\s+(?:request|instruction)|the\s+user\s+(?:asked|wants|requested))\b/i,
     why: 'echo of the instruction that prompted the work' },

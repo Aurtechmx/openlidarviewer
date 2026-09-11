@@ -25,7 +25,7 @@
  * job to judge, not a line counter's.
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isCliEntry } from './lib/isCliEntry.mjs';
@@ -65,7 +65,15 @@ if (isCliEntry(import.meta.url)) {
   const current = {};
   for (const f of FILES) current[f] = countLines(f);
 
-  const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null;
+  // Read once and let a missing file be the absence, rather than asking whether
+  // it exists and then reading it: between the two the file can appear or go,
+  // and the second step then acts on an answer the first no longer supports.
+  let baseline = null;
+  try {
+    baseline = JSON.parse(readFileSync(BASELINE, 'utf8'));
+  } catch (err) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
   const grown = collectGrowth(current, baseline);
 
   if (baseline === null && !process.argv.includes('--update')) {

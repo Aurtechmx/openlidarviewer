@@ -31,7 +31,7 @@
  */
 
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, extname, normalize, resolve, sep } from 'node:path';
 
@@ -114,19 +114,35 @@ const server = createServer(async (req, res) => {
     res.writeHead(403).end('forbidden');
     return;
   }
+  // Re-contain after the directory fallback. `join(target, 'index.html')` cannot
+  // escape a contained target, but the containment proof has to travel with the
+  // value actually opened — the check above proved `target`, and the two lines
+  // below open `file`. One predicate, applied to what is used.
+  const contained = (p) => p === ROOT || p.startsWith(ROOT + sep);
+  // Read first, and treat "this is a directory" as the read's own answer. The
+  // previous shape asked stat() what the path was and then opened it, so the
+  // two calls could disagree about a path that changed between them; here the
+  // only fact used is the one the open itself returned.
   let file = target;
-  try {
-    if ((await stat(file)).isDirectory()) file = join(file, 'index.html');
-  } catch {
-    res.writeHead(404).end('not found');
-    return;
-  }
   let body;
   try {
     body = await readFile(file);
-  } catch {
-    res.writeHead(404).end('not found');
-    return;
+  } catch (err) {
+    if (err?.code !== 'EISDIR') {
+      res.writeHead(404).end('not found');
+      return;
+    }
+    file = join(target, 'index.html');
+    if (!contained(file)) {
+      res.writeHead(403).end('forbidden');
+      return;
+    }
+    try {
+      body = await readFile(file);
+    } catch {
+      res.writeHead(404).end('not found');
+      return;
+    }
   }
   for (const s of SECTIONS) {
     if (matches(s.path, urlPath)) for (const [k, v] of s.headers) res.setHeader(k, v);
