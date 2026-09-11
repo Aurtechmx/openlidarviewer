@@ -60,6 +60,7 @@ import {
   SOFTWARE_NAME,
   type ExportProvenance,
   type ExportProvenanceOptions,
+  NO_RESOLVED_VERTICAL_SCALE,
 } from './exportProvenance';
 
 const DASH = '—';
@@ -236,12 +237,7 @@ function markFor(status: WorkflowItem['status']): TerrainReportWorkflow['mark'] 
  */
 export function buildTerrainReportContent(
   result: AnalyseContoursResult,
-  // Defaulted EXPLICITLY to "no scale resolved" rather than to `{}`. A caller
-  // that passes no options at all still gets today's honest answer; a caller
-  // that passes an options object must now state the scale, because omitting it
-  // from a populated object is the mistake that shipped a file saying
-  // `contourIntervalUnit: unknown` beside `elevationUnit: metre`.
-  opts: TerrainReportContentOptions = { verticalUnitToMetres: null },
+  opts: TerrainReportContentOptions = NO_RESOLVED_VERTICAL_SCALE,
 ): TerrainReportContent {
   // The unified provenance — the SAME object every other export stamps — gives
   // the header / footer fields (software, version, date, CRS, datum, coverage,

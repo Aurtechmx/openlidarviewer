@@ -996,14 +996,14 @@ export class NavController {
       requestPointerLock?: () => Promise<void> | void;
     };
     if (typeof canvas.requestPointerLock !== 'function') return;
-    try {
-      // Promise.resolve normalises both shapes the method has: older browsers
-      // return nothing, newer ones a promise that can reject. The call itself
-      // still happens synchronously, which the user gesture requires.
-      void Promise.resolve(canvas.requestPointerLock()).catch(() => {});
-    } catch {
-      // Synchronous refusal; the mode stays selected and orbit still responds.
-    }
+    // An async wrapper turns the synchronous TypeError and the rejected promise
+    // into the same thing, so one handler covers both. The body runs up to its
+    // first await synchronously, which is what keeps the request inside the
+    // user gesture the browser requires.
+    const ask = async (): Promise<void> => {
+      await canvas.requestPointerLock?.();
+    };
+    void ask().catch(() => {});
   }
 
   private _handlePointerLockChange(): void {

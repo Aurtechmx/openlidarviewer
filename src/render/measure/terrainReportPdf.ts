@@ -33,6 +33,7 @@ import {
   type TerrainReportContent,
   type TerrainReportContentOptions,
 } from '../../terrain/export/terrainReportContent';
+import { NO_RESOLVED_VERTICAL_SCALE } from '../../terrain/export/exportProvenance';
 import { pdfInfoDate } from '../../pdfInfoDate';
 
 const INK = rgb(0.12, 0.14, 0.18);
@@ -89,12 +90,7 @@ function isContent(x: unknown): x is TerrainReportContent {
  */
 export async function buildTerrainReportPdf(
   input: TerrainReportContent | AnalyseContoursResult,
-  // Defaulted EXPLICITLY to "no scale resolved" rather than to `{}`. A caller
-  // that passes no options at all still gets today's honest answer; a caller
-  // that passes an options object must now state the scale, because omitting it
-  // from a populated object is the mistake that shipped a file saying
-  // `contourIntervalUnit: unknown` beside `elevationUnit: metre`.
-  opts: TerrainReportContentOptions = { verticalUnitToMetres: null },
+  opts: TerrainReportContentOptions = NO_RESOLVED_VERTICAL_SCALE,
 ): Promise<Uint8Array> {
   const content = isContent(input) ? input : buildTerrainReportContent(input, opts);
 

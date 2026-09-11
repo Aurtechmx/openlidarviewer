@@ -426,6 +426,20 @@ function toIso(at: Date | string | null | undefined): string {
 }
 
 /**
+ * The standing options default: EXPLICITLY "no scale resolved" rather than
+ * `{}`. A caller that passes no options at all still gets today's honest
+ * answer; a caller that passes an options object must now state the scale,
+ * because omitting it from a populated object is the mistake that shipped a
+ * file saying `contourIntervalUnit: unknown` beside `elevationUnit: metre`.
+ *
+ * Frozen and shared rather than written inline at each default position, so
+ * every entry point defaults to the same value and none of them can mutate it.
+ */
+export const NO_RESOLVED_VERTICAL_SCALE: ExportProvenanceOptions = Object.freeze({
+  verticalUnitToMetres: null,
+});
+
+/**
  * Derive the single provenance object from an analysis result. SINGLE SOURCE OF
  * TRUTH — every exporter stamps from this so the values can never drift apart.
  * Missing values are reported honestly (never fabricated). Deterministic given a
@@ -433,12 +447,7 @@ function toIso(at: Date | string | null | undefined): string {
  */
 export function buildExportProvenance(
   result: AnalyseContoursResult,
-  // Defaulted EXPLICITLY to "no scale resolved" rather than to `{}`. A caller
-  // that passes no options at all still gets today's honest answer; a caller
-  // that passes an options object must now state the scale, because omitting it
-  // from a populated object is the mistake that shipped a file saying
-  // `contourIntervalUnit: unknown` beside `elevationUnit: metre`.
-  opts: ExportProvenanceOptions = { verticalUnitToMetres: null },
+  opts: ExportProvenanceOptions = NO_RESOLVED_VERTICAL_SCALE,
 ): ExportProvenance {
   // Surface-quality + export-readiness verdicts come from the SAME top-level
   // assessment the panel renders, so a file never disagrees with the UI.
