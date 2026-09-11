@@ -272,6 +272,12 @@ export function compareDtms(
 export interface ChangeSummaryContext {
   /** Co-registration RMSE (m) of the applied alignment — the systematic error term. */
   readonly registrationSigmaM?: number;
+  /**
+   * True when the caller supplied a level of detection measured for these
+   * epochs. False / absent means the comparison is running on the built-in
+   * default, which the report then says out loud.
+   */
+  readonly levelOfDetectionSupplied?: boolean;
   /** Horizontal linear-unit factor, to turn the source-unit cell size into m². */
   readonly horizontalUnitToMetres?: number;
 }
@@ -421,6 +427,29 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
       }
       if (!(ctx.registrationSigmaM && ctx.registrationSigmaM > 0)) {
         lines.push('The co-registration error is unquantified (no alignment applied), so this band is a lower bound.');
+      } else {
+        // What that term IS. The caller supplies the ICP fit's RMS
+        // nearest-neighbour distance, a 3-D residual carrying horizontal
+        // mismatch, point spacing, surface roughness and real change as well as
+        // vertical noise. It is a proxy for the vertical co-registration sigma
+        // the model wants, not a measurement of it, and the report said nothing.
+        lines.push(
+          'The co-registration term is the alignment fit\'s 3-D RMS residual, which ' +
+            'also carries horizontal mismatch, point spacing, surface roughness and ' +
+            'real change — a proxy for vertical registration error, not a measurement ' +
+            'of it. Vertical residuals on stable ground would quantify it.',
+        );
+      }
+      // Where the per-cell sigma came from. It is derived as LoD/1.96, so when
+      // the level of detection is the built-in default rather than a figure
+      // from this survey, the whole band rests on that default. Printing the
+      // band without saying so presents a shipped constant as an error model.
+      if (comparison.levelOfDetectionM === DEFAULT_LOD_M && ctx.levelOfDetectionSupplied !== true) {
+        lines.push(
+          `The per-cell sigma is derived from the level of detection (${DEFAULT_LOD_M} m ÷ 1.96), ` +
+            'and that level of detection is this build\'s default, not a figure measured for ' +
+            'these epochs. Supply one from the surveys\' own accuracy to make the band theirs.',
+        );
       }
     }
   }

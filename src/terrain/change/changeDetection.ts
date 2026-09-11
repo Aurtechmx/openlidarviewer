@@ -88,9 +88,12 @@ export interface ChangeStats {
   readonly netVolumeM3: number;
   /**
    * Net volume (m³) summed over EVERY comparable cell (no LoD threshold):
-   * Σ Δz·cellArea. Per Anderson, this is the statistically correct net —
-   * uncorrelated sub-LoD noise of both signs is free to cancel, instead of
-   * being clipped to zero on one side only. This is the primary net figure
+   * Σ Δz·cellArea. Per Anderson, this is the preferred net estimator UNDER A
+   * ZERO-MEAN ERROR MODEL — uncorrelated sub-LoD noise of both signs is free
+   * to cancel, instead of being clipped to zero on one side only. It was
+   * called "the statistically correct net", which claims more than the model
+   * supports: a systematic co-registration bias and spatially correlated error
+   * do not cancel, and this sum carries them straight into the total. This is the primary net figure
    * (`olv.change.dtm-difference.raw-net@1`); `netVolumeM3` above is kept
    * for `@1` provenance.
    */

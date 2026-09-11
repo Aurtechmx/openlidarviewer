@@ -396,3 +396,40 @@ describe('compareDtms — an unknown projected linear unit refuses the metres', 
     expect(text).toMatch(/linear unit is unknown/i);
   });
 });
+
+/**
+ * The two inputs the band rests on, and what the report said about them.
+ *
+ * The per-cell sigma is derived as LoD/1.96, and no live caller supplies a
+ * level of detection, so every real comparison inherits the build's 0.10 m
+ * default. The registration term is the ICP fit's 3-D RMS nearest-neighbour
+ * residual, which also carries horizontal mismatch, point spacing, surface
+ * roughness and real change. Both are defensible as a working model; neither
+ * was disclosed, so a shipped constant and a proxy read as measurements of
+ * these epochs.
+ */
+describe('the uncertainty band says what it rests on', () => {
+  const pair = () => [grid([1, 1, 1, 1], 2, 2), grid([2, 2, 2, 2], 2, 2)] as const;
+
+  it('names the default level of detection when the caller supplied none', () => {
+    const [a, b] = pair();
+    const lines = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0.02 });
+    expect(lines.some((l) => /this build's default, not a figure measured/.test(l)), 'the default LoD passed as measured').toBe(true);
+  });
+
+  it('stays quiet about the default when the caller measured one', () => {
+    const [a, b] = pair();
+    const lines = summarizeChange(
+      compareDtms(a, b, { levelOfDetectionM: 0.04 }),
+      { horizontalUnitToMetres: 1, registrationSigmaM: 0.02, levelOfDetectionSupplied: true },
+    );
+    expect(lines.some((l) => /this build's default/.test(l))).toBe(false);
+  });
+
+  it('says the registration term is a 3-D residual, not a vertical sigma', () => {
+    const [a, b] = pair();
+    const lines = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0.02 });
+    expect(lines.some((l) => /3-D RMS residual/.test(l)), 'the ICP residual read as a vertical sigma').toBe(true);
+    expect(lines.some((l) => /proxy for vertical registration error/.test(l))).toBe(true);
+  });
+});
