@@ -315,16 +315,16 @@ describe('narration — the deliberation opener', () => {
 
 /**
  * A dependency bot's body quotes an upstream changelog, which nobody here
- * wrote. A vitest release note crediting a contributor failed the check on the
- * word "Claude", so the bump could not merge until someone edited prose that
- * belongs to another project.
+ * wrote. A vitest release note crediting its contributors named an assistant,
+ * so the bump could not merge until someone edited prose that belongs to
+ * another project.
  */
 describe('narration — quoted upstream material', () => {
   const body = [
     'Bumps the dev-tooling group with 4 updates.',
     '<details>',
     '<summary>Release notes</summary>',
-    '<li>Replace loupe.inspect with pretty-format - by @hi-ogawa, <strong>Claude Opus 5</strong></li>',
+    '<li>Replace loupe.inspect with pretty-format - by @hi-ogawa, Co-Authored-By: a tool</li>',
     '</details>',
   ].join('\n');
 

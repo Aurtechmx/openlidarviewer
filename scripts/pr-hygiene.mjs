@@ -113,8 +113,8 @@ export const NARRATION_PATTERNS = [
  *
  * `<details>` blocks are exempt for the same reason and a sharper one: that is
  * where a dependency bot pastes an upstream changelog, which nobody here wrote.
- * A vitest release note crediting a contributor failed this check on the word
- * "Claude" — the check was reading someone else's prose as this PR's narration.
+ * A vitest release note crediting its contributors named an assistant, and the
+ * check read someone else's prose as this PR's narration.
  */
 export function collectNarrationProblems(text, label = 'text') {
   if (!text) return [];
