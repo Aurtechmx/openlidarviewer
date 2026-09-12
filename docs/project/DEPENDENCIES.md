@@ -57,18 +57,18 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
 | @loaders.gl/las | ^4.4.5 | 4.4.5 | MIT |
-| @playwright/test | ^1.62.1 | 1.62.1 | Apache-2.0 |
+| @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 |
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
 | @types/three | ^0.184.1 | 0.184.1 | MIT |
-| @vitest/coverage-v8 | ^4.1.11 | 4.1.11 | MIT |
+| @vitest/coverage-v8 | ^5.0.0 | 5.0.0 | MIT |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
-| vite | ^8.2.1 | 8.2.1 | MIT |
+| vite | ^8.2.2 | 8.2.2 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
-| vitest | ^4.1.7 | 4.1.11 | MIT |
+| vitest | ^5.0.0 | 5.0.0 | MIT |
 
 ## Production security status
 
@@ -116,8 +116,15 @@ through `overrides` rather than waiting on the packages that depend on them:
 | qs (under typed-rest-client) | 6.15.1 | 6.15.3 | `qs.stringify` denial of service |
 | brace-expansion | 1.1.15 | 1.1.16 | CVE-2026-13149, exponential-time expansion |
 
+One further override is not an advisory. `rolldown` is pinned to 1.2.3, the
+bundler Vite builds with. Vite accepts any 1.2.x, and 1.2.7 emits an entry chunk
+14 KiB larger from identical source, which exceeds the 812 KiB ceiling in
+`scripts/check-bundle-budget.mjs`. The pin holds the measured 805 KiB until the
+entry chunk has headroom again; the lazy report seam that would provide it is
+recorded in that file as a refactor of its own.
+
 The `vite` override is scoped to `vitepress` alone. The application builds on
-Vite 8.2.1 and is not affected by it. `npm run docs:build` passes on the
+Vite 8.2.2 and is not affected by it. `npm run docs:build` passes on the
 overridden tree.
 
 ## Stubbed to prune
