@@ -86,7 +86,7 @@ describe('converters preserve band + caveats', () => {
   test('changeFinding carries detectability honesty', () => {
     const u = changeVolumeUncertainty({
       netVolumeM3: 2,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
       registrationSigmaM: 0.02,

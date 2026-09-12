@@ -123,16 +123,87 @@ describe('compareDtms', () => {
 });
 
 describe('summarizeChange', () => {
-  it('leads with the not-co-registered warning when alignment fails', () => {
-    // Triggered by an ORIGIN OFFSET — an indicative case where the numbers
-    // still print with a caveat. This test previously used a CRS mismatch as
-    // the trigger and asserted the numbers printed anyway; a PROVEN mismatch
-    // now refuses them (see the frame-incompatibility suite below).
+  it('refuses the figures when the grids are provably not one grid', () => {
+    // An ORIGIN OFFSET is a MEASURED defect, not an unconfirmed one: cell (i,j)
+    // of one grid is not the ground under cell (i,j) of the other, so a
+    // cell-for-cell subtraction returns the terrain's own slope across the
+    // offset as elevation change. The contaminant is systematic and signed, so
+    // it survives every aggregate. This used to print the volumes under a
+    // caveat; a caveat above a m³ figure does not stop the figure being quoted.
     const a = grid([1, 1], 2, 1);
     const b = grid([2, 2], 2, 1, { originH1: 10 });
     const lines = summarizeChange(compareDtms(a, b));
-    expect(lines[0]).toContain('Not co-registered');
-    expect(lines.some((l) => l.includes('Net volume change'))).toBe(true);
+    expect(lines[0]).toContain('Not comparable');
+    expect(lines.some((l) => l.includes('Net volume change'))).toBe(false);
+    expect(lines.some((l) => /offset by about/.test(l))).toBe(true);
+  });
+
+  it('reports no figures when the frame is merely UNCONFIRMED either', () => {
+    // One grid, same origin, same cell size — but neither states a CRS, so the
+    // two cannot be CONFIRMED to describe the same place. This printed the
+    // volumes under "treat as indicative, not measured", which is the right
+    // posture for a GIS scratchpad and the wrong one for a figure that leaves
+    // the process: the caveat is prose above a m³ number, and the number is what
+    // gets quoted. Absence of evidence that two epochs share a frame is not
+    // evidence that they do.
+    const a = grid([1, 1, 1, 1], 2, 2, { crs: null, verticalDatum: null });
+    const b = grid([2, 2, 2, 2], 2, 2, { crs: null, verticalDatum: null });
+    const cmp = compareDtms(a, b);
+    // Still distinguished from a MEASURED grid defect, so each keeps its own
+    // diagnosis even though both now withhold.
+    expect(cmp.gridMisaligned).toBe(false);
+    expect(cmp.coregistered).toBe(false);
+    const lines = summarizeChange(cmp);
+    expect(lines[0]).toContain('Not comparable');
+    expect(lines[0]).toContain('cannot be confirmed to share a frame');
+    expect(lines.some((l) => l.includes('Net volume change'))).toBe(false);
+    expect(lines.some((l) => /Detectable gross change/.test(l))).toBe(false);
+    expect(lines.some((l) => /Needs for a measured result/.test(l))).toBe(true);
+  });
+
+  it('says "nothing compared" instead of printing NaN when no cell overlaps', () => {
+    // Two co-registered tiles whose footprints do not overlap: every frame check
+    // passes and comparable is 0. detectChange reports NaN per-cell aggregates
+    // there, and the summary printed them through toFixed as "NaN m³" beside a
+    // band that called the undefined figure "below the threshold".
+    const a = grid([1, NaN, 1, NaN], 2, 2);
+    const b = grid([NaN, 2, NaN, 2], 2, 2);
+    const cmp = compareDtms(a, b);
+    expect(cmp.coregistered).toBe(true);
+    expect(cmp.result.stats.comparable).toBe(0);
+    expect(Number.isNaN(cmp.result.stats.maxGainM), 'an empty comparison reported a definite largest gain')
+      .toBe(true);
+    const lines = summarizeChange(cmp, { horizontalUnitToMetres: 1 });
+    expect(lines[0]).toMatch(/Nothing compared/);
+    expect(lines.join(' '), 'a NaN reached the summary').not.toMatch(/NaN/);
+    expect(lines.join(' ')).not.toMatch(/Net volume change/);
+  });
+
+  it('keeps the elevation differences for a geographic pair and withholds only volumes', () => {
+    // Both epochs declare EPSG:4326 and one datum on one grid: nothing about the
+    // frame is unconfirmed. The degree-grid note explains a withheld VOLUME, and
+    // counting it against co-registration swept this pair into "cannot be
+    // confirmed to share a frame", a false statement, and dropped the Δz lines
+    // the note itself says remain valid.
+    const a = grid([1, 1, 1, 1], 2, 2, { crs: 'EPSG:4326', verticalDatum: 'EPSG:5703' });
+    const b = grid([2, 2, 2, 2], 2, 2, { crs: 'EPSG:4326', verticalDatum: 'EPSG:5703' });
+    const cmp = compareDtms(a, b, { isGeographic: true });
+    expect(cmp.coregistered, 'a geographic pair was called unconfirmed').toBe(true);
+    const lines = summarizeChange(cmp);
+    expect(lines.join(' ')).not.toMatch(/cannot be confirmed to share a frame/);
+    expect(lines.some((l) => /not computable on a geographic/.test(l))).toBe(true);
+    expect(lines.some((l) => /Largest gain/.test(l)), 'the Δz statistics were dropped').toBe(true);
+  });
+
+  it('treats a sub-cell origin offset as a defect, not as alignment', () => {
+    // Half a cell of slack passed the old check, so two surfaces offset by 0.49
+    // of a cell were differenced cell-for-cell and called co-registered.
+    const a = grid([1, 1, 1, 1], 2, 2);
+    const b = grid([2, 2, 2, 2], 2, 2, { originH1: 0.49 });
+    expect(compareDtms(a, b).gridMisaligned).toBe(true);
+    // And an origin that IS the same number still aligns, so the tolerance has
+    // not simply been set to zero-tolerance-on-everything.
+    expect(compareDtms(a, grid([2, 2, 2, 2], 2, 2)).gridMisaligned).toBe(false);
   });
 
   it('omits the warning and reports volumes when fully aligned', () => {
@@ -236,9 +307,17 @@ describe('compareDtms — a proven frame mismatch refuses the numbers', () => {
     expect(text).toContain('Horizontal CRS differs');
   });
 
-  it('summarizeChange still prints numbers for merely-unknown frames', () => {
+  it('withholds the numbers for a merely-unknown frame too, with its own diagnosis', () => {
+    // A PROVEN mismatch and an UNCONFIRMED frame now both withhold. They are
+    // still told apart, because the fix differs: reproject, versus state the
+    // CRS. What changed is that "we cannot confirm these are the same place"
+    // stopped being grounds to publish a m³ figure under a caveat.
     const cmp = compareDtms(grid(flat, 2, 2, { crs: null }), grid(flat, 2, 2, { crs: null }));
-    expect(summarizeChange(cmp).join('\n')).toContain('Net volume');
+    const text = summarizeChange(cmp).join('\n');
+    expect(text).not.toContain('Net volume');
+    expect(text).not.toContain('Largest gain');
+    expect(text).toMatch(/cannot be confirmed to share a frame/);
+    expect(text).not.toMatch(/provably different frames/);
   });
 });
 
@@ -315,5 +394,42 @@ describe('compareDtms — an unknown projected linear unit refuses the metres', 
     expect(text).not.toContain('Net volume');
     expect(text).not.toContain('m³');
     expect(text).toMatch(/linear unit is unknown/i);
+  });
+});
+
+/**
+ * The two inputs the band rests on, and what the report said about them.
+ *
+ * The per-cell sigma is derived as LoD/1.96, and no live caller supplies a
+ * level of detection, so every real comparison inherits the build's 0.10 m
+ * default. The registration term is the ICP fit's 3-D RMS nearest-neighbour
+ * residual, which also carries horizontal mismatch, point spacing, surface
+ * roughness and real change. Both are defensible as a working model; neither
+ * was disclosed, so a shipped constant and a proxy read as measurements of
+ * these epochs.
+ */
+describe('the uncertainty band says what it rests on', () => {
+  const pair = () => [grid([1, 1, 1, 1], 2, 2), grid([2, 2, 2, 2], 2, 2)] as const;
+
+  it('names the default level of detection when the caller supplied none', () => {
+    const [a, b] = pair();
+    const lines = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0.02 });
+    expect(lines.some((l) => /this build's default, not a figure measured/.test(l)), 'the default LoD passed as measured').toBe(true);
+  });
+
+  it('stays quiet about the default when the caller measured one', () => {
+    const [a, b] = pair();
+    const lines = summarizeChange(
+      compareDtms(a, b, { levelOfDetectionM: 0.04 }),
+      { horizontalUnitToMetres: 1, registrationSigmaM: 0.02, levelOfDetectionSupplied: true },
+    );
+    expect(lines.some((l) => /this build's default/.test(l))).toBe(false);
+  });
+
+  it('says the registration term is a 3-D residual, not a vertical sigma', () => {
+    const [a, b] = pair();
+    const lines = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0.02 });
+    expect(lines.some((l) => /3-D RMS residual/.test(l)), 'the ICP residual read as a vertical sigma').toBe(true);
+    expect(lines.some((l) => /proxy for vertical registration error/.test(l))).toBe(true);
   });
 });

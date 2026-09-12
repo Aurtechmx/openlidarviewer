@@ -31,6 +31,7 @@ import {
   footprintConvexHullRing,
   footprintLonLatRing,
   footprintRectangleRing,
+  lonLatUpAxisRefusal,
   footprintUpAxisRefusal,
   ScanFootprintError,
   type FootprintExtent,
@@ -85,6 +86,12 @@ export interface KmlActionDeps {
   readonly worldUp: () => Vec3;
   /** Render-units to metres for the measurement metrics. */
   readonly unitToMetres: () => number;
+  /**
+   * The resolved up-axis of the active scan. Read independently of
+   * {@link scanExtent} because the site KML places features without needing an
+   * extent, yet is built on the same X/Y-is-horizontal assumption.
+   */
+  readonly upAxis: () => SpatialUpAxis;
   /** The active scan's horizontal extent in LOCAL space, or null when none. */
   readonly scanExtent: () => ScanExtentReading | null;
   /**
@@ -109,6 +116,22 @@ export interface KmlActionDeps {
 /** The caveat every published product carries, verbatim across the exports. */
 const NOT_SURVEY_GRADE =
   'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.';
+
+/**
+ * Whether a length in this frame may be labelled metres.
+ *
+ * Requires a PROJECTED frame with a declared linear unit. A geographic frame is
+ * excluded on its own terms: its coordinates are angular, so there is no scalar
+ * metres-per-unit to apply, and 0.001 degrees is not a distance a factor of 1
+ * turns into metres.
+ */
+function linearScaleIsMetric(resolved: ResolvedCrs | null): boolean {
+  return resolved != null
+    && resolved.kind === 'projected'
+    && resolved.linearUnit !== 'unknown'
+    && Number.isFinite(resolved.linearUnitToMetres)
+    && resolved.linearUnitToMetres > 0;
+}
 
 /** True when the resolved CRS is a real-world frame (projected / geographic). */
 export function crsIsKnown(resolved: ResolvedCrs | null): boolean {
@@ -141,6 +164,11 @@ export function siteKmlStatus(deps: KmlActionDeps): KmlActionStatus {
       reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
     };
   }
+  // A known CRS is not enough: the placement also assumes X/Y is the ground
+  // plane. The footprint export has always refused a Y-up scan for this reason;
+  // the site KML converts the same way and must refuse on the same ground.
+  const axisRefusal = lonLatUpAxisRefusal(deps.upAxis());
+  if (axisRefusal) return { ready: false, reason: axisRefusal };
   return { ready: true, reason: '' };
 }
 
@@ -151,6 +179,13 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   const crs = deps.crsCurrent();
   const toLonLat = makeLocalToLonLat(crs, geo.origin);
   if (!toLonLat) return; // gated by siteKmlStatus; defensive no-op if reached
+  // Re-checked here, not just in the status: the status renders the button, and
+  // the axis can resolve differently by the time it is clicked.
+  const axisRefusal = lonLatUpAxisRefusal(deps.upAxis());
+  if (axisRefusal) {
+    deps.setError(axisRefusal);
+    return;
+  }
   // Every input is read BEFORE the serialiser import. The origin and CRS above
   // were already captured pre-await while the features, up vector and unit scale
   // were read after it, so a placement made (or a scan opened) during the import
@@ -163,9 +198,12 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     // the measurements, so the injected transform places them correctly.
     viewpoints: deps.viewpoints(),
     crsName: geo.crsName ?? crs?.name ?? null,
-    // The exporter reports metres (keys end in _m); unitToMetres scales render
-    // units, so the label is always metres.
-    unitLabel: 'm',
+    // The label follows the RESOLVED frame rather than asserting metres. A
+    // projected frame with a known unit converts; a local or unknown-unit scan
+    // has an inert factor of 1, and an angular frame has no scalar factor at
+    // all, so neither may be published as metres in a file a reader will take
+    // at face value.
+    unitLabel: linearScaleIsMetric(crs) ? 'm' : 'source units (scale unverified)',
     up: deps.worldUp(),
     unitToMetres: deps.unitToMetres(),
     // The RESOLVED vertical unit, not the measurement controller's. That one
@@ -261,14 +299,19 @@ export async function exportScanFootprintKml(deps: KmlActionDeps): Promise<void>
     deps.setError(`Scan area export stopped. ${axisRefusal}`);
     return;
   }
-  const { buildFootprintKml, KmlCoordinateError } = await deps.loadKmlExport();
   // Prefer the true outline (convex hull of the resident points) when the scan
   // can back one; fall back to the extent's bounding rectangle otherwise. A
   // degenerate hull (too few points, collinear) throws ScanFootprintError, which
   // the shared catch below turns into a refusal — it does NOT silently drop to
   // the rectangle, because a scan whose points enclose no area has no honest
   // outline of either shape.
+  //
+  // Read BEFORE the loader await, with the CRS, origin and extent it belongs
+  // to. It was read after, so a scan swap during the lazy import produced a
+  // polygon from B's points labelled with A's CRS and extent — the sibling site
+  // export already captures its whole input before loading the serializer.
   const hullPositions = deps.scanHullPositions();
+  const { buildFootprintKml, KmlCoordinateError } = await deps.loadKmlExport();
   let text: string;
   try {
     const localRing = hullPositions

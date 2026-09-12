@@ -46,3 +46,37 @@ describe('demAccuracyStandards', () => {
     expect(s.rmseZM).toBeNull();
   });
 });
+
+/**
+ * The density reference is a metric comparison.
+ *
+ * `pointDensityPerM2` arrives as ground returns per CELL AREA, and the cell
+ * size is in source units until a horizontal scale resolves. The USGS 3DEP
+ * floors it is compared against are pulses per SQUARE METRE. A contour sheet
+ * exported from a scan whose own extents read "source units" printed
+ * "USGS density ref: >= QL3 floor" from exactly that comparison.
+ *
+ * Withheld at the producer, so the panel chip, the map sheet and the export
+ * provenance all go quiet without each remembering to ask.
+ */
+describe('demAccuracyStandards — density on a frame with no linear unit', () => {
+  it('cites no 3DEP floor and reports no density', () => {
+    const a = demAccuracyStandards(0.1, 0.2, 19.1, false);
+    expect(a.densityReferenceFloorsMet, 'source units were graded against a metric floor').toEqual([]);
+    expect(a.pointDensityPerM2).toBe(0);
+    expect(a.densityReferenceNote).toMatch(/source unit squared/);
+    expect(a.densityReferenceNote).not.toMatch(/clears the USGS/);
+  });
+
+  it('leaves the vertical figures alone — they answer a different question', () => {
+    const a = demAccuracyStandards(0.1, 0.2, 19.1, false);
+    expect(a.rmseZM).toBe(0.1);
+    expect(a.vvaM).toBe(0.2);
+  });
+
+  it('still grades the density when the horizontal scale resolved', () => {
+    const a = demAccuracyStandards(0.1, 0.2, 19.1, true);
+    expect(a.densityReferenceFloorsMet[0]).toBe('QL0');
+    expect(a.pointDensityPerM2).toBe(19.1);
+  });
+});

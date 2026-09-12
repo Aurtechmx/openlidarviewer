@@ -38,6 +38,24 @@ export class TouchTapGate {
     }
   }
 
+  /**
+   * The interaction was CANCELLED, not completed.
+   *
+   * The Viewer aliased `pointercancel` to its pointer-up handler, so an
+   * interrupted touch — the browser taking over for a scroll, a palm landing,
+   * the OS interrupting — arrived here as a finished tap. Two of those in
+   * quick succession focused the camera on a point the user never tapped.
+   *
+   * A cancel ends the sequence without completing it: the pending tap is
+   * discarded and cannot seed the next double tap, while a deliberate double
+   * tap of two real ups is untouched.
+   */
+  cancel(): void {
+    this._moved = true; // the in-flight sequence can no longer become a tap
+    this._seqHadTwo = false;
+    this._dbl.reset();
+  }
+
   /** A finger moved; once it passes the drag slop the sequence is not a tap. */
   move(x: number, y: number): void {
     if (this._moved) return;

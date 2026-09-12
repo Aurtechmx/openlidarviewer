@@ -63,6 +63,7 @@ import {
   ANALYSE_LABELS,
   GRADE_MEANING,
   METRIC_TOOLTIPS,
+  blockedRmseHint,
   NOT_SURVEY_GRADE,
   confidenceWord,
   describeIntervalOption,
@@ -170,8 +171,13 @@ import type {
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
 import {
+  analysisFreshnessBreach,
+  FRESHNESS_REFUSALS,
+  type FreshnessBreach,
+  type AnalysisFreshnessStamp,
+} from '../science/analysisFreshness';
+import {
   sameExportTarget,
-  TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL,
 } from '../export/exportScanIdentity';
 import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
 import type { ContourExportAdapter, ContourExportHost } from './contourExportAdapter';
@@ -185,7 +191,7 @@ import {
 } from './scanTypeControl';
 import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFitness';
 import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
-import { horizontalUnitLabel, verticalUnitSuffix, verticalUnitLabel } from '../units/units';
+import { verticalUnitSuffix, verticalUnitLabel } from '../units/units';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
@@ -233,6 +239,10 @@ export interface AnalysePanelCallbacks {
    * tell the two apart and behaves as before.
    */
   getActiveScanId?: () => string | null;
+  /** Classification edit epoch for the active cloud. Omitted ⇒ treated as 0. */
+  activeClassificationEpoch?: () => number;
+  /** Active spatial-frame revision (CrsService). Omitted ⇒ treated as 0. */
+  crsRevision?: () => number;
   /**
    * The loaded cloud for a scan, or null. The panel offers the feature-candidate
    * review launcher when the cloud carries a classification; the (lazy) review
@@ -283,7 +293,14 @@ export interface AnalysePanelCallbacks {
      * Undefined when the CRS cannot be converted; the export then refuses
      * rather than writing projected numbers into degree fields.
      */
-    toLonLat?: (p: readonly [number, number, number]) => [number, number, number];
+    /** RENDER-LOCAL source coordinates to WGS 84 lon/lat. */
+    localToLonLat?: (p: readonly [number, number, number]) => [number, number, number];
+    /** WORLD (origin-restored) source coordinates to WGS 84 lon/lat. */
+    worldToLonLat?: (p: readonly [number, number, number]) => [number, number, number];
+    /** Metres per source unit, from the RESOLVED frame; undefined when unknown. */
+    resolvedUnitToMetres?: number;
+    /** The resolved frame's label, for provenance. Never the declared one. */
+    resolvedCrsLabel?: string | null;
     /** CRS WKT for the DEM export's .prj sidecar, when known. */
     wkt?: string | null;
     /**
@@ -411,6 +428,8 @@ export class AnalysePanel {
    * it would be stamped with come from two different scans.
    */
   private _resultScanId: string | null = null;
+  /** State the on-screen result was computed under; gates every export. */
+  private _resultStamp: AnalysisFreshnessStamp | null = null;
   /** The "Colour 3D by confidence" toggle button + its current on/off state, so
    *  its label always shows the way back to the original colour. */
   private _confidenceColorBtn?: HTMLButtonElement;
@@ -447,6 +466,9 @@ export class AnalysePanel {
   private readonly _featureReview: HTMLElement;
   private _featureMounted: MountedFeatureCandidates | null = null;
   private _featureScanId: string | null = null;
+  /** Classification epoch and CRS revision the feature workspace was built at. */
+  private _featureEpoch = -1;
+  private _featureCrsRev = -1;
   private _featureToken = 0;
   private readonly _contourLauncher: HTMLElement;
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
@@ -755,15 +777,44 @@ export class AnalysePanel {
       this._teardownFeatures();
       return;
     }
-    if (this._featureScanId === scanId && this._featureMounted) return;
+    // The mount SNAPSHOTS the extraction input, and building candidates are
+    // keyed on ASPRS class 6, so a reclassification changes the candidate set
+    // outright. Keying on the scan alone left the pre-edit footprints on screen
+    // and exportable — the terrain result goes stale on the same event, this did
+    // not. The CRS revision counts too: the mount also captures the frame's
+    // converter and metric scale.
+    const epoch = this._cb.activeClassificationEpoch?.() ?? 0;
+    const crsRev = this._cb.crsRevision?.() ?? 0;
+    if (
+      this._featureScanId === scanId
+      && this._featureEpoch === epoch
+      && this._featureCrsRev === crsRev
+      && this._featureMounted
+    ) return;
     this._teardownFeatures();
     this._featureScanId = scanId;
+    this._featureEpoch = epoch;
+    this._featureCrsRev = crsRev;
     const token = ++this._featureToken;
     void loadFeatureCandidatesMount()
       .then((m) => {
         if (token !== this._featureToken) return;
+        const fctx = this._cb.getMapContext?.() ?? {};
         this._featureMounted = m.mountFeatureCandidates({
           cloud,
+          // The SAME source-frame -> WGS 84 converter the RFC 7946 contour
+          // GeoJSON uses, origin restore included. Footprints wrote their
+          // render-local coordinates under a georeferenced label; they now take
+          // the seam that already exists, and refuse where it refuses.
+          // Extraction runs on the RECENTRED buffer, so it needs the local converter.
+          toLonLat: fctx.localToLonLat ?? null,
+          // The RESOLVED frame, so a user CRS correction reaches the metric
+          // twins and the provenance label instead of the file's declaration.
+          unitToMetres: fctx.resolvedUnitToMetres,
+          crsLabel: fctx.resolvedCrsLabel ?? null,
+          // X/Y is the horizontal plane only in a Z-up frame; the extraction's
+          // 2D coordinates go to a mapper with that contract.
+          upAxis: fctx.sceneUpAxis ?? 'unknown',
           launcherHost: this._featureLauncher,
           reviewHost: this._featureReview,
           onLaunch: () => this._featureReview.classList.remove('olv-hidden'),
@@ -834,6 +885,13 @@ export class AnalysePanel {
     const show = text != null && this._result != null;
     this._staleNotice.textContent = show ? text : '';
     this._staleNotice.classList.toggle('olv-hidden', !show);
+    // The SAME event that makes the terrain result stale invalidates the
+    // feature workspace: its candidates were extracted from ASPRS class 6 at
+    // mount time, so a class edit can change them outright. Re-keying here
+    // rebuilds it (or tears it down) instead of leaving pre-edit footprints
+    // on screen and exportable. Guarded on `text` so clearing a notice after a
+    // fresh run does not churn the mount.
+    if (text != null) this._refreshFeatureLauncher();
   }
 
   /**
@@ -847,13 +905,54 @@ export class AnalysePanel {
     return this._result;
   }
 
+  /**
+   * The result only when it may be ATTRIBUTED — null when the export gate
+   * would refuse it. Distinct from {@link currentResult}, which reports what is
+   * on screen: the panel deliberately keeps a result when another scan becomes
+   * active, and refusing an export must not discard the user's work.
+   *
+   * The two were the same accessor and the session manifest read it, so saving
+   * scan B embedded scan A's processing manifest beside B's own scan summary —
+   * a provenance record describing inputs that did not produce the session it
+   * travels in. The same applies to a same-scan result gone stale through a
+   * classification edit or a CRS change. A session with no manifest is honest;
+   * one with the wrong manifest is not.
+   *
+   * Any export that stamps provenance must read THIS one.
+   */
+  currentResultForProvenance(): AnalyseContoursResult | null {
+    return this._freshnessBreach() === null ? this._result : null;
+  }
+
   /** Re-render from a fresh analysis result (or clear when null). */
-  update(result: AnalyseContoursResult | null): void {
+  update(
+    result: AnalyseContoursResult | null,
+    /**
+     * The dataset and frame the COMPUTATION ran under, supplied by the runner.
+     *
+     * Reading these from live state at land time was wrong: a CRS change while
+     * the core ran off-thread meant the result was computed under one revision
+     * and stamped with the next, so the freshness gate passed a result whose
+     * frame the app had already replaced. Omitted by callers with no computation
+     * behind them, which fall back to live state as before.
+     */
+    computed?: { readonly targetId: string | null; readonly crsRevision: number },
+  ): void {
     this._result = result;
     // Bind the result to the scan it was computed on. The runner only lands a
     // result while its own dataset guard still holds, so the active id here IS
     // the id the analysis ran against.
-    this._resultScanId = result ? this._cb.getActiveScanId?.() ?? null : null;
+    this._resultScanId = result ? computed?.targetId ?? this._cb.getActiveScanId?.() ?? null : null;
+    // Mint the freshness stamp with the result. Scan identity alone let an
+    // edited classification or a changed CRS through behind a caveat.
+    this._resultStamp = result
+      ? {
+          targetId: this._resultScanId,
+          classificationEpoch: this._cb.activeClassificationEpoch?.() ?? 0,
+          crsRevision: computed?.crsRevision ?? this._cb.crsRevision?.() ?? 0,
+          coverageMode: result.dtm.coverageMode,
+        }
+      : null;
     // Any update supersedes a pending staleness caveat: a fresh result was
     // computed against the edited classes, and a clear removes the result
     // the caveat was about.
@@ -2221,10 +2320,19 @@ export class AnalysePanel {
     this._validationRow.replaceChildren();
     const v = this._result?.validation;
     if (!v) return;
+    // Every figure on this row is a hold-out residual, and a residual is only in
+    // metres when the frame stated a vertical scale. Without one the analysis
+    // leaves the residuals in the source Z unit, so the caption must too — a
+    // scanner-unit number captioned "m" is the failure this row used to ship.
+    const zUnit = this._result?.verticalScaleResolved === false ? 'source Z units' : 'm';
     const rmse = formatHonestValue({
       value: Number.isFinite(v.rmse) ? v.rmse : null,
-      units: 'm',
-      reasonWhenAbsent: 'Not enough ground points to cross-validate.',
+      units: zUnit,
+      // The report knows why it has no figure — too few ground returns, an
+      // invalid parameter, or a requested train-only classification that could
+      // not be produced. Guessing one reason here printed a false explanation
+      // for the other three.
+      reasonWhenAbsent: v.unavailableReason ?? 'Not enough ground points to cross-validate.',
     });
     const cal = this._result?.confidenceOrdering;
     let calText: string;
@@ -2296,7 +2404,7 @@ export class AnalysePanel {
     if (slopeParts.length > 1) {
       this._validationRow.append(el('div', {
         className: 'olv-analyse-strata',
-        text: `RMSE by slope: ${slopeParts.join(' · ')} m`,
+        text: `RMSE by slope: ${slopeParts.join(' · ')} ${zUnit}`,
       }));
     }
     const zoneParts = (v.perZone ?? [])
@@ -2305,7 +2413,7 @@ export class AnalysePanel {
     if (zoneParts.length > 1) {
       this._validationRow.append(el('div', {
         className: 'olv-analyse-strata',
-        text: `RMSE by zone: ${zoneParts.join(' · ')} m`,
+        text: `RMSE by zone: ${zoneParts.join(' · ')} ${zUnit}`,
       }));
     }
 
@@ -2319,23 +2427,25 @@ export class AnalysePanel {
       this._validationRow.append(this._hint(
         el('div', {
           className: 'olv-analyse-reliability',
-          text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz| ≤ ${fmtR(m.tolerance)} m`,
+          text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz| ≤ ${fmtR(m.tolerance)} ${zUnit}`,
         }),
         'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% confidence interval. Interpolated (void-filled) cells are model support, not a measured reliability.',
       ));
     }
 
-    // Spatially-blocked hold-out RMSE — a less optimistic accuracy estimate than
-    // the random hold-out above, since it predicts across whole withheld blocks
-    // (Phase 4). Shown with its bootstrap CI when it was computed.
+    // Spatially-blocked hold-out RMSE. NOT a like-for-like contrast with the
+    // random hold-out above: that one re-runs ground classification on the
+    // training points only, while this one scores against the whole-cloud
+    // classification, so the two differ in treatment as well as in geometry.
+    // The copy says so rather than attributing the gap to the geometry alone.
     const blocked = this._result?.blockedAccuracy;
     if (blocked && blocked.n > 0 && Number.isFinite(blocked.rmse)) {
       this._validationRow.append(this._hint(
         el('div', {
           className: 'olv-analyse-blocked',
-          text: `Blocked RMSE: ${fmtR(blocked.rmse)} m (95% CI ${fmtR(blocked.ciLow)}–${fmtR(blocked.ciHigh)})`,
+          text: `Blocked RMSE: ${fmtR(blocked.rmse)} ${zUnit} (95% CI ${fmtR(blocked.ciLow)}–${fmtR(blocked.ciHigh)})`,
         }),
-        'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks withheld, then scored on them, so it measures how the DTM predicts across a real gap. It runs larger than the random hold-out RMSE, which is optimistic because withheld points sit among their neighbours. Still a data-quality diagnostic, not field-checkpoint accuracy.',
+        blockedRmseHint(v.classificationScope, blocked.classificationScope),
       ));
     }
   }
@@ -2373,10 +2483,28 @@ export class AnalysePanel {
    * Called at the head of every export path AND again after any regeneration
    * await, since a scan can be opened while contours are being rebuilt.
    */
+  /**
+   * Which fact the on-screen result is stale against, or null when current.
+   * One computation, shared by the export gate and {@link currentResult}, so a
+   * consumer cannot accidentally read a result the gate would have refused.
+   */
+  private _freshnessBreach(): FreshnessBreach {
+    if (!this._result || !this._cb.getActiveScanId) return null;
+    return analysisFreshnessBreach(
+      this._resultStamp,
+      {
+        targetId: this._cb.getActiveScanId(),
+        classificationEpoch: this._cb.activeClassificationEpoch?.() ?? 0,
+        crsRevision: this._cb.crsRevision?.() ?? 0,
+      },
+      sameExportTarget,
+    );
+  }
+
   private _refuseForeignScanExport(): boolean {
-    if (!this._result || !this._cb.getActiveScanId) return false;
-    if (sameExportTarget(this._resultScanId, this._cb.getActiveScanId())) return false;
-    this.setStaleNotice(TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL);
+    const breach = this._freshnessBreach();
+    if (breach === null) return false;
+    this.setStaleNotice(FRESHNESS_REFUSALS[breach]);
     return true;
   }
 
@@ -2452,7 +2580,7 @@ export class AnalysePanel {
       // result when the style already matches), then serialize with the unified
       // provenance derived from that SAME result.
       const result = await this._resultForExport();
-      const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance }] =
+      const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance, contourArtifactClaims }] =
         await Promise.all([loadContourDownload(), loadExportProvenance()]);
       // Re-verify after the regeneration: the captured context is the right one
       // for `basename`/`mapCtx`, but a scan opened during the rebuild means the
@@ -2468,9 +2596,20 @@ export class AnalysePanel {
         // exported (analytical vs generalized) + the purpose that chose it.
         contourMethod: provenanceExtra?.contourMethod,
         deliverablePurpose: provenanceExtra?.deliverablePurpose,
+        // The vertical scale the geometry was actually resolved under, which
+        // this path used to omit. Without it the provenance fell to "unknown"
+        // while the SAME file carried `elevationUnit: metre` on every feature
+        // and `zUnit: m` in its complexity block — one deliverable answering
+        // the same question two ways, because one of two sibling export paths
+        // passed the scale and this one did not. Undefined still means unknown,
+        // which is what an unresolved frame must say.
+        verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
         // §19: stamp the evidence-gate permit that authorised this file, so the
         // artifact records the decision (validated / exploratory + watermark).
         exportPermit: permitStamp(permit),
+        // What the file actually contains: the geometry AND the surface it was
+        // cut from. The evidence resolves to whichever is weaker.
+        evidenceClaimIds: contourArtifactClaims(result),
       });
       // World-frame registration: the analysis runs in the cloud's recentred
       // LOCAL frame, so exports must add the load-time origin back (the same
@@ -2487,7 +2626,7 @@ export class AnalysePanel {
           // Resolved CRS unit → DXF $INSUNITS + the SVG scale note, so a
           // foot-based CRS stamps feet instead of the metre default.
           linearUnit: mapCtx?.linearUnit,
-          toLonLat: mapCtx?.toLonLat,
+          toLonLat: mapCtx?.worldToLonLat,
         }),
       );
     } catch (err) {
@@ -2586,6 +2725,8 @@ export class AnalysePanel {
     try {
       const { buildDemPackage } = await loadDemPackage();
       const bytes = buildDemPackage(r, {
+        // Same resolved scale as the GeoJSON / DXF / sheet / report.
+        verticalUnitToMetres: ctx.verticalUnitToMetres ?? null,
         worldOrigin: ctx.worldOrigin ?? null,
         basename,
         wkt: ctx.wkt ?? null,
@@ -2705,6 +2846,11 @@ export class AnalysePanel {
     // describes the scan its verdicts were computed on.
     const basename = this._cb.getExportBasename?.() ?? 'terrain';
     const mapCtx = this._cb.getMapContext?.() ?? {};
+    // The Inspector card's summary belongs to the same snapshot. It was read
+    // inside the builder call, i.e. AFTER the chunk await, so a scan swap while
+    // pdf-lib loaded gave this scan's verdicts the other scan's Dataset
+    // Statistics — the two facts above were hoisted and this one was not.
+    const intelligence = this._cb.getDatasetIntelligence?.() ?? null;
     try {
       const { buildTerrainReportPdf } = await loadTerrainReportPdf();
       // The renderer assembles the content from the SAME result the panel shows,
@@ -2712,14 +2858,17 @@ export class AnalysePanel {
       // header / footer (CRS, datum, verdicts, accuracy, date) can never drift
       // from the GeoJSON / DXF / map sheet / DEM exports of this scan.
       const bytes = await buildTerrainReportPdf(r, {
+        // The same resolved scale the GeoJSON, DXF and map sheet stamp, so the
+        // report's vertical figures are labelled from one answer.
+        verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
         basename,
         generatedAt: new Date(),
         softwareVersion: __APP_VERSION__,
         metricVersion: TERRAIN_METRIC_VERSION,
-        // The Inspector card's CURRENT bucket summary (or null) — the report's
-        // Dataset Statistics rows must be the card's own strings, never a
-        // re-derivation that could disagree with what the user saw on screen.
-        intelligence: this._cb.getDatasetIntelligence?.() ?? null,
+        // The Inspector card's bucket summary as it stood when the export began
+        // — the report's Dataset Statistics rows must be the card's own
+        // strings, never a re-derivation that could disagree with the screen.
+        intelligence,
         // The §19 evidence-gate permit the Studio resolved for this report (DTM
         // claim), stamped into the provenance footer. null via the direct
         // convenience button, which keeps its own availability.
@@ -3080,7 +3229,7 @@ export class AnalysePanel {
     const annotations = opts.includeAnnotations ? this._cb.getAnnotations?.() ?? [] : [];
     const sceneUpAxis = mapCtx?.sceneUpAxis ?? 'z';
     const { buildMapSheetPdf } = await loadMapSheetPdf();
-    const { buildExportProvenance } = await loadExportProvenance();
+    const { buildExportProvenance, contourArtifactClaims } = await loadExportProvenance();
     // The unified provenance, derived from the SAME result the sheet plots, so
     // the title block's CRS / datum / style / accuracy / readiness / date can't
     // drift from the GeoJSON / DXF / SVG / DEM exports of this scan.
@@ -3089,8 +3238,17 @@ export class AnalysePanel {
       generatedAt: opts.generatedAt,
       softwareVersion: __APP_VERSION__,
       metricVersion: TERRAIN_METRIC_VERSION,
+      // The resolved vertical scale, which this call omitted. Without it the
+      // title block hedged "10 (vertical unit unverified)" while the notes line
+      // ten rows below on the SAME sheet read "interval 10 m" — the sheet
+      // hedging and asserting the unit at once, which is precisely the drift
+      // the comment above says this shared provenance prevents.
+      verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
       // Stamp the permit into the sheet's provenance (title-block honesty).
       exportPermit: permitStamp(permit),
+      // A map sheet plots the contours over the DTM; it claims no more than the
+      // weaker of the two.
+      evidenceClaimIds: contourArtifactClaims(result),
     });
     const bytes = await buildMapSheetPdf({
       model: result.model,
@@ -3272,21 +3430,25 @@ export class AnalysePanel {
   private _renderRecommend(): void {
     this._recommendRow.replaceChildren();
     const g = this._result!.gridRecommendation;
-    // The grid cell size is in the source HORIZONTAL unit and the contour
-    // interval in the source VERTICAL unit — neither is guaranteed metres. Label
-    // each from the resolved CRS so a foot / geographic frame never reads a false
-    // "m", and an unresolved vertical shows an honest "unverified" form.
-    const ctx = this._cb.getMapContext?.() ?? {};
-    const gridUnit = horizontalUnitLabel({
-      isGeographic: ctx.isGeographic,
-      linearUnit: ctx.linearUnit,
-    });
-    const intervalSuffix = verticalUnitSuffix(ctx.verticalUnitToMetres);
+    // Withheld when no linear unit resolved: the ladders are metre ladders, so
+    // any number would be chosen for a site of the wrong size.
+    if (g === null) {
+      this._recommendRow.append(el('div', {
+        className: 'olv-analyse-reco',
+        text: 'No grid recommendation — confirm the source CRS first (the ladders are in metres).',
+      }));
+      return;
+    }
+    // Both figures come from METRE ladders, and analyseContours now converts the
+    // extent and relief before consulting them. So the recommended grid and
+    // interval ARE metres whatever the source frame is. This row used to label
+    // them from the source CRS, which was right while the recommender was fed
+    // source units and is the wrong way round now that it is not.
     this._recommendRow.append(
-      el('div', { className: 'olv-analyse-reco', text: `Recommended grid: ${g.cellSizeM} ${gridUnit}` }),
+      el('div', { className: 'olv-analyse-reco', text: `Recommended grid: ${g.cellSizeM} m` }),
       el('div', {
         className: 'olv-analyse-reco',
-        text: `Recommended contour interval: ${g.contourIntervalM}${intervalSuffix}`,
+        text: `Recommended contour interval: ${g.contourIntervalM} m`,
       }),
     );
   }

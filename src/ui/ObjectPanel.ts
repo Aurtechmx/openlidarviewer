@@ -157,6 +157,10 @@ interface ObjectUnitFormat {
   readonly areaFine: (v: number) => string;
   /** A fine volume. */
   readonly volFine: (v: number) => string;
+  /** A coarse (interior-scale) area — rooms are whole square units. */
+  readonly area: (v: number) => string;
+  /** A coarse (interior-scale) volume. */
+  readonly vol: (v: number) => string;
   /** Mean / median point spacing. */
   readonly spacing: (v: number) => string;
   /** Areal point density. */
@@ -175,6 +179,8 @@ const METRIC_FORMAT: ObjectUnitFormat = {
   len: mft,
   areaFine: areaMftFine,
   volFine: volMftFine,
+  area: areaMft,
+  vol: volMft,
   spacing: cm,
   density: (v) => (Number.isFinite(v) ? `${v.toFixed(1)} pts/m²` : '—'),
 };
@@ -185,6 +191,8 @@ const SOURCE_FORMAT: ObjectUnitFormat = {
   len: (v) => (Number.isFinite(v) ? `${v.toFixed(1)} ${SU}` : '—'),
   areaFine: (v) => (Number.isFinite(v) ? `${magnitudeFixed(v, 2)} ${SU_SQ}` : '—'),
   volFine: (v) => (Number.isFinite(v) ? `${magnitudeFixed(v, 2)} ${SU_CU}` : '—'),
+  area: (v) => (Number.isFinite(v) ? `${Math.round(v).toLocaleString()} ${SU_SQ}` : '—'),
+  vol: (v) => (Number.isFinite(v) ? `${Math.round(v).toLocaleString()} ${SU_CU}` : '—'),
   spacing: (v) => (Number.isFinite(v) ? `${v.toFixed(3)} ${SU}` : '—'),
   density: (v) => (Number.isFinite(v) ? `${v.toFixed(1)} pts per square source unit` : '—'),
 };
@@ -564,26 +572,34 @@ export class ObjectPanel {
       return;
     }
     const d = space.dims;
+    // The scale the figures were COMPUTED under — the same choice the object
+    // path makes. An interior scan whose linear unit never resolved is measured
+    // on the file's own coordinates, and this row used to print those numbers as
+    // metres and convert them to feet, under a caveat that said the units were
+    // unverified. The caveat and the figures contradicted each other; the
+    // figures won, because a reader takes a number over a note.
+    const f = space.linearUnit.known ? METRIC_FORMAT : SOURCE_FORMAT;
+    const dimsHint = f.tripleHint(d.lengthM, d.widthM, d.heightM).replace(/\s+—\s+$/, '');
     this._body.append(
       this._row('Dimensions (L×W×H)',
-        `${m1(d.lengthM)} × ${m1(d.widthM)} × ${m1(d.heightM)} m`,
-        `${metresToFeet(d.lengthM).toFixed(1)} × ${metresToFeet(d.widthM).toFixed(1)} × ${metresToFeet(d.heightM).toFixed(1)} ft`),
-      this._row('Floor area', areaMft(space.floorAreaM2)),
-      this._row('Ceiling height', space.ceilingHeightM != null ? mft(space.ceilingHeightM) : '—',
+        f.triple(d.lengthM, d.widthM, d.heightM),
+        dimsHint === '' ? undefined : dimsHint),
+      this._row('Floor area', f.area(space.floorAreaM2)),
+      this._row('Ceiling height', space.ceilingHeightM != null ? f.len(space.ceilingHeightM) : '—',
         'Floor→ceiling gap from the height histogram peaks.'),
-      this._row('Enclosed volume', space.enclosedVolumeM3 != null ? volMft(space.enclosedVolumeM3) : '—',
+      this._row('Enclosed volume', space.enclosedVolumeM3 != null ? f.vol(space.enclosedVolumeM3) : '—',
         'Floor area × ceiling height — an envelope, not a watertight solid volume.'),
       this._row('Storeys / levels', i0(space.storyCount)),
     );
     this._body.append(el('div', { className: 'olv-object-subhead', text: 'Planes' }));
     const p = space.planes;
     this._body.append(
-      this._row('Floor', p.floorPresent ? `Yes · ${areaMft(p.floorAreaM2 ?? Number.NaN)}` : 'Not detected'),
-      this._row('Ceiling', p.ceilingPresent ? `Yes · ${areaMft(p.ceilingAreaM2 ?? Number.NaN)}` : 'Not detected'),
+      this._row('Floor', p.floorPresent ? `Yes · ${f.area(p.floorAreaM2 ?? Number.NaN)}` : 'Not detected'),
+      this._row('Ceiling', p.ceilingPresent ? `Yes · ${f.area(p.ceilingAreaM2 ?? Number.NaN)}` : 'Not detected'),
       this._row('Walls', `${Math.round(p.wallCoveragePct)}% coverage · ~${p.dominantWallDirections} direction(s)`,
         'Share of perimeter spanning most of the height; approximate dominant-wall count.'),
     );
-    this._quality(space.quality);
+    this._quality(space.quality, f);
     this._caveats(space.reasons);
     // Interior export row: Report PDF + the interior-only Floor plan preview.
     this._exportRow(true);

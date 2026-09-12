@@ -58,8 +58,10 @@ been exercised over, it can move a claim to E4 against an independent
 implementation, and it is how a weakness gets found. It sits at E4, and a
 register entry should say so.
 
-Of the 33 registered claims, 17 currently sit below their required level, and
-every one of those 17 requires E5. None of them is waiting on a download.
+Of the 34 registered claims, 18 currently sit below their required level. Seventeen
+of those require E5. The eighteenth is CONTOURS-CARTOGRAPHIC, which requires only
+E4: a generalized contour needs the same independent check the analytical line
+already has, and does not have it. None of them is waiting on a download.
 
 ## Per-claim fields
 
@@ -145,15 +147,20 @@ when the mechanism is actually run against real data and the result committed.
 
 - **E3 → E4 (cross-implementation).** `src/validation/crossCheck.ts` compares our
   grid to an independent tool's grid within a stated tolerance. The procedure is
-  in [`cross-implementation.md`](./cross-implementation.md). Four reference slots
-  are supplied, `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` and `CONTOURS`,
+  in [`cross-implementation.md`](./cross-implementation.md). Seventeen reference slots
+  are supplied (the count the claim register carries; it is the source), `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` and `CONTOURS`,
   each an independent GDAL comparison on a frozen analytic fixture; every other
   slot ships `pending`. No reference output is bundled for a slot that has not
   been compared, and none is fabricated.
-- **Honest internal error.** `src/terrain/validate/spatialBlockHoldout.ts`
-  replaces random point hold-out (optimistic) with spatially-blocked hold-out and
-  a bootstrap CI. It still is not field accuracy (E5); it is a less-biased E3
-  diagnostic.
+- **Honest internal error.** `src/terrain/validate/spatialBlockHoldout.ts` adds a
+  spatially-blocked hold-out with a bootstrap CI alongside the random point
+  hold-out. It complements rather than replaces it: blocking changes the spatial
+  arrangement of the withheld support, and the resulting contrast is
+  protocol-dependent, not a bias correction. Whether the blocked figure comes out
+  larger is a result of a given run. The two are only a geometry contrast when
+  their recorded `classificationScope` agrees, which it does on the
+  trusted-source-classification path and does not on the SMRF path. Neither is
+  field accuracy (E5).
 - **Reliability vs support.** `src/terrain/validate/reliabilitySplit.ts` reports
   measured-cell empirical reliability with a Wilson interval, kept separate from
   interpolated-cell model support, which carries no calibrated-probability claim.

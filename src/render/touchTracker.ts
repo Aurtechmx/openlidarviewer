@@ -22,9 +22,42 @@ interface TrackedPoint {
   y: number;
 }
 
+/**
+ * The finger positions a component's next delta is measured from, keyed by
+ * pointer id.
+ *
+ * Keyed, not an (a, b) pair: the pair has to be handed to `decompose2Pointer`
+ * in the SAME finger order as the baseline it is compared against. Ordered by
+ * anything else — insertion order on one side, mover-first on the other — the
+ * two fingers can swap between the two arguments, which leaves distance and
+ * midpoint unchanged but flips the segment's angle by π and reports a large
+ * twist for a gesture that did not rotate.
+ */
+type Baseline = Map<number, TrackedPoint>;
+
+/** The three gesture components, each tracked from its own baseline. */
+type Component = 'pan' | 'pinch' | 'twist';
+const COMPONENTS: readonly Component[] = ['pan', 'pinch', 'twist'];
+
 export class TouchTracker {
   private readonly _points = new Map<number, TrackedPoint>();
   private readonly _thresholds?: GestureThresholds;
+  /**
+   * Where each component last emitted from.
+   *
+   * Deltas were measured between CONSECUTIVE events, and the stored position
+   * advanced whether or not the dead zone was crossed. Motion slower than the
+   * threshold per event was therefore measured, discarded and forgotten: a
+   * deliberate 100 px two-finger pan delivered in 1 px steps emitted nothing at
+   * all, and the slower the gesture the more completely it was lost. Movement
+   * now accumulates against a baseline that only moves when its component
+   * actually fires, so the dead zone rejects jitter without rejecting intent.
+   *
+   * One baseline PER COMPONENT. They share two fingers but not one intent:
+   * with a single baseline, a pan crossing its dead zone would re-anchor the
+   * slowly accumulating pinch and twist along with it.
+   */
+  private _base: Record<Component, Baseline> | null = null;
 
   /** Optional custom thresholds; defaults match `decompose2Pointer`. */
   constructor(thresholds?: GestureThresholds) {
@@ -38,17 +71,47 @@ export class TouchTracker {
 
   /** Record a finger going down at canvas-local (x, y). */
   down(id: number, x: number, y: number): void {
+    // Re-anchor only when the PAIR changes. A repeat down for a finger already
+    // tracked is a position report, not a new gesture, and re-anchoring on it
+    // would throw away whatever the components had accumulated.
+    const joined = !this._points.has(id);
     this._points.set(id, { x, y });
+    if (joined) this._resetBaselines();
   }
 
   /** Drop a finger. Unknown id is a no-op — an up can outlive its down. */
   up(id: number): void {
-    this._points.delete(id);
+    // `delete` reports whether anything was actually tracked. Re-anchoring
+    // unconditionally made this method the opposite of the no-op its contract
+    // promises: an up for a finger that was never down re-anchored all three
+    // components mid-gesture, and a slow pan lost a third of its travel to a
+    // stray event it was documented to ignore.
+    if (!this._points.delete(id)) return;
+    this._resetBaselines();
   }
 
   /** Forget every tracked finger (tool takes the canvas, viewer disposes). */
   clear(): void {
     this._points.clear();
+    this._base = null;
+  }
+
+  /**
+   * Re-anchor every component wherever the fingers are now.
+   *
+   * Runs whenever the set of fingers changes. A baseline carried across a
+   * finger going down or up would measure from a pair that no longer exists,
+   * and the first move of the new pair would jump.
+   */
+  private _resetBaselines(): void {
+    if (this._points.size !== 2) {
+      this._base = null;
+      return;
+    }
+    const snap = (): Baseline => new Map(
+      [...this._points].map(([pid, p]) => [pid, { ...p }]),
+    );
+    this._base = { pan: snap(), pinch: snap(), twist: snap() };
   }
 
   /**
@@ -66,29 +129,38 @@ export class TouchTracker {
     if (!prev) return null;
 
     const cur: TrackedPoint = { x, y };
+    // The live position always advances: it is where the finger IS. The
+    // baselines below are where each component last measured FROM.
+    this._points.set(id, cur);
 
     // Two-pointer gesture: needs the moved finger plus exactly one other.
-    if (this._points.size === 2) {
-      let other: TrackedPoint | null = null;
-      for (const [otherId, p] of this._points) {
-        if (otherId !== id) {
-          other = p;
-          break;
-        }
-      }
-      if (other) {
-        // The other finger stays put for this frame; its own move runs later
-        // in the same tick. Measure prev->cur for the mover against a still
-        // other point.
-        const delta = decompose2Pointer(prev, other, cur, other, this._thresholds);
-        this._points.set(id, cur);
-        return isZero(delta) ? null : delta;
-      }
+    const base = this._base;
+    if (this._points.size !== 2 || !base) return null;
+    let other: TrackedPoint | null = null;
+    let otherId = -1;
+    for (const [pid, p] of this._points) {
+      if (pid !== id) { other = p; otherId = pid; break; }
     }
+    if (!other) return null;
 
-    // Not a two-finger frame — still record the position so a later return to
-    // two fingers measures from where this one actually is.
-    this._points.set(id, cur);
-    return null;
+    const out: GestureDelta = { dPinch: 0, dTwist: 0, dPan: { x: 0, y: 0 } };
+    for (const c of COMPONENTS) {
+      // From THIS component's baseline to where both fingers are now, so
+      // movement too small to cross the dead zone is carried, not dropped.
+      const from = base[c];
+      const baseMover = from.get(id);
+      const baseOther = from.get(otherId);
+      if (!baseMover || !baseOther) continue;
+      // Mover and other in the same slots on both sides, so the angle is
+      // measured between comparable segments.
+      const d = decompose2Pointer(baseMover, baseOther, cur, other, this._thresholds);
+      let fired = false;
+      if (c === 'pinch' && d.dPinch !== 0) { out.dPinch = d.dPinch; fired = true; }
+      if (c === 'twist' && d.dTwist !== 0) { out.dTwist = d.dTwist; fired = true; }
+      if (c === 'pan' && (d.dPan.x !== 0 || d.dPan.y !== 0)) { out.dPan = d.dPan; fired = true; }
+      // Only a component that fired re-anchors; the others keep accumulating.
+      if (fired) base[c] = new Map([[id, { ...cur }], [otherId, { ...other }]]);
+    }
+    return isZero(out) ? null : out;
   }
 }

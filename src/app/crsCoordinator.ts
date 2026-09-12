@@ -11,6 +11,7 @@
 // the `activeId` selection — are read through getters so the coordinator always
 // sees current values without a top-level `viewer.*` dereference in main.ts.
 import type { Viewer } from '../render/Viewer';
+import { datasetIdentity } from '../geo/CrsService';
 import type { CrsInfo } from '../io/crs';
 import { type CrsSource } from '../geo/CoordinateTypes';
 import type { CrsService } from '../geo/CrsService';
@@ -69,6 +70,11 @@ export interface CrsCoordinator {
      * context (float64-transform.md step 2); the two are equal today. */
     readonly sourceOrigin?: readonly [number, number, number];
     readonly metadata?: { readonly crs?: CrsInfo | null };
+    /** Source total + bounds, for telling two same-named datasets apart. */
+    readonly sourceDeclaredPointCount?: number;
+    readonly declaredPointCount?: number;
+    readonly pointCount?: number;
+    readonly bounds?: () => { readonly min: readonly number[]; readonly max: readonly number[] };
   }): void;
   /** Refresh the Inspector's CRS section after a streaming-cloud open. */
   refreshCrsForStreamingCloud(cloud: {
@@ -76,6 +82,10 @@ export interface CrsCoordinator {
     readonly kind: StreamingSourceKind;
     readonly renderOrigin?: readonly [number, number, number];
     crs(): CrsInfo | undefined;
+    /** Source total + bounds, for telling two same-named streams apart. */
+    readonly sourcePointCount?: number | null;
+    dataBounds?(): readonly number[] | null | undefined;
+    localBounds?(): readonly number[] | null | undefined;
   }): void;
   /** Handle a user CRS override picked from the Inspector. */
   handleCrsOverride(override: {
@@ -117,6 +127,11 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     readonly origin?: readonly [number, number, number];
     readonly sourceOrigin?: readonly [number, number, number];
     readonly metadata?: { readonly crs?: CrsInfo | null };
+    /** Source total + bounds, for telling two same-named datasets apart. */
+    readonly sourceDeclaredPointCount?: number;
+    readonly declaredPointCount?: number;
+    readonly pointCount?: number;
+    readonly bounds?: () => { readonly min: readonly number[]; readonly max: readonly number[] };
   }): void {
     trackDataset(cloud.name);
     // Publish to the central service so subscribers (today: the lasso
@@ -130,6 +145,9 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       name: cloud.name,
       detected: cloud.metadata?.crs ?? undefined,
       source: 'las-vlr',
+      // Tells this dataset apart from an unrelated one of the same name before
+      // a remembered override is applied to it.
+      identity: datasetIdentity(cloud),
     });
     // Push the origin + CRS into the point inspector so World + Lat/Lon
     // rows render against the loaded scan. Wrapped in a viewer-loaded
@@ -146,6 +164,10 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     readonly kind: StreamingSourceKind;
     readonly renderOrigin?: readonly [number, number, number];
     crs(): CrsInfo | undefined;
+    /** Source total + bounds, for telling two same-named streams apart. */
+    readonly sourcePointCount?: number | null;
+    dataBounds?(): readonly number[] | null | undefined;
+    localBounds?(): readonly number[] | null | undefined;
   }): void {
     const source: CrsSource = crsSourceForKind(cloud.kind);
     trackDataset(cloud.name);
@@ -155,6 +177,9 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       name: cloud.name,
       detected: cloud.crs(),
       source,
+      // The static path already does this. Without it a remembered override
+      // keyed on the filename reattaches to any same-named stream.
+      identity: datasetIdentity(cloud),
     });
     if (isViewerReady()) {
       try {

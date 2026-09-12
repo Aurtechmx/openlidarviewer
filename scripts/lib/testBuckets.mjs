@@ -72,18 +72,3 @@ export const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 //     `unit`; routing them by accident would also change silently the next time
 //     a bucket regex is edited.
 export const NESTED_TEST_DIRS = { benchmark: 'unit' };
-
-function allTestFiles() {
-  const top = readdirSync(TESTS_DIR).filter((f) => /\.(test|spec)\.ts$/.test(f));
-  const nested = Object.keys(NESTED_TEST_DIRS).flatMap((dir) => {
-    let entries;
-    try {
-      entries = readdirSync(join(TESTS_DIR, dir));
-    } catch {
-      return []; // the directory may legitimately not exist yet
-    }
-    return entries.filter((f) => /\.(test|spec)\.ts$/.test(f)).map((f) => `${dir}/${f}`);
-  });
-  return [...top, ...nested];
-}
-

@@ -48,8 +48,15 @@ export interface IntervalGateParams {
   /** Candidate intervals. Default [0.5, 1, 2, 5, 10]. */
   readonly candidates?: ReadonlyArray<number>;
   /**
-   * Multiple of RMSE below which an interval is unsupported. Default 2
-   * (≈ Nyquist on the vertical error floor).
+   * Multiple of RMSE below which an interval is unsupported. Default 2.
+   *
+   * A POLICY safety factor, not a sampling theorem. It was described as
+   * "≈ Nyquist on the vertical error floor", which lends it an authority it
+   * does not have: a vertical RMSE is a dispersion, not a band limit, and
+   * nothing here is a band-limited signal being sampled. The rule stands on
+   * its own — an interval finer than twice the measured error draws lines the
+   * surface cannot support — and two is the conservative factor this project
+   * chose for that.
    */
   readonly rmseMultiple?: number;
   /**

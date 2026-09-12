@@ -62,6 +62,10 @@ function readyResult(): AnalyseContoursResult {
       coverageMode: 'full',
       features: [{}, {}],
     },
+    // A frame that RESOLVED its vertical scale, which is what makes the
+    // metre-named standards below legitimate. Every residual-derived figure in
+    // the report reads this flag for its suffix.
+    verticalScaleResolved: true,
     accuracyStandards: {
       rmseZM: 0.14,
       nvaM: 0.27,
@@ -176,10 +180,18 @@ function previewResult(): AnalyseContoursResult {
 }
 
 const OPTS = {
+  // Stated for the same reason the horizontal frame below is: the fixture
+  // asserts metre RMSEz / NVA / VVA rows, and provenance withholds those on a
+  // frame that never resolved a vertical scale.
+  verticalUnitToMetres: 1,
   basename: 'site-42',
   generatedAt: '2026-06-05T00:00:00.000Z',
   softwareVersion: '9.9.9',
   metricVersion: 'v0.4.1',
+  // Declares the horizontal frame. Without it the grid extent reads "units",
+  // which is the honest answer for a frame that never resolved one — so a
+  // fixture asserting "200 x 150 m" has to say the CRS is metric.
+  linearUnit: 'metre',
 } as const;
 
 /** Collect every value string in a content's sections. */
@@ -445,8 +457,7 @@ describe('buildTerrainReportContent — honest nulls', () => {
 
 describe('buildTerrainReportContent — §19 permit stamp in provenance', () => {
   it('stamps the resolved evidence-gate permit into the provenance footer', () => {
-    const c = buildTerrainReportContent(readyResult(), {
-      ...OPTS,
+    const c = buildTerrainReportContent(readyResult(), { ...OPTS,
       exportPermit: {
         status: 'exploratory',
         label: 'Exploratory',
@@ -566,6 +577,32 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     );
   });
 
+  it('#2b does not call the blocked RMSE or the tolerance metres on an unresolved frame', () => {
+    // The ASPRS rows (rmseZM / nvaM / vvaM) are already withheld when no
+    // vertical scale resolved. The blocked RMSE and the reliability tolerance
+    // are read straight off the result and were formatted with a fixed " m", so
+    // the report withheld the standard while printing the quantity it is
+    // computed from, in metres, two rows below.
+    const base = readyResult();
+    const r = {
+      ...base,
+      verticalScaleResolved: false,
+      accuracyStandards: { ...base.accuracyStandards, rmseZM: null, nvaM: null, vvaM: null },
+      reliabilitySplit: {
+        measured: { n: 500, reliability: 0.76, ciLow: 0.75, ciHigh: 0.76, tolerance: 0.66 },
+        interpolated: null,
+      },
+      blockedAccuracy: { n: 400, rmse: 0.31, mae: 0.2, ciLow: 0.25, ciHigh: 0.36, folds: 4 },
+    } as unknown as AnalyseContoursResult;
+    const c = buildTerrainReportContent(r, OPTS);
+    const blocked = rowValue(c, 'Quality Metrics', 'Blocked RMSE (spatial CV)');
+    expect(blocked, 'the blocked RMSE was captioned m on an unresolved frame')
+      .not.toMatch(/[\d.] m\b/);
+    expect(blocked).toMatch(/source Z units/);
+    expect(labels(c, 'Quality Metrics').join(' | '))
+      .not.toMatch(/Within 1 × hold-out RMSEz \([\d.]+ m\)/);
+  });
+
   it('#3 omits an intelligence row whose bucket is unknown instead of printing a dash', () => {
     const intelligence: DatasetIntelligence = {
       density: { bucket: 'dense', label: 'Dense', basis: 'areal' },
@@ -592,9 +629,15 @@ describe('buildTerrainReportContent — every row names its basis', () => {
 
   it('#4 bridges the random hold-out and the blocked spatial CV with their true parameters', () => {
     const base = readyResult();
+    // SMRF path: the two figures ran under DIFFERENT classifications, so the
+    // report must say the contrast is not like-for-like.
     const r = {
       ...base,
-      blockedAccuracy: { n: 4, rmse: 3.87, mae: 2.1, ciLow: 3.5, ciHigh: 4.2 },
+      validation: { ...base.validation, classificationScope: 'train-only' },
+      blockedAccuracy: {
+        n: 4, rmse: 3.87, mae: 2.1, ciLow: 3.5, ciHigh: 4.2,
+        classificationScope: 'whole-cloud',
+      },
     } as unknown as AnalyseContoursResult;
     const c = buildTerrainReportContent(r, OPTS);
     const v = rowValue(c, 'Quality Metrics', 'Accuracy bases') ?? '';
@@ -603,8 +646,37 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(v).toMatch(/feeds NVA\/VVA/);
     expect(v).toMatch(/8-cell blocks, 4 folds/);
     expect(v).toMatch(/<= 20,000 points/);
-    expect(v).toMatch(/extrapolation across held-out blocks/);
-    expect(v).toMatch(/blocked figure \(3\.87 m\) for map-scale use/);
+    // The report used to call the blocked pass a test of "extrapolation across
+    // held-out blocks" and tell the reader to quote it "for map-scale use". The
+    // withheld blocks are data the scan HAS, and the two figures do not share a
+    // treatment: random re-classifies ground on the training points only, the
+    // blocked pass keeps the whole-cloud classification. Recommending one over
+    // the other asserted an ordering this project does not measure.
+    expect(v).not.toMatch(/extrapolation across held-out blocks/);
+    expect(v).not.toMatch(/for map-scale use/);
+    expect(v).toMatch(/not like-for-like/);
+    expect(v).toMatch(/ground re-classified on the training points only/);
+    expect(v).toMatch(/the whole-cloud ground classification/);
+    expect(v).toMatch(/neither is guaranteed the larger/);
+    expect(v).toMatch(/blocked 3\.87 m/);
+
+    // Trusted class-2 path: BOTH figures use the source classification and no
+    // classifier runs for either, so there is no treatment difference to report.
+    // The wording above was written for the SMRF case and stated for every scan,
+    // which told trusted-path readers about a difference that did not exist.
+    const trusted = {
+      ...base,
+      validation: { ...base.validation, classificationScope: 'fixed-source-classification' },
+      blockedAccuracy: {
+        n: 4, rmse: 3.87, mae: 2.1, ciLow: 3.5, ciHigh: 4.2,
+        classificationScope: 'fixed-source-classification',
+      },
+    } as unknown as AnalyseContoursResult;
+    const tv = rowValue(buildTerrainReportContent(trusted, OPTS), 'Quality Metrics', 'Accuracy bases') ?? '';
+    expect(tv, 'the trusted path was told it had a treatment difference')
+      .not.toMatch(/not like-for-like/);
+    expect(tv).toMatch(/neither runs a classifier/);
+    expect(tv).toMatch(/holding classification treatment fixed/);
   });
 
   it('#5 names the two density bases apart', () => {
@@ -703,5 +775,28 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(allValues(c)).not.toMatch(/ready to hand off/);
     const p = buildTerrainReportContent(previewResult(), OPTS);
     expect(rowValue(p, 'Terrain Assessment', 'Export note')).toMatch(/datum/i);
+  });
+});
+
+/**
+ * The disclosed cross-validation parameters are the ones that ran.
+ *
+ * The report prints them so a reader can reproduce the blocked figure. They
+ * used to be literals in the analysis and a sentence in the report — two
+ * statements of one fact, with nothing to keep them equal. Changing the block
+ * size would have left the report quoting the old one.
+ */
+describe('the blocked cross-validation prose is built from the parameters', () => {
+  it('quotes the block size, fold count and both caps the analysis uses', async () => {
+    const { BLOCKED_CV_PARAMS } = await import('../src/terrain/contour/analyseContours');
+    const content = buildTerrainReportContent(readyResult(), OPTS);
+    const basis = content.sections
+      .flatMap((s) => s.rows)
+      .map((r) => r.value)
+      .join('\n');
+    expect(basis).toContain(`${BLOCKED_CV_PARAMS.blockCells}-cell blocks`);
+    expect(basis).toContain(`${BLOCKED_CV_PARAMS.folds} folds`);
+    expect(basis).toContain(BLOCKED_CV_PARAMS.pointCap.toLocaleString('en-US'));
+    expect(basis).toContain(BLOCKED_CV_PARAMS.cellCap.toLocaleString('en-US'));
   });
 });

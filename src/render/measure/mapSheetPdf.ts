@@ -6,8 +6,13 @@
  * dashed where interpolated) over a clean sheet, wrapped in a cartographic
  * collar: a coordinate graticule with UTM-style tick labels, a round scale bar,
  * a north arrow, a legend that explains the line types, and a title block
- * carrying the CRS, vertical datum, map scale, date, and the validated ASPRS /
- * USGS 3DEP accuracy (NVA / VVA / Quality Level) with an honest readiness note.
+ * carrying the CRS, vertical datum, map scale, date, and the accuracy block with
+ * an honest readiness note. That block is NOT a standards determination: the NVA
+ * and VVA figures apply the ASPRS 2014 formulas to internally withheld ground
+ * points rather than independent survey checkpoints, and the density line names
+ * which USGS 3DEP nominal-pulse-density floor the measured GROUND-return density
+ * clears, as context. Calling it "validated ASPRS / USGS 3DEP accuracy" claimed
+ * a conformance assessment nothing here performs.
  *
  * Pure: pdf-lib only (no DOM / canvas), so it produces bytes anywhere and is
  * unit-testable. pdf-lib is imported here so the whole module lands in its own
@@ -15,6 +20,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
+import { verticalSuffixFromLabel } from '../../units/units';
 import type { ContourFeatureModel, ContourFeature } from '../../terrain/contour/contourFeatureModel';
 import type { Annotation, AnnotationType } from '../annotate/types';
 import { buildAnnotationReport, type AnnotationReportRow } from './annotationReportTable';
@@ -25,6 +31,7 @@ import {
 import { decimalsForInterval, type ContourLabel } from '../../terrain/contour/labelPlacement';
 import { placeContourLabels } from '../../terrain/contourStudio/contourLabelEngine';
 import { contourShapeStyleLabel } from '../../terrain/contour/contourShapeStyle';
+import { gradePercent } from '../../terrain/contour/evidenceGrade';
 import type { DemAccuracyStandards } from '../../terrain/quality/demAccuracyStandards';
 import type { ExportProvenance } from '../../terrain/export/exportProvenance';
 import {
@@ -331,19 +338,25 @@ export function scaleBarUnit(
 ): { unit: string; divisor: number } {
   const isFootUnit = linearUnit === 'foot' || linearUnit === 'us-survey-foot';
   if (isFootUnit) return { unit: 'ft', divisor: 1 };
+  // An unresolved frame is not metres. It also cannot be grouped into km:
+  // dividing by 1000 only means anything once the unit is known, so an unknown
+  // unit keeps its own magnitude and says so.
+  if (linearUnit !== 'metre') return { unit: 'units', divisor: 1 };
   const groupKm = totalGround >= 1000;
   return { unit: groupKm ? 'km' : 'm', divisor: groupKm ? 1000 : 1 };
 }
 
 /**
- * The plain linear-unit label (ft / m) for the SOURCE units the map is drawn
- * in. Single-sourced so the contour-interval row, the scale bar and the notes
- * never disagree about the unit. A non-georeferenced scan is still treated as
- * metric (the app's standing default everywhere — measurements, scale bar), so
- * the interval reads "0.5 m", not a hedged "(units)".
+ * The plain linear-unit label for the SOURCE units the map is drawn in.
+ * Single-sourced so the scale bar and the notes never disagree about the unit.
+ *
+ * A non-georeferenced scan used to be treated as metric here, so the sheet read
+ * "0.5 m" rather than a hedged form. That put a metre claim on the same page as
+ * "Horizontal CRS: not georeferenced". An unresolved frame now reads 'units'.
  */
 export function mapLinearUnitLabel(linearUnit: MapSheetInput['linearUnit']): string {
-  return linearUnit === 'foot' || linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+  if (linearUnit === 'foot' || linearUnit === 'us-survey-foot') return 'ft';
+  return linearUnit === 'metre' ? 'm' : 'units';
 }
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
@@ -1010,7 +1023,16 @@ function drawTitleBlock(
   const rows: Array<[string, string]> = [
     ['Horizontal CRS', crsStr],
     ['Vertical datum', datumStr],
-    ['Contour interval', interval != null && Number.isFinite(interval) ? `${interval} ${mapLinearUnitLabel(input.linearUnit)}` : '—'],
+    // A contour interval is an ELEVATION spacing, so it takes the vertical
+    // label, never the horizontal one. Routing it through the horizontal helper
+    // printed "5 m" while this sheet's own notes said "(vertical unit
+    // unverified)" for the same number.
+    [
+      'Contour interval',
+      interval != null && Number.isFinite(interval)
+        ? `${interval}${verticalSuffixFromLabel(prov?.verticalUnitLabel ?? prov?.contourIntervalUnit ?? prov?.complexity?.zUnit)}`
+        : '—',
+    ],
     ['Approx. scale', scaleN > 0 ? `1:${scaleN.toLocaleString()}` : '—'],
     ['Generated', generatedStr],
     ['Prepared by', input.preparedBy ?? '—'],
@@ -1060,9 +1082,16 @@ function drawTitleBlock(
   // Interpolated fraction is NaN when there is no contour length to measure
   // against (an empty contour set). Report that honestly rather than collapsing
   // it to a fabricated 0%.
+  // The number is the share of length that is NOT solid, which is the two
+  // swatches immediately above: dashed (interpolated) AND gap (uncertain).
+  // Printed as "interpolated" alone it contradicted the legend and the data —
+  // on a real sheet it read "100% interpolated" while 504 of the drawn features
+  // carried `provenance: measured`, and thirty solid contours were on the page.
+  // gradePercent keeps 100 for the exact case, so "99%" is what a sheet with
+  // any solid line can say.
   const interpFraction = input.model.interpolatedFraction;
   const interpLine = Number.isFinite(interpFraction)
-    ? `${Math.round(interpFraction * 100)}% interpolated (by length)`
+    ? `${gradePercent(interpFraction)}% interpolated or uncertain (by length)`
     : 'Interpolated fraction — not measured (no contours)';
   text(interpLine, mxx, topY - 88, 6.5, font, DIM);
   // Honest stamp of the shape style applied to the plotted contours, sourced
@@ -1081,6 +1110,10 @@ function drawTitleBlock(
   const rxr = PW - M - 4;
   rightText('Survey accuracy', rxr, topY - 16, 9, bold);
   page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize('Survey accuracy', 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
+  // ' m' is unconditional and correct here: these figures are metres by
+  // construction (a hold-out residual times the resolved vertical factor), and
+  // the provenance withholds the whole accuracy block when no vertical scale
+  // resolved, so an unverified frame reaches this formatter with nulls.
   const fmtM = (v: number | null | undefined): string => (v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—');
   // Accuracy rows, single-sourced from provenance when present (its accuracy
   // block is null when the run measured none, in which case every figure reads
@@ -1093,7 +1126,18 @@ function drawTitleBlock(
         ['NVA-style (95%, hold-out)', fmtM(prov.accuracy?.nvaM)],
         ['VVA-style (95th pct, hold-out)', fmtM(prov.accuracy?.vvaM)],
         ['RMSEz', fmtM(prov.accuracy?.rmseZM)],
-        ['USGS density ref', prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none' ? `>= ${prov.accuracy.usgsDensityReferenceFloor} floor` : '—'],
+        // Named for the quantity it measures. "USGS density ref" alone read as a
+        // pulse-density grade, which this is not: the 3DEP floors are nominal
+        // PULSE density and this figure is measured GROUND-RETURN density. The
+        // technical report for the same scan refuses to grade its all-returns
+        // density against these floors, so an unqualified row here put two of
+        // this session's own documents in apparent disagreement.
+        [
+          'Ground-return density ref',
+          prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none'
+            ? `>= USGS ${prov.accuracy.usgsDensityReferenceFloor}`
+            : '—',
+        ],
       ]
     : (() => {
         const a = input.accuracy ?? null;
@@ -1102,8 +1146,8 @@ function drawTitleBlock(
           ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
           ['RMSEz', fmtM(a?.rmseZM)],
           [
-            'USGS density ref',
-            a && a.densityReferenceFloorsMet.length > 0 ? `>= ${a.densityReferenceFloorsMet[0]} floor` : '—',
+            'Ground-return density ref',
+            a && a.densityReferenceFloorsMet.length > 0 ? `>= USGS ${a.densityReferenceFloorsMet[0]}` : '—',
           ],
         ];
       })();
@@ -1139,4 +1183,20 @@ function drawTitleBlock(
   const evStartY = topY - 84 - noteWrapped.length * 8 - 5;
   evWrapped.forEach((ln, i) => rightText(ln, rxr, evStartY - i * 8, 6, font, evColor));
   rightText('OpenLiDARViewer - terrain analysis', rxr, M - 9, 6, font, DIM);
+  // Which build drew this sheet. Every other provenance-bearing export carries
+  // it; the sheet did not, so a printed map could not be traced to the code
+  // that produced it — the question that sent one back for a second look. It
+  // sits centred on the footer baseline between the deliverable label and the
+  // software credit, and is drawn only when it fits between them, so a long
+  // build string cannot collide with either.
+  if (prov?.build) {
+    const buildStr = safe(prov.build);
+    const w = font.widthOfTextAtSize(buildStr, 5.5);
+    const leftEdge = M + (input.purpose ? bold.widthOfTextAtSize(safe(`Deliverable - ${input.purpose.label}`), 6) : 0);
+    const rightEdge = rxr - font.widthOfTextAtSize('OpenLiDARViewer - terrain analysis', 6);
+    const centre = (leftEdge + rightEdge) / 2 - w / 2;
+    if (centre > leftEdge + 8 && centre + w < rightEdge - 8) {
+      text(buildStr, centre, M - 9, 5.5, font, DIM);
+    }
+  }
 }

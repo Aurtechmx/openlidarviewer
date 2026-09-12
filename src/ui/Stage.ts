@@ -317,7 +317,7 @@ export class Stage {
     const guide = el('a', {
       className: 'olv-github',
       text: 'Guide',
-      href: 'https://lidar.aurtech.mx/guide',
+      href: 'https://openlidarviewer.org/guide/',
       ariaLabel: 'OpenLiDARViewer user guide',
     });
     guide.target = '_blank';

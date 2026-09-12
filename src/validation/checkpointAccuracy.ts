@@ -209,6 +209,22 @@ export const DEFAULT_CI_Z = 1.96;
  */
 export const CI_ASSUMPTION = 'normal-approximation-independent-samples';
 
+/**
+ * Whether a caller-supplied `combine` returned a usable combined uncertainty.
+ *
+ * The hook's OUTPUT is an input to this record. A combined uncertainty is a
+ * root-sum-square-like quantity: finite, non-negative, and never smaller than
+ * the observed RMSE it combines, because adding a reference term cannot reduce
+ * the total. Without this a hook returning NaN, a negative, or a shrunken figure
+ * went into the record verbatim next to `uncertaintyCombinationId`, the id a
+ * consumer identifies the number by. The slack lets a zero reference term
+ * return the observed value to within rounding, which is a legitimate result.
+ */
+function combinedUncertaintyIsSound(combined: number, observedRmse: number): boolean {
+  const SLACK = 1e-9;
+  return Number.isFinite(combined) && combined >= 0 && combined >= observedRmse - SLACK;
+}
+
 export type CheckpointRefusalReason =
   | 'leakage'
   | 'unknown-usage'
@@ -217,6 +233,7 @@ export type CheckpointRefusalReason =
   | 'invalid-min-sample'
   | 'invalid-ci-z'
   | 'invalid-reference-sigma'
+  | 'invalid-uncertainty-combination'
   | 'duplicate-id';
 
 export interface CheckpointRefusal {
@@ -247,6 +264,19 @@ export interface AccuracyStats {
   readonly nmad: number | null;
   readonly p90AbsResidual: number | null;
   readonly p95AbsResidual: number | null;
+  /**
+   * Which quantile definition produced `medianResidual`, `nmad`, `p90` and
+   * `p95`. Nearest rank, so every reported value is an observed residual rather
+   * than an interpolated one no checkpoint exhibits.
+   *
+   * This project holds two conventions on purpose: src/terrain/quantile.ts
+   * interpolates (type 7, R's default) and this module takes the nearest rank.
+   * tests/statisticsRAgreement.test.ts pins both against R and records that
+   * neither is wrong — but that the same residuals can carry different values
+   * under the same label, and that "what is not defensible is a report that
+   * does not say which". The record says which.
+   */
+  readonly quantileConvention: 'nearest-rank';
   readonly maxAbsResidual: number | null;
   /** Confidence interval on the bias. null when the sample cannot support one. */
   readonly biasCiLower: number | null;
@@ -353,6 +383,7 @@ const EMPTY_STATS: AccuracyStats = {
   bias: null,
   rmse: null,
   medianResidual: null,
+  quantileConvention: 'nearest-rank',
   nmad: null,
   p90AbsResidual: null,
   p95AbsResidual: null,
@@ -437,14 +468,24 @@ function statsOf(
   // No combination, no reference sigma, partial coverage, and an unestablished
   // reference all leave the combined figure null. Relabelling the observed RMSE
   // as "combined" would assert a propagation that never happened.
-  const combinedRmse =
+  // `combine` is caller-supplied, so its OUTPUT is an input to this record. A
+  // combined uncertainty is a root-sum-square-like quantity: finite and
+  // non-negative, and never smaller than the observed RMSE it combines, since
+  // adding a reference term cannot reduce the total. A hook returning NaN, a
+  // negative, or a shrunken figure would otherwise be published verbatim under
+  // the combination's own id, which is the id a reader would trust it by.
+  const combinedRaw =
     combination && referenceRmse !== null ? combination.combine(rmse, referenceRmse) : null;
+  const combinedRmse = combinedRaw !== null && combinedUncertaintyIsSound(combinedRaw, rmse)
+    ? combinedRaw
+    : null;
 
   return {
     n,
     bias,
     rmse,
     medianResidual: median,
+    quantileConvention: 'nearest-rank',
     nmad,
     p90AbsResidual: quantileSorted(abs, 0.9),
     p95AbsResidual: quantileSorted(abs, 0.95),
@@ -499,6 +540,19 @@ export function checkpointAccuracy(
   const { minSample } = options;
   if (!Number.isInteger(minSample) || minSample < 1) {
     return refuse('invalid-min-sample', `minSample must be an integer >= 1, got ${minSample}`);
+  }
+  // The per-stratum floor decides which strata are REPORTED, so it is a
+  // statistical parameter of the same kind and gets the same guard. Only the
+  // pooled floor was checked, and a fractional or negative per-stratum floor
+  // silently admitted one-point strata whose RMSE is its own residual.
+  if (
+    options.minStratumSample !== undefined
+    && (!Number.isInteger(options.minStratumSample) || options.minStratumSample < 1)
+  ) {
+    return refuse(
+      'invalid-min-sample',
+      `minStratumSample must be an integer >= 1, got ${options.minStratumSample}`,
+    );
   }
   const ciZ = options.ciZ ?? DEFAULT_CI_Z;
   if (!Number.isFinite(ciZ) || ciZ <= 0) {
@@ -628,6 +682,26 @@ export function checkpointAccuracy(
     );
   }
 
+  // Probe the caller's combination on the pooled sample BEFORE building the
+  // record: a hook that produced an unusable combined figure there produced one
+  // for every stratum too, and a record whose combined column is silently null
+  // where a combination WAS supplied is indistinguishable from one where none
+  // was. Refuse instead, and name the id so the caller knows which hook failed.
+  const pooledStats = statsOf(
+    pooled, pooledSigmas, pooledNotEstablished, ciZ, options.uncertaintyCombination,
+  );
+  if (
+    options.uncertaintyCombination
+    && pooledStats.referenceRmse !== null
+    && pooledStats.combinedRmse === null
+  ) {
+    return refuse(
+      'invalid-uncertainty-combination',
+      `uncertaintyCombination "${options.uncertaintyCombination.id}" returned a combined `
+        + 'uncertainty that is not finite, not non-negative, or smaller than the observed RMSE',
+    );
+  }
+
   const minStratum = options.minStratumSample ?? minSample;
   // A comparator rather than a bare sort(), and deliberately NOT localeCompare.
   // Static analysis asks for localeCompare here; it is wrong for this file.
@@ -669,7 +743,7 @@ export function checkpointAccuracy(
 
   return {
     status: 'reported',
-    pooled: statsOf(pooled, pooledSigmas, pooledNotEstablished, ciZ, options.uncertaintyCombination),
+    pooled: pooledStats,
     strata,
     residuals,
     ciZ,

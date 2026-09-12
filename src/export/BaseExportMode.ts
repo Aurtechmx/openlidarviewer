@@ -410,6 +410,12 @@ export async function runStudioExport(
     },
   );
   const blob = capture.blob;
+  // Provenance belongs to the moment the PIXELS were taken. Camera, clip and
+  // CRS were read after the compositing awaits below, so a view change or a
+  // scan swap while the report and banner were drawn stamped this image with
+  // another view's camera and another scan's CRS.
+  const view = context.adapter.figureViewContext?.() ?? null;
+  const crs = context.adapter.crsLabel();
 
   // Class-filter scope stamp threaded from the call site (Viewer → main.ts).
   // Empty when no class is hidden, so the banner + card row are no-ops and the
@@ -422,14 +428,13 @@ export async function runStudioExport(
   // image can't leave the app without a class-scope stamp.
   const composed = await composeClassScopeBannerOntoBlob(withReport, classScopeStamp);
 
-  // Figure provenance, embedded after every canvas re-encode is done. The
-  // colour mode recorded is the one this export FORCED — the artifact's
-  // truth — not whatever the live view happened to show beforehand. Camera
-  // and clip come from the optional view-context accessor; adapters that
-  // don't implement it still get build + CRS + colormap chunks.
-  const view = context.adapter.figureViewContext?.() ?? null;
+  // Figure provenance, embedded after every canvas re-encode is done, but
+  // SOURCED at capture time above. The colour mode recorded is the one this
+  // export FORCED — the artifact's truth — not whatever the live view happened
+  // to show beforehand. Camera and clip come from the optional view-context
+  // accessor; adapters that don't implement it still get build + CRS + colormap.
   const final = await stampFigureProvenanceOntoBlob(composed, {
-    crs: context.adapter.crsLabel(),
+    crs,
     colorMode,
     palette: paletteLabelOfOptions(options as Readonly<Record<string, unknown>>),
     camera: view?.camera ?? null,

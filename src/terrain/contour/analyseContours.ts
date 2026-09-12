@@ -155,6 +155,21 @@ export interface TerrainCoreParams {
    */
   readonly verticalUnitToMetres?: number;
   /**
+   * Whether the frame actually RESOLVED a vertical scale, stated separately from
+   * the factor above. The live runner supplies the factor under the GeoTIFF
+   * policy, which for an unresolved frame is the inert placeholder 1, because
+   * the raster geometry (thresholds, despike floor, cell floors) must stay
+   * self-consistent whatever the unit is. That is the right factor for
+   * geometry and the wrong evidence for a claim: deriving "resolved" from the
+   * factor's finiteness made every unit-withholding branch in this analysis
+   * unreachable from the application, which never passes an undefined factor.
+   * When omitted, the factor test stands in, which is what direct-call tests
+   * exercise.
+   */
+  readonly verticalScaleKnown?: boolean;
+  /** Same statement for the horizontal scale; see {@link verticalScaleKnown}. */
+  readonly horizontalScaleKnown?: boolean;
+  /**
    * Metres per source horizontal unit (1 for metre data, ~0.3048 for feet).
    * Densities, cell areas and slope runs are scaled by this so a feet-based
    * projected CRS reports genuine pts/m² and correct slope, mirroring
@@ -345,13 +360,22 @@ export interface TerrainCore {
    */
   readonly reliabilitySplit: ReliabilitySplit | null;
   /**
-   * Spatially-blocked hold-out RMSE (in metres) with a bootstrap CI — a less
-   * optimistic accuracy estimate than the random point hold-out, since it
-   * predicts across whole withheld blocks. Null when skipped (grid too large
-   * to afford the k rebuilds, or too few blocks to split). Diagnostic, not
-   * field accuracy.
+   * Spatially-blocked hold-out RMSE (in metres) with a bootstrap CI. NOT a
+   * like-for-like contrast with `validation`: that pass re-runs ground
+   * classification on the training points only, this one scores against the
+   * whole-cloud classification, so the two estimate different quantities and
+   * neither is guaranteed the larger. Null when skipped (grid too large to
+   * afford the k rebuilds, or too few blocks to split). Diagnostic, not field
+   * accuracy.
    */
   readonly blockedAccuracy: SpatialBlockResult | null;
+  /**
+   * True when the frame stated a usable vertical scale, so every residual-derived
+   * figure here (`validation`, `blockedAccuracy`, `accuracyStandards`) is in
+   * METRES. False means the residuals stayed in the source Z unit — feet,
+   * millimetres, arbitrary scanner units — and no renderer may caption them "m".
+   */
+  readonly verticalScaleResolved: boolean;
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -375,7 +399,12 @@ export interface TerrainCore {
    */
   readonly unclassifiedFraction: number | null;
   readonly excludedByClassification: number;
-  /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
+  /**
+   * ASPRS-2014-style hold-out figures (NVA, VVA) plus the USGS 3DEP density
+   * REFERENCE. Not a standards determination: the formulas are applied to
+   * internally withheld ground points rather than independent checkpoints, and
+   * ground-return density is not nominal pulse density.
+   */
   readonly accuracyStandards: DemAccuracyStandards;
   /** Surface models: top-surface DSM, height-above-ground, slope, hillshade. */
   readonly surface: {
@@ -418,7 +447,8 @@ export interface TerrainCore {
   readonly interpolation: 'idw' | 'geodesic';
   /** Per-cell aggregation the live + hold-out DTM rasters used (provenance). */
   readonly aggregation: DtmAggregation;
-  /** True when the blunder-only despike pass ran (always true today). */
+  /** True when the blunder-only despike pass ran. The trusted authoritative-
+   *  classification path deliberately skips it, so this is not always true. */
   readonly despikeApplied: boolean;
   /** Resolved horizontal CRS (echoed for the contour stage + result). */
   readonly crs: string | null;
@@ -439,11 +469,41 @@ export interface TerrainCore {
     readonly widthM: number;
     readonly depthM: number;
     readonly reliefM: number;
+    /**
+     * Whether the extents above are genuinely metres.
+     *
+     * `cellSizeM` is in the SOURCE horizontal unit despite its name, and the
+     * raw elevation range is in the source vertical unit. These fields used to
+     * carry those numbers unconverted into a recommender that selects from
+     * metre ladders, so a US-survey-foot capture was sized about 3.3 times too
+     * large and advised accordingly. They are converted now; when no scale
+     * resolves, the conversion is an inert 1 and this is false, which withholds
+     * the recommendation rather than dressing source units as metres.
+     */
+    readonly unitResolved: boolean;
   };
   /** Ordered core warnings (classification, ground, despike, void-fill). The
    *  contour stage appends its interval-dependent warnings after these. */
   readonly coreWarnings: ReadonlyArray<string>;
 }
+
+/**
+ * The spatially-blocked cross-validation's parameters, in one place.
+ *
+ * The terrain report prints them as prose so a reader can reproduce the figure.
+ * They were literals here and a sentence there, which is a claim with no
+ * producer that can check it: change the block size and the report keeps
+ * stating the old one. The report builds its sentence from this object.
+ */
+export const BLOCKED_CV_PARAMS = {
+  /** Block edge, in DTM cells. */
+  blockCells: 8,
+  folds: 4,
+  /** Ground points are strided down to this many before the folds run. */
+  pointCap: 20_000,
+  /** Grids larger than this skip the blocked pass entirely. */
+  cellCap: 250_000,
+} as const;
 
 /** Everything the UI needs from one analysis pass. */
 export interface AnalyseContoursResult {
@@ -453,8 +513,22 @@ export interface AnalyseContoursResult {
    *  support, at τ = the calibration tolerance. Null when unstated. */
   readonly reliabilitySplit: ReliabilitySplit | null;
   /** Spatially-blocked hold-out RMSE (metres) + bootstrap CI, or null when
-   *  skipped. A less optimistic accuracy estimate than the random hold-out. */
+   *  skipped. Withholds whole blocks rather than scattered points, so it
+   *  measures sensitivity to withholding geometry; a larger figure than the
+   *  random hold-out is a result of a given run, not a guarantee. The two also
+   *  differ in TREATMENT — `validation` re-classifies ground on the training
+   *  points only, this scores against the whole-cloud classification — so the
+   *  difference between them is not attributable to geometry alone. */
   readonly blockedAccuracy: SpatialBlockResult | null;
+  /** Passed through from the core. */
+  readonly verticalScaleResolved: TerrainCore['verticalScaleResolved'];
+  /**
+   * Did a HORIZONTAL scale resolve? Densities and areas are per source unit
+   * squared until one does, so a consumer that compares a density against a
+   * per-square-metre threshold — or prints one — has to read this first.
+   * `gridGeometry` itself is core-only, so this is how the fact leaves it.
+   */
+  readonly horizontalScaleResolved: TerrainCore['gridGeometry']['unitResolved'];
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -471,7 +545,12 @@ export interface AnalyseContoursResult {
   /** Passed through unchanged from `TerrainCore`. */
   readonly unclassifiedFraction: TerrainCore['unclassifiedFraction'];
   readonly excludedByClassification: number;
-  /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
+  /**
+   * ASPRS-2014-style hold-out figures (NVA, VVA) plus the USGS 3DEP density
+   * REFERENCE. Not a standards determination: the formulas are applied to
+   * internally withheld ground points rather than independent checkpoints, and
+   * ground-return density is not nominal pulse density.
+   */
   readonly accuracyStandards: DemAccuracyStandards;
   /** Surface models: top-surface DSM, height-above-ground, slope, hillshade. */
   readonly surface: {
@@ -498,7 +577,8 @@ export interface AnalyseContoursResult {
    */
   readonly complexity: TerrainComplexitySummary | null;
   /** Recommended DTM grid + contour interval for this dataset. */
-  readonly gridRecommendation: GridRecommendation;
+  /** Withheld (null) when no linear unit resolved — the ladders are metres. */
+  readonly gridRecommendation: GridRecommendation | null;
   readonly gate: IntervalGateResult;
   /**
    * The interval of the contour levels actually emitted. Coarser than
@@ -571,6 +651,10 @@ interface GroundTrustDecision {
   readonly requestedButUnavailable: boolean;
 }
 
+/** Refusal when an explicit trust request finds no source ground. */
+export const TRUSTED_GROUND_UNAVAILABLE =
+  'trusted source-ground treatment unavailable: trustGroundClassification was requested and no ASPRS class 2 (ground) points are present; no substitute ground filter was run';
+
 /**
  * Decide whether to trust an existing ground classification (see
  * {@link TerrainCoreParams.trustGroundClassification}) and, when so, select the
@@ -581,6 +665,65 @@ interface GroundTrustDecision {
  * requires EVERY candidate to be class-2, so a cloud with unclassified ground
  * stays on the SMRF path and nothing is silently dropped.
  */
+/**
+ * Grid-recommendation geometry, converted to real metres.
+ *
+ * The recommender selects a cell size and a contour interval from metre
+ * ladders, so it must be handed metres. `cellSizeM` is in the SOURCE horizontal
+ * unit despite its name, and the elevation range is in the source vertical
+ * unit; both used to reach the recommender unconverted, so a US-survey-foot
+ * capture was sized about 3.3 times too large and advised accordingly. A
+ * geographic frame converts through METRES_PER_DEGREE, a projected frame
+ * through its linear unit, and anything else has no scale to convert by and
+ * reports that instead of pretending to one.
+ */
+function gridGeometryInMetres(
+  params: {
+    isGeographic?: boolean;
+    horizontalUnitToMetres?: number;
+    verticalUnitToMetres?: number;
+    horizontalScaleKnown?: boolean;
+    verticalScaleKnown?: boolean;
+    latitudeDeg?: number | null;
+  },
+  dtm: { cols: number; rows: number; cellSizeM: number },
+  pointCount: number,
+  elevationRangeSourceUnits: number,
+): {
+  pointCount: number; widthM: number; depthM: number; reliefM: number; unitResolved: boolean;
+} {
+  const geographic = params.isGeographic === true;
+  const horiz = params.horizontalUnitToMetres;
+  const horizOk = typeof horiz === 'number' && Number.isFinite(horiz) && horiz > 0;
+  // The frame's statement wins over the factor test: the live runner passes the
+  // placeholder 1 for an unresolved projected frame, which is finite and
+  // positive, so the factor alone called every unreferenced scan resolved.
+  const horizResolved = geographic || (params.horizontalScaleKnown ?? horizOk);
+  const horizToM = geographic ? METRES_PER_DEGREE : (horizOk ? horiz : 1);
+  // A geographic frame's east-west extent shrinks by cos(latitude), the same
+  // correction the density figure in this file already applies. Without it a
+  // site at 60 degrees north reported twice its true width.
+  const lat = params.latitudeDeg;
+  const ewScale =
+    geographic && typeof lat === 'number' && Number.isFinite(lat)
+      ? Math.max(Math.cos((lat * Math.PI) / 180), 1e-6)
+      : 1;
+  const vert = params.verticalUnitToMetres;
+  const vertOk = typeof vert === 'number' && Number.isFinite(vert) && vert > 0;
+  // A geographic frame's z is already metric by convention (the other unit
+  // resolutions in this file fall back to 1 there); a projected frame's vertical
+  // falls back to its horizontal scale. Falling back to METRES_PER_DEGREE here
+  // multiplied a geographic relief by 111,320.
+  const vertToM = vertOk ? vert : (geographic ? 1 : horizToM);
+  return {
+    pointCount,
+    widthM: dtm.cols * dtm.cellSizeM * horizToM * ewScale,
+    depthM: dtm.rows * dtm.cellSizeM * horizToM,
+    reliefM: elevationRangeSourceUnits * vertToM,
+    unitResolved: horizResolved,
+  };
+}
+
 function resolveGroundTrust(
   points: ReadonlyArray<TerrainPoint>,
   classification: ReadonlyArray<number> | Uint8Array | undefined,
@@ -789,17 +932,23 @@ export function computeTerrainCore(
     groundPts.length,
     params.trustGroundClassification,
   );
+  // An EXPLICIT trust request with no class-2 points is refused, not replaced.
+  // This fell back to the SMRF filter under a warning, so a run that asked for
+  // the source classification received a surface from a different algorithm
+  // under the same field names — the substitution the train-only hold-out
+  // refusal already removes. Auto mode may still choose SMRF; explicit true
+  // fails closed: no ground set, an empty surface, a blocked verdict.
   if (trust.requestedButUnavailable) {
-    warnings.push(
-      'trustGroundClassification was requested but no ASPRS class 2 (ground) ' +
-        'points are present; falling back to the SMRF ground filter.',
-    );
+    warnings.push(TRUSTED_GROUND_UNAVAILABLE);
+    groundPts = [];
   }
   let groundPtsForSurface: ReadonlyArray<TerrainPoint>;
   let gf: GroundFilterResult;
   let reclassifyForHoldout:
     | ((points: ReadonlyArray<TerrainPoint>, isHeldOut: Uint8Array) => Uint8Array | ReadonlyArray<number>)
     | undefined;
+  /** What that hook represents, for the report's classificationScope. */
+  let reclassificationKind: 'train-only' | 'fixed-source-classification' = 'train-only';
   if (trust.trust) {
     groundPtsForSurface = trust.groundPoints;
     gf = groundFromTrustedClassification(groundPtsForSurface, {
@@ -817,6 +966,11 @@ export function computeTerrainCore(
     // exist here. Feed the validator an all-ground mask (it excludes held-out
     // points from the fit itself), so it validates the delivered surface.
     reclassifyForHoldout = (pts) => new Uint8Array(pts.length).fill(1);
+    // NOT a re-run classifier, and the record must not read as one. The hook
+    // above is an all-ground pseudo-mask, indistinguishable at the hold-out
+    // boundary from a real train-only pass, which made validation.json report
+    // `train-only` for a path where no classifier ran at all.
+    reclassificationKind = 'fixed-source-classification';
   } else {
     groundPtsForSurface = groundPts;
     gf = classifyGroundSmrf(groundPtsForSurface, groundParams);
@@ -914,6 +1068,7 @@ export function computeTerrainCore(
     // an all-ground mask (no SMRF), so the hold-out validates the exact class-2
     // surface the user receives.
     reclassifyGround: reclassifyForHoldout,
+    reclassificationKind,
   });
   const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);
@@ -933,17 +1088,26 @@ export function computeTerrainCore(
         )
       : null;
 
-  // Spatially-blocked hold-out — a less optimistic accuracy estimate that
-  // predicts across whole withheld blocks (see spatialBlockHoldout). It costs k
+  // Spatially-blocked hold-out — withholds whole blocks rather than scattered
+  // points (see spatialBlockHoldout), so it measures sensitivity to withholding
+  // geometry rather than guaranteeing any separation. It costs k
   // DTM rebuilds, so it is bounded: skipped on grids over CELL_CAP cells, and
   // the ground set is strided to POINT_CAP points. Diagnostic only; reported in
   // metres. Null when skipped or when there aren't enough blocks to split.
-  const BLOCKED_CELL_CAP = 250_000; // ~500×500 grid
-  const BLOCKED_POINT_CAP = 20_000;
-  const vMetresB =
-    Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0
-      ? (params.verticalUnitToMetres as number)
-      : 1;
+  const BLOCKED_CELL_CAP = BLOCKED_CV_PARAMS.cellCap;
+  const BLOCKED_POINT_CAP = BLOCKED_CV_PARAMS.pointCap;
+  // ONE resolution of "does this frame state a vertical scale", read by the
+  // blocked hold-out below, the metre-named accuracy standards further down and
+  // the panel that labels both. Three copies of this expression drifted apart
+  // before: the standards were withheld on an unresolved frame while the blocked
+  // RMSE beside them kept a source-unit number captioned "m".
+  const verticalFactorUsable =
+    Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0;
+  // The frame's own statement wins; the factor test is the fallback for direct
+  // callers that pass no flag. A placeholder factor of 1 is finite and positive,
+  // which is exactly why the flag has to travel separately.
+  const verticalScaleResolved = params.verticalScaleKnown ?? verticalFactorUsable;
+  const vMetresB = verticalFactorUsable ? (params.verticalUnitToMetres as number) : 1;
   let blockedAccuracy: SpatialBlockResult | null = null;
   if (dtm.cols * dtm.rows <= BLOCKED_CELL_CAP) {
     const { getH1, getH2, getV } = axisGetters(verticalAxis);
@@ -961,9 +1125,21 @@ export function computeTerrainCore(
         blockedHoldoutModelOptions(dtm, aggregation, despikeApplied, params),
       );
       const raw = spatialBlockHoldout(sampled, model, {
-        blockSize: dtm.cellSizeM * 8,
-        folds: 4,
+        blockSize: dtm.cellSizeM * BLOCKED_CV_PARAMS.blockCells,
+        folds: BLOCKED_CV_PARAMS.folds,
         seed: params.holdoutSeed ?? 1,
+        // The blocked pass scores against `gf.isGround`, whatever produced it.
+        // On the SMRF path that is the whole-cloud mask, so it differs from the
+        // random hold-out's train-only re-run. On the trusted path it is the
+        // source's own class-2 set — the SAME classification the random pass
+        // uses — so there both figures hold classification fixed and the
+        // contrast is geometry alone. Stating one of those two cases for both
+        // told trusted-path readers there was a treatment difference when there
+        // was none.
+        classificationScope:
+          reclassificationKind === 'fixed-source-classification'
+            ? 'fixed-source-classification'
+            : 'whole-cloud',
       });
       // Scale residual-derived figures from source vertical units to metres.
       blockedAccuracy = {
@@ -1029,10 +1205,20 @@ export function computeTerrainCore(
   const cellStatusTally = tallyCellStatus(classifyCellStatus(dtm));
   const groundPointRatio =
     gf.sourcePointCount > 0 ? gf.groundPointCount / gf.sourcePointCount : Number.NaN;
+  // The gate's RMSE field means metres and is judged against a metre floor.
+  // On a frame with no resolved vertical scale the residual is in source Z
+  // units and used to be handed over regardless, so a foot residual was judged
+  // as a metre one. NaN reads as "no figure" there; null does the same below.
+  const rmseMetres = verticalScaleResolved && Number.isFinite(validation.rmse)
+    ? validation.rmse
+    : Number.NaN;
   const quality = evaluateDtmQuality({
     tally: cellStatusTally,
     meanCellConfidence: dtm.meanConfidence,
-    holdoutRmseM: validation.rmse,
+    holdoutRmseM: rmseMetres,
+    // Validated in the source unit is still validated; only the METRE value
+    // is withheld above.
+    holdoutValidated: Number.isFinite(validation.rmse),
     groundPointRatio,
     coverageMode: dtm.coverageMode,
     crs,
@@ -1066,10 +1252,26 @@ export function computeTerrainCore(
   }).summary;
   // Express the validated accuracy in ASPRS/USGS 3DEP terms (NVA, VVA, QL) so
   // the surface can be judged against recognised accuracy standards.
+  //
+  // Withheld entirely when no vertical scale resolved. holdoutRmse computes
+  // `residual = (z - predicted) * verticalUnitToMetres` and falls back to an
+  // inert 1, so on an unresolved frame the residuals are in SOURCE Z units.
+  // Every field below is named `rmseZM`, `nvaM`, `vvaM`: a property whose name
+  // ends in M must never hold a value that might be feet or scanner units, and
+  // a consumer reading those names has no way to discover that it does. All
+  // three are already `number | null` and every consumer has a null path, so
+  // the honest answer costs nothing but the figure itself.
+  // Computed here rather than inline in the returned object: the density
+  // reference below needs its horizontal-unit verdict.
+  const gridGeometry = gridGeometryInMetres(params, dtm, gf.analyzedPointCount, elevationRangeM);
   const accuracyStandards = demAccuracyStandards(
-    Number.isFinite(validation.rmse) ? validation.rmse : null,
-    Number.isFinite(validation.p95) ? validation.p95 : null,
+    verticalScaleResolved && Number.isFinite(validation.rmse) ? validation.rmse : null,
+    verticalScaleResolved && Number.isFinite(validation.p95) ? validation.p95 : null,
     cellMetrics.meanDensity,
+    // The density's own unit question, which the vertical flags above do not
+    // answer: the figure is per source unit squared until a horizontal scale
+    // resolves.
+    gridGeometry.unitResolved,
   );
   // Stride honesty: when the gather strided the cloud, the ground density (and
   // therefore the USGS 3DEP density reference derived from it) is a uniform-stride
@@ -1094,11 +1296,17 @@ export function computeTerrainCore(
   const qualityScore = terrainQualityScore({
     measuredOfCovered: coveredCells > 0 ? cellStatusTally.measured / coveredCells : 0,
     meanCellConfidence: Number.isFinite(dtm.meanConfidence) ? dtm.meanConfidence : 0,
-    holdoutRmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+    holdoutRmseM: Number.isFinite(rmseMetres) ? rmseMetres : null,
     groundPointRatio: Number.isFinite(groundPointRatio) ? groundPointRatio : null,
     boundaryMeasuredRatio: cellMetrics.boundaryMeasuredRatio,
     meanDensity: cellMetrics.meanDensity,
-    cellSizeM: params.cellSizeM,
+    // The score multiplies density by cell area. The density is per m² where a
+    // horizontal scale resolved (cellMetrics converts with the same factor), so
+    // the cell edge must be in metres too: a 1 ft cell handed over as 1 read as
+    // 1 m², overstating returns per cell by 1/0.3048², about 10.8×. Without a
+    // resolved scale both stay in source units and the product is still
+    // returns per cell.
+    cellSizeM: params.cellSizeM * horizUnitToMetres,
   });
 
   // Surface models — a top-surface DSM (all returns) on the DTM grid, the
@@ -1203,6 +1411,7 @@ export function computeTerrainCore(
           analyzedPointCount: dtm.analyzedPointCount,
         },
         groundDensityPerM2: cellMetrics.meanDensity,
+        horizontalScaleResolved: gridGeometry.unitResolved,
       })
     : null;
 
@@ -1220,6 +1429,7 @@ export function computeTerrainCore(
     unclassifiedFraction,
     excludedByClassification: classFilter.excludedCount,
     accuracyStandards,
+    verticalScaleResolved,
     surface,
     cellStatusTally,
     complexity,
@@ -1235,12 +1445,7 @@ export function computeTerrainCore(
     verticalDatum,
     verticalUnitToMetres: params.verticalUnitToMetres ?? null,
     cellSizeM: params.cellSizeM,
-    gridGeometry: {
-      pointCount: gf.analyzedPointCount,
-      widthM: dtm.cols * dtm.cellSizeM,
-      depthM: dtm.rows * dtm.cellSizeM,
-      reliefM: elevationRangeM,
-    },
+    gridGeometry,
     coreWarnings: warnings,
   };
 }
@@ -1285,13 +1490,19 @@ export function contoursFromCore(
 
   // The grid + interval recommendation reads the requested interval, so it is
   // part of the interval stage (the geometry inputs come from the core).
-  const gridRecommendation = recommendGrid({
-    pointCount: core.gridGeometry.pointCount,
-    widthM: core.gridGeometry.widthM,
-    depthM: core.gridGeometry.depthM,
-    reliefM: core.gridGeometry.reliefM,
-    requestedIntervalM: intervalParams.intervalM ?? null,
-  });
+  // Withheld outright when no linear scale resolved: the ladders are metre
+  // ladders, so advising from unconverted source coordinates would recommend a
+  // cell size and an interval chosen for a site of the wrong size. No
+  // recommendation is honest; a confident wrong one is not.
+  const gridRecommendation = core.gridGeometry.unitResolved
+    ? recommendGrid({
+      pointCount: core.gridGeometry.pointCount,
+      widthM: core.gridGeometry.widthM,
+      depthM: core.gridGeometry.depthM,
+      reliefM: core.gridGeometry.reliefM,
+      requestedIntervalM: intervalParams.intervalM ?? null,
+    })
+    : null;
 
   // Choose the interval: explicit > recommended.
   const intervalM = intervalParams.intervalM ?? gate.recommendedM ?? null;
@@ -1325,6 +1536,8 @@ export function contoursFromCore(
       validation: core.validation,
       reliabilitySplit: core.reliabilitySplit,
       blockedAccuracy: core.blockedAccuracy,
+      verticalScaleResolved: core.verticalScaleResolved,
+      horizontalScaleResolved: core.gridGeometry.unitResolved,
       confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
@@ -1419,6 +1632,8 @@ export function contoursFromCore(
     validation: core.validation,
     reliabilitySplit: core.reliabilitySplit,
     blockedAccuracy: core.blockedAccuracy,
+    verticalScaleResolved: core.verticalScaleResolved,
+    horizontalScaleResolved: core.gridGeometry.unitResolved,
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,

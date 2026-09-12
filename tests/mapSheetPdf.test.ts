@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { inflateSync } from 'node:zlib';
 import {
   buildMapSheetPdf,
   readinessNote,
@@ -52,8 +53,7 @@ const model: ContourFeatureModel = {
 };
 
 describe('scaleBarUnit — label follows the source CRS (label-vs-value)', () => {
-  it('labels metres, grouping to km past 1000 (metric default)', () => {
-    expect(scaleBarUnit(200, undefined)).toEqual({ unit: 'm', divisor: 1 });
+  it('labels metres, grouping to km past 1000, on a DECLARED metre CRS', () => {
     expect(scaleBarUnit(200, 'metre')).toEqual({ unit: 'm', divisor: 1 });
     expect(scaleBarUnit(2000, 'metre')).toEqual({ unit: 'km', divisor: 1000 });
   });
@@ -63,17 +63,24 @@ describe('scaleBarUnit — label follows the source CRS (label-vs-value)', () =>
     expect(scaleBarUnit(2000, 'us-survey-foot')).toEqual({ unit: 'ft', divisor: 1 });
     expect(scaleBarUnit(50, 'foot')).toEqual({ unit: 'ft', divisor: 1 });
   });
-  it('keeps the metre default for an unresolved (unknown) unit (back-compat)', () => {
-    expect(scaleBarUnit(200, 'unknown')).toEqual({ unit: 'm', divisor: 1 });
-    expect(scaleBarUnit(2000, 'unknown')).toEqual({ unit: 'km', divisor: 1000 });
+  it('does NOT assert metres for an unresolved unit, and cannot group it', () => {
+    // This previously kept a metre default "for back-compat", which put a metre
+    // scale bar on a sheet whose own title block said "not georeferenced".
+    // Grouping is dropped with it: dividing by 1000 to reach "km" only means
+    // something once the unit is known.
+    expect(scaleBarUnit(200, 'unknown')).toEqual({ unit: 'units', divisor: 1 });
+    expect(scaleBarUnit(2000, 'unknown')).toEqual({ unit: 'units', divisor: 1 });
+    expect(scaleBarUnit(200, undefined)).toEqual({ unit: 'units', divisor: 1 });
   });
 });
 
 describe('mapLinearUnitLabel — contour-interval unit matches the scale bar', () => {
-  it('reads "m" for metric, unknown, and undefined (the standing default)', () => {
+  it('reads "m" only for a DECLARED metre CRS', () => {
     expect(mapLinearUnitLabel('metre')).toBe('m');
-    expect(mapLinearUnitLabel('unknown')).toBe('m');
-    expect(mapLinearUnitLabel(undefined)).toBe('m');
+  });
+  it('reads "units" for an unresolved or absent unit, never a false "m"', () => {
+    expect(mapLinearUnitLabel('unknown')).toBe('units');
+    expect(mapLinearUnitLabel(undefined)).toBe('units');
   });
   it('reads "ft" for both foot variants', () => {
     expect(mapLinearUnitLabel('foot')).toBe('ft');
@@ -380,5 +387,90 @@ describe('buildMapSheetPdf — purpose deliverable content', () => {
     const a = await buildMapSheetPdf({ model, labels: [], provenance: PROV, purpose: engineering });
     const b = await buildMapSheetPdf({ model, labels: [], provenance: PROV, purpose: survey });
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(false);
+  });
+});
+
+/**
+ * The sheet says which build drew it.
+ *
+ * Every other provenance-bearing export carries the build line; a printed map
+ * did not, so a sheet whose figures looked wrong could not be traced to the
+ * code that produced it — a question that cost a round of investigation over a
+ * PDF nobody could attribute.
+ */
+describe('buildMapSheetPdf — build identity', () => {
+  /** Every text run drawn into the PDF, decoded from its content streams. */
+  const drawnText = (bytes: Uint8Array): string => {
+    const buf = Buffer.from(bytes);
+    let out = '';
+    for (const seg of buf.toString('latin1').split(/stream\r?\n/).slice(1)) {
+      const raw = seg.split('endstream')[0];
+      let content: string;
+      try {
+        content = inflateSync(Buffer.from(raw, 'latin1')).toString('latin1');
+      } catch {
+        continue;
+      }
+      for (const m of content.matchAll(/<([0-9A-Fa-f]*)> Tj/g)) {
+        out += Buffer.from(m[1]!, 'hex').toString('latin1');
+      }
+    }
+    return out;
+  };
+
+  it('prints the provenance build line on the sheet', async () => {
+    const bytes = await buildMapSheetPdf({ model, labels: [], provenance: PROV });
+    expect(drawnText(bytes)).toContain(PROV.build);
+  });
+
+  it('prints nothing when no provenance was supplied', async () => {
+    const withProv = await buildMapSheetPdf({ model, labels: [], provenance: PROV, generatedAt: new Date(0) });
+    const without = await buildMapSheetPdf({ model, labels: [], generatedAt: new Date(0) });
+    expect(drawnText(withProv)).toContain(PROV.build);
+    expect(drawnText(without)).not.toContain(PROV.build);
+  });
+});
+
+/**
+ * The density row names the quantity it measures.
+ *
+ * The 3DEP floors are nominal PULSE density; this figure is measured
+ * GROUND-RETURN density, which is not the same determination. Labelled
+ * "USGS density ref" the row read as a pulse-density grade, and the technical
+ * report for the same scan refuses to grade its all-returns density against
+ * those floors — two documents from one session, apparently disagreeing.
+ *
+ * The row also has to fit its column: the accuracy block is right-aligned in a
+ * fixed strip, and an overlong row runs into the legend beside it.
+ */
+describe('buildMapSheetPdf — the density reference names its basis', () => {
+  const drawn = (bytes: Uint8Array): string => {
+    let out = '';
+    for (const seg of Buffer.from(bytes).toString('latin1').split(/stream\r?\n/).slice(1)) {
+      let content: string;
+      try {
+        content = inflateSync(Buffer.from(seg.split('endstream')[0], 'latin1')).toString('latin1');
+      } catch { continue; }
+      for (const m of content.matchAll(/<([0-9A-Fa-f]*)> Tj/g)) out += Buffer.from(m[1]!, 'hex').toString('latin1');
+    }
+    return out;
+  };
+
+  it('says ground-return density, not a bare USGS density reference', async () => {
+    const prov = { ...PROV, accuracy: { rmseZM: 1, nvaM: 1.96, vvaM: 2.1, usgsDensityReferenceFloor: 'QL3' } } as typeof PROV;
+    const text = drawn(await buildMapSheetPdf({ model, labels: [], provenance: prov }));
+    expect(text).toContain('Ground-return density ref');
+    expect(text).toContain('>= USGS QL3');
+    expect(text, 'the unqualified label read as a pulse-density grade').not.toContain('USGS density ref');
+  });
+
+  it('fits the accuracy column at its longest', async () => {
+    const { PDFDocument, StandardFonts } = await import('pdf-lib');
+    const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
+    // Portrait letter is the narrowest sheet: the column runs from 72% of the
+    // content width to the right margin, and the rows are drawn at 7.5pt.
+    const column = (612 - 36 - 4) - (36 + (612 - 72) * 0.72);
+    const longest = 'Ground-return density ref:  >= USGS QL0';
+    expect(font.widthOfTextAtSize(longest, 7.5)).toBeLessThan(column);
   });
 });

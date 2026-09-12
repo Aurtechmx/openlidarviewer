@@ -28,6 +28,21 @@ describe('buildFeatureExtractionInput', () => {
     expect(buildFeatureExtractionInput(stub({ positions: new Float32Array([0, 0, 0]) }))).toBeNull();
   });
 
+  it('withholds a derived classification the frame has invalidated', () => {
+    // The terrain gather withholds these codes; this extractor read them raw and
+    // was remounted on the CRS change that invalidated them, so footprints were
+    // re-extracted from stale class-6 codes and exported under the new frame.
+    const input = buildFeatureExtractionInput(
+      stub({
+        positions: new Float32Array([0, 0, 0, 1, 1, 1]),
+        classification: new Uint8Array([6, 6]),
+        classificationIsDerived: true,
+        derivedClassificationFrameInvalid: true,
+      }),
+    );
+    expect(input, 'frame-invalid derived codes were extracted').toBeNull();
+  });
+
   it('returns null when no point is building- or wire-classified', () => {
     const input = buildFeatureExtractionInput(
       stub({

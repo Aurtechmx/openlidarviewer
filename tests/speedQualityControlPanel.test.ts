@@ -17,6 +17,7 @@
  *     pinning one leaves the others where they were.
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import {
   QUALITY_MAX,
@@ -83,8 +84,27 @@ class FakeEl {
   }
   setAttribute(name: string, value: string): void { this.attrs.set(name, value); }
   getAttribute(name: string): string | null { return this.attrs.get(name) ?? null; }
+  /** Set by append, so `closest` can walk up the way a real node does. */
+  parent: FakeEl | null = null;
   append(...kids: Array<FakeEl | string>): void {
-    for (const k of kids) if (k instanceof FakeEl) this.children.push(k);
+    for (const k of kids) {
+      if (!(k instanceof FakeEl)) continue;
+      k.parent = this;
+      this.children.push(k);
+    }
+  }
+  /**
+   * Nearest ancestor-or-self carrying a class. Only the `.class` form the
+   * production code uses is supported; anything else throws rather than
+   * quietly answering null, which would let a selector typo pass this stub.
+   */
+  closest(selector: string): FakeEl | null {
+    if (!selector.startsWith('.')) throw new Error(`FakeEl.closest: unsupported selector ${selector}`);
+    const want = selector.slice(1);
+    for (let node: FakeEl | null = this; node; node = node.parent) {
+      if (node.className.split(/\s+/).includes(want)) return node;
+    }
+    return null;
   }
   addEventListener(type: string, fn: () => void): void {
     const list = this.listeners.get(type) ?? [];
@@ -365,11 +385,48 @@ describe('Speed ↔ Quality control — Advanced', () => {
 });
 
 describe('Speed ↔ Quality control — honesty', () => {
-  it('states that nothing here reaches a computed quantity', async () => {
+  it('states the scope, including what a streamed scan does inherit', async () => {
+    // This asserted the note named measurements and exports as untouched. The
+    // streaming preset moves the resident-point budget, so a resident-only
+    // figure does change with it; what cannot change is how it is computed.
     const { panel } = await openPanel();
     const note = panel.one('olv-quality-note').ownText;
     expect(note).toContain('Display and streaming only');
-    expect(note).toContain('Measurements');
-    expect(note).toContain('exports');
+    expect(note).toMatch(/not how anything is computed/);
+    expect(note).toMatch(/resident-only measurement, analysis or export/);
+  });
+});
+
+/**
+ * The scope sentence, and the boundary it is imported across.
+ *
+ * The first version of this note said measurements, terrain products and
+ * exports "do not change with this setting". The streaming preset moves the
+ * resident-point budget, and a resident-only measurement, analysis or export
+ * reads whatever is resident when it runs, so the claim was wider than the
+ * policy it described. What the control genuinely cannot do is change how any
+ * of those is computed.
+ *
+ * It also lived in `QualityPanel.ts`, which is lazily loaded, and the header
+ * button imported it as a value: a static value import from a lazy module puts
+ * that module back in the eager graph. It lives with the policy now.
+ */
+describe('the Performance scope note', () => {
+  it('claims only that nothing is computed differently', async () => {
+    const { QUALITY_SCOPE_NOTE } = await import('../src/render/quality/qualityPolicy');
+    expect(QUALITY_SCOPE_NOTE).toMatch(/not how anything is computed/);
+    expect(QUALITY_SCOPE_NOTE).toMatch(/resident-point budget/);
+    expect(
+      QUALITY_SCOPE_NOTE,
+      'the note claimed a streamed export cannot change with this setting',
+    ).not.toMatch(/do not change with this setting/);
+  });
+
+  it('is not imported as a value from the lazy panel module', () => {
+    const src = readFileSync(new URL('../src/ui/qualityControl.ts', import.meta.url), 'utf8');
+    // A `import type { QualityPanel }` is erased at build time and is fine; a
+    // value import is what drags the panel into the shell.
+    const valueImports = [...src.matchAll(/^import\s+(?!type\b)[^;]*from '\.\/QualityPanel';/gm)];
+    expect(valueImports, 'a value import from the lazy QualityPanel reached the header control').toEqual([]);
   });
 });

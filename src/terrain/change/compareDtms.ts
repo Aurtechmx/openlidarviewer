@@ -70,9 +70,20 @@ export interface EpochComparison {
   readonly result: ChangeResult;
   /**
    * True only when the two DTMs share a raster (cell size + dims), sit at the
-   * same world origin (within half a cell), and declare the same CRS + vertical
-   * datum where both are known. When false, `coregistrationNotes` says why and
-   * the difference should be treated as indicative, not measured.
+   * same world origin (to floating-point representation — half a cell of slack
+   * used to pass, and half a cell of misregistration is not co-registration),
+   * and declare the same CRS + vertical datum where both are known. When false,
+   * `coregistrationNotes` says why, and `summarizeChange` reports no cut/fill
+   * volume and no elevation difference — an unconfirmed frame is not a proven
+   * mismatch, but it is not enough to publish a terrain-change measurement
+   * either. `gridMisaligned` distinguishes a MEASURED grid defect from an
+   * unconfirmed frame so each gets its own diagnosis.
+   *
+   * The difference-raster EXPORT is gated on this whole verdict rather than on
+   * the provable subset, and so is stricter than the panel. An .asc is a bare
+   * header plus a rectangle of numbers: opened in a GIS it carries no note about
+   * an unconfirmed CRS, an unstated vertical datum or an unknown linear unit.
+   * The caveat cannot travel with the file, so the file is not written.
    */
   readonly coregistered: boolean;
   /** Plain-language co-registration caveats (empty when fully aligned). */
@@ -89,10 +100,10 @@ export interface EpochComparison {
   /**
    * True when the two grids PROVABLY sit in different frames — a differing
    * horizontal CRS, or a differing vertical datum. Different in kind from an
-   * unknown frame: absence of evidence stays "indicative, not measured", but a
-   * Δz between UTM 12N and 13N, or between NAVD88 and ellipsoidal heights,
-   * describes nothing, and `summarizeChange` withholds the numbers rather than
-   * captioning them.
+   * unknown frame, which is merely unconfirmed: a Δz between UTM 12N and 13N, or
+   * between NAVD88 and ellipsoidal heights, describes nothing at all. Both
+   * withhold the numbers; this one says the frames are known to differ, so the
+   * fix is to reproject rather than to state what is missing.
    */
   readonly frameIncompatible: boolean;
   /**
@@ -103,6 +114,16 @@ export interface EpochComparison {
    * clash, so `summarizeChange` says so distinctly.
    */
   readonly horizontalUnitUnknown: boolean;
+  /**
+   * True when the two grids are PROVABLY not one grid: different cell sizes,
+   * different dimensions, or origins that do not coincide. Distinct from the
+   * rest of `coregistrationNotes`, which record what could not be CONFIRMED (an
+   * unstated CRS, an unstated vertical datum). Here the defect is measured, and
+   * the difference provably carries a misregistration term — cell (i,j) of one
+   * grid is not the ground under cell (i,j) of the other — so the quantitative
+   * result is withheld the way a proven frame clash is.
+   */
+  readonly gridMisaligned: boolean;
 }
 
 /**
@@ -124,6 +145,11 @@ export function compareDtms(
   // path, because two same-CRS geographic epochs would otherwise pass every
   // check and ship the bogus volume with no warning at all.
   const volumesComputable = options.isGeographic !== true;
+  // The degree-grid note explains a withheld VOLUME; it is not a doubt about the
+  // frame. Counting it against co-registration swept every geographic pair into
+  // "cannot be confirmed to share a frame", a false statement for two epochs
+  // that both declare EPSG:4326 and one datum, and withheld the elevation
+  // differences the note itself says remain valid.
   if (!volumesComputable) {
     notes.push(
       'Geographic (degree) grid — cell areas are in degrees², so cut/fill volumes ' +
@@ -151,10 +177,26 @@ export function compareDtms(
 
   // World origin: same raster shape is not enough — the grids must start at the
   // same world point, or cell (x,y) of one is a different place than the other.
-  const tol = Math.max(a.cellSizeM, b.cellSizeM) * 0.5;
+  //
+  // The tolerance is float-representation equality, NOT a fraction of a cell.
+  // Half a cell of slack made the correspondence assumption false by up to half
+  // a cell: on a 1 m grid, two surfaces whose origins differed by 0.49 m were
+  // called origin-aligned and differenced cell-for-cell, which measures the
+  // terrain's own slope across that offset and reports it as elevation change.
+  // On a 10 % grade that is a 4.9 cm bias over the whole raster, forty-nine
+  // times the default level of detection and in a fixed direction, so it does
+  // not average out. Nothing here resamples one grid onto the other — that is a
+  // new capability, not a tolerance — so the only honest test is whether the two
+  // ARE the same grid. The live path composes both epochs onto one shared grid
+  // (`compareEpochs.sharedGrid`), so its origins are the same number and this
+  // costs it nothing; independently built pairs are told to co-register.
+  let originsOffset = false;
   const dH1 = Math.abs(a.originH1 - b.originH1);
   const dH2 = Math.abs(a.originH2 - b.originH2);
-  if (dH1 > tol || dH2 > tol) {
+  const originTol =
+    Math.max(Math.abs(a.originH1), Math.abs(b.originH1), Math.abs(a.originH2), Math.abs(b.originH2), 1)
+    * 1e-9;
+  if (dH1 > originTol || dH2 > originTol) {
     // Origins are in SOURCE units. Convert to metres for a projected CRS
     // (a 30-ft offset must not print "30 m"); a geographic grid stays degrees.
     const off = Math.max(dH1, dH2);
@@ -162,9 +204,14 @@ export function compareDtms(
       Number.isFinite(options.horizontalUnitToMetres) && (options.horizontalUnitToMetres as number) > 0
         ? (options.horizontalUnitToMetres as number)
         : 1;
-    const offLabel = options.isGeographic ? `${off.toFixed(5)}°` : `${(off * hUnit).toFixed(2)} m`;
+    const cells = Math.max(a.cellSizeM, b.cellSizeM) > 0
+      ? off / Math.max(a.cellSizeM, b.cellSizeM)
+      : Number.NaN;
+    const offLabel = options.isGeographic ? `${off.toFixed(5)}°` : `${(off * hUnit).toFixed(3)} m`;
+    const cellLabel = Number.isFinite(cells) ? ` (${cells.toFixed(2)} of a cell)` : '';
+    originsOffset = true;
     notes.push(
-      `The two epochs are offset by about ${offLabel} at the grid origin — ` +
+      `The two epochs are offset by about ${offLabel}${cellLabel} at the grid origin — ` +
         `co-register them (align to common ground control) before trusting the difference.`,
     );
   }
@@ -184,7 +231,7 @@ export function compareDtms(
     const which = !a.crs && !b.crs ? 'both epochs' : 'one epoch';
     notes.push(
       `Horizontal CRS is unknown for ${which} — the grids can't be confirmed to share a ` +
-        `frame, so treat the difference as unverified, not measured.`,
+        `frame.`,
     );
   }
 
@@ -202,16 +249,18 @@ export function compareDtms(
     const which = !a.verticalDatum && !b.verticalDatum ? 'both epochs' : 'one epoch';
     notes.push(
       `Vertical datum is unknown for ${which} — heights can't be confirmed on a common ` +
-        `reference, so the elevation difference is unverified.`,
+        `reference.`,
     );
   }
 
   const result = detectChange(dtmToChangeGrid(a), dtmToChangeGrid(b), options);
   // The raster mismatch (cell size / dims) is already in result.warnings; the
   // overall co-registration verdict folds those in too.
-  const coregistered = result.aligned && notes.length === 0;
+  const geographicNoteCount = volumesComputable ? 0 : 1;
+  const coregistered = result.aligned && notes.length - geographicNoteCount === 0;
+  const gridMisaligned = !result.aligned || originsOffset;
   const levelOfDetectionM = Math.max(0, options.levelOfDetectionM ?? DEFAULT_LOD_M);
-  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable, frameIncompatible, horizontalUnitUnknown };
+  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable, frameIncompatible, horizontalUnitUnknown, gridMisaligned };
 }
 
 /**
@@ -223,9 +272,23 @@ export function compareDtms(
 export interface ChangeSummaryContext {
   /** Co-registration RMSE (m) of the applied alignment — the systematic error term. */
   readonly registrationSigmaM?: number;
+  /**
+   * True when the caller supplied a level of detection measured for these
+   * epochs. False / absent means the comparison is running on the built-in
+   * default, which the report then says out loud.
+   */
+  readonly levelOfDetectionSupplied?: boolean;
   /** Horizontal linear-unit factor, to turn the source-unit cell size into m². */
   readonly horizontalUnitToMetres?: number;
 }
+
+/**
+ * What a MEASURED (not indicative) comparison needs, spelled out so the user
+ * knows exactly what to fix. Printed on every path that falls short of one.
+ */
+const COREGISTRATION_CHECKLIST =
+  'Needs for a measured result: shared CRS · shared vertical datum · ' +
+  'matching units · common ground control.';
 
 export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryContext = {}): string[] {
   const { result, coregistered, coregistrationNotes } = comparison;
@@ -256,8 +319,60 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     for (const note of coregistrationNotes) lines.push(`• ${note}`);
     return lines;
   }
+  if (comparison.gridMisaligned) {
+    // A MEASURED grid defect, not an unconfirmed one. Cell (i,j) of one grid is
+    // not the ground under cell (i,j) of the other, so a cell-for-cell
+    // subtraction returns the terrain's own slope across the offset (or across
+    // the resolution step) as though it were elevation change. That contaminant
+    // is systematic and signed, so it survives every aggregate below. Same
+    // posture as a proven frame clash: state the defect, report no figure.
+    lines.push(
+      '✗ Not comparable — the two epochs are not on one grid (different cell size, ' +
+        'different dimensions, or offset origins), so no cut/fill volume or elevation ' +
+        'difference is reported. Co-register them onto a common grid and compare again.',
+    );
+    for (const note of coregistrationNotes) lines.push(`• ${note}`);
+    for (const w of result.warnings) lines.push(`• ${w}`);
+    lines.push(COREGISTRATION_CHECKLIST);
+    return lines;
+  }
+  if (s.comparable === 0) {
+    // No cell is measured in both epochs. detectChange reports NaN for every
+    // per-cell aggregate here, and this printed those through toFixed as
+    // "NaN m³" beside a band that called the undefined figure "below the
+    // threshold". Two adjacent tiles of one survey reach this path with every
+    // frame check passing.
+    lines.push(
+      '✗ Nothing compared — no cell holds a measured height in both epochs, so no ' +
+        'cut/fill volume or elevation difference exists to report. The two footprints ' +
+        'do not overlap on the shared grid.',
+    );
+    for (const w of result.warnings) lines.push(`• ${w}`);
+    for (const note of coregistrationNotes) lines.push(`• ${note}`);
+    return lines;
+  }
   if (!coregistered) {
-    lines.push('⚠ Not co-registered — treat the difference as indicative, not measured.');
+    // Everything that falls short of a confirmed common frame: an unstated CRS,
+    // an unstated vertical datum, a geographic grid. None of these PROVES a
+    // mismatch — but a cut/fill volume is a measurement, and absence of evidence
+    // that two epochs describe the same place is not evidence that they do.
+    //
+    // This printed the volumes under "treat as indicative, not measured". That
+    // is the defensible GIS posture and the wrong one for a figure that leaves
+    // this process: the caveat is a line of prose above a m³ number, and the
+    // number is what gets quoted, pasted and published. The same reasoning
+    // already withholds the figures for a proven frame clash, an unknown linear
+    // unit and a measured grid defect; an unconfirmed frame was the last member
+    // of that family still answering with numbers.
+    lines.push(
+      '✗ Not comparable — the two epochs cannot be confirmed to share a frame, so no ' +
+        'cut/fill volume or elevation difference is reported. The difference raster is ' +
+        'still available to LOOK at; it is not a measurement until the frame is stated.',
+    );
+    for (const note of coregistrationNotes) lines.push(`• ${note}`);
+    for (const w of result.warnings) lines.push(`• ${w}`);
+    lines.push(COREGISTRATION_CHECKLIST);
+    return lines;
   }
   if (comparison.volumesComputable === false) {
     // Degree² cell areas: no m³ figure exists — the refusal line replaces it.
@@ -282,8 +397,13 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     const hM = ctx.horizontalUnitToMetres;
     if (hM && hM > 0) {
       const u = changeVolumeUncertainty({
-        netVolumeM3: s.netVolumeM3,
-        significantCells: s.gained + s.lost,
+        // The band must qualify the figure the line above REPORTS, which is
+        // the raw net over every comparable cell. It qualified the thresholded
+        // net over above-LoD cells only: a different estimand, and one whose
+        // count is zero whenever every cell changes below the level of
+        // detection, collapsing the band while the reported net is non-zero.
+        netVolumeM3: s.rawNetVolumeM3,
+        contributingCells: s.comparable,
         cellAreaM2: (result.cellSizeM * hM) * (result.cellSizeM * hM),
         cellSigmaM: cellSigmaFromLoD(comparison.levelOfDetectionM),
         registrationSigmaM: ctx.registrationSigmaM ?? 0,
@@ -307,6 +427,29 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
       }
       if (!(ctx.registrationSigmaM && ctx.registrationSigmaM > 0)) {
         lines.push('The co-registration error is unquantified (no alignment applied), so this band is a lower bound.');
+      } else {
+        // What that term IS. The caller supplies the ICP fit's RMS
+        // nearest-neighbour distance, a 3-D residual carrying horizontal
+        // mismatch, point spacing, surface roughness and real change as well as
+        // vertical noise. It is a proxy for the vertical co-registration sigma
+        // the model wants, not a measurement of it, and the report said nothing.
+        lines.push(
+          'The co-registration term is the alignment fit\'s 3-D RMS residual, which ' +
+            'also carries horizontal mismatch, point spacing, surface roughness and ' +
+            'real change — a proxy for vertical registration error, not a measurement ' +
+            'of it. Vertical residuals on stable ground would quantify it.',
+        );
+      }
+      // Where the per-cell sigma came from. It is derived as LoD/1.96, so when
+      // the level of detection is the built-in default rather than a figure
+      // from this survey, the whole band rests on that default. Printing the
+      // band without saying so presents a shipped constant as an error model.
+      if (comparison.levelOfDetectionM === DEFAULT_LOD_M && ctx.levelOfDetectionSupplied !== true) {
+        lines.push(
+          `The per-cell sigma is derived from the level of detection (${DEFAULT_LOD_M} m ÷ 1.96), ` +
+            'and that level of detection is this build\'s default, not a figure measured for ' +
+            'these epochs. Supply one from the surveys\' own accuracy to make the band theirs.',
+        );
       }
     }
   }
@@ -322,11 +465,5 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
   // Co-registration checklist — spell out what a MEASURED (not indicative)
   // change comparison needs, so the user knows exactly what to fix. Shown only
   // when the result isn't co-registered, where it's actionable.
-  if (!coregistered) {
-    lines.push(
-      'Needs for a measured result: shared CRS · shared vertical datum · ' +
-        'matching units · common ground control.',
-    );
-  }
   return lines;
 }

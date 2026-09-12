@@ -24,7 +24,7 @@ export interface StockpileViewRow {
 
 export interface StockpileView {
   /**
-   * "1,254 m³ ± 41 m³ (1σ)" — the volume and its band, already in metres.
+   * "1,254 m³ ± 41 m³ (model band)" — the volume and its band, already in metres.
    * The band's confidence level is printed explicitly: a bare "± N" invites
    * reading it as a hard bound, when it is one standard deviation (~68%).
    */
@@ -33,7 +33,7 @@ export interface StockpileView {
   readonly relative: string;
   /** The confidence tier. */
   readonly confidence: StockpileConfidence;
-  /** "High" / "Medium" / "Low". */
+  /** What the sampling supports — see {@link CONFIDENCE_LABEL}. */
   readonly confidenceLabel: string;
   /** The auditable breakdown — every input behind the number and band. */
   readonly rows: ReadonlyArray<StockpileViewRow>;
@@ -60,10 +60,22 @@ export interface StockpilePresentOptions {
   readonly vert?: number;
 }
 
+/**
+ * How well the SAMPLE supports the estimate — not how accurate the volume is.
+ *
+ * The words were High / Medium / Low beside a "± x m³ (1σ)" band, which reads
+ * as a calibrated interval on the volume. The register approves "Exploratory
+ * volume preview; spatial correlation and base uncertainty unquantified" and
+ * prohibits "validated uncertainty interval": the band is a model sensitivity
+ * scale whose sample term assumes independent thickness observations (LiDAR
+ * returns are spatially correlated, so the effective N is smaller) and whose
+ * base term is a heuristic spread, zero for an explicit base. Naming what the
+ * grade is about keeps the word inside what the estimator supports.
+ */
 const CONFIDENCE_LABEL: Record<StockpileConfidence, string> = {
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
+  high: 'Dense, even sampling',
+  medium: 'Uneven sampling',
+  low: 'Sparse or gappy sampling',
 };
 
 function int(n: number): string {
@@ -83,7 +95,9 @@ export function presentStockpile(
   const vol = lin2 * vert;
   const b = r.breakdown;
 
-  const headline = `${int(r.volume * vol)} m³ ± ${int(r.sigma * vol)} m³ (1σ)`;
+  // "model band", not "1σ": the ± is one standard deviation OF THE MODEL above,
+  // not a measured coverage interval on the volume.
+  const headline = `${int(r.volume * vol)} m³ ± ${int(r.sigma * vol)} m³ (model band)`;
   const relative = `±${(r.relativeError * 100).toFixed(1)}%`;
 
   const baseLabel =
@@ -119,9 +133,9 @@ export function presentStockpile(
   };
 }
 
-/** One-line summary for a toast: "Stockpile: 1,254 m³ ± 41 m³ (1σ) (±3.3%) · Medium confidence". */
+/** One-line summary for a toast: "Stockpile: 1,254 m³ ± 41 m³ (model band) (±3.3%) · Uneven sampling". */
 export function stockpileToastLine(view: StockpileView): string {
-  const line = `Stockpile: ${view.headline} (${view.relative}) · ${view.confidenceLabel} confidence`;
+  const line = `Stockpile: ${view.headline} (${view.relative}) · ${view.confidenceLabel}`;
   // The toast renders no caveats, so the unverified-unit disclosure has to live
   // in the line itself — otherwise an unknown-unit CRS shows a bare "X m³".
   return view.unitVerified ? line : `${line} · units unverified (assumes metres)`;

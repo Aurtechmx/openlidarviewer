@@ -150,6 +150,26 @@ function readStoredHelpPinned(): boolean {
   return stored === null ? true : stored === '1';
 }
 
+/** Storage key for the legend's own open/closed state, independent of the panel. */
+const LEGEND_OPEN_KEY = 'olv.nav.legendOpen';
+
+/**
+ * Whether the key legend is expanded. Defaults to CLOSED.
+ *
+ * The panel is anchored bottom-centre and stacks upward, so its height is what
+ * reaches into the middle of the view — where the scan is. The legend is the
+ * tall part of it and it is help, not a control: once someone knows WASD they
+ * do not need it on screen over their data for the rest of the session. The
+ * Camera and Views rows are controls and stay visible either way.
+ */
+function readStoredLegendOpen(): boolean {
+  return storageGet(LEGEND_OPEN_KEY) === '1';
+}
+
+function writeStoredLegendOpen(open: boolean): void {
+  storageSet(LEGEND_OPEN_KEY, open ? '1' : '0');
+}
+
 function writeStoredHelpPinned(pinned: boolean): void {
   storageSet(HELP_PINNED_KEY, pinned ? '1' : '0');
 }
@@ -215,6 +235,7 @@ export class NavBar {
    * back.
    */
   private _helpPinned = readStoredHelpPinned();
+  private _legendOpen = readStoredLegendOpen();
   private _hintTimer: number | null = null;
   private _touchTimer: number | null = null;
 
@@ -474,7 +495,10 @@ export class NavBar {
     }) as HTMLButtonElement;
     hudDismiss.addEventListener('click', () => {
       hudDismiss.blur();
-      this.toggleHelp();
+      // Dismisses the PANEL. It used to call toggleHelp(), which now cycles the
+      // legend instead — sharing that path made the close button reopen the
+      // legend rather than close anything.
+      this.dismissPanel();
     });
     this._legendToggle = hudDismiss;
     const hudHeader = el('div', { className: 'olv-nav-hud-header' }, [
@@ -631,10 +655,37 @@ export class NavBar {
     this._render();
   }
 
-  /** Toggle the controls HUD (the `H` key / help action). */
+  /**
+   * Toggle the controls HUD (the `H` key / help action).
+   *
+   * H and the close button now do different jobs, because the legend and the
+   * panel are different things. With the panel up, H cycles the LEGEND open and
+   * closed — someone pressing H for the key hints gets them without having to
+   * find the panel first. The × dismisses the whole panel, and H brings a
+   * dismissed panel back. So H never hides the Camera and Views controls, which
+   * is what it used to do when it toggled the panel outright.
+   */
+  dismissPanel(): void {
+    this._helpPinned = false;
+    writeStoredHelpPinned(false);
+    this._render();
+  }
+
   toggleHelp(): void {
-    this._helpPinned = !this._helpPinned;
-    writeStoredHelpPinned(this._helpPinned);
+    if (this._helpPinned && !this._legendOpen) {
+      this._legendOpen = true;
+      writeStoredLegendOpen(true);
+      this._render();
+      return;
+    }
+    if (this._helpPinned && this._legendOpen) {
+      this._legendOpen = false;
+      writeStoredLegendOpen(false);
+      this._render();
+      return;
+    }
+    this._helpPinned = true;
+    writeStoredHelpPinned(true);
     this._render();
   }
 
@@ -685,8 +736,11 @@ export class NavBar {
     // caught. They are in the command palette now, so the panel can close the
     // way a panel is expected to, and H or the dock's Help button reopens it.
     this._hud.classList.toggle('olv-hidden', !this._helpPinned);
-    this._legend.classList.remove('olv-hidden');
-    this._hud.classList.remove('olv-nav-hud-collapsed');
+    // `.olv-nav-hud-collapsed` has been styled since v0.3.10 but nothing ever
+    // added it, so the legend was always expanded over the scan. It follows the
+    // persisted legend state now.
+    this._legend.classList.toggle('olv-hidden', !this._legendOpen);
+    this._hud.classList.toggle('olv-nav-hud-collapsed', !this._legendOpen);
     this._legendToggle.textContent = '\u00d7';
     const legendLabel = 'Hide navigation panel';
     this._legendToggle.title = `${legendLabel} (H)`;

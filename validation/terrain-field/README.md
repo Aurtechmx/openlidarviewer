@@ -101,15 +101,17 @@ The asserted bounds in the test come from the accuracy budget (RTK ~2 cm + a UAS
 
 Marsh Island is flat coastal marsh. This leg adds the hard case it does not cover: bare-earth extraction **under canopy**. Source is the USGS AZ Coconino B1 2019 airborne LiDAR (Atlantic project 19049; NGTOC task order 140G0219F0247), public domain via the USGS 3D Elevation Program. Its aerial-accuracy checkpoints (NVA + VVA, project-report Tables 8/9) are held **separate from the 12 LiDAR Control Points**, so they are an independent vertical-accuracy set, not reused for calibration. Checkpoints are reprojected from UTM 12N to the tile CRS (NAD83(2011) / Conus Albers, EPSG:6350); tile Z and checkpoint Z are both **NAVD88 orthometric (Geoid12B)**, so there is no vertical-datum reconciliation.
 
-The checkpoints are sparse — 1–2 per 1 km tile across the whole ~50×110 km project — so a given tile usually contains none. The committed tile `w1407n1486` contains exactly one: **TR03**, a *vegetated* (VVA) checkpoint at 2567.66 m in forest (+2.8 cm residual there). The leg has since grown the way the harness was built to: `coconino-metrics.json` records **13 checkpoints (6 NVA + 7 VVA) across 8 project tiles**, pooled RMSEz 8.65 cm, each tile gridded with the production `rasterizeDtm` at 1.0 m (the USGS 3DEP QL2 bare-earth DEM resolution) and each checkpoint compared to its DTM cell.
+The checkpoints are sparse (1 to 2 per 1 km tile across the whole ~50×110 km project), so a given tile usually holds none, and the leg grew by downloading more of the project rather than by measuring one tile harder. The frozen universe is now 57 project tiles. Of the 121 accuracy checkpoints in the project report, 60 fall inside a downloaded tile's header bounds and enter the universe; 2 of those, both VVA, have no classified ground in their 1 m DTM cell and are rejected; the remaining **58 checkpoints (38 NVA + 20 VVA)** are the evaluated subset every figure below is computed over. `coconino-eligibility.json` carries the state and the reason for all 121, one entry each. Membership and rejection are both decided before any residual is computed, and no checkpoint is removed for the size of its error.
 
 | Metric | OLV DTM vs USGS aerial checkpoints |
 |---|---|
-| N used / rejected | 13 / 0 (6 NVA + 7 VVA, 8 tiles) |
-| pooled RMSEz (1 m cell) | 8.65 cm |
-| committed-tile TR03 (forest VVA) | +2.8 cm |
+| N in universe / rejected / used | 60 / 2 / 58 (38 NVA + 20 VVA, 57 project tiles) |
+| pooled RMSEz (1 m cell) | 11.11 cm |
+| NVA RMSEz | 5.75 cm; 95% confidence is 1.96 × that, inside the 30 cm class |
+| VVA 95th percentile | 20.18 cm, inside the 60 cm class |
+| largest single residual | 70.07 cm (BR11, a VVA point over sparse forest ground; reported, not removed) |
 
-The per-checkpoint bound in the test is the USGS accuracy class for the checkpoint's type (NVA 0.30 m, VVA 0.60 m), not a figure fitted to the result. Thirteen checkpoints are still a small sample, not a distribution to certify against, and the fixture and test grow with N automatically as more project tiles are added (`scripts/terrain-field/generate-coconino-reference.py <tile.laz ...>`).
+Each checkpoint is gridded with the production `rasterizeDtm` at 1.0 m (the USGS 3DEP QL2 bare-earth DEM resolution) and compared to the cell it falls in: nearest cell, no interpolation. The bound the test asserts is the USGS accuracy class for the checkpoint's type (NVA 0.30 m, VVA 0.60 m), applied as the statistical statement that class is written as, not as a per-checkpoint tolerance. Both rejections are VVA and the rejection rule is the absence of a ground return, which is the condition the VVA class exists to test, so read the VVA figures as conditional on the bare-earth surface reaching the checkpoint at all. This universe clears the USGS ≥20 NVA and ≥12-per-stratum sample minimums, which the earlier 8-tile stage did not; the determination still stays E3, because found third-party checkpoints cannot satisfy the repo's preregistration bar (`coconino-validation-summary.json`). The single-tile stage this leg started from used `w1407n1486`, which the slope/aspect leg below still crops; it is not among the 57 tiles here. To grow the universe: `scripts/terrain-field/coconino-ingest-tiles.py`, then regenerate the artifacts with `COCONINO_WRITE=1 npx vitest run tests/coconinoArtifacts.test.ts`. That test fails while the shipped numbers and the measurement disagree.
 
 ## The Coconino slope/aspect leg (real steep terrain)
 

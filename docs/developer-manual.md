@@ -397,8 +397,7 @@ matching `tests/myModule.test.ts`.
 | Firefox | Windows; macOS on Apple Silicon | Yes |
 | Safari | iOS / macOS 26+ | Yes |
 
-Where WebGPU is unavailable the viewer automatically uses WebGL 2 — a fully
-tested path, not a degraded one. The active backend is shown in the UI.
+Where WebGPU is unavailable the viewer automatically uses WebGL 2. The active backend is shown in the UI.
 
 ### Cross-browser end-to-end results
 

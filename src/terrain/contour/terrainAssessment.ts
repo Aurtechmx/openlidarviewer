@@ -216,12 +216,25 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   const gridTotal = tally.total > 0 ? tally.total : 1;
   const emptyFrac = tally.empty / gridTotal;
   const edgeFrac = Number.isFinite(cm?.boundaryMeasuredRatio) ? cm.boundaryMeasuredRatio : 0;
-  const density = Number.isFinite(cm?.meanDensity) ? cm.meanDensity : 0;
+  // Returns per CELL AREA, and the cell size is in source units until a
+  // horizontal scale resolves — so this is pts/m² only when one did. It is not
+  // just a caption: the threshold below caps the surface at Preview, so an
+  // unresolved frame had its readiness decided by a number whose unit nothing
+  // established. Two scans identical but for their source unit graded
+  // differently. Null means "not a metric density"; every use below reads that.
+  const densityInMetres =
+    result.horizontalScaleResolved !== false && Number.isFinite(cm?.meanDensity)
+      ? cm.meanDensity
+      : null;
   const groundRatio = Number.isFinite(q.groundPointRatio) ? q.groundPointRatio : Number.NaN;
   const crsKnown = crs != null;
   const datumKnown = datum != null;
-  const rmse = acc?.rmseZM;
-  const rmseKnown = rmse != null && Number.isFinite(rmse);
+  // Named for the field it comes from, not shortened: `rmseZM` is withheld by
+  // `analyseContours` when the frame resolved no vertical scale, so a
+  // null-guarded read of it cannot print a source-unit number as metres. The
+  // name is what carries that guarantee to the caption below.
+  const rmseZM = acc?.rmseZM;
+  const rmseKnown = rmseZM != null && Number.isFinite(rmseZM);
   const noUsableDtm = coveredCells === 0;
 
   // ── baseline status from the gate ─────────────────────────────────────
@@ -237,7 +250,9 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   if (emptyFrac > HIGH_EMPTY_FRACTION) status = capStatus(status, 'Preview');
   if (edgeFrac > HIGH_EDGE_FRACTION) status = capStatus(status, 'Preview');
   if (coverageMode !== 'full') status = capStatus(status, 'Preview');
-  if (density < LOW_DENSITY_PER_M2) status = capStatus(status, 'Preview');
+  if (densityInMetres != null && densityInMetres < LOW_DENSITY_PER_M2) {
+    status = capStatus(status, 'Preview');
+  }
   if (Number.isFinite(groundRatio) && groundRatio < LOW_GROUND_RATIO) {
     status = capStatus(status, 'Preview');
   }
@@ -253,8 +268,14 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     { label: 'Scan scope', value: cov.value, rating: cov.rating },
     {
       label: 'Ground density',
-      value: density > 0 ? `${density.toFixed(1)} pts/m²` : 'unknown',
-      rating: density <= 0 ? 'unknown' : bandHigh(density, 2, LOW_DENSITY_PER_M2),
+      value:
+        densityInMetres != null && densityInMetres > 0
+          ? `${densityInMetres.toFixed(1)} pts/m²`
+          : 'unknown',
+      rating:
+        densityInMetres == null || densityInMetres <= 0
+          ? 'unknown'
+          : bandHigh(densityInMetres, 2, LOW_DENSITY_PER_M2),
     },
     {
       label: 'DTM quality',
@@ -282,8 +303,8 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     },
     {
       label: 'Vertical RMSE',
-      value: rmseKnown ? `${(rmse as number).toFixed(2)} m` : 'unknown',
-      rating: !rmseKnown ? 'unknown' : bandLow(rmse as number, 0.1, 0.25),
+      value: rmseKnown ? `${(rmseZM as number).toFixed(2)} m` : 'unknown',
+      rating: !rmseKnown ? 'unknown' : bandLow(rmseZM as number, 0.1, 0.25),
     },
     {
       label: 'CRS',
@@ -351,7 +372,9 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     // identical, so a report could show 79% here and 7% there under one
     // description.
     if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of measured cells lie within a few cells of the data boundary, where neighbour support is thinnest`);
-    if (density < LOW_DENSITY_PER_M2) caps.push('ground returns are sparse');
+    if (densityInMetres != null && densityInMetres < LOW_DENSITY_PER_M2) {
+      caps.push('ground returns are sparse');
+    }
     // Every cap above has a matching 'poor' chip; only these two poor chips
     // have no cap of their own, yet count toward the Limited rule.
     limiters.push(...caps);

@@ -279,7 +279,7 @@ function axes(
  * Degenerate inputs are handled honestly rather than thrown:
  *   - empty input → empty result with a warning;
  *   - all points coincident / zero horizontal extent → single-cell grid;
- *   - non-finite params → clamped with a warning.
+ *   - non-finite or out-of-range params → refused (RangeError); the caller normalises.
  */
 export function classifyGroundSmrf(
   points: ReadonlyArray<TerrainPoint>,
@@ -319,20 +319,19 @@ export function classifyGroundSmrf(
       ? params.maxElevationThresholdM
       : 2.5,
   );
-  let floorPercentile = params.floorPercentile ?? 0;
-  if (!Number.isFinite(floorPercentile) || floorPercentile < 0) floorPercentile = 0;
-  if (floorPercentile > 50) floorPercentile = 50;
-  // An unrecognised mode falls back to the shipped one WITH a warning rather
-  // than silently picking a rule the caller did not ask for.
-  let openingMode: GroundOpeningMode = params.openingMode ?? 'cut-surface';
-  if (openingMode !== 'cut-surface' && openingMode !== 'object-mask') {
-    warnings.push(`openingMode invalid (${String(openingMode)}); using cut-surface`);
-    openingMode = 'cut-surface';
+  const floorPercentile = params.floorPercentile ?? 0;
+  if (!Number.isFinite(floorPercentile) || floorPercentile < 0 || floorPercentile > 50) {
+    throw new RangeError(`classifyGroundSmrf: floorPercentile must lie in [0, 50]; got ${floorPercentile}`);
   }
-  let structuringElement: GroundStructuringElement = params.structuringElement ?? 'square';
+  // An unrecognised mode or element is a specification error, refused rather
+  // than replaced by the shipped one under a warning.
+  const openingMode: GroundOpeningMode = params.openingMode ?? 'cut-surface';
+  if (openingMode !== 'cut-surface' && openingMode !== 'object-mask') {
+    throw new RangeError(`classifyGroundSmrf: openingMode must be cut-surface or object-mask; got ${String(openingMode)}`);
+  }
+  const structuringElement: GroundStructuringElement = params.structuringElement ?? 'square';
   if (structuringElement !== 'square' && structuringElement !== 'diamond') {
-    warnings.push(`structuringElement invalid (${String(structuringElement)}); using square`);
-    structuringElement = 'square';
+    throw new RangeError(`classifyGroundSmrf: structuringElement must be square or diamond; got ${String(structuringElement)}`);
   }
 
   const sourcePointCount = points.length;
@@ -878,14 +877,21 @@ function emptyResult(cellSizeM: number, warnings: string[]): GroundFilterResult 
   };
 }
 
-function finitePositive(v: number, fallback: number, name: string, warnings: string[]): number {
+function finitePositive(v: number, _fallback: number, name: string, _warnings: string[]): number {
   if (Number.isFinite(v) && v > 0) return v;
-  warnings.push(`${name} invalid (${v}); using ${fallback}`);
-  return fallback;
+  throw new RangeError(`classifyGroundSmrf: ${name} must be a finite positive number; got ${v}`);
 }
 
-function finiteNonNeg(v: number, fallback: number, name: string, warnings: string[]): number {
+/**
+ * A malformed method parameter is REFUSED, not repaired. Each of these used to
+ * substitute a working default with a warning, so a caller that passed a NaN
+ * slope or a negative threshold received a classification under parameters it
+ * did not specify, and the warning was the only trace. The scientific
+ * primitive rejects the specification; normalisation belongs to the caller.
+ * `fallback` is kept in the signature so the call sites read unchanged for a
+ * VALID value, which is byte-identical to before.
+ */
+function finiteNonNeg(v: number, _fallback: number, name: string, _warnings: string[]): number {
   if (Number.isFinite(v) && v >= 0) return v;
-  warnings.push(`${name} invalid (${v}); using ${fallback}`);
-  return fallback;
+  throw new RangeError(`classifyGroundSmrf: ${name} must be a finite non-negative number; got ${v}`);
 }

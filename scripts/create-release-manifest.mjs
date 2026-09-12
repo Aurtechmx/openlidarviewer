@@ -46,6 +46,7 @@ export const PAYLOAD_KINDS = [
   'gateLog',
   'gateLogSha256',
   'releaseNotes',
+  'deploySmoke',
 ];
 
 /** Classify a staged filename. Returns null for anything unrecognised. */
@@ -57,6 +58,7 @@ export function classifyAsset(name, version) {
   if (name === 'gate.log') return 'gateLog';
   if (name === 'gate.log.sha256') return 'gateLogSha256';
   if (name === `RELEASE_NOTES_v${version}.md`) return 'releaseNotes';
+  if (name === `smoke-deploy-v${version}.json`) return 'deploySmoke';
   if (name === 'SHA256SUMS') return 'checksums';
   if (name === `release-manifest-v${version}.json`) return 'manifest';
   return null;

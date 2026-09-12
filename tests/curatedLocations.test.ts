@@ -5,9 +5,9 @@
  * in a bbox or id can't ship without a failing test.
  */
 
+import { distributedFiles } from './helpers/repoFiles';
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { buildCuratedDemoSample, DEMO_SAMPLE_ID } from '../src/ui/CatalogPanel';
 import {
@@ -37,8 +37,7 @@ function testFiles(): string[] {
 let TREE_TEXT: string | null = null;
 function treeText(): string {
   if (TREE_TEXT !== null) return TREE_TEXT;
-  const files = execFileSync('git', ['ls-files'], { cwd: REPO_ROOT, encoding: 'utf8' })
-    .split('\n')
+  const files = distributedFiles()
     .filter((f) => /\.(ts|mjs|js|md|html|json|yaml|yml)$/.test(f))
     .filter((f) => f !== 'src/io/catalog/curatedLocations.ts');
   TREE_TEXT = files

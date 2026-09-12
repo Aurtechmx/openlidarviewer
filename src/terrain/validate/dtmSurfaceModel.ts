@@ -11,8 +11,10 @@
  * The grid is fixed at construction (the full-scene grid), so every fold's
  * surface lands on the same cells and predictions are comparable across folds.
  * A held-out block has no training returns of its own; it is predicted only if
- * the void-fill reached into it from neighbouring blocks — which is exactly the
- * "predict across a real gap" case the blocked estimate is meant to measure.
+ * the void-fill reached into it from neighbouring blocks. That is the
+ * withholding geometry the blocked estimate measures. It is not a guaranteed
+ * separation: a scored point beside a block boundary can sit arbitrarily close
+ * to a training point in the adjacent block.
  *
  * Cost note: each `fit` is a full rasterise + surface build, so k folds do k
  * rebuilds. The caller bounds this (a cell-count cap and a sampled point set);

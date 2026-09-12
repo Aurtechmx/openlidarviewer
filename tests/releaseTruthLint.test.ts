@@ -70,9 +70,18 @@ describe('lint:release-truth', () => {
   it('fails on "promotes no grade" while the validation report promoted claims this cycle', () => {
     // Rule 3b: the exact v0.6.7 contradiction — REPRODUCIBILITY said "promotes
     // no grade" while the validation report promoted five claims to E4.
+    //
+    // The contradiction is BUILT here rather than borrowed from the current
+    // release. This test used to rely on the real validation report describing
+    // a promotion, so it went quiet the moment a cycle promoted nothing, which
+    // is exactly what v0.6.8 does. A rule that only fires on some releases must
+    // still be tested on all of them.
     const REPRO = `docs/releases/REPRODUCIBILITY_v${VERSION}.md`;
+    const promoted = `${realRead(VALREPORT)!}\n\nSLOPE-RASTER reaches E4 this cycle.\n`;
     const doc = (realRead(REPRO) ?? '# repro\n') + '\n\nv' + VERSION + ' promotes no grade.\n';
-    const problems = problemsFor(withOverride(REPRO, doc));
+    const problems = problemsFor((q) =>
+      q === REPRO ? doc : q === VALREPORT ? promoted : realRead(q),
+    );
     expect(problems.some((p) => /no grade/i.test(p) && /contradict|promoted/i.test(p))).toBe(true);
   });
 

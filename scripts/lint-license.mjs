@@ -72,6 +72,23 @@ export function checkLicense(root) {
     let zenodo = {};
     try { zenodo = JSON.parse(zenodoText); } catch { problems.push('.zenodo.json is not valid JSON.'); }
     must(zenodo.license === CURRENT_LICENSE, `.zenodo.json license is ${JSON.stringify(zenodo.license)}, expected ${CURRENT_LICENSE}.`);
+    // A Software Heritage relation is a claim about which archived object this
+    // deposit IS. `isIdenticalTo` may name a release (`swh:1:rel:`) or a source
+    // tree (`swh:1:dir:`), both of which a tag resolves to. A snapshot
+    // (`swh:1:snp:`) names the whole repository as seen on one visit, and no
+    // visit of a release can precede its tag, so an identity relation to a
+    // snapshot written into the tree before tagging names a state the release
+    // is not. v0.6.7 deposited exactly that; nothing read the field.
+    const related = Array.isArray(zenodo.related_identifiers) ? zenodo.related_identifiers : [];
+    for (const r of related) {
+      const id = typeof r?.identifier === 'string' ? r.identifier : '';
+      const identity = r?.relation === 'isIdenticalTo' || r?.relation === 'isVersionOf';
+      if (!identity || !id.startsWith('swh:1:')) continue;
+      must(
+        /^swh:1:(rel|dir):/.test(id),
+        `.zenodo.json relation ${r.relation} names ${id}; only a release (swh:1:rel:) or a directory (swh:1:dir:) identifier can be identical to a deposit, and it is added after the tag is archived, not before.`,
+      );
+    }
   }
 
   const codemetaText = read('codemeta.json');

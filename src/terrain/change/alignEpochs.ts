@@ -217,6 +217,19 @@ function sampleWorld(
   positions: Float32Array,
   origin: readonly [number, number, number],
   maxSamples: number,
+  /**
+   * Z multiplier that puts the vertical axis in the SAME unit as X/Y.
+   *
+   * ICP's correspondence search is fully 3-D — `icpRegister`'s `nearest` sums
+   * dx²+dy²+dz² — so a compound frame with foot heights over a metre grid fed
+   * it a distorted distance: a 1-unit vertical separation counted as 1 when it
+   * was really 0.3048 horizontal-equivalent. That biased which points paired
+   * with which, the trimmed-inlier ranking, the convergence test and the
+   * reported residual. The solved transform is constrained to yaw + x/y with
+   * translation[2] zeroed, so scaling Z here needs no inverse afterwards — it
+   * only removes the anisotropy from the fit.
+   */
+  zScale: number,
 ): Vec3[] {
   const n = (positions.length / 3) | 0;
   if (n === 0) return [];
@@ -228,7 +241,7 @@ function sampleWorld(
   for (let i = 0; i < n; i += stride) {
     const x = positions[i * 3] + ox;
     const y = positions[i * 3 + 1] + oy;
-    const z = positions[i * 3 + 2] + oz;
+    const z = (positions[i * 3 + 2] + oz) * zScale;
     if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) out.push([x, y, z]);
   }
   return out;
@@ -309,8 +322,17 @@ export function alignEpochClouds(
   const horizontalUnitUnknown = options.horizontalUnitKnown === false;
 
   const maxSamples = options.maxSamples ?? 1500;
-  const beforeSample = sampleWorld(before.positions, before.origin ?? ZERO, maxSamples);
-  const afterSample = sampleWorld(after.positions, after.origin ?? ZERO, maxSamples);
+  // One isotropic space for the fit. `1` for every single-unit frame, so a
+  // metre or foot scan is sampled exactly as before.
+  const zScaleOf = (c: EpochCloud): number => {
+    const h = Number.isFinite(c.linearUnitToMetres) && (c.linearUnitToMetres as number) > 0
+      ? (c.linearUnitToMetres as number) : 1;
+    const v = Number.isFinite(c.verticalUnitToMetres) && (c.verticalUnitToMetres as number) > 0
+      ? (c.verticalUnitToMetres as number) : h;
+    return v / h;
+  };
+  const beforeSample = sampleWorld(before.positions, before.origin ?? ZERO, maxSamples, zScaleOf(before));
+  const afterSample = sampleWorld(after.positions, after.origin ?? ZERO, maxSamples, zScaleOf(after));
 
   if (beforeSample.length < 3 || afterSample.length < 3) {
     return { after, alignment: NO_ALIGNMENT };
@@ -393,9 +415,16 @@ export function alignEpochClouds(
   // (horizontalOnly), apply yaw + x/y only and keep z, so a real vertical change
   // is preserved rather than absorbed into the fit's z-shift.
   const horizontalOnly = options.horizontalOnly ?? true;
+  // The fit ran in a space whose Z was scaled by zScale (metres per vertical
+  // unit over metres per horizontal unit), so translation[2] is in that scaled
+  // space and must come back to raw source Z before it is applied. The default
+  // path zeroes it and never needed the inverse; the full 3-D path applied the
+  // scaled shift to raw Z, leaving zScale-1 of the offset behind on a compound
+  // frame while reporting the correct metre figure.
+  const zBack = zScaleOf(after);
   const applied: Pick<IcpResult, 'yawRad' | 'translation'> = horizontalOnly
     ? { yawRad: fit.yawRad, translation: [fit.translation[0], fit.translation[1], 0] }
-    : { yawRad: fit.yawRad, translation: fit.translation };
+    : { yawRad: fit.yawRad, translation: [fit.translation[0], fit.translation[1], fit.translation[2] / zBack] };
   const aligned: EpochCloud = {
     positions: transformedLocal(after.positions, after.origin ?? ZERO, applied),
     origin: after.origin ?? ZERO,
@@ -405,6 +434,11 @@ export function alignEpochClouds(
     // confidence roughness slope read it downstream.
     isGeographic: after.isGeographic,
     linearUnitToMetres: after.linearUnitToMetres,
+    // The VERTICAL factor too. Omitting it let a compound frame (foot heights
+    // over a metre grid) lose its own Z scale the moment alignment succeeded,
+    // so the ground filter downstream fell back to the horizontal factor and
+    // the same pair was interpreted differently aligned than unaligned.
+    verticalUnitToMetres: after.verticalUnitToMetres,
   };
   return {
     after: aligned,

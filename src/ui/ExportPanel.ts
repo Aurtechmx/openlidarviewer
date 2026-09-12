@@ -125,6 +125,12 @@ export interface ExportPanelCallbacks {
    * Measurements group.
    */
   collectMeasurementFindings?: () => Promise<readonly ReportFinding[]>;
+  /**
+   * The scan the findings ledger belongs to. The ledger outlives a re-render by
+   * design, so without an owner a finding measured on one scan could be
+   * exported into a report stamped with another scan's identity.
+   */
+  activeFindingsTargetId?: () => string | null;
   /** Export the curated findings ledger as the signed integrity report (JSON). */
   exportFindingsReport?: (findings: readonly ReportFinding[]) => void;
   /**
@@ -686,12 +692,41 @@ export class ExportPanel {
         this._findings = new SessionFindings();
         this._findingsPanel = buildFindingsPanel({
           findings: this._findings,
-          collectMeasurements: () => this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]),
-          exportReport: (f) => this._cb.exportFindingsReport?.(f),
+          // Bind the ledger to the scan BEFORE anything is added to or read from
+          // it. A report describes one dataset, so a ledger holding another
+          // scan's numbers has no honest representation in it.
+          collectMeasurements: () => {
+            this._retargetFindings();
+            return this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]);
+          },
+          exportReport: (f) => {
+            if (this._retargetFindings() > 0) {
+              // The ledger has just been emptied, so `f` describes a scan that is
+              // no longer active. Refuse rather than sign it as this one.
+              this._setStatus(
+                'Report not written — the findings were measured on a different scan than the one '
+                + 'now open, and a report describes a single dataset. Re-collect on this scan.',
+                'error',
+              );
+              this._findingsPanel?.refresh();
+              return;
+            }
+            this._cb.exportFindingsReport?.(f);
+          },
         });
         slot.append(this._findingsPanel.element);
       },
     );
+  }
+
+  /**
+   * Re-bind the findings ledger to the active scan. Returns how many findings
+   * were discarded because they belonged to another scan (0 in the normal case,
+   * so an idle call is free).
+   */
+  private _retargetFindings(): number {
+    if (!this._findings) return 0;
+    return this._findings.retarget(this._cb.activeFindingsTargetId?.() ?? null);
   }
 
   private _productGroup(label: string, actions: HTMLElement, hint?: string): HTMLElement {
@@ -847,6 +882,19 @@ export class ExportPanel {
     // `null` is an explicit Local/no-CRS resolution and must NOT fall back to A.
     const resolvedCrsGetter = this._cb.getResolvedSourceCrs;
     const resolvedSourceCrs = resolvedCrsGetter ? resolvedCrsGetter() : undefined;
+    // The remaining request options, frozen here for the same reason. Only the
+    // Export BUTTON is disabled during the run: the format pills, CRS pills,
+    // both checkboxes and the EPSG inputs stay live, and every one of these was
+    // read after the multi-second full-resolution decode. Changing the format
+    // mid-decode wrote a different container than the one asked for; flipping
+    // `crsMode` from reproject to keep silently dropped the transformation; and
+    // re-ticking "include classification" after the class gate had already
+    // passed produced exactly the file that gate exists to refuse.
+    const format = this._format;
+    const crsMode = this._crsMode;
+    const sourceEpsg = parseEpsg(this._sourceEpsg);
+    const includeClass = this._includeClass;
+    const gzip = this._gzip;
 
     this._busy = true;
     this._exportBtn.disabled = true;
@@ -869,9 +917,11 @@ export class ExportPanel {
         this._setStatus(EXPORT_SCAN_CHANGED_REFUSAL, 'error');
         return;
       }
+      // Judges the request that was MADE (`includeClass`), against the edit
+      // state as it stands NOW — that live term is the fact the guard watches.
       const classGateAfter = evaluateFullResClassExport({
         fullRes: useFull,
-        includeClassification: this._includeClass,
+        includeClassification: includeClass,
         hasClassEdits: this._cb.hasClassEdits?.() ?? false,
       });
       if (!classGateAfter.allowed) {
@@ -884,11 +934,22 @@ export class ExportPanel {
       const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
       this._exportBtn.textContent = 'Exporting…';
       const { convertCloud } = await loadConvertEngine();
+      // One more await stands between the gate above and the write below, so
+      // the same gate is taken again on the far side of it. An edit landing in
+      // that window would otherwise reach the file unjudged.
+      if (!evaluateFullResClassExport({
+        fullRes: useFull,
+        includeClassification: includeClass,
+        hasClassEdits: this._cb.hasClassEdits?.() ?? false,
+      }).allowed) {
+        this._setStatus(FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL, 'error');
+        return;
+      }
       const options: ConvertOptions = {
-        format: this._format,
-        crsMode: this._crsMode,
+        format,
+        crsMode,
         targetEpsg: target,
-        sourceEpsg: parseEpsg(this._sourceEpsg),
+        sourceEpsg,
         // Resolved source CRS (override applied) is authoritative — the file's
         // declared metadata.crs is provenance only, so a rejected/local override
         // never tags or reprojects the output (blocker #2D). undefined when the
@@ -896,12 +957,12 @@ export class ExportPanel {
         // The request-time snapshot (not a fresh call) keeps the whole export
         // on one frame.
         resolvedSourceCrs,
-        omitClassification: !this._includeClass,
+        omitClassification: !includeClass,
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {
         // Gzip the written LAS to `.las.gz` when requested (binary LAS only).
-        const wantGzip = this._gzip && (this._format === 'las' || this._format === 'las14');
+        const wantGzip = gzip && (format === 'las' || format === 'las14');
         const out = wantGzip ? await gzipConvertedFile(file, true) : file;
         downloadBytes(out.filename, out.bytes, out.mime);
         // ASCII keep-mode: also emit a `.prj` sidecar. It carries the RESOLVED
@@ -912,7 +973,7 @@ export class ExportPanel {
         const activeWkt = resolvedCrsGetter !== undefined
           ? (resolvedSourceCrs?.wkt ?? null)
           : (cloud.metadata?.crs?.wkt ?? null);
-        if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && activeWkt) {
+        if ((format === 'xyz' || format === 'asc') && crsMode === 'keep' && activeWkt) {
           downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(activeWkt), 'text/plain');
         }
         const warn = report.log.find((l) => l.level === 'warn');

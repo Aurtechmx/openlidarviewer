@@ -221,6 +221,17 @@ export interface FloorPlanParams {
   readonly upAxis: Axis;
   /** Scale from source units to metres (default 1 — assume metres). */
   readonly unitToMetres?: number;
+  /**
+   * Whether that scale is CONFIRMED by the frame.
+   *
+   * `unitToMetres` is an inert 1 for a local or unknown-unit scan — which is the
+   * ordinary state of the phone and raw-scanner captures this feature exists
+   * for. The Space panel and the report's numeric table both disclose that; the
+   * plan DRAWING did not, and printed "10.0 m (32.8 ft)" dimension lines with
+   * nothing behind the metre. Default true keeps every georeferenced caller
+   * unchanged.
+   */
+  readonly unitKnown?: boolean;
   /** Max points to sample. Default 300 000 (the wallSlice default). */
   readonly maxSamples?: number;
   /** Wall band bottom / top, metres above the floor. Defaults 0.7 / 1.8. */
@@ -482,6 +493,25 @@ export function extractFloorPlan(
     ]);
   }
 
+  // ── 0. The band is physical, so the scale must be real ──
+  // The wall slice is 0.7-1.8 m ABOVE THE FLOOR. With no resolved linear unit
+  // `unitToMetres` is an inert 1 and those metres are applied straight to source
+  // coordinates, so a foot-unit capture samples roughly 0.21-0.55 m up and
+  // traces skirting rather than wall. That is not a labelling problem: it
+  // changes which points are analysed, so every dimension, area and centreline
+  // on the sheet describes a different slice of the room. A caveat cannot
+  // rescue a plan traced from the wrong band, so the plan is refused instead.
+  if (params.unitKnown === false) {
+    return emptyModel([
+      'Coordinate units are unverified, so no floor plan was extracted. The wall '
+      + 'slice is a physical band 0.7-1.8 m above the floor; without a resolved '
+      + 'linear unit those metres would be applied to raw source coordinates and '
+      + 'the trace would sample the wrong height. Confirm the source CRS, then '
+      + 'export again.',
+      SUITABILITY_NOTE,
+    ]);
+  }
+
   // ── 1. Wall-height slice ──
   const slice = wallSlice(positions, {
     upAxis: params.upAxis,
@@ -672,6 +702,9 @@ export function extractFloorPlan(
     }
   }
 
+  // An unresolved linear unit refuses the plan outright at step 0, so no sheet
+  // reaches here carrying dimensions from an unconfirmed scale. There is no
+  // caveat for that case because there is no plan to caveat.
   const reasons: string[] = [];
   // Basis line: the band offsets ACTUALLY used (the widened retry shows its
   // real numbers), and an honest distinction between a detected floor plane

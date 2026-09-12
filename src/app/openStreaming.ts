@@ -223,6 +223,11 @@ export function activateCommittedStreamingCloud(
       readonly name: string;
       readonly kind: StreamingSourceKind;
       crs(): CrsInfo | undefined;
+      // Named here so the identity the resolver reads is visible at the call
+      // site rather than surviving only because a cast happens to be shallow.
+      readonly sourcePointCount?: number | null;
+      dataBounds?(): readonly number[] | null | undefined;
+      localBounds?(): readonly number[] | null | undefined;
     });
   } catch (err) {
     if (deps.debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);

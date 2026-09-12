@@ -245,7 +245,7 @@ gap is a decision, not a task someone forgot.
 Measuring the real COPC workflow means measuring the running application, so it
 needs an instrumentation bridge inside the app that reports GPU upload, first
 rendered frame, frame rate and time to interaction. The live entry chunk is
-718 KiB against a hard ceiling of 720 KiB (`scripts/check-bundle-budget.mjs`),
+close to its hard ceiling (`scripts/check-bundle-budget.mjs` carries the current figure),
 so a bridge cannot be linked into the shell. It has to be dynamic-import only
 and gated so it cannot load during normal use, which is a design problem before
 it is a measurement one.

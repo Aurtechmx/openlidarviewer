@@ -42,14 +42,14 @@
  * so the two can never drift.
  */
 
-import type { AnalyseContoursResult } from '../contour/analyseContours';
+import { BLOCKED_CV_PARAMS, type AnalyseContoursResult } from '../contour/analyseContours';
 import { terrainAssessment } from '../contour/terrainAssessment';
 import { readinessLine } from '../quality/readinessEngine';
 import { recommendedWorkflows, type WorkflowItem } from '../contour/recommendedWorkflow';
 import { terrainProducts } from '../contour/terrainProducts';
 import { explainLimitations } from '../contour/whyNotReasons';
 import type { DatasetIntelligence } from '../datasetIntelligence';
-import { METRIC_TOOLTIPS } from '../contour/contourCopy';
+import { METRIC_TOOLTIPS, blockedTreatmentContrast } from '../contour/contourCopy';
 import { horizontalUnitLabel } from '../../units/units';
 import { EVIDENCE_REGISTRY } from '../../validation/claimRegistry.generated';
 import { evidenceLabel, type EvidenceLevel } from '../../validation/evidenceLevel';
@@ -60,6 +60,7 @@ import {
   SOFTWARE_NAME,
   type ExportProvenance,
   type ExportProvenanceOptions,
+  NO_RESOLVED_VERTICAL_SCALE,
 } from './exportProvenance';
 
 const DASH = '—';
@@ -188,9 +189,20 @@ function productEvidence(label: string, provenance: ExportProvenance): string {
  * floor in analyseContours.ts; a change there must be mirrored here.
  */
 const BLOCKED_CV_TEXT =
-  '8-cell blocks, 4 folds, ground set strided to <= 20,000 points, skipped on grids over 250,000 cells';
+  `${BLOCKED_CV_PARAMS.blockCells}-cell blocks, ${BLOCKED_CV_PARAMS.folds} folds, `
+  + `ground set strided to <= ${BLOCKED_CV_PARAMS.pointCap.toLocaleString('en-US')} points, `
+  + `skipped on grids over ${BLOCKED_CV_PARAMS.cellCap.toLocaleString('en-US')} cells`;
 
-/** Format a metre value at 2 dp, or an em-dash when absent (never fabricated). */
+/**
+ * Format a metre value at 2 dp, or an em-dash when absent (never fabricated).
+ *
+ * The ' m' suffix is unconditional here and that is now SOUND, where it used to
+ * be a documented gap. Every value this formats — `rmseZM`, `nvaM`, `vvaM`, and
+ * nothing else — is withheld as null by `analyseContours` unless the frame
+ * resolved a vertical scale, so an unresolved frame reaches this function with
+ * null and prints the dash. Keep that true: a caller that routes some other
+ * residual-derived figure through here reopens the gap.
+ */
 function fmtM(v: number | null | undefined): string {
   return v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : DASH;
 }
@@ -225,7 +237,7 @@ function markFor(status: WorkflowItem['status']): TerrainReportWorkflow['mark'] 
  */
 export function buildTerrainReportContent(
   result: AnalyseContoursResult,
-  opts: TerrainReportContentOptions = {},
+  opts: TerrainReportContentOptions = NO_RESOLVED_VERTICAL_SCALE,
 ): TerrainReportContent {
   // The unified provenance — the SAME object every other export stamps — gives
   // the header / footer fields (software, version, date, CRS, datum, coverage,
@@ -239,7 +251,6 @@ export function buildTerrainReportContent(
 
   const dtm = result.dtm;
   const q = result.quality;
-  const acc = result.accuracyStandards ?? null;
   const hasAcc = provenance.accuracy != null;
 
   // ── Executive Summary ───────────────────────────────────────────────────
@@ -426,14 +437,33 @@ export function buildTerrainReportContent(
   // ── Quality Metrics ─────────────────────────────────────────────────────
   // ASPRS / USGS 3DEP vocabulary, honestly null-able: when the run measured no
   // RMSEz the whole block reads em-dash / unknown rather than a fabricated zero.
-  const qlFallback = acc && acc.densityReferenceFloorsMet.length > 0 ? acc.densityReferenceFloorsMet[0] : DASH;
+  // ONE source. The fallback read the raw result when the provenance carried no
+  // accuracy block, which is a second path to a figure the provenance had just
+  // withheld — the shape of every unit leak on this page. The floors are empty
+  // on a frame with no horizontal scale (demAccuracyStandards decides that
+  // once), so the dash here means the same thing the provenance means.
   const qlValue =
     hasAcc && provenance.accuracy && provenance.accuracy.usgsDensityReferenceFloor !== 'none'
       ? provenance.accuracy.usgsDensityReferenceFloor
-      : qlFallback;
+      : DASH;
   // Phase 4 honesty figures, single-sourced from the same result the panel
   // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
   const pctOf = (x: number): string => `${Math.round(x * 100)}%`;
+  // Vertical suffix for the residual-derived figures below. `holdoutRmse`
+  // scales residuals by verticalUnitToMetres and falls back to an inert 1, so on
+  // a frame that resolved no vertical scale they stay in the source Z unit. The
+  // ASPRS rows above are already withheld there (rmseZM/nvaM/vvaM come back
+  // null), but the blocked RMSE and the reliability tolerance are read straight
+  // off the result and were formatted with a fixed " m". ASCII only, as above.
+  // BOTH frames, for the reason the ASPRS rows below read the provenance: the
+  // analysis states the scale it fitted under, the provenance states the one
+  // this document is stamped with, and a report whose RMSEz row reads '—' while
+  // its blocked RMSE two rows down reads ' m' describes two frames at once.
+  const zInMetres = result.verticalScaleResolved && provenance.verticalUnitLabel !== 'unknown';
+  const fmtZ = (v: number | null | undefined): string =>
+    v != null && Number.isFinite(v)
+      ? `${v.toFixed(2)}${zInMetres ? ' m' : ' source Z units'}`
+      : DASH;
   const relM = result.reliabilitySplit?.measured;
   // The reliability tolerance IS the hold-out RMSEz (analyseContours:
   // reliabilityTolerance = validation.rmse), so the row is the share of
@@ -441,7 +471,7 @@ export function buildTerrainReportContent(
   // and is labelled as that, never as an independent tolerance.
   const hasRel = relM != null && relM.n >= 5 && Number.isFinite(relM.reliability);
   const reliabilityLabel = hasRel
-    ? `Within 1 × hold-out RMSEz (${fmtM(relM.tolerance)})`
+    ? `Within 1 × hold-out RMSEz (${fmtZ(relM.tolerance)})`
     : 'Within 1 × hold-out RMSEz';
   const reliabilityValue = hasRel
     ? `${pctOf(relM.reliability)} of measured-cell hold-out residuals (95% CI ${pctOf(relM.ciLow)}-${pctOf(relM.ciHigh)})`
@@ -449,19 +479,36 @@ export function buildTerrainReportContent(
   const blk = result.blockedAccuracy;
   const hasBlk = blk != null && blk.n > 0 && Number.isFinite(blk.rmse);
   const blockedValue = hasBlk
-    ? `${fmtM(blk.rmse)} (95% CI ${fmtM(blk.ciLow)}-${fmtM(blk.ciHigh)})`
+    ? `${fmtZ(blk.rmse)} (95% CI ${fmtZ(blk.ciLow)}-${fmtZ(blk.ciHigh)})`
     : DASH;
   // One line that says what each RMSE tests, so the two figures are never
   // read as competing estimates of the same thing. Parameters are the ones
   // analyseContours runs with (BLOCKED_CV_TEXT).
+  // The SAME two scopes the panel hint reads, so the PDF and the screen cannot
+  // describe one comparison two ways.
+  // Both scopes or neither. Defaulting a missing one would state a treatment
+  // contrast nothing established, which is the failure this whole line exists
+  // to avoid; an absent scope simply drops the sentence.
+  const randomScope = result.validation?.classificationScope;
+  const blockedScope = blk?.classificationScope;
+  const treatmentContrast =
+    randomScope != null && blockedScope != null
+      ? `${blockedTreatmentContrast(randomScope, blockedScope)} `
+      : '';
   const rmseText = hasAcc ? fmtM(provenance.accuracy?.rmseZM) : null;
   const accuracyBases =
     rmseText != null && rmseText !== DASH
       ? `Random hold-out RMSEz (${rmseText}) tests interpolation between neighbouring ground points and feeds NVA/VVA. ` +
-        `Blocked spatial CV (${BLOCKED_CV_TEXT}) tests extrapolation across held-out blocks; ` +
+        `Blocked spatial CV (${BLOCKED_CV_TEXT}) withholds whole blocks instead of scattered points. ` +
+        // Derived from the two scopes, not asserted. Stating the SMRF case for
+        // every scan told trusted-survey readers there was a classification
+        // difference between the two figures when both use the source's own
+        // class-2 set and no classifier runs for either.
+        treatmentContrast +
         (hasBlk
-          ? `quote the blocked figure (${fmtM(blk.rmse)}) for map-scale use.`
-          : 'it was not run on this grid, so no map-scale figure is available.')
+          ? `Report both figures (blocked ${fmtZ(blk.rmse)}) with the treatment each one ran under; ` +
+            'neither is a field-checkpoint accuracy.'
+          : 'The blocked pass was not run on this grid.')
       : null;
   const qualitySection: TerrainReportSection = {
     title: 'Quality Metrics',
@@ -472,8 +519,10 @@ export function buildTerrainReportContent(
       // figures via the ASPRS formulas, never a checkpoint assessment.
       { label: 'NVA-style (95%, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
       { label: 'VVA-style (95th pct, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
-      // Measured-cell empirical reliability (Wilson CI) and the less optimistic
-      // spatially-blocked RMSE — the same numbers the Analyse panel surfaces.
+      // Measured-cell empirical reliability (Wilson CI) and the spatially-blocked
+      // RMSE — the same numbers the Analyse panel surfaces. "Less optimistic"
+      // was the old wording here and it asserted an ordering this project does
+      // not measure; the Accuracy bases row states what each figure ran under.
       { label: reliabilityLabel, value: reliabilityValue },
       { label: 'Blocked RMSE (spatial CV)', value: blockedValue },
       ...(accuracyBases != null ? [{ label: 'Accuracy bases', value: accuracyBases }] : []),

@@ -50,6 +50,21 @@ export interface EpochCloud {
   readonly isGeographic?: boolean | null;
   /** Metres per source horizontal unit (~0.3048 for feet). Default 1. */
   readonly linearUnitToMetres?: number | null;
+  /**
+   * Metres per source VERTICAL unit, when the frame declares one of its own.
+   *
+   * Z had been scaled by the HORIZONTAL factor. On a compound frame — foot
+   * heights over a metre grid, which GeoTIFF key 4099 and a VERT_CS UNIT both
+   * express — that made the SMRF ground tolerances wrong by the ratio between
+   * the two: the physical 0.5 m / 2.5 m limits were applied as 0.5 / 2.5 feet,
+   * about 3.3x too tight, so the filter kept the wrong points as ground. The
+   * differenced elevations were already scaled correctly downstream; this is
+   * about which points the surfaces were built from in the first place.
+   *
+   * Null / omitted falls back to the horizontal factor, which is right for
+   * every single-unit frame and keeps existing callers unchanged.
+   */
+  readonly verticalUnitToMetres?: number | null;
 }
 
 /** The shared grid spec both epochs are rasterised onto. */
@@ -161,11 +176,24 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
     : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
       ? cloud.linearUnitToMetres
       : 1;
-  const vertToMetres = cloud.isGeographic
-    ? 1
-    : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
-      ? cloud.linearUnitToMetres
-      : 1;
+  // Z on its OWN declared scale where the frame states one; the horizontal
+  // verdict is a fallback, not a substitute.
+  // The geographic test governs the HORIZONTAL conversion only. A declared
+  // vertical scale wins whatever the horizontal kind: geographic degrees over a
+  // foot vertical is a valid compound frame, and forcing its z factor to 1 ran
+  // the SMRF thresholds, the despike floor and the cell confidence in feet
+  // while the Analyse panel converted them for the same scan. Without a
+  // declared vertical, a geographic frame's z is metric by convention and a
+  // projected frame's falls back to its horizontal unit — the rule
+  // resolveGroundFilterParams applies.
+  const vertToMetres =
+    Number.isFinite(cloud.verticalUnitToMetres) && (cloud.verticalUnitToMetres as number) > 0
+      ? (cloud.verticalUnitToMetres as number)
+      : cloud.isGeographic
+        ? 1
+        : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
+          ? cloud.linearUnitToMetres
+          : 1;
   // The 0.5 m / 2.5 m SMRF tolerances are physical; convert to source vertical
   // units so a foot frame keeps its physical ground tolerance (a geographic
   // frame's z is already metric, so zPerMetre is 1 there).
@@ -197,6 +225,13 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
       cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
         ? cloud.linearUnitToMetres
         : 1,
+    // The SAME factor the ground-filter thresholds above are scaled by. It was
+    // omitted here, so a compound frame (metre horizontal, foot vertical)
+    // classified correctly and then despiked and scored on the wrong scale:
+    // despike's 0.30 m blunder floor became 0.30 FEET (~0.091 m) and removed
+    // real sub-30 cm relief, and cell confidence read its roughness rise in
+    // source units. Both consumers are inside buildSurfaceFromRaster.
+    verticalUnitToMetres: vertToMetres,
   }).dtm;
 }
 

@@ -15,7 +15,7 @@ describe('changeVolumeUncertainty', () => {
   test('random error scales as cellArea·σ·√N', () => {
     const r = changeVolumeUncertainty({
       netVolumeM3: 1000,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
       registrationSigmaM: 0,
@@ -30,7 +30,7 @@ describe('changeVolumeUncertainty', () => {
     // Swapping before/after negates the net volume (a gain becomes an equal
     // loss) but changes nothing about the cells or their per-cell error, so the
     // ± band must be identical in magnitude and the signed bounds must mirror.
-    const base = { significantCells: 400, cellAreaM2: 1, cellSigmaM: 0.05, registrationSigmaM: 0.02 };
+    const base = { contributingCells: 400, cellAreaM2: 1, cellSigmaM: 0.05, registrationSigmaM: 0.02 };
     const gain = changeVolumeUncertainty({ ...base, netVolumeM3: 1000 });
     const loss = changeVolumeUncertainty({ ...base, netVolumeM3: -1000 });
     expect(loss.sigmaM3).toBeCloseTo(gain.sigmaM3, 9);
@@ -45,7 +45,7 @@ describe('changeVolumeUncertainty', () => {
   test('names the error model on the result, and the correlation caveat travels', () => {
     const r = changeVolumeUncertainty({
       netVolumeM3: 1000,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
     });
@@ -54,7 +54,7 @@ describe('changeVolumeUncertainty', () => {
   });
 
   test('an explicit independent-cells model matches the default', () => {
-    const args = { netVolumeM3: 1000, significantCells: 400, cellAreaM2: 1, cellSigmaM: 0.05 };
+    const args = { netVolumeM3: 1000, contributingCells: 400, cellAreaM2: 1, cellSigmaM: 0.05 };
     const a = changeVolumeUncertainty(args);
     const b = changeVolumeUncertainty({ ...args, model: { kind: 'independent-cells' } });
     expect(b).toEqual(a);
@@ -64,7 +64,7 @@ describe('changeVolumeUncertainty', () => {
     expect(() =>
       changeVolumeUncertainty({
         netVolumeM3: 1000,
-        significantCells: 400,
+        contributingCells: 400,
         cellAreaM2: 1,
         cellSigmaM: 0.05,
         model: { kind: 'bogus' } as never,
@@ -75,13 +75,13 @@ describe('changeVolumeUncertainty', () => {
   test('a co-registration bias adds a systematic term in quadrature', () => {
     const base = changeVolumeUncertainty({
       netVolumeM3: 1000,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
     });
     const withReg = changeVolumeUncertainty({
       netVolumeM3: 1000,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
       registrationSigmaM: 0.02, // 400·1·0.02 = 8 m³ systematic
@@ -94,7 +94,7 @@ describe('changeVolumeUncertainty', () => {
   test('a change smaller than its band is flagged not detectable and graded low', () => {
     const r = changeVolumeUncertainty({
       netVolumeM3: 3,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05, // σ ≈ 1 m³, but include systematic to exceed |net|
       registrationSigmaM: 0.02,
@@ -112,7 +112,7 @@ describe('changeVolumeUncertainty', () => {
     // have called it detectable) but is below the ~95% level of detection.
     const r = changeVolumeUncertainty({
       netVolumeM3: 10,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
       registrationSigmaM: 0.02,
@@ -127,7 +127,7 @@ describe('changeVolumeUncertainty', () => {
   test('a clear, well-registered change grades high and is detectable', () => {
     const r = changeVolumeUncertainty({
       netVolumeM3: 1240,
-      significantCells: 900,
+      contributingCells: 900,
       cellAreaM2: 1,
       cellSigmaM: 0.03,
       registrationSigmaM: 0.01,
@@ -142,7 +142,7 @@ describe('changeVolumeUncertainty', () => {
   test('missing registration is called out honestly', () => {
     const r = changeVolumeUncertainty({
       netVolumeM3: 1000,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
     });
@@ -152,7 +152,7 @@ describe('changeVolumeUncertainty', () => {
   test('net erosion keeps a signed (negative) band, never clamped to 0', () => {
     const r = changeVolumeUncertainty({
       netVolumeM3: -500,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
       registrationSigmaM: 0.01,
@@ -165,7 +165,7 @@ describe('changeVolumeUncertainty', () => {
   test('zero net change yields relative error 0 (no divide-by-zero)', () => {
     const r = changeVolumeUncertainty({
       netVolumeM3: 0,
-      significantCells: 0,
+      contributingCells: 0,
       cellAreaM2: 1,
       cellSigmaM: 0.05,
     });
@@ -177,7 +177,7 @@ describe('changeVolumeUncertainty', () => {
 describe('changeVolumeUncertainty — covariance model', () => {
   const base = {
     netVolumeM3: 1000,
-    significantCells: 400,
+    contributingCells: 400,
     cellAreaM2: 1,
     cellSigmaM: 0.05,
     registrationSigmaM: 0,
@@ -207,7 +207,7 @@ describe('changeVolumeUncertainty — covariance model', () => {
       model: { kind: 'covariance', correlationLengthM: 1e9 },
     });
     // cellAreaM2=1, cellSigmaM=0.05, N=400 → fully correlated bound = 1·0.05·400 = 20.
-    const fullyCorrelatedBound = base.cellAreaM2 * base.cellSigmaM * base.significantCells;
+    const fullyCorrelatedBound = base.cellAreaM2 * base.cellSigmaM * base.contributingCells;
     expect(r.randomErrorM3).toBeCloseTo(fullyCorrelatedBound, 6);
   });
 

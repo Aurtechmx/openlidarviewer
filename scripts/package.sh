@@ -135,9 +135,15 @@ else
   # No git: enumerate with rsync. Exclude build/vcs/deps AND any generated
   # test/coverage output that a prior local run may have produced — otherwise a
   # source archive built after an E2E run would ship Playwright traces / coverage.
+  #
+  # `/release/` is anchored to the transfer root: unanchored, rsync matches the
+  # pattern against every path segment, and the tracked docs/release/ documents
+  # and the snapshot evidence stored under .../release/ were dropped with the
+  # generated zips. The remaining patterns stay unanchored on purpose — nested
+  # dist/ and coverage/ (docs-site/.vitepress/dist) are generated too.
   rsync -a \
         --exclude node_modules --exclude dist --exclude .git \
-        --exclude 'release' --exclude '*.log' \
+        --exclude '/release/' --exclude '*.log' \
         --exclude 'test-results' --exclude 'playwright-report' \
         --exclude 'coverage' --exclude '.tmp' --exclude '.cache' \
         --exclude '.stryker-tmp' --exclude 'stryker.log' \

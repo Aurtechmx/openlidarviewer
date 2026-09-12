@@ -122,8 +122,20 @@ export interface CalibrationFitParams {
   /** Number of cross-fitting folds. Default 5, floored at 2. */
   readonly cvFolds?: number;
   /**
-   * Deterministic fold-assignment offset. Fold of sample i is `(i + seed) % K`,
-   * so the assessment is reproducible (no PRNG state) yet controllable. Default 0.
+   * Deterministic fold-assignment OFFSET. Fold of sample i is `(i + seed) % K`.
+   *
+   * Read the arithmetic literally: this ROTATES the fold labels, it does not
+   * repartition. Every seed produces the same K groups of samples with the
+   * labels shifted, so re-running with a different seed re-tests one partition
+   * under new names rather than sampling a second one. It is a reproducibility
+   * knob (no PRNG state to carry), not a resampling control, and a spread over
+   * seeds would not be a spread over partitions. Default 0.
+   *
+   * The interleaved partition itself is deliberate — `i % K` spreads
+   * neighbouring samples across folds, which balances the folds but makes the
+   * cross-fit optimistic on spatially ordered input, the same optimism the
+   * random hold-out carries and for the same reason. The blocked hold-out is
+   * where withheld geometry is contiguous.
    */
   readonly seed?: number;
 }

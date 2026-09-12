@@ -72,6 +72,16 @@ export interface DtmQualityInput {
   readonly meanCellConfidence: number;
   /** Hold-out RMSE in source linear units; NaN when not measurable. */
   readonly holdoutRmseM: number;
+  /**
+   * Whether a hold-out validation produced a figure at all, in WHATEVER unit.
+   * The readiness criterion asks only that; it compares nothing to a metre
+   * floor. `holdoutRmseM` above is the metre value and is NaN when the vertical
+   * scale did not resolve, so that no source-unit number travels under an M
+   * name — but withholding it here demoted every unreferenced scan to preview
+   * for an accuracy that HAD been validated. Defaults to the finiteness of
+   * `holdoutRmseM` for callers that pass no separate fact.
+   */
+  readonly holdoutValidated?: boolean;
   /** Ground returns / total returns from the classifier, 0..1. NaN if unknown. */
   readonly groundPointRatio: number;
   /** Coverage mode of the underlying analysis. */
@@ -140,7 +150,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
   const crsKnown = input.crs != null;
   const datumKnown = input.verticalDatum != null;
   const hasInterval = input.recommendedIntervalM != null;
-  const rmseOk = Number.isFinite(input.holdoutRmseM);
+  const rmseOk = input.holdoutValidated ?? Number.isFinite(input.holdoutRmseM);
 
   const T = DTM_QUALITY_THRESHOLDS;
   const reasons: string[] = [];

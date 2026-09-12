@@ -23,6 +23,16 @@ export interface MeasureExportView {
   readonly verticalUnitToMetres: number;
   /** True when the scan's linear scale is known — drives the M1 units caveat. */
   readonly crsKnown: boolean;
+  /**
+   * True when the horizontal frame is ANGULAR (lon/lat degrees).
+   *
+   * The controller has always tracked this and grades measurements on it, but
+   * the export view did not expose it, so the export hardcoded `false`. Two
+   * things went wrong from that: the GeoJSON kept a named CRS member it should
+   * have suppressed, and a degree difference was carried into the metre-named
+   * columns by a scalar factor that cannot exist for an angular frame.
+   */
+  readonly geographicCrs: boolean;
 }
 
 export interface MeasurementExportActionDeps {
@@ -67,10 +77,13 @@ export async function exportMeasurementsFile(
     unitToMetres: measure.unitToMetres,
     verticalUnitToMetres: measure.verticalUnitToMetres,
     crsName: geo.crsName,
-    geographic: false,
+    // The RESOLVED frame's own answer, not a literal. A geographic frame has no
+    // scalar metres-per-unit at all, so it is neither verified nor convertible.
+    geographic: measure.geographicCrs,
     // A local / unknown-unit scan has an inert factor of 1, so the `_m` columns
-    // are nominal, not metres — the evidence note then says so (M1).
-    unitsVerified: measure.crsKnown,
+    // are nominal, not metres — the evidence note then says so (M1). An angular
+    // frame is unverified for a stronger reason: no scalar could make it metres.
+    unitsVerified: measure.crsKnown && !measure.geographicCrs,
   };
   const { measurementsToGeoJSON, measurementsToCsv } = await deps.loadMeasurementExport();
   const text =
@@ -87,19 +100,29 @@ export async function exportMeasurementIntegrityReport(
   const ms = measure.getMeasurements();
   if (ms.length === 0) return;
   const geo = deps.geo();
+  // Every scan-bound fact is read BEFORE the lazy import, so the report is one
+  // scan's account of itself. The frame, unit scales, class epoch and
+  // unit-known flag were read AFTER the await, so a scan swap while the chunk
+  // loaded signed A's geometry and name with B's up vector, unit scale and
+  // classification epoch — inside a file called an integrity report.
+  const worldUp = measure.worldUp;
+  const unitToMetres = measure.unitToMetres;
+  const verticalUnitToMetres = measure.verticalUnitToMetres;
+  const classificationEpoch = deps.activeClassificationEpoch();
+  // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
+  const crsKnown = measure.crsKnown;
   const { integrityReportFile } = await deps.loadMeasurementReport();
   const f = integrityReportFile(
     ms,
-    measure.worldUp,
-    measure.unitToMetres,
-    measure.verticalUnitToMetres,
+    worldUp,
+    unitToMetres,
+    verticalUnitToMetres,
     geo.name ? deps.baseName(geo.name) : 'scan',
     geo.crsName,
     deps.now(),
-    deps.activeClassificationEpoch(),
+    classificationEpoch,
     deps.appVersion,
-    // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
-    measure.crsKnown,
+    crsKnown,
   );
   deps.downloadText(f.filename, f.text);
 }
@@ -116,8 +139,13 @@ export async function collectMeasurementFindings(
   const { measure } = deps;
   const ms = measure.getMeasurements();
   if (ms.length === 0) return [];
+  // Same discipline: the frame the measurements were taken in, captured with
+  // them rather than re-read after the import.
+  const worldUp = measure.worldUp;
+  const unitToMetres = measure.unitToMetres;
+  const verticalUnitToMetres = measure.verticalUnitToMetres;
   const { measurementsToFindings } = await deps.loadMeasurementReport();
-  return measurementsToFindings(ms, measure.worldUp, measure.unitToMetres, measure.verticalUnitToMetres);
+  return measurementsToFindings(ms, worldUp, unitToMetres, verticalUnitToMetres);
 }
 
 /** Export the curated findings ledger as the signed integrity report (JSON). */
@@ -127,15 +155,17 @@ export async function exportFindingsReport(
 ): Promise<void> {
   if (findings.length === 0) return;
   const geo = deps.geo();
+  const classificationEpoch = deps.activeClassificationEpoch();
+  const crsKnown = deps.measure.crsKnown;
   const { findingsReportFile } = await deps.loadMeasurementReport();
   const f = findingsReportFile(
     findings,
     geo.name ? deps.baseName(geo.name) : 'scan',
     geo.crsName,
     deps.now(),
-    deps.activeClassificationEpoch(),
+    classificationEpoch,
     deps.appVersion,
-    deps.measure.crsKnown,
+    crsKnown,
   );
   deps.downloadText(f.filename, f.text);
 }

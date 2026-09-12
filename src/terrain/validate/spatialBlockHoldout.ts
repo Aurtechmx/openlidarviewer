@@ -6,14 +6,26 @@
  * randomly withheld point is surrounded by training points from the same cell,
  * so the surface predicts it almost for free. The reported RMSE is optimistic
  * relative to how the DTM performs over a region with no nearby ground truth
- * (a real gap, a void, an unscanned strip).
+ * (a void, an unscanned strip).
  *
- * Spatial-block cross-validation removes that leakage: it partitions the extent
+ * Spatial-block cross-validation changes that support pattern rather than
+ * eliminating it: withholding whole blocks removes a block's own returns, but a
+ * point near a block edge still has training returns just across the boundary,
+ * so the effective separation varies within a block and approaches zero at its
+ * edges. It partitions the extent
  * into blocks, withholds WHOLE blocks, and scores the held-out block from a
- * surface trained only on the other blocks. The model must then predict across
- * a gap the size of a block, which is the case a user actually cares about.
- * Spatially-structured error makes the blocked RMSE larger than the random one;
- * the gap between them is the optimism the random estimate hides.
+ * surface trained only on the other blocks. The withheld block is data the scan
+ * HAS; calling it "a gap the size of a block" described a hole the survey does
+ * not contain, and the separation it actually imposes is the varying one above.
+ *
+ * The blocked RMSE is often larger than a random hold-out under spatial
+ * autocorrelation, but that is a tendency, not an identity, and it is not
+ * measured here: this module scores whatever mask its caller supplies. In
+ * `analyseContours` the two figures do not even share a treatment — the random
+ * hold-out re-runs ground classification on the training points only, while the
+ * blocked pass keeps the whole-cloud classification — so they estimate different
+ * quantities and either can come out the larger. Reporting the difference as
+ * "the optimism the random estimate hides" attributed it to geometry alone.
  *
  * The surface model is INJECTED (`SurfaceModel`) so this core stays pure and
  * unit-testable with a trivial predictor. The real caller passes a DTM
@@ -27,6 +39,11 @@
  */
 
 import { NeumaierSum } from '../../process/numerics';
+// THE project percentile convention. This module had its own type-7 copy, which
+// quantile.ts's own note forbids: two spellings of one convention agree until
+// one is edited.
+import { quantileSorted } from '../quantile';
+import type { ClassificationScope } from './ValidationReport';
 
 export interface XYZ {
   readonly x: number;
@@ -59,6 +76,19 @@ export interface SpatialBlockOptions {
   readonly bootstrapN?: number;
   /** Confidence level for the interval, 0..1. Default 0.95. */
   readonly ciLevel?: number;
+  /**
+   * Which ground classification the scored point set came from, echoed onto the
+   * result. Default `'whole-cloud'`.
+   *
+   * This module scores whatever points it is handed and cannot see where their
+   * ground membership came from, but a reader comparing this figure against a
+   * random hold-out needs to know whether the two share a treatment. Without it
+   * every consumer stated the SMRF case — random re-classifies on the training
+   * points, blocked keeps the whole-cloud mask — as though it were universal,
+   * which is false on the trusted-survey path where both use the same fixed
+   * source classification and no classifier runs at all.
+   */
+  readonly classificationScope?: ClassificationScope;
 }
 
 export interface SpatialBlockResult {
@@ -81,6 +111,13 @@ export interface SpatialBlockResult {
   readonly ciHigh: number;
   /** The CI level used (echoed for the report). */
   readonly ciLevel: number;
+  /**
+   * The ground classification the scored points came from. Compare against a
+   * {@link ValidationReport}'s own `classificationScope` before reading the two
+   * figures as a geometry contrast: when they differ, the contrast changes
+   * treatment as well as geometry.
+   */
+  readonly classificationScope: ClassificationScope;
   readonly warnings: readonly string[];
 }
 
@@ -102,17 +139,6 @@ function rmseOf(residuals: readonly number[]): number {
   return Math.sqrt(s.total / residuals.length);
 }
 
-/** Percentile of a pre-sorted array by linear interpolation (type-7). */
-function percentileSorted(sorted: readonly number[], p: number): number {
-  if (sorted.length === 0) return Number.NaN;
-  if (sorted.length === 1) return sorted[0];
-  const idx = (sorted.length - 1) * p;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-
 /**
  * Run spatial-block cross-validation and return the blocked RMSE with a
  * bootstrap confidence interval. Honest on degenerate input: fewer than two
@@ -124,9 +150,41 @@ export function spatialBlockHoldout(
   model: SurfaceModel,
   opts: SpatialBlockOptions,
 ): SpatialBlockResult {
+  // Every statistical parameter is REFUSED rather than repaired.
+  //
+  // A blockSize of 0 became 1 with a warning, a NaN fold count propagated
+  // through Math.min/Math.max, bootstrapN was floored, and ciLevel was accepted
+  // at any value including 0, 1 and 1.5. Each of those manufactures a
+  // valid-looking statistic from an invalid specification, and a warning string
+  // beside a number is not a refusal: the caller still receives an RMSE and a
+  // confidence interval it can quote. These are caller errors, not data
+  // conditions, so they throw where a bad input is written rather than
+  // surfacing as a result that has to be believed.
+  const bad = (what: string, got: unknown): never => {
+    throw new RangeError(`spatialBlockHoldout: ${what}, got ${String(got)}.`);
+  };
+  if (!(Number.isFinite(opts.blockSize) && opts.blockSize > 0)) {
+    bad('blockSize must be a finite number greater than 0', opts.blockSize);
+  }
+  if (opts.folds !== undefined
+    && !(Number.isInteger(opts.folds) && opts.folds >= 2)) {
+    bad('folds must be an integer of at least 2', opts.folds);
+  }
+  if (opts.seed !== undefined
+    && !(Number.isInteger(opts.seed) && opts.seed >= 0)) {
+    bad('seed must be a non-negative integer', opts.seed);
+  }
+  if (opts.bootstrapN !== undefined
+    && !(Number.isInteger(opts.bootstrapN) && opts.bootstrapN >= 0)) {
+    bad('bootstrapN must be a non-negative integer', opts.bootstrapN);
+  }
+  if (opts.ciLevel !== undefined
+    && !(Number.isFinite(opts.ciLevel) && opts.ciLevel > 0 && opts.ciLevel < 1)) {
+    bad('ciLevel must lie strictly between 0 and 1', opts.ciLevel);
+  }
+
   const warnings: string[] = [];
-  const blockSize = opts.blockSize > 0 ? opts.blockSize : 1;
-  if (!(opts.blockSize > 0)) warnings.push(`blockSize invalid; using ${blockSize}`);
+  const blockSize = opts.blockSize;
 
   const finite = points.filter(
     (p) => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z),
@@ -217,7 +275,7 @@ export function spatialBlockHoldout(
   // recompute RMSE over the pooled residuals. Resampling individual residuals
   // (an iid bootstrap) would ignore the spatial correlation within a block and
   // report an interval that is too tight; the block is the exchangeable unit.
-  const B = Math.max(0, Math.floor(opts.bootstrapN ?? 1000));
+  const B = opts.bootstrapN ?? 1000;
   const ciLevel = opts.ciLevel ?? 0.95;
   let ciLow = rmse;
   let ciHigh = rmse;
@@ -238,12 +296,13 @@ export function spatialBlockHoldout(
     }
     boot.sort((a, b) => a - b);
     const alpha = (1 - ciLevel) / 2;
-    ciLow = percentileSorted(boot, alpha);
-    ciHigh = percentileSorted(boot, 1 - alpha);
+    ciLow = quantileSorted(boot, alpha);
+    ciHigh = quantileSorted(boot, 1 - alpha);
   }
 
   return {
     method: 'spatial-block-cv',
+    classificationScope: opts.classificationScope ?? 'whole-cloud',
     rmse,
     mae,
     n: residuals.length,
@@ -265,6 +324,7 @@ function degenerate(
 ): SpatialBlockResult {
   return {
     method: 'spatial-block-cv',
+    classificationScope: opts.classificationScope ?? 'whole-cloud',
     rmse: Number.NaN,
     mae: Number.NaN,
     n: 0,

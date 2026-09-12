@@ -78,14 +78,27 @@
    *   --text-2xl 20  panel titles
    *   --text-3xl 28  display figures
    */
-  --text-2xs: 10px;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-md: 13px;
-  --text-lg: 14px;
-  --text-xl: 16px;
-  --text-2xl: 20px;
-  --text-3xl: 28px;
+  /* Type scale. Eight names, but only the DISTINCT values below are steps a
+   * reader can actually see. 10/11 differ by 1.10 and 12/13/14 by 1.08 — under
+   * the threshold of perception, so those were three names for one level, not
+   * three levels. Adjacent steps now differ by at least 1.14.
+   *
+   * 2xs and md are kept as ALIASES so ~150 call sites did not have to churn in
+   * a release branch; they resolve to the neighbouring real step. Prefer the
+   * canonical names in new code.
+   *
+   * Not yet fixed: 11px still carries ~75% of the app's text, so the floor of
+   * this scale is doing the work a 12–13px body should. Raising it is a
+   * deliberate re-typing pass, not a token edit — every dense chip and badge
+   * has to be re-checked for overflow. */
+  --text-2xs: 11px; /* alias of --text-xs */
+  --text-xs: 11px; /* dense chips, badges, table cells */
+  --text-sm: 12px; /* secondary rows */
+  --text-md: 14px; /* alias of --text-lg */
+  --text-lg: 14px; /* emphasis, values */
+  --text-xl: 16px; /* panel titles */
+  --text-2xl: 20px; /* section headings */
+  --text-3xl: 28px; /* display */
 
   /*
    * Radius scale — four corner radii plus a pill. Drawn from the
@@ -602,6 +615,12 @@ button:disabled { cursor: not-allowed; }
   z-index: var(--z-topbar);
   pointer-events: none;
 }
+/* The header's own z-index makes it a stacking context, so a popover opened
+   from it is capped at the header's layer however high its own z-index reads —
+   the Performance panel opened underneath the right rail and looked broken.
+   While a header popover is open the header is lifted above the panels; it
+   stays click-through, so nothing beneath it loses a click. */
+.olv-topbar-popover-open { z-index: var(--z-popover); }
 .olv-topbar > * { pointer-events: auto; }
 .olv-wordmark { display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-lg); font-weight: 500; }
 /* The official brand mark (public/brand-mark.svg, via <img>) beside the
@@ -679,7 +698,7 @@ button:disabled { cursor: not-allowed; }
 .olv-quality-button-open { color: var(--accent); background: var(--accent-soft); }
 .olv-quality-pop {
   position: absolute; top: calc(100% + var(--space-md)); right: 0;
-  z-index: var(--z-dock);
+  z-index: var(--z-popover);
   width: 280px; max-width: calc(100vw - var(--space-4xl));
   display: flex; flex-direction: column; gap: var(--space-md);
   padding: var(--space-xl);
@@ -3554,6 +3573,24 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-touch-hint { transition: none; }
 }
 
+/* ── iOS Safari auto-zoom on focus ───────────────────────────────────────────
+ * Safari zooms the whole page when a focused text control is under 16px, and
+ * does NOT zoom back out on blur: the user is left in a zoomed viewport with
+ * the layout shifted. Every input here inherits a token between 11px and 15px,
+ * so opening the URL field, renaming a layer or using the converter triggered
+ * it. `max()` keeps the desktop size wherever the token is already larger.
+ * Coarse-pointer only, so desktop density is untouched. */
+@media (pointer: coarse) {
+  input[type='text'],
+  input[type='search'],
+  input[type='url'],
+  input[type='number'],
+  input[type='email'],
+  select,
+  textarea {
+    font-size: max(16px, var(--text-md));
+  }
+}
 /* ───────────────────────────────────────────────────────────────────────────
    Measurement toolkit — polygon fills, preview rubber-bands, leader lines,
    and headline value labels. The dot / line / label base styles are shared
@@ -4444,6 +4481,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     width: 100%;
     box-sizing: border-box;
   }
+}
+
+/* The Layers section is the Inspector's own node, re-parented into Data mode.
+   Inside the Inspector it sits on that panel's surface; in the rail it is a
+   top-level child with nothing behind it, so its rows and group headers read
+   straight over the point cloud. Same card surface the sibling panels carry. */
+.olv-ws-mode > .olv-layers-section {
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
 }
 
 /* Persistent "Add dataset" affordance. The Stage reveals it with the first

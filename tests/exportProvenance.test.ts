@@ -59,7 +59,8 @@ it('labels the contour interval in the resolved vertical unit, never a hard-code
   expect(metre).toMatch(/Contour interval\s+1 m\b/);
   const foot = provenanceLines(buildExportProvenance(readyResult(), { ...OPTS, verticalUnitToMetres: 0.3048 })).join('\n');
   expect(foot).toMatch(/Contour interval\s+1 ft\b/);
-  const unknown = provenanceLines(buildExportProvenance(readyResult(), { basename: 'site', softwareVersion: '9.9.9', metricVersion: 'v0.4.1' })).join('\n');
+  const unknown = provenanceLines(buildExportProvenance(readyResult(), {
+    verticalUnitToMetres: null, basename: 'site', softwareVersion: '9.9.9', metricVersion: 'v0.4.1' })).join('\n');
   expect(unknown).toMatch(/Contour interval\s+1 \(vertical unit unverified\)/);
 });
 
@@ -439,5 +440,56 @@ describe('the export manifest records what happened to source identity', () => {
     const exact = JSON.stringify(processingManifestFromProvenance(buildExportProvenance(readyResult(), OPTS), setWith({ kind: 'exact' })));
     expect(exact).toContain('exact');
     expect(exact).not.toContain('voxel-centroids');
+  });
+});
+
+/**
+ * One provenance object, one frame.
+ *
+ * A contour sheet exported from a scan with no CRS printed "Contour interval
+ * 10 (vertical unit unverified)" and, in the same title block, "RMSEz: 0.71 m",
+ * "NVA-style: 1.40 m", "VVA-style: 1.47 m" and a USGS density floor. The unit
+ * label was gated on the resolved scale; the accuracy block beside it was gated
+ * only on a figure existing, and the density was compared against pulses per
+ * square metre without asking whether the horizontal scale resolved at all —
+ * on that scan the extents are stated in source units.
+ *
+ * The figures are withheld here rather than relabelled: `rmseZM`, `nvaM` and
+ * `vvaM` are metre-named, and a consumer reading those names has no way to
+ * discover the number might be feet or scanner units.
+ */
+describe('provenance accuracy is withheld on a frame that states no scale', () => {
+  const unresolved = (over: Record<string, unknown> = {}): AnalyseContoursResult => ({
+    ...(readyResult() as unknown as Record<string, unknown>),
+    verticalScaleResolved: false,
+    // What demAccuracyStandards produces on a frame with no horizontal scale:
+    // no density, no floor cleared.
+    accuracyStandards: {
+      rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 0,
+      densityReferenceFloorsMet: [], densityReferenceNote: 'source units',
+    },
+    dtm: { coverageMode: 'full', meanConfidence: 82 },
+    model: { intervalM: 10, contourStyle: 'generalized', coverageMode: 'full' },
+    ...over,
+  } as unknown as AnalyseContoursResult);
+
+  it('states no metre RMSEz, NVA or VVA when the vertical unit is unverified', () => {
+    const p = buildExportProvenance(unresolved(), { ...OPTS, verticalUnitToMetres: null });
+    expect(p.verticalUnitLabel).toBe('unknown');
+    expect(p.accuracy, 'a metre-named accuracy block survived an unverified frame').toBeNull();
+    const text = provenanceLines(p).join('\n');
+    expect(text).not.toMatch(/RMSEz\s+[\d.]+ m/);
+    expect(text).not.toMatch(/NVA-style[^\n]*[\d.]+ m/);
+  });
+
+  it('cites no USGS density floor when the horizontal unit is unverified', () => {
+    const p = buildExportProvenance(unresolved(), { ...OPTS, verticalUnitToMetres: null });
+    expect(p.pointDensityPerM2, 'a per-square-metre density survived source units').toBeNull();
+  });
+
+  it('keeps both when the frame does resolve its scales', () => {
+    const p = buildExportProvenance(readyResult(), OPTS);
+    expect(p.accuracy?.rmseZM).toBe(0.14);
+    expect(p.pointDensityPerM2).toBe(4.2);
   });
 });

@@ -20,7 +20,9 @@ function resultStub(over: {
   measured?: number; interpolated?: number; empty?: number; total?: number;
   lowConfidence?: number; edgeRisk?: number; groundIsDerived?: boolean;
   cellSizeM?: number; contourIntervalM?: number; recommendedM?: number | null;
+  intervalM?: number | null; gateOptions?: { intervalM: number; supported: boolean; reason: string }[];
   reasons?: string[]; rmse?: number; gateWarnings?: string[];
+  verticalScaleResolved?: boolean;
 }): AnalyseContoursResult {
   return {
     cellStatusTally: {
@@ -36,8 +38,12 @@ function resultStub(over: {
       pointSpacingM: 0.2,
       reasons: over.reasons ?? ['Recommended from median ground spacing and memory budget.'],
     },
-    gate: { options: [], recommendedM: 'recommendedM' in over ? (over.recommendedM ?? null) : 0.5, warnings: over.gateWarnings ?? [] },
+    intervalM: 'intervalM' in over ? over.intervalM : undefined,
+    gate: { options: over.gateOptions ?? [], recommendedM: 'recommendedM' in over ? (over.recommendedM ?? null) : 0.5, warnings: over.gateWarnings ?? [] },
     validation: { rmse: over.rmse ?? 0.09 },
+    // Default to a frame that resolved its vertical scale, which is what makes
+    // the metre captions on the RMSE rows legitimate.
+    verticalScaleResolved: over.verticalScaleResolved ?? true,
   } as unknown as AnalyseContoursResult;
 }
 
@@ -64,8 +70,27 @@ describe('buildContourReviewSummary', () => {
   it('surfaces the grid recommendation with its engine rationale', () => {
     const s = buildContourReviewSummary(resultStub({ cellSizeM: 0.25, reasons: ['spacing rationale'] }), metreInput(AVAILABLE));
     const grid = s.rows.find((r) => r.key === 'grid')!;
+    // The recommender picks from METRE ladders and analyseContours now converts
+    // the extent and relief before consulting it, withholding the whole
+    // recommendation when no linear unit resolves. So a recommendation that
+    // exists is in metres, whatever the source frame is.
     expect(grid.value).toContain('0.25 m');
     expect(grid.rationale).toContain('spacing rationale');
+  });
+
+  it('does not caption the validation RMSE metres on an unresolved vertical scale', () => {
+    // `holdoutRmse` scales residuals by verticalUnitToMetres and falls back to
+    // an inert 1, so on a frame that resolved no vertical scale this figure is
+    // in the source Z unit. The row said "m" either way.
+    const resolved = buildContourReviewSummary(resultStub({ rmse: 0.09 }), metreInput(AVAILABLE));
+    expect(resolved.rows.find((r) => r.key === 'validation')!.value).toContain('0.09 m');
+
+    const unresolved = buildContourReviewSummary(
+      resultStub({ rmse: 0.09, verticalScaleResolved: false }), metreInput(AVAILABLE),
+    );
+    const row = unresolved.rows.find((r) => r.key === 'validation')!;
+    expect(row.value, 'a source-unit residual was captioned m').not.toMatch(/[\d.] m\b/);
+    expect(row.value).toContain('source Z units');
   });
 
   it('interval row is metric-supported on a projected metre CRS', () => {
@@ -195,5 +220,79 @@ describe('ground source provenance', () => {
   it('never rates derived ground as high confidence', () => {
     // Derived ground can be dense and still wrong; density is not provenance.
     expect(sourceRow(true).confidence).not.toBe('high');
+  });
+});
+
+/**
+ * The review row used to read `gate.recommendedM` alone, while the DXF, the
+ * GeoJSON and ContourStudio.json all ship `result.intervalM` — which is the
+ * user's explicit interval when they set one. A reviewer comparing the screen
+ * to the file saw two different intervals, and the verdict on screen described
+ * a number that was not in the deliverable.
+ */
+describe('interval row describes the interval that ships', () => {
+  it('shows the user\'s explicit interval, not the gate recommendation', () => {
+    const rows = buildContourReviewSummary(
+      resultStub({ recommendedM: 5, intervalM: 2 }),
+      metreInput(AVAILABLE),
+    ).rows;
+    const interval = rows.find((r) => r.key === 'interval')!;
+    expect(interval.value).toContain('2');
+    expect(interval.value).not.toContain('5 m ');
+  });
+
+  it('refuses internal support for an interval the gate never scored', () => {
+    const rows = buildContourReviewSummary(
+      resultStub({ recommendedM: 5, intervalM: 2 }),
+      metreInput(AVAILABLE),
+    ).rows;
+    const interval = rows.find((r) => r.key === 'interval')!;
+    expect(interval.value).toContain('cartographic-only');
+    expect(interval.rationale.join(' ')).toMatch(/not among the gate-evaluated options/);
+    expect(interval.rationale.join(' ')).toMatch(/Gate recommendation for this surface: 5/);
+  });
+
+  it('carries the gate\'s own refusal reason when it scored and declined it', () => {
+    const rows = buildContourReviewSummary(
+      resultStub({
+        recommendedM: 5,
+        intervalM: 2,
+        gateOptions: [{ intervalM: 2, supported: false, reason: 'finer than 2x the measured error' }],
+      }),
+      metreInput(AVAILABLE),
+    ).rows;
+    const interval = rows.find((r) => r.key === 'interval')!;
+    expect(interval.value).toContain('cartographic-only');
+    expect(interval.rationale.join(' ')).toContain('finer than 2x the measured error');
+  });
+
+  it('claims support when the shipped interval IS the gate recommendation', () => {
+    const rows = buildContourReviewSummary(resultStub({ recommendedM: 0.5, intervalM: 0.5 }), metreInput(AVAILABLE)).rows;
+    expect(rows.find((r) => r.key === 'interval')!.value).toContain('supported (internal)');
+  });
+});
+
+
+/**
+ * The validation row reads BOTH frames.
+ *
+ * A contour sheet exported from a scan whose CRS never resolved printed "RMSEz
+ * 0.71 m" while the same sheet's title block said the vertical unit was
+ * unverified. The sheet's provenance now withholds that figure on the live
+ * frame; the review bar was reading only the frame the surface was fitted
+ * under, so the two would have disagreed on screen and on paper.
+ */
+describe('the validation row will not caption a residual "m" on an unverified frame', () => {
+  it('says source Z units when the studio frame states no vertical scale', () => {
+    const input: ContourReviewInput = { ...metreInput(EXPLORATORY), verticalUnit: unknownUnit() };
+    const s = buildContourReviewSummary(resultStub({ rmse: 0.715 }), input);
+    const validation = s.rows.find((r) => r.key === 'validation')!;
+    expect(validation.value).toContain('0.715 source Z units');
+    expect(validation.value).not.toMatch(/0\.715 m\b/);
+  });
+
+  it('says metres when both the analysis and the studio frame resolved one', () => {
+    const s = buildContourReviewSummary(resultStub({ rmse: 0.715 }), metreInput(AVAILABLE));
+    expect(s.rows.find((r) => r.key === 'validation')!.value).toContain('0.715 m');
   });
 });

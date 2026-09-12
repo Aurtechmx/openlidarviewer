@@ -1,4 +1,4 @@
-# .htaccess — deployment headers for lidar.aurtech.mx
+# .htaccess — deployment headers for app.openlidarviewer.org
 #
 # Lives in public/ so Vite copies it verbatim to the dist root; the host
 # runs LiteSpeed, which honours Apache directives. Two jobs:
@@ -84,4 +84,18 @@ AddType application/manifest+json .webmanifest
   #     no user-derived string reaches the unsafeHtml/innerHTML sinks (guarded by
   #     `npm run lint:unsafe-html`), so this does not open an XSS path.
   Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'"
+</IfModule>
+
+# ── Permanent move to app.openlidarviewer.org ────────────────────────────────
+# The viewer's canonical host is app.openlidarviewer.org. lidar.aurtech.mx
+# keeps working as a permanent redirect so links published in earlier releases,
+# in the Zenodo records and in the papers do not break.
+#
+# The condition on HTTP_HOST is load-bearing. Both names serve this same bundle,
+# so an unconditional rule would redirect the new host to itself and loop. The
+# path and query are carried across, so a deep link survives the move.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP_HOST} ^(www\.)?lidar\.aurtech\.mx$ [NC]
+  RewriteRule ^(.*)$ https://app.openlidarviewer.org/$1 [R=301,L,QSA]
 </IfModule>

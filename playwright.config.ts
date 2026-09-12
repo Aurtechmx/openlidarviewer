@@ -5,6 +5,24 @@ import { defineConfig, devices } from '@playwright/test';
  * Run locally with `npm run test:e2e` (install browsers first with
  * `npx playwright install --with-deps chromium`).
  */
+/**
+ * The port the smoke's web server binds. Deploy-root runs are handed a
+ * kernel-assigned free port so two runs, or a stray process, cannot collide.
+ */
+const DEPLOY_PORT = Number(process.env.OLV_DEPLOY_PORT ?? 4173);
+
+/**
+ * The one origin the web server binds and every spec navigates against.
+ *
+ * 127.0.0.1 rather than `localhost` in deploy-root mode, because that server
+ * binds loopback explicitly and a `localhost` resolving to ::1 first would find
+ * nothing there. Defined once: baseURL and webServer.url disagreeing is how the
+ * whole suite ended up pointed at a dead port.
+ */
+const SERVER_URL = process.env.OLV_DEPLOY_ROOT
+  ? `http://127.0.0.1:${DEPLOY_PORT}`
+  : `http://localhost:${DEPLOY_PORT}`;
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -16,7 +34,10 @@ export default defineConfig({
   // failures are only diagnosable from an uploaded trace).
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://localhost:4173',
+    // Follows the web server: deploy-root runs get a kernel-assigned free port
+    // and a loopback address, and a hardcoded 4173 here sent every spec to a
+    // port nothing was listening on.
+    baseURL: SERVER_URL,
     trace: 'on-first-retry',
     // Pre-seed localStorage so the onboarding tour overlay (which
     // auto-launches on first session per browser and intercepts
@@ -29,7 +50,10 @@ export default defineConfig({
       cookies: [],
       origins: [
         {
-          origin: 'http://localhost:4173',
+          // Must be the origin actually served, or the seed lands on a
+          // different origin and the tour overlay is back. Deploy-root runs
+          // move both host and port.
+          origin: SERVER_URL,
           localStorage: [{ name: 'olv:tour:v1:completed', value: '1' }],
         },
       ],
@@ -122,18 +146,40 @@ export default defineConfig({
     // dynamic-import / worker-URL string literals, chunk-isolation regressions —
     // that the plain build can never surface. Default stays the plain build for
     // the fast e2e loop.
-    command: process.env.SMOKE_LIVE
-      ? 'npm run build:live && npm run preview'
-      : 'npm run build && npm run preview',
+    // OLV_DEPLOY_ROOT serves an already-extracted deploy bundle and builds
+    // NOTHING. It is how the smoke reaches the bytes that actually ship: the
+    // normal legs test a build, packaging then produces a second build, and the
+    // archive users download had never been started. See
+    // scripts/smoke-deploy-zip.mjs, which sets this and binds the run to the
+    // archive's SHA-256.
+    // The directory and port travel in the environment, never in this command
+    // string: `command` is shell text, and an extraction path containing a
+    // space would split into two arguments. serve-deploy-bytes.mjs reads
+    // OLV_DEPLOY_ROOT / OLV_DEPLOY_PORT itself.
+    command: process.env.OLV_DEPLOY_ROOT
+      ? 'node scripts/serve-deploy-bytes.mjs'
+      : process.env.SMOKE_LIVE
+        ? 'npm run build:live && npm run preview'
+        : 'npm run build && npm run preview',
     // The `?test=1` seam (`window.__OLV_TEST_API__`) is compiled in only when
     // OLV_TEST_SEAM=1 is set at build time; without it the block is dropped by
     // the minifier and every spec that drives the viewer programmatically
     // fails. The SMOKE_LIVE build is deliberately left without it: that leg
     // boots the artifact users are served, and its two specs never use the
     // seam. Playwright merges this over process.env for the spawned command.
-    env: process.env.SMOKE_LIVE ? {} : { OLV_TEST_SEAM: '1' },
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env.CI,
+    env: process.env.SMOKE_LIVE || process.env.OLV_DEPLOY_ROOT ? {} : { OLV_TEST_SEAM: '1' },
+    // 127.0.0.1, not `localhost`, in deploy-root mode: the static server binds
+    // loopback explicitly, and a `localhost` that resolves to ::1 first would
+    // find nothing listening there.
+    url: SERVER_URL,
+    // Deploy-root mode NEVER reuses a server, in CI or out of it. The whole
+    // claim of that mode is "these archive bytes were started and driven"; a
+    // server someone left on the port answers every request, the specs pass,
+    // and the archive is never opened. Reuse is a convenience for the local
+    // build loop and is wrong here at any cost in start-up time. With reuse
+    // off, an occupied port fails the run instead of silently satisfying it —
+    // and scripts/smoke-deploy-zip.mjs asks the kernel for a free port anyway.
+    reuseExistingServer: process.env.OLV_DEPLOY_ROOT ? false : !process.env.CI,
     timeout: 180_000,
   },
 });

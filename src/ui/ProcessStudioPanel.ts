@@ -37,6 +37,18 @@ import { runQaChecks } from '../qa/qaChecks';
 import type { PreflightActionId, ToolId, ToolPreflight } from '../process/toolPreflight';
 import type { PreflightView } from '../app/toolPreflightRuntime';
 
+/**
+ * Where a produced product is exported from. Named on the row because the panel
+ * that says a product exists is not the panel that exports it, and the path is
+ * three panels away: a reader who saw "ready to export" had no way to learn
+ * where. Only products with a single, stable destination appear here.
+ */
+const EXPORT_LOCATION: Readonly<Partial<Record<ProductId, string>>> = {
+  contours: 'Analyse › Contour Studio (GeoJSON, DXF, SVG, map-sheet PDF)',
+  dtm: 'Analyse › Contour Studio › DEM (ZIP)',
+  dsm: 'Analyse › Contour Studio › DEM (ZIP)',
+};
+
 const PRODUCTS: ReadonlyArray<{ id: ProductId; label: string }> = [
   { id: 'classify-gaps', label: 'Classify gaps' },
   { id: 'dtm', label: 'DTM' },
@@ -179,8 +191,10 @@ export class ProcessStudioPanel {
       // ride through _verdictRow, so they stay VISIBLE captions, not hover-only.
       const produced = this._produced.has(p.id);
       const status = produced ? 'produced' : readiness;
+      const where = EXPORT_LOCATION[p.id];
       const reason = produced
-        ? `Produced by the last analysis — ready to export.${verdict ? ` (${verdict})` : ''}`
+        ? `Produced by the last analysis. Export from ${where ?? 'the Output tab'}.`
+          + `${verdict ? ` (${verdict})` : ''}`
         : verdict;
       this._products.append(
         this._verdictRow(

@@ -35,6 +35,12 @@ export interface ReclassifyUiOptions {
   readonly canvas: HTMLCanvasElement;
   readonly getViewer: () => Viewer | null;
   readonly getActiveId: () => string | null;
+  /**
+   * Bring the class legend back in step after an edit and report whether the
+   * target class had to be revealed. The edit only touches visible points, so
+   * reclassifying into a filtered-out class hid its own result.
+   */
+  readonly onReclassified?: (targetClass: number) => boolean;
   readonly onToast?: (msg: string) => void;
   /**
    * Run the whole-scan heuristic classifier (ground / vegetation / building).
@@ -113,8 +119,12 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
       if (!v || !id) return;
       const cls = Number(select.value);
       const r = v.reclassifyLasso(id, lasso, cls);
-      if (r.changedCount > 0) noteEdit('classification');
-      toast(reclassifyOutcome(r, cls));
+      let revealed = false;
+      if (r.changedCount > 0) {
+        noteEdit('classification');
+        revealed = opts.onReclassified?.(cls) ?? false;
+      }
+      toast(reclassifyOutcome(r, cls, revealed));
       refresh();
     },
     onCancel: () => {

@@ -51,7 +51,11 @@ export function buildDsm(points: ReadonlyArray<TerrainPoint>, params: BuildDsmPa
   const n = cols * rows;
   const z = new Float32Array(n).fill(-Infinity);
   const coverage = new Uint8Array(n);
-  const cell = cellSizeM > 0 ? cellSizeM : 1;
+  if (!(Number.isFinite(cellSizeM) && cellSizeM > 0)) {
+    // A non-positive cell size was replaced by 1, a grid nobody specified.
+    throw new RangeError(`buildDsm: cellSizeM must be a finite positive length; got ${cellSizeM}`);
+  }
+  const cell = cellSizeM;
 
   for (const p of points) {
     const h1 = getH1(p);
@@ -123,7 +127,14 @@ export function surfaceStats(g: SurfaceGrid): SurfaceStats {
  * Returns the per-cell heights (NaN where unavailable) + summary stats.
  */
 export interface CanopyHeight {
-  readonly heightM: Float32Array; // NaN where either surface is missing
+  /**
+   * DSM minus DTM per cell, in the surfaces' OWN vertical unit — the `M` in
+   * these names is metres only where the frame resolved a metre vertical. The
+   * consumer labels the value from the frame (the panel says "vertical unit
+   * unverified" when it did not resolve); nothing here converts. NaN where
+   * either surface is missing.
+   */
+  readonly heightM: Float32Array;
   readonly coveredCells: number;
   readonly maxHeightM: number;
   readonly meanHeightM: number;
@@ -136,6 +147,13 @@ export function heightAboveGround(
   dtmCoverage: Uint8Array | ReadonlyArray<number>,
 ): CanopyHeight {
   const n = dsm.z.length;
+  if (dtmZ.length !== n || dtmCoverage.length !== n) {
+    // A DTM of a different size is a different grid; subtracting it cell for
+    // cell would pair unrelated cells and read the result as canopy height.
+    throw new RangeError(
+      `heightAboveGround: DSM has ${n} cells, DTM has ${dtmZ.length} values and ${dtmCoverage.length} coverage entries — length mismatch.`,
+    );
+  }
   const heightM = new Float32Array(n).fill(Number.NaN);
   const heights: number[] = [];
   let sum = 0;

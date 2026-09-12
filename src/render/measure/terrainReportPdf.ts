@@ -33,6 +33,7 @@ import {
   type TerrainReportContent,
   type TerrainReportContentOptions,
 } from '../../terrain/export/terrainReportContent';
+import { NO_RESOLVED_VERTICAL_SCALE } from '../../terrain/export/exportProvenance';
 import { pdfInfoDate } from '../../pdfInfoDate';
 
 const INK = rgb(0.12, 0.14, 0.18);
@@ -89,7 +90,7 @@ function isContent(x: unknown): x is TerrainReportContent {
  */
 export async function buildTerrainReportPdf(
   input: TerrainReportContent | AnalyseContoursResult,
-  opts: TerrainReportContentOptions = {},
+  opts: TerrainReportContentOptions = NO_RESOLVED_VERTICAL_SCALE,
 ): Promise<Uint8Array> {
   const content = isContent(input) ? input : buildTerrainReportContent(input, opts);
 

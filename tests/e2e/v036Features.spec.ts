@@ -19,7 +19,7 @@ import { isBenignPageError } from './pageErrors';
  * through a synthesised `DataTransfer` (the empty-state sample buttons no
  * longer exist) and asserts on stable counts rather than visibility where
  * the target lives inside a collapsed `<details>` (Inspector first-view
- * density pass — see Gate 6 stability rules in `docs/quality-control.md`).
+ * density pass).
  */
 
 // ── 0. PC "Search by location" disclosure layout (regression) ──────────────
@@ -41,15 +41,25 @@ test('PC Search disclosure: heading and helper text do not visually overlap', as
   // pulled the caption up onto the same y-band as the summary, so the two
   // texts overlapped on screen. Assert the caption's top edge sits
   // strictly below the summary's bottom edge.
-  const headingBox = await pcSummary.boundingBox();
-  const captionBox = await page
-    .locator('.olv-empty-section-caption')
-    .first()
-    .boundingBox();
-  if (!headingBox || !captionBox) {
-    throw new Error('PC search heading or caption has no bounding box');
-  }
-  expect(captionBox.y).toBeGreaterThanOrEqual(headingBox.y + headingBox.height);
+  //
+  // Polled, not sampled once. A single boundingBox() pair taken in the frame
+  // after the click raced the disclosure's open, and one gate run read the
+  // caption 7.9 px above the summary's bottom edge while the rest of the suite
+  // passed. The predicate is unchanged; it is retried until the layout it
+  // measures has settled.
+  const caption = page.locator('.olv-empty-section-caption').first();
+  await expect(caption).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        const headingBox = await pcSummary.boundingBox();
+        const captionBox = await caption.boundingBox();
+        if (!headingBox || !captionBox) return Number.NEGATIVE_INFINITY;
+        return captionBox.y - (headingBox.y + headingBox.height);
+      },
+      { message: 'PC search caption top edge must sit at or below the summary bottom edge' },
+    )
+    .toBeGreaterThanOrEqual(0);
 });
 
 // ── 1. Curated public LiDAR catalog dropdown ────────────────────────────────

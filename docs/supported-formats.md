@@ -36,7 +36,7 @@ OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when th
 
 The parser decodes Cartesian coordinates, RGB colour, intensity, classification, and per-point surface normals. It applies each scan's recorded pose (rotation and translation), drops points the file flags as invalid, and bridges global coordinates into the viewer's local space with the same coordinate bridge the LAS loader uses. Multi-scan E57 files are merged into a single cloud, and the file's generating software is read from the header and shown in the Scan Report.
 
-E57 exports from Trimble survey scanners have been tested directly. Other standard E57 files — from Leica, FARO, Matterport, and similar systems — follow the same ASTM format and are expected to work; E57 files that use uncommon or non-standard schema features may not.
+E57 exports from Trimble survey scanners were checked manually during development. No Trimble fixture is committed, so that check is not reproducible from this archive. Other standard E57 files, from Leica, FARO, Matterport and similar systems, follow the same ASTM format and are expected to work; E57 files that use uncommon or non-standard schema features may not.
 
 ## Drone LiDAR and other professional point clouds
 

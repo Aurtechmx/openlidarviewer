@@ -38,7 +38,7 @@ the paper that specifies it.
 | `olv.validation.reliability-wilson` | 1 | Measured-cell reliability | Wilson (1927) |
 | `olv.registration.icp-planar` | 1 | Planar rigid ICP | Besl & McKay (1992); Umeyama (1991) |
 | `olv.registration.epoch-horizontal-icp` | 1 | Repeat-epoch horizontal alignment (yaw + XY, Z locked) | Besl & McKay (1992); Umeyama (1991) |
-| `olv.volume.stockpile` | 1 | Stockpile cut-fill volume ±1σ | internal (prismatic cut-fill) |
+| `olv.volume.stockpile` | 1 | Stockpile cut-fill volume with model sensitivity band | internal (prismatic cut-fill) |
 | `olv.volume.stockpile-area-grid` | 2 | Area-weighted stockpile volume (grid integration) | internal (area-weighted DoD); Sutherland & Hodgman (1974) |
 | `olv.change.dtm-difference` | 1 | DTM-of-difference cut/fill (thresholded gain/loss/net) | Anderson (2019), LoD thresholding |
 | `olv.change.dtm-difference.raw-net` | 1 | DTM-of-difference cut/fill (raw net + thresholded gross) | Anderson (2019), thresholded gross vs raw net |
@@ -52,3 +52,10 @@ behind its output. The hold-out vertical accuracy uses the ASPRS 2014 formulas
 on internally withheld points, not independent survey checkpoints, and the
 evidence registry still governs whether any product may be presented as
 validated. See `docs/validation/` and the evidence model.
+
+Naming those formulas is not a conformance statement. They are the edition-1
+(2014) forms, reproduced as diagnostics on withheld observations; ASPRS has
+published later editions of the positional-accuracy standards, and OLV does not
+claim conformance with any edition of them. The claim register prohibits
+"ASPRS NVA/VVA compliance" outright, because conformance presumes independent
+checkpoints this project does not have.

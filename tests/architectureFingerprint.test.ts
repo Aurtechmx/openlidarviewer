@@ -28,7 +28,7 @@ import {
   computeArchitectureFingerprint,
   measureModuleGraph,
 } from '../scripts/lint-module-graph.mjs';
-import { buildManifest } from '../scripts/create-release-manifest.mjs';
+import { buildManifest, PAYLOAD_KINDS } from '../scripts/create-release-manifest.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE = resolve(ROOT, 'docs/validation/module-graph-baseline.json');
@@ -94,10 +94,10 @@ describe('architecture fingerprint', () => {
       gateExit: 0,
       stages: { mutation: 'executed' },
     };
+    // The kinds the builder requires, read from the builder itself so a new
+    // payload asset cannot be forgotten here and silently narrow the fixture.
     const assets = Object.fromEntries(
-      ['sourceZip', 'deployZip', 'sbom', 'evidence', 'gateLog', 'gateLogSha256', 'releaseNotes'].map(
-        (k) => [k, { file: `${k}.bin`, sizeBytes: 1, sha256: 'x' }],
-      ),
+      PAYLOAD_KINDS.map((k: string) => [k, { file: `${k}.bin`, sizeBytes: 1, sha256: 'x' }]),
     );
     const built = buildManifest({
       version,

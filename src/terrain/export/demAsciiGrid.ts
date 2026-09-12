@@ -39,6 +39,29 @@ export function writeAsciiGrid(input: DemGridInput): string {
   const { values, coverage, cols, rows, cellSize, xllCorner, yllCorner } = input;
   const noData = input.noData ?? -9999;
   const precision = input.precision ?? 3;
+  // The GeoTIFF writer validates its input; this one emitted whatever it was
+  // handed. A cols x rows that does not match the arrays writes a raster whose
+  // rows are read from the wrong offsets, and a non-finite origin or cell size
+  // writes a header no GIS can place.
+  const isCount = (v: number): boolean => Number.isInteger(v) && v > 0;
+  if (!isCount(cols) || !isCount(rows)) {
+    throw new RangeError(`writeAsciiGrid: cols and rows must be positive integers; got ${cols} x ${rows}`);
+  }
+  if (values.length !== cols * rows || coverage.length !== cols * rows) {
+    throw new RangeError(
+      `writeAsciiGrid: ${cols} x ${rows} cells but ${values.length} values and ${coverage.length} coverage entries`,
+    );
+  }
+  if (!(Number.isFinite(cellSize) && cellSize > 0)) {
+    throw new RangeError(`writeAsciiGrid: cellSize must be a finite positive length; got ${cellSize}`);
+  }
+  if (!Number.isFinite(xllCorner) || !Number.isFinite(yllCorner)) {
+    throw new RangeError(`writeAsciiGrid: origin must be finite; got (${xllCorner}, ${yllCorner})`);
+  }
+  if (!Number.isFinite(noData)) throw new RangeError(`writeAsciiGrid: NODATA must be finite; got ${noData}`);
+  if (!(Number.isInteger(precision) && precision >= 0 && precision <= 20)) {
+    throw new RangeError(`writeAsciiGrid: precision must be an integer in [0, 20]; got ${precision}`);
+  }
 
   const head =
     `ncols ${cols}\n` +

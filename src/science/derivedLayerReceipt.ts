@@ -48,6 +48,7 @@ export interface DerivedLayerReceiptInput {
 /** Build the receipt describing the analysis a derived layer came from. */
 export function buildDerivedLayerReceipt(input: DerivedLayerReceiptInput): ScientificReceipt {
   const provenance = buildExportProvenance(input.result, {
+    verticalUnitToMetres: null,
     generatedAt: input.generatedAt,
   });
   return buildScientificReceipt(analysisRecordFromProvenance(provenance), {

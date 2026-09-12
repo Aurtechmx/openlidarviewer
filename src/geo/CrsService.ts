@@ -80,6 +80,93 @@ export type CrsListener = (crs: ResolvedCrs | null) => void;
  * a per-load `CrsInfo` with an existing override and emit a single
  * `ResolvedCrs`.
  */
+/**
+ * Relative difference between two spans, or null when either is unusable.
+ *
+ * A non-positive or non-finite value is NOT a small measurement — it is a
+ * degenerate one (bounds not computed yet, an empty buffer, a flat axis), and
+ * comparing it against a real span would read as total disagreement and discard
+ * a choice the user legitimately made. Unusable means "cannot tell".
+ */
+function spanRelDiff(a: number, b: number): number | null {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  if (a <= 0 || b <= 0) return null;
+  return Math.abs(a - b) / Math.max(a, b);
+}
+
+/**
+ * Whether a remembered override's dataset and the one being opened are the same.
+ *
+ * Only ever returns false on POSITIVE disagreement: if either side recorded no
+ * identity, this cannot tell them apart and says so by returning true, leaving
+ * the older name-and-declaration comparison as the only gate. That keeps a
+ * legacy entry and a caller with no cloud in hand working exactly as before.
+ *
+ * The tolerances mirror `matchSessionToScan`, which fingerprints a scan on the
+ * same two facts for the same reason: 1% on each bounds span, 0.5% on the point
+ * count. Both are far wider than float noise and far tighter than the gap
+ * between two genuinely different surveys.
+ */
+export function sameDataset(
+  stored: { readonly pointCount?: number; readonly extent?: readonly [number, number, number] } | undefined,
+  loaded: { readonly pointCount?: number; readonly extent?: readonly [number, number, number] } | undefined,
+): boolean {
+  if (!stored || !loaded) return true;
+  if (stored.pointCount !== undefined && loaded.pointCount !== undefined) {
+    const d = spanRelDiff(stored.pointCount, loaded.pointCount);
+    if (d !== null && d > 0.005) return false;
+  }
+  if (stored.extent && loaded.extent) {
+    for (let i = 0; i < 3; i++) {
+      const d = spanRelDiff(stored.extent[i], loaded.extent[i]);
+      if (d !== null && d > 0.01) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * A scan's identity for override matching: its source point total and the x/y/z
+ * spans of its bounds. Structural, so any object carrying these fields works.
+ * Returns undefined when neither fact is available, which reads as "cannot tell"
+ * rather than "different".
+ */
+export function datasetIdentity(cloud: {
+  readonly declaredPointCount?: number;
+  readonly sourceDeclaredPointCount?: number;
+  readonly pointCount?: number;
+  readonly bounds?: () => { readonly min: readonly number[]; readonly max: readonly number[] };
+  // A STREAMING source states the same two facts in its own shape: a declared
+  // source total, and bounds as one flat [minX,minY,minZ,maxX,maxY,maxZ]. It
+  // was left out, so a streaming scan reached the resolver with no identity at
+  // all and two same-named COPC/EPT datasets still collided on a remembered
+  // override — the very case the static path was fixed for.
+  readonly sourcePointCount?: number | null;
+  readonly dataBounds?: () => readonly number[] | null | undefined;
+  readonly localBounds?: () => readonly number[] | null | undefined;
+} | null | undefined): ResolveForScanInput['identity'] {
+  if (!cloud) return undefined;
+  const pointCount = cloud.sourceDeclaredPointCount
+    ?? cloud.declaredPointCount
+    ?? cloud.sourcePointCount
+    ?? cloud.pointCount
+    ?? undefined;
+  let extent: [number, number, number] | undefined;
+  try {
+    const b = cloud.bounds?.();
+    if (b) extent = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
+    else {
+      // Prefer the tight data bounds; the octree cube is a last resort.
+      const f = (cloud.dataBounds ?? cloud.localBounds)?.();
+      if (f && f.length >= 6) extent = [f[3] - f[0], f[4] - f[1], f[5] - f[2]];
+    }
+  } catch {
+    extent = undefined;
+  }
+  if (pointCount === undefined && !extent) return undefined;
+  return { ...(pointCount !== undefined ? { pointCount } : {}), ...(extent ? { extent } : {}) };
+}
+
 export interface ResolveForScanInput {
   /**
    * Display name of the loaded scan. Used to compute the override-
@@ -90,6 +177,16 @@ export interface ResolveForScanInput {
   readonly detected: CrsInfo | undefined;
   /** Where the detection came from — drives the source label. */
   readonly source: CrsSource;
+  /**
+   * The scan's own size and shape, for telling two same-named datasets apart
+   * before a remembered override is applied to the wrong one. Omitted by a
+   * caller that has no cloud in hand, which leaves the older name-and-
+   * declaration comparison in force rather than dropping the user's choice.
+   */
+  readonly identity?: {
+    readonly pointCount?: number;
+    readonly extent?: readonly [number, number, number];
+  };
 }
 
 /**
@@ -99,6 +196,26 @@ export interface ResolveForScanInput {
  * Listeners receive `null` when the active scan closes and a fresh
  * `ResolvedCrs` after every successful resolve / override change.
  */
+/**
+ * Structural equality of two resolved CRS records. Plain data only (strings,
+ * numbers, booleans, optional fields), compared key by key so that an
+ * `undefined` field and an absent one read the same. Any differing fact,
+ * including `source` and `userConfirmed`, is a different frame: the metric
+ * claims a frame permits depend on them.
+ */
+function sameResolvedCrs(a: ResolvedCrs, b: ResolvedCrs): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    const va = (a as unknown as Record<string, unknown>)[k];
+    const vb = (b as unknown as Record<string, unknown>)[k];
+    if (va === vb) continue;
+    if (va == null && vb == null) continue;
+    if (typeof va === 'number' && typeof vb === 'number' && Number.isNaN(va) && Number.isNaN(vb)) continue;
+    return false;
+  }
+  return true;
+}
+
 export class CrsService {
   private readonly _port: CrsOverridePort;
   private readonly _listeners: Set<CrsListener> = new Set();
@@ -111,6 +228,12 @@ export class CrsService {
    * and the rebuild happens on the next read.
    */
   private _context: SpatialContext | null = null;
+  /**
+   * The active scan's identity as last resolved, so applying an override
+   * records WHICH dataset the choice was made for without every caller having
+   * to pass it again.
+   */
+  private _currentIdentity: ResolveForScanInput['identity'];
 
   constructor(port: CrsOverridePort = DEFAULT_CRS_OVERRIDE_PORT) {
     this._port = port;
@@ -155,6 +278,7 @@ export class CrsService {
    */
   resolveForScan(input: ResolveForScanInput): ResolvedCrs {
     this._currentDatasetKey = keyForDataset(input.name);
+    this._currentIdentity = input.identity;
     const resolved = this._resolve(input);
     this._setCurrent(resolved);
     return resolved;
@@ -186,10 +310,24 @@ export class CrsService {
     // declaration, at high confidence. Comparing the declaration recorded with
     // the override tells them apart — and still lets a user override a file's
     // own wrong CRS, because that file declares the same thing every reopen.
-    const belongsToThisFile =
-      override?.detectedEpsg === undefined ||
-      input.detected?.epsg === undefined ||
-      override.detectedEpsg === input.detected.epsg;
+    // A legacy entry recorded no observation at all, so it keeps the original
+    // fail-open: dropping it would discard a choice the user really made.
+    // Anything written since records what the file declared — including that it
+    // declared NOTHING — so "both saw no declaration" is now a positive match
+    // rather than an absence of evidence, and "one declared, one did not" is a
+    // mismatch instead of a pass.
+    const observed = override?.detectedEpsgObserved === true;
+    const declarationMatches = !observed
+      ? (override?.detectedEpsg === undefined
+        || input.detected?.epsg === undefined
+        || override.detectedEpsg === input.detected.epsg)
+      : override?.detectedEpsg === input.detected?.epsg;
+    // A matching declaration is not identity when BOTH sides declared nothing —
+    // which is the usual state of a scan someone overrides. The dataset's own
+    // size and shape settle it where both are known; where they are not, the
+    // comparison is the weaker one it always was.
+    const belongsToThisFile = declarationMatches
+      && sameDataset(override?.identity, input.identity);
     const applicable = override && belongsToThisFile ? override : undefined;
     return this._resolveDatum(applicable
       ? this._fromOverride(applicable, input.detected)
@@ -237,6 +375,11 @@ export class CrsService {
       // Without it the entry cannot be told apart from one belonging to an
       // unrelated file that happens to share a name.
       detectedEpsg: args.detected?.epsg,
+      // Records that the declaration WAS looked at, so a later file declaring
+      // something different — or declaring nothing when this one did — is not
+      // mistaken for the same dataset.
+      detectedEpsgObserved: true,
+      ...(this._currentIdentity ? { identity: this._currentIdentity } : {}),
     });
     const override = this._port.get(this._currentDatasetKey);
     if (!override) return this._current;
@@ -321,8 +464,41 @@ export class CrsService {
 
   // ── private ────────────────────────────────────────────────────────
 
+  /**
+   * Monotonic count of active-CRS changes. Not an identity: it answers only
+   * "is this the same frame the result was computed under", which is what a
+   * freshness check needs. Starts at 0 and never resets.
+   */
+  private _crsRevision = 0;
+
+  /** The current spatial-frame revision. See {@link _crsRevision}. */
+  crsRevision(): number {
+    return this._crsRevision;
+  }
+
   private _setCurrent(next: ResolvedCrs | null): void {
+    const prev = this._current;
     this._current = next;
+    // Every CHANGE to the active CRS advances the revision. A terrain result is
+    // computed under one spatial frame — projected/geographic kind, horizontal
+    // and vertical scale, datum — so a result minted at revision N describes a
+    // frame that revision N+1 may have replaced. Scan identity alone cannot see
+    // that: an override changes the frame without changing the scan.
+    //
+    // A re-resolution that lands the SAME frame is not a change. This bumped on
+    // every call, so opening a second tile of one survey, or re-applying the
+    // override already in force, advanced the revision: the freshness stamps
+    // then refused the on-screen result as "coordinate system changed", every
+    // derived classification was marked frame-invalid and the terrain cache
+    // dropped, for a frame that had not moved. Equality is over the whole
+    // resolved record, so any fact that differs still counts as a change.
+    if (prev !== null && next !== null && sameResolvedCrs(prev, next)) {
+      for (const fn of this._listeners) {
+        try { fn(next); } catch { /* see below */ }
+      }
+      return;
+    }
+    this._crsRevision += 1;
     // Drop the memoised context so the next `context()` read rebuilds from the
     // CRS that just landed. Invalidate rather than recompute: a scan swap that
     // no one asks a spatial question about should not pay for one.

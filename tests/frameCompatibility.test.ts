@@ -258,10 +258,58 @@ describe('epochVerticalScalesComparable', () => {
     expect(epochVerticalScalesComparable(withVertical(0.3048), withVertical(1))).toBe(false);
   });
 
-  it('permits when either vertical scale is unknown (no evidence of a mismatch)', () => {
-    // A plain UTM context carries no known vertical scale.
+  it('permits when the EFFECTIVE scales agree, declared or inherited', () => {
+    // A plain metre UTM context declares no separate vertical unit, so Z rides
+    // the horizontal one: its effective vertical scale is 1, the same as an
+    // explicitly declared metre vertical.
     expect(epochVerticalScalesComparable(metreUtm(), withVertical(1))).toBe(true);
-    expect(epochVerticalScalesComparable(withVertical(0.3048), metreUtm())).toBe(true);
     expect(epochVerticalScalesComparable(metreUtm(), metreUtm())).toBe(true);
+  });
+
+  it('REFUSES a declared foot vertical against a metre CRS that declares none', () => {
+    // This returned true while the check read `verticalScaleKnown` instead of
+    // the effective scale: absence of a SEPARATE vertical unit was treated as
+    // no evidence, when for a single-unit CRS it is positive evidence that Z is
+    // in the horizontal unit. 100 ft and the physically identical 30.48 m then
+    // differenced to a 21 m change instead of zero.
+    expect(epochVerticalScalesComparable(withVertical(0.3048), metreUtm())).toBe(false);
+    expect(epochVerticalScalesComparable(metreUtm(), withVertical(0.3048))).toBe(false);
+  });
+
+  it('REFUSES when exactly one side resolves a vertical scale', () => {
+    // The unresolved side cannot be SHOWN to match the resolved one, and the
+    // pipeline applies one shared factor to both — so "no evidence of a
+    // mismatch" was doing the work of "evidence of a match". A foot-vertical
+    // epoch differenced against a scan of unstated units is exactly the case
+    // that produces a plausible, wrong metre figure.
+    const noCrs = spatialContextFrom(null);
+    expect(epochVerticalScalesComparable(noCrs, withVertical(0.3048))).toBe(false);
+    expect(epochVerticalScalesComparable(withVertical(1), noCrs)).toBe(false);
+  });
+
+  it('REFUSES a declared but degenerate vertical unit', () => {
+    // main.ts passes `ctxA.verticalUnitToMetres` to the change pipeline as the
+    // shared factor. A file that declares a scale of 0 (or a negative, or a
+    // non-finite one) has stated it wrongly, and that number would be carried
+    // into every elevation difference whatever the other epoch declares.
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        epochVerticalScalesComparable(withVertical(bad), withVertical(1)),
+        `a declared vertical scale of ${bad} was accepted`,
+      ).toBe(false);
+      expect(epochVerticalScalesComparable(withVertical(1), withVertical(bad))).toBe(false);
+    }
+  });
+
+  it('permits two epochs that BOTH state nothing, because no metre figure survives', () => {
+    // The one remaining permit. An undeclared vertical resolves to undefined
+    // under 'horizontal-when-known' only when that epoch's HORIZONTAL unit is
+    // also unknown; epochFrameOptions ands the two horizontal flags, so
+    // compareDtms is told horizontalUnitKnown: false and withholds every metre
+    // figure. Refusing here too would remove the unreferenced-pair comparison
+    // without removing a number any user could read.
+    const noCrs = spatialContextFrom(null);
+    expect(epochVerticalScalesComparable(noCrs, noCrs)).toBe(true);
+    expect(epochFrameOptions(noCrs, noCrs).horizontalUnitKnown).toBe(false);
   });
 });

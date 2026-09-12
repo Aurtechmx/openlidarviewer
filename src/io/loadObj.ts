@@ -16,6 +16,7 @@
 
 import { parse } from '@loaders.gl/core';
 import { OBJLoader } from '@loaders.gl/obj';
+import { LOCAL_ONLY_LOADER_OPTIONS } from './loaderConfig';
 import { PointCloud } from '../model/PointCloud';
 import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 
@@ -44,7 +45,7 @@ function readVertexRecords(text: string): Float64Array {
  * @param name   Display name (defaults to `"cloud.obj"`).
  */
 export async function loadObj(buffer: ArrayBuffer, name = 'cloud.obj'): Promise<PointCloud> {
-  const mesh = await parse(buffer, OBJLoader);
+  const mesh = await parse(buffer, OBJLoader, LOCAL_ONLY_LOADER_OPTIONS);
 
   const positionAttr = mesh.attributes.POSITION;
   if (!positionAttr) {

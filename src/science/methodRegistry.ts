@@ -68,10 +68,12 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   'olv.ground.smrf': {
     id: 'olv.ground.smrf',
     version: 1,
-    name: 'Simple Morphological Filter (SMRF) ground extraction',
+    name: 'SMRF-core progressive morphological ground extraction',
     summary:
       'Grid-native progressive morphological opening that separates ground from ' +
-      'object returns on a rasterised surface.',
+      'object returns on a rasterised surface. It implements the SUBSET of ' +
+      'Pingel et al. (2013) the claim register scopes it to, without the ' +
+      'net-cutting refinement pass, so it is not the full reference pipeline.',
     citation: 'Pingel, Clarke & McBride (2013), doi:10.1016/j.isprsjprs.2012.12.002',
     category: 'ground',
     implementation: ['src/terrain/ground/groundFilter.ts'],
@@ -163,8 +165,11 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     name: 'Spatial-block cross-validation',
     summary:
       'Blocks the extent at a fixed data-anchored origin, holds out whole blocks, ' +
-      'and reports RMSE/MAE with a block-bootstrap confidence interval — a less ' +
-      'optimistic estimate than random hold-out under spatial autocorrelation.',
+      'and reports RMSE/MAE with a block-bootstrap confidence interval. Whether it ' +
+      'is a like-for-like contrast with random hold-out depends on the path: each ' +
+      'figure records the ground classification it used, and they agree only when ' +
+      'the source classification is trusted. Where they differ the contrast changes ' +
+      'treatment as well as geometry, and neither is guaranteed the larger.',
     citation: 'Roberts et al. (2017), doi:10.1111/ecog.02881 (spatial block CV)',
     category: 'validation',
     implementation: ['src/terrain/validate/spatialBlockHoldout.ts'],
@@ -210,10 +215,14 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   'olv.volume.stockpile': {
     id: 'olv.volume.stockpile',
     version: 1,
-    name: 'Stockpile cut-fill volume with 1σ band',
+    name: 'Stockpile cut-fill volume with model sensitivity band',
     summary:
       'Cut-fill prism volume of a footprint above a fitted base plane, with a ' +
-      'propagated 1σ volume uncertainty of area·σ(thickness)/√N.',
+      'model sensitivity band combining the independent-sample thickness term ' +
+      'area·σ(thickness)/√N and a heuristic base-height term. The arithmetic is ' +
+      'a standard deviation of that model; it is not calibrated coverage, ' +
+      'because the thickness samples are spatially correlated and the base term ' +
+      'is a spread rather than a measured error.',
     citation: 'Internal composition (prismatic cut-fill); standard earthworks method.',
     category: 'volume',
     implementation: ['src/render/measure/stockpileVolume.ts'],

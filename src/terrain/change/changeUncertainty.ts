@@ -40,6 +40,15 @@
  * the covariance branch in {@link changeVolumeUncertainty} for the formula
  * and its documented approximation.
  *
+ * NOTHING SHIPPED SELECTS `covariance`. The one call site, `compareDtms`, passes
+ * no model and exposes no way for a caller to choose one, so every figure OLV
+ * emits uses `independent-cells`. That is what lets the claim register state
+ * that the random term assumes independent per-cell errors and that spatial
+ * correlation is unquantified. Wiring this branch to a user path would make the
+ * software able to produce what that register lists under `prohibitedClaim` as
+ * "quantified spatially-correlated uncertainty", so it is a claim-register
+ * change first and a UI change second.
+ *
  * Pure, deterministic. Sits beside {@link detectChange}: that computes the
  * volume, this bounds it.
  */
@@ -80,8 +89,16 @@ export type ChangeUncertaintyModel =
 export interface ChangeVolumeUncertaintyInput {
   /** The net volume (m³) whose band we want — usually `stats.netVolumeM3`. */
   readonly netVolumeM3: number;
-  /** Significant (changed) cell count — `stats.gained + stats.lost`. */
-  readonly significantCells: number;
+  /**
+   * How many cells the reported volume actually sums.
+   *
+   * Named `contributingCells` while the caller passed the above-LoD count, which
+   * was right for the thresholded net and wrong once the RAW net over every
+   * comparable cell became the primary figure: a site whose every cell changes
+   * below the level of detection has zero significant cells and a non-zero raw
+   * net, and the random term collapsed to +/-0 on 100 noisy observations.
+   */
+  readonly contributingCells: number;
   /** Cell area in m² — `(cellSizeM · horizontalUnitToMetres)²`. */
   readonly cellAreaM2: number;
   /**
@@ -157,7 +174,7 @@ export function changeVolumeUncertainty(
     );
   }
 
-  const n = Math.max(0, Math.floor(input.significantCells));
+  const n = Math.max(0, Math.floor(input.contributingCells));
   const area = Math.max(0, input.cellAreaM2);
   const cellSigma = Math.max(0, input.cellSigmaM);
   const reg = Math.max(0, input.registrationSigmaM ?? 0);

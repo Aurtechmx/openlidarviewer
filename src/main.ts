@@ -96,7 +96,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { classCountsOf, noteClassificationEdited } from './app/classLegendRefresh';
+import { afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { classifierOptions } from './render/class/classifierCues';
 import { classificationCoverage } from './render/class/classificationCoverage';
@@ -124,7 +124,7 @@ import { spaceMetrics, resolveLinearUnitScale, positionsInMetres, type SpaceMetr
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
-import { writeScanScopedExport, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
+import { writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
   crsIsKnown,
   exportScanFootprintKml,
@@ -1520,6 +1520,8 @@ async function runDeriveClassification(): Promise<void> {
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
   const deriveOptions = classifierOptions(cloud, crsService.context());
+    // The frame is baked into these thresholds (physical metres → source units).
+    const deriveCrsRevision = crsService.crsRevision();
 
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
@@ -1535,7 +1537,7 @@ async function runDeriveClassification(): Promise<void> {
       // not a hang. (Off-thread, so the UI repaints between phases.)
       (phase) => showLassoToast(`Classify · ${phase}…`),
     );
-    if (id !== scans.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    if (id !== scans.activeId || viewer.getCloud(id) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return;
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
@@ -1608,6 +1610,8 @@ async function runFillUnclassified(): Promise<void> {
     existingClassification: cloud.classification,
     ...classifierOptions(cloud, crsService.context()),
   };
+  // See the Classify path: the frame is baked into these thresholds.
+  const deriveCrsRevision = crsService.crsRevision();
 
   classifyRunning = true;
   showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
@@ -1621,7 +1625,7 @@ async function runFillUnclassified(): Promise<void> {
       undefined,
       (phase) => showLassoToast(`Fill unclassified · ${phase}…`),
     );
-    if (id !== scans.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    if (id !== scans.activeId || viewer.getCloud(id) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return;
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
@@ -2068,7 +2072,7 @@ function newAnalysePanel(
     // Same cached-core rebuild, generalised with the contour shape-style picker so
     // an export reflects the user's chosen interval AND line shape.
     buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null,
+    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null, activeClassificationEpoch: () => { const id = scans.activeId; return id ? viewer.classificationEpoch(id) : 0; }, crsRevision: () => crsService.crsRevision(),
     // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
     // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
     // are the card's own strings (null when the card is empty — the report
@@ -2126,7 +2130,14 @@ function newAnalysePanel(
       // active, so a contour export from a streamed scan keeps its world
       // origin and EPSG stamp instead of silently degrading to local frame.
       const streaming = cloud ? null : viewer.streamingCloud;
-      const origin = cloud?.origin ?? streaming?.renderOrigin;
+      // The gather folds every mounted layer's placement in, so a multi-layer
+      // analysis is computed in the PROJECT frame — which the active layer's
+      // own origin does not name. Anchoring the export to it would translate
+      // the whole surface by that layer's offset from the project origin. When
+      // the contributing layers disagree, publish no origin: serializeContours
+      // then omits the CRS stamp rather than georeferencing to the wrong one,
+      // the same refusal `exportAdapter.georefContext` already makes.
+      const origin = viewer.terrainFrameIsSingleOrigin() ? (cloud?.origin ?? streaming?.renderOrigin) : undefined;
       const cur = crsService.current();
       // The ONE context for this export, so sheet, DXF and GeoJSON describe one
       // frame. `cur` survives only where the RESOLVED object is itself needed
@@ -2150,24 +2161,22 @@ function newAnalysePanel(
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
         // scale note says ft — and a local/unresolved frame stamps an honest
-        // "unitless" rather than asserting metres. Undefined before a CRS
-        // resolves ⇒ serializeContours keeps its standing metre default.
+        // "unitless" rather than asserting metres. Undefined before a CRS resolves
+        // ⇒ serializeContours keeps its standing metre default.
         linearUnit: cur?.linearUnit,
-        // Source frame → WGS 84 lon/lat, for the RFC 7946 contour GeoJSON.
-        // Built from the SAME resolved CRS and world origin the rest of this
-        // context uses, so the standard export and the native one describe one
-        // scan. Null when the CRS cannot be converted — the export then refuses
-        // rather than writing eastings into a longitude field.
-        // Anchored at the scan's own origin, because the converter probes the
-        // anchor to decide whether it can work at all — probing (0,0) would
-        // fail every UTM grid. Contour coordinates arrive already shifted to
-        // world, so they are re-localised against that same anchor here.
-        toLonLat: (() => {
-          if (!origin || !cur) return undefined;
-          const m = makeLocalToLonLat(cur, [origin[0], origin[1], origin[2]]);
-          if (!m) return undefined;
-          return (p: readonly [number, number, number]): [number, number, number] =>
-            m([p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]]);
+        resolvedUnitToMetres: ctx.linearUnitKnown ? ctx.linearUnitToMetres : undefined, // RESOLVED, not declared
+        resolvedCrsLabel: cur ? (cur.epsg != null ? `EPSG:${cur.epsg}` : cur.name ?? null) : null,
+        // Source frame → WGS 84 lon/lat, from the resolved CRS and origin the rest of
+        // this context uses; absent when it cannot be converted. Anchored at the
+        // scan's origin, which the converter probes: (0,0) fails every UTM grid.
+        // TWO of them, named for the frame they ACCEPT — contours arrive in world,
+        // extraction render-local; one name served both, landing footprints at 0,0.
+        ...(() => {
+          const o = origin ?? null;
+          const local = o && cur ? makeLocalToLonLat(cur, [o[0], o[1], o[2]]) : null;
+          if (!o || !local) return {};
+          const w = (p: readonly [number, number, number]): [number, number, number] => local([p[0] - o[0], p[1] - o[1], p[2] - o[2]]);
+          return { localToLonLat: local, worldToLonLat: w };
         })(),
         // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
         // it declares one, else the horizontal linear factor when the frame is
@@ -2245,8 +2254,7 @@ const processStudio = createProcessStudioFromShell({
 
 // Manual classification-edit panel — lazy-loaded below the legend on first
 // classification. `showReclassifyUi()` on availability; `hideReclassifyUi()` on detach.
-let reclassifyUi: ReclassifyUi | null = null;
-let reclassifyUiLoading: Promise<void> | null = null;
+let reclassifyUi: ReclassifyUi | null = null, reclassifyUiLoading: Promise<void> | null = null;
 async function showReclassifyUi(): Promise<void> {
   if (reclassifyUi) {
     reclassifyUi.setVisible(true);
@@ -2263,6 +2271,7 @@ async function showReclassifyUi(): Promise<void> {
         getActiveId: () => scans.activeId,
         onToast: showLassoToast,
         onAutoClassify: () => runDeriveClassification(),
+        onReclassified: (cls) => afterClassEdit(classLegendPanel, cls),
       });
       classLegendPanel.element.after(ui.element);
       reclassifyUi = ui;
@@ -2396,6 +2405,9 @@ interface SpaceExportContext {
   readonly object: ObjectMetrics | null;
   readonly spaceKind: 'interior' | 'object';
   readonly unitToMetres: number;
+  readonly unitKnown: boolean; // an inert 1 must not print as metres
+  /** The scan and frame these metrics were computed under. */
+  readonly targetId: string | null; readonly crsRevision: number;
   readonly upAxis: SpaceMetrics['up'];
   readonly basename: string;
 }
@@ -2408,6 +2420,10 @@ let lastSpaceExport: SpaceExportContext | null = null;
 // Floor-plan extraction therefore re-gathers at the terrain-analysis budget;
 // the routing snapshot stays as the metrics source AND the fallback when the
 // fresh gather fails (e.g. mid-stream).
+/** Live identity for the space-export freshness check. */
+const spaceCtxCurrent = (c: SpaceExportContext): boolean =>
+  spaceContextStillCurrent(c, { targetId: scans.activeExportTargetId(), crsRevision: crsService.crsRevision() });
+
 const FLOORPLAN_GATHER_POINTS = 300_000;
 
 /**
@@ -2483,14 +2499,18 @@ function newObjectPanel(
     const ctx = lastSpaceExport;
     if (!ctx) return;
     const { buildSpaceReportPdf } = await loadSpaceReportPdf();
+    if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
     let floorPlan = null;
     if (ctx.spaceKind === 'interior') {
       const { extractFloorPlan } = await loadFloorPlan();
+      // A SECOND await, and the gather below reads live state, so the check is
+      // owed again here: guarding only the first one left the same window open.
+      if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
       // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
       // tracing (see FLOORPLAN_GATHER_POINTS).
       floorPlan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
         upAxis: ctx.upAxis,
-        unitToMetres: ctx.unitToMetres,
+        unitToMetres: ctx.unitToMetres, unitKnown: ctx.unitKnown,
         maxSamples: FLOORPLAN_GATHER_POINTS,
         ...FLOORPLAN_OPTIONS,
         // User-tunable wall-snapping + adaptive-band selections from the panel
@@ -2521,11 +2541,12 @@ function newObjectPanel(
     const ctx = lastSpaceExport;
     if (!ctx || ctx.spaceKind !== 'interior') return;
     const { extractFloorPlan, floorPlanSvg } = await loadFloorPlan();
+    if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
     // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
     // tracing (see FLOORPLAN_GATHER_POINTS).
     const plan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
       upAxis: ctx.upAxis,
-      unitToMetres: ctx.unitToMetres,
+      unitToMetres: ctx.unitToMetres, unitKnown: ctx.unitKnown,
       maxSamples: FLOORPLAN_GATHER_POINTS,
       ...FLOORPLAN_OPTIONS,
       // User-tunable wall-snapping + adaptive-band selections from the panel
@@ -2596,7 +2617,7 @@ const terrainRunner = createTerrainAnalysisRunner({
   // entry point (onRun / onSelectInterval callbacks, the "run anyway" hatches)
   // fires only after the panel has mounted, so this always resolves non-null.
   getAnalysePanel: () => analysePanel,
-  getActiveId: () => scans.activeId,
+  getActiveId: () => scans.activeExportTargetId(), // streaming leaves activeId null
   crsService,
   // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
   // so the 3D "Coverage" colour mode (and its colourblind-safe "Confidence"
@@ -2695,14 +2716,12 @@ const kmlDeps: KmlActionDeps = {
   hasViewer: () => Boolean(viewer),
   geo: exportGeoContext,
   crsCurrent: () => crsService.current(),
+  upAxis: () => crsService.context().upAxis, // RESOLVED axis
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
   measurements: () => viewer?.measure.getMeasurements() ?? [],
-  viewpoints: () =>
-    viewBookmarks.savedViews.map((v) => ({
-      name: v.name,
-      position: v.pose.position,
-      target: v.pose.target,
-    })),
+  viewpoints: () => viewBookmarks.savedViews.map(
+    (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
+  ),
   worldUp: () => viewer.measure.worldUp,
   unitToMetres: () => viewer.measure.unitToMetres,
   // Static: the bounds of the points actually loaded. Streaming: the LAS header
@@ -2885,6 +2904,7 @@ const exportPanel = new ExportPanel({
     if (!viewer) return [];
     return collectMeasurementFindings(measurementExportActionDeps(viewer));
   },
+  activeFindingsTargetId: () => scans.activeExportTargetId(), // ledger owner
   exportFindingsReport: async (findings) => {
     if (!viewer) return;
     await exportFindingsReport(measurementExportActionDeps(viewer), findings);
@@ -2900,9 +2920,13 @@ const exportPanel = new ExportPanel({
 // assign / reproject, so the step collapses to a one-line note. A georeferenced
 // scan behaves exactly as before. Fires on every resolve / override change, plus
 // once here to seed the initial (no-scan ⇒ collapsed) state.
-crsService.subscribe((resolved) => {
-  exportPanel.setCrsKnown(crsIsKnown(resolved));
-  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } // reveal on scan load, hide + reset produced on close
+wireFrameChange({
+  crsService,
+  onResolved: (resolved) => { exportPanel.setCrsKnown(crsIsKnown(resolved)); if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } }, // reveal on scan load, hide + reset produced on close
+  cancelFullCloudGrade: () => cancelFullCloudGrade(),
+  invalidate: () => viewer?.invalidateDerivedClassificationsForFrame() ?? [],
+  clearTerrainCache: () => terrainRunner.abortAndClearCache(),
+  noteStale: (m) => analysePanel?.setStaleNotice(m),
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
@@ -3129,8 +3153,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
       spaceKind: effective === 'interior' ? 'interior' : 'object',
-      unitToMetres,
-      unitKnown: spaceCtx.linearUnitKnown,
+      unitToMetres, unitKnown: spaceCtx.linearUnitKnown,
       hasRgb,
       sourcePointCount: gathered.totalPoints,
       // A still-streaming cloud is measured on its resident subset only — lead
@@ -3161,7 +3184,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       space,
       object,
       spaceKind,
+      targetId: scans.activeExportTargetId(), crsRevision: crsService.crsRevision(),
       unitToMetres,
+      unitKnown: spaceCtx.linearUnitKnown,
       upAxis: shape.up,
       basename: lastCloudName || 'scan',
     };
@@ -3948,6 +3973,7 @@ async function runFullCloudGradeAction(): Promise<void> {
       panel: streamingPanel,
       signal: fullCloudGradeController.signal,
       debug,
+      context: crsService.context(), // the resolved frame, not the file's claim
     });
   } finally {
     fullCloudGradeRunning = false;
@@ -4545,8 +4571,8 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
 async function exportSession(): Promise<void> {
   let stem = 'openlidarviewer';
   await writeScanScopedExport({
-    requestedScanId: scans.activeId,
-    activeScanId: () => scans.activeId,
+    requestedScanId: scans.activeExportTargetId(), // streaming leaves activeId null
+    activeScanId: () => scans.activeExportTargetId(),
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()) }),
@@ -4604,12 +4630,12 @@ async function exportSession(): Promise<void> {
       let processingManifest: unknown;
       // Null-safe: saving a session before any scan (or before the panel's chunk
       // resolves) simply carries no analysis manifest.
-      const analysed = analysePanel?.currentResult() ?? null;
+      const analysed = analysePanel?.currentResultForProvenance() ?? null;
       if (analysed) {
         processingManifest = processingManifestFromProvenance(
           buildExportProvenance(analysed, {
             basename: exportFileName ? baseName(exportFileName) : null,
-            generatedAt: new Date(),
+            generatedAt: new Date(), verticalUnitToMetres: verticalMetresPerUnit(crsService.context(), 'horizontal-when-known') ?? null,
             softwareVersion: __APP_VERSION__,
             metricVersion: TERRAIN_METRIC_VERSION,
           }), cloud?.organizedRange);
@@ -5218,6 +5244,7 @@ function resetToEmptyState(): void {
   objectPanel?.setVisible(false);
   objectDesiredVisible = false;
   objectContent = null;
+  lastSpaceExport = null; // it outlived the scan it describes
   // Hide the Measurements panel and drop its tracked desired state so a fresh
   // open starts hidden. Null-safe: the panel is lazy-mounted, so a reset before
   // any scan simply has nothing to clear.
@@ -5346,10 +5373,10 @@ function compareLoadedLayers(): void {
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     try {
-      const { ctxA, comparable, frames, beforeCloud, afterCloud } = prepareEpochFrames(crsService, a, b);
+      const { ctxA, comparable, reason, frames, beforeCloud, afterCloud } = prepareEpochFrames(crsService, a, b);
       if (!comparable) {
         inspector.setCompareResult(
-          epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`),
+          epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`, reason ?? 'vertical-unit'),
         );
         inspector.setDifferenceAvailable(false);
         return;
@@ -5389,9 +5416,10 @@ function compareLoadedLayers(): void {
       // export otherwise carries foot geometry with metre values, and any GIS
       // volume mixes ft² with m). Metre / compound-metre-horizontal CRS ⇒ 1, a
       // byte-identical no-op; OLV never reprojects, so the grid unit stays source.
-      // A provably frame-incompatible pair reports no numbers, so it must not
-      // hand out a difference raster either.
-      if (cmp.frameIncompatible) {
+      // The whole co-registration verdict, not just a proven frame clash: see
+      // EpochComparison.coregistered for why the file is stricter than the panel.
+      if (!cmp.coregistered || cmp.result.stats.comparable === 0) {
+        // An all-NaN raster is not a difference; it was offered for download.
         inspector.setDifferenceAvailable(false);
         return;
       }
@@ -5505,7 +5533,10 @@ async function saveSnapshot(): Promise<void> {
     // banner the Studio export path uses so a filtered snapshot can't leave the
     // app undisclosed. With an empty stamp (nothing hidden) the helper returns
     // the input Blob unchanged, keeping the snapshot byte-identical to before.
-    let stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
+    // Scope stamp and view provenance belong to the captured pixels, so both are
+    // read here rather than after the Studio chunk await below.
+    const scope = currentClassScopeStamp(); const figureView = viewer.figureViewContext();
+    let stamped = await composeClassScopeBannerOntoBlob(blob, scope);
     // Embed figure provenance (build / CRS / colormap / camera / clip) as PNG
     // text chunks — the same chunks every Studio export carries, so a saved
     // view can answer "which build drew you, seen from where?" months later.
@@ -5514,10 +5545,7 @@ async function saveSnapshot(): Promise<void> {
     // because the snapshot itself must never sink on a metadata enrichment.
     try {
       const studio = await loadExportStudio();
-      stamped = await studio.stampFigureProvenanceOntoBlob(
-        stamped,
-        viewer.figureViewContext(),
-      );
+      stamped = await studio.stampFigureProvenanceOntoBlob(stamped, figureView);
     } catch (err) {
       console.warn('[snapshot] provenance stamping skipped:', err);
     }

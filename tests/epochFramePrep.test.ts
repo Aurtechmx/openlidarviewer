@@ -35,6 +35,9 @@ const COMPOUND_M: CrsInfo = {
 
 const epoch = (name: string, crs: CrsInfo | undefined) => ({
   name,
+  // A survey format: Z-up by specification, which the change pipeline requires.
+  // The up-axis contract is exercised on its own in epochUpAxisGate.test.ts.
+  sourceFormat: 'las' as const,
   positions: new Float32Array([0, 0, 0, 1, 1, 1]),
   sourceOrigin: [10, 20, 0] as [number, number, number],
   metadata: crs ? { crs } : undefined,

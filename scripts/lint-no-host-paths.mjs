@@ -64,6 +64,14 @@ const DESCRIBES_THE_PATTERN = new Map([
     'benchmarks/framework/artifacts.ts',
     'documents why an absolute path is stripped from a record, quoting one',
   ],
+  [
+    'scripts/defect-replay-lib.mjs',
+    'redacts absolute paths out of replay records, so it names the prefix it strips',
+  ],
+  [
+    'tests/benchmark/artifacts.test.ts',
+    'asserts the redaction works, so its fixtures are the paths that must not survive',
+  ],
 ]);
 
 /**
@@ -102,6 +110,24 @@ function hostPatterns() {
   const tmp = tmpdir();
   add(tmp, 'this temporary directory');
   add(tmp.replace(/[/\\]/g, '-').replace(/^-/, ''), 'this temporary directory, flattened');
+
+  // A floor, so the check can always run. On a root Linux container the derived
+  // values are `/root` and `/tmp`, both below MIN_LENGTH, so every candidate
+  // was filtered and the check exited 1 — correctly refusing to report an
+  // unperformed scan, but leaving a reviewer with a red gate and no leak.
+  //
+  // These prefixes are home-directory ROOTS, not words: they cannot collide
+  // with prose the way a bare `tmp` or an account name does, which is what
+  // MIN_LENGTH exists to prevent. Lowering MIN_LENGTH instead was measured and
+  // rejected: `/root` appears in 9 tracked files and `/tmp` in 12, all of them
+  // legitimate (regex literals, URLs), so it would report 21 false findings.
+  //
+  // This does NOT cover a leak of the running machine's own short home path;
+  // the derived patterns above do that wherever they clear the filter. Recorded
+  // in "Not covered, deliberately" below.
+  for (const root of ['/Users/', '/home/', 'C:\\Users\\']) {
+    patterns.push({ value: root, label: 'a home-directory path' });
+  }
 
   // Longest first, so a finding reports the most specific match.
   return patterns.sort((a, b) => b.value.length - a.value.length);

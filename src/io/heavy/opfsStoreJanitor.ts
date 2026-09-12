@@ -50,6 +50,7 @@ import {
   type OpfsDirHandle,
 } from './opfsSpillStore';
 import { CACHE_MAP_FILE } from './oocCacheMap';
+import { removeStoreIfIdle, type LockManagerLike } from './oocStoreLiveness';
 
 /** The prefix every out-of-core temp store name carries. */
 export const OOC_STORE_PREFIX = 'ooc-';
@@ -190,6 +191,16 @@ export interface PromotedSweepOptions {
   readonly referenced: ReadonlySet<string>;
   /** Store names a live tab holds open (from Web Locks); never swept. */
   readonly live: ReadonlySet<string>;
+  /**
+   * The lock manager, so each deletion is taken under the store's own EXCLUSIVE
+   * lock rather than on the strength of the `live` snapshot alone.
+   *
+   * `live` is read once, before the loop. A tab that opens a store after that
+   * read is invisible to it, and the sweep would then delete a store somebody
+   * is streaming from. Deleting under `removeStoreIfIdle` re-tests residency at
+   * the moment of deletion and skips any store that is held.
+   */
+  readonly locks: LockManagerLike | null;
   readonly now?: number;
   readonly staleMs?: number;
   readonly debug?: boolean;
@@ -225,8 +236,13 @@ export async function sweepPromotedOrphans(
     if (createdAt === null) continue; // Unknown age — keep.
     if (now - createdAt < staleMs) continue; // Fresh — a just-promoted store; keep.
     try {
-      await removeOpfsStore(root, name);
-      removed.push(name);
+      // Re-tests residency AT the deletion, under the store's exclusive lock.
+      // A tab that opened this store after `live` was sampled holds shared
+      // residency, the exclusive request fails `ifAvailable`, and the store is
+      // left alone instead of being deleted out from under a live reader.
+      if (await removeStoreIfIdle(options.locks, name, (n) => removeOpfsStore(root, n))) {
+        removed.push(name);
+      }
     } catch (err) {
       if (options.debug) console.warn('[ooc-janitor] could not remove orphan store', name, err);
     }

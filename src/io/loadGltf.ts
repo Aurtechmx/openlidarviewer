@@ -9,6 +9,7 @@
 
 import { parse } from '@loaders.gl/core';
 import { GLTFLoader, postProcessGLTF } from '@loaders.gl/gltf';
+import { LOCAL_ONLY_LOADER_OPTIONS } from './loaderConfig';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { PointCloud } from '../model/PointCloud';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
@@ -166,7 +167,7 @@ export async function loadGltf(
   sourceFormat: 'glb' | 'gltf',
   name = `cloud.${sourceFormat}`,
 ): Promise<PointCloud> {
-  const raw = await parse(buffer, GLTFLoader).catch((err: unknown) => {
+  const raw = await parse(buffer, GLTFLoader, LOCAL_ONLY_LOADER_OPTIONS).catch((err: unknown) => {
     // A standard multi-file .gltf that references an external buffer (e.g.
     // buffer.bin) can't be resolved from a single in-page file — the browser
     // hands us one file, not the sibling. Surface a precise, actionable message

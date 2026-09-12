@@ -22,6 +22,8 @@ function report(bands: Partial<Record<BandError['grade'], { rmse: number; count:
   });
   return {
     estimand: 'point-reconstruction',
+  classificationScope: 'whole-cloud',
+  unavailableReason: null,
     rmse: 0,
     mae: 0,
     p95: 0,

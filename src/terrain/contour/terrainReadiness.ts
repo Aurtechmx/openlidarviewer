@@ -139,7 +139,11 @@ export function computeTerrainReadiness(
   if (!Number.isFinite(meanConf)) {
     confidenceDetail = 'No ground surface could be built for this scan.';
   } else if (calibrated && tol != null) {
-    confidenceDetail = `Calibrated to held-out error · ±${tol.toFixed(2)} m`;
+    // The tolerance IS the hold-out RMSE, so it is in whatever unit the
+    // residuals are in; this card stamped it "m" after every other renderer
+    // of the same residual had been gated.
+    const unit = result.verticalScaleResolved === false ? 'source Z units' : 'm';
+    confidenceDetail = `Calibrated to held-out error · ±${tol.toFixed(2)} ${unit}`;
   } else {
     confidenceDetail = 'Heuristic estimate — not enough held-out points to calibrate.';
   }

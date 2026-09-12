@@ -385,6 +385,12 @@ check('archive-self-verification', 'the archive’s own node-only verification s
     // It belongs in the repo gate (test:release:execute / ci.yml), not the
     // archive's own self-verification.
     'scripts/lint-architecture-truth.mjs',
+    // smoke-deploy-zip.mjs starts the packaged DEPLOY archive and drives it in
+    // a browser. Its subject is a built artifact in release/, which a source
+    // archive does not contain, and it needs Playwright and a browser rather
+    // than node alone. It is a release-pipeline stage, not a check the archive
+    // can run on itself.
+    'scripts/smoke-deploy-zip.mjs',
   ]);
   const candidates = Object.entries(c.pkg.scripts)
     .filter(([, cmd]) => /^node scripts\/[\w.-]+\.mjs$/.test(cmd))

@@ -630,3 +630,85 @@ describe('density-reliability caveat — Münzinger et al. (2022), ≥4 pts/m²'
     expect(i).toBe(s.warnings.length - 1);
   });
 });
+
+/**
+ * The complexity summary states ground distances and cites a pts/m² threshold.
+ *
+ * Both are metric, and on a frame with no horizontal scale the cell size it
+ * derives them from is the raw source figure with an inert factor of 1 — the
+ * same placeholder that made the unit withholding elsewhere unreachable. So a
+ * scan whose own extents read "source units" described its VRM window as
+ * "3×3-cell window (30 m)" and silently cleared a density threshold it was
+ * never measured against.
+ *
+ * The radius SELECTION is untouched: it reads the raw cell size as before, so
+ * no computed figure moves — only what is claimed about one.
+ */
+describe('complexity on a frame with no resolved horizontal scale', () => {
+  const grid = () => {
+    const cols = 24; const rows = 24;
+    const z = new Float32Array(cols * rows);
+    const coverage = new Uint8Array(cols * rows).fill(2);
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) z[y * cols + x] = x * 0.4 + Math.sin(y * 0.7) * 1.5;
+    }
+    return { z, coverage, cols, rows };
+  };
+  const run = (horizontalScaleResolved: boolean) => {
+    const g = grid();
+    const sa = hornSlopeAspect(g.z, g.cols, g.rows, 2, 2, 1);
+    return summariseTerrainComplexity({
+      z: g.z, coverage: g.coverage, cols: g.cols, rows: g.rows,
+      slope: sa.slope, aspect: sa.aspect,
+      cellMetresX: 2, cellMetresY: 2, verticalUnitToMetres: 1,
+      groundDensityPerM2: 19.1,
+      horizontalScaleResolved,
+    })!;
+  };
+
+  test('states no ground window or radius, and says so in the text', () => {
+    const c = run(false);
+    expect(c.vrmWindowGroundM, 'a ground window survived an unresolved frame').toBeNull();
+    expect(c.tpiRadiusGroundM).toBeNull();
+    expect(c.vrmText).not.toMatch(/\d\s*m\)/);
+  });
+
+  test('says the density threshold could not be applied rather than passing it silently', () => {
+    const c = run(false);
+    expect(c.groundDensityPerM2).toBeNull();
+    expect(c.warnings.join(' ')).toMatch(/could not be applied/);
+  });
+
+  test('leaves the computed figures and the radius in cells untouched', () => {
+    const resolved = run(true);
+    const unresolved = run(false);
+    expect(unresolved.vrmMedian).toBe(resolved.vrmMedian);
+    expect(unresolved.tpiMedian).toBe(resolved.tpiMedian);
+    expect(unresolved.tpiRadiusCells).toBe(resolved.tpiRadiusCells);
+  });
+});
+
+/**
+ * A cell whose slope never resolved is not a flat cell.
+ *
+ * The class pass is gated on a slope grid being supplied — its header says "no
+ * silent default" — and then read a non-finite slope as 0, which is the one
+ * value that decides flat from middle-slope. A cell with no slope measurement
+ * could therefore be labelled FLAT. It is nodata, like a cell with no TPI.
+ */
+describe('TPI classes on a cell with no finite slope', () => {
+  test('leaves the class as nodata instead of calling it flat', () => {
+    const cols = 5; const rows = 5; const n = cols * rows;
+    const z = new Float32Array(n);
+    for (let i = 0; i < n; i++) z[i] = (i % cols) * 0.5;
+    const slope = new Float32Array(n).fill(0.4);
+    const centre = 2 * cols + 2;
+    slope[centre] = Number.NaN;
+    const out = computeTPI(z, cols, rows, { radiusCells: 1, slope });
+    expect(out.classes, 'no class grid was derived').not.toBeNull();
+    expect(out.classes![centre], 'an unmeasured slope was classified as terrain').toBe(0);
+    // A neighbour with a real slope still classifies, so the guard is not
+    // blanking the grid.
+    expect(out.classes!.some((c) => c !== 0)).toBe(true);
+  });
+});

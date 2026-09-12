@@ -202,9 +202,11 @@ describe('rasterizeDtm — robust cell aggregation', () => {
     it('defaults to median when percentile omitted', () => {
       expect(rasterizeDtm(pts, g, { grid, aggregation: 'percentile' }).z[0]).toBe(3);
     });
-    it('clamps out-of-range p (p=2 → max, p=-1 → min)', () => {
-      expect(p(2)).toBe(5);
-      expect(p(-1)).toBe(1);
+    it('refuses an out-of-range p instead of clamping it', () => {
+      // p=2 was clamped to the maximum and p=-1 to the minimum, so the
+      // aggregate answered a different question from the one specified.
+      expect(() => p(2)).toThrow(/percentile/);
+      expect(() => p(-1)).toThrow(/percentile/);
     });
   });
 
@@ -235,5 +237,31 @@ describe('rasterizeDtm — robust cell aggregation', () => {
       });
       expect(r.z[5 * 11 + 5]).toBe(42);
     }
+  });
+});
+
+// ── The ground mask must cover the point list ───────────────────────────────
+// `isGround[i] !== 1` skips, and reading past the end of a short mask yields
+// `undefined`, which is also `!== 1`. So a mask shorter than the point list
+// silently excluded every point past its end — 50,000 entries over 100,000
+// points dropped half the cloud from the surface and reported nothing.
+describe('rasterizeDtm refuses a mask that does not cover the points', () => {
+  const pts = [
+    { x: 0, y: 0, z: 1 }, { x: 1, y: 0, z: 1 },
+    { x: 0, y: 1, z: 1 }, { x: 1, y: 1, z: 1 },
+  ];
+
+  it('throws when the mask is shorter than the point list', () => {
+    expect(() => rasterizeDtm(pts, new Uint8Array([1, 1]), { cellSizeM: 1 }))
+      .toThrow(/ground mask has 2 entries for 4 points/);
+  });
+
+  it('throws when the mask is longer, which is the same disagreement', () => {
+    expect(() => rasterizeDtm(pts, new Uint8Array(8).fill(1), { cellSizeM: 1 }))
+      .toThrow(/ground mask has 8 entries for 4 points/);
+  });
+
+  it('accepts a matching mask, so the guard is not blanket', () => {
+    expect(() => rasterizeDtm(pts, new Uint8Array(4).fill(1), { cellSizeM: 1 })).not.toThrow();
   });
 });

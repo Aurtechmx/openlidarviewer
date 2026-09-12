@@ -67,7 +67,23 @@ export interface ZoneError {
   readonly mae: number;
 }
 
-/** The result of a hold-out cross-validation pass. */
+/**
+ * Which ground classification the validated surface was fitted from.
+ *
+ * - `whole-cloud` — the mask the caller supplied, produced with the held-out
+ *   points in view. The held-out points helped decide their own ground
+ *   membership: a mild optimism, stated rather than hidden.
+ * - `train-only` — a classifier was RE-RUN on the training points alone, so the
+ *   held-out points influenced neither the classification nor the fit.
+ * - `fixed-source-classification` — no classifier ran. The source's own ground
+ *   labels (ASPRS class 2) were treated as authoritative, and being independent
+ *   of the split there is no classification leak to remove. This read
+ *   `train-only` until v0.6.8: the trusted-survey path supplies an all-ground
+ *   pseudo-reclassifier, which is indistinguishable from a real re-run at the
+ *   hold-out boundary, so the record claimed a classifier ran when none did.
+ */
+export type ClassificationScope = 'whole-cloud' | 'train-only' | 'fixed-source-classification';
+
 /**
  * What a validation report actually ESTIMATES — the estimand. The four are not
  * interchangeable accuracy figures, and a report typed as one must never be read
@@ -78,9 +94,15 @@ export interface ZoneError {
  *    reconstructs a withheld point under DENSE sampling. It is NOT external
  *    accuracy and must not be printed as one.
  *  - `cell-reconstruction` — a whole cell's returns are withheld together.
- *  - `spatial-gap` — spatially-blocked hold-out: a whole region is withheld, so
- *    the estimate reflects performance in genuine gaps, not interpolation between
- *    dense neighbours.
+ *  - `spatial-gap` — spatially-blocked hold-out: complete blocks are assigned to
+ *    folds, which changes the spatial arrangement and the local availability of
+ *    training support. It does NOT guarantee a minimum separation: a scored
+ *    point beside a block boundary can lie arbitrarily close to a training point
+ *    in the neighbouring block, so the effective train-test distance varies
+ *    within a block and approaches zero at its edges. The contrast against a
+ *    random hold-out measures sensitivity to withholding geometry under the
+ *    stated protocol. Whether it reports a larger error is an empirical result
+ *    of a given run, not a property of the method.
  *  - `external-checkpoint` — residuals against INDEPENDENT survey checkpoints
  *    measured by a higher-accuracy method. Only this estimand may back an ASPRS
  *    conformance claim.
@@ -95,6 +117,7 @@ export type HoldoutEstimand =
   | 'spatial-gap'
   | 'external-checkpoint';
 
+/** The result of a hold-out cross-validation pass. */
 export interface ValidationReport {
   /**
    * What this report estimates. See {@link HoldoutEstimand}. A consumer that
@@ -102,6 +125,27 @@ export interface ValidationReport {
    * `point-reconstruction` report is not external accuracy.
    */
   readonly estimand: HoldoutEstimand;
+  /**
+   * Which points the ground classification saw, for the surface this report
+   * scores — see {@link ClassificationScope} for the three cases.
+   *
+   * Recorded for the same reason {@link HoldoutEstimand} is a closed union: a
+   * caller that requested train-only reclassification and hit a failed or empty
+   * reclassifier previously received a full-cloud figure with a warning
+   * appended, and a warning string does not stop a panel or a paper quoting the
+   * number as though the requested treatment had run. Two reports may only be
+   * compared as a geometry contrast when this field agrees.
+   */
+  readonly classificationScope: ClassificationScope;
+  /**
+   * Why no statistic is reported, or null when one is. `sampleSize 0` alone
+   * says a figure is missing but not which cause, so every renderer had to
+   * guess a reason; the honest ones now read it from here. Set whenever the
+   * run refuses: too few ground returns, an invalid statistical parameter, a
+   * mask that does not match the cloud, or a requested train-only
+   * classification that could not be produced.
+   */
+  readonly unavailableReason: string | null;
   /** Root-mean-square vertical residual across all covered held-out points. */
   readonly rmse: number;
   /** Mean absolute residual. */

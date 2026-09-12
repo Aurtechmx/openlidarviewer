@@ -48,6 +48,24 @@
  * low → balanced → high on both the desktop and the mobile row.
  */
 
+/**
+ * What this control does and does not touch, in one sentence for the panel and
+ * its button. Lives beside the policy it describes, so a change to the policy
+ * meets the sentence that claims its scope.
+ *
+ * The second half is the part that had to be corrected. An earlier wording said
+ * measurements, terrain products and exports "do not change with this setting",
+ * which overstates it: the streaming preset moves the resident-point budget (see
+ * the scope note above), and a resident-only measurement, analysis or export
+ * reads whatever is resident when it runs. What the control cannot do is change
+ * how any of them is computed.
+ */
+export const QUALITY_SCOPE_NOTE =
+  'Display and streaming only — it changes how the scan is drawn, not how '
+  + 'anything is computed from it. On a streamed scan it also sets the '
+  + 'resident-point budget, so a resident-only measurement, analysis or export '
+  + 'reads whatever is resident when it runs.';
+
 import type { DeviceTier } from '../deviceProfile';
 import { edlDefaultEnabled, type RenderBackend } from '../edl';
 import {

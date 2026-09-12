@@ -343,3 +343,58 @@ describe('handleCrsOverride — one resolver owns the resolved units', () => {
     expect(h.service.current()?.linearUnit).not.toBe('us-survey-foot');
   });
 });
+
+describe('refreshCrsForStreamingCloud — a persisted override needs dataset identity', () => {
+  /**
+   * The static path passes `identity: datasetIdentity(cloud)` so two same-named
+   * files are told apart before a remembered override is reapplied. Streaming
+   * passed nothing, so two unrelated COPC sources sharing a filename — both
+   * declaring no CRS, which is exactly the state a user overrides — collided,
+   * and the first one's frame was applied to the second.
+   *
+   * This pins the WIRING, not the comparator: `datasetIdentity` has its own
+   * tests, and they kept passing while the coordinator dropped the value.
+   */
+  const stream = (name: string, pts: number, span: number) => ({
+    name,
+    kind: 'copc' as const,
+    sourcePointCount: pts,
+    dataBounds: () => [0, 0, 0, span, span, span / 10] as readonly number[],
+    crs: () => undefined,
+  });
+
+  it('does NOT reapply an override to a different stream of the same name', () => {
+    const h = harness();
+    h.coordinator.refreshCrsForStreamingCloud(stream('survey.copc.laz', 1_000_000, 500));
+    h.service.setOverride({
+      override: { epsg: 32612, kind: 'projected' }, detected: undefined, source: 'copc-meta',
+    });
+    expect(h.service.current()?.epsg).toBe(32612);
+
+    h.coordinator.refreshCrsForStreamingCloud(stream('survey.copc.laz', 42_000_000, 12_000));
+    expect(h.service.current()?.epsg, "the other stream's frame was applied").not.toBe(32612);
+  });
+
+  it('DOES reapply it when the same stream is reopened', () => {
+    const h = harness();
+    h.coordinator.refreshCrsForStreamingCloud(stream('survey.copc.laz', 1_000_000, 500));
+    h.service.setOverride({
+      override: { epsg: 32612, kind: 'projected' }, detected: undefined, source: 'copc-meta',
+    });
+    h.coordinator.refreshCrsForStreamingCloud(stream('survey.copc.laz', 1_000_000, 500));
+    expect(h.service.current()?.epsg).toBe(32612);
+  });
+
+  it('leaves a stream that states no identity on the old name-only comparison', () => {
+    const h = harness();
+    const bare = (name: string) => ({ name, kind: 'copc' as const, crs: () => undefined });
+    h.coordinator.refreshCrsForStreamingCloud(bare('survey.copc.laz'));
+    h.service.setOverride({
+      override: { epsg: 32612, kind: 'projected' }, detected: undefined, source: 'copc-meta',
+    });
+    // No identity on either side means "cannot tell", which must not become
+    // "different" — that would silently drop a choice the user really made.
+    h.coordinator.refreshCrsForStreamingCloud(bare('survey.copc.laz'));
+    expect(h.service.current()?.epsg).toBe(32612);
+  });
+});

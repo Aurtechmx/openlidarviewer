@@ -31,7 +31,7 @@ import type { CrsService } from '../geo/CrsService';
  *
  * A full `CrsService` satisfies this, so no caller changes.
  */
-export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context'>;
+export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context' | 'crsRevision'>;
 // The one spatial context this pipeline reads its unit / datum / axis facts
 // from, plus the named vertical-fallback policy that replaces the local
 // `verticalUnitToMetres ?? linearUnitToMetres` chains.
@@ -161,6 +161,14 @@ export function deriveCoreParams(
     // HERE, and it is named rather than re-spelled as a `??` chain.
     verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal') ?? 1,
     horizontalUnitToMetres: ctx.linearUnitToMetres,
+    // The two FACTS beside the two FACTORS. The factors above are the GeoTIFF
+    // geometry policy and are never undefined; the core derived "resolved" from
+    // their finiteness, so on a scan with no CRS (placeholder factor 1) every
+    // unit-withholding branch was unreachable from here: the panel captioned
+    // source-unit residuals "m", the ASPRS fields were populated, and the metre
+    // grid ladder was applied to raw coordinates. These read the claim policy.
+    verticalScaleKnown: verticalMetresPerUnit(ctx, 'horizontal-when-known') !== undefined,
+    horizontalScaleKnown: ctx.linearUnitKnown,
     verticalDatum: ctx.verticalDatum ?? null,
     classification,
     samplePointScale,
@@ -524,8 +532,18 @@ export function createTerrainAnalysisRunner(
     // must not touch the UI — the newer run (or the reset) owns it now.
     const runToken = ++terrainRunToken;
     const runDatasetId = getActiveId();
+    // The FRAME the core is computed in. `deriveCoreParams` reads the spatial
+    // context below and bakes its unit and datum facts into the run, so a CRS
+    // change mid-run means the finished result describes a frame the app has
+    // replaced. Without this term the result still landed, and the panel then
+    // stamped it with the CURRENT revision — a result computed under one frame,
+    // recorded as current under another, and passed by the freshness gate.
+    const runCrsRevision = crsService.crsRevision();
     const isStale = (): boolean =>
-      runToken !== terrainRunToken || getActiveId() !== runDatasetId || !analysePanel.isVisible();
+      runToken !== terrainRunToken
+      || getActiveId() !== runDatasetId
+      || crsService.crsRevision() !== runCrsRevision
+      || !analysePanel.isVisible();
     /**
      * Bail on a stale run, releasing the busy state when nothing else owns it.
      *
@@ -616,7 +634,10 @@ export function createTerrainAnalysisRunner(
       // leave the busy/skeleton state to whoever owns it now.
       if (bail()) return;
       analysePanel.setBusy(false);
-      analysePanel.update(result);
+      // The stamp comes FROM the computation. Manufacturing it in the panel from
+      // whatever was live at land time is how a superseded frame got recorded as
+      // current in the first place.
+      analysePanel.update(result, { targetId: runDatasetId, crsRevision: runCrsRevision });
       // Contour Studio launcher: hand the panel the CRS frame facts (projected
       // vs geographic, vertical unit known) that live here on the CRS service.
       // The panel lazily loads the launcher (adapter + render), computes the
@@ -628,10 +649,18 @@ export function createTerrainAnalysisRunner(
       // unit: foot data can have a known datum). Carry the REAL scale + label so
       // Contour Studio labels a foot interval "ft", never "m". Unknown unit →
       // the launcher caps to exploratory and claims no metric-supported interval.
-      const vScale = verticalMetresPerUnit(ctx, 'horizontal') ?? null;
+      // Claim policy, not geometry policy: under 'horizontal' an unresolved
+      // frame returned the placeholder 1 and the launcher labelled a scan with
+      // no CRS as having a known vertical unit.
+      const vScale = verticalMetresPerUnit(ctx, 'horizontal-when-known') ?? null;
       const vUnitKnown = vScale != null;
       analysePanel.setContourFrame({
-        streaming: false,
+        // Read the coverage the RESULT recorded, not a second boolean derived
+        // beside it. This was hardcoded false, so a resident-only streaming
+        // analysis presented itself to Contour Studio as a complete scan and
+        // the launcher — which caps a streaming frame to exploratory — never
+        // saw the condition it exists to catch.
+        streaming: result.dtm.coverageMode === 'resident-only',
         crsProjected: ctx.kind === 'projected',
         verticalUnitsKnown: vUnitKnown,
         verticalUnitToMetres: vUnitKnown ? vScale : null,

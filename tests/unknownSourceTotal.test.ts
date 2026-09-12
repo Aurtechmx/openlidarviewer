@@ -157,7 +157,9 @@ describe('provenance signals', () => {
     kind: '3dtiles',
     sourcePointCount: null,
     dataBounds: () => [0, 0, 0, 100, 200, 10] as const,
-    crs: () => null,
+    // A declared metre frame: these tests are about an unknown POINT TOTAL, and
+    // an unknown unit would suppress the extent for an unrelated reason.
+    crs: () => ({ linearUnitToMetres: 1 }),
   };
 
   it('computes no density from a total the source never gave', () => {

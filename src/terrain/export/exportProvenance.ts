@@ -38,6 +38,7 @@ import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
 import { exportGate, EVIDENCE_REGISTRY } from '../../validation/evidenceRegistry';
 import { evidenceRank, INDEPENDENCE_FLOOR } from '../../validation/evidenceLevel';
+import { governingClaim } from '../../validation/evidenceComposition';
 import {
   resolveExportEvidence,
   type EvidenceContext,
@@ -242,6 +243,20 @@ export interface ExportProvenance {
   readonly contourRequestedIntervalM: number | null;
   /** Vertical-unit label for the interval ('m' | 'ft' | 'units'); absent/'unknown' ⇒ unverified. */
   readonly contourIntervalUnit?: string;
+  /**
+   * The resolved SOURCE vertical unit for this run ('m' / 'ft' / 'units'), or
+   * 'unknown' when the Z axis never resolved one.
+   *
+   * Every vertical figure a consumer prints — RMSEz, NVA, VVA, blocked RMSE,
+   * a contour interval — is in this unit. The record previously carried the
+   * unit only on `contourIntervalUnit` (contour-specific) and inside the
+   * nullable `complexity` block, so a report with neither had no way to know,
+   * and its formatters stamped a hardcoded 'm' on values that are only metres
+   * if the unit resolved. Deliberately NOT serialised by `provenanceJson`: it
+   * is derived from state already recorded there, and adding a key would move
+   * every manifest digest.
+   */
+  readonly verticalUnitLabel?: string;
   /** Contour shape style the geometry was produced with, or null when unknown. */
   readonly contourStyle: ContourShapeStyle | null;
   /** Human label for {@link contourStyle}, or 'unknown'. */
@@ -345,7 +360,19 @@ export interface ExportProvenanceOptions {
    * (m / ft) instead of a hard-coded metre; absent ⇒ the interval is labelled
    * "vertical unit unverified" rather than falsely stamped metres.
    */
-  readonly verticalUnitToMetres?: number | null;
+  /**
+   * Metres per source vertical unit, or null when the frame never resolved one.
+   *
+   * REQUIRED, and nullable rather than optional, because the difference between
+   * "we know it is unknown" and "nobody passed it" is the whole point. As an
+   * optional field it read the same either way: two call sites omitted it and
+   * shipped files that said `contourIntervalUnit: unknown` beside
+   * `elevationUnit: metre` on every feature, and a map sheet whose title block
+   * hedged "10 (vertical unit unverified)" ten rows above a note reading
+   * "interval 10 m". Forgetting is now a compile error; declaring it unknown
+   * stays one word.
+   */
+  readonly verticalUnitToMetres: number | null;
   /**
    * The evidence-gate permit the export was minted under (from
    * `resolveContourExportPermit`). Stamped into the file so the artifact records
@@ -362,8 +389,23 @@ export interface ExportProvenanceOptions {
   /**
    * The DTM-family claim id to resolve scope-aware evidence for. Defaults to
    * 'DTM' when an evidence context or method digest is supplied.
+   *
+   * Prefer {@link evidenceClaimIds} for anything holding more than one product;
+   * this single-claim form remains for a path that genuinely ships one.
    */
   readonly evidenceClaimId?: string;
+  /**
+   * EVERY product this artifact contains. The evidence resolves against the
+   * weakest constituent (see `governingClaim`), because a reader may claim no
+   * more about a bundle than about the least-supported thing inside it. A
+   * contour cut from a DTM carries the DTM's shortfall whether or not the file
+   * mentions it.
+   *
+   * Takes precedence over `evidenceClaimId`. Omit both and the resolution falls
+   * back to 'DTM' — correct only for a DTM-only artifact, which is why the
+   * bundle paths now name their contents explicitly.
+   */
+  readonly evidenceClaimIds?: readonly string[];
   /** Digest of the method that produced this artifact — the method-match anchor. */
   readonly methodDigest?: string | null;
   /** The artifact context checked against registered study envelopes. */
@@ -384,6 +426,20 @@ function toIso(at: Date | string | null | undefined): string {
 }
 
 /**
+ * The standing options default: EXPLICITLY "no scale resolved" rather than
+ * `{}`. A caller that passes no options at all still gets today's honest
+ * answer; a caller that passes an options object must now state the scale,
+ * because omitting it from a populated object is the mistake that shipped a
+ * file saying `contourIntervalUnit: unknown` beside `elevationUnit: metre`.
+ *
+ * Frozen and shared rather than written inline at each default position, so
+ * every entry point defaults to the same value and none of them can mutate it.
+ */
+export const NO_RESOLVED_VERTICAL_SCALE: ExportProvenanceOptions = Object.freeze({
+  verticalUnitToMetres: null,
+});
+
+/**
  * Derive the single provenance object from an analysis result. SINGLE SOURCE OF
  * TRUTH — every exporter stamps from this so the values can never drift apart.
  * Missing values are reported honestly (never fabricated). Deterministic given a
@@ -391,7 +447,7 @@ function toIso(at: Date | string | null | undefined): string {
  */
 export function buildExportProvenance(
   result: AnalyseContoursResult,
-  opts: ExportProvenanceOptions = {},
+  opts: ExportProvenanceOptions = NO_RESOLVED_VERTICAL_SCALE,
 ): ExportProvenance {
   // Surface-quality + export-readiness verdicts come from the SAME top-level
   // assessment the panel renders, so a file never disagrees with the UI.
@@ -418,13 +474,30 @@ export function buildExportProvenance(
 
   // Accuracy is present only when the hold-out validation measured an RMSEz;
   // otherwise the whole block is null (never a fabricated zero).
+  //
+  // AND only when THIS provenance resolved the vertical scale it is about to
+  // label everything else with. The two were decided independently: a sheet
+  // built from a frame that states no vertical unit printed "interval 10
+  // (vertical unit unverified)" in one row and "RMSEz: 0.71 m" three rows
+  // below, from the same object. Whatever produced a metre-named figure
+  // upstream, a provenance whose own vertical unit reads "unknown" may not
+  // carry one — the consumers all have a null path and print '—'.
+  const verticalScaleStated =
+    opts.verticalUnitToMetres != null &&
+    Number.isFinite(opts.verticalUnitToMetres) &&
+    opts.verticalUnitToMetres > 0 &&
+    result.verticalScaleResolved !== false;
   const acc = result.accuracyStandards ?? null;
   const accuracy: ExportProvenanceAccuracy | null =
-    acc?.rmseZM != null && Number.isFinite(acc.rmseZM)
+    verticalScaleStated && acc?.rmseZM != null && Number.isFinite(acc.rmseZM)
       ? {
           rmseZM: acc.rmseZM,
           nvaM: acc.nvaM ?? null,
           vvaM: acc.vvaM ?? null,
+          // The floors list is empty on a frame with no horizontal scale —
+          // demAccuracyStandards withholds the comparison there, because the
+          // density is per source unit squared and the 3DEP floors are pulses
+          // per square metre. Decided once, at the producer.
           usgsDensityReferenceFloor: acc.densityReferenceFloorsMet[0] ?? 'none',
         }
       : null;
@@ -481,6 +554,14 @@ export function buildExportProvenance(
       opts.verticalUnitToMetres > 0
         ? verticalUnitLabel(opts.verticalUnitToMetres)
         : 'unknown',
+    // Same resolution, kept as a first-class field so a consumer that prints a
+    // vertical figure without touching contours can still label it honestly.
+    verticalUnitLabel:
+      opts.verticalUnitToMetres != null &&
+      Number.isFinite(opts.verticalUnitToMetres) &&
+      opts.verticalUnitToMetres > 0
+        ? verticalUnitLabel(opts.verticalUnitToMetres)
+        : 'unknown',
     contourStyle: style,
     contourStyleLabel: style ? contourShapeStyleLabel(style) : 'unknown',
     contourMethod: opts.contourMethod ?? null,
@@ -511,6 +592,46 @@ export function buildExportProvenance(
 }
 
 /**
+ * What a contour artifact actually contains, as claim ids.
+ *
+ * Always the surface it was cut from: the register's own CONTOURS assumption is
+ * "depends on DTM validity", and a contour cannot be better evidenced than the
+ * grid whose cells produced it. The geometry claim then follows the style that
+ * really ran — a generalized line is `CONTOURS-CARTOGRAPHIC`, because the GDAL
+ * cross-check that earned CONTOURS its E4 ran on the ANALYTICAL geometry and
+ * generalization deliberately moves vertices off it.
+ *
+ * A hold-out accuracy figure is its own claim: printing an RMSEz makes a
+ * statement the artifact must be able to support.
+ */
+export function contourArtifactClaims(result: AnalyseContoursResult): string[] {
+  const style = result.generationParams?.contourStyle ?? result.model?.contourStyle ?? null;
+  // 'crisp' is the analytical geometry; every other style has been generalized.
+  const geometry = style === 'crisp' ? 'CONTOURS' : 'CONTOURS-CARTOGRAPHIC';
+  const ids = [geometry, 'DTM'];
+  if (result.accuracyStandards?.rmseZM != null) ids.push('HOLDOUT-RMSE');
+  return ids;
+}
+
+/** What a DTM raster package contains. */
+export function dtmArtifactClaims(result: AnalyseContoursResult): string[] {
+  const ids = ['DTM'];
+  if (result.accuracyStandards?.rmseZM != null) ids.push('HOLDOUT-RMSE');
+  return ids;
+}
+
+/**
+ * The ONE claim every evidence surface on this artifact resolves against. A
+ * declared constituent set composes to its weakest member; a single declared
+ * claim is used as given; nothing declared falls back to 'DTM'.
+ */
+function resolveClaimId(opts: ExportProvenanceOptions): string {
+  const ids = opts.evidenceClaimIds;
+  if (ids != null && ids.length > 0) return governingClaim(ids);
+  return opts.evidenceClaimId ?? 'DTM';
+}
+
+/**
  * The single authoritative evidence resolution for this export (§18). Composes
  * the scoped overlay, the baseline registry gate and the note into one object
  * via {@link resolveExportEvidence}, keyed on whatever artifact context the path
@@ -520,7 +641,7 @@ export function buildExportProvenance(
  * is byte-identical to before, while every surface now reads the SAME object.
  */
 function buildEvidenceResolution(opts: ExportProvenanceOptions): ExportEvidenceResolution {
-  const claimId = opts.evidenceClaimId ?? 'DTM';
+  const claimId = resolveClaimId(opts);
   const hasSignal =
     opts.evidenceContext != null || (opts.methodDigest != null && opts.methodDigest !== '');
   const context: EvidenceContext | undefined = hasSignal
@@ -544,7 +665,7 @@ function buildScopedEvidence(opts: ExportProvenanceOptions): ExportScopedEvidenc
   const hasSignal =
     opts.evidenceContext != null || (opts.methodDigest != null && opts.methodDigest !== '');
   if (!hasSignal) return null;
-  const claimId = opts.evidenceClaimId ?? 'DTM';
+  const claimId = resolveClaimId(opts);
   const context: EvidenceContext = {
     ...(opts.evidenceContext ?? {}),
     ...(opts.methodDigest != null && opts.evidenceContext?.methodDigest == null

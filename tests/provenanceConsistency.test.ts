@@ -57,6 +57,11 @@ import type {
 // ── the ONE run every exporter is driven from ───────────────────────────────
 
 const OPTS = {
+  // The fixture below is "everything known", so the frame states its vertical
+  // scale too: provenance withholds the metre-named accuracy when it does not,
+  // and a fixture that claimed a metre RMSEz beside an unstated unit was the
+  // contradiction that rule exists to stop.
+  verticalUnitToMetres: 1,
   basename: 'site',
   generatedAt: '2026-06-05T00:00:00.000Z',
   softwareVersion: '9.9.9',
@@ -85,6 +90,10 @@ function readyResult(): AnalyseContoursResult {
     },
     intervalM: 1,
     surface: { canopy: { heightM: new Float32Array([0, 5, NaN, NaN]) } },
+    // The source Z scale. buildExportProvenance derives the unit LABEL from it;
+    // without it the writers hedge every vertical figure, which is correct for a
+    // run whose axis never resolved.
+    verticalUnitToMetres: 1,
     model: {
       crs: 'EPSG:32610', verticalDatum: 'EPSG:5703', intervalM: 1,
       contourStyle: 'smooth', coverageMode: 'full', features: [{}, {}],
@@ -267,6 +276,10 @@ async function buildAll(
   const demReadme = buildDemReadme({
     result,
     basename: OPTS.basename,
+    // The same scale the shared provenance was built from: the README builds
+    // its own provenance internally, and a different answer here is the drift
+    // this whole file exists to catch.
+    verticalUnitToMetres: OPTS.verticalUnitToMetres,
     isGeographic: false,
     boundsMinX: 600000, boundsMinY: 4000000, boundsMaxX: 600002, boundsMaxY: 4000002,
     generationDateIso: OPTS.generatedAt,

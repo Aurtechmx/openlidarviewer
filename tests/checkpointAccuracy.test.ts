@@ -340,6 +340,57 @@ describe('checkpointAccuracy reference uncertainty', () => {
     expect(r.pooled.uncertaintyCombinationId).toBe('test-quadrature-sum-v1');
   });
 
+  it('refuses a combination whose OUTPUT is not a usable uncertainty', () => {
+    // `combine` is caller-supplied, so its return value is an input to the
+    // record. Each of these was published verbatim beside
+    // `uncertaintyCombinationId` — the id a reader would trust the number by.
+    // A combined uncertainty cannot be non-finite, cannot be negative, and
+    // cannot be SMALLER than the observed RMSE it combines, because adding a
+    // reference term does not reduce the total.
+    const observed = Math.sqrt(0.115 / 5);
+    const bad: ReadonlyArray<readonly [string, number]> = [
+      ['nan', Number.NaN],
+      ['infinite', Number.POSITIVE_INFINITY],
+      ['negative', -1],
+      ['shrunken', observed / 2],
+    ];
+    for (const [label, value] of bad) {
+      const r = checkpointAccuracy(withSigma, {
+        minSample: 5,
+        uncertaintyCombination: { id: `test-${label}-v1`, combine: () => value },
+      });
+      expect(r.status, `a ${label} combined uncertainty was accepted`).toBe('refused');
+      if (r.status !== 'refused') continue;
+      expect(r.reason).toBe('invalid-uncertainty-combination');
+      expect(r.detail).toContain(`test-${label}-v1`);
+    }
+  });
+
+  it('accepts a combination that returns the observed RMSE unchanged', () => {
+    // The refusal above must not catch a zero reference term: a root-sum-square
+    // with sigma 0 legitimately returns the observed value.
+    const r = checkpointAccuracy(withSigma, {
+      minSample: 5,
+      uncertaintyCombination: { id: 'test-identity-v1', combine: (o) => o },
+    });
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    expect(r.pooled.combinedRmse).toBeCloseTo(Math.sqrt(0.115 / 5), 12);
+  });
+
+  it('refuses a per-stratum floor that is not a positive integer', () => {
+    // Only the POOLED floor was validated. The per-stratum floor decides which
+    // strata are reported at all, so a fractional or negative one silently
+    // admitted one-point strata whose RMSE is simply its own residual.
+    for (const bad of [0, -1, 2.5, Number.NaN]) {
+      const r = checkpointAccuracy(withSigma, { minSample: 5, minStratumSample: bad });
+      expect(r.status, `minStratumSample ${bad} was accepted`).toBe('refused');
+      if (r.status !== 'refused') continue;
+      expect(r.reason).toBe('invalid-min-sample');
+      expect(r.detail).toContain('minStratumSample');
+    }
+  });
+
   it('refuses a negative reference sigma rather than squaring the sign away', () => {
     // referenceRmse is the quadratic mean of the sigmas, so -0.5 and 0.5 both
     // yield 0.5 and the sign error becomes a plausible number.

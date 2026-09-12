@@ -25,6 +25,8 @@ interface FixtureOpts {
   coverageMode?: TerrainCoverageMode;
   groundPointRatio?: number;
   meanDensity?: number; // pts/m²
+  /** False models a frame whose linear unit never resolved. */
+  horizontalScaleResolved?: boolean;
   rmseZM?: number | null;
 }
 
@@ -86,6 +88,7 @@ function fixture(o: FixtureOpts = {}): AnalyseContoursResult {
     densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
   };
   return {
+    horizontalScaleResolved: o.horizontalScaleResolved ?? true,
     quality: quality as DtmQualityReport,
     qualityScore: qualityScore as TerrainQualityScore,
     cellMetrics: cellMetrics as CellMetricsSummary,
@@ -519,5 +522,48 @@ describe('terrainAssessment — limiters name the actual causes of the verdict',
   });
   it('a Good surface has no limiters', () => {
     expect(terrainAssessment(fixture()).limiters).toEqual([]);
+  });
+});
+
+/**
+ * Ground density decides a readiness cap, so its unit is not a caption problem.
+ *
+ * `cellMetrics.meanDensity` is returns per CELL AREA, and the cell size is in
+ * source units until a horizontal scale resolves. The assessment compared it
+ * against a per-square-metre threshold and printed it as pts/m² regardless, so
+ * two scans identical but for their source unit were graded differently, and a
+ * scan in feet or scanner units could be capped at Preview — or cleared —
+ * by a number nothing had established the unit of.
+ */
+describe('ground density on a frame with no resolved linear unit', () => {
+  const unresolved = (meanDensity: number) =>
+    terrainAssessment(fixture({ meanDensity, horizontalScaleResolved: false }));
+  const groundDensity = (a: ReturnType<typeof terrainAssessment>) =>
+    a.supportingMetrics.find((m) => m.label === 'Ground density')!;
+
+  it('does not let the raw figure move the status', () => {
+    // The same two values that decide Preview vs Good on a metre frame.
+    expect(unresolved(0.3).status).toBe(unresolved(6).status);
+  });
+
+  it('reports the density as unknown rather than as pts/m²', () => {
+    for (const d of [0.3, 6]) {
+      const m = groundDensity(unresolved(d));
+      expect(m.value, 'a source-unit density was printed as pts/m²').toBe('unknown');
+      expect(m.rating).toBe('unknown');
+    }
+  });
+
+  it('raises no sparse-returns limitation from an unverified unit', () => {
+    const a = unresolved(0.3);
+    expect((a.limiters ?? []).join(' ')).not.toMatch(/sparse/i);
+    expect(a.reason).not.toMatch(/sparse/i);
+  });
+
+  it('still grades density when the scale did resolve', () => {
+    const sparse = terrainAssessment(fixture({ meanDensity: 0.3 }));
+    const dense = terrainAssessment(fixture({ meanDensity: 6 }));
+    expect(sparse.status).toBe('Preview');
+    expect(groundDensity(dense).value).toBe('6.0 pts/m²');
   });
 });

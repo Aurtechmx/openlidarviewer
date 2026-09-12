@@ -79,6 +79,30 @@ describe('CrsService.resolveForScan — detection path', () => {
     expect(svc.current()).toBe(resolved);
   });
 
+  it('does not advance the revision when a re-resolution lands the same frame', () => {
+    // Opening a second tile of one survey re-resolves the same CRS. The
+    // revision advanced on every call, so the freshness stamps refused the
+    // on-screen result as "coordinate system changed" and every derived
+    // classification was marked frame-invalid for a frame that had not moved.
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'tile-a.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    const after = svc.crsRevision();
+    svc.resolveForScan({ name: 'tile-b.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(svc.crsRevision(), 'an identical frame counted as a frame change').toBe(after);
+  });
+
+  it('still advances the revision when any fact of the frame differs', () => {
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'a.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    const r1 = svc.crsRevision();
+    // Same CRS, different SOURCE: the claims a frame permits depend on it.
+    svc.resolveForScan({ name: 'b.laz', detected: NAD83_UTM_18N, source: 'copc-meta' });
+    expect(svc.crsRevision()).not.toBe(r1);
+    const r2 = svc.crsRevision();
+    svc.resolveForScan({ name: 'c.laz', detected: undefined, source: 'las-vlr' });
+    expect(svc.crsRevision()).not.toBe(r2);
+  });
+
   it('normalises the dataset key (case + whitespace)', () => {
     const svc = new CrsService(makePort());
     svc.resolveForScan({

@@ -300,7 +300,7 @@ export interface CommonExportOptions {
   width?: number;
   /** Pixel height of the output. Default: live canvas height or square if framed. */
   height?: number;
-  /** PNG today; WebP in a future release. */
+  /** PNG. */
   format?: 'png';
   /**
    * Transparent background instead of a solid colour. NOT HONOURED YET:

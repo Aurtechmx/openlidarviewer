@@ -7,13 +7,13 @@
   ],
   "name": "OpenLiDARViewer",
   "description": "Browser-native, local-first platform for LiDAR and point-cloud inspection, streaming visualization, measurement, terrain analysis, validation, and reproducible reporting.",
-  "version": "0.6.7",
-  "softwareVersion": "0.6.7",
-  "dateModified": "2026-08-29",
-  "datePublished": "2026-08-29",
+  "version": "0.6.8",
+  "softwareVersion": "0.6.8",
+  "dateModified": "2026-09-12",
+  "datePublished": "2026-09-12",
   "license": "https://spdx.org/licenses/AGPL-3.0-only.html",
   "codeRepository": "https://github.com/Aurtechmx/openlidarviewer",
-  "url": "https://lidar.aurtech.mx/",
+  "url": "https://openlidarviewer.org/",
   "issueTracker": "https://github.com/Aurtechmx/openlidarviewer/issues",
   "readme": "https://github.com/Aurtechmx/openlidarviewer/blob/main/README.md",
   "programmingLanguage": [
@@ -99,7 +99,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/core",
       "name": "@loaders.gl/core",
-      "version": "^4.4.4",
+      "version": "^4.4.5",
       "provider": {
         "@type": "Organization",
         "name": "npm",
@@ -123,7 +123,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/obj",
       "name": "@loaders.gl/obj",
-      "version": "^4.4.2",
+      "version": "^4.4.5",
       "provider": {
         "@type": "Organization",
         "name": "npm",
@@ -135,7 +135,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/ply",
       "name": "@loaders.gl/ply",
-      "version": "^4.4.4",
+      "version": "^4.4.5",
       "provider": {
         "@type": "Organization",
         "name": "npm",
@@ -192,9 +192,9 @@
       "downloadUrl": "https://www.npmjs.com/package/three"
     }
   ],
-  "isPartOf": "https://lidar.aurtech.mx/",
+  "isPartOf": "https://openlidarviewer.org/",
   "relatedLink": [
-    "https://lidar.aurtech.mx/guide",
+    "https://openlidarviewer.org/guide/",
     "https://github.com/Aurtechmx/openlidarviewer/blob/main/DATA_AVAILABILITY.md"
   ],
   "citation": [

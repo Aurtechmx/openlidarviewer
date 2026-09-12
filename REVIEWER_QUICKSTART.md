@@ -21,7 +21,7 @@ npm run repro
 This runs the real analysis cores over deterministic synthetic fixtures with
 analytic ground truth and writes:
 
-- `benchmarks/out/metrics.md` — the evaluation table (also in the paper)
+- `benchmarks/out/metrics.md`: the evaluation table
 - `benchmarks/out/metrics.json` — the raw numbers
 - `benchmarks/out/registration_bias.{png,pdf}` — vertical-change preservation
 - `benchmarks/out/calibration.{png,pdf}` — uncertainty-band coverage
@@ -45,8 +45,9 @@ What the metrics show:
   horizontal-only constraint preserves it (≈ 0 error). This is the change-detection
   design choice, measured.
 - **M2** — planar alignment recovers a known horizontal misregistration.
-- **M3** — the reported stockpile ±1σ band is calibrated: empirical coverage sits
-  near the nominal 0.68 over hundreds of noise realisations.
+- M3: over seeded noise realisations the reported stockpile ±1σ band reaches
+  empirical coverage near its nominal 0.68. That is coverage against a known
+  synthetic noise model, not calibration against field data.
 - **M4** — the integrity-report digest is deterministic and tamper-evident.
 
 ## 3. Run the application (~1 min)
@@ -63,10 +64,15 @@ Everything happens on your machine; no data leaves the browser.
 ## Verifying a published release
 
 ```bash
-git checkout v0.6.7
+git checkout v0.6.8
 nvm use && npm ci
-npm run gate
+OLV_GATE_MODE=release npm run gate
 ```
+
+That is the mode the published figures come from. Plain `npm run gate` is the
+development default: it runs the static gate only, so it is quicker but does not
+reproduce coverage or the e2e counts. Either way, read the verdict from the
+`GATE EXIT:` line.
 
 If you downloaded the release assets, check the set itself — this rebuilds
 nothing:

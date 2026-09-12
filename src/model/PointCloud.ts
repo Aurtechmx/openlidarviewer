@@ -200,6 +200,7 @@ export class PointCloud {
    */
   private _classification?: Uint8Array;
   private _classificationDerived = false;
+  private _derivedClassFrameInvalid = false;
   readonly normals?: Float32Array;
   readonly returnNumber?: Uint8Array;
   readonly returnCount?: Uint8Array;
@@ -346,6 +347,34 @@ export class PointCloud {
     }
     this._classification = codes;
     this._classificationDerived = true;
+    // A fresh derive is BY DEFINITION current: it ran under the frame in force
+    // now, so whatever invalidated the previous codes no longer applies.
+    this._derivedClassFrameInvalid = false;
+  }
+
+  /**
+   * Whether the attached DERIVED classification belongs to a frame the
+   * application has since replaced.
+   *
+   * `classifierOptions` restates physical metre thresholds in source units, so
+   * derived codes only mean what they say in the frame they were derived under.
+   * When this is true the codes stay attached — they are the user's work, and
+   * the legend and class colours keep reading them — but they are withheld from
+   * any new analytical computation until a re-derive succeeds.
+   */
+  get derivedClassificationFrameInvalid(): boolean {
+    return this._derivedClassFrameInvalid;
+  }
+
+  /**
+   * Record that the frame these DERIVED codes were produced under is gone.
+   *
+   * A no-op on a producer's classification: those thresholds are the
+   * producer's, not a restatement of metres in this frame's units, so a frame
+   * change costs them nothing.
+   */
+  markDerivedClassificationFrameInvalid(): void {
+    if (this._classificationDerived) this._derivedClassFrameInvalid = true;
   }
 
   /**

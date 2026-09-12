@@ -21,12 +21,17 @@
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import { epsgFromCrsLabel } from '../../export/crsIdentifier';
-import { buildExportProvenance, provenanceLines, type ExportPermitStamp } from './exportProvenance';
+import {
+  buildExportProvenance,
+  provenanceLines,
+  dtmArtifactClaims,
+  type ExportPermitStamp,
+} from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 import { sha256Hex } from './sha256';
-import { verticalUnitLabel } from '../../units/units';
+import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 
 /**
  * Build a `SHA256SUMS` integrity manifest over `entries`, in the standard
@@ -53,14 +58,21 @@ export type DemLinearUnit = 'metre' | 'foot' | 'us-survey-foot' | 'unknown';
  * back-compat (the terrain stack's `unitToMetres` defaults to 1).
  */
 function projectedUnitLabel(unit: DemLinearUnit | undefined): string {
-  return unit === 'foot' || unit === 'us-survey-foot' ? 'ft' : 'm';
+  // Two different absences. `undefined` is a projected CRS with no UNIT clause,
+  // and the WKT default for that is the metre, a convention this project pins
+  // deliberately and the README tests state. `'unknown'` is a resolved frame
+  // that could not determine the unit, which the previous ternary also read as
+  // metres: the README printed "Cell size 1 m" for a scan whose unit never
+  // resolved. Only the second is not metres.
+  if (unit === undefined) return 'm';
+  return horizontalUnitLabel({ isGeographic: false, linearUnit: unit });
 }
 
 /**
  * Elevation-unit word for the README, mapped from the units.ts short label
  * (`'m'` / `'ft'` / `'units'`). The DTM stores Z in the scan's SOURCE vertical
- * units, so the label is derived from the resolved VERTICAL factor
- * (`dtm.verticalUnitToMetres`), never the horizontal one — a compound CRS (metre
+ * units, so the label is derived from the resolved VERTICAL factor the caller
+ * CLAIMS (`opts.verticalUnitToMetres`), never the horizontal one — a compound CRS (metre
  * plan over a foot height, or the reverse) would otherwise stamp the README and
  * the GeoTIFF vertical GeoKey with different units for the SAME zip. `'units'`
  * (an absent / degenerate factor) reads `'unknown'`, the fail-closed contract
@@ -78,6 +90,8 @@ export interface DemPackageOptions {
   readonly worldOrigin?: { readonly x: number; readonly y: number; readonly z?: number } | null;
   /** Base filename (no extension) for the entries. Default 'terrain'. */
   readonly basename?: string;
+  /** Metres per source vertical unit, or null when the frame resolved none. */
+  readonly verticalUnitToMetres?: number | null;
   /** CRS WKT for the .prj sidecar, when available. */
   readonly wkt?: string | null;
   /** True when the horizontal CRS is geographic (lat/lon, degree cells). */
@@ -170,6 +184,8 @@ export interface DemReadmeOptions {
   readonly result: AnalyseContoursResult;
   readonly basename: string;
   readonly isGeographic: boolean;
+  /** Metres per source vertical unit, or null when the frame resolved none. */
+  readonly verticalUnitToMetres?: number | null;
   /**
    * Resolved linear unit of a projected CRS (ignored when `isGeographic`).
    * Omitted ⇒ the standing metre assumption.
@@ -215,11 +231,17 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // README's reference frame, verdicts, accuracy, software + version and date
   // are word-for-word identical to the GeoJSON / DXF / SVG / map sheet.
   const p = buildExportProvenance(result, {
+    // Threaded, not defaulted: the README's reference frame is only "word-for-
+    // word identical" to the other exports if it is stamped from the same
+    // resolved scale they are.
+    verticalUnitToMetres: opts.verticalUnitToMetres ?? null,
     basename,
     generatedAt: opts.generationDateIso,
     softwareVersion: opts.softwareVersion,
     metricVersion: opts.metricVersion,
     exportPermit: opts.exportPermit ?? null,
+    // The raster, plus the hold-out accuracy figure when the README prints one.
+    evidenceClaimIds: dtmArtifactClaims(result),
   });
 
   const cov = (() => {
@@ -241,9 +263,19 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // in both branches: a geographic frame's cells are degrees but its heights
   // still carry the declared vertical unit. An absent / degenerate factor reads
   // 'unknown' (fail-closed), never a fabricated metre.
-  const zUnit = dtm.verticalUnitToMetres == null
+  // `dtm.verticalUnitToMetres` is the GEOMETRY factor the runner pins to the
+  // inert placeholder 1 for a scan with no CRS, so reading it here printed
+  // "metres" for a frame whose own Provenance block, built from the CLAIM
+  // factor threaded in as `opts.verticalUnitToMetres`, said the vertical unit
+  // was unverified. Read the claim, gated on the result's own statement that a
+  // vertical scale resolved; fall back to the geometry factor only when the
+  // caller states no claim at all (a legacy direct call).
+  const zFactor = result.verticalScaleResolved === false
+    ? null
+    : (opts.verticalUnitToMetres ?? dtm.verticalUnitToMetres ?? null);
+  const zUnit = zFactor == null
     ? 'unknown'
-    : ELEVATION_UNIT_NAME[verticalUnitLabel(dtm.verticalUnitToMetres)];
+    : ELEVATION_UNIT_NAME[verticalUnitLabel(zFactor)];
   const reasons = quality?.reasons ?? [];
   const exportReasons = quality?.exportReasons ?? [];
   const warnings = result.warnings ?? [];
@@ -428,6 +460,7 @@ export function buildDemPackage(
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
   }
   const readme = buildDemReadme({
+    verticalUnitToMetres: options.verticalUnitToMetres ?? null,
     result,
     basename,
     isGeographic,

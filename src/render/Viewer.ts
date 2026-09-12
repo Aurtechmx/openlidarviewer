@@ -30,6 +30,8 @@
  */
 
 import * as THREE from 'three/webgpu';
+
+const TWIST_AXIS = new THREE.Vector3(), TWIST_OFFSET = new THREE.Vector3(); // twist scratch, per pointermove
 import type { ColorModeHost } from './colorModeSupport';
 import { applyInspectionPreset, type PresetApplication, type PresetApplyHost } from './presetApplication';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -99,13 +101,7 @@ import { runRenderFrame, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { angularVelocity } from './angularVelocity';
-import {
-  targetPixelRatio,
-  quantizeDpr,
-  shouldApplyDpr,
-  DPR_MOTION_FLOOR,
-  DPR_FULL_REDUCTION_ANGULAR,
-} from './adaptiveDpr';
+import { refinementDprTarget, shouldApplyDpr, DPR_MOTION_FLOOR } from './adaptiveDpr';
 import { maxPixelRatio } from './quality/pixelRatioCeiling';
 import { RefinementPhaseTracker } from './refinementPhaseState';
 import { evaluateRefinementReadiness } from './streaming/refinementReadiness';
@@ -196,10 +192,8 @@ import {
 } from './measure/profileSectionSeam';
 import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
-  integrableClouds,
-  isIntegrable,
-  streamingMayCombine,
-  sourceClassifiesGround,
+  integrableClouds, isIntegrable, streamingMayCombine, sourceClassifiesGround,
+  analysisClassification,
 } from './integrableClouds';
 import type { LayerCompatibility } from '../model/layerCompatibility';
 import {
@@ -228,7 +222,7 @@ import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import { TouchTapGate } from './touchTapGate';
-import { RenderActivityGate, DampingSettleGate } from './renderActivityGate';
+import { RenderActivityGate, DampingSettleGate, CameraPoseWatch } from './renderActivityGate';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
@@ -252,7 +246,7 @@ import {
   isIdentityPlacement,
   accumulatorOffset,
   rayOriginToLayer,
-  placePoint,
+  placePoint, contributorsShareOneOrigin,
 } from './layerPlacement';
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import {
@@ -791,6 +785,7 @@ export class Viewer {
    * Past this point, the loop falls back to a heartbeat render.
    */
   private readonly _renderGate = new RenderActivityGate();
+  private readonly _camPose = new CameraPoseWatch(); // walk / fly motion signal
   /** Damping-tail measure behind the OrbitControls 'change' activity bump. */
   private readonly _settleGate = new DampingSettleGate();
   /**
@@ -1308,15 +1303,16 @@ export class Viewer {
     // `DampingSettleGate` withholds the bump once that tail is under a pixel.
     this._controls.addEventListener('change', () => {
       if (this._settleGate.arms(this._camera, this._controls, canvas.clientHeight || 600)) {
-        this._bumpRenderActivity();
+        // The ONE camera-motion signal. Orbit, pan, dolly, the fly controller's
+        // `controls.update()` and the damping tail all arrive here; nothing
+        // else moves the camera except a tween, which the loop reads directly.
+        this._bumpCameraActivity();
       }
     });
     this._controls.addEventListener('start', () => { this._userInteracting = true; });
     this._controls.addEventListener('end', () => {
       this._userInteracting = false;
-      this._lastInteractMs = (typeof performance !== 'undefined' && performance.now)
-        ? performance.now()
-        : Date.now();
+      this._lastInteractMs = this._nowMs();
     });
 
     // ── Navigation controller ─────────────────────────────────────────────
@@ -1567,20 +1563,24 @@ export class Viewer {
       // Capture so moves keep arriving if the finger slides off before lift.
       try { canvas.setPointerCapture(e.pointerId); } catch { /* pointerup still arrives */ }
     };
-    this._onCanvasPointerUp = (e) => {
-      if (e.pointerType !== 'touch') return;
+    // Shared by the up and cancel paths; true when this was a touch we tracked.
+    const endTouch = (e: PointerEvent): boolean => {
+      if (e.pointerType !== 'touch') return false;
       this._touchTracker.up(e.pointerId);
-      try {
-        canvas.releasePointerCapture(e.pointerId);
-      } catch { /* already released */ }
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* released */ }
+      return true;
+    };
+    this._onCanvasPointerUp = (e) => {
+      if (!endTouch(e)) return;
       // Double-tap → focus-on-point (touch equivalent of the desktop dblclick).
       if (this._toolMode === 'none') {
-        const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+        const now = this._nowMs();
         const focus = this._tapGate.up(this._touchTracker.size, now, e.offsetX, e.offsetY);
         if (focus) this._handleDoubleClick({ offsetX: focus.x, offsetY: focus.y } as MouseEvent);
       }
     };
-    this._onCanvasPointerCancel = this._onCanvasPointerUp;
+    // A cancel is NOT an up: aliased above, it completed a tap never made.
+    this._onCanvasPointerCancel = (e) => { if (endTouch(e)) this._tapGate.cancel(); };
     this._onWindowKeyDown = (e) => {
       this._bumpRenderActivity();
       if (e.code === 'Escape' && this._toolMode !== 'none') this._setToolMode('none');
@@ -2303,6 +2303,16 @@ export class Viewer {
   }
 
   /** Return an array of all currently loaded cloud IDs. */
+  /**
+   * Whether every CONTRIBUTING layer shares one source origin. False means the
+   * surface is in the project frame, which no layer's origin names, so an
+   * exporter must not anchor to one. Same `integrableClouds` filter as the
+   * gather, so a hidden layer is not counted against it.
+   */
+  terrainFrameIsSingleOrigin(): boolean {
+    return contributorsShareOneOrigin(integrableClouds(this._clouds.values()));
+  }
+
   clouds(): string[] {
     return [...this._clouds.keys()];
   }
@@ -2374,7 +2384,7 @@ export class Viewer {
     // Match the picker: only visible, unlocked clouds contribute to the surface.
     for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
-        const cls = alignedClass(cloud.classification, cloud.positions);
+        const cls = analysisClassification(cloud, cloud.positions.length);
         if (cls) {
           anyClass = true;
           if (!cloud.classificationIsDerived && sourceClassifiesGround(cls)) {
@@ -3062,6 +3072,13 @@ export class Viewer {
     this.onClassificationEdited?.(id);
   }
 
+  /** Mark DERIVED classifications stale after a frame change (see CLASS_FRAME_STALE_NOTICE). */
+  invalidateDerivedClassificationsForFrame(): string[] {
+    const marked: string[] = [];
+    for (const [id, e] of this._clouds) if (e.cloud.classificationIsDerived) { e.cloud.markDerivedClassificationFrameInvalid(); this._classEpochs.bump(id); marked.push(id); }
+    return marked;
+  }
+
   /** The cloud's classification edit epoch (0 = never edited). */
   classificationEpoch(id: string): number {
     return this._classEpochs.current(id);
@@ -3267,10 +3284,10 @@ export class Viewer {
     // class-mask multiply folded into the size node. Without this the legend
     // could colour the derived classes but not hide them.
     this._attachClassAttribute(entry, codes);
-    // Keep the current colour mode (RGB/natural) after a derive, like a cloud
-    // loaded WITH classification: the class-filter wiring above hides classes
-    // without recolouring. Only refresh when already showing class colours.
+    // The class-filter wiring above hides classes without recolouring, so the
+    // colour mode only needs refreshing when class colours are already shown.
     if (entry.mode === 'classification') this._refreshClassificationColours(id);
+    this._markClassificationEdited(id); // a derive replaces the classification
     this._bumpRenderActivity();
     return true;
   }
@@ -3979,8 +3996,8 @@ export class Viewer {
    * colours are stashed so {@link clearSelectionHighlight} can revert.
    *
    * Static clouds only — streaming highlights need per-mesh indexing
-   * (the streaming renderer owns its own colour buffers) and are
-   * deferred to a follow-up cut.
+   * (the streaming renderer owns its own colour buffers) and are not
+   * supported.
    */
   setSelectionHighlight(
     perCloud: ReadonlyMap<string, ReadonlyArray<number>>,
@@ -4698,6 +4715,7 @@ export class Viewer {
     options: ExportOptions = {},
     classScopeStamp = '',
   ): Promise<ExportResult> {
+    const adapter = this._buildExportAdapter(); // LIVE closures: snapshots NOTHING (gate: exportImageAction)
     const studio = await loadExportStudio();
     return studio.renderExport(
       mode,
@@ -4706,11 +4724,8 @@ export class Viewer {
         scene: this._scene,
         camera: this._camera,
         canvas: this._canvas,
-        adapter: this._buildExportAdapter(),
-        // Class-filter scope stamp from the call site — drives the "showing
-        // N of M classes" banner the Studio composes onto a filtered raster.
-        // Empty string when nothing is hidden, keeping the export unchanged.
-        classScopeStamp,
+        adapter,
+        classScopeStamp, // empty when nothing is hidden
       },
       options,
     );
@@ -5465,9 +5480,7 @@ export class Viewer {
     // The hand-tool grab and the custom orbit drag both bypass OrbitControls, so
     // the `_userInteracting` gate never sees them; suspend the clamp during either
     // and stamp the settle window on release so it doesn't yank the target.
-    const nowMs = (typeof performance !== 'undefined' && performance.now)
-      ? performance.now()
-      : Date.now();
+    const nowMs = this._nowMs();
     if (this._nav.panDragging || this._nav.orbitDragging) {
       this._panWasDragging = true;
       return;
@@ -5604,17 +5617,13 @@ export class Viewer {
 
     // ── twist / yaw around world up ────────────────────────────────────
     if (delta.dTwist !== 0) {
-      // Yaw rotates the (camera − target) vector around the world up
-      // axis. World up is +Z in the OpenLiDARViewer convention.
-      const ox = cam.position.x - tgt.x;
-      const oy = cam.position.y - tgt.y;
-      const oz = cam.position.z - tgt.z;
-      // 2D rotation in the XY plane keeps Z (height) constant.
-      const c = Math.cos(delta.dTwist);
-      const s = Math.sin(delta.dTwist);
-      const nx = ox * c - oy * s;
-      const ny = ox * s + oy * c;
-      cam.position.set(tgt.x + nx, tgt.y + ny, tgt.z + oz);
+      // Yaw rotates the (camera − target) vector around the world up AXIS,
+      // whichever it is now. A fixed XY-plane rotation was written when +Z was
+      // the only up; on a Y-up cloud (a phone scan) that plane is vertical, so
+      // a 90° twist from (10, 5, 0) moved the camera to y = 10.
+      TWIST_AXIS.copy(this._worldUp).normalize();
+      TWIST_OFFSET.copy(cam.position).sub(tgt).applyAxisAngle(TWIST_AXIS, delta.dTwist);
+      cam.position.copy(tgt).add(TWIST_OFFSET);
     }
 
     // ── pan / centroid drift ───────────────────────────────────────────
@@ -6176,10 +6185,24 @@ export class Viewer {
    * renderer responsive.
    */
   private _bumpRenderActivity(): void {
-    const now = (typeof performance !== 'undefined' && performance.now)
+    this._renderGate.bump(this._nowMs());
+  }
+
+  /**
+   * The camera moved: hold full rate AND let the motion-gated effects stand
+   * down. Reached from the controls 'change' listener (behind the settle gate)
+   * and from the walk / fly pose comparison — never from hovering, a
+   * colour-mode switch or a resize, which would flash the scene.
+   */
+  private _bumpCameraActivity(): void {
+    this._renderGate.bumpCamera(this._nowMs());
+  }
+
+  /** `performance.now()` where it exists, wall clock otherwise. */
+  private _nowMs(): number {
+    return (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-    this._renderGate.bump(now);
   }
 
   /**
@@ -6196,9 +6219,7 @@ export class Viewer {
    * orbit-pivot maintenance) so resume-on-input is glitch-free.
    */
   private _shouldRenderFrame(): boolean {
-    const now = (typeof performance !== 'undefined' && performance.now)
-      ? performance.now()
-      : Date.now();
+    const now = this._nowMs();
     // Streaming counts as busy when the scheduler has in-flight or queued
     // fetches, so freshly-decoded nodes reach the screen without latency.
     let streamingBusy = false;
@@ -6257,24 +6278,10 @@ export class Viewer {
     );
     const floor = Math.min(maxDpr, DPR_MOTION_FLOOR);
 
-    let target: number;
-    if (this._refinementPhasesEnabled) {
-      // P6 — step DPR by discrete refinement phase. The tracker decides when
-      // the phase advances (from the wanted-set readiness verdict where there
-      // is one, an elapsed-time proxy where there is not); this branch only
-      // reads the resolution fraction the current phase asks for.
-      target = Math.max(floor, maxDpr * this._phases.dprScale);
-      if (phase === 'moving' && angularSpeed > 0) {
-        // P3 — faster rotation pulls the moving-phase resolution toward the floor.
-        const t = Math.min(1, angularSpeed / DPR_FULL_REDUCTION_ANGULAR);
-        target = Math.max(floor, target + (floor - target) * t);
-      }
-    } else {
-      // Flag off: the continuous P5 mapping (no discrete phases).
-      target = targetPixelRatio({ maxDpr, moving, angularSpeed });
-    }
-
-    target = quantizeDpr(target);
+    const target = refinementDprTarget({
+      maxDpr, floor, phasesEnabled: this._refinementPhasesEnabled,
+      dprScale: this._phases.dprScale, phase, moving, angularSpeed,
+    });
     const applied = this._renderer.getPixelRatio();
     if (shouldApplyDpr(applied, target, nowMs, this._lastDprChangeMs)) {
       this._renderer.setPixelRatio(target);
@@ -6304,12 +6311,19 @@ export class Viewer {
         return this._timer.getDelta();
       },
       recordFrame: (delta) => this._recordFrame(delta),
-      updateNav: (delta) => this._nav.update(delta),
+      // Walk / fly move the camera with OrbitControls disabled, so no 'change'
+      // event carries their motion; under orbit and pan the settle gate owns
+      // the verdict and the pose comparison stays quiet.
+      updateNav: (delta) => {
+        this._nav.update(delta);
+        if (this._camPose.movedOutsideControls(this._camera, this._nav.mode)) this._bumpCameraActivity();
+      },
       maintainOrbitCenter: () => this._maintainOrbitCenter(),
       updateAdaptiveEdl: () => this._updateAdaptiveEdl(),
       shouldRenderFrame: () => this._shouldRenderFrame(),
       isTweening: () => this._nav.isTweening,
       activityUntilMs: () => this._renderGate.activityUntilMs,
+      cameraActivityUntilMs: () => this._renderGate.cameraUntilMs,
       edlEnabled: () => this._edlEnabled,
       applyAdaptiveDpr: (moving, delta, nowMs, rendered) => {
         this._updateRefinementAndDpr(moving, delta, nowMs, rendered);

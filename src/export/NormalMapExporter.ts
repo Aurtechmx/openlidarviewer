@@ -21,12 +21,9 @@
  * explicit reason so the user gets actionable feedback instead of a
  * uniform-grey image.
  *
- * **What's planned for a later session:** a depth-gradient
- * approximation that synthesises pseudo-normals from a top-down depth
- * raster, removing the cloud-must-carry-normals requirement. The export-
- * seam architecture supports it; the just gates on the
- * explicit-normals path so the seam is honest about what's currently
- * implemented.
+ * The exporter gates on the explicit-normals path rather than
+ * synthesising pseudo-normals, so the seam states only what it can
+ * actually produce from the cloud it was given.
  */
 
 import type {

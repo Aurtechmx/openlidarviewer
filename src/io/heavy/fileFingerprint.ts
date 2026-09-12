@@ -44,8 +44,7 @@ const INTERIOR_FRACTIONS = [0.25, 0.5, 0.75] as const;
  * Bytes read per window when streaming the whole-file source-content digest. A
  * bounded working-set size, not a correctness parameter — the digest is
  * identical for any chunk size (pinned by the incremental-hasher tests). 4 MiB
- * matches the bridge's existing bounded-read discipline; the browser build can
- * revisit it once real OPFS/file read throughput is measured.
+ * matches the bridge's existing bounded-read discipline.
  */
 const DIGEST_CHUNK_BYTES = 4 * 1024 * 1024;
 

@@ -152,3 +152,26 @@ export function mergePlacedBounds(
   }
   return any ? out : null;
 }
+
+/**
+ * Whether a terrain export may be anchored at a contributing layer's OWN origin.
+ *
+ * The gather folds each contributor's project placement into its positions, so
+ * a contributor carrying a non-identity placement puts the surface in the
+ * PROJECT frame, whose origin is not the layer's. One visible placed layer beside
+ * a hidden anchor passed a same-origin check on its own, and the export was
+ * anchored at that layer's origin, translating every coordinate by the
+ * placement offset. True only when no contributor is placed and all share one
+ * source origin; the caller then publishes no origin rather than a wrong one.
+ */
+export function contributorsShareOneOrigin(
+  entries: ReadonlyArray<{
+    readonly placement?: LayerSpatialTransform | null;
+    readonly cloud: { readonly sourceOrigin?: readonly [number, number, number] | null };
+  }>,
+): boolean {
+  if (entries.some((e) => e.placement != null && !isIdentityPlacement(e.placement))) return false;
+  const os = entries.map((e) => e.cloud.sourceOrigin)
+    .filter((o): o is readonly [number, number, number] => Array.isArray(o));
+  return os.every((o) => o[0] === os[0][0] && o[1] === os[0][1] && o[2] === os[0][2]);
+}

@@ -33,6 +33,7 @@ import { hornSlope } from '../ground/terrainDerivatives';
 import { quantileSorted } from '../quantile';
 import type {
   BandError,
+  ClassificationScope,
   ConfidenceSample,
   SlopeBand,
   SlopeBandError,
@@ -116,13 +117,27 @@ export interface HoldoutParams {
    *
    * Must be pure and deterministic (same inputs → same mask) to keep the report
    * reproducible. If it throws, returns a wrong-length mask, or yields no ground
-   * points, the run falls back to the supplied full-cloud mask and re-states the
-   * documented limitation in `warnings`.
+   * points, the run REFUSES: supplying this hook selects the split→classify→fit
+   * estimand, and delivering the whole-cloud one under the same field names
+   * would answer a question the caller did not ask. The report comes back with
+   * `sampleSize 0` and an `unavailableReason`, never another estimand's number.
    */
   readonly reclassifyGround?: (
     points: ReadonlyArray<TerrainPoint>,
     isHeldOut: Uint8Array,
   ) => Uint8Array | ReadonlyArray<number>;
+  /**
+   * What the `reclassifyGround` hook REPRESENTS, recorded as the report's
+   * {@link ClassificationScope} when it succeeds. Default `'train-only'`.
+   *
+   * This module cannot tell the difference from the inside: a hook that re-runs
+   * a classifier over the training points and a hook that returns an all-ground
+   * mask because the source's class-2 labels are authoritative both hand back a
+   * mask of the right length. The trusted-survey path supplies the latter, and
+   * the record said `train-only` — claiming a classifier ran when none did. The
+   * caller knows which it is, so the caller states it.
+   */
+  readonly reclassificationKind?: Exclude<ClassificationScope, 'whole-cloud'>;
 }
 
 /**
@@ -133,6 +148,15 @@ export interface HoldoutParams {
  */
 const FULL_CLOUD_CLASSIFICATION_WARNING =
   'hold-out withholds points from the surface fit only; ground classification used the full cloud (mild optimism vs classify-inside-fold)';
+
+/**
+ * Refusal when a supplied train-only reclassifier could not produce the mask.
+ * The alternative — reporting the whole-cloud figure — answers a different
+ * question under the same field name, which is the substitution this module
+ * exists to prevent.
+ */
+const TRAIN_ONLY_REFUSED =
+  'train-only ground classification was requested but could not be produced; no hold-out statistic is reported (the full-cloud figure estimates a different quantity)';
 
 /** Small, fast, deterministic PRNG (mulberry32). */
 function mulberry32(seed: number): () => number {
@@ -163,10 +187,40 @@ export function holdoutValidateDtm(
   const vertical: VerticalAxis = params.verticalAxis ?? 'z';
   const { getH1, getH2, getV } = axisGetters(vertical);
 
-  let holdoutFraction = params.holdoutFraction ?? 0.2;
+  // Statistical parameters are REFUSED, not repaired. Substituting a working
+  // default for a caller's invalid split fraction, cell size or seed produces a
+  // number for a design nobody chose, and the report carries no field saying the
+  // design was changed — only a warning line, which the panels do not render.
+  // The blocked validator already refuses these; this is the same rule.
+  const holdoutFraction = params.holdoutFraction ?? 0.2;
   if (!Number.isFinite(holdoutFraction) || holdoutFraction <= 0 || holdoutFraction >= 1) {
-    warnings.push(`holdoutFraction invalid (${holdoutFraction}); using 0.2`);
-    holdoutFraction = 0.2;
+    const why = `holdoutFraction must be a finite fraction in (0,1); got ${holdoutFraction}`;
+    warnings.push(why);
+    return emptyReport(Number.NaN, warnings, why);
+  }
+  if (!(params.cellSizeM > 0) || !Number.isFinite(params.cellSizeM)) {
+    const why = `cellSizeM must be a finite positive length; got ${params.cellSizeM}`;
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
+  }
+  if (params.seed !== undefined && !(Number.isInteger(params.seed) && params.seed >= 0)) {
+    // mulberry32 does `seed >>> 0`, which silently maps a fractional or negative
+    // seed onto some other seed. Two runs recorded as different seeds could then
+    // be the same split, and a recorded seed would not reproduce its own run.
+    const why = `seed must be a non-negative integer; got ${params.seed}`;
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
+  }
+  if (isGround.length !== points.length) {
+    // A mask shorter than the cloud reads `undefined` past its end, which is
+    // `!== 1`, so every point beyond it is silently treated as non-ground: the
+    // validated sample quietly becomes a prefix of the one the caller meant.
+    // `rasterizeDtm` already refuses this; the validator must not be laxer than
+    // the rasterizer it feeds.
+    const why =
+      `ground mask length (${isGround.length}) does not match the point count (${points.length})`;
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
   }
 
   // Collect finite ground returns, keeping each one's index back into the
@@ -185,8 +239,9 @@ export function holdoutValidateDtm(
   }
 
   if (ground.length < 4) {
-    warnings.push('too few ground returns to cross-validate');
-    return emptyReport(holdoutFraction, warnings);
+    const why = 'too few ground returns to cross-validate';
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
   }
 
   // Deterministic split. Iterate by index (identical RNG draw order to the
@@ -206,8 +261,9 @@ export function holdoutValidateDtm(
     }
   }
   if (train.length === 0 || test.length === 0) {
-    warnings.push('split produced an empty train or test set');
-    return emptyReport(holdoutFraction, warnings);
+    const why = 'split produced an empty train or test set';
+    warnings.push(why);
+    return emptyReport(holdoutFraction, warnings, why);
   }
 
   // The DTM below is fit from `fitTrain`. The hold-out already withholds points
@@ -218,6 +274,11 @@ export function holdoutValidateDtm(
   // leak, not a reworded warning. Otherwise keep the full-cloud train set and
   // re-state the documented limitation.
   let fitTrain: TerrainPoint[] = train;
+  // Set to 'train-only' ONLY where the reclassifier actually produced the mask
+  // the surface was fitted from. Both failure paths below leave it at
+  // 'whole-cloud', so a report can never say the requested treatment ran when
+  // it did not — the warning strings alone did not stop that.
+  let classificationScope: ClassificationScope = 'whole-cloud';
   if (params.reclassifyGround) {
     const isHeldOut = new Uint8Array(points.length);
     for (const idx of testIdx) isHeldOut[idx] = 1;
@@ -228,10 +289,13 @@ export function holdoutValidateDtm(
       newMask = null;
     }
     if (newMask?.length !== points.length) {
-      warnings.push(
-        'reclassifyGround returned an invalid mask; falling back to full-cloud classification',
-        FULL_CLOUD_CLASSIFICATION_WARNING,
-      );
+      // Refuse. The caller asked for split→classify→fit; the classifier did not
+      // deliver, and the whole-cloud number is a DIFFERENT estimand. Reporting
+      // it here under `rmse` would substitute one for the other silently — the
+      // `classificationScope` label disclosed the substitution but nothing
+      // obliged a consumer to read it.
+      warnings.push(TRAIN_ONLY_REFUSED, 'reclassifyGround returned an invalid mask');
+      return emptyReport(holdoutFraction, warnings, TRAIN_ONLY_REFUSED);
     } else {
       const reTrain: TerrainPoint[] = [];
       for (let i = 0; i < points.length; i++) {
@@ -244,14 +308,20 @@ export function holdoutValidateDtm(
         reTrain.push(p);
       }
       if (reTrain.length === 0) {
+        // Same refusal, other failure mode: a classifier that finds no ground in
+        // the training set has not produced the requested treatment either.
         warnings.push(
-          'train-only reclassification produced no ground points; falling back to full-cloud classification',
-          FULL_CLOUD_CLASSIFICATION_WARNING,
+          TRAIN_ONLY_REFUSED,
+          'train-only reclassification produced no ground points',
         );
+        return emptyReport(holdoutFraction, warnings, TRAIN_ONLY_REFUSED);
       } else {
+        classificationScope = params.reclassificationKind ?? 'train-only';
         fitTrain = reTrain;
         warnings.push(
-          'ground classification re-run on training points only (held-out points excluded from the classifier); surface-fit classification leak removed',
+          classificationScope === 'fixed-source-classification'
+            ? 'ground membership taken from the source classification, which is independent of the split, so there is no surface-fit classification leak to remove; no classifier was re-run'
+            : 'ground classification re-run on training points only (held-out points excluded from the classifier); surface-fit classification leak removed',
         );
       }
     }
@@ -272,8 +342,8 @@ export function holdoutValidateDtm(
     if (h1 > maxH1) maxH1 = h1;
     if (h2 > maxH2) maxH2 = h2;
   }
-  const cellSizeM = params.cellSizeM > 0 ? params.cellSizeM : 1;
-  if (!(params.cellSizeM > 0)) warnings.push(`cellSizeM invalid; using ${cellSizeM}`);
+  // Validated at entry — a non-positive or non-finite cell size refused there.
+  const cellSizeM = params.cellSizeM;
   const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
   const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
 
@@ -296,7 +366,12 @@ export function holdoutValidateDtm(
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     verticalUnitToMetres: params.verticalUnitToMetres,
   });
-  // Residuals are reported in metres regardless of the source vertical unit.
+  // Residuals are reported in metres WHEN the source vertical unit is known.
+  // When it is not, this falls back to 1, which means the residual stays in the
+  // source unit and only equals metres if the source happened to be metric.
+  // Callers must not label the result 'm' on that basis — the export writers
+  // hedge via verticalSuffixFromLabel. This comment previously claimed metres
+  // unconditionally, which is what let a false 'm' reach the reports.
   const vMetres =
     Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0
       ? (params.verticalUnitToMetres as number)
@@ -324,10 +399,13 @@ export function holdoutValidateDtm(
   // and robust spread (NMAD), which absolute-only stats hide: a surface sitting
   // uniformly 8 cm low has a large bias but its RMSE alone looks like noise.
   const allSigned: number[] = [];
-  let sumSigned = 0;
-  // Compensated so the aggregate RMSE stays accurate over a large held-out set.
+  // Compensated so the aggregate RMSE, bias and MAE stay accurate over a large
+  // held-out set. The signed and absolute sums used to be naive `+=` while every
+  // stratified aggregate below was compensated, so the comment there claiming
+  // parity with "the headline figure" was the one thing it did not hold for.
+  const sumSignedAcc = new NeumaierSum();
   const sumSqAcc = new NeumaierSum();
-  let sumAbs = 0;
+  const sumAbsAcc = new NeumaierSum();
   let covered = 0;
   let uncovered = 0;
   // Every residual aggregate is compensated, so a stratum's RMSE/MAE carries the
@@ -405,9 +483,9 @@ export function holdoutValidateDtm(
     const sq = residual * residual;
     allAbs.push(abs);
     allSigned.push(residual);
-    sumSigned += residual;
+    sumSignedAcc.add(residual);
     sumSqAcc.add(sq);
-    sumAbs += abs;
+    sumAbsAcc.add(abs);
     covered++;
     const grade = gradeForConfidence(predConf);
     bandSumSq[grade].add(sq);
@@ -433,12 +511,13 @@ export function holdoutValidateDtm(
   }
 
   if (covered === 0) {
-    warnings.push('no held-out points landed in a covered cell');
-    return { ...emptyReport(holdoutFraction, warnings), uncoveredCount: uncovered };
+    const why = 'no held-out points landed in a covered cell';
+    warnings.push(why);
+    return { ...emptyReport(holdoutFraction, warnings, why), uncoveredCount: uncovered };
   }
 
   const rmse = Math.sqrt(sumSqAcc.total / covered);
-  const mae = sumAbs / covered;
+  const mae = sumAbsAcc.total / covered;
   allAbs.sort((a, b) => a - b);
   // Project-wide type-7 quantile (was nearest-rank — one of the three
   // conventions the v0.4.3 audit flagged; see src/terrain/quantile.ts).
@@ -476,7 +555,7 @@ export function holdoutValidateDtm(
 
   // Signed BIAS: the mean signed residual. A non-zero bias is a systematic
   // vertical offset (the surface sits high or low), which RMSE/MAE cannot show.
-  const bias = sumSigned / covered;
+  const bias = sumSignedAcc.total / covered;
   // NMAD: 1.4826 × median(|residual − median(residual)|). A robust, outlier-
   // resistant spread — the ASPRS-recommended companion to RMSE for LiDAR error,
   // and the honest number to trust when residuals are non-normal.
@@ -487,6 +566,9 @@ export function holdoutValidateDtm(
     // this estimates local reconstruction under dense sampling, never external
     // checkpoint accuracy. Typed so no consumer can relabel it.
     estimand: 'point-reconstruction',
+    classificationScope,
+    // A statistic WAS produced.
+    unavailableReason: null,
     rmse,
     mae,
     p95,
@@ -519,9 +601,23 @@ function normalizedMedianAbsDeviation(values: readonly number[]): number {
   return 1.4826 * quantileSorted(dev, 0.5);
 }
 
-function emptyReport(holdoutFraction: number, warnings: string[]): ValidationReport {
+/**
+ * The refused report. `unavailableReason` is REQUIRED: while it defaulted to
+ * "too few ground returns", two refusals that had nothing to do with ground
+ * returns (an empty split, no held-out point on a covered cell) took the
+ * default, and the panel printed that false explanation beside a warnings
+ * list that said otherwise. The compiler now refuses a refusal with no reason.
+ */
+function emptyReport(
+  holdoutFraction: number,
+  warnings: string[],
+  unavailableReason: string,
+): ValidationReport {
   return {
     estimand: 'point-reconstruction',
+    // Nothing was fitted, so no train-only classification ran.
+    classificationScope: 'whole-cloud',
+    unavailableReason,
     rmse: Number.NaN,
     mae: Number.NaN,
     p95: Number.NaN,

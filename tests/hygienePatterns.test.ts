@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs helper, no type declarations.
-import { findSecret, findNarration } from '../scripts/lib/hygienePatterns.mjs';
+import { findSecret, findNarration, findMarkup, findRoadmapPromise } from '../scripts/lib/hygienePatterns.mjs';
 
 describe('findSecret', () => {
   it('flags high-confidence credential shapes', () => {
@@ -55,6 +55,58 @@ describe('findNarration', () => {
       '// a system prompt-injection guard for embedded text', // "system prompt" not matched now
     ]) {
       expect(findNarration(s), s).toBeNull();
+    }
+  });
+});
+
+// ── Tool-call markup and roadmap promises ───────────────────────────────────
+// A README reached the citable archive ending in two stray closing tags from a
+// tool call. The narration family matches prose and the PR scan reads a diff,
+// so nothing re-examined a tag committed once. These are the negative controls
+// for the two families added to close that: the tags are assembled here rather
+// than written literally, so this file does not itself contain what it guards.
+describe('tool-call markup never ships', () => {
+  const T = (name: string, close = false): string => `<${close ? '/' : ''}${name}>`;
+
+  it('catches a stray closing tool tag, however it is indented', () => {
+    for (const line of [T('invoke', true), `   ${T('antml:parameter', true)}`, T('function_calls', true)]) {
+      expect(findMarkup(line), line).not.toBeNull();
+    }
+  });
+
+  it('catches an opening tool tag', () => {
+    expect(findMarkup('<invoke name="Bash">')).not.toBeNull();
+  });
+
+  it('leaves real markup alone', () => {
+    // The tag vocabulary is the whole guard: an HTML, SVG or XML fixture may
+    // legitimately close any element, and a scan that cried wolf on those
+    // would be turned off.
+    for (const line of [T('content', true), T('svg', true), '<div class="content">', T('p', true)]) {
+      expect(findMarkup(line), line).toBeNull();
+    }
+  });
+});
+
+describe('a roadmap promise is not a scope statement', () => {
+  it('catches a promise about an unbuilt release', () => {
+    for (const line of [
+      'WebP in a future release',
+      'a depth-gradient approximation planned for a later session',
+      'deferred to a follow-up cut',
+    ]) {
+      expect(findRoadmapPromise(line), line).not.toBeNull();
+    }
+  });
+
+  it('leaves a scope statement alone', () => {
+    // These say what the software does NOT do, which is load-bearing honesty.
+    for (const line of [
+      'Ordered point-for-point verification is future work',
+      'streaming highlights are not supported',
+      'the holdout has not been run',
+    ]) {
+      expect(findRoadmapPromise(line), line).toBeNull();
     }
   });
 });

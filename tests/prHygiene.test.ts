@@ -25,7 +25,7 @@ import { join } from 'node:path';
 
 // Kept on one line: @ts-expect-error applies to the line that follows it.
 // @ts-expect-error — plain .mjs script, no types
-import { collectHygieneProblems, collectNarrationProblems, observeBranch, REDUNDANT_LIMIT } from '../scripts/pr-hygiene.mjs';
+import { collectHygieneProblems, collectNarrationProblems, observeBranch, REDUNDANT_LIMIT, NARRATION_PATTERNS } from '../scripts/pr-hygiene.mjs';
 
 interface Report { errors: string[]; warnings: string[] }
 
@@ -286,5 +286,57 @@ describe('H7 process narration', () => {
   it('reads empty and missing text as nothing to report', () => {
     expect(collectNarrationProblems('')).toEqual([]);
     expect(collectNarrationProblems(undefined as unknown as string)).toEqual([]);
+  });
+});
+
+/**
+ * The thinking-aloud opener is a sentence opener, so it is capitalised.
+ *
+ * Matching case-insensitively at a line start also caught ordinary prose that
+ * wrapped there: "whether or not a finger was\nactually tracked" describes what
+ * the software does and contains no deliberation, and it failed the check on a
+ * commit that had none. The openers themselves still fail, wherever they sit.
+ */
+describe('narration — the deliberation opener', () => {
+  const deliberation = (NARRATION_PATTERNS as ReadonlyArray<{ id: string; re: RegExp }>)
+    .find((p) => p.id === 'deliberation')!;
+
+  it('does not fire on a wrapped mid-sentence word', () => {
+    const body = 'TouchTracker.up re-anchored every component whether or not a finger was\nactually tracked.';
+    expect(deliberation.re.test(body), 'ordinary prose read as deliberation').toBe(false);
+  });
+
+  it('still fires on a real opener, at the start and mid-body', () => {
+    expect(deliberation.re.test('Actually, the second attempt worked')).toBe(true);
+    expect(deliberation.re.test('a line\nHmm, this needs another look')).toBe(true);
+    expect(deliberation.re.test('a line\nLet me try the other seam')).toBe(true);
+  });
+});
+
+/**
+ * A dependency bot's body quotes an upstream changelog, which nobody here
+ * wrote. A vitest release note crediting its contributors named an assistant,
+ * so the bump could not merge until someone edited prose that belongs to
+ * another project.
+ */
+describe('narration — quoted upstream material', () => {
+  const body = [
+    'Bumps the dev-tooling group with 4 updates.',
+    '<details>',
+    '<summary>Release notes</summary>',
+    '<li>Replace loupe.inspect with pretty-format - by @hi-ogawa, Co-Authored-By: a tool</li>',
+    '</details>',
+  ].join('\n');
+
+  it('does not read a quoted release note as this PR narrating', () => {
+    expect(collectNarrationProblems(body, 'the PR body'), 'an upstream changelog failed the check').toEqual([]);
+  });
+
+  it('still catches authored self-reference outside a quoted block', () => {
+    // A co-author trailer, not the assistant's name spelled out: the archive
+    // vocabulary lint reads a shipped file for that phrasing too, and a fixture
+    // written to prove one check fails the other.
+    expect(collectNarrationProblems('Co-Authored-By: a tool', 'the PR body').length).toBe(1);
+    expect(collectNarrationProblems('I tried the other seam first', 'the PR body').length).toBe(1);
   });
 });

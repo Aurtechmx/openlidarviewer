@@ -110,6 +110,23 @@ jobs:
           OLV_RELEASE_GATE: '1'
         run: npm run package
 
+      # The archive that ships is STARTED here, and nowhere after this point is
+      # it rebuilt or repackaged. Every earlier smoke ran against a build; this
+      # one extracts the packaged ZIP, serves those bytes with the bundle's own
+      # _headers, and drives them in a browser. It names the ZIP explicitly
+      # rather than letting the script pick the newest, so the file that was
+      # tested cannot differ from the file this step meant to test. A missing
+      # archive, a checksum mismatch, a server that will not start or a failed
+      # spec exits non-zero and fails the job, which blocks release-ready and
+      # therefore publish.
+      - name: Smoke the packaged deploy archive
+        run: |
+          set -euo pipefail
+          V="$(node -p "require('./package.json').version")"
+          ZIP="$(ls release/openlidarviewer-v${V}-deploy-*-root.zip)"
+          test -f "$ZIP"
+          npm run test:smoke:deploy -- "$ZIP"
+
       # Everything the stage job needs, in ONE flat directory. Uploading mixed
       # repo-root and release/ paths makes the artifact's internal layout
       # depend on upload-artifact's common-ancestor rule, and the download side
@@ -122,6 +139,7 @@ jobs:
           cp release/openlidarviewer-*.zip release/payload/
           cp release/gate.log release/gate.log.sha256 release/payload/
           cp "release/test-evidence-v${V}.json" release/payload/
+          cp "release/smoke-deploy-v${V}.json" release/payload/
           cp release/production-audit.json release/payload/
           cp sbom.json release/payload/
           cp "docs/releases/RELEASE_NOTES_v${V}.md" release/payload/
@@ -175,6 +193,7 @@ jobs:
           cp incoming/sbom.json "$STAGE"/
           cp incoming/gate.log incoming/gate.log.sha256 "$STAGE"/
           cp "incoming/test-evidence-v${V}.json" "$STAGE"/
+          cp "incoming/smoke-deploy-v${V}.json" "$STAGE"/
           cp "incoming/RELEASE_NOTES_v${V}.md" "$STAGE"/
           ls -la "$STAGE"
 

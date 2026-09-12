@@ -13,17 +13,17 @@
     "vva": 51
   },
   "coverageNow": {
-    "downloadedTilesWithCheckpoints": 7,
-    "checkpointsCovered": 13,
-    "nvaCovered": 6,
-    "vvaCovered": 7
+    "downloadedTilesWithCheckpoints": 57,
+    "checkpointsCovered": 60,
+    "nvaCovered": 38,
+    "vvaCovered": 22
   },
   "f7Gate": {
     "minTotal": 40,
     "minPerStratum": 12,
-    "totalMet": false,
-    "perStratumMet": false,
-    "tilesStillNeededForMinTotal": 27,
+    "totalMet": true,
+    "perStratumMet": true,
+    "tilesStillNeededForMinTotal": 0,
     "note": "One checkpoint per ~1 km tile, so total N and tile downloads (~70 MB each) rise together; closing F7 is a deterministic download, not a choice."
   },
   "tiles": [
@@ -71,7 +71,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": true
+      "downloaded": false
     },
     {
       "tileId": "w1385n1467",
@@ -287,7 +287,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1395n1460",
@@ -315,7 +315,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1396n1416",
@@ -325,7 +325,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": true
+      "downloaded": false
     },
     {
       "tileId": "w1396n1430",
@@ -334,7 +334,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1396n1437",
@@ -343,7 +343,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1396n1465",
@@ -352,7 +352,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1396n1471",
@@ -361,7 +361,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1396n1473",
@@ -370,7 +370,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1396n1478",
@@ -379,7 +379,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1396n1482",
@@ -388,7 +388,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1396n1483",
@@ -397,7 +397,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1397n1432",
@@ -406,7 +406,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1397n1434",
@@ -415,7 +415,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1397n1480",
@@ -424,7 +424,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1397n1486",
@@ -433,7 +433,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1398n1449",
@@ -443,7 +443,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1398n1455",
@@ -452,7 +452,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1398n1468",
@@ -461,7 +461,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1398n1475",
@@ -470,7 +470,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1399n1427",
@@ -479,7 +479,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1400n1473",
@@ -488,7 +488,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1400n1483",
@@ -497,7 +497,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1401n1430",
@@ -506,7 +506,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1401n1450",
@@ -516,7 +516,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1402n1466",
@@ -525,7 +525,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1402n1490",
@@ -534,7 +534,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1403n1396",
@@ -543,7 +543,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1403n1408",
@@ -552,7 +552,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1403n1454",
@@ -561,7 +561,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1403n1467",
@@ -570,7 +570,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1404n1455",
@@ -580,7 +580,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": true
+      "downloaded": false
     },
     {
       "tileId": "w1404n1493",
@@ -589,7 +589,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1405n1469",
@@ -598,7 +598,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1405n1487",
@@ -607,7 +607,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1406n1416",
@@ -617,7 +617,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1406n1464",
@@ -626,7 +626,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1406n1494",
@@ -635,7 +635,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1407n1486",
@@ -644,7 +644,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": true
+      "downloaded": false
     },
     {
       "tileId": "w1408n1470",
@@ -653,7 +653,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1409n1388",
@@ -662,7 +662,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1409n1425",
@@ -671,7 +671,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1409n1460",
@@ -680,7 +680,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1409n1462",
@@ -689,7 +689,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1409n1490",
@@ -698,7 +698,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1410n1389",
@@ -708,7 +708,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": true
+      "downloaded": false
     },
     {
       "tileId": "w1410n1420",
@@ -717,7 +717,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1410n1460",
@@ -726,7 +726,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1410n1480",
@@ -735,7 +735,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1411n1455",
@@ -744,7 +744,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1411n1473",
@@ -753,7 +753,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1411n1494",
@@ -762,7 +762,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1412n1429",
@@ -771,7 +771,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1412n1433",
@@ -780,7 +780,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1412n1436",
@@ -789,7 +789,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1412n1453",
@@ -799,7 +799,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": true
+      "downloaded": false
     },
     {
       "tileId": "w1412n1464",
@@ -808,7 +808,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1413n1466",
@@ -817,7 +817,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1413n1468",
@@ -826,7 +826,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1413n1489",
@@ -835,7 +835,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1413n1492",
@@ -844,7 +844,7 @@
       ],
       "nva": 0,
       "vva": 1,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1413n1494",
@@ -853,7 +853,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1413n1501",
@@ -862,7 +862,7 @@
       ],
       "nva": 1,
       "vva": 0,
-      "downloaded": false
+      "downloaded": true
     },
     {
       "tileId": "w1414n1475",
@@ -1000,7 +1000,7 @@
       ],
       "nva": 1,
       "vva": 1,
-      "downloaded": true
+      "downloaded": false
     },
     {
       "tileId": "w1424n1456",

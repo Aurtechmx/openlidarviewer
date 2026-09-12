@@ -86,7 +86,7 @@ composed by the `analyseContours` orchestrator
   `calibrateConfidence.ts` fits a monotonic map from heuristic confidence to
   measured reliability and recalibrates the reported confidence, so a cell's
   percentage reflects the probability its elevation is within the measured
-  vertical tolerance. ASPRS vertical accuracy is reported via
+  vertical tolerance. An NVA/VVA-style vertical statistic (1.96 x RMSEz on internal hold-out, not ASPRS checkpoints) is reported via
   `verticalAccuracy.ts`.
 - **Evidence-graded contours** (`contour/`). Marching-squares contouring,
   density-gated intervals, stitching, styling, honesty-preserving smoothing,
@@ -320,8 +320,8 @@ share of ground returns and measures the vertical residual at those
 withheld points. `validate/calibrateConfidence.ts` then fits a monotonic map
 from the heuristic confidence to that measured reliability and recalibrates
 the reported figure, so a cell's percentage reflects the probability that
-its elevation is within the measured vertical tolerance. ASPRS vertical
-accuracy (NVA/VVA) is reported via `validate/verticalAccuracy.ts`.
+its elevation is within the measured vertical tolerance. An NVA/VVA-style vertical statistic (hold-out, not ASPRS
+checkpoints) (NVA/VVA) is reported via `validate/verticalAccuracy.ts`.
 
 Confidence **does not** mean survey certification. It is a calibrated,
 data-quality estimate from the returns the analyser actually walked. It does

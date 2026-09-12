@@ -130,7 +130,7 @@ here for transparency.
 | --- | --- | --- | --- | --- |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 | https://github.com/microsoft/TypeScript |
 | vite | ^8.2.1 | 8.2.1 | MIT | https://github.com/vitejs/vite |
-| vitest | ^4.1.7 | 4.1.10 | MIT | https://github.com/vitest-dev/vitest |
+| vitest | ^4.1.7 | 4.1.11 | MIT | https://github.com/vitest-dev/vitest |
 | vitepress | 1.6.4 | 1.6.4 | MIT | https://github.com/vuejs/vitepress |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT | https://github.com/elmesutupu/vite-plugin-javascript-obfuscator |
 | @playwright/test | ^1.62.1 | 1.62.1 | Apache-2.0 | https://github.com/microsoft/playwright |
@@ -309,6 +309,82 @@ test suite; they are not part of the published web app.
 The streamed sample datasets (USGS 3DEP, swisstopo, GURS) are not bundled;
 they are fetched from public open-data buckets on user request, with attribution
 recorded in `public/credits.html`.
+
+## Derived scientific validation data (committed, not shipped in the deployed app)
+
+The terrain-field comparisons under `validation/terrain-field/` are reproducible
+without a multi-gigabyte download because small DERIVED artifacts from public
+LiDAR datasets are committed: ground-return crops (`crops/*.f32`, `crops/*.bin`),
+their crop manifests, and cross-implementation reference rasters
+(`references/*.asc`) plus checkpoint records (`references/*.json`). The RAW source
+point clouds are NOT redistributed. Full per-dataset records, including bounds
+and checksums, are in `validation/terrain-field/datasets/manifest.json`.
+
+Each entry below gives the source and licence, then the committed derivative paths.
+Attribution is a licence condition for the Estonian Land Board data (CC BY 4.0);
+the U.S. Government sources are public domain or CC0, listed for
+traceability rather than obligation.
+
+### Estonian Land Board National LiDAR, 2020 (tile 568539, Tava area)
+
+- Provider: Estonian Land and Spatial Development Board (Maa-amet)
+- Licence: **CC BY 4.0**, attribution required
+- DOI: <https://doi.org/10.5281/zenodo.19232743>
+- Committed derivatives: `validation/terrain-field/crops/estonia-tava__ground.f32`,
+  `crops/estonia-tava.crop.json`, `references/estonia-tava__bincell-dtm.asc`
+
+### USGS Marsh Island / New Bedford MA UAS survey, 2024 (site 2025-009-FA)
+
+- Provider: U.S. Geological Survey data release
+- Licence: CC0 1.0 Universal / public domain (U.S. Government work); no use constraints
+- DOI: <https://doi.org/10.5066/P19TLXVG>
+- Citation: Over, J.R., Cramer, J.M., Millo, A., Brosnahan, S.M., Ackerman, S.D.,
+  and Ganju, N.K., 2024, Topographic, multispectral, and GPS data collected during
+  UAS operations at Marsh Island, New Bedford, Massachusetts (ver. 2.0, May 2026),
+  USGS data release.
+- Committed derivatives: `validation/terrain-field/crops/marsh-island__ground.f32`,
+  `references/marsh-island__checkpoints.json`
+
+### USGS AZ Coconino B1 2019 airborne LiDAR (project 19049; task order AZ_CoconinoUSFS_2019_B19)
+
+- Provider: U.S. Geological Survey 3D Elevation Program (3DEP) / The National Map
+- Licence: public domain (U.S. Geological Survey / The National Map); no use constraints
+- Citation: U.S. Geological Survey, 2020, USGS Lidar Point Cloud
+  AZ_CoconinoUSFS_2019_B19 (USGS project 19049; NGTOC task order 140G0219F0247,
+  contract G16PC00042): U.S. Geological Survey 3D Elevation Program (3DEP). Public domain.
+- Committed derivatives: `validation/terrain-field/crops/coconino__ground.f32`,
+  `references/coconino-b19-2019__checkpoints.json`, `references/coconino__matched.json`,
+  `references/coconino-slope__bincell-dtm.asc`, `references/coconino-slope__gdaldem-slope.asc`,
+  `references/coconino-slope__slope-aspect-spotcheck.json`, and the study records
+  under `validation/terrain-field/coconino/`
+
+### USGS 3DEP LPC, White Sands NM 2020, tile w3597n3635
+
+- Provider: USGS 3D Elevation Program (3DEP) Lidar Point Cloud
+- Licence: public domain (U.S. Government work)
+- Committed derivatives: `validation/terrain-field/crops/whitesands-dune__ground.f32`,
+  `crops/whitesands-dune.crop.json`, `references/whitesands-dune__bincell-dtm.asc`,
+  `references/whitesands-dune__pdal-dtm.asc`,
+  `references/whitesands-dune__slope-aspect-spotcheck.json`
+
+### Virginia Tech StREAM Lab Spring 2026 Drone Lidar Survey
+
+- Provider: OpenTopography
+- Licence: see the OpenTopography dataset terms at the DOI below
+- DOI: <https://doi.org/10.5069/G9NZ85W7>
+- Committed derivatives: `validation/terrain-field/crops/sl-field.bin`,
+  `crops/sl-field.crop.json`, `references/sl-field__bincell-dtm.asc`,
+  `references/sl-field__published-dtm.asc`
+
+### Referenced but not redistributed
+
+Two further datasets appear in the terrain-field manifest with no committed
+derivative of any kind. They are cited for provenance only:
+
+- Hyytiala UAV Point Cloud Demo Dataset 2025. Zenodo (Atherton, J. &
+  Miettinen, I. E., 2026), <https://doi.org/10.5281/zenodo.20793895>
+- Drone LiDAR of Pangandaran coastal tourism hotspots. Zenodo
+  (Syamsuddin et al., 2025), <https://doi.org/10.5281/zenodo.17073404>
 
 ## EPSG coordinate-system parameters
 

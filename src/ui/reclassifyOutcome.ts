@@ -23,10 +23,18 @@ import type { ClassEditResult } from '../render/measure/classificationEditor';
  * (see {@link ClassEditResult}); an older result that carries neither still
  * falls back to the plain empty-lasso line rather than inventing a reason.
  */
-export function reclassifyOutcome(result: ClassEditResult, targetClass: number): string {
+export function reclassifyOutcome(
+  result: ClassEditResult,
+  targetClass: number,
+  /** True when the target class was hidden and the edit revealed it. */
+  revealedTarget = false,
+): string {
   const changed = result.changedCount;
   if (changed > 0) {
-    return `Reclassified ${changed.toLocaleString()} points → class ${targetClass}.`;
+    const revealed = revealedTarget
+      ? ` Class ${targetClass} was hidden by the class filter; showing it so the edit is visible.`
+      : '';
+    return `Reclassified ${changed.toLocaleString()} points → class ${targetClass}.${revealed}`;
   }
   const hidden = result.hiddenByFilters ?? 0;
   if (hidden > 0) {

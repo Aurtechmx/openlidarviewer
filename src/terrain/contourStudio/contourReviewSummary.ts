@@ -74,6 +74,23 @@ function num(n: number): string {
   return Number.parseFloat(n.toFixed(3)).toString();
 }
 
+/**
+ * Unit for a hold-out residual. `holdoutRmse` scales residuals by
+ * verticalUnitToMetres and falls back to an inert 1, so a frame that resolved no
+ * vertical scale leaves them in the source Z unit. The review bar captioned them
+ * "m" either way.
+ *
+ * BOTH frames have to state a vertical scale: the one the surface was fitted
+ * under and the one the Studio is looking at now. They are the same frame for a
+ * single scan, and when they are not — the analysis kept while the active scan
+ * changed — the number on the bar belongs to neither. A sheet exported from the
+ * same state already withholds its metre accuracy on the live frame, so reading
+ * only the result's put the bar and the sheet in disagreement.
+ */
+function zUnit(result: AnalyseContoursResult, input: ContourReviewInput): string {
+  return result.verticalScaleResolved && input.verticalUnit.known ? 'm' : 'source Z units';
+}
+
 /** Build the review-bar rows from a completed analysis result. Pure. */
 export function buildContourReviewSummary(
   result: AnalyseContoursResult,
@@ -123,43 +140,90 @@ export function buildContourReviewSummary(
   });
 
   // ── Grid ────────────────────────────────────────────────────────────────
+  // Null when no linear unit resolved: the recommender picks from metre
+  // ladders, so it is withheld rather than run on unconverted source
+  // coordinates. The row still appears, saying why there is no number.
   const grid = result.gridRecommendation;
-  rows.push({
-    key: 'grid',
-    label: 'Grid',
-    value: `${num(grid.cellSizeM)} m · recommended`,
-    rationale: grid.reasons.length > 0 ? grid.reasons : ['Recommended from ground spacing and memory budget.'],
-    confidence: 'high',
-  });
+  rows.push(grid === null
+    ? {
+      key: 'grid',
+      label: 'Grid',
+      value: 'no recommendation',
+      rationale: [
+        'The grid and interval ladders are in metres, and this scan has no resolved '
+        + 'linear unit, so any recommendation would be sized for the wrong site. '
+        + 'Confirm the source CRS to get one.',
+      ],
+      confidence: 'low',
+    }
+    : {
+      key: 'grid',
+      label: 'Grid',
+      value: `${num(grid.cellSizeM)} m · recommended`,
+      rationale: grid.reasons.length > 0 ? grid.reasons : ['Recommended from ground spacing and memory budget.'],
+      confidence: 'high',
+    });
 
   // ── Interval (unit-safe, PR3) ─────────────────────────────────────────────
-  const recommendedIntervalSource = result.gate.recommendedM ?? grid.contourIntervalM;
-  if (recommendedIntervalSource != null && Number.isFinite(recommendedIntervalSource) && recommendedIntervalSource > 0) {
+  // Review the interval that SHIPS, not the one the gate would have picked.
+  // `result.intervalM` is `explicit ?? gate.recommendedM` (analyseContours), and
+  // it is what contourDeliverableBuild writes into the DXF, the GeoJSON and
+  // ContourStudio.json. This row used to read `gate.recommendedM` alone, which
+  // analyseContours documents as "a function of cell size, relief and the
+  // measured RMSE only — NOT of the chosen interval". So whenever a user set
+  // their own interval, the review evaluated one number while the deliverable
+  // carried another, and the verdict beside it described an interval that was
+  // not in the file.
+  const shippedIntervalSource =
+    result.intervalM ?? result.gate.recommendedM ?? grid?.contourIntervalM ?? null;
+  if (shippedIntervalSource != null && Number.isFinite(shippedIntervalSource) && shippedIntervalSource > 0) {
     const def = buildContourLevelDefinition({
-      intervalSource: recommendedIntervalSource,
+      intervalSource: shippedIntervalSource,
       baseSource: 0,
       verticalUnit: input.verticalUnit,
       sourceUnitLabel: input.sourceUnitLabel,
     });
     const claim = contourUnitClaim(def, { crsProjected: input.crsProjected });
-    // The interval gate must have approved a metric interval for support to be
-    // claimed. When gate.recommendedM is null we fell back to the grid's
-    // geometry-only suggestion, which the gate did not endorse — so even on a
-    // known-unit projected frame the interval is cartographic-only, never
-    // "supported (internal)". Gating the label on gate approval keeps the
-    // review from overstating support the interval gate refused.
+    // Support is the GATE's verdict on the interval that ships, not on the one
+    // it recommended. The gate scores each candidate in `options`, so the
+    // shipped value is looked up there and carries that option's own verdict
+    // and reason. A value the gate never scored (a free-typed interval) was not
+    // evaluated at all, so it cannot claim support — it reads cartographic-only
+    // and says why, rather than inheriting the recommendation's verdict.
     const gateRecommended = result.gate.recommendedM;
-    const gateApprovedInterval =
-      gateRecommended != null && Number.isFinite(gateRecommended) && gateRecommended > 0;
+    // `gateIntervals` picks `recommendedM` out of the SUPPORTED candidates, so
+    // the recommendation is approved by construction and needs no lookup.
+    const isGateRecommendation =
+      gateRecommended != null &&
+      Number.isFinite(gateRecommended) &&
+      Math.abs(gateRecommended - shippedIntervalSource) < 1e-9;
+    const gateOption = result.gate.options.find(
+      (o) => Number.isFinite(o.intervalM) && Math.abs(o.intervalM - shippedIntervalSource) < 1e-9,
+    );
+    const gateApprovedInterval = isGateRecommendation || gateOption?.supported === true;
     const supported = claim === 'metric-supported' && gateApprovedInterval;
     const rmse = result.validation.rmse;
     const rationale: string[] = [];
-    if (Number.isFinite(rmse)) rationale.push(`Internal vertical RMSE ${num(rmse)} m.`);
+    if (Number.isFinite(rmse)) {
+      rationale.push(`Internal vertical RMSE ${num(rmse)} ${zUnit(result, input)}.`);
+    }
     rationale.push(
       supported
-        ? 'Recommended for the current scale and internal terrain evidence.'
-        : 'Cartographic recommendation only (no metric support claimed).',
+        ? 'Supported for the current scale and internal terrain evidence.'
+        : 'Cartographic only (no metric support claimed).',
     );
+    // Name the specific refusal when the gate scored this interval and declined
+    // it, and say so plainly when the gate never scored it.
+    if (!gateApprovedInterval) {
+      rationale.push(
+        gateOption != null && gateOption.reason !== ''
+          ? gateOption.reason
+          : 'This interval was not among the gate-evaluated options, so no internal support is claimed for it.',
+      );
+    }
+    if (gateRecommended != null && !isGateRecommendation) {
+      rationale.push(`Gate recommendation for this surface: ${num(gateRecommended)}.`);
+    }
     for (const w of result.gate.warnings) rationale.push(w);
     rows.push({
       key: 'interval',
@@ -214,7 +278,9 @@ export function buildContourReviewSummary(
   rows.push({
     key: 'validation',
     label: 'Validation',
-    value: Number.isFinite(rmse) ? `Spatial internal · RMSE ${num(rmse)} m` : 'Spatial internal',
+    value: Number.isFinite(rmse)
+      ? `Spatial internal · RMSE ${num(rmse)} ${zUnit(result, input)}`
+      : 'Spatial internal',
     rationale: ['Internal hold-out validation only — no independent checkpoints were provided.'],
     confidence: 'medium',
   });

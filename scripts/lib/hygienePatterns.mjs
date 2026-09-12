@@ -9,6 +9,16 @@
  *     hash, embedded base64/WASM, or the word "token" in prose does NOT trip.
  *   NARRATION — conversational/process artifacts (an assistant talking about the
  *     conversation) that have no place in a shipped file.
+ *   MARKUP — tool-call / assistant transcript tags. A README reached the citable
+ *     archive ending in two stray closing tags from a tool call. Nothing caught
+ *     it: NARRATION matches prose, and the PR hygiene scan reads a diff, so a
+ *     tag committed once is never re-examined. Matched as a whole trimmed line
+ *     or an opening tag, and only for that tag vocabulary, so real markup in an
+ *     HTML, SVG or XML fixture cannot trip it.
+ *   ROADMAP — a promise about a release that has not happened. Distinct from a
+ *     SCOPE statement ("ordered verification is future work"), which is
+ *     load-bearing and stays legal; only forms that commit the project to
+ *     unbuilt work, or that date themselves to an authoring session.
  *
  * Pure and dependency-free so both the gate and its negative-control test share
  * one definition. Kept narrow on purpose: the audit's anti-goal is a scan that
@@ -39,6 +49,39 @@ export const NARRATION_PATTERNS = [
   /\bthinking aloud\b/i,
   /\bthe user asked me to\b/i,
 ];
+
+/** Tag names that belong to a tool-call transcript and to nothing else. */
+const TOOL_TAGS = '(?:antml:)?(?:invoke|function_calls|function_results|parameter|thinking)';
+
+export const MARKUP_PATTERNS = [
+  new RegExp('^\\s*</' + TOOL_TAGS + '>\\s*$', 'i'),
+  new RegExp('<' + TOOL_TAGS + '(?:\\s+\\w+=|>)', 'i'),
+];
+
+export const ROADMAP_PATTERNS = [
+  /\bin a (?:later|future) (?:release|version|session)\b/i,
+  /\b(?:planned|scheduled) for a (?:later|future) (?:release|version|session)\b/i,
+  /\ba follow-up cut\b/i,
+  /\bwe should eventually\b/i,
+];
+
+/** The first tool-call markup shape that matches `line`, or null. */
+export function findMarkup(line) {
+  for (const re of MARKUP_PATTERNS) {
+    const m = line.match(re);
+    if (m) return m[0].trim();
+  }
+  return null;
+}
+
+/** The first roadmap promise that matches `line`, or null. */
+export function findRoadmapPromise(line) {
+  for (const re of ROADMAP_PATTERNS) {
+    const m = line.match(re);
+    if (m) return m[0];
+  }
+  return null;
+}
 
 /** The first secret pattern that matches `line`, or null. */
 export function findSecret(line) {

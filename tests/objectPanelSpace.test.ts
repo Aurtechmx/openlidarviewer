@@ -61,6 +61,37 @@ describe('ObjectPanel — space / object routing', () => {
     }
   });
 
+  it('does not print interior dimensions as metres when the linear unit is unverified', async () => {
+    // The OBJECT path already switches to source-unit formatting on an
+    // unverified scale; the SPACE path did not. It measured the file's own
+    // coordinates and printed "10.0 m (32.8 ft)" beside a caveat saying the
+    // units were unverified. A reader takes the number over the note, and the
+    // foot conversion made the metre claim look doubly established.
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
+    const { classifyScanShape } = await import('../src/terrain/scanShape');
+
+    const pos = room();
+    const shape = classifyScanShape(pos);
+    const unverified = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior', unitKnown: false });
+    expect(unverified.linearUnit.known, 'the fixture must have an UNVERIFIED unit').toBe(false);
+
+    const panel = new ObjectPanel();
+    panel.showSpace(unverified, shape);
+    const text = flatten(panel.element as unknown as FakeEl).map((e) => e.textContent).join(' | ');
+    expect(text, 'an unverified interior scan still reported metres').not.toMatch(/[\d.] m\b/);
+    expect(text, 'an unverified interior scan still converted to feet').not.toMatch(/[\d.] ft\b/);
+    expect(text).toMatch(/source units/);
+
+    // A KNOWN unit still reports metres, so the refusal is not vacuous.
+    const verified = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior', unitKnown: true, unitToMetres: 1 });
+    expect(verified.linearUnit.known).toBe(true);
+    const metric = new ObjectPanel();
+    metric.showSpace(verified, shape);
+    const metricText = flatten(metric.element as unknown as FakeEl).map((e) => e.textContent).join(' | ');
+    expect(metricText).toMatch(/[\d.] m\b/);
+  });
+
   it('surfaces a "Preliminary — partial stream" caveat for a resident-only space', async () => {
     const { ObjectPanel } = await import('../src/ui/ObjectPanel');
     const { spaceMetrics } = await import('../src/terrain/spaceMetrics');

@@ -97,16 +97,35 @@ export function demAccuracyStandards(
   rmseZM: number | null,
   vvaM: number | null,
   pointDensityPerM2: number,
+  /**
+   * Did a horizontal scale resolve? The density arrives as returns per CELL
+   * AREA, and the cell size is in source units until one does — so on a scan
+   * with no CRS the figure is per source unit squared. The floors below are
+   * pulses per SQUARE METRE. Comparing the two graded unverified units against
+   * a metric specification: a sheet from a scan whose own extents read "source
+   * units" cited a 3DEP density floor. Withheld at the producer so no consumer
+   * has to remember the question. Optional, defaulting to the metre assumption
+   * every direct caller in the tests already makes explicit.
+   */
+  horizontalScaleResolved: boolean = true,
 ): DemAccuracyStandards {
   const rmseOk = rmseZM != null && Number.isFinite(rmseZM) && rmseZM >= 0;
-  const density = Number.isFinite(pointDensityPerM2) && pointDensityPerM2 > 0 ? pointDensityPerM2 : 0;
+  const density =
+    horizontalScaleResolved && Number.isFinite(pointDensityPerM2) && pointDensityPerM2 > 0
+      ? pointDensityPerM2
+      : 0;
 
   const densityReferenceFloorsMet = density > 0
     ? DENSITY_FLOORS.filter((f) => density >= f.minDensity).map((f) => f.level)
     : [];
 
   let densityReferenceNote: string;
-  if (density <= 0) {
+  if (!horizontalScaleResolved) {
+    densityReferenceNote =
+      'Ground-return density is per source unit squared on this frame — no linear unit '
+      + 'resolved — so it is not compared against the USGS 3DEP pulses-per-square-metre '
+      + 'floors. Confirm the source CRS for a density reference.';
+  } else if (density <= 0) {
     densityReferenceNote = 'No measured ground-return density.';
   } else {
     // The strongest floor cleared, named as a reference. QL0/QL1 share the 8

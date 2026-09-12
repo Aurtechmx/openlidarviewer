@@ -28,6 +28,7 @@
 
 import { resolveVerticalEpsg } from './height';
 import type { SpatialContext } from './SpatialContext';
+import { verticalMetresPerUnit } from './SpatialContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The verdict
@@ -275,6 +276,17 @@ export interface EpochFrameFacts {
   readonly isGeographic: boolean;
   /** Metres per horizontal source unit as declared (1 is the placeholder when unknown). */
   readonly linearUnitToMetres: number;
+  /**
+   * Metres per VERTICAL source unit, when the frame declares one of its own.
+   *
+   * Dropped here before, so the epoch DTM scaled Z by the horizontal factor. On
+   * a compound frame (foot heights over a metre grid — GeoTIFF key 4099, or a
+   * VERT_CS UNIT) that applied the SMRF filter's physical 0.5 m / 2.5 m ground
+   * tolerances as feet, roughly 3.3x too tight, changing which points were
+   * taken as ground. Undefined leaves the consumer on the horizontal factor,
+   * which is correct for every single-unit frame.
+   */
+  readonly verticalUnitToMetres?: number;
 }
 
 /**
@@ -289,6 +301,9 @@ export function epochFrameFacts(ctx: SpatialContext): EpochFrameFacts {
     verticalDatum: ctx.verticalDatum ?? null,
     isGeographic: ctx.isGeographic,
     linearUnitToMetres: ctx.linearUnitToMetres,
+    ...(Number.isFinite(ctx.verticalUnitToMetres) && (ctx.verticalUnitToMetres as number) > 0
+      ? { verticalUnitToMetres: ctx.verticalUnitToMetres as number }
+      : {}),
   };
 }
 
@@ -318,18 +333,47 @@ export function epochFrameOptions(
  *
  * The change pipeline computes `(afterZ - beforeZ) * verticalUnitToMetres` with
  * a SINGLE factor — valid only when both epochs share the vertical scale. If
- * both declare a vertical unit and they differ (metres vs feet), subtracting
- * the raw source-unit Z values before normalising is meaningless, so the caller
- * must refuse rather than report a wrong elevation change. When either scale is
- * unknown there is no evidence of a mismatch, so the shared-factor path stands.
+ * the two differ (metres vs feet), subtracting the raw source-unit Z values
+ * before normalising is meaningless, so the caller must refuse rather than
+ * report a wrong elevation change.
+ *
+ * The scale compared is the EFFECTIVE one, via
+ * {@link verticalMetresPerUnit}(`'horizontal-when-known'`): a declared vertical
+ * unit when there is one, otherwise the horizontal unit when THAT is known,
+ * because a single-unit CRS puts Z on the horizontal unit. This read its own
+ * `verticalScaleKnown` flags instead and returned true whenever either epoch
+ * declared no SEPARATE vertical unit — so a foot-vertical epoch differenced
+ * against a plain metre UTM epoch was permitted, and 100 ft against the
+ * physically identical 30.48 m reported a 21 m change instead of zero.
+ *
+ * Unknown is not permission. Two cases used to pass on the grounds that there
+ * was no evidence of a mismatch, and both could reach a metre-denominated Δz:
+ *
+ *   - A DECLARED but degenerate vertical unit (zero, negative, non-finite). The
+ *     file states a scale and states it wrongly, and `main.ts` hands the change
+ *     pipeline `ctxA.verticalUnitToMetres` — that same corrupt number — as the
+ *     shared factor. Wrong on its face, whatever the other epoch says.
+ *   - Exactly ONE side resolving. The unresolved side cannot be shown to match
+ *     the resolved one, yet a single factor is applied to both.
+ *
+ * Neither side declaring anything still permits, and that case is closed
+ * downstream rather than here: an undeclared vertical resolves to `undefined`
+ * under `'horizontal-when-known'` only when that epoch's HORIZONTAL unit is also
+ * unknown, and {@link epochFrameOptions} ands the two horizontal flags, so
+ * `compareDtms` sees `horizontalUnitKnown: false` and withholds every metre
+ * figure. Refusing here as well would remove the unreferenced-pair comparison
+ * without removing a single number that survives to a user.
  */
 export function epochVerticalScalesComparable(
   before: SpatialContext,
   after: SpatialContext,
 ): boolean {
-  if (!before.verticalScaleKnown || !after.verticalScaleKnown) return true;
-  const vb = before.verticalUnitToMetres;
-  const va = after.verticalUnitToMetres;
+  for (const ctx of [before, after]) {
+    if (ctx.verticalUnitToMetres !== undefined && !ctx.verticalScaleKnown) return false;
+  }
+  const vb = verticalMetresPerUnit(before, 'horizontal-when-known');
+  const va = verticalMetresPerUnit(after, 'horizontal-when-known');
+  if ((vb === undefined) !== (va === undefined)) return false;
   if (vb === undefined || va === undefined) return true;
   return Math.abs(vb - va) <= 1e-9 * Math.max(vb, va);
 }

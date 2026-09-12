@@ -590,7 +590,14 @@ export function scoreScene(
   truth: Uint8Array,
   predicted: Uint8Array,
 ): SceneScore {
-  const n = Math.min(truth.length, predicted.length);
+  // Unequal arrays are refused, not truncated: a classifier that labelled
+  // fewer points than the scene holds was scored over the points it labelled.
+  if (truth.length !== predicted.length) {
+    throw new RangeError(
+      `scoreScene: ${predicted.length} predicted codes against ${truth.length} truth codes — length mismatch.`,
+    );
+  }
+  const n = truth.length;
   const byClass: ClassMetrics[] = [];
   for (const code of SCORED_CLASSES) {
     let tp = 0;

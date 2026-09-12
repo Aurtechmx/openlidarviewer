@@ -81,7 +81,9 @@
 #     claims to E4; all remaining reference slots are pending, each awaiting a
 #     real PDAL/GDAL/CloudCompare reference committed.
 #   - Honest estimators: src/terrain/validate/spatialBlockHoldout.ts
-#     (spatially-blocked hold-out, less optimistic than random point hold-out,
+#     (spatially-blocked hold-out, which withholds whole blocks rather than
+#     scattered points and so measures sensitivity to withholding geometry;
+#     whether it reports a larger error is an empirical result, not a property,
 #     with a bootstrap CI) and src/terrain/validate/reliabilitySplit.ts
 #     (measured-cell empirical reliability + Wilson CI, kept distinct from
 #     interpolated model-based support).
@@ -145,7 +147,13 @@ schemaVersion: 1
 # pending, max difference under 8e-6 m. It rests on the two already-validated
 # grids and the same below-half-a-cell radius, so it adds the differencing
 # arithmetic and not ground classification or real canopy.
-softwareVersion: 0.6.7
+# 0.6.8 moves no claim. The cycle's work is engineering and provenance: the
+# out-of-core cache, streaming readiness, the artifact passport, and a pass over
+# scan output that names the population each reported number describes. The E5
+# work registers the Rogue tiles and makes the dev/holdout split deterministic
+# and exposure-honest; the holdout has not been run, so no product advances
+# beyond E4 and the register stands at 17 there and none at E5.
+softwareVersion: 0.6.8
 generated: 2026-07-26
 validationOwner: A. Urias / Aurtech
 
@@ -441,7 +449,7 @@ claims:
       supported: []
       unsupported:
         - "Real terrain. The evidence is synthetic known-truth fixtures, and synthetic validation is not field validation."
-        - "Field-validated (surveyed-ground) precision and recall. External reference-label agreement (OpenGF expert labels, ASPRS producer class-2 ground on real airborne scenes) HAS been measured and reported with its weak regimes intact (mountain F1 near 0.5, dense-canopy precision near 0.34, building roofs read as ground), but reference labels are a classifier's output, not survey checkpoints, so field accuracy stays unmeasured and E5 unreached."
+        - "Field-validated (surveyed-ground) precision and recall. External reference-label agreement against OpenGF expert labels and ASPRS producer class-2 ground HAS been measured on real airborne scenes, with its weak regimes intact (mountain F1 near 0.5, dense-canopy precision near 0.34, building roofs read as ground) — but it was measured on the DERIVED-CLASSIFICATION heuristic (`src/render/class/deriveClassification`), which shares no code with this filter and carries no claim of its own, so it is not evidence about this claim in either direction. Reference labels are also a classifier's output rather than survey checkpoints, so field accuracy stays unmeasured and E5 unreached."
         - "Steep sparse terrain, dense low vegetation and complex roofs, the cases the fixtures do not contain."
         - "The name SMRF unqualified. A subset of the stages is implemented and the output metadata says which."
 
@@ -582,6 +590,36 @@ claims:
         - "Interpolated stretches. They are graded dashed rather than solid, which marks them, and marking is not measuring."
         - "Survey-grade contours."
 
+  - claimId: CONTOURS-CARTOGRAPHIC
+    product: Contours (cartographic / generalized)
+    algorithm: Douglas-Peucker generalization of the analytical contours
+    methodId: olv.contour.generalize
+    algorithmVersion: v0.6.x
+    claim: "Analytical contours simplified for legibility, with per-feature displacement recorded."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/contourGeometryProduct.test.ts, tests/contourAdaptiveGeneralize.test.ts, tests/generalizationRecord.test.ts]
+    supportingDatasets: [synthetic contour geometry]
+    supportingStudies: []
+    units: [metres]
+    crsDatum: metric
+    assumptions: ["depends on DTM validity", "depends on the analytical contours it simplifies"]
+    failureModes: ["tolerance too large collapses a closed ring", "displacement moves a line off the measured iso-elevation"]
+    exportAllowed: true
+    userLabel: "Generalized contours"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Contours simplified by Douglas-Peucker at a recorded tolerance, with per-feature displacement measured and bounded by that tolerance."
+    prohibitedClaim: ["survey-grade contours", "cross-implemented contours", "contours agreeing with GDAL within 0.05 m"]
+    scope:
+      supported: []
+      unsupported:
+        - "The CONTOURS cross-implementation. That study (OLV-XS-002-CONTOURS-GDAL-PLANE) ran on the ANALYTICAL geometry; generalization deliberately moves vertices away from it, so the 0.05 m agreement does not carry over."
+        - "Iso-elevation position. A generalized vertex is displaced from the elevation it is labelled with, by up to the recorded tolerance."
+        - "Real terrain. The evidence is synthetic geometry."
+        - "Survey-grade contours."
+
   # ── Terrain descriptors ─────────────────────────────────────────────────────
   - claimId: SLOPE-RASTER
     product: Slope raster
@@ -610,7 +648,7 @@ claims:
         - datasetId: OLV-DS-001-ANALYTIC-DEM
           parameterSetId: PS-HORN-DEG-METRE-NOEDGES
       unsupported:
-        - "The one-cell border. The 24-fixture GDAL matrix measured a shortfall of up to 16.2 degrees there against gdaldem -compute_edges, with the bias always negative, on the whole outer ring."
+        - "The one-cell border, where the documented gdaldem command omits -compute_edges and the reference leaves it undefined. The 24-fixture matrix once measured a shortfall of up to 16.2 degrees there against gdaldem -compute_edges; that was an edge-policy defect in this project's kernel, it was fixed, and the matrix now asserts agreement on the whole ring to about 9e-4 degree. The border stays outside this claim because the SUPPORTING study does not compute edges, not because a shortfall stands."
         - "Nodata neighbourhoods. The same matrix found that gdaldem propagates nodata through the 3x3 window while this project substitutes the centre value and answers for every halo cell, biasing slope toward zero near a hole and leaving no marker in the output."
         - "Slopes above about 16.4 degrees, the steepest the supporting fixture reaches."
         - "Geographic grids. The supporting study is a metre grid with no CRS in its header, so the per-axis cell-metre path is not exercised by it."

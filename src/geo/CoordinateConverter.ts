@@ -6,11 +6,11 @@
  * The viewer's runtime never calls a projection library directly — it
  * goes through a `CoordinateConverter`. That gives us three things:
  *
- *   1. **Lazy load discipline.** v0.3.6 ships with a vendored UTM +
- *      Web Mercator converter covering the highest-frequency cases
- *      (every USGS 3DEP UTM zone, plus Web Mercator). Future releases
- *      can plug in a proj4-backed converter behind the same interface
- *      and load it only when called — never on the initial shell.
+ *   1. **Lazy load discipline.** OLV vendors a UTM + Web Mercator
+ *      converter covering the highest-frequency cases (every USGS 3DEP
+ *      UTM zone, plus Web Mercator). The interface admits a
+ *      proj4-backed converter loaded only when called, never on the
+ *      initial shell, without changing any caller.
  *
  *   2. **Explicit `canConvert`.** Callers must check whether a pair is
  *      supported before they call convert; the UI gates the "show

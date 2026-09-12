@@ -55,11 +55,20 @@ export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
     if (clipKeepsPoint(clip, [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]])) keep[k++] = i;
   }
 
-  return new PointCloud({
+  // A DERIVED classification cannot travel through the constructor: classes
+  // supplied there are a PRODUCER's, so a subset of viewer-derived codes came
+  // out claiming the file had classified those points, and a subset of codes
+  // known to belong to a replaced frame came out looking current. Clipping is
+  // on the export path, so that is provenance invented at the moment of export.
+  // Source classes still go through the constructor, because that is what they
+  // are.
+  const classification = filterChannel(cloud.classification, keep, n);
+  const derived = cloud.classificationIsDerived;
+  const subset = new PointCloud({
     positions: filterChannel(pos, keep, n) ?? new Float32Array(0),
     colors: filterChannel(cloud.colors, keep, n),
     intensity: filterChannel(cloud.intensity, keep, n),
-    classification: filterChannel(cloud.classification, keep, n),
+    classification: derived ? undefined : classification,
     normals: filterChannel(cloud.normals, keep, n),
     returnNumber: filterChannel(cloud.returnNumber, keep, n),
     returnCount: filterChannel(cloud.returnCount, keep, n),
@@ -70,4 +79,16 @@ export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
     name: cloud.name,
     metadata: cloud.metadata,
   });
+  if (derived && classification) {
+    // `classification` is the fresh buffer filterChannel just allocated and
+    // attach stores by reference, so copying it again doubled the channel's
+    // peak memory on a full-resolution export for nothing.
+    subset.attachDerivedClassification(classification);
+    // Order matters: attaching marks the codes freshly derived, which is right
+    // for a new derive and wrong for a copy. A subset of stale codes is stale.
+    if (cloud.derivedClassificationFrameInvalid) {
+      subset.markDerivedClassificationFrameInvalid();
+    }
+  }
+  return subset;
 }

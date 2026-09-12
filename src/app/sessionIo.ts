@@ -428,12 +428,18 @@ export async function importSession(
     // The scan could have been swapped in under us since we matched (this import
     // routes ahead of the loading guard). Refuse to attach the session's state
     // to a scan it was never matched against. (mirrors the 1723/1808 guard.)
-    if (
+    //
+    // One predicate, asserted after EVERY await that precedes a mutation. It
+    // was inline and checked once, but a later lazy import (the ownership
+    // migrator) yields again before any state is attached, so a swap during
+    // that second await attached this session's measurements, annotations,
+    // bookmarks and view state to a scan it was never matched against.
+    const targetChanged = (): boolean =>
       haveCloud &&
       (deps.getActiveScanId() !== targetId ||
         viewer.streamingCloud !== targetStreamingCloud ||
-        (targetId ? viewer.getCloud(targetId) : undefined) !== targetStaticCloud)
-    ) {
+        (targetId ? viewer.getCloud(targetId) : undefined) !== targetStaticCloud);
+    if (targetChanged()) {
       deps.showToast('Session not applied — the active scan changed while it was importing.');
       return;
     }
@@ -483,6 +489,12 @@ export async function importSession(
     // Lazy: the ownership migrator lives off the index chunk — session restore is
     // on-demand, so its cost belongs on the restore path, not the initial load.
     const { migrateSessionOwnership } = await loadSessionOwnership();
+    // Second assertion: the ownership import yielded, and everything below
+    // MUTATES the viewer. Refuse rather than attach one scan's work to another.
+    if (targetChanged()) {
+      deps.showToast('Session not applied — the active scan changed while it was importing.');
+      return;
+    }
     const ownership = migrateSessionOwnership(session, {
       loadedLayerId: deps.getActiveLayerId() ?? undefined,
     });

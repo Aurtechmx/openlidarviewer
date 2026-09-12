@@ -20,7 +20,7 @@ import type { Viewer } from '../Viewer';
 import type { StreamingPanel } from '../../ui/StreamingPanel';
 import { gradeFullCloud } from './fullCloudGradeAdapter';
 import { gradeSampleDensity, summarizeSampleGrade } from './sampleGrade';
-import { spatialContextFrom, verticalMetresPerUnit } from '../../geo/SpatialContext';
+import { verticalMetresPerUnit, type SpatialContext } from '../../geo/SpatialContext';
 
 /**
  * Decode + grade the active streaming cloud's full extent and render the result
@@ -32,8 +32,16 @@ export async function runFullCloudGrade(deps: {
   readonly panel: StreamingPanel;
   readonly signal?: AbortSignal;
   readonly debug?: boolean;
+  /**
+   * The active scan's RESOLVED frame, built at the application boundary
+   * (`CrsService.context()`). Passed in rather than derived here: reading the
+   * source header's own CRS ignores a user override, so a scan the operator
+   * re-declared was graded in the frame the file claims instead of the frame the
+   * app is using — feet read as metres for a cloud corrected to a metre CRS.
+   */
+  readonly context: SpatialContext;
 }): Promise<void> {
-  const { viewer, panel, signal, debug } = deps;
+  const { viewer, panel, signal, debug, context: ctx } = deps;
   const source = viewer.streamingCloud;
   const decoder = viewer.streamingDecoder;
   if (!source || !decoder) {
@@ -51,9 +59,9 @@ export async function runFullCloudGrade(deps: {
   // gate the scan-report rows (streamingExtentRows) and the measure tool apply;
   // otherwise the factor stays 1 and the summary labels the figures per source
   // unit (see summarizeSampleGrade's unitConfirmed argument).
-  // ONE context for this grade, built here at the streaming boundary; the unit
-  // gate, the horizontal factor and the vertical factor are all read off it.
-  const ctx = spatialContextFrom(source.crs());
+  // ONE context for this grade — the resolved one the rest of the app reads, so
+  // the unit gate, the horizontal factor and the vertical factor here agree with
+  // the measure tool and the scan report.
   const unitConfirmed = ctx.linearUnitKnown;
   const metresPerUnit = unitConfirmed ? ctx.linearUnitToMetres : 1;
   // Z gets the vertical unit when the CRS declares one separately (e.g. NAVD88

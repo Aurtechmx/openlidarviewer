@@ -24,13 +24,18 @@ import type { ExportPermitStamp } from './exportProvenance';
 import type { ScientificExportDecision } from '../../export/exportManifest';
 import type { ContourWorldOrigin } from '../contour/contourFeatureModel';
 import type { DxfLinearUnit } from '../contour/dxfContours';
-import { buildExportProvenance, provenanceJson, analysisRecordFromProvenance } from './exportProvenance';
+import {
+  buildExportProvenance,
+  provenanceJson,
+  analysisRecordFromProvenance,
+  contourArtifactClaims,
+} from './exportProvenance';
 import { buildContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
 import { buildContourStudioPdf } from './contourStudioPdf';
 import { serializeContours } from '../contour/contourDownload';
 import { dxfContours } from '../contour/dxfContours';
 import { validationDeliverableJson, contourStudioDeliverableJson } from './contourDeliverableJson';
-import { verticalUnitLabel } from '../../units/units';
+import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { parseEpsg } from './demPackage';
 import {
@@ -101,7 +106,8 @@ interface GatheredDeliverable {
   readonly isAnalytical: boolean;
   readonly hasContours: boolean;
   readonly dtm: AnalyseContoursResult['dtm'] | null;
-  readonly horizontalUnit: 'ft' | 'm';
+  /** Horizontal unit label: 'm' | 'ft' | 'units' | 'degrees', never 'm' for an unknown unit. */
+  readonly horizontalUnit: string;
   /** Elevation unit label — a declared Z unit ('m'|'ft'|'units') or 'unknown'. */
   readonly verticalUnit: string;
   /**
@@ -148,7 +154,11 @@ function gatherDeliverable(
     contourMethod: opts.contourMethod ?? null,
     deliverablePurpose: opts.deliverablePurpose ?? null,
     // Label the contour interval in the real vertical unit, not a hard-coded metre.
-    verticalUnitToMetres: opts.verticalUnitToMetres,
+    verticalUnitToMetres: opts.verticalUnitToMetres ?? null,
+    // A bundle is never stronger than its weakest file. It carries the DTM
+    // raster and the support raster alongside the geometry, so the DTM's own
+    // shortfall against its required level governs the whole package.
+    evidenceClaimIds: contourArtifactClaims(result),
   });
 
   // Honest geometry role: label the bundled GeoJSON by its ACTUAL style, so a
@@ -163,7 +173,12 @@ function gatherDeliverable(
 
   const dtm = result.dtm ?? null;
   const hasContours = (model?.features.length ?? 0) > 0;
-  const horizontalUnit = opts.linearUnit === 'foot' || opts.linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+  // `undefined` is a projected CRS with no UNIT clause, metre by the WKT
+  // default this project pins; `'unknown'` is a resolved frame that could not
+  // determine the unit, which the previous ternary also labelled 'm'.
+  const horizontalUnit = opts.linearUnit === undefined && !opts.isGeographic
+    ? 'm'
+    : horizontalUnitLabel({ isGeographic: opts.isGeographic, linearUnit: opts.linearUnit });
   // Elevation unit is reported ONLY from a separately-declared Z axis — never
   // copied from the horizontal unit. Undeclared ⇒ honest 'unknown', matching the
   // convention the live Contour Studio uses (unknownUnit()).
@@ -429,7 +444,13 @@ export async function buildContourDeliverableFromResultAsync(
     support: { measuredPct, interpolatedPct, unsupportedPct },
     validation: {
       mode: validation.method,
-      rmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+      // A field named M holds metres. `holdoutRmse` scales residuals by
+      // verticalUnitToMetres and falls back to an inert 1, so on a frame that
+      // resolved no vertical scale the figure is in the source Z unit — and the
+      // PDF prints "Vertical unit: unknown" two pages earlier while captioning
+      // this one "m". Withheld there, as the ASPRS standards already are.
+      rmseM:
+        result.verticalScaleResolved && Number.isFinite(validation.rmse) ? validation.rmse : null,
       sampleSize: validation.sampleSize,
       // Hold-out only — no independent field checkpoints are supplied here.
       independentCheckpoints: false,

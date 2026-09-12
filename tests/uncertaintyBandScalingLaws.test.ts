@@ -51,7 +51,7 @@ import {
 /** One knob at a time: every law below varies a single field of this base. */
 const base: ChangeVolumeUncertaintyInput = {
   netVolumeM3: 1000,
-  significantCells: 400,
+  contributingCells: 400,
   cellAreaM2: 1,
   cellSigmaM: 0.05,
   registrationSigmaM: 0,
@@ -73,8 +73,8 @@ describe('L1 — with no per-cell σ the random term is exactly zero', () => {
   });
 
   it('holds at every cell count, so nothing count-shaped leaks into the random term', () => {
-    for (const significantCells of [1, 25, 400, 10_000]) {
-      expect(band({ significantCells, cellSigmaM: 0 }).randomErrorM3).toBe(0);
+    for (const contributingCells of [1, 25, 400, 10_000]) {
+      expect(band({ contributingCells, cellSigmaM: 0 }).randomErrorM3).toBe(0);
     }
   });
 });
@@ -84,39 +84,39 @@ describe('L2/L3 — the two components answer the same input differently', () =>
   const LADDER = [100, 400, 1600, 6400] as const;
 
   it('random error doubles when the cell count quadruples (√N)', () => {
-    const random = LADDER.map((significantCells) =>
-      band({ significantCells, registrationSigmaM: 0 }).randomErrorM3,
+    const random = LADDER.map((contributingCells) =>
+      band({ contributingCells, registrationSigmaM: 0 }).randomErrorM3,
     );
     for (let i = 1; i < random.length; i++) {
       expect(random[i] / random[i - 1]).toBeCloseTo(2, 12);
     }
     // Stated absolutely as well: the term is √N times its one-cell value.
-    const one = band({ significantCells: 1, registrationSigmaM: 0 }).randomErrorM3;
+    const one = band({ contributingCells: 1, registrationSigmaM: 0 }).randomErrorM3;
     for (const n of LADDER) {
-      expect(band({ significantCells: n, registrationSigmaM: 0 }).randomErrorM3 / one)
+      expect(band({ contributingCells: n, registrationSigmaM: 0 }).randomErrorM3 / one)
         .toBeCloseTo(Math.sqrt(n), 9);
     }
   });
 
   it('systematic error quadruples when the cell count quadruples (linear in area)', () => {
-    const systematic = LADDER.map((significantCells) =>
-      band({ significantCells, cellSigmaM: 0, registrationSigmaM: 0.02 }).systematicErrorM3,
+    const systematic = LADDER.map((contributingCells) =>
+      band({ contributingCells, cellSigmaM: 0, registrationSigmaM: 0.02 }).systematicErrorM3,
     );
     for (let i = 1; i < systematic.length; i++) {
       expect(systematic[i] / systematic[i - 1]).toBeCloseTo(4, 12);
     }
-    const one = band({ significantCells: 1, cellSigmaM: 0, registrationSigmaM: 0.02 })
+    const one = band({ contributingCells: 1, cellSigmaM: 0, registrationSigmaM: 0.02 })
       .systematicErrorM3;
     for (const n of LADDER) {
       expect(
-        band({ significantCells: n, cellSigmaM: 0, registrationSigmaM: 0.02 }).systematicErrorM3 / one,
+        band({ contributingCells: n, cellSigmaM: 0, registrationSigmaM: 0.02 }).systematicErrorM3 / one,
       ).toBeCloseTo(n, 6);
     }
   });
 
   it('L4 — so their ratio doubles at each rung: the terms are not the same term twice', () => {
-    const ratio = LADDER.map((significantCells) => {
-      const r = band({ significantCells, registrationSigmaM: 0.02 });
+    const ratio = LADDER.map((contributingCells) => {
+      const r = band({ contributingCells, registrationSigmaM: 0.02 });
       return r.systematicErrorM3 / r.randomErrorM3;
     });
     for (let i = 1; i < ratio.length; i++) {
@@ -141,9 +141,9 @@ describe('L5 — both components are linear in cell area', () => {
 describe('L6 — quadrature bracketing, without restating the formula', () => {
   it('lands strictly between the larger component and the arithmetic sum', () => {
     const cases = [
-      { significantCells: 400, cellSigmaM: 0.05, registrationSigmaM: 0.02 },
-      { significantCells: 9, cellSigmaM: 0.2, registrationSigmaM: 0.001 },
-      { significantCells: 10_000, cellSigmaM: 0.01, registrationSigmaM: 0.05 },
+      { contributingCells: 400, cellSigmaM: 0.05, registrationSigmaM: 0.02 },
+      { contributingCells: 9, cellSigmaM: 0.2, registrationSigmaM: 0.001 },
+      { contributingCells: 10_000, cellSigmaM: 0.01, registrationSigmaM: 0.05 },
     ];
     for (const c of cases) {
       const r = band(c);
@@ -177,7 +177,7 @@ describe('L7 — averaging beats noise and never beats a bias', () => {
   it('relative error halves when the cell count quadruples, under a random-only budget', () => {
     const rel = [100, 400, 1600, 6400].map((cells) =>
       band({
-        significantCells: cells,
+        contributingCells: cells,
         netVolumeM3: uniformNet(cells, AREA, RISE_M),
         cellAreaM2: AREA,
         cellSigmaM: 0.02,
@@ -190,7 +190,7 @@ describe('L7 — averaging beats noise and never beats a bias', () => {
   it('relative error does NOT move with the cell count under a systematic-only budget', () => {
     const rel = [100, 400, 1600, 6400].map((cells) =>
       band({
-        significantCells: cells,
+        contributingCells: cells,
         netVolumeM3: uniformNet(cells, AREA, RISE_M),
         cellAreaM2: AREA,
         cellSigmaM: 0,
@@ -208,14 +208,14 @@ describe('L7 — averaging beats noise and never beats a bias', () => {
     // a uniform 3 cm lift clears it at none.
     for (const cells of [4, 100, 10_000]) {
       const clears = band({
-        significantCells: cells,
+        contributingCells: cells,
         netVolumeM3: uniformNet(cells, AREA, 0.05),
         cellAreaM2: AREA,
         cellSigmaM: 0,
         registrationSigmaM: 0.02,
       });
       const misses = band({
-        significantCells: cells,
+        contributingCells: cells,
         netVolumeM3: uniformNet(cells, AREA, 0.03),
         cellAreaM2: AREA,
         cellSigmaM: 0,
@@ -233,9 +233,9 @@ describe('L8 — a band is never negative and never narrower than its verdict im
       { cellSigmaM: -0.05 },
       { registrationSigmaM: -1 },
       { cellAreaM2: -4 },
-      { significantCells: -100 },
-      { significantCells: 3.7 },
-      { cellSigmaM: -0.05, registrationSigmaM: -1, cellAreaM2: -4, significantCells: -100 },
+      { contributingCells: -100 },
+      { contributingCells: 3.7 },
+      { cellSigmaM: -0.05, registrationSigmaM: -1, cellAreaM2: -4, contributingCells: -100 },
     ];
     for (const over of hostile) {
       const r = band(over);
@@ -263,7 +263,7 @@ describe('L8 — a band is never negative and never narrower than its verdict im
     for (const cells of [1, 16, 400, 5000]) {
       for (const netVolumeM3 of [0, 1, 12, 100, 4000, -4000]) {
         for (const registrationSigmaM of [0, 0.005, 0.05]) {
-          const r = band({ significantCells: cells, netVolumeM3, registrationSigmaM });
+          const r = band({ contributingCells: cells, netVolumeM3, registrationSigmaM });
           if (r.detectable) {
             expect(r.sigmaM3).toBeLessThan(Math.abs(netVolumeM3) / 1.96);
             expect(r.sigmaM3).toBeGreaterThan(0);
@@ -299,7 +299,7 @@ describe('L9 — the band and the level of detection meet at the same boundary',
     // modules describe one convention, not two that happen to look alike.
     const single = changeVolumeUncertainty({
       netVolumeM3: AREA_M2 * LOD_M,
-      significantCells: 1,
+      contributingCells: 1,
       cellAreaM2: AREA_M2,
       cellSigmaM: cellSigmaFromLoD(LOD_M),
       registrationSigmaM: 0,
@@ -309,7 +309,7 @@ describe('L9 — the band and the level of detection meet at the same boundary',
 
     const justOver = changeVolumeUncertainty({
       netVolumeM3: AREA_M2 * LOD_M * 1.01,
-      significantCells: 1,
+      contributingCells: 1,
       cellAreaM2: AREA_M2,
       cellSigmaM: cellSigmaFromLoD(LOD_M),
       registrationSigmaM: 0,
@@ -323,7 +323,7 @@ describe('L9 — the band and the level of detection meet at the same boundary',
     const atLoD = (cells: number) =>
       changeVolumeUncertainty({
         netVolumeM3: cells * AREA_M2 * LOD_M,
-        significantCells: cells,
+        contributingCells: cells,
         cellAreaM2: AREA_M2,
         cellSigmaM: cellSigmaFromLoD(LOD_M),
         registrationSigmaM: 0,
@@ -342,7 +342,7 @@ describe('an empty error budget is the weakest result, not the strongest', () =>
     // module can produce as detectable at 0 % relative error.
     const empty = changeVolumeUncertainty({
       netVolumeM3: 1000,
-      significantCells: 400,
+      contributingCells: 400,
       cellAreaM2: 1,
       cellSigmaM: cellSigmaFromLoD(0),
       registrationSigmaM: 0,
@@ -364,7 +364,7 @@ describe('an empty error budget is the weakest result, not the strongest', () =>
   it('does not call a change detectable when no cell changed, whatever the budget says', () => {
     // σ is 0 with nothing to average over, which is the same fail-open from the
     // other side: a quantified budget must not make an empty comparison certain.
-    const noCells = band({ significantCells: 0, netVolumeM3: 500, registrationSigmaM: 0.02 });
+    const noCells = band({ contributingCells: 0, netVolumeM3: 500, registrationSigmaM: 0.02 });
     expect(noCells.sigmaM3).toBe(0);
     expect(noCells.quantified).toBe(true);
     expect(noCells.detectable).toBe(false);

@@ -31,6 +31,7 @@ import {
   type QualityOverrides,
   type QualityPreference,
   type QualitySettings,
+  QUALITY_SCOPE_NOTE,
 } from '../render/quality/qualityPolicy';
 import {
   MAX_PIXEL_RATIO_DEFAULT,
@@ -176,13 +177,7 @@ export class QualityPanel {
           this._followButton,
         ]),
       ),
-      el('p', {
-        className: 'olv-quality-note',
-        text:
-          'Display and streaming only. Measurements, terrain products, exports '
-          + 'and reported claims are computed from the loaded data and do not '
-          + 'change with this setting.',
-      }),
+      el('p', { className: 'olv-quality-note', text: QUALITY_SCOPE_NOTE }),
     ]);
     this.element.setAttribute('role', 'dialog');
     this.element.setAttribute('aria-label', 'Performance');

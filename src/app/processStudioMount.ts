@@ -70,6 +70,17 @@ export interface LiveScanAccessors {
   getStreamingPointCount(): number | null | undefined;
   /** Point count of the active static cloud; null/undefined when none is loaded. */
   getActivePointCount(): number | null | undefined;
+  /**
+   * The stride the loader applied to the active static cloud, or null.
+   *
+   * A large file is loaded as a display SAMPLE (`chooseLoadMode` -> 'stride'),
+   * and every fact derived from the resident points then describes that sample,
+   * not the file. Without this the panel reported a strided scan as full
+   * coverage and, if the sample happened to carry no class 0/1, a full
+   * classification too — a readiness verdict reached from a fraction of the
+   * data.
+   */
+  getActiveLoadStride?(): number | null;
   /** The resolved CRS (override applied), or null when unknown — never assumed. */
   getResolvedCrs(): CrsInfo | ResolvedCrs | null | undefined;
   /** Classification codes currently present on the active scan (empty when none). */
@@ -147,10 +158,29 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
   // Presence: `full` needs a static cloud, a producer classification and no
   // class 0 / class 1 in the legend, i.e. every loaded point carries a real
   // class. Anything weaker stays at the `partial` floor as before.
+  // A strided load, or a resident count below the file's declared total, means
+  // every fact below describes a display SAMPLE. `Coverage` already carries
+  // 'sampled' and the QA + capability layers already act on it; only this
+  // producer was missing, so a sampled scan arrived as the 'full' default.
+  // Guarded: the data read is allowed to throw (a buffer released mid-refresh),
+  // and an unstated total must degrade to "cannot tell", never lose the scan.
+  let declaredTotal: number | null = null;
+  try {
+    declaredTotal = a.getActiveCloudData?.()?.declaredPointCount ?? null;
+  } catch {
+    declaredTotal = null;
+  }
+  const stride = a.getActiveLoadStride?.() ?? null;
+  const sampled = !isStreaming
+    && ((stride != null && stride > 1)
+      || (declaredTotal != null && staticPts != null && declaredTotal > staticPts));
   const classification = !hasClasses
     ? 'none'
     : classificationProvenance === 'producer' &&
         !isStreaming &&
+        // A sample that happens to contain no class 0/1 says nothing about the
+        // points it skipped, so it cannot establish a full classification.
+        !sampled &&
         !codes.includes(0) &&
         !codes.includes(1)
       ? 'full'
@@ -177,6 +207,9 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
   const pointCount = isStreaming ? streamPts : staticPts;
   return {
     kind: isStreaming ? 'streaming' : 'static',
+    // Streaming keeps its own default ('resident-only'); a static sample is
+    // named here rather than falling through to 'full'.
+    ...(sampled ? { coverage: 'sampled' as const } : {}),
     // Omitted, not zeroed, when the source states no total: `RawScanSignals`
     // leaves `pointCount` optional precisely so an unstated size stays unstated.
     ...(pointCount == null ? {} : { pointCount }),
@@ -331,6 +364,8 @@ export interface ProcessStudioShell {
         readonly pointCount: number;
         readonly positions?: Float32Array;
         readonly declaredPointCount?: number;
+  /** Loader stride; > 1 means the resident points are a display sample. */
+  readonly loadStride?: number;
       }
     | null
     | undefined;
@@ -394,6 +429,7 @@ export function createProcessStudioFromShell(shell: ProcessStudioShell): Mounted
     hasStreamingSource: () => shell.getViewer().streamingCloud != null,
     getStreamingPointCount: () => shell.getViewer().streamingCloud?.sourcePointCount ?? null,
     getActivePointCount: () => shell.getActiveCloud()?.pointCount ?? null,
+    getActiveLoadStride: () => shell.getActiveCloud()?.loadStride ?? null,
     // Resolved CRS (override applied), not raw metadata — Studio agrees with the Inspector (C7).
     getResolvedCrs: () => shell.crsService.current(),
     getPresentClassCodes: () => shell.classLegend.presentCodes(),
