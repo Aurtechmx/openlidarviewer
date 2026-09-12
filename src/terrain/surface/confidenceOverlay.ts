@@ -91,10 +91,21 @@ export const CONFIDENCE_LEGEND: ReadonlyArray<{
   { grade: 'gap', color: CONFIDENCE_WEAK, word: 'weak', meaning: 'extrapolated / gap' },
 ] as const;
 
-/** The honesty caption shown beside every confidence surface. */
+/**
+ * The honesty caption shown beside every confidence surface.
+ *
+ * It names two quantities rather than one. A measured cell carries empirical
+ * hold-out reliability; an interpolated or gap cell carries model-based
+ * support, which is calibrated against nothing. The claim register prohibits
+ * both "calibrated probability for interpolated cells" and "single
+ * undifferentiated confidence", and a caption that opened with "Calibrated"
+ * and then pooled all three cell kinds asserted each of them in one sentence.
+ */
 export const CONFIDENCE_CAPTION =
-  'Calibrated trust in the bare-earth surface — bright = measured, mid = ' +
-  'interpolated, dark = extrapolated/gap. Colourblind-safe (Cividis); approximate.';
+  'Bright = measured, mid = interpolated, dark = extrapolated/gap. Measured ' +
+  'cells carry empirical hold-out reliability; interpolated and gap cells ' +
+  'carry model-based support, calibrated against nothing. ' +
+  'Colourblind-safe (Cividis).';
 
 /**
  * Rasterise a confidence grid to an RGBA image — the colourblind-safe twin of

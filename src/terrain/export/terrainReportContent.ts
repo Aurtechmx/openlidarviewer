@@ -424,13 +424,16 @@ export function buildTerrainReportContent(
         label: 'Ground share of analysed candidates (after class exclusion)',
         value: groundTrusted ? 'class 2 trusted' : fmtPct(q?.groundPointRatio),
       },
-      {
-        label: 'Mean confidence',
-        value:
-          q != null && Number.isFinite(q.meanCellConfidence)
-            ? `${Math.round(q.meanCellConfidence)}/100`
-            : DASH,
-      },
+      // No pooled confidence row. `meanCellConfidence` averages calibrated
+      // measured-cell probabilities with uncalibrated interpolated-cell
+      // support, so it moves with the measured-to-interpolated mix as much as
+      // with surface quality and cannot be read back as a statement about
+      // either. The register prohibits a "single undifferentiated confidence"
+      // for that reason. Both halves are already reported: the measured-cell
+      // figure below as a share of hold-out residuals within 1 x RMSEz, and
+      // the mix in the four coverage rows above. The quality gate still keys
+      // on the pooled value; that is an internal threshold, not a published
+      // statistic.
     ],
   };
 
