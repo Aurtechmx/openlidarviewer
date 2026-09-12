@@ -211,6 +211,7 @@
     "texture-compressor": "file:vendor-stubs/texture-compressor",
     "@loaders.gl/las": {
       "laz-perf": "0.0.7"
-    }
+    },
+    "rolldown": "1.2.3"
   }
 }
