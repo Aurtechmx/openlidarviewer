@@ -47,7 +47,7 @@ These ship in the deploy archive.
 | @loaders.gl/ply | ^4.4.5 | 4.4.5 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
-| proj4 | ^2.21.0 | 2.21.0 | MIT |
+| proj4 | ^2.22.0 | 2.22.0 | MIT |
 | three | ^0.184.0 | 0.184.0 | MIT |
 
 ## Direct development dependencies
