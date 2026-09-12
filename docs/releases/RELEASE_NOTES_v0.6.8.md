@@ -1,156 +1,125 @@
 # OpenLiDARViewer v0.6.8
 
-An engineering and provenance release. No product changed evidence level this
-cycle: the register holds 34 claims, 17 of them at E4, none at E5. The
-work went into what the viewer tells you about its own numbers, into reopening
-a heavy local file without rebuilding its index, and into a body of
-externally-checkable provenance.
+v0.6.8 is an engineering and provenance release. The work went into what the
+viewer says about its own numbers, into reopening a heavy local file without
+rebuilding its index, and into provenance a reader outside the project can
+check.
 
-## Scan output tells you which sample it measured
+No product changed evidence level this cycle. The register holds 34 claims, 2 at
+E1, 6 at E2, 9 at E3 and 17 at E4, none at E5. Groundwork for E5 registers the
+Rogue tiles, makes the dev and holdout split deterministic and exposure-honest,
+and recomputes the manifest invariants; the holdout has not been run.
 
-A strided load carries three nested populations: the count the file declares,
-the subset the stride decoded, and the smaller set an analysis gathers. Rows
-across the Scan Report, the Dataset Intelligence card, the Analyse fitness
-summary and the terrain and technical PDFs named a number without saying which
-population it came from, and several stated a constant where the label implied
-a measurement.
+OpenLiDARViewer remains browser-native and local-first: local files stay on the
+user's device, and no account is required.
 
-- Classification reports the measured unclassified share instead of a hardcoded
-  zero, so a cloud that is 95 percent code 1 reads that way.
-- The dataset card reports the resident point count and labels its basis
-  `display-sample`, where it previously reported the declared count as `full`.
-- Scan Report rows name their sample basis. "Captured" is now "File created" and
-  "Capture Sensor" is "System identifier", because that is what the header field
-  holds.
-- Edge and boundary sentences distinguish a cell near the data boundary from one
-  interpolated at a long reach from any measured cell.
-- Airborne provenance decides from footprint area and density rather than
-  matching a vendor string first.
+## Scan output names the sample it measured
+
+A strided load decodes a subset of what the file declares, and an analysis
+gathers a smaller set again. Reports named a figure without saying which of the
+three it described.
+
+Every row now states its basis. Classification reports its measured unclassified
+share instead of a hardcoded zero. The dataset card reports the resident count
+as `display-sample` rather than the declared count as `full`. "Captured" is now
+"File created" and "Capture Sensor" is "System identifier". Edge cells are
+distinguished from cells interpolated far from any measurement, and footprint
+and density decide airborne provenance, where a vendor string used to.
 
 ## Reopening a heavy local file
 
-A large local LAS or LAZ indexed into the Origin Private File System is now
-found again on reopen instead of rebuilt. A cache map records which promoted
-store holds which file, keyed by a whole-file SHA-256 rather than by name or
-size, so an edited file is a miss and never a wrong hit. A quick locator decides
-only whether computing that digest is worth it.
+A large local LAS or LAZ indexed into the Origin Private File System is found
+again on reopen instead of rebuilt. A whole-file SHA-256 keys the index, so an
+edited file never matches a stale one.
 
-Eviction skips any store another tab still holds open, and refuses to evict at
-all when it cannot determine liveness. A janitor sweeps stores an earlier
-session abandoned. Cache-map writes are serialised under a lock, so two tabs
+Eviction skips stores another tab still holds open, and refuses outright when it
+cannot tell. A janitor sweeps what an earlier session abandoned, and two tabs
 indexing at once cannot drop each other's entries.
 
 ## Streaming says what it is ready for
 
-Readiness describes the current view rather than the whole source, refinement
-orders work toward the centre of what you are looking at, and point size
-compensates while coarse nodes stand in for fine ones, so a refining view reads
-as refining rather than as sparse. Residency, decode retries and upload-queue
-totals are reported from the scheduler that owns them.
+Readiness describes the current view, not the whole source, and refinement works
+outward from the centre. Point size compensates while coarse nodes stand in for
+fine ones, so a refining view looks like one. Residency, decode retries and
+queue totals match the work behind them.
 
 ## Validation and change figures refuse rather than substitute
 
-Several analysis outputs used to answer with a number under a caveat when the
-input did not support one. Each now reports no figure and states why, because a
-caveat is a line of prose above a number, and the number is what gets quoted.
+Several analysis outputs answered with a number under a caveat when the input
+did not support one. They now report no figure and say why.
 
-- The hold-out validation refuses an invalid split fraction, cell size or seed,
-  a ground mask that does not cover the cloud, and a requested train-only
-  reclassification that could not be produced. It used to substitute a default
-  or the whole-cloud figure in the same field. The report carries the reason.
-- Every residual figure is captioned in the unit it is in. When the frame
-  states no vertical scale, the Analyse panel, the terrain PDF, the review bar
-  and the exported `validation.json` say source Z units, and the ASPRS-style
-  RMSEz, NVA and VVA fields are withheld rather than labelled metres.
-- `validation.json` records which ground classification the validated surface
-  was fitted from: the whole cloud, a classifier re-run on the training points
-  only, or the source's own classification when class 2 was trusted. The
-  spatially blocked figure records the same, and the panel and report describe
-  the contrast between the two figures from those records. The earlier wording
-  said the blocked figure predicts across a real gap and runs larger; neither
-  is measured.
-- Two-epoch change reports no cut and fill volume and no elevation difference
-  when the two epochs cannot be confirmed to share a frame, when their grids
-  differ in cell size, dimensions or origin, or when one epoch's vertical scale
-  resolves and the other's does not. The difference raster can still be viewed
-  and is exported only from a fully co-registered pair. Volumes are summed with
-  compensated arithmetic, a comparison with no comparable cells reports no
-  value rather than zero, and the uncertainty band describes the raw net it is
-  printed beside.
-- Checkpoint accuracy validates the per-stratum minimum and the output of a
-  caller-supplied uncertainty combination, and refuses the record when either
-  is unusable.
-- A frame that resolves no linear unit states no figure that would be metric.
-  Withheld: the ground-return density and the USGS 3DEP floor it was compared
-  against, the metre RMSEz, NVA and VVA a contour map sheet printed beside its
-  own "vertical unit unverified" note, the complexity window and radius in
-  ground metres, and the density threshold that caps the readiness verdict. The
-  last of those decided a status, so two scans identical but for their source
-  unit were graded differently. The complexity summary states that the pts/m²
-  reliability threshold could not be applied; producing no caveat had read as
-  clearing it.
-- The analysis is told whether the frame resolved a scale, separately from the
-  scale factor it uses for geometry. The live path supplies a placeholder factor
-  of 1 for a scan with no CRS, and the analysis derived "resolved" from that
-  factor, so none of the withholding above was reachable from the application
-  until the two facts were stated apart.
-- A comparison in which no cell is measured in both epochs reports that, rather
-  than a NaN volume, and offers no difference raster. A geographic pair keeps
-  its elevation differences and withholds only the volumes, as before.
-- Re-resolving the same coordinate system, which opening a second tile of one
-  survey does, no longer counts as a frame change: derived classifications stay
-  valid, the terrain cache is kept, and the on-screen result is not refused as
-  stale. A derived classification the frame has invalidated is withheld from
-  building and wire extraction as it already was from terrain.
-- A terrain export from a layer that carries a project placement publishes no
-  origin rather than the layer's own, which would have translated every
-  coordinate by the placement offset.
-- The reusable kernel refuses impossible specifications instead of repairing
-  them: a non-positive cell size, a percentile outside 0 to 1, a malformed
-  ground-filter parameter, a classification that does not cover the cloud, an
-  ASCII grid whose header does not match its arrays. The two evaluation kernels
-  that scored the shorter of two arrays refuse unequal arrays, so an
-  implementation that emits fewer cells than the reference cannot be graded
-  over the cells it produced.
-- An explicit request to trust the source ground classification is refused
-  when no class 2 points exist; no substitute ground filter runs, and the
-  verdict is blocked. Automatic mode still chooses.
-- A two-epoch comparison honours a declared vertical scale on a geographic
-  frame, so a foot vertical over degree coordinates is filtered and despiked in
-  metres as the Analyse panel does. The quality score judges the hold-out RMSE
-  against its metre floor only when the vertical scale resolved, and multiplies
-  density by a cell area in the density's own unit.
+Hold-out validation refuses invalid parameters, a ground mask that does not
+cover the cloud, and a train-only reclassification it could not produce, where
+it used to substitute a default. Every residual figure carries its own unit:
+with no stated vertical scale it reads source Z units, and the ASPRS-style
+RMSEz, NVA and VVA fields stay empty. `validation.json` records which ground
+classification the surface was fitted from, and the spatially blocked figure
+records the same. Checkpoint accuracy refuses a record whose per-stratum minimum
+or uncertainty combination is unusable.
+
+Two-epoch change reports no volume and no elevation difference when the epochs
+cannot be confirmed to share a frame, when their grids disagree, or when only
+one resolves a vertical scale. The difference raster stays viewable and exports
+only from a co-registered pair. Compensated arithmetic sums the volumes, a
+comparison with no cell measured in both epochs reports no value where it once
+reported zero, and the uncertainty band describes the raw net beside it. A
+geographic pair keeps its elevation differences and withholds only volumes, and
+honours a declared vertical scale. The quality score judges RMSE against its
+metre floor only where the vertical scale resolved, and multiplies density by a
+cell area in the density's own unit.
+
+A frame with no resolved linear unit states no metric figure. Withheld: the
+ground-return density and its USGS 3DEP floor, the map sheet's metre accuracy
+figures, the complexity window in ground metres, and the density threshold that
+caps the readiness verdict, which had graded two scans differently for their
+source unit alone. The complexity summary says the pts/m² reliability threshold
+could not be applied.
+
+Re-resolving the same coordinate system, which opening a second tile of a survey
+does, is no longer a frame change: derived classifications and the terrain cache
+survive it. A classification the frame did invalidate is withheld from building
+and wire extraction as it already was from terrain. A terrain export from a
+placed layer publishes no origin rather than the layer's own.
+
+The kernels refuse impossible specifications instead of repairing them: a
+non-positive cell size, a percentile outside 0 to 1, a malformed ground-filter
+parameter, a classification that does not cover the cloud, a grid whose header
+disagrees with its arrays, two arrays of unequal length. Trusting the source
+ground classification is refused when no class 2 points exist; automatic mode
+still chooses.
 
 ## Provenance you can check
 
-- Contours export as a complete package with a DXF, a validation record and the
-  Contour Studio settings.
-- A Scan QA report replaces the retired acceptance checklist, stating the
-  coordinate-quality verdict, classification provenance and what the report does
-  not establish.
-- The Coconino checkpoint artifacts state the universe they measure and agree
-  with the evidence level the claim register assigns the DTM.
-- `docs/project/THIRD_PARTY_NOTICES.md` lists every derived validation file
-  committed under `validation/terrain-field/` with its source, licence and DOI.
-  Raw source clouds are not redistributed; the derived crops and checkpoint
-  records are, and the two documents which stated otherwise now say so.
-- The slope claim no longer records a 16.2 degree border shortfall against
-  `gdaldem -compute_edges`; the kernel was corrected and the matrix asserts
-  agreement on the border ring. The border stays outside the claim because the
-  supporting study does not compute edges.
+Contours export as a package with a DXF, a validation record and the Contour
+Studio settings. A Scan QA report replaces the retired acceptance checklist,
+stating the coordinate-quality verdict, classification provenance, the
+attributes the cloud carries and what it does not establish. The Coconino
+checkpoint artifacts state the universe they measure.
 
-A scientific artifact passport, an evidence boundary inspector and a SHA-256
-over the DTM surface are implemented and tested, but no user path reaches them
-in v0.6.8. They are recorded in `docs/validation/unreachable-modules.json`,
-which a lint enforces, so they are inventory rather than delivered features.
+`docs/project/THIRD_PARTY_NOTICES.md` lists every derived validation file under
+`validation/terrain-field/` with its source, licence and DOI. Raw source clouds
+are not redistributed; the derived crops and checkpoint records are.
+`THREATS_TO_VALIDITY.md` and `DATA_AVAILABILITY.md` said the repository
+redistributes no external data while eight derived files were committed, and now
+draw that distinction.
+
+The slope claim no longer records a 16.2 degree border shortfall against
+`gdaldem -compute_edges`. The kernel was corrected and the matrix asserts
+agreement on the border ring. The border stays outside the claim because the
+supporting study does not compute edges.
+
+An artifact passport, an evidence boundary inspector and a SHA-256 over the DTM
+surface are implemented and tested but unreachable from the interface. They are
+registered in `docs/validation/unreachable-modules.json` as inventory rather
+than delivered features.
 
 ## Interface
 
-Derived analytical layers are listed in the Layers panel. Hillshade can be
-styled with an elevation ramp. A coordinate readout follows the probe. The
-profile section can filter its scatter by attribute and draw its sample corridor
-in 3D. Building and wire candidates open in a review surface. A findings ledger
-persists across a session.
+Derived analytical layers are listed in the Layers panel. Hillshade takes an
+elevation ramp. A coordinate readout follows the probe. The profile section
+filters its scatter by attribute and draws its corridor in 3D. Building and wire
+candidates open in a review surface. A findings ledger persists across a
+session.
 
 ## 3D Tiles
 
@@ -159,98 +128,86 @@ every child is resident, and the 1.1 `contents[]` array on a tile is read.
 
 ## Fixed
 
-- Six modules each declared their own metre-to-foot factor, two of them rounded.
-  A length converted two different ways depending on which surface displayed it.
-- Adaptive precision banded on the raw float, so a value one unit in the last
-  place below a decade gained a spurious significant digit. An exact 10 ft span
-  read `10.0000 ft`.
-- A focused resize grip resized the panel and orbited the camera at the same
-  time, because the camera's focus guard recognised only input, textarea and
-  select elements.
-- The reclassify lasso painted above the panels and swallowed clicks meant for
-  them.
-- Object metrics measured in source units and labelled the result metres.
-- The interior scan panel did the same for dimensions, floor area, ceiling
-  height and enclosed volume, printing metres and feet on an unknown unit.
+- Six modules each declared their own metre-to-foot factor, two of them rounded,
+  so a length converted differently depending on which surface displayed it. A
+  lint now compares conversion factors by value rather than by spelling.
+- Adaptive precision banded on the raw float, so an exact 10 ft span read
+  `10.0000 ft`.
+- Object metrics measured in source units and labelled the result metres. The
+  interior scan panel did the same for dimensions, floor area, ceiling height
+  and enclosed volume.
 - A measurement CSV or GeoJSON named its columns `length_m`, `area_m2` and
   `volume_m3` on a scan whose unit never resolved. Those columns are now
   `length_source`, `area_source2` and `volume_source3`, the dimensioned floor
-  plan is refused on the same condition, and the grid recommendation is
-  withheld rather than sized from source coordinates against a metre ladder.
+  plan is refused on the same condition, and the grid recommendation is withheld
+  rather than sized from source coordinates against a metre ladder.
 - The epoch surface builder dropped the vertical unit factor, so a compound
   frame with a foot vertical despiked at a floor of about 0.09 m instead of
   0.30 m.
-- Contour deliverables stated a unit and a grade that disagreed with the
-  analysis that produced them.
-- GeoTIFF fields short enough to fit inline are written inline, and clip
-  provenance is kept through the export.
-- Slow touch gestures are kept, yaw rotates around world up, and ending a
-  gesture cancels cleanly.
-- The no-CDN loader options reach every parse call, so a build configured to
-  fetch nothing fetches nothing.
-- Derived classes computed under a frame that was later invalidated are
-  withheld from a new analysis instead of carried into it.
-- The quantile convention each statistic uses is named in its record, and two
-  accumulators that summed naively are compensated.
-- The DEM README, the contour deliverable and the readiness card labelled an
-  unresolved unit as metres; each now says "units" or "source Z units".
 - A full three-axis epoch alignment on a compound frame applied the solved
   vertical shift in the fit's scaled Z rather than in raw Z.
 - The grid recommendation on a geographic frame multiplied relief by the metres
   per degree and ignored the cosine of latitude in the width.
+- Contour deliverables stated a unit and a grade that disagreed with the
+  analysis that produced them.
+- The DEM README, the contour deliverable and the readiness card labelled an
+  unresolved unit as metres; each now says "units" or "source Z units".
+- GeoTIFF fields short enough to fit inline are written inline, and clip
+  provenance is kept through the export.
+- Slow touch gestures are kept, yaw rotates around world up, and ending a
+  gesture cancels cleanly.
+- A focused resize grip resized the panel and orbited the camera at once; the
+  camera's focus guard recognised only input, textarea and select elements.
+- The reclassify lasso painted above the panels and swallowed clicks meant for
+  them.
+- A lasso reclassify only edits points the user can see, so reclassifying into a
+  hidden class hid its own result. The target class is revealed and the toast
+  says so; every other hidden class stays hidden.
+- The no-CDN loader options reach every parse call, so a build configured to
+  fetch nothing fetches nothing.
+- The quantile convention each statistic uses is named in its record, and two
+  accumulators that summed naively are compensated.
 - After a coordinate-system override the interior report and floor-plan buttons
   did nothing; they now refuse with the reason.
-- Moving the mouse over a parked scene changed its shading. Pointer movement
-  read as camera movement, so Eye Dome Lighting cut out and the pixel ratio
-  dropped for a third of a second; a colour-mode switch, a filter change and a
-  canvas resize did the same. Camera motion carries its own signal now, and
-  walk and fly, which move the camera outside the orbit controls, are read from
-  the camera pose each frame.
+- Moving the mouse over a parked scene cut Eye Dome Lighting and dropped the
+  pixel ratio for a third of a second, as did a colour-mode switch, a filter
+  change and a canvas resize. Only camera motion degrades the render now.
 - The Layers panel is re-parented out of the Inspector into the workspace rail,
   where nothing was painted behind it, so its group headers and rows read over
   the point cloud.
 - Packaging a source tree that has no repository dropped every tracked file
   under a directory named `release`, including the archive-portability and
-  build-identity evidence, because the exclusion matched any path segment
-  rather than the generated root. Archives cut from the repository were never
-  affected; re-packaging an extracted archive was.
-- The Performance control's tooltip was the word "Performance". It states what
-  the control trades: the computation applied to a given point set does not
-  change, and on a streamed scan the resident-point budget does, so a
-  resident-only measurement, analysis or export reads whatever is resident when
-  it runs. A produced product named where it exports from.
+  build-identity evidence. Archives cut from the repository were never affected;
+  re-packaging an extracted archive was.
+- The Performance control's tooltip names what the control trades: the
+  computation is unchanged, the resident-point budget is not, and a
+  resident-only measurement or export reads whatever is resident when it runs.
 - The contour map sheet prints the build that drew it, which every other
-  provenance-bearing export already carried. A printed sheet could not be traced
-  to the code that produced it.
-- A stockpile preview stated its band as `± x m³ (1σ)` beside a High/Medium/Low
-  confidence word, which reads as a calibrated interval on the volume. The
-  register approves an exploratory preview with spatial correlation and base
-  uncertainty unquantified, so the band is named a model band and the grade
-  names what it measures: how well the footprint was sampled.
+  provenance-bearing export already carried.
+- The map sheet's density row names the quantity it measures. The USGS floors
+  are nominal pulse density and the figure beside them is measured ground-return
+  density, which the technical report for the same scan declines to grade
+  against those floors.
+- A stockpile preview stated its band as `± x m³ (1σ)` beside a confidence
+  word, which reads as a calibrated interval on the volume. The band is now
+  named a model band, and the grade names what it measures: how well the
+  footprint was sampled.
 - A TPI slope-position class read a non-finite slope as zero, the value that
   separates flat from middle-slope, so a cell whose slope never resolved could
   be labelled flat. It stays nodata.
 - The external reference-label agreement measured on real airborne scenes
   (OpenGF expert labels, producer class-2 ground) is recorded against the
   derived-classification heuristic that produced it, not the terrain ground
-  filter, which shares no code with it.
-- A lasso reclassify only edits points the user can see, so reclassifying into a
-  class the filter was hiding landed the edit and hid its own result in the same
-  frame. The target class is revealed and the toast says so; every other hidden
-  class stays hidden and the derived-provenance caption survives.
-- The map sheet's density row names the quantity it measures. The USGS floors are
-  nominal pulse density and the figure beside them is measured ground-return
-  density, which the technical report for the same scan declines to grade against
-  those floors.
+  filter.
 
 ## Known limitations
 
-The evidence ceiling is unchanged: 17 products at E4, none at E5. The
-registration stack, the stockpile area-grid estimator, the artifact passport,
-the evidence boundary inspector and the DTM surface digest are implemented and
-tested but not wired into a user path, and are registered as unreachable rather
-than described as delivered. Touch gestures are verified on Chromium only.
-`KNOWN_LIMITATIONS_v0.6.8.md` carries the full list.
+The complete list is in `KNOWN_LIMITATIONS_v0.6.8.md`. The evidence ceiling is
+unchanged: 17 products at E4, none at E5. The registration stack, the stockpile
+area-grid estimator, the artifact passport, the evidence boundary inspector and
+the DTM surface digest are implemented and tested but not wired into a user
+path, and are registered as unreachable rather than described as delivered.
+Touch gestures are verified on Chromium only.
 
 ## The project has its own domain
 
@@ -263,12 +220,8 @@ OpenLiDARViewer is now at its own name rather than under a company subdomain.
 `lidar.aurtech.mx` keeps working. It answers with a permanent redirect to the
 new application host, carrying the path and query across, so a deep link
 published in an earlier release, a Zenodo record or a paper still resolves.
-
 Release notes, evidence records and manifests from earlier versions still name
-the host they shipped with. Those are statements about what was true at the
-time, and rewriting them would make the record dishonest, so they are left
-alone. A lint holds the current metadata together and exempts the historical
-paths by name.
+the host they shipped with, and are left as they were published.
 
 ## Licensing
 
@@ -280,7 +233,8 @@ is unaffected.
 ## Compatibility
 
 Sessions written by v0.6.8 use schema version 8, unchanged. Sessions from
-version 1 onward open. The canonical toolchain is Node 22.18.0 with npm 10.9.3.
+version 1 onward open. The canonical toolchain moves to Node 22.18.0 with npm
+10.9.3, and its verifier reads the pin instead of a hardcoded version.
 
 ## Verifying this release
 

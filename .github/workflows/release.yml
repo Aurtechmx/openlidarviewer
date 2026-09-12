@@ -229,11 +229,16 @@ jobs:
           V="$(node -p "require('./package.json').version")"
           npm run release:verify -- --dir "release/staged-v${V}"
 
+      # The trailing `/*` matters. Uploading the DIRECTORY makes `release/` the
+      # common ancestor, so the artifact carries a `staged-vX.Y.Z/` root and the
+      # download lands a level deeper than the publish job's `body_path`
+      # expects. Matching the FILES makes the staged directory the ancestor, so
+      # the payload is flat. Same lesson as the gate job's flat payload above.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-assets
           retention-days: 30
-          path: release/staged-*/
+          path: release/staged-*/*
 
   # ── The single status to gate publication on ──────────────────────────────
   release-ready:
@@ -282,6 +287,12 @@ jobs:
           subject-path: |
             assets/**/openlidarviewer-*.zip
             assets/**/sbom.json
+
+      # action-gh-release only WARNS when body_path is missing and publishes an
+      # empty body. v0.6.8 was tagged that way: every asset uploaded, the job
+      # green, the release page blank. Fail here instead.
+      - name: Check the notes reached the publish job
+        run: test -f "assets/RELEASE_NOTES_${{ github.ref_name }}.md"
 
       - name: Create the draft release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
