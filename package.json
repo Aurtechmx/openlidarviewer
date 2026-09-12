@@ -186,19 +186,19 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
-    "@loaders.gl/las": "^4.4.5",
-    "@playwright/test": "^1.62.1",
+    "@loaders.gl/las": "^4.5.1",
+    "@playwright/test": "^1.63.0",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/proj4": "^2.19.0",
     "@types/three": "^0.184.1",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^5.0.0",
     "rollup-plugin-visualizer": "^7.1.1",
     "typescript": "~7.0.2",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vite-plugin-javascript-obfuscator": "^3.1.0",
     "vitepress": "1.6.4",
-    "vitest": "^4.1.7"
+    "vitest": "^5.0.0"
   },
   "overrides": {
     "minimatch@3": {
