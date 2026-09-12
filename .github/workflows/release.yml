@@ -184,10 +184,13 @@ jobs:
       # that ship; this job only assembles and checks them. The payload is
       # flat, so these copies name files, not guessed directories.
       - name: Stage the asset set
+        id: stage
         run: |
           set -euo pipefail
           V="$(node -p "require('./package.json').version")"
           STAGE="release/staged-v${V}"
+          # The upload below needs this path without a wildcard. See the note there.
+          echo "dir=${STAGE}" >> "$GITHUB_OUTPUT"
           rm -rf "$STAGE" && mkdir -p "$STAGE"
           cp incoming/openlidarviewer-*.zip "$STAGE"/
           cp incoming/sbom.json "$STAGE"/
@@ -229,16 +232,19 @@ jobs:
           V="$(node -p "require('./package.json').version")"
           npm run release:verify -- --dir "release/staged-v${V}"
 
-      # The trailing `/*` matters. Uploading the DIRECTORY makes `release/` the
-      # common ancestor, so the artifact carries a `staged-vX.Y.Z/` root and the
-      # download lands a level deeper than the publish job's `body_path`
-      # expects. Matching the FILES makes the staged directory the ancestor, so
-      # the payload is flat. Same lesson as the gate job's flat payload above.
+      # upload-artifact roots the payload at the longest leading path segment
+      # that contains NO wildcard. `release/staged-*/` and `release/staged-*/*`
+      # both root at `release/`, so either way the artifact carries a
+      # `staged-vX.Y.Z/` directory and the download lands a level below the
+      # exact `body_path` the publish job reads. Both spellings shipped a
+      # release whose page was blank. The step output above is a literal path,
+      # expanded before the action runs, so the root IS the staged directory and
+      # the payload is flat — the same shape as the gate job's `release/payload/`.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-assets
           retention-days: 30
-          path: release/staged-*/*
+          path: ${{ steps.stage.outputs.dir }}/
 
   # ── The single status to gate publication on ──────────────────────────────
   release-ready:
