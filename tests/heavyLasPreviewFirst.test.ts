@@ -207,13 +207,23 @@ function makeEnv(opts: {
   return { env, opfs };
 }
 
-/** Wait until `cond` holds, letting the sampler's awaits drain. */
-async function waitFor(cond: () => boolean, tries = 200): Promise<void> {
-  for (let i = 0; i < tries; i++) {
+/**
+ * Wait until `cond` holds, letting the sampler's awaits drain.
+ *
+ * Bounded by elapsed time, not by a count of scheduler turns. The preview
+ * sampler yields once per batch, so the number of turns before the condition
+ * holds tracks the batch size and the host's scheduling, not whether the code
+ * under test is correct — a fixed count expired on the slower Windows runner
+ * while the work was still progressing. The budget is well under the 15 s test
+ * timeout, so a condition that never holds still fails here with this message.
+ */
+async function waitFor(cond: () => boolean, budgetMs = 10_000): Promise<void> {
+  const deadline = Date.now() + budgetMs;
+  while (Date.now() < deadline) {
     if (cond()) return;
     await new Promise((r) => setTimeout(r, 0));
   }
-  throw new Error('waitFor timed out');
+  throw new Error(`waitFor timed out after ${budgetMs} ms`);
 }
 
 describe('heavy open — preview-first attach and swap', () => {
