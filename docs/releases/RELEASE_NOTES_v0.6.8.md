@@ -5,19 +5,23 @@ v0.6.8 is an engineering and provenance release. The work went into what the vie
 No product changed evidence level this cycle. The register holds 34 claims, 2 at E1, 6 at E2, 9 at E3 and 17 at E4, none at E5. Groundwork for E5 registers the Rogue tiles, makes the dev and holdout split deterministic and exposure-honest, and recomputes the manifest invariants; the holdout has not been run.
 
 OpenLiDARViewer remains browser-native and local-first: local files stay on the user's device, and no account is required.
+
 ## Scan output names the sample it measured
 
 A strided load decodes a subset of what the file declares, and an analysis gathers a smaller set again. Reports named a figure without saying which of the three it described; every row now states its basis.
 
 Classification reports its measured unclassified share instead of a hardcoded zero, and the dataset card reports the resident count as `display-sample` rather than the declared count as `full`. Two header fields are labelled as what they hold: "File created" and "System identifier". Edge cells are distinguished from cells interpolated far from any measurement, and footprint and density decide airborne provenance.
+
 ## Reopening a heavy local file
 
 A large local LAS or LAZ indexed into the Origin Private File System is found again on reopen instead of rebuilt. A whole-file SHA-256 keys the index, so an edited file never matches a stale one.
 
 Eviction skips stores another tab still holds open, and refuses outright when it cannot tell. A janitor sweeps what an earlier session abandoned, and two tabs indexing at once cannot drop each other's entries.
+
 ## Streaming says what it is ready for
 
 Readiness describes the current view, not the whole source, and refinement works outward from the centre. Point size compensates while coarse nodes stand in for fine ones, so a refining view looks like one. Residency, decode retries and queue totals match the work behind them.
+
 ## Validation and change figures refuse rather than substitute
 
 Several analysis outputs answered with a number under a caveat when the input did not support one. They now report no figure and say why.
@@ -31,6 +35,7 @@ A frame with no resolved linear unit states no metric figure. Withheld: the grou
 Re-resolving the same coordinate system is no longer a frame change, so derived classifications and the terrain cache survive opening a second tile of a survey. The kernels refuse impossible specifications instead of repairing them, and trusting the source ground classification is refused when no class 2 points exist.
 
 The CHANGELOG carries the full list of conditions each check refuses.
+
 ## Provenance you can check
 
 Contours export as a package with a DXF, a validation record and the Contour Studio settings. A Scan QA report replaces the retired acceptance checklist, stating the coordinate-quality verdict, classification provenance and what it does not establish.
@@ -40,12 +45,15 @@ Contours export as a package with a DXF, a validation record and the Contour Stu
 The slope claim no longer records a 16.2 degree border shortfall against `gdaldem -compute_edges`. The border stays outside the claim because the supporting study does not compute edges.
 
 An artifact passport, an evidence boundary inspector and a SHA-256 over the DTM surface are implemented and tested but unreachable from the interface, and are registered as inventory rather than delivered features.
+
 ## Interface
 
 Derived analytical layers are listed in the Layers panel. Hillshade takes an elevation ramp. A coordinate readout follows the probe. The profile section filters its scatter by attribute and draws its corridor in 3D. Building and wire candidates open in a review surface. A findings ledger persists across a session.
+
 ## 3D Tiles
 
 Tilesets using REPLACE refinement render correctly, hiding a parent only once every child is resident, and the 1.1 `contents[]` array on a tile is read.
+
 ## Fixed
 
 - Six modules each declared their own metre-to-foot factor, two of them rounded, so a length converted differently depending on which surface displayed it. A lint now compares conversion factors by value rather than by spelling.
@@ -74,9 +82,11 @@ Tilesets using REPLACE refinement render correctly, hiding a parent only once ev
 - A stockpile preview stated its band as `± x m³ (1σ)` beside a confidence word, which reads as a calibrated interval on the volume. The band is now named a model band, and the grade names what it measures: how well the footprint was sampled.
 - A TPI slope-position class read a non-finite slope as zero, the value that separates flat from middle-slope, so a cell whose slope never resolved could be labelled flat. It stays nodata.
 - The external reference-label agreement measured on real airborne scenes (OpenGF expert labels, producer class-2 ground) is recorded against the derived-classification heuristic that produced it, not the terrain ground filter.
+
 ## Known limitations
 
 The complete list is in `KNOWN_LIMITATIONS_v0.6.8.md`. The evidence ceiling is unchanged: 17 products at E4, none at E5. The registration stack, the stockpile area-grid estimator, the artifact passport, the evidence boundary inspector and the DTM surface digest are implemented and tested but not wired into a user path, and are registered as unreachable rather than described as delivered. Touch gestures are verified on Chromium only.
+
 ## The project has its own domain
 
 OpenLiDARViewer is now at its own name rather than under a company subdomain.
@@ -86,15 +96,19 @@ OpenLiDARViewer is now at its own name rather than under a company subdomain.
 - Source: <https://github.com/Aurtechmx/openlidarviewer>
 
 `lidar.aurtech.mx` keeps working. It answers with a permanent redirect to the new application host, carrying the path and query across, so a deep link published in an earlier release, a Zenodo record or a paper still resolves. Release notes, evidence records and manifests from earlier versions still name the host they shipped with, and are left as they were published.
+
 ## Licensing
 
 Unchanged from v0.6.7: OpenLiDARViewer is distributed under AGPL-3.0-only. Releases through v0.6.6 were published under MIT and stay available under those terms. The license of a bundled dependency or of any test or validation dataset is unaffected.
+
 ## Compatibility
 
 Sessions written by v0.6.8 use schema version 8, unchanged. Sessions from version 1 onward open. The canonical toolchain moves to Node 22.18.0 with npm 10.9.3, and its verifier reads the pin instead of a hardcoded version.
+
 ## Verifying this release
 
 `REPRODUCIBILITY_v0.6.8.md` describes how to rebuild the release, verify a downloaded archive without rebuilding it, and regenerate each reported figure.
+
 ## Citing
 
 Cite the version DOI for v0.6.8, or the concept DOI 10.5281/zenodo.21544619 for the series.
