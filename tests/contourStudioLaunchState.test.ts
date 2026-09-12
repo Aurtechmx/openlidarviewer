@@ -93,7 +93,7 @@ describe('evaluateContourStudioLaunchState', () => {
   });
 
   it('caps to exploratory on a geographic CRS', () => {
-    const s = evaluateContourStudioLaunchState({ ...ready(), crsProjected: false });
+    const s = evaluateContourStudioLaunchState({ ...ready(), crsProjected: false, crsKind: 'geographic' });
     expect(s.status).toBe('exploratory');
     if (s.status === 'exploratory') {
       expect(s.reasons.some((r) => /geographic/i.test(r))).toBe(true);

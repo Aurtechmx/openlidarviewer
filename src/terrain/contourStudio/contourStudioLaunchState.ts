@@ -46,6 +46,13 @@ export interface ContourStudioPrerequisites {
   readonly verticalUnitsKnown: boolean;
   /** The CRS is a projected (linear) frame rather than geographic (degrees). */
   readonly crsProjected: boolean;
+  /**
+   * Which frame it is, when the caller knows. `crsProjected` alone is false for
+   * a geographic frame, a local frame and no CRS at all, and the reason string
+   * named only the first of those. Optional: a caller that cannot say leaves it
+   * out and gets a reason that names the requirement instead of guessing.
+   */
+  readonly crsKind?: 'local' | 'projected' | 'geographic' | 'unknown';
 
   /**
    * Fraction of the selected surface that is unsupported (no measured or
@@ -110,12 +117,29 @@ const REASON = {
     'Vertical units are unknown; metric-supported contour intervals cannot be claimed.',
   geographicCrs:
     'The current CRS is geographic; validated area and scale calculations require a projected frame.',
+  localCrs:
+    'The current CRS is a local frame; validated area and scale calculations require a projected frame.',
+  unprojectedCrs:
+    'Validated area and scale calculations require a projected frame, which this scan does not have.',
   sparseSupport: 'Terrain support is too sparse for a contour deliverable.',
   tooMuchUnsupported: 'The selected area has too much unsupported surface.',
   streaming:
     'The scan is still streaming; wait for analysis to complete or export exploratory output.',
   noInterval: 'No contour interval could be recommended for this surface.',
 } as const;
+
+/**
+ * Name the frame the scan has, not the one it most often has.
+ *
+ * `crsProjected` is a single boolean over four frame kinds, so a local frame
+ * and a scan with no CRS were both reported as geographic. An unsupplied kind
+ * states the requirement rather than naming a frame nobody established.
+ */
+function unprojectedReason(kind: ContourStudioPrerequisites['crsKind']): string {
+  if (kind === 'geographic') return REASON.geographicCrs;
+  if (kind === 'local') return REASON.localCrs;
+  return REASON.unprojectedCrs;
+}
 
 /**
  * Evaluate the launcher state from prerequisites. Pure and total: every input
@@ -164,7 +188,7 @@ export function evaluateContourStudioLaunchState(
   const exploratoryReasons: string[] = [];
   if (prereqs.streaming) exploratoryReasons.push(REASON.streaming);
   if (!prereqs.verticalUnitsKnown) exploratoryReasons.push(REASON.unknownVertical);
-  if (!prereqs.crsProjected) exploratoryReasons.push(REASON.geographicCrs);
+  if (!prereqs.crsProjected) exploratoryReasons.push(unprojectedReason(prereqs.crsKind));
   if (!prereqs.intervalRecommended) exploratoryReasons.push(REASON.noInterval);
   if (!prereqs.supportSufficient) exploratoryReasons.push(REASON.sparseSupport);
 

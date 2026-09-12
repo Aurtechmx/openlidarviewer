@@ -662,6 +662,7 @@ export function createTerrainAnalysisRunner(
         // saw the condition it exists to catch.
         streaming: result.dtm.coverageMode === 'resident-only',
         crsProjected: ctx.kind === 'projected',
+        crsKind: ctx.kind,
         verticalUnitsKnown: vUnitKnown,
         verticalUnitToMetres: vUnitKnown ? vScale : null,
         verticalUnitLabel: vUnitKnown ? verticalUnitLabel(vScale) : null,

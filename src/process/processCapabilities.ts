@@ -161,13 +161,43 @@ function classifyGaps(scan: ScanFacts): ProductCapability {
   return cap(p, 'ready', 'GAPS_CLASSIFIABLE', 'Unclassified points can be classified from geometry while producer classes are preserved.');
 }
 
+/**
+ * The partial-coverage verdict, named for the coverage that actually fired.
+ *
+ * `isFullCoverage` rejects `'sampled'` and `'resident-only'` alike, so one
+ * message covered both and told the reader of a strided file that "the resident
+ * streaming set is loaded" — a claim about a scan that is not streaming. The
+ * two states also differ in what the reader can do: a resident streaming set
+ * grows as nodes arrive, a sample never does until the scan is read again.
+ * `toolPreflight` has keyed its interactive vocabulary on `Coverage` since it
+ * was written (`SAMPLED_COVERAGE` beside `STREAMING_RESIDENT_ONLY`); this
+ * brings the product path to the same split.
+ */
+function partialCoverage(
+  p: ProductId,
+  scan: ScanFacts,
+  status: 'review' | 'blocked',
+  residentMessage: string,
+  sampledMessage: string,
+): ProductCapability {
+  return scan.coverage === 'resident-only'
+    ? cap(p, status, 'RESIDENT_ONLY', residentMessage)
+    : cap(p, status, 'SAMPLED', sampledMessage);
+}
+
 /** Bare-earth DTM — needs ground and full coverage; unit gates georeferenced use. */
 function dtm(scan: ScanFacts): ProductCapability {
   const p: ProductId = 'dtm';
   const points = pointTotalCondition(scan, p, 'grid');
   if (points !== null) return points;
   if (!isFullCoverage(scan)) {
-    return cap(p, 'review', 'RESIDENT_ONLY', 'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.');
+    return partialCoverage(
+      p,
+      scan,
+      'review',
+      'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.',
+      'Only a sample of the scan was read, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is analysed.',
+    );
   }
   if (!isLinearUnitKnown(scan.crs)) {
     return cap(p, 'review', 'UNIT_UNKNOWN', 'The linear unit is unconfirmed, so the surface can be built for inspection but its georeferenced export is withheld.');
@@ -184,7 +214,13 @@ function dsm(scan: ScanFacts): ProductCapability {
   const points = pointTotalCondition(scan, p, 'grid');
   if (points !== null) return points;
   if (!isFullCoverage(scan)) {
-    return cap(p, 'review', 'RESIDENT_ONLY', 'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.');
+    return partialCoverage(
+      p,
+      scan,
+      'review',
+      'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.',
+      'Only a sample of the scan was read, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is analysed.',
+    );
   }
   if (!isLinearUnitKnown(scan.crs)) {
     return cap(p, 'review', 'UNIT_UNKNOWN', 'The linear unit is unconfirmed, so the surface can be built for inspection but its georeferenced export is withheld.');
@@ -214,7 +250,13 @@ function buildingFootprints(scan: ScanFacts): ProductCapability {
     return cap(p, 'blocked', 'UNIT_UNKNOWN', 'Footprint area is a metric quantity, so an unconfirmed linear unit blocks extraction.');
   }
   if (!isFullCoverage(scan)) {
-    return cap(p, 'blocked', 'RESIDENT_ONLY', 'Footprints need every building return; a resident-only streaming view cannot back them.');
+    return partialCoverage(
+      p,
+      scan,
+      'blocked',
+      'Footprints need every building return; a resident-only streaming view cannot back them.',
+      'Footprints need every building return; a sample of the scan cannot back them.',
+    );
   }
   if (scan.hasBuildingClass) {
     return cap(p, 'ready', 'BUILDING_CLASS_PRESENT', 'Building-class points support footprint extraction.');

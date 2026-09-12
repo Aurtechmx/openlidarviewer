@@ -83,6 +83,19 @@ describe('contourStudioLaunchStateFromResult', () => {
     expect(s.status).toBe('exploratory');
   });
 
+  it('carries the frame kind through, so the reason names the frame the scan has', () => {
+    const local = contourStudioLaunchStateFromResult(resultStub({ readiness: 'ready' }), {
+      ...OK_FRAME,
+      crsProjected: false,
+      crsKind: 'local',
+    });
+    expect(local.status).toBe('exploratory');
+    if (local.status === 'exploratory') {
+      expect(local.reasons.some((r) => /local frame/i.test(r))).toBe(true);
+      expect(local.reasons.some((r) => /geographic/i.test(r))).toBe(false);
+    }
+  });
+
   it('caps to exploratory when the vertical unit is unknown', () => {
     const s = contourStudioLaunchStateFromResult(resultStub({ readiness: 'ready' }), {
       ...OK_FRAME,
