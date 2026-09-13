@@ -100,6 +100,39 @@ describe('evaluateContourStudioLaunchState', () => {
     }
   });
 
+  it('caps to exploratory on a sampled read, naming the sample', () => {
+    const s = evaluateContourStudioLaunchState({ ...ready(), coverage: 'sampled' });
+    expect(s.status).toBe('exploratory');
+    if (s.status === 'exploratory') {
+      expect(s.reasons.some((r) => /sample of the scan/i.test(r))).toBe(true);
+      expect(s.reasons.some((r) => /resident streaming set/i.test(r))).toBe(false);
+    }
+  });
+
+  it('caps to exploratory on a resident streaming set, naming the resident set', () => {
+    const s = evaluateContourStudioLaunchState({ ...ready(), coverage: 'resident-only' });
+    expect(s.status).toBe('exploratory');
+    if (s.status === 'exploratory') {
+      expect(s.reasons.some((r) => /resident streaming set/i.test(r))).toBe(true);
+      expect(s.reasons.some((r) => /sample of the scan/i.test(r))).toBe(false);
+    }
+  });
+
+  it('full coverage while still streaming names only the streaming condition', () => {
+    const s = evaluateContourStudioLaunchState({ ...ready(), coverage: 'full', streaming: true });
+    expect(s.status).toBe('exploratory');
+    if (s.status === 'exploratory') {
+      expect(s.reasons.filter((r) => /sample|resident/i.test(r))).toHaveLength(0);
+      expect(s.reasons.some((r) => /streaming/i.test(r))).toBe(true);
+    }
+  });
+
+  it('caps to exploratory over derived ground, so it never outranks the capability model', () => {
+    const s = evaluateContourStudioLaunchState({ ...ready(), groundIsDerived: true });
+    expect(s.status).toBe('exploratory');
+    if (s.status === 'exploratory') expect(s.reasons.some((r) => /derived by the filter/i.test(r))).toBe(true);
+  });
+
   it('caps to exploratory while still streaming', () => {
     const s = evaluateContourStudioLaunchState({ ...ready(), streaming: true });
     expect(s.status).toBe('exploratory');

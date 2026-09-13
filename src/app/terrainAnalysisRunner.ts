@@ -18,6 +18,8 @@
 // runner always sees current values without a top-level `viewer.*` dereference
 // in main.ts.
 import type { Viewer } from '../render/Viewer';
+import { ProcessService } from '../process/ProcessService';
+import type { ScanFacts } from '../process/ProcessPlan';
 import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 import type { CrsService } from '../geo/CrsService';
@@ -198,6 +200,14 @@ export interface TerrainAnalysisRunnerDeps {
    * becomes available. Never fired for a stale / aborted run.
    */
   onResult?: (result: AnalyseContoursResult) => void;
+  /**
+   * The active scan's facts as Process Studio evaluates them, or null when no
+   * signal is available. The contour frame reads its coverage and its
+   * capability verdicts from these, so the launcher, the workspace claim and
+   * the export permit resolve from the facts the studio shows. Optional: a
+   * caller without a studio falls back to the grid's own coverage flag.
+   */
+  getScanFacts?: () => ScanFacts | null;
 }
 
 export interface TerrainAnalysisRunner {
@@ -264,7 +274,7 @@ export interface TerrainAnalysisRunner {
 export function createTerrainAnalysisRunner(
   deps: TerrainAnalysisRunnerDeps,
 ): TerrainAnalysisRunner {
-  const { getViewer, getAnalysePanel, getActiveId, crsService, onResult } = deps;
+  const { getViewer, getAnalysePanel, getActiveId, crsService, onResult, getScanFacts } = deps;
 
   // Monotonic token for terrain-analysis runs. `run` is async (lazy chunk
   // import + a paint yield), so rapid interval clicks can overlap and resolve
@@ -654,13 +664,22 @@ export function createTerrainAnalysisRunner(
       // no CRS as having a known vertical unit.
       const vScale = verticalMetresPerUnit(ctx, 'horizontal-when-known') ?? null;
       const vUnitKnown = vScale != null;
+      // The scan's facts, as Process Studio states them. Coverage comes from
+      // here and not from the grid: `result.dtm.coverageMode` is a grid-extent
+      // flag that reads 'full' for a strided static read, which is exactly the
+      // read the launcher, the claim line and the permit must call 'sampled'.
+      const facts = getScanFacts?.() ?? null;
+      const svc = facts ? ProcessService.fromFacts([facts]) : null;
+      const verdict = (product: 'contours' | 'dtm') => {
+        const c = svc?.capability(product);
+        return c ? { readiness: c.readiness, reasonCode: c.reasonCode, reason: c.reason } : undefined;
+      };
       analysePanel.setContourFrame({
-        // Read the coverage the RESULT recorded, not a second boolean derived
-        // beside it. This was hardcoded false, so a resident-only streaming
-        // analysis presented itself to Contour Studio as a complete scan and
-        // the launcher — which caps a streaming frame to exploratory — never
-        // saw the condition it exists to catch.
-        streaming: result.dtm.coverageMode === 'resident-only',
+        // Streaming and still refining: the facts say so directly. Without
+        // facts the grid's own resident-only flag is the fallback it always was.
+        streaming: facts ? facts.kind === 'streaming' && facts.coverage !== 'full' : result.dtm.coverageMode === 'resident-only',
+        coverage: facts?.coverage,
+        capabilities: svc ? { contours: verdict('contours'), dtm: verdict('dtm') } : undefined,
         crsProjected: ctx.kind === 'projected',
         crsKind: ctx.kind,
         verticalUnitsKnown: vUnitKnown,

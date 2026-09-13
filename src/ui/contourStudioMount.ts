@@ -115,6 +115,7 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
     crsProjected: opts.ctx.crsProjected,
     blockedReasons: 'reasons' in state ? state.reasons : undefined,
     precision: opts.ctx.precision,
+    capabilities: opts.ctx.capabilities,
   };
   // The workspace fires onExport(product, btn); the mount adds the export intent
   // derived from the LIVE controller state (so it reflects the purpose the user

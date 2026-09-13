@@ -22,6 +22,7 @@ import {
   type ContourPermitProduct,
   type ContourExportFrameFacts,
   type ContourExportPermit,
+  capabilityForProduct,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
 import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
@@ -121,6 +122,7 @@ export class ContourExportAdapter {
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
         precision: frame.precision,
+        capability: capabilityForProduct('dem', frame.capabilities),
       });
       if (!demPermit.ok) {
         this._flashBlocked(srcBtn, product, demPermit.reasons);
@@ -140,6 +142,7 @@ export class ContourExportAdapter {
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
         precision: frame.precision,
+        capability: capabilityForProduct('complete-package', frame.capabilities),
       });
       if (!permit.ok) {
         this._flashBlocked(srcBtn, product, permit.reasons);
@@ -161,6 +164,7 @@ export class ContourExportAdapter {
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
         precision: frame.precision,
+        capability: capabilityForProduct('report', frame.capabilities),
       });
       if (!reportPermit.ok) {
         this._flashBlocked(srcBtn, product, reportPermit.reasons);
@@ -179,6 +183,7 @@ export class ContourExportAdapter {
       analyticalGeometry: intent.methodId === 'olv.contour.analytical',
       blockedReasons: frame.blockedReasons,
       precision: frame.precision,
+      capability: capabilityForProduct(product as ContourPermitProduct, frame.capabilities),
     });
     if (!permit.ok) {
       this._flashBlocked(srcBtn, product, permit.reasons);
