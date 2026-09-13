@@ -38,6 +38,7 @@ export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context' | 'crsRevis
 // from, plus the named vertical-fallback policy that replaces the local
 // `verticalUnitToMetres ?? linearUnitToMetres` chains.
 import { verticalMetresPerUnit } from '../geo/SpatialContext';
+import { analysedBasisOf } from '../terrain/export/analysedBasis';
 import type {
   AnalyseContoursResult,
   TerrainCoreParams,
@@ -680,6 +681,7 @@ export function createTerrainAnalysisRunner(
         streaming: facts ? facts.kind === 'streaming' && facts.coverage !== 'full' : result.dtm.coverageMode === 'resident-only',
         coverage: facts?.coverage,
         capabilities: svc ? { contours: verdict('contours'), dtm: verdict('dtm') } : undefined,
+        analysedBasis: facts ? analysedBasisOf(facts, gathered.totalPoints) : undefined,
         // The token is minted on the facts this frame was built from and
         // verified at export against the facts the scan has then, so an edit
         // between the two caps the export to exploratory.

@@ -12,6 +12,7 @@
  * launcher having to understand the result internals.
  */
 
+import type { AnalysedBasis } from '../export/analysedBasis';
 import type { ContourExportFrameFacts } from '../../export/contourExportPermit';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import type { PrecisionPermit } from '../../geo/inMemoryPrecision';
@@ -52,6 +53,8 @@ export interface LaunchFrameContext {
   readonly capabilities?: ContourExportFrameFacts['capabilities'];
   /** Mints the state-bound authorization at click time; see the frame facts. */
   readonly authorizeFor?: ContourExportFrameFacts['authorizeFor'];
+  /** Points analysed of points declared, under the facts' coverage; stamped into every export. */
+  readonly analysedBasis?: AnalysedBasis;
   /** The vertical unit (metre/foot) is known, not unknown/local. */
   readonly verticalUnitsKnown: boolean;
   /**

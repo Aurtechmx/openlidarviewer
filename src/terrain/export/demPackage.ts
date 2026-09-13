@@ -19,6 +19,7 @@
  * a prominent PRELIMINARY caveat whenever the data is not full + ready.
  */
 
+import type { AnalysedBasis } from './analysedBasis';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import { epsgFromCrsLabel } from '../../export/crsIdentifier';
 import {
@@ -117,6 +118,8 @@ export interface DemPackageOptions {
    * the export did not route through the gate.
    */
   readonly exportPermit?: ExportPermitStamp | null;
+  /** The analysed basis the frame recorded; see `ExportProvenanceOptions.analysedBasis`. */
+  readonly analysedBasis?: AnalysedBasis | null;
 }
 
 /**
@@ -202,6 +205,7 @@ export interface DemReadmeOptions {
   readonly metricVersion: string;
   /** The evidence-gate permit stamp for this raster, or null. */
   readonly exportPermit?: ExportPermitStamp | null;
+  readonly analysedBasis?: AnalysedBasis | null;
 }
 
 /** Map a coverage mode to a one-line plain-English label. */
@@ -242,6 +246,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     exportPermit: opts.exportPermit ?? null,
     // The raster, plus the hold-out accuracy figure when the README prints one.
     evidenceClaimIds: dtmArtifactClaims(result),
+    analysedBasis: opts.analysedBasis ?? null,
   });
 
   const cov = (() => {
@@ -320,6 +325,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     ``,
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
+    `  Analysed basis: ${p.analysedBasisLine}`,
     ``,
     `Quality gate`,
   );
@@ -471,6 +477,7 @@ export function buildDemPackage(
     softwareVersion: options.softwareVersion ?? 'unknown',
     metricVersion: options.metricVersion ?? 'unknown',
     exportPermit: options.exportPermit ?? null,
+    analysedBasis: options.analysedBasis ?? null,
   });
   entries.push({
     name: `${basename}-README.txt`,

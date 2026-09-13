@@ -1105,6 +1105,14 @@ function drawTitleBlock(
     ? prov.contourStyleLabel
     : `${contourShapeStyleLabel(input.model.contourStyle)} (current view, not recorded)`;
   text(`Contour style: ${styleLabel}`, mxx, topY - 99, 6.5, font, DIM);
+  // What the sheet was built from, as the provenance states it: a display
+  // sample says so on the sheet, not only in the sidecar JSON. Wrapped to the
+  // legend column, at most two lines, above the strip's bottom edge.
+  if (prov) {
+    const basisMaxW = Math.max(60, rcx - 10 - mxx - 4);
+    wrapTextToWidth(`Analysed basis: ${prov.analysedBasisLine}`, basisMaxW, 6.5, (t, sz) => font.widthOfTextAtSize(safe(t), sz), 2)
+      .forEach((ln, i) => text(ln, mxx, topY - 110 - i * 8.5, 6.5, font, DIM));
+  }
 
   // Right column — accuracy + readiness + provenance.
   const rxr = PW - M - 4;
