@@ -151,6 +151,40 @@ describe('a sample is not offered an action that waiting cannot complete', () =>
   });
 });
 
+describe('the remaining partial-coverage codes split the same way', () => {
+  it('classify-gaps names a sample as a sample and offers no wait', () => {
+    const v = verdict(scan({ coverage: 'sampled', classification: 'partial' }), 'classify-gaps');
+    expect(v.readiness).toBe('review');
+    expect(v.reasonCode).toBe('SAMPLED');
+    expect(v.reason).not.toMatch(/resident/i);
+    const a = actions(preflightFor('classify', input([scan({ coverage: 'sampled', classification: 'partial' })])));
+    expect(a).not.toContain('await-full-coverage');
+    expect(a).toContain('continue-resident-only');
+  });
+
+  it('classify-gaps keeps the resident-only code and the wait when streaming', () => {
+    const v = verdict(scan({ kind: 'streaming', coverage: 'resident-only', classification: 'partial' }), 'classify-gaps');
+    expect(v.reasonCode).toBe('PARTIAL_COVERAGE');
+    expect(actions(preflightFor('classify', input([scan({ kind: 'streaming', coverage: 'resident-only', classification: 'partial' })]))))
+      .toContain('await-full-coverage');
+  });
+
+  it('a two-scan product over two samples offers no wait', () => {
+    const scans = [scan({ coverage: 'sampled' }), scan({ coverage: 'sampled' })];
+    const plan = evaluateCapabilities({ scans, projectFrameCompatible: true });
+    const v = capabilityFor(plan, 'cross-epoch-change')!;
+    expect(v.readiness).toBe('review');
+    expect(v.reasonCode).toBe('SAMPLED_OVERLAP_ONLY');
+    expect(v.reason).not.toMatch(/resident/i);
+  });
+
+  it('a two-scan product keeps the wait while either scan is still streaming', () => {
+    const scans = [scan({ coverage: 'sampled' }), scan({ kind: 'streaming', coverage: 'resident-only' })];
+    const plan = evaluateCapabilities({ scans, projectFrameCompatible: true });
+    expect(capabilityFor(plan, 'volume-cut-fill')!.reasonCode).toBe('RESIDENT_OVERLAP_ONLY');
+  });
+});
+
 describe('the contour launcher names the frame it actually has', () => {
   it('does not call a local frame geographic', () => {
     const r = reasonsOf(launch({ crsProjected: false, crsKind: 'local' }));

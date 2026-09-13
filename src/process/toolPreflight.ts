@@ -237,6 +237,7 @@ const ACTIONS_BY_PRODUCT_CODE: Readonly<Record<string, readonly PreflightActionI
   SAMPLED: ['continue-resident-only'],
   PARTIAL_COVERAGE: ['await-full-coverage', 'continue-resident-only'],
   RESIDENT_OVERLAP_ONLY: ['await-full-coverage', 'continue-resident-only'],
+  SAMPLED_OVERLAP_ONLY: ['continue-resident-only'],
   VERTICAL_REF_DIFFERS: ['solo-active-layer', 'inspect-layer-crs'],
   VERTICAL_UNIT_CONFLICT: ['solo-active-layer', 'inspect-layer-crs'],
   FRAME_UNPROVEN: ['align-scans', 'inspect-layer-crs'],

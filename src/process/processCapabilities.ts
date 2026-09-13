@@ -153,7 +153,14 @@ function classifyGaps(scan: ScanFacts): ProductCapability {
     return cap(p, 'review', 'ALREADY_CLASSIFIED', 'Every point already carries a class; reclassifying would overwrite producer values, so it is an explicit action rather than a default.');
   }
   if (!isFullCoverage(scan)) {
-    return cap(p, 'review', 'PARTIAL_COVERAGE', 'Only resident or sampled points are available, so classification would cover part of the scan; it is labelled as such.');
+    return partialCoverage(
+      p,
+      scan,
+      'review',
+      'Only the resident streaming set is loaded, so classification would cover part of the scan; it is labelled as such.',
+      'Only a sample of the scan was read, so classification would cover part of the scan; it is labelled as such.',
+      'PARTIAL_COVERAGE',
+    );
   }
   if (!isLinearUnitKnown(scan.crs)) {
     return cap(p, 'review', 'UNIT_UNKNOWN', 'Classification can be derived for inspection, but its physical neighbourhood and height thresholds cannot be normalized until the source unit is confirmed, so the same geometry in another unit may classify differently.');
@@ -179,9 +186,10 @@ function partialCoverage(
   status: 'review' | 'blocked',
   residentMessage: string,
   sampledMessage: string,
+  residentCode: 'RESIDENT_ONLY' | 'PARTIAL_COVERAGE' = 'RESIDENT_ONLY',
 ): ProductCapability {
   return scan.coverage === 'resident-only'
-    ? cap(p, status, 'RESIDENT_ONLY', residentMessage)
+    ? cap(p, status, residentCode, residentMessage)
     : cap(p, status, 'SAMPLED', sampledMessage);
 }
 
@@ -294,7 +302,11 @@ function twoScanProduct(product: ProductId, inputs: ProcessInputs, noun: string)
   // resident-only or sampled, the result would cover only the resident overlap,
   // so it is offered for review scoped to that overlap, never as a full product.
   if (a.coverage !== 'full' || b.coverage !== 'full') {
-    return cap(product, 'review', 'RESIDENT_OVERLAP_ONLY', `${noun} needs the whole of both scans; one is resident-only or sampled, so the result would cover only the resident overlap and is offered for review scoped to that overlap.`);
+    // Waiting only helps while a scan is still streaming; a sample is what the
+    // read returned, so the two shortfalls carry different codes and actions.
+    return a.coverage === 'resident-only' || b.coverage === 'resident-only'
+      ? cap(product, 'review', 'RESIDENT_OVERLAP_ONLY', `${noun} needs the whole of both scans; one is still streaming, so the result would cover only the resident overlap and is offered for review scoped to that overlap.`)
+      : cap(product, 'review', 'SAMPLED_OVERLAP_ONLY', `${noun} needs the whole of both scans; at least one was read as a sample, so the result would cover only the sampled overlap and is offered for review scoped to that overlap.`);
   }
   return cap(product, 'ready', 'COMPATIBLE', `Two scans in a compatible frame with a shared vertical reference support ${noun.toLowerCase()}.`);
 }
