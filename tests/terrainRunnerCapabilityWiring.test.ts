@@ -76,6 +76,26 @@ describe('terrainAnalysisRunner hands the facts to Contour Studio', () => {
     expect(f.capabilities?.contours?.readiness).toBe('review');
   });
 
+  it('the frame mints an authorization that is fresh now and stale after the facts change', async () => {
+    clearTerrainCoreCache();
+    let live: ScanFacts | null = facts('full');
+    let frame: LaunchFrameContext | null = null;
+    await runner((f) => { frame = f; }, () => live).run();
+    const f = frame as unknown as LaunchFrameContext;
+    const fresh = f.authorizeFor!('contours');
+    expect(fresh!.verify(fresh!.token, 'contours').ok).toBe(true);
+    live = facts('sampled');
+    const later = f.authorizeFor!('contours');
+    expect(later!.verify(later!.token, 'contours')).toEqual({ ok: false, reason: 'STALE_AUTHORIZATION' });
+  });
+
+  it('without facts the frame mints nothing', async () => {
+    clearTerrainCoreCache();
+    let frame: LaunchFrameContext | null = null;
+    await runner((f) => { frame = f; }).run();
+    expect((frame as unknown as LaunchFrameContext).authorizeFor).toBeUndefined();
+  });
+
   it('a full static read is ready on both products', async () => {
     clearTerrainCoreCache();
     let frame: LaunchFrameContext | null = null;

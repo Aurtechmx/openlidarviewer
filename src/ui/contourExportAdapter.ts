@@ -22,7 +22,7 @@ import {
   type ContourPermitProduct,
   type ContourExportFrameFacts,
   type ContourExportPermit,
-  capabilityForProduct,
+  permitContextFor,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
 import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
@@ -115,15 +115,7 @@ export class ContourExportAdapter {
     // resolved decision — the raster keeps its preview-availability contract, so
     // an exploratory launch still exports, just labelled exploratory.
     if (product === 'package') {
-      const demPermit = resolveContourExportPermit('dem', {
-        launchStatus: frame.launchStatus,
-        verticalUnitsKnown: frame.verticalUnitsKnown,
-        crsProjected: frame.crsProjected,
-        analyticalGeometry: false,
-        blockedReasons: frame.blockedReasons,
-        precision: frame.precision,
-        capability: capabilityForProduct('dem', frame.capabilities),
-      });
+      const demPermit = resolveContourExportPermit('dem', permitContextFor('dem', frame, false));
       if (!demPermit.ok) {
         this._flashBlocked(srcBtn, product, demPermit.reasons);
         return;
@@ -135,15 +127,7 @@ export class ContourExportAdapter {
     // CONTOURS claim). A hard block refuses; otherwise it assembles + downloads,
     // stamped with the resolved decision.
     if (product === 'deliverable') {
-      const permit = resolveContourExportPermit('complete-package', {
-        launchStatus: frame.launchStatus,
-        verticalUnitsKnown: frame.verticalUnitsKnown,
-        crsProjected: frame.crsProjected,
-        analyticalGeometry: false,
-        blockedReasons: frame.blockedReasons,
-        precision: frame.precision,
-        capability: capabilityForProduct('complete-package', frame.capabilities),
-      });
+      const permit = resolveContourExportPermit('complete-package', permitContextFor('complete-package', frame, false));
       if (!permit.ok) {
         this._flashBlocked(srcBtn, product, permit.reasons);
         return;
@@ -157,15 +141,7 @@ export class ContourExportAdapter {
     // preview/blocked verdicts honestly in its body, and its provenance footer
     // records the gate decision that permitted the file.
     if (product === 'report') {
-      const reportPermit = resolveContourExportPermit('report', {
-        launchStatus: frame.launchStatus,
-        verticalUnitsKnown: frame.verticalUnitsKnown,
-        crsProjected: frame.crsProjected,
-        analyticalGeometry: false,
-        blockedReasons: frame.blockedReasons,
-        precision: frame.precision,
-        capability: capabilityForProduct('report', frame.capabilities),
-      });
+      const reportPermit = resolveContourExportPermit('report', permitContextFor('report', frame, false));
       if (!reportPermit.ok) {
         this._flashBlocked(srcBtn, product, reportPermit.reasons);
         return;
@@ -176,15 +152,10 @@ export class ContourExportAdapter {
 
     // §19: mint the permit for the contour product. analyticalGeometry keys off
     // the intent's method id so a generalized line is never minted as exact.
-    const permit = resolveContourExportPermit(product as ContourPermitProduct, {
-      launchStatus: frame.launchStatus,
-      verticalUnitsKnown: frame.verticalUnitsKnown,
-      crsProjected: frame.crsProjected,
-      analyticalGeometry: intent.methodId === 'olv.contour.analytical',
-      blockedReasons: frame.blockedReasons,
-      precision: frame.precision,
-      capability: capabilityForProduct(product as ContourPermitProduct, frame.capabilities),
-    });
+    const permit = resolveContourExportPermit(
+      product as ContourPermitProduct,
+      permitContextFor(product as ContourPermitProduct, frame, intent.methodId === 'olv.contour.analytical'),
+    );
     if (!permit.ok) {
       this._flashBlocked(srcBtn, product, permit.reasons);
       return;

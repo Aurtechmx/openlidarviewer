@@ -24,7 +24,8 @@
  * `ExportDecision`.
  */
 
-import type { ProductCapability } from '../process/ProcessPlan';
+import type { ProductCapability, ProductId } from '../process/ProcessPlan';
+import type { AuthorizationCheck } from '../process/ProcessService';
 import { governingClaim } from '../validation/evidenceComposition';
 import {
   evidenceStatus as registryEvidenceStatus,
@@ -87,8 +88,8 @@ export function exporterRegistration(exporterId: string): ScientificExporterRegi
 }
 
 export type ScientificExportDecision =
-  | { readonly status: 'validated'; readonly badge: string; readonly caveats: readonly string[] }
-  | { readonly status: 'exploratory'; readonly badge: string; readonly watermark: string; readonly caveats: readonly string[] }
+  | { readonly status: 'validated'; readonly badge: string; readonly caveats: readonly string[]; readonly claimIds?: readonly string[] }
+  | { readonly status: 'exploratory'; readonly badge: string; readonly watermark: string; readonly caveats: readonly string[]; readonly claimIds?: readonly string[] }
   | { readonly status: 'blocked'; readonly reasons: readonly string[] };
 
 export interface ExportDecisionContext {
@@ -124,7 +125,32 @@ export interface ExportDecisionContext {
    * never be the only thing standing between a partial read and "validated".
    */
   readonly capability?: ExportCapabilityVerdict;
+  /**
+   * The claim ids the ARTIFACT carries (`contourArtifactClaims` /
+   * `dtmArtifactClaims`), so the permit and the provenance stamp resolve from
+   * one set. The decision governs over the union of these and the exporter's
+   * registered ids; the granted permit returns that union for the stamp.
+   */
+  readonly claimIds?: readonly string[];
+  /**
+   * The state-bound authorization for the product this exporter delivers: a
+   * token minted by `ProcessService.authorize` and the live service to verify
+   * it against. `validated` requires a token that is authentic, for this
+   * product and minted on the current scientific state; otherwise the
+   * decision caps to exploratory and says so. Exploratory and blocked need no
+   * token, so review-grade work stays reachable.
+   */
+  readonly authorization?: ExportAuthorization;
 }
+
+/** A minted authorization and the service that judges its freshness. */
+export interface ExportAuthorization {
+  readonly product: ProductId;
+  readonly token: unknown;
+  readonly verify: (token: unknown, product: ProductId) => AuthorizationCheck;
+}
+
+const STALE_AUTHORIZATION = 'Authorization is stale or absent for the current scientific state.';
 
 /** The three fields of a `ProductCapability` the permit consumes. */
 export type ExportCapabilityVerdict = Pick<ProductCapability, 'readiness' | 'reasonCode' | 'reason'>;
@@ -176,9 +202,11 @@ export function resolveExportDecision(
     return { status: 'blocked', reasons: [cap.reason] };
   }
 
-  // The weakest constituent governs. Same rule, same helper, as the provenance
-  // stamp — so a file's permit and its Evidence line cannot contradict.
-  const status = (ctx.evidenceStatusOf ?? registryEvidenceStatus)(governingClaim(reg.claimIds));
+  // The weakest constituent governs, over ONE set: the exporter's registered
+  // ids plus whatever the artifact itself carries. The stamp resolves over the
+  // same set, so a file's permit and its Evidence line cannot contradict.
+  const claimIds = unionClaimIds(reg.claimIds, ctx.claimIds);
+  const status = (ctx.evidenceStatusOf ?? registryEvidenceStatus)(governingClaim(claimIds));
   if (status === 'refused') {
     return { status: 'blocked', reasons: [`The ${reg.product} product is not exportable at its current evidence level.`] };
   }
@@ -194,8 +222,13 @@ export function resolveExportDecision(
     && ctx.unitClaim === 'metric-supported'
     && cap?.readiness === 'ready';
 
-  if (fullySupported) {
-    return { status: 'validated', badge: 'Internal validation', caveats };
+  // The validated branch is state-bound: an authentic token for this product,
+  // minted on the current scientific state. Absent or stale caps to exploratory.
+  const auth = ctx.authorization;
+  const fresh = auth != null && auth.verify(auth.token, auth.product).ok;
+
+  if (fullySupported && fresh) {
+    return { status: 'validated', badge: 'Internal validation', caveats, claimIds };
   }
 
   const reasons: string[] = [];
@@ -206,11 +239,20 @@ export function resolveExportDecision(
   // list reads: what the evidence says, then what the scan itself allowed.
   if (!cap) reasons.push(NO_CAPABILITY_VERDICT);
   else if (cap.readiness === 'review') reasons.push(cap.reason);
+  if (fullySupported && !fresh) reasons.push(STALE_AUTHORIZATION);
 
   return {
     status: 'exploratory',
     badge: 'Exploratory',
     watermark: EXPLORATORY_WATERMARK,
     caveats: [...caveats, ...reasons],
+    claimIds,
   };
+}
+
+/** The registered ids plus the artifact's, each once, registry order first. */
+export function unionClaimIds(registered: readonly string[], artifact?: readonly string[]): readonly string[] {
+  const out = [...registered];
+  for (const id of artifact ?? []) if (!out.includes(id)) out.push(id);
+  return out;
 }

@@ -47,6 +47,12 @@ export interface ContourReviewInput {
    * producer's survey classification.
    */
   readonly groundIsDerived?: boolean;
+  /**
+   * The claim the export permit resolved for this frame. When present the
+   * Evidence row renders it verbatim; a caller without a permit falls back to
+   * the launch status, which cannot see the registry or the capability model.
+   */
+  readonly claim?: { readonly label: string; readonly rationale: readonly string[]; readonly supported: boolean };
 }
 
 const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
@@ -297,7 +303,17 @@ export function buildContourReviewSummary(
     confidence: 'high',
   });
 
-  // ── Evidence (from the launch state — the real claim) ─────────────────────
+  // ── Evidence: the permit's claim when the frame minted one ───────────────
+  if (input.claim) {
+    rows.push({
+      key: 'evidence',
+      label: 'Evidence',
+      value: input.claim.label,
+      rationale: [...input.claim.rationale],
+      confidence: input.claim.supported ? 'high' : 'low',
+    });
+    return { rows };
+  }
   let evidenceValue: string;
   if (input.launch.status === 'available') evidenceValue = 'Supported (internal validation only)';
   else if (input.launch.status === 'exploratory') evidenceValue = 'Exploratory';

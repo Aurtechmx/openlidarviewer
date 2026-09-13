@@ -28,6 +28,7 @@ const supported = (over: Partial<ContourPermitContext> = {}): ContourPermitConte
   analyticalGeometry: false,
   precision: null,
   evidenceStatusOf: () => 'validated',
+  authorization: { product: 'contours', token: {}, verify: () => ({ ok: true }) },
   ...over,
 });
 

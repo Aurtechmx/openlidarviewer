@@ -17,6 +17,7 @@
  * with PR9–PR11; those slots are labelled honestly here, not faked.
  */
 
+import type { WorkspaceClaim } from '../export/workspaceClaim';
 import type { ContourStudioController } from '../terrain/contourStudio/contourStudioController';
 import type { ContourStudioState, ContourStudioPurpose } from '../terrain/contourStudio/contourStudioState';
 import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
@@ -57,6 +58,8 @@ export interface ContourStudioWorkspaceOptions {
   readonly launch: ContourStudioLaunchState;
   /** The review-bar recommendations built from the analysis result (PR5). */
   readonly review?: ContourReviewSummary;
+  /** The permit-minted claim; rendered verbatim on the ladder when present. */
+  readonly claim?: WorkspaceClaim;
   /**
    * Fires when an export product is chosen; the host runs the real exporter. The
    * clicked button is passed so the host can show its busy state during export.
@@ -118,7 +121,8 @@ function ladderRows(launch: ContourStudioLaunchState): ReadonlyArray<{ label: st
 }
 
 /** The overall evidence claim, shown as a statement line under the checks. */
-function ladderClaim(launch: ContourStudioLaunchState): { text: string; state: LadderState } {
+function ladderClaim(launch: ContourStudioLaunchState, claim?: WorkspaceClaim): { text: string; state: LadderState } {
+  if (claim) return { text: claim.label, state: claim.state };
   switch (launch.status) {
     case 'available':
       return { text: 'Supported (internal validation only)', state: 'met' };
@@ -224,7 +228,7 @@ function renderSettingsSummary(state: ContourStudioState): HTMLElement {
   return wrap;
 }
 
-function renderLadder(launch: ContourStudioLaunchState): HTMLElement {
+function renderLadder(launch: ContourStudioLaunchState, claim?: WorkspaceClaim): HTMLElement {
   const wrap = el('div', { className: 'olv-cs-ladder' });
   wrap.append(el('div', { className: 'olv-cs-section-head', text: 'Evidence' }));
   for (const row of ladderRows(launch)) {
@@ -233,10 +237,13 @@ function renderLadder(launch: ContourStudioLaunchState): HTMLElement {
     r.append(el('span', { className: 'olv-cs-ladder-label', text: row.label }));
     wrap.append(r);
   }
-  const claim = ladderClaim(launch);
-  const claimLine = el('div', { className: `olv-cs-ladder-claim is-${claim.state}` });
+  const resolved = ladderClaim(launch, claim);
+  const claimLine = el('div', { className: `olv-cs-ladder-claim is-${resolved.state}` });
   claimLine.append(el('span', { className: 'olv-cs-ladder-claim-label', text: 'Claim' }));
-  claimLine.append(el('span', { className: 'olv-cs-ladder-claim-value', text: claim.text }));
+  claimLine.append(el('span', { className: 'olv-cs-ladder-claim-value', text: resolved.text }));
+  for (const line of claim?.rationale ?? []) {
+    claimLine.append(el('span', { className: 'olv-cs-ladder-claim-why', text: line }));
+  }
   wrap.append(claimLine);
   return wrap;
 }
@@ -333,7 +340,7 @@ export function renderContourStudioWorkspace(
     if (review) body.append(renderReviewBar(review));
     body.append(
       renderSettingsSummary(state),
-      renderLadder(launch),
+      renderLadder(launch, opts.claim),
       renderExportBar(launch, onExport),
     );
   };

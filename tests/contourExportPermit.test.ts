@@ -39,6 +39,7 @@ function ctx(over: Partial<ContourPermitContext> = {}): ContourPermitContext {
     precision: null,
     evidenceStatusOf: () => 'validated',
     capability: { readiness: 'ready', reasonCode: 'GROUND_TRUSTED', reason: 'Trusted ground points and a known unit support a bare-earth DTM.' },
+    authorization: { product: 'contours', token: {}, verify: () => ({ ok: true }) },
     ...over,
   };
 }

@@ -245,8 +245,9 @@
 /* Evidence claim — a statement line, never a crushed badge */
 .olv-cs-ladder-claim {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 4px 8px;
   margin-top: 8px;
   padding: 8px 10px;
   border-radius: var(--radius-md);
@@ -266,6 +267,7 @@
   flex: 0 0 auto;
 }
 .olv-cs-ladder-claim-value { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.olv-cs-ladder-claim-why { flex: 1 0 100%; font-size: var(--text-xs); color: var(--text-muted); }
 
 /* Contour Studio — premium export section (Gestalt-grouped by deliverable kind) */
 .olv-cs-export { display: flex; flex-direction: column; gap: 10px; }

@@ -50,6 +50,8 @@ export interface LaunchFrameContext {
    * under; a frame without them caps every export to exploratory.
    */
   readonly capabilities?: ContourExportFrameFacts['capabilities'];
+  /** Mints the state-bound authorization at click time; see the frame facts. */
+  readonly authorizeFor?: ContourExportFrameFacts['authorizeFor'];
   /** The vertical unit (metre/foot) is known, not unknown/local. */
   readonly verticalUnitsKnown: boolean;
   /**

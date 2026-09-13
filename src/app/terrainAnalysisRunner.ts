@@ -680,6 +680,16 @@ export function createTerrainAnalysisRunner(
         streaming: facts ? facts.kind === 'streaming' && facts.coverage !== 'full' : result.dtm.coverageMode === 'resident-only',
         coverage: facts?.coverage,
         capabilities: svc ? { contours: verdict('contours'), dtm: verdict('dtm') } : undefined,
+        // The token is minted on the facts this frame was built from and
+        // verified at export against the facts the scan has then, so an edit
+        // between the two caps the export to exploratory.
+        authorizeFor: svc
+          ? (product) => {
+              const live = getScanFacts?.() ?? null;
+              const now = live ? ProcessService.fromFacts([live]) : svc;
+              return { product, token: svc.authorize(product), verify: (t, p) => now.verifyAuthorization(t, p) };
+            }
+          : undefined,
         crsProjected: ctx.kind === 'projected',
         crsKind: ctx.kind,
         verticalUnitsKnown: vUnitKnown,
