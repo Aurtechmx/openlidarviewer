@@ -15,6 +15,8 @@ import { describe, it, expect } from 'vitest';
 import {
   scanFootprintStatus,
   exportScanFootprintKml,
+  siteKmlStatus,
+  exportSiteKml,
   type KmlActionDeps,
   type ScanExtentReading,
 } from '../src/app/kmlActions';
@@ -202,5 +204,33 @@ describe('scan-area export — an antimeridian-crossing scan is refused', () => 
     await exportScanFootprintKml(r.deps);
     expect(r.errors).toEqual([]);
     expect(r.files).toHaveLength(1);
+  });
+});
+
+describe('site KML with no measurement or annotation', () => {
+  // The site file used to need a feature before the button enabled, although
+  // the scan's outline was already available to the same export.
+  it('is ready when the scan has an extent to place', () => {
+    expect(siteKmlStatus(recorder(zUpReading).deps)).toEqual({ ready: true, reason: '' });
+  });
+
+  it('is not ready when there is neither a feature nor an extent', () => {
+    const s = siteKmlStatus(recorder(null).deps);
+    expect(s.ready).toBe(false);
+    expect(s.reason).toMatch(/extent/);
+  });
+
+  it('writes the scan outline as a polygon placemark', async () => {
+    const r = recorder(zUpReading);
+    await exportSiteKml(r.deps);
+    expect(r.errors).toEqual([]);
+    expect(r.files).toHaveLength(1);
+    expect(r.files[0].text).toContain('<name>Scan outline</name>');
+    expect(r.files[0].text).toContain('<Polygon>');
+    expect(r.files[0].text).toContain('the resident points');
+  });
+
+  it('refuses a Y-up frame as the scan-area export does', () => {
+    expect(siteKmlStatus(recorder({ ...zUpReading, upAxis: 'y' }).deps).ready).toBe(false);
   });
 });

@@ -402,3 +402,31 @@ describe('ExportPanel — one resolved CRS snapshot drives data + .prj (transact
     expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
   });
 });
+
+describe('ExportPanel — the findings ledger appears with the measurement deliverables', () => {
+  async function panelWith(measurementCount: number) {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({
+      getCloud: () => null,
+      hasFullSource: () => false,
+      isReduced: () => false,
+      getFullCloud: async () => null,
+      exportMeasurements: async () => {},
+      measurementCount: () => measurementCount,
+      collectMeasurementFindings: () => [],
+      exportFindingsReport: async () => {},
+    } as never);
+    return panel.element as unknown as FakeEl;
+  }
+
+  it('is absent while no measurement has been placed', async () => {
+    const root = await panelWith(0);
+    expect(root.findByClass('olv-findings-slot')).toHaveLength(0);
+    expect(root.textContent).toMatch(/Place measurements, then export them/);
+  });
+
+  it('appears once a measurement exists', async () => {
+    const root = await panelWith(1);
+    expect(root.findByClass('olv-findings-slot')).toHaveLength(1);
+  });
+});
