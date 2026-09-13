@@ -267,7 +267,7 @@
   flex: 0 0 auto;
 }
 .olv-cs-ladder-claim-value { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
-.olv-cs-ladder-claim-why { flex: 1 0 100%; font-size: var(--text-xs); color: var(--text-muted); }
+.olv-cs-ladder-claim-why { flex: 1 0 100%; font-size: var(--text-xs); color: var(--text-dim); }
 
 /* Contour Studio — premium export section (Gestalt-grouped by deliverable kind) */
 .olv-cs-export { display: flex; flex-direction: column; gap: 10px; }
