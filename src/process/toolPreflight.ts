@@ -206,7 +206,7 @@ const REMEDIATION: Readonly<Record<PreflightActionId, PreflightRemediation>> = {
   'solo-active-layer': { label: 'Show the active layer on its own', action: 'solo-active-layer' },
   'inspect-layer-crs': { label: 'Inspect each layer’s coordinate reference', action: 'inspect-layer-crs' },
   'await-full-coverage': { label: 'Wait for full visible coverage', action: 'await-full-coverage' },
-  'continue-resident-only': { label: 'Continue on the resident points', action: 'continue-resident-only' },
+  'continue-resident-only': { label: 'Continue on the points that were read', action: 'continue-resident-only' },
   'load-second-scan': { label: 'Load a second scan', action: 'load-second-scan' },
   'align-scans': { label: 'Align the two scans', action: 'align-scans' },
   'classify-scan': { label: 'Classify the scan first', action: 'classify-scan' },
@@ -231,8 +231,13 @@ const PERMISSIVE: ReadonlySet<PreflightActionId> = new Set([
 const ACTIONS_BY_PRODUCT_CODE: Readonly<Record<string, readonly PreflightActionId[]>> = {
   UNIT_UNKNOWN: ['set-coordinate-system', 'continue-exploratory'],
   RESIDENT_ONLY: ['await-full-coverage', 'continue-resident-only'],
+  // No 'await-full-coverage': a sample is what the read returned under its
+  // budget or stride, so waiting completes nothing. Re-reading the scan is
+  // the only route to full coverage, and this model has no action for it.
+  SAMPLED: ['continue-resident-only'],
   PARTIAL_COVERAGE: ['await-full-coverage', 'continue-resident-only'],
   RESIDENT_OVERLAP_ONLY: ['await-full-coverage', 'continue-resident-only'],
+  SAMPLED_OVERLAP_ONLY: ['continue-resident-only'],
   VERTICAL_REF_DIFFERS: ['solo-active-layer', 'inspect-layer-crs'],
   VERTICAL_UNIT_CONFLICT: ['solo-active-layer', 'inspect-layer-crs'],
   FRAME_UNPROVEN: ['align-scans', 'inspect-layer-crs'],
@@ -364,7 +369,7 @@ function coverageReason(scans: readonly ScanFacts[]): CandidateReason | null {
         code: 'SAMPLED_COVERAGE',
         message:
           'Only a sample of the scan can be read, so the figure describes that sample rather than the whole scan.',
-        actions: ['await-full-coverage', 'continue-resident-only'],
+        actions: ['continue-resident-only'],
       };
 }
 

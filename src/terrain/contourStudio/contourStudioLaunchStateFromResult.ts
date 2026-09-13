@@ -30,6 +30,13 @@ export interface LaunchFrameContext {
   readonly streaming: boolean;
   /** The active CRS is a projected (linear) frame, not geographic degrees. */
   readonly crsProjected: boolean;
+  /**
+   * Which frame the CRS service resolved. Carried so the launcher's reason can
+   * name it: `crsProjected` is false for a geographic frame, a local frame and
+   * no CRS alike, and the reason used to call all three geographic. Optional so
+   * a caller without the kind states the requirement rather than a frame.
+   */
+  readonly crsKind?: 'local' | 'projected' | 'geographic' | 'unknown';
   /** The vertical unit (metre/foot) is known, not unknown/local. */
   readonly verticalUnitsKnown: boolean;
   /**
@@ -89,6 +96,7 @@ export function contourStudioPrerequisitesFromResult(
     intervalRecommended: result.gate.recommendedM != null,
     verticalUnitsKnown: ctx.verticalUnitsKnown,
     crsProjected: ctx.crsProjected,
+    ...(ctx.crsKind != null ? { crsKind: ctx.crsKind } : {}),
     unsupportedFraction,
     // Only a fully-ready surface counts as sufficient support; previewOnly caps
     // the deliverable to exploratory rather than blocking it.

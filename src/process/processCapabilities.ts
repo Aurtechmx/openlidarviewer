@@ -153,12 +153,44 @@ function classifyGaps(scan: ScanFacts): ProductCapability {
     return cap(p, 'review', 'ALREADY_CLASSIFIED', 'Every point already carries a class; reclassifying would overwrite producer values, so it is an explicit action rather than a default.');
   }
   if (!isFullCoverage(scan)) {
-    return cap(p, 'review', 'PARTIAL_COVERAGE', 'Only resident or sampled points are available, so classification would cover part of the scan; it is labelled as such.');
+    return partialCoverage(
+      p,
+      scan,
+      'review',
+      'Only the resident streaming set is loaded, so classification would cover part of the scan; it is labelled as such.',
+      'Only a sample of the scan was read, so classification would cover part of the scan; it is labelled as such.',
+      'PARTIAL_COVERAGE',
+    );
   }
   if (!isLinearUnitKnown(scan.crs)) {
     return cap(p, 'review', 'UNIT_UNKNOWN', 'Classification can be derived for inspection, but its physical neighbourhood and height thresholds cannot be normalized until the source unit is confirmed, so the same geometry in another unit may classify differently.');
   }
   return cap(p, 'ready', 'GAPS_CLASSIFIABLE', 'Unclassified points can be classified from geometry while producer classes are preserved.');
+}
+
+/**
+ * The partial-coverage verdict, named for the coverage that actually fired.
+ *
+ * `isFullCoverage` rejects `'sampled'` and `'resident-only'` alike, so one
+ * message covered both and told the reader of a strided file that "the resident
+ * streaming set is loaded" — a claim about a scan that is not streaming. The
+ * two states also differ in what the reader can do: a resident streaming set
+ * grows as nodes arrive, a sample never does until the scan is read again.
+ * `toolPreflight` has keyed its interactive vocabulary on `Coverage` since it
+ * was written (`SAMPLED_COVERAGE` beside `STREAMING_RESIDENT_ONLY`); this
+ * brings the product path to the same split.
+ */
+function partialCoverage(
+  p: ProductId,
+  scan: ScanFacts,
+  status: 'review' | 'blocked',
+  residentMessage: string,
+  sampledMessage: string,
+  residentCode: 'RESIDENT_ONLY' | 'PARTIAL_COVERAGE' = 'RESIDENT_ONLY',
+): ProductCapability {
+  return scan.coverage === 'resident-only'
+    ? cap(p, status, residentCode, residentMessage)
+    : cap(p, status, 'SAMPLED', sampledMessage);
 }
 
 /** Bare-earth DTM — needs ground and full coverage; unit gates georeferenced use. */
@@ -167,7 +199,13 @@ function dtm(scan: ScanFacts): ProductCapability {
   const points = pointTotalCondition(scan, p, 'grid');
   if (points !== null) return points;
   if (!isFullCoverage(scan)) {
-    return cap(p, 'review', 'RESIDENT_ONLY', 'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.');
+    return partialCoverage(
+      p,
+      scan,
+      'review',
+      'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.',
+      'Only a sample of the scan was read, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is analysed.',
+    );
   }
   if (!isLinearUnitKnown(scan.crs)) {
     return cap(p, 'review', 'UNIT_UNKNOWN', 'The linear unit is unconfirmed, so the surface can be built for inspection but its georeferenced export is withheld.');
@@ -184,7 +222,13 @@ function dsm(scan: ScanFacts): ProductCapability {
   const points = pointTotalCondition(scan, p, 'grid');
   if (points !== null) return points;
   if (!isFullCoverage(scan)) {
-    return cap(p, 'review', 'RESIDENT_ONLY', 'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.');
+    return partialCoverage(
+      p,
+      scan,
+      'review',
+      'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.',
+      'Only a sample of the scan was read, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is analysed.',
+    );
   }
   if (!isLinearUnitKnown(scan.crs)) {
     return cap(p, 'review', 'UNIT_UNKNOWN', 'The linear unit is unconfirmed, so the surface can be built for inspection but its georeferenced export is withheld.');
@@ -214,7 +258,13 @@ function buildingFootprints(scan: ScanFacts): ProductCapability {
     return cap(p, 'blocked', 'UNIT_UNKNOWN', 'Footprint area is a metric quantity, so an unconfirmed linear unit blocks extraction.');
   }
   if (!isFullCoverage(scan)) {
-    return cap(p, 'blocked', 'RESIDENT_ONLY', 'Footprints need every building return; a resident-only streaming view cannot back them.');
+    return partialCoverage(
+      p,
+      scan,
+      'blocked',
+      'Footprints need every building return; a resident-only streaming view cannot back them.',
+      'Footprints need every building return; a sample of the scan cannot back them.',
+    );
   }
   if (scan.hasBuildingClass) {
     return cap(p, 'ready', 'BUILDING_CLASS_PRESENT', 'Building-class points support footprint extraction.');
@@ -252,7 +302,11 @@ function twoScanProduct(product: ProductId, inputs: ProcessInputs, noun: string)
   // resident-only or sampled, the result would cover only the resident overlap,
   // so it is offered for review scoped to that overlap, never as a full product.
   if (a.coverage !== 'full' || b.coverage !== 'full') {
-    return cap(product, 'review', 'RESIDENT_OVERLAP_ONLY', `${noun} needs the whole of both scans; one is resident-only or sampled, so the result would cover only the resident overlap and is offered for review scoped to that overlap.`);
+    // Waiting only helps while a scan is still streaming; a sample is what the
+    // read returned, so the two shortfalls carry different codes and actions.
+    return a.coverage === 'resident-only' || b.coverage === 'resident-only'
+      ? cap(product, 'review', 'RESIDENT_OVERLAP_ONLY', `${noun} needs the whole of both scans; one is still streaming, so the result would cover only the resident overlap and is offered for review scoped to that overlap.`)
+      : cap(product, 'review', 'SAMPLED_OVERLAP_ONLY', `${noun} needs the whole of both scans; at least one was read as a sample, so the result would cover only the sampled overlap and is offered for review scoped to that overlap.`);
   }
   return cap(product, 'ready', 'COMPATIBLE', `Two scans in a compatible frame with a shared vertical reference support ${noun.toLowerCase()}.`);
 }
