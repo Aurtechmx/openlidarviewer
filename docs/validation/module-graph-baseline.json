@@ -53,7 +53,7 @@
   "fanOut": {
     "src/main.ts": {
       "runtime": 118,
-      "typeOnly": 19,
+      "typeOnly": 20,
       "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
@@ -64,18 +64,19 @@
         "src/analysis/ModuleApi.ts",
         "src/analysis/modules/healthCheck.ts",
         "src/analysis/modules/scanReport.ts",
-        "src/analysis/streamingExtentRows.ts",
         "src/app/AppRuntime.ts",
         "src/app/LayerService.ts",
         "src/app/ScanRouteService.ts",
         "src/app/ScanService.ts",
         "src/app/actionDefinitions.ts",
-        "src/app/coordinateHudMount.ts",
+        "src/app/classLegendRefresh.ts",
+        "src/app/coordinateHudLazy.ts",
         "src/app/crsCoordinator.ts",
         "src/app/epochFramePrep.ts",
         "src/app/exportCrsResolver.ts",
         "src/app/exportImageAction.ts",
         "src/app/floorPlanPositions.ts",
+        "src/app/helpOverlayLazy.ts",
         "src/app/inspectorCardRefreshers.ts",
         "src/app/kmlActions.ts",
         "src/app/measurePanelMount.ts",
@@ -89,10 +90,12 @@
         "src/app/reportExport.ts",
         "src/app/sessionIo.ts",
         "src/app/staleChunkReload.ts",
+        "src/app/streamingScanReport.ts",
         "src/app/swUrl.ts",
         "src/app/terrainAnalysisRunner.ts",
         "src/app/terrainComputePath.ts",
         "src/app/toggleTool.ts",
+        "src/app/tourLauncher.ts",
         "src/app/viewBookmarks.ts",
         "src/app/viewStateCoordinator.ts",
         "src/convert/decodeFull.ts",
@@ -116,7 +119,6 @@
         "src/lazyChunks.ts",
         "src/prefs.ts",
         "src/render/camera/recommendView.ts",
-        "src/render/class/classBuffer.ts",
         "src/render/class/classHistogram.ts",
         "src/render/class/classScope.ts",
         "src/render/class/classificationCoverage.ts",
@@ -148,7 +150,6 @@
         "src/ui/ClipPanel.ts",
         "src/ui/DropZone.ts",
         "src/ui/ExportPanel.ts",
-        "src/ui/HelpOverlay.ts",
         "src/ui/Inspector.ts",
         "src/ui/LassoVolumeTool.ts",
         "src/ui/MobileSheet.ts",
@@ -166,7 +167,6 @@
         "src/ui/isMobileDevice.ts",
         "src/ui/keyBindings.ts",
         "src/ui/navBarWiring.ts",
-        "src/ui/onboarding/bootTour.ts",
         "src/ui/panelChrome.ts",
         "src/ui/streamingScanReveal.ts",
         "src/ui/themes.ts",
@@ -234,7 +234,7 @@
         "src/render/projectElevationScale.ts",
         "src/render/quality/pixelRatioCeiling.ts",
         "src/render/recordSelection.ts",
-        "src/render/refinementPhase.ts",
+        "src/render/refinementPhaseState.ts",
         "src/render/renderActivityGate.ts",
         "src/render/renderLoop.ts",
         "src/render/rgbAppearance.ts",
@@ -266,8 +266,71 @@
     "components": []
   },
   "context": {
-    "filesScanned": 784,
+    "filesScanned": 812,
     "inlineTypeOnlyImports": 3,
-    "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above."
+    "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
+    "topFanIn": [
+      {
+        "file": "src/ui/dom.ts",
+        "importers": 56
+      },
+      {
+        "file": "src/units/units.ts",
+        "importers": 24
+      },
+      {
+        "file": "src/lazyChunks.ts",
+        "importers": 22
+      },
+      {
+        "file": "src/io/loadErrors.ts",
+        "importers": 19
+      },
+      {
+        "file": "src/io/sniffFormat.ts",
+        "importers": 16
+      },
+      {
+        "file": "src/geo/height.ts",
+        "importers": 15
+      },
+      {
+        "file": "src/model/PointCloud.ts",
+        "importers": 15
+      },
+      {
+        "file": "src/model/pointFrames.ts",
+        "importers": 14
+      },
+      {
+        "file": "src/geo/SpatialContext.ts",
+        "importers": 13
+      },
+      {
+        "file": "src/io/formatByteSize.ts",
+        "importers": 13
+      },
+      {
+        "file": "src/render/pointInfo.ts",
+        "importers": 13
+      },
+      {
+        "file": "src/terrain/ground/cellConfidence.ts",
+        "importers": 13
+      },
+      {
+        "file": "src/model/OrganizedRange.ts",
+        "importers": 12
+      },
+      {
+        "file": "src/render/colorModes.ts",
+        "importers": 12
+      },
+      {
+        "file": "src/science/methodRegistry.ts",
+        "importers": 12
+      }
+    ],
+    "topFanInNote": "The most-imported files by distinct static importers, runtime edges only. Recorded so a review can see what the tree leans on; not enforced, because a widely imported pure module is a healthy hub and a widely imported stateful one is a defect, and this scan cannot tell them apart."
   }
 }
