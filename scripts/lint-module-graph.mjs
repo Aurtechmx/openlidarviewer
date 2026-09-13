@@ -72,7 +72,7 @@
  *   node scripts/lint-module-graph.mjs --update
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname, relative, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -716,10 +716,20 @@ function collectGrowth(baseline, { pairs, fanOut, cycles }) {
   return problems;
 }
 
+/** The committed baseline, or null when there is none yet; one read, no check-then-use. */
+function readBaseline() {
+  try {
+    return JSON.parse(readFileSync(BASELINE, 'utf8'));
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return null;
+    throw e;
+  }
+}
+
 function runCli() {
   const measurement = measureModuleGraph();
   const { graph, problems, pairs, fanOut, cycles, fanIn, inlineOnlyTotal } = measurement;
-  const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null;
+  const baseline = readBaseline();
 
   if (process.argv.includes('--update') || baseline === null) {
     if (problems.length > 0) {
