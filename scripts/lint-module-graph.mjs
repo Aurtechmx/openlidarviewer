@@ -15,13 +15,20 @@
  *   fan-out of src/main.ts and src/render/Viewer.ts
  *   file-level import cycles
  *
+ * One more number is measured and recorded but never enforced: fan-in, the
+ * distinct files that statically import each module. The most-imported files
+ * are written under `context.topFanIn` so a review can see which modules the
+ * rest of the tree leans on, and `measureFanIn()` is exported for reports.
+ *
  * THE BASELINE IS A RECORD, NOT A TARGET. It is generated from the tree as it
  * stands, so the first run passes. It states where the architecture is today.
  * It makes no claim that any of these numbers is good, and reaching zero is not
  * this script's call to make. All it enforces is direction: the numbers may
  * fall, never rise. Growth is a hand-edited act, because there is no flag that
- * raises a baseline; `--update` rewrites the file from the current tree, which
- * is how a genuine reduction gets banked.
+ * raises a baseline: `--update` rewrites the file from the current tree, which
+ * is how a genuine reduction gets banked, and it refuses the whole write when
+ * any enforced number is above its baseline, the same rule
+ * scripts/lint-monolith-size.mjs applies.
  *
  * WHAT COUNTS AS AN EDGE, and why the distinctions are the whole point.
  *
@@ -65,7 +72,7 @@
  *   node scripts/lint-module-graph.mjs --update
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname, relative, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -469,6 +476,31 @@ function measureFanOut(graph, problems, file) {
 }
 
 /**
+ * Distinct importers of every file, runtime edges only. Returns a Map keyed by
+ * file with the count and the sorted importer list; files nobody imports are
+ * present with a count of 0 so an unreachable module reads as such.
+ */
+export function measureFanIn(graph) {
+  const importers = new Map([...graph.keys()].map((f) => [f, new Set()]));
+  for (const [from, entry] of graph) {
+    for (const to of entry.value.keys()) {
+      if (importers.has(to)) importers.get(to).add(from);
+    }
+  }
+  const out = new Map();
+  for (const [file, set] of importers) out.set(file, { count: set.size, importers: [...set].sort() });
+  return out;
+}
+
+/** The `n` most-imported files, ties broken by path, as `{ file, importers }`. */
+export function topFanIn(fanIn, n = 15) {
+  return [...fanIn.entries()]
+    .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
+    .slice(0, n)
+    .map(([file, m]) => ({ file, importers: m.count }));
+}
+
+/**
  * Strongly connected components of two or more files in the static value graph.
  *
  * Tarjan, iterative: the graph is 682 files deep in places and a recursive walk
@@ -568,11 +600,12 @@ export function measureModuleGraph() {
   const pairs = new Map(PAIRS.map((p) => [p.id, measurePair(graph, p)]));
   const fanOut = new Map(FAN_OUT_FILES.map((f) => [f, measureFanOut(graph, problems, f)]));
   const cycles = measureCycles(graph);
+  const fanIn = measureFanIn(graph);
   const inlineOnlyTotal = [...graph.values()].reduce((a, e) => a + e.inlineOnly, 0);
   // Total distinct runtime import edges (internal files and packages alike).
   const totalEdges = [...graph.values()].reduce((a, e) => a + e.value.size, 0);
 
-  return { graph, problems, pairs, fanOut, cycles, inlineOnlyTotal, totalEdges, filesScanned: graph.size };
+  return { graph, problems, pairs, fanOut, cycles, fanIn, inlineOnlyTotal, totalEdges, filesScanned: graph.size };
 }
 
 /**
@@ -620,126 +653,171 @@ const PURPOSE =
   + 'the static value graph. Run "node scripts/lint-module-graph.mjs --update" to bank a '
   + 'reduction. There is no flag that raises a number.';
 
-function runCli() {
-  const { graph, problems, pairs, fanOut, cycles, inlineOnlyTotal } = measureModuleGraph();
+/**
+ * Every enforced number that sits above its baseline, as failure lines. Empty
+ * means the tree is at or below the record. Shared by the check and by
+ * --update, so the path an operator is told to take on failure cannot bank the
+ * growth it was told about.
+ */
+function collectGrowth(baseline, { pairs, fanOut, cycles }) {
+  const problems = [];
+  /** The items measured now that the baseline did not record. */
+  const added = (now, before) => now.filter((x) => !before.includes(x));
 
-  if (process.argv.includes('--update') || !existsSync(BASELINE)) {
-    if (problems.length > 0) {
-    console.error('module-graph baseline NOT written; the scan itself reported a problem:\n');
-    for (const p of problems) console.error(`  • ${p}`);
-    process.exit(1);
-  }
-  const edges = {};
   for (const p of PAIRS) {
     const m = pairs.get(p.id);
-    edges[p.id] = { runtime: m.runtime, typeOnly: m.typeOnly, dynamic: m.dynamic, edges: m.edges };
+    const b = baseline.edges?.[p.id];
+    if (!b) {
+      problems.push(`${p.id}: no baseline entry. Run --update once to record this category, then hold it.`);
+      continue;
+    }
+    if (m.runtime > b.runtime) {
+      const fresh = added(m.edges, b.edges ?? []);
+      problems.push(
+        `${p.id}: ${m.runtime} runtime edges, baseline ${b.runtime} (+${m.runtime - b.runtime}). `
+        + 'Cross-directory coupling may shrink, never grow.'
+        + fresh.map((e) => `\n      new: ${e} (${e.split(' -> ')[0]}:${m.lines.get(e)})`).join(''),
+      );
+    }
   }
-  const fan = {};
+
   for (const f of FAN_OUT_FILES) {
     const m = fanOut.get(f);
-    fan[f] = { runtime: m.runtime, typeOnly: m.typeOnly, dynamic: m.dynamic, modules: m.modules };
+    const b = baseline.fanOut?.[f];
+    if (!b) {
+      problems.push(`${f}: no baseline fan-out entry. Run --update once to record it, then hold it.`);
+      continue;
+    }
+    if (m.runtime > b.runtime) {
+      const fresh = added(m.modules, b.modules ?? []);
+      problems.push(
+        `${f}: static fan-out ${m.runtime} modules, baseline ${b.runtime} (+${m.runtime - b.runtime}). `
+        + 'Import the new module from the cluster that owns the behaviour, or reach it through '
+        + 'src/lazyChunks.ts, which is a lazy boundary and is not counted here.'
+        + fresh.map((e) => `\n      new: ${e} (${f}:${m.lines.get(e)})`).join(''),
+      );
+    }
   }
-  const doc = {
-    purpose: PURPOSE,
-    edges,
-    fanOut: fan,
-    cycles: { count: cycles.count, components: cycles.components },
-    context: {
-      filesScanned: graph.size,
-      inlineTypeOnlyImports: inlineOnlyTotal,
-      note:
-        'inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` '
-        + 'specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from "x"`, '
-        + 'a module load with no binding, so it is counted as a runtime edge above.',
-    },
-  };
-  writeFileSync(BASELINE, `${JSON.stringify(doc, null, 2)}\n`);
-  console.log(
-    `module-graph baseline written: ${PAIRS.map((p) => `${p.id} ${pairs.get(p.id).runtime}`).join(', ')}, `
-    + `${FAN_OUT_FILES.map((f) => `${f.split('/').pop()} fan-out ${fanOut.get(f).runtime}`).join(', ')}, `
-    + `${cycles.count} cycle${cycles.count === 1 ? '' : 's'} across ${graph.size} files.`,
-  );
-  process.exit(0);
-}
 
-// ── shrink-only ─────────────────────────────────────────────────────────────
-
-const baseline = JSON.parse(readFileSync(BASELINE, 'utf8'));
-
-/** The items measured now that the baseline did not record. */
-const added = (now, before) => now.filter((x) => !before.includes(x));
-
-for (const p of PAIRS) {
-  const m = pairs.get(p.id);
-  const b = baseline.edges?.[p.id];
-  if (!b) {
-    problems.push(`${p.id}: no baseline entry. Run --update once to record this category, then hold it.`);
-    continue;
-  }
-  if (m.runtime > b.runtime) {
-    const fresh = added(m.edges, b.edges ?? []);
+  const baseCycles = baseline.cycles?.count;
+  if (baseCycles === undefined) {
+    problems.push('cycles: no baseline entry. Run --update once to record the count, then hold it.');
+  } else if (cycles.count > baseCycles) {
+    const before = (baseline.cycles.components ?? []).map((c) => c.join(' <-> '));
+    const fresh = added(cycles.components.map((c) => c.join(' <-> ')), before);
     problems.push(
-      `${p.id}: ${m.runtime} runtime edges, baseline ${b.runtime} (+${m.runtime - b.runtime}). `
-      + 'Cross-directory coupling may shrink, never grow.'
-      + fresh.map((e) => `\n      new: ${e} (${e.split(' -> ')[0]}:${m.lines.get(e)})`).join(''),
+      `cycles: ${cycles.count} file-level static import cycle${cycles.count === 1 ? '' : 's'}, `
+      + `baseline ${baseCycles} `
+      + `(+${cycles.count - baseCycles}). Break the back edge, or make it an \`import type\`, `
+      + 'which is erased and forms no cycle.'
+      + fresh.map((c) => `\n      new: ${c}`).join(''),
     );
   }
+  return problems;
 }
 
-for (const f of FAN_OUT_FILES) {
-  const m = fanOut.get(f);
-  const b = baseline.fanOut?.[f];
-  if (!b) {
-    problems.push(`${f}: no baseline fan-out entry. Run --update once to record it, then hold it.`);
-    continue;
+/** The committed baseline, or null when there is none yet; one read, no check-then-use. */
+function readBaseline() {
+  try {
+    return JSON.parse(readFileSync(BASELINE, 'utf8'));
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return null;
+    throw e;
   }
-  if (m.runtime > b.runtime) {
-    const fresh = added(m.modules, b.modules ?? []);
-    problems.push(
-      `${f}: static fan-out ${m.runtime} modules, baseline ${b.runtime} (+${m.runtime - b.runtime}). `
-      + 'Import the new module from the cluster that owns the behaviour, or reach it through '
-      + 'src/lazyChunks.ts, which is a lazy boundary and is not counted here.'
-      + fresh.map((e) => `\n      new: ${e} (${f}:${m.lines.get(e)})`).join(''),
+}
+
+function runCli() {
+  const measurement = measureModuleGraph();
+  const { graph, problems, pairs, fanOut, cycles, fanIn, inlineOnlyTotal } = measurement;
+  const baseline = readBaseline();
+
+  if (process.argv.includes('--update') || baseline === null) {
+    if (problems.length > 0) {
+      console.error('module-graph baseline NOT written; the scan itself reported a problem:\n');
+      for (const p of problems) console.error(`  • ${p}`);
+      process.exit(1);
+    }
+    // Refuse before writing. --update is the command the failure message tells
+    // an operator to run, so banking a raise here would let the guard undo
+    // itself on the very path taken to satisfy it.
+    const grown = baseline ? collectGrowth(baseline, measurement) : [];
+    if (grown.length > 0) {
+      console.error('lint:module-graph --update REFUSED\n');
+      for (const g of grown) console.error(`  • ${g}`);
+      console.error(
+        '\n--update banks a drop, never a raise, and refuses the whole write when any number '
+        + 'grew. If the growth is deliberate, edit docs/validation/module-graph-baseline.json '
+        + 'by hand so the new number is reviewed in the diff.',
+      );
+      process.exit(1);
+    }
+    const edges = {};
+    for (const p of PAIRS) {
+      const m = pairs.get(p.id);
+      edges[p.id] = { runtime: m.runtime, typeOnly: m.typeOnly, dynamic: m.dynamic, edges: m.edges };
+    }
+    const fan = {};
+    for (const f of FAN_OUT_FILES) {
+      const m = fanOut.get(f);
+      fan[f] = { runtime: m.runtime, typeOnly: m.typeOnly, dynamic: m.dynamic, modules: m.modules };
+    }
+    const doc = {
+      purpose: PURPOSE,
+      edges,
+      fanOut: fan,
+      cycles: { count: cycles.count, components: cycles.components },
+      context: {
+        filesScanned: graph.size,
+        inlineTypeOnlyImports: inlineOnlyTotal,
+        note:
+          'inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` '
+          + 'specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from "x"`, '
+          + 'a module load with no binding, so it is counted as a runtime edge above.',
+        topFanIn: topFanIn(fanIn),
+        topFanInNote:
+          'The most-imported files by distinct static importers, runtime edges only. Recorded so a '
+          + 'review can see what the tree leans on; not enforced, because a widely imported pure '
+          + 'module is a healthy hub and a widely imported stateful one is a defect, and this scan '
+          + 'cannot tell them apart.',
+      },
+    };
+    writeFileSync(BASELINE, `${JSON.stringify(doc, null, 2)}\n`);
+    console.log(
+      `module-graph baseline written: ${PAIRS.map((p) => `${p.id} ${pairs.get(p.id).runtime}`).join(', ')}, `
+      + `${FAN_OUT_FILES.map((f) => `${f.split('/').pop()} fan-out ${fanOut.get(f).runtime}`).join(', ')}, `
+      + `${cycles.count} cycle${cycles.count === 1 ? '' : 's'} across ${graph.size} files.`,
     );
+    process.exit(0);
   }
-}
 
-const baseCycles = baseline.cycles?.count;
-if (baseCycles === undefined) {
-  problems.push('cycles: no baseline entry. Run --update once to record the count, then hold it.');
-} else if (cycles.count > baseCycles) {
-  const before = (baseline.cycles.components ?? []).map((c) => c.join(' <-> '));
-  const fresh = added(cycles.components.map((c) => c.join(' <-> ')), before);
-  problems.push(
-    `cycles: ${cycles.count} file-level static import cycle${cycles.count === 1 ? '' : 's'}, `
-    + `baseline ${baseCycles} `
-    + `(+${cycles.count - baseCycles}). Break the back edge, or make it an \`import type\`, `
-    + 'which is erased and forms no cycle.'
-    + fresh.map((c) => `\n      new: ${c}`).join(''),
-  );
-}
+  // ── shrink-only ─────────────────────────────────────────────────────────────
 
-if (problems.length > 0) {
-  console.error('lint:module-graph FAILED\n');
-  for (const p of problems) console.error(`  • ${p}`);
-  console.error('\nIf a decomposition step legitimately lowered a number, run '
-    + '"node scripts/lint-module-graph.mjs --update" to bank it.');
-  process.exit(1);
-}
+  problems.push(...collectGrowth(baseline, measurement));
 
-const summary = [
-  ...PAIRS.map((p) => {
-    const m = pairs.get(p.id);
-    return `${p.id} ${m.runtime}`;
-  }),
-  ...FAN_OUT_FILES.map((f) => `${f.split('/').pop()} ${fanOut.get(f).runtime}`),
-  `${cycles.count} cycle${cycles.count === 1 ? '' : 's'}`,
-];
-const dropped = PAIRS.reduce((a, p) => a + (baseline.edges[p.id].runtime - pairs.get(p.id).runtime), 0)
-  + FAN_OUT_FILES.reduce((a, f) => a + (baseline.fanOut[f].runtime - fanOut.get(f).runtime), 0)
-  + (baseCycles - cycles.count);
+  if (problems.length > 0) {
+    console.error('lint:module-graph FAILED\n');
+    for (const p of problems) console.error(`  • ${p}`);
+    console.error('\nIf a decomposition step legitimately lowered a number, run '
+      + '"node scripts/lint-module-graph.mjs --update" to bank it.');
+    process.exit(1);
+  }
+
+  const baseCycles = baseline.cycles.count;
+  const summary = [
+    ...PAIRS.map((p) => {
+      const m = pairs.get(p.id);
+      return `${p.id} ${m.runtime}`;
+    }),
+    ...FAN_OUT_FILES.map((f) => `${f.split('/').pop()} ${fanOut.get(f).runtime}`),
+    `${cycles.count} cycle${cycles.count === 1 ? '' : 's'}`,
+  ];
+  const dropped = PAIRS.reduce((a, p) => a + (baseline.edges[p.id].runtime - pairs.get(p.id).runtime), 0)
+    + FAN_OUT_FILES.reduce((a, f) => a + (baseline.fanOut[f].runtime - fanOut.get(f).runtime), 0)
+    + (baseCycles - cycles.count);
+  const hub = topFanIn(fanIn, 1)[0];
   console.log(
     `lint:module-graph OK [runtime edges only; ${graph.size} files scanned]: ${summary.join(', ')}`
+    + (hub ? `; most-imported ${hub.file} (${hub.importers})` : '')
     + (dropped > 0 ? ` (${dropped} fewer than baseline; run --update to bank it).` : '.'),
   );
 }

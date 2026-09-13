@@ -77,4 +77,35 @@ describe('lint:module-graph', () => {
     // The baseline is restored, so a follow-up run is green again.
     expect(runLint().status).toBe(0);
   });
+
+  it('--update refuses to bank a number that EXCEEDS its baseline and leaves the file untouched', () => {
+    withBaseline(
+      (doc) => {
+        doc.fanOut['src/main.ts'].runtime -= 1;
+      },
+      () => {
+        const before = readFileSync(BASELINE, 'utf8');
+        const r = spawnSync('node', ['scripts/lint-module-graph.mjs', '--update'], { cwd: ROOT, encoding: 'utf8' });
+        expect(r.status).not.toBe(0);
+        expect(r.stderr).toContain('lint:module-graph --update REFUSED');
+        expect(r.stderr).toContain('src/main.ts');
+        expect(readFileSync(BASELINE, 'utf8')).toBe(before);
+      },
+    );
+  });
+
+  it('records the most-imported files as unenforced context', () => {
+    const doc = JSON.parse(readFileSync(BASELINE, 'utf8'));
+    const top = doc.context.topFanIn as Array<{ file: string; importers: number }>;
+    expect(Array.isArray(top)).toBe(true);
+    expect(top.length).toBeGreaterThan(0);
+    expect(top[0].importers).toBeGreaterThanOrEqual(top[top.length - 1].importers);
+    // Widening the record is not a failure: fan-in is context, never a ratchet.
+    withBaseline(
+      (d) => {
+        d.context.topFanIn = [];
+      },
+      (r) => expect(r.status).toBe(0),
+    );
+  });
 });
