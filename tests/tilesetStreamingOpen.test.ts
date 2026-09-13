@@ -449,8 +449,9 @@ describe('a refusal reaches the user', () => {
  * crashes on a null total or that survives a scan swap is not visible from the
  * open path alone.
  */
-describe('the streaming Scan Report in the shell', () => {
-  const main = readFileSync(resolve(ROOT, 'src/main.ts'), 'utf8');
+describe('the streaming Scan Report assembler', () => {
+  // The assembler moved out of the shell into app/streamingScanReport.ts.
+  const main = readFileSync(resolve(ROOT, 'src/app/streamingScanReport.ts'), 'utf8');
 
   it('accepts a source that states no point total', () => {
     expect(main).toMatch(/readonly sourcePointCount: number \| null;/);
@@ -480,7 +481,8 @@ describe('the streaming Scan Report in the shell', () => {
     // `clearOpenStaticLayers` runs on every streaming attach once it has
     // committed, including a streaming→streaming swap, which never passes
     // through `closeStreaming`.
-    const body = main.slice(main.indexOf('function clearOpenStaticLayers()'));
+    const shell = readFileSync(resolve(ROOT, 'src/main.ts'), 'utf8');
+    const body = shell.slice(shell.indexOf('function clearOpenStaticLayers()'));
     const end = body.indexOf('\n}');
     expect(body.slice(0, end)).toContain('lastStreamingReportCloud = null');
   });

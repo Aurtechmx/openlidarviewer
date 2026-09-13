@@ -530,13 +530,15 @@ async function openBatchConverter(): Promise<void> {
   batchConverter.open();
 }
 /**
- * The Viewer is lazy-imported so three.js stays out of the initial shell.
- * `viewer` is treated as non-null throughout the rest of main.ts; every
- * scan-open path awaits `viewerLoaded` before touching it, and UI handlers that
- * could fire pre-init operate against an empty state where the calls are no-ops.
+ * The Viewer is lazy-imported so three.js stays out of the initial shell, and
+ * the import does not start at module evaluation: the shell paints without it,
+ * the idle pre-warm starts it on a capable connection, and every scan-open
+ * path calls `ensureViewer()` before touching it. `viewer` is treated as
+ * non-null throughout the rest of main.ts; UI handlers that could fire pre-init
+ * operate against an empty state where the calls are no-ops.
  *
  * The cast through `unknown` is the documented escape hatch: TS cannot see that
- * `viewerLoaded` resolves before any user-driven scan-open at runtime, but it does.
+ * `ensureViewer()` resolves before any user-driven scan-open at runtime, but it does.
  */
 let viewer: Viewer = null as unknown as Viewer;
 // v0.6 P3: recover from a stale lazy chunk after a deploy. If the Viewer's
@@ -544,7 +546,11 @@ let viewer: Viewer = null as unknown as Viewer;
 // do ONE guarded reload (sessionStorage cooldown, URL preserved), not a hard boot
 // failure. Ordinary Viewer exceptions are NOT classified as stale and never reload.
 const { importOrReload } = installStaleChunkRecovery();
-const viewerLoaded: Promise<Viewer> = (async () => {
+let startViewer: () => void = () => {};
+const viewerStarted = new Promise<void>((resolve) => { startViewer = resolve; });
+/** Start the Viewer import if it has not started, and hand back the shared promise. */
+const ensureViewer = (): Promise<Viewer> => { startViewer(); return viewerLoaded; };
+const viewerLoaded: Promise<Viewer> = viewerStarted.then(async () => {
   const { Viewer: ViewerCtor } = await importOrReload(loadViewer);
   // WebKit/iOS: navigator.gpu is present but requestAdapter() -> null; probe so
   // the renderer picks WebGL 2 instead of throwing on the first scan open.
@@ -560,7 +566,7 @@ const viewerLoaded: Promise<Viewer> = (async () => {
   }));
   viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current())); // STREAMING export CRS
   return viewer;
-})();
+});
 
 // ── Lasso volume tool — 3D volumetric pick via freehand draw ────────────
 //
@@ -1793,7 +1799,7 @@ const keyBindingDeps: KeyBindingDeps = {
     toggleWorkflowRecord: () => toggleWorkflowRecord(),
     globalActions: () => globalActionHandlers,
 };
-installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), keyBindingDeps);
+stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), keyBindingDeps));
 
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
 
@@ -3436,8 +3442,8 @@ void viewerLoaded.then(() => {
     // so a user who opens the app and immediately drops a file sees the
     // parser run instantly. Idle-callback so the prewarm doesn't compete
     // with the renderer's first frames; falls back to setTimeout on
-    // browsers without rIC.
-    schedulePrewarm();
+    // browsers without rIC. Scheduled at boot, below, since the pre-warm is
+    // now what starts the Viewer import on a capable connection.
   }).catch(() => {
     // The GPU init failure has already been logged by the Viewer's own
     // `.catch`. Swallow here so the browser's unhandled-rejection
@@ -3457,7 +3463,7 @@ stage.overlay.append(dropZone.toast);
 // artifact contains no API surface. The seam drives a measurement
 // programmatically, bypassing the raycast headless CI cannot pretend at.
 if (__OLV_TEST_SEAM__ && testApi) {
-  void viewerLoaded.then((v) => {
+  void ensureViewer().then((v) => {
     const placePoint = (x: number, y: number, z: number): void => {
       if (![x, y, z].every((c) => typeof c === 'number' && Number.isFinite(c))) {
         throw new Error(
@@ -4163,7 +4169,7 @@ function prewarmLoaders(): void {
   void loadLasLoader().catch(() => { /* swallow */ });
   // The Viewer chunk pulls in three.js / WebGPU (~800 KB) — warm it too, skipping under Save-Data / 2G-3G.
   if (!_isDataSaver()) {
-    void loadViewer().catch(() => { /* swallow — open() retries */ });
+    void ensureViewer().catch(() => { /* swallow — open() retries */ });
   }
 }
 
@@ -4178,6 +4184,7 @@ function schedulePrewarm(): void {
     setTimeout(prewarmLoaders, 1500);
   }
 }
+schedulePrewarm();
 
 /**
  * Assemble + render a PDF report from the live state — a thin caller over the
@@ -4538,7 +4545,7 @@ async function exportSession(): Promise<void> {
  * rebase / apply logic and the pure `ScanFacts` adapter live in that module.
  */
 const sessionIoDeps: SessionIoDeps = {
-  viewerReady: viewerLoaded,
+  get viewerReady() { return ensureViewer(); },
   getViewer: () => viewer,
   loadSession,
   appVersion: __APP_VERSION__,
@@ -4568,7 +4575,7 @@ function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Pr
  * `layerChipCount` / `shouldResetSavedWork` decisions live in that module.
  */
 const openScanDeps: OpenScanDeps = {
-  viewerReady: viewerLoaded,
+  get viewerReady() { return ensureViewer(); },
   getViewer: () => viewer,
   importSession,
   isLoading: () => loading,
@@ -4637,7 +4644,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   loadEptLaszipWorkerClient,
   loadEpt,
   loadDiagnostics,
-  viewerReady: viewerLoaded,
+  get viewerReady() { return ensureViewer(); },
   getViewer: () => viewer,
   isLoading: () => loading,
   setLoading: (v) => { loading = v; },
@@ -4688,7 +4695,7 @@ const openStreamingDeps: OpenStreamingDeps = {
  * `isNonTerrainVerdict` decisions, live in that module.
  */
 const reportExportDeps: ReportExportDeps = {
-  viewerReady: viewerLoaded,
+  get viewerReady() { return ensureViewer(); },
   getViewer: () => viewer,
   scans,
   crsCurrent: () => crsService.current(),
@@ -4776,7 +4783,7 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
 
     // The actual streaming open touches viewer state — defer until the lazy
     // Viewer chunk is up.
-    await viewerLoaded;
+    await ensureViewer();
     // Blue blinking "Opening …" (by dataset name) — the same prominent indicator
     // device files show, so a public/streaming open reads identically. Staged
     // progress from the streaming pipeline supersedes it once bytes arrive.
@@ -5030,7 +5037,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
 /** Fetch a built-in sample (a local static file — no upload) and load it. */
 async function loadFromUrl(url: string, name: string): Promise<void> {
   // ensure the lazy-loaded Viewer is ready before touching it.
-  await viewerLoaded;
+  await ensureViewer();
   // Remote COPC / EPT URLs route through the streaming pipeline — a
   // `fetch().blob()` against a 1+ GB COPC would defeat the whole point
   // of streaming and try to pull the entire file before showing a
