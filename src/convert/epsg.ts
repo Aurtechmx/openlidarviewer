@@ -68,6 +68,7 @@ function utm(zone: number, opts: { south?: boolean; datum?: string }): string {
  *
  *   326zz → WGS84 / UTM zz N        327zz → WGS84 / UTM zz S
  *   269zz → NAD83 / UTM zz N        267zz → NAD27 / UTM zz N
+ *   6330+zz-1 → NAD83(2011) / UTM zz N (6330–6349; 6339 is zone 10N)
  *   258zz → ETRS89 / UTM zz N (258 = 25800)
  *   283zz → GDA94 / MGA zz S        78zz  → GDA2020 / MGA zz S (7846–7859)
  */
@@ -80,6 +81,8 @@ export function epsgToProj4(epsg: number): string | null {
   if (epsg >= 32701 && epsg <= 32760) return utm(epsg - 32700, { datum: 'WGS84', south: true });
   // NAD83 / UTM (zones 1–23 N).
   if (epsg >= 26901 && epsg <= 26923) return utm(epsg - 26900, { datum: 'NAD83' });
+  // NAD83(2011) / UTM (zones 1–20 N): 6330 is zone 1, so zone = epsg - 6329.
+  if (epsg >= 6330 && epsg <= 6349) return utm(epsg - 6329, { datum: 'NAD83' });
   // NAD27 / UTM (zones 1–22 N).
   if (epsg >= 26701 && epsg <= 26722) return utm(epsg - 26700, { datum: 'NAD27' });
   // ETRS89 / UTM (zones 28–38 N).
@@ -126,6 +129,7 @@ export function epsgDatumFamily(epsg: number): DatumFamily | null {
   if (epsg >= 32601 && epsg <= 32660) return 'WGS84';
   if (epsg >= 32701 && epsg <= 32760) return 'WGS84';
   if (epsg >= 26901 && epsg <= 26923) return 'NAD83';
+  if (epsg >= 6330 && epsg <= 6349) return 'NAD83';
   if (epsg >= 26701 && epsg <= 26722) return 'NAD27';
   if (epsg >= 25828 && epsg <= 25838) return 'ETRS89';
   if (epsg >= 28348 && epsg <= 28358) return 'GDA94';

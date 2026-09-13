@@ -61,13 +61,13 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
   const list = el('div', { className: 'olv-findings-list' });
   const actions = el('div', { className: 'olv-findings-actions' });
 
-  const addBtn = el('button', { className: 'olv-findings-add', text: 'Add current measurements' });
+  const addBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-add', text: 'Add current measurements' });
   addBtn.type = 'button';
   addBtn.title = 'Append the placed measurements to the findings ledger, each with its band and caveats.';
-  const exportBtn = el('button', { className: 'olv-findings-export', text: 'Export findings report' });
+  const exportBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-export', text: 'Export findings report' });
   exportBtn.type = 'button';
   exportBtn.title = 'Export the whole ledger as the tamper-evident integrity report (JSON, SHA-256 digest).';
-  const clearBtn = el('button', { className: 'olv-findings-clear', text: 'Clear all' });
+  const clearBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-clear', text: 'Clear all' });
   clearBtn.type = 'button';
   const status = el('div', { className: 'olv-findings-status', text: '' });
   actions.append(addBtn, exportBtn, clearBtn);

@@ -25,7 +25,7 @@
  * serialiser is a lazy loader so this module stays off the boot graph.
  */
 
-import { makeLocalToLonLat, LonLatConversionError } from '../export/lonLatMapper';
+import { makeLocalToLonLat, LonLatConversionError, type LocalToLonLatSourceZ } from '../export/lonLatMapper';
 import {
   footprintCrsRefusal,
   footprintConvexHullRing,
@@ -37,7 +37,7 @@ import {
   type FootprintExtent,
   type FootprintExtentBasis,
 } from '../export/scanFootprint';
-import type { KmlExportInput, KmlViewpoint } from '../export/kmlExport';
+import type { KmlExportInput, KmlSiteOutline, KmlViewpoint } from '../export/kmlExport';
 import type { GeoExportContext } from './reportExport';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { SpatialUpAxis } from '../geo/SpatialContext';
@@ -139,6 +139,21 @@ export function crsIsKnown(resolved: ResolvedCrs | null): boolean {
 }
 
 /**
+ * The scan's bounding rectangle in lon/lat for the site file, or null when the
+ * extent is unknown, the frame is not Z-up, or a corner leaves the projection.
+ */
+function siteOutlineFor(deps: KmlActionDeps, toLonLat: LocalToLonLatSourceZ): KmlSiteOutline | null {
+  const reading = deps.scanExtent();
+  if (!reading || footprintUpAxisRefusal(reading.upAxis)) return null;
+  try {
+    return { ring: footprintLonLatRing(footprintRectangleRing(reading.extent), toLonLat), basis: reading.basis };
+  } catch (err) {
+    if (err instanceof ScanFootprintError) return null;
+    throw err;
+  }
+}
+
+/**
  * Whether the SITE KML can be written, with the reason when it cannot.
  * Resolves origin/CRS for static AND streaming, because a georeferenced streaming scan
  * can place KML too.
@@ -147,9 +162,12 @@ export function siteKmlStatus(deps: KmlActionDeps): KmlActionStatus {
   if (!deps.hasViewer()) return { ready: false, reason: 'Open a scan first.' };
   const geo = deps.geo();
   if (geo.name === null) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
+  // The scan outline is always a placemark, so the site file has content with
+  // no feature placed; only a scan with neither an outline nor a feature has
+  // nothing to write.
   const features = deps.measurements().length + deps.annotations().length;
-  if (features === 0) {
-    return { ready: false, reason: 'Add a measurement or annotation to place on the map.' };
+  if (features === 0 && deps.scanExtent() === null) {
+    return { ready: false, reason: 'The scan has no measured extent to place yet.' };
   }
   const resolved = deps.crsCurrent();
   if (!crsIsKnown(resolved)) {
@@ -217,6 +235,11 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     verticalDatum: crs?.verticalDatum ?? null,
     toLonLat,
     notSurveyGradeNote: NOT_SURVEY_GRADE,
+    // The scan's outline, placed through the same mapper as every feature. The
+    // footprint gate is the one the scan-area export applies: a Y-up extent's
+    // X/Y rectangle is not a ground outline, so it is left out rather than
+    // drawn wrong; a conversion failure likewise omits the outline.
+    siteOutline: siteOutlineFor(deps, toLonLat),
   };
   const stem = geo.name ? deps.baseName(geo.name) : 'site';
   const { buildKml, KmlCoordinateError } = await deps.loadKmlExport();
