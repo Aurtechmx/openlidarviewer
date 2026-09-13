@@ -8,7 +8,7 @@
  * so the interface says what the file says.
  */
 
-import { permitContextFor, resolveContourExportPermit, type ContourExportFrameFacts } from './contourExportPermit';
+import { permitContextFor, resolveContourExportPermit, type ContourExportFrameFacts, type ContourPermitContext } from './contourExportPermit';
 
 export interface WorkspaceClaim {
   /** The words the user reads. */
@@ -19,8 +19,11 @@ export interface WorkspaceClaim {
   readonly supported: boolean;
 }
 
-export function resolveWorkspaceClaim(frame: ContourExportFrameFacts): WorkspaceClaim {
-  const permit = resolveContourExportPermit('complete-package', permitContextFor('complete-package', frame, false));
+export function resolveWorkspaceClaim(
+  frame: ContourExportFrameFacts,
+  evidenceStatusOf?: ContourPermitContext['evidenceStatusOf'],
+): WorkspaceClaim {
+  const permit = resolveContourExportPermit('complete-package', { ...permitContextFor('complete-package', frame, false), evidenceStatusOf });
   if (!permit.ok) return { label: 'Blocked', state: 'blocked', rationale: permit.reasons, supported: false };
   if (permit.decision.status === 'validated') {
     return { label: 'Supported (internal validation only)', state: 'met', rationale: permit.decision.caveats, supported: true };
