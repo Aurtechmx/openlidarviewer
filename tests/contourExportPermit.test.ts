@@ -38,6 +38,7 @@ function ctx(over: Partial<ContourPermitContext> = {}): ContourPermitContext {
     analyticalGeometry: false,
     precision: null,
     evidenceStatusOf: () => 'validated',
+    capability: { readiness: 'ready', reasonCode: 'GROUND_TRUSTED', reason: 'Trusted ground points and a known unit support a bare-earth DTM.' },
     ...over,
   };
 }

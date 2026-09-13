@@ -24,6 +24,7 @@
  * `ExportDecision`.
  */
 
+import type { ProductCapability } from '../process/ProcessPlan';
 import { governingClaim } from '../validation/evidenceComposition';
 import {
   evidenceStatus as registryEvidenceStatus,
@@ -112,7 +113,24 @@ export interface ExportDecisionContext {
   readonly precision: PrecisionPermit | null;
   /** Injectable evidence lookup (defaults to the claim registry) — for tests. */
   readonly evidenceStatusOf?: (claimId: string) => EvidenceStatus;
+  /**
+   * The capability verdict for the product this exporter delivers, from the
+   * same `ProcessService` (same `ScanFacts`) Process Studio shows. A `blocked`
+   * verdict blocks the export with its reason; `review` caps the decision to
+   * exploratory with the reason appended; `ready` leaves it alone. An ABSENT
+   * verdict is not a passing one: without it the permit cannot know whether
+   * the scan was sampled, resident-only, unit-unknown or built on derived
+   * ground, so it caps to exploratory and says so. The registry can therefore
+   * never be the only thing standing between a partial read and "validated".
+   */
+  readonly capability?: ExportCapabilityVerdict;
 }
+
+/** The three fields of a `ProductCapability` the permit consumes. */
+export type ExportCapabilityVerdict = Pick<ProductCapability, 'readiness' | 'reasonCode' | 'reason'>;
+
+const NO_CAPABILITY_VERDICT =
+  'No capability verdict reached the export permit, so whole-dataset support is not claimed.';
 
 const EXPLORATORY_WATERMARK = 'EXPLORATORY';
 
@@ -150,6 +168,14 @@ export function resolveExportDecision(
     return { status: 'blocked', reasons: ctx.precision.reasons };
   }
 
+  // Hard block: the capability model refuses the product outright (no scan,
+  // no two scans for a comparison, a vertical reference conflict). Its reason
+  // is the one the user already saw in Process Studio.
+  const cap = ctx.capability;
+  if (cap && cap.readiness === 'blocked') {
+    return { status: 'blocked', reasons: [cap.reason] };
+  }
+
   // The weakest constituent governs. Same rule, same helper, as the provenance
   // stamp — so a file's permit and its Evidence line cannot contradict.
   const status = (ctx.evidenceStatusOf ?? registryEvidenceStatus)(governingClaim(reg.claimIds));
@@ -159,10 +185,14 @@ export function resolveExportDecision(
 
   const caveats = [NOT_SURVEY_GRADE_NOTE];
 
-  // Validated requires BOTH the registry validated AND a fully-supported launch
-  // AND a metric-supported unit claim. Any shortfall caps to exploratory.
+  // Validated requires the registry validated AND a fully-supported launch AND
+  // a metric-supported unit claim AND a capability verdict of `ready`. Any
+  // shortfall caps to exploratory.
   const fullySupported =
-    status === 'validated' && ctx.launchStatus === 'available' && ctx.unitClaim === 'metric-supported';
+    status === 'validated'
+    && ctx.launchStatus === 'available'
+    && ctx.unitClaim === 'metric-supported'
+    && cap?.readiness === 'ready';
 
   if (fullySupported) {
     return { status: 'validated', badge: 'Internal validation', caveats };
@@ -172,6 +202,10 @@ export function resolveExportDecision(
   if (ctx.launchStatus === 'exploratory') reasons.push('One or more scientific prerequisites are incomplete.');
   if (ctx.unitClaim !== 'metric-supported') reasons.push('Metric contour support is not claimed (unknown vertical unit or geographic CRS).');
   if (status === 'exploratory') reasons.push('The product has not reached its required evidence level.');
+  // The capability fact follows the registry shortfall, so a stamped caveat
+  // list reads: what the evidence says, then what the scan itself allowed.
+  if (!cap) reasons.push(NO_CAPABILITY_VERDICT);
+  else if (cap.readiness === 'review') reasons.push(cap.reason);
 
   return {
     status: 'exploratory',

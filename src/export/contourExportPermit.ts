@@ -72,6 +72,14 @@ export interface ContourPermitContext {
   readonly precision: PrecisionPermit | null;
   /** Injectable evidence lookup (defaults to the claim registry) — for tests. */
   readonly evidenceStatusOf?: NonNullable<ExportDecisionContext['evidenceStatusOf']>;
+  /**
+   * The capability verdict for the product this export delivers: `contours`
+   * for the vector and map products, `dtm` for the DEM and the report, the
+   * weaker of the two for the complete package. Passed through to
+   * {@link resolveExportDecision}, which caps or blocks on it and treats its
+   * absence as a shortfall.
+   */
+  readonly capability?: ExportDecisionContext['capability'];
 }
 
 /**
@@ -83,7 +91,51 @@ export interface ContourPermitContext {
 export type ContourExportFrameFacts = Pick<
   ContourPermitContext,
   'launchStatus' | 'verticalUnitsKnown' | 'crsProjected' | 'blockedReasons' | 'precision'
->;
+> & {
+  /**
+   * The capability verdicts the frame was mounted with, by governing product.
+   * The permit picks the one its product exports from; a frame mounted with
+   * none caps every export to exploratory.
+   */
+  readonly capabilities?: {
+    readonly contours?: ExportDecisionContext['capability'];
+    readonly dtm?: ExportDecisionContext['capability'];
+  };
+};
+
+/** The product whose capability verdict governs each export. */
+export function governingProductFor(product: ContourPermitProduct): 'contours' | 'dtm' | 'both' {
+  switch (product) {
+    case 'dem':
+    case 'report':
+      return 'dtm';
+    case 'complete-package':
+      return 'both';
+    default:
+      return 'contours';
+  }
+}
+
+const RANK = { ready: 0, review: 1, blocked: 2 } as const;
+
+/**
+ * The verdict a product exports under, from the frame's verdicts. The
+ * complete package takes the weaker of contours and DTM; a product whose
+ * verdict is missing gets none, which the decision treats as a shortfall.
+ */
+export function capabilityForProduct(
+  product: ContourPermitProduct,
+  capabilities: ContourExportFrameFacts['capabilities'],
+): ExportDecisionContext['capability'] {
+  if (!capabilities) return undefined;
+  const which = governingProductFor(product);
+  if (which === 'contours') return capabilities.contours;
+  if (which === 'dtm') return capabilities.dtm;
+  const c = capabilities.contours;
+  const d = capabilities.dtm;
+  if (!c || !d) return undefined;
+  return RANK[c.readiness] >= RANK[d.readiness] ? c : d;
+}
 
 /** A granted permit — the file MAY be written, stamped with `decision`. */
 export interface ContourExportGranted {
@@ -157,6 +209,7 @@ export function resolveContourExportPermit(
     blockedReasons: ctx.blockedReasons,
     precision: ctx.precision,
     evidenceStatusOf: ctx.evidenceStatusOf,
+    capability: ctx.capability,
   });
 
   if (decision.status === 'blocked') {

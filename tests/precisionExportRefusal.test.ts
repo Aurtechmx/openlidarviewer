@@ -37,6 +37,7 @@ const ctx = (over: Partial<ExportDecisionContext> = {}): ExportDecisionContext =
   unitClaim: 'metric-supported',
   precision: null,
   evidenceStatusOf: () => 'validated',
+  capability: { readiness: 'ready', reasonCode: 'GROUND_TRUSTED', reason: 'Trusted ground points and a known unit support a bare-earth DTM.' },
   ...over,
 });
 
@@ -130,6 +131,7 @@ describe('precision refusal — through the contour export permit', () => {
         analyticalGeometry: false,
         precision: permitForSpan(400_000),
         evidenceStatusOf: () => 'validated',
+        capability: { readiness: 'ready', reasonCode: 'GROUND_TRUSTED', reason: 'Trusted ground points and a known unit support a bare-earth DTM.' },
       });
       expect(permit.ok, product).toBe(false);
     }
@@ -144,6 +146,7 @@ describe('precision refusal — through the contour export permit', () => {
         analyticalGeometry: false,
         precision: permitForSpan(2_000),
         evidenceStatusOf: () => 'validated',
+        capability: { readiness: 'ready', reasonCode: 'GROUND_TRUSTED', reason: 'Trusted ground points and a known unit support a bare-earth DTM.' },
       });
       expect(permit.ok, product).toBe(true);
     }
