@@ -140,7 +140,7 @@ here for transparency.
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
-| @loaders.gl/las | ^4.4.5 | 4.4.5 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/las | ^4.5.1 | 4.5.1 | MIT | https://github.com/visgl/loaders.gl |
 
 ## License texts
 
