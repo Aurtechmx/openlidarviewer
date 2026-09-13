@@ -195,7 +195,12 @@ export class CommandPalette {
           );
         }
         const idxInRanked = absoluteRow;
-        row.addEventListener('mouseenter', () => {
+        // Hover follows the pointer only when it moves. Firefox fires
+        // `mouseenter` on whichever row appears under a stationary pointer,
+        // which moved the selection off the first row before the user touched
+        // anything; `mousemove` never fires without movement.
+        row.addEventListener('mousemove', () => {
+          if (this._selected === idxInRanked) return;
           this._selected = idxInRanked;
           this._paintSelection();
         });

@@ -73,6 +73,7 @@ test.describe('command palette accessibility', () => {
     const rows = page.locator('.olv-palette-row');
     const firstId = await rows.nth(0).getAttribute('id');
     expect(firstId).toBeTruthy();
+    // Opens on the first row whatever the pointer happens to rest over.
     await expect(input).toHaveAttribute('aria-activedescendant', firstId!);
     await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('ArrowDown');
@@ -80,6 +81,19 @@ test.describe('command palette accessibility', () => {
     await expect(input).toHaveAttribute('aria-activedescendant', secondId!);
     await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'false');
     await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('a stationary pointer over the list does not move the selection on open', async ({ page }) => {
+    await page.goto('/');
+    // Park the pointer where the list will appear, then open by keyboard.
+    await page.mouse.move(640, 420);
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await expect(page.locator('.olv-palette')).toBeVisible();
+    await expect(page.locator('.olv-palette-row').nth(0)).toHaveAttribute('aria-selected', 'true');
+    // Moving the pointer hands selection to the row under it.
+    await page.mouse.move(641, 421);
+    const hovered = page.locator('.olv-palette-row:hover');
+    if (await hovered.count()) await expect(hovered.first()).toHaveAttribute('aria-selected', 'true');
   });
 
   test('closing the palette collapses the combobox', async ({ page }) => {
