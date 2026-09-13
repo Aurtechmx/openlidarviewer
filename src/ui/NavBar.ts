@@ -228,7 +228,7 @@ export class NavBar {
    * Whether the navigation legend is pinned open.
    *
    * It used to start open on every scan, and `flashHelp()` re-pinned it each
-   * time a new one loaded. The legend is a 640px panel over the middle of the
+   * time a new one loaded. The legend is a panel of up to 360px over the middle of the
    * view, so the first thing a user saw of their own scan was the help for
    * reading it. It now opens for a first-time user and remembers the choice
    * after that; H, the dock's Help button and the command palette all bring it

@@ -126,6 +126,12 @@ describe('ToolDock manifest', () => {
     expect(gapped).toBe(2);
   });
 
+  it('announces the dock as one named toolbar group', () => {
+    const dock = makeDock().dock as unknown as FakeEl;
+    expect(dock.getAttribute('role')).toBe('toolbar');
+    expect(dock.getAttribute('aria-label')).toBe('Tools');
+  });
+
   it('gives the five toggles aria-pressed="false" at creation', () => {
     const b = buttons(makeDock());
     for (const i of [2, 3, 4, 5, 6]) {

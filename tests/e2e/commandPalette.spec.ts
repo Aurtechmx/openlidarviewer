@@ -52,6 +52,43 @@ test.describe('command palette open / close', () => {
   });
 });
 
+test.describe('command palette accessibility', () => {
+  test('the input is a combobox that owns a listbox of options', async ({ page }) => {
+    await openPalette(page);
+    const input = page.locator('.olv-palette-input');
+    await expect(input).toHaveAttribute('role', 'combobox');
+    await expect(input).toHaveAttribute('aria-expanded', 'true');
+    await expect(input).toHaveAttribute('aria-autocomplete', 'list');
+    const listId = await input.getAttribute('aria-controls');
+    expect(listId).toBeTruthy();
+    const list = page.locator(`#${listId}`);
+    await expect(list).toHaveAttribute('role', 'listbox');
+    const rows = page.locator('.olv-palette-row');
+    await expect(rows.first()).toHaveAttribute('role', 'option');
+  });
+
+  test('the highlighted row is the active descendant and follows the arrow keys', async ({ page }) => {
+    await openPalette(page);
+    const input = page.locator('.olv-palette-input');
+    const rows = page.locator('.olv-palette-row');
+    const firstId = await rows.nth(0).getAttribute('id');
+    expect(firstId).toBeTruthy();
+    await expect(input).toHaveAttribute('aria-activedescendant', firstId!);
+    await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('ArrowDown');
+    const secondId = await rows.nth(1).getAttribute('id');
+    await expect(input).toHaveAttribute('aria-activedescendant', secondId!);
+    await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'false');
+    await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('closing the palette collapses the combobox', async ({ page }) => {
+    await openPalette(page);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-palette-input')).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
 test.describe('command palette filtering + ranking', () => {
   test('every action is visible on an empty query', async ({ page }) => {
     await openPalette(page);

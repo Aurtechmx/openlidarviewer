@@ -14,6 +14,9 @@
 .olv-m-leader { stroke: rgba(0, 178, 255, 0.5); stroke-width: 1.1; }
 .olv-m-label-primary { font-size: var(--text-md); }
 .olv-m-handle { pointer-events: all; fill: transparent; cursor: grab; }
+/* The handle is invisible until the pointer is over it; the cursor alone was
+   the only cue that a vertex can be dragged. */
+.olv-m-handle:hover { fill: rgba(0, 178, 255, 0.28); stroke: var(--accent); stroke-width: 1; }
 .olv-m-handle:active { cursor: grabbing; }
 
 /* ── Annotation markers ──────────────────────────────────────────────────── */

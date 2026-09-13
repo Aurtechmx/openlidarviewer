@@ -59,6 +59,15 @@ export class CommandPalette {
     this._input.autocomplete = 'off';
 
     this._list = el('div', { className: 'olv-palette-list' });
+    // Combobox over a listbox: the input owns the list, the highlighted row is
+    // its active descendant, so a screen reader hears the selection move.
+    this._list.id = 'olv-palette-list';
+    this._list.setAttribute('role', 'listbox');
+    this._list.setAttribute('aria-label', 'Commands');
+    this._input.setAttribute('role', 'combobox');
+    this._input.setAttribute('aria-controls', this._list.id);
+    this._input.setAttribute('aria-autocomplete', 'list');
+    this._input.setAttribute('aria-expanded', 'false');
     this._empty = el('div', {
       className: 'olv-palette-empty olv-hidden',
       text: 'No matching commands.',
@@ -109,6 +118,7 @@ export class CommandPalette {
     if (this._open) return;
     this._open = true;
     this.element.classList.remove('olv-hidden');
+    this._input.setAttribute('aria-expanded', 'true');
     this._input.value = '';
     this._refresh();
     // Defer focus to the next tick so the show transition starts
@@ -121,6 +131,8 @@ export class CommandPalette {
     if (!this._open) return;
     this._open = false;
     this.element.classList.add('olv-hidden');
+    this._input.setAttribute('aria-expanded', 'false');
+    this._input.removeAttribute('aria-activedescendant');
     this._input.blur();
   }
 
@@ -145,6 +157,7 @@ export class CommandPalette {
     this._list.replaceChildren();
     if (this._ranked.length === 0) {
       this._empty.classList.remove('olv-hidden');
+      this._input.removeAttribute('aria-activedescendant');
       return;
     }
     this._empty.classList.add('olv-hidden');
@@ -161,6 +174,9 @@ export class CommandPalette {
           className: 'olv-palette-row',
           ariaLabel: action.title,
         });
+        row.id = `olv-palette-opt-${absoluteRow}`;
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', String(absoluteRow === this._selected));
         if (absoluteRow === this._selected) {
           row.classList.add('olv-palette-row-active');
         }
@@ -190,17 +206,29 @@ export class CommandPalette {
         absoluteRow += 1;
       }
     }
+    const active = this._ranked.length > 0 && this._selected >= 0
+      ? `olv-palette-opt-${this._selected}`
+      : null;
+    if (active) this._input.setAttribute('aria-activedescendant', active);
+    else this._input.removeAttribute('aria-activedescendant');
   }
 
   /** Update only the active-row highlight without rebuilding the list. */
   private _paintSelection(): void {
     const rows = this._list.querySelectorAll<HTMLElement>('.olv-palette-row');
     rows.forEach((row, i) => {
-      row.classList.toggle('olv-palette-row-active', i === this._selected);
+      const on = i === this._selected;
+      row.classList.toggle('olv-palette-row-active', on);
+      row.setAttribute('aria-selected', String(on));
     });
     // Scroll the active row into view if it's outside the viewport.
     const active = rows[this._selected];
-    if (active) active.scrollIntoView({ block: 'nearest' });
+    if (active) {
+      active.scrollIntoView({ block: 'nearest' });
+      this._input.setAttribute('aria-activedescendant', active.id);
+    } else {
+      this._input.removeAttribute('aria-activedescendant');
+    }
   }
 
   /** Run the action at `idx`, then close. No-op if `idx` is out of range. */

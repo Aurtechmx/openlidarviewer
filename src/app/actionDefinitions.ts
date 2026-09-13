@@ -295,8 +295,8 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
 
   // Workflow recorder — Start / Stop+Save / Open a file.
   //
-  // v0.4.5 — gated behind WORKFLOW_RECORDER_ENABLED (currently false; see
-  // WorkflowController.ts for the product rationale). The entries must be
+  // v0.4.5 — gated behind WORKFLOW_RECORDER_ENABLED, whose value lives in
+  // WorkflowController.ts with the product rationale. The entries must be
   // ABSENT from the registry when the flag is off — not merely inert — so
   // the command palette and the shortcut sheet (both of which render
   // straight from this registry) show nothing for the feature.
