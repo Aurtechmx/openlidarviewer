@@ -124,15 +124,12 @@ export function mountFeatureCandidates(
   // launcher (any classification present) is separated from the specific fact.
   // The resolved frame is authoritative even when it states no unit: the metric
   // twins then read as unknown rather than reverting to the file's declaration.
+  // With no building- or wire-classified points there is nothing to propose,
+  // so the launcher renders nothing. A later Classify run bumps the epoch the
+  // host keys its remount on, and the card appears when it has something.
   const input = buildFeatureExtractionInput(cloud, { metresPerUnit: opts.unitToMetres ?? null });
   if (!input) {
-    card.append(
-      el('div', {
-        className: 'olv-feature-launcher-fact',
-        text: 'This scan carries no building- or wire-classified points.',
-      }),
-    );
-    launcherHost.replaceChildren(card);
+    launcherHost.replaceChildren();
     return {
       dispose: () => {
         launcherHost.replaceChildren();

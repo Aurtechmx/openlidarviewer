@@ -611,7 +611,11 @@ export class ExportPanel {
       // integrity report. Mounted only when the host wires both halves, and lazily
       // (the panel + store are a separate chunk). An already-mounted panel is
       // re-attached to the fresh slot so its ledger survives a re-render.
-      if (this._cb.collectMeasurementFindings && this._cb.exportFindingsReport) {
+      // Shown under the rule its sibling deliverables use: once a measurement
+      // exists, or once the ledger already holds something. An empty ledger
+      // beside an empty measurement list offered three inert controls.
+      const ledgerHasEntries = (this._findings?.all.length ?? 0) > 0;
+      if (this._cb.collectMeasurementFindings && this._cb.exportFindingsReport && (count > 0 || ledgerHasEntries)) {
         const slot = el('div', { className: 'olv-findings-slot' });
         content.append(this._productGroup('Findings ledger', slot));
         if (this._findingsPanel) {
@@ -635,8 +639,8 @@ export class ExportPanel {
       );
       mapHints.push(
         status.ready
-          ? 'Site KML: annotations, measurements, and saved views.'
-          : `Site KML: ${status.reason || 'needs a georeferenced scan with a measurement or annotation.'}`,
+          ? 'Site KML: the scan outline, plus annotations, measurements and saved views.'
+          : `Site KML: ${status.reason || 'needs a georeferenced scan.'}`,
       );
     }
     if (this._cb.exportScanFootprint) {

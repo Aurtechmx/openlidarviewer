@@ -49,6 +49,12 @@ export interface KmlViewpoint {
 }
 
 /** Everything the KML document is built from, plus the injected transform. */
+/** The scan's outline for the site file: a closed lon/lat ring and what it was measured from. */
+export interface KmlSiteOutline {
+  readonly ring: FootprintRing;
+  readonly basis: string;
+}
+
 export interface KmlExportInput {
   /** Annotations → <Point> placemarks. */
   readonly annotations: readonly Annotation[];
@@ -56,6 +62,8 @@ export interface KmlExportInput {
   readonly measurements: readonly Measurement[];
   /** Saved viewpoints → <LookAt> placemarks. */
   readonly viewpoints: readonly KmlViewpoint[];
+  /** The scan's outline → one <Polygon> placemark; absent when it cannot be placed. */
+  readonly siteOutline?: KmlSiteOutline | null;
   /** CRS label, surfaced in the document + every feature description. */
   readonly crsName: string | null;
   /** Unit label for the reported metric values (always metres here, "m"). */
@@ -420,6 +428,26 @@ const POLYGON_STYLE = [
 ].join('');
 const POLYGON_STYLE_URL = `<styleUrl>#${POLYGON_STYLE_ID}</styleUrl>`;
 
+/** The scan outline as a clamped polygon; every vertex passes the same domain check as a feature. */
+function siteOutlinePlacemark(outline: KmlSiteOutline): string {
+  const coords = outline.ring.map(([lon, lat]) => coord([lon, lat, 0], false)).join(' ');
+  return [
+    '<Placemark>',
+    '<name>Scan outline</name>',
+    description([`The scanned area's bounding rectangle, from ${outline.basis}.`]),
+    POLYGON_STYLE_URL,
+    '<Polygon>',
+    '<altitudeMode>clampToGround</altitudeMode>',
+    '<outerBoundaryIs>',
+    '<LinearRing>',
+    `<coordinates>${coords}</coordinates>`,
+    '</LinearRing>',
+    '</outerBoundaryIs>',
+    '</Polygon>',
+    '</Placemark>',
+  ].join('\n');
+}
+
 /** Serialise the full input to a complete KML 2.2 document string. */
 export function buildKml(input: KmlExportInput): string {
   const placemarks: string[] = [];
@@ -429,6 +457,7 @@ export function buildKml(input: KmlExportInput): string {
     if (pm) placemarks.push(pm);
   }
   for (const v of input.viewpoints) placemarks.push(viewpointPlacemark(v, input));
+  if (input.siteOutline) placemarks.push(siteOutlinePlacemark(input.siteOutline));
   const hasPolygon = placemarks.some((p) => p.includes('<Polygon>'));
 
   const crs = input.crsName ?? 'unknown CRS';

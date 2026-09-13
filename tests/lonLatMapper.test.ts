@@ -41,6 +41,17 @@ describe('makeLocalToLonLat', () => {
     expect(makeLocalToLonLat({ ...utm12, kind: 'unknown' } as ResolvedCrs, [0, 0, 0])).toBeNull();
   });
 
+  it('converts NAD83(2011) / UTM through the proj4 path (EPSG 6330–6349)', () => {
+    const nad83_2011_utm10: ResolvedCrs = { ...utm12, name: 'NAD83(2011) / UTM zone 10N', epsg: 6339 };
+    const to = makeLocalToLonLat(nad83_2011_utm10, [500_000, 4_400_000, 0]);
+    expect(to).not.toBeNull();
+    const [lon, lat] = to!([0, 0, 0]);
+    // Zone 10N central meridian is 123°W; northing 4,400,000 sits near 39.7°N.
+    expect(lon).toBeCloseTo(-123, 0);
+    expect(lat).toBeGreaterThan(39);
+    expect(lat).toBeLessThan(40.5);
+  });
+
   it('declines a projected CRS the converter does not handle', () => {
     // A state-plane code is projected but not UTM; the probe fails and the
     // export button stays honestly disabled instead of approximating.
