@@ -1562,7 +1562,7 @@ async function runDeriveClassification(): Promise<void> {
       .slice(0, 3)
       .map((e) => `${classificationLabel(e.code)} ${Math.round((e.n / total) * 100)}%`)
       .join(' · ');
-    const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
+    const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';
     const warnText = result.warnings.length > 0 ? ` ⚠ ${result.warnings[0]}` : '';
     showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.${confText}${warnText}`);
   } catch (err) {
@@ -1635,7 +1635,7 @@ async function runFillUnclassified(): Promise<void> {
     classLegendPanel.show();
     processStudio.refresh(); // filled classes can enable ground/building products
     void showReclassifyUi();
-    const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
+    const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';
     showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

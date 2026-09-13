@@ -249,7 +249,7 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   if (i.classification === 'derived') {
     const pct =
       typeof i.classConfidence === 'number' && Number.isFinite(i.classConfidence)
-        ? ` · ${Math.round(i.classConfidence * 100)}% confidence`
+        ? ` · support ${i.classConfidence.toFixed(2)}`
         : '';
     rows.push({ label: 'Classification', value: `Derived (heuristic)${pct}`, tier: 'caution' });
   } else if (i.classification === 'source') {

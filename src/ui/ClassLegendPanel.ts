@@ -336,7 +336,7 @@ export class ClassLegendPanel {
     let text = 'Derived (heuristic) — not survey-grade. Validate before relying on it.';
     if (on && info) {
       if (typeof info.confidencePct === 'number') {
-        text += ` Confidence ${info.confidencePct}%.`;
+        text += ` Support ${(info.confidencePct / 100).toFixed(2)} (heuristic, not a probability).`;
       }
       if (info.warnings && info.warnings.length > 0) {
         text += ` ⚠ ${info.warnings[0]}`;

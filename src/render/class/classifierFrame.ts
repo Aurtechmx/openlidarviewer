@@ -66,14 +66,16 @@ export interface ClassifierFrame {
  * 1s returns the metre defaults unchanged.
  */
 export function classifierParamsForFrame(frame: ClassifierFrame): Partial<DeriveClassificationOptions> {
-  const lin =
-    frame.linearUnitToMetres && frame.linearUnitToMetres > 0 ? frame.linearUnitToMetres : 1;
+  const linearUnitKnown = Boolean(frame.linearUnitToMetres && frame.linearUnitToMetres > 0);
+  const lin = linearUnitKnown ? frame.linearUnitToMetres! : 1;
   const vert =
     frame.verticalUnitToMetres && frame.verticalUnitToMetres > 0 ? frame.verticalUnitToMetres : lin;
   const p = CURRENT_PARAMS;
   return {
     // Carried so the auto cell-size clamp stays physical (see chooseCellSize).
     linearUnitToMetres: lin,
+    // The substitution is recorded, never silent: the run names it.
+    linearUnitAssumed: !linearUnitKnown,
     maxObjectSizeM: p.maxObjectSizeM / lin,
     structuralNeighborRadiusM: p.structuralNeighborRadiusM / lin,
     elevThresholdM: p.elevThresholdM / vert,
