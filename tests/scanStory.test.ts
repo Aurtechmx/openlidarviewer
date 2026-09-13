@@ -173,7 +173,7 @@ describe('buildExportHealth — verdict', () => {
     expect(h.blockers.some((b) => /heuristic/i.test(b))).toBe(true);
     expect(h.blockers.some((b) => /coordinate system/i.test(b))).toBe(true);
     // The derived row carries its confidence.
-    expect(h.rows.find((r) => r.label === 'Classification')?.value).toMatch(/42% confidence/);
+    expect(h.rows.find((r) => r.label === 'Classification')?.value).toMatch(/support 0\.42/);
   });
 
   it('a Blocked surface forces a blocked verdict', () => {

@@ -109,6 +109,13 @@ export interface DeriveClassificationOptions {
   /** Hard cap on either grid dimension; cellSize grows to respect it. */
   readonly maxGridDim?: number;
   /**
+   * True when the frame supplied no positive linear unit and the caller
+   * substituted 1, so every metre-calibrated threshold ran in source units.
+   * The run then carries a warning and the `linear-unit-assumed` cue; no
+   * threshold changes, the record says what was assumed.
+   */
+  readonly linearUnitAssumed?: boolean;
+  /**
    * Optional per-point RGB(A) colours (uint8 or uint16; only ratios are used,
    * so the scale is immaterial), in the SAME point order as `positions`. When
    * present, a vegetation-greenness index (normalised Excess-Green) supplements
@@ -407,6 +414,7 @@ const DEFAULTS: ClassifierParams = CURRENT_PARAMS;
 
 /** Which optional cues a run actually had data for, in a stable order. */
 const CUE_RGB = 'rgb-greenness';
+const CUE_UNIT_ASSUMED = 'linear-unit-assumed';
 const CUE_RETURNS = 'multi-return';
 const CUE_PRESERVED = 'producer-classes-preserved';
 const CUE_STRUCTURAL = 'structural-verticality';
@@ -1117,6 +1125,12 @@ export function deriveClassification(
         `was built.`,
     );
   }
+  if (o.linearUnitAssumed) {
+    warnings.push(
+      'Linear unit unconfirmed — thresholds calibrated in metres were applied in source ' +
+        'units; the same geometry in another unit would classify differently.',
+    );
+  }
 
   const modeNotes: string[] = [];
   if (useGreen) modeNotes.push('RGB vegetation index');
@@ -1130,6 +1144,7 @@ export function deriveClassification(
   if (useReturns) cues.push(CUE_RETURNS);
   if (usedStructural) cues.push(CUE_STRUCTURAL);
   if (preserved) cues.push(CUE_PRESERVED);
+  if (o.linearUnitAssumed) cues.push(CUE_UNIT_ASSUMED);
 
   const classifier: ClassifierProvenance = {
     method: CLASSIFIER_METHOD_TAG,

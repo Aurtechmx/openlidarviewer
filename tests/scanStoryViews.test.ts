@@ -127,7 +127,7 @@ describe('renderExportHealthPanel', () => {
     expect(text).toContain('Export with caution');
     expect(text).toContain('Before you hand this off');
     expect(text).toContain('heuristic');
-    expect(text).toContain('42% confidence');
+    expect(text).toContain('support 0.42');
     expect(node.allClasses()).toContain('is-caution');
   });
 });
