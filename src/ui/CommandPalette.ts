@@ -47,13 +47,6 @@ export class CommandPalette {
   private _selected = -1;
   /** Whether the palette is open. */
   private _open = false;
-  /**
-   * Whether the pointer has moved since the palette opened. Firefox fires
-   * `mouseenter` on whichever row appears under a stationary pointer, which
-   * moved the selection off the first row before the user touched anything;
-   * hover only follows the pointer once it has actually moved.
-   */
-  private _pointerMoved = false;
 
   constructor() {
     this._input = el('input', {
@@ -103,7 +96,6 @@ export class CommandPalette {
 
     // ── interactions ──────────────────────────────────────────────
     this._input.addEventListener('input', () => this._refresh());
-    this._list.addEventListener('mousemove', () => { this._pointerMoved = true; });
     this._input.addEventListener('keydown', (e) => this._handleKey(e));
     this._backdrop.addEventListener('click', () => this.close());
     // Clicks inside the card should not bubble to the backdrop.
@@ -125,7 +117,6 @@ export class CommandPalette {
   open(): void {
     if (this._open) return;
     this._open = true;
-    this._pointerMoved = false;
     this.element.classList.remove('olv-hidden');
     this._input.setAttribute('aria-expanded', 'true');
     this._input.value = '';
@@ -204,8 +195,12 @@ export class CommandPalette {
           );
         }
         const idxInRanked = absoluteRow;
-        row.addEventListener('mouseenter', () => {
-          if (!this._pointerMoved) return;
+        // Hover follows the pointer only when it moves. Firefox fires
+        // `mouseenter` on whichever row appears under a stationary pointer,
+        // which moved the selection off the first row before the user touched
+        // anything; `mousemove` never fires without movement.
+        row.addEventListener('mousemove', () => {
+          if (this._selected === idxInRanked) return;
           this._selected = idxInRanked;
           this._paintSelection();
         });

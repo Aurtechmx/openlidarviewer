@@ -90,10 +90,10 @@ test.describe('command palette accessibility', () => {
     await page.keyboard.press('ControlOrMeta+KeyK');
     await expect(page.locator('.olv-palette')).toBeVisible();
     await expect(page.locator('.olv-palette-row').nth(0)).toHaveAttribute('aria-selected', 'true');
-    // Moving the pointer hands selection to hover again.
+    // Moving the pointer hands selection to the row under it.
     await page.mouse.move(641, 421);
     const hovered = page.locator('.olv-palette-row:hover');
-    if (await hovered.count()) await expect(hovered).toHaveAttribute('aria-selected', 'true');
+    if (await hovered.count()) await expect(hovered.first()).toHaveAttribute('aria-selected', 'true');
   });
 
   test('closing the palette collapses the combobox', async ({ page }) => {
