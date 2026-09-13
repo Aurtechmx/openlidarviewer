@@ -186,7 +186,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
-    "@loaders.gl/las": "^4.4.5",
+    "@loaders.gl/las": "^4.5.1",
     "@playwright/test": "^1.63.0",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
