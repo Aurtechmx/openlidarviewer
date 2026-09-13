@@ -44,10 +44,12 @@ describe('Contour Studio is told the coverage the result actually recorded', () 
   it('derives the streaming flag from the result, never a literal', () => {
     const at = RUNNER.indexOf('setContourFrame({');
     expect(at).toBeGreaterThan(-1);
-    const block = RUNNER.slice(at, at + 260);
+    const block = RUNNER.slice(at, at + 420);
     // The launcher caps a streaming frame to exploratory. Hardcoding false told
-    // it a resident-only analysis was a complete scan.
+    // it a resident-only analysis was a complete scan. The flag now comes from
+    // the scan facts (a strided static read is sampled, not streaming); the
+    // grid's resident-only flag is the fallback when no facts are available.
     expect(block).not.toMatch(/streaming:\s*false/);
-    expect(block).toMatch(/streaming:\s*result\.dtm\.coverageMode === 'resident-only'/);
+    expect(block).toMatch(/streaming:\s*facts\s*\?\s*facts\.kind === 'streaming' && facts\.coverage !== 'full'\s*:\s*result\.dtm\.coverageMode === 'resident-only'/);
   });
 });
