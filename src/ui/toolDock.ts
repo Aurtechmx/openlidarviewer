@@ -274,6 +274,8 @@ export class ToolDock {
     this._share = this._buttons.get('tool.share')!;
 
     this.dock = el('div', { className: 'olv-dock' }, buttons);
+    this.dock.setAttribute('role', 'toolbar');
+    this.dock.setAttribute('aria-label', 'Tools');
 
     this._backendText = el('span', { className: 'olv-backend-text', text: 'initialising…' });
     this.backend = el('div', { className: 'olv-backend' }, [

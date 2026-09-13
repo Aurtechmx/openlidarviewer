@@ -32,7 +32,7 @@
 .olv-colorbar-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .olv-colorbar-svg { line-height: 0; }
 .olv-colorbar-note { font-size: var(--text-2xs); color: var(--text-dim); max-width: 150px; }
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .olv-colorbar { right: 14px; }
 }
 

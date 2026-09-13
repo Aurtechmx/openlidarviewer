@@ -109,6 +109,17 @@ const WHEEL_LINE_HEIGHT_PX = 16;
 /** Arrow-key orbit angular speed, radians per second (~4 s for a full turn). */
 const ORBIT_KEY_SPEED = 1.6;
 
+/** The OS-level motion preference, read at tween start; false where unreadable. */
+function prefersReducedMotion(): boolean {
+  try {
+    return typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches === true;
+  } catch {
+    return false;
+  }
+}
+
 export class NavController {
   private readonly _camera: THREE.PerspectiveCamera;
   private readonly _canvas: HTMLCanvasElement;
@@ -505,13 +516,16 @@ export class NavController {
    * acceleration, not snaps.
    */
   tweenTo(toPos: THREE.Vector3, toTarget: THREE.Vector3, duration = 0.8): void {
+    // A user who asked the OS for less motion gets the destination on the next
+    // frame, through the same tween so every completion path stays one path.
+    const d = prefersReducedMotion() ? 0 : duration;
     this._tween = {
       fromPos: this._camera.position.clone(),
       fromTarget: this._currentLookTarget(),
       toPos: toPos.clone(),
       toTarget: toTarget.clone(),
       elapsed: 0,
-      duration: Math.max(0.0001, duration),
+      duration: Math.max(0.0001, d),
     };
   }
 

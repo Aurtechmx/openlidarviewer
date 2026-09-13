@@ -37,6 +37,10 @@
   }
   .olv-mobile-sheet.olv-hidden { display: none; }
   .olv-mobile-sheet.is-dragging { transition: none; }
+  /* Less motion: the sheet lands on its detent instead of easing to it. */
+  @media (prefers-reduced-motion: reduce) {
+    .olv-mobile-sheet { transition: none; }
+  }
 
   /* ── Snap detents ─────────────────────────────────────────────────────────
      'peek' leaves height:auto so the collapsed sheet is just its head (the body
