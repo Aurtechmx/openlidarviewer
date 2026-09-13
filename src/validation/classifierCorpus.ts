@@ -242,8 +242,26 @@ interface SceneSpec {
  * loop changes every subsequent coordinate.
  */
 function buildScene(spec: SceneSpec): CorpusScene {
+  return buildSceneOver(spec, SURFACES[spec.surface]);
+}
+
+/** A scene spec with the surface given as a function; for scenes outside the frozen corpus. */
+export type CustomSceneSpec = Omit<SceneSpec, 'surface'> & {
+  readonly surface: (x: number, y: number) => number;
+};
+
+/**
+ * Build a scene outside the frozen corpus: the same generator, draw order and
+ * densities, over a caller-supplied terrain function. Characterization tests
+ * use it to pin how the classifier behaves on terrain shapes the corpus does
+ * not carry (scarp, ditch, low wall) without moving the corpus digest.
+ */
+export function buildCustomScene(spec: CustomSceneSpec): CorpusScene {
+  return buildSceneOver({ ...spec, surface: 'flat' }, spec.surface);
+}
+
+function buildSceneOver(spec: SceneSpec, surface: (x: number, y: number) => number): CorpusScene {
   const rnd = lcg(spec.seed);
-  const surface = SURFACES[spec.surface];
   const a = accum();
 
   // ── bare earth ───────────────────────────────────────────────────────────
@@ -558,6 +576,8 @@ export interface ClassMetrics {
   readonly precision: number | null;
   readonly recall: number | null;
   readonly f1: number | null;
+  /** tp / (tp + fp + fn); null when the class has neither support nor predictions. */
+  readonly iou: number | null;
 }
 
 /** One scene's score. */
@@ -571,8 +591,22 @@ export interface SceneScore {
    * Null when no scored class has either.
    */
   readonly macroF1: number | null;
+  /** Mean IoU over the same classes {@link macroF1} averages; null on the same condition. */
+  readonly macroIoU: number | null;
   /** Fraction of points the classifier declined to name. */
   readonly unclassifiedRate: number;
+  /** 1 - unclassifiedRate: the fraction the classifier committed to a class. */
+  readonly coverage: number;
+  /**
+   * Ground Type I error: truth-ground points called anything but ground, over
+   * truth-ground points (1 - ground recall). Null with no ground in the scene.
+   */
+  readonly groundTypeI: number | null;
+  /**
+   * Ground Type II error: points called ground whose truth is not ground, over
+   * truth-non-ground points. Null when every point is ground.
+   */
+  readonly groundTypeII: number | null;
   /**
    * Points predicted BUILDING whose truth is not building, over all points
    * whose truth is not building. A false-positive rate, so it does not move
@@ -634,14 +668,17 @@ export function scoreScene(
       precision,
       recall,
       f1,
+      iou: tp + fp + fn > 0 ? tp / (tp + fp + fn) : null,
     });
   }
 
   let f1Sum = 0;
+  let iouSum = 0;
   let f1N = 0;
   for (const m of byClass) {
     if (m.support === 0 && m.predicted === 0) continue;
     f1Sum += m.f1 ?? 0;
+    iouSum += m.iou ?? 0;
     f1N++;
   }
 
@@ -662,12 +699,18 @@ export function scoreScene(
     }
   }
 
+  const ground = byClass.find((m) => m.code === TRUTH_GROUND)!;
+  const notGround = n - ground.support;
   return {
     sceneId,
     points: n,
     byClass,
     macroF1: f1N > 0 ? f1Sum / f1N : null,
+    macroIoU: f1N > 0 ? iouSum / f1N : null,
     unclassifiedRate: n > 0 ? unclassified / n : 0,
+    coverage: n > 0 ? 1 - unclassified / n : 0,
+    groundTypeI: ground.support > 0 ? ground.falseNegative / ground.support : null,
+    groundTypeII: notGround > 0 ? ground.falsePositive / notGround : null,
     falseBuildingRate: notBuilding > 0 ? falseBuilding / notBuilding : null,
     lowNoiseCalledGround,
     lowNoisePoints,
@@ -732,23 +775,32 @@ export function poolScores(scores: readonly SceneScore[]): SceneScore {
       precision,
       recall,
       f1,
+      iou: acc.tp + acc.fp + acc.fn > 0 ? acc.tp / (acc.tp + acc.fp + acc.fn) : null,
     };
   });
 
   let f1Sum = 0;
+  let iouSum = 0;
   let f1N = 0;
   for (const m of byClass) {
     if (m.support === 0 && m.predicted === 0) continue;
     f1Sum += m.f1 ?? 0;
+    iouSum += m.iou ?? 0;
     f1N++;
   }
 
+  const ground = byClass.find((m) => m.code === TRUTH_GROUND)!;
+  const notGround = points - ground.support;
   return {
     sceneId: 'pooled',
     points,
     byClass,
     macroF1: f1N > 0 ? f1Sum / f1N : null,
+    macroIoU: f1N > 0 ? iouSum / f1N : null,
     unclassifiedRate: points > 0 ? unclassified / points : 0,
+    coverage: points > 0 ? 1 - unclassified / points : 0,
+    groundTypeI: ground.support > 0 ? ground.falseNegative / ground.support : null,
+    groundTypeII: notGround > 0 ? ground.falsePositive / notGround : null,
     falseBuildingRate: notBuilding > 0 ? falseBuilding / notBuilding : null,
     lowNoiseCalledGround,
     lowNoisePoints,

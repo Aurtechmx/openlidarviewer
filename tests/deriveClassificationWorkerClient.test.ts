@@ -133,3 +133,35 @@ describe('DeriveClassificationWorkerClient — synchronous postMessage failure',
     expect(client.pendingCount).toBe(0);
   });
 });
+
+describe('DeriveClassificationWorkerClient — abort terminates the computation', () => {
+  test('an abort terminates the worker, drops it, and the next job respawns a fresh one', async () => {
+    instances = [];
+    vi.stubGlobal('Worker', FakeWorker);
+    const client = new DeriveClassificationWorkerClient();
+    const ctrl = new AbortController();
+
+    const job = client.classify(positions(), 3, OPTIONS, ctrl.signal);
+    expect(instances).toHaveLength(1);
+    const running = instances[0];
+    ctrl.abort();
+    await expect(job).rejects.toThrow(/aborted/i);
+    // Rejecting the promise alone would leave the worker computing to the end
+    // for nobody; the worker is torn down with the job.
+    expect(running.terminated).toBe(true);
+    expect(client.pendingCount).toBe(0);
+
+    const next = client.classify(positions(), 3, OPTIONS);
+    expect(instances).toHaveLength(2);
+    const fresh = instances[1];
+    expect(fresh).not.toBe(running);
+    const id = (fresh.posted[0] as { jobId: number }).jobId;
+    fresh.onmessage?.({
+      data: {
+        jobId: id, ok: true, codes: new Uint8Array([2]), counts: {}, cellSizeM: 1, gridWidth: 1, gridHeight: 1,
+        provenance: {}, confidence: 1, classConfidence: {}, warnings: [], classifier: {},
+      },
+    } as MessageEvent);
+    await expect(next).resolves.toMatchObject({ derived: true });
+  });
+});

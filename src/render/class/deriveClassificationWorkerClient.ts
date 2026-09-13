@@ -101,6 +101,16 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
         pending.onAbort = (): void => {
           if (!this._pending.delete(jobId)) return;
           reject(new Error('Classification aborted'));
+          // The worker is single-job: the aborted job IS its current work, so
+          // rejecting the promise alone would leave it computing to the end
+          // and then replying to nobody. Terminate it and drop it; the next
+          // job respawns a fresh one. Any other job queued behind this one is
+          // failed rather than silently lost with the worker.
+          this._failAll(new Error('Classification aborted'));
+          if (this._worker) {
+            this._worker.terminate();
+            this._worker = null;
+          }
         };
         signal.addEventListener('abort', pending.onAbort, { once: true });
       }
