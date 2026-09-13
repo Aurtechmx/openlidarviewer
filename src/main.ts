@@ -30,8 +30,7 @@ import {
   wireRailToggle,
   containPanelWheel,
   RAIL_CHEVRON_LEFT,
-  RAIL_CHEVRON_RIGHT,
-} from './ui/panelChrome';
+  RAIL_CHEVRON_RIGHT, createToastHost } from './ui/panelChrome';
 import {
   applyTheme,
   readPersistedTheme,
@@ -836,55 +835,8 @@ if (
 // `I` belongs solely to the Inspect tool (binding 612), the collision fixed in
 // v0.4.3.
 
-let _lassoToastEl: HTMLElement | null = null;
-let _lassoToastTimer: ReturnType<typeof setTimeout> | null = null;
-/**
- * Render the lasso toast. When `action` is provided, the toast shows
- * a button that fires the callback (and hides the toast). The toast
- * auto-dismisses after 8 s for an action toast, 6 s for an info
- * toast — actions need a little longer to read and click.
- */
-function showLassoToast(
-  message: string,
-  action?: { readonly label: string; readonly onClick: () => void },
-): void {
-  if (_lassoToastTimer !== null) clearTimeout(_lassoToastTimer);
-  if (_lassoToastEl === null) {
-    _lassoToastEl = document.createElement('div');
-    _lassoToastEl.className = 'olv-lasso-toast';
-    // Announce toast text to assistive tech — these toasts are the only
-    // feedback channel for several flows (tool hints, rejected opens).
-    _lassoToastEl.setAttribute('role', 'status');
-    _lassoToastEl.setAttribute('aria-live', 'polite');
-    document.body.append(_lassoToastEl);
-  }
-  // Rebuild contents from scratch each call so an info toast cleanly
-  // replaces a previous action toast (no stale Save button stuck
-  // around).
-  _lassoToastEl.replaceChildren();
-  const messageEl = document.createElement('span');
-  messageEl.className = 'olv-lasso-toast-msg';
-  messageEl.textContent = message;
-  _lassoToastEl.append(messageEl);
-  if (action) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'olv-lasso-toast-action';
-    btn.textContent = action.label;
-    btn.addEventListener('click', () => {
-      btn.blur();
-      action.onClick();
-    });
-    _lassoToastEl.append(btn);
-  }
-  _lassoToastEl.classList.add('olv-visible');
-  _lassoToastTimer = setTimeout(
-    () => {
-      _lassoToastEl?.classList.remove('olv-visible');
-    },
-    action ? 8000 : 6000,
-  );
-}
+/** The app's one toast; see `createToastHost`. */
+const showLassoToast = createToastHost().show;
 
 /** Input-aware mobile check — drives the touch hint and the tighter point budget. */
 function isPhone(): boolean {
