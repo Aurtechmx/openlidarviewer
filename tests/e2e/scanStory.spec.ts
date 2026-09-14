@@ -56,7 +56,8 @@ test('Export health check action opens a verdict + per-axis rows', async ({ page
 
   await firePaletteAction(page, 'Export health', 'Export health check');
 
-  const health = page.locator('.olv-health');
+  // The Export panel renders the same block in its body; scope to the modal.
+  const health = page.locator('.olv-modal .olv-health');
   await expect(health).toBeVisible();
   await expect(health.locator('.olv-health-verdict')).toBeVisible();
   // Scope + classification are always present rows.

@@ -19,7 +19,7 @@
 }
 
 /* Panels glide in rather than snapping */
-.olv-inspector, .olv-navbar, .olv-dock, .olv-backend, .olv-version {
+.olv-inspector, .olv-navbar, .olv-dock, .olv-backend {
   animation: olv-rise-in 260ms ease both;
 }
 @keyframes olv-rise-in {
@@ -45,15 +45,6 @@
   50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rating-weak) 22%, transparent); }
 }
 
-/* Version mark — bottom-right corner, revealed once a scan loads */
-.olv-version {
-  position: absolute; bottom: 13px; right: 14px;
-  font-size: var(--text-2xs); line-height: 1; font-variant-numeric: tabular-nums;
-  letter-spacing: 0.03em; color: var(--text-faint);
-  pointer-events: auto; user-select: none;
-}
-
-
 /* Respect a reduced-motion preference: hold the health dots static and drop the
    entrance motion, matching the guards the other section files already carry.
    The pulse is INFINITE, so it is the one that most needs silencing. */
@@ -65,8 +56,7 @@
   .olv-inspector,
   .olv-navbar,
   .olv-dock,
-  .olv-backend,
-  .olv-version {
+  .olv-backend {
     animation: none;
   }
 }

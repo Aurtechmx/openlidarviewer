@@ -32,7 +32,7 @@ from the tree and fails when a cell drifts.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~12k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~15k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~31k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,409 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,407 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,409)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,407)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,

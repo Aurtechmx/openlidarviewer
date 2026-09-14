@@ -1,8 +1,8 @@
 /**
  * DesktopWorkspace.ts
  *
- * The desktop left-rail workspace shell: a semantic Data · Work · Analyse ·
- * Output tablist over four mode-host slots the composition root re-parents the
+ * The desktop left-rail workspace shell: a semantic Data · Tools · Analyse ·
+ * Export tablist over four mode-host slots the composition root re-parents the
  * existing live panels into. It replaces the flat vertical stack of
  * `.olv-left-panels` with one mode visible at a time, WITHOUT changing what any
  * panel is or does — the workspace orchestrates presentation only. It owns no
@@ -40,15 +40,21 @@ interface ModeDef {
 
 /**
  * The tab order — Data (layers, classes) → Work (the scene-work tools:
- * measurement, annotation, clip) → Analyse → Output. Splitting Work out of Data
- * keeps Data about what the scan IS and Work about what you DO to it, so neither
- * tab carries the other's clutter.
+ * measurement, annotation, clip) → Analyse → Export. Splitting Tools out of Data
+ * keeps Data about what the scan IS and Tools about what you DO to it, so
+ * neither tab carries the other's clutter.
+ *
+ * The visible labels and the mode ids are deliberately allowed to differ. The
+ * ids are a persisted contract (`olv.workspace.left.mode`) and a selector
+ * contract for the panels and the e2e suite; renaming them to chase a label
+ * would strand every stored preference on the fallback for no user-visible
+ * gain, so `work` still means the Tools tab and `output` the Export tab.
  */
 const MODES: readonly ModeDef[] = [
   { id: 'data', label: 'Data' },
-  { id: 'work', label: 'Work' },
+  { id: 'work', label: 'Tools' },
   { id: 'analyse', label: 'Analyse' },
-  { id: 'output', label: 'Output' },
+  { id: 'output', label: 'Export' },
 ];
 
 const MODE_IDS: readonly WorkspaceMode[] = MODES.map((m) => m.id);

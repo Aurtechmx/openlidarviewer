@@ -66,6 +66,12 @@ export interface HeavyLasDecisionEnv {
   capable(): boolean;
   /** A ranged reader over the file for the header peek. */
   openRange(file: File): RangeSource;
+  /**
+   * The file's first bytes, from offset 0, when the caller has already read
+   * them. The peek uses these instead of issuing its own read when they cover
+   * what it would have read; absent, it reads as before.
+   */
+  head?: ArrayBuffer;
 }
 
 /** The heavy seams the execution half needs. */

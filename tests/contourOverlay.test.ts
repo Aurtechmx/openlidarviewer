@@ -205,6 +205,19 @@ describe('vertexColours — evidence honesty', () => {
     for (let k = 0; k < 3; k++) expect(c[6 + k]).toBeLessThan(c[k]);
   });
 
+  it('an interpolated segment is legible: half again the luminance it used to draw at', () => {
+    // Rec.709 luminance. The floor matters because a scan on steep ground can
+    // be 95 % interpolated by length, so this grade is most of what is drawn.
+    const luma = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const c = vertexColours(buffers([0, 1], [0, 0]), true);
+    const solid = luma(c[0], c[1], c[2]);
+    const dashed = luma(c[6], c[7], c[8]);
+    // Was 0.353 against a solid 0.757; the lift is to ~0.53.
+    expect(dashed).toBeGreaterThan(0.5);
+    // And it stays clearly the receding grade: well under the measured line.
+    expect(dashed).toBeLessThan(solid * 0.8);
+  });
+
   it('both vertices of a segment carry the same colour', () => {
     const c = vertexColours(buffers([0], [0]), true);
     expect([c[0], c[1], c[2]]).toEqual([c[3], c[4], c[5]]);

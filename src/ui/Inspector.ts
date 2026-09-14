@@ -83,6 +83,8 @@ export interface RenderingState {
 }
 
 export interface InspectorCallbacks {
+  /** Open the add-a-dataset picker. Optional so a host without ingest omits it. */
+  onAddDataset?: () => void;
   onColorMode: (mode: ColorMode) => void;
   /**
    * v0.3.7 final-polish — symmetric height percentile trim.
@@ -682,7 +684,19 @@ export class Inspector {
     newGroup.addEventListener('click', () => {
       void this._ensureGroups().then((groups) => groups?.createGroup());
     });
-    this._groupBar = el('div', { className: 'olv-group-bar' }, [newGroup]);
+    // "+ Add dataset" belongs to Layers, which is what it adds to. It used to
+    // float over the canvas at bottom-left, where the tool dock sits one pixel
+    // away with a higher z-index and covered it: the control was revealed
+    // exactly when a scan loaded, which is exactly when the dock appeared, so
+    // it was unreachable for the whole of its visible life.
+    const addDataset = el('button', {
+      className: 'olv-group-new olv-add-dataset-row',
+      type: 'button',
+      text: '+ Add dataset',
+      title: 'Open another point-cloud file — it mounts alongside the current scan',
+    });
+    addDataset.addEventListener('click', () => this._cb.onAddDataset?.());
+    this._groupBar = el('div', { className: 'olv-group-bar' }, [addDataset, newGroup]);
 
     // ── Point size: an adaptive/fixed mode toggle above the size slider ──
     const slider = el('input', {

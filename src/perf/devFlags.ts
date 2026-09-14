@@ -245,7 +245,8 @@ let cached: DevFlags | null = null;
 /**
  * The session's development flags, parsed once from
  * `window.location.search`. Safe anywhere: in a DOM-free environment (unit
- * tests, workers) it returns the defaults.
+ * tests, workers) it returns the defaults, unless the owner of a worker has
+ * handed it the page's query through {@link primeDevFlags}.
  */
 export function readDevFlags(): DevFlags {
   if (cached) return cached;
@@ -255,6 +256,17 @@ export function readDevFlags(): DevFlags {
       : '';
   cached = parseDevFlags(search);
   return cached;
+}
+
+/**
+ * Adopt the page's query string in a scope that has no `window`. A dedicated
+ * worker's `location` is its own script URL, so a flag typed into the page
+ * never reaches code running there; the thread that spawns the worker sends
+ * `location.search` with its request and the worker calls this before any
+ * flag is read. Re-priming with the same query is a no-op in effect.
+ */
+export function primeDevFlags(search: string): void {
+  cached = parseDevFlags(search);
 }
 
 /** Test hook — drop the memoized flags so a new search string re-parses. */

@@ -350,7 +350,26 @@ describe('capture type — the other bands are unchanged', () => {
     ).toBe('iphone-lidar');
   });
 
-  it('the object-shape guard still fires, and still names geometry as the reason', () => {
+  it('a wide airborne tile over steep ground is not relabelled ground-based', () => {
+    // The case this separation came from: a 1 km USGS tile over ~500 m of
+    // relief reads to the shape router as a compact object, which withholds
+    // the airborne verdict. Withholding is not evidence of a ground survey,
+    // and the report headline must not say it was one.
+    const fp = classify({
+      sourceFormat: 'laz',
+      pointCount: 47_170_656,
+      extent: [1000, 1000, 509],
+      densityPerSqM: 47.2,
+      isNonTerrain: true,
+    });
+    expect(fp.captureType).toBe('unknown');
+    expect(fp.confidence).toBe('low');
+    expect(fp.label).toBe('Capture method not determined');
+    expect(fp.label).not.toMatch(/ground-based/i);
+    expect(fp.signals.join(' ')).not.toMatch(/ruled out/i);
+  });
+
+  it('the object-shape guard still fires, names geometry, and asserts no capture type', () => {
     const fp = classify({
       sourceFormat: 'xyz',
       pointCount: 1_564_029,
@@ -359,6 +378,9 @@ describe('capture type — the other bands are unchanged', () => {
       isNonTerrain: true,
     });
     expect(fp.captureType).toBe('unknown');
-    expect(fp.signals.some((s) => /ruled out by geometry/.test(s))).toBe(true);
+    expect(fp.signals.some((s) => /not asserted from geometry alone/.test(s))).toBe(true);
+    // Geometry withholds an airborne reading; it is not evidence the scan was
+    // taken from the ground, so the label states neither.
+    expect(fp.label).toBe('Capture method not determined');
   });
 });

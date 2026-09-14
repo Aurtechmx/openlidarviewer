@@ -31,7 +31,10 @@ describe('classify — object-shape aerial guard', () => {
     expect(fp.captureType).toBe('unknown');
     expect(fp.confidence).toBe('low');
     expect(fp.bounds).toEqual([]);
-    expect(fp.signals.some((s) => /airborne capture ruled out/i.test(s))).toBe(true);
+    // The shape reading withholds the airborne verdict; it does not evidence a
+    // ground survey, so the signal names geometry and the label asserts nothing.
+    expect(fp.signals.some((s) => /not asserted from geometry alone/i.test(s))).toBe(true);
+    expect(fp.label).toBe('Capture method not determined');
   });
 
   it('a non-aerial guess (phone-LiDAR) passes through unchanged for an object', () => {

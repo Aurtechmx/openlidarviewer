@@ -100,7 +100,7 @@ import { deriveClassificationAsync } from './render/class/deriveClassificationAs
 import { classifierOptions } from './render/class/classifierCues';
 import { classificationCoverage } from './render/class/classificationCoverage';
 import type { DeriveClassificationOptions } from './render/class/deriveClassification';
-import { densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
+import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 // ObjectPanel is lazy-mounted on first scan load (v0.6 P1, step 2): only the
@@ -513,7 +513,6 @@ const stage = new Stage(app, {
 themeToggle = mountHeaderControls(stage, {
   initialTheme: currentTheme,
   onThemeChange: (name) => setTheme(name),
-  onRecenter: () => { viewer?.frameAll(); },
 });
 
 /**
@@ -1088,13 +1087,13 @@ const layerService = createLayerService({
 });
 
 const inspector = new Inspector({
+  onAddDataset: () => stage.promptAddDataset(),
   onColorMode: (mode) => {
     currentColorMode = mode;
     if (scans.activeId) viewer.setColorMode(scans.activeId, mode);
-    // Keep the analyse-panel confidence toggle in sync when the user changes
-    // colour from the COLOR BY rail instead of the toggle button. Null-safe: the
-    // panel is lazy-mounted, and `hydrateAnalysePanel()` re-derives this from
-    // `currentColorMode` when it does mount.
+    // Keep the analyse-panel confidence toggle in sync when colour changes from
+    // the rail instead of the toggle. Null-safe: the panel is lazy-mounted and
+    // `hydrateAnalysePanel()` re-derives this from `currentColorMode` on mount.
     analysePanel?.setConfidenceColorActive(mode === 'confidence');
     // Workflow rail (v0.4.5): a colour-mode change can enter/leave a preset.
     syncInspectorVisuals();
@@ -1696,6 +1695,13 @@ const ACTION_REGISTRY = buildActionRegistry({
   ensureWorkflowConfigPanel,
   ensureShortcutSheet,
   hasScan,
+  saveSnapshot,
+  copyShareLink,
+  terrainAnalysisEntry: {
+    showAnalyseMode: () => showWorkspaceMode?.('analyse'),
+    showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null }; }),
+    run: () => void terrainRunner.run(),
+  },
   saveCurrentView,
   applyView,
   ...makeNavPaletteActions({ viewer, inspector, persist: persistPrefs, toast: showLassoToast }),
@@ -1703,8 +1709,7 @@ const ACTION_REGISTRY = buildActionRegistry({
 });
 const duplicateActionIds = findDuplicateIds(ACTION_REGISTRY);
 if (duplicateActionIds.length > 0) {
-  // Throw at boot rather than silently surfacing two rows with the
-  // same id — duplicates almost always mean a copy-paste bug.
+  // Throw at boot rather than surface two rows with one id: a duplicate is a copy-paste bug.
   throw new Error(
     `Command palette: duplicate action ids: ${duplicateActionIds.join(', ')}`,
   );
@@ -1845,23 +1850,18 @@ const dock = new ToolDock({
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
   onAnnotateToggle: () => { if (toggleTool(viewer, workflowController, 'annotate')) showWorkspaceMode?.('work'); },
   onAnalyseToggle: () => {
-    // Re-open (or hide) the terrain analysis panel. If an object scan had
-    // demoted it behind the Object panel, opening Analyse takes over —
-    // the "run terrain anyway" path, reachable from one obvious place.
-    // Lazy-mount aware: the panel may not exist yet (import in flight), so the
-    // toggle reads/writes the tracked desired-visibility and mounts on demand.
+    // Re-open (or hide) the terrain analysis panel; opening takes over from an
+    // Object panel that demoted it. Lazy-mount aware: the panel may not exist
+    // yet, so the toggle reads the tracked desired-visibility and mounts on demand.
     const show = analysePanel ? !analysePanel.isVisible() : !analyseDesiredVisible;
-    // A manual Analyse toggle is a user override — stop auto-rerouting so a
-    // late streaming node can't yank the panel away.
+    // A manual toggle is a user override: stop auto-rerouting so a late streaming node cannot move the panel.
     routing.pin();
     analyseDesiredVisible = show;
     analyseProfileVisibility.clear(); // explicit toggle overrides a pending restore
     if (show) {
       showWorkspaceMode?.('analyse');
-      // Opening: ensure the panel is mounted, then show it.
       void ensureAnalysePanel().then((p) => p.setVisible(true));
-      // Opening Analyse demotes the Object panel — track the intent (so a still-
-      // mounting Object panel replays hidden) and hide it now (no-op if unmounted).
+      // Opening Analyse demotes the Object panel: track the intent so a still-mounting one replays hidden.
       objectDesiredVisible = false;
       objectPanel?.setVisible(false);
     } else {
@@ -2727,6 +2727,7 @@ const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => 
 });
 
 const exportPanel = new ExportPanel({
+  exportHealth: () => (hasScan() ? buildExportHealth(buildCurrentStoryInputs()) : null),
   onExport: (format) => {
     const cloud = scans.activeCloud() ?? undefined;
     if (!cloud) return;
@@ -5024,8 +5025,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
   });
-  // Suggest the camera preset best suited to the scan — a dismissible chip the
-  // user can accept with one click or ignore (it auto-hides).
+  // Suggest the camera preset best suited to the scan: a dismissible chip, accepted in one click or ignored (it auto-hides).
   const rec = recommendCameraPreset({
     hasRgb: cloud.colors !== undefined,
     hasClassification: cloud.classification !== undefined,
@@ -5038,12 +5038,10 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
 async function loadFromUrl(url: string, name: string): Promise<void> {
   // ensure the lazy-loaded Viewer is ready before touching it.
   await ensureViewer();
-  // Remote COPC / EPT URLs route through the streaming pipeline — a
-  // `fetch().blob()` against a 1+ GB COPC would defeat the whole point
-  // of streaming and try to pull the entire file before showing a
-  // single point. The dispatch matches `handleRemoteUrl`'s contract so
-  // the sample-button affordance can carry a real public COPC URL the
-  // same way the "stream from URL" field does.
+  // Remote COPC / EPT URLs route through the streaming pipeline: a
+  // `fetch().blob()` against a 1+ GB COPC would pull the whole file before
+  // showing a point. The dispatch matches `handleRemoteUrl`'s contract, so the
+  // sample button can carry a real public COPC URL like the URL field does.
   const looksLikeRemoteStream =
     /^https?:\/\//i.test(url) &&
     (/\.copc\.laz$/i.test(url) || /\/ept\.json(?:\?|#|$)/i.test(url));

@@ -128,20 +128,21 @@ export class LazChunkWorkerClient {
 /**
  * Point count at which a `.laz` decodes across the pool without being asked to.
  *
- * Pooling costs one laz-perf WASM heap per worker plus the worker startup, on
- * the order of a couple of hundred milliseconds for the four the hard cap
- * allows. Below a few million points the whole decode is over inside that
- * overhead and the pool would only add memory. Ten million is where the
- * single-threaded decode is unambiguously the larger cost: a 10 M-point PDRF 7
- * file measured 3.9 s on one core against 1.1 s across four workers (a 14-core
- * laptop, threads rather than browser workers), and the files this exists for
- * are several times that again.
+ * Pooling costs one laz-perf WASM heap per worker plus the worker startup:
+ * about 55 ms for the four the hard cap allows, measured in Node threads, and
+ * no more in a browser module Worker once its script is fetched. The pool is
+ * repaid from a quarter million points in threads; in the browser it decodes
+ * a 1 M-point file in 183 ms against 433 ms on one reader, 2 M in 314 against
+ * 841, and 10 M in 1.25 s against 3.9 s (headless Chromium, 14-core laptop,
+ * `tests/e2e/localOpenDevice.spec.ts`). One million is the smallest rung the
+ * browser measured; below it the single reader's whole decode is under half a
+ * second and the gain shrinks toward the pool's fixed cost.
  *
  * Deliberately the DECLARED record count, not the sampled one: a strided decode
  * still decompresses every record (laz-perf cannot skip), so the file's size is
  * what the work is proportional to.
  */
-export const PARALLEL_DECODE_MIN_POINTS = 10_000_000;
+export const PARALLEL_DECODE_MIN_POINTS = 1_000_000;
 
 /** Options for {@link decodeLazPooled}; same decode contract as `decodeLaz`. */
 export interface PooledDecodeOptions {

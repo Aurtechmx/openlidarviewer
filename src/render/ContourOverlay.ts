@@ -66,11 +66,24 @@ export interface ContourOverlayInput {
 
 /** Colours, chosen to read against both the dark and light scene presets. */
 const SOLID_RGB: readonly [number, number, number] = [0.36, 0.85, 1.0];
-const DASHED_RGB: readonly [number, number, number] = [0.55, 0.66, 0.74];
+const DASHED_RGB: readonly [number, number, number] = [0.44, 0.72, 0.80];
 /** Index (bold) contours are the same hue, brighter — emphasis, not a new class. */
 const INDEX_GAIN = 1.25;
-/** Interpolated support also drops alpha, so it recedes as well as desaturates. */
-const DASHED_ALPHA = 0.55;
+/**
+ * Interpolated support also drops alpha, so it recedes as well as desaturates.
+ *
+ * The floor sits where a dashed line is still legible on the dark preset. At
+ * the previous pair (rgb 0.55/0.66/0.74, alpha 0.55) an interpolated segment
+ * drew at Rec.709 luminance 0.35, and on a scan whose contours are mostly
+ * interpolated — 95 % by length is ordinary on steep ground — that is nearly
+ * the whole overlay rendered at a third of its colour. The pair here draws at
+ * 0.53, half again as bright, while measured line stays at 0.76 so the two
+ * grades remain plainly different. The hue carries the lift rather than the
+ * red channel, which stays under the solid colour's: dashed must remain below
+ * solid on EVERY channel, not only in total, so it can never read as the
+ * advancing line.
+ */
+const DASHED_ALPHA = 0.8;
 
 const GRADE_SOLID = 0;
 

@@ -11,6 +11,8 @@
  * consistency with the splash batch converter.
  */
 
+import type { ExportHealth } from '../intelligence/scanStory';
+import { renderExportHealthPanel } from './scanStoryViews';
 import { el } from './dom';
 import { downloadBytes } from '../io/download';
 import { loadConvertEngine, loadFindingsPanel, loadSessionFindings } from '../lazyChunks';
@@ -79,6 +81,12 @@ function cloudToSummary(cloud: PointCloud | null): ExportCloudSummary | null {
 }
 
 export interface ExportPanelCallbacks {
+  /**
+   * The canonical export-health model for the active scan, or null when none is
+   * exportable. The panel RENDERS this; it never re-derives readiness from its
+   * own fields, so the block and the palette's health check cannot disagree.
+   */
+  exportHealth?: () => ExportHealth | null;
   /**
    * Lightweight summary of the exportable cloud for the live panel, or null when
    * no scan is exportable. MUST NOT materialize streaming buffers. When omitted,
@@ -197,6 +205,8 @@ export class ExportPanel {
   private readonly _classRow: HTMLElement;
   private readonly _summary: HTMLElement;
   private readonly _products: HTMLElement;
+  /** The export-health block at the top of the panel; empty when no scan is exportable. */
+  private readonly _health: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
   /**
    * The session findings ledger, owned here and rendered by the findings panel.
@@ -287,9 +297,13 @@ export class ExportPanel {
     // The collapsed "Products" lane — derived artifacts (measurements today;
     // rasters / report / session to follow) kept out of the primary save flow.
     this._products = el('div', { className: 'olv-export-products' });
+    this._health = el('div', { className: 'olv-export-health' });
 
     const body = el('div', { className: 'olv-export-body' });
     body.append(
+      // Readiness before the controls: what limits the claim is the first thing
+      // an export surface should say, not something to find afterwards.
+      this._health,
       this._label('Point cloud'),
       this._formatRow,
       this._gzipRow,
@@ -359,8 +373,21 @@ export class ExportPanel {
     if (this._deliverables) this._deliverables.formatSection.style.display = streaming ? 'none' : '';
   }
 
+  /**
+   * Render the export-health block from the canonical model. Empty when the
+   * host supplies no health callback or no scan is exportable, so the panel
+   * reads exactly as before for a host that does not wire it.
+   */
+  private _renderHealth(): void {
+    this._health.replaceChildren();
+    const health = this._cb.exportHealth?.() ?? null;
+    if (!health) return;
+    this._health.append(renderExportHealthPanel(health));
+  }
+
   /** Re-evaluate the full-resolution availability for the active cloud. */
   refresh(): void {
+    this._renderHealth();
     this._renderFullResRow();
     this._renderGzipRow();
     this._renderClassRow();

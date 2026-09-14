@@ -76,6 +76,14 @@ export interface LoadOptions {
   deviceMemoryGB?: number;
   /** Abort signal — abort it to cancel the load (rejects `LoadCancelledError`). */
   signal?: AbortSignal;
+  /**
+   * The file's first bytes, from offset 0, when the caller has already read
+   * them. Preflight sniffs and plans from these instead of slicing the file
+   * again; it takes exactly the prefix it would have read, so the plan is the
+   * same either way. Absent, preflight reads as before. The loader does not
+   * depend on who read them.
+   */
+  head?: ArrayBuffer;
 }
 
 /** The cloud payload transferred back from the parse worker. */
@@ -243,7 +251,11 @@ async function preflightFile(
   budget: number,
   options: LoadOptions,
 ): Promise<FilePreflight> {
-  const headSlice = await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
+  const need = Math.min(file.size, HEAD_SLICE_BYTES);
+  const headSlice =
+    options.head && options.head.byteLength >= need
+      ? options.head.slice(0, need)
+      : await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
   const format = sniffFormat(headSlice, file.name);
   if (format === 'unknown') {
     if (is3dTilesName(file.name)) {
@@ -459,6 +471,15 @@ let sharedWorker: Worker | undefined;
 // load waits its turn before touching the worker.
 const workerGate = createSerialGate();
 
+/**
+ * The page's query string, sent with every parse request so the worker reads
+ * the same development flags as the thread that typed them. Empty where there
+ * is no page (tests, a nested worker).
+ */
+function pageSearch(): string {
+  return typeof window === 'undefined' ? '' : (window.location?.search ?? '');
+}
+
 /** Builds the real module worker. Overridable so Node tests can inject a fake. */
 type ParseWorkerFactory = () => Worker;
 const defaultParseWorkerFactory: ParseWorkerFactory = () =>
@@ -664,7 +685,15 @@ export async function loadFile(
       // scope has no `matchMedia`, so a worker planning for itself reads a
       // phone as a desktop and can pick a different stride, or none.
       worker.postMessage(
-        { buffer, format, name: file.name, budget, plan, e57Plan: preflight.e57?.plan },
+        {
+          buffer,
+          format,
+          name: file.name,
+          budget,
+          plan,
+          e57Plan: preflight.e57?.plan,
+          search: pageSearch(),
+        },
         [buffer],
       );
     } catch (err) {
@@ -783,7 +812,7 @@ export async function decodeFullViaWorker(
       // (not copied) into the worker.
       try {
         worker.postMessage(
-          { buffer, format, name, budget: Number.MAX_SAFE_INTEGER },
+          { buffer, format, name, budget: Number.MAX_SAFE_INTEGER, search: pageSearch() },
           [buffer],
         );
       } catch (err) {

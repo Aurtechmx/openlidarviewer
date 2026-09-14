@@ -7,7 +7,6 @@
  * dial. All mount left of the GitHub link, and all are no-ops in embed mode,
  * where there is no top bar to mount into.
  */
-import { RecenterButton } from './RecenterButton';
 import { ThemeToggle } from './ThemeToggle';
 import { QualityControl } from './qualityControl';
 import { readQualityPreference, writeQualityPreference } from './qualityPreferenceStore';
@@ -24,8 +23,6 @@ export interface HeaderControlHost {
 export interface HeaderControlOptions {
   initialTheme: ThemeName;
   onThemeChange: (name: ThemeName) => void;
-  /** Return the camera to the loaded scan. */
-  onRecenter: () => void;
 }
 
 /**
@@ -41,7 +38,6 @@ export function mountHeaderControls(
     onChange: options.onThemeChange,
   });
   host.mountHeaderControl(theme.element);
-  host.mountHeaderControl(new RecenterButton(options.onRecenter).element);
   return theme;
 }
 

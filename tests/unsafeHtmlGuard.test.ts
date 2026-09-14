@@ -127,7 +127,6 @@ const ALLOWLIST: readonly string[] = [
   'src/ui/FullscreenToggle.ts::ICON_ENTER',
   // Back-to-centre glyph: a module-level literal SVG string with no
   // interpolation and no parameter, same shape as the entries above.
-  'src/ui/RecenterButton.ts::ICON_RECENTER',
   // Speed to Quality header button glyph: `ICON_QUALITY`, a module-level
   // literal SVG string (a gauge arc and needle) with no interpolation and no
   // parameter, same shape as the two entries above it.

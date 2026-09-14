@@ -182,8 +182,9 @@ export function classify(signals: ScanSignals): ProvenanceFingerprint {
   const heuristic = ruleOutAerialCapture(
     classifyHeuristic(signals),
     signals.isNonTerrain === true
-      ? ['Shape reads as a compact object / interior — airborne capture ruled out by geometry.']
+      ? ['Shape reads as a compact object / interior, so an airborne verdict is not asserted from geometry alone.']
       : [],
+    'geometry',
   );
   // 0. The file's own declaration outranks every heuristic. When the loader
   //    found a declared synthetic / procedural / reconstruction / reference
@@ -217,12 +218,21 @@ const AERIAL_CAPTURE_TYPES: ReadonlySet<CaptureType> = new Set<CaptureType>([
 function ruleOutAerialCapture(
   fp: ProvenanceFingerprint,
   reasons: readonly string[],
+  basis: 'declaration' | 'geometry' = 'declaration',
 ): ProvenanceFingerprint {
   if (reasons.length === 0 || !AERIAL_CAPTURE_TYPES.has(fp.captureType)) return fp;
   return {
     captureType: 'unknown',
     confidence: 'low',
-    label: 'Ground-based scan — capture method not determined',
+    // A file that declares its own ground instrument says the scan was taken
+    // from the ground, so the label may. Geometry says only that the density
+    // reading is not trustworthy here: a 1 km airborne tile over 500 m of
+    // relief reads as a compact object, and calling that "Ground-based" put a
+    // capture type the verdict had just set to `unknown` into the headline of
+    // every report the scan produced.
+    label: basis === 'declaration'
+      ? 'Ground-based scan — capture method not determined'
+      : 'Capture method not determined',
     signals: [...fp.signals, ...reasons],
     bounds: [],
     disclaimer: fp.disclaimer,
