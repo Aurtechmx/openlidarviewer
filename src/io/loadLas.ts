@@ -157,6 +157,8 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
  * @param stride       Decode every `stride`-th record (1 = every record).
  *                     Used by the fast-load path for huge clouds.
  * @param onProgress   Optional staged-progress callback for the decode loop.
+ * @param onPreview    Receives a stratified preview cloud before the decode
+ *                     finishes. Pooled `.laz` only; never called otherwise.
  */
 export async function loadLas(
   buffer: ArrayBuffer,
@@ -164,11 +166,14 @@ export async function loadLas(
   name = `cloud.${sourceFormat}`,
   stride = 1,
   onProgress?: (u: ProgressUpdate) => void,
+  onPreview?: (cloud: PointCloud) => void,
 ): Promise<PointCloud> {
   const header = parseLasHeader(buffer);
   // Origin from the floored header min — known before decoding, so records
   // are converted straight into local coordinates.
   const origin = computeOrigin(header.min);
+  const toCloud = (raw: RawPoints): PointCloud =>
+    cloudFromRaw(raw, header, origin, sourceFormat, name, stride);
 
   let raw: RawPoints;
   if (sourceFormat === 'laz') {
@@ -185,12 +190,27 @@ export async function loadLas(
     // the fallback for all three.
     const pooled = await (
       await import('./heavy/worker/lazChunkWorkerClient')
-    ).decodeLazPooled(buffer, header, origin, { stride, onProgress });
+    ).decodeLazPooled(buffer, header, origin, {
+      stride,
+      onProgress,
+      onPreview: onPreview && ((preview) => onPreview(toCloud(preview))),
+    });
     raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress));
   } else {
     raw = decodeLas(buffer, header, origin, stride, onProgress);
   }
+  return toCloud(raw);
+}
 
+/** Sanitise decoded records and wrap them as a cloud with the header's facts. */
+function cloudFromRaw(
+  raw: RawPoints,
+  header: LasHeader,
+  origin: [number, number, number],
+  sourceFormat: 'las' | 'laz',
+  name: string,
+  stride: number,
+): PointCloud {
   const decodedPointCount = raw.positions.length / 3;
 
   // A LAS coordinate is `int * scale + offset`, and the header guard already

@@ -16,6 +16,8 @@ export interface LoadTelemetry {
   fileReadMs?: number;
   /** `postMessage` to the worker's first reply — buffer transfer + spin-up. */
   transferMs?: number;
+  /** Load start to the preview cloud's arrival on the main thread, when one was sent. */
+  previewMs?: number;
   /** Header parse and decoder setup (worker). */
   parseMs?: number;
   /** Decoding the point records (worker). */
@@ -35,6 +37,7 @@ const TELEMETRY_ROWS: [string, keyof LoadTelemetry][] = [
   ['sniff + plan', 'sniffMs'],
   ['file read', 'fileReadMs'],
   ['transfer', 'transferMs'],
+  ['preview', 'previewMs'],
   ['parse', 'parseMs'],
   ['decode', 'decodeMs'],
   ['downsample', 'downsampleMs'],

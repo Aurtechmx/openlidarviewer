@@ -134,7 +134,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     renderBudget: 1_000_000,
     isPhone: () => false,
     deviceMemoryGB: () => 8,
-    stage: { hideEmptyState: vi.fn() },
+    stage: { hideEmptyState: vi.fn(), showEmptyState: vi.fn() },
     closeStreaming: calls.closeStreaming,
     scans: { setActive: vi.fn(), activeId: null } as unknown as OpenScanDeps['scans'],
     layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: vi.fn(), stableIdFor: vi.fn(() => null) },

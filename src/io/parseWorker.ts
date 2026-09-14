@@ -11,6 +11,7 @@ import type { LoadErrorCategory } from './loadErrors';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate, LoadStage } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
+import type { PointCloud } from '../model/PointCloud';
 import { organizedRangeTransferables } from '../model/OrganizedRange';
 import { primeDevFlags } from '../perf/devFlags';
 
@@ -63,6 +64,12 @@ ctx.onmessage = (event: MessageEvent): void => {
           ctx.postMessage({ type: 'progress', ...update });
         },
         e57Plan,
+        (preview: PointCloud) => {
+          // A stand-in the main thread shows while the decode runs; it owns
+          // its own buffers, so transferring them takes nothing from the final.
+          const { payload, transfer } = cloudPayload(preview);
+          ctx.postMessage({ type: 'preview', cloud: payload }, transfer);
+        },
       );
 
       const endedAt = performance.now();
@@ -75,52 +82,11 @@ ctx.onmessage = (event: MessageEvent): void => {
         downsampleMs: optimizeAt !== undefined ? endedAt - optimizeAt : undefined,
       };
 
-      const transfer: ArrayBuffer[] = [cloud.positions.buffer as ArrayBuffer];
-      if (cloud.colors) transfer.push(cloud.colors.buffer as ArrayBuffer);
-      if (cloud.intensity) transfer.push(cloud.intensity.buffer as ArrayBuffer);
-      if (cloud.classification) transfer.push(cloud.classification.buffer as ArrayBuffer);
-      if (cloud.normals) transfer.push(cloud.normals.buffer as ArrayBuffer);
-      if (cloud.returnNumber) transfer.push(cloud.returnNumber.buffer as ArrayBuffer);
-      if (cloud.returnCount) transfer.push(cloud.returnCount.buffer as ArrayBuffer);
-      if (cloud.pointSourceId) transfer.push(cloud.pointSourceId.buffer as ArrayBuffer);
-      if (cloud.gpsTime) transfer.push(cloud.gpsTime.buffer as ArrayBuffer);
-      // The organized-range sidecar is several typed arrays PER FRAME, so it is
-      // transferred rather than cloned: a 10 M cell grid would otherwise be
-      // copied across the boundary, which is the cost this list exists to
-      // avoid. Derived from the frames rather than enumerated here, so a new
-      // array on a frame cannot quietly fall back to a clone.
-      if (cloud.organizedRange) {
-        transfer.push(...organizedRangeTransferables(cloud.organizedRange));
-      }
-
+      const { payload, transfer } = cloudPayload(cloud);
       ctx.postMessage(
         {
           type: 'done',
-          cloud: {
-            positions: cloud.positions,
-            colors: cloud.colors,
-            intensity: cloud.intensity,
-            classification: cloud.classification,
-            normals: cloud.normals,
-            returnNumber: cloud.returnNumber,
-            returnCount: cloud.returnCount,
-            pointSourceId: cloud.pointSourceId,
-            gpsTime: cloud.gpsTime,
-            organizedRange: cloud.organizedRange,
-            origin: cloud.origin,
-            sourceFormat: cloud.sourceFormat,
-            name: cloud.name,
-            declaredPointCount: cloud.declaredPointCount,
-            // v0.5.5 P12 — decodedPointCount was DROPPED at this thread
-            // boundary, so the main-thread Health Check fell back to the
-            // voxel-reduced display count and flagged every budget-capped
-            // load as a declared-vs-decoded anomaly. Carry it (and the
-            // deliberate decode stride) across so the check reads the same
-            // numbers the worker saw.
-            decodedPointCount: cloud.decodedPointCount,
-            loadStride: cloud.loadStride,
-            metadata: cloud.metadata,
-          },
+          cloud: payload,
           originalPointCount,
           downsampled,
           telemetry,
@@ -140,3 +106,55 @@ ctx.onmessage = (event: MessageEvent): void => {
     }
   })();
 };
+
+/**
+ * The cloud as it crosses the thread boundary, with the buffers to transfer
+ * rather than clone. Shared by the preview and the final reply so the two can
+ * never disagree on which fields travel.
+ */
+function cloudPayload(cloud: PointCloud): { payload: Record<string, unknown>; transfer: ArrayBuffer[] } {
+  const transfer: ArrayBuffer[] = [cloud.positions.buffer as ArrayBuffer];
+  if (cloud.colors) transfer.push(cloud.colors.buffer as ArrayBuffer);
+  if (cloud.intensity) transfer.push(cloud.intensity.buffer as ArrayBuffer);
+  if (cloud.classification) transfer.push(cloud.classification.buffer as ArrayBuffer);
+  if (cloud.normals) transfer.push(cloud.normals.buffer as ArrayBuffer);
+  if (cloud.returnNumber) transfer.push(cloud.returnNumber.buffer as ArrayBuffer);
+  if (cloud.returnCount) transfer.push(cloud.returnCount.buffer as ArrayBuffer);
+  if (cloud.pointSourceId) transfer.push(cloud.pointSourceId.buffer as ArrayBuffer);
+  if (cloud.gpsTime) transfer.push(cloud.gpsTime.buffer as ArrayBuffer);
+  // The organized-range sidecar is several typed arrays PER FRAME, so it is
+  // transferred rather than cloned: a 10 M cell grid would otherwise be
+  // copied across the boundary, which is the cost this list exists to
+  // avoid. Derived from the frames rather than enumerated here, so a new
+  // array on a frame cannot quietly fall back to a clone.
+  if (cloud.organizedRange) {
+    transfer.push(...organizedRangeTransferables(cloud.organizedRange));
+  }
+
+  const payload = {
+    positions: cloud.positions,
+    colors: cloud.colors,
+    intensity: cloud.intensity,
+    classification: cloud.classification,
+    normals: cloud.normals,
+    returnNumber: cloud.returnNumber,
+    returnCount: cloud.returnCount,
+    pointSourceId: cloud.pointSourceId,
+    gpsTime: cloud.gpsTime,
+    organizedRange: cloud.organizedRange,
+    origin: cloud.origin,
+    sourceFormat: cloud.sourceFormat,
+    name: cloud.name,
+    declaredPointCount: cloud.declaredPointCount,
+    // v0.5.5 P12 — decodedPointCount was DROPPED at this thread
+    // boundary, so the main-thread Health Check fell back to the
+    // voxel-reduced display count and flagged every budget-capped
+    // load as a declared-vs-decoded anomaly. Carry it (and the
+    // deliberate decode stride) across so the check reads the same
+    // numbers the worker saw.
+    decodedPointCount: cloud.decodedPointCount,
+    loadStride: cloud.loadStride,
+    metadata: cloud.metadata,
+  };
+  return { payload, transfer };
+}

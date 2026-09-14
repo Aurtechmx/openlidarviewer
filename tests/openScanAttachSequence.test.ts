@@ -72,6 +72,8 @@ function fakeFile(name = 'field.las'): File {
 interface HarnessOptions {
   /** Runs with the loader's callbacks the moment the static load resolves. */
   readonly onLoaded?: (callbacks: LoadCallbacks) => void;
+  /** Make the loader reject after `onLoaded` ran, as a decode failure would. */
+  readonly failLoad?: boolean;
   /** Runs on every line handed to the drop zone (null is the teardown). */
   readonly onProgressLine?: (line: string | null) => void;
   /** Make the lazily imported display-profile chunk arrive a task later. */
@@ -109,6 +111,10 @@ function harness(opts: HarnessOptions = {}) {
       trace.push(fn === null ? 'cancel:retired' : 'cancel:armed');
     }),
     hideEmptyState: vi.fn(() => { trace.push('hideEmptyState'); }),
+    showEmptyState: vi.fn(() => { trace.push('showEmptyState'); }),
+    showPreviewCloud: vi.fn(() => { trace.push('showPreviewCloud'); }),
+    clearPreviewCloud: vi.fn(() => { trace.push('clearPreviewCloud'); }),
+    frameAll: vi.fn(() => { trace.push('frameAll'); }),
     closeStreaming: vi.fn(),
     addCloud: vi.fn(() => { trace.push('addCloud'); return 'cloud-1'; }),
     setActive: vi.fn((id: string) => { activeId = id; }),
@@ -127,12 +133,14 @@ function harness(opts: HarnessOptions = {}) {
     ready: Promise.resolve(),
     hasStreamingCloud: false,
     addCloud: calls.addCloud,
+    showPreviewCloud: calls.showPreviewCloud,
+    clearPreviewCloud: calls.clearPreviewCloud,
     clouds: () => [cloud],
     measure: {},
     annotate: { clear: calls.annotateClear },
     setCoverageGrid: () => {},
     setMode: () => {},
-    frameAll: () => {},
+    frameAll: calls.frameAll,
     setColorMode: () => {},
     activeBackend: () => 'webgl',
     elevationExtent: () => ({ min: 0, max: 2 }),
@@ -183,12 +191,13 @@ function harness(opts: HarnessOptions = {}) {
     openLocalCopc: vi.fn(async () => {}),
     loadLocalSource: vi.fn(async (_file: File, callbacks: LoadCallbacks) => {
       opts.onLoaded?.(callbacks);
+      if (opts.failLoad) throw new Error('decode failed');
       return result;
     }),
     renderBudget: 1_000_000,
     isPhone: () => false,
     deviceMemoryGB: () => 8,
-    stage: { hideEmptyState: calls.hideEmptyState },
+    stage: { hideEmptyState: calls.hideEmptyState, showEmptyState: calls.showEmptyState },
     closeStreaming: calls.closeStreaming,
     scans: {
       setActive: calls.setActive,
@@ -456,5 +465,58 @@ describe('what the completed attach leaves behind', () => {
     // The scan is on screen regardless of the card.
     expect(h.at('reveal')).toBeGreaterThan(-1);
     expect(h.trace.at(-1)).toBe('progress:cleared');
+  });
+});
+
+describe('a preview cloud delivered before the decode finishes', () => {
+  it('shows it at once, then swaps the final cloud in without framing again', async () => {
+    const h = harness({
+      onLoaded: (callbacks) => { callbacks.onPreview?.(fakeCloud()); },
+    });
+
+    await openScan(fakeFile('field.laz'), h.deps);
+
+    // The stand-in goes up the moment it arrives, with the empty state gone.
+    expect(h.at('hideEmptyState')).toBeGreaterThan(-1);
+    expect(h.at('showPreviewCloud')).toBeGreaterThan(h.at('hideEmptyState'));
+    // The commit replaces it in the same task as the add, and keeps the pose.
+    expect(h.at('clearPreviewCloud')).toBe(h.at('addCloud') + 1);
+    expect(h.calls.frameAll).not.toHaveBeenCalled();
+    expect(h.calls.showEmptyState).not.toHaveBeenCalled();
+    expect(h.at('reveal')).toBeGreaterThan(-1);
+  });
+
+  it('frames the final cloud as before when no preview was shown', async () => {
+    const h = harness();
+    await openScan(fakeFile(), h.deps);
+    expect(h.calls.showPreviewCloud).not.toHaveBeenCalled();
+    expect(h.calls.frameAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes the stand-in down and restores the empty state when the load then fails', async () => {
+    const h = harness({
+      onLoaded: (callbacks) => { callbacks.onPreview?.(fakeCloud()); },
+      failLoad: true,
+    });
+    (h.deps.getViewer() as unknown as { clouds: () => string[] }).clouds = () => [];
+
+    await openScan(fakeFile('field.laz'), h.deps);
+
+    expect(h.at('showPreviewCloud')).toBeGreaterThan(-1);
+    expect(h.at('clearPreviewCloud')).toBeGreaterThan(h.at('showPreviewCloud'));
+    expect(h.at('showEmptyState')).toBeGreaterThan(h.at('clearPreviewCloud'));
+    expect(h.calls.addCloud).not.toHaveBeenCalled();
+    expect(h.calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a preview that lands after Cancel', async () => {
+    const h = harness({
+      onLoaded: (callbacks) => { h.fireCancel(); callbacks.onPreview?.(fakeCloud()); },
+    });
+
+    await openScan(fakeFile('field.laz'), h.deps);
+
+    expect(h.calls.showPreviewCloud).not.toHaveBeenCalled();
+    expect(h.calls.hideEmptyState).not.toHaveBeenCalled();
   });
 });

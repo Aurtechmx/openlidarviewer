@@ -123,9 +123,18 @@ describe('the attach phase yields so its status lines can paint', () => {
     // on the way out of a cancelled load strands the user on a blank stage:
     // nothing outside `resetToEmptyState` puts it back.
     const abortAt = lineOf('if (source.signal.aborted) throw new LoadCancelledError();');
-    const hideAt = lineOf('deps.stage.hideEmptyState();');
+    const hideAt = lineOfAfter('deps.stage.hideEmptyState();', uploadingAt);
     expect(abortAt).toBeGreaterThan(uploadingAt);
     expect(hideAt).toBeGreaterThan(abortAt);
+  });
+
+  it('checks cancellation before a preview hides the empty state too', () => {
+    // The preview lands from the loader while the decode runs, so a Cancel can
+    // already have been clicked; the same rule holds for that earlier site.
+    const previewAbortAt = lineOf('if (controller.signal.aborted) return;');
+    const hideAt = lineOfAfter('deps.stage.hideEmptyState();', previewAbortAt);
+    expect(hideAt).toBeLessThan(uploadingAt);
+    expect(hideAt - previewAbortAt).toBeLessThanOrEqual(2);
   });
 
   it('retires Cancel at the commit boundary rather than throwing past it', () => {

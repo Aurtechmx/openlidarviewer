@@ -484,37 +484,17 @@ const QUAD_CORNERS = [-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0];
 const QUAD_INDEX = [0, 1, 2, 0, 2, 3];
 
 /**
- * Device-pixel-ratio cap. High-density displays render at up to DPR² the pixel
- * area; capping bounds the cost — most visible once the EDL pass adds a
- * full-screen render target — with little perceptible loss of sharpness. A
- * retina display reports DPR=2 and shades 4 sub-pixels per logical pixel; for a
- * point cloud that is almost pure GPU waste, because points rasterise as sprite
- * quads and fragment cost grows with the square of the ratio (~44 % more work
- * going 1.5 → 2.0). The 1.5 default is what keeps laptop-class GPUs out of the
- * thermal envelope on a long session; a low-DPR display is unaffected, because
- * the `Math.min` below keeps the native ratio as the floor.
- *
- * The value itself is no longer a constant here. It is the display half of the
- * Speed ↔ Quality control, so it lives in `quality/pixelRatioCeiling.ts` and is
- * read through `maxPixelRatio()` at each of the three sites below: construction,
- * the adaptive-DPR frame, and the resize handler.
+ * Device-pixel-ratio cap: points rasterise as sprite quads, so fragment cost
+ * grows with the square of the ratio. The value is the display half of the
+ * Speed / Quality control (`quality/pixelRatioCeiling.ts`, read through
+ * `maxPixelRatio()` at construction, the adaptive-DPR frame and resize).
  */
 
 /**
- * Idle-render throttling. After any user input (pointer / key /
- * wheel) the renderer holds at the full requestAnimationFrame rate
- * for this window so the response feels native. Once the window
- * expires AND the scene is quiet (no tween, no streaming activity)
- * the loop drops to a heartbeat rate of one render per
- * `IDLE_HEARTBEAT_FRAMES` frames. This is the dominant fix for
- * "OpenLiDARViewer makes my laptop hot": a static point cloud was
- * previously being re-rasterised 60×/sec to produce the same image.
- *
- * The CPU paths (`_nav.update`, `_maintainOrbitCenter`,
- * `_updateAdaptiveEdl`, the streaming tick) keep running on every
- * loop iteration so OrbitControls damping integrates correctly and
- * the streaming scheduler keeps its cadence — only the actual
- * GPU `render()` call is gated.
+ * Idle-render throttling: full rAF rate for this window after any input, then
+ * one render per `IDLE_HEARTBEAT_FRAMES` while the scene is quiet. Only the GPU
+ * `render()` call is gated; nav, orbit-centre, EDL and streaming ticks keep
+ * running so damping and the scheduler cadence are unaffected.
  */
 /** Default vertical field of view, in degrees — the camera's construction value. */
 const DEFAULT_FOV = 60;
@@ -545,27 +525,11 @@ const FRAME_SAMPLE_COUNT = 60;
 const BYTES_PER_GPU_POINT = 24;
 
 /**
- * Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute.
- *
- * Performs sRGB → linear conversion in the process. Why: scanner RGB
- * is stored display-referred (sRGB-encoded) — that's what a camera
- * captures and a viewer expects to see. Our TSL pipeline plumbs the
- * attribute straight through `instancedBufferAttribute(colorAttr)` as
- * the colour node, which bypasses three.js's automatic sRGB → linear
- * conversion that `vertexColors: true` would normally apply. With
- * `outputColorSpace = SRGBColorSpace` the renderer then encodes
- * linear → sRGB at output. Passing already-sRGB values through the
- * linear path means three.js re-encodes a second time, which washes
- * out saturation and brightens midtones — exactly the "pale colours"
- * symptom v0.3.6 carried.
- *
- * Linearising the source here means the renderer receives true linear
- * light values, tone-maps (NoToneMapping = identity), then sRGB-encodes
- * once. Net round-trip: scanner sRGB in → display sRGB out, faithful.
- *
- * The piecewise sRGB EOTF (IEC 61966-2-1) is exact, not the 2.2-power
- * approximation — matches three.js's `Color.SRGBToLinear` and PNG
- * exports stay in lock-step with the on-screen image.
+ * Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute,
+ * linearising sRGB on the way (exact IEC 61966-2-1 piecewise EOTF, as
+ * `Color.SRGBToLinear`). The TSL colour node bypasses three.js's automatic
+ * conversion, so without this the renderer re-encodes sRGB twice and colours
+ * wash out.
  */
 
 function toFloatColors(u8: Uint8Array): Float32Array {
@@ -672,19 +636,8 @@ function buildEdlOutputNode(
 /**
  * Build the circular point-mask opacity node: `positionGeometry.xy` is the
  * sprite-quad coordinate in [-0.5, 0.5]², so the point renders as a round dot
- * with a soft, antialiased rim instead of a hard square.
- *
- * v0.3.7 final-polish: widened the soft falloff from (0.42 → 0.50) to
- * (0.30 → 0.50). The wider gradient softens the rim noticeably without
- * touching the rest of the pipeline, and the matching `alphaTest`
- * lowered to 0.18 (was 0.5) keeps more of the soft pixels around the
- * disc. Net effect: cleaner rim, reduced sparkle on sparse regions, no
- * change to point centre brightness so a brown roof still reads brown
- * and a pixel-accurate measurement still hits the same point.
- *
- * The alpha is still gated against `alphaTest` so points stay correctly
- * depth-sorted — this is NOT full splatting, just a wider antialiased
- * rim on the existing sprite.
+ * with a soft rim (0.30 to 0.50 falloff, `alphaTest` 0.18). Still gated by
+ * `alphaTest` so points depth-sort; not splatting.
  */
 function buildPointMaskNode(): TslNode {
   const r: TslNode = length((positionGeometry as TslNode).xy);
@@ -828,6 +781,8 @@ export class Viewer {
   private readonly _streamingPickData = new Map<THREE.Mesh, StreamingPickEntry>();
   /** The scheduler/renderer/cloud, present only while a COPC is streaming. */
   private _streaming: StreamingSession | null = null;
+  /** The stand-in a load shows before its cloud commits. Never a layer. */
+  private _preview: { mesh: THREE.Mesh; material: THREE.PointsNodeMaterial } | null = null;
   /**
    * Streaming heartbeat — a timer that ticks the scheduler INDEPENDENTLY of
    * the render loop. The RAF loop is deliberately cancelled while the tab is
@@ -1698,19 +1653,7 @@ export class Viewer {
     const id = `cloud_${this._nextId++}`;
     const mode = defaultMode(cloud);
 
-    const { mesh, material, colorAttr } = this.buildPointMesh(
-      cloud.positions,
-      // upAxis from the source format so a Y-up phone scan's elevation ramp
-      // follows true height, not a horizontal axis.
-      colorForMode(mode, cloud, { upAxis: isZUpFormat(cloud.sourceFormat) ? 2 : 1 }),
-      // Feed the DOWNSAMPLED classification (carried in lockstep with the
-      // downsampled positions by `downsampleToBudget`), never the original
-      // input — the attribute must align 1:1 with the uploaded points.
-      cloud.classification ?? null,
-      // Intensity rides along 1:1 for the intensity filter (v0.5.6); the
-      // downsampled cloud carries a downsampled intensity in lockstep.
-      cloud.intensity ?? null,
-    );
+    const { mesh, material, colorAttr } = this._meshForCloud(cloud, mode);
     this._scene.add(mesh);
 
     this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
@@ -1724,6 +1667,23 @@ export class Viewer {
     // appear for it too.
     this._notifyColorContextChanged();
     return id;
+  }
+
+  /** A cloud's point mesh coloured by `mode`; the layer and the preview share it. */
+  private _meshForCloud(cloud: PointCloud, mode: ColorMode): PointMeshHandle {
+    return this.buildPointMesh(
+      cloud.positions,
+      // upAxis from the source format so a Y-up phone scan's elevation ramp
+      // follows true height, not a horizontal axis.
+      colorForMode(mode, cloud, { upAxis: isZUpFormat(cloud.sourceFormat) ? 2 : 1 }),
+      // Feed the DOWNSAMPLED classification (carried in lockstep with the
+      // downsampled positions by `downsampleToBudget`), never the original
+      // input — the attribute must align 1:1 with the uploaded points.
+      cloud.classification ?? null,
+      // Intensity rides along 1:1 for the intensity filter (v0.5.6); the
+      // downsampled cloud carries a downsampled intensity in lockstep.
+      cloud.intensity ?? null,
+    );
   }
 
   /**
@@ -4320,7 +4280,46 @@ export class Viewer {
    */
   frameAll(): void {
     const box = this._visibleBoundingBox();
-    if (!box) return;
+    if (box) this._frameBox(box);
+  }
+
+  /**
+   * Show a stand-in cloud while a load's decode is still running. Drawn like a
+   * layer but not one: nothing lists, measures or exports it, and `addCloud`
+   * does not know it exists. The camera is fitted to it once, with the fit
+   * `frameAll` makes, so the commit that replaces it need not frame again.
+   */
+  showPreviewCloud(cloud: PointCloud): void {
+    this.clearPreviewCloud();
+    const { mesh, material } = this._meshForCloud(cloud, defaultMode(cloud));
+    this._scene.add(mesh);
+    const zUp = isZUpFormat(cloud.sourceFormat);
+    this._preview = { mesh, material };
+    this._worldUp.set(0, zUp ? 0 : 1, zUp ? 1 : 0);
+    this._nav.setWorldUp(this._worldUp);
+    this._nav.setHasCloud(true);
+    const b = cloud.bounds();
+    this._frameBox(new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
+    this.requestFrame();
+  }
+
+  clearPreviewCloud(): void {
+    const p = this._preview;
+    if (!p) return;
+    this._scene.remove(p.mesh);
+    p.mesh.geometry.dispose();
+    p.material.dispose();
+    this._preview = null;
+    this._nav.setHasCloud(this._clouds.size > 0 || this._streaming !== null);
+    this.requestFrame();
+  }
+
+  get hasPreviewCloud(): boolean {
+    return this._preview !== null;
+  }
+
+  /** Tween the camera to an oblique fit of `box`. */
+  private _frameBox(box: THREE.Box3): void {
     const target = box.getCenter(new THREE.Vector3());
 
     // An oblique direction: a horizontal heading lifted ~35° toward world-up,

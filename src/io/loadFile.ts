@@ -64,6 +64,12 @@ export interface LoadCallbacks {
    * and how the file will be loaded. Shown for every format, before the decode.
    */
   onPreload?: (lines: string[]) => void;
+  /**
+   * A stratified stand-in cloud, delivered while the decode is still running
+   * and superseded by the resolved result. Pooled `.laz` loads only; a caller
+   * that shows it must take it down when the result arrives or the load fails.
+   */
+  onPreview?: (cloud: PointCloud) => void;
 }
 
 /** Per-device tuning and lifecycle control for a load. */
@@ -107,6 +113,7 @@ interface CloudPayload {
 
 type WorkerReply =
   | ({ type: 'progress' } & ProgressUpdate)
+  | { type: 'preview'; cloud: CloudPayload }
   | { type: 'error'; error: string; category?: LoadErrorCategory }
   | {
       type: 'done';
@@ -557,7 +564,7 @@ export async function loadFile(
   callbacks: LoadCallbacks = {},
   options: LoadOptions = {},
 ): Promise<LoadResult> {
-  const { onProgress, onPreload } = callbacks;
+  const { onProgress, onPreload, onPreview } = callbacks;
   const budget = options.budget ?? POINT_BUDGET;
   const signal = options.signal;
 
@@ -605,6 +612,7 @@ export async function loadFile(
     let settled = false;
     let postedAt = 0;
     let transferMs: number | undefined;
+    let previewMs: number | undefined;
 
     const onAbort = (): void => {
       if (settled) return;
@@ -643,6 +651,11 @@ export async function loadFile(
         onProgress?.({ stage: msg.stage, detail: msg.detail, fraction: msg.fraction });
         return;
       }
+      if (msg.type === 'preview') {
+        previewMs ??= performance.now() - startedAt;
+        onPreview?.(new PointCloud(msg.cloud));
+        return;
+      }
       detach();
       if (msg.type === 'error') {
         // Rebuild the typed LoadError when the worker carried a category, so
@@ -661,6 +674,7 @@ export async function loadFile(
           sniffMs,
           fileReadMs,
           transferMs,
+          previewMs,
           parseMs: msg.telemetry.parseMs,
           decodeMs: msg.telemetry.decodeMs,
           downsampleMs: msg.telemetry.downsampleMs,
@@ -789,7 +803,7 @@ export async function decodeFullViaWorker(
         if (settled) return;
         const msg = event.data as WorkerReply;
         // A full-res decode surfaces no UI progress — drop the progress frames.
-        if (msg.type === 'progress') return;
+        if (msg.type === 'progress' || msg.type === 'preview') return;
         detach();
         if (msg.type === 'error') {
           reject(

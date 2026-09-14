@@ -122,7 +122,7 @@ export interface OpenScanDeps {
   /** Reported device memory in GB, or undefined when the browser withholds it. */
   deviceMemoryGB: () => number | undefined;
   /** Hide the empty-state placeholder once a scan renders. */
-  stage: Pick<Stage, 'hideEmptyState'>;
+  stage: Pick<Stage, 'hideEmptyState' | 'showEmptyState'>;
   /** Tear down any open streaming scan (a static load replaces it; a failed streaming open tidies up). */
   closeStreaming: () => void;
   /** Active-scan selection + lookup. */
@@ -241,6 +241,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     return;
   }
   const controller = new AbortController();
+  let previewUp = false;
   // Blue blinking "Opening …" — the prominent first feedback, matching the
   // catalog status vocabulary so device and public-dataset loads read the same.
   // The load's staged progress (decoding / uploading / rendering) supersedes it.
@@ -319,6 +320,12 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       {
         onProgress: (u) => deps.dropZone.setProgress(formatProgress(u), u.fraction),
         onPreload: (lines) => deps.dropZone.setPreload(lines),
+        onPreview: (cloud) => {
+          if (controller.signal.aborted) return;
+          deps.stage.hideEmptyState();
+          deps.getViewer().showPreviewCloud(cloud);
+          previewUp = true;
+        },
       },
       {
         // The point budget is the device's safe render budget — full on a
@@ -330,9 +337,10 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         head: headSlice,
       },
     );
-    await attachStaticCloud(result, { file, signal: controller.signal }, deps);
+    await attachStaticCloud(result, { file, signal: controller.signal, previewUp }, deps);
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
+    if (previewUp) takeDownPreview(deps);
     if (err instanceof LoadCancelledError) {
       // A cancelled load is a quiet no-op — no error toast, nothing was added.
       deps.dropZone.setProgress(null);
@@ -349,6 +357,16 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   }
 }
 
+/**
+ * Remove a stand-in a load put up before it failed or was cancelled, and put
+ * the empty state back when nothing else is on screen.
+ */
+function takeDownPreview(deps: OpenScanDeps): void {
+  const viewer = deps.getViewer();
+  viewer.clearPreviewCloud();
+  if (viewer.clouds().length === 0 && !viewer.hasStreamingCloud) deps.stage.showEmptyState();
+}
+
 /** What an attach needs to know about where its cloud came from. */
 export interface AttachedCloudSource {
   /**
@@ -360,6 +378,11 @@ export interface AttachedCloudSource {
   readonly file: File | null;
   /** The cancel signal, checked once more before the commit boundary. */
   readonly signal: AbortSignal;
+  /**
+   * A stand-in is on screen and the camera is already fitted to it. The commit
+   * swaps the cloud in under the same pose rather than framing a second time.
+   */
+  readonly previewUp?: boolean;
 }
 
 /**
@@ -416,6 +439,7 @@ export async function attachStaticCloud(
   if (viewer.hasStreamingCloud) deps.closeStreaming();
   const uploadStartedAt = performance.now();
   const id = viewer.addCloud(result.cloud);
+  viewer.clearPreviewCloud();
   // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that
   // back, so cancelling is no longer a thing this load can honour: retire the
   // control rather than leave a button that would abandon a half-revealed
@@ -471,7 +495,7 @@ export async function attachStaticCloud(
   const renderStartedAt = performance.now();
   // A freshly opened scan starts in the orbit overview, then glides in.
   viewer.setMode('orbit');
-  viewer.frameAll();
+  if (!source.previewUp) viewer.frameAll();
   const firstRenderMs = performance.now() - renderStartedAt;
 
   // Colour the fresh scan by the mode its attributes best support (RGB →

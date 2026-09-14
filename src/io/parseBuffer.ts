@@ -85,6 +85,7 @@ export async function parseBuffer(
   plan?: LoadPlan,
   onProgress?: (u: ProgressUpdate) => void,
   e57Plan?: E57DecodePlan,
+  onPreview?: (cloud: PointCloud) => void,
 ): Promise<LoadResult> {
   // --- Budget-aware fast load: LAS/LAZ with a preflight plan. ---
   if (plan && (format === 'las' || format === 'laz')) {
@@ -93,7 +94,7 @@ export async function parseBuffer(
     // `loadLas` carries the laz-perf WASM — imported on demand so that heavy
     // decoder is its own chunk, fetched only when a LAS/LAZ file is opened.
     const { loadLas } = await import('./loadLas');
-    const cloud = await loadLas(buffer, format, name, stride, onProgress);
+    const cloud = await loadLas(buffer, format, name, stride, onProgress, onPreview);
     assertNonEmptyCloud(cloud);
 
     if (plan.mode === 'voxel') {
