@@ -56,7 +56,7 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
-| @loaders.gl/las | ^4.4.5 | 4.4.5 | MIT |
+| @loaders.gl/las | ^4.5.1 | 4.5.1 | MIT |
 | @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 |
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
