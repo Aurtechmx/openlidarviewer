@@ -34,26 +34,27 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 
-/**
- * Collect every truth-drift problem. `read(relPath)` returns the file's text or
- * null when it does not exist. Returns an array of human-readable problem
- * strings (empty when the tree is clean).
- */
+/** The CITATION.cff description line a deposited version carries, verbatim. */
+export function versionDoiDescription(version) {
+  return `description: "Version DOI for the archived v${version} release"`;
+}
+
 /**
  * True when CITATION.cff lists a version DOI for `version`: the release was
- * deposited, so its release documents are published and no longer describe
- * the working tree.
+ * deposited, so its release documents are published and describe that release
+ * rather than the working tree, which keeps moving under the same version
+ * until the next bump.
  */
 export function isPublishedRelease(citationText, version) {
   if (citationText == null) return false;
   return citationText.includes(versionDoiDescription(version));
 }
 
-/** The CITATION.cff description line a deposited version carries, verbatim. */
-export function versionDoiDescription(version) {
-  return `description: "Version DOI for the archived v${version} release"`;
-}
-
+/**
+ * Collect every truth-drift problem. `read(relPath)` returns the file's text or
+ * null when it does not exist. Returns an array of human-readable problem
+ * strings (empty when the tree is clean).
+ */
 export function collectReleaseTruthProblems(read) {
   const problems = [];
   const pkgText = read('package.json');
@@ -357,7 +358,12 @@ export function collectReleaseTruthProblems(read) {
         // waits …" and "mounting is off" do not read as an enabled claim.
         const MOUNT_ENABLED_CLAIM =
           /(?:multi-layer mount\w*|mounting)\s+is(?:\s+now)?\s+(?:enabled|on)\b|MULTI_LAYER_MOUNT_ENABLED\s*=\s*true/i;
-        for (const doc of [KNOWN, VALREPORT, RELEASE_NOTES]) {
+        // Published release documents are exempt for the same reason rule 1
+        // exempts the limitations doc: they state the flag as it shipped at
+        // their release, and the flag can move afterwards under the same
+        // package version. Before the deposit all three are still drafts and
+        // must agree with the code.
+        for (const doc of published ? [] : [KNOWN, VALREPORT, RELEASE_NOTES]) {
           const text = read(doc);
           if (text == null) continue;
           if (mountEnabled) {
