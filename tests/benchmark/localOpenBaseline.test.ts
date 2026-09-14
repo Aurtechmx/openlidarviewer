@@ -46,6 +46,7 @@ import {
 } from '../helpers/lazLadder';
 
 const ENABLED = LAZ_BENCH_ENABLED;
+const PDAL = ENABLED ? pdalPath() : null;
 /** Sizes in millions of points; override with LAZ_DECODE_BENCH_SIZES=1,5,10. */
 const SIZES_M = benchSizesM('1,5,10');
 const RUNS = 3;
@@ -54,11 +55,8 @@ const best = (runs: number[]): number => Math.min(...runs);
 const ms = (v: number): string => v.toFixed(0).padStart(6);
 const mb = (b: number): string => (b / 1e6).toFixed(1).padStart(6);
 
-describe('local LAZ open baseline (prefix read + whole-file read + single-reader decode)', () => {
-  const PDAL = ENABLED ? pdalPath() : null;
-  const run = ENABLED && PDAL !== null ? it : it.skip;
-
-  run(
+describe.skipIf(!ENABLED || PDAL === null)('local LAZ open baseline (prefix read + whole-file read + single-reader decode)', () => {
+  it(
     'measures the open phases across a size ladder',
     async () => {
       const dir = mkdtempSync(join(tmpdir(), 'olv-local-open-bench-'));

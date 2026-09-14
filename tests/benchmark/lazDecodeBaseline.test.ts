@@ -35,6 +35,7 @@ import type { GlobalPoints } from '../../src/convert/globalPoints';
 import { LAZ_BENCH_ENABLED, benchSizesM, pdalPath } from '../helpers/lazLadder';
 
 const ENABLED = LAZ_BENCH_ENABLED;
+const PDAL = ENABLED ? pdalPath() : null;
 /** Sizes in millions of points; override with LAZ_DECODE_BENCH_SIZES=1,5,10,50. */
 const SIZES_M = benchSizesM('1,5,10');
 
@@ -57,11 +58,8 @@ function makeCloud(n: number): GlobalPoints {
   return { count: n, x, y, z };
 }
 
-describe('LAZ decode baseline (single-threaded laz-perf)', () => {
-  const PDAL = ENABLED ? pdalPath() : null;
-  const run = ENABLED && PDAL !== null ? it : it.skip;
-
-  run(
+describe.skipIf(!ENABLED || PDAL === null)('LAZ decode baseline (single-threaded laz-perf)', () => {
+  it(
     'measures decode throughput across a size ladder',
     async () => {
       // mkdtemp, not a fixed name under the shared temp dir: a predictable path

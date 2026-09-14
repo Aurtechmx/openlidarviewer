@@ -57,6 +57,7 @@ import {
 } from '../helpers/lazLadder';
 
 const ENABLED = LAZ_BENCH_ENABLED;
+const PDAL = ENABLED ? pdalPath() : null;
 /** Sizes in millions of points; override with LAZ_DECODE_BENCH_SIZES=1,2,5,10. */
 const SIZES_M = benchSizesM('1,2,5,10');
 /** Pool size; defaults to the policy's hard cap, which is what a large file gets. */
@@ -134,11 +135,8 @@ function expectIdentical(pooled: RawPoints, single: RawPoints, label: string): v
   expect(same(pooled.returnNumber, single.returnNumber), `${label} returnNumber`).toBe(true);
 }
 
-describe('local LAZ open, pooled decoder (chunk table + worker_threads pool)', () => {
-  const PDAL = ENABLED ? pdalPath() : null;
-  const run = ENABLED && PDAL !== null ? it : it.skip;
-
-  run(
+describe.skipIf(!ENABLED || PDAL === null)('local LAZ open, pooled decoder (chunk table + worker_threads pool)', () => {
+  it(
     'measures the pooled decode across a size ladder against the single reader',
     async () => {
       const dir = mkdtempSync(join(tmpdir(), 'olv-local-open-pooled-'));
