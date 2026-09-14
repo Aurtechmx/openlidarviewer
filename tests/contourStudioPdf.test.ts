@@ -1,3 +1,4 @@
+import { CONTOUR_CLAIMS, exploratoryDecision, validatedDecision } from './helpers/exportDecisions';
 import { describe, it, expect } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 import { buildContourStudioPdf } from '../src/terrain/export/contourStudioPdf';
@@ -31,7 +32,7 @@ function baseInput(): ContourPdfInput {
       sampleSize: 42,
       independentCheckpoints: false,
     },
-    decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['CONTOURS', 'DTM'] },
+    decision: validatedDecision(),
     geometry: { cartographic: false, analyticalAvailable: true },
   };
 }
@@ -61,13 +62,7 @@ describe('buildContourStudioPdf (multipage Contour Studio PDF emitter)', () => {
   it('emits an exploratory (watermarked) model including the optional standards page', async () => {
     const model = buildContourPdfModel({
       ...baseInput(),
-      decision: {
-        status: 'exploratory',
-        badge: 'Exploratory',
-        watermark: 'EXPLORATORY',
-        caveats: ['These outputs are not survey-grade.'],
-        claimIds: ['CONTOURS', 'DTM'],
-      },
+      decision: exploratoryDecision(CONTOUR_CLAIMS, ['These outputs are not survey-grade.']),
       standardsTraceability: true,
     });
     expect(model.watermark).toBe('EXPLORATORY');

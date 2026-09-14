@@ -13,6 +13,7 @@
  *    file).
  */
 
+import { exploratoryDecision, validatedDecision } from './helpers/exportDecisions';
 import { describe, it, expect } from 'vitest';
 import {
   assembleContourDeliverable,
@@ -48,7 +49,7 @@ function readStoreZip(zip: Uint8Array): Map<string, Uint8Array> {
 function input(over: Partial<PackageInput> = {}): PackageInput {
   return {
     projectName: 'Site A',
-    decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['CONTOURS', 'DTM'] },
+    decision: validatedDecision(),
     available: {
       pdf: false,
       analyticalGeojson: true,
@@ -141,7 +142,7 @@ describe('assembleContourDeliverable', () => {
 
   it('carries the exploratory README into the package for a downgraded decision', () => {
     const manifest = buildContourPackageManifest(input({
-      decision: { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: [], claimIds: ['CONTOURS', 'DTM'] },
+      decision: exploratoryDecision(),
     }));
     const zip = readStoreZip(assembleContourDeliverable(manifest, bytesFor(manifest)));
     const readme = manifest.entries.find((e) => e.role === 'readme')!;

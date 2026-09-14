@@ -6,6 +6,7 @@
  * wording), the exploratory caveat, and the blocked-never-packaged rule.
  */
 
+import { exploratoryDecision, validatedDecision } from './helpers/exportDecisions';
 import { describe, it, expect } from 'vitest';
 import {
   buildContourPackageManifest,
@@ -17,8 +18,8 @@ import {
 import type { ContourFeature } from '../src/terrain/contour/contourFeatureModel';
 import type { ScientificExportDecision } from '../src/export/exportManifest';
 
-const validated: ScientificExportDecision = { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['CONTOURS', 'DTM'] };
-const exploratory: ScientificExportDecision = { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: [], claimIds: ['CONTOURS', 'DTM'] };
+const validated: ScientificExportDecision = validatedDecision();
+const exploratory: ScientificExportDecision = exploratoryDecision();
 const blocked: ScientificExportDecision = { status: 'blocked', reasons: ['no surface'] };
 
 const allAvailable = {

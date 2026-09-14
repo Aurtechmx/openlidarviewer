@@ -1,3 +1,4 @@
+import { DTM_CLAIMS, validatedDecision } from './helpers/exportDecisions';
 import { describe, it, expect } from 'vitest';
 import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from '../src/terrain/export/demGeoTiff';
@@ -287,7 +288,7 @@ describe('buildDemPackage', () => {
 
   it('builds the complete deliverable ZIP: DTM + provenance + README + verifying SHA256SUMS', () => {
     const zip = buildContourDeliverableFromResult(fixtureResult(), {
-      decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['DTM'] },
+      decision: validatedDecision(DTM_CLAIMS),
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
@@ -318,7 +319,7 @@ describe('buildDemPackage', () => {
 
   it('emits Support.tif — a uint8 coverage map matching dtm.coverage, on the DTM grid, with README percentages', () => {
     const zip = buildContourDeliverableFromResult(fixtureResult(), {
-      decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['DTM'] },
+      decision: validatedDecision(DTM_CLAIMS),
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
@@ -380,7 +381,7 @@ describe('buildDemPackage', () => {
     const core = computeTerrainCore(hillPoints(), { cellSizeM: 1, crs: 'EPSG:32610' });
     const result = contoursFromCore(core, { intervalM: 1, shapeStyle: 'generalized', generalizeToleranceCells: 1.0 });
     const zip = await buildContourDeliverableFromResultAsync(result, {
-      decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['DTM'] },
+      decision: validatedDecision(DTM_CLAIMS),
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
@@ -404,7 +405,7 @@ describe('buildDemPackage', () => {
 
   it('never copies the horizontal unit onto the vertical — an undeclared elevation unit reads "unknown"', () => {
     const zip = buildContourDeliverableFromResult(fixtureResult(), {
-      decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['DTM'] },
+      decision: validatedDecision(DTM_CLAIMS),
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
@@ -425,7 +426,7 @@ describe('buildDemPackage', () => {
 
   it('reports a declared vertical unit that differs from the horizontal unit', () => {
     const zip = buildContourDeliverableFromResult(fixtureResult(), {
-      decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['DTM'] },
+      decision: validatedDecision(DTM_CLAIMS),
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
@@ -445,7 +446,7 @@ describe('buildDemPackage', () => {
     const core = computeTerrainCore(hillPoints(), { cellSizeM: 1, crs: 'EPSG:32610' });
     const cart = contoursFromCore(core, { intervalM: 1, shapeStyle: 'generalized', generalizeToleranceCells: 1.0 });
     const zip = buildContourDeliverableFromResult(cart, {
-      decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['DTM'] },
+      decision: validatedDecision(DTM_CLAIMS),
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
@@ -482,7 +483,7 @@ describe('buildDemPackage', () => {
     const core = computeTerrainCore(hillPoints(), { cellSizeM: 1, crs: 'EPSG:32610' });
     const crisp = contoursFromCore(core, { intervalM: 1, shapeStyle: 'crisp' });
     const zip = buildContourDeliverableFromResult(crisp, {
-      decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['DTM'] },
+      decision: validatedDecision(DTM_CLAIMS),
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
@@ -678,7 +679,7 @@ describe('buildDemPackage', () => {
       extractEntry(buildDemPackage(r, opts), 'site-dtm.tif')!, 4099,
     );
     const deliverable = buildContourDeliverableFromResult(r, {
-      decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['DTM'] },
+      decision: validatedDecision(DTM_CLAIMS),
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
