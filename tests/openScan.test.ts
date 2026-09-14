@@ -317,3 +317,23 @@ describe('openScan — heavy-LAS fail-closed routing', () => {
     expect(cancelled.calls.setError).not.toHaveBeenCalled();
   });
 });
+
+describe('openScan reads the file prefix once', () => {
+  it('slices the file a single time before the loader, and hands the bytes on', async () => {
+    // A non-COPC head: the sniff, the heavy peek and the loader's preflight
+    // all consume the one 64 KiB read. The stand-in counts every slice.
+    let slices = 0;
+    const head = new ArrayBuffer(65_536);
+    const file = {
+      name: 'plain.laz',
+      size: 10_000_000,
+      slice: () => { slices += 1; return { arrayBuffer: async () => head }; },
+    } as unknown as File;
+    const { deps, calls } = makeDeps();
+    await openScan(file, deps);
+    expect(slices).toBe(1);
+    expect(calls.loadLocalSource).toHaveBeenCalledTimes(1);
+    const options = (calls.loadLocalSource.mock.calls[0] as unknown as [File, unknown, { head?: ArrayBuffer }])[2];
+    expect(options.head).toBe(head);
+  });
+});

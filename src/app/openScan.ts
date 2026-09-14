@@ -26,7 +26,7 @@ import { describeLoadError } from '../io/loadErrors';
 import { formatTelemetry } from '../io/loadTelemetry';
 import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
 import { LoadCancelledError } from '../io/loadFile';
-import { openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
+import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
 import type { OpenStreamingDeps } from './openStreaming';
 import { availableModes } from '../render/colorModes';
 import { recommendColorMode } from '../render/colorModeRecommend';
@@ -249,9 +249,12 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   try {
     // ensure the lazy-loaded Viewer is ready before touching it.
     await deps.viewerReady;
-    // COPC files take the streaming pipeline, not the static loader. The
-    // range-source module is part of the lazy COPC chunk.
-    const headSlice = await file.slice(0, 4096).arrayBuffer();
+    // One read of the file's first 64 KiB serves every prefix consumer on
+    // this path: the COPC sniff here (589 bytes), the heavy peek (64 KiB) and
+    // the loader's preflight (16 KiB). They used to read the same prefix three
+    // times, sequentially, on the main thread. The range-source module for
+    // COPC is part of the lazy COPC chunk.
+    const headSlice = await file.slice(0, HEADER_PEEK_BYTES).arrayBuffer();
     if (detectCopc(headSlice).isCopc) {
       await deps.openLocalCopc(file, controller.signal);
       return;
@@ -283,7 +286,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       setPhase: (phase) => deps.dropZone.setProgress(phase),
       debug: deps.debug,
       streaming: deps.getStreamingDeps(),
-    });
+    }, { head: headSlice });
     if (heavy.status === 'attached') {
       deps.dropZone.setCancelHandler(null);
       deps.dropZone.setProgress(null);
@@ -324,6 +327,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         isMobile: deps.isPhone(),
         deviceMemoryGB: deps.deviceMemoryGB(),
         signal: controller.signal,
+        head: headSlice,
       },
     );
     await attachStaticCloud(result, { file, signal: controller.signal }, deps);

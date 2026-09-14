@@ -76,6 +76,14 @@ export interface LoadOptions {
   deviceMemoryGB?: number;
   /** Abort signal — abort it to cancel the load (rejects `LoadCancelledError`). */
   signal?: AbortSignal;
+  /**
+   * The file's first bytes, from offset 0, when the caller has already read
+   * them. Preflight sniffs and plans from these instead of slicing the file
+   * again; it takes exactly the prefix it would have read, so the plan is the
+   * same either way. Absent, preflight reads as before. The loader does not
+   * depend on who read them.
+   */
+  head?: ArrayBuffer;
 }
 
 /** The cloud payload transferred back from the parse worker. */
@@ -243,7 +251,11 @@ async function preflightFile(
   budget: number,
   options: LoadOptions,
 ): Promise<FilePreflight> {
-  const headSlice = await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
+  const need = Math.min(file.size, HEAD_SLICE_BYTES);
+  const headSlice =
+    options.head && options.head.byteLength >= need
+      ? options.head.slice(0, need)
+      : await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
   const format = sniffFormat(headSlice, file.name);
   if (format === 'unknown') {
     if (is3dTilesName(file.name)) {

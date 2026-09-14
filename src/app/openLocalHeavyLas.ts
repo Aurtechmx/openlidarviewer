@@ -88,7 +88,7 @@ export function describeHeavyRefusal(
 
 /** How many header bytes to peek. The LAS public header is 375 bytes; this is
  *  generous slack, and always far smaller than a file that routes out of core. */
-const HEADER_PEEK_BYTES = 64 * 1024;
+export const HEADER_PEEK_BYTES = 64 * 1024;
 
 /**
  * Peek the LAS public header from a small ranged read. Both LAS and LAZ carry
@@ -100,6 +100,7 @@ const HEADER_PEEK_BYTES = 64 * 1024;
 async function peekLasHeaderFacts(
   range: RangeSource,
   signal: AbortSignal | undefined,
+  preread?: ArrayBuffer,
 ): Promise<LasHeaderFacts | null> {
   let size: number;
   try {
@@ -108,11 +109,19 @@ async function peekLasHeaderFacts(
     return null;
   }
   if (!Number.isFinite(size) || size <= 0) return null;
+  // The bytes this peek needs are the file's first min(size, 64 KiB). A caller
+  // that already holds at least that much hands them over, and this issues no
+  // read of its own: the open path used to read the same prefix three times.
+  const need = Math.min(size, HEADER_PEEK_BYTES);
   let head: ArrayBuffer;
-  try {
-    head = await range.readRange(0, Math.min(size, HEADER_PEEK_BYTES), signal);
-  } catch {
-    return null;
+  if (preread && preread.byteLength >= need) {
+    head = preread.byteLength === need ? preread : preread.slice(0, need);
+  } else {
+    try {
+      head = await range.readRange(0, need, signal);
+    } catch {
+      return null;
+    }
   }
   // Both an uncompressed LAS and a compressed LAZ route here: the LAS half of
   // the tile builder reads sliced LAS, the LAZ half decodes chunk-by-chunk from
@@ -187,7 +196,7 @@ export async function openLocalHeavyLas(
   // is what tells us whether a fall-through to the whole-file loader is safe. A
   // file whose header does not parse as a LAS or LAZ is not one this path
   // handles, so it is not-heavy and the whole-file loader takes it.
-  const facts = await peekLasHeaderFacts(openRange(file), signal);
+  const facts = await peekLasHeaderFacts(openRange(file), signal, env.head);
   if (facts === null) return { status: 'not-heavy' };
 
   // The same plan the whole-file loader computes, acted on before a point is
