@@ -1,7 +1,7 @@
 {
   "files": {
     "src/main.ts": {
-      "lines": 5408,
+      "lines": 5407,
       "goal": 2500
     },
     "src/render/Viewer.ts": {
@@ -14,7 +14,7 @@
       "lines": 3555
     },
     "src/ui/Inspector.ts": {
-      "lines": 2564
+      "lines": 2578
     },
     "src/render/measure/MeasureController.ts": {
       "lines": 2387

@@ -141,7 +141,7 @@ export class Stage {
   readonly canvas: HTMLCanvasElement;
   readonly overlay: HTMLElement;
   private readonly _empty: HTMLElement;
-  private readonly _version: HTMLElement;
+  /** The hidden file input the Layers-header control and {@link promptAddDataset} both open. */
   private readonly _addDataset: HTMLElement;
   /** Inline status banner above the URL field. */
   private _urlError: HTMLElement | null = null;
@@ -186,14 +186,6 @@ export class Stage {
     this._empty = this._buildEmptyState(options);
     this.overlay.append(this._empty);
 
-    // A quiet version mark in the bottom-right corner, revealed with the
-    // first scan so the empty state stays uncluttered.
-    this._version = el('div', {
-      className: 'olv-version olv-hidden',
-      text: `v${__APP_VERSION__}`,
-      title: `OpenLiDARViewer ${__APP_VERSION__}`,
-    });
-    this.overlay.append(this._version);
 
     // Online/offline awareness — set initial state and react to changes.
     // Error-handling-UX item E4: warn the user they can't stream when offline
@@ -223,14 +215,10 @@ export class Stage {
       if (file) void this._approveFile(file).then((ok) => { if (ok) options.onOpenFile?.(file); });
       addInput.value = ''; // let the same file be re-picked
     });
-    this._addDataset = el('button', {
-      className: 'olv-add-dataset olv-hidden',
-      type: 'button',
-      text: '+ Add dataset',
-      title: 'Open another point-cloud file — it mounts alongside the current scan',
-    });
-    this._addDataset.addEventListener('click', () => addInput.click());
-    this.overlay.append(addInput, this._addDataset);
+    // The picker itself, with no floating trigger over the canvas: the visible
+    // control lives in the Layers header (Inspector), which is what it adds to.
+    this._addDataset = addInput;
+    this.overlay.append(addInput);
 
     mount.append(this.root);
   }
@@ -244,19 +232,15 @@ export class Stage {
     this._addDataset.click();
   }
 
-  /** Hide the empty state once the first cloud loads; reveal the version. */
+  /** Hide the empty state once the first cloud loads. */
   hideEmptyState(): void {
     this._empty.classList.add('olv-hidden');
-    this._version.classList.remove('olv-hidden');
-    this._addDataset.classList.remove('olv-hidden');
     this._cancelUrlLoad();
   }
 
   /** Show the empty state again (e.g. after the last cloud is removed). */
   showEmptyState(): void {
     this._empty.classList.remove('olv-hidden');
-    this._version.classList.add('olv-hidden');
-    this._addDataset.classList.add('olv-hidden');
   }
 
   /**

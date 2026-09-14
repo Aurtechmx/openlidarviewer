@@ -69,10 +69,7 @@
   right: calc(18px + env(safe-area-inset-right));
 }
 .olv-navbar { bottom: calc(72px + env(safe-area-inset-bottom)); }
-.olv-version {
-  bottom: calc(13px + env(safe-area-inset-bottom));
-  right: calc(14px + env(safe-area-inset-right));
-}
+
 
 /* ── Phone layout ─────────────────────────────────────────────────────────
    CANONICAL MOBILE-LAYOUT CONDITION (mirrors MOBILE_LAYOUT_QUERY in
@@ -106,7 +103,14 @@
   .olv-navbar { display: none !important; }
 
   /* The backend pill is desk-side detail; drop it to declutter the phone. */
-  .olv-backend { display: none; }
+  /* The pill keeps the version on a phone, in the free bottom-left corner:
+     the renderer name and its status dot are desktop diagnostics. */
+  .olv-backend {
+    left: calc(12px + env(safe-area-inset-left));
+    right: auto;
+    background: none; border: none; padding: 0;
+  }
+  .olv-backend-dot, .olv-backend-text, .olv-backend-sep { display: none; }
 
   /* Show the "More" disclosure on phones (hidden on desktop). It un-hides the
      secondary tools when tapped (see the .olv-dock-more-open rules below). The
@@ -248,11 +252,6 @@
   /* The mode switcher lets its speed slider wrap onto a second line. */
   .olv-nav-row { flex-wrap: wrap; justify-content: center; }
 
-  /* Version mark moves to the free bottom-left corner. */
-  .olv-version {
-    left: calc(12px + env(safe-area-inset-left));
-    right: auto;
-  }
 
   /* ── Centred transient cards were capped at HALF the screen ──────────────
      Every hint, toast and bar below is centred with `left: 50%` plus a

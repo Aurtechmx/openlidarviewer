@@ -109,7 +109,7 @@ body.olv-theme-light .olv-empty::before {
 /* Eyebrow — the one-line technical positioning above the headline. */
 .olv-empty-eyebrow {
   font-size: var(--text-xs);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-faint);
 }

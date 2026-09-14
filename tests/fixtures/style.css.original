@@ -398,7 +398,7 @@
 
 /* Full-screen toggle — same ghost-icon treatment as the theme toggle so the
    header cluster reads as one family (Gestalt similarity). */
-.olv-fs-toggle, .olv-recenter {
+.olv-fs-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; padding: 0; margin: 0;
   color: var(--text-dim);
@@ -411,13 +411,12 @@
     background var(--dur-fast) var(--ease-standard),
     transform 90ms var(--ease-standard);
 }
-.olv-fs-toggle svg, .olv-recenter svg { width: 17px; height: 17px; display: block; }
+.olv-fs-toggle svg { width: 17px; height: 17px; display: block; }
 /* Rendered only while a scan is loaded. */
-body:not(.olv-has-scan) .olv-recenter { display: none; }
 /* Coarse-pointer touch target: 44 px minimum (28 px on fine pointers). */
 @media (pointer: coarse) {
-  .olv-fs-toggle, .olv-recenter { width: 44px; height: 44px; }
-  .olv-fs-toggle svg, .olv-recenter svg { width: 20px; height: 20px; }
+  .olv-fs-toggle { width: 44px; height: 44px; }
+  .olv-fs-toggle svg { width: 20px; height: 20px; }
 }
 .olv-fs-toggle:hover, .olv-recenter:hover {
   color: var(--text);
@@ -431,7 +430,7 @@ body:not(.olv-has-scan) .olv-recenter { display: none; }
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .olv-fs-toggle, .olv-recenter { transition: none; }
+  .olv-fs-toggle { transition: none; }
   .olv-fs-toggle:hover, .olv-fs-toggle:active,
   .olv-recenter:hover, .olv-recenter:active { transform: none; }
 }
@@ -856,7 +855,7 @@ body.olv-theme-light .olv-empty::before {
 /* Eyebrow — the one-line technical positioning above the headline. */
 .olv-empty-eyebrow {
   font-size: var(--text-xs);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
@@ -1204,9 +1203,14 @@ body.olv-theme-light .olv-empty::before {
  */
 .olv-section { margin-top: var(--space-2xl); padding-top: var(--space-md); border-top: 0.5px solid rgba(255, 255, 255, 0.05); }
 .olv-section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+/* Section headings read as written. `Coordinate system`, `Saved views` and
+   `Scan report` are authored sentence-case in TS and were uppercased here
+   alone, which is what made a rail of ordinary nouns read as an instrument
+   panel. Uppercase stays for short state identities (MEASURE, REVIEW,
+   BLOCKED), which are their own rules. */
 .olv-section-label {
-  font-size: var(--text-xs); color: var(--text-faint);
-  letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: var(--space-md);
+  font-size: var(--text-xs); color: var(--text-faint); font-weight: 600;
+  letter-spacing: 0.01em; margin-bottom: var(--space-md);
 }
 
 /* Collapsible section (<details>) — matches the static section
@@ -1289,7 +1293,15 @@ body.olv-theme-light .olv-empty::before {
  * the rows beneath it (see ui/LayerGroupsPanel.ts), so nothing here encodes a
  * group's visibility — the checkbox is a rendering, including the mixed state.
  */
-.olv-group-bar { display: flex; margin-bottom: var(--space-sm); }
+/* The Layers header row: the primary Data action first, then grouping. */
+.olv-group-bar { display: flex; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+/* "+ Add dataset" is the section's primary action, so it reads solid where the
+   opt-in grouping control stays a dashed affordance. */
+.olv-add-dataset-row {
+  border-style: solid; border-color: var(--hairline);
+  background: rgba(255, 255, 255, 0.06); color: var(--text); font-weight: 600;
+}
+.olv-add-dataset-row:hover { background: rgba(255, 255, 255, 0.1); border-color: var(--accent); }
 .olv-group-new {
   background: none; border: 1px dashed var(--border, rgba(255,255,255,0.16));
   border-radius: var(--radius-sm, 6px); color: var(--text-dim);
@@ -1297,6 +1309,7 @@ body.olv-theme-light .olv-empty::before {
   padding: var(--space-xs) var(--space-sm);
 }
 .olv-group-new:hover { color: var(--text); border-color: var(--accent); }
+.olv-group-new:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-group { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-group-head { display: flex; align-items: center; gap: var(--space-xs); }
 .olv-group-head input { accent-color: var(--accent); }
@@ -1740,6 +1753,11 @@ body.olv-theme-light .olv-empty::before {
 }
 .olv-backend-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .olv-backend-text { font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.olv-backend-sep { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-backend-version {
+  font-size: var(--text-2xs); color: var(--text-faint);
+  font-variant-numeric: tabular-nums; letter-spacing: 0.03em; user-select: none;
+}
 
 /* Developer performance overlay (?debug=1) */
 .olv-debug {
@@ -2418,7 +2436,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 
 /* Panels glide in rather than snapping */
-.olv-inspector, .olv-navbar, .olv-dock, .olv-backend, .olv-version {
+.olv-inspector, .olv-navbar, .olv-dock, .olv-backend {
   animation: olv-rise-in 260ms ease both;
 }
 @keyframes olv-rise-in {
@@ -2444,15 +2462,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rating-weak) 22%, transparent); }
 }
 
-/* Version mark — bottom-right corner, revealed once a scan loads */
-.olv-version {
-  position: absolute; bottom: 13px; right: 14px;
-  font-size: var(--text-2xs); line-height: 1; font-variant-numeric: tabular-nums;
-  letter-spacing: 0.03em; color: var(--text-faint);
-  pointer-events: auto; user-select: none;
-}
-
-
 /* Respect a reduced-motion preference: hold the health dots static and drop the
    entrance motion, matching the guards the other section files already carry.
    The pulse is INFINITE, so it is the one that most needs silencing. */
@@ -2464,8 +2473,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-inspector,
   .olv-navbar,
   .olv-dock,
-  .olv-backend,
-  .olv-version {
+  .olv-backend {
     animation: none;
   }
 }
@@ -3090,10 +3098,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   right: calc(18px + env(safe-area-inset-right));
 }
 .olv-navbar { bottom: calc(72px + env(safe-area-inset-bottom)); }
-.olv-version {
-  bottom: calc(13px + env(safe-area-inset-bottom));
-  right: calc(14px + env(safe-area-inset-right));
-}
+
 
 /* ── Phone layout ─────────────────────────────────────────────────────────
    CANONICAL MOBILE-LAYOUT CONDITION (mirrors MOBILE_LAYOUT_QUERY in
@@ -3127,7 +3132,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-navbar { display: none !important; }
 
   /* The backend pill is desk-side detail; drop it to declutter the phone. */
-  .olv-backend { display: none; }
+  /* The pill keeps the version on a phone, in the free bottom-left corner:
+     the renderer name and its status dot are desktop diagnostics. */
+  .olv-backend {
+    left: calc(12px + env(safe-area-inset-left));
+    right: auto;
+    background: none; border: none; padding: 0;
+  }
+  .olv-backend-dot, .olv-backend-text, .olv-backend-sep { display: none; }
 
   /* Show the "More" disclosure on phones (hidden on desktop). It un-hides the
      secondary tools when tapped (see the .olv-dock-more-open rules below). The
@@ -3269,11 +3281,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* The mode switcher lets its speed slider wrap onto a second line. */
   .olv-nav-row { flex-wrap: wrap; justify-content: center; }
 
-  /* Version mark moves to the free bottom-left corner. */
-  .olv-version {
-    left: calc(12px + env(safe-area-inset-left));
-    right: auto;
-  }
 
   /* ── Centred transient cards were capped at HALF the screen ──────────────
      Every hint, toast and bar below is centred with `left: 50%` plus a
@@ -4497,35 +4504,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-md);
 }
 
-/* Persistent "Add dataset" affordance. The Stage reveals it with the first
-   scan (hideEmptyState); once the empty state is gone, drag-and-drop is the
-   only way to open a second dataset — and a phone has none — so this is the
-   discoverable, touch-safe path to a multi-dataset project. */
-.olv-add-dataset {
-  position: absolute;
-  bottom: 13px;
-  left: 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm);
-  padding: var(--space-xs) var(--space-md);
-  cursor: pointer;
-  transition: background 160ms var(--ease-standard), border-color 160ms var(--ease-standard);
-}
-.olv-add-dataset:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent);
-}
-.olv-add-dataset:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 /* The Inspector is the active control rail (Color By / Quality /
  * Workflow / Visuals) — RAISED so it reads as the live working
  * surface against the recessive left stack. */
@@ -6625,17 +6603,6 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
 .olv-catalog-quickpick:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
-
-/* Version chip — was display:none on empty state, switched on at scan
- * load. Show always, but keep low-key on the empty state so it grounds
- * the page as a real product without competing with the CTA. */
-.olv-version {
-  display: block !important;
-  opacity: 0.55;
-  transition: opacity 220ms var(--ease-standard);
-}
-.olv-version:hover { opacity: 0.9; }
-body.olv-has-scan .olv-version { opacity: 0.7; }
 
 /* Inspector and its sheet toggle disappear entirely while no scan is
  * loaded. Same mechanism the dock uses. */

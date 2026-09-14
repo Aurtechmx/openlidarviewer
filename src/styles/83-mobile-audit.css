@@ -252,17 +252,6 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
-/* Version chip — was display:none on empty state, switched on at scan
- * load. Show always, but keep low-key on the empty state so it grounds
- * the page as a real product without competing with the CTA. */
-.olv-version {
-  display: block !important;
-  opacity: 0.55;
-  transition: opacity 220ms var(--ease-standard);
-}
-.olv-version:hover { opacity: 0.9; }
-body.olv-has-scan .olv-version { opacity: 0.7; }
-
 /* Inspector and its sheet toggle disappear entirely while no scan is
  * loaded. Same mechanism the dock uses. */
 .olv-inspector.olv-hidden { display: none; }

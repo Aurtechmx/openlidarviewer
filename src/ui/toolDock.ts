@@ -278,9 +278,18 @@ export class ToolDock {
     this.dock.setAttribute('aria-label', 'Tools');
 
     this._backendText = el('span', { className: 'olv-backend-text', text: 'initialising…' });
+    // The version rides in the same pill. It used to be its own absolutely
+    // positioned mark 3 px away in the same corner, so the two boxes crossed:
+    // one status item states both facts and cannot overlap itself.
     this.backend = el('div', { className: 'olv-backend' }, [
       el('span', { className: 'olv-backend-dot' }),
       this._backendText,
+      el('span', { className: 'olv-backend-sep', text: '·' }),
+      el('span', {
+        className: 'olv-backend-version',
+        text: `v${__APP_VERSION__}`,
+        title: `OpenLiDARViewer ${__APP_VERSION__}`,
+      }),
     ]);
   }
 

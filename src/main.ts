@@ -513,7 +513,6 @@ const stage = new Stage(app, {
 themeToggle = mountHeaderControls(stage, {
   initialTheme: currentTheme,
   onThemeChange: (name) => setTheme(name),
-  onRecenter: () => { viewer?.frameAll(); },
 });
 
 /**
@@ -1088,13 +1087,13 @@ const layerService = createLayerService({
 });
 
 const inspector = new Inspector({
+  onAddDataset: () => stage.promptAddDataset(),
   onColorMode: (mode) => {
     currentColorMode = mode;
     if (scans.activeId) viewer.setColorMode(scans.activeId, mode);
-    // Keep the analyse-panel confidence toggle in sync when the user changes
-    // colour from the COLOR BY rail instead of the toggle button. Null-safe: the
-    // panel is lazy-mounted, and `hydrateAnalysePanel()` re-derives this from
-    // `currentColorMode` when it does mount.
+    // Keep the analyse-panel confidence toggle in sync when colour changes from
+    // the rail instead of the toggle. Null-safe: the panel is lazy-mounted and
+    // `hydrateAnalysePanel()` re-derives this from `currentColorMode` on mount.
     analysePanel?.setConfidenceColorActive(mode === 'confidence');
     // Workflow rail (v0.4.5): a colour-mode change can enter/leave a preset.
     syncInspectorVisuals();
