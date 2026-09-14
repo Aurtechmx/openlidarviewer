@@ -8,6 +8,7 @@
 
 import {
   parseDevFlags,
+  primeDevFlags,
   readDevFlags,
   resetDevFlagsForTest,
   DEV_FLAG_DEFAULTS,
@@ -168,5 +169,22 @@ describe('readDevFlags — DOM-free environment', () => {
     // Memoized — same object on the second read.
     expect(readDevFlags()).toBe(first);
     resetDevFlagsForTest();
+  });
+});
+
+describe('primeDevFlags — a worker adopts the page query it was handed', () => {
+  afterEach(() => resetDevFlagsForTest());
+
+  it('makes the primed query what readDevFlags returns', () => {
+    primeDevFlags('?decodePool=off');
+    expect(readDevFlags().decodePoolOff).toBe(true);
+    expect(readDevFlags().decodePool).toBe(false);
+  });
+
+  it('replaces an earlier priming rather than merging', () => {
+    primeDevFlags('?decodeWorkers=3');
+    expect(readDevFlags().decodeWorkers).toBe(3);
+    primeDevFlags('');
+    expect(readDevFlags()).toEqual(DEV_FLAG_DEFAULTS);
   });
 });

@@ -12,6 +12,7 @@ import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate, LoadStage } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
 import { organizedRangeTransferables } from '../model/OrganizedRange';
+import { primeDevFlags } from '../perf/devFlags';
 
 interface ParseRequest {
   buffer: ArrayBuffer;
@@ -29,12 +30,19 @@ interface ParseRequest {
    * shown.
    */
   e57Plan?: E57DecodePlan;
+  /**
+   * The page's `location.search`, so the development flags read in this scope
+   * (the LAZ pool's opt-in and refusal switches) are the ones the user typed.
+   * A worker's own `location` is its script URL and carries no query.
+   */
+  search?: string;
 }
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent): void => {
-  const { buffer, format, name, budget, plan, e57Plan } = event.data as ParseRequest;
+  const { buffer, format, name, budget, plan, e57Plan, search } = event.data as ParseRequest;
+  if (typeof search === 'string') primeDevFlags(search);
 
   void (async (): Promise<void> => {
     try {

@@ -1,5 +1,5 @@
 /**
- * lazDecodeBaseline.test.ts — the honest "before" for chunk-parallel LAZ decode.
+ * lazDecodeBaseline.test.ts : the honest "before" for chunk-parallel LAZ decode.
  *
  * OLV's live path decodes a dropped `.laz` with a single laz-perf `LASZip`
  * reader (`src/io/lazDecode.ts`), one arithmetic-coder state across the whole
@@ -13,7 +13,7 @@
  * the same local-tool pattern the cross-implementation reference generators use.
  * PDAL is not a project dependency and is absent in CI, so the benchmark runs
  * only when `LAZ_DECODE_BENCH=1` and PDAL is on the path; otherwise it skips.
- * It is not a `benchmarks/runner` suite yet — it establishes the baseline leg;
+ * It is not a `benchmarks/runner` suite yet; it establishes the baseline leg;
  * the loaders.gl LASLoader competitor leg and the manifest integration follow.
  *
  * WHY BEST-OF-N. Decode is CPU-bound and the WASM heap warms on the first call;
@@ -32,25 +32,11 @@ import { parseLasHeader } from '../../src/io/lasHeader';
 import { computeOrigin } from '../../src/io/coordinateBridge';
 import { decodeLaz } from '../../src/io/lazDecode';
 import type { GlobalPoints } from '../../src/convert/globalPoints';
+import { LAZ_BENCH_ENABLED, benchSizesM, pdalPath } from '../helpers/lazLadder';
 
-const ENABLED = process.env.LAZ_DECODE_BENCH === '1';
-function pdalPath(): string | null {
-  for (const p of ['/opt/homebrew/bin/pdal', '/usr/local/bin/pdal', 'pdal']) {
-    try {
-      execFileSync(p, ['--version'], { stdio: 'ignore' });
-      return p;
-    } catch {
-      /* try next */
-    }
-  }
-  return null;
-}
-
+const ENABLED = LAZ_BENCH_ENABLED;
 /** Sizes in millions of points; override with LAZ_DECODE_BENCH_SIZES=1,5,10,50. */
-const SIZES_M = (process.env.LAZ_DECODE_BENCH_SIZES ?? '1,5,10')
-  .split(',')
-  .map((s) => Number(s.trim()))
-  .filter((n) => Number.isFinite(n) && n > 0);
+const SIZES_M = benchSizesM('1,5,10');
 
 /** A deterministic terrain-like cloud: a rolling surface plus small noise. */
 function makeCloud(n: number): GlobalPoints {
@@ -83,7 +69,7 @@ describe('LAZ decode baseline (single-threaded laz-perf)', () => {
       // would write its fixtures through it.
       const dir = mkdtempSync(join(tmpdir(), 'olv-laz-decode-bench-'));
       // eslint-disable-next-line no-console
-      console.log(`\nLAZ decode baseline — cores=${cpus().length}, sizes=${SIZES_M.join(',')}M`);
+      console.log(`\nLAZ decode baseline: cores=${cpus().length}, sizes=${SIZES_M.join(',')}M`);
 
       for (const m of SIZES_M) {
         const n = Math.round(m * 1e6);
