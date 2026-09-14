@@ -294,3 +294,55 @@ export const RAIL_CHEVRON_RIGHT =
 export function containPanelWheel(panel: HTMLElement): void {
   panel.addEventListener('wheel', (e) => { e.stopPropagation(); }, { passive: true });
 }
+
+// ── the app's one toast ────────────────────────────────────────────────────
+
+export interface ToastAction {
+  readonly label: string;
+  readonly onClick: () => void;
+}
+
+export interface ToastHost {
+  /**
+   * Show `message`, replacing whatever the toast showed before. With `action`
+   * a button follows the text and the toast stays 8 s instead of 6, since an
+   * action needs reading and reaching.
+   */
+  readonly show: (message: string, action?: ToastAction) => void;
+}
+
+/**
+ * One `role="status"` toast for the whole app, created on first use inside
+ * `host()`. Every call rebuilds the content, so an info toast never leaves a
+ * stale action button behind, and restarts the dismiss timer.
+ */
+export function createToastHost(host: () => HTMLElement = () => document.body): ToastHost {
+  let root: HTMLElement | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return {
+    show(message, action) {
+      if (timer !== null) clearTimeout(timer);
+      if (root === null) {
+        root = el('div', { className: 'olv-lasso-toast' });
+        // The toast is the only feedback channel for several flows (tool
+        // hints, rejected opens), so assistive tech hears it.
+        root.setAttribute('role', 'status');
+        root.setAttribute('aria-live', 'polite');
+        host().append(root);
+      }
+      root.replaceChildren(el('span', { className: 'olv-lasso-toast-msg', text: message }));
+      if (action) {
+        const btn = el('button', { className: 'olv-lasso-toast-action', text: action.label });
+        btn.type = 'button';
+        btn.addEventListener('click', () => {
+          btn.blur();
+          action.onClick();
+        });
+        root.append(btn);
+      }
+      root.classList.add('olv-visible');
+      const shown = root;
+      timer = setTimeout(() => shown.classList.remove('olv-visible'), action ? 8000 : 6000);
+    },
+  };
+}

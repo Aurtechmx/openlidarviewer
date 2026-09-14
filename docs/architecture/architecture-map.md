@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,557 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,409 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -99,7 +99,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,557)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,409)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -110,6 +110,18 @@ called with a 19-member deps object. The candidates that remain:
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `syncInspectorVisuals` | 266 | inspector wiring module |
 | `applyScanRoute` | 233 | joins `ScanRouteService` |
+
+Done: `runStreamingModules` (~105 lines), the Scan Report assembler for a streaming
+cloud, now lives in `src/app/streamingScanReport.ts` beside the row builders it
+calls, takes the resolved frame as a parameter instead of reading the shell's
+CRS service, and exports the cloud shape it reads as `StreamingReportCloud`
+(`tests/streamingReportAssembler.test.ts`). The app toast (~55 lines, two
+module-level variables) is `createToastHost` in `src/ui/panelChrome.ts`; the
+shell keeps a one-line handle (`tests/toastHost.test.ts`). The Viewer import no
+longer starts at module evaluation: `ensureViewer()` starts it from the idle
+pre-warm on a capable connection and from every scan-open path, so the
+existing Save-Data guard on the pre-warm decides, and the key dispatcher's
+teardown is registered with the stage instead of discarded.
 
 Done: `importSession` (~208 lines) now lives in `src/app/sessionIo.ts`, called with a
 `SessionIoDeps` object of ~16 accessors the shell binds to its own state. The pure
