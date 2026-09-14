@@ -106,7 +106,7 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
           // and then replying to nobody. Terminate it and drop it; the next
           // job respawns a fresh one. Any other job queued behind this one is
           // failed rather than silently lost with the worker.
-          this._failAll(new Error('Classification aborted'));
+          this._failAll(new Error('The classifier worker was torn down by an abort.'));
           if (this._worker) {
             this._worker.terminate();
             this._worker = null;

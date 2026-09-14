@@ -272,5 +272,5 @@ export function resolveContourExportPermit(
   if (decision.status === 'blocked') {
     return { ok: false, exporterId, reasons: decision.reasons };
   }
-  return { ok: true, exporterId, decision, claimIds: decision.claimIds ?? [] };
+  return { ok: true, exporterId, decision, claimIds: decision.claimIds };
 }

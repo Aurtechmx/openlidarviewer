@@ -88,8 +88,8 @@ export function exporterRegistration(exporterId: string): ScientificExporterRegi
 }
 
 export type ScientificExportDecision =
-  | { readonly status: 'validated'; readonly badge: string; readonly caveats: readonly string[]; readonly claimIds?: readonly string[] }
-  | { readonly status: 'exploratory'; readonly badge: string; readonly watermark: string; readonly caveats: readonly string[]; readonly claimIds?: readonly string[] }
+  | { readonly status: 'validated'; readonly badge: string; readonly caveats: readonly string[]; readonly claimIds: readonly string[] }
+  | { readonly status: 'exploratory'; readonly badge: string; readonly watermark: string; readonly caveats: readonly string[]; readonly claimIds: readonly string[] }
   | { readonly status: 'blocked'; readonly reasons: readonly string[] };
 
 export interface ExportDecisionContext {

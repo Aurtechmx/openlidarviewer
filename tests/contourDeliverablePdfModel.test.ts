@@ -6,6 +6,7 @@
  * blocked-never-polished rule, forbidden-wording detection, and determinism.
  */
 
+import { CONTOUR_CLAIMS, exploratoryDecision, validatedDecision } from './helpers/exportDecisions';
 import { describe, it, expect } from 'vitest';
 import {
   buildContourPdfModel,
@@ -15,8 +16,8 @@ import {
 } from '../src/terrain/contourStudio/contourDeliverablePdfModel';
 import type { ScientificExportDecision } from '../src/export/exportManifest';
 
-const validated: ScientificExportDecision = { status: 'validated', badge: 'Internal validation', caveats: ['Suitability: not survey-grade.'] };
-const exploratory: ScientificExportDecision = { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: ['Suitability: not survey-grade.', 'Metric contour support is not claimed.'] };
+const validated: ScientificExportDecision = validatedDecision(CONTOUR_CLAIMS, ['Suitability: not survey-grade.']);
+const exploratory: ScientificExportDecision = exploratoryDecision(CONTOUR_CLAIMS, ['Suitability: not survey-grade.', 'Metric contour support is not claimed.']);
 const blocked: ScientificExportDecision = { status: 'blocked', reasons: ['no surface'] };
 
 function input(decision: ScientificExportDecision, over: Partial<ContourPdfInput> = {}): ContourPdfInput {

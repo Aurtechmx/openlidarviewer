@@ -19,7 +19,8 @@
 // in main.ts.
 import type { Viewer } from '../render/Viewer';
 import { ProcessService } from '../process/ProcessService';
-import type { ScanFacts } from '../process/ProcessPlan';
+import type { ProductId, ScanFacts } from '../process/ProcessPlan';
+import type { AuthorizationCheck } from '../process/ProcessService';
 import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 import type { CrsService } from '../geo/CrsService';
@@ -81,6 +82,34 @@ import type { PrecisionPermit } from '../geo/inMemoryPrecision';
  * offset, so `originY + localCentreY` recovers the grid-centre LATITUDE the
  * cos φ corrections need. Projected frames never touch it.
  */
+/**
+ * Mint the frame's authorizer: a token from the state the frame was built on,
+ * verified at export against the state the scan is in then, so a change
+ * between the two caps the export. The verifying service is rebuilt only when
+ * the facts object itself changes, so repeated clicks on an unchanged scan
+ * re-plan nothing.
+ */
+function authorizerFor(
+  frameFacts: ScanFacts | null,
+  frameService: ProcessService,
+  getScanFacts?: () => ScanFacts | null,
+): (product: 'contours' | 'dtm') => { product: 'contours' | 'dtm'; token: unknown; verify: (t: unknown, p: ProductId) => AuthorizationCheck } {
+  let cachedFacts: ScanFacts | null = frameFacts;
+  let cachedService = frameService;
+  return (product) => {
+    const live = getScanFacts?.() ?? null;
+    if (live !== cachedFacts) {
+      cachedFacts = live;
+      cachedService = live ? ProcessService.fromFacts([live]) : frameService;
+    }
+    return {
+      product,
+      token: frameService.authorize(product),
+      verify: (t, p) => cachedService.verifyAuthorization(t, p),
+    };
+  };
+}
+
 export function deriveCoreParams(
   positions: Float32Array,
   classification: Uint8Array | undefined,
@@ -685,13 +714,7 @@ export function createTerrainAnalysisRunner(
         // The token is minted on the facts this frame was built from and
         // verified at export against the facts the scan has then, so an edit
         // between the two caps the export to exploratory.
-        authorizeFor: svc
-          ? (product) => {
-              const live = getScanFacts?.() ?? null;
-              const now = live ? ProcessService.fromFacts([live]) : svc;
-              return { product, token: svc.authorize(product), verify: (t, p) => now.verifyAuthorization(t, p) };
-            }
-          : undefined,
+        authorizeFor: svc ? authorizerFor(facts, svc, getScanFacts) : undefined,
         crsProjected: ctx.kind === 'projected',
         crsKind: ctx.kind,
         verticalUnitsKnown: vUnitKnown,
