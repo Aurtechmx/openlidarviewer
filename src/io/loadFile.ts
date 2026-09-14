@@ -477,9 +477,7 @@ const workerGate = createSerialGate();
  * is no page (tests, a nested worker).
  */
 function pageSearch(): string {
-  return typeof window !== 'undefined' && typeof window.location !== 'undefined'
-    ? window.location.search
-    : '';
+  return typeof window === 'undefined' ? '' : (window.location?.search ?? '');
 }
 
 /** Builds the real module worker. Overridable so Node tests can inject a fake. */

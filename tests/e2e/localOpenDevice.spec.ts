@@ -88,6 +88,7 @@ async function openOnce(page: Page, url: string, file: string): Promise<OpenTimi
 const ms = (v: number): string => (Number.isFinite(v) ? v.toFixed(0) : 'n/a').padStart(6);
 
 test.describe('local LAZ open on device: single reader against the worker pool', () => {
+  // Skipped by design outside a benchmark run: it needs an explicit opt-in.
   test.skip(!ENABLED, 'LAZ_DECODE_BENCH=1 not set');
   test.setTimeout(3_600_000);
 
@@ -99,6 +100,7 @@ test.describe('local LAZ open on device: single reader against the worker pool',
     if (!ENABLED) return;
     ladder = await loadLadder();
     const pdal = ladder.pdalPath();
+    // Skipped by design without PDAL: the ladder is compressed by it.
     test.skip(pdal === null, 'PDAL not found on the path');
     SIZES_M = ladder.benchSizesM('1,2,5,10');
     dir = mkdtempSync(join(tmpdir(), 'olv-local-open-device-'));

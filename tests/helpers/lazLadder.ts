@@ -44,7 +44,10 @@ export function makeLadderCloud(n: number): GlobalPoints {
   const y = new Float64Array(n);
   const z = new Float64Array(n);
   let s = 20260726;
-  const rnd = () => ((s = (1664525 * s + 1013904223) >>> 0) / 4294967296);
+  const rnd = (): number => {
+    s = (1664525 * s + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
   const side = Math.ceil(Math.sqrt(n));
   const span = 1000;
   for (let i = 0; i < n; i++) {
