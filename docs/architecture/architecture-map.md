@@ -18,17 +18,20 @@ keep that arrow pointing one way.
 
 ## Layers
 
+Sizes are `.ts` lines per layer, bucketed; `lint:architecture-truth` derives them
+from the tree and fails when a cell drifts.
+
 | Layer | Path | Size | Role |
 |---|---|---:|---|
-| Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~540 | Compensated sums, Welford, unit types. No dependencies. |
-| Model | `src/model` | ~490 | `PointCloud`, layer model. Plain data. |
-| Geo | `src/geo` | ~2.5k | CRS math, `ProjectSpatialFrame`, transforms. |
-| Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~30.8k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. **UI-free by lint.** |
-| I/O | `src/io` | ~13.6k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~38k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
-| Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
-| UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
+| Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~2.2k | Compensated sums, Welford, unit types. No dependencies. |
+| Model | `src/model` | ~3.4k | `PointCloud`, layer model. Plain data. |
+| Geo | `src/geo` | ~5.2k | CRS math, `ProjectSpatialFrame`, transforms. |
+| Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~45k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. **UI-free by lint.** |
+| I/O | `src/io` | ~34k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
+| Render | `src/render` | ~63k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Export / report | `src/export`, `src/report`, `src/convert` | ~12k | Studio exporters, PDF/report builders, batch conversion. |
+| Application services | `src/app` | ~15k | Composition root and the services that own shared state. |
+| UI | `src/ui` | ~31k | Panels, Inspector, Studio surfaces, onboarding. |
 | Shell | `src/main.ts` | 5,409 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root

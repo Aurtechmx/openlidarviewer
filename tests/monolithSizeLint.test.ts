@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — plain .mjs script, no types
-import { collectGrowth } from '../scripts/lint-monolith-size.mjs';
+import { collectGrowth, collectWatchDrift, watchAllowance } from '../scripts/lint-monolith-size.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MAIN = 'src/main.ts';
@@ -143,5 +143,47 @@ describe('lint-monolith-size --update', () => {
     const { code } = run();
     expect(code).toBe(0);
     expect(bank().files[MAIN].lines).toBe(140);
+  });
+});
+
+describe('the watch list monitors the next tier for material growth', () => {
+  const banked = { watch: { 'src/ui/AnalysePanel.ts': { lines: 3000 }, 'src/ui/Inspector.ts': { lines: 2000 } } };
+
+  it('gives a module a 5% band, with a 40-line floor for small ones', () => {
+    expect(watchAllowance(3000)).toBe(3150);
+    expect(watchAllowance(1680)).toBe(1764);
+    // Below 800 lines, 5% is under the floor, so the floor applies.
+    expect(watchAllowance(400)).toBe(440);
+    expect(watchAllowance(800)).toBe(840);
+  });
+
+  it('passes inside the band, in either direction', () => {
+    expect(collectWatchDrift({ 'src/ui/AnalysePanel.ts': 3150 }, banked)).toEqual([]);
+    expect(collectWatchDrift({ 'src/ui/AnalysePanel.ts': 2400 }, banked)).toEqual([]);
+  });
+
+  it('fails one line past the band, naming the banked figure and the ceiling', () => {
+    const drift = collectWatchDrift({ 'src/ui/AnalysePanel.ts': 3151 }, banked);
+    expect(drift).toEqual([{ file: 'src/ui/AnalysePanel.ts', current: 3151, banked: 3000, ceiling: 3150 }]);
+  });
+
+  it('reports every drifted module, not just the first', () => {
+    const drift = collectWatchDrift({ 'src/ui/AnalysePanel.ts': 4000, 'src/ui/Inspector.ts': 2500 }, banked);
+    expect(drift.map((d: { file: string }) => d.file)).toEqual(['src/ui/AnalysePanel.ts', 'src/ui/Inspector.ts']);
+  });
+
+  it('ignores a module the baseline does not watch, and an absent watch section', () => {
+    expect(collectWatchDrift({ 'src/ui/Other.ts': 99_999 }, banked)).toEqual([]);
+    expect(collectWatchDrift({ 'src/ui/AnalysePanel.ts': 99_999 }, { files: {} })).toEqual([]);
+  });
+
+  it('the committed baseline watches the next tier and the tree sits inside every band', () => {
+    const live = JSON.parse(readFileSync(resolve(ROOT, 'docs/validation/monolith-size-baseline.json'), 'utf8'));
+    expect(Object.keys(live.watch ?? {}).length).toBeGreaterThanOrEqual(7);
+    const current: Record<string, number> = {};
+    for (const f of Object.keys(live.watch)) {
+      current[f] = readFileSync(resolve(ROOT, f), 'utf8').split('\n').length;
+    }
+    expect(collectWatchDrift(current, live)).toEqual([]);
   });
 });

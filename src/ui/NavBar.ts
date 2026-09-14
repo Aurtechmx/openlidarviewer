@@ -191,6 +191,8 @@ export class NavBar {
   readonly touchHint: HTMLElement;
 
   private readonly _cb: NavBarCallbacks;
+  /** Removals for every listener this panel put outside its own DOM. */
+  private readonly _teardown: Array<() => void> = [];
   private readonly _hud: HTMLElement;
   /**
    * The dismissible half of the HUD: the movement / mode / meta legend. Held
@@ -525,20 +527,26 @@ export class NavBar {
     const yieldWhileDragging = (down: boolean): void => {
       this._hud.classList.toggle('olv-nav-hud-yielding', down);
     };
+    // These listen on `window`, outside this component's own DOM, so they
+    // outlive the element tree unless something removes them. Held as named
+    // handlers and torn down by dispose(): anonymous ones cannot be removed at
+    // all, and a NavBar rebuilt by a shell remount would stack another set on
+    // every construction.
+    //
     // Guarded because the panel is constructed in Node by the tests that hold
     // its DOM shape, where there is no window to listen on.
     if (typeof window !== 'undefined') {
-      window.addEventListener(
-        'pointerdown',
-        (e) => {
-          const target = e.target as Element | null;
-          if (target?.closest?.('.olv-navbar') != null) return;
-          yieldWhileDragging(true);
-        },
-        { capture: true },
-      );
+      const onPointerDown = (e: Event): void => {
+        const target = e.target as Element | null;
+        if (target?.closest?.('.olv-navbar') != null) return;
+        yieldWhileDragging(true);
+      };
+      const onPointerEnd = (): void => yieldWhileDragging(false);
+      window.addEventListener('pointerdown', onPointerDown, { capture: true });
+      this._teardown.push(() => window.removeEventListener('pointerdown', onPointerDown, { capture: true }));
       for (const end of ['pointerup', 'pointercancel'] as const) {
-        window.addEventListener(end, () => yieldWhileDragging(false), { capture: true });
+        window.addEventListener(end, onPointerEnd, { capture: true });
+        this._teardown.push(() => window.removeEventListener(end, onPointerEnd, { capture: true }));
       }
     }
 
@@ -687,6 +695,20 @@ export class NavBar {
     this._helpPinned = true;
     writeStoredHelpPinned(true);
     this._render();
+  }
+
+  /**
+   * Release everything this panel owns outside its own element tree: the
+   * window-level pointer listeners and the pending hint timer. A component
+   * that registers beyond its root owns its removal, or a rebuilt shell
+   * accumulates a live listener set per construction.
+   */
+  dispose(): void {
+    for (const off of this._teardown.splice(0)) off();
+    if (this._hintTimer !== null) {
+      clearTimeout(this._hintTimer);
+      this._hintTimer = null;
+    }
   }
 
   /**

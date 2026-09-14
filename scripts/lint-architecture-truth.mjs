@@ -44,6 +44,28 @@ const read = (rel) => {
 };
 const countLines = (rel) => read(rel).split('\n').length;
 
+/** Every .ts line under a file or directory, counted the way `wc -l` does. */
+function countTsLines(rel) {
+  const abs = resolve(ROOT, rel);
+  if (!existsSync(abs)) return 0;
+  if (statSync(abs).isFile()) return rel.endsWith('.ts') ? countLines(rel) : 0;
+  let n = 0;
+  for (const entry of readdirSync(abs)) {
+    n += countTsLines(join(rel, entry));
+  }
+  return n;
+}
+
+/**
+ * How the layer table writes a size. Bucketed so ordinary commits do not churn
+ * the document: a layer has to move by ~500 lines before its cell is wrong.
+ */
+function sizeBucket(lines) {
+  if (lines >= 10_000) return `~${Math.round(lines / 1000)}k`;
+  if (lines >= 1000) return `~${(lines / 1000).toFixed(1)}k`;
+  return `~${Math.round(lines / 10) * 10}`;
+}
+
 /**
  * The mount state a document asserts in words, as 'enabled' | 'disabled', or
  * null when it makes no present-tense assertion. Matches a PRESENT-TENSE verb
@@ -110,6 +132,49 @@ const fact = (name, value) => {
       problems.push(
         `${MAP}: states src/${m[1]} at ${m[2]} lines; the tree has ${expected[m[1]]}. `
         + 'Update the stated current size.',
+      );
+    }
+  }
+}
+
+// ── Fact 1b: the layer table's stated sizes ─────────────────────────────────
+// The map opens with a layer table whose Size column described the tree when it
+// was written. Nothing derived those figures, so decomposition moving code
+// between layers left them behind: at the v0.6.8 archive every row was stale,
+// `src/app` by a factor of nine, while this lint still reported OK because it
+// only read the two monolith counts. The sizes are derived here and the row for
+// each layer must state the current bucket.
+{
+  const MAP = 'docs/architecture/architecture-map.md';
+  const mapText = read(MAP);
+  // The layer groups exactly as the table's Path column lists them.
+  const LAYERS = [
+    ['src/process', 'src/numeric.ts', 'src/units'],
+    ['src/model'],
+    ['src/geo'],
+    ['src/terrain', 'src/validation', 'src/analysis', 'src/science'],
+    ['src/io'],
+    ['src/render'],
+    ['src/export', 'src/report', 'src/convert'],
+    ['src/app'],
+    ['src/ui'],
+  ];
+  for (const paths of LAYERS) {
+    const lines = paths.reduce((n, p) => n + countTsLines(p), 0);
+    const stated = sizeBucket(lines);
+    fact(`${paths[0]} layer lines`, lines);
+    // The row is the one whose Path cell names every path in the group.
+    const row = mapText
+      .split('\n')
+      .find((l) => l.startsWith('|') && paths.every((p) => l.includes(`\`${p}\``)));
+    if (row === undefined) {
+      problems.push(`${MAP}: no layer row names ${paths.join(', ')}. The table no longer covers the tree.`);
+      continue;
+    }
+    if (!row.includes(stated)) {
+      problems.push(
+        `${MAP}: the ${paths.join(' + ')} row states a size the tree does not have; it is ${lines} lines, `
+        + `which this table writes as "${stated}". Update the Size cell.`,
       );
     }
   }

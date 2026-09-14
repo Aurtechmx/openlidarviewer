@@ -39,8 +39,21 @@ export type HashFn = (input: string) => string;
  * built with an optional field left undefined (e.g. a dataset with no CRS) would
  * hash that field as `null` here, but the exported-then-reparsed file would have
  * the key absent — and the digest would fail to verify on a round trip.
+ *
+ * A non-finite number is refused rather than serialized. `JSON.stringify`
+ * renders NaN, Infinity and -Infinity all as `null`, so three distinct invalid
+ * states and a real null would share one digest: a manifest recording a failed
+ * measurement would hash identically to one recording no measurement. Refusing
+ * at the boundary keeps a digest a statement about a value that exists.
  */
 export function canonicalize(value: unknown): string {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw new RangeError(
+      `canonicalize: ${String(value)} is not a finite number. JSON serialization would render it as null, ` +
+        'giving it the same digest as a null field and as every other non-finite value. Record the absence ' +
+        'explicitly (omit the key, or state why the value is unavailable) rather than hashing a placeholder.',
+    );
+  }
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value) ?? 'null';
   }

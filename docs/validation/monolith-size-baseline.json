@@ -8,5 +8,28 @@
       "lines": 6423,
       "goal": 2000
     }
+  },
+  "watch": {
+    "src/ui/AnalysePanel.ts": {
+      "lines": 3555
+    },
+    "src/ui/Inspector.ts": {
+      "lines": 2564
+    },
+    "src/render/measure/MeasureController.ts": {
+      "lines": 2387
+    },
+    "src/ui/MeasurePanel.ts": {
+      "lines": 2197
+    },
+    "src/render/measure/profilePdf.ts": {
+      "lines": 1914
+    },
+    "src/render/streaming/StreamingScheduler.ts": {
+      "lines": 1832
+    },
+    "src/terrain/contour/analyseContours.ts": {
+      "lines": 1681
+    }
   }
 }
