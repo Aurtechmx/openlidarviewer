@@ -46,8 +46,12 @@ import { isCliEntry } from './lib/isCliEntry.mjs';
  */
 export function isPublishedRelease(citationText, version) {
   if (citationText == null) return false;
-  const re = new RegExp(`description:\\s*"Version DOI for the archived v${version.replace(/\./g, '\\.')} release"`);
-  return re.test(citationText);
+  return citationText.includes(versionDoiDescription(version));
+}
+
+/** The CITATION.cff description line a deposited version carries, verbatim. */
+export function versionDoiDescription(version) {
+  return `description: "Version DOI for the archived v${version} release"`;
 }
 
 export function collectReleaseTruthProblems(read) {

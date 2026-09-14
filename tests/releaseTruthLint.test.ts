@@ -13,7 +13,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — plain .mjs script, no types
-import { collectReleaseTruthProblems, isPublishedRelease } from '../scripts/lint-release-truth.mjs';
+import { collectReleaseTruthProblems, isPublishedRelease, versionDoiDescription } from '../scripts/lint-release-truth.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const realRead = (p: string): string | null =>
@@ -43,7 +43,12 @@ describe('lint:release-truth', () => {
 
   /** The real tree with CITATION.cff stripped of this version's DOI: the release not yet deposited. */
   const unpublished = (over?: [string, string]) => {
-    const cff = realRead('CITATION.cff')!.replace(new RegExp(`\\n  - type: doi\\n    value: "[^"]+"\\n    description: "Version DOI for the archived v${VERSION.replace(/\./g, '\\.')} release"`), '');
+    // Drop this version's identifier block: the `- type: doi` entry whose
+    // description names it. Line-based, so no pattern is built from data.
+    const lines = realRead('CITATION.cff')!.split('\n');
+    const at = lines.findIndex((l) => l.includes(versionDoiDescription(VERSION)));
+    expect(at).toBeGreaterThan(1);
+    const cff = [...lines.slice(0, at - 2), ...lines.slice(at + 1)].join('\n');
     expect(isPublishedRelease(cff, VERSION)).toBe(false);
     return (p: string): string | null => (p === 'CITATION.cff' ? cff : over && p === over[0] ? over[1] : realRead(p));
   };
