@@ -710,7 +710,12 @@ export function createTerrainAnalysisRunner(
         streaming: facts ? facts.kind === 'streaming' && facts.coverage !== 'full' : result.dtm.coverageMode === 'resident-only',
         coverage: facts?.coverage,
         capabilities: svc ? { contours: verdict('contours'), dtm: verdict('dtm') } : undefined,
-        analysedBasis: facts ? analysedBasisOf(facts, gathered.totalPoints) : undefined,
+        // Points the analysis actually read, against the total the FILE
+        // declares — not the count the viewer holds, which on a display sample
+        // is the same number on both sides and states nothing.
+        analysedBasis: facts
+          ? analysedBasisOf(facts, gathered.positions.length / 3, viewer.getCloud(getActiveId() ?? '')?.declaredPointCount)
+          : undefined,
         // The token is minted on the facts this frame was built from and
         // verified at export against the facts the scan has then, so an edit
         // between the two caps the export to exploratory.

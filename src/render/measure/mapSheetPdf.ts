@@ -1106,12 +1106,13 @@ function drawTitleBlock(
     : `${contourShapeStyleLabel(input.model.contourStyle)} (current view, not recorded)`;
   text(`Contour style: ${styleLabel}`, mxx, topY - 99, 6.5, font, DIM);
   // What the sheet was built from, as the provenance states it: a display
-  // sample says so on the sheet, not only in the sidecar JSON. Wrapped to the
-  // legend column, at most two lines, above the strip's bottom edge.
+  // sample says so on the sheet, not only in the sidecar JSON. Three lines: at
+  // two, a real basis ("2,899,049 of 47,170,656 points (display sample); whole-
+  // dataset support not claimed") lost the caveat that is the point of the line.
   if (prov) {
     const basisMaxW = Math.max(60, rcx - 10 - mxx - 4);
-    wrapTextToWidth(`Analysed basis: ${prov.analysedBasisLine}`, basisMaxW, 6.5, (t, sz) => font.widthOfTextAtSize(safe(t), sz), 2)
-      .forEach((ln, i) => text(ln, mxx, topY - 110 - i * 8.5, 6.5, font, DIM));
+    wrapTextToWidth(`Analysed basis: ${prov.analysedBasisLine}`, basisMaxW, 6, (t, sz) => font.widthOfTextAtSize(safe(t), sz), 3)
+      .forEach((ln, i) => text(ln, mxx, topY - 110 - i * 7.5, 6, font, DIM));
   }
 
   // Right column — accuracy + readiness + provenance.

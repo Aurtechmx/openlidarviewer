@@ -1696,6 +1696,11 @@ const ACTION_REGISTRY = buildActionRegistry({
   ensureWorkflowConfigPanel,
   ensureShortcutSheet,
   hasScan,
+  terrainAnalysisEntry: {
+    showAnalyseMode: () => showWorkspaceMode?.('analyse'),
+    showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null }; }),
+    run: () => void terrainRunner.run(),
+  },
   saveCurrentView,
   applyView,
   ...makeNavPaletteActions({ viewer, inspector, persist: persistPrefs, toast: showLassoToast }),
@@ -1703,8 +1708,7 @@ const ACTION_REGISTRY = buildActionRegistry({
 });
 const duplicateActionIds = findDuplicateIds(ACTION_REGISTRY);
 if (duplicateActionIds.length > 0) {
-  // Throw at boot rather than silently surfacing two rows with the
-  // same id — duplicates almost always mean a copy-paste bug.
+  // Throw at boot rather than surface two rows with one id: a duplicate is a copy-paste bug.
   throw new Error(
     `Command palette: duplicate action ids: ${duplicateActionIds.join(', ')}`,
   );
@@ -1845,23 +1849,18 @@ const dock = new ToolDock({
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
   onAnnotateToggle: () => { if (toggleTool(viewer, workflowController, 'annotate')) showWorkspaceMode?.('work'); },
   onAnalyseToggle: () => {
-    // Re-open (or hide) the terrain analysis panel. If an object scan had
-    // demoted it behind the Object panel, opening Analyse takes over —
-    // the "run terrain anyway" path, reachable from one obvious place.
-    // Lazy-mount aware: the panel may not exist yet (import in flight), so the
-    // toggle reads/writes the tracked desired-visibility and mounts on demand.
+    // Re-open (or hide) the terrain analysis panel; opening takes over from an
+    // Object panel that demoted it. Lazy-mount aware: the panel may not exist
+    // yet, so the toggle reads the tracked desired-visibility and mounts on demand.
     const show = analysePanel ? !analysePanel.isVisible() : !analyseDesiredVisible;
-    // A manual Analyse toggle is a user override — stop auto-rerouting so a
-    // late streaming node can't yank the panel away.
+    // A manual toggle is a user override: stop auto-rerouting so a late streaming node cannot move the panel.
     routing.pin();
     analyseDesiredVisible = show;
     analyseProfileVisibility.clear(); // explicit toggle overrides a pending restore
     if (show) {
       showWorkspaceMode?.('analyse');
-      // Opening: ensure the panel is mounted, then show it.
       void ensureAnalysePanel().then((p) => p.setVisible(true));
-      // Opening Analyse demotes the Object panel — track the intent (so a still-
-      // mounting Object panel replays hidden) and hide it now (no-op if unmounted).
+      // Opening Analyse demotes the Object panel: track the intent so a still-mounting one replays hidden.
       objectDesiredVisible = false;
       objectPanel?.setVisible(false);
     } else {

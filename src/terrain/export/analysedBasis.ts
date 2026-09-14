@@ -20,11 +20,25 @@ export interface AnalysedBasis {
   readonly loadStride: number | null;
 }
 
-/** The basis for a scan as the capability model states it and the gather counted it. */
-export function analysedBasisOf(facts: Pick<ScanFacts, 'coverage' | 'pointCount'>, analysedPointCount: number): AnalysedBasis {
-  const declared = facts.pointCount != null && Number.isFinite(facts.pointCount) && facts.pointCount > 0 ? facts.pointCount : null;
+/**
+ * The basis for a scan: the coverage the capability model states, the points
+ * the analysis read, and the total the SOURCE declares.
+ *
+ * `declaredPointCount` is passed separately because `ScanFacts.pointCount` is
+ * the count the viewer holds, not the file's record count. On a display sample
+ * those differ by the whole point of this line: reading the total off the facts
+ * reported "2,899,049 of 2,899,049" for a 47,170,656-point tile, which states
+ * nothing. Null when the source declares no total, which stays unstated.
+ */
+export function analysedBasisOf(
+  facts: Pick<ScanFacts, 'coverage' | 'pointCount'>,
+  analysedPointCount: number,
+  declaredPointCount?: number | null,
+): AnalysedBasis {
+  const stated = declaredPointCount ?? facts.pointCount;
+  const declared = stated != null && Number.isFinite(stated) && stated > 0 ? stated : null;
   let loadStride: number | null = null;
-  if (facts.coverage === 'sampled' && declared != null && analysedPointCount > 0) {
+  if (facts.coverage === 'sampled' && declared != null && analysedPointCount > 0 && declared > analysedPointCount) {
     const ratio = declared / analysedPointCount;
     const whole = Math.round(ratio);
     // A decimated read keeps every stride-th point, so the ratio is a whole

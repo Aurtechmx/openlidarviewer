@@ -6,6 +6,7 @@
 // boot, and `tour` starts null and is set later. Both must be resolved when a
 // handler fires, not when the registry is built.
 
+import { openTerrainAnalysis, type TerrainAnalysisEntryDeps } from './openTerrainAnalysis';
 import type { Action } from '../ui/actionRegistry';
 import type { Viewer } from '../render/Viewer';
 import type { TourHandle } from '../ui/onboarding/bootTour';
@@ -48,6 +49,8 @@ export interface ActionRegistryDeps {
   setTheme: (name: ThemeName) => void;
   syncLassoButton: () => void;
   runDeriveClassification: () => Promise<void>;
+  /** How to reach the Analyse panel and its run; see {@link openTerrainAnalysis}. */
+  terrainAnalysisEntry: TerrainAnalysisEntryDeps;
   runFillUnclassified: () => Promise<void>;
   buildCurrentStoryInputs: () => ScanStoryInputs;
   startWorkflowRecording: () => void;
@@ -229,6 +232,26 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       keywords: ['classification', 'fill', 'gaps', 'unclassified', 'producer', 'preserve'],
       run: () => {
         void deps.runFillUnclassified();
+      },
+    },
+    {
+      id: 'analyse.run',
+      title: 'Run terrain analysis',
+      section: 'Analyse',
+      hint: 'Classify ground, build the DTM, validate it, and check contour readiness.',
+      keywords: ['terrain', 'analysis', 'run', 'dtm', 'ground', 'surface', 'analyse'],
+      run: () => {
+        void openTerrainAnalysis(deps.terrainAnalysisEntry, true);
+      },
+    },
+    {
+      id: 'analyse.contours',
+      title: 'Create contours',
+      section: 'Analyse',
+      hint: 'Open Contour Studio. Terrain analysis runs first when the scan has not been analysed yet.',
+      keywords: ['contour', 'contours', 'isoline', 'create', 'deliverable', 'lines', 'terrain'],
+      run: () => {
+        void openTerrainAnalysis(deps.terrainAnalysisEntry, false);
       },
     },
     {

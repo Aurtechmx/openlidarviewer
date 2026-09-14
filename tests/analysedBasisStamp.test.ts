@@ -33,6 +33,20 @@ describe('analysed basis', () => {
     expect(analysedBasisLine(strided)).toBe('200,000 of 1,000,000 points (display sample, stride 5); whole-dataset support not claimed');
   });
 
+  it('takes the declared total from the source, not the count the viewer holds', () => {
+    // The regression this guards: ScanFacts.pointCount is the LOADED count, so
+    // reading the total off the facts printed "2,899,049 of 2,899,049" for the
+    // 47,170,656-point Rogue-Siskiyou tile — a basis line that stated nothing.
+    const b = analysedBasisOf({ coverage: 'sampled', pointCount: 2_899_049 }, 2_899_049, 47_170_656);
+    expect(b.declaredPointCount).toBe(47_170_656);
+    expect(analysedBasisLine(b)).toBe('2,899,049 of 47,170,656 points (display sample); whole-dataset support not claimed');
+    // With no declared total supplied the facts' count is the fallback, and a
+    // sample whose two counts are equal claims no stride.
+    const fallback = analysedBasisOf({ coverage: 'sampled', pointCount: 2_899_049 }, 2_899_049);
+    expect(fallback.declaredPointCount).toBe(2_899_049);
+    expect(fallback.loadStride).toBeNull();
+  });
+
   it('a full read and a resident set say so; no total stays honest', () => {
     expect(analysedBasisLine(analysedBasisOf({ coverage: 'full', pointCount: 1_000 }, 1_000))).toBe('1,000 of 1,000 points (full read)');
     expect(analysedBasisLine(analysedBasisOf({ coverage: 'resident-only', pointCount: null }, 640)))

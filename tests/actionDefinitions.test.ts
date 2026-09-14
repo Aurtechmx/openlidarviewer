@@ -160,6 +160,7 @@ function fakeViewer(): FakeViewer {
 
 interface Harness {
   actions: Action[];
+  openTerrainAnalysis: ReturnType<typeof vi.fn>;
   viewer: FakeViewer;
   tour: { replay: ReturnType<typeof vi.fn> } | null;
   capture: ReturnType<typeof vi.fn>;
@@ -217,6 +218,7 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     configPanelOpen: vi.fn(),
     shortcutSheetOpen: vi.fn(),
     hasScan: true,
+    openTerrainAnalysis: vi.fn(async () => {}),
     saveCurrentView: vi.fn(),
     applyView: vi.fn(),
     toggleOrbitInvert: vi.fn(),
@@ -257,6 +259,7 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     ensureWorkflowConfigPanel: () => Promise.resolve({ open: self.configPanelOpen }),
     ensureShortcutSheet: () => Promise.resolve({ open: self.shortcutSheetOpen }),
     hasScan: () => self.hasScan,
+    terrainAnalysisEntry: { showAnalyseMode: () => {}, showPanel: async () => ({ hasResult: true }), run: self.openTerrainAnalysis },
     saveCurrentView: self.saveCurrentView,
     applyView: self.applyView,
     toggleOrbitInvert: self.toggleOrbitInvert,
@@ -617,6 +620,36 @@ describe('buildActionRegistry — help', () => {
     h.run('help.shortcuts');
     await flush();
     expect(h.shortcutSheetOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the Analyse entries reach terrain analysis and contours from the palette', () => {
+  it('offers both, in the Analyse section', () => {
+    const h = harness();
+    for (const id of ['analyse.run', 'analyse.contours']) {
+      expect(h.find(id).section).toBe('Analyse');
+    }
+    expect(h.find('analyse.run').title).toBe('Run terrain analysis');
+    expect(h.find('analyse.contours').title).toBe('Create contours');
+  });
+
+  it('both entries reach the run seam; the panel is shown either way', async () => {
+    // The harness reports a scan that is already analysed, so only the entry
+    // that asks for a fresh run reaches `run`. openTerrainAnalysisEntry.test.ts
+    // pins the cold-start half.
+    const h = harness();
+    h.find('analyse.contours').run();
+    await Promise.resolve();
+    expect(h.openTerrainAnalysis).not.toHaveBeenCalled();
+    h.find('analyse.run').run();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.openTerrainAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it('contours are findable by the words someone would type', () => {
+    const kw = harness().find('analyse.contours').keywords ?? [];
+    for (const word of ['contour', 'isoline', 'create']) expect(kw).toContain(word);
   });
 });
 
