@@ -9,7 +9,8 @@
  * `isNonTerrain` from the shape router. On a compact object or interior the
  * router rules airborne out, so the Inspector reported "Drone-mounted LiDAR (UAV
  * ALS)" while the technical report PDF exported from the same session reported
- * "Ground-based scan, capture method not determined".
+ * "Capture method not determined" — the shape reading withholds an airborne
+ * verdict rather than evidencing a ground-based one.
  *
  * Ordering made a per-site argument insufficient on its own. Both open paths
  * refresh the panel before the verdict exists: `openScan.ts` calls
@@ -192,7 +193,7 @@ beforeEach(() => {
 });
 
 describe('capture type: one verdict, every surface', () => {
-  it('states ground-based on all three surfaces for a compact object', async () => {
+  it('states one undetermined capture type on all three surfaces for a compact object', async () => {
     const p = panel();
     // Open order: the panel refreshes first, the shape router decides after.
     p.cards.refreshProvenance(templeCloud, 'a');
@@ -202,17 +203,17 @@ describe('capture type: one verdict, every surface', () => {
     const report = await reportProvenance(templeCloud);
     const image = exportedImageCapture(onlyLayer('a', templeCloud));
 
-    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(p.label()).toBe('Capture method not determined');
     expect(report?.label).toBe(p.label());
     expect(image?.label).toBe(p.label());
     expect(report?.confidence).toBe(p.confidence());
     expect(image?.confidence).toBe(p.confidence());
     expect(report?.signals).toContain(
-      'Shape reads as a compact object / interior — airborne capture ruled out by geometry.',
+      'Shape reads as a compact object / interior, so an airborne verdict is not asserted from geometry alone.',
     );
   });
 
-  it('states ground-based on all three surfaces for an interior', async () => {
+  it('states one undetermined capture type on all three surfaces for an interior', async () => {
     const p = panel();
     p.cards.refreshProvenance(templeCloud, 'a');
     captureProvenance.setVerdict('interior');
@@ -220,7 +221,7 @@ describe('capture type: one verdict, every surface', () => {
     const report = await reportProvenance(templeCloud);
     const image = exportedImageCapture(onlyLayer('a', templeCloud));
 
-    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(p.label()).toBe('Capture method not determined');
     expect(report?.label).toBe(p.label());
     expect(image?.label).toBe(p.label());
   });
@@ -247,7 +248,7 @@ describe('capture type: one verdict, every surface', () => {
     const atOpen = p.label();
     captureProvenance.setVerdict('object');
     expect(atOpen).toBe('Drone-mounted LiDAR (UAV ALS)');
-    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(p.label()).toBe('Capture method not determined');
   });
 
   it('follows a streaming re-route that changes the verdict mid-session', () => {
@@ -256,7 +257,7 @@ describe('capture type: one verdict, every surface', () => {
     captureProvenance.setVerdict('terrain');
     expect(p.label()).toBe('Drone-mounted LiDAR (UAV ALS)');
     captureProvenance.setVerdict('object');
-    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(p.label()).toBe('Capture method not determined');
   });
 });
 
@@ -337,7 +338,7 @@ describe('capture type: the exported image is scene scoped', () => {
       { id: 'b', cloud: templeCloud, visible: false },
     ]);
     // The panel keeps describing the active scan, which is correct for it.
-    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(p.label()).toBe('Capture method not determined');
     // The image carries only terrain pixels, so it must not stamp the temple's
     // capture type.
     expect(image).toBeNull();
@@ -349,13 +350,13 @@ describe('capture type: the exported image is scene scoped', () => {
       { id: 'a', cloud: terrainCloud },
       { id: 'b', cloud: templeCloud },
     ]);
-    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(p.label()).toBe('Capture method not determined');
     expect(image).toBeNull();
   });
 
   it('drops a removed scan from every surface at once', () => {
     const p = twoLayerSession();
-    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(p.label()).toBe('Capture method not determined');
     // The layer close control: `removeCloud` clears the store for the layer it
     // frees, so the freed scan cannot keep describing the session.
     captureProvenance.clearIf('b');
@@ -367,7 +368,7 @@ describe('capture type: the exported image is scene scoped', () => {
   it('keeps the verdict when a layer that does not own it is removed', () => {
     const p = twoLayerSession();
     captureProvenance.clearIf('a');
-    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(p.label()).toBe('Capture method not determined');
     expect(exportedImageCapture(onlyLayer('b', templeCloud))?.label).toBe(p.label());
   });
 

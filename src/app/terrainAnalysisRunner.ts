@@ -714,7 +714,7 @@ export function createTerrainAnalysisRunner(
         // declares — not the count the viewer holds, which on a display sample
         // is the same number on both sides and states nothing.
         analysedBasis: facts
-          ? analysedBasisOf(facts, gathered.positions.length / 3, viewer.getCloud(getActiveId() ?? '')?.declaredPointCount)
+          ? analysedBasisOf(facts, pos.length / 3, viewer.getCloud(getActiveId() ?? '')?.declaredPointCount)
           : undefined,
         // The token is minted on the facts this frame was built from and
         // verified at export against the facts the scan has then, so an edit
