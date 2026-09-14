@@ -48,7 +48,7 @@ function readStoreZip(zip: Uint8Array): Map<string, Uint8Array> {
 function input(over: Partial<PackageInput> = {}): PackageInput {
   return {
     projectName: 'Site A',
-    decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+    decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['CONTOURS', 'DTM'] },
     available: {
       pdf: false,
       analyticalGeojson: true,
@@ -141,7 +141,7 @@ describe('assembleContourDeliverable', () => {
 
   it('carries the exploratory README into the package for a downgraded decision', () => {
     const manifest = buildContourPackageManifest(input({
-      decision: { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: [] },
+      decision: { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: [], claimIds: ['CONTOURS', 'DTM'] },
     }));
     const zip = readStoreZip(assembleContourDeliverable(manifest, bytesFor(manifest)));
     const readme = manifest.entries.find((e) => e.role === 'readme')!;

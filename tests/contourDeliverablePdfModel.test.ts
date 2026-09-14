@@ -15,8 +15,8 @@ import {
 } from '../src/terrain/contourStudio/contourDeliverablePdfModel';
 import type { ScientificExportDecision } from '../src/export/exportManifest';
 
-const validated: ScientificExportDecision = { status: 'validated', badge: 'Internal validation', caveats: ['Suitability: not survey-grade.'] };
-const exploratory: ScientificExportDecision = { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: ['Suitability: not survey-grade.', 'Metric contour support is not claimed.'] };
+const validated: ScientificExportDecision = { status: 'validated', badge: 'Internal validation', caveats: ['Suitability: not survey-grade.'], claimIds: ['CONTOURS', 'DTM'] };
+const exploratory: ScientificExportDecision = { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: ['Suitability: not survey-grade.', 'Metric contour support is not claimed.'], claimIds: ['CONTOURS', 'DTM'] };
 const blocked: ScientificExportDecision = { status: 'blocked', reasons: ['no surface'] };
 
 function input(decision: ScientificExportDecision, over: Partial<ContourPdfInput> = {}): ContourPdfInput {

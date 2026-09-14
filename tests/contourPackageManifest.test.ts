@@ -17,8 +17,8 @@ import {
 import type { ContourFeature } from '../src/terrain/contour/contourFeatureModel';
 import type { ScientificExportDecision } from '../src/export/exportManifest';
 
-const validated: ScientificExportDecision = { status: 'validated', badge: 'Internal validation', caveats: [] };
-const exploratory: ScientificExportDecision = { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: [] };
+const validated: ScientificExportDecision = { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['CONTOURS', 'DTM'] };
+const exploratory: ScientificExportDecision = { status: 'exploratory', badge: 'Exploratory', watermark: 'EXPLORATORY', caveats: [], claimIds: ['CONTOURS', 'DTM'] };
 const blocked: ScientificExportDecision = { status: 'blocked', reasons: ['no surface'] };
 
 const allAvailable = {

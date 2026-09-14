@@ -31,7 +31,7 @@ function baseInput(): ContourPdfInput {
       sampleSize: 42,
       independentCheckpoints: false,
     },
-    decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+    decision: { status: 'validated', badge: 'Internal validation', caveats: [], claimIds: ['CONTOURS', 'DTM'] },
     geometry: { cartographic: false, analyticalAvailable: true },
   };
 }
@@ -66,6 +66,7 @@ describe('buildContourStudioPdf (multipage Contour Studio PDF emitter)', () => {
         badge: 'Exploratory',
         watermark: 'EXPLORATORY',
         caveats: ['These outputs are not survey-grade.'],
+        claimIds: ['CONTOURS', 'DTM'],
       },
       standardsTraceability: true,
     });
