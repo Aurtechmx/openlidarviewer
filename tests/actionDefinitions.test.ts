@@ -161,6 +161,8 @@ function fakeViewer(): FakeViewer {
 interface Harness {
   actions: Action[];
   openTerrainAnalysis: ReturnType<typeof vi.fn>;
+  saveSnapshot: ReturnType<typeof vi.fn>;
+  copyShareLink: ReturnType<typeof vi.fn>;
   viewer: FakeViewer;
   tour: { replay: ReturnType<typeof vi.fn> } | null;
   capture: ReturnType<typeof vi.fn>;
@@ -219,6 +221,8 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     shortcutSheetOpen: vi.fn(),
     hasScan: true,
     openTerrainAnalysis: vi.fn(async () => {}),
+    saveSnapshot: vi.fn(),
+    copyShareLink: vi.fn(),
     saveCurrentView: vi.fn(),
     applyView: vi.fn(),
     toggleOrbitInvert: vi.fn(),
@@ -260,6 +264,8 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     ensureShortcutSheet: () => Promise.resolve({ open: self.shortcutSheetOpen }),
     hasScan: () => self.hasScan,
     terrainAnalysisEntry: { showAnalyseMode: () => {}, showPanel: async () => ({ hasResult: true }), run: self.openTerrainAnalysis },
+    saveSnapshot: self.saveSnapshot,
+    copyShareLink: self.copyShareLink,
     saveCurrentView: self.saveCurrentView,
     applyView: self.applyView,
     toggleOrbitInvert: self.toggleOrbitInvert,
@@ -620,6 +626,28 @@ describe('buildActionRegistry — help', () => {
     h.run('help.shortcuts');
     await flush();
     expect(h.shortcutSheetOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the dock-only captures have a palette route', () => {
+  it('registers Snapshot and Copy view link, which the dock alone used to carry', () => {
+    // Neither has a keyboard shortcut, so before this the tool dock was the
+    // single route to both: demoting them out of the dock would have left them
+    // unreachable. A palette entry is the fallback that makes the dock's
+    // composition a presentation choice rather than a functional one.
+    const h = harness();
+    h.find('tool.snapshot').run();
+    expect(h.saveSnapshot).toHaveBeenCalledTimes(1);
+    h.find('tool.share').run();
+    expect(h.copyShareLink).toHaveBeenCalledTimes(1);
+  });
+
+  it('files them where a user would look for them', () => {
+    const h = harness();
+    expect(h.find('tool.snapshot').section).toBe('Export');
+    expect(h.find('tool.share').section).toBe('Export');
+    expect(h.find('tool.snapshot').keywords ?? []).toContain('screenshot');
+    expect(h.find('tool.share').keywords ?? []).toContain('permalink');
   });
 });
 

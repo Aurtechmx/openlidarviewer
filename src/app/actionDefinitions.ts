@@ -49,6 +49,14 @@ export interface ActionRegistryDeps {
   setTheme: (name: ThemeName) => void;
   syncLassoButton: () => void;
   runDeriveClassification: () => Promise<void>;
+  /**
+   * Save the current view as a PNG, and copy a link back to it. The tool dock
+   * is otherwise the ONLY route to either: neither carries a shortcut, so
+   * without these the palette cannot reach them and demoting them out of the
+   * dock would leave them unreachable.
+   */
+  saveSnapshot: () => void | Promise<void>;
+  copyShareLink: () => void | Promise<void>;
   /** How to reach the Analyse panel and its run; see {@link openTerrainAnalysis}. */
   terrainAnalysisEntry: TerrainAnalysisEntryDeps;
   runFillUnclassified: () => Promise<void>;
@@ -252,6 +260,26 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       keywords: ['contour', 'contours', 'isoline', 'create', 'deliverable', 'lines', 'terrain'],
       run: () => {
         void openTerrainAnalysis(deps.terrainAnalysisEntry, false);
+      },
+    },
+    {
+      id: 'tool.snapshot',
+      title: 'Save a snapshot',
+      section: 'Export',
+      hint: 'Write the current view to a PNG, with the scan and scale recorded on it.',
+      keywords: ['snapshot', 'screenshot', 'png', 'image', 'capture', 'save view'],
+      run: () => {
+        void deps.saveSnapshot();
+      },
+    },
+    {
+      id: 'tool.share',
+      title: 'Copy view link',
+      section: 'Export',
+      hint: 'Copy a link that reopens this camera position and appearance.',
+      keywords: ['share', 'link', 'copy', 'url', 'view', 'permalink'],
+      run: () => {
+        void deps.copyShareLink();
       },
     },
     {
