@@ -13,7 +13,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — plain .mjs script, no types
-import { collectReleaseTruthProblems } from '../scripts/lint-release-truth.mjs';
+import { collectReleaseTruthProblems, isPublishedRelease, versionDoiDescription } from '../scripts/lint-release-truth.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const realRead = (p: string): string | null =>
@@ -27,6 +27,7 @@ const DEPS = 'docs/project/DEPENDENCIES.md';
 const NOTICES = 'docs/project/THIRD_PARTY_NOTICES.md';
 const RELEASE_ASSETS = 'docs/release/RELEASE_ASSETS.md';
 const RELEASE_NOTES = `docs/releases/RELEASE_NOTES_v${VERSION}.md`;
+const ARCHMAP = 'docs/architecture/architecture-map.md';
 const DOCS_SITE = `docs-site/releases/v${VERSION}.md`;
 
 /** A reader over the real tree with a single-file override. */
@@ -41,10 +42,60 @@ describe('lint:release-truth', () => {
     expect(problemsFor(realRead)).toEqual([]);
   });
 
-  it('fails on a stale monolith line count', () => {
+  // ── deposit state ────────────────────────────────────────────────────────
+  // Both states are built here rather than read off the tree, so these hold
+  // whatever the current version's deposit state is: at a fresh bump the
+  // release is undeposited for the whole cycle, and a test that asserted
+  // otherwise would be red until the deposit and unfixable in between.
+  const CFF_HEAD = 'cff-version: 1.2.0\nidentifiers:\n  - type: doi\n    value: "10.5281/zenodo.21544619"\n    description: "Concept DOI for the series"\n';
+  const NOT_DEPOSITED = CFF_HEAD;
+  const DEPOSITED = `${CFF_HEAD}  - type: doi\n    value: "10.5281/zenodo.99999999"\n    ${versionDoiDescription(VERSION)}\n`;
+
+  /** A reader over the real tree with CITATION.cff replaced, plus one optional override. */
+  const withCitation = (cff: string, over?: [string, string]) =>
+    (p: string): string | null =>
+      p === 'CITATION.cff' ? cff : over && p === over[0] ? over[1] : realRead(p);
+
+  it('reports the deposit state the citation file actually carries', () => {
+    expect(collectReleaseTruthProblems(withCitation(DEPOSITED)).published).toBe(true);
+    expect(collectReleaseTruthProblems(withCitation(NOT_DEPOSITED)).published).toBe(false);
+    // And the real tree agrees with its own citation file, whichever state it is in.
+    expect(collectReleaseTruthProblems(realRead).published).toBe(
+      isPublishedRelease(realRead('CITATION.cff'), VERSION),
+    );
+  });
+
+  it('fails on a stale monolith line count while the release is not deposited', () => {
     const doc = realRead(KNOWN)! + '\n\n`src/main.ts` is 7,635 lines.\n';
-    const problems = problemsFor(withOverride(KNOWN, doc));
+    const problems = problemsFor(withCitation(NOT_DEPOSITED, [KNOWN, doc]));
     expect(problems.some((p) => p.includes('7,635'))).toBe(true);
+  });
+
+  it('a deposited limitations doc keeps its shipped counts; the architecture map is still checked', () => {
+    const doc = realRead(KNOWN)! + '\n\n`src/main.ts` is 7,635 lines.\n';
+    expect(problemsFor(withCitation(DEPOSITED, [KNOWN, doc])).some((p) => p.includes('7,635'))).toBe(false);
+    // The same stale count in the living map fails in either state.
+    const map = realRead(ARCHMAP)! + '\n\n`src/main.ts` is 7,635 lines.\n';
+    for (const cff of [DEPOSITED, NOT_DEPOSITED]) {
+      expect(problemsFor(withCitation(cff, [ARCHMAP, map])).some((p) => p.includes('7,635'))).toBe(true);
+    }
+  });
+
+  it('the mount-flag rule follows the same deposit boundary', () => {
+    // A release doc claiming the opposite of the flag the code ships. Before
+    // the deposit that is drift and fails; after it the doc describes its own
+    // release and the live flag may legitimately differ.
+    const flag = /export const MULTI_LAYER_MOUNT_ENABLED\s*=\s*(true|false)\s*;/.exec(realRead('src/app/LayerService.ts')!)![1];
+    const contrary = flag === 'true' ? 'Multi-layer mounting remains disabled.' : 'Multi-layer mounting is enabled.';
+    const doc = `${realRead(KNOWN)!}\n\n${contrary}\n`;
+    expect(problemsFor(withCitation(NOT_DEPOSITED, [KNOWN, doc])).some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED'))).toBe(true);
+    expect(problemsFor(withCitation(DEPOSITED, [KNOWN, doc])).some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED'))).toBe(false);
+  });
+
+  it('a deposited release is one whose version DOI is listed, not any DOI', () => {
+    expect(isPublishedRelease(`${CFF_HEAD}  - type: doi\n    value: "10.5281/zenodo.1"\n    ${versionDoiDescription('0.0.1')}\n`, VERSION)).toBe(false);
+    expect(isPublishedRelease(null, VERSION)).toBe(false);
+    expect(isPublishedRelease(DEPOSITED, VERSION)).toBe(true);
   });
 
   it('fails on a present-tense prerelease "DISABLED in <pre>" claim', () => {
@@ -130,9 +181,10 @@ describe('lint:release-truth', () => {
 
   it('fails when a truth doc says mounting is disabled while the flag is ON', () => {
     // The real docs and flag both state mounting is enabled; make one truth doc
-    // contradict the shipped flag with a disabled claim.
+    // contradict the shipped flag with a disabled claim. Read before the
+    // deposit: afterwards the release docs describe their own release.
     const doc = realRead(KNOWN)! + '\n\nMulti-layer mounting is disabled in this build.\n';
-    const problems = problemsFor(withOverride(KNOWN, doc));
+    const problems = problemsFor(withCitation(NOT_DEPOSITED, [KNOWN, doc]));
     expect(problems.some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED = true'))).toBe(true);
   });
 
@@ -143,7 +195,7 @@ describe('lint:release-truth', () => {
       'MULTI_LAYER_MOUNT_ENABLED = true',
       'MULTI_LAYER_MOUNT_ENABLED = false',
     );
-    const problems = problemsFor(withOverride(SERVICE, svc));
+    const problems = problemsFor(withCitation(NOT_DEPOSITED, [SERVICE, svc]));
     expect(problems.some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED = false'))).toBe(true);
   });
 

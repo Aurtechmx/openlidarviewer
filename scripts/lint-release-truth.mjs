@@ -34,6 +34,22 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 
+/** The CITATION.cff description line a deposited version carries, verbatim. */
+export function versionDoiDescription(version) {
+  return `description: "Version DOI for the archived v${version} release"`;
+}
+
+/**
+ * True when CITATION.cff lists a version DOI for `version`: the release was
+ * deposited, so its release documents are published and describe that release
+ * rather than the working tree, which keeps moving under the same version
+ * until the next bump.
+ */
+export function isPublishedRelease(citationText, version) {
+  if (citationText == null) return false;
+  return citationText.includes(versionDoiDescription(version));
+}
+
 /**
  * Collect every truth-drift problem. `read(relPath)` returns the file's text or
  * null when it does not exist. Returns an array of human-readable problem
@@ -42,7 +58,7 @@ import { isCliEntry } from './lib/isCliEntry.mjs';
 export function collectReleaseTruthProblems(read) {
   const problems = [];
   const pkgText = read('package.json');
-  if (pkgText == null) return { problems: ['package.json is missing.'], version: null, currentPre: null, e4Claims: 0, suppliedSlots: 0 };
+  if (pkgText == null) return { problems: ['package.json is missing.'], version: null, currentPre: null, e4Claims: 0, suppliedSlots: 0, published: false };
   const pkg = JSON.parse(pkgText);
   const version = pkg.version;
 
@@ -60,6 +76,12 @@ export function collectReleaseTruthProblems(read) {
   const RELEASE_ASSETS = 'docs/release/RELEASE_ASSETS.md';
 
   // ── 1. Monolith line counts, derived from the ratchet baseline ────────────
+  // A limitations doc describes the tree at its release. Once that release is
+  // deposited (CITATION.cff carries its version DOI) the doc is published and
+  // stays as shipped; the tree keeps moving under the same package version
+  // until the next bump, so the doc's counts are no longer compared to it.
+  // The architecture map is a living document and is always compared.
+  const published = isPublishedRelease(read('CITATION.cff'), version);
   const baseText = read('docs/validation/monolith-size-baseline.json');
   if (baseText == null) {
     problems.push('docs/validation/monolith-size-baseline.json is missing — cannot check monolith counts.');
@@ -68,7 +90,7 @@ export function collectReleaseTruthProblems(read) {
     const withSep = (n) => n.toLocaleString('en-US'); // 7521 -> "7,521"
     const expected = new Set(Object.values(base.files).map((f) => withSep(f.lines)));
     const expectedList = [...expected].join(', ');
-    for (const doc of [KNOWN, ARCHMAP]) {
+    for (const doc of published ? [ARCHMAP] : [KNOWN, ARCHMAP]) {
       const text = read(doc);
       if (text == null) {
         problems.push(`${doc} is missing — cannot check monolith counts.`);
@@ -336,7 +358,12 @@ export function collectReleaseTruthProblems(read) {
         // waits …" and "mounting is off" do not read as an enabled claim.
         const MOUNT_ENABLED_CLAIM =
           /(?:multi-layer mount\w*|mounting)\s+is(?:\s+now)?\s+(?:enabled|on)\b|MULTI_LAYER_MOUNT_ENABLED\s*=\s*true/i;
-        for (const doc of [KNOWN, VALREPORT, RELEASE_NOTES]) {
+        // Published release documents are exempt for the same reason rule 1
+        // exempts the limitations doc: they state the flag as it shipped at
+        // their release, and the flag can move afterwards under the same
+        // package version. Before the deposit all three are still drafts and
+        // must agree with the code.
+        for (const doc of published ? [] : [KNOWN, VALREPORT, RELEASE_NOTES]) {
           const text = read(doc);
           if (text == null) continue;
           if (mountEnabled) {
@@ -361,7 +388,7 @@ export function collectReleaseTruthProblems(read) {
     }
   }
 
-  return { problems, version, currentPre, e4Claims, suppliedSlots };
+  return { problems, version, currentPre, e4Claims, suppliedSlots, published };
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
@@ -372,11 +399,11 @@ function isMain() {
 if (isMain()) {
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const read = (p) => (existsSync(resolve(ROOT, p)) ? readFileSync(resolve(ROOT, p), 'utf8') : null);
-  const { problems, version, currentPre, e4Claims, suppliedSlots } = collectReleaseTruthProblems(read);
+  const { problems, version, currentPre, e4Claims, suppliedSlots, published } = collectReleaseTruthProblems(read);
 
   if (problems.length === 0) {
     console.log(
-      `lint:release-truth OK — monolith counts, ${currentPre ?? 'release'} identifiers, ` +
+      `lint:release-truth OK — monolith counts${published ? ' (limitations doc published, map only)' : ''}, ${currentPre ?? 'release'} identifiers, ` +
         `E4 wording (${e4Claims} E4 / ${suppliedSlots} supplied), dependency audit, ` +
         `THIRD_PARTY versions, validation wording, and the checklist asset set all agree ` +
         `with the machine state for v${version}.`,
