@@ -53,6 +53,20 @@ export interface ContourStudioPrerequisites {
    * out and gets a reason that names the requirement instead of guessing.
    */
   readonly crsKind?: 'local' | 'projected' | 'geographic' | 'unknown';
+  /**
+   * How much of the scan the analysis read, as the capability model states it.
+   * A sample or a resident streaming set can build a surface for inspection;
+   * a whole-dataset deliverable is not claimed until the full cloud is read.
+   * Optional so a caller with no coverage fact states nothing; the export
+   * permit treats a missing capability verdict as a shortfall regardless.
+   */
+  readonly coverage?: 'full' | 'sampled' | 'resident-only';
+  /**
+   * The ground the surface stands on was derived by the filter, not read from
+   * a producer class. The capability model rates that product `review`; the
+   * launcher must not say "available" over it.
+   */
+  readonly groundIsDerived?: boolean;
 
   /**
    * Fraction of the selected surface that is unsupported (no measured or
@@ -126,6 +140,12 @@ const REASON = {
   streaming:
     'The scan is still streaming; wait for analysis to complete or export exploratory output.',
   noInterval: 'No contour interval could be recommended for this surface.',
+  sampled:
+    'Only a sample of the scan was read; a whole-dataset deliverable cannot be claimed until the full cloud is analysed.',
+  residentOnly:
+    'Only the resident streaming set is loaded; a whole-dataset deliverable cannot be claimed until the full cloud is graded.',
+  derivedGround:
+    'Ground was derived by the filter, not read from a producer class; the surface carries lower confidence than one built from classified ground.',
 } as const;
 
 /**
@@ -187,6 +207,9 @@ export function evaluateContourStudioLaunchState(
   // cap the result to exploratory (visual/inspection) rather than validated.
   const exploratoryReasons: string[] = [];
   if (prereqs.streaming) exploratoryReasons.push(REASON.streaming);
+  if (prereqs.coverage === 'sampled') exploratoryReasons.push(REASON.sampled);
+  if (prereqs.coverage === 'resident-only') exploratoryReasons.push(REASON.residentOnly);
+  if (prereqs.groundIsDerived) exploratoryReasons.push(REASON.derivedGround);
   if (!prereqs.verticalUnitsKnown) exploratoryReasons.push(REASON.unknownVertical);
   if (!prereqs.crsProjected) exploratoryReasons.push(unprojectedReason(prereqs.crsKind));
   if (!prereqs.intervalRecommended) exploratoryReasons.push(REASON.noInterval);

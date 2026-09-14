@@ -478,6 +478,8 @@ export class AnalysePanel {
   private readonly _contourDeliverable: HTMLElement;
   /** Monotonic token so a slow lazy launcher load can't mount a stale result. */
   private _contourToken = 0;
+  /** The frame Contour Studio was last mounted on; its analysed basis stamps every export. */
+  private _contourFrame: LaunchFrameContext | null = null;
   /**
    * Maps each Contour Studio export product to the real, honesty-gated exporter
    * button built in `_buildExportRow`. The Studio's premium export section is the
@@ -1102,6 +1104,7 @@ export class AnalysePanel {
 
   setContourFrame(ctx: LaunchFrameContext | null): void {
     const token = ++this._contourToken; // any new call supersedes a pending mount
+    this._contourFrame = ctx;
     this._contourLauncher.replaceChildren();
     // Always re-hide first: opening the deliverable is an explicit user action,
     // and a fresh frame must not leak the previous scan's open panel.
@@ -2607,6 +2610,7 @@ export class AnalysePanel {
         // §19: stamp the evidence-gate permit that authorised this file, so the
         // artifact records the decision (validated / exploratory + watermark).
         exportPermit: permitStamp(permit),
+        analysedBasis: this._contourFrame?.analysedBasis ?? null,
         // What the file actually contains: the geometry AND the surface it was
         // cut from. The evidence resolves to whichever is weaker.
         evidenceClaimIds: contourArtifactClaims(result),
@@ -2745,6 +2749,7 @@ export class AnalysePanel {
         // claim), stamped into the README's provenance. null via the direct
         // convenience button, which keeps its own availability.
         exportPermit: exportPermit ?? null,
+        analysedBasis: this._contourFrame?.analysedBasis ?? null,
       });
       triggerDownload(new Blob([bytes as BlobPart], { type: 'application/zip' }), `${basename}-dem.zip`);
     } catch (err) {
@@ -2808,6 +2813,7 @@ export class AnalysePanel {
         metricVersion: TERRAIN_METRIC_VERSION,
         generatedAt: new Date(),
         exportPermit: permitStamp(permit),
+        analysedBasis: this._contourFrame?.analysedBasis ?? null,
         // Stamp the geometry method + purpose so the bundle self-describes what it
         // holds — but ONLY when we regenerated at the intent's style, so a fallback
         // to the on-screen result never stamps a method that mismatches the bytes.
@@ -2873,6 +2879,7 @@ export class AnalysePanel {
         // claim), stamped into the provenance footer. null via the direct
         // convenience button, which keeps its own availability.
         exportPermit: exportPermit ?? null,
+        analysedBasis: this._contourFrame?.analysedBasis ?? null,
         // The source horizontal unit so the Footprint (extent) reads the CRS's
         // real unit ('ft' / 'degrees') instead of a hard-coded metre.
         linearUnit: mapCtx.linearUnit,
@@ -3246,6 +3253,7 @@ export class AnalysePanel {
       verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
       // Stamp the permit into the sheet's provenance (title-block honesty).
       exportPermit: permitStamp(permit),
+      analysedBasis: this._contourFrame?.analysedBasis ?? null,
       // A map sheet plots the contours over the DTM; it claims no more than the
       // weaker of the two.
       evidenceClaimIds: contourArtifactClaims(result),

@@ -256,6 +256,12 @@ export interface MountedProcessStudio {
   markProduced(ids: readonly ProductId[]): void;
   /** Clear the produced set (e.g. on scan change) so a new scan starts un-produced. */
   clearProduced(): void;
+  /**
+   * The active scan's facts as this studio evaluates them, or null when no
+   * signal is available. The contour export permit reads its capability
+   * verdicts from these same facts, so the panel and the file agree.
+   */
+  facts(): ScanFacts | null;
 }
 
 /**
@@ -318,6 +324,7 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
     clearProduced() {
       panel.setProduced([]);
     },
+    facts: () => resolveActiveScanFacts(deps),
   };
 }
 

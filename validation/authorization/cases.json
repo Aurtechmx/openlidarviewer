@@ -1,9 +1,9 @@
 {
-  "benchmarkVersion": 3,
-  "description": "Frozen scientific-output authorization adversarial benchmark (A01–A20).",
-  "caseCount": 20,
-  "controlCount": 2,
-  "unsupportedCount": 18,
+  "benchmarkVersion": 4,
+  "description": "Frozen scientific-output authorization adversarial benchmark (A01–A28).",
+  "caseCount": 28,
+  "controlCount": 4,
+  "unsupportedCount": 24,
   "cases": [
     {
       "id": "A01",
@@ -124,6 +124,54 @@
       "title": "valid state-bound control — token verified against its own unchanged state",
       "kind": "control",
       "product": "dtm"
+    },
+    {
+      "id": "A21",
+      "title": "production permit on a sampled read, fully supported frame, registry stubbed validated — exploratory",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A22",
+      "title": "production permit on a resident-only streaming read, registry stubbed validated — exploratory",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A23",
+      "title": "production permit on derived ground, registry stubbed validated — exploratory (GROUND_DERIVED)",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A24",
+      "title": "registry patched to validated on every claim, sampled load — still exploratory",
+      "kind": "adversarial",
+      "product": "contours"
+    },
+    {
+      "id": "A25",
+      "title": "permit vs provenance: crisp map PDF with RMSEz — one governing claim, refused above it",
+      "kind": "adversarial",
+      "product": "contours"
+    },
+    {
+      "id": "A26",
+      "title": "validated branch with a token minted on state S₁, export attempted on S₂ — capped to exploratory",
+      "kind": "adversarial",
+      "product": "contours"
+    },
+    {
+      "id": "A27",
+      "title": "control — interface Claim equals the permit stamp across six frames (supported, sampled, unit unknown, no CRS, derived ground, precision refused)",
+      "kind": "control",
+      "product": "contours"
+    },
+    {
+      "id": "A28",
+      "title": "control — full coverage, producer ground, fresh token, registry stubbed validated — validated",
+      "kind": "control",
+      "product": "contours"
     }
   ]
 }

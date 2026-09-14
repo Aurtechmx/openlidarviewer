@@ -346,6 +346,7 @@ export function buildTerrainReportContent(
       },
       ...intelligenceRows,
       { label: 'Coverage mode', value: provenance.coverageMode },
+      { label: 'Analysed basis', value: provenance.analysedBasisLine },
       { label: 'Horizontal CRS', value: provenance.horizontalCrs },
       { label: 'Vertical datum', value: provenance.verticalDatum },
       { label: 'Non-ground classes excluded', value: classesExcluded },

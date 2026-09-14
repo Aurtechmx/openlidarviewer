@@ -90,7 +90,11 @@ describe('resolveExportDecision', () => {
   });
 
   it('validated only when registry validated AND launch available AND metric-supported', () => {
-    const d = resolveExportDecision('contour.pdf', ctx({ evidenceStatusOf: () => 'validated' }));
+    const d = resolveExportDecision('contour.pdf', ctx({
+      evidenceStatusOf: () => 'validated',
+      capability: { readiness: 'ready', reasonCode: 'GROUND_TRUSTED', reason: 'Trusted ground.' },
+      authorization: { product: 'contours', token: {}, verify: () => ({ ok: true }) },
+    }));
     expect(d.status).toBe('validated');
     if (d.status === 'validated') expect(d.caveats.some((c) => /not survey-grade/i.test(c))).toBe(true);
   });

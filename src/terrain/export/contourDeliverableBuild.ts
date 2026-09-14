@@ -19,6 +19,7 @@
  * what the standalone export would produce.
  */
 
+import type { AnalysedBasis } from './analysedBasis';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import type { ExportPermitStamp } from './exportProvenance';
 import type { ScientificExportDecision } from '../../export/exportManifest';
@@ -84,6 +85,8 @@ export interface DeliverableBuildOptions {
    * it was built for. Null ⇒ no purpose context.
    */
   readonly deliverablePurpose?: string | null;
+  /** The analysed basis the frame recorded; see `ExportProvenanceOptions.analysedBasis`. */
+  readonly analysedBasis?: AnalysedBasis | null;
 }
 
 /** Honest one-line reasons for the products this package omits. */
@@ -153,6 +156,7 @@ function gatherDeliverable(
     // self-describes what it holds and which purpose produced it.
     contourMethod: opts.contourMethod ?? null,
     deliverablePurpose: opts.deliverablePurpose ?? null,
+    analysedBasis: opts.analysedBasis ?? null,
     // Label the contour interval in the real vertical unit, not a hard-coded metre.
     verticalUnitToMetres: opts.verticalUnitToMetres ?? null,
     // A bundle is never stronger than its weakest file. It carries the DTM

@@ -74,6 +74,7 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
  */
 import { NOT_SURVEY_GRADE_NOTE } from './exportNotes';
 import { verticalUnitLabel } from '../../units/units';
+import { analysedBasisLine, type AnalysedBasis } from './analysedBasis';
 import type { TransformProvenance } from '../../convert/transformProvenance';
 import type { OrganizedRangeSet } from '../../model/OrganizedRange';
 import { sourceTopologyRecord } from '../../science/sourceTopology';
@@ -231,8 +232,18 @@ export interface ExportProvenance {
   readonly verticalDatum: string;
   /** True when a vertical datum is known. */
   readonly datumKnown: boolean;
-  /** Coverage mode ('full' / 'resident-only' / 'sampled' / 'unknown'). */
+  /**
+   * The DTM grid's extent flag ('full' / 'resident-only' / 'sampled' /
+   * 'unknown'). This is grid extent, not read coverage: a strided static read
+   * has a 'full' grid. Read coverage is {@link analysedBasis}.
+   */
+  readonly gridExtent: string;
+  /** @deprecated Alias of {@link gridExtent}, kept one release for consumers of the JSON. */
   readonly coverageMode: string;
+  /** How many points the analysis was built from, of how many the source declares; null when not recorded. */
+  readonly analysedBasis: AnalysedBasis | null;
+  /** The one printed sentence for {@link analysedBasis}; 'unknown' when null. */
+  readonly analysedBasisLine: string;
   /**
    * Contour interval of the levels actually emitted (source units), or null when
    * none was chosen. Coarser than {@link contourRequestedIntervalM} when an
@@ -416,6 +427,13 @@ export interface ExportProvenanceOptions {
    * or a future path that registers a real, frozen study.
    */
   readonly scopedRecords?: readonly ScopedEvidenceRecord[];
+  /**
+   * The analysed basis the frame recorded for this scan (from `ScanFacts` and
+   * the gather count). Absent means the export path did not record one and the
+   * stamp says 'unknown'; it is never derived from the grid, whose extent flag
+   * reads 'full' for a strided read.
+   */
+  readonly analysedBasis?: AnalysedBasis | null;
 }
 
 /** Resolve the generation timestamp to an ISO string. */
@@ -542,7 +560,10 @@ export function buildExportProvenance(
     crsKnown: crs != null,
     verticalDatum: datum ?? 'unknown',
     datumKnown: datum != null,
+    gridExtent: coverageMode,
     coverageMode,
+    analysedBasis: opts.analysedBasis ?? null,
+    analysedBasisLine: analysedBasisLine(opts.analysedBasis),
     contourIntervalM: intervalM,
     contourRequestedIntervalM:
       requestedIntervalM != null && requestedIntervalM !== intervalM ? requestedIntervalM : null,
@@ -894,6 +915,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Horizontal CRS', p.horizontalCrs),
     kv('Vertical datum', p.verticalDatum),
     kv('Coverage', p.coverageMode),
+    kv('Analysed basis', p.analysedBasisLine),
     kv('Contour interval', contourIntervalValue),
     kv('Contour style', p.contourStyleLabel),
     kv('Surface quality', p.surfaceQuality),
@@ -1022,7 +1044,10 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     crsKnown: p.crsKnown,
     verticalDatum: p.verticalDatum,
     datumKnown: p.datumKnown,
+    gridExtent: p.gridExtent,
     coverageMode: p.coverageMode,
+    analysedBasis: p.analysedBasis,
+    analysedBasisLine: p.analysedBasisLine,
     contourIntervalM: p.contourIntervalM,
     contourRequestedIntervalM: p.contourRequestedIntervalM,
     contourIntervalUnit: p.contourIntervalUnit ?? null,

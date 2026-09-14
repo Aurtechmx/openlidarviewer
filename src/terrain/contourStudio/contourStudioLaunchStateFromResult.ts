@@ -12,6 +12,8 @@
  * launcher having to understand the result internals.
  */
 
+import type { AnalysedBasis } from '../export/analysedBasis';
+import type { ContourExportFrameFacts } from '../../export/contourExportPermit';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import type { PrecisionPermit } from '../../geo/inMemoryPrecision';
 import {
@@ -37,6 +39,22 @@ export interface LaunchFrameContext {
    * a caller without the kind states the requirement rather than a frame.
    */
   readonly crsKind?: 'local' | 'projected' | 'geographic' | 'unknown';
+  /**
+   * The scan's coverage as the capability model states it, from `ScanFacts`,
+   * not from the grid's extent: a strided static read is `sampled` while its
+   * DTM grid reads `full`.
+   */
+  readonly coverage?: 'full' | 'sampled' | 'resident-only';
+  /**
+   * The capability verdicts for `contours` and `dtm`, from the same facts the
+   * coverage came from. The export permit reads the one its product exports
+   * under; a frame without them caps every export to exploratory.
+   */
+  readonly capabilities?: ContourExportFrameFacts['capabilities'];
+  /** Mints the state-bound authorization at click time; see the frame facts. */
+  readonly authorizeFor?: ContourExportFrameFacts['authorizeFor'];
+  /** Points analysed of points declared, under the facts' coverage; stamped into every export. */
+  readonly analysedBasis?: AnalysedBasis;
   /** The vertical unit (metre/foot) is known, not unknown/local. */
   readonly verticalUnitsKnown: boolean;
   /**
@@ -97,6 +115,8 @@ export function contourStudioPrerequisitesFromResult(
     verticalUnitsKnown: ctx.verticalUnitsKnown,
     crsProjected: ctx.crsProjected,
     ...(ctx.crsKind != null ? { crsKind: ctx.crsKind } : {}),
+    ...(ctx.coverage != null ? { coverage: ctx.coverage } : {}),
+    ...(ctx.groundIsDerived != null ? { groundIsDerived: ctx.groundIsDerived } : {}),
     unsupportedFraction,
     // Only a fully-ready surface counts as sufficient support; previewOnly caps
     // the deliverable to exploratory rather than blocking it.

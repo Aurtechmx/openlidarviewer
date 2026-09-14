@@ -13,6 +13,8 @@
  * panel, keeping the shell's contribution to the launcher near zero.
  */
 
+import { contourArtifactClaims, dtmArtifactClaims } from '../terrain/export/exportProvenance';
+import { resolveWorkspaceClaim } from '../export/workspaceClaim';
 import {
   contourStudioLaunchStateFromResult,
   type LaunchFrameContext,
@@ -96,14 +98,6 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
   // "2 m". Unknown unit ⇒ unknownUnit() ⇒ no metric claim.
   const scale = opts.ctx.verticalUnitToMetres;
   const unitKnown = scale != null && Number.isFinite(scale) && scale > 0;
-  const review = buildContourReviewSummary(opts.result, {
-    launch: state,
-    state: baseContourStudioState(),
-    verticalUnit: unitKnown ? knownUnit(scale) : unknownUnit(),
-    sourceUnitLabel: (unitKnown ? opts.ctx.verticalUnitLabel : null) ?? '',
-    crsProjected: opts.ctx.crsProjected,
-    groundIsDerived: opts.ctx.groundIsDerived,
-  });
   // Stable per-frame gate facts for the §19 export permit: the launch status
   // plus the CRS unit facts. Computed ONCE here (from the same launch state the
   // launcher renders) and handed to the host so it mints a permit at click time
@@ -115,7 +109,25 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
     crsProjected: opts.ctx.crsProjected,
     blockedReasons: 'reasons' in state ? state.reasons : undefined,
     precision: opts.ctx.precision,
+    capabilities: opts.ctx.capabilities,
+    artifactClaimIds: {
+      contours: contourArtifactClaims(opts.result),
+      dtm: dtmArtifactClaims(opts.result),
+    },
+    authorizeFor: opts.ctx.authorizeFor,
   };
+  // The claim the complete package exports under, rendered on the review row
+  // and the ladder so the interface says what the file says.
+  const claim = resolveWorkspaceClaim(frame);
+  const review = buildContourReviewSummary(opts.result, {
+    launch: state,
+    state: baseContourStudioState(),
+    verticalUnit: unitKnown ? knownUnit(scale) : unknownUnit(),
+    sourceUnitLabel: (unitKnown ? opts.ctx.verticalUnitLabel : null) ?? '',
+    crsProjected: opts.ctx.crsProjected,
+    groundIsDerived: opts.ctx.groundIsDerived,
+    claim,
+  });
   // The workspace fires onExport(product, btn); the mount adds the export intent
   // derived from the LIVE controller state (so it reflects the purpose the user
   // has selected at click time) and the frame gate facts before handing off.
@@ -125,6 +137,7 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
       controller,
       launch: state,
       review,
+      claim,
       onExport: hostOnExport
         ? (product, btn) =>
             hostOnExport(product, btn, contourExportIntentFromState(controller.getState()), frame)

@@ -24,6 +24,18 @@ import {
   isAuthenticAuthorization,
   type ProductAuthorization,
 } from '../process/ProcessService';
+import {
+  permitContextFor,
+  resolveContourExportPermit,
+  type ContourExportFrameFacts,
+  type ContourExportPermit,
+  type ContourPermitContext,
+  type ContourPermitProduct,
+} from '../export/contourExportPermit';
+import { resolveWorkspaceClaim } from '../export/workspaceClaim';
+import { governingClaim } from './evidenceComposition';
+import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
+import { contourArtifactClaims, dtmArtifactClaims } from '../terrain/export/exportProvenance';
 
 function crs(o: Partial<CrsInfo> = {}): CrsInfo {
   return { source: 'epsg', linearUnit: 'metre', linearUnitToMetres: 1, verticalDatum: 'NAVD88', verticalUnitToMetres: 1, ...o } as CrsInfo;
@@ -61,6 +73,8 @@ export interface BenchmarkCase {
   readonly product: ProductId;
   /** True when the case reuses an authentic token across a state change (SAAR denominator). */
   readonly staleCase?: boolean;
+  /** True when the case mints a production permit on non-full coverage (CPAR denominator). */
+  readonly coverageBlindCase?: boolean;
   /** Runs the case against the real authorization machinery. */
   readonly run: () => CaseOutcome;
 }
@@ -84,6 +98,60 @@ function obtain(svc: ProcessService, product: ProductId, token?: unknown): CaseO
 }
 
 const svcOf = (...scans: ScanFacts[]): ProcessService => ProcessService.fromFacts(scans);
+
+
+// ── Production-permit cases (A21–A28) ─────────────────────────────────────────
+// These run the export permit the adapter mints at click time, not the
+// capability token alone. "authorized" here means the permit resolved
+// `validated`; a review-grade or blocked permit is a refusal. Provenance is
+// resolvable when the permit returned the claim set it governed over.
+
+const VALIDATED: NonNullable<ContourPermitContext['evidenceStatusOf']> = () => 'validated';
+
+/** The frame the runner builds for Contour Studio from these facts. */
+function frameOf(facts: ScanFacts, over: Partial<ContourExportFrameFacts> = {}, authorizeOn: ScanFacts = facts): ContourExportFrameFacts {
+  const svc = svcOf(facts);
+  const issuer = svcOf(authorizeOn);
+  const verdict = (product: 'contours' | 'dtm') => {
+    const c = svc.capability(product);
+    return c ? { readiness: c.readiness, reasonCode: c.reasonCode, reason: c.reason } : undefined;
+  };
+  return {
+    launchStatus: 'available', verticalUnitsKnown: true, crsProjected: true, precision: null,
+    capabilities: { contours: verdict('contours'), dtm: verdict('dtm') },
+    artifactClaimIds: { contours: ['CONTOURS', 'DTM'], dtm: ['DTM'] },
+    authorizeFor: (product) => ({ product, token: issuer.authorize(product), verify: (t, p) => svc.verifyAuthorization(t, p) }),
+    ...over,
+  };
+}
+
+function permitOn(product: ContourPermitProduct, frame: ContourExportFrameFacts, evidenceStatusOf?: ContourPermitContext['evidenceStatusOf']): ContourExportPermit {
+  return resolveContourExportPermit(product, { ...permitContextFor(product, frame, product === 'geojson-native'), evidenceStatusOf });
+}
+
+function permitOutcome(permit: ContourExportPermit): CaseOutcome {
+  const authorized = permit.ok && permit.decision.status === 'validated';
+  return { authorized, authentic: authorized, provenanceResolvable: authorized && permit.claimIds.length > 0 };
+}
+
+const CLAIM_LABEL = { validated: 'Supported (internal validation only)', exploratory: 'Exploratory' } as const;
+
+/** The interface claim and the permit the package exports under agree on words and rationale. */
+function claimAgrees(frame: ContourExportFrameFacts, evidenceStatusOf?: ContourPermitContext['evidenceStatusOf']): boolean {
+  const claim = resolveWorkspaceClaim(frame, evidenceStatusOf);
+  const permit = permitOn('complete-package', frame, evidenceStatusOf);
+  if (!permit.ok) return claim.label === 'Blocked' && claim.rationale.join('\n') === permit.reasons.join('\n');
+  return claim.label === CLAIM_LABEL[permit.decision.status]
+    && claim.rationale.join('\n') === permit.decision.caveats.join('\n');
+}
+
+const SAMPLED: ScanFacts = { ...BASE, coverage: 'sampled' };
+const RESIDENT: ScanFacts = { ...BASE, kind: 'streaming', coverage: 'resident-only' };
+const DERIVED_GROUND: ScanFacts = { ...BASE, groundClassified: false, classificationProvenance: 'derived' };
+/** Same capability verdicts as BASE, different scientific state. */
+const REVISED: ScanFacts = { ...BASE, hasBuildingClass: false };
+const CRISP_WITH_RMSE = { generationParams: { contourStyle: 'crisp' }, accuracyStandards: { rmseZM: 0.08 } } as unknown as AnalyseContoursResult;
+const PRECISION_REFUSED = { ok: false, precision: {}, reasons: ['Float32 cannot hold this extent at the product precision.'] } as unknown as ContourExportFrameFacts['precision'];
 
 /** The frozen A01–A12 case set, mapped to the domain model actually present. */
 export const AUTHORIZATION_CASES: readonly BenchmarkCase[] = [
@@ -201,6 +269,57 @@ export const AUTHORIZATION_CASES: readonly BenchmarkCase[] = [
       return { authorized: auth, authentic: auth, provenanceResolvable: auth && typeof (token as ProductAuthorization).grantedFrom === 'string' };
     },
   },
+  {
+    id: 'A21', title: 'production permit on a sampled read, fully supported frame, registry stubbed validated — exploratory', kind: 'adversarial', product: 'dtm', coverageBlindCase: true,
+    run: () => permitOutcome(permitOn('dem', frameOf(SAMPLED), VALIDATED)),
+  },
+  {
+    id: 'A22', title: 'production permit on a resident-only streaming read, registry stubbed validated — exploratory', kind: 'adversarial', product: 'dtm', coverageBlindCase: true,
+    run: () => permitOutcome(permitOn('dem', frameOf(RESIDENT), VALIDATED)),
+  },
+  {
+    id: 'A23', title: 'production permit on derived ground, registry stubbed validated — exploratory (GROUND_DERIVED)', kind: 'adversarial', product: 'dtm',
+    run: () => permitOutcome(permitOn('dem', frameOf(DERIVED_GROUND), VALIDATED)),
+  },
+  {
+    id: 'A24', title: 'registry patched to validated on every claim, sampled load — still exploratory', kind: 'adversarial', product: 'contours', coverageBlindCase: true,
+    run: () => permitOutcome(permitOn('complete-package', frameOf(SAMPLED), VALIDATED)),
+  },
+  {
+    id: 'A25', title: 'permit vs provenance: crisp map PDF with RMSEz — one governing claim, refused above it', kind: 'adversarial', product: 'contours',
+    run: () => {
+      const frame = frameOf(BASE, { artifactClaimIds: { contours: contourArtifactClaims(CRISP_WITH_RMSE), dtm: dtmArtifactClaims(CRISP_WITH_RMSE) } });
+      const permit = permitOn('pdf', frame);
+      const o = permitOutcome(permit);
+      // A permit whose governing claim differs from the artifact's counts as
+      // authorized above its evidence: the stamp would describe another product.
+      const agrees = permit.ok && governingClaim(permit.claimIds) === governingClaim([...contourArtifactClaims(CRISP_WITH_RMSE), 'CONTOURS-CARTOGRAPHIC']);
+      return { ...o, authorized: o.authorized || !agrees };
+    },
+  },
+  {
+    id: 'A26', title: 'validated branch with a token minted on state S₁, export attempted on S₂ — capped to exploratory', kind: 'adversarial', product: 'contours', staleCase: true,
+    run: () => permitOutcome(permitOn('geojson-native', frameOf(REVISED, {}, BASE), VALIDATED)),
+  },
+  {
+    id: 'A27', title: 'control — interface Claim equals the permit stamp across six frames (supported, sampled, unit unknown, no CRS, derived ground, precision refused)', kind: 'control', product: 'contours',
+    run: () => {
+      const frames: Array<[ContourExportFrameFacts, ContourPermitContext['evidenceStatusOf']]> = [
+        [frameOf(BASE), VALIDATED],
+        [frameOf(SAMPLED), undefined],
+        [frameOf(BASE, { verticalUnitsKnown: false, launchStatus: 'exploratory' }), undefined],
+        [frameOf(BASE, { crsProjected: false, launchStatus: 'exploratory' }), undefined],
+        [frameOf(DERIVED_GROUND), undefined],
+        [frameOf(BASE, { precision: PRECISION_REFUSED }), undefined],
+      ];
+      const agree = frames.every(([f, e]) => claimAgrees(f, e));
+      return { authorized: agree, authentic: agree, provenanceResolvable: agree };
+    },
+  },
+  {
+    id: 'A28', title: 'control — full coverage, producer ground, fresh token, registry stubbed validated — validated', kind: 'control', product: 'contours',
+    run: () => permitOutcome(permitOn('geojson-native', frameOf(BASE), VALIDATED)),
+  },
 ];
 
 export interface CaseResult extends CaseOutcome {
@@ -223,9 +342,11 @@ export interface BenchmarkScore {
   readonly atr: number;
   /** Stale Authorization Acceptance Rate — reused-across-state tokens wrongly accepted. Target 0. */
   readonly saar: number;
+  /** Coverage-blind Production Authorization Rate — production permits on non-full coverage that resolve validated. Target 0. */
+  readonly cpar: number;
 }
 
-/** Run every case and score the three integrity metrics. Deterministic. */
+/** Run every case and score the integrity metrics. Deterministic. */
 export function scoreAuthorizationBenchmark(cases: readonly BenchmarkCase[] = AUTHORIZATION_CASES): BenchmarkScore {
   const results: CaseResult[] = cases.map((c) => {
     const o = c.run();
@@ -242,9 +363,11 @@ export function scoreAuthorizationBenchmark(cases: readonly BenchmarkCase[] = AU
   const orr = controls.length === 0 ? 0 : controls.filter((r) => !r.authorized).length / controls.length;
   const atr = authorized.length === 0 ? 1 : authorized.filter((r) => r.provenanceResolvable).length / authorized.length;
   const saar = staleResults.length === 0 ? 0 : staleResults.filter((r) => r.authorized).length / staleResults.length;
+  const coverageBlind = results.filter((r) => cases.some((c) => c.coverageBlindCase && c.id === r.id));
+  const cpar = coverageBlind.length === 0 ? 0 : coverageBlind.filter((r) => r.authorized).length / coverageBlind.length;
   return {
     results,
     totals: { adversarial: adversarial.length, control: controls.length, authorized: authorized.length },
-    uoar, orr, atr, saar,
+    uoar, orr, atr, saar, cpar,
   };
 }

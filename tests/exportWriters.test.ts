@@ -25,6 +25,7 @@ const PROV: ExportProvenance = {
   verticalDatum: 'EPSG:5703',
   datumKnown: true,
   coverageMode: 'full',
+  gridExtent: 'full', analysedBasis: null, analysedBasisLine: 'unknown',
   contourIntervalM: 1,
   contourRequestedIntervalM: null,
   contourStyle: 'smooth',
