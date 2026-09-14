@@ -13,7 +13,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — plain .mjs script, no types
-import { collectReleaseTruthProblems } from '../scripts/lint-release-truth.mjs';
+import { collectReleaseTruthProblems, isPublishedRelease } from '../scripts/lint-release-truth.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const realRead = (p: string): string | null =>
@@ -41,10 +41,37 @@ describe('lint:release-truth', () => {
     expect(problemsFor(realRead)).toEqual([]);
   });
 
-  it('fails on a stale monolith line count', () => {
+  /** The real tree with CITATION.cff stripped of this version's DOI: the release not yet deposited. */
+  const unpublished = (over?: [string, string]) => {
+    const cff = realRead('CITATION.cff')!.replace(new RegExp(`\\n  - type: doi\\n    value: "[^"]+"\\n    description: "Version DOI for the archived v${VERSION.replace(/\./g, '\\.')} release"`), '');
+    expect(isPublishedRelease(cff, VERSION)).toBe(false);
+    return (p: string): string | null => (p === 'CITATION.cff' ? cff : over && p === over[0] ? over[1] : realRead(p));
+  };
+
+  it('this version is deposited: CITATION.cff carries its version DOI', () => {
+    expect(isPublishedRelease(realRead('CITATION.cff'), VERSION)).toBe(true);
+    expect(collectReleaseTruthProblems(realRead).published).toBe(true);
+  });
+
+  it('fails on a stale monolith line count while the release is not deposited', () => {
     const doc = realRead(KNOWN)! + '\n\n`src/main.ts` is 7,635 lines.\n';
-    const problems = problemsFor(withOverride(KNOWN, doc));
+    const problems = problemsFor(unpublished([KNOWN, doc]));
     expect(problems.some((p) => p.includes('7,635'))).toBe(true);
+  });
+
+  it('a published limitations doc keeps its shipped counts; the architecture map is still checked', () => {
+    // The doc as shipped, plus a count the tree no longer has: published, so
+    // the doc is not re-checked against a tree that moved after the tag.
+    const doc = realRead(KNOWN)! + '\n\n`src/main.ts` is 7,635 lines.\n';
+    expect(problemsFor(withOverride(KNOWN, doc)).some((p) => p.includes('7,635'))).toBe(false);
+    // The same stale count in the living map fails whatever the deposit state.
+    const map = realRead('docs/architecture/architecture-map.md')! + '\n\n`src/main.ts` is 7,635 lines.\n';
+    expect(problemsFor(withOverride('docs/architecture/architecture-map.md', map)).some((p) => p.includes('7,635'))).toBe(true);
+  });
+
+  it('a deposited release is one whose version DOI is listed, not any DOI', () => {
+    expect(isPublishedRelease('identifiers:\n  - type: doi\n    value: "10.5281/zenodo.1"\n    description: "Version DOI for the archived v0.0.1 release"\n', '0.6.8')).toBe(false);
+    expect(isPublishedRelease(null, '0.6.8')).toBe(false);
   });
 
   it('fails on a present-tense prerelease "DISABLED in <pre>" claim', () => {

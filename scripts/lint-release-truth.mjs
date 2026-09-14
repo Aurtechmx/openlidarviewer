@@ -39,10 +39,21 @@ import { isCliEntry } from './lib/isCliEntry.mjs';
  * null when it does not exist. Returns an array of human-readable problem
  * strings (empty when the tree is clean).
  */
+/**
+ * True when CITATION.cff lists a version DOI for `version`: the release was
+ * deposited, so its release documents are published and no longer describe
+ * the working tree.
+ */
+export function isPublishedRelease(citationText, version) {
+  if (citationText == null) return false;
+  const re = new RegExp(`description:\\s*"Version DOI for the archived v${version.replace(/\./g, '\\.')} release"`);
+  return re.test(citationText);
+}
+
 export function collectReleaseTruthProblems(read) {
   const problems = [];
   const pkgText = read('package.json');
-  if (pkgText == null) return { problems: ['package.json is missing.'], version: null, currentPre: null, e4Claims: 0, suppliedSlots: 0 };
+  if (pkgText == null) return { problems: ['package.json is missing.'], version: null, currentPre: null, e4Claims: 0, suppliedSlots: 0, published: false };
   const pkg = JSON.parse(pkgText);
   const version = pkg.version;
 
@@ -60,6 +71,12 @@ export function collectReleaseTruthProblems(read) {
   const RELEASE_ASSETS = 'docs/release/RELEASE_ASSETS.md';
 
   // ── 1. Monolith line counts, derived from the ratchet baseline ────────────
+  // A limitations doc describes the tree at its release. Once that release is
+  // deposited (CITATION.cff carries its version DOI) the doc is published and
+  // stays as shipped; the tree keeps moving under the same package version
+  // until the next bump, so the doc's counts are no longer compared to it.
+  // The architecture map is a living document and is always compared.
+  const published = isPublishedRelease(read('CITATION.cff'), version);
   const baseText = read('docs/validation/monolith-size-baseline.json');
   if (baseText == null) {
     problems.push('docs/validation/monolith-size-baseline.json is missing — cannot check monolith counts.');
@@ -68,7 +85,7 @@ export function collectReleaseTruthProblems(read) {
     const withSep = (n) => n.toLocaleString('en-US'); // 7521 -> "7,521"
     const expected = new Set(Object.values(base.files).map((f) => withSep(f.lines)));
     const expectedList = [...expected].join(', ');
-    for (const doc of [KNOWN, ARCHMAP]) {
+    for (const doc of published ? [ARCHMAP] : [KNOWN, ARCHMAP]) {
       const text = read(doc);
       if (text == null) {
         problems.push(`${doc} is missing — cannot check monolith counts.`);
@@ -361,7 +378,7 @@ export function collectReleaseTruthProblems(read) {
     }
   }
 
-  return { problems, version, currentPre, e4Claims, suppliedSlots };
+  return { problems, version, currentPre, e4Claims, suppliedSlots, published };
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
@@ -372,11 +389,11 @@ function isMain() {
 if (isMain()) {
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const read = (p) => (existsSync(resolve(ROOT, p)) ? readFileSync(resolve(ROOT, p), 'utf8') : null);
-  const { problems, version, currentPre, e4Claims, suppliedSlots } = collectReleaseTruthProblems(read);
+  const { problems, version, currentPre, e4Claims, suppliedSlots, published } = collectReleaseTruthProblems(read);
 
   if (problems.length === 0) {
     console.log(
-      `lint:release-truth OK — monolith counts, ${currentPre ?? 'release'} identifiers, ` +
+      `lint:release-truth OK — monolith counts${published ? ' (limitations doc published, map only)' : ''}, ${currentPre ?? 'release'} identifiers, ` +
         `E4 wording (${e4Claims} E4 / ${suppliedSlots} supplied), dependency audit, ` +
         `THIRD_PARTY versions, validation wording, and the checklist asset set all agree ` +
         `with the machine state for v${version}.`,
