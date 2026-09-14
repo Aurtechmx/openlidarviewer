@@ -78,6 +78,17 @@ export const EXPECTED_CORPUS = {
  * the recall of ASPRS 2. A real improvement raises one and passes; the check is
  * one-directional on purpose.
  */
+/**
+ * The classifier identity every figure in the baseline was measured under. A
+ * record produced by another method or another preset digest is not a rerun
+ * of this baseline and is refused before any metric is compared, so a future
+ * method cannot inherit these figures by being scored against them.
+ */
+export const FROZEN_CLASSIFIER = Object.freeze({
+  method: 'olv.class.derived-heuristic@3',
+  presetDigest: 'sha256:5e83f48e13fafe8fd30771fa75cc370102ee75d78ad33de446bfbfd83fcb21b3',
+});
+
 export const FROZEN_BASELINE = {
   scenes: {
     'aerial-urban': { macroF1: 0.9991111111111112, groundRecall: 1 },
@@ -113,9 +124,25 @@ export function collectCorpusProblems(
   expected = EXPECTED_CORPUS,
   baseline = FROZEN_BASELINE,
   tol = REGRESSION_TOLERANCE,
+  classifier = FROZEN_CLASSIFIER,
 ) {
   const problems = [];
   const readings = [];
+
+  const method = record.classifier?.method;
+  const digest = record.classifier?.presetDigest;
+  if (method !== classifier.method) {
+    problems.push(
+      `classifier method is ${method ?? 'absent'}, the baseline was measured under ${classifier.method}. ` +
+        'A record from another method is not a rerun of this baseline; a new method needs its own record, digest and baseline.',
+    );
+  }
+  if (digest !== classifier.presetDigest) {
+    problems.push(
+      `preset digest is ${digest ?? 'absent'}, the baseline was measured under ${classifier.presetDigest}. ` +
+        'The parameters moved, so every metric below was measured by a different classifier.',
+    );
+  }
 
   if (record.corpusVersion !== expected.version) {
     problems.push(

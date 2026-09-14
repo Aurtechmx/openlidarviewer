@@ -35,10 +35,18 @@ export declare const REGRESSION_TOLERANCE: number;
 export declare const EXPECTED_CORPUS: CorpusExpectation;
 export declare const FROZEN_BASELINE: CorpusBaseline;
 
+/** The method tag and preset digest every baseline figure was measured under. */
+export interface CorpusClassifierIdentity {
+  readonly method: string;
+  readonly presetDigest: string;
+}
+export declare const FROZEN_CLASSIFIER: CorpusClassifierIdentity;
+
 /** Empty `problems` is a pass. `readings` is every metric, in a stable order. */
 export declare function collectCorpusProblems(
   record: unknown,
   expected?: CorpusExpectation,
   baseline?: CorpusBaseline,
   tol?: number,
+  classifier?: CorpusClassifierIdentity,
 ): { problems: string[]; readings: CorpusReading[] };

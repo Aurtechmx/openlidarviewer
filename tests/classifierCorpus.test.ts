@@ -33,9 +33,11 @@ import {
 } from '../src/validation/classifierCorpus';
 import {
   collectCorpusProblems,
+  FROZEN_CLASSIFIER,
   EXPECTED_CORPUS,
   FROZEN_BASELINE,
 } from '../scripts/verify-classifier-corpus.mjs';
+import { CLASSIFIER_METHOD_TAG, CLASSIFIER_PRESET } from '../src/render/class/deriveClassification';
 
 /** The published corpus. See the header: this is the freeze. */
 const CORPUS_DIGEST = 'sha256:2a0c01654d979210dd2b95ef343c3b25a5a4ae97a237afaddf8662197173b1db';
@@ -248,6 +250,7 @@ describe('the gate is not vacuous', () => {
   const passingRecord = () => ({
     corpusVersion: EXPECTED_CORPUS.version,
     corpusDigest: EXPECTED_CORPUS.digest,
+    classifier: { ...FROZEN_CLASSIFIER },
     scenes: EXPECTED_CORPUS.sceneIds.map((id) => ({
       id,
       metrics: {
@@ -269,6 +272,25 @@ describe('the gate is not vacuous', () => {
     const record = { ...passingRecord(), corpusDigest: 'sha256:0000' };
     const { problems } = collectCorpusProblems(record);
     expect(problems.join(' ')).toMatch(/corpus digest/);
+  });
+
+  it('refuses a record from another method, before any metric is read', () => {
+    const record = { ...passingRecord(), classifier: { ...FROZEN_CLASSIFIER, method: 'olv.class.derived-selective@4' } };
+    const { problems } = collectCorpusProblems(record);
+    expect(problems.join(' ')).toMatch(/classifier method is olv\.class\.derived-selective@4/);
+  });
+
+  it('refuses a record whose preset digest moved, and one that names no classifier', () => {
+    const moved = { ...passingRecord(), classifier: { ...FROZEN_CLASSIFIER, presetDigest: 'sha256:0000' } };
+    expect(collectCorpusProblems(moved).problems.join(' ')).toMatch(/preset digest is sha256:0000/);
+    const { classifier: _c, ...anonymous } = passingRecord();
+    void _c;
+    expect(collectCorpusProblems(anonymous).problems.join(' ')).toMatch(/classifier method is absent/);
+  });
+
+  it('the frozen identity is the identity the live classifier reports', () => {
+    expect(CLASSIFIER_METHOD_TAG).toBe(FROZEN_CLASSIFIER.method);
+    expect(CLASSIFIER_PRESET.digest).toBe(FROZEN_CLASSIFIER.presetDigest);
   });
 
   it('refuses a dropped scene', () => {

@@ -47,7 +47,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 3,
@@ -58,7 +59,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 4,
@@ -69,7 +71,8 @@
             "falseNegative": 1,
             "precision": 1,
             "recall": 0.9911504424778761,
-            "f1": 0.9955555555555555
+            "f1": 0.9955555555555555,
+            "iou": 0.9911504424778761
           },
           {
             "code": 5,
@@ -80,7 +83,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 6,
@@ -91,11 +95,16 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           }
         ],
         "macroF1": 0.9991111111111112,
+        "macroIoU": 0.9982300884955752,
         "unclassifiedRate": 0.00011261261261261261,
+        "coverage": 0.9998873873873874,
+        "groundTypeI": 0,
+        "groundTypeII": 0,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -128,7 +137,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 3,
@@ -139,7 +149,8 @@
             "falseNegative": 1,
             "precision": 0.9662921348314607,
             "recall": 0.9885057471264368,
-            "f1": 0.9772727272727273
+            "f1": 0.9772727272727273,
+            "iou": 0.9555555555555556
           },
           {
             "code": 4,
@@ -150,7 +161,8 @@
             "falseNegative": 6,
             "precision": 0.994535519125683,
             "recall": 0.9837837837837838,
-            "f1": 0.9891304347826088
+            "f1": 0.9891304347826088,
+            "iou": 0.978494623655914
           },
           {
             "code": 5,
@@ -161,7 +173,8 @@
             "falseNegative": 6,
             "precision": 1,
             "recall": 0.9880715705765407,
-            "f1": 0.9939999999999999
+            "f1": 0.9939999999999999,
+            "iou": 0.9880715705765407
           },
           {
             "code": 6,
@@ -172,11 +185,16 @@
             "falseNegative": 0,
             "precision": null,
             "recall": null,
-            "f1": null
+            "f1": null,
+            "iou": null
           }
         ],
         "macroF1": 0.9901007905138339,
+        "macroIoU": 0.9805304374470026,
         "unclassifiedRate": 0.0008928571428571428,
+        "coverage": 0.9991071428571429,
+        "groundTypeI": 0,
+        "groundTypeII": 0,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -209,7 +227,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 3,
@@ -220,7 +239,8 @@
             "falseNegative": 0,
             "precision": 0.9722222222222222,
             "recall": 1,
-            "f1": 0.9859154929577464
+            "f1": 0.9859154929577464,
+            "iou": 0.9722222222222222
           },
           {
             "code": 4,
@@ -231,7 +251,8 @@
             "falseNegative": 2,
             "precision": 1,
             "recall": 0.9787234042553191,
-            "f1": 0.989247311827957
+            "f1": 0.989247311827957,
+            "iou": 0.9787234042553191
           },
           {
             "code": 5,
@@ -242,7 +263,8 @@
             "falseNegative": 1,
             "precision": 1,
             "recall": 0.990990990990991,
-            "f1": 0.9954751131221719
+            "f1": 0.9954751131221719,
+            "iou": 0.990990990990991
           },
           {
             "code": 6,
@@ -253,11 +275,16 @@
             "falseNegative": 29,
             "precision": 1,
             "recall": 0.9789397240377633,
-            "f1": 0.9893577981651377
+            "f1": 0.9893577981651377,
+            "iou": 0.9789397240377633
           }
         ],
         "macroF1": 0.9919991432146027,
+        "macroIoU": 0.9841752683012592,
         "unclassifiedRate": 0.0037804878048780487,
+        "coverage": 0.996219512195122,
+        "groundTypeI": 0,
+        "groundTypeII": 0,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -290,7 +317,8 @@
             "falseNegative": 0,
             "precision": 0.9766191883902177,
             "recall": 1,
-            "f1": 0.9881713120326309
+            "f1": 0.9881713120326309,
+            "iou": 0.9766191883902177
           },
           {
             "code": 3,
@@ -301,7 +329,8 @@
             "falseNegative": 0,
             "precision": 0.024574669187145556,
             "recall": 1,
-            "f1": 0.047970479704797044
+            "f1": 0.047970479704797044,
+            "iou": 0.024574669187145556
           },
           {
             "code": 4,
@@ -312,7 +341,8 @@
             "falseNegative": 1,
             "precision": 0.11971830985915492,
             "recall": 0.9714285714285714,
-            "f1": 0.21316614420062696
+            "f1": 0.21316614420062696,
+            "iou": 0.11929824561403508
           },
           {
             "code": 5,
@@ -323,7 +353,8 @@
             "falseNegative": 2,
             "precision": 0.05317919075144509,
             "recall": 0.9583333333333334,
-            "f1": 0.10076670317634173
+            "f1": 0.10076670317634173,
+            "iou": 0.0530565167243368
           },
           {
             "code": 6,
@@ -334,11 +365,16 @@
             "falseNegative": 1758,
             "precision": 1,
             "recall": 0.4680786686838124,
-            "f1": 0.6376751854905194
+            "f1": 0.6376751854905194,
+            "iou": 0.4680786686838124
           }
         ],
         "macroF1": 0.39754996492098316,
+        "macroIoU": 0.3283254577199095,
         "unclassifiedRate": 0.00018745899334520573,
+        "coverage": 0.9998125410066548,
+        "groundTypeI": 0,
+        "groundTypeII": 0.05116142311084975,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -371,7 +407,8 @@
             "falseNegative": 0,
             "precision": 0.9997500624843789,
             "recall": 1,
-            "f1": 0.9998750156230471
+            "f1": 0.9998750156230471,
+            "iou": 0.9997500624843789
           },
           {
             "code": 3,
@@ -382,7 +419,8 @@
             "falseNegative": 4,
             "precision": 1,
             "recall": 0.9954545454545455,
-            "f1": 0.9977220956719818
+            "f1": 0.9977220956719818,
+            "iou": 0.9954545454545455
           },
           {
             "code": 4,
@@ -393,7 +431,8 @@
             "falseNegative": 0,
             "precision": null,
             "recall": null,
-            "f1": null
+            "f1": null,
+            "iou": null
           },
           {
             "code": 5,
@@ -404,7 +443,8 @@
             "falseNegative": 0,
             "precision": null,
             "recall": null,
-            "f1": null
+            "f1": null,
+            "iou": null
           },
           {
             "code": 6,
@@ -415,11 +455,16 @@
             "falseNegative": 0,
             "precision": null,
             "recall": null,
-            "f1": null
+            "f1": null,
+            "iou": null
           }
         ],
         "macroF1": 0.9987985556475145,
+        "macroIoU": 0.9976023039694621,
         "unclassifiedRate": 0.00022522522522522523,
+        "coverage": 0.9997747747747747,
+        "groundTypeI": 0,
+        "groundTypeII": 0.0022727272727272726,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -454,7 +499,8 @@
             "falseNegative": 2910,
             "precision": 1,
             "recall": 0.63625,
-            "f1": 0.7776928953399541
+            "f1": 0.7776928953399541,
+            "iou": 0.63625
           },
           {
             "code": 3,
@@ -465,7 +511,8 @@
             "falseNegative": 13,
             "precision": 0.034106412005457026,
             "recall": 0.6578947368421053,
-            "f1": 0.0648508430609598
+            "f1": 0.0648508430609598,
+            "iou": 0.03351206434316354
           },
           {
             "code": 4,
@@ -476,7 +523,8 @@
             "falseNegative": 56,
             "precision": 0.13262599469496023,
             "recall": 0.6410256410256411,
-            "f1": 0.21978021978021978
+            "f1": 0.21978021978021978,
+            "iou": 0.12345679012345678
           },
           {
             "code": 5,
@@ -487,7 +535,8 @@
             "falseNegative": 9,
             "precision": 0.7647058823529411,
             "recall": 0.9285714285714286,
-            "f1": 0.8387096774193549
+            "f1": 0.8387096774193549,
+            "iou": 0.7222222222222222
           },
           {
             "code": 6,
@@ -498,11 +547,16 @@
             "falseNegative": 0,
             "precision": 0,
             "recall": null,
-            "f1": null
+            "f1": null,
+            "iou": 0
           }
         ],
         "macroF1": 0.38020672712009773,
+        "macroIoU": 0.3030882153377685,
         "unclassifiedRate": 0.0045673076923076926,
+        "coverage": 0.9954326923076923,
+        "groundTypeI": 0.36375,
+        "groundTypeII": 0,
         "falseBuildingRate": 0.18653846153846154,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -537,7 +591,8 @@
             "falseNegative": 4786,
             "precision": 1,
             "recall": 0.40175,
-            "f1": 0.5732120563581238
+            "f1": 0.5732120563581238,
+            "iou": 0.40175
           },
           {
             "code": 3,
@@ -548,7 +603,8 @@
             "falseNegative": 26,
             "precision": 0.008706467661691543,
             "recall": 0.35,
-            "f1": 0.016990291262135925
+            "f1": 0.016990291262135925,
+            "iou": 0.008567931456548347
           },
           {
             "code": 4,
@@ -559,7 +615,8 @@
             "falseNegative": 71,
             "precision": 0.0647010647010647,
             "recall": 0.5266666666666666,
-            "f1": 0.11524434719183077
+            "f1": 0.11524434719183077,
+            "iou": 0.06114551083591331
           },
           {
             "code": 5,
@@ -570,7 +627,8 @@
             "falseNegative": 7,
             "precision": 0.5668202764976958,
             "recall": 0.9461538461538461,
-            "f1": 0.7089337175792507
+            "f1": 0.7089337175792507,
+            "iou": 0.5491071428571429
           },
           {
             "code": 6,
@@ -581,11 +639,16 @@
             "falseNegative": 0,
             "precision": 0,
             "recall": null,
-            "f1": null
+            "f1": null,
+            "iou": 0
           }
         ],
         "macroF1": 0.28287608247826823,
+        "macroIoU": 0.2041141170299209,
         "unclassifiedRate": 0.005408653846153846,
+        "coverage": 0.9945913461538461,
+        "groundTypeI": 0.59825,
+        "groundTypeII": 0,
         "falseBuildingRate": 0.2421875,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -618,7 +681,8 @@
             "falseNegative": 0,
             "precision": 0.995848899958489,
             "recall": 1,
-            "f1": 0.9979201331114809
+            "f1": 0.9979201331114809,
+            "iou": 0.995848899958489
           },
           {
             "code": 3,
@@ -629,7 +693,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 4,
@@ -640,7 +705,8 @@
             "falseNegative": 4,
             "precision": 0.9907407407407407,
             "recall": 0.963963963963964,
-            "f1": 0.9771689497716894
+            "f1": 0.9771689497716894,
+            "iou": 0.9553571428571429
           },
           {
             "code": 5,
@@ -651,7 +717,8 @@
             "falseNegative": 1,
             "precision": 0.9911504424778761,
             "recall": 0.9911504424778761,
-            "f1": 0.9911504424778761
+            "f1": 0.9911504424778761,
+            "iou": 0.9824561403508771
           },
           {
             "code": 6,
@@ -662,11 +729,16 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           }
         ],
         "macroF1": 0.9932479050722092,
+        "macroIoU": 0.9867324366333019,
         "unclassifiedRate": 0.0003386004514672686,
+        "coverage": 0.9996613995485327,
+        "groundTypeI": 0,
+        "groundTypeII": 0.01803968731208659,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 30,
         "lowNoisePoints": 30
@@ -700,7 +772,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 3,
@@ -711,7 +784,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 4,
@@ -722,7 +796,8 @@
             "falseNegative": 1,
             "precision": 1,
             "recall": 0.9911504424778761,
-            "f1": 0.9955555555555555
+            "f1": 0.9955555555555555,
+            "iou": 0.9911504424778761
           },
           {
             "code": 5,
@@ -733,7 +808,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 6,
@@ -744,11 +820,16 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           }
         ],
         "macroF1": 0.9991111111111112,
+        "macroIoU": 0.9982300884955752,
         "unclassifiedRate": 0.00011261261261261261,
+        "coverage": 0.9998873873873874,
+        "groundTypeI": 0,
+        "groundTypeII": 0,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -782,7 +863,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 3,
@@ -793,7 +875,8 @@
             "falseNegative": 1,
             "precision": 0.9662921348314607,
             "recall": 0.9885057471264368,
-            "f1": 0.9772727272727273
+            "f1": 0.9772727272727273,
+            "iou": 0.9555555555555556
           },
           {
             "code": 4,
@@ -804,7 +887,8 @@
             "falseNegative": 6,
             "precision": 0.994535519125683,
             "recall": 0.9837837837837838,
-            "f1": 0.9891304347826088
+            "f1": 0.9891304347826088,
+            "iou": 0.978494623655914
           },
           {
             "code": 5,
@@ -815,7 +899,8 @@
             "falseNegative": 6,
             "precision": 1,
             "recall": 0.9880715705765407,
-            "f1": 0.9939999999999999
+            "f1": 0.9939999999999999,
+            "iou": 0.9880715705765407
           },
           {
             "code": 6,
@@ -826,11 +911,16 @@
             "falseNegative": 0,
             "precision": null,
             "recall": null,
-            "f1": null
+            "f1": null,
+            "iou": null
           }
         ],
         "macroF1": 0.9901007905138339,
+        "macroIoU": 0.9805304374470026,
         "unclassifiedRate": 0.0008928571428571428,
+        "coverage": 0.9991071428571429,
+        "groundTypeI": 0,
+        "groundTypeII": 0,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -863,7 +953,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 3,
@@ -874,7 +965,8 @@
             "falseNegative": 1,
             "precision": 1,
             "recall": 0.9777777777777777,
-            "f1": 0.9887640449438202
+            "f1": 0.9887640449438202,
+            "iou": 0.9777777777777777
           },
           {
             "code": 4,
@@ -885,7 +977,8 @@
             "falseNegative": 2,
             "precision": 0.983739837398374,
             "recall": 0.983739837398374,
-            "f1": 0.983739837398374
+            "f1": 0.983739837398374,
+            "iou": 0.968
           },
           {
             "code": 5,
@@ -896,7 +989,8 @@
             "falseNegative": 7,
             "precision": 1,
             "recall": 0.9539473684210527,
-            "f1": 0.9764309764309764
+            "f1": 0.9764309764309764,
+            "iou": 0.9539473684210527
           },
           {
             "code": 6,
@@ -907,11 +1001,16 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           }
         ],
         "macroF1": 0.989786971754634,
+        "macroIoU": 0.9799450292397662,
         "unclassifiedRate": 0.0008970621215519175,
+        "coverage": 0.9991029378784481,
+        "groundTypeI": 0,
+        "groundTypeII": 0,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -944,7 +1043,8 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           },
           {
             "code": 3,
@@ -955,7 +1055,8 @@
             "falseNegative": 1,
             "precision": 1,
             "recall": 0.9777777777777777,
-            "f1": 0.9887640449438202
+            "f1": 0.9887640449438202,
+            "iou": 0.9777777777777777
           },
           {
             "code": 4,
@@ -966,7 +1067,8 @@
             "falseNegative": 2,
             "precision": 0.983739837398374,
             "recall": 0.983739837398374,
-            "f1": 0.983739837398374
+            "f1": 0.983739837398374,
+            "iou": 0.968
           },
           {
             "code": 5,
@@ -977,7 +1079,8 @@
             "falseNegative": 7,
             "precision": 1,
             "recall": 0.9539473684210527,
-            "f1": 0.9764309764309764
+            "f1": 0.9764309764309764,
+            "iou": 0.9539473684210527
           },
           {
             "code": 6,
@@ -988,11 +1091,16 @@
             "falseNegative": 0,
             "precision": 1,
             "recall": 1,
-            "f1": 1
+            "f1": 1,
+            "iou": 1
           }
         ],
         "macroF1": 0.989786971754634,
+        "macroIoU": 0.9799450292397662,
         "unclassifiedRate": 0.0008970621215519175,
+        "coverage": 0.9991029378784481,
+        "groundTypeI": 0,
+        "groundTypeII": 0,
         "falseBuildingRate": 0,
         "lowNoiseCalledGround": 0,
         "lowNoisePoints": 0
@@ -1012,7 +1120,8 @@
         "falseNegative": 7696,
         "precision": 0.9975018796536587,
         "recall": 0.9144432586268232,
-        "f1": 0.954168454997854
+        "f1": 0.954168454997854,
+        "iou": 0.912353867654562
       },
       {
         "code": 3,
@@ -1023,7 +1132,8 @@
         "falseNegative": 47,
         "precision": 0.31862035697057406,
         "recall": 0.9656432748538012,
-        "f1": 0.47914399709829525
+        "f1": 0.47914399709829525,
+        "iou": 0.3150488910088242
       },
       {
         "code": 4,
@@ -1034,7 +1144,8 @@
         "falseNegative": 152,
         "precision": 0.4386779568423928,
         "recall": 0.9135381114903299,
-        "f1": 0.5927292858460971
+        "f1": 0.5927292858460971,
+        "iou": 0.42119066351953843
       },
       {
         "code": 5,
@@ -1045,7 +1156,8 @@
         "falseNegative": 46,
         "precision": 0.6826987307949232,
         "recall": 0.9779904306220095,
-        "f1": 0.8040912667191187
+        "f1": 0.8040912667191187,
+        "iou": 0.6723684210526316
       },
       {
         "code": 6,
@@ -1056,11 +1168,16 @@
         "falseNegative": 1787,
         "precision": 0.732748932344347,
         "recall": 0.8455087749632575,
-        "f1": 0.7851007465681945
+        "f1": 0.7851007465681945,
+        "iou": 0.6462270384564557
       }
     ],
     "macroF1": 0.7230467502459119,
+    "macroIoU": 0.5934377763384024,
     "unclassifiedRate": 0.0014517866341966,
+    "coverage": 0.9985482133658033,
+    "groundTypeI": 0.0855567413731768,
+    "groundTypeII": 0.012252423719740677,
     "falseBuildingRate": 0.03746927456459169,
     "lowNoiseCalledGround": 30,
     "lowNoisePoints": 30
