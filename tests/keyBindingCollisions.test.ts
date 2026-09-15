@@ -51,7 +51,6 @@ const ALLOWED_OVERRIDES: ReadonlyArray<readonly [string, string]> = [
   // `?` shortcut sheet (priority 400) intentionally shadows the `?` help
   // overlay (614): the higher-priority binding in the same 'global' scope wins,
   // which is the exact regression the priority scheme was built to lock in.
-  ['shortcut-sheet', 'help-overlay'],
   // Measure-mode Backspace (priority 110, 'measure' scope while drafting)
   // intentionally precedes the global delete (615): narrower mode + higher
   // priority pop a vertex instead of deleting the selection.

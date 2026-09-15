@@ -626,16 +626,15 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     const budgetCaption = out.budget.downsample
       ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%`
       : '';
-    // CRS gate — when the scan is geographic or unknown, displaying a
-    // cubic-metre headline would be misleading. Replace the metrics
-    // line with the caveat, and refuse to surface a Save button (the
-    // user has to project / confirm a CRS first). When the CRS is
-    // safe-explicit-local, the metrics are still meaningful in source
-    // units; surface a softer "units assumed metres" line below them.
+    // CRS gate — a geographic or unknown CRS makes a cubic-metre headline
+    // misleading: replace the metrics line with the caveat and refuse a Save
+    // button (project / confirm a CRS first). safe-explicit-local keeps the
+    // metrics in source units with a softer "units assumed metres" line.
     const crsVerdict = crsService.validation();
     if (!crsVerdict.canDisplayMetric) {
       showLassoToast(
         `Volume can't be claimed in this CRS — ${crsVerdict.reason} ${crsVerdict.suggestion}`,
+        { label: 'Learn why', onClick: () => helpOverlay.openTopic('export-trust') }, // Help explains the unit gate
       );
       pendingLassoSave = null;
       return;

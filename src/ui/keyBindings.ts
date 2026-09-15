@@ -352,7 +352,7 @@ function targetIsField(e: KeyboardEvent): boolean {
  * Build the declarative binding table. Priorities encode the exact pre-refactor
  * precedence: 100/110/120 = the main.ts:753 Space/measure/Escape listener;
  * 200/210 = the main.ts:872 L / T-O-P listener; 300 = Cmd+K; 400 = the `?`
- * sheet (MUST beat the 614 `?` help overlay — reproduced by 400 < 614);
+ * sheet owns `?` (the overlay has no key binding: it opens from the dock);
  * 500 = the flag-gated workflow chord; 600+ = the former `bindShortcuts`.
  */
 export function buildViewerKeyBindings(
@@ -457,7 +457,7 @@ export function buildViewerKeyBindings(
         return true;
       },
     },
-    // ── main.ts:1860 — shortcut sheet (MUST beat the 614 help overlay) ────
+    // ── shortcut sheet: the one owner of bare `?` ─────────────────────────
     {
       id: 'shortcut-sheet',
       actionIds: ['help.shortcuts'],
@@ -581,21 +581,6 @@ export function buildViewerKeyBindings(
         const h = deps.globalActions();
         if (!h) return false;
         h.onSaveView();
-        return true;
-      },
-    },
-    {
-      id: 'help-overlay',
-      help: 'The shortcut sheet owns this key; open Help from the tool dock.',
-      match: { key: '?', bareOnly: true },
-      priority: 614,
-      contextTag: 'global',
-      displayKeys: '?',
-      when: (ctx) => !ctx.isTyping,
-      run: () => {
-        const h = deps.globalActions();
-        if (!h) return false;
-        h.onToggleHelp();
         return true;
       },
     },
