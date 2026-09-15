@@ -23,8 +23,6 @@ import { scanFactsFromStatic } from './sessionIo';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress } from '../io/loadProgress';
 import { describeLoadError } from '../io/loadErrors';
-import { formatTelemetry } from '../io/loadTelemetry';
-import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
 import { LoadCancelledError } from '../io/loadFile';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
 import type { OpenStreamingDeps } from './openStreaming';
@@ -52,7 +50,9 @@ import type { LayerIdentityService } from './layerIdentityService';
 import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
 import type { CrsCoordinator } from './crsCoordinator';
 import type { ViewBookmarksService } from './viewBookmarks';
-import { startPreviewCloud, type PreviewCloudHandle } from './previewCloud';
+import { loadPreviewCloud, loadLoadDiagnostics } from '../lazyChunks';
+import type { PreviewCloudHandle, PreviewCloudViewer } from './previewCloud';
+import type { PreviewChunk } from '../io/loadLas';
 
 /**
  * The Layers chip names the FILE, so it shows the file total (the same count
@@ -128,7 +128,7 @@ export interface OpenScanDeps {
    */
   isTouchFirst?: () => boolean;
   /** Builds the stand-in a load shows while its chunks decode; tests inject a fake. */
-  startPreviewCloud?: typeof startPreviewCloud;
+  startPreviewCloud?: typeof import('./previewCloud').startPreviewCloud;
   /** Reported device memory in GB, or undefined when the browser withholds it. */
   deviceMemoryGB: () => number | undefined;
   /** Hide the empty-state placeholder once a scan renders. */
@@ -334,7 +334,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
           if (controller.signal.aborted) return;
           if (preview) return preview.append(chunk);
           deps.stage.hideEmptyState();
-          preview = (deps.startPreviewCloud ?? startPreviewCloud)(deps.getViewer(), chunk, deps.renderBudget);
+          preview = (deps.startPreviewCloud ?? deferredPreviewCloud)(deps.getViewer(), chunk, deps.renderBudget);
         },
       },
       {
@@ -365,6 +365,39 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   } finally {
     deps.setLoading(false);
   }
+}
+
+/**
+ * Start the stand-in through its lazy chunk. Chunks that arrive before the
+ * module lands are held and replayed in order; a dispose that lands first
+ * drops them and never builds the layer.
+ */
+export function deferredPreviewCloud(
+  viewer: PreviewCloudViewer,
+  first: PreviewChunk,
+  renderBudget: number,
+  load: typeof loadPreviewCloud = loadPreviewCloud,
+): PreviewCloudHandle {
+  let inner: PreviewCloudHandle | null = null;
+  let held: PreviewChunk[] | null = [first];
+  void load().then(({ startPreviewCloud }) => {
+    if (!held) return;
+    const [head, ...rest] = held;
+    held = null;
+    inner = startPreviewCloud(viewer, head, renderBudget);
+    for (const chunk of rest) inner.append(chunk);
+  }).catch(() => { held = null; });
+  return {
+    append(chunk) {
+      if (held) held.push(chunk);
+      else inner?.append(chunk);
+    },
+    dispose() {
+      held = null;
+      inner?.dispose();
+      inner = null;
+    },
+  };
 }
 
 /**
@@ -691,37 +724,11 @@ export async function attachStaticCloud(
 
   // Developer diagnostics — the merged telemetry feeds the debug console
   // block, the performance overlay, and (under ?benchmark=1) a benchmark.
+  // The formatters ride their own chunk; a normal session never loads them.
   if ((deps.debug || deps.benchmark) && result.telemetry) {
     const telemetry = { ...result.telemetry, gpuUploadMs, firstRenderMs };
-    if (deps.debug) {
-      console.log(
-        '%cOpenLiDARViewer — load telemetry',
-        'font-weight:600;color:#22dcff',
-        '\n' + formatTelemetry(telemetry),
-      );
-    }
-    deps.getDebugOverlay()?.setTelemetry(telemetry);
-    if (deps.benchmark) {
-      const text = formatBenchmarkResult(
-        buildBenchmarkResult(
-          result.cloud.name,
-          result.cloud.sourceFormat,
-          result.cloud.pointCount,
-          telemetry,
-          // Surface the header-declared point count when the source had
-          // one, so the benchmark output disambiguates "4M of 100M (4 %)"
-          // from "4M of 4M (100 %)" — a budget-capped load shouldn't
-          // read identically to a full one.
-          result.cloud.declaredPointCount,
-        ),
-      );
-      console.log(
-        '%cOpenLiDARViewer — benchmark',
-        'font-weight:600;color:#22dcff',
-        '\n' + text,
-      );
-      deps.getDebugOverlay()?.setBenchmark('benchmark\n' + text);
-    }
+    const cloud = result.cloud;
+    void loadLoadDiagnostics().then((m) => m.reportLoadDiagnostics(deps, cloud, telemetry));
   }
   deps.dropZone.setCancelHandler(null);
   deps.dropZone.setProgress(null);
