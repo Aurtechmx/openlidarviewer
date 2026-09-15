@@ -382,6 +382,8 @@ export async function executeHeavyLasBuild(
   const getOpfsRoot = env.getOpfsRoot ?? defaultGetOpfsRoot;
   const readStorage = env.readStorage ?? readStorageEstimate;
   const runIndex = env.runIndex ?? ((request) => new LocalOocIndexerClient().run(request));
+  const digestSource =
+    env.digestSource ?? ((f, bytes, sig) => digestOffMainThread(f, bytes, sig, openRange));
   const openRange = env.openRange ?? ((f: File): RangeSource => new LocalFileRangeSource(f));
   // One random id for this open, threaded through the preview id, the build's
   // store name and the reopen, so the whole lifecycle owns one private store.
@@ -430,7 +432,7 @@ export async function executeHeavyLasBuild(
   let digestMemo: string | null | undefined;
   const sourceDigest = async (): Promise<string | null> => {
     if (digestMemo === undefined) {
-      digestMemo = await sourceContentDigestFromRange(openRange(file), facts.fileBytes, signal);
+      digestMemo = await digestSource(file, facts.fileBytes, signal);
     }
     return digestMemo;
   };
@@ -777,4 +779,26 @@ async function defaultGetOpfsRoot(): Promise<OpfsDirHandle | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * The production digest: a worker of its own, so a multi-gigabyte hash never
+ * blocks the page. Without Workers, or when the worker fails before it
+ * answers, the in-process hasher runs instead; the result is the same digest.
+ */
+async function digestOffMainThread(
+  file: File,
+  fileBytes: number,
+  signal: AbortSignal,
+  openRange: (file: File) => RangeSource,
+): Promise<string | null> {
+  if (typeof Worker !== 'undefined') {
+    try {
+      return await new LocalOocIndexerClient().digest({ file, fileBytes, signal });
+    } catch {
+      /* fall through to the in-process hasher */
+    }
+  }
+  if (signal.aborted) return null;
+  return sourceContentDigestFromRange(openRange(file), fileBytes, signal);
 }

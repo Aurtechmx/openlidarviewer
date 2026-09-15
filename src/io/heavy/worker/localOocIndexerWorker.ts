@@ -7,7 +7,9 @@
  * opens the worker's own OPFS root, and runs `buildLocalOocStore` into a partial
  * store that is promoted on success and discarded on cancel or fault. Phase
  * strings and the final result are posted back; a `cancel` message aborts the
- * in-flight build.
+ * in-flight build. A `digest` message hashes the whole file here for the same
+ * reason: the read is bounded, but the hash walks every byte, and that walk
+ * does not belong on the main thread.
  *
  * OPFS sync access handles are worker-only, which is the whole reason the build
  * runs here rather than on the main thread. The build logic is
@@ -17,6 +19,7 @@
 /// <reference lib="webworker" />
 import { LocalFileRangeSource } from '../../range/LocalFileRangeSource';
 import { buildLocalOocStore } from '../localOocBuild';
+import { sourceContentDigestFromRange } from '../fileFingerprint';
 import type { OpfsDirHandle } from '../opfsSpillStore';
 import { handleOocWorkerMessage } from './localOocWorkerHandler';
 import type { LocalOocResponseMessage } from './localOocIndexerWorkerClient';
@@ -33,6 +36,8 @@ ctx.onmessage = (event: MessageEvent): void => {
     setController: (controller) => {
       inFlight = controller;
     },
+    runDigest: (message, signal) =>
+      sourceContentDigestFromRange(new LocalFileRangeSource(message.file), message.fileBytes, signal),
     runBuild: async (message, signal, onPhase) => {
       // The real handle satisfies the structural view the store is written
       // against; TypeScript's lib type is stricter about buffer variance.

@@ -34,20 +34,33 @@ export function isLocalOocRequestMessage(data: unknown): data is LocalOocRequest
   if (typeof data !== 'object' || data === null) return false;
   const message = data as { type?: unknown };
   if (message.type === 'cancel') return true;
+  if (message.type === 'digest') {
+    const digest = data as { file?: unknown; fileBytes?: unknown };
+    return isFileLike(digest.file) && typeof digest.fileBytes === 'number' && Number.isFinite(digest.fileBytes);
+  }
   if (message.type !== 'build') return false;
   const build = data as { file?: unknown; storeName?: unknown; options?: unknown };
   return (
     typeof build.storeName === 'string' &&
     typeof build.options === 'object' &&
     build.options !== null &&
-    build.file != null &&
-    typeof (build.file as { name?: unknown }).name === 'string' &&
-    typeof (build.file as { size?: unknown }).size === 'number'
+    isFileLike(build.file)
+  );
+}
+
+/** A `File` as it arrives across the boundary: a named, sized object. */
+function isFileLike(value: unknown): boolean {
+  return (
+    value != null &&
+    typeof (value as { name?: unknown }).name === 'string' &&
+    typeof (value as { size?: unknown }).size === 'number'
   );
 }
 
 /** The build message, narrowed. */
 type BuildMessage = Extract<LocalOocRequestMessage, { type: 'build' }>;
+/** The digest message, narrowed. */
+type DigestMessage = Extract<LocalOocRequestMessage, { type: 'digest' }>;
 
 /** What the worker gives the handler: how to reply, how to build, and where the
  *  in-flight cancel controller lives. */
@@ -58,6 +71,8 @@ export interface OocWorkerHost {
     signal: AbortSignal,
     onPhase: (phase: LocalOocPhase) => void,
   ): Promise<LocalOocBuildResult>;
+  /** Hash the file; null when it cannot be read whole or the signal aborts. */
+  runDigest(message: DigestMessage, signal: AbortSignal): Promise<string | null>;
   getController(): AbortController | null;
   setController(controller: AbortController | null): void;
 }
@@ -70,7 +85,8 @@ export interface OocWorkerMessageEvent {
 
 /**
  * Handle one message from the owner page. Ignores any message that is not a
- * well-formed owner request, and otherwise dispatches a cancel or runs a build.
+ * well-formed owner request, and otherwise dispatches a cancel, runs a digest,
+ * or runs a build.
  */
 export async function handleOocWorkerMessage(
   event: OocWorkerMessageEvent,
@@ -92,6 +108,11 @@ export async function handleOocWorkerMessage(
   const controller = new AbortController();
   host.setController(controller);
   try {
+    if (message.type === 'digest') {
+      const digest = await host.runDigest(message, controller.signal);
+      host.post({ type: 'digest', digest });
+      return;
+    }
     const result = await host.runBuild(message, controller.signal, (phase) =>
       host.post({ type: 'phase', phase }),
     );

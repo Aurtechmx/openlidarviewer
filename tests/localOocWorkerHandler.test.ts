@@ -25,16 +25,26 @@ function host(over: Partial<OocWorkerHost> = {}) {
     pointCount: 0,
     storeName: 's',
   }));
+  const runDigest = vi.fn<OocWorkerHost['runDigest']>(async () => 'abc123');
   const h: OocWorkerHost = {
     post,
     runBuild,
+    runDigest,
     getController: () => controller,
     setController: (c) => {
       controller = c;
     },
     ...over,
   };
-  return { h, post, runBuild, getController: () => controller };
+  return { h, post, runBuild, runDigest, getController: () => controller };
+}
+
+function digestMessage() {
+  return {
+    type: 'digest' as const,
+    file: { name: 'heavy.las', size: 1000 } as unknown as File,
+    fileBytes: 1000,
+  };
 }
 
 /** A minimal structurally-valid build message. */
@@ -94,5 +104,53 @@ describe('localOocWorkerHandler — origin and shape guards', () => {
     expect(isLocalOocRequestMessage({ type: 'build' })).toBe(false);
     expect(isLocalOocRequestMessage({ type: 'cancel' })).toBe(true);
     expect(isLocalOocRequestMessage(null)).toBe(false);
+  });
+});
+
+/**
+ * A digest request is the second thing the worker does for the heavy open. It
+ * shares the owner and shape guards with the build, and it takes the same
+ * cancel controller, so one Cancel stops whichever of the two is in flight.
+ * The hash itself is `sourceContentDigestFromRange`, tested on its own; here
+ * only the dispatch, the reply and the error path are pinned.
+ */
+describe('localOocWorkerHandler — digest requests', () => {
+  it('hashes for a well-formed owner digest message and posts the digest', async () => {
+    const { h, post, runDigest, runBuild } = host();
+    await handleOocWorkerMessage({ origin: '', data: digestMessage() }, h);
+    expect(runDigest).toHaveBeenCalledTimes(1);
+    expect(runBuild).not.toHaveBeenCalled();
+    expect(post).toHaveBeenCalledWith({ type: 'digest', digest: 'abc123' });
+  });
+
+  it('rejects a digest message without a finite byte count or a file', async () => {
+    const { h, post, runDigest } = host();
+    await handleOocWorkerMessage({ origin: '', data: { ...digestMessage(), fileBytes: Number.NaN } }, h);
+    await handleOocWorkerMessage({ origin: '', data: { type: 'digest', fileBytes: 10 } }, h);
+    expect(runDigest).not.toHaveBeenCalled();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'error', message: expect.stringContaining('malformed') }),
+    );
+  });
+
+  it('gives the digest a controller a cancel can abort, and clears it after', async () => {
+    let seen: AbortSignal | null = null;
+    const { h, getController } = host({
+      runDigest: async (_m, signal) => {
+        seen = signal;
+        expect(getController()).not.toBeNull();
+        return null;
+      },
+    });
+    await handleOocWorkerMessage({ origin: '', data: digestMessage() }, h);
+    expect(seen).not.toBeNull();
+    expect(getController()).toBeNull();
+  });
+
+  it('posts an error when the hasher throws', async () => {
+    const { h, post } = host({ runDigest: async () => { throw new Error('read failed'); } });
+    await handleOocWorkerMessage({ origin: '', data: digestMessage() }, h);
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: 'error', message: 'read failed' }));
   });
 });

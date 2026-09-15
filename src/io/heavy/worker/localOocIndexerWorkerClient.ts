@@ -46,13 +46,23 @@ export interface LocalOocIndexOptions {
 /** main → worker. */
 export type LocalOocRequestMessage =
   | { readonly type: 'build'; readonly file: File; readonly storeName: string; readonly options: LocalOocIndexOptions }
+  | { readonly type: 'digest'; readonly file: File; readonly fileBytes: number }
   | { readonly type: 'cancel' };
 
 /** worker → main. */
 export type LocalOocResponseMessage =
   | { readonly type: 'phase'; readonly phase: LocalOocPhase }
   | { readonly type: 'done'; readonly result: LocalOocBuildResult }
+  | { readonly type: 'digest'; readonly digest: string | null }
   | { readonly type: 'error'; readonly message: string; readonly name?: string };
+
+/** What the caller asks the worker to hash. */
+export interface LocalOocDigestRequest {
+  readonly file: File;
+  /** The byte count the header declared; a shorter file digests to null. */
+  readonly fileBytes: number;
+  readonly signal?: AbortSignal;
+}
 
 /**
  * Runs one out-of-core index build in a dedicated worker.
@@ -62,6 +72,50 @@ export type LocalOocResponseMessage =
  * and its OPFS locks promptly rather than lingering for the session.
  */
 export class LocalOocIndexerClient {
+  /**
+   * Hash the whole file in a worker of its own, so a multi-gigabyte digest never
+   * runs on the main thread. Resolves null on abort, as the in-process hasher
+   * does; rejects when the worker itself fails, so the caller can fall back.
+   */
+  digest(request: LocalOocDigestRequest): Promise<string | null> {
+    if (request.signal?.aborted) return Promise.resolve(null);
+    const worker = new Worker(new URL('./localOocIndexerWorker.ts', import.meta.url), {
+      type: 'module',
+    });
+    return new Promise<string | null>((resolve, reject) => {
+      const cleanup = (): void => {
+        request.signal?.removeEventListener('abort', onAbort);
+        worker.terminate();
+      };
+      const onAbort = (): void => {
+        cleanup();
+        resolve(null);
+      };
+      request.signal?.addEventListener('abort', onAbort, { once: true });
+      worker.onmessage = (event: MessageEvent<LocalOocResponseMessage>): void => {
+        const message = event.data;
+        if (message.type === 'digest') {
+          cleanup();
+          resolve(message.digest);
+          return;
+        }
+        if (message.type === 'error') {
+          cleanup();
+          reject(new Error(message.message));
+        }
+      };
+      worker.onerror = (event: ErrorEvent): void => {
+        cleanup();
+        reject(new Error(event.message || 'out-of-core indexer worker failed'));
+      };
+      worker.postMessage({
+        type: 'digest',
+        file: request.file,
+        fileBytes: request.fileBytes,
+      } satisfies LocalOocRequestMessage);
+    });
+  }
+
   run(request: LocalOocIndexRequest): Promise<LocalOocBuildResult> {
     // If cancellation already happened before run(), no 'abort' event will ever
     // fire, so a plain listener would let the worker index gigabytes for a build
@@ -99,6 +153,7 @@ export class LocalOocIndexerClient {
           resolve(message.result);
           return;
         }
+        if (message.type !== 'error') return; // a digest reply belongs to another request
         cleanup();
         reject(Object.assign(new Error(message.message), message.name ? { name: message.name } : {}));
       };

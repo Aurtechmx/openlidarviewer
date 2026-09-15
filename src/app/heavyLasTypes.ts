@@ -82,6 +82,12 @@ export interface HeavyLasExecutorEnv {
   readStorage: StorageEstimateReader;
   /** Runs the index build (a worker in the browser). */
   runIndex(request: LocalOocIndexRequest): Promise<LocalOocBuildResult>;
+  /**
+   * The whole-file SHA-256, or null when the file cannot be read whole or the
+   * signal aborts. Production hashes in a worker and falls back to the
+   * in-process hasher when no worker can be made.
+   */
+  digestSource?(file: File, fileBytes: number, signal: AbortSignal): Promise<string | null>;
 }
 
 /** The full injectable env; a test provides all of it, production none. */
