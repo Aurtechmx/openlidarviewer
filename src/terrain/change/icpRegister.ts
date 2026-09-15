@@ -20,12 +20,15 @@
  *     aligner that "looks locked" but is confidently wrong is the failure mode
  *     to avoid; the residual is the falsifiable signal that prevents it.
  *
- * Pure: no three.js, no DOM. Nearest-neighbour is brute-force O(N·M) per
- * iteration, so callers pass DOWNSAMPLED key points (a few thousand), not full
- * clouds — the same way real ICP runs on a sampled subset.
+ * Pure: no three.js, no DOM. Nearest-neighbour runs over a grid index built
+ * once per fit (`pointIndex.ts`) and answers exactly what a scan over every
+ * target would: the smallest distance, lowest index on a tie. Callers still
+ * pass DOWNSAMPLED key points (a few thousand), the way real ICP runs on a
+ * sampled subset.
  */
 
 import { NeumaierSum } from '../../process/numerics';
+import { buildPointIndex, nearestPoint, nearestState } from './pointIndex';
 
 /** A point as [x, y, z]. World up is +Z (the yaw axis). */
 export type Vec3 = readonly [number, number, number];
@@ -114,14 +117,6 @@ function centroid(pts: readonly Vec3[]): Vec3 {
   return [x / n, y / n, z / n];
 }
 
-/** Centroid over a subset of `pts` given by `idx` (used by the trimmed solve). */
-function centroidIdx(pts: readonly Vec3[], idx: readonly number[]): Vec3 {
-  let x = 0, y = 0, z = 0;
-  for (const i of idx) { x += pts[i][0]; y += pts[i][1]; z += pts[i][2]; }
-  const n = idx.length || 1;
-  return [x / n, y / n, z / n];
-}
-
 /** Median of a number list (deterministic; even length averages the middle two). */
 function median(vals: number[]): number {
   if (vals.length === 0) return 0;
@@ -141,19 +136,6 @@ function medianPoint(pts: readonly Vec3[]): Vec3 {
   const zs: number[] = new Array(pts.length);
   for (let i = 0; i < pts.length; i++) { xs[i] = pts[i][0]; ys[i] = pts[i][1]; zs[i] = pts[i][2]; }
   return [median(xs), median(ys), median(zs)];
-}
-
-/** Nearest target point to `p` (brute force). Returns its index + squared dist. */
-function nearest(p: Vec3, target: readonly Vec3[]): { index: number; d2: number } {
-  let best = -1;
-  let bestD2 = Infinity;
-  for (let i = 0; i < target.length; i++) {
-    const t = target[i];
-    const dx = p[0] - t[0], dy = p[1] - t[1], dz = p[2] - t[2];
-    const d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 < bestD2) { bestD2 = d2; best = i; }
-  }
-  return { index: best, d2: bestD2 };
 }
 
 /**
@@ -205,46 +187,71 @@ export function icpRegister(
   let iter = 0;
   let converged = false;
 
+  // The target is fixed for the whole fit: index it once. The per-iteration
+  // buffers are allocated once too and rewritten each pass.
+  const index = buildPointIndex(target);
+  const n = source.length;
+  const mx = new Float64Array(n), my = new Float64Array(n), mz = new Float64Array(n);
+  const corr = new Int32Array(n);
+  const d2s = new Float64Array(n);
+  const order = new Int32Array(n);
+  const moveSource = (): void => {
+    const c = Math.cos(yaw), sn = Math.sin(yaw);
+    const [tx, ty, tz] = t;
+    for (let i = 0; i < n; i++) {
+      const p = source[i];
+      mx[i] = c * p[0] - sn * p[1] + tx;
+      my[i] = sn * p[0] + c * p[1] + ty;
+      mz[i] = p[2] + tz;
+    }
+  };
+
   for (; iter < maxIterations; iter++) {
     // 1. Transform source by the current estimate and find correspondences,
     //    keeping each squared residual so the trim can rank them.
-    const moved: Vec3[] = source.map((p) => applyIcp({ yawRad: yaw, translation: t }, p));
-    const corr: Vec3[] = new Array(moved.length);
-    const d2s: number[] = new Array(moved.length);
-    for (let i = 0; i < moved.length; i++) {
-      const { index, d2 } = nearest(moved[i], target);
-      corr[i] = target[index];
-      d2s[i] = d2;
+    moveSource();
+    for (let i = 0; i < n; i++) {
+      corr[i] = nearestPoint(index, mx[i], my[i], mz[i]);
+      d2s[i] = nearestState.d2;
     }
 
     // 2. Select the correspondences the solve is allowed to use. Without
-    //    trimming that is all of them; with trimming, the best-residual
-    //    `trimFraction` — the outliers (largest residuals) are dropped so they
+    //    trimming that is all of them, in index order; with trimming, the
+    //    best-residual `trimFraction`, so the outliers (largest residuals)
     //    cannot drag the least-squares. Ties break by index for determinism.
-    const order: number[] = d2s.map((_, i) => i);
+    for (let i = 0; i < n; i++) order[i] = i;
     if (trimming) order.sort((a, b) => (d2s[a] - d2s[b]) || (a - b));
-    const kept = trimming ? order.slice(0, keepCount(order.length)) : order;
+    const keep = keepCount(n);
 
     // RMS over the KEPT set — the objective being minimised (see rmsResidual).
     // Compensated: the residual sum drives the convergence test, so drift here
     // would show up as a false converge/refuse on a large correspondence set.
     const sumD2 = new NeumaierSum();
-    for (const i of kept) sumD2.add(d2s[i]);
-    rms = Math.sqrt(sumD2.total / kept.length);
+    for (let k = 0; k < keep; k++) sumD2.add(d2s[order[k]]);
+    rms = Math.sqrt(sumD2.total / keep);
 
     // 3. Best incremental (yaw, translation) mapping the kept `moved` onto
     //    `corr`. Centre both sets; yaw is the closed-form 2-D rotation
     //    least-squares (Umeyama in the ground plane); translation closes the
     //    centroids in 3-D.
-    const cm = centroidIdx(moved, kept);
-    const cc = centroidIdx(corr, kept);
+    let cmx = 0, cmy = 0, cmz = 0, ccx = 0, ccy = 0, ccz = 0;
+    for (let k = 0; k < keep; k++) {
+      const i = order[k];
+      cmx += mx[i]; cmy += my[i]; cmz += mz[i];
+      const q = target[corr[i]];
+      ccx += q[0]; ccy += q[1]; ccz += q[2];
+    }
+    const cm: Vec3 = [cmx / keep, cmy / keep, cmz / keep];
+    const cc: Vec3 = [ccx / keep, ccy / keep, ccz / keep];
     let sxy = 0; // Σ (mx·cy − my·cx)  → sin term
     let cxy = 0; // Σ (mx·cx + my·cy)  → cos term
-    for (const i of kept) {
-      const mx = moved[i][0] - cm[0], my = moved[i][1] - cm[1];
-      const cx = corr[i][0] - cc[0], cy = corr[i][1] - cc[1];
-      sxy += mx * cy - my * cx;
-      cxy += mx * cx + my * cy;
+    for (let k = 0; k < keep; k++) {
+      const i = order[k];
+      const q = target[corr[i]];
+      const dmx = mx[i] - cm[0], dmy = my[i] - cm[1];
+      const cx = q[0] - cc[0], cy = q[1] - cc[1];
+      sxy += dmx * cy - dmy * cx;
+      cxy += dmx * cx + dmy * cy;
     }
     const dYaw = Math.atan2(sxy, cxy);
     // Apply the incremental rotation about `cm`, then close centroids.
@@ -277,26 +284,27 @@ export function icpRegister(
   // by outliers the solve deliberately excluded.
   let inliers = 0;
   const maxD2 = maxResidual * maxResidual;
-  const finalD2: number[] = new Array(source.length);
-  for (let i = 0; i < source.length; i++) {
-    const m = applyIcp({ yawRad: yaw, translation: t }, source[i]);
-    const { d2 } = nearest(m, target);
+  moveSource();
+  const finalD2 = d2s;
+  for (let i = 0; i < n; i++) {
+    nearestPoint(index, mx[i], my[i], mz[i]);
+    const d2 = nearestState.d2;
     finalD2[i] = d2;
     if (d2 <= maxD2) inliers++;
   }
-  const inlierFraction = inliers / source.length;
+  const inlierFraction = inliers / n;
 
   let finalRms: number;
   if (trimming) {
-    const sorted = finalD2.slice().sort((a, b) => a - b);
+    const sorted = finalD2.slice().sort();
     const keep = keepCount(sorted.length);
     const s = new NeumaierSum();
     for (let i = 0; i < keep; i++) s.add(sorted[i]);
     finalRms = Math.sqrt(s.total / keep);
   } else {
     const s = new NeumaierSum();
-    for (const d2 of finalD2) s.add(d2);
-    finalRms = Math.sqrt(s.total / finalD2.length);
+    for (let i = 0; i < n; i++) s.add(finalD2[i]);
+    finalRms = Math.sqrt(s.total / n);
   }
 
   // Normalise yaw to (−π, π].
