@@ -23,6 +23,10 @@ import type { ProductId, ScanFacts } from '../process/ProcessPlan';
 import type { AuthorizationCheck } from '../process/ProcessService';
 import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { AnalysePanel } from '../ui/AnalysePanel';
+// Shell-resident already (ExportPanel renders Export Health, main builds the
+// story inputs), so reading the Dataset Story here adds no chunk weight.
+import { buildScanStory, type ScanStoryInputs } from '../intelligence/scanStory';
+import { renderDatasetStoryCard } from '../ui/scanStoryViews';
 import type { CrsService } from '../geo/CrsService';
 
 /**
@@ -238,6 +242,14 @@ export interface TerrainAnalysisRunnerDeps {
    * caller without a studio falls back to the grid's own coverage flag.
    */
   getScanFacts?: () => ScanFacts | null;
+  /**
+   * The canonical story inputs for the active scan, or nothing when the host
+   * does not offer them. The runner reduces them with `buildScanStory` and
+   * hands the card to the panel, so the Dataset Story is reachable beside the
+   * work instead of only through a command-palette modal. The runner never
+   * builds or reinterprets an input: it passes what the host gathered.
+   */
+  buildStoryInputs?: () => ScanStoryInputs;
 }
 
 export interface TerrainAnalysisRunner {
@@ -304,7 +316,24 @@ export interface TerrainAnalysisRunner {
 export function createTerrainAnalysisRunner(
   deps: TerrainAnalysisRunnerDeps,
 ): TerrainAnalysisRunner {
-  const { getViewer, getAnalysePanel, getActiveId, crsService, onResult, getScanFacts } = deps;
+  const {
+    getViewer, getAnalysePanel, getActiveId, crsService, onResult, getScanFacts, buildStoryInputs,
+  } = deps;
+
+  /**
+   * Refresh the panel's Dataset Story from the current inputs. Called when a
+   * scan is gathered for a run and again once the result lands, because the
+   * analysis is itself one of the story's inputs. Guarded: a story is a summary,
+   * and a failure to summarise must never cost the user their analysis.
+   */
+  function refreshDatasetStory(panel: AnalysePanel): void {
+    if (!buildStoryInputs) return;
+    try {
+      panel.setDatasetStory(renderDatasetStoryCard(buildScanStory(buildStoryInputs())));
+    } catch (err) {
+      console.warn('OpenLiDARViewer: Dataset Story not rendered.', err);
+    }
+  }
 
   // Monotonic token for terrain-analysis runs. `run` is async (lazy chunk
   // import + a paint yield), so rapid interval clicks can overlap and resolve
@@ -580,6 +609,9 @@ export function createTerrainAnalysisRunner(
     // Remember the frame this scan was gathered in — the map-sheet export reads
     // it to place annotation markers (see getLastSourceUpAxis).
     if (gathered.sourceUpAxis) lastSourceUpAxis = gathered.sourceUpAxis;
+    // A scan is open and gathers: the story can be read now, before any
+    // analysis, and is refreshed once the result lands.
+    refreshDatasetStory(analysePanel);
     // Claim a token + snapshot the dataset identity for this run. After every
     // await we re-check these: a newer run (token mismatch), a different/closed
     // scan (activeId changed), or a hidden panel means this result is stale and
@@ -695,6 +727,7 @@ export function createTerrainAnalysisRunner(
       // whatever was live at land time is how a superseded frame got recorded as
       // current in the first place.
       analysePanel.update(result, { targetId: runDatasetId, crsRevision: runCrsRevision });
+      refreshDatasetStory(analysePanel);
       if (coreSource === 'restored') {
         analysePanel.setStatus(
           'Terrain core restored from the on-device cache. The analysed points, the classification, the parameters and the method versions all matched.',

@@ -243,11 +243,11 @@
   font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px;
   border: 0.5px solid color-mix(in srgb, currentColor 35%, transparent);
 }
-.olv-story-assess.is-good { color: var(--ok, #2e9e5b); }
-.olv-story-assess.is-preview,
-.olv-story-assess.is-limited { color: var(--warn, #b8860b); }
-.olv-story-assess.is-blocked { color: var(--bad, #c0392b); }
-.olv-story-assess.is-unknown { color: var(--muted, #8a8f98); }
+.olv-story-assess.is-good { color: var(--state-measured); }
+.olv-story-assess.is-preview { color: var(--state-preview); }
+.olv-story-assess.is-limited { color: var(--state-review); }
+.olv-story-assess.is-blocked { color: var(--state-blocked); }
+.olv-story-assess.is-unknown { color: var(--state-info); }
 .olv-story-headline { font-size: var(--text-sm); opacity: 0.92; }
 .olv-story-row { display: grid; grid-template-columns: 116px 1fr; gap: 8px; align-items: baseline; }
 .olv-story-k { color: var(--muted, #8a8f98); font-size: var(--text-xs); }
@@ -263,15 +263,17 @@
   border: 0.5px solid color-mix(in srgb, currentColor 35%, transparent);
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
-.olv-health-verdict.is-ready { color: var(--ok, #2e9e5b); }
-.olv-health-verdict.is-caution { color: var(--warn, #b8860b); }
-.olv-health-verdict.is-blocked { color: var(--bad, #c0392b); }
+.olv-health-verdict.is-ready { color: var(--state-measured); }
+.olv-health-verdict.is-caution { color: var(--state-review); }
+.olv-health-verdict.is-blocked { color: var(--state-blocked); }
 .olv-health-rows { display: flex; flex-direction: column; gap: 4px; }
-.olv-health-row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: baseline; }
+/* Leading `auto` track holds the state glyph, so the tier reads without colour. */
+.olv-health-row { display: grid; grid-template-columns: auto 140px 1fr; gap: 8px; align-items: baseline; }
 .olv-health-row .olv-health-k { color: var(--muted, #8a8f98); }
-.olv-health-row.is-caution .olv-health-v { color: var(--warn, #b8860b); }
-.olv-health-row.is-blocked .olv-health-v { color: var(--bad, #c0392b); }
-.olv-health-row.is-good .olv-health-v { color: var(--ok, #2e9e5b); }
+.olv-health-row.is-caution .olv-health-v { color: var(--state-review); }
+.olv-health-row.is-blocked .olv-health-v { color: var(--state-blocked); }
+.olv-health-row.is-good .olv-health-v { color: var(--state-measured); }
+.olv-health-row.is-info .olv-health-v { color: var(--state-info); }
 .olv-health-blockers-title { font-weight: 600; font-size: var(--text-xs); margin-top: 2px; }
 .olv-health-blockers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .olv-health-blockers li { font-size: var(--text-xs); opacity: 0.9; }

@@ -10,6 +10,12 @@
  */
 
 import { el } from './dom';
+import {
+  renderStateGlyph,
+  stateFromHealthTier,
+  stateFromFitnessTier,
+  type SciState,
+} from './stateChip';
 import type { ScanStory, ExportHealth, HealthVerdict } from '../intelligence/scanStory';
 
 const join = (xs: readonly string[]): string => (xs.length > 0 ? xs.join(' · ') : '—');
@@ -33,7 +39,10 @@ export function renderDatasetStoryCard(story: ScanStory): HTMLElement {
   card.append(
     el('div', { className: 'olv-story-head' }, [
       el('span', { className: 'olv-story-title', text: 'Dataset Story' }),
-      el('span', { className: `olv-story-assess ${tierClass}`, text: story.assessment }),
+      el('span', { className: `olv-story-assess ${tierClass}` }, [
+        renderStateGlyph(stateFromFitnessTier(story.assessment), `Dataset fitness ${story.assessment}`),
+        el('span', { text: story.assessment }),
+      ]),
     ]),
     el('div', { className: 'olv-story-headline', text: story.headline }),
     row('Primary limiter', story.primaryLimiter),
@@ -60,6 +69,20 @@ const VERDICT_LABEL: Readonly<Record<HealthVerdict, string>> = {
   blocked: 'Export blocked',
 };
 
+/** The verdict in the shared state vocabulary, so one glyph names both. */
+const VERDICT_STATE: Readonly<Record<HealthVerdict, SciState>> = {
+  ready: 'measured',
+  caution: 'review',
+  blocked: 'blocked',
+};
+
+/** The one-word form of the verdict, carried by the line itself. */
+const VERDICT_WORD: Readonly<Record<HealthVerdict, string>> = {
+  ready: 'Ready',
+  caution: 'Review',
+  blocked: 'Blocked',
+};
+
 /**
  * The Export Health summary — the content of the pre-export confirmation. The
  * host adds the Export / Cancel controls around it.
@@ -67,17 +90,24 @@ const VERDICT_LABEL: Readonly<Record<HealthVerdict, string>> = {
 export function renderExportHealthPanel(health: ExportHealth): HTMLElement {
   const panel = el('div', { className: 'olv-health' });
 
+  // The verdict states the condition in the shared vocabulary and, when there
+  // is something to act on, how many lines are waiting: "Review · 2 conditions"
+  // rather than a colour the reader has to decode.
+  const state = VERDICT_STATE[health.verdict];
+  const n = health.blockers.length;
+  const conditions = n > 0 ? ` · ${n} condition${n === 1 ? '' : 's'}` : '';
   panel.append(
-    el('div', {
-      className: `olv-health-verdict is-${health.verdict}`,
-      text: VERDICT_LABEL[health.verdict],
-    }),
+    el('div', { className: `olv-health-verdict is-${health.verdict}` }, [
+      renderStateGlyph(state, VERDICT_LABEL[health.verdict]),
+      el('span', { text: ` ${VERDICT_WORD[health.verdict]}${conditions} · ${VERDICT_LABEL[health.verdict]}` }),
+    ]),
   );
 
   const rows = el('div', { className: 'olv-health-rows' });
   for (const r of health.rows) {
     rows.append(
       el('div', { className: `olv-health-row is-${r.tier}` }, [
+        renderStateGlyph(stateFromHealthTier(r.tier), r.label),
         el('span', { className: 'olv-health-k', text: r.label }),
         el('span', { className: 'olv-health-v', text: r.value }),
       ]),

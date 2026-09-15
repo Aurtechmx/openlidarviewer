@@ -128,6 +128,7 @@ import { terrainAssessment, type SupportingMetric } from '../terrain/contour/ter
 import { recommendedWorkflows } from '../terrain/contour/recommendedWorkflow';
 import { terrainProducts } from '../terrain/contour/terrainProducts';
 import type { FitnessTier, StoryProduct } from '../intelligence/scanStory';
+import { collapsibleSection } from './collapsibleSection';
 import { explainLimitations } from '../terrain/contour/whyNotReasons';
 import {
   renderTerrainProducts,
@@ -452,6 +453,8 @@ export class AnalysePanel {
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
   private readonly _contourLayerControls: HTMLElement;
   /** Mount point for the generic derived-layers list (built by the runner). */
+  private readonly _datasetStoryHost: HTMLElement;
+  private _datasetStoryOpen = false;
   private readonly _derivedLayersHost: HTMLElement;
   private readonly _contourDeliverable: HTMLElement;
   /** Monotonic token so a slow lazy launcher load can't mount a stale result. */
@@ -619,6 +622,7 @@ export class AnalysePanel {
 
     this._contourLauncher = el('div', { className: 'olv-analyse-contour-launcher' });
     this._contourLayerControls = el('div', { className: 'olv-analyse-layer-controls olv-hidden' });
+    this._datasetStoryHost = el('div', { className: 'olv-analyse-story' });
     this._derivedLayersHost = el('div', { className: 'olv-analyse-derived-layers' });
     this._contourDeliverable = el('div', {
       className: 'olv-analyse-contour-deliverable olv-hidden',
@@ -683,6 +687,7 @@ export class AnalysePanel {
     this.element.append(
       head,
       subtitle,
+      this._datasetStoryHost,
       this._runBtn,
       this._status,
       this._rangeLauncher,
@@ -1013,6 +1018,30 @@ export class AnalysePanel {
    */
   setDerivedLayersList(element: HTMLElement): void {
     this._derivedLayersHost.replaceChildren(element);
+  }
+
+  /**
+   * Mount (or clear) the Dataset Story card, built by the host from the
+   * canonical story inputs. The card is a collapsible section at the top of the
+   * panel rather than a modal, so the fitness read stays available beside the
+   * work instead of interrupting it; it starts collapsed so a panel the user
+   * opened to run an analysis still leads with the run control.
+   *
+   * Idempotent: a second call replaces the mounted card, so a re-render cannot
+   * stack two stories. Passing null removes the section entirely, because an
+   * empty story frame would imply facts that are not there.
+   */
+  setDatasetStory(element: HTMLElement | null): void {
+    if (!element) {
+      this._datasetStoryHost.replaceChildren();
+      return;
+    }
+    const open = this._datasetStoryOpen;
+    const section = collapsibleSection('Dataset Story', element, { open });
+    // Remember the disclosure across re-renders, so a story that refreshes on a
+    // new run does not close itself under a reader who had opened it.
+    section.addEventListener('toggle', () => { this._datasetStoryOpen = section.open; });
+    this._datasetStoryHost.replaceChildren(section);
   }
 
   setContourLayerControls(controls: ContourLayerControls | null): void {
