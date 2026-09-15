@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "label": "stockpile-area-grid-baseline",
+  "generatedAt": "2026-09-15",
+  "revision": "feat/stockpile-area-grid-live (PR #953) plus the benchmark",
+  "test": "tests/benchmark/stockpileAreaGridBaseline.test.ts",
+  "runCommand": "STOCKPILE_BENCH=1 npx vitest run tests/benchmark/stockpileAreaGridBaseline.test.ts",
+  "environment": {
+    "os": "macOS 26.5.2 (25F84)",
+    "cpu": "Apple M3 Max",
+    "logicalCores": 14,
+    "memoryBytes": 38654705664,
+    "nodeVersion": "v22.23.2"
+  },
+  "workload": "cone R 40 m, H 12 m (analytic 20,106.2 m\u00b3) on a 100 m square apron at z = 0, points uniform over the apron; constant base at z = 0; 3 runs, best reported",
+  "rows": [
+    {
+      "points": 100000,
+      "gridMs": 29,
+      "gridCellM": 0.79,
+      "gridM3": 20076.1,
+      "gridVsAnalyticPct": -0.15,
+      "pointSampleMs": 10,
+      "pointSampleM3": 20205.2,
+      "pointSampleVsAnalyticPct": 0.49,
+      "presenterPathMs": 26
+    },
+    {
+      "points": 500000,
+      "gridMs": 137,
+      "gridCellM": 0.35,
+      "gridM3": 20077.8,
+      "gridVsAnalyticPct": -0.14,
+      "pointSampleMs": 44,
+      "pointSampleM3": 20106.3,
+      "pointSampleVsAnalyticPct": 0.0,
+      "presenterPathMs": 156
+    },
+    {
+      "points": 2000000,
+      "gridMs": 1020,
+      "gridCellM": 0.18,
+      "gridM3": 20070.3,
+      "gridVsAnalyticPct": -0.18,
+      "pointSampleMs": 154,
+      "pointSampleM3": 20097.1,
+      "pointSampleVsAnalyticPct": -0.05,
+      "presenterPathMs": 1187
+    }
+  ],
+  "reading": "Under uniform density both estimators sit within 0.5% of the analytic cone; the grid's steady -0.15% is the median-per-cell surface on a curved peak at the derived cell size, a resolution term the result reports through cellSizeM. The grid costs 3 to 7 times the point-sample pass and stays near one second at 2 M selected points, which is the same order as the lasso walk that precedes it. The density-invariance property is pinned by tests, not by this uniform workload."
+}
