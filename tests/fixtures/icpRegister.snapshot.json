@@ -1,0 +1,137 @@
+{
+  "identity": {
+    "converged": true,
+    "refused": false,
+    "iterations": 2,
+    "rmsResidual": 0,
+    "yawRad": 0,
+    "translation": [
+      0,
+      0,
+      0
+    ],
+    "degenerate": false,
+    "inlierFraction": 1,
+    "trimFraction": 1
+  },
+  "translation": {
+    "converged": true,
+    "refused": false,
+    "iterations": 2,
+    "rmsResidual": 3.823639903298438e-15,
+    "yawRad": -2.5259741407039145e-18,
+    "translation": [
+      4.9999999999999964,
+      -3,
+      2
+    ],
+    "degenerate": false,
+    "inlierFraction": 1,
+    "trimFraction": 1
+  },
+  "yaw+translation": {
+    "converged": true,
+    "refused": false,
+    "iterations": 4,
+    "rmsResidual": 0,
+    "yawRad": 0.05,
+    "translation": [
+      2,
+      1,
+      -0.5
+    ],
+    "degenerate": false,
+    "inlierFraction": 1,
+    "trimFraction": 1
+  },
+  "trimmed blunders": {
+    "converged": true,
+    "refused": false,
+    "iterations": 12,
+    "rmsResidual": 1.3597399555105182e-16,
+    "yawRad": 0.019999999999999993,
+    "translation": [
+      1,
+      1,
+      0
+    ],
+    "degenerate": false,
+    "inlierFraction": 1,
+    "trimFraction": 0.7
+  },
+  "partial overlap": {
+    "converged": true,
+    "refused": false,
+    "iterations": 6,
+    "rmsResidual": 2.1034714156675487,
+    "yawRad": 0.007489028474701071,
+    "translation": [
+      0.4278549624889081,
+      0.7537761975591266,
+      0.0494733692774183
+    ],
+    "degenerate": false,
+    "inlierFraction": 0.984,
+    "trimFraction": 1
+  },
+  "lattice ties": {
+    "converged": true,
+    "refused": false,
+    "iterations": 2,
+    "rmsResidual": 1.2123970931222453e-14,
+    "yawRad": -4.848660998928835e-18,
+    "translation": [
+      -0.8999999999999932,
+      -0.9000000000000092,
+      0
+    ],
+    "degenerate": false,
+    "inlierFraction": 1,
+    "trimFraction": 1
+  },
+  "lattice ties trimmed": {
+    "converged": true,
+    "refused": false,
+    "iterations": 3,
+    "rmsResidual": 1.5403695284126506e-15,
+    "yawRad": -0.03,
+    "translation": [
+      -1.2114582405797831,
+      -0.363825413256599,
+      -0.10000000000000009
+    ],
+    "degenerate": false,
+    "inlierFraction": 1,
+    "trimFraction": 0.8
+  },
+  "degenerate": {
+    "converged": false,
+    "refused": true,
+    "iterations": 0,
+    "rmsResidual": "Infinity",
+    "yawRad": 0,
+    "translation": [
+      0,
+      0,
+      0
+    ],
+    "degenerate": true,
+    "inlierFraction": 0,
+    "trimFraction": 1
+  },
+  "few iterations": {
+    "converged": false,
+    "refused": false,
+    "iterations": 3,
+    "rmsResidual": 5.3136879187829405e-14,
+    "yawRad": 0.10000000000000002,
+    "translation": [
+      3.9999999999999716,
+      4.000000000000043,
+      1.0000000000000107
+    ],
+    "degenerate": false,
+    "inlierFraction": 1,
+    "trimFraction": 1
+  }
+}
