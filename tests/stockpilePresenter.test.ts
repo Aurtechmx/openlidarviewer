@@ -189,15 +189,19 @@ function prism(h: number, stepX: number, stepY: number, xFrom = 0, xTo = 20): nu
   return out;
 }
 const RECT: Vec3[] = [[0, 0, 0], [20, 0, 0], [20, 10, 0], [0, 10, 0]];
-const complete = { sourceComplete: true, sampled: false };
+const complete = { sourceComplete: true, sampled: false, streaming: false };
 
 describe('stockpileAuthority', () => {
   test('measured coverage on a complete, unsampled source is measured', () => {
     expect(stockpileAuthority('measured', complete)).toEqual({ authority: 'measured', reason: '' });
   });
-  test('an unsettled source caps a measured coverage at preview', () => {
+  test('a streaming source short of full residency caps a measured coverage at preview', () => {
+    expect(stockpileAuthority('measured', { sourceComplete: false, sampled: false, streaming: true }))
+      .toEqual({ authority: 'preview', reason: 'source is streaming and not fully resident' });
+  });
+  test('an incomplete source with no streaming contribution says so plainly', () => {
     expect(stockpileAuthority('measured', { sourceComplete: false, sampled: false }))
-      .toEqual({ authority: 'preview', reason: 'source still refining' });
+      .toEqual({ authority: 'preview', reason: 'source not proven complete' });
   });
   test('a sampled source caps a measured coverage at preview', () => {
     expect(stockpileAuthority('measured', { sourceComplete: true, sampled: true }))
@@ -274,9 +278,13 @@ describe('stockpileAreaGridToastLine', () => {
   test('a preview figure never appears without PREVIEW and its reason', () => {
     const pts = Float32Array.from(prism(3, 0.5, 0.5));
     const line = stockpileAreaGridToastLine(
-      presentStockpileAreaGrid(RECT, pts, base, { sourceComplete: false, sampled: false }),
+      presentStockpileAreaGrid(RECT, pts, base, {
+        sourceComplete: false,
+        sampled: false,
+        streaming: true,
+      }),
     );
-    expect(line).toMatch(/600 m³ · PREVIEW \(source still refining\)/);
+    expect(line).toMatch(/600 m³ · PREVIEW \(source is streaming and not fully resident\)/);
   });
   test('a withheld result shows no number', () => {
     const half = Float32Array.from(prism(3, 0.5, 0.5, 0, 9));
@@ -301,12 +309,35 @@ describe('stockpileToastSuffix (area-grid)', () => {
   });
   test('a reduced source or a strided walk reads PREVIEW (display sample)', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
-    expect(stockpileToastSuffix(RECT, pts, 1, true)).toMatch(/PREVIEW \(display sample\)/);
-    expect(stockpileToastSuffix(RECT, pts, 1, false, true, 1, null, true)).toMatch(/PREVIEW \(display sample\)/);
+    expect(stockpileToastSuffix(RECT, pts, 1, { sourceReduced: true })).toMatch(/PREVIEW \(display sample\)/);
+    expect(stockpileToastSuffix(RECT, pts, 1, { densityUnitKnown: true, vert: 1, walkSampled: true }))
+      .toMatch(/PREVIEW \(display sample\)/);
   });
-  test('an unsettled source reads PREVIEW (source still refining)', () => {
+  test('a settled view over a partially resident streaming source is never MEASURED', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
-    expect(stockpileToastSuffix(RECT, pts, 1, false, true, 1, { phase: 'loading', fractionResident: 0.4 } as never)).toMatch(/PREVIEW \(source still refining\)/);
+    const suffix = stockpileToastSuffix(RECT, pts, 1, {
+      streamingContributed: true,
+      streamingCoverage: { knownNodeCount: 100, residentNodeCount: 5 },
+    });
+    expect(suffix).toMatch(/PREVIEW \(source is streaming and not fully resident\)/);
+    expect(suffix).not.toMatch(/MEASURED/);
+  });
+  test('unknown streaming coverage is not evidence of completeness', () => {
+    const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+    for (const streamingCoverage of [
+      { knownNodeCount: null, residentNodeCount: 5 },
+      null,
+    ]) {
+      expect(stockpileToastSuffix(RECT, pts, 1, { streamingContributed: true, streamingCoverage }))
+        .toMatch(/PREVIEW \(source is streaming and not fully resident\)/);
+    }
+  });
+  test('a fully resident streaming source reads MEASURED', () => {
+    const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+    expect(stockpileToastSuffix(RECT, pts, 1, {
+      streamingContributed: true,
+      streamingCoverage: { knownNodeCount: 12, residentNodeCount: 12 },
+    })).toMatch(/· MEASURED ·/);
   });
   test('a degenerate footprint or too few points yields nothing', () => {
     expect(stockpileToastSuffix(RECT.slice(0, 2), Float32Array.from(prism(3, 1, 1)))).toBe('');

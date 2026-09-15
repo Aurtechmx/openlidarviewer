@@ -120,6 +120,26 @@ describe('computeLassoVolume', () => {
     expect(out.selectedCount).toBe(72);
     expect([...out.selectionByCloudId.keys()]).toEqual(['layer-1']);
     expect(out.selectionByCloudId.get('layer-1')!).toHaveLength(36);
+    expect(out.streamingContributed).toBe(true);
+  });
+
+  it('reports no streaming contribution for a static-only selection', () => {
+    const h = host({ integrable: [['layer-1', { cloud: cloud(grid(6, 10, 2)) }]] });
+    const out = computeLassoVolume({ host: h, lasso: fullBox(10), referencePercentile: 0.05 })!;
+    expect(out.streamingContributed).toBe(false);
+  });
+
+  it('reports no streaming contribution when the stream selected nothing', () => {
+    // A stream outside the lasso must not turn the figure into a streaming
+    // claim: the authority the caller derives from it would cap a complete
+    // static source at preview for nothing.
+    const away = new Float32Array([100, 100, 0, 101, 100, 0, 100, 101, 0]);
+    const h = host({
+      integrable: [['layer-1', { cloud: cloud(grid(6, 10, 2)) }]],
+      streamingPositions: [away],
+    });
+    const out = computeLassoVolume({ host: h, lasso: fullBox(10), referencePercentile: 0.05 })!;
+    expect(out.streamingContributed).toBe(false);
   });
 
   it('carries the reduced-source caveat when any contributing layer was reduced', () => {

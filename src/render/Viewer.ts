@@ -1155,16 +1155,7 @@ export class Viewer {
       // The configured world up, not a hardcoded [0,0,1]: a Y-up phone scan
       // gets cut along the wrong axis otherwise (v0.4.4 audit, B1).
       worldUp: (): Vec3 => [this._worldUp.x, this._worldUp.y, this._worldUp.z],
-      streamingCoverage: () =>
-        this._streaming
-          ? {
-              // Zero known nodes is a hierarchy not yet read far enough to
-              // count, which `streamingIsComplete` reports as unknown rather
-              // than as coverage.
-              knownNodeCount: this._streaming.cloud.octree.nodes().length || null,
-              residentNodeCount: this._streamingPickData.size,
-            }
-          : null,
+      streamingCoverage: () => this._streamingCoverage(),
     });
     this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts));
     // Volume sampler — feeds the cut/fill record half of a Volume
@@ -1914,6 +1905,17 @@ export class Viewer {
   refinementReadiness(): RefinementReadiness | null {
     const scheduler = this._streaming?.scheduler;
     return scheduler ? evaluateRefinementReadiness(scheduler.readinessFacts()) : null;
+  }
+
+  /**
+   * Streaming node counts, or null when nothing streams. Zero known nodes is a
+   * hierarchy not read far enough to count, which reads as unknown coverage.
+   */
+  private _streamingCoverage() {
+    const s = this._streaming;
+    return s
+      ? { knownNodeCount: s.cloud.octree.nodes().length || null, residentNodeCount: this._streamingPickData.size }
+      : null;
   }
 
   /**
@@ -3752,16 +3754,14 @@ export class Viewer {
 
     return {
       result: out.result,
-      stockpileSuffix: stockpileToastSuffix(
-        out.polygon3D,
-        out.selectedPositions,
-        lin,
-        out.anySourceReduced,
+      stockpileSuffix: stockpileToastSuffix(out.polygon3D, out.selectedPositions, lin, {
+        sourceReduced: out.anySourceReduced,
         densityUnitKnown,
         vert,
-        this.refinementReadiness(),
-        out.budget.downsample,
-      ),
+        streamingContributed: out.streamingContributed,
+        streamingCoverage: this._streamingCoverage(),
+        walkSampled: out.budget.downsample,
+      }),
       selectedCount: out.selectedCount,
       lasso,
       selectionByCloudId: out.selectionByCloudId,
