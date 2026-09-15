@@ -16,6 +16,7 @@
  * and first-run; restore is the median and max of 5.
  */
 import { test, expect } from '@playwright/test';
+import { makeTerrainBenchCloud } from '../helpers/terrainBenchCloud';
 
 const ENABLED = process.env.TERRAIN_CORE_OPFS_BENCH === '1';
 const SIZES = (process.env.TERRAIN_CORE_OPFS_BENCH_SIZES ?? '100000,500000,1000000')
@@ -49,7 +50,10 @@ test.describe('TerrainCore restore from OPFS vs fresh compute', () => {
     test.setTimeout(900_000);
     await page.goto('/');
 
-    const rows: Row[] = await page.evaluate(async (sizes: number[]) => {
+    // The clouds are generated in Node with the gate benchmark's generator and
+    // handed to the page as plain arrays; the page rebuilds the Float32Array.
+    const clouds = SIZES.map((n) => ({ n, xyz: Array.from(makeTerrainBenchCloud(n)) }));
+    const rows: Row[] = await page.evaluate(async (clouds: Array<{ n: number; xyz: number[] }>) => {
       const now = () => performance.now();
       const imp = (spec: string): Promise<any> => import(/* @vite-ignore */ spec);
       const [{ computeTerrainCore }, keys] = await Promise.all([
@@ -63,22 +67,6 @@ test.describe('TerrainCore restore from OPFS vs fresh compute', () => {
       };
       const PARAMS = { cellSizeM: 2, crs: 'EPSG:32610', verticalUnitToMetres: 1, horizontalUnitToMetres: 1 };
 
-      const makeCloud = (n: number): Float32Array => {
-        const xyz = new Float32Array(n * 3);
-        let s = 123456789 >>> 0;
-        const rnd = () => ((s = (1664525 * s + 1013904223) >>> 0) / 4294967296);
-        const side = Math.ceil(Math.sqrt(n));
-        const span = 1000;
-        for (let i = 0; i < n; i++) {
-          const gx = (i % side) / side;
-          const gy = Math.floor(i / side) / side;
-          xyz[i * 3] = gx * span + (rnd() - 0.5) * 0.5;
-          xyz[i * 3 + 1] = gy * span + (rnd() - 0.5) * 0.5;
-          xyz[i * 3 + 2] = 200 + 8 * Math.sin(gx * 12) * Math.cos(gy * 9) + (rnd() - 0.5) * 0.3;
-        }
-        return xyz;
-      };
-
       // The eight grids a persisted core carries, in a fixed order, plus the
       // scalar record with those grids removed.
       const GRIDS: Array<[string, string[]]> = [
@@ -88,8 +76,12 @@ test.describe('TerrainCore restore from OPFS vs fresh compute', () => {
         ['synth', ['surface', 'relief', 'synthesised']],
       ];
       const getPath = (o: any, p: string[]) => p.reduce((a, k) => a[k], o);
-      const kindOf = (v: ArrayBufferView) =>
-        v instanceof Float32Array ? 'f32' : v instanceof Uint32Array ? 'u32' : v instanceof Uint8Array ? 'u8' : 'other';
+      const kindOf = (v: ArrayBufferView): string => {
+        if (v instanceof Float32Array) return 'f32';
+        if (v instanceof Uint32Array) return 'u32';
+        if (v instanceof Uint8Array) return 'u8';
+        return 'other';
+      };
       const ctor: Record<string, any> = { f32: Float32Array, u32: Uint32Array, u8: Uint8Array };
 
       const serialise = (core: any) => {
@@ -140,8 +132,8 @@ test.describe('TerrainCore restore from OPFS vs fresh compute', () => {
       const root = await navigator.storage.getDirectory();
       const DIR = 'olv-terrain-core-bench';
       const out: Row[] = [];
-      for (const n of sizes) {
-        const positions = makeCloud(n);
+      for (const { n, xyz } of clouds) {
+        const positions = Float32Array.from(xyz);
         let freshFirst = 0, freshBest = Infinity, core: any = null;
         for (let r = 0; r < 3; r++) {
           const t0 = now();
@@ -190,7 +182,7 @@ test.describe('TerrainCore restore from OPFS vs fresh compute', () => {
         });
       }
       return out;
-    }, SIZES);
+    }, clouds);
 
     print(`\nTerrainCore restore — real OPFS, Chromium, fresh best-of-3, restore median-of-5, sizes=${SIZES.join(',')}`);
     print('  points | cells | payload MB | fresh first/best ms | key | read | hash | parse | restore median/max ms | speedup | parity');
