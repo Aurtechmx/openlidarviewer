@@ -217,7 +217,7 @@ export class ToolDock {
       {
         id: 'tool.help',
         label: 'Help',
-        title: 'Workflows, navigation and keyboard shortcuts — also the ? key',
+        title: 'Workflows, navigation and scientific states. Press ? for the shortcut sheet.',
         icon: ICON_HELP,
         classes: ['olv-tool-help'],
         blur: true,

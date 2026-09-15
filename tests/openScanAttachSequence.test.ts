@@ -1,7 +1,7 @@
 /**
  * openScanAttachSequence.test.ts — the static attach, driven rather than read.
  *
- * Everything from "Preparing GPU buffers" to the progress teardown used to run
+ * Everything from "Preparing display" to the progress teardown used to run
  * in one task. The last natural await is `await viewer.ready`, well above those
  * writes, so both status lines were written and cleared without the browser
  * painting either and the user watched the last decode line freeze through the
@@ -275,12 +275,12 @@ function harness(opts: HarnessOptions = {}) {
   };
 }
 
-const UPLOADING = 'progress:Preparing GPU buffers…';
+const UPLOADING = 'progress:Preparing display…';
 const RENDERING = 'progress:Rendering…';
 
 describe('the attach yields between its status lines', () => {
   it('lets a task queued before the attach run before the empty state is hidden', async () => {
-    // The defect: with no yield, everything from "Preparing GPU buffers" to the
+    // The defect: with no yield, everything from "Preparing display" to the
     // teardown is one task, so nothing the browser has queued gets in until the
     // attach is over, a paint of those status lines included. A task queued as
     // the decode finishes landing after `progress:cleared` is that defect.

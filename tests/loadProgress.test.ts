@@ -23,7 +23,7 @@ describe('loadStageLabel', () => {
 
   test('key stage labels are stable', () => {
     expect(loadStageLabel('decoding')).toBe('Decoding points');
-    expect(loadStageLabel('uploading')).toBe('Preparing GPU buffers');
+    expect(loadStageLabel('uploading')).toBe('Preparing display');
     expect(loadStageLabel('detecting-format')).toBe('Detecting format');
   });
 });

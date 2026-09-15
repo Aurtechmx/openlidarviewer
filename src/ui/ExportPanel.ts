@@ -36,6 +36,9 @@ import type { ReportFinding } from '../render/measure/reportManifest';
 import type { SessionFindings } from '../render/measure/sessionFindings';
 import type { MountedFindingsPanel } from './findingsPanel';
 
+/** Why the measurement deliverables are inert: shown as the group hint AND each button's tooltip. */
+const NO_MEASUREMENTS_HINT = 'Place measurements, then export them as open vector formats.';
+
 /**
  * Lightweight, allocation-free description of the exportable cloud, used to
  * render the live summary/enablement WITHOUT materializing the point buffers.
@@ -608,7 +611,12 @@ export class ExportPanel {
       const measureRow = el('div', { className: 'olv-export-product-actions' });
       ([['geojson', 'GeoJSON'], ['csv', 'CSV']] as const).forEach(([fmt, label]) => {
         measureRow.append(
-          this._productButton(label, count > 0, () => this._cb.exportMeasurements?.(fmt)),
+          this._productButton(
+            label,
+            count > 0,
+            () => this._cb.exportMeasurements?.(fmt),
+            NO_MEASUREMENTS_HINT,
+          ),
         );
       });
       // Tamper-evident integrity report (JSON) — the same measurements, stamped
@@ -619,6 +627,7 @@ export class ExportPanel {
           'Integrity report',
           count > 0,
           () => this._cb.exportIntegrityReport?.(),
+          NO_MEASUREMENTS_HINT,
         );
         btn.setAttribute('data-testid', 'export-integrity-report');
         measureRow.append(btn);
@@ -629,7 +638,7 @@ export class ExportPanel {
           'Measurements',
           measureRow,
           count === 0
-            ? 'Place measurements, then export them as open vector formats.'
+            ? NO_MEASUREMENTS_HINT
             : `${count} measurement${measurePlural} ready to export.`,
         ),
       );
@@ -662,7 +671,12 @@ export class ExportPanel {
     if (this._cb.exportKml) {
       const status = this._readStatus(this._cb.kmlStatus);
       mapRow.append(
-        this._productButton('Site KML', status.ready, () => this._cb.exportKml?.()),
+        this._productButton(
+          'Site KML',
+          status.ready,
+          () => this._cb.exportKml?.(),
+          status.reason || 'Needs a georeferenced scan.',
+        ),
       );
       mapHints.push(
         status.ready
@@ -676,6 +690,7 @@ export class ExportPanel {
         'Scan area (KML polygon)',
         status.ready,
         () => this._cb.exportScanFootprint?.(),
+        status.reason || 'Needs a scan with a known coordinate system.',
       );
       btn.setAttribute('data-testid', 'export-scan-footprint');
       mapRow.append(btn);
@@ -774,13 +789,22 @@ export class ExportPanel {
    * hover and type match every other button in the panel; the extra class makes
    * it a full-width, left-aligned row so a stack of them stays scannable.
    */
-  private _productButton(label: string, enabled: boolean, onClick: () => void): HTMLButtonElement {
+  private _productButton(
+    label: string,
+    enabled: boolean,
+    onClick: () => void,
+    reason?: string,
+  ): HTMLButtonElement {
     const btn = el('button', {
       className: 'olv-bc-pill olv-export-product-btn',
       type: 'button',
       text: label,
     }) as HTMLButtonElement;
     btn.disabled = !enabled;
+    // A disabled product says WHY on hover: the group hint below the row carries
+    // the same sentence, but a user who reaches for the button first would
+    // otherwise get an inert control with no explanation.
+    if (!enabled && reason) btn.title = reason;
     btn.addEventListener('click', onClick);
     return btn;
   }

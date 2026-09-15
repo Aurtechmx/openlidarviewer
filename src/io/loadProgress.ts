@@ -41,13 +41,13 @@ export function loadStageLabel(stage: LoadStage): string {
     case 'reading-file':
       return 'Reading file';
     case 'parsing-metadata':
-      return 'Parsing metadata';
+      return 'Reading metadata';
     case 'decoding':
       return 'Decoding points';
     case 'optimizing':
       return 'Optimizing';
     case 'uploading':
-      return 'Preparing GPU buffers';
+      return 'Preparing display';
     case 'rendering':
       return 'Rendering';
   }

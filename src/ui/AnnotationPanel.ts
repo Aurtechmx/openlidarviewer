@@ -281,7 +281,7 @@ export class AnnotationPanel {
     if (total === 0) {
       this._disarmClear();
       this._list.replaceChildren(
-        el('div', { className: 'olv-ap-empty', text: 'No annotations yet.' }),
+        el('div', { className: 'olv-ap-empty', text: 'No annotations yet. Mark a point or region to note it here.' }),
       );
       return;
     }
@@ -334,7 +334,7 @@ export class AnnotationPanel {
             ? 'No issues match your search.'
             : resolved.length > 0
               ? 'Nothing open here. Every issue below is marked resolved.'
-              : 'No issues tracked yet.',
+              : 'No issues tracked yet. Raise an annotation as an issue to follow it here.',
         }),
       );
     }

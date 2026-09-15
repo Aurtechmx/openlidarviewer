@@ -330,6 +330,10 @@ function section(text: string): HTMLElement {
  */
 const IDLE_STATUS = 'Load a LAS, LAZ, COPC, or EPT dataset to analyze terrain readiness.';
 
+/** Resting tooltip for the Intelligence Report button; swapped for the reason when disabled. */
+const REPORT_BUTTON_TITLE =
+  'Download a one-page terrain intelligence report: assessment, coverage, accuracy, recommended workflows and which products you can take away';
+
 // Session-remembered MAP PDF dialog choices. Module-level by design (per the
 // brief — NOT localStorage): they persist across opens within this tab session
 // only, so the next export pre-fills the user's last Prepared by / Sheet /
@@ -570,6 +574,11 @@ export class AnalysePanel {
       className: 'olv-analyse-status',
       text: IDLE_STATUS,
     });
+    // The status line is the only running commentary for a long analysis, so
+    // assistive tech hears each stage and the final verdict. `el()` has no
+    // role/aria props, so the attributes are set directly.
+    this._status.setAttribute('role', 'status');
+    this._status.setAttribute('aria-live', 'polite');
     this._assessmentRow = el('div', { className: 'olv-analyse-assessment' });
     this._scoreRow = el('div', { className: 'olv-analyse-score' });
     this._surfaceRow = el('div', { className: 'olv-analyse-surface' });
@@ -2005,8 +2014,7 @@ export class AnalysePanel {
       className: 'olv-analyse-dl is-primary',
       text: 'Intelligence report (PDF)',
     });
-    this._reportButton.title =
-      'Download a one-page terrain intelligence report: assessment, coverage, accuracy, recommended workflows and which products you can take away';
+    this._reportButton.title = REPORT_BUTTON_TITLE;
     this._reportButton.addEventListener('click', () => void this._exportTerrainReport(this._reportButton));
     this._studioExportBtns.set('report', this._reportButton);
     row.append(this._reportButton);
@@ -2793,6 +2801,9 @@ export class AnalysePanel {
     // The Intelligence Report is gated the same way as the DEM — it only needs an
     // analysis to summarise; it honestly reports a preview/blocked verdict.
     this._reportButton.disabled = !hasDtm;
+    this._reportButton.title = hasDtm
+      ? REPORT_BUTTON_TITLE
+      : 'No covered DTM cells to report on';
     this._demButton.title = hasDtm
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';

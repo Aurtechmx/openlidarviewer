@@ -465,7 +465,7 @@ export async function attachStaticCloud(
   deps.dropZone.setProgress(formatProgress({ stage: 'uploading' }));
   // PAINT YIELD. `await viewer.ready` above is the last await in this
   // function, so everything from here to the progress teardown runs in ONE
-  // task: the "Preparing GPU buffers" and "Rendering" lines were written and
+  // task: the "Preparing display" and "Rendering" lines were written and
   // cleared without the browser ever painting them, and the user watched the
   // last decode line freeze through the whole GPU attach. `setTimeout`, not
   // `requestAnimationFrame`, which resumes inside the same frame's rendering

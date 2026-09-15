@@ -269,7 +269,7 @@ describe('ObjectPanel — space / object routing', () => {
     panel.showSpace(null, null);
     const root = panel.element as unknown as FakeEl;
     const all = flatten(root);
-    expect(root.textContent).toContain('No space measurements available');
+    expect(root.textContent).toContain('No space measurements yet');
     expect(all.filter((e) => e.className.includes('olv-scan-type-opt'))).toHaveLength(4);
     expect(all.some((e) => e.className.includes('olv-object-run-anyway'))).toBe(true);
   });
