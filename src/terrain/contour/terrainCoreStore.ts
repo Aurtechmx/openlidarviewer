@@ -200,6 +200,12 @@ export function createTerrainCoreStore(root: OpfsDirHandle | null, options: Terr
           await remove(d, victim.file);
           used -= victim.bytes;
         }
+        // A torn index reads as empty, which would leave its payload files
+        // outside the budget; drop every payload the index does not name.
+        const named = new Set(index.entries.map((e) => e.file));
+        for await (const name of d.keys()) {
+          if (name !== TERRAIN_CORE_INDEX_FILE && !named.has(name)) await remove(d, name);
+        }
         const free = await freeBytes();
         if (free !== null && free < payload.byteLength) return false;
         const file = `core-${index.next}.bin`;

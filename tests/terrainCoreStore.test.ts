@@ -143,4 +143,19 @@ describe('terrain core store', () => {
     expect(await store.persist(positions, SMALL_PARAMS, core, EXPENSIVE)).toBe(true);
     expect('core' in (await store.lookup(positions, SMALL_PARAMS))).toBe(true);
   });
+
+  it('a write sweeps payload files the index no longer names', async () => {
+    const root = fakeOpfsDir();
+    const store = createTerrainCoreStore(root, { generation: 'g1' });
+    await store.persist(positions, SMALL_PARAMS, core, EXPENSIVE);
+    const dir = await root.getDirectoryHandle(TERRAIN_CORE_STORE_DIR);
+    const w = await (await dir.getFileHandle(TERRAIN_CORE_INDEX_FILE, { create: true })).createWritable();
+    await w.write(new TextEncoder().encode('{"version":1,"ent'));
+    await w.close();
+    const other = smallCloud(3000, 11);
+    await store.persist(other, SMALL_PARAMS, computeTerrainCore(other, SMALL_PARAMS), EXPENSIVE);
+    const names: string[] = [];
+    for await (const k of dir.keys()) names.push(k);
+    expect(names.sort()).toEqual(['core-1.bin', TERRAIN_CORE_INDEX_FILE].sort());
+  });
 });
