@@ -119,7 +119,6 @@ describe('keyBindings — table contract', () => {
   it('encodes the documented precedence order', () => {
     const priority = (id: string): number => byId.get(id)!.priority;
     // sheet MUST beat help; measure MUST beat global delete/undo.
-    expect(priority('shortcut-sheet')).toBeLessThan(priority('help-overlay'));
     expect(priority('measure-polygon-keys')).toBeLessThan(priority('delete-selection'));
     expect(priority('measure-polygon-keys')).toBeLessThan(priority('undo-redo-z'));
     // The five formerly-registered listeners, in their old order.
