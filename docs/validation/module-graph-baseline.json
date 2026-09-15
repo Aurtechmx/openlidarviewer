@@ -257,7 +257,7 @@
   },
   "watchFanOut": {
     "src/ui/AnalysePanel.ts": {
-      "runtime": 32,
+      "runtime": 22,
       "typeOnly": 16,
       "dynamic": 0,
       "modules": [
@@ -266,33 +266,23 @@
         "src/io/download.ts",
         "src/lazyChunks.ts",
         "src/model/organizedRangeLink.ts",
-        "src/render/colorModes.ts",
-        "src/render/hypsometricPalette.ts",
         "src/render/measure/mapSheetExportOptions.ts",
-        "src/render/paletteCatalog.ts",
         "src/science/analysisFreshness.ts",
         "src/terrain/contour/contourCopy.ts",
         "src/terrain/contour/contourShapeStyle.ts",
         "src/terrain/contour/evidenceGrade.ts",
-        "src/terrain/contour/histogram.ts",
-        "src/terrain/contour/hypsometric.ts",
         "src/terrain/contour/recommendedWorkflow.ts",
-        "src/terrain/contour/sampleTerrain.ts",
         "src/terrain/contour/terrainAssessment.ts",
         "src/terrain/contour/terrainProducts.ts",
         "src/terrain/contour/terrainReadiness.ts",
         "src/terrain/contour/whyNotReasons.ts",
         "src/terrain/datasetIntelligence.ts",
-        "src/terrain/ground/cellConfidence.ts",
         "src/terrain/quality/scanFitness.ts",
-        "src/terrain/surface/confidenceOverlay.ts",
-        "src/terrain/surface/coverageHeatmap.ts",
-        "src/terrain/surface/hillshade.ts",
         "src/ui/Modal.ts",
+        "src/ui/analyseSurfaceTiles.ts",
         "src/ui/fitnessIcons.ts",
         "src/ui/scanTypeControl.ts",
-        "src/ui/workflowCardRender.ts",
-        "src/units/units.ts"
+        "src/ui/workflowCardRender.ts"
       ]
     },
     "src/ui/Inspector.ts": {
@@ -463,13 +453,13 @@
     "components": []
   },
   "context": {
-    "filesScanned": 832,
+    "filesScanned": 833,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 56
+        "importers": 57
       },
       {
         "file": "src/units/units.ts",
@@ -520,11 +510,11 @@
         "importers": 13
       },
       {
-        "file": "src/model/OrganizedRange.ts",
+        "file": "src/io/download.ts",
         "importers": 12
       },
       {
-        "file": "src/science/methodRegistry.ts",
+        "file": "src/model/OrganizedRange.ts",
         "importers": 12
       }
     ],

@@ -125,7 +125,7 @@ describe('lint:module-graph watch band', () => {
     expect(files).toContain('src/main.ts');
     expect(files).toContain('src/ui/AnalysePanel.ts');
     expect(files).toContain('src/app/actionDefinitions.ts');
-    for (const r of rows) {
+    for (const r of rows as Array<{ file: string; loc: number; fanOut: number }>) {
       expect(r.loc, r.file).toBeGreaterThan(0);
       expect(r.fanOut, r.file).toBeGreaterThan(0);
     }
