@@ -51,7 +51,7 @@ async function navbar() {
 /** The action registry's source, read as text so this stays a unit test. */
 async function readActionDefinitions(): Promise<string> {
   const { readFileSync } = await import('node:fs');
-  return readFileSync(new URL('../src/app/actionDefinitions.ts', import.meta.url), 'utf8');
+  return readFileSync(new URL('../src/app/actions/cameraActions.ts', import.meta.url), 'utf8');
 }
 
 describe('dismissing the navigation legend keeps the view controls', () => {
