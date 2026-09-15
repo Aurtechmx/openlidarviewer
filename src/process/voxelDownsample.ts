@@ -228,9 +228,9 @@ export function voxelSizeForBudget(cloud: PointCloud, maxPoints: number): number
  * proportionally (point count scales about `1 / size²` for surface-like
  * data). A pass that fails to move the count by a tenth means the voxel is
  * still below the point spacing, which a proportional step cannot cross; the
- * size then doubles instead. Once the count is under budget, at most three
- * bisection passes between the last over-budget size and the first under
- * recover points a large step gave away. The pass count is hard-capped at
+ * size then doubles instead. Once the count is under budget, at most two
+ * passes aimed by the local count-versus-size exponent recover points a
+ * large step gave away. The pass count is hard-capped at
  * {@link MAX_DOWNSAMPLE_PASSES}; the doubling phase reaches one voxel per axis
  * inside that cap for any cloud, so the result never exceeds `maxPoints`.
  *
@@ -281,8 +281,10 @@ export function downsampleToBudgetReport(cloud: PointCloud, maxPoints: number): 
   // doubling once it does not, which is the sign the voxel is still below the
   // point spacing (every point alone in its voxel) and a small step is wasted.
   let overSize = 0;
+  let overCount = 0;
   while (reduced.pointCount > maxPoints && passes < MAX_DOWNSAMPLE_PASSES) {
     overSize = size;
+    overCount = reduced.pointCount;
     const before = reduced.pointCount;
     const ratio = Math.sqrt(before / maxPoints);
     const proportional = Math.min(Math.max(ratio * 1.1, 1.25), 3);
@@ -292,6 +294,7 @@ export function downsampleToBudgetReport(cloud: PointCloud, maxPoints: number): 
       // Flat: switch to doubling until the count moves.
       while (reduced.pointCount > maxPoints && passes < MAX_DOWNSAMPLE_PASSES) {
         overSize = size;
+        overCount = reduced.pointCount;
         size *= 2;
         reduced = pass(size);
       }
@@ -305,19 +308,28 @@ export function downsampleToBudgetReport(cloud: PointCloud, maxPoints: number): 
     reduced = pass(size);
   }
 
-  // Wastefully far under budget: bisect between the last size that was over
-  // and this one, keeping the best result that fits. At most three passes.
+  // Wastefully far under budget after a large step: aim one more pass at
+  // 0.85 of the budget using the local count-versus-size exponent between
+  // the last over-budget size and this one, then at most one correction.
+  // Only a result that fits is ever kept.
   if (overSize > 0) {
     let lo = overSize;
+    let loCount = overCount;
     let hi = size;
-    for (let i = 0; i < 3 && reduced.pointCount < maxPoints * 0.6 && passes < MAX_DOWNSAMPLE_PASSES; i++) {
-      const mid = (lo + hi) / 2;
-      const candidate = pass(mid);
+    let hiCount = reduced.pointCount;
+    for (let i = 0; i < 2 && hiCount < maxPoints * 0.6 && passes < MAX_DOWNSAMPLE_PASSES; i++) {
+      const exponent = Math.log(loCount / hiCount) / Math.log(hi / lo);
+      const target = maxPoints * 0.85;
+      let next = hi * Math.pow(hiCount / target, 1 / Math.max(exponent, 0.5));
+      next = Math.min(Math.max(next, lo * 1.01), hi * 0.99);
+      const candidate = pass(next);
       if (candidate.pointCount > maxPoints) {
-        lo = mid;
+        lo = next;
+        loCount = candidate.pointCount;
       } else {
-        hi = mid;
-        size = mid;
+        hi = next;
+        hiCount = candidate.pointCount;
+        size = next;
         reduced = candidate;
       }
     }

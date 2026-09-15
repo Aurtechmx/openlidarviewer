@@ -51,7 +51,7 @@ describe('downsampleToBudget: bounded passes, never over budget', () => {
     const r = downsampleToBudgetReport(cloud, budget);
     expect(r.cloud.pointCount).toBeLessThanOrEqual(budget);
     expect(r.cloud.pointCount).toBeGreaterThan(budget * 0.5);
-    expect(r.passes).toBeLessThanOrEqual(8);
+    expect(r.passes).toBeLessThanOrEqual(6);
     expect(r.passes).toBeLessThanOrEqual(MAX_DOWNSAMPLE_PASSES);
   });
 
