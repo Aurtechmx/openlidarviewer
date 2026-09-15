@@ -20,6 +20,7 @@ import { decodeLaz } from '../src/io/lazDecode';
 import {
   decodeLazChunkedSequential,
   decodeLazParallel,
+  decodeLazParallelFromSource,
   decodeLazChunkLocal,
   previewChunkIndices,
   PREVIEW_CHUNK_STEP,
@@ -27,6 +28,8 @@ import {
 import { getLazPerf } from '../src/io/lazDecode';
 import { readLazChunkTable } from '../src/io/heavy/lazChunkTable';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
+import { LocalFileRangeSource } from '../src/io/range/LocalFileRangeSource';
+import type { RangeSource } from '../src/io/range/RangeSource';
 
 function loadFixture(name: string): ArrayBuffer {
   const b = readFileSync(resolve(__dirname, 'fixtures', name));
@@ -140,6 +143,42 @@ describe('chunked LAZ decode', () => {
       decodeLazChunkLocal(lazPerf, job), { onPreview: () => { previews++; } });
     expect(out).toBeNull();
     expect(previews).toBe(0);
+  });
+
+  it('decodes from a File by range, one read per chunk, never the whole file, identically', async () => {
+    const buf = loadFixture('multichunk.laz');
+    const header = parseLasHeader(buf);
+    const origin = computeOrigin([500000, 4100000, 190]);
+    const seq = await decodeLaz(buf, header, origin, 1);
+    const lazPerf = await getLazPerf();
+    const table = await readLazChunkTable(new ArrayBufferRangeSource(buf));
+    if (!table.supported) throw new Error('fixture is a chunked LAZ');
+
+    const inner = new LocalFileRangeSource(new File([buf], 'm.laz'));
+    const reads: Array<[number, number]> = [];
+    const counted: RangeSource = {
+      id: () => inner.id(),
+      kind: () => inner.kind(),
+      size: () => inner.size(),
+      readRange: (offset, length, signal) => {
+        reads.push([offset, length]);
+        return inner.readRange(offset, length, signal);
+      },
+    };
+    const out = await decodeLazParallelFromSource(counted, header, origin, async (job) =>
+      decodeLazChunkLocal(lazPerf, job), { maxInFlight: 3 });
+    expect(out).not.toBeNull();
+    expect(out!.positions).toEqual(seq.positions);
+    expect(out!.intensity).toEqual(seq.intensity);
+    expect(out!.classification).toEqual(seq.classification);
+
+    // Every chunk was read exactly once, at its own range.
+    for (const c of table.chunks) {
+      expect(reads.filter(([o, l]) => o === c.byteOffset && l === c.byteLength)).toHaveLength(1);
+    }
+    // No read covered the file: the largest is a chunk or the table's prefix.
+    const largest = Math.max(...reads.map(([, l]) => l));
+    expect(largest).toBeLessThan(buf.byteLength);
   });
 
   it('fails closed (returns null) on a non-chunked input rather than guessing', async () => {

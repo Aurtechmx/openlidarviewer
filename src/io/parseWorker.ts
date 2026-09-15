@@ -5,7 +5,7 @@
  * own stages for the debug telemetry.
  */
 import type { DetectedFormat } from './sniffFormat';
-import { parseBuffer } from './parseBuffer';
+import { parseBuffer, parseFile } from './parseBuffer';
 import { LoadError } from './loadErrors';
 import type { LoadErrorCategory } from './loadErrors';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
@@ -16,7 +16,10 @@ import { organizedRangeTransferables } from '../model/OrganizedRange';
 import { primeDevFlags } from '../perf/devFlags';
 
 interface ParseRequest {
-  buffer: ArrayBuffer;
+  /** The file's bytes, transferred; absent when `file` is sent instead. */
+  buffer?: ArrayBuffer;
+  /** The file itself, for a format the worker reads as it needs. */
+  file?: File;
   format: DetectedFormat;
   name: string;
   /** Optional point budget — phones pass a lower value than the desktop default. */
@@ -42,7 +45,7 @@ interface ParseRequest {
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent): void => {
-  const { buffer, format, name, budget, plan, e57Plan, search } = event.data as ParseRequest;
+  const { buffer, file, format, name, budget, plan, e57Plan, search } = event.data as ParseRequest;
   if (typeof search === 'string') primeDevFlags(search);
 
   void (async (): Promise<void> => {
@@ -52,25 +55,20 @@ ctx.onmessage = (event: MessageEvent): void => {
       const stageAt = new Map<LoadStage, number>();
 
       ctx.postMessage({ type: 'progress', stage: 'parsing-metadata' });
-      const { cloud, originalPointCount, downsampled } = await parseBuffer(
-        buffer,
-        format,
-        name,
-        budget,
-        plan,
-        (update: ProgressUpdate) => {
-          if (!stageAt.has(update.stage)) stageAt.set(update.stage, performance.now());
-          // Forward each staged-progress update to the main thread.
-          ctx.postMessage({ type: 'progress', ...update });
-        },
-        e57Plan,
-        (preview: PointCloud) => {
-          // A stand-in the main thread shows while the decode runs; it owns
-          // its own buffers, so transferring them takes nothing from the final.
-          const { payload, transfer } = cloudPayload(preview);
-          ctx.postMessage({ type: 'preview', cloud: payload }, transfer);
-        },
-      );
+      const onProgress = (update: ProgressUpdate): void => {
+        if (!stageAt.has(update.stage)) stageAt.set(update.stage, performance.now());
+        // Forward each staged-progress update to the main thread.
+        ctx.postMessage({ type: 'progress', ...update });
+      };
+      const onPreview = (preview: PointCloud): void => {
+        // A stand-in the main thread shows while the decode runs; it owns
+        // its own buffers, so transferring them takes nothing from the final.
+        const { payload, transfer } = cloudPayload(preview);
+        ctx.postMessage({ type: 'preview', cloud: payload }, transfer);
+      };
+      const { cloud, originalPointCount, downsampled } = file
+        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreview)
+        : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan, onPreview);
 
       const endedAt = performance.now();
       const decodeAt = stageAt.get('decoding');

@@ -95,29 +95,9 @@ export async function parseBuffer(
     // decoder is its own chunk, fetched only when a LAS/LAZ file is opened.
     const { loadLas } = await import('./loadLas');
     const cloud = await loadLas(buffer, format, name, stride, onProgress, onPreview);
-    assertNonEmptyCloud(cloud);
-
-    if (plan.mode === 'voxel') {
-      // Decoded in full, then voxel-reduced to the plan's budget.
-      const originalPointCount = cloud.pointCount;
-      onProgress?.({ stage: 'optimizing' });
-      const reduced = downsampleToBudget(cloud, plan.budget);
-      return { cloud: reduced, originalPointCount, downsampled: reduced !== cloud };
-    }
-    if (plan.mode === 'stride') {
-      // The strided cloud is a memory-safe intermediate; voxel-reducing it to
-      // the budget equalises density — the same pass medium clouds get — so
-      // the result has no scan-line aliasing and no flight-strip density
-      // blocks. The "total" the Detail slider shows is the true source count.
-      onProgress?.({ stage: 'optimizing' });
-      const reduced = downsampleToBudget(cloud, plan.budget);
-      return { cloud: reduced, originalPointCount: plan.sourceCount, downsampled: true };
-    }
-    // 'all' — the whole cloud was decoded; nothing was reduced.
-    return { cloud, originalPointCount: cloud.pointCount, downsampled: false };
+    return budgetedLas(cloud, plan, onProgress);
   }
 
-  // --- Every other format: decode fully, then voxel-downsample to budget. ---
   onProgress?.({ stage: 'decoding' });
   // The registry's E57 entry calls `loadE57(buffer, name)`, which leaves the
   // loader to plan for itself. With a plan from the caller, route around it so
@@ -137,4 +117,58 @@ export async function parseBuffer(
   onProgress?.({ stage: 'optimizing' });
   const reduced = downsampleToBudget(cloud, budget);
   return { cloud: reduced, originalPointCount, downsampled: reduced !== cloud };
+}
+
+/**
+ * Parse from the `File` itself. A `.laz` with a plan is decoded by
+ * `loadLazFromFile`, which reads the header and, when the pool engages, each
+ * chunk on demand, so the worker never holds the compressed file whole. Every
+ * other format is read whole here and handed to {@link parseBuffer}.
+ */
+export async function parseFile(
+  file: File,
+  format: DetectedFormat,
+  name: string,
+  budget = POINT_BUDGET,
+  plan?: LoadPlan,
+  onProgress?: (u: ProgressUpdate) => void,
+  e57Plan?: E57DecodePlan,
+  onPreview?: (cloud: PointCloud) => void,
+): Promise<LoadResult> {
+  if (plan && format === 'laz') {
+    onProgress?.({ stage: 'decoding' });
+    const stride = plan.mode === 'stride' ? plan.stride : 1;
+    const { loadLazFromFile } = await import('./loadLas');
+    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreview);
+    return budgetedLas(cloud, plan, onProgress);
+  }
+  onProgress?.({ stage: 'reading-file' });
+  const buffer = await file.arrayBuffer();
+  return parseBuffer(buffer, format, name, budget, plan, onProgress, e57Plan, onPreview);
+}
+
+/** The plan's budget step after a LAS/LAZ decode: voxel-reduce, or stride then reduce. */
+function budgetedLas(
+  cloud: PointCloud,
+  plan: LoadPlan,
+  onProgress?: (u: ProgressUpdate) => void,
+): LoadResult {
+  assertNonEmptyCloud(cloud);
+  if (plan.mode === 'voxel') {
+    // Decoded in full, then voxel-reduced to the plan's budget.
+    const originalPointCount = cloud.pointCount;
+    onProgress?.({ stage: 'optimizing' });
+    const reduced = downsampleToBudget(cloud, plan.budget);
+    return { cloud: reduced, originalPointCount, downsampled: reduced !== cloud };
+  }
+  if (plan.mode === 'stride') {
+    // The strided cloud is a memory-safe intermediate; voxel-reducing it to
+    // the budget equalises density, the same pass medium clouds get, so the
+    // result has no scan-line aliasing and no flight-strip density blocks.
+    // The "total" the Detail slider shows is the true source count.
+    onProgress?.({ stage: 'optimizing' });
+    const reduced = downsampleToBudget(cloud, plan.budget);
+    return { cloud: reduced, originalPointCount: plan.sourceCount, downsampled: true };
+  }
+  return { cloud, originalPointCount: cloud.pointCount, downsampled: false };
 }

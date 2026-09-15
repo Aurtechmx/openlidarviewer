@@ -202,6 +202,56 @@ export async function loadLas(
   return toCloud(raw);
 }
 
+/** Prefix read for the header peek; the public header is 375 bytes at most. */
+const LAZ_HEAD_PEEK_BYTES = 64 * 1024;
+/** Where the LAS public header records the offset to point data. */
+const OFFSET_TO_POINT_DATA = 96;
+
+/**
+ * Load a `.laz` straight from its `File`, reading what each step needs.
+ *
+ * The header comes from a prefix read. When the pool engages, each chunk's
+ * bytes are read as that chunk is decoded, so the compressed file is never
+ * resident whole; when it does not (a small file, a session that refused
+ * pooling, a file with no usable chunk table) the file is read whole here, in
+ * the worker, and decoded as before. Same records, same order, same sample
+ * as {@link loadLas} on the file's bytes.
+ */
+export async function loadLazFromFile(
+  file: File,
+  name = 'cloud.laz',
+  stride = 1,
+  onProgress?: (u: ProgressUpdate) => void,
+  onPreview?: (cloud: PointCloud) => void,
+): Promise<PointCloud> {
+  let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
+  // The VLRs sit between the public header and the point data; a file whose
+  // VLR block outgrows the peek is re-read up to where the points start.
+  if (head.byteLength >= OFFSET_TO_POINT_DATA + 4) {
+    const toPoints = new DataView(head).getUint32(OFFSET_TO_POINT_DATA, true);
+    if (toPoints > head.byteLength && toPoints <= file.size) {
+      head = await file.slice(0, toPoints).arrayBuffer();
+    }
+  }
+  const header = parseLasHeader(head);
+  const origin = computeOrigin(header.min);
+  const toCloud = (raw: RawPoints): PointCloud =>
+    cloudFromRaw(raw, header, origin, 'laz', name, stride);
+
+  const { decodeLazPooledFromSource } = await import('./heavy/worker/lazChunkWorkerClient');
+  const { LocalFileRangeSource } = await import('./range/LocalFileRangeSource');
+  const pooled = await decodeLazPooledFromSource(new LocalFileRangeSource(file), header, origin, {
+    stride,
+    onProgress,
+    onPreview: onPreview && ((preview) => onPreview(toCloud(preview))),
+  });
+  if (pooled) return toCloud(pooled);
+
+  const { decodeLaz } = await import('./lazDecode');
+  const buffer = await file.arrayBuffer();
+  return toCloud(await decodeLaz(buffer, header, origin, stride, onProgress));
+}
+
 /** Sanitise decoded records and wrap them as a cloud with the header's facts. */
 function cloudFromRaw(
   raw: RawPoints,

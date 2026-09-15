@@ -593,11 +593,16 @@ export async function loadFile(
   if (refusal) throw refusal;
 
   // --- Now read the whole file — only once the format is known. ---
+  // A `.laz` with a plan goes to the worker as the File itself: the worker
+  // reads the header and, when its pool engages, each chunk as it decodes it,
+  // so neither thread holds the compressed file whole. Every other format is
+  // read here and its bytes transferred.
+  const sendFile = format === 'laz' && plan !== undefined;
   onProgress?.({ stage: 'reading-file' });
   const readStartedAt = performance.now();
   // Abort-aware: a cancel during a multi-gigabyte read stops within one chunk
   // instead of after the whole file has been materialised.
-  const buffer = await readWholeFileAbortable(file, signal);
+  const buffer = sendFile ? null : await readWholeFileAbortable(file, signal);
   const fileReadMs = performance.now() - readStartedAt;
   throwIfCancelled();
 
@@ -700,7 +705,8 @@ export async function loadFile(
       // phone as a desktop and can pick a different stride, or none.
       worker.postMessage(
         {
-          buffer,
+          buffer: buffer ?? undefined,
+          file: buffer ? undefined : file,
           format,
           name: file.name,
           budget,
@@ -708,7 +714,7 @@ export async function loadFile(
           e57Plan: preflight.e57?.plan,
           search: pageSearch(),
         },
-        [buffer],
+        buffer ? [buffer] : [],
       );
     } catch (err) {
       // A synchronous post failure — a DataCloneError on an unclonable or

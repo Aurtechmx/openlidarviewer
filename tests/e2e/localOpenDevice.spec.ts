@@ -62,6 +62,8 @@ interface OpenTiming {
   readonly totalMs: number;
   readonly workers: number;
   readonly chunkWorkers: number;
+  /** JS heap after the load, in MB, where the browser reports it (Chromium). */
+  readonly heapMb: number;
 }
 
 function row(text: string, label: string): number {
@@ -81,7 +83,12 @@ async function openOnce(page: Page, url: string, file: string): Promise<OpenTimi
   });
   await page.locator('.olv-file-input').first().setInputFiles(file);
   const text = (await telemetry).text();
+  const heapMb = await page.evaluate(() => {
+    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+    return mem ? mem.usedJSHeapSize / 1e6 : Number.NaN;
+  });
   return {
+    heapMb,
     previewMs: row(text, 'preview'),
     decodeMs: row(text, 'decode'),
     uploadMs: row(text, 'gpu upload'),
@@ -128,7 +135,7 @@ test.describe('local LAZ open on device: single reader against the worker pool',
     );
     // eslint-disable-next-line no-console
     console.log(
-      '  size | mode   | preview best | decode first | decode best | wall first | wall best | upload best | workers (chunk) | runs',
+      '  size | mode   | preview best | decode first | decode best | wall first | wall best | upload best | heap MB | workers (chunk) | runs',
     );
 
     for (const [i, rung] of rungs.entries()) {
@@ -155,7 +162,7 @@ test.describe('local LAZ open on device: single reader against the worker pool',
         // eslint-disable-next-line no-console
         console.log(
           `  ${m.toString().padStart(3)}M | ${mode.name.padEnd(6)} | ${ms(previewBest)} | ${ms(decodes[0])} | ${ms(Math.min(...decodes))} | ` +
-            `${ms(walls[0])} | ${ms(Math.min(...walls))} | ${ms(Math.min(...uploads))} | ${runs[0].workers} (${runs[0].chunkWorkers}) | ` +
+            `${ms(walls[0])} | ${ms(Math.min(...walls))} | ${ms(Math.min(...uploads))} | ${ms(Math.min(...runs.map((t) => t.heapMb)))} | ${runs[0].workers} (${runs[0].chunkWorkers}) | ` +
             `decode[${decodes.map((x) => x.toFixed(0)).join(',')}] wall[${walls.map((x) => x.toFixed(0)).join(',')}]`,
         );
       }
