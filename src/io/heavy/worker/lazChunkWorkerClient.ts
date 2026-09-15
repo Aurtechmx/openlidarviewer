@@ -43,11 +43,13 @@ import {
 } from '../../workerPool/DecodeWorkerPool';
 import { resolveDecodePoolSize, decodeLazPoolEnabled } from '../../workerPool/decodePoolSize';
 import { readDevFlags } from '../../../perf/devFlags';
+import { ArrayBufferRangeSource } from '../../range/ArrayBufferRangeSource';
+import type { RangeSource } from '../../range/RangeSource';
 import type { RawPoints } from '../../lasDecodeShared';
 import type { LasHeader } from '../../lasHeader';
 import type { ProgressUpdate } from '../../loadProgress';
 import {
-  decodeLazParallel,
+  decodeLazParallel, decodeLazParallelFromSource,
   type LazChunkDecoder,
   type LazChunkJob,
 } from '../decodeLazChunked';
@@ -173,8 +175,18 @@ export interface PooledDecodeOptions {
  * a decode error, which then propagates so the caller sees the same failure
  * `decodeLaz` would raise rather than a silent slow success.
  */
-export async function decodeLazPooled(
+export function decodeLazPooled(
   buffer: ArrayBuffer,
+  header: LasHeader,
+  origin: [number, number, number],
+  options: PooledDecodeOptions = {},
+): Promise<RawPoints | null> {
+  return decodeLazPooledFromSource(new ArrayBufferRangeSource(buffer), header, origin, options);
+}
+
+/** {@link decodeLazPooled} over any range source; chunks are read as needed. */
+export async function decodeLazPooledFromSource(
+  source: RangeSource,
   header: LasHeader,
   origin: [number, number, number],
   options: PooledDecodeOptions = {},
@@ -183,7 +195,7 @@ export async function decodeLazPooled(
   if (!decodeLazPoolEnabled(readDevFlags(), eligible)) return null;
   const client = new LazChunkWorkerClient({ poolEnabled: true });
   try {
-    return await decodeLazParallel(buffer, header, origin, client.decode, {
+    return await decodeLazParallelFromSource(source, header, origin, client.decode, {
       stride: options.stride,
       signal: options.signal,
       onProgress: options.onProgress,

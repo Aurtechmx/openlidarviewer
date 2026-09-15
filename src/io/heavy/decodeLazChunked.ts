@@ -28,6 +28,7 @@
  */
 import { readLazChunkTable, type LazChunkRange } from './lazChunkTable';
 import { ArrayBufferRangeSource } from '../range/ArrayBufferRangeSource';
+import type { RangeSource } from '../range/RangeSource';
 import { decompressChunk } from '../copc/copcChunkDecompress';
 import { getLazPerf, type LazPerfModule } from '../lazDecode';
 import {
@@ -174,15 +175,16 @@ function partitionSample(
 }
 
 /** Build the per-chunk job for `planned`, slicing its bytes out of the file. */
-function jobFor(
-  buffer: ArrayBuffer,
+async function jobFor(
+  source: RangeSource,
   header: LasHeader,
   ctx: DecodeContext,
   planned: PlannedChunk,
-): LazChunkJob {
+  signal?: AbortSignal,
+): Promise<LazChunkJob> {
   const c = planned.range;
   return {
-    chunk: buffer.slice(c.byteOffset, c.byteOffset + c.byteLength),
+    chunk: await source.readRange(c.byteOffset, c.byteLength, signal),
     pointCount: c.pointCount,
     firstPointIndex: c.firstPointIndex,
     pointDataRecordFormat: header.pointFormat,
@@ -222,13 +224,14 @@ export interface ChunkedDecodeOptions {
  * mismatch).
  */
 async function planChunked(
-  buffer: ArrayBuffer,
+  source: RangeSource,
   header: LasHeader,
   origin: [number, number, number],
   stride: number,
   signal?: AbortSignal,
 ): Promise<ChunkedPlan | null> {
-  const table = await readLazChunkTable(new ArrayBufferRangeSource(buffer), signal);
+  // The VLRs all precede the point data, so the prefix read stops there.
+  const table = await readLazChunkTable(source, signal, header.offsetToPointData);
   if (!table.supported) return null;
   if (!CHUNK_DECODE_FORMATS.has(header.pointFormat)) return null;
   const tableTotal = table.chunks.reduce((a, c) => a + c.pointCount, 0);
@@ -277,7 +280,8 @@ export async function decodeLazChunkedSequential(
   options: ChunkedDecodeOptions = {},
 ): Promise<RawPoints | null> {
   const { signal } = options;
-  const plan = await planChunked(buffer, header, origin, options.stride ?? 1, signal);
+  const source = new ArrayBufferRangeSource(buffer);
+  const plan = await planChunked(source, header, origin, options.stride ?? 1, signal);
   if (plan === null) return null;
   const lazPerf = await getLazPerf();
   const report = progressReporter(plan.total, options.onProgress);
@@ -287,7 +291,7 @@ export async function decodeLazChunkedSequential(
     // A chunk the sample skips entirely holds no output record, so decompressing
     // it could not change one. Every other chunk is decoded in full.
     if (planned.keep && planned.keep.length === 0) continue;
-    const job = jobFor(buffer, header, plan.ctx, planned);
+    const job = await jobFor(source, header, plan.ctx, planned, signal);
     placeChunk(plan.out, decodeLazChunkLocal(lazPerf, job), planned.outIndex);
     done += planned.keep ? planned.keep.length : planned.range.pointCount;
     report(done);
@@ -352,15 +356,30 @@ export interface ParallelDecodeOptions extends ChunkedDecodeOptions {
  * so the result is the same points `decodeLaz` keeps at that stride, in the same
  * order, in an output sized to the sample.
  */
-export async function decodeLazParallel(
+export function decodeLazParallel(
   buffer: ArrayBuffer,
   header: LasHeader,
   origin: [number, number, number],
   decodeChunk: LazChunkDecoder,
   options: ParallelDecodeOptions = {},
 ): Promise<RawPoints | null> {
+  return decodeLazParallelFromSource(new ArrayBufferRangeSource(buffer), header, origin, decodeChunk, options);
+}
+
+/**
+ * {@link decodeLazParallel} over any range source. Each chunk's bytes are read
+ * on demand, one read per chunk, so a file-backed source never has to be
+ * resident whole: only the chunks in flight are in memory at once.
+ */
+export async function decodeLazParallelFromSource(
+  source: RangeSource,
+  header: LasHeader,
+  origin: [number, number, number],
+  decodeChunk: LazChunkDecoder,
+  options: ParallelDecodeOptions = {},
+): Promise<RawPoints | null> {
   const { signal, onPreview } = options;
-  const plan = await planChunked(buffer, header, origin, options.stride ?? 1, signal);
+  const plan = await planChunked(source, header, origin, options.stride ?? 1, signal);
   if (plan === null) return null;
 
   const chunks = plan.chunks;
@@ -385,7 +404,7 @@ export async function decodeLazParallel(
       const planned = chunks[i];
       // A chunk the sample skips entirely holds no output record.
       if (planned.keep?.length !== 0) {
-        const job = jobFor(buffer, header, plan.ctx, planned);
+        const job = await jobFor(source, header, plan.ctx, planned, signal);
         placeChunk(plan.out, await decodeChunk(job, signal), planned.outIndex);
         done += keptOf(planned);
         report(done);
