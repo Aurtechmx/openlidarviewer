@@ -101,3 +101,26 @@
   .olv-analyse-panel { width: auto; }
 }
 
+
+/* ── Scientific-state chip ────────────────────────────────────────────────────
+   One presentation for every canonical state (see src/ui/stateChip.ts). The
+   glyph is the primary channel and the word the second; colour is third and
+   never load-bearing, so the chip survives forced colours and greyscale. */
+.olv-state {
+  display: inline-flex; align-items: baseline; gap: var(--space-xs);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.01em;
+  color: var(--state-info);
+}
+.olv-state-glyph { font-size: 0.95em; line-height: 1; }
+.olv-state--glyph { font-size: var(--text-xs); }
+.olv-state.is-measured { color: var(--state-measured); }
+.olv-state.is-preview { color: var(--state-preview); }
+.olv-state.is-review { color: var(--state-review); }
+.olv-state.is-blocked { color: var(--state-blocked); }
+.olv-state.is-withheld { color: var(--state-withheld); }
+.olv-state.is-derived { color: var(--state-derived); }
+.olv-state.is-info { color: var(--state-info); }
+
+/* Dataset Story mounted as a collapsible section at the top of Analyse. */
+.olv-analyse-story { margin-bottom: var(--space-md); }
+.olv-analyse-story:empty { display: none; }

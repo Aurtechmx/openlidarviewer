@@ -130,7 +130,7 @@
   color: #ff8a8a;
 }
 .olv-bc-hint { font-size: var(--text-xs); color: var(--text-dim); margin: 0; }
-.olv-bc-hint.is-blocked { color: var(--rating-moderate); }
+.olv-bc-hint.is-blocked { color: var(--state-blocked); }
 /* Visible reason for a disabled format pill (LAZ not yet available) — touch
    users can't see the pill's hover-only title, so it's restated here. */
 .olv-bc-format-note { font-size: var(--text-2xs); color: var(--text-faint); margin: var(--space-sm) 0 0; line-height: 1.4; }

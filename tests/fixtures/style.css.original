@@ -33,6 +33,17 @@
   --rating-moderate: #fb923c;
   --rating-weak: #f87171;
   --rating-blocked: #c084fc;  /* violet — gate blocked, distinct from the amber/red scale */
+  /* Scientific-state palette. ALIASES of the rating scale above, so a state and
+   * a rating can never drift apart and no theme has to be re-tuned: every rail
+   * that overrides a --rating-* token re-themes these with it. The chip's glyph
+   * and word carry the state; these only reinforce it. */
+  --state-measured: var(--rating-excellent);
+  --state-preview: var(--rating-moderate);
+  --state-review: var(--rating-weak);
+  --state-blocked: var(--rating-blocked);
+  --state-withheld: var(--rating-blocked);
+  --state-derived: var(--accent);
+  --state-info: var(--text-dim);
   --cyan: #00f0ff;        /* Cyan */
   --teal: #00d4c8;        /* Teal */
   --ice: #c9f6ff;         /* Ice Blue */
@@ -7453,6 +7464,29 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   .olv-analyse-panel { width: auto; }
 }
 
+
+/* ── Scientific-state chip ────────────────────────────────────────────────────
+   One presentation for every canonical state (see src/ui/stateChip.ts). The
+   glyph is the primary channel and the word the second; colour is third and
+   never load-bearing, so the chip survives forced colours and greyscale. */
+.olv-state {
+  display: inline-flex; align-items: baseline; gap: var(--space-xs);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.01em;
+  color: var(--state-info);
+}
+.olv-state-glyph { font-size: 0.95em; line-height: 1; }
+.olv-state--glyph { font-size: var(--text-xs); }
+.olv-state.is-measured { color: var(--state-measured); }
+.olv-state.is-preview { color: var(--state-preview); }
+.olv-state.is-review { color: var(--state-review); }
+.olv-state.is-blocked { color: var(--state-blocked); }
+.olv-state.is-withheld { color: var(--state-withheld); }
+.olv-state.is-derived { color: var(--state-derived); }
+.olv-state.is-info { color: var(--state-info); }
+
+/* Dataset Story mounted as a collapsible section at the top of Analyse. */
+.olv-analyse-story { margin-bottom: var(--space-md); }
+.olv-analyse-story:empty { display: none; }
 /* ───────────────────────────────────────────────────────────────────────────
    Batch format converter — splash entry link + modal overlay.
    Gestalt: one grouped region per decision; a single gradient primary action;
@@ -7585,7 +7619,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   color: #ff8a8a;
 }
 .olv-bc-hint { font-size: var(--text-xs); color: var(--text-dim); margin: 0; }
-.olv-bc-hint.is-blocked { color: var(--rating-moderate); }
+.olv-bc-hint.is-blocked { color: var(--state-blocked); }
 /* Visible reason for a disabled format pill (LAZ not yet available) — touch
    users can't see the pill's hover-only title, so it's restated here. */
 .olv-bc-format-note { font-size: var(--text-2xs); color: var(--text-faint); margin: var(--space-sm) 0 0; line-height: 1.4; }
@@ -9018,11 +9052,11 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px;
   border: 0.5px solid color-mix(in srgb, currentColor 35%, transparent);
 }
-.olv-story-assess.is-good { color: var(--ok, #2e9e5b); }
-.olv-story-assess.is-preview,
-.olv-story-assess.is-limited { color: var(--warn, #b8860b); }
-.olv-story-assess.is-blocked { color: var(--bad, #c0392b); }
-.olv-story-assess.is-unknown { color: var(--muted, #8a8f98); }
+.olv-story-assess.is-good { color: var(--state-measured); }
+.olv-story-assess.is-preview { color: var(--state-preview); }
+.olv-story-assess.is-limited { color: var(--state-review); }
+.olv-story-assess.is-blocked { color: var(--state-blocked); }
+.olv-story-assess.is-unknown { color: var(--state-info); }
 .olv-story-headline { font-size: var(--text-sm); opacity: 0.92; }
 .olv-story-row { display: grid; grid-template-columns: 116px 1fr; gap: 8px; align-items: baseline; }
 .olv-story-k { color: var(--muted, #8a8f98); font-size: var(--text-xs); }
@@ -9038,15 +9072,17 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   border: 0.5px solid color-mix(in srgb, currentColor 35%, transparent);
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
-.olv-health-verdict.is-ready { color: var(--ok, #2e9e5b); }
-.olv-health-verdict.is-caution { color: var(--warn, #b8860b); }
-.olv-health-verdict.is-blocked { color: var(--bad, #c0392b); }
+.olv-health-verdict.is-ready { color: var(--state-measured); }
+.olv-health-verdict.is-caution { color: var(--state-review); }
+.olv-health-verdict.is-blocked { color: var(--state-blocked); }
 .olv-health-rows { display: flex; flex-direction: column; gap: 4px; }
-.olv-health-row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: baseline; }
+/* Leading `auto` track holds the state glyph, so the tier reads without colour. */
+.olv-health-row { display: grid; grid-template-columns: auto 140px 1fr; gap: 8px; align-items: baseline; }
 .olv-health-row .olv-health-k { color: var(--muted, #8a8f98); }
-.olv-health-row.is-caution .olv-health-v { color: var(--warn, #b8860b); }
-.olv-health-row.is-blocked .olv-health-v { color: var(--bad, #c0392b); }
-.olv-health-row.is-good .olv-health-v { color: var(--ok, #2e9e5b); }
+.olv-health-row.is-caution .olv-health-v { color: var(--state-review); }
+.olv-health-row.is-blocked .olv-health-v { color: var(--state-blocked); }
+.olv-health-row.is-good .olv-health-v { color: var(--state-measured); }
+.olv-health-row.is-info .olv-health-v { color: var(--state-info); }
 .olv-health-blockers-title { font-weight: 600; font-size: var(--text-xs); margin-top: 2px; }
 .olv-health-blockers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .olv-health-blockers li { font-size: var(--text-xs); opacity: 0.9; }

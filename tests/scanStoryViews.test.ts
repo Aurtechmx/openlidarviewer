@@ -8,36 +8,10 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { installRecordingDom, type RecordingEl } from './helpers/recordingDom';
 import { buildScanStory, buildExportHealth, type ScanStoryInputs } from '../src/intelligence/scanStory';
 
-class FakeEl {
-  className = '';
-  title = '';
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  set innerHTML(_v: string) { /* unused here */ }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-  /** Every class on any node in the subtree (space-split). */
-  allClasses(): string[] {
-    return [this.className, ...this.children.flatMap((c) => c.allClasses())]
-      .flatMap((c) => c.split(' '))
-      .filter(Boolean);
-  }
-}
-
-beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-  };
-});
+beforeAll(installRecordingDom);
 
 // Import AFTER the stub is installed (el() touches document at call time only).
 const { renderDatasetStoryCard, renderExportHealthPanel } = await import('../src/ui/scanStoryViews');
@@ -61,7 +35,7 @@ const GOOD: ScanStoryInputs = {
 
 describe('renderDatasetStoryCard', () => {
   it('surfaces the headline, assessment, limiter, best-for and next step', () => {
-    const node = renderDatasetStoryCard(buildScanStory(GOOD)) as unknown as FakeEl;
+    const node = renderDatasetStoryCard(buildScanStory(GOOD)) as unknown as RecordingEl;
     const text = node.textContent;
     expect(text).toContain('Dataset Story');
     expect(text).toContain('Aerial / airborne ALS');
@@ -80,7 +54,7 @@ describe('renderDatasetStoryCard', () => {
         { label: 'DTM/DEM export', status: 'Ready' },
       ],
     });
-    const node = renderDatasetStoryCard(allReady) as unknown as FakeEl;
+    const node = renderDatasetStoryCard(allReady) as unknown as RecordingEl;
     expect(node.textContent).not.toContain('Use with caution');
     expect(node.textContent).not.toContain('Not recommended');
   });
@@ -95,7 +69,7 @@ describe('renderDatasetStoryCard', () => {
         { label: 'Contours', status: 'Blocked' },
       ],
     });
-    const text = (renderDatasetStoryCard(story) as unknown as FakeEl).textContent;
+    const text = (renderDatasetStoryCard(story) as unknown as RecordingEl).textContent;
     expect(text).toContain('Use with caution');
     expect(text).toContain('DTM/DEM export');
     expect(text).toContain('Not recommended');
@@ -105,7 +79,7 @@ describe('renderDatasetStoryCard', () => {
 
 describe('renderExportHealthPanel', () => {
   it('renders the verdict, every row, and no blocker list when ready', () => {
-    const node = renderExportHealthPanel(buildExportHealth(GOOD)) as unknown as FakeEl;
+    const node = renderExportHealthPanel(buildExportHealth(GOOD)) as unknown as RecordingEl;
     const text = node.textContent;
     expect(text).toContain('Ready to export');
     expect(text).toContain('Scan scope');
@@ -122,7 +96,7 @@ describe('renderExportHealthPanel', () => {
       classConfidence: 0.42,
       crsKnown: false,
     });
-    const node = renderExportHealthPanel(health) as unknown as FakeEl;
+    const node = renderExportHealthPanel(health) as unknown as RecordingEl;
     const text = node.textContent;
     expect(text).toContain('Export with caution');
     expect(text).toContain('Before you hand this off');

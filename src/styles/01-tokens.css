@@ -33,6 +33,17 @@
   --rating-moderate: #fb923c;
   --rating-weak: #f87171;
   --rating-blocked: #c084fc;  /* violet — gate blocked, distinct from the amber/red scale */
+  /* Scientific-state palette. ALIASES of the rating scale above, so a state and
+   * a rating can never drift apart and no theme has to be re-tuned: every rail
+   * that overrides a --rating-* token re-themes these with it. The chip's glyph
+   * and word carry the state; these only reinforce it. */
+  --state-measured: var(--rating-excellent);
+  --state-preview: var(--rating-moderate);
+  --state-review: var(--rating-weak);
+  --state-blocked: var(--rating-blocked);
+  --state-withheld: var(--rating-blocked);
+  --state-derived: var(--accent);
+  --state-info: var(--text-dim);
   --cyan: #00f0ff;        /* Cyan */
   --teal: #00d4c8;        /* Teal */
   --ice: #c9f6ff;         /* Ice Blue */
