@@ -8,6 +8,7 @@ import { LoadError } from './loadErrors';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
+import type { LazLoadStats, PreviewSink } from './loadLas';
 
 export type { LoaderFn } from './loaderRegistry';
 
@@ -85,7 +86,7 @@ export async function parseBuffer(
   plan?: LoadPlan,
   onProgress?: (u: ProgressUpdate) => void,
   e57Plan?: E57DecodePlan,
-  onPreview?: (cloud: PointCloud) => void,
+  onPreview?: PreviewSink,
 ): Promise<LoadResult> {
   // --- Budget-aware fast load: LAS/LAZ with a preflight plan. ---
   if (plan && (format === 'las' || format === 'laz')) {
@@ -133,13 +134,14 @@ export async function parseFile(
   plan?: LoadPlan,
   onProgress?: (u: ProgressUpdate) => void,
   e57Plan?: E57DecodePlan,
-  onPreview?: (cloud: PointCloud) => void,
+  onPreview?: PreviewSink,
+  onStats?: (stats: LazLoadStats) => void,
 ): Promise<LoadResult> {
   if (plan && format === 'laz') {
     onProgress?.({ stage: 'decoding' });
     const stride = plan.mode === 'stride' ? plan.stride : 1;
     const { loadLazFromFile } = await import('./loadLas');
-    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreview);
+    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreview, onStats);
     return budgetedLas(cloud, plan, onProgress);
   }
   onProgress?.({ stage: 'reading-file' });

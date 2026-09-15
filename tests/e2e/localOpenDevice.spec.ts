@@ -125,10 +125,11 @@ test.describe('local LAZ open on device: single reader against the worker pool',
   });
 
   test('times each rung in both modes and reports first and best', async ({ context }) => {
+    const wanted = (process.env.LAZ_DEVICE_MODES ?? 'single,pooled').split(',');
     const modes: Array<{ name: string; url: string }> = [
       { name: 'single', url: '/?debug=1&decodePool=off' },
-      { name: 'pooled', url: '/?debug=1&decodePool=on' },
-    ];
+      { name: 'pooled', url: `/?debug=1&decodePool=on${process.env.LAZ_PREVIEW_CHUNKS ? `&previewChunks=${process.env.LAZ_PREVIEW_CHUNKS}` : ''}` },
+    ].filter((m) => wanted.includes(m.name));
     // eslint-disable-next-line no-console
     console.log(
       `\nLocal LAZ open on device: sizes=${SIZES_M.join(',')}M, ${RUNS} opens per mode, each on a fresh page`,
@@ -167,8 +168,8 @@ test.describe('local LAZ open on device: single reader against the worker pool',
         );
       }
       // The pool must have been observed engaging, or the pooled column is not a pooled number.
-      expect(results.pooled[0].chunkWorkers, `${m}M pooled run spawned chunk workers`).toBeGreaterThan(0);
-      expect(results.single[0].chunkWorkers, `${m}M single run spawned no chunk worker`).toBe(0);
+      if (results.pooled) expect(results.pooled[0].chunkWorkers, `${m}M pooled run spawned chunk workers`).toBeGreaterThan(0);
+      if (results.single) expect(results.single[0].chunkWorkers, `${m}M single run spawned no chunk worker`).toBe(0);
     }
   });
 });

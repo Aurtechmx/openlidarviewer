@@ -109,3 +109,23 @@ function groundOpenErosionReference(g: Float32Array, W: number, H: number, r: nu
   }
   return out;
 }
+
+describe('square opening: the boundary cases a port must keep', () => {
+  it('radius 0 is the identity for both', () => {
+    const g = grid(9, 7, 4);
+    expect(same(classifierOpen(g, 9, 7, 0), g)).toBe(true);
+    expect(same(groundOpen(g, 9, 7, 0, 'square'), g)).toBe(true);
+  });
+
+  it('negative values, a flat grid, and a 1x1 grid agree at every radius', () => {
+    const neg = grid(16, 12, 5);
+    for (let i = 0; i < neg.length; i++) neg[i] -= 130;
+    const flat = new Float32Array(16 * 12).fill(-3.5);
+    const one = new Float32Array([2.25]);
+    for (let r = 0; r <= 4; r++) {
+      expect(same(classifierOpen(neg, 16, 12, r), groundOpen(neg, 16, 12, r, 'square')), `neg r=${r}`).toBe(true);
+      expect(same(classifierOpen(flat, 16, 12, r), flat), `flat r=${r}`).toBe(true);
+      expect(same(classifierOpen(one, 1, 1, r), one), `1x1 r=${r}`).toBe(true);
+    }
+  });
+});

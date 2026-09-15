@@ -29,6 +29,7 @@ import { buildPreloadSummary } from './preloadSummary';
 import { LoadError } from './loadErrors';
 import type { LoadErrorCategory } from './loadErrors';
 import type { OrganizedRangeSet } from '../model/OrganizedRange';
+import type { PreviewFrame } from './loadLas';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
 export { POINT_BUDGET, MOBILE_POINT_BUDGET, pickLoader, parseBuffer } from './parseBuffer';
@@ -69,7 +70,7 @@ export interface LoadCallbacks {
    * and superseded by the resolved result. Pooled `.laz` loads only; a caller
    * that shows it must take it down when the result arrives or the load fails.
    */
-  onPreview?: (cloud: PointCloud) => void;
+  onPreview?: (cloud: PointCloud, frame?: PreviewFrame) => void;
 }
 
 /** Per-device tuning and lifecycle control for a load. */
@@ -113,7 +114,7 @@ interface CloudPayload {
 
 type WorkerReply =
   | ({ type: 'progress' } & ProgressUpdate)
-  | { type: 'preview'; cloud: CloudPayload }
+  | { type: 'preview'; cloud: CloudPayload; frame?: PreviewFrame }
   | { type: 'error'; error: string; category?: LoadErrorCategory }
   | {
       type: 'done';
@@ -603,7 +604,9 @@ export async function loadFile(
   // Abort-aware: a cancel during a multi-gigabyte read stops within one chunk
   // instead of after the whole file has been materialised.
   const buffer = sendFile ? null : await readWholeFileAbortable(file, signal);
-  const fileReadMs = performance.now() - readStartedAt;
+  // No whole-file read happened when the File was sent; the row is omitted
+  // rather than reported as zero, and the worker's ranged reads fill in.
+  const fileReadMs = sendFile ? undefined : performance.now() - readStartedAt;
   throwIfCancelled();
 
   // Acquire the worker gate so this load has exclusive use of the shared parse
@@ -658,7 +661,7 @@ export async function loadFile(
       }
       if (msg.type === 'preview') {
         previewMs ??= performance.now() - startedAt;
-        onPreview?.(new PointCloud(msg.cloud));
+        onPreview?.(new PointCloud(msg.cloud), msg.frame);
         return;
       }
       detach();
@@ -684,6 +687,13 @@ export async function loadFile(
           decodeMs: msg.telemetry.decodeMs,
           downsampleMs: msg.telemetry.downsampleMs,
           totalLoadMs: performance.now() - startedAt,
+          metadataBytes: msg.telemetry.metadataBytes,
+          rangeRequests: msg.telemetry.rangeRequests,
+          compressedBytesRead: msg.telemetry.compressedBytesRead,
+          previewPoints: msg.telemetry.previewPoints,
+          poolWorkers: msg.telemetry.poolWorkers,
+          decodePath: msg.telemetry.decodePath,
+          poolFallbackReason: msg.telemetry.poolFallbackReason,
         },
       });
     };
@@ -713,6 +723,7 @@ export async function loadFile(
           plan,
           e57Plan: preflight.e57?.plan,
           search: pageSearch(),
+          device: { touchFirst: options.isMobile ?? false },
         },
         buffer ? [buffer] : [],
       );

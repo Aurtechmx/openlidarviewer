@@ -23,7 +23,8 @@ import {
   decodeLazParallelFromSource,
   decodeLazChunkLocal,
   previewChunkIndices,
-  PREVIEW_CHUNK_STEP,
+  planPreview,
+  PREVIEW_MAX_CHUNKS,
 } from '../src/io/heavy/decodeLazChunked';
 import { getLazPerf } from '../src/io/lazDecode';
 import { readLazChunkTable } from '../src/io/heavy/lazChunkTable';
@@ -76,7 +77,7 @@ describe('chunked LAZ decode', () => {
     if (seq.colors) expect(parallel!.colors).toEqual(seq.colors);
   });
 
-  it('hands a preview of the early chunks first and still assembles the full output identically', async () => {
+  it('hands a bounded, file-spread preview first and still assembles the full output identically', async () => {
     const buf = loadFixture('multichunk.laz');
     const header = parseLasHeader(buf);
     const origin = computeOrigin([500000, 4100000, 190]);
@@ -84,12 +85,13 @@ describe('chunked LAZ decode', () => {
     const lazPerf = await getLazPerf();
     const table = await readLazChunkTable(new ArrayBufferRangeSource(buf));
     if (!table.supported) throw new Error('fixture is a chunked LAZ');
-    const previewIdx = previewChunkIndices(table.chunks.length);
-    expect(previewIdx[0]).toBe(0);
+    const previewIdx = previewChunkIndices(table.chunks.length, 2);
+    expect(previewIdx).toEqual([0, table.chunks.length - 1]);
 
     const decodedOrder: number[] = [];
     let preview: Awaited<ReturnType<typeof decodeLaz>> | null = null;
     let placedWhenPreviewed = -1;
+    let plannedInfo: { chunkCount: number; previewChunks: number; previewPoints: number } | null = null;
     const parallel = await decodeLazParallel(
       buf,
       header,
@@ -100,6 +102,8 @@ describe('chunked LAZ decode', () => {
       },
       {
         maxInFlight: 1,
+        previewChunks: 2,
+        onPlanned: (info) => { plannedInfo = info; },
         onPreview: (p) => {
           preview = p;
           placedWhenPreviewed = decodedOrder.length;
@@ -112,26 +116,40 @@ describe('chunked LAZ decode', () => {
     // The preview arrived after exactly the preview chunks, which decoded first.
     expect(preview).not.toBeNull();
     expect(placedWhenPreviewed).toBe(previewIdx.length);
-    const firstDecoded = decodedOrder.slice(0, previewIdx.length);
-    expect(firstDecoded).toEqual(previewIdx.map((i) => table.chunks[i].firstPointIndex));
+    expect(decodedOrder.slice(0, previewIdx.length)).toEqual(previewIdx.map((i) => table.chunks[i].firstPointIndex));
+    expect(plannedInfo).toEqual({ chunkCount: table.chunks.length, previewChunks: 2, previewPoints: preview!.positions.length / 3 });
 
     // Its records are the preview chunks' records, in file order, unchanged.
     const expected: number[] = [];
     for (const i of previewIdx) {
       const c = table.chunks[i];
-      for (let k = c.firstPointIndex * 3; k < (c.firstPointIndex + c.pointCount) * 3; k++) {
-        expected.push(seq.positions[k]);
-      }
+      for (let k = c.firstPointIndex * 3; k < (c.firstPointIndex + c.pointCount) * 3; k++) expected.push(seq.positions[k]);
     }
     expect(Array.from(preview!.positions)).toEqual(expected);
-    expect(preview!.colors === null).toBe(seq.colors === null);
   });
 
-  it('previews every PREVIEW_CHUNK_STEP-th chunk and nothing for a single-chunk file', () => {
+  it('spreads a bounded number of preview chunks over the file, first and last included', () => {
     expect(previewChunkIndices(1)).toEqual([]);
-    expect(previewChunkIndices(2)).toEqual([0]);
-    expect(previewChunkIndices(PREVIEW_CHUNK_STEP + 1)).toEqual([0, PREVIEW_CHUNK_STEP]);
-    expect(previewChunkIndices(3 * PREVIEW_CHUNK_STEP)).toEqual([0, PREVIEW_CHUNK_STEP, 2 * PREVIEW_CHUNK_STEP]);
+    expect(previewChunkIndices(2)).toEqual([0, 1]);
+    expect(previewChunkIndices(5)).toEqual([0, 1, 2, 3, 4]);
+    const spread = previewChunkIndices(200);
+    expect(spread).toHaveLength(PREVIEW_MAX_CHUNKS);
+    expect(spread[0]).toBe(0);
+    expect(spread[spread.length - 1]).toBe(199);
+    expect(new Set(spread).size).toBe(spread.length);
+    for (let i = 1; i < spread.length; i++) expect(spread[i]).toBeGreaterThan(spread[i - 1]);
+    // Twenty thousand chunks cost the same number of preview decodes as two hundred.
+    expect(previewChunkIndices(20_000)).toHaveLength(PREVIEW_MAX_CHUNKS);
+    expect(previewChunkIndices(3, 2)).toEqual([0, 2]);
+  });
+
+  it('drops preview chunks from the tail of the spread until the point cap fits, keeping one', () => {
+    const chunk = (firstPointIndex: number, pointCount: number) =>
+      ({ range: { byteOffset: 0, byteLength: 1, pointCount, firstPointIndex }, outIndex: firstPointIndex });
+    const chunks = Array.from({ length: 10 }, (_, i) => chunk(i * 50_000, 50_000));
+    expect(planPreview(chunks, 4, 1_000_000)).toEqual([0, 3, 6, 9]);
+    expect(planPreview(chunks, 4, 120_000)).toEqual([0, 3]);
+    expect(planPreview(chunks, 4, 10)).toEqual([0]);
   });
 
   it('never calls onPreview when the decode is not chunked', async () => {

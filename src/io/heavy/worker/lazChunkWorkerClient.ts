@@ -49,7 +49,7 @@ import type { RawPoints } from '../../lasDecodeShared';
 import type { LasHeader } from '../../lasHeader';
 import type { ProgressUpdate } from '../../loadProgress';
 import {
-  decodeLazParallel, decodeLazParallelFromSource,
+  decodeLazParallel, decodeLazParallelFromSource, type DecodePlanInfo,
   type LazChunkDecoder,
   type LazChunkJob,
 } from '../decodeLazChunked';
@@ -154,6 +154,15 @@ export interface PooledDecodeOptions {
   readonly onProgress?: (u: ProgressUpdate) => void;
   /** A stratified subset decoded first; see `decodeLazParallel`. */
   readonly onPreview?: (preview: RawPoints) => void;
+  /** Called once the chunk table is read; see `decodeLazParallel`. */
+  readonly onPlanned?: (info: DecodePlanInfo) => void;
+  /** Called after the decode with the pool the file ran on. */
+  readonly onPool?: (stats: { readonly workers: number }) => void;
+  /**
+   * Called when the pool engaged but could not produce the cloud because no
+   * worker of it could be built or kept; the caller then decodes without it.
+   */
+  readonly onFallback?: (reason: string) => void;
 }
 
 /**
@@ -194,13 +203,27 @@ export async function decodeLazPooledFromSource(
   const eligible = header.pointCount >= PARALLEL_DECODE_MIN_POINTS;
   if (!decodeLazPoolEnabled(readDevFlags(), eligible)) return null;
   const client = new LazChunkWorkerClient({ poolEnabled: true });
+  const flags = readDevFlags();
   try {
-    return await decodeLazParallelFromSource(source, header, origin, client.decode, {
+    const out = await decodeLazParallelFromSource(source, header, origin, client.decode, {
       stride: options.stride,
       signal: options.signal,
       onProgress: options.onProgress,
       onPreview: options.onPreview,
+      onPlanned: options.onPlanned,
+      previewChunks: flags.previewChunks ?? undefined,
     });
+    options.onPool?.({ workers: client.poolStats().size });
+    return out;
+  } catch (err) {
+    // A pool with no worker left (none could be built, or every one failed)
+    // is an environment fact, not a decode fault: the caller decodes without
+    // it and the reason is reported, never swallowed.
+    if (client.poolStats().broken && !options.signal?.aborted) {
+      options.onFallback?.(err instanceof Error ? err.message : String(err));
+      return null;
+    }
+    throw err;
   } finally {
     client.dispose();
   }

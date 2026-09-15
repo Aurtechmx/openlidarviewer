@@ -329,13 +329,26 @@ export interface ParallelDecodeOptions extends ChunkedDecodeOptions {
    */
   readonly maxInFlight?: number;
   /**
-   * Receive a stratified preview before the bulk of the decode: every
-   * `PREVIEW_CHUNK_STEP`-th chunk is queued ahead of the rest, and once those
+   * Receive a preview before the bulk of the decode: a bounded set of chunks
+   * spread evenly over the file is queued ahead of the rest, and once those
    * have landed a compact copy of their records is handed here, in file order.
    * The final output is assembled exactly as it is without a preview; only the
    * order the chunks decode in changes, which `out` never depends on.
    */
   readonly onPreview?: (preview: RawPoints) => void;
+  /** Chunks the preview is built from; default {@link PREVIEW_MAX_CHUNKS}. */
+  readonly previewChunks?: number;
+  /** Records the preview may hold; default {@link PREVIEW_MAX_POINTS}. */
+  readonly previewPoints?: number;
+  /** Called once the chunk table is read and the decode order is fixed. */
+  readonly onPlanned?: (info: DecodePlanInfo) => void;
+}
+
+/** What is known once the chunk table is read, before any chunk decodes. */
+export interface DecodePlanInfo {
+  readonly chunkCount: number;
+  readonly previewChunks: number;
+  readonly previewPoints: number;
 }
 
 /**
@@ -386,9 +399,17 @@ export async function decodeLazParallelFromSource(
   const maxInFlight = options.maxInFlight ?? MAX_CHUNK_DECODES_IN_FLIGHT;
   const lanes = Math.max(1, Math.min(Math.floor(maxInFlight), chunks.length));
   const report = progressReporter(plan.total, options.onProgress);
-  const previewIdx = onPreview ? previewChunkIndices(chunks.length) : [];
+  const previewIdx = onPreview
+    ? planPreview(chunks, options.previewChunks ?? PREVIEW_MAX_CHUNKS, options.previewPoints ?? PREVIEW_MAX_POINTS)
+    : [];
   const order = previewIdx.length > 0 ? decodeOrder(chunks.length, previewIdx) : null;
+  const previewSet = new Set(previewIdx);
   let previewLeft = previewIdx.length;
+  options.onPlanned?.({
+    chunkCount: chunks.length,
+    previewChunks: previewIdx.length,
+    previewPoints: previewIdx.reduce((n, i) => n + keptOf(chunks[i]), 0),
+  });
   let next = 0;
   let done = 0;
 
@@ -409,7 +430,7 @@ export async function decodeLazParallelFromSource(
         done += keptOf(planned);
         report(done);
       }
-      if (order && i % PREVIEW_CHUNK_STEP === 0 && --previewLeft === 0) {
+      if (order && previewSet.has(i) && --previewLeft === 0) {
         onPreview!(assemblePreview(plan, previewIdx));
       }
     }
@@ -420,8 +441,14 @@ export async function decodeLazParallelFromSource(
   return plan.out;
 }
 
-/** One chunk in every this many is decoded first and shown as the preview. */
-export const PREVIEW_CHUNK_STEP = 16;
+/**
+ * The most chunks a preview is built from. Bounded so the preview's cost does
+ * not grow with the file: a 200-chunk file and a 20,000-chunk file both wait
+ * for this many decodes before the first points show.
+ */
+export const PREVIEW_MAX_CHUNKS = 12;
+/** The most records a preview holds; chunks are dropped from the spread past it. */
+export const PREVIEW_MAX_POINTS = 250_000;
 
 /** Records a planned chunk contributes to the output. */
 function keptOf(planned: PlannedChunk): number {
@@ -429,14 +456,40 @@ function keptOf(planned: PlannedChunk): number {
 }
 
 /**
- * The chunks a preview is built from: every `PREVIEW_CHUNK_STEP`-th, so the
- * sample is spread across the file rather than taken from its start. Empty
+ * The chunks a preview is built from: up to `maxChunks` indices spread evenly
+ * over `[0, chunkCount - 1]`, first and last included, no duplicates. Empty
  * for a single-chunk file, where nothing would be left to preview ahead of.
+ * Chunk order is file order, not a spatial order, so this spreads the
+ * preview over the file's sequence; it is a latency device, not a claim of
+ * spatial uniformity.
  */
-export function previewChunkIndices(chunkCount: number): number[] {
+export function previewChunkIndices(chunkCount: number, maxChunks = PREVIEW_MAX_CHUNKS): number[] {
   if (chunkCount < 2) return [];
+  const k = Math.max(1, Math.min(Math.floor(maxChunks), chunkCount));
+  if (k === 1) return [0];
   const idx: number[] = [];
-  for (let i = 0; i < chunkCount; i += PREVIEW_CHUNK_STEP) idx.push(i);
+  for (let j = 0; j < k; j++) {
+    const i = Math.round((j * (chunkCount - 1)) / (k - 1));
+    if (idx.length === 0 || idx[idx.length - 1] !== i) idx.push(i);
+  }
+  return idx;
+}
+
+/**
+ * {@link previewChunkIndices} with the point cap applied: chunks are dropped
+ * from the tail of the spread until the records they hold fit `maxPoints`, at
+ * least one chunk staying.
+ */
+export function planPreview(
+  chunks: readonly PlannedChunk[],
+  maxChunks: number,
+  maxPoints: number,
+): number[] {
+  const idx = previewChunkIndices(chunks.length, maxChunks);
+  let points = idx.reduce((n, i) => n + keptOf(chunks[i]), 0);
+  while (idx.length > 1 && points > maxPoints) {
+    points -= keptOf(chunks[idx.pop() as number]);
+  }
   return idx;
 }
 

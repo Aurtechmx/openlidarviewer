@@ -93,6 +93,7 @@ import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
+import type { PreviewFrame } from '../io/loadLas';
 import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
@@ -1671,17 +1672,13 @@ export class Viewer {
 
   /** A cloud's point mesh coloured by `mode`; the layer and the preview share it. */
   private _meshForCloud(cloud: PointCloud, mode: ColorMode): PointMeshHandle {
+    // upAxis from the source format so a Y-up scan's elevation ramp follows
+    // true height. Classification and intensity are the cloud's own, already
+    // in lockstep with its positions, so every attribute aligns per point.
     return this.buildPointMesh(
       cloud.positions,
-      // upAxis from the source format so a Y-up phone scan's elevation ramp
-      // follows true height, not a horizontal axis.
       colorForMode(mode, cloud, { upAxis: isZUpFormat(cloud.sourceFormat) ? 2 : 1 }),
-      // Feed the DOWNSAMPLED classification (carried in lockstep with the
-      // downsampled positions by `downsampleToBudget`), never the original
-      // input — the attribute must align 1:1 with the uploaded points.
       cloud.classification ?? null,
-      // Intensity rides along 1:1 for the intensity filter (v0.5.6); the
-      // downsampled cloud carries a downsampled intensity in lockstep.
       cloud.intensity ?? null,
     );
   }
@@ -4286,10 +4283,11 @@ export class Viewer {
   /**
    * Show a stand-in cloud while a load's decode is still running. Drawn like a
    * layer but not one: nothing lists, measures or exports it, and `addCloud`
-   * does not know it exists. The camera is fitted to it once, with the fit
+   * does not know it exists. The camera is fitted once, to `frame` when the
+   * source declared a usable extent and to the sample otherwise, with the fit
    * `frameAll` makes, so the commit that replaces it need not frame again.
    */
-  showPreviewCloud(cloud: PointCloud): void {
+  showPreviewCloud(cloud: PointCloud, frame?: PreviewFrame): void {
     this.clearPreviewCloud();
     const { mesh, material } = this._meshForCloud(cloud, defaultMode(cloud));
     this._scene.add(mesh);
@@ -4298,7 +4296,9 @@ export class Viewer {
     this._worldUp.set(0, zUp ? 0 : 1, zUp ? 1 : 0);
     this._nav.setWorldUp(this._worldUp);
     this._nav.setHasCloud(true);
-    const b = cloud.bounds();
+    // The declared source extent frames the view when the header gave one, so
+    // the sample's own spread cannot crop it; the sample's bounds otherwise.
+    const b = frame ?? cloud.bounds();
     this._frameBox(new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
     this.requestFrame();
   }

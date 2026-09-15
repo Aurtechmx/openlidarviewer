@@ -40,6 +40,7 @@ import { computeOrigin } from './coordinateBridge';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
+import type { RangeSource } from './range/RangeSource';
 import {
   allocRawPoints,
   decodeContext,
@@ -166,7 +167,7 @@ export async function loadLas(
   name = `cloud.${sourceFormat}`,
   stride = 1,
   onProgress?: (u: ProgressUpdate) => void,
-  onPreview?: (cloud: PointCloud) => void,
+  onPreview?: PreviewSink,
 ): Promise<PointCloud> {
   const header = parseLasHeader(buffer);
   // Origin from the floored header min — known before decoding, so records
@@ -193,7 +194,7 @@ export async function loadLas(
     ).decodeLazPooled(buffer, header, origin, {
       stride,
       onProgress,
-      onPreview: onPreview && ((preview) => onPreview(toCloud(preview))),
+      onPreview: onPreview && ((preview) => onPreview(toCloud(preview), previewFrame(header, origin))),
     });
     raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress));
   } else {
@@ -222,7 +223,8 @@ export async function loadLazFromFile(
   name = 'cloud.laz',
   stride = 1,
   onProgress?: (u: ProgressUpdate) => void,
-  onPreview?: (cloud: PointCloud) => void,
+  onPreview?: PreviewSink,
+  onStats?: (stats: LazLoadStats) => void,
 ): Promise<PointCloud> {
   let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
   // The VLRs sit between the public header and the point data; a file whose
@@ -240,16 +242,90 @@ export async function loadLazFromFile(
 
   const { decodeLazPooledFromSource } = await import('./heavy/worker/lazChunkWorkerClient');
   const { LocalFileRangeSource } = await import('./range/LocalFileRangeSource');
-  const pooled = await decodeLazPooledFromSource(new LocalFileRangeSource(file), header, origin, {
+  // Every ranged read is counted so the load can say what it read and when.
+  const inner = new LocalFileRangeSource(file);
+  const stats = {
+    metadataBytes: head.byteLength,
+    rangeRequests: 1,
+    compressedBytesRead: 0,
+    previewPoints: undefined as number | undefined,
+    poolWorkers: undefined as number | undefined,
+    decodePath: 'whole-file' as LazLoadStats['decodePath'],
+    poolFallbackReason: undefined as string | undefined,
+  };
+  let planned = false;
+  const counted: RangeSource = {
+    id: () => inner.id(),
+    kind: () => inner.kind(),
+    size: () => inner.size(),
+    readRange: async (offset, length, signal) => {
+      const bytes = await inner.readRange(offset, length, signal);
+      stats.rangeRequests++;
+      if (planned) stats.compressedBytesRead += bytes.byteLength;
+      else stats.metadataBytes += bytes.byteLength;
+      return bytes;
+    },
+  };
+  const pooled = await decodeLazPooledFromSource(counted, header, origin, {
     stride,
     onProgress,
-    onPreview: onPreview && ((preview) => onPreview(toCloud(preview))),
+    onPreview: onPreview && ((preview) => onPreview(toCloud(preview), previewFrame(header, origin))),
+    onPlanned: (info) => {
+      planned = true;
+      if (onPreview) stats.previewPoints = info.previewPoints;
+    },
+    onPool: ({ workers }) => { stats.poolWorkers = workers; stats.decodePath = 'pooled'; },
+    onFallback: (reason) => { stats.poolFallbackReason = reason; stats.decodePath = 'pool-fallback'; },
   });
-  if (pooled) return toCloud(pooled);
+  if (pooled) {
+    onStats?.(stats);
+    return toCloud(pooled);
+  }
 
   const { decodeLaz } = await import('./lazDecode');
   const buffer = await file.arrayBuffer();
+  stats.rangeRequests++;
+  stats.compressedBytesRead += buffer.byteLength;
+  onStats?.(stats);
   return toCloud(await decodeLaz(buffer, header, origin, stride, onProgress));
+}
+
+/** What a file-fed LAZ load read and which decoder produced it. */
+export interface LazLoadStats {
+  readonly metadataBytes: number;
+  readonly rangeRequests: number;
+  readonly compressedBytesRead: number;
+  readonly previewPoints?: number;
+  readonly poolWorkers?: number;
+  readonly decodePath: 'pooled' | 'whole-file' | 'pool-fallback';
+  readonly poolFallbackReason?: string;
+}
+
+/** The preview's frame: the header's declared extent, in the cloud's local frame. */
+export type PreviewFrame = { readonly min: [number, number, number]; readonly max: [number, number, number] };
+
+/** Receives the preview cloud and, when the header's bounds are usable, the frame to show it in. */
+export type PreviewSink = (cloud: PointCloud, frame?: PreviewFrame) => void;
+
+/**
+ * The header's declared bounds shifted into the render-local frame, or
+ * undefined when they cannot frame a view: a non-finite value, a min above
+ * its max, or an extent that is flat on more than one axis. Declared bounds
+ * frame the camera; they do not claim where points are inside them.
+ */
+export function previewFrame(header: LasHeader, origin: [number, number, number]): PreviewFrame | undefined {
+  const min: [number, number, number] = [0, 0, 0];
+  const max: [number, number, number] = [0, 0, 0];
+  let flat = 0;
+  for (let a = 0; a < 3; a++) {
+    const lo = header.min[a] - origin[a];
+    const hi = header.max[a] - origin[a];
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo > hi) return undefined;
+    if (hi - lo <= 0) flat++;
+    min[a] = lo;
+    max[a] = hi;
+  }
+  return flat > 1 ? undefined : { min, max };
 }
 
 /** Sanitise decoded records and wrap them as a cloud with the header's facts. */

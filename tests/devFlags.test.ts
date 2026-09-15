@@ -33,6 +33,7 @@ describe('parseDevFlags — defaults', () => {
       decodePool: false,
       decodePoolOff: false,
       decodeWorkers: null,
+      previewChunks: null,
       residentStickiness: false,
     });
   });
@@ -85,6 +86,7 @@ describe('parseDevFlags — the program §P0 flag set', () => {
       decodePool: false,
       decodePoolOff: false,
       decodeWorkers: null,
+      previewChunks: null,
       residentStickiness: false,
     });
   });
@@ -186,5 +188,15 @@ describe('primeDevFlags — a worker adopts the page query it was handed', () =>
     expect(readDevFlags().decodeWorkers).toBe(3);
     primeDevFlags('');
     expect(readDevFlags()).toEqual(DEV_FLAG_DEFAULTS);
+  });
+});
+
+describe('parseDevFlags — ?previewChunks', () => {
+  it('clamps to 1-64 and is null when absent or not a number', () => {
+    expect(parseDevFlags('?previewChunks=8').previewChunks).toBe(8);
+    expect(parseDevFlags('?previewChunks=0').previewChunks).toBe(1);
+    expect(parseDevFlags('?previewChunks=999').previewChunks).toBe(64);
+    expect(parseDevFlags('?previewChunks=x').previewChunks).toBeNull();
+    expect(parseDevFlags('').previewChunks).toBeNull();
   });
 });

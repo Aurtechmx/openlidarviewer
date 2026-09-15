@@ -219,6 +219,24 @@ export interface DecodePoolEnvironment {
  * Never throws: a DOM-free environment (Node tests, a worker) reports no cores
  * and not-mobile, which lands on the conservative desktop default.
  */
+/**
+ * The page's device answer, adopted by a worker before it sizes a pool. A
+ * dedicated worker has no `matchMedia`, so the touch-first signal the page
+ * read is sent with the request and primed here; the worker's own
+ * `navigator` still supplies cores and memory.
+ */
+let primedIsMobile: boolean | undefined;
+
+/** Adopt the page's touch-first answer in a scope that cannot ask for it. */
+export function primeDecodePoolEnvironment(env: { readonly isMobile: boolean }): void {
+  primedIsMobile = env.isMobile;
+}
+
+/** Test hook: forget a primed answer so the next read asks `matchMedia` again. */
+export function resetDecodePoolEnvironmentForTest(): void {
+  primedIsMobile = undefined;
+}
+
 export function readDecodePoolEnvironment(): DecodePoolEnvironment {
   let hardwareConcurrency: number | undefined;
   let deviceMemoryGB: number | undefined;
@@ -234,14 +252,16 @@ export function readDecodePoolEnvironment(): DecodePoolEnvironment {
   } catch {
     /* no navigator — the policy's unknown-cores default covers it */
   }
-  let isMobile = false;
-  try {
-    const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
-    if (typeof mm === 'function') {
-      isMobile = mm.call(globalThis, '(pointer: coarse) and (hover: none)').matches;
+  let isMobile = primedIsMobile ?? false;
+  if (primedIsMobile === undefined) {
+    try {
+      const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+      if (typeof mm === 'function') {
+        isMobile = mm.call(globalThis, '(pointer: coarse) and (hover: none)').matches;
+      }
+    } catch {
+      /* matchMedia unavailable or threw: treat as desktop, capped anyway */
     }
-  } catch {
-    /* matchMedia unavailable or threw — treat as desktop, capped anyway */
   }
   return { deviceMemoryGB, hardwareConcurrency, isMobile };
 }

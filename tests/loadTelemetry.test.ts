@@ -24,6 +24,17 @@ describe('formatTelemetry', () => {
     expect(formatTelemetry({ transferMs: 5, parseMs: 1 })).not.toContain('preview');
   });
 
+  test('prints the ranged-read counts and the decode path after the timings', () => {
+    const out = formatTelemetry({ decodeMs: 12, rangeRequests: 41, compressedBytesRead: 19_700_000, metadataBytes: 65_536, previewPoints: 250_000, poolWorkers: 4, decodePath: 'pooled' });
+    expect(out.indexOf('decode  ')).toBeLessThan(out.indexOf('range reads'));
+    expect(out).toContain('41');
+    expect(out).toContain('19.7 MB');
+    expect(out).toContain('65.5 kB');
+    expect(out).toContain('250,000');
+    expect(out).toContain('pooled');
+    expect(formatTelemetry({ decodeMs: 1 })).not.toContain('decode path');
+  });
+
   test('orders rows by pipeline stage, not by insertion order', () => {
     const out = formatTelemetry({ totalLoadMs: 999, sniffMs: 1 });
     expect(out.indexOf('sniff')).toBeLessThan(out.indexOf('total'));

@@ -327,10 +327,10 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       {
         onProgress: (u) => deps.dropZone.setProgress(formatProgress(u), u.fraction),
         onPreload: (lines) => deps.dropZone.setPreload(lines),
-        onPreview: (cloud) => {
+        onPreview: (cloud, frame) => {
           if (controller.signal.aborted) return;
           deps.stage.hideEmptyState();
-          deps.getViewer().showPreviewCloud(cloud);
+          deps.getViewer().showPreviewCloud(cloud, frame);
           previewUp = true;
         },
       },
