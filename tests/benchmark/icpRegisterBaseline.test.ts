@@ -23,9 +23,9 @@ function cloud(n: number, seed: number): Vec3[] {
   return pts;
 }
 
-describe('icpRegister cost', () => {
-  const run = ENABLED ? it : it.skip;
-  run(
+// Skipped by design outside a benchmark run: it needs an explicit opt-in.
+describe.skipIf(!ENABLED)('icpRegister cost', () => {
+  it(
     'times a full fit across a size ladder',
     () => {
       // eslint-disable-next-line no-console

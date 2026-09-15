@@ -65,7 +65,9 @@ export function buildPointIndex(points: readonly Vec3[]): PointIndex {
   const cellStart = new Uint32Array(cells + 1);
   const clampCell = (v: number, min: number, dim: number): number => {
     const c = Math.floor((v - min) / cell);
-    return c < 0 ? 0 : c >= dim ? dim - 1 : c;
+    if (c < 0) return 0;
+    if (c >= dim) return dim - 1;
+    return c;
   };
   for (let i = 0; i < n; i++) {
     const p = points[i];
