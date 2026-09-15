@@ -397,30 +397,32 @@ claims:
 
   - claimId: VOL-STOCKPILE
     product: Stockpile volume
-    algorithm: Point-sample estimator over a fitted/explicit base (area-weighted integration pending — Phase 8)
-    methodId: olv.volume.stockpile
-    algorithmVersion: v0.5.x
-    claim: "Stockpile volume above a reference base."
+    algorithm: Area-weighted grid integration (polygon-clipped cell areas, median cell surface) over a lowest-ground base plane fitted by the point-sample estimator
+    methodId: olv.volume.stockpile-area-grid
+    algorithmVersion: v0.6.9
+    claim: "Stockpile volume above a reference base, over the supported footprint area."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Local metric; refuses geographic degrees."
-    assumptions: ["uniform density", "base uncertainty currently unquantified"]
-    failureModes: ["non-uniform density", "coverage gaps", "base-surface error"]
+    assumptions: ["one median surface height per cell", "base uncertainty currently unquantified", "a preview or withheld figure is not a measurement"]
+    failureModes: ["coverage gaps below the support thresholds", "base-surface error", "a source still refining"]
     exportAllowed: true
     userLabel: "Exploratory stockpile preview"
     softwareStatus: shipping
     evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: pending
-    approvedClaim: "Exploratory volume preview; spatial correlation and base uncertainty unquantified."
+    approvedClaim: "Exploratory volume preview over the supported footprint area; spatial correlation and base uncertainty unquantified."
     prohibitedClaim: ["survey-grade stockpile volume", "validated uncertainty interval"]
     scope:
-      supported: []
+      supported:
+        - "A density gradient across the footprint does not bias the figure (cells are area-weighted, not point-weighted)."
+        - "Unsupported cells lower the reported footprint support instead of reading as zero."
       unsupported:
         - "Base-surface uncertainty, which is unquantified."
-        - "Non-uniform density and coverage gaps."
+        - "Coverage gaps below the support thresholds; the figure is then a preview or withheld."
         - "Any validated uncertainty interval on the reported volume."
 
   # ── Ground / terrain surfaces ───────────────────────────────────────────────

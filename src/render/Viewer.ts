@@ -3862,11 +3862,7 @@ export class Viewer {
     percentile: number = 0.05,
     lin: number = 1,
     densityUnitKnown: boolean = true,
-    /**
-     * `verticalUnitToMetres`; defaults to `lin`. A stockpile volume is an area
-     * times a height, so a compound CRS (metre eastings over foot heights)
-     * needs both factors — one alone overstates the pile by 3.28×.
-     */
+    /** `verticalUnitToMetres`; defaults to `lin`. A compound CRS needs both factors. */
     vert: number = lin,
     basis: LassoSelectionBasis = 'through-surfaces',
   ): LassoVolumeReturn | null {
@@ -3918,6 +3914,8 @@ export class Viewer {
         out.anySourceReduced,
         densityUnitKnown,
         vert,
+        this.refinementReadiness(),
+        out.budget.downsample,
       ),
       selectedCount: out.selectedCount,
       lasso,

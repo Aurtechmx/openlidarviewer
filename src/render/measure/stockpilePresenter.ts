@@ -15,7 +15,9 @@
  */
 
 import { stockpileVolume, type StockpileVolumeResult, type StockpileConfidence } from './stockpileVolume';
+import { stockpileAreaGrid, type StockpileAreaGridResult } from './stockpileAreaGrid';
 import type { Vec3 } from '../navMath';
+import type { RefinementReadiness } from '../streaming/refinementReadiness';
 
 export interface StockpileViewRow {
   readonly label: string;
@@ -141,13 +143,129 @@ export function stockpileToastLine(view: StockpileView): string {
   return view.unitVerified ? line : `${line} · units unverified (assumes metres)`;
 }
 
+/** What the analysed sample was, relative to the whole source. */
+export interface StockpileScope {
+  /**
+   * False while the source the footprint was drawn on is still arriving or
+   * refining (a streaming scan not yet settled), so cells filled by the
+   * resident subset do not authorise a final figure.
+   */
+  readonly sourceComplete: boolean;
+  /**
+   * True when the analysed points are a sample of the resident data: a cloud
+   * voxel-reduced to the device budget, or a lasso walk that strode the points.
+   */
+  readonly sampled: boolean;
+}
+
+/** The result authority after footprint support AND scope are both applied. */
+export type StockpileAuthority = 'measured' | 'preview' | 'withheld';
+
+export interface StockpileAreaGridView {
+  readonly method: StockpileAreaGridResult['method'];
+  readonly authority: StockpileAuthority;
+  /** Why a preview or a withheld result is not measured. */
+  readonly reason: string;
+  /** Fill volume above the base over supported cells, m³. */
+  readonly volumeM3: number;
+  /** Supported footprint fraction, 0..1, and the coverage verdict it gave. */
+  readonly supportFraction: number;
+  readonly coverage: StockpileAreaGridResult['coverage'];
+  /** Per-cell surface spread term, m³; the only term the incomplete model carries. */
+  readonly surfaceTermM3: number;
+  /** Base plane elevation (m) and its heuristic spread (m), not in the band. */
+  readonly baseZM: number;
+  readonly baseUncertaintyM: number;
+  readonly unitVerified: boolean;
+}
+
 /**
- * End-to-end helper for the lasso toast: run the estimator over the selected
- * sample with a "lowest ground" base plane and return the ` · Stockpile: …`
- * suffix — or `''` when there's nothing trustworthy to claim (too few points,
- * degenerate footprint, or zero volume). Keeps the whole compute + format path
- * inside the lazy chunk, so `main.ts` carries only the call. Positional args
- * keep the eager call site byte-cheap.
+ * Apply the scope to the coverage verdict. Footprint support is geometric; it
+ * says nothing about whether the points that filled the cells are all the
+ * points there will be. An incomplete or sampled source caps the authority at
+ * preview; a refused coverage stays withheld whatever the scope.
+ */
+export function stockpileAuthority(
+  coverage: StockpileAreaGridResult['coverage'],
+  scope: StockpileScope,
+): { authority: StockpileAuthority; reason: string } {
+  if (coverage === 'refused') return { authority: 'withheld', reason: 'insufficient observations' };
+  if (!scope.sourceComplete) return { authority: 'preview', reason: 'source still refining' };
+  if (scope.sampled) return { authority: 'preview', reason: 'display sample' };
+  if (coverage === 'preview') return { authority: 'preview', reason: 'footprint gaps' };
+  return { authority: 'measured', reason: '' };
+}
+
+/**
+ * Integrate the lasso sample with the area-weighted grid over a "lowest
+ * ground" base plane and build its view. The grid runs in native units; the
+ * m³ factor is linear²·vertical, applied here, so a compound CRS is handled
+ * the way the point-sample presenter handles it.
+ */
+export function presentStockpileAreaGrid(
+  polygon: ReadonlyArray<Vec3>,
+  positions: Float32Array,
+  base: { readonly z: number; readonly uncertainty: number },
+  scope: StockpileScope,
+  options: StockpilePresentOptions & { readonly unitVerified?: boolean } = {},
+): StockpileAreaGridView {
+  const lin = options.lin ?? 1;
+  const vert = options.vert ?? lin;
+  const vol = lin * lin * vert;
+  const points: { x: number; y: number; z: number }[] = [];
+  const n = positions.length / 3;
+  for (let i = 0; i < n; i++) {
+    const z = positions[i * 3 + 2];
+    if (!Number.isFinite(z)) continue;
+    points.push({ x: positions[i * 3], y: positions[i * 3 + 1], z });
+  }
+  const grid = stockpileAreaGrid({
+    points,
+    polygon: polygon.map((p) => ({ x: p[0], y: p[1] })),
+    base: { kind: 'constant', zM: base.z },
+  });
+  const { authority, reason } = stockpileAuthority(grid.coverage, scope);
+  return {
+    method: grid.method,
+    authority,
+    reason,
+    volumeM3: grid.fillM3 * vol,
+    supportFraction: grid.supportFraction,
+    coverage: grid.coverage,
+    surfaceTermM3: grid.surfaceTermM3 * vol,
+    baseZM: base.z * vert,
+    baseUncertaintyM: base.uncertainty * vert,
+    unitVerified: options.unitVerified ?? true,
+  };
+}
+
+/**
+ * One line for the toast. A preview figure never appears without its PREVIEW
+ * word and reason; a withheld result shows the support that fell short and no
+ * number at all.
+ */
+export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
+  const support = `${Math.round(v.supportFraction * 100)}% footprint support`;
+  let line: string;
+  if (v.authority === 'withheld') {
+    line = `Stockpile: volume withheld · ${support} · ${v.reason}`;
+  } else {
+    const state = v.authority === 'measured' ? 'MEASURED' : `PREVIEW (${v.reason})`;
+    line =
+      `Stockpile: ${int(v.volumeM3)} m³ · ${state} · ${support} · area-weighted grid` +
+      ` · surface term ± ${int(v.surfaceTermM3)} m³ (incomplete model)` +
+      ` · base ${v.baseZM.toFixed(2)} m (lowest ground, ±${v.baseUncertaintyM.toFixed(2)} m, not in the term)`;
+  }
+  return v.unitVerified ? line : `${line} · units unverified (assumes metres)`;
+}
+
+/**
+ * End-to-end helper for the lasso toast: fit the "lowest ground" base plane
+ * with the point-sample estimator (kept as the base and validity reference),
+ * integrate the volume with the area-weighted grid, and return the
+ * ` · Stockpile: …` suffix, or `''` when the footprint is unusable. Keeps the
+ * whole compute + format path inside the lazy chunk, so `main.ts` carries only
+ * the call. Positional args keep the eager call site byte-cheap.
  */
 export function stockpileToastSuffix(
   polygon: ReadonlyArray<Vec3>,
@@ -157,20 +275,33 @@ export function stockpileToastSuffix(
   densityUnitKnown?: boolean,
   /** `verticalUnitToMetres`; defaults to `lin` for a single-unit CRS. */
   vert?: number,
+  /**
+   * The streaming session's readiness, or null when nothing streams. A source
+   * that has not settled can still fill every cell with what is resident;
+   * that is support, not completeness, so the figure stays a preview.
+   */
+  readiness: RefinementReadiness | null = null,
+  /** True when the lasso walk strode the points; defaults to false. */
+  walkSampled: boolean = false,
 ): string {
+  const sourceComplete = readiness === null || readiness.phase === 'settled';
   if (polygon.length < 3 || positions.length < 9) return '';
   const stock = stockpileVolume({
     polygon,
     positions,
     base: { mode: 'lowest-percentile', percentile: 0.05 },
     sourceReduced,
-    // Grade the density bar in points/m² for foot-unit projects, not native ft².
     linearUnitToMetres: lin,
-    // …but only claim a points/m² density when the unit is actually known; an
-    // unknown CRS still passes lin (defaulting to 1) for display, so the grade
-    // must be told separately not to trust it.
     densityUnitKnown,
   });
-  if (stock.validity !== 'ok' || stock.volume <= 0) return '';
-  return ` · ${stockpileToastLine(presentStockpile(stock, { lin, vert }))}`;
+  if (stock.validity !== 'ok') return '';
+  const view = presentStockpileAreaGrid(
+    polygon,
+    positions,
+    { z: stock.breakdown.baseZ, uncertainty: stock.breakdown.baseUncertainty },
+    { sourceComplete, sampled: Boolean(sourceReduced) || walkSampled },
+    { lin, vert, unitVerified: densityUnitKnown ?? true },
+  );
+  if (view.authority !== 'withheld' && view.volumeM3 <= 0) return '';
+  return ` · ${stockpileAreaGridToastLine(view)}`;
 }

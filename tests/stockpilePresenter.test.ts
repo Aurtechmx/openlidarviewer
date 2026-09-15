@@ -168,3 +168,148 @@ describe('the stockpile line does not promise a coverage interval', () => {
     expect(stockpileToastLine(view)).toMatch(/sampling/i);
   });
 });
+
+// Area-weighted grid path (the live toast since v0.6.9).
+
+import {
+  presentStockpileAreaGrid,
+  stockpileAreaGridToastLine,
+  stockpileAuthority,
+  stockpileToastSuffix,
+} from '../src/render/measure/stockpilePresenter';
+import { stockpileAreaGrid } from '../src/render/measure/stockpileAreaGrid';
+import type { Vec3 } from '../src/render/navMath';
+
+/** A 20 m × 10 m prism, `h` high over z = 0, sampled on a grid with the given step. */
+function prism(h: number, stepX: number, stepY: number, xFrom = 0, xTo = 20): number[] {
+  const out: number[] = [];
+  for (let x = xFrom + stepX / 2; x < xTo; x += stepX) {
+    for (let y = stepY / 2; y < 10; y += stepY) out.push(x, y, h);
+  }
+  return out;
+}
+const RECT: Vec3[] = [[0, 0, 0], [20, 0, 0], [20, 10, 0], [0, 10, 0]];
+const complete = { sourceComplete: true, sampled: false };
+
+describe('stockpileAuthority', () => {
+  test('measured coverage on a complete, unsampled source is measured', () => {
+    expect(stockpileAuthority('measured', complete)).toEqual({ authority: 'measured', reason: '' });
+  });
+  test('an unsettled source caps a measured coverage at preview', () => {
+    expect(stockpileAuthority('measured', { sourceComplete: false, sampled: false }))
+      .toEqual({ authority: 'preview', reason: 'source still refining' });
+  });
+  test('a sampled source caps a measured coverage at preview', () => {
+    expect(stockpileAuthority('measured', { sourceComplete: true, sampled: true }))
+      .toEqual({ authority: 'preview', reason: 'display sample' });
+  });
+  test('refused coverage is withheld whatever the scope', () => {
+    expect(stockpileAuthority('refused', complete).authority).toBe('withheld');
+    expect(stockpileAuthority('refused', { sourceComplete: false, sampled: true }).authority).toBe('withheld');
+  });
+});
+
+describe('presentStockpileAreaGrid', () => {
+  test('a full prism is measured with the analytic volume', () => {
+    const pts = Float32Array.from(prism(3, 0.5, 0.5));
+    const v = presentStockpileAreaGrid(RECT, pts, { z: 0, uncertainty: 0.02 }, complete);
+    expect(v.authority).toBe('measured');
+    expect(v.coverage).toBe('measured');
+    expect(v.volumeM3).toBeCloseTo(20 * 10 * 3, 6);
+    expect(v.method).toBe('olv.volume.stockpile-area-grid@2');
+    expect(v.supportFraction).toBeCloseTo(1, 6);
+  });
+
+  test('the figure equals the area-grid result times the CRS volume factor', () => {
+    // Parity: the presenter adds nothing to the number; feet horizontally and
+    // metres vertically give lin²·vert, never lin³.
+    const pts = Float32Array.from(prism(3, 0.5, 0.5));
+    const lin = 0.3048;
+    const v = presentStockpileAreaGrid(RECT, pts, { z: 0, uncertainty: 0 }, complete, { lin, vert: 1 });
+    const points = [];
+    for (let i = 0; i < pts.length; i += 3) points.push({ x: pts[i], y: pts[i + 1], z: pts[i + 2] });
+    const grid = stockpileAreaGrid({ points, polygon: RECT.map((p) => ({ x: p[0], y: p[1] })), base: { kind: 'constant', zM: 0 } });
+    expect(v.volumeM3).toBeCloseTo(grid.fillM3 * lin * lin * 1, 9);
+    expect(v.surfaceTermM3).toBeCloseTo(grid.surfaceTermM3 * lin * lin, 9);
+  });
+
+  test('a density gradient across the footprint does not move the figure', () => {
+    // Ten times more points on the left half. The point-weighted estimator
+    // would follow the density; the area-weighted one follows the geometry.
+    const uniform = Float32Array.from(prism(3, 0.5, 0.5));
+    const leftHeavy = Float32Array.from([...prism(3, 0.1, 0.25, 0, 10), ...prism(3, 0.5, 0.5, 10, 20)]);
+    const a = presentStockpileAreaGrid(RECT, uniform, { z: 0, uncertainty: 0 }, complete);
+    const b = presentStockpileAreaGrid(RECT, leftHeavy, { z: 0, uncertainty: 0 }, complete);
+    expect(b.volumeM3).toBeCloseTo(a.volumeM3, 6);
+    expect(b.authority).toBe('measured');
+  });
+
+  test('a missing half of the footprint withholds the figure', () => {
+    const half = Float32Array.from(prism(3, 0.5, 0.5, 0, 9));
+    const v = presentStockpileAreaGrid(RECT, half, { z: 0, uncertainty: 0 }, complete);
+    expect(v.coverage).toBe('refused');
+    expect(v.authority).toBe('withheld');
+    expect(v.supportFraction).toBeLessThan(0.6);
+  });
+
+  test('a gap large enough for preview reads PREVIEW with its reason', () => {
+    const most = Float32Array.from(prism(3, 0.5, 0.5, 0, 15));
+    const v = presentStockpileAreaGrid(RECT, most, { z: 0, uncertainty: 0 }, complete);
+    expect(v.coverage).toBe('preview');
+    expect(v.authority).toBe('preview');
+    expect(v.reason).toBe('footprint gaps');
+  });
+});
+
+describe('stockpileAreaGridToastLine', () => {
+  const base = { z: 0, uncertainty: 0.05 };
+  test('a measured line names the state, the support and the method', () => {
+    const pts = Float32Array.from(prism(3, 0.5, 0.5));
+    const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, pts, base, complete));
+    expect(line).toMatch(/^Stockpile: 600 m³ · MEASURED · 100% footprint support · area-weighted grid/);
+    expect(line).toMatch(/incomplete model/);
+    expect(line).toMatch(/base 0\.00 m \(lowest ground, ±0\.05 m, not in the term\)/);
+    expect(line).not.toMatch(/1σ|model band/);
+  });
+  test('a preview figure never appears without PREVIEW and its reason', () => {
+    const pts = Float32Array.from(prism(3, 0.5, 0.5));
+    const line = stockpileAreaGridToastLine(
+      presentStockpileAreaGrid(RECT, pts, base, { sourceComplete: false, sampled: false }),
+    );
+    expect(line).toMatch(/600 m³ · PREVIEW \(source still refining\)/);
+  });
+  test('a withheld result shows no number', () => {
+    const half = Float32Array.from(prism(3, 0.5, 0.5, 0, 9));
+    const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, half, base, complete));
+    expect(line).toMatch(/^Stockpile: volume withheld · \d+% footprint support · insufficient observations$/);
+    expect(line).not.toMatch(/m³/);
+  });
+  test('an unverified unit is disclosed on the line', () => {
+    const pts = Float32Array.from(prism(3, 0.5, 0.5));
+    const line = stockpileAreaGridToastLine(
+      presentStockpileAreaGrid(RECT, pts, base, complete, { unitVerified: false }),
+    );
+    expect(line).toMatch(/units unverified \(assumes metres\)$/);
+  });
+});
+
+describe('stockpileToastSuffix (area-grid)', () => {
+  test('a complete prism yields a measured suffix over the lowest-ground base', () => {
+    const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+    const suffix = stockpileToastSuffix(RECT, pts);
+    expect(suffix).toMatch(/^ · Stockpile: \d[\d,]* m³ · MEASURED/);
+  });
+  test('a reduced source or a strided walk reads PREVIEW (display sample)', () => {
+    const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+    expect(stockpileToastSuffix(RECT, pts, 1, true)).toMatch(/PREVIEW \(display sample\)/);
+    expect(stockpileToastSuffix(RECT, pts, 1, false, true, 1, null, true)).toMatch(/PREVIEW \(display sample\)/);
+  });
+  test('an unsettled source reads PREVIEW (source still refining)', () => {
+    const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+    expect(stockpileToastSuffix(RECT, pts, 1, false, true, 1, { phase: 'loading', fractionResident: 0.4 } as never)).toMatch(/PREVIEW \(source still refining\)/);
+  });
+  test('a degenerate footprint or too few points yields nothing', () => {
+    expect(stockpileToastSuffix(RECT.slice(0, 2), Float32Array.from(prism(3, 1, 1)))).toBe('');
+    expect(stockpileToastSuffix(RECT, new Float32Array(6))).toBe('');
+  });
+});
