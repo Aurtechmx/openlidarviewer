@@ -58,7 +58,7 @@ has re-opened the divergence this closes.
 | 2 | Scan report | migrated | `src/analysis/modules/scanReport.ts`, `src/analysis/ModuleApi.ts` | `linearUnitKnown`, `linearUnitToMetres` |
 | 3 | Space / object report | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown` |
 | 4 | Stockpile and cut/fill volume | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `verticalMetresPerUnit` |
-| 5 | Density and fitness grades | migrated | `src/render/streaming/runFullCloudGradeAction.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit` |
+| 5 | Density and fitness grades | migrated | `src/render/streaming/runFullCloudGradeAction.ts`, `src/app/streamingUiCoordinator.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit` |
 | 6 | Terrain analysis | migrated | `src/app/terrainAnalysisRunner.ts` | `isGeographic`, `linearUnitToMetres`, `epsg`, `verticalEpsg`, `verticalDatum`, `crsName`, `kind`, `verticalMetresPerUnit` |
 | 7 | Epoch comparison | migrated | `src/app/epochFramePrep.ts`, `src/geo/frameCompatibility.ts`, `src/main.ts` | `isGeographic`, `linearUnitKnown`, `linearUnitToMetres`, `verticalReference`, `verticalUnitToMetres`, `verticalScaleKnown` |
 | 8 | Contours | carrier | `src/terrain/contour/geojsonContours.ts` | `verticalReference`, carried on `ContourFeatureModel` |

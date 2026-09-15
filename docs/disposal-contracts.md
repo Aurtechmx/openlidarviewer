@@ -45,6 +45,7 @@ long-session spec — see the checklist at the bottom.
 | InspectTool pointer listeners | `InspectTool` | Per Viewer instance | `viewer.dispose()` |
 | AnnotationController DOM panels | `AnnotationController` | Per Viewer instance | `viewer.dispose()` |
 | `window` event listeners (keydown, resize) | main.ts | Per session | Page reload — no per-scan cleanup needed |
+| Streaming status poll (`setInterval`) | `streamingUiCoordinator` | Per streaming scan | `endSession()` on close (also aborts an in-flight full-cloud grade) |
 | Scheduled task timers (recorder badge, settle clamp) | individual controllers | Per scope | `controller.dispose()` clears |
 
 ## Disposal triggers — when each fires
