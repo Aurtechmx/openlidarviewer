@@ -219,12 +219,10 @@ export function rasterizeDtm(
   const z = new Float32Array(nCells).fill(Number.NaN);
   const counts = new Uint32Array(nCells);
   const accum = new Float64Array(nCells); // sum for mean
-  // Per-cell value lists, only allocated for list-needing modes. Sparse: a cell
-  // gets its small array only when it first receives a return, so memory tracks
-  // the number of *filled* cells, not the full grid.
-  const lists: Array<number[] | undefined> | null = needsLists
-    ? new Array<number[] | undefined>(nCells)
-    : null;
+  // The list-needing modes remember each return's cell here, then lay the
+  // values out contiguously by cell (count, prefix, fill) once the counts are
+  // known: one buffer for all cells rather than one small array per cell.
+  const cellOf: Int32Array | null = needsLists ? new Int32Array(analyzed) : null;
 
   // Points materially outside the grid extent are REJECTED, not edge-clamped:
   // clamping pulls a point that is physically off the raster onto its border,
@@ -238,6 +236,7 @@ export function rasterizeDtm(
     const fy = (gy[i] - originH2) / cellSizeM;
     if (fx < -EPS_CELLS || fx > cols + EPS_CELLS || fy < -EPS_CELLS || fy > rows + EPS_CELLS) {
       outsideGridPointCount++;
+      if (cellOf) cellOf[i] = -1;
       continue;
     }
     let col = Math.floor(fx);
@@ -247,13 +246,8 @@ export function rasterizeDtm(
     if (row < 0) row = 0;
     else if (row >= rows) row = rows - 1;
     const c = row * cols + col;
-    if (lists) {
-      let list = lists[c];
-      if (list === undefined) {
-        list = [];
-        lists[c] = list;
-      }
-      list.push(gz[i]);
+    if (cellOf) {
+      cellOf[i] = c;
     } else if (counts[c] === 0) {
       z[c] = gz[i];
       accum[c] = gz[i];
@@ -268,16 +262,30 @@ export function rasterizeDtm(
     for (let c = 0; c < nCells; c++) {
       if (counts[c] > 0) z[c] = accum[c] / counts[c];
     }
-  } else if (lists) {
-    // Reduce each filled cell's small list once. Sorting is per-cell (small),
-    // never a global O(N log N) sort over all returns.
+  } else if (cellOf) {
+    // Prefix offsets over the counts, then one contiguous value buffer filled
+    // in return order; each cell is then a subarray view, sorted in place.
+    // Sorting stays per cell, never one O(N log N) sort over all returns.
+    const offsets = new Uint32Array(nCells + 1);
+    let largest = 0;
     for (let c = 0; c < nCells; c++) {
-      const list = lists[c];
-      if (list === undefined || list.length === 0) continue;
-      list.sort((a, b) => a - b);
-      if (aggregation === 'median') z[c] = quantileSorted(list, 0.5);
-      else if (aggregation === 'percentile') z[c] = quantileSorted(list, percentile);
-      else z[c] = robustEstimateSorted(list);
+      offsets[c + 1] = offsets[c] + counts[c];
+      if (counts[c] > largest) largest = counts[c];
+    }
+    const cursor = offsets.slice(0, nCells);
+    const values = new Float64Array(offsets[nCells]);
+    for (let i = 0; i < analyzed; i++) {
+      const c = cellOf[i];
+      if (c >= 0) values[cursor[c]++] = gz[i];
+    }
+    const scratch = new Float64Array(largest);
+    for (let c = 0; c < nCells; c++) {
+      if (counts[c] === 0) continue;
+      const cell = values.subarray(offsets[c], offsets[c + 1]);
+      cell.sort();
+      if (aggregation === 'median') z[c] = quantileSorted(cell, 0.5);
+      else if (aggregation === 'percentile') z[c] = quantileSorted(cell, percentile);
+      else z[c] = robustEstimateSorted(cell, scratch);
     }
   }
 
@@ -335,7 +343,8 @@ function emptyRaster(cellSizeM: number, warnings: string[]): DemRaster {
 // audit flagged; it is now the single shared definition.
 
 /**
- * Robust cell estimator over an ASCENDING-sorted, non-empty list.
+ * Robust cell estimator over an ASCENDING-sorted, non-empty cell; `scratch`
+ * must hold at least as many values and is overwritten.
  *
  * Definition: a MAD-clipped trimmed mean centred on the median.
  *   1. m   = median(values)
@@ -354,14 +363,14 @@ function emptyRaster(cellSizeM: number, warnings: string[]): DemRaster {
  * to the median survive and the result is the median itself — the outlier is
  * rejected. n = 1 returns that single value.
  */
-function robustEstimateSorted(sorted: number[]): number {
+function robustEstimateSorted(sorted: Float64Array, scratch: Float64Array): number {
   const n = sorted.length;
   if (n === 1) return sorted[0];
   const m = quantileSorted(sorted, 0.5);
-  // MAD: median of absolute deviations from m.
-  const dev = new Array<number>(n);
+  // MAD: median of absolute deviations from m, sorted in the shared scratch.
+  const dev = scratch.subarray(0, n);
   for (let i = 0; i < n; i++) dev[i] = Math.abs(sorted[i] - m);
-  dev.sort((a, b) => a - b);
+  dev.sort();
   const mad = quantileSorted(dev, 0.5);
   const sigma = 1.4826 * mad;
   // MAD = 0 → no spread among the bulk; keep only values at the median so a
