@@ -47,6 +47,12 @@ export interface BenchmarkResult {
  * main-thread `gpuUploadMs` / `firstRenderMs` — exactly what the debug console
  * block is given. `timeToFirstRenderMs` sums the whole-load span
  * (`totalLoadMs`) with the GPU upload and first-render costs that follow it.
+ *
+ * `stages` carries the load's identity as well as its timings on the local LAZ
+ * path (file name and size, declared point count, PDRF, chunk count, stride,
+ * preview budget, and the read ledger), so a serialised result says which file
+ * and which plan produced the row. `sourcePointCount` falls back to the header
+ * count the telemetry recorded when the caller did not pass one.
  */
 export function buildBenchmarkResult(
   file: string,
@@ -63,7 +69,7 @@ export function buildBenchmarkResult(
     file,
     format,
     pointCount,
-    sourcePointCount,
+    sourcePointCount: sourcePointCount ?? telemetry.declaredPointCount,
     timeToFirstRenderMs,
     stages: { ...telemetry },
   };
