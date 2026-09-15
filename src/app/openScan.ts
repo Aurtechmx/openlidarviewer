@@ -119,6 +119,13 @@ export interface OpenScanDeps {
   readonly renderBudget: number;
   /** Phone-class device — tighter budget + touch hints. */
   isPhone: () => boolean;
+  /**
+   * Phone or tablet by input device, whatever the window size. Feeds the load
+   * plan's memory band, which must agree with the render budget the device
+   * was given at startup. Defaults to `isPhone` for a caller that has no
+   * device signal.
+   */
+  isTouchFirst?: () => boolean;
   /** Reported device memory in GB, or undefined when the browser withholds it. */
   deviceMemoryGB: () => number | undefined;
   /** Hide the empty-state placeholder once a scan renders. */
@@ -273,7 +280,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     const heavy = await openLocalHeavyLas(file, controller.signal, {
       viewerReady: deps.viewerReady,
       getViewer: deps.getViewer,
-      isPhone: deps.isPhone,
+      isPhone: deps.isTouchFirst ?? deps.isPhone,
       renderBudget: deps.renderBudget,
       deviceMemoryGB: deps.deviceMemoryGB,
       dock: deps.dock,
@@ -331,7 +338,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         // The point budget is the device's safe render budget — full on a
         // capable machine, reduced on a weak one to keep the GPU stable.
         budget: deps.renderBudget,
-        isMobile: deps.isPhone(),
+        isMobile: (deps.isTouchFirst ?? deps.isPhone)(),
         deviceMemoryGB: deps.deviceMemoryGB(),
         signal: controller.signal,
         head: headSlice,

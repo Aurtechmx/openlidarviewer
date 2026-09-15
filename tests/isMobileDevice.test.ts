@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   classifyMobile,
+  isTouchFirstDevice,
   matchesMobileLayout,
   MOBILE_LAYOUT_QUERY,
 } from '../src/ui/isMobileDevice';
@@ -44,5 +45,32 @@ describe('MOBILE_LAYOUT_QUERY', () => {
     expect(MOBILE_LAYOUT_QUERY).toContain('(max-height: 500px) and (pointer: coarse)');
     // The comma is the media-query OR the CSS layout blocks mirror.
     expect(MOBILE_LAYOUT_QUERY).toContain(',');
+  });
+});
+
+describe('isTouchFirstDevice (the device half alone)', () => {
+  const g = globalThis as unknown as { window?: unknown };
+  const withMatchMedia = (matches: (q: string) => boolean, run: () => void): void => {
+    const saved = g.window;
+    g.window = { matchMedia: (q: string) => ({ matches: matches(q) }) };
+    try { run(); } finally { g.window = saved; }
+  };
+
+  it('is true for a coarse pointer with no hover, whatever the window size', () => {
+    withMatchMedia((q) => q.includes('pointer: coarse') && q.includes('hover: none'), () => {
+      expect(isTouchFirstDevice()).toBe(true);
+    });
+  });
+
+  it('is false for a narrow window driven by a mouse', () => {
+    withMatchMedia((q) => q.includes('max-width'), () => {
+      expect(isTouchFirstDevice()).toBe(false);
+    });
+  });
+
+  it('is false without a window', () => {
+    const saved = g.window;
+    g.window = undefined;
+    try { expect(isTouchFirstDevice()).toBe(false); } finally { g.window = saved; }
   });
 });

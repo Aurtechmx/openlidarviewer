@@ -72,6 +72,10 @@ function fakeFile(name = 'field.las'): File {
 interface HarnessOptions {
   /** Runs with the loader's callbacks the moment the static load resolves. */
   readonly onLoaded?: (callbacks: LoadCallbacks) => void;
+  /** The phone flag the window-size check answers. */
+  readonly isPhone?: boolean;
+  /** The device flag; omitted means the seam is absent. */
+  readonly isTouchFirst?: boolean;
   /** Make the loader reject after `onLoaded` ran, as a decode failure would. */
   readonly failLoad?: boolean;
   /** Runs on every line handed to the drop zone (null is the teardown). */
@@ -195,7 +199,8 @@ function harness(opts: HarnessOptions = {}) {
       return result;
     }),
     renderBudget: 1_000_000,
-    isPhone: () => false,
+    isPhone: () => opts.isPhone ?? false,
+    ...(opts.isTouchFirst === undefined ? {} : { isTouchFirst: () => opts.isTouchFirst as boolean }),
     deviceMemoryGB: () => 8,
     stage: { hideEmptyState: calls.hideEmptyState, showEmptyState: calls.showEmptyState },
     closeStreaming: calls.closeStreaming,
@@ -518,5 +523,28 @@ describe('a preview cloud delivered before the decode finishes', () => {
 
     expect(h.calls.showPreviewCloud).not.toHaveBeenCalled();
     expect(h.calls.hideEmptyState).not.toHaveBeenCalled();
+  });
+});
+
+describe('the load plan reads the device, not the window', () => {
+  it('a narrow window on a mouse-driven machine plans as desktop', async () => {
+    const h = harness({ isPhone: true, isTouchFirst: false });
+    await openScan(fakeFile(), h.deps);
+    const options = (h.deps.loadLocalSource as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][2] as { isMobile?: boolean };
+    expect(options.isMobile).toBe(false);
+  });
+
+  it('a phone plans as a phone', async () => {
+    const h = harness({ isPhone: false, isTouchFirst: true });
+    await openScan(fakeFile(), h.deps);
+    const options = (h.deps.loadLocalSource as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][2] as { isMobile?: boolean };
+    expect(options.isMobile).toBe(true);
+  });
+
+  it('falls back to the window check when no device signal is wired', async () => {
+    const h = harness({ isPhone: true });
+    await openScan(fakeFile(), h.deps);
+    const options = (h.deps.loadLocalSource as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][2] as { isMobile?: boolean };
+    expect(options.isMobile).toBe(true);
   });
 });

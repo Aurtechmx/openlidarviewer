@@ -11,7 +11,7 @@ import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
 import { chooseRenderBackend } from './render/renderBackendChoice';
 import { floorPlanPositions } from './app/floorPlanPositions';
-import { isMobileDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
+import { isMobileDevice, isTouchFirstDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
@@ -906,14 +906,13 @@ function deviceMemoryGB(): number | undefined {
 }
 
 /**
- * The device's capability tier and safe render budget — computed once at
- * startup. A weak device loads fewer points and gets degraded rendering
- * defaults, so a large survey never crashes the GPU.
+ * The device's capability tier and safe render budget, computed once at
+ * startup from device signals only: window size at load time is not one.
  */
 const deviceCapsValue = deviceCaps({
   deviceMemoryGB: deviceMemoryGB(),
   hardwareConcurrency: navigator.hardwareConcurrency,
-  isMobile: isPhone(),
+  isMobile: isTouchFirstDevice(),
 });
 
 const registry = new ModuleRegistry();
@@ -4590,6 +4589,7 @@ const openScanDeps: OpenScanDeps = {
   loadLocalSource: (fileToLoad, callbacks, options) => new LocalFileSource(fileToLoad).load(callbacks, options),
   renderBudget: deviceCapsValue.renderBudget,
   isPhone,
+  isTouchFirst: isTouchFirstDevice,
   deviceMemoryGB,
   stage,
   closeStreaming,
