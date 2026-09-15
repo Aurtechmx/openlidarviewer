@@ -53,6 +53,7 @@ import type { ViewBookmarksService } from './viewBookmarks';
 import { loadPreviewCloud, loadLoadDiagnostics } from '../lazyChunks';
 import type { PreviewCloudHandle, PreviewCloudViewer } from './previewCloud';
 import type { PreviewChunk } from '../io/loadLas';
+import { PREVIEW_MAX_POINTS } from '../render/previewLimits';
 
 /**
  * The Layers chip names the FILE, so it shows the file total (the same count
@@ -341,6 +342,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         // The point budget is the device's safe render budget — full on a
         // capable machine, reduced on a weak one to keep the GPU stable.
         budget: deps.renderBudget,
+        // What the stand-in can actually draw, so the decode hands back a
+        // sample of that size instead of every record it places.
+        previewBudget: Math.max(1, Math.min(deps.renderBudget, PREVIEW_MAX_POINTS)),
         isMobile: (deps.isTouchFirst ?? deps.isPhone)(),
         deviceMemoryGB: deps.deviceMemoryGB(),
         signal: controller.signal,

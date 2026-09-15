@@ -165,8 +165,10 @@ export interface PooledDecodeOptions {
   readonly stride?: number;
   readonly signal?: AbortSignal;
   readonly onProgress?: (u: ProgressUpdate) => void;
-  /** Each chunk's positions as it is placed; see `decodeLazParallel`. */
-  readonly onPreviewChunk?: (chunk: RawPoints, outIndex: number) => void;
+  /** Each chunk's share of the preview sample as it is placed; see `decodeLazParallel`. */
+  readonly onPreviewChunk?: (positions: Float32Array, outIndex: number) => void;
+  /** Points the preview sample may hold; see `decodeLazParallel`. */
+  readonly previewBudget?: number;
   /** Called once the chunk table is read; see `decodeLazParallel`. */
   readonly onPlanned?: (info: DecodePlanInfo) => void;
   /** Called after the decode with the pool the file ran on. */
@@ -230,6 +232,7 @@ export async function decodeLazPooledFromSource(
       signal: options.signal,
       onProgress: options.onProgress,
       onPreviewChunk: options.onPreviewChunk,
+      previewBudget: options.previewBudget,
       onPlanned: options.onPlanned,
     });
     if (out === null) {

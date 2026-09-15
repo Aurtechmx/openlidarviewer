@@ -72,11 +72,12 @@ test.describe('local LAZ, progressive path', () => {
     if (browserName !== 'webkit') {
       expect(r.workerUrls.filter((u) => /lazChunkWorker/i.test(u)).length).toBeGreaterThan(0);
     }
-    // Chunks reached the page before the final cloud; every record was handed on.
+    // Chunks reached the page before the final cloud, thinned to the preview
+    // budget: what crosses the worker boundary is a sample, never the cloud.
     expect(r.text).toMatch(/preview\s+[\d.]+ ms/);
     const previewPoints = Number(/preview pts\s+([\d,]+)/.exec(r.text)?.[1]?.replace(/,/g, ''));
     expect(previewPoints).toBeGreaterThan(0);
-    expect(previewPoints).toBe(POINTS);
+    expect(previewPoints).toBeLessThanOrEqual(POINTS);
 
     // The final cloud replaced it: every point resident, no preview left.
     expect(await pointsShown(page, POINTS)).toBe(POINTS);

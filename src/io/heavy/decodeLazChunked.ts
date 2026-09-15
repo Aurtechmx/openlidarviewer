@@ -25,6 +25,13 @@
  * (laz-perf decompresses a chunk as a unit, and a bucket is far smaller than a
  * chunk), so a strided parallel decode does the same decompression work as
  * `decodeLaz` — only spread over cores, and storing only the kept records.
+ *
+ * PREVIEW. A caller watching the decode fill in gets one whole-file sample, not
+ * every chunk in full: the planned output total is known before any chunk
+ * decodes, so a single global stride selects the records whose output index is
+ * a multiple of it, and each chunk emits only the ones inside its own span.
+ * About `previewBudget` points reach the caller however large the file is, and
+ * which points those are does not depend on the order the chunks finish.
  */
 import { readLazChunkTable, type LazChunkRange } from './lazChunkTable';
 import { ArrayBufferRangeSource } from '../range/ArrayBufferRangeSource';
@@ -119,10 +126,15 @@ export function decodeLazChunkLocal(lazPerf: LazPerfModule, job: LazChunkJob): R
   return local;
 }
 
-/** Copy a chunk-local `RawPoints` into the whole-file `out` at `at`. */
-function placeChunk(out: RawPoints, local: RawPoints, at: number): void {
+/**
+ * Copy a chunk-local `RawPoints` into the whole-file `out` at `at`, and return
+ * the chunk's own position buffer, which the whole-file output no longer needs
+ * and a preview may take from here.
+ */
+function placeChunk(out: RawPoints, local: RawPoints, at: number): Float32Array {
   const p = at;
-  out.positions.set(local.positions, p * 3);
+  const positions = local.positions;
+  out.positions.set(positions, p * 3);
   out.intensity.set(local.intensity, p);
   out.classification.set(local.classification, p);
   out.returnNumber.set(local.returnNumber, p);
@@ -130,6 +142,7 @@ function placeChunk(out: RawPoints, local: RawPoints, at: number): void {
   out.pointSourceId.set(local.pointSourceId, p);
   if (out.gpsTime && local.gpsTime) out.gpsTime.set(local.gpsTime, p);
   if (out.colors16 && local.colors16) out.colors16.set(local.colors16, p * 3);
+  return positions;
 }
 
 /** One chunk's share of the decode: its byte range, what it keeps, where it lands. */
@@ -329,13 +342,22 @@ export interface ParallelDecodeOptions extends ChunkedDecodeOptions {
    */
   readonly maxInFlight?: number;
   /**
-   * Receive each chunk's records the moment it is placed, in completion
-   * order, with the index of its first kept record in the output, so a
-   * caller can show the cloud filling in while the decode runs. The buffers
-   * handed over are the chunk's own, which the whole-file output no longer
-   * needs; the caller owns them from here.
+   * Receive a thinned copy of each chunk's positions the moment the chunk is
+   * placed, in completion order, with the index of its first kept record in
+   * the output, so a caller can show the cloud filling in while the decode
+   * runs. What is handed over is the chunk's share of ONE whole-file preview
+   * sample (see {@link previewStrideFor}), not its whole position buffer, so
+   * the callback sees about `previewBudget` points in total however large the
+   * file is. The buffer belongs to the caller from here.
    */
-  readonly onPreviewChunk?: (chunk: RawPoints, outIndex: number) => void;
+  readonly onPreviewChunk?: (positions: Float32Array, outIndex: number) => void;
+  /**
+   * Points the preview sample may hold. The stride follows from this and the
+   * planned output total, so the sample is the same set of records whatever
+   * order the chunks finish in. Absent, every placed record is handed on, which
+   * is the historical behaviour; the page always supplies a budget.
+   */
+  readonly previewBudget?: number;
   /** Called once the chunk table is read, before any chunk decodes. */
   readonly onPlanned?: (info: DecodePlanInfo) => void;
 }
@@ -390,6 +412,7 @@ export async function decodeLazParallelFromSource(
   const { signal, onPreviewChunk } = options;
   const plan = await planChunked(source, header, origin, options.stride ?? 1, signal);
   if (plan === null) return null;
+  const previewStride = previewStrideFor(plan.total, options.previewBudget);
 
   const chunks = plan.chunks;
   const maxInFlight = options.maxInFlight ?? MAX_CHUNK_DECODES_IN_FLIGHT;
@@ -412,11 +435,14 @@ export async function decodeLazParallelFromSource(
       if (planned.keep?.length !== 0) {
         const job = await jobFor(source, header, plan.ctx, planned, signal);
         const decoded = await decodeChunk(job, signal);
-        placeChunk(plan.out, decoded, planned.outIndex);
+        const placed = placeChunk(plan.out, decoded, planned.outIndex);
         done += keptOf(planned);
         report(done);
-        // Placed, so the chunk-local buffers are free to hand on.
-        onPreviewChunk?.(decoded, planned.outIndex);
+        if (onPreviewChunk) {
+          // Placed, so the chunk-local buffer is free to hand on.
+          const preview = samplePreviewPositions(placed, planned.outIndex, previewStride);
+          if (preview) onPreviewChunk(preview, planned.outIndex);
+        }
       }
     }
   };
@@ -429,4 +455,49 @@ export async function decodeLazParallelFromSource(
 /** Records a planned chunk contributes to the output. */
 function keptOf(planned: PlannedChunk): number {
   return planned.keep ? planned.keep.length : planned.range.pointCount;
+}
+
+/**
+ * The step a whole-file preview sample takes so it fits `budget` records.
+ * Derived from the planned output total, which `planChunked` knows before a
+ * single chunk decodes, so every chunk thins against the same number. Returns 1
+ * for an absent or unusable budget, which hands every record on.
+ */
+export function previewStrideFor(total: number, budget?: number): number {
+  if (budget === undefined || !Number.isFinite(budget) || budget <= 0) return 1;
+  return Math.max(1, Math.ceil(total / budget));
+}
+
+/**
+ * One chunk's share of the whole-file preview sample: the positions whose
+ * GLOBAL output index is a multiple of `stride`, compacted into a buffer of
+ * their own. `outIndex` is where the chunk's first record lands in the output,
+ * so `outIndex + local` is that record's global index and the selection is a
+ * pure function of it. Chunk spans are disjoint and cover the output, so the
+ * union over the chunks is exactly the global sample whatever order they
+ * finish in, and its size is `ceil(total / stride)`, never more than the budget
+ * the stride came from.
+ *
+ * Returns the input untouched at stride 1, and null for a chunk the sample
+ * misses entirely, which spares the caller an empty hand-off.
+ */
+export function samplePreviewPositions(
+  positions: Float32Array,
+  outIndex: number,
+  stride: number,
+): Float32Array | null {
+  const count = Math.floor(positions.length / 3);
+  if (count === 0) return null;
+  if (stride <= 1) return positions;
+  // First local index whose global index is a multiple of the stride.
+  const first = (stride - (outIndex % stride)) % stride;
+  if (first >= count) return null;
+  const kept = Math.ceil((count - first) / stride);
+  const out = new Float32Array(kept * 3);
+  for (let k = 0, i = first; k < kept; k++, i += stride) {
+    out[k * 3] = positions[i * 3];
+    out[k * 3 + 1] = positions[i * 3 + 1];
+    out[k * 3 + 2] = positions[i * 3 + 2];
+  }
+  return out;
 }

@@ -477,12 +477,12 @@ describe('what the completed attach leaves behind', () => {
   });
 });
 
-const chunk = () => ({ positions: new Float32Array([0, 0, 0, 1, 1, 1]), expectedPoints: 4_000 });
+const chunk = (outIndex = 0) => ({ positions: new Float32Array([0, 0, 0, 1, 1, 1]), outIndex, expectedPoints: 4_000 });
 
 describe('preview chunks delivered before the decode finishes', () => {
   it('starts the stand-in on the first chunk, appends the rest, then swaps the final cloud in without framing again', async () => {
     const h = harness({
-      onLoaded: (callbacks) => { callbacks.onPreviewChunk?.(chunk()); callbacks.onPreviewChunk?.(chunk()); },
+      onLoaded: (callbacks) => { callbacks.onPreviewChunk?.(chunk(0)); callbacks.onPreviewChunk?.(chunk(2)); },
     });
 
     await openScan(fakeFile('field.laz'), h.deps);
@@ -520,6 +520,15 @@ describe('preview chunks delivered before the decode finishes', () => {
     expect(h.at('showEmptyState')).toBeGreaterThan(h.at('disposePreview'));
     expect(h.calls.addCloud).not.toHaveBeenCalled();
     expect(h.calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the loader how many preview points the stand-in can draw', async () => {
+    const h = harness();
+    await openScan(fakeFile('field.laz'), h.deps);
+    const options = (h.deps.loadLocalSource as unknown as { mock: { calls: unknown[][] } })
+      .mock.calls[0][2] as { previewBudget?: number };
+    // The render budget here is under the preview layer's own ceiling.
+    expect(options.previewBudget).toBe(1_000_000);
   });
 
   it('ignores a chunk that lands after Cancel', async () => {
