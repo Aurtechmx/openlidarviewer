@@ -93,9 +93,9 @@ describe('architecture map stays in step with the tree', () => {
     // pending table into "Done:" prose, so the count ratchets down over time
     // (the render-loop and importSession extractions took it from 10 to 8, the
     // openScan extraction took it to 7, the openStreaming extraction to 6, and the
-    // reportExport extraction to 5).
+    // reportExport extraction to 5, and the scanRouteCoordinator extraction to 4).
     const rows = text.split('\n').filter((l) => /^\|\s*`?[A-Za-z_]/.test(l) && /\|\s*[\d,]+\s*\|/.test(l));
-    expect(rows.length, 'the extraction tables have gone missing').toBeGreaterThanOrEqual(5);
+    expect(rows.length, 'the extraction tables have gone missing').toBeGreaterThanOrEqual(4);
 
     const lines = [
       ...readFileSync(root + 'src/main.ts', 'utf8').split('\n'),

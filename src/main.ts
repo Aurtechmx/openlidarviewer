@@ -110,16 +110,7 @@ import { classificationLabel } from './render/pointInfo';
 import type { ObjectPanel } from './ui/ObjectPanel';
 import { MobileSheet } from './ui/MobileSheet';
 import { DesktopWorkspace, type WorkspaceMode } from './ui/workspace/DesktopWorkspace';
-import { classifyScanShape } from './terrain/scanShape';
-import type { SpaceKind } from './terrain/scanShape';
-import {
-  planScanRoute,
-  settleOneShotSpent,
-  settleTargetDepth,
-  type ScanTypeOverride,
-} from './terrain/scanRoute';
-import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
-import { spaceMetrics, resolveLinearUnitScale, positionsInMetres, type SpaceMetrics } from './terrain/spaceMetrics';
+import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
@@ -858,7 +849,7 @@ let _lastInstantScanLabel: string | undefined;
  * (with a second scan) a before/after difference — all without an upload. The
  * routing is the pure `planInstantAnswer`; this only wires the chosen action to
  * the existing analysis cores. (Object/interior scans are already auto-analysed
- * by `applyScanRoute`; this still announces them and offers the next step.)
+ * by the scan-route coordinator; this still announces them and offers the next step.)
  */
 function showInstantAnswer(scanLabel: string): void {
   const answer = planInstantAnswer({
@@ -2019,7 +2010,7 @@ function newAnalysePanel(
 ): AnalysePanel {
   return new Ctor({
     onRun: () => void terrainRunner.run(),
-    onScanTypeChange: (override) => setScanTypeOverride(override),
+    onScanTypeChange: (override) => routeCoordinator.setTypeOverride(override),
     onSelectInterval: (m) => void terrainRunner.run(m),
     // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
     // the SAME cached terrain core the runner uses — never mutates the panel.
@@ -2327,11 +2318,7 @@ void viewerLoaded.then(() => {
     refreshColorbarOverlay();
     // A manual (non-auto) "Treat as" choice pins the routing exactly like the
     // "Run terrain anyway" override — a late streaming node must not flip it.
-    if (routing.pinned) return;
-    const resident = viewer.residentPointTotal();
-    if (resident < lastRouteResident * SCAN_REROUTE_GROWTH) return;
-    lastRouteResident = resident;
-    routing.schedule(() => applyScanRoute(false), 500);
+    routeCoordinator.onStreamingNodeReady();
   };
   // GPU render-stage failures (shader-compile / pipeline-creation) surface on the
   // WebGPU device's uncaptured-error channel — AFTER a scan's decode + attach have
@@ -2350,23 +2337,10 @@ void viewerLoaded.then(() => {
   };
 });
 
-// The last non-terrain analysis the ObjectPanel rendered, captured so the panel's
-// export buttons (Report PDF / Floor plan preview) can build their deliverable from the
-// SAME positions + metrics + unit factor that produced the on-screen numbers —
-// nothing recomputed differently, nothing fabricated. Null while terrain / empty.
-interface SpaceExportContext {
-  readonly positions: Float32Array;
-  readonly space: SpaceMetrics;
-  readonly object: ObjectMetrics | null;
-  readonly spaceKind: 'interior' | 'object';
-  readonly unitToMetres: number;
-  readonly unitKnown: boolean; // an inert 1 must not print as metres
-  /** The scan and frame these metrics were computed under. */
-  readonly targetId: string | null; readonly crsRevision: number;
-  readonly upAxis: SpaceMetrics['up'];
-  readonly basename: string;
-}
-let lastSpaceExport: SpaceExportContext | null = null;
+// The last non-terrain analysis the ObjectPanel rendered lives on the route
+// coordinator (`routeCoordinator.spaceExport()`), captured so the panel's export
+// buttons build from the SAME positions + metrics + unit factor that produced
+// the on-screen numbers. Null while terrain / empty.
 
 // The routing gather that fills `lastSpaceExport` is capped at 60 k points —
 // plenty for classification + metrics, far too sparse for tracing 2–5 cm wall
@@ -2443,15 +2417,15 @@ function newObjectPanel(
     // "Run terrain contours anyway" is the explicit, equivalent twin of the
     // "Treat as: Terrain" override — route both through the same path so the
     // control, the panels, and the streaming pin stay in sync.
-    setScanTypeOverride('terrain');
+    routeCoordinator.setTypeOverride('terrain');
   },
-  onScanTypeChange: (override) => setScanTypeOverride(override),
+  onScanTypeChange: (override) => routeCoordinator.setTypeOverride(override),
   // Build + download the one-page Space / Object report (lazy pdf-lib). For an
   // interior scan, the density-derived floor-plan sketch is embedded too. The
   // small dedicated provenance is built inside buildSpaceReportPdf from these
   // exact inputs, so the PDF can never disagree with the panel.
   onExportReport: async () => {
-    const ctx = lastSpaceExport;
+    const ctx = routeCoordinator.spaceExport();
     if (!ctx) return;
     const { buildSpaceReportPdf } = await loadSpaceReportPdf();
     if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
@@ -2493,7 +2467,7 @@ function newObjectPanel(
   // vectorised walls), labelled with its honest basis by the renderer itself.
   // Dimension / scale-bar units follow the live measurement unit system.
   onExportFloorPlan: async () => {
-    const ctx = lastSpaceExport;
+    const ctx = routeCoordinator.spaceExport();
     if (!ctx || ctx.spaceKind !== 'interior') return;
     const { extractFloorPlan, floorPlanSvg } = await loadFloorPlan();
     if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
@@ -2903,311 +2877,82 @@ const clipPanel = new ClipPanel({
   keptCount: () => (scans.activeId ? viewer.clipKeptCount(scans.activeId) : null),
 });
 
-// ── Scan-type routing state ─────────────────────────────────────────────────
-// The verdict itself lives in `captureProvenance`, which composes it with the
-// scan's metadata signals into the one capture-type fingerprint the Inspector,
-// the PDF report and the image exports all state.
-// `revealAnalysePanel` runs once at open, when a streaming cloud may have only
-// a sparse coarse level resident — a misread is likely. `applyScanRoute` is
-// re-run as the cloud fills in (debounced, growth-gated) and only flips panels
-// when the verdict actually changes, so it never thrashes. Once the user forces
-// a panel ("Run terrain anyway" / Analyse toggle) `routing.overridden` pins it.
-let lastRouteResident = 0;
-/** Re-route only after the resident cloud grows by this factor (cheap gate). */
-const SCAN_REROUTE_GROWTH = 1.4;
-
-// ── Manual scan-type override ────────────────────────────────────────────────
-// The safety net for a misdetection: the user can FORCE the route via the
-// "Treat as" control in either panel. A non-auto choice WINS over the detected
-// verdict and pins the routing like `routing.overridden` so a streaming
-// re-evaluation can't flip it. Per-session, reset to 'auto' on every new scan.
-// One-shot guard: re-evaluate the scan type once the streaming cloud has fully
-// settled (current view ready), so a verdict decided on a sparse early frame is
-// corrected on representative geometry. Reset per scan.
-let streamingSettledRouted = false;
-// Settled-evaluation bookkeeping for the re-arming one-shot (v0.4.5b fix —
-// a REFUSED settled verdict no longer spends the one-shot, so it can retry):
-// attempts feed the SETTLE_RETRY_CAP, the resident count gates re-attempts on
-// actual geometry change (an idle stream re-reads the same frame — pointless),
-// and `lastSettleUndecided` lets a failed gather retry on the very next poll
-// (its failure is not a property of the geometry). All reset per scan.
-let settleAttempts = 0;
-let lastSettleResident = -1;
-let lastSettleUndecided = false;
-// True once a SETTLED auto-mode verdict soft-committed the "Treat as" control
-// to the detected pill (static-load detection or the streaming settle
-// one-shot — `plan.commitDetected`). Display-only state: routing still follows
-// `routing.typeOverride`/detection exactly as before, it never pins anything, and
-// it resets on every new scan and on any user click (a manual pick shows that
-// pick; clicking Auto returns to the uncommitted Auto presentation while
-// detection re-runs).
-let scanDetectionCommitted = false;
-
-/**
- * Apply a manual "Treat as" choice and re-route immediately on the current
- * geometry. A non-auto override wins (see `resolveScanRoute`) and stays pinned
- * until the user picks 'auto' (restore detection) or a new scan resets it.
- */
-function setScanTypeOverride(override: ScanTypeOverride): void {
-  routing.setTypeOverride(override);
-  // Any user click clears the settled soft-commit: a manual pick shows that
-  // pick, and clicking Auto means "re-detect" — the control returns to the
-  // uncommitted Auto presentation until the next settled verdict (if any).
-  scanDetectionCommitted = false;
-  // Force-apply over the current geometry — `initial=true` bypasses the
-  // verdict-change + override no-op guards so the choice takes effect at once.
-  applyScanRoute(true);
-}
-
-/**
- * The disabled-with-reason map for the "Treat as" control, derived from the
- * DETECTED verdict: when detection says interior / compact object, the
- * Terrain segment is greyed out (running contours there is misleading) and
- * the explicit "Run terrain contours anyway" hatch stays the override.
- */
-function treatAsDisabledFor(
-  detected: SpaceKind | null,
-): { terrain: string } | undefined {
-  return detected === 'interior' || detected === 'object'
-    ? {
-        terrain:
-          (detected === 'interior'
-            ? 'This scan reads as an interior'
-            : 'This scan reads as a compact object') +
-          ' — terrain analysis would be misleading. ' +
-          "Use 'Run terrain contours anyway' to override.",
-      }
-    : undefined;
-}
-
-/**
- * Classify the currently-loaded/streamed geometry and route to the Object /
- * Space panel (non-terrain) or the Analyse panel (terrain). Passes the
- * resident classification so the vegetation tiebreaker can fire (a classified
- * forest stays terrain even though its geometry mimics an interior).
- *
- * `initial` = the open-time call (always applies + resets the override). A
- * non-initial call is a streaming re-evaluation: it no-ops unless the verdict
- * changed, and is skipped once the user has overridden the routing.
- *
- * `settled` = this evaluation runs on settled geometry (static load, or the
- * streaming settle one-shot). A settled auto-mode verdict soft-commits the
- * "Treat as" control to the detected pill (`plan.commitDetected`) — display
- * only, routing semantics unchanged.
- *
- * Returns whether a SETTLED call spent the streaming settle one-shot
- * (`settleOneShotSpent`): true once the settled verdict LANDED (the planner
- * applied it or the soft-commit fired) — or once no commit can ever come
- * (pinned / manual override) — false when the verdict was REFUSED by the
- * routing guards or the frame was undecidable, so the settled-view poll
- * keeps the one-shot armed and retries on fuller geometry (bounded by
- * SETTLE_RETRY_CAP). Non-settled callers ignore the value.
- */
-function applyScanRoute(initial: boolean, settled = false): boolean {
-  // A non-auto manual override pins the routing exactly like `routing.overridden`:
-  // a streaming re-evaluation must never flip a deliberate user choice. The
-  // one-shot is spent: a pinned/manual session never soft-commits.
-  if (!initial && (routing.pinned)) return true;
-  let shape: ReturnType<typeof classifyScanShape> | null = null;
-  let gathered: ReturnType<typeof viewer.gatherTerrainPositions> = null;
-  try {
-    gathered = viewer.gatherTerrainPositions(60_000);
-    if (gathered) {
-      // Pass classification when index-aligned so the veg tiebreaker can fire,
-      // and the loader's vertical-axis hint so z-up-by-spec formats (LAS/LAZ/
-      // COPC/EPT/…) never run the up-axis guess at all — detection stays
-      // active only for genuinely ambiguous frames (PLY/OBJ/glTF). v0.4.5.
-      shape = classifyScanShape(gathered.positions, {
-        classification: gathered.classification,
-        verticalAxis: gathered.verticalAxisHint,
-      });
-    }
-  } catch {
-    /* classification is best-effort — fall back to showing terrain analysis */
-    shape = null;
-  }
-  if (debug && shape) {
-    // `?debug` only: dump the raw scan-shape signals so a misroute can be
-    // diagnosed against real numbers instead of guessed at.
-    console.info(
-      `[scan-type] ${initial ? 'open' : 're-route'} verdict=${shape.nonTerrain ? shape.spaceKind : 'terrain'} ` +
-        `up=${shape.up} aspect=${shape.aspect.toFixed(2)} overhang=${Math.round(shape.overhangFraction * 100)}% ` +
-        `wall=${Math.round(shape.wallCoverage * 100)}% floor=${Math.round(shape.floorCoverage * 100)}% ` +
-        `ceil=${Math.round(shape.ceilingCoverage * 100)}% topVeg=${Math.round(shape.topVegFraction * 100)}% ` +
-        `sampled=${gathered?.positions ? gathered.positions.length / 3 : 0} resident=${viewer.residentPointTotal()}`,
-    );
-  }
-  // The DETECTED verdict, then the full routing decision from the pure planner
-  // (`planScanRoute`): 'auto' defers to detection, any other choice wins; when
-  // detection has nothing to say a NON-AUTO override still routes by itself.
-  // The planner also encodes the v0.4.5 guarantees: a streaming re-evaluation
-  // never flips the session TO terrain (it only rescues interiors/objects
-  // misread on a sparse frame), and `runTerrain` is true ONLY for the explicit
-  // hatch / manual Terrain override — auto-detection never starts an analysis.
-  const detected: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
-  const plan = planScanRoute({
-    detected,
-    override: routing.typeOverride,
-    initial,
-    lastVerdict: captureProvenance.verdict(),
-    pinned: routing.overridden,
-    settled,
-  });
-  // A settled verdict soft-commits the "Treat as" pill to the detected type
-  // (sticky for the rest of the scan's display updates; cleared on a new scan
-  // or any user click). Independent of `plan.apply`: the settle one-shot
-  // usually CONFIRMS the standing verdict — a routing no-op — but the control
-  // must still move off Auto onto the now-settled pill.
-  if (plan.commitDetected !== null) scanDetectionCommitted = true;
-  // The settled one-shot's spend decision (see the doc comment above): spent
-  // only when the verdict actually LANDED (applied or committed) or when no
-  // commit can ever come (pinned / manual). A REFUSED verdict (e.g. a
-  // ceiling-heavy early frame reading terrain against a standing interior
-  // route — the no-flip guard rejects it without a commit) and an undecidable
-  // frame both leave the one-shot ARMED for a later ready poll, bounded by
-  // SETTLE_RETRY_CAP via the attempt counter.
-  if (settled) lastSettleUndecided = detected === null;
-  const oneShotSpent = settleOneShotSpent({
-    detected,
-    override: routing.typeOverride,
-    pinned: routing.overridden,
-    applied: plan.apply,
-    committed: plan.commitDetected !== null,
-    attempts: settleAttempts,
-  });
-  if (!plan.apply) {
-    if (plan.commitDetected !== null) {
-      const committedDisabled = treatAsDisabledFor(detected);
-      // Track for hydration + apply (no-op while the panel's chunk is in flight).
-      objectScanTypeArgs = [routing.typeOverride, plan.commitDetected, committedDisabled, true];
+// ── Scan-type routing ────────────────────────────────────────────────────────
+// The route (terrain / interior / object), its streaming re-evaluation and the
+// settled one-shot live in `src/app/scanRouteCoordinator.ts` over narrow ports.
+// The shell supplies geometry, frame facts, the composed verdict store, and a
+// view that records each panel's intent so a panel mounted a beat later (the
+// dynamic import resolves after the route ran) replays exactly what the route
+// asked for; `hydrate{Analyse,Object}Panel()` read those tracking vars.
+const routeCoordinator = createScanRouteCoordinator({
+  routing,
+  geometry: {
+    gatherForRouting: (maxPoints) => viewer.gatherTerrainPositions(maxPoints),
+    residentPointTotal: () => viewer.residentPointTotal(),
+    // A STREAMING COPC/EPT carries its colours in the streamed nodes, not the
+    // static `activeCloud.colors`; ask the streaming cloud first.
+    hasRgb: () => {
+      const streamingCloud = viewer.streamingCloud;
+      if (streamingCloud) return streamingCloud.availableColorModes().includes('rgb');
+      const activeCloud = scans.activeCloud();
+      return !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+    },
+  },
+  frame: {
+    linearUnitToMetres: () => crsService.context().linearUnitToMetres,
+    linearUnitKnown: () => crsService.context().linearUnitKnown,
+    exportTargetId: () => scans.activeExportTargetId(),
+    crsRevision: () => crsService.crsRevision(),
+    basename: () => lastCloudName,
+  },
+  verdict: {
+    get: () => captureProvenance.verdict(),
+    set: (v) => captureProvenance.setVerdict(v),
+  },
+  view: {
+    setObjectScanType: (args) => {
+      objectScanTypeArgs = [...args];
       objectPanel?.setScanType(...objectScanTypeArgs);
-      analyseScanTypeArgs = [routing.typeOverride, plan.commitDetected, committedDisabled, true];
+    },
+    setAnalyseScanType: (args) => {
+      analyseScanTypeArgs = [...args];
       analysePanel?.setScanType(...analyseScanTypeArgs);
-    }
-    return oneShotSpent;
-  }
-  const effective = plan.effective;
-  captureProvenance.setVerdict(effective);
-
-  const isNonTerrain = plan.showObjectPanel;
-  if (isNonTerrain && shape && gathered) {
-    const activeCloud = scans.activeCloud();
-    // RGB presence: a STREAMING COPC/EPT carries its colours in the streamed
-    // nodes, not the static `activeCloud.colors`, so checking the static buffer
-    // reports "No" for a PDRF 7/8 colour scan. Ask the streaming cloud's own
-    // colour capabilities (the same source the COLOUR rail uses), and only fall
-    // back to the static buffer for a non-streaming cloud.
-    const streamingCloud = viewer.streamingCloud;
-    const hasRgb = streamingCloud
-      ? streamingCloud.availableColorModes().includes('rgb')
-      : !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
-    // Compute REAL metrics for the EFFECTIVE type — when forced, the report
-    // reflects what's actually there; nothing fabricated. The active scan's
-    // context makes a foot CRS report honest metre/feet dimensions.
-    const spaceCtx = crsService.context();
-    const unitToMetres = spaceCtx.linearUnitToMetres;
-    const objectScale = resolveLinearUnitScale(unitToMetres, spaceCtx.linearUnitKnown);
-    const space = spaceMetrics(gathered.positions, {
-      upAxis: shape.up,
-      spaceKind: effective === 'interior' ? 'interior' : 'object',
-      unitToMetres, unitKnown: spaceCtx.linearUnitKnown,
-      hasRgb,
-      sourcePointCount: gathered.totalPoints,
-      // A still-streaming cloud is measured on its resident subset only — lead
-      // the caveats with the stronger "Preliminary — partial stream" note.
-      residentOnly: gathered.residentOnly,
-    });
-    const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
-    // Same stride honesty as spaceMetrics above (the gather caps at 60 k), and
-    // the SAME unit authority: a known foot CRS is scaled to metres before the
-    // measurement runs, while an unknown unit stays in the file's own units.
-    const object =
-      spaceKind === 'object'
-        ? objectMetrics(positionsInMetres(gathered.positions, objectScale), { sourcePointCount: gathered.totalPoints })
-        : null;
-    // Track the content for hydration; apply now (no-op if not yet mounted).
-    if (spaceKind === 'interior') {
+    },
+    showSpace: (space, shape) => {
       objectContent = { kind: 'space', args: [space, shape] };
       objectPanel?.showSpace(space, shape);
-    } else {
+    },
+    showObject: (object, space, shape) => {
       objectContent = { kind: 'object', args: [object, space, shape] };
       objectPanel?.showObject(object, space, shape);
-    }
-    // Cache the EXACT inputs behind the on-screen report so the panel's export
-    // buttons (Report PDF / Floor plan preview) build from the same positions + metrics +
-    // unit factor — copied so a later streaming buffer reuse can't corrupt it.
-    lastSpaceExport = {
-      positions: Float32Array.from(gathered.positions),
-      space,
-      object,
-      spaceKind,
-      targetId: scans.activeExportTargetId(), crsRevision: crsService.crsRevision(),
-      unitToMetres,
-      unitKnown: spaceCtx.linearUnitKnown,
-      upAxis: shape.up,
-      basename: lastCloudName || 'scan',
-    };
-  } else if (isNonTerrain) {
-    // The user forced a non-terrain route but the geometry gather / classifier
-    // failed right now (e.g. mid-stream). Keep the Space/Object panel ALIVE
-    // with its honest empty state — which still carries the "Treat as" control
-    // and the run-anyway hatch — instead of tearing it down. Never a dead panel.
-    lastSpaceExport = null;
-    if (effective === 'interior') {
-      objectContent = { kind: 'space', args: [null, null] };
-      objectPanel?.showSpace(null, null);
-    } else {
-      objectContent = { kind: 'object', args: [null, null, null] };
-      objectPanel?.showObject(null, null, null);
-    }
-  } else {
-    lastSpaceExport = null;
-  }
-  // Track desired visibility for hydration; apply now (no-op if not yet mounted).
-  objectDesiredVisible = plan.showObjectPanel;
-  objectPanel?.setVisible(plan.showObjectPanel);
-  analyseDesiredVisible = plan.showAnalysePanel;
-  analyseProfileVisibility.clear(); // the route owns panel state; drop any restore
-  analysePanel?.setVisible(plan.showAnalysePanel);
-  dock.setAnalyseEnabled(true);
-  dock.setAnalyseActive(plan.showAnalysePanel);
-  // When DETECTION says the scan is an interior / compact object, the Terrain
-  // segment of the "Treat as" control is disabled with the reason — running
-  // contours on a room or an object is misleading, and the explicit
-  // "Run terrain contours anyway" hatch remains the deliberate override. The
-  // control itself never locks out the CURRENT override, so a previously
-  // forced terrain choice stays visible and escapable (Auto/Object/Interior
-  // remain one click away).
-  const treatAsDisabled = treatAsDisabledFor(detected);
-  // Keep BOTH panels' "Treat as" controls reflecting the current state, so the
-  // user can switch direction from whichever panel is showing. The committed
-  // flag (settled-verdict soft commit) only ever shows under auto mode — a
-  // manual override displays the override pill regardless.
-  const committed = routing.typeOverride === 'auto' && scanDetectionCommitted;
-  // Track for hydration + apply (no-op while the panel's chunk is in flight).
-  objectScanTypeArgs = [routing.typeOverride, effective, treatAsDisabled, committed];
-  objectPanel?.setScanType(...objectScanTypeArgs);
-  analyseScanTypeArgs = [routing.typeOverride, effective, treatAsDisabled, committed];
-  analysePanel?.setScanType(...analyseScanTypeArgs);
-  // Forcing terrain is the explicit "run anyway": surface the Analyse panel
-  // AND kick the pipeline, matching the old escape hatch. The panel must also
-  // EXPAND out of its collapsed-chip state — it is built collapsed, and routing
-  // the user to a chip that hides the busy state, the result, and the way back
-  // is exactly the dead-panel bug this guards against. `plan.runTerrain` is
-  // true ONLY for the manual 'terrain' override — a detected-terrain route
-  // shows the collapsed panel but NEVER starts the analysis by itself.
-  if (plan.runTerrain) {
+    },
+    setObjectVisible: (visible) => {
+      objectDesiredVisible = visible;
+      objectPanel?.setVisible(visible);
+    },
+    setAnalyseVisible: (visible) => {
+      analyseDesiredVisible = visible;
+      analyseProfileVisibility.clear(); // the route owns panel state; drop any restore
+      analysePanel?.setVisible(visible);
+    },
+    setDockAnalyse: (enabled, active) => {
+      dock.setAnalyseEnabled(enabled);
+      dock.setAnalyseActive(active);
+    },
     // The explicit "run terrain anyway" hatch: mount the panel (if the import is
-    // still in flight), expand it out of its collapsed chip, then run. Mounting
-    // first guarantees the busy state + result have somewhere to land.
-    analyseExpanded = true;
-    void ensureAnalysePanel().then((p) => {
-      p.expand();
-      void terrainRunner.run();
-    });
-  }
-  return oneShotSpent;
-}
+    // still in flight), expand it out of its collapsed chip, then run.
+    expandAnalyseAndRunTerrain: () => {
+      analyseExpanded = true;
+      void ensureAnalysePanel().then((p) => {
+        p.expand();
+        void terrainRunner.run();
+      });
+    },
+  },
+  // `?debug` only: the raw scan-shape signals, so a misroute can be diagnosed
+  // against real numbers instead of guessed at.
+  log: debug ? (line) => console.info(line) : undefined,
+});
 
 /**
  * Reveal the Analyse + Export panels and seed the export basename. Called
@@ -3261,18 +3006,10 @@ function revealAnalysePanel(name: string, settled = true): void {
   // authoritative and streaming re-routes can fire again. The manual "Treat as"
   // override is per-session-per-scan: a new scan returns to auto-detection,
   // and any settled soft-commit from the previous scan is forgotten.
-  routing.reset();
-  streamingSettledRouted = false;
-  settleAttempts = 0;
-  lastSettleResident = -1;
-  lastSettleUndecided = false;
-  scanDetectionCommitted = false;
-  captureProvenance.setVerdict(null);
-  lastRouteResident = viewer.residentPointTotal();
   // `settled` = the geometry is fully loaded at open time (every static path).
   // Streaming callers pass false: their open-time verdict runs on a sparse
   // coarse frame, so the "Treat as" commit waits for the settle one-shot.
-  applyScanRoute(true, settled);
+  routeCoordinator.beginScan(settled);
   // Mount the Analyse + Object panels on this scan load (v0.6 P1 lazy seam). The
   // route above ran synchronously against the not-yet-mounted panels, recording
   // their intent in the tracking vars; once each chunk resolves the panel
@@ -4941,20 +4678,11 @@ function startStreamingStatusPolling(): void {
       //      on the resident set actually CHANGING (re-reading an identical
       //      frame cannot change the verdict; a failed gather may retry at
       //      once) and bounded by SETTLE_RETRY_CAP inside the spend rule.
-      if (!streamingSettledRouted) {
-        const hierarchyDepth = cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0;
-        if (hasResidentAtDepth(cloud, settleTargetDepth(hierarchyDepth))) {
-          const resident = cloud.residentPointCount;
-          if (settleAttempts === 0 || resident !== lastSettleResident || lastSettleUndecided) {
-            settleAttempts++;
-            lastSettleResident = resident;
-            // settled=true: this is THE settled verdict for a streaming scan —
-            // under auto mode it soft-commits the "Treat as" pill to the
-            // detected type (display only; routing guards unchanged).
-            streamingSettledRouted = applyScanRoute(false, true);
-          }
-        }
-      }
+      routeCoordinator.onStreamingSettled({
+        hierarchyDepth: cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0,
+        residentPointCount: cloud.residentPointCount,
+        residentAtDepth: (depth) => hasResidentAtDepth(cloud, depth),
+      });
     }
 
     // Benchmark sampling — only when collecting. The 250 ms cadence catches
@@ -5094,7 +4822,6 @@ function resetToEmptyState(): void {
   objectPanel?.setVisible(false);
   objectDesiredVisible = false;
   objectContent = null;
-  lastSpaceExport = null; // it outlived the scan it describes
   // Hide the Measurements panel and drop its tracked desired state so a fresh
   // open starts hidden. Null-safe: the panel is lazy-mounted, so a reset before
   // any scan simply has nothing to clear.
@@ -5132,14 +4859,7 @@ function resetToEmptyState(): void {
   lastStreamingReportCloud = null;
   // Cancel any pending scan-type re-route + reset its state so a timer can't
   // fire against the now-closed scan, and the next open routes from scratch.
-  routing.cancelScheduled();
-  routing.reset();
-  streamingSettledRouted = false;
-  settleAttempts = 0;
-  lastSettleResident = -1;
-  lastSettleUndecided = false;
-  scanDetectionCommitted = false;
-  lastRouteResident = 0;
+  routeCoordinator.reset(); // also drops the space-export context that outlived its scan
   exportPanel.setVisible(false);
   sourceFileById.clear();
   reducedById.clear();

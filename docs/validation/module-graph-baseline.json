@@ -52,8 +52,8 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 118,
-      "typeOnly": 20,
+      "runtime": 115,
+      "typeOnly": 19,
       "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
@@ -88,6 +88,7 @@
         "src/app/projectFrame.ts",
         "src/app/remoteSourceNaming.ts",
         "src/app/reportExport.ts",
+        "src/app/scanRouteCoordinator.ts",
         "src/app/sessionIo.ts",
         "src/app/staleChunkReload.ts",
         "src/app/streamingScanReport.ts",
@@ -140,10 +141,6 @@
         "src/styles/index.ts",
         "src/terrain/canonicalFrame.ts",
         "src/terrain/datasetIntelligence.ts",
-        "src/terrain/objectMetrics.ts",
-        "src/terrain/scanRoute.ts",
-        "src/terrain/scanShape.ts",
-        "src/terrain/spaceMetrics.ts",
         "src/ui/AnnotationPanel.ts",
         "src/ui/CatalogPanel.ts",
         "src/ui/ClassLegendPanel.ts",
@@ -266,13 +263,13 @@
     "components": []
   },
   "context": {
-    "filesScanned": 812,
+    "filesScanned": 820,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 56
+        "importers": 55
       },
       {
         "file": "src/units/units.ts",
@@ -280,7 +277,7 @@
       },
       {
         "file": "src/lazyChunks.ts",
-        "importers": 22
+        "importers": 23
       },
       {
         "file": "src/io/loadErrors.ts",
@@ -311,6 +308,10 @@
         "importers": 13
       },
       {
+        "file": "src/render/colorModes.ts",
+        "importers": 13
+      },
+      {
         "file": "src/render/pointInfo.ts",
         "importers": 13
       },
@@ -320,10 +321,6 @@
       },
       {
         "file": "src/model/OrganizedRange.ts",
-        "importers": 12
-      },
-      {
-        "file": "src/render/colorModes.ts",
         "importers": 12
       },
       {
