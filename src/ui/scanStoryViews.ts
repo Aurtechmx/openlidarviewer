@@ -38,7 +38,6 @@ export function renderDatasetStoryCard(story: ScanStory): HTMLElement {
 
   card.append(
     el('div', { className: 'olv-story-head' }, [
-      el('span', { className: 'olv-story-title', text: 'Dataset Story' }),
       el('span', { className: `olv-story-assess ${tierClass}` }, [
         renderStateGlyph(stateFromFitnessTier(story.assessment), `Dataset fitness ${story.assessment}`),
         el('span', { text: story.assessment }),

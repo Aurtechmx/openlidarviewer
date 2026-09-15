@@ -27,9 +27,9 @@ test('Dataset Story action opens a card with headline, limiter and next step', a
 
   await firePaletteAction(page, 'Dataset Story', 'Dataset Story');
 
-  const card = page.locator('.olv-story-card');
+  const card = page.locator('.olv-modal .olv-story-card');
   await expect(card).toBeVisible();
-  await expect(card.locator('.olv-story-title')).toHaveText('Dataset Story');
+  await expect(page.locator('.olv-modal-title')).toHaveText('Dataset Story');
   await expect(card.locator('.olv-story-assess')).toBeVisible();
   // The card always carries a primary-limiter row and a next-step line.
   await expect(card).toContainText('Primary limiter');
@@ -44,9 +44,9 @@ test('the Dataset overview link in the Inspector opens the same Dataset Story ca
   // A visible, on-screen route (not only the ⌘K palette) to the existing modal.
   await page.locator('.olv-di-story-link').click();
 
-  const card = page.locator('.olv-story-card');
+  const card = page.locator('.olv-modal .olv-story-card');
   await expect(card).toBeVisible();
-  await expect(card.locator('.olv-story-title')).toHaveText('Dataset Story');
+  await expect(page.locator('.olv-modal-title')).toHaveText('Dataset Story');
 });
 
 test('Export health check action opens a verdict + per-axis rows', async ({ page }) => {
