@@ -159,7 +159,7 @@ import type { StreamingBenchmark } from './render/streaming/streamingBenchmark';
 import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 // Type-only: the overlay itself rides a lazy chunk (loadColorbarOverlay).
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
-import { estimateDecodedBytes, estimateGpuBytes, type StreamingQuality } from './render/streaming/streamingBudget';
+import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { streamingHasGpsTime } from './render/streaming/StreamingSource';
 import { isZUpFormat } from './io/sniffFormat';
 // `exportCloud` is dynamically imported via `loadExporters` in the onExport
@@ -192,7 +192,8 @@ import { validateRemoteCopcUrl } from './io/range/RangeSource';
 import type { RangeSource } from './io/range/RangeSource';
 import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
 import type { EptLaszipWorkerClient } from './io/ept/worker/eptLaszipWorkerClient';
-import { StreamingPanel } from './ui/StreamingPanel';
+import type { StreamingPanel } from './ui/StreamingPanel';
+import { createStreamingUiCoordinator } from './app/streamingUiCoordinator';
 // The COPC/streaming `import()` split points live in `lazyChunks.ts` — a
 // module excluded from the live-build source-transform so Vite can still see the
 // dynamic-import specifiers and emit the chunks (see lazyChunks.ts).
@@ -983,9 +984,7 @@ let copcDecoder: CopcWorkerClient | null = null;
 /** The EPT laszip decode worker client — created lazily on the first EPT laszip open. */
 let eptLaszipDecoder: EptLaszipWorkerClient | null = null;
 /** The active streaming quality preset — initial value follows the static device tier (mirrors streamingProfile.qualityForTier); display-only and user-overridable. */
-let streamingQuality: StreamingQuality = deviceCapsValue.tier === 'low' ? 'low' : deviceCapsValue.tier === 'high' ? 'high' : 'balanced';
 /** Interval handle for the streaming-status poll, while a COPC is open. */
-let streamingStatusTimer: number | undefined;
 /** Active streaming benchmark collector — non-null only under `?benchmark=1`. */
 let streamingBenchmark: StreamingBenchmark | null = null;
 /** Latched once the coarse view first finishes loading, per streaming session. */
@@ -1809,21 +1808,27 @@ const navBar = new NavBar(navWiring.callbacks);
 
 const projectCard = new ProjectCard();
 
-// The streaming-COPC panel — phase, live status, and streaming controls.
-const streamingPanel = new StreamingPanel({
-  onColorMode: (mode) => viewer.setStreamingColorMode(mode),
-  onQuality: (quality) => {
-    streamingQuality = quality;
-    viewer.setStreamingQuality(quality, isPhone());
+// The streaming-COPC panel (phase, live status, controls), its quality
+// setting, the status poll and the full-cloud grade live on the streaming UI
+// coordinator in `src/app/streamingUiCoordinator.ts`; the Viewer stays the
+// renderer. The shell registers the readers that share each poll tick below.
+const streamingUi = createStreamingUiCoordinator({
+  renderer: {
+    setStreamingColorMode: (mode) => viewer.setStreamingColorMode(mode),
+    setStreamingQuality: (q, mobile) => viewer.setStreamingQuality(q, mobile),
+    pauseStreaming: () => viewer.pauseStreaming(),
+    resumeStreaming: () => viewer.resumeStreaming(),
+    clearStreamingCache: () => viewer.clearStreamingCache(),
+    streamingCloud: () => viewer.streamingCloud,
+    streamingScheduler: () => viewer.streamingScheduler,
   },
-  onPauseToggle: (paused) => {
-    if (paused) viewer.pauseStreaming();
-    else viewer.resumeStreaming();
-  },
-  onClearCache: () => viewer.clearStreamingCache(),
-  onGradeFullCloud: () => void runFullCloudGradeAction(),
-  onCancelGrade: () => cancelFullCloudGrade(),
+  isPhone,
+  getViewer: () => viewer,
+  gradeContext: () => crsService.context(), // the resolved frame, not the file's claim
+  loadGrade: loadFullCloudGradeAction,
+  debug,
 });
+const streamingPanel: StreamingPanel = streamingUi.panel;
 
 // --- Lazy Measurements-panel mount (index-trim) -------------------------------
 // The Measurements panel is constructed on the FIRST scan load, not at boot, so
@@ -2787,7 +2792,7 @@ const exportPanel = new ExportPanel({
 wireFrameChange({
   crsService,
   onResolved: (resolved) => { exportPanel.setCrsKnown(crsIsKnown(resolved)); if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } }, // reveal on scan load, hide + reset produced on close
-  cancelFullCloudGrade: () => cancelFullCloudGrade(),
+  cancelFullCloudGrade: () => streamingUi.cancelGrade(),
   invalidate: () => viewer?.invalidateDerivedClassificationsForFrame() ?? [],
   clearTerrainCache: () => terrainRunner.abortAndClearCache(),
   noteStale: (m) => analysePanel?.setStaleNotice(m),
@@ -3579,39 +3584,6 @@ if (debug || benchmark) {
   });
 }
 
-/** Re-entry guard for the full-cloud grade — one run at a time per session. */
-let fullCloudGradeRunning = false;
-
-/**
- * Run the full-cloud grade. The orchestration — sampling plan,
- * decode through the session decoder, grade, and panel updates — lives in a
- * lazily-imported module so it (and the adapter + grade it pulls in) never
- * weighs on the live index bundle; this stub only owns the re-entry guard.
- */
-let fullCloudGradeController: AbortController | null = null;
-async function runFullCloudGradeAction(): Promise<void> {
-  if (fullCloudGradeRunning) return;
-  fullCloudGradeRunning = true;
-  fullCloudGradeController = new AbortController();
-  try {
-    const { runFullCloudGrade } = await loadFullCloudGradeAction();
-    await runFullCloudGrade({
-      viewer,
-      panel: streamingPanel,
-      signal: fullCloudGradeController.signal,
-      debug,
-      context: crsService.context(), // the resolved frame, not the file's claim
-    });
-  } finally {
-    fullCloudGradeRunning = false;
-    fullCloudGradeController = null;
-  }
-}
-
-/** Abort an in-flight full-cloud grade — the streaming panel's Cancel control. */
-function cancelFullCloudGrade(): void {
-  fullCloudGradeController?.abort();
-}
 
 /** Sample live COPC streaming counters for the debug overlay, or null. */
 function streamingDebugSample(): StreamingDebugStats | null {
@@ -3925,9 +3897,9 @@ function persistPrefs(): void {
  *  preference still wins; the control writes prefs back on every user change. */
 function mountPerformanceControl(): void {
   mountQualityControl(stage, {
-    getViewer: () => viewer, getStreamingQuality: () => streamingQuality,
+    getViewer: () => viewer, getStreamingQuality: () => streamingUi.quality(),
     device: () => ({ tier: deviceCapsValue.tier, isMobile: isPhone(), backend: viewer.activeBackend() }),
-    onStreamingQuality: (q) => { streamingQuality = q; streamingPanel.setQuality(q); },
+    onStreamingQuality: (q) => streamingUi.noteQualityFromControl(q),
     onUserChange: () => { visuals.syncRendering(); persistPrefs(); },
   });
 }
@@ -4315,7 +4287,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   setCopcDecoder: (d) => { copcDecoder = d; },
   getEptLaszipDecoder: () => eptLaszipDecoder,
   setEptLaszipDecoder: (d) => { eptLaszipDecoder = d; },
-  getStreamingQuality: () => streamingQuality,
+  getStreamingQuality: () => streamingUi.quality(),
   setLastStreamingReportCloud: (c) => { lastStreamingReportCloud = c; processStudio.refresh(); },
   debug,
   benchmark,
@@ -4509,13 +4481,10 @@ function closeStreaming(): void {
     coarseStableFired = false;
   }
   if (copcDecoder) copcDecoder.onDecodeMs = undefined;
-  stopStreamingStatusPolling();
-  // Abort an in-flight full-cloud grade — the scan it was decoding is going away,
-  // so its decode is now orphaned work (its result is discarded by the grade's
-  // own stale-cloud guard regardless; this just stops it early).
-  cancelFullCloudGrade();
+  // Stop the status poll, abort an in-flight grade (its decode is orphaned
+  // work now) and hide the panel.
+  streamingUi.endSession();
   viewer.detachStreamingCloud();
-  streamingPanel.hide();
   // Return the Inspector to its static layout — un-hide every section
   // and clear the streaming-mode positioning class.
   try { inspector.setStreamingMode(false); }
@@ -4557,109 +4526,69 @@ function hasResidentAtDepth(
 
 /** Poll the streaming state ~4 Hz so the panel reflects progress. */
 function startStreamingStatusPolling(): void {
-  stopStreamingStatusPolling();
-  streamingStatusTimer = window.setInterval(() => {
-    const cloud = viewer.streamingCloud;
-    const scheduler = viewer.streamingScheduler;
-    if (!cloud || !scheduler) return;
-    const counts = cloud.counts();
-    // ONE snapshot per tick: the panel line, the bar and the settle one-shot
-    // all read the same instant, and the same wanted-set verdict the renderer's
-    // phase machine acts on.
-    const diag = scheduler.diagnostics();
-    streamingPanel.setStatus({
-      loadedNodes: counts.resident,
-      knownNodes: counts.known,
-      displayedPoints: cloud.residentPointCount,
-      sourcePoints: cloud.sourcePointCount,
-      cacheBytes: scheduler.cacheStats().byteSize,
+  streamingUi.startPolling();
+}
+
+// The readers of each streaming poll tick: they all see the one snapshot the
+// panel was drawn from, so residency, the settle one-shot and the benchmark
+// never read different instants.
+streamingUi.onTick(({ cloud, scheduler, counts, diagnostics: diag }) => {
+  // Same tick's counters; residency is source-vs-resident, not readiness.
+  publishStreamingDetail(inspector, cloud, debug);
+  if (diag.readinessPhase === 'settled') {
+    // First settled current-view verdict: the scan route's one-shot
+    // re-evaluation on the now fully-resident cloud (depth gate and
+    // spend-on-landed-verdict live on the coordinator).
+    routeCoordinator.onStreamingSettled({
+      hierarchyDepth: cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0,
+      residentPointCount: cloud.residentPointCount,
+      residentAtDepth: (depth) => hasResidentAtDepth(cloud, depth),
     });
-    streamingPanel.setViewDiagnostics(diag);
-    // Same tick's counters; residency is source-vs-resident, not readiness.
-    publishStreamingDetail(inspector, cloud, debug);
-    if (diag.readinessPhase === 'settled') {
-      // First settled current-view verdict: re-evaluate the scan type on
-      // the now fully-resident cloud — a sparse early frame can misread a
-      // 360 / house as terrain or object. One-shot per scan; a manual "Treat
-      // as" override or a "run anyway" pin make this a no-op (and spend it).
-      //
-      // Two guards keep the one-shot THE settled verdict (v0.4.5 fix — the
-      // pill stayed on Auto after the ready poll because a transient idle
-      // had silently spent the one-shot without committing):
-      //   1. DEPTH GATE — the scheduler often reads idle at the root level
-      //      (depth 0) long before the cloud fills in (same reality the
-      //      benchmark's coarse-stable guard handles below). Don't even
-      //      attempt the settled evaluation until the resident set spans the
-      //      hierarchy's own depth (capped at 2).
-      //   2. SPEND-ON-LANDED-VERDICT (v0.4.5b) — `applyScanRoute` reports
-      //      whether the settled verdict actually LANDED (applied or
-      //      committed) or routing is pinned/manual. A REFUSED verdict (a
-      //      ceiling-heavy early frame reading terrain against a standing
-      //      interior route) and an undecidable frame both leave the one-shot
-      //      ARMED so a later ready poll retries on fuller geometry — gated
-      //      on the resident set actually CHANGING (re-reading an identical
-      //      frame cannot change the verdict; a failed gather may retry at
-      //      once) and bounded by SETTLE_RETRY_CAP inside the spend rule.
-      routeCoordinator.onStreamingSettled({
-        hierarchyDepth: cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0,
-        residentPointCount: cloud.residentPointCount,
-        residentAtDepth: (depth) => hasResidentAtDepth(cloud, depth),
-      });
-    }
-
-    // Benchmark sampling — only when collecting. The 250 ms cadence catches
-    // scheduler-tick samples through the onTick hook, not here; this loop is
-    // for state-snapshot metrics (resident counts, cache outcomes, peaks).
-    if (streamingBenchmark) {
-      const cacheStats = scheduler.cacheStats();
-      streamingBenchmark.recordCacheSnapshot({
-        hits: cacheStats.hits,
-        misses: cacheStats.misses,
-        evictions: cacheStats.evictions,
-      });
-      streamingBenchmark.recordResident(
-        cloud.residentPointCount,
-        scheduler.pointBudget,
-      );
-      streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount));
-      // Coarse stable: the first poll at which the scheduler has settled
-      // AND the resident set has meaningful coverage — i.e. spans at
-      // least one refinement level beyond the root. On a slow link the
-      // scheduler often reaches steady state at depth 0 (root only)
-      // before the user moves; firing then would report "coarse stable
-      // = first scheduler idle" instead of "first usable view", and
-      // every benchmark across machines would look identical because
-      // the depth-0 root takes roughly the same time everywhere.
-      //
-      // The guard caps at the deepest depth the hierarchy actually
-      // exposes: large datasets must reach depth 2 before the marker
-      // fires; tiny datasets whose entire hierarchy is depth 0–1 still
-      // fire the marker once they reach their own max depth. Otherwise
-      // small COPCs (test fixtures, small drone surveys) would never
-      // mark coarse-stable, leaving the benchmark output with a
-      // permanent em-dash placeholder.
-      const targetDepth = Math.min(2, cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0);
-      if (
-        !coarseStableFired &&
-        counts.resident > 0 &&
-        counts.loading === 0 &&
-        counts.queued === 0 &&
-        hasResidentAtDepth(cloud, targetDepth)
-      ) {
-        streamingBenchmark.recordCoarseStable();
-        coarseStableFired = true;
-      }
-    }
-  }, 250);
-}
-
-/** Stop the streaming-status poll. */
-function stopStreamingStatusPolling(): void {
-  if (streamingStatusTimer !== undefined) {
-    window.clearInterval(streamingStatusTimer);
-    streamingStatusTimer = undefined;
   }
-}
+  // Benchmark sampling — only when collecting. The 250 ms cadence catches
+  // scheduler-tick samples through the onTick hook, not here; this loop is
+  // for state-snapshot metrics (resident counts, cache outcomes, peaks).
+  if (streamingBenchmark) {
+    const cacheStats = scheduler.cacheStats();
+    streamingBenchmark.recordCacheSnapshot({
+      hits: cacheStats.hits,
+      misses: cacheStats.misses,
+      evictions: cacheStats.evictions,
+    });
+    streamingBenchmark.recordResident(
+      cloud.residentPointCount,
+      scheduler.pointBudget,
+    );
+    streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount));
+    // Coarse stable: the first poll at which the scheduler has settled
+    // AND the resident set has meaningful coverage — i.e. spans at
+    // least one refinement level beyond the root. On a slow link the
+    // scheduler often reaches steady state at depth 0 (root only)
+    // before the user moves; firing then would report "coarse stable
+    // = first scheduler idle" instead of "first usable view", and
+    // every benchmark across machines would look identical because
+    // the depth-0 root takes roughly the same time everywhere.
+    //
+    // The guard caps at the deepest depth the hierarchy actually
+    // exposes: large datasets must reach depth 2 before the marker
+    // fires; tiny datasets whose entire hierarchy is depth 0–1 still
+    // fire the marker once they reach their own max depth. Otherwise
+    // small COPCs (test fixtures, small drone surveys) would never
+    // mark coarse-stable, leaving the benchmark output with a
+    // permanent em-dash placeholder.
+    const targetDepth = Math.min(2, cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0);
+    if (
+      !coarseStableFired &&
+      counts.resident > 0 &&
+      counts.loading === 0 &&
+      counts.queued === 0 &&
+      hasResidentAtDepth(cloud, targetDepth)
+    ) {
+      streamingBenchmark.recordCoarseStable();
+      coarseStableFired = true;
+    }
+  }
+});
 
 /** Reveal the "Project ready" summary card for a freshly opened scan. */
 function showProjectCard(cloud: PointCloud, totalCount: number): void {

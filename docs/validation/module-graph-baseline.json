@@ -53,7 +53,7 @@
   "fanOut": {
     "src/main.ts": {
       "runtime": 112,
-      "typeOnly": 19,
+      "typeOnly": 20,
       "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
@@ -92,6 +92,7 @@
         "src/app/sessionIo.ts",
         "src/app/staleChunkReload.ts",
         "src/app/streamingScanReport.ts",
+        "src/app/streamingUiCoordinator.ts",
         "src/app/swUrl.ts",
         "src/app/terrainAnalysisRunner.ts",
         "src/app/terrainComputePath.ts",
@@ -151,7 +152,6 @@
         "src/ui/ProjectCard.ts",
         "src/ui/RecommendedViewChip.ts",
         "src/ui/Stage.ts",
-        "src/ui/StreamingPanel.ts",
         "src/ui/ThemeToggle.ts",
         "src/ui/WorkflowController.ts",
         "src/ui/actionRegistry.ts",
@@ -260,7 +260,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 828,
+    "filesScanned": 829,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [

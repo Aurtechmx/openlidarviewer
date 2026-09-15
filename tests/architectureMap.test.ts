@@ -94,9 +94,10 @@ describe('architecture map stays in step with the tree', () => {
     // (the render-loop and importSession extractions took it from 10 to 8, the
     // openScan extraction took it to 7, the openStreaming extraction to 6, and the
     // reportExport extraction to 5, the scanRouteCoordinator extraction to 4, and the
-    // inspectorVisualCoordinator extraction to 3).
+    // inspectorVisualCoordinator extraction to 3, and the streamingUiCoordinator
+    // extraction to 2).
     const rows = text.split('\n').filter((l) => /^\|\s*`?[A-Za-z_]/.test(l) && /\|\s*[\d,]+\s*\|/.test(l));
-    expect(rows.length, 'the extraction tables have gone missing').toBeGreaterThanOrEqual(3);
+    expect(rows.length, 'the extraction tables have gone missing').toBeGreaterThanOrEqual(2);
 
     const lines = [
       ...readFileSync(root + 'src/main.ts', 'utf8').split('\n'),

@@ -32,7 +32,7 @@ from the tree and fails when a cell drifts.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~12k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~16k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~31k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,049 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 4,978 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,049)** — the largest blocks, which are the extraction
+**`src/main.ts` (4,978)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -113,7 +113,14 @@ chunk. The candidates that remain:
 
 | Block | ~Lines | Extraction target |
 |---|---:|---|
-| `startStreamingStatusPolling` | 338 | streaming panel wiring module |
+
+Done: the streaming panel's controls (quality, pause, cache, the full-cloud
+grade with its re-entry guard and cancel) and the status poll now live in
+`src/app/streamingUiCoordinator.ts` over a renderer port; the shell registers
+the readers that share each poll tick (residency detail, the scan route's
+settle one-shot, the benchmark). `tests/streamingUiCoordinator.test.ts` covers
+the controls, the tick fan-out, the grade guard and the session end. The
+Viewer stays the renderer; the scheduler is untouched.
 
 Done: `syncInspectorVisuals`, `syncInspectorRendering`, the Visuals Studio
 preset callbacks (RGB appearance, EDL, sky, white balance, workflow preset) and
