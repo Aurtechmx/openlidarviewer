@@ -53,7 +53,7 @@
 /* Desktop collapse — slide the whole rail past the right edge (GPU transform). */
 @media (min-width: 768px) {
   .olv-right-rail {
-    transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
+    transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-slow) var(--ease-standard);
   }
   .olv-right-rail.olv-right-collapsed {
     transform: translateX(calc(100% + var(--space-lg, 16px)));
@@ -76,7 +76,7 @@
  * section" before it reaches the hairline. The hairline drops to half
  * opacity so it doesn't compete with the typographic eyebrow below it.
  */
-.olv-section { margin-top: var(--space-2xl); padding-top: var(--space-md); border-top: 0.5px solid rgba(255, 255, 255, 0.05); }
+.olv-section { margin-top: var(--space-2xl); padding-top: var(--space-md); border-top: 0.5px solid var(--hairline); }
 .olv-section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
 /* Section headings read as written. `Coordinate system`, `Saved views` and
    `Scan report` are authored sentence-case in TS and were uppercased here
@@ -292,7 +292,7 @@
 .olv-rvc-apply:hover { color: var(--accent); }
 .olv-rvc-spark { color: var(--accent); font-size: 0.85em; }
 .olv-rvc-dismiss {
-  font-size: 16px; line-height: 1; color: var(--text-dim);
+  font-size: var(--text-xl); line-height: 1; color: var(--text-dim);
   background: none; border: none; cursor: pointer; padding: 2px 6px;
 }
 .olv-rvc-dismiss:hover { color: var(--text); }
@@ -370,9 +370,8 @@
 }
 .olv-visuals-advanced-summary {
   cursor: pointer;
-  font-size: var(--text-xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   list-style: none;
   user-select: none;

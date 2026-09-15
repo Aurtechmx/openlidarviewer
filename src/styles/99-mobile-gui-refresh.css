@@ -119,7 +119,7 @@
   .olv-msheet-tab {
     min-height: var(--m-tab-h);
     border-radius: 8px;
-    font-size: 9px;
+    font-size: var(--text-micro);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;

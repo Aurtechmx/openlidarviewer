@@ -266,7 +266,7 @@
 /* The kind name is a VISIBLE caption under the glyph (evidence: unlabeled icon
  * tools fail first-time users, and hover tooltips don't work on touch). */
 .olv-mkind-icon .olv-mkind-name {
-  font-size: 8px; line-height: 1; letter-spacing: 0.02em;
+  font-size: var(--text-micro); line-height: 1; letter-spacing: 0.02em;
   color: inherit; white-space: nowrap;
 }
 /* Action buttons (Undo / Metric / Done / Finish / Clear): glyph over label. */

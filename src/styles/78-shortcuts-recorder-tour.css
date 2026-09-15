@@ -62,7 +62,7 @@
 .olv-wfc-title { font-size: var(--text-md); font-weight: 600; }
 .olv-wfc-subtitle { font-size: var(--text-xs); color: var(--text-dim); margin-top: 2px; }
 .olv-wfc-close {
-  font-size: 20px; line-height: 1; color: var(--text-dim);
+  font-size: var(--text-2xl); line-height: 1; color: var(--text-dim);
   background: none; border: none; cursor: pointer; padding: 2px 6px;
 }
 .olv-wfc-close:hover { color: var(--text); }
@@ -117,7 +117,7 @@
   outline: 1px solid var(--accent); outline-offset: 1px;
 }
 .olv-shortcuts-title {
-  font-size: 15px;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 .olv-shortcuts-subtitle {
@@ -149,9 +149,8 @@
 }
 .olv-shortcuts-section {
   font-variant-numeric: tabular-nums;
-  font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   padding: var(--space-md) var(--space-sm) var(--space-xs);
 }
@@ -346,9 +345,8 @@
   border-radius: var(--radius-md);
 }
 .olv-mp-chain-label {
-  font-size: var(--text-2xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-mp-chain-chips {

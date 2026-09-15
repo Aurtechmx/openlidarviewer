@@ -104,7 +104,7 @@
 .olv-debug.is-collapsed .olv-debug-body { display: none; }
 .olv-debug.is-collapsed .olv-debug-title { margin-bottom: 0; }
 .olv-debug-label {
-  font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase;
+  font-size: var(--text-micro); letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--text-faint);
   margin: var(--space-md) 0 var(--space-2xs);
 }

@@ -41,8 +41,8 @@
 .olv-help-empty { font-size: var(--text-sm); color: var(--text-dim); padding: var(--space-2xl); }
 .olv-help-section { margin-top: var(--space-2xl); }
 .olv-help-heading {
-  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--accent); margin-bottom: var(--space-md);
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em; color: var(--accent); margin-bottom: var(--space-md);
 }
 .olv-help-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-help-row { display: flex; gap: var(--space-lg); align-items: baseline; }
@@ -152,18 +152,18 @@
   padding: var(--space-sm) 0; border-top: 0.5px solid var(--hairline);
 }
 .olv-rf-stat-label {
-  font-size: var(--text-2xs); letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-rf-stat-value {
-  margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-md);
+  margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-value);
   color: var(--text); overflow-wrap: anywhere;
 }
 /* Station table — reuses the in-panel scroll wrap + sticky header, with room to
    read more rows at once than the 220px dock cap allows. */
 .olv-rf-stations { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-rf-section-label {
-  font-size: var(--text-2xs); letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-rf-stations-wrap { max-height: 40vh; }
@@ -173,8 +173,8 @@
 .olv-modal-grid { display: flex; flex-direction: column; gap: var(--space-lg); }
 .olv-modal-field { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-modal-label {
-  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-dim);
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em; color: var(--text-dim);
 }
 .olv-modal-input {
   font: inherit; font-size: var(--text-xs); color: var(--text);
@@ -193,8 +193,8 @@
   background: rgba(255, 255, 255, 0.02); padding: var(--space-lg);
 }
 .olv-modal-locked-head {
-  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: var(--space-md);
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em; color: var(--text-faint); margin-bottom: var(--space-md);
 }
 .olv-modal-locked-grid {
   display: grid; grid-template-columns: max-content 1fr;

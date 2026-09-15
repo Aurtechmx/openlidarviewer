@@ -165,7 +165,7 @@
   .olv-dock .olv-tool {
     flex-direction: column;
     gap: 2px;
-    font-size: 9px;
+    font-size: var(--text-micro);
     letter-spacing: 0.02em;
     padding: var(--space-2xs) var(--space-xs);
     border-radius: var(--radius-sm);
@@ -180,7 +180,7 @@
   .olv-dock .olv-tool-ico { flex-direction: column; gap: 2px; }
   .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
   .olv-dock .olv-tool-label {
-    font-size: 9px;
+    font-size: var(--text-micro);
     line-height: 1;
     font-weight: 500;
   }
@@ -316,7 +316,7 @@
     flex-shrink: 0;
     display: inline-flex; align-items: center; justify-content: center;
     background: none; border: none; color: var(--text-faint);
-    font-size: 17px; line-height: 1;
+    font-size: var(--text-xl); line-height: 1;
     min-width: 44px; min-height: 44px;
   }
   @media (hover: hover) { .olv-touch-hint-x:hover { color: var(--text); } }
@@ -371,7 +371,7 @@
        maths shifts the panel down by its own height minus the peek and
        the safe-area inset. */
     transform: translateY(calc(100% - var(--olv-sheet-head-peek) - env(safe-area-inset-bottom)));
-    transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition: transform var(--dur-slow) cubic-bezier(0.22, 0.61, 0.36, 1);
     box-shadow: 0 -14px 38px rgba(0, 0, 0, 0.55);
     overflow: hidden;
   }
@@ -423,7 +423,7 @@
   .olv-sheet-close {
     display: inline-flex; align-items: center; justify-content: center;
     background: none; border: none; color: var(--text-dim);
-    font-size: 22px; line-height: 1;
+    font-size: var(--text-2xl); line-height: 1;
     min-width: 44px; min-height: 44px;
     margin: -8px -10px -8px 0;
   }

@@ -15,7 +15,7 @@
 .olv-ps-title { margin: 0; font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.01em; }
 .olv-ps-subtitle {
   margin: var(--space-md) 0 var(--space-2xs);
-  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-dim);
 }
 .olv-ps-stages { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
