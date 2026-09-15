@@ -5,6 +5,8 @@
  * With no layer loaded it asks for a scan. With several visible layers that
  * have not proven a shared frame the gather is empty too, and the old status
  * blamed a missing scan; it now names the combination rule and the way out.
+ * The viewer double gathers nothing by construction. Only the cloud list
+ * differs between the two cases, which is the one fact the message reads.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { createTerrainAnalysisRunner } from '../src/app/terrainAnalysisRunner';
