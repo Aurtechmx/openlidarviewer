@@ -1,123 +1,126 @@
 /**
  * HelpOverlay.ts
  *
- * A compact, static help overlay (should-have #15): a centred card over a
- * dimmed backdrop, summarising the inspection and measurement workflows, the
- * navigation controls, and the keyboard shortcuts.
- *
- * Static content — no live state, one close button. It is opened from the tool
- * dock's Help button (the `?` key belongs to the ShortcutSheet), and closed by
- * the button, a backdrop click, or Escape. Browser-bound (DOM); not imported
- * in Node tests.
+ * The Help overlay: a centred card over a dimmed backdrop with a search box,
+ * the topic list, and the topic bodies. Prose comes from the help catalogue;
+ * every action row and every key comes from the action descriptors and the
+ * key binding table handed in at construction, so this surface cannot state
+ * a title, hint or key the palette and the sheet do not. Opened from the tool
+ * dock (the `?` key belongs to the shortcut sheet), closed by the button, a
+ * backdrop click, or Escape. Browser-bound (DOM); not imported in Node tests.
+ * Search re-renders the topic list and the bodies from the same catalogue
+ * ranking. A topic section carries its id in a data attribute, which is what
+ * openTopic scrolls to.
  */
 
 import { el } from './dom';
+import type { ActionDescriptor } from './actionRegistry';
+import type { ShortcutDescriptor } from './keyBindings';
+import { formatShortcutKeys } from './ShortcutSheet';
+import { HELP_TOPICS, helpActionRows, helpKeyRows, searchHelp, type HelpTopic } from '../app/helpCatalog';
 
-/** One labelled row inside a help section — a key/term and its description. */
-type HelpRow = [term: string, description: string];
-
-/** Build a section: a sub-heading followed by term/description rows. */
-function section(heading: string, rows: HelpRow[]): HTMLElement {
-  const body = el(
-    'div',
-    { className: 'olv-help-rows' },
-    rows.map(([term, description]) =>
-      el('div', { className: 'olv-help-row' }, [
-        el('span', { className: 'olv-help-term', text: term }),
-        el('span', { className: 'olv-help-desc', text: description }),
-      ]),
-    ),
-  );
-  return el('section', { className: 'olv-help-section' }, [
-    el('h3', { className: 'olv-help-heading', text: heading }),
-    body,
-  ]);
+export interface HelpOverlayDeps {
+  readonly actions: readonly ActionDescriptor[];
+  readonly shortcuts: readonly ShortcutDescriptor[];
 }
 
 export class HelpOverlay {
-  /** The backdrop element (contains the card) — mount into the stage overlay. */
+  /** The backdrop element (contains the card); mount into the stage overlay. */
   readonly element: HTMLElement;
 
   private _open = false;
   private readonly _onKeyDown: (e: KeyboardEvent) => void;
+  private readonly _search: HTMLInputElement;
+  private readonly _nav: HTMLElement;
+  private readonly _body: HTMLElement;
+  private readonly _deps: HelpOverlayDeps;
 
-  constructor() {
-    const closeBtn = el('button', {
-      className: 'olv-help-close',
-      text: 'Close',
-      ariaLabel: 'Close help',
-    });
+  constructor(deps: HelpOverlayDeps) {
+    this._deps = deps;
+    const closeBtn = el('button', { className: 'olv-help-close', text: 'Close', ariaLabel: 'Close help' });
     closeBtn.addEventListener('click', () => {
       closeBtn.blur();
       this.close();
     });
+    this._search = el('input', { className: 'olv-palette-input olv-help-search', ariaLabel: 'Search help' });
+    this._search.type = 'search';
+    this._search.placeholder = 'Search help…';
+    this._search.addEventListener('input', () => this._render(this._search.value));
+    this._nav = el('nav', { className: 'olv-help-nav', ariaLabel: 'Help topics' });
+    this._body = el('div', { className: 'olv-help-body' });
 
     const card = el('div', { className: 'olv-help-card' }, [
       el('div', { className: 'olv-help-head' }, [
-        el('span', { className: 'olv-help-title', text: 'OpenLiDARViewer — Help' }),
+        el('span', { className: 'olv-help-title', text: 'OpenLiDARViewer Help' }),
         closeBtn,
       ]),
-      el('div', { className: 'olv-help-body' }, [
-        section('Tools', [
-          ['Measure', 'Distances, areas, heights, angles and slope on the scan.'],
-          ['Inspect', 'Click any point to read its coordinates and attributes.'],
-          ['Probe', 'Hover the scan for a live point readout, with no click.'],
-          ['Annotate', 'Mark a point of interest with a titled, categorised note.'],
-        ]),
-        section('Annotating', [
-          ['Place', 'With Annotate on, click a point, fill the card, then Save.'],
-          ['Camera', 'Keep "Save current camera view" to return to the exact framing.'],
-          ['Revisit', 'The Annotations panel jumps to, edits or deletes any finding.'],
-        ]),
-        section('Navigation', [
-          ['Orbit / Walk / Fly / Pan', 'Switch mode with 1, 2, 3 and 4.'],
-          ['Look', 'Drag to rotate, or orbit with the arrow keys; scroll to zoom.'],
-          ['Pan', 'The hand tool grabs the scene and drags it 1:1 — middle-drag pans in any mode.'],
-          ['Move', 'WASD in walk and fly; Space / C raise and lower; hold Shift to sprint.'],
-          ['Frame', 'R frames the whole scan; F focuses the centre; double-click a point to focus there.'],
-          ['Re-orient', 'Hold Space while a tool is active to rotate / pan, then release to resume.'],
-          ['Right-click', 'A quick menu — focus here, frame the scan, or snap to a view.'],
-        ]),
-        section('Keyboard shortcuts', [
-          ['A', 'Toggle the Annotate tool.'],
-          ['M', 'Toggle the Measure tool.'],
-          ['I', 'Toggle the Inspect tool.'],
-          ['L', 'Toggle the lasso volume tool.'],
-          ['T / O / P', 'Camera presets — Top, Oblique and Planar views.'],
-          ['G', 'Toggle the Pan (hand) tool from any mode.'],
-          ['H', 'Show or hide the controls HUD.'],
-          ['V', 'Save the current camera view.'],
-          ['Delete', 'Remove the selected annotation.'],
-          ['Enter / Backspace', 'While measuring: finish a shape / undo the last point.'],
-          ['Ctrl+Z', 'Undo your last edit — annotation or classification; add Shift to redo.'],
-          ['Cmd/Ctrl+K', 'Open the command palette.'],
-          ['Esc', 'Cancel the active tool or draft.'],
-          // `?` is owned by the ShortcutSheet (main.ts binds it before the
-          // tool shortcuts and consumes the keystroke) — describe that
-          // truthfully rather than claiming it toggles this overlay.
-          ['?', 'Open the keyboard shortcut sheet.'],
-        ]),
-        section('Saving your work', [
-          ['Snapshot', 'Exports a PNG with placed measurements and annotations.'],
-          ['Session', 'Export or import the whole inspection as a JSON file.'],
-          ['Local', 'Every scan stays on your device — nothing is uploaded.'],
-        ]),
-      ]),
+      this._search,
+      this._nav,
+      this._body,
     ]);
-    // A click on the backdrop (outside the card) closes the overlay.
     this.element = el('div', { className: 'olv-help-backdrop olv-hidden' }, [card]);
     this.element.addEventListener('click', (e) => {
       if (e.target === this.element) this.close();
     });
-
-    // Escape closes the overlay while it is open; the listener is only live
-    // then, so it never competes with the tool-cancel Escape handling.
     this._onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         this.close();
       }
     };
+    this._render('');
+  }
+
+  private _render(query: string): void {
+    const hits = searchHelp(query, this._deps.actions);
+    this._nav.replaceChildren(
+      ...hits.map(({ topic }) => {
+        const b = el('button', { className: 'olv-help-nav-item', text: topic.title, type: 'button' });
+        b.addEventListener('click', () => this._scrollTo(topic.id));
+        return b;
+      }),
+    );
+    this._body.replaceChildren(...hits.map(({ topic }) => this._section(topic)));
+    if (hits.length === 0) {
+      this._body.replaceChildren(el('p', { className: 'olv-help-empty', text: 'Nothing in Help matches that. The command palette lists every action by name.' }));
+    }
+  }
+
+  private _section(topic: HelpTopic): HTMLElement {
+    const children: HTMLElement[] = [
+      el('h3', { className: 'olv-help-heading', text: topic.title }),
+      el('p', { className: 'olv-help-summary', text: topic.summary }),
+      ...topic.paragraphs.map((text) => el('p', { className: 'olv-help-desc', text })),
+    ];
+    const rows: HTMLElement[] = [];
+    for (const [term, text] of topic.terms ?? []) rows.push(this._row(term, text));
+    for (const a of helpActionRows(topic, this._deps.actions)) {
+      const keys = a.keys ? formatShortcutKeys(a.keys) : '';
+      const note = a.help?.scientificNote ? ` ${a.help.scientificNote}` : '';
+      rows.push(this._row(a.title, `${a.hint}${note}`, keys, a.id));
+    }
+    if (topic.id === 'keyboard') {
+      for (const k of helpKeyRows(this._deps.shortcuts, this._deps.actions)) rows.push(this._row(formatShortcutKeys(k.keys), k.text));
+    }
+    if (rows.length > 0) children.push(el('div', { className: 'olv-help-rows' }, rows));
+    const section = el('section', { className: 'olv-help-section' }, children);
+    section.dataset.helpTopic = topic.id;
+    return section;
+  }
+
+  private _row(term: string, description: string, keys = '', actionId?: string): HTMLElement {
+    const row = el('div', { className: 'olv-help-row' }, [
+      el('span', { className: 'olv-help-term', text: term }),
+      el('span', { className: 'olv-help-desc', text: description }),
+      ...(keys ? [el('kbd', { className: 'olv-help-key', text: keys })] : []),
+    ]);
+    if (actionId) row.dataset.actionId = actionId;
+    return row;
+  }
+
+  private _scrollTo(topicId: string): void {
+    const target = this._body.querySelector<HTMLElement>(`[data-help-topic="${topicId}"]`);
+    target?.scrollIntoView({ block: 'start' });
   }
 
   /** Whether the overlay is currently shown. */
@@ -131,6 +134,21 @@ export class HelpOverlay {
     this._open = true;
     this.element.classList.remove('olv-hidden');
     window.addEventListener('keydown', this._onKeyDown, true);
+  }
+
+  /** Open on one topic: clears the search and scrolls the topic into view. */
+  openTopic(topicId: string): void {
+    this._search.value = '';
+    this._render('');
+    this.open();
+    this._scrollTo(topicId);
+  }
+
+  /** Open on the topic that lists an action; falls back to a plain open. */
+  openForAction(actionId: string): void {
+    const topic = HELP_TOPICS.find((t) => (t.actionIds ?? []).includes(actionId));
+    if (topic) this.openTopic(topic.id);
+    else this.open();
   }
 
   /** Hide the overlay. */
@@ -153,3 +171,5 @@ export class HelpOverlay {
     this.element.remove();
   }
 }
+
+export { shortcutDescriptors } from './keyBindings';

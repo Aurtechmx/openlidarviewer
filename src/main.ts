@@ -1761,7 +1761,7 @@ stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), key
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
 
 
-const helpOverlay = createHelpOverlayLazy(stage.overlay); // lazy chunk, see helpOverlayLazy.ts
+const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry() }); // lazy chunk, see helpOverlayLazy.ts
 
 const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),

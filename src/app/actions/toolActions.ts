@@ -26,6 +26,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
   actions.push(
     {
       id: 'tool.measure',
+      keys: keyDisplayFor('tool-measure'),
       title: 'Measure',
       section: 'Tools',
       hint: 'Activate the measurement toolbar.',
@@ -36,6 +37,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     },
     {
       id: 'tool.inspect',
+      keys: keyDisplayFor('tool-inspect'),
       title: 'Inspect point',
       section: 'Tools',
       hint: 'Read attributes of any point under the cursor.',
@@ -46,6 +48,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     },
     {
       id: 'tool.annotate',
+      keys: keyDisplayFor('tool-annotate'),
       title: 'Annotate',
       section: 'Tools',
       hint: 'Drop notes, info, warnings, or issues on points.',

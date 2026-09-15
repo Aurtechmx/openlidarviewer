@@ -337,6 +337,20 @@ smaller follow-on. Everything else on the class — the constructor's
 scene/pipeline build, the render loop's requestAnimationFrame scheduling, event
 wiring — is the same view-bound remainder, and belongs here.
 
+### Help, actions and keys share one truth
+
+`ActionDescriptor` (`src/ui/actionRegistry.ts`) is the metadata the command
+palette, the shortcut sheet and Help all read; `Action` adds `run()`. The
+registry is assembled by `src/app/actionDefinitions.ts` from the contributors in
+`src/app/actions/`, lazily. A key binding that fires an action names it in
+`actionIds`; one that fires none carries its own `help` line, and
+`shortcutDescriptors()` projects the table for Help. `src/app/helpCatalog.ts`
+holds the curated topics (including the scientific states) and references
+actions by id only, so `HelpOverlay` renders titles, hints and keys it never
+authored. `tests/helpCatalog.test.ts` and `tests/keyBindingActionLinks.test.ts`
+fail when a topic references a missing action, when a binding and its action
+disagree on a key, or when a non-action binding has no line for Help.
+
 ## Test and gate topology
 
 - **Unit / integration** — `tests/*.test.ts`, run in sharded buckets
