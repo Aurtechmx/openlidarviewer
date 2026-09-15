@@ -44,29 +44,42 @@ async function openProgressive(page: Page, query: string) {
   return { text, consoleErrors, pageErrors, workerUrls };
 }
 
+/** The debug overlay's resident point count once it reaches `expected`, else what it last said. */
+async function pointsShown(page: Page, expected: number): Promise<number> {
+  const read = (): number => {
+    const dbg = document.querySelector('[class*=debug]')?.textContent ?? '';
+    return Number(/points\s+([\d,]+) shown/.exec(dbg.replace(/\s+/g, ' '))?.[1]?.replace(/,/g, '') ?? -1);
+  };
+  await page.waitForFunction((n) => {
+    const dbg = document.querySelector('[class*=debug]')?.textContent ?? '';
+    return Number(/points\s+([\d,]+) shown/.exec(dbg.replace(/\s+/g, ' '))?.[1]?.replace(/,/g, '') ?? -1) === n;
+  }, expected, { timeout: 30_000 }).catch(() => undefined);
+  return page.evaluate(read);
+}
+
 test.describe('local LAZ, progressive path', () => {
-  test('File to worker, ranged reads, chunk pool, preview, final cloud', async ({ page }) => {
+  test('File to worker, ranged reads, chunk pool, preview, final cloud', async ({ page, browserName }) => {
     const r = await openProgressive(page, '&decodePool=on&previewChunks=2');
 
     // The page sent the File: no whole-file read row, ranged reads instead.
     expect(r.text).not.toMatch(/file read/);
     expect(r.text).toMatch(/range reads\s+\d+/);
-    expect(r.text).toMatch(/decode path\s+pooled/);
-    // The pool ran on a worker of its own, made from the parse worker.
-    expect(r.workerUrls.filter((u) => /lazChunkWorker/i.test(u)).length).toBeGreaterThan(0);
+    expect(r.text, r.text).toMatch(/decode path\s+pooled/);
+    // The pool ran on workers of its own, made from the parse worker. The
+    // telemetry says so in every engine; Playwright also reports the nested
+    // workers themselves in Chromium and Firefox, and does not in WebKit.
+    expect(r.text).toMatch(/pool workers\s+[1-9]/);
+    if (browserName !== 'webkit') {
+      expect(r.workerUrls.filter((u) => /lazChunkWorker/i.test(u)).length).toBeGreaterThan(0);
+    }
     // A preview came first, a strict subset of the final cloud.
     expect(r.text).toMatch(/preview\s+[\d.]+ ms/);
     const previewPoints = Number(/preview pts\s+([\d,]+)/.exec(r.text)?.[1]?.replace(/,/g, ''));
     expect(previewPoints).toBeGreaterThan(0);
     expect(previewPoints).toBeLessThan(POINTS);
 
-    // The final cloud replaced it: every point resident, one layer, no preview.
-    await expect(page.locator('.olv-layer-row, .olv-layerhealth-row-name').first()).toBeVisible();
-    const shown = await page.evaluate(() => {
-      const dbg = document.querySelector('[class*=debug]')?.textContent ?? '';
-      return /points\s+([\d,]+) shown/.exec(dbg.replace(/\s+/g, ' '))?.[1]?.replace(/,/g, '');
-    });
-    expect(Number(shown)).toBe(POINTS);
+    // The final cloud replaced it: every point resident, no preview left.
+    expect(await pointsShown(page, POINTS)).toBe(POINTS);
     expect(await page.evaluate(() => !!document.querySelector('.olv-empty.olv-hidden'))).toBe(true);
 
     expect(r.pageErrors, r.pageErrors.join('\n')).toEqual([]);
@@ -78,11 +91,7 @@ test.describe('local LAZ, progressive path', () => {
     expect(r.text).toMatch(/decode path\s+whole-file/);
     expect(r.text).not.toMatch(/preview\s+[\d.]+ ms/);
     expect(r.workerUrls.filter((u) => /lazChunkWorker/i.test(u))).toHaveLength(0);
-    const shown = await page.evaluate(() => {
-      const dbg = document.querySelector('[class*=debug]')?.textContent ?? '';
-      return /points\s+([\d,]+) shown/.exec(dbg.replace(/\s+/g, ' '))?.[1]?.replace(/,/g, '');
-    });
-    expect(Number(shown)).toBe(POINTS);
+    expect(await pointsShown(page, POINTS)).toBe(POINTS);
     expect(r.pageErrors).toEqual([]);
     expect(r.consoleErrors).toEqual([]);
   });

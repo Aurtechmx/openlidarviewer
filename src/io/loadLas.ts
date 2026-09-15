@@ -41,6 +41,7 @@ import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
 import type { RangeSource } from './range/RangeSource';
+import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
 import {
   allocRawPoints,
   decodeContext,
@@ -225,6 +226,7 @@ export async function loadLazFromFile(
   onProgress?: (u: ProgressUpdate) => void,
   onPreview?: PreviewSink,
   onStats?: (stats: LazLoadStats) => void,
+  policy?: DecodePoolPolicy,
 ): Promise<PointCloud> {
   let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
   // The VLRs sit between the public header and the point data; a file whose
@@ -276,6 +278,8 @@ export async function loadLazFromFile(
     },
     onPool: ({ workers }) => { stats.poolWorkers = workers; stats.decodePath = 'pooled'; },
     onFallback: (reason) => { stats.poolFallbackReason = reason; stats.decodePath = 'pool-fallback'; },
+    onSkipped: (reason) => { stats.poolFallbackReason = reason; },
+    policy,
   });
   if (pooled) {
     onStats?.(stats);

@@ -42,7 +42,7 @@ export interface LoadTelemetry {
   poolWorkers?: number;
   /** Which decoder produced the cloud (worker). */
   decodePath?: 'pooled' | 'whole-file' | 'pool-fallback';
-  /** Why the pool did not produce the cloud, when it engaged and failed. */
+  /** Why the pool did not produce the cloud: skipped, or engaged and failed. */
   poolFallbackReason?: string;
 }
 
@@ -93,7 +93,7 @@ const COUNT_ROWS: [string, keyof LoadTelemetry, 'bytes' | 'count' | 'text'][] = 
   ['preview pts', 'previewPoints', 'count'],
   ['pool workers', 'poolWorkers', 'count'],
   ['decode path', 'decodePath', 'text'],
-  ['pool fallback', 'poolFallbackReason', 'text'],
+  ['pool reason', 'poolFallbackReason', 'text'],
 ];
 
 function formatCount(value: number, unit: 'bytes' | 'count' | 'text'): string {

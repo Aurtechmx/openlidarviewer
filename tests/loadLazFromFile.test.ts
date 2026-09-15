@@ -5,7 +5,8 @@ import { loadLas, loadLazFromFile, previewFrame, type LazLoadStats } from '../sr
 import { parseBuffer, parseFile } from '../src/io/parseBuffer';
 import { getLazPerf } from '../src/io/lazDecode';
 import { decodeLazChunkLocal, type LazChunkJob } from '../src/io/heavy/decodeLazChunked';
-import { primeDevFlags, resetDevFlagsForTest } from '../src/perf/devFlags';
+import { primeDevFlags, parseDevFlags, resetDevFlagsForTest } from '../src/perf/devFlags';
+import { DECODE_POOL_MOBILE_CAP } from '../src/io/workerPool/decodePoolSize';
 import type { LoadPlan } from '../src/io/loadPlan';
 import type { PointCloud } from '../src/model/PointCloud';
 
@@ -144,5 +145,29 @@ describe('previewFrame', () => {
     expect(previewFrame(header([5, 0, 0], [1, 1, 1]), [0, 0, 0])).toBeUndefined();
     expect(previewFrame(header([0, 0, 0], [0, 0, 1]), [0, 0, 0])).toBeUndefined();
     expect(previewFrame(header([0, 0, 0], [1, 1, 0]), [0, 0, 0])).toEqual({ min: [0, 0, 0], max: [1, 1, 0] });
+  });
+});
+
+describe('loadLazFromFile takes the pool decision from an explicit policy', () => {
+  it('engages the pool from the policy alone, with nothing primed in this scope', async () => {
+    vi.stubGlobal('Worker', FakeLazWorker);
+    resetDevFlagsForTest();
+    const buf = fixtureBytes();
+    let stats: LazLoadStats | undefined;
+    const policy = { flags: parseDevFlags('?decodePool=on&previewChunks=2'), isMobile: false };
+    const cloud = await loadLazFromFile(new File([buf], 'm.laz'), 'm.laz', 1, undefined, () => {}, (s) => { stats = s; }, policy);
+    expect(cloud.pointCount).toBe(120_000);
+    expect(stats?.decodePath).toBe('pooled');
+  });
+
+  it('a mobile policy caps the pool the way the page would', async () => {
+    vi.stubGlobal('Worker', FakeLazWorker);
+    resetDevFlagsForTest();
+    const buf = fixtureBytes();
+    let stats: LazLoadStats | undefined;
+    const policy = { flags: parseDevFlags('?decodePool=on'), isMobile: true };
+    await loadLazFromFile(new File([buf], 'm.laz'), 'm.laz', 1, undefined, undefined, (s) => { stats = s; }, policy);
+    expect(stats?.decodePath).toBe('pooled');
+    expect(stats?.poolWorkers).toBeLessThanOrEqual(DECODE_POOL_MOBILE_CAP);
   });
 });

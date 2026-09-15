@@ -327,3 +327,13 @@ describe('readDecodePoolEnvironment: the page device answer, primed into a worke
     expect(readDecodePoolEnvironment().isMobile).toBe(true);
   });
 });
+
+describe('resolveDecodePoolSize with an explicit environment', () => {
+  it('takes the handed-in device answer over what this scope reads', () => {
+    const flags = { decodePool: true, decodePoolOff: false, decodeWorkers: null };
+    const desktopSize = resolveDecodePoolSize('laz', flags, undefined, { isMobile: false, hardwareConcurrency: 16, deviceMemoryGB: 8 });
+    const mobileSize = resolveDecodePoolSize('laz', flags, undefined, { isMobile: true, hardwareConcurrency: 16, deviceMemoryGB: 8 });
+    expect(desktopSize).toBe(DECODE_POOL_HARD_CAP);
+    expect(mobileSize).toBeLessThanOrEqual(DECODE_POOL_MOBILE_CAP);
+  });
+});

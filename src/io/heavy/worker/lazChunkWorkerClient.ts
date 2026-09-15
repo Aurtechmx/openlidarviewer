@@ -42,7 +42,7 @@ import {
   type WorkerLike,
 } from '../../workerPool/DecodeWorkerPool';
 import { resolveDecodePoolSize, decodeLazPoolEnabled } from '../../workerPool/decodePoolSize';
-import { readDevFlags } from '../../../perf/devFlags';
+import { readDevFlags, type DevFlags } from '../../../perf/devFlags';
 import { ArrayBufferRangeSource } from '../../range/ArrayBufferRangeSource';
 import type { RangeSource } from '../../range/RangeSource';
 import type { RawPoints } from '../../lasDecodeShared';
@@ -79,6 +79,18 @@ export interface LazChunkWorkerClientOptions {
   readonly poolEnabled?: boolean;
   /** Injectable worker factory — a fake worker makes the pool Node-testable. */
   readonly workerFactory?: () => WorkerLike;
+  /**
+   * The flags and device answer to size the pool from, handed in by the
+   * scope that owns them. A worker gets these from its request; without
+   * them the client reads what its own scope can see.
+   */
+  readonly policy?: DecodePoolPolicy;
+}
+
+/** What a pool decision needs from the page: the session flags and the device class. */
+export interface DecodePoolPolicy {
+  readonly flags: DevFlags;
+  readonly isMobile: boolean;
 }
 
 /** A {@link LazChunkDecoder} that runs LAZ chunk decoding in a pool of workers. */
@@ -86,12 +98,13 @@ export class LazChunkWorkerClient {
   private readonly _pool: DecodeWorkerPool<RawPoints>;
 
   constructor(options: LazChunkWorkerClientOptions = {}) {
-    const flags = readDevFlags();
+    const flags = options.policy?.flags ?? readDevFlags();
     this._pool = new DecodeWorkerPool<RawPoints>({
       size: resolveDecodePoolSize(
         'laz',
         options.poolEnabled ? { ...flags, decodePool: true } : flags,
         options.poolSize,
+        options.policy ? { isMobile: options.policy.isMobile } : {},
       ),
       createWorker: options.workerFactory ?? defaultWorkerFactory,
       messages: {
@@ -163,6 +176,10 @@ export interface PooledDecodeOptions {
    * worker of it could be built or kept; the caller then decodes without it.
    */
   readonly onFallback?: (reason: string) => void;
+  /** Called when the pool did not run at all: not enabled, or no chunk table. */
+  readonly onSkipped?: (reason: string) => void;
+  /** The flags and device answer to decide by; the scope's own when absent. */
+  readonly policy?: DecodePoolPolicy;
 }
 
 /**
@@ -201,9 +218,12 @@ export async function decodeLazPooledFromSource(
   options: PooledDecodeOptions = {},
 ): Promise<RawPoints | null> {
   const eligible = header.pointCount >= PARALLEL_DECODE_MIN_POINTS;
-  if (!decodeLazPoolEnabled(readDevFlags(), eligible)) return null;
-  const client = new LazChunkWorkerClient({ poolEnabled: true });
-  const flags = readDevFlags();
+  const flags = options.policy?.flags ?? readDevFlags();
+  if (!decodeLazPoolEnabled(flags, eligible)) {
+    options.onSkipped?.(flags.decodePoolOff ? 'refused by ?decodePool=off' : 'below the pool threshold');
+    return null;
+  }
+  const client = new LazChunkWorkerClient({ poolEnabled: true, policy: options.policy });
   try {
     const out = await decodeLazParallelFromSource(source, header, origin, client.decode, {
       stride: options.stride,
@@ -213,6 +233,10 @@ export async function decodeLazPooledFromSource(
       onPlanned: options.onPlanned,
       previewChunks: flags.previewChunks ?? undefined,
     });
+    if (out === null) {
+      options.onSkipped?.('no usable chunk table for this file');
+      return null;
+    }
     options.onPool?.({ workers: client.poolStats().size });
     return out;
   } catch (err) {

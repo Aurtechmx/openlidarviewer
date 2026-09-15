@@ -160,10 +160,14 @@ export function resolveDecodePoolSize(
   format: DecodeFormat,
   flags: DecodePoolFlags,
   explicitSize?: number,
+  environment: Partial<DecodePoolEnvironment> = {},
 ): number {
   const requested = explicitSize ?? flags.decodeWorkers;
+  // An explicit environment wins over what this scope can read: a worker is
+  // handed the page's device answer rather than asking `matchMedia` itself.
   return decodeWorkerPoolSize({
     ...readDecodePoolEnvironment(),
+    ...environment,
     format,
     requested,
     poolDisabled: !decodePoolOptedIn(flags, explicitSize),

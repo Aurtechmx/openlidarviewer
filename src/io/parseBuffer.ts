@@ -9,6 +9,7 @@ import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
 import type { LazLoadStats, PreviewSink } from './loadLas';
+import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
 
 export type { LoaderFn } from './loaderRegistry';
 
@@ -136,12 +137,13 @@ export async function parseFile(
   e57Plan?: E57DecodePlan,
   onPreview?: PreviewSink,
   onStats?: (stats: LazLoadStats) => void,
+  policy?: DecodePoolPolicy,
 ): Promise<LoadResult> {
   if (plan && format === 'laz') {
     onProgress?.({ stage: 'decoding' });
     const stride = plan.mode === 'stride' ? plan.stride : 1;
     const { loadLazFromFile } = await import('./loadLas');
-    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreview, onStats);
+    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreview, onStats, policy);
     return budgetedLas(cloud, plan, onProgress);
   }
   onProgress?.({ stage: 'reading-file' });

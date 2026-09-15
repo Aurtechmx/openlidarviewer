@@ -13,9 +13,10 @@ import type { ProgressUpdate, LoadStage } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
 import type { PointCloud } from '../model/PointCloud';
 import { organizedRangeTransferables } from '../model/OrganizedRange';
-import { primeDevFlags } from '../perf/devFlags';
+import { primeDevFlags, parseDevFlags } from '../perf/devFlags';
 import { primeDecodePoolEnvironment } from './workerPool/decodePoolSize';
 import type { LazLoadStats, PreviewSink } from './loadLas';
+import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
 
 interface ParseRequest {
   /** The file's bytes, transferred; absent when `file` is sent instead. */
@@ -52,6 +53,12 @@ ctx.onmessage = (event: MessageEvent): void => {
   const { buffer, file, format, name, budget, plan, e57Plan, search, device } = event.data as ParseRequest;
   if (typeof search === 'string') primeDevFlags(search);
   if (device) primeDecodePoolEnvironment({ isMobile: device.touchFirst });
+  // The pool decides from this, handed down explicitly: a lazily loaded chunk
+  // may hold its own copy of the flag module, which priming does not reach.
+  const policy: DecodePoolPolicy = {
+    flags: parseDevFlags(typeof search === 'string' ? search : ''),
+    isMobile: device?.touchFirst ?? false,
+  };
 
   void (async (): Promise<void> => {
     try {
@@ -73,7 +80,7 @@ ctx.onmessage = (event: MessageEvent): void => {
       };
       let stats: LazLoadStats | undefined;
       const { cloud, originalPointCount, downsampled } = file
-        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreview, (s) => { stats = s; })
+        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreview, (s) => { stats = s; }, policy)
         : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan, onPreview);
 
       const endedAt = performance.now();
