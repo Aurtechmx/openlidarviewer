@@ -32,7 +32,7 @@ from the tree and fails when a cell drifts.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~12k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~15k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~31k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,407 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,127 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,407)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,127)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -112,7 +112,14 @@ called with a 19-member deps object. The candidates that remain:
 |---|---:|---|
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `syncInspectorVisuals` | 266 | inspector wiring module |
-| `applyScanRoute` | 233 | joins `ScanRouteService` |
+
+Done: `applyScanRoute` (233 lines, with the manual "Treat as" override, the
+settled one-shot bookkeeping and the space-export context) now lives in
+`src/app/scanRouteCoordinator.ts` over narrow ports (geometry, frame, verdict,
+view, analysis trigger); the shell's view port records each lazily-mounted
+panel's intent for hydration. `tests/scanRouteCoordinator.test.ts` drives the
+whole route with fakes. main.ts lost its direct imports of `scanShape`,
+`scanRoute`, `objectMetrics` and `spaceMetrics`.
 
 Done: `runStreamingModules` (~105 lines), the Scan Report assembler for a streaming
 cloud, now lives in `src/app/streamingScanReport.ts` beside the row builders it
