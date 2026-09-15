@@ -89,6 +89,25 @@ export interface KeyBinding<Deps> {
   contextTag?: string;
   /** Documented-but-not-dispatched: a key owned by a component listener. */
   reservedOnly?: boolean;
+  /**
+   * The registry action(s) this key fires, when it fires one. Metadata only:
+   * dispatch stays here, and the consistency test checks that each named
+   * action exists and advertises the same keys. A binding that is not an
+   * action (a component-owned key, the palette) names none and carries
+   * {@link help} instead.
+   */
+  actionIds?: readonly string[];
+  /** One line for Help when the key is not an action. */
+  help?: string;
+}
+
+/** A key as Help and the sheet describe it, projected from the table. */
+export interface ShortcutDescriptor {
+  readonly id: string;
+  readonly displayKeys: string;
+  readonly actionIds: readonly string[];
+  readonly help: string | undefined;
+  readonly reservedOnly: boolean;
 }
 
 /** Test a `KeyMatch` against an event. */
@@ -343,6 +362,7 @@ export function buildViewerKeyBindings(
     // ── main.ts:753 group (isEditableTarget guard on all three) ──────────
     {
       id: 'space-reorient',
+      help: 'Hold while a tool is active to rotate or pan, then release to resume.',
       match: { code: 'Space' },
       priority: 100,
       contextTag: 'tool-active',
@@ -357,6 +377,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'measure-polygon-keys',
+      help: 'While measuring: finish the shape, undo the last point.',
       match: { key: ['Enter', 'Backspace', 'z', 'Z'] },
       priority: 110,
       contextTag: 'measure',
@@ -372,6 +393,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'escape-exit-tool',
+      help: 'Cancel the active tool or draft.',
       match: { key: 'Escape' },
       priority: 120,
       contextTag: 'global',
@@ -387,6 +409,7 @@ export function buildViewerKeyBindings(
     // ── main.ts:872 group (targetIsField guard) ──────────────────────────
     {
       id: 'lasso-toggle',
+      actionIds: ['tool.lasso-volume'],
       match: { key: ['l', 'L'] },
       priority: 200,
       contextTag: 'global',
@@ -401,6 +424,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'camera-presets',
+      actionIds: ['camera.top', 'camera.oblique', 'camera.planar'],
       match: { key: ['t', 'T', 'o', 'O', 'p', 'P'], bareOnly: true, shift: false },
       priority: 210,
       contextTag: 'global',
@@ -423,6 +447,7 @@ export function buildViewerKeyBindings(
     // ── main.ts:1849 — command palette ───────────────────────────────────
     {
       id: 'command-palette',
+      help: 'Open the command palette.',
       match: { key: ['k', 'K'], ctrlOrMeta: true },
       priority: 300,
       contextTag: 'global',
@@ -435,6 +460,7 @@ export function buildViewerKeyBindings(
     // ── main.ts:1860 — shortcut sheet (MUST beat the 614 help overlay) ────
     {
       id: 'shortcut-sheet',
+      actionIds: ['help.shortcuts'],
       match: { key: '?', bareOnly: true },
       priority: 400,
       contextTag: 'global',
@@ -448,6 +474,7 @@ export function buildViewerKeyBindings(
     // ── main.ts:1898 — workflow recorder chord (flag-gated, inert today) ──
     {
       id: 'workflow-recorder',
+      actionIds: ['workflow.start'],
       match: {}, // matcher lives in matchesWorkflowShortcut (config-driven)
       priority: 500,
       contextTag: 'global',
@@ -468,6 +495,7 @@ export function buildViewerKeyBindings(
     // ── shortcuts.ts bindShortcuts — attached LAST today (isTyping guard) ─
     {
       id: 'undo-redo-z',
+      help: 'Undo the last annotation or classification edit; add Shift to redo.',
       match: { key: ['z', 'Z'], ctrlOrMeta: true },
       priority: 600,
       contextTag: 'global',
@@ -483,6 +511,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'redo-y',
+      help: 'Redo the last undone edit.',
       match: { key: ['y', 'Y'], ctrlOrMeta: true },
       priority: 601,
       contextTag: 'global',
@@ -497,6 +526,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'tool-annotate',
+      actionIds: ['tool.annotate'],
       match: { key: ['a', 'A'], bareOnly: true },
       priority: 610,
       contextTag: 'global',
@@ -511,6 +541,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'tool-measure',
+      actionIds: ['tool.measure'],
       match: { key: ['m', 'M'], bareOnly: true },
       priority: 611,
       contextTag: 'global',
@@ -525,6 +556,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'tool-inspect',
+      actionIds: ['tool.inspect'],
       match: { key: ['i', 'I'], bareOnly: true },
       priority: 612,
       contextTag: 'global',
@@ -539,6 +571,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'save-view',
+      actionIds: ['view.save-state'],
       match: { key: ['v', 'V'], bareOnly: true },
       priority: 613,
       contextTag: 'global',
@@ -553,6 +586,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'help-overlay',
+      help: 'The shortcut sheet owns this key; open Help from the tool dock.',
       match: { key: '?', bareOnly: true },
       priority: 614,
       contextTag: 'global',
@@ -567,6 +601,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'delete-selection',
+      help: 'Remove the selected annotation.',
       match: { key: ['Delete', 'Backspace'], bareOnly: true },
       priority: 615,
       contextTag: 'global',
@@ -583,6 +618,7 @@ export function buildViewerKeyBindings(
     //    Present so a future collision lint knows they are taken. ──────────
     {
       id: 'reserved-nav-controller',
+      help: 'Navigation: 1 to 4 pick the mode, R frames the scan, F focuses the centre, H hides the HUD, G toggles the hand tool, WASD and the arrows move.',
       // Real `key` values (not `e.code` strings), so the collision lint reads
       // them as occupied slots and can catch a dispatched binding placed on a
       // nav key in a shared scope. Both cases are listed because the lint
@@ -604,6 +640,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'reserved-viewer-escape',
+      help: 'Leaves a viewer tool mode.',
       match: { code: 'Escape' },
       priority: 10_001,
       contextTag: 'tool-mode',
@@ -614,6 +651,7 @@ export function buildViewerKeyBindings(
     },
     {
       id: 'reserved-lasso-draw',
+      help: 'Cancels a lasso being drawn.',
       match: { key: 'Escape' },
       priority: 10_002,
       contextTag: 'lasso-draw',
@@ -662,4 +700,15 @@ const KEY_DISPLAY_BY_ID: ReadonlyMap<string, string> = new Map(
 /** The help chip a binding advertises, or `undefined` for an unknown id. */
 export function keyDisplayFor(id: string): string | undefined {
   return KEY_DISPLAY_BY_ID.get(id);
+}
+
+/** Every binding as a {@link ShortcutDescriptor}, in table order: what Help and the sheet may list. */
+export function shortcutDescriptors(): readonly ShortcutDescriptor[] {
+  return buildViewerKeyBindings(DISPLAY_META_DEPS).map((b) => ({
+    id: b.id,
+    displayKeys: b.displayKeys ?? '',
+    actionIds: b.actionIds ?? [],
+    help: b.help,
+    reservedOnly: b.reservedOnly === true,
+  }));
 }

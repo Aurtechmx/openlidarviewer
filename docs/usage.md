@@ -86,7 +86,7 @@ In the Saved views section of the panel, click Save current view — or press `V
 
 ## Keyboard shortcuts
 
-`A`, `M`, and `I` toggle the Annotate, Measure, and Inspect tools; `V` saves the current view state; `Delete` removes the selected annotation; `Ctrl`/`Cmd`+`Z` undoes an annotation change and adding `Shift` redoes it; `Esc` cancels the active tool; and `?` opens the help overlay. Shortcuts are suppressed while you are typing in a field. Navigation keeps its own keys — `1`/`2`/`3` for the modes, `R` to frame the scan, `F` to focus the centre. The Help button in the tool dock opens a reference card covering all of this.
+Press `?` for the shortcut sheet: every action with its key, searchable, from the same table the keys are dispatched from. The Help button in the tool dock opens the searchable Help overlay, whose Keyboard topic lists the same keys and whose Scientific states topic explains the words the app uses for how far a result can be trusted. Shortcuts are suppressed while you are typing in a field.
 
 ## Exporting
 

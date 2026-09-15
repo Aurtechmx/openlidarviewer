@@ -6106,6 +6106,19 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-help-close:hover { color: var(--text); border-color: var(--accent); }
 .olv-help-body { padding: var(--space-sm) var(--space-2xl) var(--space-2xl); overflow-y: auto; }
+.olv-help-search { margin: var(--space-sm) var(--space-2xl) 0; width: calc(100% - 2 * var(--space-2xl)); box-sizing: border-box; }
+.olv-help-nav { display: flex; flex-wrap: wrap; gap: var(--space-xs); padding: var(--space-sm) var(--space-2xl) 0; }
+.olv-help-nav-item {
+  font: inherit; font-size: var(--text-xs); color: var(--text-dim); background: none;
+  border: 1px solid var(--border); border-radius: 999px; padding: 2px var(--space-md); cursor: pointer;
+}
+.olv-help-nav-item:hover { color: var(--text); border-color: var(--accent); }
+.olv-help-summary { font-size: var(--text-sm); color: var(--text); margin: var(--space-xs) 0 0; }
+.olv-help-key {
+  font-family: var(--mono, ui-monospace, monospace); font-size: var(--text-xs); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0 var(--space-xs); white-space: nowrap;
+}
+.olv-help-empty { font-size: var(--text-sm); color: var(--text-dim); padding: var(--space-2xl); }
 .olv-help-section { margin-top: var(--space-2xl); }
 .olv-help-heading {
   font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
