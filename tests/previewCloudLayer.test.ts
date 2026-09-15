@@ -62,6 +62,25 @@ describe('PreviewCloudLayer', () => {
     expect(made[0].aPos.ranges).toHaveLength(2);
   });
 
+  it('stores a pre-thinned chunk as it stands, and still stops at capacity', () => {
+    const h = host();
+    const { build, made } = fakeBuilder();
+    // The same spec as above, except that the decoder already sampled the
+    // chunks against this capacity, so the layer must not sample again.
+    const layer = new PreviewCloudLayer(h, build, { capacity: 10, expectedPoints: 40, preThinned: true, frame: { min: [0, 0, 0], max: [1, 1, 10] } });
+    expect(layer.stride).toBe(1);
+
+    const chunk = new Float32Array(6 * 3);
+    for (let i = 0; i < 6; i++) { chunk[i * 3] = i; chunk[i * 3 + 2] = i / 2; }
+    layer.append({ positions: chunk });
+    expect(layer.pointCount).toBe(6);
+    expect(Array.from(made[0].aPos.array.subarray(0, 18)).filter((_, k) => k % 3 === 0)).toEqual([0, 1, 2, 3, 4, 5]);
+    // The capacity is still the ceiling: the second chunk fills it and stops.
+    layer.append({ positions: chunk });
+    expect(layer.pointCount).toBe(10);
+    expect(made[0].geometry.instanceCount).toBe(10);
+  });
+
   it('colours by one fixed range across chunks and reports the extent it has shown', () => {
     const h = host();
     const { build, made } = fakeBuilder();

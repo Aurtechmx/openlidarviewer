@@ -76,13 +76,23 @@ describe('loadLazFromFile', () => {
     const file = new CountingFile([buf], 'm.laz');
     const chunks: PreviewChunk[] = [];
     let stats: LazLoadStats | undefined;
-    const fromFile = await loadLazFromFile(file, 'm.laz', 1, undefined, (c) => { chunks.push(c); }, (s) => { stats = s; });
+    const previewBudget = 1_000;
+    const fromFile = await loadLazFromFile(
+      file, 'm.laz', 1, undefined, (c) => { chunks.push(c); }, (s) => { stats = s; }, undefined, previewBudget,
+    );
     const fromBuffer = await loadLas(buf, 'laz', 'm.laz', 1);
     sameCloud(fromFile, fromBuffer);
     expect(file.wholeReads).toBe(0);
     // Every chunk was handed on, with the decode's expected total and the frame.
     expect(chunks.length).toBeGreaterThan(1);
-    expect(chunks.reduce((n, c) => n + c.positions.length / 3, 0)).toBe(fromFile.pointCount);
+    // Only the preview budget crossed, not the cloud: the decoder thinned each
+    // chunk against one whole-file stride before handing it over.
+    const previewPoints = chunks.reduce((n, c) => n + c.positions.length / 3, 0);
+    expect(previewPoints).toBeGreaterThan(0);
+    expect(previewPoints).toBeLessThanOrEqual(previewBudget);
+    expect(previewPoints).toBeLessThan(fromFile.pointCount);
+    // Each chunk says where its records sit in the decode's output.
+    expect(chunks.map((c) => c.outIndex).sort((a, b) => a - b)).toEqual([...new Set(chunks.map((c) => c.outIndex))].sort((a, b) => a - b));
     expect(chunks.every((c) => c.expectedPoints === fromFile.pointCount)).toBe(true);
     // The header's declared extent frames the preview, in the local frame.
     const frame = chunks[0].frame as { min: number[]; max: number[] };

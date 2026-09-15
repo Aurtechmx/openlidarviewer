@@ -26,7 +26,8 @@ export type PreviewCloudViewer = Pick<Viewer, 'derivedLayerHost' | 'buildPointMe
 /**
  * Start a stand-in for a load whose first chunk is `first`. The mesh is sized
  * to the smaller of the decode's expected records, the device's render budget
- * and {@link PREVIEW_MAX_POINTS}; every chunk is thinned to fit.
+ * and {@link PREVIEW_MAX_POINTS}, which is the same ceiling the decode sampled
+ * its hand-offs against, so the chunks fit as they arrive.
  */
 export function startPreviewCloud(
   viewer: PreviewCloudViewer,
@@ -39,6 +40,9 @@ export function startPreviewCloud(
     {
       capacity: Math.max(1, Math.min(first.expectedPoints, renderBudget, PREVIEW_MAX_POINTS)),
       expectedPoints: first.expectedPoints,
+      // The decoder sampled these against the same budget, so storing them as
+      // they arrive is what keeps the preview at the size it was planned for.
+      preThinned: true,
       frame: first.frame,
     },
   );

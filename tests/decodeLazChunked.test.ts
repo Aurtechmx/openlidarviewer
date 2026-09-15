@@ -22,6 +22,8 @@ import {
   decodeLazParallel,
   decodeLazParallelFromSource,
   decodeLazChunkLocal,
+  samplePreviewPositions,
+  previewStrideFor,
 } from '../src/io/heavy/decodeLazChunked';
 import { getLazPerf } from '../src/io/lazDecode';
 import { readLazChunkTable } from '../src/io/heavy/lazChunkTable';
@@ -93,7 +95,7 @@ describe('chunked LAZ decode', () => {
       {
         maxInFlight: 2,
         onPlanned: (info) => { planned = info; },
-        onPreviewChunk: (records, outIndex) => { handed.push({ positions: records.positions, outIndex }); },
+        onPreviewChunk: (positions, outIndex) => { handed.push({ positions, outIndex }); },
       },
     );
     expect(parallel).not.toBeNull();
@@ -121,14 +123,61 @@ describe('chunked LAZ decode', () => {
     let total = 0;
     const parallel = await decodeLazParallel(buf, header, origin, async (job) => decodeLazChunkLocal(lazPerf, job), {
       stride: 7,
-      onPreviewChunk: (records, outIndex) => {
-        const n = records.positions.length / 3;
+      onPreviewChunk: (positions, outIndex) => {
+        const n = positions.length / 3;
         total += n;
-        expect(Array.from(records.positions)).toEqual(Array.from(seq.positions.subarray(outIndex * 3, (outIndex + n) * 3)));
+        expect(Array.from(positions)).toEqual(Array.from(seq.positions.subarray(outIndex * 3, (outIndex + n) * 3)));
       },
     });
     expect(parallel!.positions).toEqual(seq.positions);
     expect(total).toBe(seq.positions.length / 3);
+  });
+
+  it('samples the preview by one global stride, so only the budget crosses the boundary', async () => {
+    const buf = loadFixture('multichunk.laz');
+    const header = parseLasHeader(buf);
+    const origin = computeOrigin([500000, 4100000, 190]);
+    const seq = await decodeLaz(buf, header, origin, 1);
+    const lazPerf = await getLazPerf();
+    const table = await readLazChunkTable(new ArrayBufferRangeSource(buf));
+    if (!table.supported) throw new Error('fixture is a chunked LAZ');
+
+    const previewBudget = 5_000;
+    const stride = previewStrideFor(header.pointCount, previewBudget);
+    expect(stride, 'the fixture is larger than the budget').toBeGreaterThan(1);
+
+    const run = async (maxInFlight: number): Promise<Array<{ outIndex: number; positions: Float32Array }>> => {
+      const handed: Array<{ outIndex: number; positions: Float32Array }> = [];
+      const out = await decodeLazParallel(buf, header, origin, async (job) => decodeLazChunkLocal(lazPerf, job), {
+        maxInFlight,
+        previewBudget,
+        onPreviewChunk: (positions, outIndex) => { handed.push({ outIndex, positions: positions.slice() }); },
+      });
+      // The decode itself is untouched by the preview sampling.
+      expect(out!.positions).toEqual(seq.positions);
+      return handed;
+    };
+    const assembled = (handed: Array<{ outIndex: number; positions: Float32Array }>): number[] =>
+      [...handed].sort((a, b) => a.outIndex - b.outIndex).flatMap((h) => Array.from(h.positions));
+
+    // The records at global indices 0, stride, 2*stride, ... and no others.
+    const expected: number[] = [];
+    for (let g = 0; g < header.pointCount; g += stride) {
+      expected.push(seq.positions[g * 3], seq.positions[g * 3 + 1], seq.positions[g * 3 + 2]);
+    }
+
+    const oneLane = await run(1);
+    const manyLanes = await run(7);
+    expect(assembled(oneLane)).toEqual(expected);
+    // The union does not depend on the order the chunks finished in.
+    expect(assembled(manyLanes)).toEqual(assembled(oneLane));
+
+    const total = expected.length / 3;
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThanOrEqual(previewBudget);
+    expect(total).toBeGreaterThanOrEqual(previewBudget - table.chunks.length);
+    // Which is a small fraction of what the unbounded hand-off used to post.
+    expect(total).toBeLessThan(header.pointCount / 10);
   });
 
   it('never hands a chunk on when the decode is not chunked', async () => {
@@ -185,5 +234,50 @@ describe('chunked LAZ decode', () => {
     const header = parseLasHeader(tiny);
     const out = await decodeLazChunkedSequential(tiny, header, computeOrigin([0, 0, 0]));
     expect(out).toBeNull();
+  });
+});
+
+describe('samplePreviewPositions', () => {
+  /** `n` records whose x is `base + local index`, so a kept record names itself. */
+  const chunkOf = (n: number, base: number): Float32Array => {
+    const a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) a[i * 3] = base + i;
+    return a;
+  };
+  const xs = (a: Float32Array): number[] => Array.from(a).filter((_, k) => k % 3 === 0);
+
+  it('keeps the records whose GLOBAL index is a multiple of the stride', () => {
+    // Locals 0..9 placed at output index 7, so globals 7..16; stride 5 keeps
+    // globals 10 and 15, which are locals 3 and 8.
+    expect(xs(samplePreviewPositions(chunkOf(10, 100), 7, 5)!)).toEqual([103, 108]);
+  });
+
+  it('returns null for a chunk the sample misses and the buffer itself at stride 1', () => {
+    const chunk = chunkOf(2, 0);
+    expect(samplePreviewPositions(chunk, 1, 10)).toBeNull();
+    expect(samplePreviewPositions(new Float32Array(0), 0, 4)).toBeNull();
+    expect(samplePreviewPositions(chunk, 0, 1)).toBe(chunk);
+  });
+
+  it('covers a contiguous output exactly once, whatever the chunk boundaries are', () => {
+    const total = 37;
+    const stride = 4;
+    const kept: number[] = [];
+    for (const [at, n] of [[0, 10], [10, 9], [19, 18]] as Array<[number, number]>) {
+      const sampled = samplePreviewPositions(chunkOf(n, at), at, stride);
+      if (sampled) kept.push(...xs(sampled));
+    }
+    const expected: number[] = [];
+    for (let g = 0; g < total; g += stride) expected.push(g);
+    expect(kept).toEqual(expected);
+  });
+});
+
+describe('previewStrideFor', () => {
+  it('is the step that fits the planned total into the budget, and 1 without one', () => {
+    expect(previewStrideFor(100_000_000, 2_000_000)).toBe(50);
+    expect(previewStrideFor(1_000, 2_000_000)).toBe(1);
+    expect(previewStrideFor(1_000, undefined)).toBe(1);
+    expect(previewStrideFor(1_000, 0)).toBe(1);
   });
 });

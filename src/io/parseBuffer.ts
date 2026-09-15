@@ -137,12 +137,13 @@ export async function parseFile(
   onPreviewChunk?: PreviewChunkSink,
   onStats?: (stats: LazLoadStats) => void,
   policy?: DecodePoolPolicy,
+  previewBudget?: number,
 ): Promise<LoadResult> {
   if (plan && format === 'laz') {
     onProgress?.({ stage: 'decoding' });
     const stride = plan.mode === 'stride' ? plan.stride : 1;
     const { loadLazFromFile } = await import('./loadLas');
-    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreviewChunk, onStats, policy);
+    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreviewChunk, onStats, policy, previewBudget);
     return budgetedLas(cloud, plan, onProgress);
   }
   onProgress?.({ stage: 'reading-file' });

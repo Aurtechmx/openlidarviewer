@@ -78,6 +78,13 @@ export interface LoadCallbacks {
 export interface LoadOptions {
   /** Point budget; defaults to the desktop budget when omitted. */
   budget?: number;
+  /**
+   * Points the progressive `.laz` preview may hand back from the worker. The
+   * caller that shows the preview is the authority, because it knows both the
+   * device's render budget and the ceiling its preview layer holds. Defaults to
+   * the point budget, so the preview is never larger than what will be drawn.
+   */
+  previewBudget?: number;
   /** True on phones — tightens the fast-load thresholds. */
   isMobile?: boolean;
   /** `navigator.deviceMemory` in GB, when the browser reports it. */
@@ -728,6 +735,9 @@ export async function loadFile(
           e57Plan: preflight.e57?.plan,
           search: pageSearch(),
           device: { touchFirst: options.isMobile ?? false },
+          // The preview sample is sized here, on the page: the worker cannot
+          // read the render layer's ceiling and must not guess it.
+          previewBudget: Math.max(1, Math.floor(options.previewBudget ?? budget)),
         },
         buffer ? [buffer] : [],
       );

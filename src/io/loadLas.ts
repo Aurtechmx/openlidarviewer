@@ -220,6 +220,7 @@ export async function loadLazFromFile(
   onPreviewChunk?: PreviewChunkSink,
   onStats?: (stats: LazLoadStats) => void,
   policy?: DecodePoolPolicy,
+  previewBudget?: number,
 ): Promise<PointCloud> {
   let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
   // The VLRs sit between the public header and the point data; a file whose
@@ -265,10 +266,10 @@ export async function loadLazFromFile(
   const pooled = await decodeLazPooledFromSource(counted, header, origin, {
     stride,
     onProgress,
-    onPreviewChunk: onPreviewChunk && ((records) => {
-      // Transport only: the chunk's own buffer, in the frame the decoder wrote it.
-      const { positions } = records;
-      onPreviewChunk({ positions, expectedPoints, frame });
+    previewBudget,
+    onPreviewChunk: onPreviewChunk && ((positions, outIndex) => {
+      // Transport only: the sample's own buffer, in the frame the decoder wrote it.
+      onPreviewChunk({ positions, outIndex, expectedPoints, frame });
     }),
     onPlanned: (info) => {
       planned = true;
@@ -306,12 +307,21 @@ export interface LazLoadStats {
 export type PreviewFrame = { readonly min: [number, number, number]; readonly max: [number, number, number] };
 
 /**
- * One decoded chunk's positions for a preview that fills in as the decode
- * runs, with what the receiver needs to size and frame it: the records the
- * finished decode will hold, and the header's declared extent when usable.
+ * One chunk's share of the decode's preview sample, for a preview that fills in
+ * as the decode runs, with what the receiver needs to size and frame it: the
+ * records the finished decode will hold, and the header's declared extent when
+ * usable. The decoder has already thinned these positions to the page's preview
+ * budget, so the receiver stores them as they arrive rather than sampling again.
  */
 export interface PreviewChunk {
   readonly positions: Float32Array;
+  /**
+   * Where this chunk's first record lands in the decode's output. The positions
+   * are already the chunk's share of one whole-file sample, so a receiver may
+   * append them in arrival order; the index says which part of the cloud they
+   * came from.
+   */
+  readonly outIndex: number;
   readonly expectedPoints: number;
   readonly frame?: PreviewFrame;
 }

@@ -7,10 +7,11 @@
  *
  * The mesh is built once at a fixed capacity and filled in as chunks arrive,
  * in whatever order the pool finishes them, by writing into the attribute
- * arrays behind an update range and raising the instance count. A chunk is
- * thinned by one stride, chosen so the whole file fits the capacity, so the
- * preview stays a uniform subsample of the source as it fills rather than a
- * complete copy of its first part. Colour is an elevation ramp over one fixed
+ * arrays behind an update range and raising the instance count. The preview
+ * stays a uniform subsample of the source as it fills rather than a complete
+ * copy of its first part: `preThinned` chunks arrive already sampled to the
+ * capacity, and any others are thinned here by one stride chosen so the whole
+ * file fits it. Colour is an elevation ramp over one fixed
  * range, the header's declared extent when the file gave one, so successive
  * chunks share one ramp.
  *
@@ -22,8 +23,7 @@ import * as THREE from 'three/webgpu';
 import { colorByElevation } from './colorModes';
 import { writeFloatColorsInto } from './colorEncode';
 
-/** Records a preview holds at most, whatever the file or the device budget. */
-export const PREVIEW_MAX_POINTS = 2_000_000;
+export { PREVIEW_MAX_POINTS } from './previewLimits';
 
 export interface PreviewLayerHost {
   add(object: THREE.Object3D): void;
@@ -36,6 +36,13 @@ export interface PreviewLayerSpec {
   readonly capacity: number;
   /** Records the finished decode will hold. */
   readonly expectedPoints: number;
+  /**
+   * True when the chunks arrive already thinned to the capacity by whoever
+   * decodes them, which is what the pooled `.laz` path does. The layer then
+   * stores each chunk as it stands instead of sampling it a second time, which
+   * would keep one record in `stride` of an already-strided sample.
+   */
+  readonly preThinned?: boolean;
   /** The declared extent, local frame, when the source gave a usable one. */
   readonly frame?: { readonly min: readonly [number, number, number]; readonly max: readonly [number, number, number] };
   /** Which component is up for the elevation ramp; 2 for a LAS survey. */
@@ -66,7 +73,7 @@ export class PreviewCloudLayer {
   constructor(host: PreviewLayerHost, build: PointMeshBuilder, spec: PreviewLayerSpec) {
     this._host = host;
     this._capacity = Math.max(1, Math.floor(spec.capacity));
-    this._stride = Math.max(1, Math.ceil(spec.expectedPoints / this._capacity));
+    this._stride = spec.preThinned ? 1 : Math.max(1, Math.ceil(spec.expectedPoints / this._capacity));
     this._upAxis = spec.upAxis ?? 2;
     this._range = spec.frame
       ? { min: spec.frame.min[this._upAxis], max: spec.frame.max[this._upAxis] }

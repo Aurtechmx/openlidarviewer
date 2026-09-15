@@ -45,12 +45,20 @@ interface ParseRequest {
    * A worker's own `location` is its script URL and carries no query.
    */
   search?: string;
+  /**
+   * Points the progressive preview may hand back to the page. The page is the
+   * authority: it knows its render budget and the preview layer's own ceiling,
+   * and this scope must not reach into the render layer to ask. Without it the
+   * decode hands back every record it places.
+   */
+  previewBudget?: number;
 }
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent): void => {
-  const { buffer, file, format, name, budget, plan, e57Plan, search, device } = event.data as ParseRequest;
+  const { buffer, file, format, name, budget, plan, e57Plan, search, device, previewBudget } =
+    event.data as ParseRequest;
   if (typeof search === 'string') primeDevFlags(search);
   if (device) primeDecodePoolEnvironment({ isMobile: device.touchFirst });
   // The pool decides from this, handed down explicitly: a lazily loaded chunk
@@ -73,14 +81,14 @@ ctx.onmessage = (event: MessageEvent): void => {
         ctx.postMessage({ type: 'progress', ...update });
       };
       const onPreviewChunk: PreviewChunkSink = (chunk) => {
-        // The chunk's own positions, already placed into the final output, so
-        // the buffer transfers to the page with nothing copied.
+        // The chunk's share of the preview sample, already placed into the final
+        // output, so the buffer transfers to the page with nothing copied.
         const { positions } = chunk;
         ctx.postMessage({ type: 'previewChunk', ...chunk }, [positions.buffer as ArrayBuffer]);
       };
       let stats: LazLoadStats | undefined;
       const { cloud, originalPointCount, downsampled } = file
-        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreviewChunk, (s) => { stats = s; }, policy)
+        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreviewChunk, (s) => { stats = s; }, policy, previewBudget)
         : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan);
 
       const endedAt = performance.now();
