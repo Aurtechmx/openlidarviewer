@@ -1,0 +1,374 @@
+{
+  "schemaVersion": 1,
+  "label": "local-laz-open-baseline",
+  "generatedAt": "2026-09-15",
+  "revisions": {
+    "singleReaderNode": "c61cf20e",
+    "pooledNode": "a61d10c4",
+    "browserBeforeRangeDecode": "63b44134",
+    "browserAfterRangeDecode": "daf903df",
+    "previewChunkSweep": "58943c3b",
+    "dtmContiguous": "775f7161",
+    "icpIndex": "528e061b",
+    "voxelTyped": "c704825d"
+  },
+  "environment": {
+    "os": "macOS 26.5.2 (25F84)",
+    "cpu": "Apple M3 Max",
+    "logicalCores": 14,
+    "memoryBytes": 38654705664,
+    "nodeVersion": "v22.23.2",
+    "npmVersion": "10.9.8",
+    "playwrightVersion": "1.63.0",
+    "browsers": {
+      "chromium": "headless shell 1243",
+      "firefox": "1543",
+      "webkit": "2359"
+    },
+    "note": "Absolute times moved by up to 2x between runs on this machine as its load changed; compare within one table, not across tables."
+  },
+  "datasets": {
+    "ladder": {
+      "generator": "tests/helpers/lazLadder.ts makeLadderCloud, PDAL translate to LAZ (compressor 3, PDRF 6, 50,000-point chunks)",
+      "rungs": [
+        {
+          "points": 250000,
+          "lazBytes": 500000,
+          "chunks": 5
+        },
+        {
+          "points": 500000,
+          "lazBytes": 1000000,
+          "chunks": 10
+        },
+        {
+          "points": 1000000,
+          "lazBytes": 2000000,
+          "chunks": 20
+        },
+        {
+          "points": 2000000,
+          "lazBytes": 4000000,
+          "chunks": 40
+        },
+        {
+          "points": 5000000,
+          "lazBytes": 9900000,
+          "chunks": 100
+        },
+        {
+          "points": 10000000,
+          "lazBytes": 19700000,
+          "chunks": 200
+        }
+      ]
+    },
+    "committedFixture": {
+      "path": "tests/fixtures/multichunk.laz",
+      "points": 120000,
+      "bytes": 291163
+    }
+  },
+  "results": {
+    "singleReaderNodeMs": {
+      "status": "measured",
+      "unit": "ms",
+      "test": "tests/benchmark/localOpenBaseline.test.ts",
+      "repetitions": 3,
+      "statistic": "best",
+      "rows": [
+        {
+          "points": 1000000,
+          "prefixRead": 0.1,
+          "wholeFileRead": 0,
+          "decode": 329,
+          "ttr": 330
+        },
+        {
+          "points": 5000000,
+          "prefixRead": 0.1,
+          "wholeFileRead": 1,
+          "decode": 1563,
+          "ttr": 1563
+        },
+        {
+          "points": 10000000,
+          "prefixRead": 0.1,
+          "wholeFileRead": 3,
+          "decode": 3118,
+          "ttr": 3119
+        }
+      ]
+    },
+    "pooledNodeMs": {
+      "status": "measured",
+      "unit": "ms",
+      "test": "tests/benchmark/localOpenPooled.test.ts",
+      "workers": 4,
+      "repetitions": 3,
+      "statistic": "best",
+      "note": "Single and pooled columns come from the same process; the machine was slower than in the table above at the time.",
+      "rows": [
+        {
+          "points": 250000,
+          "chunkTable": 1,
+          "single": 119,
+          "pooledCold": 101,
+          "pooledWarm": 53
+        },
+        {
+          "points": 500000,
+          "chunkTable": 0,
+          "single": 232,
+          "pooledCold": 138,
+          "pooledWarm": 84
+        },
+        {
+          "points": 1000000,
+          "chunkTable": 0,
+          "single": 468,
+          "pooledCold": 196,
+          "pooledWarm": 139
+        },
+        {
+          "points": 2000000,
+          "chunkTable": 1,
+          "single": 929,
+          "pooledCold": 331,
+          "pooledWarm": 277
+        },
+        {
+          "points": 5000000,
+          "chunkTable": 0,
+          "single": 2344,
+          "pooledCold": 749,
+          "pooledWarm": 692
+        },
+        {
+          "points": 10000000,
+          "chunkTable": 1,
+          "single": 4835,
+          "pooledCold": 1421,
+          "pooledWarm": 1366
+        }
+      ]
+    },
+    "browserMs": {
+      "status": "measured",
+      "unit": "ms",
+      "test": "tests/e2e/localOpenDevice.spec.ts",
+      "browser": "chromium headless",
+      "chunkWorkers": 4,
+      "repetitions": 3,
+      "statistic": "best",
+      "columns": "previewArrival is the first preview message on the page; decode is the worker's decode stage; wall is drop to resolved",
+      "beforeRangeDecode": [
+        {
+          "points": 1000000,
+          "singleDecode": 320,
+          "singleWall": 397,
+          "previewArrival": 149,
+          "pooledDecode": 133,
+          "pooledWall": 856
+        },
+        {
+          "points": 2000000,
+          "singleDecode": 602,
+          "singleWall": 707,
+          "previewArrival": 138,
+          "pooledDecode": 227,
+          "pooledWall": 1020
+        },
+        {
+          "points": 5000000,
+          "singleDecode": 1453,
+          "singleWall": 3052,
+          "previewArrival": 173,
+          "pooledDecode": 520,
+          "pooledWall": 1946
+        },
+        {
+          "points": 10000000,
+          "singleDecode": 2738,
+          "singleWall": 4370,
+          "previewArrival": 303,
+          "pooledDecode": 900,
+          "pooledWall": 3300
+        }
+      ],
+      "afterRangeDecode": [
+        {
+          "points": 1000000,
+          "singleDecode": 324,
+          "singleWall": 385,
+          "previewArrival": 118,
+          "pooledDecode": 162,
+          "pooledWall": 889
+        },
+        {
+          "points": 2000000,
+          "singleDecode": 606,
+          "singleWall": 660,
+          "previewArrival": 113,
+          "pooledDecode": 232,
+          "pooledWall": 973
+        },
+        {
+          "points": 5000000,
+          "singleDecode": 1465,
+          "singleWall": 2942,
+          "previewArrival": 116,
+          "pooledDecode": 521,
+          "pooledWall": 1816
+        },
+        {
+          "points": 10000000,
+          "singleDecode": 2770,
+          "singleWall": 4253,
+          "previewArrival": 209,
+          "pooledDecode": 909,
+          "pooledWall": 3268
+        }
+      ],
+      "previewChunkSweep10M": {
+        "note": "Chunk-set preview design, since replaced by per-chunk progressive delivery; arrival did not move with the count",
+        "rows": [
+          {
+            "chunks": 8,
+            "previewArrival": 256
+          },
+          {
+            "chunks": 12,
+            "previewArrival": 291
+          },
+          {
+            "chunks": 16,
+            "previewArrival": 284
+          },
+          {
+            "chunks": 24,
+            "previewArrival": 304
+          }
+        ]
+      },
+      "progressivePreviewDevServer10M": {
+        "note": "unminified dev build, one run",
+        "firstChunkArrival": 203,
+        "decode": 1324,
+        "rangeReads": 205,
+        "compressedBytesRead": 60200000,
+        "poolWorkers": 4
+      }
+    },
+    "dtmAggregationMs": {
+      "status": "measured",
+      "unit": "ms",
+      "test": "tests/benchmark/rasterizeDtmBaseline.test.ts",
+      "workload": "2,000,000 returns over a 1000 x 1000 grid",
+      "repetitions": 3,
+      "statistic": "best",
+      "rows": [
+        {
+          "aggregation": "mean",
+          "before": 152,
+          "after": 141
+        },
+        {
+          "aggregation": "min",
+          "before": 155,
+          "after": 132
+        },
+        {
+          "aggregation": "median",
+          "before": 994,
+          "after": 168
+        },
+        {
+          "aggregation": "percentile",
+          "before": 945,
+          "after": 181
+        },
+        {
+          "aggregation": "robust",
+          "before": 1095,
+          "after": 210
+        }
+      ]
+    },
+    "icpRegisterMs": {
+      "status": "measured",
+      "unit": "ms",
+      "test": "tests/benchmark/icpRegisterBaseline.test.ts",
+      "workload": "25 iterations, untrimmed",
+      "repetitions": 3,
+      "statistic": "best",
+      "rows": [
+        {
+          "points": 500,
+          "before": 15,
+          "after": 8
+        },
+        {
+          "points": 1000,
+          "before": 48,
+          "after": 11
+        },
+        {
+          "points": 1500,
+          "before": 117,
+          "after": 18
+        },
+        {
+          "points": 3000,
+          "before": 482,
+          "after": 42
+        }
+      ]
+    },
+    "voxelPassMs": {
+      "status": "measured",
+      "unit": "ms",
+      "test": "tests/benchmark/voxelDownsampleBaseline.test.ts",
+      "workload": "2,000,000 random points in 1000 x 1000 x 50",
+      "repetitions": 3,
+      "statistic": "best",
+      "rows": [
+        {
+          "voxel": 0.9,
+          "reference": 1095,
+          "typed": 342
+        },
+        {
+          "voxel": 2,
+          "reference": 963,
+          "typed": 370
+        },
+        {
+          "voxel": 4,
+          "reference": 632,
+          "typed": 265
+        }
+      ]
+    },
+    "downsampleToBudgetPasses": {
+      "status": "measured",
+      "test": "tests/downsampleToBudgetBound.test.ts and one Node run",
+      "rows": [
+        {
+          "points": 2000000,
+          "budget": 1500000,
+          "before": {
+            "passes": 12,
+            "endedOverBudget": true,
+            "points": 1515048
+          },
+          "after": {
+            "passes": 5,
+            "points": 1448383,
+            "ms": 7681
+          }
+        }
+      ]
+    }
+  }
+}
