@@ -109,3 +109,29 @@ describe('lint:module-graph', () => {
     );
   });
 });
+
+describe('lint:module-graph watch band', () => {
+  it('allows a watched module ten percent or three modules of growth, whichever is larger', async () => {
+    const { watchAllowance } = await import('../scripts/lint-module-graph.mjs');
+    expect(watchAllowance(10)).toBe(13);
+    expect(watchAllowance(40)).toBe(44);
+    expect(watchAllowance(0)).toBe(3);
+  });
+
+  it('prints the concentration table with LOC and fan-out for every watched module', async () => {
+    const { measureModuleGraph, concentrationRows, formatConcentrationTable } = await import('../scripts/lint-module-graph.mjs');
+    const rows = concentrationRows(measureModuleGraph());
+    const files = rows.map((r) => r.file);
+    expect(files).toContain('src/main.ts');
+    expect(files).toContain('src/ui/AnalysePanel.ts');
+    expect(files).toContain('src/app/actionDefinitions.ts');
+    for (const r of rows) {
+      expect(r.loc, r.file).toBeGreaterThan(0);
+      expect(r.fanOut, r.file).toBeGreaterThan(0);
+    }
+    const table = formatConcentrationTable(rows);
+    expect(table).toMatch(/Module\s+LOC\s+fan-out\s+rule/);
+    expect(table).toMatch(/main\.ts\s+\d+\s+\d+\s+shrink-only/);
+    expect(table).toMatch(/AnalysePanel\.ts\s+\d+\s+\d+\s+watch/);
+  });
+});

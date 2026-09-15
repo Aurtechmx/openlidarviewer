@@ -29,6 +29,8 @@ export interface ModuleGraphMeasurement {
   readonly problems: readonly string[];
   readonly pairs: ReadonlyMap<string, ModuleGraphPairMeasurement>;
   readonly fanOut: ReadonlyMap<string, ModuleGraphFanOutMeasurement>;
+  /** The watched concentration modules; banded, not ratcheted. */
+  readonly watchFanOut: ReadonlyMap<string, ModuleGraphFanOutMeasurement>;
   readonly cycles: { readonly count: number; readonly components: readonly string[][] };
   readonly inlineOnlyTotal: number;
   readonly totalEdges: number;
@@ -49,3 +51,18 @@ export function measureModuleGraph(): ModuleGraphMeasurement;
 export function computeArchitectureFingerprint(
   measurement?: ModuleGraphMeasurement,
 ): ArchitectureFingerprint;
+
+/** One row of the concentration table the gate prints. */
+export interface ConcentrationRow {
+  readonly file: string;
+  readonly loc: number;
+  readonly fanOut: number;
+  readonly rule: 'shrink-only' | 'watch';
+}
+
+/** The runtime fan-out a watched module may reach: banked plus 10 %, at least 3. */
+export function watchAllowance(banked: number): number;
+
+export function concentrationRows(measurement: ModuleGraphMeasurement): ConcentrationRow[];
+
+export function formatConcentrationTable(rows: readonly ConcentrationRow[]): string;

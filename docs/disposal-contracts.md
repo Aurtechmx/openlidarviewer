@@ -93,6 +93,18 @@ vitest. Use the e2e long-session spec for these:
    tool 20 times. Expected: zero net listeners added, single SVG
    overlay in the DOM at any time.
 
+## Lifecycle ownership rule
+
+A component or module that registers a listener outside its own DOM root owns
+the matching teardown. That covers `window` and `document` event listeners,
+`ResizeObserver` and `MutationObserver` subscriptions, `setInterval` timers,
+worker message listeners and global pointer listeners: each is removed by a
+`dispose()` on the owner, by a teardown function the registration returns, or
+by a `Stage.addTeardown` entry for shell-level wiring. The tables above are the
+inventory; a new registration adds a row and a contract test. The shell's
+session-scoped `window` listeners are the one recorded exception, and they end
+with the page.
+
 ## Adding a new resource
 
 When you introduce a new GPU buffer / worker / timer / listener:
