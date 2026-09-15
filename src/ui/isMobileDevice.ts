@@ -49,6 +49,19 @@ export function classifyMobile(narrow: boolean, coarseNoHover: boolean): boolean
   return narrow || coarseNoHover;
 }
 
+/**
+ * The device half of the question alone: a coarse pointer with no hover, which
+ * is a phone or a tablet whatever the window size. Drives capacity policy (the
+ * point budget, the load plan's memory band), where a narrow desktop window
+ * with a mouse must not be mistaken for a phone: the budget is computed once
+ * at startup, so a window that happened to be narrow then would otherwise
+ * carry the phone budget for the whole session.
+ */
+export function isTouchFirstDevice(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(pointer: coarse) and (hover: none)').matches;
+}
+
 /** Input-aware "is this a mobile device", for behaviour (not CSS layout). */
 export function isMobileDevice(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;

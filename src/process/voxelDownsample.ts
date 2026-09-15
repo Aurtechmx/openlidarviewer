@@ -220,20 +220,40 @@ export function voxelSizeForBudget(cloud: PointCloud, maxPoints: number): number
 }
 
 /**
- * Downsample `cloud` so it fits within `maxPoints`.
+ * Reduce `cloud` to at most `maxPoints` by voxel centroids.
  *
  * The first voxel size is estimated for a target slightly under the budget,
  * so a typical estimate lands the first pass at or under `maxPoints` with no
  * further full-cloud passes. When the estimate misses, the size is corrected
- * proportionally — point count scales about `1 / size²` for surface-like
- * data — so it converges within a pass or two rather than creeping by a fixed
- * factor. The pass count is capped so a pathological cloud cannot loop
- * indefinitely, and the returned cloud never exceeds `maxPoints`.
+ * proportionally (point count scales about `1 / size²` for surface-like
+ * data). A pass that fails to move the count by a tenth means the voxel is
+ * still below the point spacing, which a proportional step cannot cross; the
+ * size then doubles instead. Once the count is under budget, at most three
+ * bisection passes between the last over-budget size and the first under
+ * recover points a large step gave away. The pass count is hard-capped at
+ * {@link MAX_DOWNSAMPLE_PASSES}; the doubling phase reaches one voxel per axis
+ * inside that cap for any cloud, so the result never exceeds `maxPoints`.
  *
  * If `cloud` already fits, the *same object* is returned untouched, so callers
  * can detect "was it downsampled?" with a simple identity check.
  */
 export function downsampleToBudget(cloud: PointCloud, maxPoints: number): PointCloud {
+  return downsampleToBudgetReport(cloud, maxPoints).cloud;
+}
+
+/** Full-cloud voxel passes {@link downsampleToBudget} may run, the first included. */
+export const MAX_DOWNSAMPLE_PASSES = 16;
+
+/** What a budget reduction did; `passes` counts full-cloud voxel passes. */
+export interface DownsampleReport {
+  readonly cloud: PointCloud;
+  readonly passes: number;
+  /** The voxel size of the returned cloud, or 0 when it was returned untouched. */
+  readonly voxelSize: number;
+}
+
+/** {@link downsampleToBudget} with the pass count and voxel size it settled on. */
+export function downsampleToBudgetReport(cloud: PointCloud, maxPoints: number): DownsampleReport {
   // A budget that is not a positive number already fails, but it fails two
   // calls down in `voxelDownsample` complaining about a voxel size the caller
   // never chose. NaN is the one that matters: `pointCount <= NaN` is false, so
@@ -243,36 +263,64 @@ export function downsampleToBudget(cloud: PointCloud, maxPoints: number): PointC
   if (!Number.isFinite(maxPoints) || maxPoints < 1) {
     throw new Error(`downsampleToBudget: maxPoints must be a finite number >= 1 (got ${maxPoints})`);
   }
-  if (cloud.pointCount <= maxPoints) return cloud;
+  if (cloud.pointCount <= maxPoints) return { cloud, passes: 0, voxelSize: 0 };
 
-  const MAX_PASSES = 12;
+  let passes = 0;
+  const pass = (size: number): PointCloud => {
+    passes++;
+    return voxelDownsample(cloud, size);
+  };
+
   // Aim the first estimate a little under budget. The estimate is usually
   // close, so undershooting the target lands the first pass at or under the
-  // budget — and when it does, both loops below are skipped entirely.
-  let voxelSize = voxelSizeForBudget(cloud, maxPoints * 0.9);
-  let reduced = voxelDownsample(cloud, voxelSize);
-  let passes = 1;
+  // budget and the loops below are skipped.
+  let size = voxelSizeForBudget(cloud, maxPoints * 0.9);
+  let reduced = pass(size);
 
-  // Over budget: grow the voxel by a proportional correction until it fits.
-  while (reduced.pointCount > maxPoints && passes < MAX_PASSES) {
-    const ratio = Math.sqrt(reduced.pointCount / maxPoints);
-    voxelSize *= Math.min(Math.max(ratio, 1.05), 3);
-    reduced = voxelDownsample(cloud, voxelSize);
-    passes++;
+  // Over budget: grow the voxel. Proportional while a pass makes progress;
+  // doubling once it does not, which is the sign the voxel is still below the
+  // point spacing (every point alone in its voxel) and a small step is wasted.
+  let overSize = 0;
+  while (reduced.pointCount > maxPoints && passes < MAX_DOWNSAMPLE_PASSES) {
+    overSize = size;
+    const before = reduced.pointCount;
+    const ratio = Math.sqrt(before / maxPoints);
+    const proportional = Math.min(Math.max(ratio * 1.1, 1.25), 3);
+    size *= proportional;
+    reduced = pass(size);
+    if (reduced.pointCount > maxPoints && reduced.pointCount > before * 0.9) {
+      // Flat: switch to doubling until the count moves.
+      while (reduced.pointCount > maxPoints && passes < MAX_DOWNSAMPLE_PASSES) {
+        overSize = size;
+        size *= 2;
+        reduced = pass(size);
+      }
+    }
+  }
+  if (reduced.pointCount > maxPoints) {
+    // Unreachable by the cap arithmetic (16 doublings exceed any extent the
+    // estimate can start from); kept so the contract holds whatever the input.
+    const { min, max } = cloud.bounds();
+    size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2], 1e-6) * 2;
+    reduced = pass(size);
   }
 
-  // Wastefully far under budget: the voxel is too large and detail is being
-  // thrown away. Shrink it to recover points — but never past the size that
-  // would push the cloud back over the budget.
-  while (reduced.pointCount < maxPoints * 0.6 && passes < MAX_PASSES) {
-    const ratio = Math.sqrt(reduced.pointCount / maxPoints);
-    const nextSize = voxelSize * Math.min(Math.max(ratio, 0.5), 0.95);
-    const candidate = voxelDownsample(cloud, nextSize);
-    if (candidate.pointCount > maxPoints) break;
-    voxelSize = nextSize;
-    reduced = candidate;
-    passes++;
+  // Wastefully far under budget: bisect between the last size that was over
+  // and this one, keeping the best result that fits. At most three passes.
+  if (overSize > 0) {
+    let lo = overSize;
+    let hi = size;
+    for (let i = 0; i < 3 && reduced.pointCount < maxPoints * 0.6 && passes < MAX_DOWNSAMPLE_PASSES; i++) {
+      const mid = (lo + hi) / 2;
+      const candidate = pass(mid);
+      if (candidate.pointCount > maxPoints) {
+        lo = mid;
+      } else {
+        hi = mid;
+        size = mid;
+        reduced = candidate;
+      }
+    }
   }
-
-  return reduced;
+  return { cloud: reduced, passes, voxelSize: size };
 }
