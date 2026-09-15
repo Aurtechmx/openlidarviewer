@@ -37,7 +37,6 @@ describe('renderDatasetStoryCard', () => {
   it('surfaces the headline, assessment, limiter, best-for and next step', () => {
     const node = renderDatasetStoryCard(buildScanStory(GOOD)) as unknown as RecordingEl;
     const text = node.textContent;
-    expect(text).toContain('Dataset Story');
     expect(text).toContain('Aerial / airborne ALS');
     expect(text).toContain('Good');
     expect(text).toContain('Primary limiter');

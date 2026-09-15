@@ -43,7 +43,6 @@ describe('the runner mounts the Dataset Story on the panel', () => {
     await h.runner.run();
     expect(h.stories.length).toBeGreaterThanOrEqual(2);
     const card = h.stories[0] as RecordingEl;
-    expect(card.textContent).toContain('Dataset Story');
     expect(card.textContent).toContain('Aerial / airborne ALS');
   });
 

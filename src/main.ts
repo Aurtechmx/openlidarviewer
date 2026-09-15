@@ -2111,8 +2111,8 @@ function ensureAnalysePanel(): Promise<AnalysePanel> {
 function hydrateAnalysePanel(): void {
   if (!analysePanel) return;
   if (analyseScanTypeArgs) analysePanel.setScanType(...analyseScanTypeArgs);
-  analysePanel.setVisible(analyseDesiredVisible);
-  if (analyseExpanded) analysePanel.expand();
+  terrainRunner.refreshDatasetStory(analysePanel);
+  analysePanel.setVisible(analyseDesiredVisible); if (analyseExpanded) analysePanel.expand();
   analysePanel.setConfidenceColorActive(currentColorMode === 'confidence');
 }
 
@@ -2853,12 +2853,12 @@ const routeCoordinator = createScanRouteCoordinator({
   },
   view: {
     setObjectScanType: (args) => {
-      objectScanTypeArgs = [...args];
-      objectPanel?.setScanType(...objectScanTypeArgs);
+      objectScanTypeArgs = [...args]; objectPanel?.setScanType(...objectScanTypeArgs);
     },
     setAnalyseScanType: (args) => {
       analyseScanTypeArgs = [...args];
       analysePanel?.setScanType(...analyseScanTypeArgs);
+      if (analysePanel) terrainRunner.refreshDatasetStory(analysePanel);
     },
     showSpace: (space, shape) => {
       objectContent = { kind: 'space', args: [space, shape] };

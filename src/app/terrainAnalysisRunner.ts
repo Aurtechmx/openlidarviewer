@@ -305,6 +305,8 @@ export interface TerrainAnalysisRunner {
    * clear — so this never eagerly pulls the heavy analysis chunk.
    */
   abortAndClearCache(): void;
+  /** Mount the Dataset Story card on the panel from the host's story inputs; a no-op without them. */
+  refreshDatasetStory(panel: AnalysePanel): void;
 }
 
 /**
@@ -894,6 +896,7 @@ export function createTerrainAnalysisRunner(
     buildResultAtInterval,
     buildResultForExport,
     abortAndClearCache,
+    refreshDatasetStory,
     getLastSourceUpAxis,
     getContourLayers,
   };
