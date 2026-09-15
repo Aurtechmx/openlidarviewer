@@ -1,39 +1,38 @@
-// The command-palette / shortcut-sheet action registry, lifted out of main.ts.
-//
-// buildActionRegistry reaches into the shell for ~19 collaborators. They are
-// passed in as `deps` rather than imported so this module stays free of the
-// boot graph. Two are read through getters: `viewer` is a `let` assigned after
-// boot, and `tour` starts null and is set later. Both must be resolved when a
-// handler fires, not when the registry is built.
-
-import { openTerrainAnalysis, type TerrainAnalysisEntryDeps } from './openTerrainAnalysis';
+/**
+ * actionDefinitions.ts
+ *
+ * The command-palette / shortcut-sheet action registry: one assembler over the
+ * contributors in `src/app/actions/`, each of which receives only the shell
+ * collaborators its own actions use. Nothing here has behaviour of its own.
+ * The shell builds the registry on the first surface that needs it (palette,
+ * sheet, a Dataset Story click), so none of this rides the startup chunk.
+ *
+ * Two collaborators are read through getters: `viewer` is a `let` assigned
+ * after boot, and `tour` starts null and is set later. Both resolve when a
+ * handler fires, not when the registry is built.
+ */
 import type { Action } from '../ui/actionRegistry';
 import type { Viewer } from '../render/Viewer';
 import type { TourHandle } from '../ui/onboarding/bootTour';
 import type { WorkflowController } from '../ui/WorkflowController';
-import { WORKFLOW_RECORDER_ENABLED } from '../ui/WorkflowController';
-import { toggleTool } from './toggleTool';
 import type { WorkflowConfigPanel } from '../ui/WorkflowConfigPanel';
 import type { WorkflowEvent } from '../render/workflow/workflowRecorder';
 import type { ShortcutSheet } from '../ui/ShortcutSheet';
 import type { LassoVolumeTool } from '../ui/LassoVolumeTool';
 import type { CompassController } from '../ui/compassController';
 import type { ViewBookmarksService } from './viewBookmarks';
-import { THEME_LABEL, THEME_ORDER, type ThemeName } from '../ui/themes';
-import {
-  CAMERA_PRESET_KEY,
-  CAMERA_PRESET_LABEL,
-  CAMERA_PRESET_ORDER,
-  STANDARD_VIEW_LABEL,
-  STANDARD_VIEW_ORDER,
-  type CameraPresetName,
-} from '../render/camera/cameraPresets';
-import { buildScanStory, buildExportHealth, type ScanStoryInputs } from '../intelligence/scanStory';
-import { renderDatasetStoryCard, renderExportHealthPanel } from '../ui/scanStoryViews';
-import { openModal } from '../ui/Modal';
-import { keyDisplayFor } from '../ui/keyBindings';
-import { el } from '../ui/dom';
-import { loadReportVerifier } from '../lazyChunks';
+import type { ThemeName } from '../ui/themes';
+import type { TerrainAnalysisEntryDeps } from './openTerrainAnalysis';
+import type { ScanStoryInputs } from '../intelligence/scanStory';
+import { contributeCameraActions, type PlanViewActions } from './actions/cameraActions';
+import { contributeViewActions } from './actions/viewActions';
+import { contributeToolActions } from './actions/toolActions';
+import { contributeAnalysisActions } from './actions/analysisActions';
+import { contributeExportActions } from './actions/exportActions';
+import { contributeWorkflowActions } from './actions/workflowActions';
+import { contributeHelpActions } from './actions/helpActions';
+
+export type { PlanViewActions } from './actions/cameraActions';
 
 export interface ActionRegistryDeps {
   getViewer: () => Viewer;
@@ -49,15 +48,8 @@ export interface ActionRegistryDeps {
   setTheme: (name: ThemeName) => void;
   syncLassoButton: () => void;
   runDeriveClassification: () => Promise<void>;
-  /**
-   * Save the current view as a PNG, and copy a link back to it. The tool dock
-   * is otherwise the ONLY route to either: neither carries a shortcut, so
-   * without these the palette cannot reach them and demoting them out of the
-   * dock would leave them unreachable.
-   */
   saveSnapshot: () => void | Promise<void>;
   copyShareLink: () => void | Promise<void>;
-  /** How to reach the Analyse panel and its run; see {@link openTerrainAnalysis}. */
   terrainAnalysisEntry: TerrainAnalysisEntryDeps;
   runFillUnclassified: () => Promise<void>;
   buildCurrentStoryInputs: () => ScanStoryInputs;
@@ -68,498 +60,63 @@ export interface ActionRegistryDeps {
   hasScan: () => boolean;
   saveCurrentView: () => void;
   applyView: (index: number) => void;
-  /** Flip one mouse-orbit invert axis (the "gyroscope" handedness). Persists. */
   toggleOrbitInvert: (axis: 'x' | 'y') => void;
-  /** Return orbit navigation to the shipped defaults. */
   resetNavigation: () => void;
-  /** Plan mode, reached the same way the NavBar's Plan chip reaches it. */
   planView: PlanViewActions;
 }
 
-/**
- * The plan-mode surface the palette needs. `navBarWiring` satisfies it; the
- * shape is declared here so this module stays clear of the shell's graph.
- */
-export interface PlanViewActions {
-  togglePlanView: () => void;
-  /**
-   * A camera preset fired from the palette rather than the bar. Plan mode is a
-   * claim that the camera is looking straight down, so it has to hear about
-   * every route that aims it.
-   */
-  notePlanViewPreset: (name: CameraPresetName) => void;
-}
-
+/** Assemble the registry in its display order: camera, theme and view, tools, analyse, export, workflow, help. */
 export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
-  const actions: Action[] = [];
-
-  // Camera presets — same handlers as the T / O / P keys.
-  for (const name of CAMERA_PRESET_ORDER) {
-    const label = CAMERA_PRESET_LABEL[name];
-    actions.push({
-      id: `camera.${name}`,
-      title: `${label} view`,
-      section: 'Camera',
-      // Iso's advertised 'I' chip is suppressed: bare 'I' is the Inspect
-      // tool shortcut (see the keydown handler above) — Iso is palette /
-      // NavBar only. Advertising a key that doesn't fire would be worse.
-      keys: name === 'iso' ? undefined : CAMERA_PRESET_KEY[name],
-      hint: `Frame the scan with the ${label.toLowerCase()} preset.`,
-      keywords: ['view', 'pose', 'orbit'],
-      run: () => {
-        const fired = deps.getViewer().setCameraPreset(name);
-        if (fired) {
-          deps.planView.notePlanViewPreset(name);
-          deps.workflowController.capture({ type: 'camera-preset', name });
-          deps.showLassoToast(`Camera · ${label} view.`);
-        }
-      },
-    });
-  }
-  // Plan view — the composed top-down workflow, not a pose. It lives in the
-  // Camera section beside the presets because that is where a user looking for
-  // "look straight down" goes; the state and the restore live in
-  // planViewController.ts, which this only pokes.
-  actions.push({
-    id: 'camera.plan-view',
-    title: 'Plan view',
-    section: 'Camera',
-    hint: 'Look straight down in parallel projection, with the hand tool on the drag.',
-    keywords: ['plan', 'top', 'ortho', 'orthographic', 'parallel', '2d', 'map', 'pan'],
-    run: () => deps.planView.togglePlanView(),
+  const capture: WorkflowController['capture'] = (event) => deps.workflowController.capture(event);
+  const camera = contributeCameraActions({
+    getViewer: deps.getViewer,
+    planView: deps.planView,
+    capture,
+    showLassoToast: deps.showLassoToast,
   });
-  // The six axis-aligned views and the orthographic toggle, which until now
-  // lived only on the navigation panel. That made the panel undismissable in
-  // practice: closing it would have taken the only route to them, and the
-  // dismissal is persisted, so the loss would have outlived the session. A
-  // second home is what lets the panel be closed at all.
-  for (const view of STANDARD_VIEW_ORDER) {
-    const label = STANDARD_VIEW_LABEL[view];
-    actions.push({
-      id: `camera.view-${view}`,
-      title: `${label} view (axis aligned)`,
-      section: 'Camera',
-      hint: `Look straight along the ${label.toLowerCase()} axis.`,
-      keywords: ['view', 'axis', 'square', 'face', 'elevation', 'plan'],
-      run: () => {
-        if (!deps.getViewer().setStandardView(view)) return;
-        deps.showLassoToast(`Camera · ${label} view.`);
-      },
-    });
-  }
-  actions.push({
-    id: 'camera.orthographic',
-    title: 'Orthographic projection',
-    section: 'Camera',
-    hint: 'Parallel projection, so equal lengths measure equal on screen.',
-    keywords: ['ortho', 'parallel', 'projection', 'perspective', '2d'],
-    run: () => {
-      const viewer = deps.getViewer();
-      const on = !viewer.orthographic;
-      if (!viewer.setOrthographic(on)) return;
-      deps.showLassoToast(`Camera · orthographic ${on ? 'on' : 'off'}.`);
-    },
+  const view = contributeViewActions({
+    setTheme: deps.setTheme,
+    capture,
+    compass: deps.compass,
+    bookmarks: deps.bookmarks,
+    toggleOrbitInvert: deps.toggleOrbitInvert,
+    resetNavigation: deps.resetNavigation,
+    hasScan: deps.hasScan,
+    saveCurrentView: deps.saveCurrentView,
+    applyView: deps.applyView,
+    showLassoToast: deps.showLassoToast,
   });
-
-  // Reset / Frame All — exposed alongside the named presets.
-  actions.push({
-    id: 'camera.frame-all',
-    title: 'Frame all',
-    section: 'Camera',
-    hint: 'Fit the camera to every visible cloud.',
-    keywords: ['fit', 'reset', 'center', 'centre'],
-    run: () => {
-      deps.getViewer().frameAll();
-      deps.workflowController.capture({ type: 'frame-all' });
-    },
+  const tools = contributeToolActions({
+    getViewer: deps.getViewer,
+    workflowController: deps.workflowController,
+    lassoVolumeTool: deps.lassoVolumeTool,
+    syncLassoButton: deps.syncLassoButton,
+    runDeriveClassification: deps.runDeriveClassification,
+    runFillUnclassified: deps.runFillUnclassified,
+    showLassoToast: deps.showLassoToast,
   });
-
-  // Theme — same handler as the header theme toggle. `setTheme` keeps the
-  // toggle's icon in sync.
-  for (const name of THEME_ORDER) {
-    actions.push({
-      id: `theme.${name}`,
-      title: `${THEME_LABEL[name]} theme`,
-      section: 'Theme',
-      hint: 'Switch the palette of the whole interface.',
-      keywords: ['appearance', 'colours', 'colors', 'accessibility'],
-      run: () => {
-        deps.setTheme(name);
-        deps.workflowController.capture({ type: 'theme', name });
-      },
-    });
-  }
-
-  // Tool dock — Measure, Inspect, Annotate, Lasso volume.
-  actions.push(
-    {
-      id: 'tool.measure',
-      title: 'Measure',
-      section: 'Tools',
-      hint: 'Activate the measurement toolbar.',
-      keywords: ['distance', 'area', 'volume'],
-      run: () => {
-        toggleTool(deps.getViewer(), deps.workflowController, 'measure');
-      },
-    },
-    {
-      id: 'tool.inspect',
-      title: 'Inspect point',
-      section: 'Tools',
-      hint: 'Read attributes of any point under the cursor.',
-      keywords: ['point info', 'attributes'],
-      run: () => {
-        toggleTool(deps.getViewer(), deps.workflowController, 'inspect');
-      },
-    },
-    {
-      id: 'tool.annotate',
-      title: 'Annotate',
-      section: 'Tools',
-      hint: 'Drop notes, info, warnings, or issues on points.',
-      keywords: ['note', 'comment', 'mark'],
-      run: () => {
-        toggleTool(deps.getViewer(), deps.workflowController, 'annotate');
-      },
-    },
-    {
-      id: 'tool.classify',
-      title: 'Classify (derive)',
-      section: 'Tools',
-      hint: 'Derive a ground / vegetation / building classification for an unclassified scan (heuristic).',
-      keywords: ['classification', 'ground', 'vegetation', 'building', 'segment', 'auto'],
-      run: () => {
-        void deps.runDeriveClassification();
-      },
-    },
-    {
-      id: 'tool.fillUnclassified',
-      title: 'Fill unclassified points (derive)',
-      section: 'Tools',
-      hint: 'Derive only the unclassified points of a partially-classified scan, preserving every producer class (heuristic).',
-      keywords: ['classification', 'fill', 'gaps', 'unclassified', 'producer', 'preserve'],
-      run: () => {
-        void deps.runFillUnclassified();
-      },
-    },
-    {
-      id: 'analyse.run',
-      title: 'Run terrain analysis',
-      section: 'Analyse',
-      hint: 'Classify ground, build the DTM, validate it, and check contour readiness.',
-      keywords: ['terrain', 'analysis', 'run', 'dtm', 'ground', 'surface', 'analyse'],
-      run: () => {
-        void openTerrainAnalysis(deps.terrainAnalysisEntry, true);
-      },
-    },
-    {
-      id: 'analyse.contours',
-      title: 'Create contours',
-      section: 'Analyse',
-      hint: 'Open Contour Studio. Terrain analysis runs first when the scan has not been analysed yet.',
-      keywords: ['contour', 'contours', 'isoline', 'create', 'deliverable', 'lines', 'terrain'],
-      run: () => {
-        void openTerrainAnalysis(deps.terrainAnalysisEntry, false);
-      },
-    },
-    {
-      id: 'tool.snapshot',
-      title: 'Save a snapshot',
-      section: 'Export',
-      hint: 'Write the current view to a PNG, with the scan and scale recorded on it.',
-      keywords: ['snapshot', 'screenshot', 'png', 'image', 'capture', 'save view'],
-      run: () => {
-        void deps.saveSnapshot();
-      },
-    },
-    {
-      id: 'tool.share',
-      title: 'Copy view link',
-      section: 'Export',
-      hint: 'Copy a link that reopens this camera position and appearance.',
-      keywords: ['share', 'link', 'copy', 'url', 'view', 'permalink'],
-      run: () => {
-        void deps.copyShareLink();
-      },
-    },
-    {
-      id: 'story.dataset',
-      title: 'Dataset Story',
-      section: 'Analyse',
-      hint: 'What this scan is, how good it is, what it is best for, and the next step.',
-      keywords: ['story', 'fitness', 'summary', 'overview', 'what is this', 'good for'],
-      run: () => {
-        openModal({ title: 'Dataset Story', body: renderDatasetStoryCard(buildScanStory(deps.buildCurrentStoryInputs())) });
-      },
-    },
-    {
-      id: 'export.health',
-      title: 'Export health check',
-      section: 'Export',
-      hint: 'What is about to leave the app: scope, classification, CRS, datum, density, readiness.',
-      keywords: ['export', 'health', 'check', 'hand-off', 'ready', 'before export'],
-      run: () => {
-        openModal({ title: 'Export health check', body: renderExportHealthPanel(buildExportHealth(deps.buildCurrentStoryInputs())) });
-      },
-    },
-    {
-      id: 'tool.lasso-volume',
-      title: 'Lasso volume',
-      section: 'Tools',
-      keys: keyDisplayFor('lasso-toggle'),
-      hint: 'Draw a freeform shape to measure a 3D volume.',
-      keywords: ['select', 'shape', 'cut', 'fill'],
-      run: () => {
-        if (deps.lassoVolumeTool.enabled) {
-          deps.lassoVolumeTool.disable();
-          deps.getViewer().clearSelectionHighlight();
-          deps.showLassoToast('Lasso off — back to navigation.');
-        } else {
-          deps.lassoVolumeTool.enable();
-          deps.showLassoToast('Lasso armed — draw a shape on the canvas.');
-        }
-        deps.syncLassoButton();
-      },
-    },
-    {
-      id: 'tool.lasso-selection-basis',
-      title: 'Lasso selection basis',
-      section: 'Tools',
-      hint: 'Whether a lasso measures every depth along the ray or only the surfaces the camera can see.',
-      keywords: ['occlusion', 'hidden', 'behind', 'depth', 'through', 'visible', 'volume'],
-      run: () => {
-        // Two different measurements of the same drawn shape, so the toast
-        // names the one now armed rather than reporting a setting changed.
-        const next =
-          deps.lassoVolumeTool.selectionBasis === 'occluded-excluded'
-            ? 'through-surfaces'
-            : 'occluded-excluded';
-        deps.lassoVolumeTool.selectionBasis = next;
-        deps.showLassoToast(
-          next === 'occluded-excluded'
-            ? 'Lasso measures visible surfaces only — points hidden behind nearer ones are left out.'
-            : 'Lasso measures all depths along the ray — points behind a surface are included.',
-        );
-      },
-    },
-  );
-
-  // Workflow recorder — Start / Stop+Save / Open a file.
-  //
-  // v0.4.5 — gated behind WORKFLOW_RECORDER_ENABLED, whose value lives in
-  // WorkflowController.ts with the product rationale. The entries must be
-  // ABSENT from the registry when the flag is off — not merely inert — so
-  // the command palette and the shortcut sheet (both of which render
-  // straight from this registry) show nothing for the feature.
-  if (WORKFLOW_RECORDER_ENABLED) {
-    actions.push(
-      {
-        id: 'workflow.start',
-        title: 'Start recording workflow',
-        section: 'Workflow',
-        keys: keyDisplayFor('workflow-recorder'),
-        // v0.3.10 — `.olvworkflow` files capture camera
-        // moves and tool actions ONLY (no scan data, no measurements). To
-        // replay one the recipient needs the same scan file already open
-        // locally. Without that disclosure users will share a workflow,
-        // the recipient opens it, nothing happens, and trust is lost the
-        // way it was with the pre-v0.3.10 "Share" button. The hint below
-        // sets that expectation at recording start, the stop-save title
-        // makes the file format explicit, and the save toast confirms
-        // both what was saved and what the recipient needs to use it.
-        hint:
-          'Records camera moves and tool actions only — to replay later you ' +
-          '(or the recipient) need the same scan open.',
-        keywords: ['record', 'macro', 'demo'],
-        run: () => deps.startWorkflowRecording(),
-      },
-      {
-        id: 'workflow.stop-save',
-        title: 'Stop and save workflow (.olvworkflow)',
-        section: 'Workflow',
-        hint:
-          'Saves a replay of camera moves and tool actions — replay needs ' +
-          'the same scan loaded on the other end.',
-        keywords: ['export', 'finish', 'save'],
-        run: () => {
-          const workflow = deps.workflowController.stopRecording();
-          if (workflow) {
-            void deps.workflowController.save(workflow);
-            deps.showLassoToast(
-              'Workflow saved. Replay needs the same scan open on the other end.',
-            );
-          } else {
-            deps.showLassoToast('Workflow · nothing recorded yet.');
-          }
-        },
-      },
-      {
-        id: 'workflow.load-replay',
-        title: 'Replay a workflow file…',
-        section: 'Workflow',
-        hint: 'Pick a .olvworkflow file and play it back.',
-        keywords: ['load', 'import', 'open', 'macro'],
-        run: () => {
-          const input = el('input', { className: 'olv-hidden' });
-          input.type = 'file';
-          input.accept = '.olvworkflow,application/json';
-          input.addEventListener('change', () => {
-            const file = input.files?.[0];
-            input.remove();
-            if (!file) return;
-            void (async () => {
-              try {
-                const workflow = await deps.workflowController.loadFromFile(file);
-                deps.workflowController.replay(workflow, deps.dispatchWorkflowEvent);
-                deps.showLassoToast(
-                  `Workflow · playing ${workflow.events.length} event${workflow.events.length === 1 ? '' : 's'}.`,
-                );
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : 'unknown error';
-                deps.showLassoToast(`Workflow · couldn't load file: ${msg}`);
-              }
-            })();
-          });
-          document.body.append(input);
-          input.click();
-        },
-      },
-      {
-        id: 'workflow.settings',
-        title: 'Workflow recorder settings…',
-        section: 'Workflow',
-        hint: 'Format, save location, shortcut, replay speed, capture scope.',
-        keywords: ['config', 'options', 'preferences', 'shortcut', 'speed'],
-        run: () => void deps.ensureWorkflowConfigPanel().then((p) => p.open()),
-      },
-    );
-  }
-
-  // v0.5.2 — verify a handed-over integrity report. Opens a file picker, reads
-  // the JSON, recomputes its digest (the algorithm is self-described in the
-  // file), and shows intact / modified. Ungated; the verifier loads on demand.
-  actions.push(
-    {
-      id: 'report.verify',
-      title: 'Verify integrity report…',
-      section: 'Export',
-      hint: 'Check a report JSON — confirm its digest still matches its contents.',
-      keywords: ['integrity', 'digest', 'tamper', 'check', 'sha', 'validate', 'verify'],
-      run: () => {
-        const input = el('input', { className: 'olv-hidden' });
-        input.type = 'file';
-        input.accept = '.json,application/json';
-        input.addEventListener('change', () => {
-          const file = input.files?.[0];
-          input.remove();
-          if (!file) return;
-          void loadReportVerifier()
-            .then(({ verifyAndShow }) => verifyAndShow(file))
-            // A chunk-load failure must not surface as an unhandled rejection.
-            .catch((err) => console.warn('[verify] report-verifier chunk failed to load', err));
-        });
-        document.body.append(input);
-        input.click();
-      },
-    },
-    // v0.5.3 — toggle the on-canvas compass (promoted to a default control). The
-    // choice persists; the widget loads lazily the first time it is shown.
-    {
-      id: 'view.compass',
-      title: 'Toggle compass',
-      section: 'View',
-      hint: 'Show or hide the on-canvas compass — north plus the standard-view snaps.',
-      keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
-      run: () => deps.compass.setEnabled(!deps.compass.isEnabled()),
-    },
-    // Mouse-orbit handedness ("gyroscope") from the palette — the same invert
-    // the Inspector's Navigation section owns, exposed here so it is reachable
-    // without opening a panel. Each toggles one axis and persists; the Inspector
-    // chips stay in sync.
-    {
-      id: 'nav.invert-vertical',
-      title: 'Invert vertical orbit',
-      section: 'View',
-      hint: 'Flip the up / down mouse-orbit direction — the common "feels inverted vs CAD" fix. Persists.',
-      keywords: ['invert', 'vertical', 'pitch', 'orbit', 'mouse', 'gyroscope', 'handedness', 'camera', 'navigation'],
-      run: () => deps.toggleOrbitInvert('y'),
-    },
-    {
-      id: 'nav.invert-horizontal',
-      title: 'Invert horizontal orbit',
-      section: 'View',
-      hint: 'Flip the left / right mouse-orbit direction. Persists.',
-      keywords: ['invert', 'horizontal', 'yaw', 'orbit', 'mouse', 'gyroscope', 'handedness', 'camera', 'navigation'],
-      run: () => deps.toggleOrbitInvert('x'),
-    },
-    {
-      id: 'nav.reset',
-      title: 'Reset navigation to defaults',
-      section: 'View',
-      hint: 'Return orbit handedness to the shipped defaults.',
-      keywords: ['reset', 'navigation', 'orbit', 'invert', 'defaults', 'handedness', 'gyroscope'],
-      run: () => deps.resetNavigation(),
-    },
-    // v7 sessions — named view states from the palette. Both handlers already
-    // live in this shell (the same saveCurrentView/applyView the panels call),
-    // so these entries add only sub-KB registry rows — no new code is dragged
-    // into the eager bundle. `keys: 'V'` advertises the binding that
-    // ui/shortcuts.ts actually fires; the registry `keys` field is display-only.
-    {
-      id: 'view.save-state',
-      title: 'Save view state',
-      section: 'View',
-      keys: keyDisplayFor('save-view'),
-      hint: 'Bookmark the camera plus clip box, colour mode, class filter, point filters, and render settings as a named, restorable state.',
-      keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'capture'],
-      run: () => {
-        if (!deps.hasScan()) {
-          deps.showLassoToast('Load a scan first — a view state captures the open scan.');
-          return;
-        }
-        deps.saveCurrentView();
-        const name = deps.bookmarks.get(deps.bookmarks.count() - 1)?.name ?? 'View';
-        deps.showLassoToast(`View state saved — “${name}” (rename it in the panel list).`);
-      },
-    },
-    {
-      id: 'view.restore-state',
-      title: 'Restore view state',
-      section: 'View',
-      hint: 'Reapply the most recently saved view state — the panel list restores any of them by name.',
-      keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'apply', 'go to'],
-      run: () => {
-        if (deps.bookmarks.count() === 0) {
-          deps.showLassoToast('No saved view states yet — save one first (V).');
-          return;
-        }
-        deps.applyView(deps.bookmarks.count() - 1);
-      },
-    },
-    // v0.3.9 — Onboarding tour replay. Surfaces the tour from the
-    // command palette so users who skipped or dismissed can re-trigger
-    // it from one keystroke (Cmd-K → "tour").
-    {
-      id: 'tour.replay',
-      title: 'Replay onboarding tour',
-      section: 'Help',
-      hint: 'Walks through the main tools — about 30 seconds.',
-      keywords: ['onboarding', 'tour', 'help', 'tutorial', 'guide', 'walkthrough'],
-      run: () => deps.getTour()?.replay(),
-    },
-    // v0.3.9 — Keyboard shortcut sheet. Surfaces the sheet from the
-    // palette and lists its own binding (`?`) so users who discovered
-    // the palette via Cmd-K can find the sheet from the same surface.
-    {
-      id: 'help.shortcuts',
-      title: 'Show keyboard shortcuts',
-      section: 'Help',
-      keys: keyDisplayFor('shortcut-sheet'),
-      hint: 'Every action and key, grouped by section.',
-      keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
-      run: () => void deps.ensureShortcutSheet().then((sheet) => sheet.open()),
-    },
-  );
-
-  return actions;
+  const analysis = contributeAnalysisActions({
+    terrainAnalysisEntry: deps.terrainAnalysisEntry,
+    buildCurrentStoryInputs: deps.buildCurrentStoryInputs,
+  });
+  const exports_ = contributeExportActions({
+    saveSnapshot: deps.saveSnapshot,
+    copyShareLink: deps.copyShareLink,
+    buildCurrentStoryInputs: deps.buildCurrentStoryInputs,
+  });
+  const workflow = contributeWorkflowActions({
+    workflowController: deps.workflowController,
+    startWorkflowRecording: deps.startWorkflowRecording,
+    dispatchWorkflowEvent: deps.dispatchWorkflowEvent,
+    ensureWorkflowConfigPanel: deps.ensureWorkflowConfigPanel,
+    showLassoToast: deps.showLassoToast,
+  });
+  const help = contributeHelpActions({
+    getTour: deps.getTour,
+    ensureShortcutSheet: deps.ensureShortcutSheet,
+  });
+  // The theme rows sit between the camera rows and the tools, as before.
+  const theme = view.filter((a) => a.section === 'Theme');
+  const rest = view.filter((a) => a.section !== 'Theme');
+  return [...camera, ...theme, ...tools, ...analysis, ...exports_, ...workflow, ...rest, ...help];
 }

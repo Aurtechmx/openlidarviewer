@@ -26,8 +26,12 @@
  * The DOM overlay (CommandPalette.ts) consumes the ranked list.
  */
 
-/** A user-runnable command surfaced in the palette. */
-export interface Action {
+/**
+ * What an action IS, apart from running it: the metadata the palette, the
+ * shortcut sheet and Help all read. Help derives its action references from
+ * this shape, so a title, hint or key lives in exactly one place.
+ */
+export interface ActionDescriptor {
   /** Stable string id. Used for analytics + tests; never user-visible. */
   readonly id: string;
   /** The primary user-visible label. Searched first, weighted highest. */
@@ -51,6 +55,16 @@ export interface Action {
    * "Preferences" without re-naming the action.
    */
   readonly keywords?: readonly string[];
+  /** Longer-form notes Help shows beside the action; absent for most. */
+  readonly help?: {
+    readonly summary?: string;
+    readonly availabilityNote?: string;
+    readonly scientificNote?: string;
+  };
+}
+
+/** A user-runnable command surfaced in the palette. */
+export interface Action extends ActionDescriptor {
   /** Runs the action. The palette closes after a successful fire. */
   readonly run: () => void;
 }

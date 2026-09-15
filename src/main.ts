@@ -41,8 +41,7 @@ import type { CommandPalette } from './ui/CommandPalette';
 import type { ShortcutSheet } from './ui/ShortcutSheet';
 import type { TourHandle } from './ui/onboarding/bootTour';
 import { createTourLauncher } from './app/tourLauncher';
-import { findDuplicateIds } from './ui/actionRegistry';
-import { buildActionRegistry } from './app/actionDefinitions';
+import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { toggleTool } from './app/toggleTool';
 import { importSession as runImportSession, type SessionIoDeps } from './app/sessionIo';
 import { openScan, type OpenScanDeps } from './app/openScan';
@@ -247,6 +246,7 @@ import {
   loadAnalysePanel,
   loadObjectPanel,
   loadTilesetOpen,
+  loadActionRegistry,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -1204,7 +1204,7 @@ const inspector = new Inspector({
   // Workflow presets (v0.4.5) — fan one pure bundle out through the
   // EXISTING setters, then re-sync every Inspector surface the bundle
   // touched. No new rendering machinery: the preset module is a table.
-  onOpenDatasetStory: () => ACTION_REGISTRY.find((a) => a.id === 'story.dataset')?.run(),
+  onOpenDatasetStory: () => void ensureActionRegistry().then((r) => r.find((a) => a.id === 'story.dataset')?.run()),
   onTerrainWorkflowPreset: (id) => {
     const p = getTerrainWorkflowPreset(id);
     viewer.setEdlPreset(p.edlPresetId);
@@ -1350,17 +1350,14 @@ function toggleWorkflowRecord(): void {
 // registry so every action stays close to the handler that powers
 // the corresponding tool dock / Inspector / keyboard surface — no
 // duplicate truth.
-// The command palette opens only on Cmd/Ctrl-K, so it's lazy-loaded on first
-// use — its module stays out of the startup chunk. `ACTION_REGISTRY` is built
-// later in this file but is in module scope by the time the user can press the
-// shortcut, so the deferred init reads it safely.
+// The command palette opens on Cmd/Ctrl-K only: lazy, with the lazy registry it lists.
 let commandPalette: CommandPalette | null = null;
 async function openCommandPalette(): Promise<void> {
   if (!commandPalette) {
     const { CommandPalette } = await loadCommandPalette();
     commandPalette = new CommandPalette();
     stage.overlay.append(commandPalette.element);
-    commandPalette.setActions(ACTION_REGISTRY);
+    commandPalette.setActions(await ensureActionRegistry());
   }
   commandPalette.toggle();
 }
@@ -1381,10 +1378,10 @@ let shortcutSheetLoading: Promise<ShortcutSheet> | null = null;
 function ensureShortcutSheet(): Promise<ShortcutSheet> {
   if (shortcutSheet) return Promise.resolve(shortcutSheet);
   if (!shortcutSheetLoading) {
-    shortcutSheetLoading = loadShortcutSheet().then(({ ShortcutSheet }) => {
+    shortcutSheetLoading = Promise.all([loadShortcutSheet(), ensureActionRegistry()]).then(([{ ShortcutSheet }, actions]) => {
       const sheet = new ShortcutSheet();
       stage.overlay.append(sheet.element);
-      sheet.setActions(ACTION_REGISTRY);
+      sheet.setActions(actions);
       shortcutSheet = sheet;
       return sheet;
     });
@@ -1667,7 +1664,13 @@ const navWiring = createNavBarWiring({
   getNavBar: () => navBar,
   toast: showLassoToast,
 });
-const ACTION_REGISTRY = buildActionRegistry({
+// The action registry is built on the first surface that needs it (palette,
+// sheet, a Dataset Story click) from the lazy `actionDefinitions` chunk; a
+// duplicate id is a copy-paste bug and throws on that first build.
+let actionRegistry: Promise<Action[]> | null = null;
+function ensureActionRegistry(): Promise<Action[]> {
+  actionRegistry ??= loadActionRegistry().then(({ buildActionRegistry }) => {
+    const actions = buildActionRegistry({
   getViewer: () => viewer,
   getTour: () => tour,
   workflowController,
@@ -1697,15 +1700,12 @@ const ACTION_REGISTRY = buildActionRegistry({
   ...makeNavPaletteActions({ viewer, inspector, persist: persistPrefs, toast: showLassoToast }),
   planView: navWiring,
 });
-const duplicateActionIds = findDuplicateIds(ACTION_REGISTRY);
-if (duplicateActionIds.length > 0) {
-  // Throw at boot rather than surface two rows with one id: a duplicate is a copy-paste bug.
-  throw new Error(
-    `Command palette: duplicate action ids: ${duplicateActionIds.join(', ')}`,
-  );
+    const dupes = findDuplicateIds(actions);
+    if (dupes.length > 0) throw new Error(`Command palette: duplicate action ids: ${dupes.join(', ')}`);
+    return actions;
+  });
+  return actionRegistry;
 }
-// Both the command palette and the shortcut sheet are lazy: each wires
-// ACTION_REGISTRY into its instance during its own first-use init.
 
 // Cmd-K / Ctrl-K (palette, binding 300) and bare `?` (shortcut sheet, binding
 // 400) were window keydown listeners here. They are now in the dispatch table
