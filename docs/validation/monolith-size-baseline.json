@@ -11,7 +11,7 @@
   },
   "watch": {
     "src/ui/AnalysePanel.ts": {
-      "lines": 3555
+      "lines": 2865
     },
     "src/ui/Inspector.ts": {
       "lines": 2578
