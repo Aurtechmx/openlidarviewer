@@ -52,7 +52,7 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 115,
+      "runtime": 114,
       "typeOnly": 19,
       "dynamic": 7,
       "modules": [
@@ -68,7 +68,6 @@
         "src/app/LayerService.ts",
         "src/app/ScanRouteService.ts",
         "src/app/ScanService.ts",
-        "src/app/actionDefinitions.ts",
         "src/app/classLegendRefresh.ts",
         "src/app/coordinateHudLazy.ts",
         "src/app/crsCoordinator.ts",
@@ -263,13 +262,13 @@
     "components": []
   },
   "context": {
-    "filesScanned": 820,
+    "filesScanned": 827,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 55
+        "importers": 56
       },
       {
         "file": "src/units/units.ts",

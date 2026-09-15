@@ -586,3 +586,10 @@ export const loadLoadDiagnostics = () => import('./app/loadDiagnostics');
  * bounded store. Loaded beside the terrain-core cache on the first analysis.
  */
 export const loadTerrainCoreStore = () => import('./terrain/contour/terrainCoreStore');
+
+/**
+ * The command-palette / shortcut-sheet action registry and its contributors.
+ * Built on the first surface that needs it; the shell only ever needs the
+ * ids it dispatches by name, none of which has to exist at boot.
+ */
+export const loadActionRegistry = () => import('./app/actionDefinitions');

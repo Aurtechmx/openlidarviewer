@@ -30,7 +30,7 @@ from the tree and fails when a cell drifts.
 | I/O | `src/io` | ~35k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~64k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~12k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~15k | Composition root and the services that own shared state. |
+| Application services | `src/app` | ~16k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~31k | Panels, Inspector, Studio surfaces, onboarding. |
 | Shell | `src/main.ts` | 5,127 | Wiring. **A monolith under decomposition.** |
 
@@ -105,8 +105,11 @@ Recorded so the next pass does not re-derive them:
 **`src/main.ts` (5,127)** — the largest blocks, which are the extraction
 candidates:
 
-`buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
-called with a 19-member deps object. The candidates that remain:
+`buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
+seven contributors in `src/app/actions/` (camera, view, tools, analysis, export,
+workflow, help), each taking only the collaborators its actions use; the shell
+builds the registry on the first palette, sheet or Dataset Story use from a lazy
+chunk. The candidates that remain:
 
 | Block | ~Lines | Extraction target |
 |---|---:|---|
