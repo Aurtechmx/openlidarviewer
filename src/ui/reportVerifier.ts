@@ -10,6 +10,7 @@
  */
 
 import { verifyReportFile, type VerifyReportResult } from '../export/verifyReport';
+import { focusableIn, trapTab } from './Modal';
 
 function row(label: string, value: string): HTMLElement {
   const r = document.createElement('div');
@@ -105,22 +106,31 @@ export function showReportVerification(result: VerifyReportResult): void {
   close.style.cssText =
     'align-self:flex-end;margin-top:6px;padding:6px 14px;border:0;border-radius:8px;cursor:pointer;' +
     'font:600 12px system-ui,sans-serif;color:var(--on-accent);background:var(--accent);';
-  const esc = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') dismiss();
+  // Escape dismisses; Tab / Shift+Tab cycle inside the card. The card claims
+  // `aria-modal`, so Tab must not walk out into the page behind it. The trap is
+  // the shared one from Modal.ts, so the two dialogs cannot drift apart.
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      dismiss();
+      return;
+    }
+    trapTab(card, e);
   };
   // dismiss tears down BOTH the node and the document-level key listener, so
   // closing via Close / backdrop / Escape never leaves a stale handler attached.
   const dismiss = (): void => {
     backdrop.remove();
-    document.removeEventListener('keydown', esc);
+    document.removeEventListener('keydown', onKey);
   };
   close.addEventListener('click', dismiss);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) dismiss(); });
-  document.addEventListener('keydown', esc);
+  document.addEventListener('keydown', onKey);
   card.append(close);
 
   backdrop.append(card);
   document.body.append(backdrop);
+  // Land focus inside the dialog so the trap has somewhere to cycle from.
+  (focusableIn(card)[0] ?? close).focus();
 }
 
 /**

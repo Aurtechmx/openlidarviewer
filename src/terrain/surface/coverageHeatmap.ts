@@ -91,8 +91,8 @@ export const COVERAGE_LEGEND: ReadonlyArray<{
  * The honesty caption shown beneath every coverage surface.
  */
 export const COVERAGE_CAPTION =
-  'Where the bare-earth surface is measured (green) vs interpolated (yellow) ' +
-  'vs unreliable (red) — approximate.';
+  'Where the bare-earth surface is measured, interpolated, or unreliable; ' +
+  'the legend names each grade. Approximate.';
 
 /** The minimal grid the rasteriser needs — a {@link DtmGrid} fits structurally. */
 export interface CoverageGrid {

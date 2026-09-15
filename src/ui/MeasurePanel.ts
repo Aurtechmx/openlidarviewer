@@ -1191,7 +1191,7 @@ export class MeasurePanel {
 
     if (this._summaries.length === 0) {
       this._list.replaceChildren(
-        el('div', { className: 'olv-mp-empty', text: 'No measurements yet.' }),
+        el('div', { className: 'olv-mp-empty', text: 'No measurements yet. Place a distance, area or profile to list it here.' }),
       );
       return;
     }

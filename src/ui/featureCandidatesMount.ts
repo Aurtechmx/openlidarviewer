@@ -257,7 +257,7 @@ function renderBuildingSection(
     }),
   );
   if (buildings.length === 0) {
-    section.append(el('p', { className: 'olv-feature-empty', text: 'No footprint candidates.' }));
+    section.append(el('p', { className: 'olv-feature-empty', text: 'No footprint candidates. Building extraction found nothing to review.' }));
     return section;
   }
   for (const b of buildings) {
@@ -382,7 +382,7 @@ function renderConductorSection(
         text:
           wirePointCount > 0
             ? 'Wire points were present but did not fit a single conductor span.'
-            : 'No wire-classified points.',
+            : 'No wire-classified points. Wire extraction needs a classification that marks wires.',
       }),
     );
     return section;

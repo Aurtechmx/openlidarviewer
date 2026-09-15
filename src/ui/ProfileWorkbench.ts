@@ -178,7 +178,7 @@ const KEY_RESIZE_STEP = 24;
 const CANVAS_DESCRIPTION =
   'Plot of the individual returns across the measured section. Every exact figure is listed in the selected-return details beside it.';
 
-const NO_SELECTION = 'No return selected.';
+const NO_SELECTION = 'No return selected. Click a point in the profile to inspect it.';
 
 /** The export control's resting label, and the two states it passes through. */
 const EXPORT_LABEL = 'Export PDF';

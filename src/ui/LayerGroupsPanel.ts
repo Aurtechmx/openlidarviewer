@@ -352,7 +352,7 @@ export class LayerGroupsPanel {
       );
     }
     if (rows.length === 0) {
-      rows.push(el('p', { className: 'olv-group-pick-empty', text: 'No layers loaded.' }));
+      rows.push(el('p', { className: 'olv-group-pick-empty', text: 'No layers loaded. Open a scan to list it here.' }));
     }
     return el('div', { className: 'olv-group-picker' }, rows);
   }

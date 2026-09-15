@@ -11,7 +11,7 @@
  * below pins the handler to it, because the predicate on its own would pass
  * even if nothing called it.
  *
- * `openScan` writes "Preparing GPU buffers" and then "Rendering", and clears
+ * `openScan` writes "Preparing display" and then "Rendering", and clears
  * both, with no await in between: the last await in the function is
  * `await viewer.ready`, well above the first of those writes. One task, so the
  * browser painted neither, and the user watched the previous line freeze
@@ -109,7 +109,7 @@ describe('the attach phase yields so its status lines can paint', () => {
     expect(clearAt).toBeGreaterThan(renderingAt);
   });
 
-  it('yields after "Preparing GPU buffers", before the GPU attach', () => {
+  it('yields after "Preparing display", before the GPU attach', () => {
     expect(yieldsWithin(uploadingAt, 14)).toBe(true);
   });
 

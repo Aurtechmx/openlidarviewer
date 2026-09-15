@@ -567,7 +567,7 @@ export class ObjectPanel {
     this._title.textContent = 'Space scan';
     this._body.replaceChildren();
     if (!space) {
-      this._body.append(el('div', { className: 'olv-object-note', text: 'No space measurements available.' }));
+      this._body.append(el('div', { className: 'olv-object-note', text: 'No space measurements yet. They appear once the scan points are loaded.' }));
       this._runAnywayButton();
       return;
     }
@@ -616,7 +616,7 @@ export class ObjectPanel {
     this._title.textContent = 'Object scan';
     this._body.replaceChildren();
     if (!metrics) {
-      this._body.append(el('div', { className: 'olv-object-note', text: 'No object measurements available.' }));
+      this._body.append(el('div', { className: 'olv-object-note', text: 'No object measurements yet. They appear once the scan points are loaded.' }));
       this._runAnywayButton();
       return;
     }

@@ -2139,7 +2139,7 @@ export class Inspector {
 
   private _showViewsPlaceholder(): void {
     this._viewList.replaceChildren(
-      el('div', { className: 'olv-report-empty', text: 'No saved views yet.' }),
+      el('div', { className: 'olv-report-empty', text: 'No saved views yet. Save the current camera to return to it later.' }),
     );
   }
 

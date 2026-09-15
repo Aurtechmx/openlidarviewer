@@ -45,8 +45,43 @@ export interface ModalHandle {
 }
 
 /** Selector for the elements Tab should cycle through inside the dialog. */
-const FOCUSABLE =
+export const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * The focusable children of `dialog`, in tab order. Hidden nodes are dropped,
+ * but the active element is kept so a focused-then-hidden control cannot
+ * strand Tab.
+ */
+export function focusableIn(dialog: HTMLElement): HTMLElement[] {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (n) => n.offsetParent !== null || n === document.activeElement,
+  );
+}
+
+/**
+ * Keep Tab / Shift+Tab cycling inside `dialog`. Call from a keydown handler for
+ * any `role="dialog"` surface; a no-op for every key but Tab. Shared so the
+ * modal primitive and the hand-rolled dialogs cannot drift apart.
+ */
+export function trapTab(dialog: HTMLElement, e: KeyboardEvent): void {
+  if (e.key !== 'Tab') return;
+  const items = focusableIn(dialog);
+  if (items.length === 0) {
+    e.preventDefault();
+    return;
+  }
+  const first = items[0];
+  const last = items.at(-1)!;
+  const active = document.activeElement;
+  if (e.shiftKey && (active === first || !dialog.contains(active))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && active === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
 
 let modalSeq = 0;
 
@@ -102,10 +137,7 @@ export function openModal(opts: ModalOptions): ModalHandle {
     opts.onClose?.();
   };
 
-  const focusable = (): HTMLElement[] =>
-    Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-      (n) => n.offsetParent !== null || n === document.activeElement,
-    );
+  const focusable = (): HTMLElement[] => focusableIn(dialog);
 
   const onKeyDown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
@@ -114,23 +146,8 @@ export function openModal(opts: ModalOptions): ModalHandle {
       close();
       return;
     }
-    if (e.key !== 'Tab') return;
     // Focus trap — keep Tab / Shift+Tab cycling within the dialog.
-    const items = focusable();
-    if (items.length === 0) {
-      e.preventDefault();
-      return;
-    }
-    const first = items[0];
-    const last = items.at(-1)!;
-    const active = document.activeElement;
-    if (e.shiftKey && (active === first || !dialog.contains(active))) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
+    trapTab(dialog, e);
   };
 
   closeBtn.addEventListener('click', () => close());
