@@ -16,7 +16,7 @@ export interface LoadTelemetry {
   fileReadMs?: number;
   /** `postMessage` to the worker's first reply — buffer transfer + spin-up. */
   transferMs?: number;
-  /** Load start to the preview cloud's arrival on the main thread, when one was sent. */
+  /** Load start to the first preview chunk's arrival on the main thread, when one was sent. */
   previewMs?: number;
   /** Header parse and decoder setup (worker). */
   parseMs?: number;
@@ -36,7 +36,7 @@ export interface LoadTelemetry {
   rangeRequests?: number;
   /** Compressed bytes read through ranged reads (worker). */
   compressedBytesRead?: number;
-  /** Records in the preview cloud, when one was sent (worker). */
+  /** Records handed to the preview as chunks, before any thinning on the page. */
   previewPoints?: number;
   /** Workers the chunk pool was sized to, when it engaged (worker). */
   poolWorkers?: number;

@@ -329,26 +329,22 @@ export interface ParallelDecodeOptions extends ChunkedDecodeOptions {
    */
   readonly maxInFlight?: number;
   /**
-   * Receive a preview before the bulk of the decode: a bounded set of chunks
-   * spread evenly over the file is queued ahead of the rest, and once those
-   * have landed a compact copy of their records is handed here, in file order.
-   * The final output is assembled exactly as it is without a preview; only the
-   * order the chunks decode in changes, which `out` never depends on.
+   * Receive each chunk's records the moment it is placed, in completion
+   * order, with the index of its first kept record in the output, so a
+   * caller can show the cloud filling in while the decode runs. The buffers
+   * handed over are the chunk's own, which the whole-file output no longer
+   * needs; the caller owns them from here.
    */
-  readonly onPreview?: (preview: RawPoints) => void;
-  /** Chunks the preview is built from; default {@link PREVIEW_MAX_CHUNKS}. */
-  readonly previewChunks?: number;
-  /** Records the preview may hold; default {@link PREVIEW_MAX_POINTS}. */
-  readonly previewPoints?: number;
-  /** Called once the chunk table is read and the decode order is fixed. */
+  readonly onPreviewChunk?: (chunk: RawPoints, outIndex: number) => void;
+  /** Called once the chunk table is read, before any chunk decodes. */
   readonly onPlanned?: (info: DecodePlanInfo) => void;
 }
 
 /** What is known once the chunk table is read, before any chunk decodes. */
 export interface DecodePlanInfo {
   readonly chunkCount: number;
-  readonly previewChunks: number;
-  readonly previewPoints: number;
+  /** Records the finished decode will hold: the sample size at a stride, else the file's count. */
+  readonly expectedPoints: number;
 }
 
 /**
@@ -391,7 +387,7 @@ export async function decodeLazParallelFromSource(
   decodeChunk: LazChunkDecoder,
   options: ParallelDecodeOptions = {},
 ): Promise<RawPoints | null> {
-  const { signal, onPreview } = options;
+  const { signal, onPreviewChunk } = options;
   const plan = await planChunked(source, header, origin, options.stride ?? 1, signal);
   if (plan === null) return null;
 
@@ -399,17 +395,7 @@ export async function decodeLazParallelFromSource(
   const maxInFlight = options.maxInFlight ?? MAX_CHUNK_DECODES_IN_FLIGHT;
   const lanes = Math.max(1, Math.min(Math.floor(maxInFlight), chunks.length));
   const report = progressReporter(plan.total, options.onProgress);
-  const previewIdx = onPreview
-    ? planPreview(chunks, options.previewChunks ?? PREVIEW_MAX_CHUNKS, options.previewPoints ?? PREVIEW_MAX_POINTS)
-    : [];
-  const order = previewIdx.length > 0 ? decodeOrder(chunks.length, previewIdx) : null;
-  const previewSet = new Set(previewIdx);
-  let previewLeft = previewIdx.length;
-  options.onPlanned?.({
-    chunkCount: chunks.length,
-    previewChunks: previewIdx.length,
-    previewPoints: previewIdx.reduce((n, i) => n + keptOf(chunks[i]), 0),
-  });
+  options.onPlanned?.({ chunkCount: chunks.length, expectedPoints: plan.total });
   let next = 0;
   let done = 0;
 
@@ -419,19 +405,18 @@ export async function decodeLazParallelFromSource(
   // is copied into `out`. Slicing here rather than up front keeps the file's
   // compressed bytes from being duplicated whole.
   const runLane = async (): Promise<void> => {
-    for (let k = next++; k < chunks.length; k = next++) {
+    for (let i = next++; i < chunks.length; i = next++) {
       signal?.throwIfAborted();
-      const i = order ? order[k] : k;
       const planned = chunks[i];
       // A chunk the sample skips entirely holds no output record.
       if (planned.keep?.length !== 0) {
         const job = await jobFor(source, header, plan.ctx, planned, signal);
-        placeChunk(plan.out, await decodeChunk(job, signal), planned.outIndex);
+        const decoded = await decodeChunk(job, signal);
+        placeChunk(plan.out, decoded, planned.outIndex);
         done += keptOf(planned);
         report(done);
-      }
-      if (order && previewSet.has(i) && --previewLeft === 0) {
-        onPreview!(assemblePreview(plan, previewIdx));
+        // Placed, so the chunk-local buffers are free to hand on.
+        onPreviewChunk?.(decoded, planned.outIndex);
       }
     }
   };
@@ -441,106 +426,7 @@ export async function decodeLazParallelFromSource(
   return plan.out;
 }
 
-/**
- * The most chunks a preview is built from. Bounded so the preview's cost does
- * not grow with the file: a 200-chunk file and a 20,000-chunk file both wait
- * for this many decodes before the first points show.
- */
-export const PREVIEW_MAX_CHUNKS = 12;
-/** The most records a preview holds; chunks are dropped from the spread past it. */
-export const PREVIEW_MAX_POINTS = 250_000;
-
 /** Records a planned chunk contributes to the output. */
 function keptOf(planned: PlannedChunk): number {
   return planned.keep ? planned.keep.length : planned.range.pointCount;
-}
-
-/**
- * The chunks a preview is built from: up to `maxChunks` indices spread evenly
- * over `[0, chunkCount - 1]`, first and last included, no duplicates. Empty
- * for a single-chunk file, where nothing would be left to preview ahead of.
- * Chunk order is file order, not a spatial order, so this spreads the
- * preview over the file's sequence; it is a latency device, not a claim of
- * spatial uniformity.
- */
-export function previewChunkIndices(chunkCount: number, maxChunks = PREVIEW_MAX_CHUNKS): number[] {
-  if (chunkCount < 2) return [];
-  const k = Math.max(1, Math.min(Math.floor(maxChunks), chunkCount));
-  if (k === 1) return [0];
-  const idx: number[] = [];
-  for (let j = 0; j < k; j++) {
-    const i = Math.round((j * (chunkCount - 1)) / (k - 1));
-    if (idx.length === 0 || idx[idx.length - 1] !== i) idx.push(i);
-  }
-  return idx;
-}
-
-/**
- * {@link previewChunkIndices} with the point cap applied: chunks are dropped
- * from the tail of the spread until the records they hold fit `maxPoints`, at
- * least one chunk staying.
- */
-export function planPreview(
-  chunks: readonly PlannedChunk[],
-  maxChunks: number,
-  maxPoints: number,
-): number[] {
-  const idx = previewChunkIndices(chunks.length, maxChunks);
-  let points = idx.reduce((n, i) => n + keptOf(chunks[i]), 0);
-  while (idx.length > 1 && points > maxPoints) {
-    points -= keptOf(chunks[idx.pop() as number]);
-  }
-  return idx;
-}
-
-/** Preview chunks first, then every other chunk, each group in file order. */
-function decodeOrder(chunkCount: number, first: readonly number[]): number[] {
-  const early = new Set(first);
-  const order = [...first];
-  for (let i = 0; i < chunkCount; i++) if (!early.has(i)) order.push(i);
-  return order;
-}
-
-/** Elements per record of each `RawPoints` buffer; the null-able ones stay null. */
-const RECORD_WIDTH: Record<keyof RawPoints, number> = {
-  positions: 3,
-  intensity: 1,
-  classification: 1,
-  returnNumber: 1,
-  returnCount: 1,
-  pointSourceId: 1,
-  gpsTime: 1,
-  colors: 3,
-  colors16: 3,
-};
-
-/** Views over records `[from, from + n)` of every buffer in `raw`; no copy. */
-function sliceRaw(raw: RawPoints, from: number, n: number): RawPoints {
-  const view: Partial<Record<keyof RawPoints, ArrayBufferView | null>> = {};
-  for (const key of Object.keys(RECORD_WIDTH) as (keyof RawPoints)[]) {
-    const buf = raw[key];
-    const w = RECORD_WIDTH[key];
-    view[key] = buf ? buf.subarray(from * w, (from + n) * w) : null;
-  }
-  return view as RawPoints;
-}
-
-/**
- * Copy the preview chunks' records out of the whole-file output into a
- * compact buffer, in file order, with colours narrowed the way the final
- * output's will be. The whole-file output is left untouched.
- */
-function assemblePreview(plan: ChunkedPlan, previewIdx: readonly number[]): RawPoints {
-  const spans = previewIdx.map((i) => plan.chunks[i]).filter((c) => keptOf(c) > 0);
-  const total = spans.reduce((n, c) => n + keptOf(c), 0);
-  const out = plan.out;
-  const preview = allocRawPoints(total, out.gpsTime !== null, out.colors16 !== null);
-  let at = 0;
-  for (const c of spans) {
-    const n = keptOf(c);
-    placeChunk(preview, sliceRaw(out, c.outIndex, n), at);
-    at += n;
-  }
-  finalizeRawColors(preview);
-  return preview;
 }

@@ -29,7 +29,7 @@ import { buildPreloadSummary } from './preloadSummary';
 import { LoadError } from './loadErrors';
 import type { LoadErrorCategory } from './loadErrors';
 import type { OrganizedRangeSet } from '../model/OrganizedRange';
-import type { PreviewFrame } from './loadLas';
+import type { PreviewChunk } from './loadLas';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
 export { POINT_BUDGET, MOBILE_POINT_BUDGET, pickLoader, parseBuffer } from './parseBuffer';
@@ -66,11 +66,12 @@ export interface LoadCallbacks {
    */
   onPreload?: (lines: string[]) => void;
   /**
-   * A stratified stand-in cloud, delivered while the decode is still running
-   * and superseded by the resolved result. Pooled `.laz` loads only; a caller
-   * that shows it must take it down when the result arrives or the load fails.
+   * Each decoded chunk's positions as the decode runs, so a stand-in can fill
+   * in before the resolved result supersedes it. Pooled `.laz` loads only; a
+   * caller that shows it must take it down when the result arrives or the
+   * load fails.
    */
-  onPreview?: (cloud: PointCloud, frame?: PreviewFrame) => void;
+  onPreviewChunk?: (chunk: PreviewChunk) => void;
 }
 
 /** Per-device tuning and lifecycle control for a load. */
@@ -114,7 +115,7 @@ interface CloudPayload {
 
 type WorkerReply =
   | ({ type: 'progress' } & ProgressUpdate)
-  | { type: 'preview'; cloud: CloudPayload; frame?: PreviewFrame }
+  | ({ type: 'previewChunk' } & PreviewChunk)
   | { type: 'error'; error: string; category?: LoadErrorCategory }
   | {
       type: 'done';
@@ -565,7 +566,7 @@ export async function loadFile(
   callbacks: LoadCallbacks = {},
   options: LoadOptions = {},
 ): Promise<LoadResult> {
-  const { onProgress, onPreload, onPreview } = callbacks;
+  const { onProgress, onPreload, onPreviewChunk } = callbacks;
   const budget = options.budget ?? POINT_BUDGET;
   const signal = options.signal;
 
@@ -621,6 +622,7 @@ export async function loadFile(
     let postedAt = 0;
     let transferMs: number | undefined;
     let previewMs: number | undefined;
+    let previewPoints = 0;
 
     const onAbort = (): void => {
       if (settled) return;
@@ -659,9 +661,11 @@ export async function loadFile(
         onProgress?.({ stage: msg.stage, detail: msg.detail, fraction: msg.fraction });
         return;
       }
-      if (msg.type === 'preview') {
+      if (msg.type === 'previewChunk') {
         previewMs ??= performance.now() - startedAt;
-        onPreview?.(new PointCloud(msg.cloud), msg.frame);
+        const { positions } = msg;
+        previewPoints += positions.length / 3;
+        onPreviewChunk?.(msg);
         return;
       }
       detach();
@@ -690,7 +694,7 @@ export async function loadFile(
           metadataBytes: msg.telemetry.metadataBytes,
           rangeRequests: msg.telemetry.rangeRequests,
           compressedBytesRead: msg.telemetry.compressedBytesRead,
-          previewPoints: msg.telemetry.previewPoints,
+          previewPoints: previewPoints > 0 ? previewPoints : undefined,
           poolWorkers: msg.telemetry.poolWorkers,
           decodePath: msg.telemetry.decodePath,
           poolFallbackReason: msg.telemetry.poolFallbackReason,
@@ -820,7 +824,7 @@ export async function decodeFullViaWorker(
         if (settled) return;
         const msg = event.data as WorkerReply;
         // A full-res decode surfaces no UI progress — drop the progress frames.
-        if (msg.type === 'progress' || msg.type === 'preview') return;
+        if (msg.type === 'progress' || msg.type === 'previewChunk') return;
         detach();
         if (msg.type === 'error') {
           reject(

@@ -52,6 +52,7 @@ import type { LayerIdentityService } from './layerIdentityService';
 import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
 import type { CrsCoordinator } from './crsCoordinator';
 import type { ViewBookmarksService } from './viewBookmarks';
+import { startPreviewCloud, type PreviewCloudHandle } from './previewCloud';
 
 /**
  * The Layers chip names the FILE, so it shows the file total (the same count
@@ -126,6 +127,8 @@ export interface OpenScanDeps {
    * device signal.
    */
   isTouchFirst?: () => boolean;
+  /** Builds the stand-in a load shows while its chunks decode; tests inject a fake. */
+  startPreviewCloud?: typeof startPreviewCloud;
   /** Reported device memory in GB, or undefined when the browser withholds it. */
   deviceMemoryGB: () => number | undefined;
   /** Hide the empty-state placeholder once a scan renders. */
@@ -248,7 +251,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     return;
   }
   const controller = new AbortController();
-  let previewUp = false;
+  let preview: PreviewCloudHandle | null = null;
   // Blue blinking "Opening …" — the prominent first feedback, matching the
   // catalog status vocabulary so device and public-dataset loads read the same.
   // The load's staged progress (decoding / uploading / rendering) supersedes it.
@@ -327,11 +330,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       {
         onProgress: (u) => deps.dropZone.setProgress(formatProgress(u), u.fraction),
         onPreload: (lines) => deps.dropZone.setPreload(lines),
-        onPreview: (cloud, frame) => {
+        onPreviewChunk: (chunk) => {
           if (controller.signal.aborted) return;
+          if (preview) return preview.append(chunk);
           deps.stage.hideEmptyState();
-          deps.getViewer().showPreviewCloud(cloud, frame);
-          previewUp = true;
+          preview = (deps.startPreviewCloud ?? startPreviewCloud)(deps.getViewer(), chunk, deps.renderBudget);
         },
       },
       {
@@ -344,10 +347,10 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         head: headSlice,
       },
     );
-    await attachStaticCloud(result, { file, signal: controller.signal, previewUp }, deps);
+    await attachStaticCloud(result, { file, signal: controller.signal, preview }, deps);
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
-    if (previewUp) takeDownPreview(deps);
+    if (preview) takeDownPreview(deps, preview);
     if (err instanceof LoadCancelledError) {
       // A cancelled load is a quiet no-op — no error toast, nothing was added.
       deps.dropZone.setProgress(null);
@@ -368,9 +371,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
  * Remove a stand-in a load put up before it failed or was cancelled, and put
  * the empty state back when nothing else is on screen.
  */
-function takeDownPreview(deps: OpenScanDeps): void {
+function takeDownPreview(deps: OpenScanDeps, preview: PreviewCloudHandle): void {
+  preview.dispose();
   const viewer = deps.getViewer();
-  viewer.clearPreviewCloud();
   if (viewer.clouds().length === 0 && !viewer.hasStreamingCloud) deps.stage.showEmptyState();
 }
 
@@ -386,10 +389,11 @@ export interface AttachedCloudSource {
   /** The cancel signal, checked once more before the commit boundary. */
   readonly signal: AbortSignal;
   /**
-   * A stand-in is on screen and the camera is already fitted to it. The commit
-   * swaps the cloud in under the same pose rather than framing a second time.
+   * The stand-in on screen, with the camera already fitted to it. The commit
+   * disposes it right after the add and keeps the pose rather than framing a
+   * second time.
    */
-  readonly previewUp?: boolean;
+  readonly preview?: PreviewCloudHandle | null;
 }
 
 /**
@@ -446,7 +450,7 @@ export async function attachStaticCloud(
   if (viewer.hasStreamingCloud) deps.closeStreaming();
   const uploadStartedAt = performance.now();
   const id = viewer.addCloud(result.cloud);
-  viewer.clearPreviewCloud();
+  source.preview?.dispose();
   // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that
   // back, so cancelling is no longer a thing this load can honour: retire the
   // control rather than leave a button that would abandon a half-revealed
@@ -502,7 +506,7 @@ export async function attachStaticCloud(
   const renderStartedAt = performance.now();
   // A freshly opened scan starts in the orbit overview, then glides in.
   viewer.setMode('orbit');
-  if (!source.previewUp) viewer.frameAll();
+  if (!source.preview) viewer.frameAll();
   const firstRenderMs = performance.now() - renderStartedAt;
 
   // Colour the fresh scan by the mode its attributes best support (RGB →

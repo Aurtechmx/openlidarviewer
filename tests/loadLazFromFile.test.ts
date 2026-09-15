@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { loadLas, loadLazFromFile, previewFrame, type LazLoadStats } from '../src/io/loadLas';
+import { loadLas, loadLazFromFile, previewFrame, type LazLoadStats, type PreviewChunk } from '../src/io/loadLas';
 import { parseBuffer, parseFile } from '../src/io/parseBuffer';
 import { getLazPerf } from '../src/io/lazDecode';
 import { decodeLazChunkLocal, type LazChunkJob } from '../src/io/heavy/decodeLazChunked';
@@ -71,21 +71,21 @@ describe('loadLazFromFile', () => {
 
   it('matches loadLas on the pooled path and never reads the file whole', async () => {
     vi.stubGlobal('Worker', FakeLazWorker);
-    primeDevFlags('?decodePool=on&previewChunks=2');
+    primeDevFlags('?decodePool=on');
     const buf = fixtureBytes();
     const file = new CountingFile([buf], 'm.laz');
-    const previews: PointCloud[] = [];
-    const frames: unknown[] = [];
+    const chunks: PreviewChunk[] = [];
     let stats: LazLoadStats | undefined;
-    const fromFile = await loadLazFromFile(file, 'm.laz', 1, undefined, (c, f) => { previews.push(c); frames.push(f); }, (s) => { stats = s; });
+    const fromFile = await loadLazFromFile(file, 'm.laz', 1, undefined, (c) => { chunks.push(c); }, (s) => { stats = s; });
     const fromBuffer = await loadLas(buf, 'laz', 'm.laz', 1);
     sameCloud(fromFile, fromBuffer);
     expect(file.wholeReads).toBe(0);
-    expect(previews).toHaveLength(1);
-    expect(previews[0].pointCount).toBeGreaterThan(0);
-    expect(previews[0].pointCount).toBeLessThan(fromFile.pointCount);
+    // Every chunk was handed on, with the decode's expected total and the frame.
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.reduce((n, c) => n + c.positions.length / 3, 0)).toBe(fromFile.pointCount);
+    expect(chunks.every((c) => c.expectedPoints === fromFile.pointCount)).toBe(true);
     // The header's declared extent frames the preview, in the local frame.
-    const frame = frames[0] as { min: number[]; max: number[] };
+    const frame = chunks[0].frame as { min: number[]; max: number[] };
     const b = fromFile.bounds();
     for (let a = 0; a < 3; a++) {
       expect(frame.min[a]).toBeLessThanOrEqual(b.min[a] + 1e-3);
@@ -94,7 +94,6 @@ describe('loadLazFromFile', () => {
     // The load said what it read and which decoder ran.
     expect(stats?.decodePath).toBe('pooled');
     expect(stats?.poolWorkers).toBeGreaterThan(0);
-    expect(stats?.previewPoints).toBe(previews[0].pointCount);
     expect(stats?.rangeRequests).toBeGreaterThan(2);
     expect(stats?.compressedBytesRead).toBeGreaterThan(0);
     expect(stats!.compressedBytesRead + stats!.metadataBytes).toBeLessThanOrEqual(buf.byteLength + 64 * 1024);
@@ -106,7 +105,6 @@ describe('loadLazFromFile', () => {
     await loadLazFromFile(new File([buf], 'm.laz'), 'm.laz', 1, undefined, undefined, (s) => { stats = s; });
     expect(stats?.decodePath).toBe('whole-file');
     expect(stats?.compressedBytesRead).toBe(buf.byteLength);
-    expect(stats?.previewPoints).toBeUndefined();
   });
 
   it('keeps the stride sample identical to the buffer path', async () => {
@@ -154,7 +152,7 @@ describe('loadLazFromFile takes the pool decision from an explicit policy', () =
     resetDevFlagsForTest();
     const buf = fixtureBytes();
     let stats: LazLoadStats | undefined;
-    const policy = { flags: parseDevFlags('?decodePool=on&previewChunks=2'), isMobile: false };
+    const policy = { flags: parseDevFlags('?decodePool=on'), isMobile: false };
     const cloud = await loadLazFromFile(new File([buf], 'm.laz'), 'm.laz', 1, undefined, () => {}, (s) => { stats = s; }, policy);
     expect(cloud.pointCount).toBe(120_000);
     expect(stats?.decodePath).toBe('pooled');

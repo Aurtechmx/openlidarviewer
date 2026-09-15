@@ -117,3 +117,14 @@ export function writeFloatColorsInto(
     dst[i] = SRGB_BYTE_TO_LINEAR[srcU8[i]];
   }
 }
+
+/**
+ * Interleaved Uint8 [0-255] RGB as a fresh Float32 [0-1] attribute array,
+ * linearised through {@link writeFloatColorsInto}, so the initial upload and
+ * every in-place recolour apply the same maths.
+ */
+export function toFloatColors(u8: Uint8Array): Float32Array {
+  const f = new Float32Array(u8.length);
+  writeFloatColorsInto(f, u8);
+  return f;
+}

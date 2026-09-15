@@ -11,9 +11,9 @@ import { isBenignPageError } from './pageErrors';
  *         preview posted, shown, then replaced by the final cloud
  *
  * The committed multi-chunk fixture is small, so `?decodePool=on` engages the
- * pool the way a large file would and `?previewChunks=2` keeps the preview a
- * strict subset. `?debug=1` prints the load telemetry to the console, which
- * is how the spec reads what happened; the worker events are Playwright's.
+ * pool the way a large file would. `?debug=1` prints the load telemetry to the
+ * console, which is how the spec reads what happened; the worker events are
+ * Playwright's.
  * Correctness only: no timing threshold is asserted.
  */
 
@@ -59,7 +59,7 @@ async function pointsShown(page: Page, expected: number): Promise<number> {
 
 test.describe('local LAZ, progressive path', () => {
   test('File to worker, ranged reads, chunk pool, preview, final cloud', async ({ page, browserName }) => {
-    const r = await openProgressive(page, '&decodePool=on&previewChunks=2');
+    const r = await openProgressive(page, '&decodePool=on');
 
     // The page sent the File: no whole-file read row, ranged reads instead.
     expect(r.text).not.toMatch(/file read/);
@@ -72,11 +72,11 @@ test.describe('local LAZ, progressive path', () => {
     if (browserName !== 'webkit') {
       expect(r.workerUrls.filter((u) => /lazChunkWorker/i.test(u)).length).toBeGreaterThan(0);
     }
-    // A preview came first, a strict subset of the final cloud.
+    // Chunks reached the page before the final cloud; every record was handed on.
     expect(r.text).toMatch(/preview\s+[\d.]+ ms/);
     const previewPoints = Number(/preview pts\s+([\d,]+)/.exec(r.text)?.[1]?.replace(/,/g, ''));
     expect(previewPoints).toBeGreaterThan(0);
-    expect(previewPoints).toBeLessThan(POINTS);
+    expect(previewPoints).toBe(POINTS);
 
     // The final cloud replaced it: every point resident, no preview left.
     expect(await pointsShown(page, POINTS)).toBe(POINTS);

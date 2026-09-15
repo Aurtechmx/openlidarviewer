@@ -15,7 +15,7 @@ import type { PointCloud } from '../model/PointCloud';
 import { organizedRangeTransferables } from '../model/OrganizedRange';
 import { primeDevFlags, parseDevFlags } from '../perf/devFlags';
 import { primeDecodePoolEnvironment } from './workerPool/decodePoolSize';
-import type { LazLoadStats, PreviewSink } from './loadLas';
+import type { LazLoadStats, PreviewChunkSink } from './loadLas';
 import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
 
 interface ParseRequest {
@@ -72,16 +72,16 @@ ctx.onmessage = (event: MessageEvent): void => {
         // Forward each staged-progress update to the main thread.
         ctx.postMessage({ type: 'progress', ...update });
       };
-      const onPreview: PreviewSink = (preview, frame) => {
-        // A stand-in the main thread shows while the decode runs; it owns
-        // its own buffers, so transferring them takes nothing from the final.
-        const { payload, transfer } = cloudPayload(preview);
-        ctx.postMessage({ type: 'preview', cloud: payload, frame }, transfer);
+      const onPreviewChunk: PreviewChunkSink = (chunk) => {
+        // The chunk's own positions, already placed into the final output, so
+        // the buffer transfers to the page with nothing copied.
+        const { positions } = chunk;
+        ctx.postMessage({ type: 'previewChunk', ...chunk }, [positions.buffer as ArrayBuffer]);
       };
       let stats: LazLoadStats | undefined;
       const { cloud, originalPointCount, downsampled } = file
-        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreview, (s) => { stats = s; }, policy)
-        : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan, onPreview);
+        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreviewChunk, (s) => { stats = s; }, policy)
+        : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan);
 
       const endedAt = performance.now();
       const decodeAt = stageAt.get('decoding');

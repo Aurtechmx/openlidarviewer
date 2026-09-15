@@ -115,8 +115,6 @@ export interface DevFlags {
    * getting one would be a flag that lies.
    */
   decodeWorkers: number | null;
-  /** `?previewChunks=N`: chunks the LAZ preview is built from (benchmarks; 1-64). */
-  previewChunks: number | null;
 }
 
 /**
@@ -140,7 +138,6 @@ export const DEV_FLAG_DEFAULTS: Readonly<DevFlags> = Object.freeze({
   decodePool: false,
   decodePoolOff: false,
   decodeWorkers: null,
-  previewChunks: null,
   // Stickiness changes what stays on screen at the budget boundary, and flicker
   // is not observable from Node, so it stays opt-in until a browser run on a
   // real streamed cloud shows it settling the pulsing WITHOUT stalling refinement.
@@ -208,14 +205,6 @@ function parseOptOut(value: string | null): boolean {
  * The pool clamps to the same cap regardless, so the two cannot disagree in a
  * way that matters.
  */
-/** A positive integer flag clamped to `[min, max]`, or null when absent or not a number. */
-function parseBoundedInt(value: string | null, min: number, max: number): number | null {
-  if (value === null) return null;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-  return Math.min(max, Math.max(min, Math.floor(n)));
-}
-
 function parseWorkerCount(value: string | null): number | null {
   if (value === null) return null;
   const n = Number(value.trim());
@@ -247,7 +236,6 @@ export function parseDevFlags(search: string | URLSearchParams): DevFlags {
     decodePoolOff: parseOptOut(params.get('decodePool')),
     residentStickiness: parseOptIn(params.get('stickiness')),
     decodeWorkers: parseWorkerCount(params.get('decodeWorkers')),
-    previewChunks: parseBoundedInt(params.get('previewChunks'), 1, 64),
   };
 }
 

@@ -116,8 +116,9 @@ function harness(opts: HarnessOptions = {}) {
     }),
     hideEmptyState: vi.fn(() => { trace.push('hideEmptyState'); }),
     showEmptyState: vi.fn(() => { trace.push('showEmptyState'); }),
-    showPreviewCloud: vi.fn(() => { trace.push('showPreviewCloud'); }),
-    clearPreviewCloud: vi.fn(() => { trace.push('clearPreviewCloud'); }),
+    beginPreview: vi.fn(() => { trace.push('beginPreview'); }),
+    appendPreview: vi.fn((_chunk?: unknown) => { trace.push('appendPreview'); }),
+    disposePreview: vi.fn(() => { trace.push('disposePreview'); }),
     frameAll: vi.fn(() => { trace.push('frameAll'); }),
     closeStreaming: vi.fn(),
     addCloud: vi.fn(() => { trace.push('addCloud'); return 'cloud-1'; }),
@@ -137,8 +138,6 @@ function harness(opts: HarnessOptions = {}) {
     ready: Promise.resolve(),
     hasStreamingCloud: false,
     addCloud: calls.addCloud,
-    showPreviewCloud: calls.showPreviewCloud,
-    clearPreviewCloud: calls.clearPreviewCloud,
     clouds: () => [cloud],
     measure: {},
     annotate: { clear: calls.annotateClear },
@@ -200,6 +199,11 @@ function harness(opts: HarnessOptions = {}) {
     }),
     renderBudget: 1_000_000,
     isPhone: () => opts.isPhone ?? false,
+    startPreviewCloud: (_viewer, first) => {
+      calls.beginPreview();
+      calls.appendPreview(first);
+      return { append: calls.appendPreview, dispose: calls.disposePreview };
+    },
     ...(opts.isTouchFirst === undefined ? {} : { isTouchFirst: () => opts.isTouchFirst as boolean }),
     deviceMemoryGB: () => 8,
     stage: { hideEmptyState: calls.hideEmptyState, showEmptyState: calls.showEmptyState },
@@ -473,55 +477,59 @@ describe('what the completed attach leaves behind', () => {
   });
 });
 
-describe('a preview cloud delivered before the decode finishes', () => {
-  it('shows it at once, then swaps the final cloud in without framing again', async () => {
+const chunk = () => ({ positions: new Float32Array([0, 0, 0, 1, 1, 1]), expectedPoints: 4_000 });
+
+describe('preview chunks delivered before the decode finishes', () => {
+  it('starts the stand-in on the first chunk, appends the rest, then swaps the final cloud in without framing again', async () => {
     const h = harness({
-      onLoaded: (callbacks) => { callbacks.onPreview?.(fakeCloud()); },
+      onLoaded: (callbacks) => { callbacks.onPreviewChunk?.(chunk()); callbacks.onPreviewChunk?.(chunk()); },
     });
 
     await openScan(fakeFile('field.laz'), h.deps);
 
-    // The stand-in goes up the moment it arrives, with the empty state gone.
+    // The stand-in goes up on the first chunk, with the empty state gone.
     expect(h.at('hideEmptyState')).toBeGreaterThan(-1);
-    expect(h.at('showPreviewCloud')).toBeGreaterThan(h.at('hideEmptyState'));
-    // The commit replaces it in the same task as the add, and keeps the pose.
-    expect(h.at('clearPreviewCloud')).toBe(h.at('addCloud') + 1);
+    expect(h.at('beginPreview')).toBeGreaterThan(h.at('hideEmptyState'));
+    expect(h.calls.beginPreview).toHaveBeenCalledTimes(1);
+    expect(h.calls.appendPreview).toHaveBeenCalledTimes(2);
+    // The commit disposes it right after the add, and keeps the pose.
+    expect(h.at('disposePreview')).toBe(h.at('addCloud') + 1);
     expect(h.calls.frameAll).not.toHaveBeenCalled();
     expect(h.calls.showEmptyState).not.toHaveBeenCalled();
     expect(h.at('reveal')).toBeGreaterThan(-1);
   });
 
-  it('frames the final cloud as before when no preview was shown', async () => {
+  it('frames the final cloud as before when no chunk was shown', async () => {
     const h = harness();
     await openScan(fakeFile(), h.deps);
-    expect(h.calls.showPreviewCloud).not.toHaveBeenCalled();
+    expect(h.calls.beginPreview).not.toHaveBeenCalled();
     expect(h.calls.frameAll).toHaveBeenCalledTimes(1);
   });
 
   it('takes the stand-in down and restores the empty state when the load then fails', async () => {
     const h = harness({
-      onLoaded: (callbacks) => { callbacks.onPreview?.(fakeCloud()); },
+      onLoaded: (callbacks) => { callbacks.onPreviewChunk?.(chunk()); },
       failLoad: true,
     });
     (h.deps.getViewer() as unknown as { clouds: () => string[] }).clouds = () => [];
 
     await openScan(fakeFile('field.laz'), h.deps);
 
-    expect(h.at('showPreviewCloud')).toBeGreaterThan(-1);
-    expect(h.at('clearPreviewCloud')).toBeGreaterThan(h.at('showPreviewCloud'));
-    expect(h.at('showEmptyState')).toBeGreaterThan(h.at('clearPreviewCloud'));
+    expect(h.at('beginPreview')).toBeGreaterThan(-1);
+    expect(h.at('disposePreview')).toBeGreaterThan(h.at('beginPreview'));
+    expect(h.at('showEmptyState')).toBeGreaterThan(h.at('disposePreview'));
     expect(h.calls.addCloud).not.toHaveBeenCalled();
     expect(h.calls.setError).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores a preview that lands after Cancel', async () => {
+  it('ignores a chunk that lands after Cancel', async () => {
     const h = harness({
-      onLoaded: (callbacks) => { h.fireCancel(); callbacks.onPreview?.(fakeCloud()); },
+      onLoaded: (callbacks) => { h.fireCancel(); callbacks.onPreviewChunk?.(chunk()); },
     });
 
     await openScan(fakeFile('field.laz'), h.deps);
 
-    expect(h.calls.showPreviewCloud).not.toHaveBeenCalled();
+    expect(h.calls.beginPreview).not.toHaveBeenCalled();
     expect(h.calls.hideEmptyState).not.toHaveBeenCalled();
   });
 });

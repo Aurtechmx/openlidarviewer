@@ -159,8 +159,6 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
  * @param stride       Decode every `stride`-th record (1 = every record).
  *                     Used by the fast-load path for huge clouds.
  * @param onProgress   Optional staged-progress callback for the decode loop.
- * @param onPreview    Receives a stratified preview cloud before the decode
- *                     finishes. Pooled `.laz` only; never called otherwise.
  */
 export async function loadLas(
   buffer: ArrayBuffer,
@@ -168,7 +166,6 @@ export async function loadLas(
   name = `cloud.${sourceFormat}`,
   stride = 1,
   onProgress?: (u: ProgressUpdate) => void,
-  onPreview?: PreviewSink,
 ): Promise<PointCloud> {
   const header = parseLasHeader(buffer);
   // Origin from the floored header min — known before decoding, so records
@@ -192,11 +189,7 @@ export async function loadLas(
     // the fallback for all three.
     const pooled = await (
       await import('./heavy/worker/lazChunkWorkerClient')
-    ).decodeLazPooled(buffer, header, origin, {
-      stride,
-      onProgress,
-      onPreview: onPreview && ((preview) => onPreview(toCloud(preview), previewFrame(header, origin))),
-    });
+    ).decodeLazPooled(buffer, header, origin, { stride, onProgress });
     raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress));
   } else {
     raw = decodeLas(buffer, header, origin, stride, onProgress);
@@ -224,7 +217,7 @@ export async function loadLazFromFile(
   name = 'cloud.laz',
   stride = 1,
   onProgress?: (u: ProgressUpdate) => void,
-  onPreview?: PreviewSink,
+  onPreviewChunk?: PreviewChunkSink,
   onStats?: (stats: LazLoadStats) => void,
   policy?: DecodePoolPolicy,
 ): Promise<PointCloud> {
@@ -250,7 +243,6 @@ export async function loadLazFromFile(
     metadataBytes: head.byteLength,
     rangeRequests: 1,
     compressedBytesRead: 0,
-    previewPoints: undefined as number | undefined,
     poolWorkers: undefined as number | undefined,
     decodePath: 'whole-file' as LazLoadStats['decodePath'],
     poolFallbackReason: undefined as string | undefined,
@@ -268,13 +260,19 @@ export async function loadLazFromFile(
       return bytes;
     },
   };
+  const frame = previewFrame(header, origin);
+  let expectedPoints = header.pointCount;
   const pooled = await decodeLazPooledFromSource(counted, header, origin, {
     stride,
     onProgress,
-    onPreview: onPreview && ((preview) => onPreview(toCloud(preview), previewFrame(header, origin))),
+    onPreviewChunk: onPreviewChunk && ((records) => {
+      // Transport only: the chunk's own buffer, in the frame the decoder wrote it.
+      const { positions } = records;
+      onPreviewChunk({ positions, expectedPoints, frame });
+    }),
     onPlanned: (info) => {
       planned = true;
-      if (onPreview) stats.previewPoints = info.previewPoints;
+      expectedPoints = info.expectedPoints;
     },
     onPool: ({ workers }) => { stats.poolWorkers = workers; stats.decodePath = 'pooled'; },
     onFallback: (reason) => { stats.poolFallbackReason = reason; stats.decodePath = 'pool-fallback'; },
@@ -299,7 +297,6 @@ export interface LazLoadStats {
   readonly metadataBytes: number;
   readonly rangeRequests: number;
   readonly compressedBytesRead: number;
-  readonly previewPoints?: number;
   readonly poolWorkers?: number;
   readonly decodePath: 'pooled' | 'whole-file' | 'pool-fallback';
   readonly poolFallbackReason?: string;
@@ -308,8 +305,19 @@ export interface LazLoadStats {
 /** The preview's frame: the header's declared extent, in the cloud's local frame. */
 export type PreviewFrame = { readonly min: [number, number, number]; readonly max: [number, number, number] };
 
-/** Receives the preview cloud and, when the header's bounds are usable, the frame to show it in. */
-export type PreviewSink = (cloud: PointCloud, frame?: PreviewFrame) => void;
+/**
+ * One decoded chunk's positions for a preview that fills in as the decode
+ * runs, with what the receiver needs to size and frame it: the records the
+ * finished decode will hold, and the header's declared extent when usable.
+ */
+export interface PreviewChunk {
+  readonly positions: Float32Array;
+  readonly expectedPoints: number;
+  readonly frame?: PreviewFrame;
+}
+
+/** Receives each preview chunk as it is placed. */
+export type PreviewChunkSink = (chunk: PreviewChunk) => void;
 
 /**
  * The header's declared bounds shifted into the render-local frame, or

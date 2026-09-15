@@ -165,8 +165,8 @@ export interface PooledDecodeOptions {
   readonly stride?: number;
   readonly signal?: AbortSignal;
   readonly onProgress?: (u: ProgressUpdate) => void;
-  /** A stratified subset decoded first; see `decodeLazParallel`. */
-  readonly onPreview?: (preview: RawPoints) => void;
+  /** Each chunk's positions as it is placed; see `decodeLazParallel`. */
+  readonly onPreviewChunk?: (chunk: RawPoints, outIndex: number) => void;
   /** Called once the chunk table is read; see `decodeLazParallel`. */
   readonly onPlanned?: (info: DecodePlanInfo) => void;
   /** Called after the decode with the pool the file ran on. */
@@ -229,9 +229,8 @@ export async function decodeLazPooledFromSource(
       stride: options.stride,
       signal: options.signal,
       onProgress: options.onProgress,
-      onPreview: options.onPreview,
+      onPreviewChunk: options.onPreviewChunk,
       onPlanned: options.onPlanned,
-      previewChunks: flags.previewChunks ?? undefined,
     });
     if (out === null) {
       options.onSkipped?.('no usable chunk table for this file');
