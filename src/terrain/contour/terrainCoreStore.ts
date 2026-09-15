@@ -33,7 +33,7 @@ export const TERRAIN_CORE_STORE_BUDGET_BYTES = 512 * 1024 * 1024;
 export type TerrainCoreMissReason =
   | 'unavailable'
   | 'not-found'
-  | 'source-mismatch'
+  | 'content-mismatch'
   | 'parameter-mismatch'
   | 'generation-mismatch'
   | 'format-mismatch'
@@ -88,7 +88,7 @@ const emptyIndex = (): Index => ({ version: TERRAIN_CORE_INDEX_VERSION, next: 1,
 /** Name the axis on which a lookup missed, from the entries that do exist. */
 function classifyMiss(index: Index, parts: PersistentKeyParts): TerrainCoreMissReason {
   const sameContent = index.entries.filter((e) => e.content === parts.content);
-  if (sameContent.length === 0) return index.entries.length === 0 ? 'not-found' : 'source-mismatch';
+  if (sameContent.length === 0) return index.entries.length === 0 ? 'not-found' : 'content-mismatch';
   if (sameContent.some((e) => e.params === parts.params)) return 'generation-mismatch';
   return 'parameter-mismatch';
 }

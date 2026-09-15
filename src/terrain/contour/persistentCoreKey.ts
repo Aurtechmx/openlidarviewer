@@ -15,7 +15,7 @@
  * It differs from the in-memory {@link coreFingerprint} in two ways that only
  * matter once a core outlives the process that computed it:
  *
- *   1. Source identity is a full SHA-256 of the position bytes, not the sampled
+ *   1. Content identity is a full SHA-256 of the analysed position bytes, not the sampled
  *      64-bit FNV the in-memory cache uses. The FNV sample hash is safe only
  *      because `clearTerrainCoreCache()` scopes reuse to one open scan, where
  *      the cloud is literally the same array; a persisted core is looked up

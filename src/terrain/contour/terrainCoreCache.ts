@@ -382,6 +382,16 @@ export function setTerrainCorePersistence(tier: TerrainCorePersistenceTier | nul
   persistence = tier;
 }
 
+// Why the last persistent lookup did not restore, as the tier named it (the
+// `TerrainCoreMissReason` strings of terrainCoreStore). Null when nothing was
+// asked, when the tier restored, or when the answer came from memory, so a
+// reader can tell "no restore was attempted" from "a restore was refused".
+let lastPersistenceMiss: string | null = null;
+/** The reason the persistent tier gave for not restoring, or null. */
+export function lastTerrainCorePersistenceMiss(): string | null {
+  return lastPersistenceMiss;
+}
+
 /** Restore from the persistent tier, or compute; a tier failure is a miss. */
 async function restoreOrCompute(
   positions: Float32Array,
@@ -389,12 +399,16 @@ async function restoreOrCompute(
   compute: ComputeCoreAsyncFn,
 ): Promise<{ core: TerrainCore; source: TerrainCoreSource; computeMs: number }> {
   const tier = persistence;
+  lastPersistenceMiss = null;
   if (tier) {
     try {
       const found = await tier.lookup(positions, params);
       if ('core' in found) return { core: found.core, source: 'restored', computeMs: 0 };
+      lastPersistenceMiss = found.miss;
     } catch {
-      /* the tier is an optimisation; a failure here means compute */
+      // The tier is an optimisation; a failure here means compute. It is still
+      // named, so a diagnostic reader sees a broken tier rather than silence.
+      lastPersistenceMiss = 'lookup-failure';
     }
   }
   const t0 = performance.now();
@@ -426,6 +440,7 @@ export async function getOrComputeCoreAsync(
     cache.delete(key);
     cache.set(key, hit);
     lastSource = 'memory';
+    lastPersistenceMiss = null;
     return hit;
   }
   // Coalesce concurrent misses for the same key onto one compute.
