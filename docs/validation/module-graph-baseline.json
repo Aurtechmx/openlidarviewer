@@ -226,7 +226,6 @@
         "src/render/pointStyle.ts",
         "src/render/presetApplication.ts",
         "src/render/projectElevationScale.ts",
-        "src/render/quality/pixelRatioCeiling.ts",
         "src/render/recordSelection.ts",
         "src/render/refinementPhaseState.ts",
         "src/render/renderActivityGate.ts",
@@ -247,6 +246,7 @@
         "src/render/touchTapGate.ts",
         "src/render/touchTracker.ts",
         "src/render/viewCubeMath.ts",
+        "src/render/viewerRenderBootstrap.ts",
         "src/terrain/canonicalFrame.ts",
         "src/terrain/scanShape.ts",
         "three/addons/controls/OrbitControls.js",
@@ -260,7 +260,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 829,
+    "filesScanned": 832,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
