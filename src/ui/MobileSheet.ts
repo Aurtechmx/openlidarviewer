@@ -300,6 +300,34 @@ export class MobileSheet {
     this.element.classList.toggle('olv-hidden', !visible);
   }
 
+  /**
+   * Bring a freshly produced result into view: select its tab, open the sheet
+   * far enough to read it, and scroll its headline into place.
+   *
+   * The phone case this exists for: a terrain run finishes while the sheet is
+   * at 'peek', so the verdict it just computed lands below the fold, under the
+   * parameters that asked for it. Nothing announces it, so the run reads as
+   * having done nothing.
+   *
+   * Deliberately conservative. It is a no-op when the sheet is hidden (the
+   * desktop layout owns the panels then, and moving them would be wrong), and
+   * it opens an already-collapsed sheet to 'half' rather than 'full' (enough
+   * to read the headline with the scan still visible above it), while leaving a
+   * sheet the user has already positioned exactly where they put it.
+   *
+   * Returns whether it acted, which is what the unit tests assert on.
+   */
+  revealResult(tab: MobileTab, heroSelector: string): boolean {
+    if (!this._slots.has(tab)) return false;
+    if (this.element.classList.contains('olv-hidden')) return false;
+    if (!this.isExpanded()) this.setDetent('half');
+    this.setActive(tab);
+    const slot = this.slot(tab);
+    const hero = slot.querySelector?.(heroSelector) as HTMLElement | null;
+    (hero ?? slot).scrollIntoView?.({ block: 'start' });
+    return true;
+  }
+
   // ── internals ────────────────────────────────────────────────────────────
 
   private _onTabKey(ev: KeyboardEvent, id: MobileTab): void {

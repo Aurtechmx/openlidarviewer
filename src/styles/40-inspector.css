@@ -271,9 +271,12 @@
 .olv-rvc {
   position: fixed;
   left: 50%;
-  top: calc(64px + env(safe-area-inset-top));
+  top: var(--olv-lane-top);
   transform: translateX(-50%);
-  z-index: var(--z-modal);
+  /* The chip shares the top-centre lane with the "Project ready" card and
+     waits for it (ProjectCard's onDismiss), so it no longer needs the modal
+     layer it used to sit on to win that collision. */
+  z-index: var(--z-float);
   display: inline-flex; align-items: center; gap: var(--space-xs);
   padding: 4px 6px 4px 10px;
   background: rgba(11, 17, 33, 0.92);

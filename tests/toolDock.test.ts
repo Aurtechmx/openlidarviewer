@@ -229,3 +229,65 @@ describe('ToolDock manifest', () => {
     expect(close.title).toBe('Close the scan and return to the start');
   });
 });
+
+/**
+ * The laptop tier. Eleven permanent buttons fit a full desktop and a phone
+ * (which files five of them under More), but between the two the dock ran the
+ * width of the canvas. A middle tier folds Snapshot, Copy view link and Probe,
+ * each reachable another way, and keeps Analyse and Help out, where a user
+ * mid-task and a user stuck respectively look first.
+ *
+ * The disclosure is one button with one handler for both tiers, so the test
+ * that matters most here is that the handler is width-blind: a phone-only gate
+ * in it would leave the laptop button rendered and inert.
+ */
+describe('the More disclosure across viewport tiers', () => {
+  const dockCss = (): string => {
+    const { readFileSync } = require('node:fs') as typeof import('node:fs');
+    return readFileSync(new URL('../src/styles/45-dock-and-panels.css', import.meta.url), 'utf8');
+  };
+  /** The body of the laptop-tier media block. */
+  const laptopTier = (): string => {
+    const css = dockCss();
+    const at = css.indexOf('@media (max-width: 1100px) and (min-width: 768px)');
+    expect(at, 'the laptop tier media block is missing').toBeGreaterThan(-1);
+    return css.slice(at, css.indexOf('\n}', at));
+  };
+
+  it('toggles the dock class on click at any width', () => {
+    const dock = makeDock();
+    const more = buttons(dock).find((b) => b.classList.contains('olv-tool-more'))!;
+    // The stub window reports a 1280px desktop; the handler must not care.
+    more.dispatchEvent({ type: 'click' });
+    expect(dock.dock.classList.contains('olv-dock-more-open')).toBe(true);
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    more.dispatchEvent({ type: 'click' });
+    expect(dock.dock.classList.contains('olv-dock-more-open')).toBe(false);
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('shows the button and folds three tools on the laptop tier', () => {
+    const tier = laptopTier();
+    expect(tier).toMatch(/\.olv-dock \.olv-tool-more \{[^}]*display: inline-flex/);
+    for (const tool of ['olv-tool-snapshot', 'olv-tool-share', 'olv-tool-probe']) {
+      expect(tier, `${tool} does not fold on the laptop tier`).toContain(`.olv-dock .${tool}`);
+      expect(tier).toContain(`.olv-dock.olv-dock-more-open .${tool}`);
+    }
+  });
+
+  it('keeps Analyse and Help permanent on the laptop tier', () => {
+    const tier = laptopTier();
+    expect(tier).not.toContain('olv-tool-analyse');
+    expect(tier).not.toContain('olv-tool-help');
+  });
+
+  it('leaves the full-desktop dock alone', () => {
+    // Nothing outside the two media blocks hides a tool, so above 1100px every
+    // button is present, which is what the e2e specs click.
+    const css = dockCss();
+    const base = css.slice(0, css.indexOf('@media (max-width: 1100px)'));
+    expect(base).toMatch(/\.olv-tool-more \{ display: none; \}/);
+    expect(base).not.toContain('olv-tool-snapshot');
+    expect(base).not.toContain('olv-tool-probe');
+  });
+});

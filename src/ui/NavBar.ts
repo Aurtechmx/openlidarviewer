@@ -153,6 +153,16 @@ function readStoredHelpPinned(): boolean {
 /** Storage key for the legend's own open/closed state, independent of the panel. */
 const LEGEND_OPEN_KEY = 'olv.nav.legendOpen';
 
+/** How long the touch-gesture hint stays up when nobody touches the scan. */
+const TOUCH_HINT_MS = 6500;
+/**
+ * How long the hint lingers after a gesture it described has been completed.
+ * Not zero: the hint vanishing under the finger that just proved it read as a
+ * glitch rather than an acknowledgement, and the pause also spans the gap
+ * between the two halves of a pinch.
+ */
+const TOUCH_HINT_YIELD_MS = 600;
+
 /**
  * Whether the key legend is expanded. Defaults to CLOSED.
  *
@@ -240,6 +250,8 @@ export class NavBar {
   private _legendOpen = readStoredLegendOpen();
   private _hintTimer: number | null = null;
   private _touchTimer: number | null = null;
+  /** Pending post-gesture hide of the touch hint; see `_yieldTouchHint`. */
+  private _touchYieldTimer: number | null = null;
 
   constructor(callbacks: NavBarCallbacks) {
     this._cb = callbacks;
@@ -541,7 +553,14 @@ export class NavBar {
         if (target?.closest?.('.olv-navbar') != null) return;
         yieldWhileDragging(true);
       };
-      const onPointerEnd = (): void => yieldWhileDragging(false);
+      const onPointerEnd = (): void => {
+        // A drag that made the panel yield started on the scan, so it is the
+        // orbit / pan the touch hint is describing. Having been demonstrated,
+        // the hint stops waiting out its full timer.
+        const onScan = this._hud.classList.contains('olv-nav-hud-yielding');
+        yieldWhileDragging(false);
+        if (onScan) this._yieldTouchHint();
+      };
       window.addEventListener('pointerdown', onPointerDown, { capture: true });
       this._teardown.push(() => window.removeEventListener('pointerdown', onPointerDown, { capture: true }));
       for (const end of ['pointerup', 'pointercancel'] as const) {
@@ -598,7 +617,18 @@ export class NavBar {
   flashTouchHint(): void {
     this.touchHint.classList.add('olv-visible');
     if (this._touchTimer !== null) clearTimeout(this._touchTimer);
-    this._touchTimer = window.setTimeout(() => this.hideTouchHint(), 6500);
+    this._touchTimer = window.setTimeout(() => this.hideTouchHint(), TOUCH_HINT_MS);
+  }
+
+  /**
+   * Retire the hint shortly after the gestures it describes have been used. The
+   * full timer stays as the fallback for someone who reads it and does nothing;
+   * this is the path for someone who reads it and orbits.
+   */
+  private _yieldTouchHint(): void {
+    if (this._touchYieldTimer !== null) return;
+    if (!this.touchHint.classList.contains('olv-visible')) return;
+    this._touchYieldTimer = window.setTimeout(() => this.hideTouchHint(), TOUCH_HINT_YIELD_MS);
   }
 
   /** Dismiss the touch-gesture hint. */
@@ -606,6 +636,10 @@ export class NavBar {
     if (this._touchTimer !== null) {
       clearTimeout(this._touchTimer);
       this._touchTimer = null;
+    }
+    if (this._touchYieldTimer !== null) {
+      clearTimeout(this._touchYieldTimer);
+      this._touchYieldTimer = null;
     }
     this.touchHint.classList.remove('olv-visible');
   }

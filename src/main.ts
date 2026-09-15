@@ -1657,6 +1657,7 @@ function ensureActionRegistry(): Promise<Action[]> {
     showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null }; }),
     run: () => void terrainRunner.run(),
   },
+  showTouchGestures: () => navBar.flashTouchHint(),
   saveCurrentView,
   applyView,
   ...makeNavPaletteActions({ viewer, inspector, persist: persistPrefs, toast: showLassoToast }),
@@ -2476,6 +2477,7 @@ function hydrateObjectPanel(): void {
 // `analysePanel`, so the panel/object-panel callbacks above (which fire only on
 // user input) can drive it. Reads the lazy `viewer` and the `scans.activeId`
 // selection through getters so no top-level `viewer.*` dereference is added.
+let phoneSheet: MobileSheet | null = null;
 const terrainRunner = createTerrainAnalysisRunner({
   getViewer: () => viewer,
   getScanFacts: () => processStudio.facts(),
@@ -2519,6 +2521,9 @@ const terrainRunner = createTerrainAnalysisRunner({
     inspectorCards.noteTerrainComplexity(
       cx && cx.band ? { bucket: cx.band, label: cx.bandLabel, detail: cx.detail } : null,
     );
+    // On a phone the panel that produced this sits in the bottom sheet at 'peek',
+    // so the verdict lands below the fold. Open it on the assessment (no-op on desktop).
+    phoneSheet?.revealResult('analyse', '.olv-analyse-assessment');
   },
 });
 
@@ -2863,27 +2868,18 @@ const routeCoordinator = createScanRouteCoordinator({
       objectContent = { kind: 'object', args: [object, space, shape] };
       objectPanel?.showObject(object, space, shape);
     },
-    setObjectVisible: (visible) => {
-      objectDesiredVisible = visible;
-      objectPanel?.setVisible(visible);
-    },
+    setObjectVisible: (visible) => { objectDesiredVisible = visible; objectPanel?.setVisible(visible); },
     setAnalyseVisible: (visible) => {
       analyseDesiredVisible = visible;
       analyseProfileVisibility.clear(); // the route owns panel state; drop any restore
       analysePanel?.setVisible(visible);
     },
-    setDockAnalyse: (enabled, active) => {
-      dock.setAnalyseEnabled(enabled);
-      dock.setAnalyseActive(active);
-    },
+    setDockAnalyse: (enabled, active) => { dock.setAnalyseEnabled(enabled); dock.setAnalyseActive(active); },
     // The explicit "run terrain anyway" hatch: mount the panel (if the import is
     // still in flight), expand it out of its collapsed chip, then run.
     expandAnalyseAndRunTerrain: () => {
       analyseExpanded = true;
-      void ensureAnalysePanel().then((p) => {
-        p.expand();
-        void terrainRunner.run();
-      });
+      void ensureAnalysePanel().then((p) => { p.expand(); void terrainRunner.run(); });
     },
   },
   // `?debug` only: the raw scan-shape signals, so a misroute can be diagnosed
@@ -3329,6 +3325,7 @@ void viewerLoaded.then(() => {
     // on a wider viewport. Re-parenting a live node keeps its listeners, so no
     // panel is re-wired on a breakpoint flip. Desktop layout is untouched.
     const mobileSheet = new MobileSheet();
+    phoneSheet = mobileSheet;
     stage.overlay.append(mobileSheet.element);
 
     const toMobileLayout = (): void => {
@@ -4593,6 +4590,15 @@ streamingUi.onTick(({ cloud, scheduler, counts, diagnostics: diag }) => {
 function showProjectCard(cloud: PointCloud, totalCount: number): void {
   const b = cloud.bounds();
   const c = crsService.context();
+  // Suggest the camera preset best suited to the scan: a dismissible chip,
+  // accepted in one click or ignored (it auto-hides). It shares the top-centre
+  // lane with the card, so it waits for the card's own dismissal rather than
+  // covering it. One lane, one owner.
+  const rec = recommendCameraPreset({
+    hasRgb: cloud.colors !== undefined,
+    hasClassification: cloud.classification !== undefined,
+    flatness: flatnessFromBounds(b.min, b.max, c.upAxis),
+  });
   projectCard.show({
     name: cloud.name,
     format: cloud.sourceFormat,
@@ -4602,14 +4608,8 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     hasRgb: cloud.colors !== undefined,
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
+    onDismiss: () => recommendedViewChip.show(rec, () => viewer.setCameraPreset(rec.preset)),
   });
-  // Suggest the camera preset best suited to the scan: a dismissible chip, accepted in one click or ignored (it auto-hides).
-  const rec = recommendCameraPreset({
-    hasRgb: cloud.colors !== undefined,
-    hasClassification: cloud.classification !== undefined,
-    flatness: flatnessFromBounds(b.min, b.max, c.upAxis),
-  });
-  recommendedViewChip.show(rec, () => viewer.setCameraPreset(rec.preset));
 }
 
 /** Fetch a built-in sample (a local static file — no upload) and load it. */

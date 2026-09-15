@@ -134,7 +134,7 @@
 
 /* ── Annotation hint bar ─────────────────────────────────────────────────── */
 .olv-anno-hint {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: var(--space-md);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
@@ -158,7 +158,7 @@
  * the live instruction, then the action buttons.
  */
 .olv-measure-bar {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center;
   gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
   background: rgba(11, 17, 33, 0.82);

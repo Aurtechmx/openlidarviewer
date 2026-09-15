@@ -62,6 +62,8 @@ export interface ActionRegistryDeps {
   applyView: (index: number) => void;
   toggleOrbitInvert: (axis: 'x' | 'y') => void;
   resetNavigation: () => void;
+  /** Re-flash the touch-gesture hint (the `nav.gestures` action). */
+  showTouchGestures: () => void;
   planView: PlanViewActions;
 }
 
@@ -81,6 +83,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     bookmarks: deps.bookmarks,
     toggleOrbitInvert: deps.toggleOrbitInvert,
     resetNavigation: deps.resetNavigation,
+    showTouchGestures: deps.showTouchGestures,
     hasScan: deps.hasScan,
     saveCurrentView: deps.saveCurrentView,
     applyView: deps.applyView,

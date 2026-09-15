@@ -24,6 +24,13 @@ import {
  */
 const COPY_VIEW_LINK_LABEL = 'Copy view link';
 
+/**
+ * The More disclosure's tooltip. Deliberately does not list tools: which ones
+ * fold under it depends on the viewport tier the stylesheet is in, so a list
+ * here would be wrong at one width or the other.
+ */
+const MORE_TITLE = 'More tools';
+
 export interface ToolDockCallbacks {
   onFrameAll: () => void;
   onSnapshot: () => void;
@@ -223,21 +230,25 @@ export class ToolDock {
         blur: true,
         onClick: callbacks.onHelp,
       },
-      // "More" disclosure for phones — hidden on desktop, shown on phones.
-      // CSS hides Snapshot and Help by default on phones (low-value with no
-      // keyboard). "More" toggles a `.olv-dock-more-open` class on the dock
-      // that un-hides them. On desktop every button is visible and More never
-      // appears. Built via `custom` because it is a bare `•••` glyph with no
-      // icon+label structure and an aria-expanded disclosure state.
+      // "More" disclosure for the widths that cannot hold eleven buttons.
+      // Which tools fold is a CSS decision, taken per tier: phones file
+      // Snapshot, Analyse, Copy view link, Help and Probe under it; laptops
+      // (768–1100px) file Snapshot, Copy view link and Probe and keep Analyse
+      // and Help out. Both tiers toggle the same `.olv-dock-more-open` class on
+      // the dock, so the handler below is width-agnostic and must stay that
+      // way, because a phone-only gate here would leave the laptop button inert. Above
+      // 1100px CSS hides the button and every tool is permanent. Built via
+      // `custom` because it is a bare `•••` glyph with no icon+label structure
+      // and an aria-expanded disclosure state.
       {
         id: 'tool.more',
         label: '•••',
-        title: 'More tools: Snapshot, Analyse, Copy view link, Help',
+        title: MORE_TITLE,
         custom: () => {
           const more = el('button', {
             className: 'olv-tool olv-tool-more',
             text: '•••',
-            title: 'More tools: Snapshot, Analyse, Copy view link, Help',
+            title: MORE_TITLE,
             ariaLabel: 'Show more tools',
           });
           more.setAttribute('aria-expanded', 'false');
