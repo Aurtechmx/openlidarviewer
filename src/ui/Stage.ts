@@ -141,6 +141,8 @@ export class Stage {
   readonly canvas: HTMLCanvasElement;
   readonly overlay: HTMLElement;
   private readonly _empty: HTMLElement;
+  /** Empty-state controls with a native tooltip, and the text each carries while shown. */
+  private readonly _emptyTitles = new Map<HTMLElement, string>();
   /** The hidden file input the Layers-header control and {@link promptAddDataset} both open. */
   private readonly _addDataset: HTMLElement;
   /** Inline status banner above the URL field. */
@@ -235,12 +237,17 @@ export class Stage {
   /** Hide the empty state once the first cloud loads. */
   hideEmptyState(): void {
     this._empty.classList.add('olv-hidden');
+    // A native tooltip already open over a control outlives the control's
+    // hiding until the pointer moves, so it would sit over the first paint of
+    // the scan. Clearing the title closes it; showEmptyState puts it back.
+    for (const control of this._emptyTitles.keys()) control.title = '';
     this._cancelUrlLoad();
   }
 
   /** Show the empty state again (e.g. after the last cloud is removed). */
   showEmptyState(): void {
     this._empty.classList.remove('olv-hidden');
+    for (const [control, title] of this._emptyTitles) control.title = title;
   }
 
   /**
@@ -444,6 +451,7 @@ export class Stage {
       title: 'Choose a point-cloud file from your device — or drag one onto the page',
     });
     openButton.addEventListener('click', () => fileInput.click());
+    this._emptyTitles.set(openButton, openButton.title);
 
     // "Try a sample scan" — the zero-friction demo path, promoted from the
     // Explore card below the fold to a ghost button directly under the
@@ -465,6 +473,7 @@ export class Stage {
         })
       : null;
     if (tryButton && demoSample) {
+      this._emptyTitles.set(tryButton, tryButton.title);
       tryButton.addEventListener('click', () => {
         void this._approveSample(demoSample).then((ok) => {
           if (ok) options.onSample?.(demoSample.url, demoSample.name);
