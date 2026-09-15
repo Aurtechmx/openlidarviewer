@@ -32,7 +32,7 @@ from the tree and fails when a cell drifts.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~12k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~16k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~31k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,127 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,049 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,127)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,049)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -113,8 +113,16 @@ chunk. The candidates that remain:
 
 | Block | ~Lines | Extraction target |
 |---|---:|---|
-| `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
-| `syncInspectorVisuals` | 266 | inspector wiring module |
+| `startStreamingStatusPolling` | 338 | streaming panel wiring module |
+
+Done: `syncInspectorVisuals`, `syncInspectorRendering`, the Visuals Studio
+preset callbacks (RGB appearance, EDL, sky, white balance, workflow preset) and
+`seedStreamingFilterExtents` now live in `src/app/inspectorVisualCoordinator.ts`
+over read, write and view ports; the streaming filter seed is an explicit
+unseeded/seeded state the shell resets on the streaming lifecycle.
+`tests/inspectorVisualCoordinator.test.ts` covers preset matching, the seed
+machine and the projections. main.ts lost its direct imports of
+`terrainWorkflowPresets`, `rgbAppearance` and `skyPresets`.
 
 Done: `applyScanRoute` (233 lines, with the manual "Treat as" override, the
 settled one-shot bookkeeping and the space-export context) now lives in

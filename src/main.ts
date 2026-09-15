@@ -81,10 +81,6 @@ import { lazyCoordinateHud } from './app/coordinateHudLazy';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
-import {
-  getTerrainWorkflowPreset,
-  matchTerrainWorkflowPreset,
-} from './render/terrainWorkflowPresets';
 import { AnnotationPanel } from './ui/AnnotationPanel';
 // AnalysePanel is lazy-mounted on first scan load (v0.6 P1): only the TYPE is
 // imported here (erased at compile time — pulls nothing into the shell), and the
@@ -123,8 +119,7 @@ import {
   type KmlActionDeps,
 } from './app/kmlActions';
 import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
-import { isRgbAppearancePresetId } from './render/rgbAppearance';
-import { isSkyPreset } from './render/skyPresets';
+import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
 import {
   exportMeasurementsFile,
   exportMeasurementIntegrityReport,
@@ -1046,26 +1041,53 @@ let pendingShareState: ShareState | null = (() => {
 // no filter. Cleared on the empty state.
 let activeElevFilter: [number, number] | null = null;
 let activeIntenFilter: [number, number] | null = null;
-// True once the streaming scan's elevation + intensity filter controls have been
-// seeded. Streaming (COPC/EPT) has no static cloud, so the extent setters weren't
-// being called at all and the controls stayed hidden. We seed ONCE (first
-// resident node) — not per node — so a growing resident intensity range can't
-// re-seed and stomp a window the user has set mid-stream. Reset on every
-// streaming open/close.
-let streamingFilterSeeded = false;
-
-/** Seed the streaming scan's filter controls from the resident data, once. */
-function seedStreamingFilterExtents(): void {
-  if (streamingFilterSeeded || !viewer.hasStreamingCloud) return;
-  const elev = viewer.elevationExtent();
-  const inten = viewer.intensityExtent();
-  // Elevation is header-derived and available immediately; intensity needs a
-  // resident node. Wait until at least one is present before marking seeded.
-  if (!elev && !inten) return;
-  inspector.setElevationExtent(elev);
-  inspector.setIntensityExtent(inten);
-  streamingFilterSeeded = true;
-}
+// Viewer visual state <-> Inspector controls, and the one-shot seeding of the
+// streaming filter extents, live in `src/app/inspectorVisualCoordinator.ts`.
+// The shell hands it read and write ports on the lazy Viewer (thunks, so no
+// top-level `viewer.*` dereference), the Inspector surfaces it projects into,
+// and the colour-mode record + preference persistence it must keep in step.
+const visuals = createInspectorVisualCoordinator({
+  source: {
+    edlPresetId: () => viewer.edlPresetId,
+    pointSize: () => viewer.pointSize,
+    pointSizeMode: () => viewer.pointSizeMode,
+    skyPresetId: () => viewer.skyPresetId,
+    heightPercentileTrim: () => viewer.heightPercentileTrim,
+    rgbAppearancePresetId: () => viewer.rgbAppearancePresetId,
+    rgbAppearance: () => viewer.rgbAppearance,
+    streamingActive: () => viewer.isStreamingActive(),
+    edlEnabled: () => viewer.edlEnabled,
+    edlStrength: () => viewer.edlStrength,
+    antialiasing: () => viewer.antialiasing,
+    twoFingerTwistEnabled: () => viewer.twoFingerTwistEnabled,
+    splatMode: () => viewer.splatMode,
+    hasStreamingCloud: () => viewer.hasStreamingCloud,
+    elevationExtent: () => viewer.elevationExtent(),
+    intensityExtent: () => viewer.intensityExtent(),
+  },
+  sink: {
+    setEdlPreset: (id) => viewer.setEdlPreset(id),
+    setPointSize: (size) => viewer.setPointSize(size),
+    setPointSizeMode: (mode) => viewer.setPointSizeMode(mode),
+    setSky: (id) => viewer.setSky(id),
+    setHeightPercentileTrim: (trim) => viewer.setHeightPercentileTrim(trim),
+    applyRgbAppearancePreset: (id) => viewer.applyRgbAppearancePreset(id),
+    setRgbAppearance: (a) => viewer.setRgbAppearance(a),
+    setColorMode: (id, mode) => viewer.setColorMode(id, mode),
+    setStreamingColorMode: (mode) => viewer.setStreamingColorMode(mode),
+  },
+  view: {
+    syncVisuals: (state) => inspector.syncVisuals(state),
+    setAdvancedWbVisible: (v) => inspector.setAdvancedWbVisible(v),
+    syncRendering: (state) => inspector.syncRendering(state),
+    setElevationExtent: (e) => inspector.setElevationExtent(e),
+    setIntensityExtent: (e) => inspector.setIntensityExtent(e),
+  },
+  activeScanId: () => scans.activeId,
+  colorMode: { get: () => currentColorMode, set: (mode) => { currentColorMode = mode; } },
+  afterColorModeChange: () => syncColorModeForActive(),
+  onPreferenceChanged: () => persistPrefs(),
+});
 
 const layerService = createLayerService({
   getViewer: () => viewer,
@@ -1086,11 +1108,11 @@ const inspector = new Inspector({
     // `hydrateAnalysePanel()` re-derives this from `currentColorMode` on mount.
     analysePanel?.setConfidenceColorActive(mode === 'confidence');
     // Workflow rail (v0.4.5): a colour-mode change can enter/leave a preset.
-    syncInspectorVisuals();
+    visuals.syncVisuals();
   },
   onHeightPercentileTrim: (trim) => {
     viewer.setHeightPercentileTrim(trim);
-    syncInspectorVisuals();
+    visuals.syncVisuals();
   },
   onProjectSharedElevation: (on) => {
     viewer.setProjectSharedElevation(on);
@@ -1106,7 +1128,7 @@ const inspector = new Inspector({
   },
   onPointSize: (size) => {
     viewer.setPointSize(size);
-    syncInspectorVisuals();
+    visuals.syncVisuals();
     persistPrefs();
   },
   onToggleVisible: (id, visible) => layerService.setVisible(id, visible),
@@ -1135,7 +1157,7 @@ const inspector = new Inspector({
   },
   onPointSizeMode: (mode) => {
     viewer.setPointSizeMode(mode);
-    syncInspectorVisuals();
+    visuals.syncVisuals();
     persistPrefs();
   },
   onAntialiasing: (on) => {
@@ -1144,41 +1166,15 @@ const inspector = new Inspector({
   },
   onTwoFingerTwist: (on) => {
     viewer.setTwoFingerTwistEnabled(on);
-    syncInspectorRendering();
+    visuals.syncRendering();
     persistPrefs();
   },
   onNavigationPrefsChange: (prefs) => applyNavPrefsChange(prefs, viewer, persistPrefs),
   // Visuals Studio — Visuals Studio.
-  onRgbAppearancePreset: (id) => {
-    if (isRgbAppearancePresetId(id)) {
-      viewer.applyRgbAppearancePreset(id);
-      // Auto-switch may have flipped the active cloud into RGB mode;
-      // re-sync the colour-mode chip so it reflects reality.
-      syncColorModeForActive();
-      syncInspectorVisuals();
-      persistPrefs();
-    }
-  },
-  onEdlPreset: (id) => {
-    viewer.setEdlPreset(id);
-    syncInspectorVisuals();
-    syncInspectorRendering();
-    persistPrefs();
-  },
-  onSkyPreset: (id) => {
-    if (isSkyPreset(id)) {
-      viewer.setSky(id);
-      syncInspectorVisuals();
-      persistPrefs();
-    }
-  },
-  onWhiteBalance: (temperature, tint) => {
-    const current = viewer.rgbAppearance;
-    viewer.setRgbAppearance({ ...current, temperature, tint });
-    syncColorModeForActive();
-    syncInspectorVisuals();
-    persistPrefs();
-  },
+  onRgbAppearancePreset: (id) => visuals.applyRgbAppearancePreset(id),
+  onEdlPreset: (id) => visuals.applyEdlPreset(id),
+  onSkyPreset: (id) => visuals.applySky(id),
+  onWhiteBalance: (temperature, tint) => visuals.setWhiteBalance(temperature, tint),
   onAutoBalance: () => {
     // Auto-normalize against the active cloud's RGB. No-op when the
     // active cloud has no RGB. Lazy-import keeps the analyser out of
@@ -1191,51 +1187,19 @@ const inspector = new Inspector({
       if (scans.activeId !== id) return; // scan changed while we waited
       const suggestion = rgbAutoNormalize({ colorsU8: cloud.colors! });
       if (!suggestion) return;
-      viewer.setRgbAppearance(suggestion.settings);
-      syncInspectorVisuals();
-      persistPrefs();
+      visuals.applyRgbAppearance(suggestion.settings);
     });
   },
   onSplatMode: (id) => {
     viewer.setSplatMode(id);
-    syncInspectorRendering();
+    visuals.syncRendering();
     persistPrefs();
   },
   // Workflow presets (v0.4.5) — fan one pure bundle out through the
   // EXISTING setters, then re-sync every Inspector surface the bundle
   // touched. No new rendering machinery: the preset module is a table.
   onOpenDatasetStory: () => void ensureActionRegistry().then((r) => r.find((a) => a.id === 'story.dataset')?.run()),
-  onTerrainWorkflowPreset: (id) => {
-    const p = getTerrainWorkflowPreset(id);
-    viewer.setEdlPreset(p.edlPresetId);
-    viewer.setPointSize(p.pointSize);
-    viewer.setPointSizeMode(p.pointSizeMode);
-    viewer.setSky(p.sky);
-    viewer.setHeightPercentileTrim(p.heightPercentileTrim);
-    // Colour mode is per-cloud and channel-gated: a cloud without the
-    // channel throws from colorForMode — skip it (keeping its current
-    // colours) rather than failing the rest of the bundle, and only
-    // record `currentColorMode` once the guarded set actually applied
-    // so the chip rail stays honest on channel-less clouds. Streaming
-    // clouds recolour through their own seam.
-    if (scans.activeId) {
-      try {
-        viewer.setColorMode(scans.activeId, p.colorMode);
-        currentColorMode = p.colorMode;
-      } catch (err) {
-        console.warn(`[workflow-preset] colour mode ${p.colorMode} skipped:`, err);
-      }
-    }
-    try {
-      viewer.setStreamingColorMode(p.colorMode);
-    } catch (err) {
-      console.warn(`[workflow-preset] streaming colour mode skipped:`, err);
-    }
-    syncColorModeForActive();
-    syncInspectorVisuals();
-    syncInspectorRendering();
-    persistPrefs();
-  },
+  onTerrainWorkflowPreset: (id) => visuals.applyWorkflowPreset(id),
 });
 
 // v0.4.3 — the header theme toggle was constructed with the persisted
@@ -1797,37 +1761,6 @@ stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), key
 
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
 
-/**
- * Visuals Studio — push the Viewer's Visuals Studio state into the
- * Inspector chip rails + advanced sliders. Called whenever a callback
- * fires, on session restore, and on initial paint after a scan loads.
- */
-function syncInspectorVisuals(): void {
-  // Workflow rail (v0.4.5): re-derive which preset (if any) the CURRENT
-  // knobs equal. Any hand-tweak of a preset-managed knob → 'custom'.
-  const workflowPresetId =
-    matchTerrainWorkflowPreset({
-      colorMode: currentColorMode ?? null,
-      edlPresetId: viewer.edlPresetId,
-      pointSize: viewer.pointSize,
-      pointSizeMode: viewer.pointSizeMode,
-      skyPresetId: viewer.skyPresetId,
-      heightPercentileTrim: viewer.heightPercentileTrim,
-    }) ?? 'custom';
-  inspector.syncVisuals({
-    rgbAppearancePresetId: viewer.rgbAppearancePresetId,
-    edlPresetId: viewer.edlPresetId,
-    skyPresetId: viewer.skyPresetId,
-    temperature: viewer.rgbAppearance.temperature ?? 0,
-    tint: viewer.rgbAppearance.tint ?? 0,
-    workflowPresetId,
-  });
-  // Advanced disclosure (Temperature, Tint, Auto-balance) only makes
-  // sense on streaming COPC tiles — for local LAZ the RGB preset
-  // chips already cover the use case and the sliders would mislead
-  // users into expecting an effect that does not land.
-  inspector.setAdvancedWbVisible(viewer.isStreamingActive());
-}
 
 const helpOverlay = createHelpOverlayLazy(stage.overlay); // lazy chunk, see helpOverlayLazy.ts
 
@@ -2042,7 +1975,7 @@ function newAnalysePanel(
         currentColorMode = restore;
         viewer.setColorMode(scans.activeId, restore);
         inspector.setColorModes(availableModes(cloud), restore);
-        syncInspectorVisuals();
+        visuals.syncVisuals();
         analysePanel?.setConfidenceColorActive(false);
         return;
       }
@@ -2050,7 +1983,7 @@ function newAnalysePanel(
       currentColorMode = 'confidence';
       viewer.setColorMode(scans.activeId, 'confidence');
       inspector.setColorModes(availableModes(cloud), 'confidence');
-      syncInspectorVisuals();
+      visuals.syncVisuals();
       analysePanel?.setConfidenceColorActive(true);
       // The 3D overlay tints each point by the trust of the ground beneath it.
       // Points cluster over MEASURED ground, so a surface that is largely
@@ -2311,7 +2244,7 @@ void viewerLoaded.then(() => {
     // Seed the elevation + intensity filter controls once the first node is
     // resident (idempotent + guarded, so it runs a single time per streaming
     // scan). Fixes the streaming filter controls staying hidden.
-    seedStreamingFilterExtents();
+    visuals.seedStreamingFilterExtents();
     // The cloud-global colour ranges reseed as coarser nodes arrive
     // (StreamingRenderer.onNodeReady) — keep the legend's window in step.
     // The overlay no-ops on an unchanged spec, so this per-node call is free.
@@ -3957,6 +3890,7 @@ function syncColorModeForActive(): void {
   inspector.setColorModes(availableModes(cloud), currentColorMode);
 }
 
+
 /**
  * Surface the project-shared elevation toggle only when ≥2 layers share the
  * project frame, and mirror its current on/off state. Called after the cloud
@@ -3967,18 +3901,6 @@ function syncProjectElevationScale(): void {
     viewer.projectSharedElevationRange() != null,
     viewer.projectSharedElevation,
   );
-}
-
-function syncInspectorRendering(): void {
-  inspector.syncRendering({
-    pointSize: viewer.pointSize,
-    edlEnabled: viewer.edlEnabled,
-    edlStrength: viewer.edlStrength,
-    pointSizeMode: viewer.pointSizeMode,
-    antialiasing: viewer.antialiasing,
-    twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
-    splatMode: viewer.splatMode,
-  });
 }
 
 /** Read the current viewer settings and persist them for the next session. */
@@ -4006,7 +3928,7 @@ function mountPerformanceControl(): void {
     getViewer: () => viewer, getStreamingQuality: () => streamingQuality,
     device: () => ({ tier: deviceCapsValue.tier, isMobile: isPhone(), backend: viewer.activeBackend() }),
     onStreamingQuality: (q) => { streamingQuality = q; streamingPanel.setQuality(q); },
-    onUserChange: () => { syncInspectorRendering(); persistPrefs(); },
+    onUserChange: () => { visuals.syncRendering(); persistPrefs(); },
   });
 }
 
@@ -4538,7 +4460,7 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // it to attachStreamingCloud (build replacement, then detach prior) — a
     // malformed COPC that fails to open leaves the scene intact, as local does.
     await openStreamingCopc(range, remoteCopcName(url), controller.signal);
-    streamingFilterSeeded = false; // fresh scan re-seeds its own filter extents
+    visuals.resetStreamingFilterSeed(); // fresh scan re-seeds its own filter extents
     dropZone.setCancelHandler(null);
     dropZone.setProgress(null);
   } catch (err) {
@@ -4564,7 +4486,7 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
   // A new streaming scan must re-seed its filter controls from its own data.
-  streamingFilterSeeded = false;
+  visuals.resetStreamingFilterSeed();
   runtime.streamingClasses.reset(); // a node id is unique only within its own source
   // Finalize the benchmark (if any) before tearing the session down — we
   // want the final cache snapshot and peak resident counters to be observed.
@@ -4847,7 +4769,7 @@ function resetToEmptyState(): void {
   inspector.setIntensityExtent(null);
   activeElevFilter = null;
   activeIntenFilter = null;
-  streamingFilterSeeded = false;
+  visuals.resetStreamingFilterSeed();
   // Hide + clear the class legend (and Process Studio) so neither lingers with a
   // stale scan after close. v0.4.1.
   classLegendPanel.setClasses(new Map());

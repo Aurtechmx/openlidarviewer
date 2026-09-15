@@ -52,7 +52,7 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 114,
+      "runtime": 112,
       "typeOnly": 19,
       "dynamic": 7,
       "modules": [
@@ -77,6 +77,7 @@
         "src/app/floorPlanPositions.ts",
         "src/app/helpOverlayLazy.ts",
         "src/app/inspectorCardRefreshers.ts",
+        "src/app/inspectorVisualCoordinator.ts",
         "src/app/kmlActions.ts",
         "src/app/measurePanelMount.ts",
         "src/app/measurementExportActions.ts",
@@ -131,11 +132,8 @@
         "src/render/navPrefsWiring.ts",
         "src/render/pointInfo.ts",
         "src/render/renderBackendChoice.ts",
-        "src/render/rgbAppearance.ts",
-        "src/render/skyPresets.ts",
         "src/render/streaming/StreamingSource.ts",
         "src/render/streaming/streamingBudget.ts",
-        "src/render/terrainWorkflowPresets.ts",
         "src/render/workflow/workflowConfig.ts",
         "src/styles/index.ts",
         "src/terrain/canonicalFrame.ts",
@@ -262,7 +260,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 827,
+    "filesScanned": 828,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
