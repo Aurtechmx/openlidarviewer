@@ -105,6 +105,60 @@ const PAIRS = [
 /** The two files whose fan-out is measured. */
 const FAN_OUT_FILES = ['src/main.ts', 'src/render/Viewer.ts'];
 
+/**
+ * Concentration modules whose runtime fan-out is WATCHED, not ratcheted: the
+ * large secondary modules the monolith guard already watches by size, plus the
+ * action assembler. Ordinary local change is allowed; a dependency accretion
+ * past the band (`watchAllowance`) fails and asks for an architecture review.
+ * `--update` re-banks these in either direction.
+ */
+const WATCH_FILES = [
+  'src/ui/AnalysePanel.ts',
+  'src/ui/Inspector.ts',
+  'src/render/measure/MeasureController.ts',
+  'src/ui/MeasurePanel.ts',
+  'src/render/measure/profilePdf.ts',
+  'src/render/streaming/StreamingScheduler.ts',
+  'src/terrain/contour/analyseContours.ts',
+  'src/app/actionDefinitions.ts',
+];
+
+/** The runtime fan-out a watched module may reach before it fails: banked plus 10 %, at least 3. */
+export function watchAllowance(banked) {
+  return banked + Math.max(3, Math.ceil(banked * 0.1));
+}
+
+/** Lines in a file the way the monolith guard counts them. */
+function lineCount(file) {
+  try {
+    return readFileSync(resolve(ROOT, file), 'utf8').split('\n').length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * The concentration table: LOC and runtime fan-out for the two ratcheted
+ * monoliths and every watched module. An architecture indicator the release
+ * audit prints, not a score.
+ */
+export function concentrationRows(measurement) {
+  const rows = [];
+  for (const f of [...FAN_OUT_FILES, ...WATCH_FILES]) {
+    const m = measurement.fanOut.get(f) ?? measurement.watchFanOut.get(f);
+    rows.push({ file: f, loc: lineCount(f), fanOut: m ? m.runtime : 0, rule: FAN_OUT_FILES.includes(f) ? 'shrink-only' : 'watch' });
+  }
+  return rows;
+}
+
+export function formatConcentrationTable(rows) {
+  const name = (f) => f.replace(/^src\//, '');
+  const w = Math.max(...rows.map((r) => name(r.file).length));
+  const lines = [`  ${'Module'.padEnd(w)}   LOC  fan-out  rule`];
+  for (const r of rows) lines.push(`  ${name(r.file).padEnd(w)}  ${String(r.loc).padStart(4)}  ${String(r.fanOut).padStart(7)}  ${r.rule}`);
+  return lines.join('\n');
+}
+
 // ── source scanning ─────────────────────────────────────────────────────────
 //
 // TypeScript 7 ships no JavaScript parser API (the `typescript` package exports
@@ -599,13 +653,14 @@ export function measureModuleGraph() {
 
   const pairs = new Map(PAIRS.map((p) => [p.id, measurePair(graph, p)]));
   const fanOut = new Map(FAN_OUT_FILES.map((f) => [f, measureFanOut(graph, problems, f)]));
+  const watchFanOut = new Map(WATCH_FILES.map((f) => [f, measureFanOut(graph, problems, f)]));
   const cycles = measureCycles(graph);
   const fanIn = measureFanIn(graph);
   const inlineOnlyTotal = [...graph.values()].reduce((a, e) => a + e.inlineOnly, 0);
   // Total distinct runtime import edges (internal files and packages alike).
   const totalEdges = [...graph.values()].reduce((a, e) => a + e.value.size, 0);
 
-  return { graph, problems, pairs, fanOut, cycles, fanIn, inlineOnlyTotal, totalEdges, filesScanned: graph.size };
+  return { graph, problems, pairs, fanOut, watchFanOut, cycles, fanIn, inlineOnlyTotal, totalEdges, filesScanned: graph.size };
 }
 
 /**
@@ -716,6 +771,30 @@ function collectGrowth(baseline, { pairs, fanOut, cycles }) {
   return problems;
 }
 
+/**
+ * Watched modules above their band, as failure lines. A missing baseline entry
+ * is not a failure: `--update` records it on the next run.
+ */
+function collectWatchBreaches(baseline, { watchFanOut }) {
+  const problems = [];
+  for (const f of WATCH_FILES) {
+    const m = watchFanOut.get(f);
+    const b = baseline.watchFanOut?.[f];
+    if (!b) continue;
+    const allowance = watchAllowance(b.runtime);
+    if (m.runtime > allowance) {
+      const fresh = m.modules.filter((x) => !(b.modules ?? []).includes(x));
+      problems.push(
+        `${f}: static fan-out ${m.runtime} modules, watched at ${b.runtime} (band up to ${allowance}). `
+        + 'A dependency accretion of this size wants an architecture review: move the concern to its '
+        + 'owner or reach it through src/lazyChunks.ts, then re-bank with --update.'
+        + fresh.map((e) => `\n      new: ${e} (${f}:${m.lines.get(e)})`).join(''),
+      );
+    }
+  }
+  return problems;
+}
+
 /** The committed baseline, or null when there is none yet; one read, no check-then-use. */
 function readBaseline() {
   try {
@@ -728,7 +807,7 @@ function readBaseline() {
 
 function runCli() {
   const measurement = measureModuleGraph();
-  const { graph, problems, pairs, fanOut, cycles, fanIn, inlineOnlyTotal } = measurement;
+  const { graph, problems, pairs, fanOut, watchFanOut, cycles, fanIn, inlineOnlyTotal } = measurement;
   const baseline = readBaseline();
 
   if (process.argv.includes('--update') || baseline === null) {
@@ -761,10 +840,21 @@ function runCli() {
       const m = fanOut.get(f);
       fan[f] = { runtime: m.runtime, typeOnly: m.typeOnly, dynamic: m.dynamic, modules: m.modules };
     }
+    const watch = {};
+    for (const f of WATCH_FILES) {
+      const m = watchFanOut.get(f);
+      watch[f] = { runtime: m.runtime, typeOnly: m.typeOnly, dynamic: m.dynamic, modules: m.modules };
+    }
     const doc = {
       purpose: PURPOSE,
       edges,
       fanOut: fan,
+      watchFanOut: watch,
+      watchRule:
+        'Watched, not ratcheted: each module may reach its banked runtime fan-out plus 10 % '
+        + '(at least 3) before the gate fails; --update re-banks in either direction. Sized like '
+        + 'the monolith size watch band so ordinary local change passes and a dependency '
+        + 'accretion is reviewed.',
       cycles: { count: cycles.count, components: cycles.components },
       context: {
         filesScanned: graph.size,
@@ -787,12 +877,14 @@ function runCli() {
       + `${FAN_OUT_FILES.map((f) => `${f.split('/').pop()} fan-out ${fanOut.get(f).runtime}`).join(', ')}, `
       + `${cycles.count} cycle${cycles.count === 1 ? '' : 's'} across ${graph.size} files.`,
     );
+    console.log(formatConcentrationTable(concentrationRows(measurement)));
     process.exit(0);
   }
 
   // ── shrink-only ─────────────────────────────────────────────────────────────
 
   problems.push(...collectGrowth(baseline, measurement));
+  problems.push(...collectWatchBreaches(baseline, measurement));
 
   if (problems.length > 0) {
     console.error('lint:module-graph FAILED\n');
@@ -820,6 +912,7 @@ function runCli() {
     + (hub ? `; most-imported ${hub.file} (${hub.importers})` : '')
     + (dropped > 0 ? ` (${dropped} fewer than baseline; run --update to bank it).` : '.'),
   );
+  console.log(formatConcentrationTable(concentrationRows(measurement)));
 }
 
 if (isCliEntry(import.meta.url)) runCli();
