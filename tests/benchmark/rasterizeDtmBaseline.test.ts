@@ -28,9 +28,9 @@ function cloud(n: number): TerrainPoint[] {
   return pts;
 }
 
-describe('rasterizeDtm aggregation cost', () => {
-  const run = ENABLED ? it : it.skip;
-  run(
+// Skipped by design outside a benchmark run: it needs an explicit opt-in.
+describe.skipIf(!ENABLED)('rasterizeDtm aggregation cost', () => {
+  it(
     'times every aggregation on one return set',
     () => {
       const pts = cloud(POINTS);
