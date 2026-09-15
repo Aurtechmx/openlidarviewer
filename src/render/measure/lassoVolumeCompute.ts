@@ -176,6 +176,13 @@ export interface LassoVolumeComputeOutput {
   readonly selectionByCloudId: Map<string, ReadonlyArray<number>>;
   readonly budget: VolumeBudgetDecision;
   readonly anySourceReduced: boolean;
+  /**
+   * True when at least one selected point came from a streaming source. The
+   * completeness of a streaming source is a property of the transfer, not of
+   * the footprint, so a caller that states an authority has to know whether
+   * the figure rests on one at all.
+   */
+  readonly streamingContributed: boolean;
   readonly polygon3D: ReadonlyArray<[number, number, number]>;
   readonly referenceZ: number;
   readonly result: ReturnType<typeof volumeFromLassoWithFootprint>['result'];
@@ -268,6 +275,9 @@ export function computeLassoVolume(
   const subsetParts: Float32Array[] = [];
   let totalSelected = 0;
   let base = 0;
+  // Streaming parts carry a null id; a part that survives the depth test is a
+  // streaming contribution to the figure.
+  let streamingContributed = false;
   for (const part of parts) {
     const { sel, positions, id } = part;
     // Kept indices, in the source array's own space.
@@ -281,6 +291,8 @@ export function computeLassoVolume(
       // Strided indices are in the reduced array's space; translate back so the
       // highlight lights up the right points in the source cloud.
       selectionByCloudId.set(id, stride === 1 ? kept : kept.map((i) => i * stride));
+    } else {
+      streamingContributed = true;
     }
     totalSelected += kept.length;
     const packed = new Float32Array(kept.length * 3);
@@ -334,6 +346,7 @@ export function computeLassoVolume(
     selectionByCloudId,
     budget,
     anySourceReduced,
+    streamingContributed,
     polygon3D: lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
     referenceZ: lassoOut.referenceZ,
     result: lassoOut.result,

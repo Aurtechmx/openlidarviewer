@@ -17,7 +17,7 @@
 import { stockpileVolume, type StockpileVolumeResult, type StockpileConfidence } from './stockpileVolume';
 import { stockpileAreaGrid, type StockpileAreaGridResult } from './stockpileAreaGrid';
 import type { Vec3 } from '../navMath';
-import type { RefinementReadiness } from '../streaming/refinementReadiness';
+import { streamingIsComplete, type StreamingCoverage } from './profileSectionSnapshot';
 
 export interface StockpileViewRow {
   readonly label: string;
@@ -146,9 +146,13 @@ export function stockpileToastLine(view: StockpileView): string {
 /** What the analysed sample was, relative to the whole source. */
 export interface StockpileScope {
   /**
-   * False while the source the footprint was drawn on is still arriving or
-   * refining (a streaming scan not yet settled), so cells filled by the
-   * resident subset do not authorise a final figure.
+   * Whether the source the footprint was drawn on is PROVEN complete: a
+   * committed static cloud, or a streaming source counted fully resident.
+   *
+   * A streaming source that holds part of its nodes, or whose node count is
+   * unknown, is false. Renderer readiness is not this fact: a settled view is
+   * settled for the current camera's wanted set, so a 5 %-resident source can
+   * fill every cell the footprint covers and still be most of a scan short.
    */
   readonly sourceComplete: boolean;
   /**
@@ -156,6 +160,12 @@ export interface StockpileScope {
    * voxel-reduced to the device budget, or a lasso walk that strode the points.
    */
   readonly sampled: boolean;
+  /**
+   * True when a streaming source contributed points, so an incomplete source
+   * can be named as streaming residency rather than left unexplained.
+   * Defaults to false.
+   */
+  readonly streaming?: boolean;
 }
 
 /** The result authority after footprint support AND scope are both applied. */
@@ -190,7 +200,12 @@ export function stockpileAuthority(
   scope: StockpileScope,
 ): { authority: StockpileAuthority; reason: string } {
   if (coverage === 'refused') return { authority: 'withheld', reason: 'insufficient observations' };
-  if (!scope.sourceComplete) return { authority: 'preview', reason: 'source still refining' };
+  if (!scope.sourceComplete) {
+    const reason = scope.streaming
+      ? 'source is streaming and not fully resident'
+      : 'source not proven complete';
+    return { authority: 'preview', reason };
+  }
   if (scope.sampled) return { authority: 'preview', reason: 'display sample' };
   if (coverage === 'preview') return { authority: 'preview', reason: 'footprint gaps' };
   return { authority: 'measured', reason: '' };
@@ -259,32 +274,47 @@ export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
   return v.unitVerified ? line : `${line} · units unverified (assumes metres)`;
 }
 
+/** What the caller knows about the sample and the source behind it. */
+export interface StockpileToastOptions {
+  /** True when a contributing cloud was voxel-reduced to the device budget. */
+  readonly sourceReduced?: boolean;
+  /** False for an unknown-unit CRS, which bars a pts/m² claim. */
+  readonly densityUnitKnown?: boolean;
+  /** `verticalUnitToMetres`; defaults to `lin` for a single-unit CRS. */
+  readonly vert?: number;
+  /** True when a streaming source contributed selected points. */
+  readonly streamingContributed?: boolean;
+  /**
+   * The streaming source's node counts, or null when nothing streams. What
+   * is resident can fill every cell the footprint covers; that is support,
+   * not completeness, so anything short of full residency stays a preview.
+   */
+  readonly streamingCoverage?: StreamingCoverage | null;
+  /** True when the lasso walk strode the points. */
+  readonly walkSampled?: boolean;
+}
+
 /**
  * End-to-end helper for the lasso toast: fit the "lowest ground" base plane
  * with the point-sample estimator (kept as the base and validity reference),
  * integrate the volume with the area-weighted grid, and return the
  * ` · Stockpile: …` suffix, or `''` when the footprint is unusable. Keeps the
  * whole compute + format path inside the lazy chunk, so `main.ts` carries only
- * the call. Positional args keep the eager call site byte-cheap.
+ * the call.
  */
 export function stockpileToastSuffix(
   polygon: ReadonlyArray<Vec3>,
   positions: Float32Array,
   lin?: number,
-  sourceReduced?: boolean,
-  densityUnitKnown?: boolean,
-  /** `verticalUnitToMetres`; defaults to `lin` for a single-unit CRS. */
-  vert?: number,
-  /**
-   * The streaming session's readiness, or null when nothing streams. A source
-   * that has not settled can still fill every cell with what is resident;
-   * that is support, not completeness, so the figure stays a preview.
-   */
-  readiness: RefinementReadiness | null = null,
-  /** True when the lasso walk strode the points; defaults to false. */
-  walkSampled: boolean = false,
+  options: StockpileToastOptions = {},
 ): string {
-  const sourceComplete = readiness === null || readiness.phase === 'settled';
+  const { sourceReduced, densityUnitKnown, vert, streamingContributed, walkSampled } = options;
+  // A streaming source authorises a measured figure only when its resident
+  // node count reaches its known node count. An unknown count (null) is not
+  // evidence of coverage, so it reads as incomplete.
+  const sourceComplete =
+    !streamingContributed ||
+    (options.streamingCoverage != null && streamingIsComplete(options.streamingCoverage) === true);
   if (polygon.length < 3 || positions.length < 9) return '';
   const stock = stockpileVolume({
     polygon,
@@ -299,7 +329,11 @@ export function stockpileToastSuffix(
     polygon,
     positions,
     { z: stock.breakdown.baseZ, uncertainty: stock.breakdown.baseUncertainty },
-    { sourceComplete, sampled: Boolean(sourceReduced) || walkSampled },
+    {
+      sourceComplete,
+      sampled: Boolean(sourceReduced) || Boolean(walkSampled),
+      streaming: Boolean(streamingContributed),
+    },
     { lin, vert, unitVerified: densityUnitKnown ?? true },
   );
   if (view.authority !== 'withheld' && view.volumeM3 <= 0) return '';
