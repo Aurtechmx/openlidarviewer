@@ -79,7 +79,7 @@
   border: none;
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: filter 0.15s ease, transform 0.05s ease;
+  transition: filter 150ms ease, transform 50ms ease;
 }
 .olv-contour-launcher-action:hover { filter: brightness(1.08); }
 .olv-contour-launcher-action:active { transform: translateY(1px); }
@@ -127,8 +127,7 @@
 .olv-cs-section-head {
   font-size: var(--text-2xs);
   font-weight: 700;
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   margin-bottom: 8px;
 }
@@ -149,7 +148,7 @@
   border: 1px solid var(--hairline);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+  transition: border-color 150ms ease, background 150ms ease, transform 50ms ease;
 }
 .olv-cs-purpose-card:hover,
 .olv-cs-genmode-card:hover { border-color: var(--hairline-strong); }
@@ -207,7 +206,7 @@
   justify-content: center;
   width: 18px; height: 18px;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 700;
   color: var(--text-faint);
   background: var(--panel-recessive);
@@ -224,8 +223,7 @@
 .olv-contour-launcher-head {
   font-size: var(--text-2xs);
   font-weight: 700;
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--accent);
   margin-bottom: 2px;
 }
@@ -289,7 +287,7 @@
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+  transition: border-color 150ms ease, background 150ms ease, transform 50ms ease;
 }
 .olv-cs-export-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
 .olv-cs-export-btn:active { transform: translateY(1px); }

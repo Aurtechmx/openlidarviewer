@@ -127,8 +127,7 @@
   display: flex; flex-direction: column; gap: var(--space-sm);
 }
 .olv-fp-options-legend {
-  padding: 0; font-size: var(--text-2xs); letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--text-faint);
+  padding: 0; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 .olv-fp-opt-row { display: flex; align-items: center; gap: var(--space-sm); }
 .olv-fp-opt-label { font-size: var(--text-2xs); color: var(--text-dim); flex: none; }
@@ -188,7 +187,7 @@
   display: flex; align-items: baseline; gap: var(--space-sm);
 }
 .olv-scan-type-label {
-  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint); white-space: nowrap;
 }
 .olv-scan-type-note { font-size: var(--text-2xs); color: var(--accent); }

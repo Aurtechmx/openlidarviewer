@@ -226,13 +226,12 @@
 .olv-witness-details {
   margin-top: var(--space-md);
   padding: var(--space-sm) var(--space-xs) var(--space-xs) var(--space-xs);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--hairline);
 }
 .olv-witness-summary {
   cursor: pointer;
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   padding: var(--space-2xs) 0;
   list-style: none;
@@ -338,8 +337,8 @@
 .olv-mp-summary-sec { margin: var(--space-2xs) var(--space-xs) 0 var(--space-xs); }
 .olv-mp-summary-sec-toggle {
   cursor: pointer;
-  font-size: var(--text-2xs);
-  letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   padding: var(--space-2xs) 0;
   list-style: none; user-select: none;
@@ -399,9 +398,8 @@
   gap: 2px;
 }
 .olv-mp-sampler-label {
-  font-size: var(--text-2xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-mp-sampler-input {
@@ -436,9 +434,8 @@
 }
 .olv-mp-stations-summary {
   cursor: pointer;
-  font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   padding: var(--space-2xs) 0;
   list-style: none;

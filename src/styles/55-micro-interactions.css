@@ -20,7 +20,7 @@
 
 /* Panels glide in rather than snapping */
 .olv-inspector, .olv-navbar, .olv-dock, .olv-backend {
-  animation: olv-rise-in 260ms ease both;
+  animation: olv-rise-in var(--dur-slow) ease both;
 }
 @keyframes olv-rise-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -58,5 +58,20 @@
   .olv-dock,
   .olv-backend {
     animation: none;
+  }
+}
+
+/* A blanket floor under everything else. The per-component blocks above stay,
+   because they say what each surface should look like when it holds still. This
+   catches the rest: the sheet keeps growing new transitions, and a reader who
+   asked for less motion should not wait for each one to be guarded by hand. */
+@media (prefers-reduced-motion: reduce) {
+  body *,
+  body *::before,
+  body *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

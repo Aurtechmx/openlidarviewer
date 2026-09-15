@@ -48,7 +48,7 @@
 .olv-fit-caveats-summary::-webkit-details-marker { display: none; }
 .olv-fit-caveats-summary::before {
   content: '▸'; display: inline-block; margin-right: var(--space-2xs);
-  font-size: 0.85em; transition: transform 0.12s ease;
+  font-size: 0.85em; transition: transform 120ms ease;
 }
 .olv-fit-caveats[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
 

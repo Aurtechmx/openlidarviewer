@@ -99,6 +99,8 @@
   --text-xl: 16px; /* panel titles */
   --text-2xl: 20px; /* section headings */
   --text-3xl: 28px; /* display */
+  --text-value: 16px; /* focal result values — the number a reader came for */
+  --text-micro: 10px; /* keycaps and superscripts only */
 
   /*
    * Radius scale — four corner radii plus a pill. Drawn from the
@@ -297,7 +299,7 @@
 }
 .olv-palette-input {
   width: 100%;
-  font-family: var(--font); font-size: 15px;
+  font-family: var(--font); font-size: var(--text-xl);
   color: var(--text);
   background: transparent;
   border: none; outline: none;
@@ -311,8 +313,8 @@
   padding: var(--space-sm) var(--space-sm) var(--space-md);
 }
 .olv-palette-section {
-  font-size: var(--text-xs); color: var(--text-faint);
-  letter-spacing: 0.07em; text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-faint);
+  letter-spacing: 0.02em;
   padding: var(--space-lg) var(--space-xl) var(--space-xs);
 }
 .olv-palette-section:first-child { padding-top: var(--space-xs); }
@@ -854,9 +856,8 @@ body.olv-theme-light .olv-empty::before {
 
 /* Eyebrow — the one-line technical positioning above the headline. */
 .olv-empty-eyebrow {
-  font-size: var(--text-xs);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 
@@ -990,8 +991,8 @@ body.olv-theme-light .olv-empty::before {
  * LiDAR"). Sets a clear visual break between the three input modes so
  * the user reads three distinct intents, not five competing inputs. */
 .olv-empty-section-label {
-  font-size: var(--text-xs); color: var(--text-faint);
-  letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-faint);
+  letter-spacing: 0.02em;
   margin-top: var(--space-4xl); margin-bottom: var(--space-2xs);
 }
 .olv-samples { display: flex; gap: var(--space-lg); flex-wrap: wrap; justify-content: center; }
@@ -1178,7 +1179,7 @@ body.olv-theme-light .olv-empty::before {
 /* Desktop collapse — slide the whole rail past the right edge (GPU transform). */
 @media (min-width: 768px) {
   .olv-right-rail {
-    transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
+    transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-slow) var(--ease-standard);
   }
   .olv-right-rail.olv-right-collapsed {
     transform: translateX(calc(100% + var(--space-lg, 16px)));
@@ -1201,7 +1202,7 @@ body.olv-theme-light .olv-empty::before {
  * section" before it reaches the hairline. The hairline drops to half
  * opacity so it doesn't compete with the typographic eyebrow below it.
  */
-.olv-section { margin-top: var(--space-2xl); padding-top: var(--space-md); border-top: 0.5px solid rgba(255, 255, 255, 0.05); }
+.olv-section { margin-top: var(--space-2xl); padding-top: var(--space-md); border-top: 0.5px solid var(--hairline); }
 .olv-section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
 /* Section headings read as written. `Coordinate system`, `Saved views` and
    `Scan report` are authored sentence-case in TS and were uppercased here
@@ -1417,7 +1418,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-rvc-apply:hover { color: var(--accent); }
 .olv-rvc-spark { color: var(--accent); font-size: 0.85em; }
 .olv-rvc-dismiss {
-  font-size: 16px; line-height: 1; color: var(--text-dim);
+  font-size: var(--text-xl); line-height: 1; color: var(--text-dim);
   background: none; border: none; cursor: pointer; padding: 2px 6px;
 }
 .olv-rvc-dismiss:hover { color: var(--text); }
@@ -1495,9 +1496,8 @@ body.olv-theme-light .olv-empty::before {
 }
 .olv-visuals-advanced-summary {
   cursor: pointer;
-  font-size: var(--text-xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   list-style: none;
   user-select: none;
@@ -1799,7 +1799,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-debug.is-collapsed .olv-debug-body { display: none; }
 .olv-debug.is-collapsed .olv-debug-title { margin-bottom: 0; }
 .olv-debug-label {
-  font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase;
+  font-size: var(--text-micro); letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--text-faint);
   margin: var(--space-md) 0 var(--space-2xs);
 }
@@ -2093,7 +2093,7 @@ body.olv-theme-light .olv-empty::before {
 }
 .olv-mode-icon svg { width: 100%; height: 100%; display: block; }
 .olv-mode-label {
-  font-size: 9px;
+  font-size: var(--text-micro);
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2241,8 +2241,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   transform: translateY(6px);
 }
 .olv-nav-speed-label {
-  font-size: var(--text-xs); color: var(--text-faint);
-  letter-spacing: 0.04em; text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-faint);
+  letter-spacing: 0.02em;
 }
 .olv-speed-slider { width: 116px; }
 .olv-speed-readout {
@@ -2287,15 +2287,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   gap: var(--space-xl); margin-bottom: var(--space-sm);
 }
 .olv-nav-hud-title {
-  font-size: var(--text-xs); color: var(--text-faint);
-  letter-spacing: 0.07em; text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-faint);
+  letter-spacing: 0.02em;
 }
 .olv-nav-hud-close {
   flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px;
   background: none; border: none; color: var(--text-faint);
-  font-size: 17px; line-height: 1; cursor: pointer;
+  font-size: var(--text-xl); line-height: 1; cursor: pointer;
   border-radius: var(--radius-sm);
   transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
 }
@@ -2337,8 +2337,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-top: 0.5px solid rgba(255, 255, 255, 0.05);
 }
 .olv-cam-presets-label {
-  font-size: var(--text-xs); color: var(--text-faint);
-  letter-spacing: 0.07em; text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-faint);
+  letter-spacing: 0.02em;
   display: block; margin-bottom: var(--space-sm);
 }
 .olv-cam-presets, .olv-cam-views { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
@@ -2437,7 +2437,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* Panels glide in rather than snapping */
 .olv-inspector, .olv-navbar, .olv-dock, .olv-backend {
-  animation: olv-rise-in 260ms ease both;
+  animation: olv-rise-in var(--dur-slow) ease both;
 }
 @keyframes olv-rise-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -2475,6 +2475,21 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-dock,
   .olv-backend {
     animation: none;
+  }
+}
+
+/* A blanket floor under everything else. The per-component blocks above stay,
+   because they say what each surface should look like when it holds still. This
+   catches the rest: the sheet keeps growing new transitions, and a reader who
+   asked for less motion should not wait for each one to be guarded by hand. */
+@media (prefers-reduced-motion: reduce) {
+  body *,
+  body *::before,
+  body *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 /* Export buttons (Inspector)
@@ -2588,8 +2603,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   line-height: 1.45;
 }
 .olv-crs-picker-label {
-  font-size: var(--text-xs); color: var(--text-faint);
-  letter-spacing: 0.04em; text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-faint);
+  letter-spacing: 0.02em;
   margin-top: var(--space-xs);
 }
 .olv-crs-select {
@@ -2655,14 +2670,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  */
 .olv-prov-ribbon { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-xl); }
 .olv-prov-ribbon-title {
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-prov-bound { display: flex; flex-direction: column; gap: 1px; }
 .olv-prov-bound-label  { font-size: var(--text-xs); color: var(--text-faint); }
-.olv-prov-bound-value  { font-size: var(--text-xs);   color: var(--text); }
+.olv-prov-bound-value  { font-size: var(--text-value); color: var(--text); }
 .olv-prov-bound-source { font-size: var(--text-2xs);   color: var(--text-faint); font-style: italic; }
 .olv-prov-disclaimer {
   font-size: var(--text-xs);
@@ -2694,10 +2708,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-stats-section > summary {
   list-style: none;
   cursor: pointer;
-  font-size: var(--text-xs);
+  font-size: var(--text-xs); font-weight: 600;
   color: var(--text-faint);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   user-select: none;
   padding: 0;
   margin-bottom: var(--space-md);
@@ -2781,8 +2794,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-pc-head { display: flex; align-items: center; justify-content: space-between; }
 .olv-pc-title {
-  font-size: var(--text-xs); color: var(--accent);
-  letter-spacing: 0.05em; text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600; color: var(--accent);
+  letter-spacing: 0.02em;
 }
 .olv-pc-dismiss {
   background: none; border: none; color: var(--text-faint);
@@ -3194,7 +3207,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-dock .olv-tool {
     flex-direction: column;
     gap: 2px;
-    font-size: 9px;
+    font-size: var(--text-micro);
     letter-spacing: 0.02em;
     padding: var(--space-2xs) var(--space-xs);
     border-radius: var(--radius-sm);
@@ -3209,7 +3222,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-dock .olv-tool-ico { flex-direction: column; gap: 2px; }
   .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
   .olv-dock .olv-tool-label {
-    font-size: 9px;
+    font-size: var(--text-micro);
     line-height: 1;
     font-weight: 500;
   }
@@ -3345,7 +3358,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     flex-shrink: 0;
     display: inline-flex; align-items: center; justify-content: center;
     background: none; border: none; color: var(--text-faint);
-    font-size: 17px; line-height: 1;
+    font-size: var(--text-xl); line-height: 1;
     min-width: 44px; min-height: 44px;
   }
   @media (hover: hover) { .olv-touch-hint-x:hover { color: var(--text); } }
@@ -3400,7 +3413,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
        maths shifts the panel down by its own height minus the peek and
        the safe-area inset. */
     transform: translateY(calc(100% - var(--olv-sheet-head-peek) - env(safe-area-inset-bottom)));
-    transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition: transform var(--dur-slow) cubic-bezier(0.22, 0.61, 0.36, 1);
     box-shadow: 0 -14px 38px rgba(0, 0, 0, 0.55);
     overflow: hidden;
   }
@@ -3452,7 +3465,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-sheet-close {
     display: inline-flex; align-items: center; justify-content: center;
     background: none; border: none; color: var(--text-dim);
-    font-size: 22px; line-height: 1;
+    font-size: var(--text-2xl); line-height: 1;
     min-width: 44px; min-height: 44px;
     margin: -8px -10px -8px 0;
   }
@@ -3866,7 +3879,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* The kind name is a VISIBLE caption under the glyph (evidence: unlabeled icon
  * tools fail first-time users, and hover tooltips don't work on touch). */
 .olv-mkind-icon .olv-mkind-name {
-  font-size: 8px; line-height: 1; letter-spacing: 0.02em;
+  font-size: var(--text-micro); line-height: 1; letter-spacing: 0.02em;
   color: inherit; white-space: nowrap;
 }
 /* Action buttons (Undo / Metric / Done / Finish / Clear): glyph over label. */
@@ -3981,7 +3994,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   max-height: calc(100% - 56px
     - var(--olv-measure-bar-clear, 0px)
     - var(--olv-dock-clear, 80px));
-  transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
+  transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-slow) var(--ease-standard);
   scrollbar-gutter: stable;
 }
 /* Collapsed — slide the whole column out (transform only; GPU, no reflow),
@@ -4034,7 +4047,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
     4px 4px 14px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.24);
   cursor: pointer; pointer-events: auto; z-index: var(--z-dock);
-  transition: left 420ms var(--ease-spring), width 200ms var(--ease-standard),
+  transition: left var(--dur-slow) var(--ease-spring), width 200ms var(--ease-standard),
     color 160ms var(--ease-standard), border-color 160ms var(--ease-standard),
     box-shadow 200ms var(--ease-standard), background 200ms var(--ease-standard);
 }
@@ -4061,7 +4074,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   outline: 2px solid var(--accent-soft);
   outline-offset: 2px;
 }
-.olv-rail-tab svg { width: 14px; height: 14px; transition: transform 300ms var(--ease-spring); }
+.olv-rail-tab svg { width: 14px; height: 14px; transition: transform var(--dur-slow) var(--ease-spring); }
 .olv-rail-tab[aria-expanded="false"] svg { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
   .olv-left-panels { transition: opacity 120ms linear; }
@@ -4100,7 +4113,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
     -4px 4px 14px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.24);
   cursor: pointer; pointer-events: auto; z-index: var(--z-dock);
-  transition: right 420ms var(--ease-spring), width 200ms var(--ease-standard),
+  transition: right var(--dur-slow) var(--ease-spring), width 200ms var(--ease-standard),
     color 160ms var(--ease-standard), border-color 160ms var(--ease-standard),
     box-shadow 200ms var(--ease-standard), background 200ms var(--ease-standard);
 }
@@ -4127,7 +4140,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   outline: 2px solid var(--accent-soft);
   outline-offset: 2px;
 }
-.olv-right-rail-tab svg { width: 14px; height: 14px; transition: transform 300ms var(--ease-spring); }
+.olv-right-rail-tab svg { width: 14px; height: 14px; transition: transform var(--dur-slow) var(--ease-spring); }
 .olv-right-rail-tab[aria-expanded="false"] svg { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
   .olv-right-rail-tab, .olv-right-rail-tab svg { transition: none; }
@@ -4732,13 +4745,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-witness-details {
   margin-top: var(--space-md);
   padding: var(--space-sm) var(--space-xs) var(--space-xs) var(--space-xs);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--hairline);
 }
 .olv-witness-summary {
   cursor: pointer;
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   padding: var(--space-2xs) 0;
   list-style: none;
@@ -4844,8 +4856,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-summary-sec { margin: var(--space-2xs) var(--space-xs) 0 var(--space-xs); }
 .olv-mp-summary-sec-toggle {
   cursor: pointer;
-  font-size: var(--text-2xs);
-  letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   padding: var(--space-2xs) 0;
   list-style: none; user-select: none;
@@ -4905,9 +4917,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   gap: 2px;
 }
 .olv-mp-sampler-label {
-  font-size: var(--text-2xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-mp-sampler-input {
@@ -4942,9 +4953,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-stations-summary {
   cursor: pointer;
-  font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   padding: var(--space-2xs) 0;
   list-style: none;
@@ -5270,7 +5280,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: 10px; padding: 12px;
 }
-.olv-cl-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
+.olv-cl-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: 10px; }
 
 /* Manual classification-edit panel — mounts directly beneath .olv-class-panel,
    so it borrows the same 248px dock chrome to read as a first-class sibling.
@@ -5282,7 +5292,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: 10px; padding: 12px;
   display: flex; flex-direction: column; gap: var(--space-sm);
 }
-.olv-reclass-head { font-size: 12px; font-weight: 500; margin-bottom: var(--space-2xs); }
+.olv-reclass-head { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-2xs); }
 .olv-reclass-select {
   width: 100%; box-sizing: border-box; font: inherit; font-size: var(--text-sm);
   color: var(--text); background: transparent; border: 0.5px solid var(--hairline);
@@ -5374,17 +5384,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: 3px; border: 0.5px solid rgba(255, 255, 255, 0.22);
 }
 .olv-cl-name {
-  flex: 1 1 auto; min-width: 0; font-size: 11.5px; color: var(--text);
+  flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--text);
   font-family: var(--font);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* Tabular figures so counts line up column-right as they refine while streaming. */
 .olv-cl-count {
-  flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums;
+  flex-shrink: 0; font-size: var(--text-xs); font-variant-numeric: tabular-nums;
   color: var(--text-dim); text-align: right;
 }
 .olv-cl-solo {
-  flex-shrink: 0; font-size: 10px; color: var(--text-faint);
+  flex-shrink: 0; font-size: var(--text-micro); color: var(--text-faint);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: 5px; padding: 2px 5px;
@@ -5395,7 +5405,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* Solo as a glyph + label (isolate "stacked layers" mark before the word). */
 .olv-cl-solo-ico { display: inline-flex; align-items: center; gap: 4px; }
 .olv-cl-solo-ico svg { width: 12px; height: 12px; flex: none; display: block; }
-.olv-cl-empty { font-size: 11.5px; color: var(--text-faint); }
+.olv-cl-empty { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-cl-footer {
   display: flex; flex-wrap: wrap; gap: 6px;
   margin-top: 10px; padding-top: 10px;
@@ -5406,14 +5416,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-cl-cvd {
   flex: 1 0 100%;
   display: flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   cursor: pointer;
   transition: color 130ms ease;
 }
 .olv-cl-cvd:hover { color: var(--text); }
 .olv-cl-cvd-input { accent-color: var(--accent); margin: 0; cursor: pointer; }
 .olv-cl-showall {
-  flex: 1; font-size: 11px; color: var(--text-dim);
+  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: 6px; padding: 6px;
@@ -5486,7 +5496,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-wfc-title { font-size: var(--text-md); font-weight: 600; }
 .olv-wfc-subtitle { font-size: var(--text-xs); color: var(--text-dim); margin-top: 2px; }
 .olv-wfc-close {
-  font-size: 20px; line-height: 1; color: var(--text-dim);
+  font-size: var(--text-2xl); line-height: 1; color: var(--text-dim);
   background: none; border: none; cursor: pointer; padding: 2px 6px;
 }
 .olv-wfc-close:hover { color: var(--text); }
@@ -5541,7 +5551,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   outline: 1px solid var(--accent); outline-offset: 1px;
 }
 .olv-shortcuts-title {
-  font-size: 15px;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 .olv-shortcuts-subtitle {
@@ -5573,9 +5583,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-shortcuts-section {
   font-variant-numeric: tabular-nums;
-  font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   padding: var(--space-md) var(--space-sm) var(--space-xs);
 }
@@ -5770,9 +5779,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-md);
 }
 .olv-mp-chain-label {
-  font-size: var(--text-2xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-mp-chain-chips {
@@ -6122,8 +6130,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-help-empty { font-size: var(--text-sm); color: var(--text-dim); padding: var(--space-2xl); }
 .olv-help-section { margin-top: var(--space-2xl); }
 .olv-help-heading {
-  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--accent); margin-bottom: var(--space-md);
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em; color: var(--accent); margin-bottom: var(--space-md);
 }
 .olv-help-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-help-row { display: flex; gap: var(--space-lg); align-items: baseline; }
@@ -6233,18 +6241,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   padding: var(--space-sm) 0; border-top: 0.5px solid var(--hairline);
 }
 .olv-rf-stat-label {
-  font-size: var(--text-2xs); letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-rf-stat-value {
-  margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-md);
+  margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-value);
   color: var(--text); overflow-wrap: anywhere;
 }
 /* Station table — reuses the in-panel scroll wrap + sticky header, with room to
    read more rows at once than the 220px dock cap allows. */
 .olv-rf-stations { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-rf-section-label {
-  font-size: var(--text-2xs); letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint);
 }
 .olv-rf-stations-wrap { max-height: 40vh; }
@@ -6254,8 +6262,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-modal-grid { display: flex; flex-direction: column; gap: var(--space-lg); }
 .olv-modal-field { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-modal-label {
-  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-dim);
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em; color: var(--text-dim);
 }
 .olv-modal-input {
   font: inherit; font-size: var(--text-xs); color: var(--text);
@@ -6274,8 +6282,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(255, 255, 255, 0.02); padding: var(--space-lg);
 }
 .olv-modal-locked-head {
-  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: var(--space-md);
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em; color: var(--text-faint); margin-bottom: var(--space-md);
 }
 .olv-modal-locked-grid {
   display: grid; grid-template-columns: max-content 1fr;
@@ -6493,7 +6501,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* Icon-over-label tools — glyph + tiny caption, comfortable tap target. */
   .olv-mkind-icon { min-width: 56px; padding: var(--space-xs) var(--space-2xs); border-radius: var(--radius-md); }
   .olv-mkind-icon svg { width: 22px; height: 22px; }
-  .olv-mkind-icon .olv-mkind-name { font-size: 9px; }
+  .olv-mkind-icon .olv-mkind-name { font-size: var(--text-micro); }
   /* On a phone the on-canvas pending-dot pulse carries the "tap next point"
      guidance, so the instruction pill is dropped to keep the rail uncluttered
      (touch has no hover tooltip to compete with anyway). */
@@ -6517,7 +6525,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     border-radius: var(--radius-md);
   }
   .olv-micon-btn svg { width: 18px; height: 18px; }
-  .olv-micon-btn .olv-mlabel { font-size: 9px; }
+  .olv-micon-btn .olv-mlabel { font-size: var(--text-micro); }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -6929,7 +6937,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 .olv-di-details {
   margin-top: var(--space-xs);
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--hairline);
   padding-top: var(--space-xs);
 }
 .olv-di-details-summary {
@@ -7191,7 +7199,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* Left column — label over the supporting line; takes the slack. */
 .olv-analyse-ready-main { flex: 1 1 auto; min-width: 0; }
 .olv-analyse-ready-label {
-  font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-dim);
 }
 .olv-analyse-ready-detail {
@@ -7307,7 +7315,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* ── Analyse v0.4.0 hardening: chips, sections, recommend, coverage, roadmap ── */
 .olv-analyse-section {
-  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint); margin: var(--space-lg) 0 var(--space-sm);
   border-top: 0.5px solid var(--hairline); padding-top: var(--space-md);
 }
@@ -7392,7 +7400,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-fit-caveats-summary::-webkit-details-marker { display: none; }
 .olv-fit-caveats-summary::before {
   content: '▸'; display: inline-block; margin-right: var(--space-2xs);
-  font-size: 0.85em; transition: transform 0.12s ease;
+  font-size: 0.85em; transition: transform 120ms ease;
 }
 .olv-fit-caveats[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
 
@@ -7501,8 +7509,8 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 
 .olv-bc-section-label {
-  font-size: var(--text-xs); font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.04em; color: var(--text-faint); margin-bottom: var(--space-md);
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em; color: var(--text-faint); margin-bottom: var(--space-md);
 }
 
 .olv-bc-drop {
@@ -7596,7 +7604,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-bc-row { border: 0.5px solid var(--hairline); border-radius: var(--radius-md); padding: var(--space-md); }
 .olv-bc-row.is-error { border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.06); }
 .olv-bc-row-top { display: flex; align-items: center; gap: var(--space-md); }
-.olv-bc-row-icon { font-size: 9px; }
+.olv-bc-row-icon { font-size: var(--text-micro); }
 .olv-bc-row.is-ok .olv-bc-row-icon { color: var(--rating-excellent); }
 .olv-bc-row.is-error .olv-bc-row-icon { color: var(--rating-weak); }
 .olv-bc-row-name { flex: 1; min-width: 0; font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -7747,7 +7755,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   /* Arrival motion (design audit 1.1 + 3.4): the verdict rises + fades in
      a touch slower than the readiness cards so it resolves LAST and loudest,
      the eye's natural landing point. Reuses the canonical olv-ready-in. */
-  animation: olv-ready-in 260ms 120ms ease both;
+  animation: olv-ready-in var(--dur-slow) 120ms ease both;
   /* The rating tint is layered ON the raised fill via a low-alpha
      gradient set per state below, so the card carries the verdict
      colour as a coherent region, not just a stripe. */
@@ -7757,8 +7765,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 .olv-analyse-assess-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
 .olv-analyse-assess-label {
-  font-size: var(--text-2xs); font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 /* The hero word — large, the unmistakable focal point of the panel. */
 .olv-analyse-assess-verdict { font-size: var(--text-2xl); font-weight: 700; line-height: 1.05; letter-spacing: -0.01em; }
@@ -7817,12 +7824,10 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    reuses the rating tokens so it never introduces a new hardcoded hue. */
 .olv-analyse-assess-export {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs);
-  margin-top: var(--space-sm); padding-top: var(--space-sm);
-  border-top: 0.5px solid var(--hairline);
+  margin-top: var(--space-lg);
 }
 .olv-analyse-assess-export-label {
-  font-size: var(--text-2xs); font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 .olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 700; }
 .olv-analyse-assess-export-reason { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere; }
@@ -7835,18 +7840,16 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    Descriptive (never a good/bad colour); the density caveat below it reuses
    the .olv-caveat honesty primitive. */
 .olv-analyse-derived {
-  margin-top: var(--space-sm); padding-top: var(--space-sm);
-  border-top: 0.5px solid var(--hairline);
+  margin-top: var(--space-lg);
 }
 .olv-analyse-derived-label {
   cursor: pointer; list-style: none; user-select: none;
-  font-size: var(--text-2xs); font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 .olv-analyse-derived-label::-webkit-details-marker { display: none; }
 .olv-analyse-derived-label::before {
   content: '▸'; display: inline-block; margin-right: var(--space-2xs);
-  font-size: 0.85em; transition: transform 0.12s ease;
+  font-size: 0.85em; transition: transform 120ms ease;
 }
 .olv-analyse-derived[open] > .olv-analyse-derived-label::before { transform: rotate(90deg); }
 .olv-analyse-derived-value {
@@ -7899,7 +7902,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-assess-metrics-summary::-webkit-details-marker { display: none; }
 .olv-analyse-assess-metrics-summary::before {
   content: '▸'; display: inline-block; margin-right: var(--space-2xs);
-  font-size: 0.85em; transition: transform 0.12s ease;
+  font-size: 0.85em; transition: transform 120ms ease;
 }
 .olv-analyse-assess-metrics-all[open] > .olv-analyse-assess-metrics-summary::before {
   transform: rotate(90deg);
@@ -8076,14 +8079,13 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-details { margin-bottom: var(--space-lg); }
 .olv-analyse-details-summary {
   cursor: pointer; list-style: none; user-select: none;
-  font-size: var(--text-2xs); font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim);
   padding: var(--space-sm) 0; display: flex; align-items: center; gap: var(--space-sm);
   border-bottom: 0.5px solid var(--hairline);
 }
 .olv-analyse-details-summary::-webkit-details-marker { display: none; }
 .olv-analyse-details-summary::before {
-  content: '▸'; font-size: 9px; color: var(--text-faint);
+  content: '▸'; font-size: var(--text-micro); color: var(--text-faint);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 .olv-analyse-details[open] > .olv-analyse-details-summary::before { transform: rotate(90deg); }
@@ -8118,8 +8120,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 /* A labelled preview tile — heading, raster, optional legend, caption, export. */
 .olv-analyse-raster-tile { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-analyse-sublabel {
-  font-size: var(--text-2xs); font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 .olv-analyse-caption { font-size: var(--text-2xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
 /* Colour-ramp legend under a raster tile. */
@@ -8169,12 +8170,10 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    of the same panel rather than a new kind of surface. */
 .olv-analyse-layer-controls {
   display: flex; flex-direction: column; gap: var(--space-2xs);
-  margin-top: var(--space-md); padding-top: var(--space-md);
-  border-top: 0.5px solid var(--hairline);
+  margin-top: var(--space-lg);
 }
 .olv-analyse-layer-head {
-  font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.9px;
-  text-transform: uppercase; color: var(--text-faint);
+  font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em; color: var(--text-faint);
 }
 .olv-analyse-layer-row { display: flex; align-items: center; gap: var(--space-lg); flex-wrap: wrap; }
 .olv-analyse-layer-toggle {
@@ -8436,8 +8435,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   display: flex; flex-direction: column; gap: var(--space-sm);
 }
 .olv-fp-options-legend {
-  padding: 0; font-size: var(--text-2xs); letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--text-faint);
+  padding: 0; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 .olv-fp-opt-row { display: flex; align-items: center; gap: var(--space-sm); }
 .olv-fp-opt-label { font-size: var(--text-2xs); color: var(--text-dim); flex: none; }
@@ -8497,7 +8495,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   display: flex; align-items: baseline; gap: var(--space-sm);
 }
 .olv-scan-type-label {
-  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint); white-space: nowrap;
 }
 .olv-scan-type-note { font-size: var(--text-2xs); color: var(--accent); }
@@ -8809,7 +8807,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     padding-bottom: env(safe-area-inset-bottom);
     pointer-events: auto;
     /* Smooth snapping between detents; the drag disables it for 1:1 tracking. */
-    transition: height 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition: height var(--dur-slow) cubic-bezier(0.22, 0.61, 0.36, 1);
     will-change: height;
   }
   .olv-mobile-sheet.olv-hidden { display: none; }
@@ -9012,12 +9010,12 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 /* ── Dataset Story card + Export Health (fitness-for-use synthesis) ───────── */
 .olv-story-card {
   display: flex; flex-direction: column; gap: 7px;
-  font-size: 12px; line-height: 1.4; min-width: 0;
+  font-size: var(--text-sm); line-height: 1.4; min-width: 0;
 }
 .olv-story-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .olv-story-title { font-weight: 600; letter-spacing: 0.02em; }
 .olv-story-assess {
-  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px;
   border: 0.5px solid color-mix(in srgb, currentColor 35%, transparent);
 }
 .olv-story-assess.is-good { color: var(--ok, #2e9e5b); }
@@ -9025,18 +9023,18 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-story-assess.is-limited { color: var(--warn, #b8860b); }
 .olv-story-assess.is-blocked { color: var(--bad, #c0392b); }
 .olv-story-assess.is-unknown { color: var(--muted, #8a8f98); }
-.olv-story-headline { font-size: 12.5px; opacity: 0.92; }
+.olv-story-headline { font-size: var(--text-sm); opacity: 0.92; }
 .olv-story-row { display: grid; grid-template-columns: 116px 1fr; gap: 8px; align-items: baseline; }
-.olv-story-k { color: var(--muted, #8a8f98); font-size: 11px; }
+.olv-story-k { color: var(--muted, #8a8f98); font-size: var(--text-xs); }
 .olv-story-v { min-width: 0; word-break: break-word; }
 .olv-story-next {
   margin-top: 2px; padding-top: 7px; font-weight: 500;
   border-top: 0.5px solid color-mix(in srgb, currentColor 14%, transparent);
 }
 
-.olv-health { display: flex; flex-direction: column; gap: 10px; font-size: 12px; min-width: 280px; }
+.olv-health { display: flex; flex-direction: column; gap: 10px; font-size: var(--text-sm); min-width: 280px; }
 .olv-health-verdict {
-  font-weight: 600; font-size: 13px; padding: 7px 10px; border-radius: 8px;
+  font-weight: 600; font-size: var(--text-sm); padding: 7px 10px; border-radius: 8px;
   border: 0.5px solid color-mix(in srgb, currentColor 35%, transparent);
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
@@ -9049,9 +9047,9 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-health-row.is-caution .olv-health-v { color: var(--warn, #b8860b); }
 .olv-health-row.is-blocked .olv-health-v { color: var(--bad, #c0392b); }
 .olv-health-row.is-good .olv-health-v { color: var(--ok, #2e9e5b); }
-.olv-health-blockers-title { font-weight: 600; font-size: 11.5px; margin-top: 2px; }
+.olv-health-blockers-title { font-weight: 600; font-size: var(--text-xs); margin-top: 2px; }
 .olv-health-blockers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
-.olv-health-blockers li { font-size: 11.5px; opacity: 0.9; }
+.olv-health-blockers li { font-size: var(--text-xs); opacity: 0.9; }
 
 /* ─────────────────────────────────────────────────────────────────────────
    Contour Studio (v0.5.9) — launcher + workspace
@@ -9134,7 +9132,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   border: none;
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: filter 0.15s ease, transform 0.05s ease;
+  transition: filter 150ms ease, transform 50ms ease;
 }
 .olv-contour-launcher-action:hover { filter: brightness(1.08); }
 .olv-contour-launcher-action:active { transform: translateY(1px); }
@@ -9182,8 +9180,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cs-section-head {
   font-size: var(--text-2xs);
   font-weight: 700;
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--text-faint);
   margin-bottom: 8px;
 }
@@ -9204,7 +9201,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   border: 1px solid var(--hairline);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+  transition: border-color 150ms ease, background 150ms ease, transform 50ms ease;
 }
 .olv-cs-purpose-card:hover,
 .olv-cs-genmode-card:hover { border-color: var(--hairline-strong); }
@@ -9262,7 +9259,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   justify-content: center;
   width: 18px; height: 18px;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 700;
   color: var(--text-faint);
   background: var(--panel-recessive);
@@ -9279,8 +9276,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-contour-launcher-head {
   font-size: var(--text-2xs);
   font-weight: 700;
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--accent);
   margin-bottom: 2px;
 }
@@ -9344,7 +9340,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+  transition: border-color 150ms ease, background 150ms ease, transform 50ms ease;
 }
 .olv-cs-export-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
 .olv-cs-export-btn:active { transform: translateY(1px); }
@@ -9380,11 +9376,11 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .olv-colorbar-range {
-  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .olv-colorbar-close {
   border: none; background: none; color: var(--text-dim); cursor: pointer;
-  font-size: 15px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+  font-size: var(--text-xl); line-height: 1; padding: 2px 5px; border-radius: 4px;
 }
 .olv-colorbar-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .olv-colorbar-svg { line-height: 0; }
@@ -9494,7 +9490,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-ps-title { margin: 0; font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.01em; }
 .olv-ps-subtitle {
   margin: var(--space-md) 0 var(--space-2xs);
-  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-dim);
 }
 .olv-ps-stages { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
@@ -9631,9 +9627,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 }
 
 .olv-range-launcher-head {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   opacity: 0.7;
 }
 
@@ -9645,13 +9640,13 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-range-launcher-fact {
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: var(--text-sm);
   opacity: 0.85;
 }
 
 .olv-range-launcher-message {
   margin: 6px 0 10px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   opacity: 0.8;
 }
 
@@ -9674,7 +9669,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   display: flex;
   gap: 6px;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .olv-range-modes {
@@ -9684,7 +9679,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-range-mode {
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   border: 1px solid var(--hairline);
   border-radius: 999px;
   background: transparent;
@@ -9700,7 +9695,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-range-linkage {
   margin: 8px 0 6px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   opacity: 0.85;
 }
 
@@ -9732,7 +9727,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   min-height: 16px;
   margin-top: 6px;
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: var(--text-xs);
   opacity: 0.8;
 }
 
@@ -9745,12 +9740,12 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-range-readout-head {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .olv-range-readout-detail {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   opacity: 0.8;
 }
 
@@ -9759,7 +9754,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 10px;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .olv-range-key {
@@ -9778,7 +9773,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-range-note {
   flex: 1 1 100%;
   margin: 4px 0 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
   opacity: 0.75;
 }
 
@@ -9790,13 +9785,13 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-range-stat-block h4 {
   margin: 0 0 4px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .olv-range-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .olv-range-table th {
@@ -9824,7 +9819,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   gap: 4px;
   align-items: center;
   margin-top: 4px;
-  font-size: 10px;
+  font-size: var(--text-micro);
 }
 
 .olv-range-bands-name {
@@ -9856,9 +9851,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 }
 
 .olv-feature-launcher-head {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-dim);
 }
 
@@ -9869,13 +9863,13 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-feature-launcher-fact {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
 }
 
 .olv-feature-launcher-message {
   margin: 6px 0 10px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
 }
 
@@ -9906,7 +9900,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-feature-note {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
 }
 
@@ -9916,7 +9910,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-feature-empty {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
 }
 
@@ -9931,12 +9925,12 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-feature-id {
   font-family: var(--mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .olv-feature-measure {
   flex: 1 1 200px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -9952,7 +9946,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   border-radius: 999px;
   background: transparent;
   color: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 
@@ -10082,7 +10076,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-msheet-tab {
     min-height: var(--m-tab-h);
     border-radius: 8px;
-    font-size: 9px;
+    font-size: var(--text-micro);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;

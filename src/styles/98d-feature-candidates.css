@@ -16,9 +16,8 @@
 }
 
 .olv-feature-launcher-head {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-dim);
 }
 
@@ -29,13 +28,13 @@
 
 .olv-feature-launcher-fact {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
 }
 
 .olv-feature-launcher-message {
   margin: 6px 0 10px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
 }
 
@@ -66,7 +65,7 @@
 
 .olv-feature-note {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
 }
 
@@ -76,7 +75,7 @@
 
 .olv-feature-empty {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
 }
 
@@ -91,12 +90,12 @@
 
 .olv-feature-id {
   font-family: var(--mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .olv-feature-measure {
   flex: 1 1 200px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -112,7 +111,7 @@
   border-radius: 999px;
   background: transparent;
   color: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 

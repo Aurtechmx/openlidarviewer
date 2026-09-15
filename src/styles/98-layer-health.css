@@ -23,11 +23,11 @@
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .olv-colorbar-range {
-  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .olv-colorbar-close {
   border: none; background: none; color: var(--text-dim); cursor: pointer;
-  font-size: 15px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+  font-size: var(--text-xl); line-height: 1; padding: 2px 5px; border-radius: 4px;
 }
 .olv-colorbar-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .olv-colorbar-svg { line-height: 0; }

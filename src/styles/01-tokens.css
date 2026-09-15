@@ -99,6 +99,8 @@
   --text-xl: 16px; /* panel titles */
   --text-2xl: 20px; /* section headings */
   --text-3xl: 28px; /* display */
+  --text-value: 16px; /* focal result values — the number a reader came for */
+  --text-micro: 10px; /* keycaps and superscripts only */
 
   /*
    * Radius scale — four corner radii plus a pill. Drawn from the
