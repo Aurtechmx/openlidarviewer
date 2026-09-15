@@ -109,23 +109,26 @@ describe('ObjectPanel - an unknown unit prints no metre, foot or centimetre clai
 });
 
 describe('the call site itself is normalised, not just the helper', () => {
-  // The defect was never in objectMetrics; it was that main.ts handed it raw
+  // The defect was never in objectMetrics; it was that the route handed it raw
   // source-unit positions while spaceMetrics scaled the same buffer first.
   // Both accept `Float32Array | ReadonlyArray<number>`, so removing the wrapper
-  // type-checks and every helper test still passes. This reads the wiring.
-  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  // type-checks and every helper test still passes. This reads the wiring,
+  // which lives on the scan-route coordinator.
+  const route = readFileSync(new URL('../src/app/scanRouteCoordinator.ts', import.meta.url), 'utf8');
 
   it('passes objectMetrics positions converted to metres', () => {
-    const call = /objectMetrics\(\s*([^,]+),/.exec(main);
-    expect(call, 'objectMetrics call site not found in main.ts').toBeTruthy();
+    const call = /objectMetrics\(\s*([^,]+),/.exec(route);
+    expect(call, 'objectMetrics call site not found in scanRouteCoordinator.ts').toBeTruthy();
     expect(call![1]).toMatch(/positionsInMetres\(/);
   });
 
   it('resolves the scale from the CRS unit-known flag, not the bare factor', () => {
-    expect(main).toMatch(/resolveLinearUnitScale\(\s*unitToMetres,\s*spaceCtx\.linearUnitKnown\s*\)/);
+    expect(route).toMatch(/resolveLinearUnitScale\(\s*unitToMetres,\s*unitKnown\s*\)/);
+    expect(route).toMatch(/const unitKnown = frame\.linearUnitKnown\(\)/);
   });
 
   it('never hands objectMetrics the raw gathered buffer', () => {
-    expect(main).not.toMatch(/objectMetrics\(\s*gathered\.positions/);
+    expect(route).not.toMatch(/objectMetrics\(\s*gathered\.positions/);
+    expect(route).not.toMatch(/objectMetrics\(\s*routePositions,/);
   });
 });
