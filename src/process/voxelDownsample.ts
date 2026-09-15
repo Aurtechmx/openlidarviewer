@@ -9,7 +9,7 @@ import { withLinkageUnavailable } from '../model/OrganizedRange';
  * stays collision-free while each grid index is within [-S/2, S/2), i.e. the
  * ±65536-voxel-per-axis window every realistic recentred scan satisfies.
  */
-const GRID_STRIDE = 131072;
+export const GRID_STRIDE = 131072;
 
 /**
  * Half the stride — the inclusive lower / exclusive upper bound a voxel index
@@ -20,7 +20,7 @@ const GRID_STRIDE = 131072;
  */
 const GRID_INDEX_BOUND = GRID_STRIDE / 2;
 
-function voxelIndexInRange(g: number): boolean {
+export function voxelIndexInRange(g: number): boolean {
   return g >= -GRID_INDEX_BOUND && g < GRID_INDEX_BOUND;
 }
 
@@ -94,7 +94,39 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     acc.counts[slot]++;
   }
 
-  const out = acc.slotCount;
+  return emitVoxelCloud(cloud, acc.slotCount, acc);
+}
+
+/** Per-voxel sums and first-member values, indexed by slot; typed or plain arrays alike. */
+export interface VoxelSums {
+  readonly sumX: ArrayLike<number>;
+  readonly sumY: ArrayLike<number>;
+  readonly sumZ: ArrayLike<number>;
+  readonly sumR: ArrayLike<number>;
+  readonly sumG: ArrayLike<number>;
+  readonly sumB: ArrayLike<number>;
+  readonly sumI: ArrayLike<number>;
+  readonly firstClass: ArrayLike<number>;
+  readonly firstReturnNumber: ArrayLike<number>;
+  readonly firstReturnCount: ArrayLike<number>;
+  readonly firstSourceId: ArrayLike<number>;
+  readonly firstGpsTime: ArrayLike<number>;
+  readonly counts: ArrayLike<number>;
+}
+
+/**
+ * The output cloud from `out` voxels of sums: centroids as Float32, colours
+ * and intensity rounded from their means, first-member values carried, and
+ * every field of `cloud` that is not per point passed through.
+ */
+export function emitVoxelCloud(cloud: PointCloud, out: number, acc: VoxelSums): PointCloud {
+  const colors = cloud.colors;
+  const intensity = cloud.intensity;
+  const classification = cloud.classification;
+  const returnNumber = cloud.returnNumber;
+  const returnCount = cloud.returnCount;
+  const pointSourceId = cloud.pointSourceId;
+  const gpsTime = cloud.gpsTime;
   const outPositions = new Float32Array(out * 3);
   const outColors = colors !== undefined ? new Uint8Array(out * 3) : undefined;
   const outIntensity = intensity !== undefined ? new Uint16Array(out) : undefined;
