@@ -9,28 +9,9 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { installRecordingDom, type RecordingEl } from './helpers/recordingDom';
 
-class FakeEl {
-  className = '';
-  private _text = '';
-  readonly attrs: Record<string, string> = {};
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(k: string, v: string): void { this.attrs[k] = v; }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-}
-
-beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-  };
-});
+beforeAll(installRecordingDom);
 
 const {
   STATE_GLYPH, STATE_LABEL, stateAriaLabel, renderStateChip, renderStateGlyph,
@@ -62,7 +43,7 @@ describe('the state vocabulary', () => {
 
 describe('the rendered chip', () => {
   it('carries glyph, word, the state class and an accessible name', () => {
-    const chip = renderStateChip('preview', 'DTM') as unknown as FakeEl;
+    const chip = renderStateChip('preview', 'DTM') as unknown as RecordingEl;
     expect(chip.className).toContain('olv-state');
     expect(chip.className).toContain('is-preview');
     expect(chip.attrs.role).toBe('img');
@@ -72,7 +53,7 @@ describe('the rendered chip', () => {
   });
 
   it('the glyph-only form still names the state to a screen reader', () => {
-    const mark = renderStateGlyph('blocked', 'Georeferencing') as unknown as FakeEl;
+    const mark = renderStateGlyph('blocked', 'Georeferencing') as unknown as RecordingEl;
     expect(mark.textContent).toBe(STATE_GLYPH.blocked);
     expect(mark.attrs['aria-label']).toBe('Blocked: Georeferencing');
     expect(mark.attrs.role).toBe('img');

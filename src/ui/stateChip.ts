@@ -66,47 +66,58 @@ export function stateAriaLabel(state: SciState, detail?: string): string {
   return detail ? `${STATE_LABEL[state]}: ${detail}` : STATE_LABEL[state];
 }
 
-/** Glyph and word together: the full-width form, used wherever it fits. */
-export function renderStateChip(state: SciState, detail?: string): HTMLElement {
-  const chip = el('span', {
-    className: `olv-state is-${state}`,
+/**
+ * The one mark builder. `withLabel` decides whether the word is rendered beside
+ * the glyph; both forms carry the same class, role and accessible name, so the
+ * state reaches a screen reader identically either way.
+ */
+function mark(state: SciState, detail: string | undefined, withLabel: boolean): HTMLElement {
+  const node = el('span', {
+    className: `olv-state${withLabel ? '' : ' olv-state--glyph'} is-${state}`,
     ariaLabel: stateAriaLabel(state, detail),
   });
-  chip.setAttribute('role', 'img');
-  chip.append(
-    el('span', { className: 'olv-state-glyph', text: STATE_GLYPH[state] }),
-    el('span', { className: 'olv-state-label', text: STATE_LABEL[state] }),
-  );
-  return chip;
+  node.setAttribute('role', 'img');
+  node.append(el('span', { className: 'olv-state-glyph', text: STATE_GLYPH[state] }));
+  if (withLabel) node.append(el('span', { className: 'olv-state-label', text: STATE_LABEL[state] }));
+  return node;
+}
+
+/** Glyph and word together: the full-width form, used wherever it fits. */
+export function renderStateChip(state: SciState, detail?: string): HTMLElement {
+  return mark(state, detail, true);
+}
+
+/** The glyph alone, for a row that already prints its own words. */
+export function renderStateGlyph(state: SciState, detail?: string): HTMLElement {
+  return mark(state, detail, false);
 }
 
 /**
- * The glyph alone, for a row that already prints its own words. Same accessible
- * name as the full chip, so the state reaches a screen reader either way.
+ * Export Health's per-axis tiers and the Dataset Story's fitness tiers, as
+ * lookup tables. Translation, not judgement: the canonical model already
+ * decided the tier, and these only say which mark presents it.
  */
-export function renderStateGlyph(state: SciState, detail?: string): HTMLElement {
-  const mark = el('span', {
-    className: `olv-state olv-state--glyph is-${state}`,
-    ariaLabel: stateAriaLabel(state, detail),
-    text: STATE_GLYPH[state],
-  });
-  mark.setAttribute('role', 'img');
-  return mark;
-}
+const HEALTH_TIER_STATE: Record<HealthTier, SciState> = {
+  good: 'measured',
+  caution: 'review',
+  blocked: 'blocked',
+  info: 'info',
+};
+
+const FITNESS_TIER_STATE: Record<FitnessTier, SciState> = {
+  Good: 'measured',
+  Preview: 'preview',
+  Limited: 'review',
+  Blocked: 'blocked',
+  Unknown: 'info',
+};
 
 /** Export Health's per-axis tier, translated. */
 export function stateFromHealthTier(tier: HealthTier): SciState {
-  if (tier === 'good') return 'measured';
-  if (tier === 'caution') return 'review';
-  if (tier === 'blocked') return 'blocked';
-  return 'info';
+  return HEALTH_TIER_STATE[tier];
 }
 
 /** The Dataset Story's fitness tier, translated. */
 export function stateFromFitnessTier(tier: FitnessTier): SciState {
-  if (tier === 'Good') return 'measured';
-  if (tier === 'Preview') return 'preview';
-  if (tier === 'Limited') return 'review';
-  if (tier === 'Blocked') return 'blocked';
-  return 'info';
+  return FITNESS_TIER_STATE[tier];
 }
