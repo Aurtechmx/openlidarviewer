@@ -12,6 +12,10 @@
  * change nothing on its own. `addTeardown` gives them a home that survives to
  * `dispose()`.
  *
+ * The same stub also pins the empty-state tooltip rule: a native tooltip open
+ * over a control outlives the control's hiding until the pointer moves, so
+ * hiding the empty state clears the titles and showing it restores them.
+ *
  * A recording stub rather than jsdom, matching the other panel suites. The stub
  * answers `createElement` for every tag the empty state builds; the assertions
  * are about registration and teardown, never layout.
@@ -34,6 +38,7 @@ interface NodeStub {
   readonly classes: Set<string>;
   readonly children: NodeStub[];
   className: string;
+  title: string;
 }
 
 const nodes: NodeStub[] = [];
@@ -198,5 +203,16 @@ describe('Stage teardown', () => {
     expect(own).toHaveLength(2);
     stage.dispose();
     expect(windowStub.removed).toEqual(own);
+  });
+
+  it('clears the empty-state control titles on hide and restores them on show', () => {
+    const empty = new Set(['olv-open-btn', 'olv-try-sample']);
+    const buttons = nodes.filter((n) => empty.has(n.className) && n.title !== '');
+    expect(buttons.length).toBeGreaterThan(0);
+    const titles = buttons.map((b) => b.title);
+    stage.hideEmptyState();
+    expect(buttons.every((b) => b.title === '')).toBe(true);
+    stage.showEmptyState();
+    expect(buttons.map((b) => b.title)).toEqual(titles);
   });
 });
