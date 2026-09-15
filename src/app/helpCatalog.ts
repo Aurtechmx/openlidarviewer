@@ -87,7 +87,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       'The app fails closed: when it cannot support a claim it says so instead of printing a number. These states appear on every panel, export and report with the same meaning.',
     ],
     terms: [
-      ['Preview', 'Incomplete or progressive evidence, such as a source still refining, a sample of the resident points, or gaps in the footprint. The figure is shown with its reason and is not a measurement.'],
+      ['Preview', 'Incomplete evidence, such as a streaming source that is not fully resident, a display sample of the points, or gaps in the footprint. The figure is shown with its reason and is not a measurement.'],
       ['Measured', 'The computation had sufficient permitted evidence for its declared scope.'],
       ['Review', 'A result exists, but one or more conditions ask for attention before it is relied on.'],
       ['Blocked', 'The app refuses the requested scientific claim; the reason names what is missing.'],
