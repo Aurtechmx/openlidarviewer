@@ -17,7 +17,13 @@ import { resolve } from 'node:path';
 import { parseLasHeader } from '../src/io/lasHeader';
 import { computeOrigin } from '../src/io/coordinateBridge';
 import { decodeLaz } from '../src/io/lazDecode';
-import { decodeLazChunkedSequential, decodeLazParallel, decodeLazChunkLocal } from '../src/io/heavy/decodeLazChunked';
+import {
+  decodeLazChunkedSequential,
+  decodeLazParallel,
+  decodeLazChunkLocal,
+  previewChunkIndices,
+  PREVIEW_CHUNK_STEP,
+} from '../src/io/heavy/decodeLazChunked';
 import { getLazPerf } from '../src/io/lazDecode';
 import { readLazChunkTable } from '../src/io/heavy/lazChunkTable';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
@@ -65,6 +71,75 @@ describe('chunked LAZ decode', () => {
     expect(parallel!.positions).toEqual(seq.positions);
     if (seq.gpsTime) expect(parallel!.gpsTime).toEqual(seq.gpsTime);
     if (seq.colors) expect(parallel!.colors).toEqual(seq.colors);
+  });
+
+  it('hands a preview of the early chunks first and still assembles the full output identically', async () => {
+    const buf = loadFixture('multichunk.laz');
+    const header = parseLasHeader(buf);
+    const origin = computeOrigin([500000, 4100000, 190]);
+    const seq = await decodeLaz(buf, header, origin, 1);
+    const lazPerf = await getLazPerf();
+    const table = await readLazChunkTable(new ArrayBufferRangeSource(buf));
+    if (!table.supported) throw new Error('fixture is a chunked LAZ');
+    const previewIdx = previewChunkIndices(table.chunks.length);
+    expect(previewIdx[0]).toBe(0);
+
+    const decodedOrder: number[] = [];
+    let preview: Awaited<ReturnType<typeof decodeLaz>> | null = null;
+    let placedWhenPreviewed = -1;
+    const parallel = await decodeLazParallel(
+      buf,
+      header,
+      origin,
+      async (job) => {
+        decodedOrder.push(job.firstPointIndex);
+        return decodeLazChunkLocal(lazPerf, job);
+      },
+      {
+        maxInFlight: 1,
+        onPreview: (p) => {
+          preview = p;
+          placedWhenPreviewed = decodedOrder.length;
+        },
+      },
+    );
+    expect(parallel).not.toBeNull();
+    expect(parallel!.positions).toEqual(seq.positions);
+
+    // The preview arrived after exactly the preview chunks, which decoded first.
+    expect(preview).not.toBeNull();
+    expect(placedWhenPreviewed).toBe(previewIdx.length);
+    const firstDecoded = decodedOrder.slice(0, previewIdx.length);
+    expect(firstDecoded).toEqual(previewIdx.map((i) => table.chunks[i].firstPointIndex));
+
+    // Its records are the preview chunks' records, in file order, unchanged.
+    const expected: number[] = [];
+    for (const i of previewIdx) {
+      const c = table.chunks[i];
+      for (let k = c.firstPointIndex * 3; k < (c.firstPointIndex + c.pointCount) * 3; k++) {
+        expected.push(seq.positions[k]);
+      }
+    }
+    expect(Array.from(preview!.positions)).toEqual(expected);
+    expect(preview!.colors === null).toBe(seq.colors === null);
+  });
+
+  it('previews every PREVIEW_CHUNK_STEP-th chunk and nothing for a single-chunk file', () => {
+    expect(previewChunkIndices(1)).toEqual([]);
+    expect(previewChunkIndices(2)).toEqual([0]);
+    expect(previewChunkIndices(PREVIEW_CHUNK_STEP + 1)).toEqual([0, PREVIEW_CHUNK_STEP]);
+    expect(previewChunkIndices(3 * PREVIEW_CHUNK_STEP)).toEqual([0, PREVIEW_CHUNK_STEP, 2 * PREVIEW_CHUNK_STEP]);
+  });
+
+  it('never calls onPreview when the decode is not chunked', async () => {
+    const tiny = loadFixture('tiny.las');
+    const header = parseLasHeader(tiny);
+    const lazPerf = await getLazPerf();
+    let previews = 0;
+    const out = await decodeLazParallel(tiny, header, computeOrigin([0, 0, 0]), async (job) =>
+      decodeLazChunkLocal(lazPerf, job), { onPreview: () => { previews++; } });
+    expect(out).toBeNull();
+    expect(previews).toBe(0);
   });
 
   it('fails closed (returns null) on a non-chunked input rather than guessing', async () => {

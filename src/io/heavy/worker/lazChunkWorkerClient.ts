@@ -150,6 +150,8 @@ export interface PooledDecodeOptions {
   readonly stride?: number;
   readonly signal?: AbortSignal;
   readonly onProgress?: (u: ProgressUpdate) => void;
+  /** A stratified subset decoded first; see `decodeLazParallel`. */
+  readonly onPreview?: (preview: RawPoints) => void;
 }
 
 /**
@@ -185,6 +187,7 @@ export async function decodeLazPooled(
       stride: options.stride,
       signal: options.signal,
       onProgress: options.onProgress,
+      onPreview: options.onPreview,
     });
   } finally {
     client.dispose();

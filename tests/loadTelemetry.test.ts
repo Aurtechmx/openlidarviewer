@@ -17,6 +17,13 @@ describe('formatTelemetry', () => {
     expect(formatTelemetry({})).toBe('(no telemetry)');
   });
 
+  test('reports the preview arrival between transfer and parse when one was sent', () => {
+    const out = formatTelemetry({ transferMs: 5, previewMs: 120, parseMs: 1 });
+    expect(out.indexOf('transfer')).toBeLessThan(out.indexOf('preview'));
+    expect(out.indexOf('preview')).toBeLessThan(out.indexOf('parse'));
+    expect(formatTelemetry({ transferMs: 5, parseMs: 1 })).not.toContain('preview');
+  });
+
   test('orders rows by pipeline stage, not by insertion order', () => {
     const out = formatTelemetry({ totalLoadMs: 999, sniffMs: 1 });
     expect(out.indexOf('sniff')).toBeLessThan(out.indexOf('total'));

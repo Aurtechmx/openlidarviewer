@@ -54,7 +54,11 @@ async function loadLadder(): Promise<Ladder> {
 }
 
 interface OpenTiming {
+  /** Load start to the preview cloud's arrival; NaN when no preview was sent. */
+  readonly previewMs: number;
   readonly decodeMs: number;
+  /** The final cloud's GPU upload, which pays the pipeline compile when no preview did. */
+  readonly uploadMs: number;
   readonly totalMs: number;
   readonly workers: number;
   readonly chunkWorkers: number;
@@ -78,7 +82,9 @@ async function openOnce(page: Page, url: string, file: string): Promise<OpenTimi
   await page.locator('.olv-file-input').first().setInputFiles(file);
   const text = (await telemetry).text();
   return {
+    previewMs: row(text, 'preview'),
     decodeMs: row(text, 'decode'),
+    uploadMs: row(text, 'gpu upload'),
     totalMs: row(text, 'total \\(wall\\)'),
     workers: workerUrls.length,
     chunkWorkers: workerUrls.filter((u) => /lazChunkWorker/i.test(u)).length,
@@ -122,7 +128,7 @@ test.describe('local LAZ open on device: single reader against the worker pool',
     );
     // eslint-disable-next-line no-console
     console.log(
-      '  size | mode   | decode first | decode best | wall first | wall best | workers (chunk) | runs',
+      '  size | mode   | preview best | decode first | decode best | wall first | wall best | upload best | workers (chunk) | runs',
     );
 
     for (const [i, rung] of rungs.entries()) {
@@ -143,10 +149,13 @@ test.describe('local LAZ open on device: single reader against the worker pool',
         const runs = results[mode.name];
         const decodes = runs.map((t) => t.decodeMs);
         const walls = runs.map((t) => t.totalMs);
+        const uploads = runs.map((t) => t.uploadMs);
+        const previews = runs.map((t) => t.previewMs).filter(Number.isFinite);
+        const previewBest = previews.length > 0 ? Math.min(...previews) : Number.NaN;
         // eslint-disable-next-line no-console
         console.log(
-          `  ${m.toString().padStart(3)}M | ${mode.name.padEnd(6)} | ${ms(decodes[0])} | ${ms(Math.min(...decodes))} | ` +
-            `${ms(walls[0])} | ${ms(Math.min(...walls))} | ${runs[0].workers} (${runs[0].chunkWorkers}) | ` +
+          `  ${m.toString().padStart(3)}M | ${mode.name.padEnd(6)} | ${ms(previewBest)} | ${ms(decodes[0])} | ${ms(Math.min(...decodes))} | ` +
+            `${ms(walls[0])} | ${ms(Math.min(...walls))} | ${ms(Math.min(...uploads))} | ${runs[0].workers} (${runs[0].chunkWorkers}) | ` +
             `decode[${decodes.map((x) => x.toFixed(0)).join(',')}] wall[${walls.map((x) => x.toFixed(0)).join(',')}]`,
         );
       }

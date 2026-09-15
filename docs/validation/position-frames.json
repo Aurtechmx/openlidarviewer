@@ -142,10 +142,10 @@
     },
     {
       "file": "src/io/loadLas.ts",
-      "symbol": "loadLas",
+      "symbol": "cloudFromRaw",
       "frame": "source-local",
       "reads": 3,
-      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it. Shared by the final cloud and the preview a pooled decode hands over first."
     },
     {
       "file": "src/io/loadObj.ts",
@@ -191,10 +191,10 @@
     },
     {
       "file": "src/io/parseWorker.ts",
-      "symbol": "ctx.onmessage",
+      "symbol": "cloudPayload",
       "frame": "source-local",
       "reads": 2,
-      "why": "Worker transport: the freshly parsed buffer is transferred to the main thread in exactly the frame the loader wrote it, untouched."
+      "why": "Worker transport: the freshly parsed buffer is transferred to the main thread in exactly the frame the loader wrote it, untouched. One payload builder serves the preview reply and the final reply."
     },
     {
       "file": "src/io/tiles3d/pntsDecode.ts",
@@ -309,6 +309,76 @@
       "why": "Uploads the CONTOUR line-segment vertices (not cloud points) into a THREE.BufferGeometry. They arrive from buildContourOverlayBuffers over a model derived from gatherTerrainPositions, which folds every layer placement in, so the buffer is already in the project frame the scene draws at its origin — the object carries no further offset."
     },
     {
+      "file": "src/render/InspectTool.ts",
+      "symbol": "InspectTool._buildWitnessSection",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The patch provider returns the picked layer own neighbourhood buffer, and the patch is built around a point index in that same layer."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer._meshForCloud",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "GPU upload boundary: the buffer goes to the mesh unchanged and the layer placement is applied at MESH level by setLayerPlacement, never written into the points. Builds the mesh for both a committed layer and the load preview."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer._pickDetailed",
+      "frame": "source-local",
+      "reads": 2,
+      "why": "Placement fold on the RAY, not the points: the ray drops into the layer source frame, the pick runs over the raw buffer, and the hit lifts back."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer._pickStreamingDetailed",
+      "frame": "render-local",
+      "reads": 2,
+      "why": "Streaming nodes are picked in the streaming render frame, which is where their decoded buffers and the ray both already are."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.constructor",
+      "frame": [
+        "source-local",
+        "render-local"
+      ],
+      "reads": 14,
+      "why": "The sampler callbacks registered here (profile, cut/fill volume, inspector patch) collect buffers from both sources: static layers contribute source-local buffers WITH their placement alongside, resident streaming nodes contribute render-local ones. Neither is lifted here; the assemblers fold placement as they copy."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.constructor.layers",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Hands the layer's own buffer to the profile seam untouched; the Float64 placement travels beside it and is folded at read time, never written into the array."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.constructor.residentNodes",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "A decoded streaming node is local to the streaming render origin, and the terms it was admitted on are what say that origin is the project's."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.gatherTerrainPositions",
+      "frame": [
+        "source-local",
+        "render-local",
+        "project-local"
+      ],
+      "reads": 13,
+      "why": "The gather is the frame boundary itself: static layer buffers (source-local) and resident streaming node buffers (render-local) go IN with their placements, and sampleStridedTerrain folds each placement while striding, so the sample buffer that comes back out and is up-axis normalised is project-local."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.reclassifyLasso",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "The projector and the clip predicate add the layer placement offset themselves, so the raw layer buffer is the correct input; folding it again would place the layer twice."
+    },
+    {
       "file": "src/render/densityColors.ts",
       "symbol": "densityForChunk",
       "frame": "source-local",
@@ -335,13 +405,6 @@
       "frame": "source-local",
       "reads": 1,
       "why": "Numeric kernel: slope shading from local gradients, which a translation cannot change. It is handed a single layer buffer in that layer own frame."
-    },
-    {
-      "file": "src/render/InspectTool.ts",
-      "symbol": "InspectTool._buildWitnessSection",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "The patch provider returns the picked layer own neighbourhood buffer, and the patch is built around a point index in that same layer."
     },
     {
       "file": "src/render/localDensitySize.ts",
@@ -418,69 +481,6 @@
       "frame": "render-local",
       "reads": 4,
       "why": "Builds a record->position callback from the cloud's own recentred buffer for the acquisition-coverage fit. The fit is translation-invariant (per-setup angular extent from the buffer's own bounds), so the recentred render-local frame is exactly what it needs; no origin shift applies."
-    },
-    {
-      "file": "src/render/Viewer.ts",
-      "symbol": "Viewer._pickDetailed",
-      "frame": "source-local",
-      "reads": 2,
-      "why": "Placement fold on the RAY, not the points: the ray drops into the layer source frame, the pick runs over the raw buffer, and the hit lifts back."
-    },
-    {
-      "file": "src/render/Viewer.ts",
-      "symbol": "Viewer._pickStreamingDetailed",
-      "frame": "render-local",
-      "reads": 2,
-      "why": "Streaming nodes are picked in the streaming render frame, which is where their decoded buffers and the ray both already are."
-    },
-    {
-      "file": "src/render/Viewer.ts",
-      "symbol": "Viewer.addCloud",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "GPU upload boundary: the buffer goes to the mesh unchanged and the layer placement is applied at MESH level by setLayerPlacement, never written into the points."
-    },
-    {
-      "file": "src/render/Viewer.ts",
-      "symbol": "Viewer.constructor",
-      "frame": [
-        "source-local",
-        "render-local"
-      ],
-      "reads": 14,
-      "why": "The sampler callbacks registered here (profile, cut/fill volume, inspector patch) collect buffers from both sources: static layers contribute source-local buffers WITH their placement alongside, resident streaming nodes contribute render-local ones. Neither is lifted here; the assemblers fold placement as they copy."
-    },
-    {
-      "file": "src/render/Viewer.ts",
-      "symbol": "Viewer.constructor.layers",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "Hands the layer's own buffer to the profile seam untouched; the Float64 placement travels beside it and is folded at read time, never written into the array."
-    },
-    {
-      "file": "src/render/Viewer.ts",
-      "symbol": "Viewer.constructor.residentNodes",
-      "frame": "render-local",
-      "reads": 1,
-      "why": "A decoded streaming node is local to the streaming render origin, and the terms it was admitted on are what say that origin is the project's."
-    },
-    {
-      "file": "src/render/Viewer.ts",
-      "symbol": "Viewer.gatherTerrainPositions",
-      "frame": [
-        "source-local",
-        "render-local",
-        "project-local"
-      ],
-      "reads": 13,
-      "why": "The gather is the frame boundary itself: static layer buffers (source-local) and resident streaming node buffers (render-local) go IN with their placements, and sampleStridedTerrain folds each placement while striding, so the sample buffer that comes back out and is up-axis normalised is project-local."
-    },
-    {
-      "file": "src/render/Viewer.ts",
-      "symbol": "Viewer.reclassifyLasso",
-      "frame": "source-local",
-      "reads": 3,
-      "why": "The projector and the clip predicate add the layer placement offset themselves, so the raw layer buffer is the correct input; folding it again would place the layer twice."
     },
     {
       "file": "src/terrain/change/alignEpochs.ts",
