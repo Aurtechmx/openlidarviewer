@@ -38,9 +38,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   instancedBufferAttribute,
   pass,
-  Fn,
-  vec2,
-  vec4,
   float,
   int,
   uniform,
@@ -49,19 +46,13 @@ import {
   materialPointSize,
   instanceIndex,
   fract,
-  screenUV,
-  screenSize,
-  log2,
   exp,
-  exp2,
-  max,
   min,
   mix,
   length,
   smoothstep,
   step,
   positionGeometry,
-  perspectiveDepthToViewZ,
 } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
@@ -99,10 +90,10 @@ import { type ActiveColorbar } from './activeColorbar';
 import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
 import { runRenderFrame, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
-import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
+import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
 import { refinementDprTarget, shouldApplyDpr, DPR_MOTION_FLOOR } from './adaptiveDpr';
-import { maxPixelRatio } from './quality/pixelRatioCeiling';
+import { createViewerRenderCore, currentPixelRatio, DEFAULT_FOV } from './viewerRenderBootstrap';
 import { RefinementPhaseTracker } from './refinementPhaseState';
 import { evaluateRefinementReadiness } from './streaming/refinementReadiness';
 import type { RefinementReadiness } from './streaming/refinementReadiness';
@@ -128,7 +119,7 @@ import {
   type CameraPresetName,
   type StandardView,
 } from './camera/cameraPresets';
-import { makeOrthoCamera, followPerspective } from './camera/orthoCamera';
+import { followPerspective } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
@@ -497,7 +488,6 @@ const QUAD_INDEX = [0, 1, 2, 0, 2, 3];
  * running so damping and the scheduler cadence are unaffected.
  */
 /** Default vertical field of view, in degrees — the camera's construction value. */
-const DEFAULT_FOV = 60;
 
 /**
  * Absolute GPU-upload point ceiling. The device-aware load budget already
@@ -535,87 +525,6 @@ const BYTES_PER_GPU_POINT = 24;
  */
 /** A TSL node value — see the note above on why this is `any`. */
 type TslNode = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-/**
- * Build the Eye Dome Lighting output node for a scene pass.
- *
- * For each screen pixel it samples the pass colour, then compares the pixel's
- * eye-space depth against four neighbours on a ring of `radiusPx` pixels and
- * darkens the pixel in proportion to how far it recedes behind them. Works in
- * `log2(eye distance)` so the cue is scale-invariant. Mirrors `edlObscurance`
- * and `edlShade` in `edl.ts`, which are unit-tested.
- *
- * @param usesLogDepth - Whether the renderer owns a logarithmic depth buffer,
- * read back off the renderer instance at construction. Decides which depth
- * inversion the node graph is built with (the graph is compiled once, and the
- * renderer's depth mode is fixed at construction, so a build-time branch is
- * correct — no per-pixel uniform needed).
- */
-function buildEdlOutputNode(
-  scenePass: ReturnType<typeof pass>,
-  strength: TslNode,
-  near: TslNode,
-  far: TslNode,
-  radiusPx: number,
-  usesLogDepth: boolean,
-): TslNode {
-  const colorNode: TslNode = scenePass.getTextureNode();
-  const depthNode: TslNode = scenePass.getTextureNode('depth');
-
-  // Positive eye-space distance at a screen UV, floored away from zero so the
-  // following log2 is always finite.
-  //
-  // The inversion MUST match the encoding the renderer actually wrote:
-  //
-  //  • Logarithmic depth buffer (this app's default — see the renderer
-  //    construction): three's node pipeline (`NodeMaterial.setupDepth` →
-  //    `viewZToLogarithmicDepth`) replaces fragment depth with the Ulrich
-  //    near-anchored log encoding
-  //        raw = log2(eyeDist / near') / log2(far / near'),
-  //        near' = max(near, 1e-6),
-  //    so the eye distance is recovered with
-  //        eyeDist = near' · 2^(raw · log2(far / near')).
-  //    This mirrors `logDepthToEyeDistance` in `edl.ts` (unit-tested) exactly,
-  //    including the 1e-6 near clamp. Both the WebGPU backend and the WebGL 2
-  //    fallback compile this same node graph, so one inversion covers both.
-  //    (Deliberately NOT the legacy WebGLRenderer chunk
-  //    `log2(1 + w) / log2(1 + far)` — that convention never runs here.)
-  //
-  //  • Standard perspective depth otherwise: three's own
-  //    `perspectiveDepthToViewZ` (which internally also handles a reversed
-  //    depth buffer) recovers viewZ; negate for a positive distance.
-  //
-  // Using the wrong inversion is not subtle: treating a log-encoded sample as
-  // perspective depth computes obscurance in the wrong space — EDL reads far
-  // too weak up close and erratic at range — silently defeating the
-  // unit-tested maths in `edl.ts`. That was the v0.4.x audit defect.
-  const eyeDistAt = Fn(([sampleUv]: TslNode[]): TslNode => {
-    const raw: TslNode = depthNode.sample(sampleUv).r;
-    if (usesLogDepth) {
-      const nearClamped: TslNode = max(near, float(1e-6));
-      const eyeDist: TslNode = nearClamped.mul(
-        exp2(raw.mul(log2(far.div(nearClamped)))),
-      );
-      return max(eyeDist, float(1e-4));
-    }
-    return max(perspectiveDepthToViewZ(raw, near, far).negate(), float(1e-4));
-  });
-
-  return Fn((): TslNode => {
-    const texel: TslNode = vec2(radiusPx, radiusPx).div(screenSize);
-    const logC: TslNode = log2(eyeDistAt(screenUV));
-    // A neighbour contributes only when it is deeper by more than the bias —
-    // gating depth-buffer noise so EDL does not shimmer as the camera moves.
-    const bias: TslNode = float(EDL_DEPTH_BIAS);
-    const sum: TslNode = float(0).toVar();
-    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.add(vec2(texel.x, 0))))).sub(bias)));
-    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.sub(vec2(texel.x, 0))))).sub(bias)));
-    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.add(vec2(0, texel.y))))).sub(bias)));
-    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.sub(vec2(0, texel.y))))).sub(bias)));
-    const shade: TslNode = exp(sum.mul(strength).negate());
-    return vec4(colorNode.rgb.mul(shade), colorNode.a);
-  })();
-}
 
 /**
  * Build the circular point-mask opacity node: `positionGeometry.xy` is the
@@ -1119,84 +1028,20 @@ export class Viewer {
       ),
     );
 
-    // ── Renderer ──────────────────────────────────────────────────────────
-    this._renderer = new THREE.WebGPURenderer({
-      canvas,
-      forceWebGL, // WebGL 2 when the adapter probe found no WebGPU adapter (WebKit/iOS)
-      antialias: true,
-      alpha: false,
-      // logarithmic depth buffer distributes
-      // precision across many orders of magnitude of distance, so a
-      // 50 km COPC tile and a 5 m indoor scan both render without
-      // z-fighting and the zoom envelope is effectively unbounded.
-      // Eliminates the residual "stops zooming at a point" artifact
-      // on huge surveys that even near=0.01 couldn't fully clear.
-      logarithmicDepthBuffer: true,
-    } as ConstructorParameters<typeof THREE.WebGPURenderer>[0]);
-
-    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio()));
-    // updateStyle=false: the stylesheet owns the canvas display size
-    // (.olv-canvas is inset:0/100%×100%). Letting three.js write inline
-    // style.width/height in px would override the CSS and pin the canvas to a
-    // stale fixed box — under browser zoom the container grows but the canvas
-    // stays clamped, confining the scene to a sub-region. We size only the
-    // drawing buffer here and let CSS track the layout.
-    this._renderer.setSize(canvas.clientWidth || 800, canvas.clientHeight || 600, false);
-    // v0.3.7 colour-fidelity pass: ACES Filmic tone-mapping (the v0.3.6
-    // default) was designed for HDR cinema content — it deliberately
-    // rolls off highlights and desaturates near-white values. Applied
-    // to LDR point-cloud RGB, which the scanner already captured in
-    // display-referred space, that roll-off reads as pale, washed-out
-    // colour. NoToneMapping passes scanner-captured RGB straight through
-    // so a brown roof reads brown and grass reads green — what the
-    // analyst expects from "RGB Natural" mode. Exposure stays at 1.0 to
-    // preserve scanner-captured brightness; the v0.3.7 RGB appearance
-    // controls (gamma / contrast / saturation / exposure) layer on top
-    // per the user's preset choice. sRGB output-space ensures
-    // PNG exports match the on-screen colour.
-    this._renderer.toneMapping = THREE.NoToneMapping;
-    this._renderer.toneMappingExposure = 1.0;
-    this._renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    // ── Scene ─────────────────────────────────────────────────────────────
-    this._scene = new THREE.Scene();
-    // Deep Navy — the brand background colour. Slightly darker than the
-    // previous 0x0a0e1a so the cyan EDL highlights pop against it and the
-    // CSS vignette overlay reads as cinematic edge falloff rather than
-    // a flat tint.
-    this._scene.background = new THREE.Color(0x070b16);
-
-    // ── Camera ────────────────────────────────────────────────────────────
-    const aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
-    this._camera = new THREE.PerspectiveCamera(DEFAULT_FOV, aspect, 0.1, 5_000_000);
-    this._camera.position.set(0, 0, 100);
-    this._orthoCamera = makeOrthoCamera(this._camera.near, this._camera.far);
-
-    // ── Post-processing pipeline (Eye Dome Lighting) ──────────────────────
-    // The scene renders into a pass; the EDL node shades it from the pass's
-    // colour and depth. The pipeline is driven only while EDL is enabled (see
-    // the render loop); its node graph compiles lazily on first use.
-    //
-    // Depth-encoding flag: read back off the renderer instance rather than
-    // hard-coding `true` to match the constructor option above. three's base
-    // `Renderer` class stores the option verbatim (`this.logarithmicDepthBuffer`),
-    // and the node pipeline keys its fragment-depth override on that same
-    // property — so deriving the EDL inversion from it keeps the two in
-    // lock-step even if a future three release stops honouring (or starts
-    // ignoring) the option on one backend.
-    const usesLogDepth =
-      (this._renderer as unknown as { logarithmicDepthBuffer?: boolean })
-        .logarithmicDepthBuffer === true;
-    this._scenePass = pass(this._scene, this._camera);
-    this._post = new THREE.RenderPipeline(this._renderer);
-    this._post.outputNode = buildEdlOutputNode(
-      this._scenePass,
-      this._edlLiveStrength,
-      this._edlNear,
-      this._edlFar,
-      EDL_DEFAULTS.radiusPx,
-      usesLogDepth,
-    ) as typeof this._post.outputNode;
+    // ── Renderer, scene, cameras, EDL pipeline ────────────────────────────
+    // Built by `viewerRenderBootstrap.ts` with the settings this constructor
+    // held; the Viewer keeps every field and owns them from here on.
+    const core = createViewerRenderCore(canvas, forceWebGL, {
+      strength: this._edlLiveStrength,
+      near: this._edlNear,
+      far: this._edlFar,
+    });
+    this._renderer = core.renderer;
+    this._scene = core.scene;
+    this._camera = core.camera;
+    this._orthoCamera = core.orthoCamera;
+    this._scenePass = core.scenePass;
+    this._post = core.pipeline;
 
     // ── OrbitControls ─────────────────────────────────────────────────────
     // v0.3.6 smoothness tuning, take 2 — after the first pass made orbit
@@ -6230,10 +6075,7 @@ export class Viewer {
     this._prevCamQuat[2] = q.z;
     this._prevCamQuat[3] = q.w;
     this._hasPrevCamQuat = true;
-    const maxDpr = Math.min(
-      typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
-      maxPixelRatio(),
-    );
+    const maxDpr = currentPixelRatio();
     const floor = Math.min(maxDpr, DPR_MOTION_FLOOR);
 
     const target = refinementDprTarget({
@@ -6358,7 +6200,7 @@ export class Viewer {
     // Re-apply the pixel ratio: browser zoom and monitor-DPI changes alter
     // devicePixelRatio, and the backing-store resolution must follow or the
     // scene renders soft/aliased after a zoom.
-    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio()));
+    this._renderer.setPixelRatio(currentPixelRatio());
     // updateStyle=false — CSS owns the display box (see the constructor note);
     // we resize only the WebGPU drawing buffer so the canvas keeps tracking the
     // container at any browser zoom instead of pinning to a stale pixel size.
