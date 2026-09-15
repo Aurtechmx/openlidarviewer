@@ -77,3 +77,39 @@ test('the formatter omits the "of" suffix when sourcePointCount is unknown', () 
   expect(text).toContain('1,000');
   expect(text).not.toContain(' of ');
 });
+
+test('the serialised result carries the load identity and the read ledger', () => {
+  const r = buildBenchmarkResult('ladder-5M.laz', 'laz', 1_250_000, {
+    ...TELEMETRY,
+    fileName: 'ladder-5M.laz',
+    fileBytes: 9_900_000,
+    declaredPointCount: 5_000_000,
+    pointFormat: 6,
+    lazChunkCount: 100,
+    decodeStride: 4,
+    previewBudget: 250_000,
+    rangeRequests: 41,
+    requestedBytes: 10_100_000,
+    uniqueBytesRead: 9_900_000,
+    rereadBytes: 200_000,
+    compressedBytesBeforePreview: 2_400_000,
+    compressedBytesRead: 9_800_000,
+  });
+  // The header count stands in for a source count the caller did not pass.
+  expect(r.sourcePointCount).toBe(5_000_000);
+  const json = JSON.parse(JSON.stringify(r)) as { stages: Record<string, unknown> };
+  expect(json.stages.fileName).toBe('ladder-5M.laz');
+  expect(json.stages.fileBytes).toBe(9_900_000);
+  expect(json.stages.pointFormat).toBe(6);
+  expect(json.stages.lazChunkCount).toBe(100);
+  expect(json.stages.decodeStride).toBe(4);
+  expect(json.stages.previewBudget).toBe(250_000);
+  expect(json.stages.uniqueBytesRead).toBe(9_900_000);
+  expect(json.stages.rereadBytes).toBe(200_000);
+  expect(json.stages.compressedBytesBeforePreview).toBe(2_400_000);
+});
+
+test('an explicit source count still wins over the header count', () => {
+  const r = buildBenchmarkResult('a.laz', 'laz', 10, { declaredPointCount: 500 }, 900);
+  expect(r.sourcePointCount).toBe(900);
+});

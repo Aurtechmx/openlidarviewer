@@ -30,10 +30,32 @@ export interface LoadTelemetry {
   firstRenderMs?: number;
   /** The whole load, from drop to resolved (main thread). */
   totalLoadMs?: number;
+  /** Name of the file the row was measured on (local LAZ path). */
+  fileName?: string;
+  /** Size of that file, in bytes. */
+  fileBytes?: number;
+  /** Point count the LAS header declares, before any stride or budget. */
+  declaredPointCount?: number;
+  /** Point data record format id (PDRF) the header declares. */
+  pointFormat?: number;
+  /** Chunks the LAZ chunk table described, when the chunked path planned one. */
+  lazChunkCount?: number;
+  /** Stride the loader applied: every `n`-th record was decoded. */
+  decodeStride?: number;
+  /** Preview records the page asked for, when it asked for a preview. */
+  previewBudget?: number;
   /** Bytes read before the first chunk decode: header, VLRs, chunk table (worker). */
   metadataBytes?: number;
   /** Ranged reads issued over the source (worker). */
   rangeRequests?: number;
+  /** Sum of the requested read lengths, re-reads counted each time (worker). */
+  requestedBytes?: number;
+  /** Bytes of the file the requested spans cover, each counted once (worker). */
+  uniqueBytesRead?: number;
+  /** `requestedBytes` minus `uniqueBytesRead`: bytes fetched more than once. */
+  rereadBytes?: number;
+  /** Compressed bytes counted when the first preview chunk was handed on. */
+  compressedBytesBeforePreview?: number;
   /** Compressed bytes read through ranged reads (worker). */
   compressedBytesRead?: number;
   /** Records handed to the preview as chunks, before any thinning on the page. */
@@ -85,10 +107,21 @@ export function formatTelemetry(t: LoadTelemetry): string {
   return lines.length > 0 ? lines.join('\n') : '(no telemetry)';
 }
 
-/** Non-timing rows: what the ranged path read and which decoder ran. */
+/** Non-timing rows: which file was read, what the ranged path read, which decoder ran. */
 const COUNT_ROWS: [string, keyof LoadTelemetry, 'bytes' | 'count' | 'text'][] = [
+  ['file', 'fileName', 'text'],
+  ['file bytes', 'fileBytes', 'bytes'],
+  ['declared pts', 'declaredPointCount', 'count'],
+  ['point format', 'pointFormat', 'count'],
+  ['laz chunks', 'lazChunkCount', 'count'],
+  ['stride', 'decodeStride', 'count'],
+  ['preview cap', 'previewBudget', 'count'],
   ['metadata read', 'metadataBytes', 'bytes'],
   ['range reads', 'rangeRequests', 'count'],
+  ['requested', 'requestedBytes', 'bytes'],
+  ['unique read', 'uniqueBytesRead', 'bytes'],
+  ['re-read', 'rereadBytes', 'bytes'],
+  ['pre-preview', 'compressedBytesBeforePreview', 'bytes'],
   ['compressed', 'compressedBytesRead', 'bytes'],
   ['preview pts', 'previewPoints', 'count'],
   ['pool workers', 'poolWorkers', 'count'],

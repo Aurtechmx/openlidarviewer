@@ -238,15 +238,39 @@ export async function loadLazFromFile(
 
   const { decodeLazPooledFromSource } = await import('./heavy/worker/lazChunkWorkerClient');
   const { LocalFileRangeSource } = await import('./range/LocalFileRangeSource');
+  const { createRangeLedger } = await import('./range/rangeLedger');
   // Every ranged read is counted so the load can say what it read and when.
   const inner = new LocalFileRangeSource(file);
+  // The header prefix was read off the `File` directly, so it is recorded here
+  // for the ledger to see: a later read of the same offsets is a re-read, and
+  // the totals say so rather than hiding it.
+  const ledger = createRangeLedger();
+  ledger.record(0, head.byteLength);
   const stats = {
+    fileName: file.name,
+    fileBytes: file.size,
+    declaredPointCount: header.pointCount,
+    pointFormat: header.pointFormat,
+    lazChunkCount: undefined as number | undefined,
+    decodeStride: stride,
+    previewBudget,
     metadataBytes: head.byteLength,
     rangeRequests: 1,
+    requestedBytes: head.byteLength,
+    uniqueBytesRead: head.byteLength,
+    rereadBytes: 0,
+    compressedBytesBeforePreview: undefined as number | undefined,
     compressedBytesRead: 0,
     poolWorkers: undefined as number | undefined,
     decodePath: 'whole-file' as LazLoadStats['decodePath'],
     poolFallbackReason: undefined as string | undefined,
+  };
+  const settleLedger = (): void => {
+    const totals = ledger.totals();
+    stats.rangeRequests = totals.requests;
+    stats.requestedBytes = totals.requestedBytes;
+    stats.uniqueBytesRead = totals.uniqueBytes;
+    stats.rereadBytes = totals.requestedBytes - totals.uniqueBytes;
   };
   let planned = false;
   const counted: RangeSource = {
@@ -255,7 +279,9 @@ export async function loadLazFromFile(
     size: () => inner.size(),
     readRange: async (offset, length, signal) => {
       const bytes = await inner.readRange(offset, length, signal);
-      stats.rangeRequests++;
+      // The ledger holds the requested span; the byte counters hold what came
+      // back, which is shorter when a read ran past the end of the file.
+      ledger.record(offset, length);
       if (planned) stats.compressedBytesRead += bytes.byteLength;
       else stats.metadataBytes += bytes.byteLength;
       return bytes;
@@ -268,12 +294,15 @@ export async function loadLazFromFile(
     onProgress,
     previewBudget,
     onPreviewChunk: onPreviewChunk && ((positions, outIndex) => {
+      // What the file cost up to the first sample the page can draw.
+      stats.compressedBytesBeforePreview ??= stats.compressedBytesRead;
       // Transport only: the sample's own buffer, in the frame the decoder wrote it.
       onPreviewChunk({ positions, outIndex, expectedPoints, frame });
     }),
     onPlanned: (info) => {
       planned = true;
       expectedPoints = info.expectedPoints;
+      stats.lazChunkCount = info.chunkCount;
     },
     onPool: ({ workers }) => { stats.poolWorkers = workers; stats.decodePath = 'pooled'; },
     onFallback: (reason) => { stats.poolFallbackReason = reason; stats.decodePath = 'pool-fallback'; },
@@ -281,22 +310,43 @@ export async function loadLazFromFile(
     policy,
   });
   if (pooled) {
+    settleLedger();
     onStats?.(stats);
     return toCloud(pooled);
   }
 
   const { decodeLaz } = await import('./lazDecode');
   const buffer = await file.arrayBuffer();
-  stats.rangeRequests++;
+  // The whole-file read covers the file once more, prefix included.
+  ledger.record(0, buffer.byteLength);
   stats.compressedBytesRead += buffer.byteLength;
+  settleLedger();
   onStats?.(stats);
   return toCloud(await decodeLaz(buffer, header, origin, stride, onProgress));
 }
 
-/** What a file-fed LAZ load read and which decoder produced it. */
+/** Which file a LAZ load read, what it read of it, and which decoder produced it. */
 export interface LazLoadStats {
+  /** The file's own name, so a measured row says what it was measured on. */
+  readonly fileName: string;
+  readonly fileBytes: number;
+  readonly declaredPointCount: number;
+  /** Point data record format id (PDRF) from the header. */
+  readonly pointFormat: number;
+  /** Chunks the chunk table described, absent when no chunked plan was made. */
+  readonly lazChunkCount?: number;
+  readonly decodeStride: number;
+  readonly previewBudget?: number;
   readonly metadataBytes: number;
   readonly rangeRequests: number;
+  /** Requested read lengths summed, re-reads counted each time. */
+  readonly requestedBytes: number;
+  /** Bytes of the file the requested spans cover, each counted once. */
+  readonly uniqueBytesRead: number;
+  /** `requestedBytes` minus `uniqueBytesRead`. */
+  readonly rereadBytes: number;
+  /** Compressed bytes counted when the first preview chunk was handed on. */
+  readonly compressedBytesBeforePreview?: number;
   readonly compressedBytesRead: number;
   readonly poolWorkers?: number;
   readonly decodePath: 'pooled' | 'whole-file' | 'pool-fallback';

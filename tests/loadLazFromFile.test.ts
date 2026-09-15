@@ -107,6 +107,25 @@ describe('loadLazFromFile', () => {
     expect(stats?.rangeRequests).toBeGreaterThan(2);
     expect(stats?.compressedBytesRead).toBeGreaterThan(0);
     expect(stats!.compressedBytesRead + stats!.metadataBytes).toBeLessThanOrEqual(buf.byteLength + 64 * 1024);
+    // The row says which file and which plan produced it.
+    expect(stats?.fileName).toBe('m.laz');
+    expect(stats?.fileBytes).toBe(buf.byteLength);
+    expect(stats?.declaredPointCount).toBe(fromFile.declaredPointCount);
+    expect(stats?.pointFormat).toBeGreaterThanOrEqual(0);
+    expect(stats?.lazChunkCount).toBeGreaterThan(1);
+    expect(stats?.decodeStride).toBe(1);
+    expect(stats?.previewBudget).toBe(previewBudget);
+    // Bytes counted up to the first drawable sample, no more than the whole read.
+    expect(stats?.compressedBytesBeforePreview).toBeGreaterThanOrEqual(0);
+    expect(stats!.compressedBytesBeforePreview!).toBeLessThanOrEqual(stats!.compressedBytesRead);
+    // The union of the requested spans cannot exceed the file (plus the
+    // head-peek slack), and the re-read is the part asked for twice.
+    expect(stats!.uniqueBytesRead).toBeLessThanOrEqual(buf.byteLength + 64 * 1024);
+    expect(stats!.rereadBytes).toBeGreaterThanOrEqual(0);
+    expect(stats!.rereadBytes).toBe(stats!.requestedBytes - stats!.uniqueBytesRead);
+    // `readLazChunkTable` re-reads offset 0 after the prefix read off the File.
+    // That is a real cost of the current reading order, and it is reported.
+    expect(stats!.rereadBytes).toBeGreaterThan(0);
   });
 
   it('reports the whole-file path and its one read when the pool does not engage', async () => {
@@ -115,6 +134,26 @@ describe('loadLazFromFile', () => {
     await loadLazFromFile(new File([buf], 'm.laz'), 'm.laz', 1, undefined, undefined, (s) => { stats = s; });
     expect(stats?.decodePath).toBe('whole-file');
     expect(stats?.compressedBytesRead).toBe(buf.byteLength);
+    // Identity is recorded on this path too; no chunk plan was ever made.
+    expect(stats?.fileName).toBe('m.laz');
+    expect(stats?.fileBytes).toBe(buf.byteLength);
+    expect(stats?.decodeStride).toBe(1);
+    expect(stats?.previewBudget).toBeUndefined();
+    expect(stats?.lazChunkCount).toBeUndefined();
+    // The prefix read is covered again by the whole-file read.
+    expect(stats!.uniqueBytesRead).toBe(buf.byteLength);
+    expect(stats!.rereadBytes).toBeGreaterThan(0);
+  });
+
+  it('carries the stride and the declared count the file was read at', async () => {
+    const buf = fixtureBytes();
+    let stats: LazLoadStats | undefined;
+    const cloud = await loadLazFromFile(new File([buf], 'ladder.laz'), 'm.laz', 7, undefined, undefined, (s) => { stats = s; });
+    expect(stats?.fileName).toBe('ladder.laz');
+    expect(stats?.decodeStride).toBe(7);
+    expect(stats?.declaredPointCount).toBe(cloud.declaredPointCount);
+    expect(stats!.pointFormat).toBeGreaterThanOrEqual(0);
+    expect(stats!.pointFormat).toBeLessThanOrEqual(10);
   });
 
   it('keeps the stride sample identical to the buffer path', async () => {
