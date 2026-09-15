@@ -59,6 +59,24 @@ export function sampleReadoutText(sample: ReturnType<typeof sampleTerrain>, suff
   return `Sample · ${f(sample.elevationM, 2)}${suffix} · slope ${f(sample.slopeDeg)}° · canopy ${f(sample.canopyM)}${suffix}`;
 }
 
+/** Where a click landed on a north-up raster: the fractional position and the DTM cell, or null off the canvas. */
+function cellAtClick(canvas: HTMLCanvasElement, e: MouseEvent, cols: number, rows: number): { fx: number; fy: number; col: number; row: number } | null {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  const fx = (e.clientX - rect.left) / rect.width;
+  const fy = (e.clientY - rect.top) / rect.height;
+  const col = Math.max(0, Math.min(cols - 1, Math.floor(fx * cols)));
+  const displayRow = Math.max(0, Math.min(rows - 1, Math.floor(fy * rows)));
+  return { fx, fy, col, row: rows - 1 - displayRow }; // undo the north-up flip
+}
+
+/** Drop the crosshair at a fractional position; percentages survive a resize. */
+function placeCrosshair(crosshair: HTMLElement, fx: number, fy: number): void {
+  crosshair.style.left = `${(fx * 100).toFixed(2)}%`;
+  crosshair.style.top = `${(fy * 100).toFixed(2)}%`;
+  crosshair.style.display = 'block';
+}
+
 export class SurfaceTiles {
   private _cancelRepaint: (() => void) | null = null;
   private readonly host: SurfaceTilesHost;
@@ -226,13 +244,9 @@ export class SurfaceTiles {
     canvas.addEventListener('click', (e) => {
       const r = this.host.getResult();
       if (!r) return;
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return;
-      const fx = (e.clientX - rect.left) / rect.width;
-      const fy = (e.clientY - rect.top) / rect.height;
-      const col = Math.max(0, Math.min(cols - 1, Math.floor(fx * cols)));
-      const displayRow = Math.max(0, Math.min(rows - 1, Math.floor(fy * rows)));
-      const row = rows - 1 - displayRow; // undo the north-up flip
+      const hit = cellAtClick(canvas, e, cols, rows);
+      if (!hit) return;
+      const { fx, fy, col, row } = hit;
       const i = row * cols + col;
       const covered = r.dtm.coverage[i] !== 0;
       if (!covered) {
@@ -253,9 +267,7 @@ export class SurfaceTiles {
         readout.textContent = `Sample · ${support} support · confidence ${c}% (${confidenceWord(conf)})`;
         readout.classList.remove('is-empty');
       }
-      crosshair.style.left = `${(fx * 100).toFixed(2)}%`;
-      crosshair.style.top = `${(fy * 100).toFixed(2)}%`;
-      crosshair.style.display = 'block';
+      placeCrosshair(crosshair, fx, fy);
     });
   }
 
@@ -616,20 +628,14 @@ export class SurfaceTiles {
     canvas.addEventListener('click', (e) => {
       const r = this.host.getResult();
       if (!r) return;
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return;
-      const fx = (e.clientX - rect.left) / rect.width;
-      const fy = (e.clientY - rect.top) / rect.height;
-      const col = Math.max(0, Math.min(cols - 1, Math.floor(fx * cols)));
-      const displayRow = Math.max(0, Math.min(rows - 1, Math.floor(fy * rows)));
-      const row = rows - 1 - displayRow; // undo the north-up flip
+      const hit = cellAtClick(canvas, e, cols, rows);
+      if (!hit) return;
+      const { fx, fy, col, row } = hit;
       const sample = sampleTerrain(r, col, row);
       readout.textContent = this._sampleReadoutText(sample);
       readout.classList.toggle('is-empty', !sample?.covered);
       // Drop the crosshair at the click point, percentages survive resize.
-      crosshair.style.left = `${(fx * 100).toFixed(2)}%`;
-      crosshair.style.top = `${(fy * 100).toFixed(2)}%`;
-      crosshair.style.display = 'block';
+      placeCrosshair(crosshair, fx, fy);
     });
   }
 
@@ -703,7 +709,8 @@ export class SurfaceTiles {
     }
     if (covered.length < 16) return null;
     const hist = histogramBins(covered, 24);
-    if (hist.peak <= 0 || !(hist.max > hist.min)) return null;
+    // Written as a negated comparison on purpose: a NaN bound must also bail out.
+    if (hist.peak <= 0 || !(hist.max > hist.min)) return null; // NOSONAR S1940
 
     const wrap = el('div', { className: 'olv-analyse-hist' });
     wrap.append(el('div', { className: 'olv-analyse-sublabel', text: 'Bare-earth elevation' }));
