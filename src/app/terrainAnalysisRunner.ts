@@ -696,7 +696,7 @@ export function createTerrainAnalysisRunner(
       analysePanel.update(result, { targetId: runDatasetId, crsRevision: runCrsRevision });
       if (coreSource === 'restored') {
         analysePanel.setStatus(
-          'Terrain core restored from the on-device cache: source digest, parameters and method generation matched.',
+          'Terrain core restored from the on-device cache. The analysed points, the classification, the parameters and the method versions all matched.',
         );
       }
       // Contour Studio launcher: hand the panel the CRS frame facts (projected

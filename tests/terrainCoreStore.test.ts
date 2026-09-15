@@ -14,6 +14,7 @@ import { computeTerrainCore } from '../src/terrain/contour/analyseContours';
 import type { TerrainCore } from '../src/terrain/contour/analyseContours';
 import { createTerrainCoreStore, TERRAIN_CORE_STORE_DIR, TERRAIN_CORE_INDEX_FILE } from '../src/terrain/contour/terrainCoreStore';
 import { encodeTerrainCore } from '../src/terrain/contour/terrainCorePayload';
+import { integrityDigest } from '../src/terrain/contour/persistentCoreKey';
 import { smallCloud, SMALL_PARAMS, sameCore } from './terrainCorePayload.test';
 
 const positions = smallCloud();
@@ -54,20 +55,20 @@ describe('terrain core store', () => {
     await store.persist(positions, SMALL_PARAMS, core, EXPENSIVE);
     const edited = positions.slice();
     edited[3] += 0.001;
-    expect(await store.lookup(edited, SMALL_PARAMS)).toEqual({ miss: 'source-mismatch' });
+    expect(await store.lookup(edited, SMALL_PARAMS)).toEqual({ miss: 'content-mismatch' });
     expect(await store.lookup(positions, { ...SMALL_PARAMS, cellSizeM: 5 })).toEqual({ miss: 'parameter-mismatch' });
     const later = createTerrainCoreStore(root, { generation: 'g2' });
     expect(await later.lookup(positions, SMALL_PARAMS)).toEqual({ miss: 'generation-mismatch' });
   });
 
-  it('a classification edit the sampled hash would miss is a source mismatch', async () => {
+  it('a classification edit the sampled hash would miss is a content mismatch', async () => {
     const root = fakeOpfsDir();
     const store = createTerrainCoreStore(root, { generation: 'g1' });
     const cls = new Uint8Array(positions.length / 3).fill(2);
     await store.persist(positions, { ...SMALL_PARAMS, classification: cls }, core, EXPENSIVE);
     const edited = cls.slice();
     edited[1] = 5;
-    expect(await store.lookup(positions, { ...SMALL_PARAMS, classification: edited })).toEqual({ miss: 'source-mismatch' });
+    expect(await store.lookup(positions, { ...SMALL_PARAMS, classification: edited })).toEqual({ miss: 'content-mismatch' });
   });
 
   it('a flipped payload byte fails integrity and the entry is dropped', async () => {
@@ -100,6 +101,48 @@ describe('terrain core store', () => {
     expect(await store.lookup(positions, SMALL_PARAMS)).toEqual({ miss: 'read-failure' });
   });
 
+  it('a store opened fresh over the same root restores the earlier core', async () => {
+    const root = fakeOpfsDir();
+    const first = createTerrainCoreStore(root, { generation: 'g1' });
+    expect(await first.persist(positions, SMALL_PARAMS, core, EXPENSIVE)).toBe(true);
+    // A later session builds a new store over the same directory; the entry it
+    // finds there is the whole point of persisting, so it must hit.
+    const reopened = createTerrainCoreStore(root, { generation: 'g1' });
+    const found = await reopened.lookup(positions, SMALL_PARAMS);
+    expect('core' in found).toBe(true);
+    expect(sameCore((found as { core: TerrainCore }).core, core)).toBeNull();
+  });
+
+  it('a payload that passes its digest but will not decode is an integrity failure', async () => {
+    const root = fakeOpfsDir();
+    const store = createTerrainCoreStore(root, { generation: 'g1' });
+    await store.persist(positions, SMALL_PARAMS, core, EXPENSIVE);
+    const index = await readIndex(root);
+    const dir = await root.getDirectoryHandle(TERRAIN_CORE_STORE_DIR);
+    const file = index.entries[0].file as string;
+    // Bytes the index vouches for exactly, and which the decoder still cannot
+    // read: the digest gate passes and the decode gate is what refuses.
+    const garbage = new Uint8Array([9, 9, 9, 9, 9, 9, 9, 9]);
+    const w = await (await dir.getFileHandle(file, { create: true })).createWritable();
+    await w.write(garbage);
+    await w.close();
+    await writeIndex(root, {
+      ...index,
+      entries: [{ ...index.entries[0], bytes: garbage.byteLength, digest: await integrityDigest(garbage) }],
+    });
+    expect(await store.lookup(positions, SMALL_PARAMS)).toEqual({ miss: 'integrity-failure' });
+  });
+
+  it('names generation, not parameters, when only the generation moved', async () => {
+    const root = fakeOpfsDir();
+    await createTerrainCoreStore(root, { generation: 'g1' }).persist(positions, SMALL_PARAMS, core, EXPENSIVE);
+    const bumped = createTerrainCoreStore(root, { generation: 'g2' });
+    expect(await bumped.lookup(positions, SMALL_PARAMS)).toEqual({ miss: 'generation-mismatch' });
+    // The same store still names the parameter axis when the parameters move,
+    // so the two axes are not collapsed into one reason.
+    expect(await bumped.lookup(positions, { ...SMALL_PARAMS, cellSizeM: 5 })).toEqual({ miss: 'parameter-mismatch' });
+  });
+
   it('keeps cheap cores in memory only', async () => {
     const store = createTerrainCoreStore(fakeOpfsDir(), { generation: 'g1', persistMinMs: 1000 });
     expect(await store.persist(positions, SMALL_PARAMS, core, 999)).toBe(false);
@@ -122,7 +165,7 @@ describe('terrain core store', () => {
     const total = index.entries.reduce((n: number, e: { bytes: number }) => n + e.bytes, 0);
     expect(total).toBeLessThanOrEqual(budget);
     expect(index.entries).toHaveLength(2);
-    expect(await store.lookup(positions, SMALL_PARAMS)).toEqual({ miss: 'source-mismatch' });
+    expect(await store.lookup(positions, SMALL_PARAMS)).toEqual({ miss: 'content-mismatch' });
     expect('core' in (await store.lookup(third, SMALL_PARAMS))).toBe(true);
   });
 

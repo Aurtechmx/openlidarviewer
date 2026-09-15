@@ -312,6 +312,34 @@ Evaluated and deliberately deferred (kept here so the roadmap is explicit):
 - archaeological local-relief workflows (cf. Niculiță 2020,
   doi:10.3390/s20041192).
 
+## Terrain core cache on this device
+
+The heavy half of the pipeline (classification, ground filtering, DTM,
+validation, calibration, gate, quality, surface) is computed once as a terrain
+core and reused. Beyond the in-memory reuse inside one session, the core is
+also written to the browser's origin-private file system, in a directory named
+`olv-terrain-core`. Re-opening the same data after a reload restores the core
+from there instead of recomputing it.
+
+An entry is keyed by four things: a SHA-256 of the analysed position bytes, a
+SHA-256 of the per-point classification, the exact core parameters (cell size,
+CRS and vertical frame, unit factors, excluded classes, ground filter settings,
+hold-out seed, aggregation, sample scale), and the method generation, which is
+the `id@version` tag of every registered method whose output is baked into the
+core. All four must match. Any mismatch, a failed integrity check on the stored
+bytes, or an unreadable payload recomputes the core rather than serving what was
+stored.
+
+The key identifies the analysed input, not the file it came from. A different
+sample of the same file (a different stride, a different resident subset, a
+different class exclusion) is a different input and recomputes.
+
+The store holds at most 512 MiB across all entries. When a write does not fit,
+the least recently used entries are removed until it does. Only cores whose
+compute took at least one second are written; cheaper ones stay in memory for
+the session and are recomputed afterwards. Nothing in this store reaches the
+point-cloud tile caches or the source file, and nothing leaves the device.
+
 ## What confidence means (and what it does not)
 
 The per-cell confidence is **calibrated against measured error**, not

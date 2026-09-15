@@ -118,6 +118,38 @@ describe('persistentCoreKey', () => {
     }
   });
 
+  it('misses on any ground filter sub-parameter change', async () => {
+    const pos = makeCloud(500);
+    const ground = {
+      maxWindowCells: 16,
+      slope: 0.15,
+      elevationThresholdM: 0.5,
+      scalingFactorM: 1.25,
+      floorPercentile: 0.05,
+    };
+    const base = await persistentCoreKey(pos, { ...BASE_PARAMS, ground });
+    // Every field paramsKey flattens must move the key on its own; a field left
+    // out of that flattening would let a different ground filter reuse a core.
+    const moved: Partial<typeof ground>[] = [
+      { maxWindowCells: 17 },
+      { slope: 0.16 },
+      { elevationThresholdM: 0.6 },
+      { scalingFactorM: 1.5 },
+      { floorPercentile: 0.1 },
+    ];
+    for (const over of moved) {
+      const key = await persistentCoreKey(pos, { ...BASE_PARAMS, ground: { ...ground, ...over } });
+      expect(key, JSON.stringify(over)).not.toBe(base);
+    }
+  });
+
+  it('misses when a classification appears where there was none', async () => {
+    const pos = makeCloud(500);
+    const none = await persistentCoreKey(pos, BASE_PARAMS);
+    const cls = new Uint8Array(500).fill(2);
+    expect(await persistentCoreKey(pos, { ...BASE_PARAMS, classification: cls })).not.toBe(none);
+  });
+
   it('misses on the SAME generation only when an input actually changed', async () => {
     const pos = makeCloud(500);
     const gen = coreMethodGeneration();

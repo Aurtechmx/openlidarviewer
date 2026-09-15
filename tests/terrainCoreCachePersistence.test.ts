@@ -4,8 +4,9 @@
  * The in-memory core cache consults the persistent tier on a miss and hands
  * a computed core to it afterwards, without ever delaying the result: the
  * caller has its core before the tier is asked to write. A tier that throws
- * is a miss, and a restored core is reported as such. The tier here is a pair
- * of spies. No OPFS is involved.
+ * is a miss, and a restored core is reported as such. The tier is a pair of
+ * spies, except for the last case, which drives the real OPFS-backed store
+ * over a fake directory to check that a refused restore is named.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
@@ -13,7 +14,12 @@ import {
   clearTerrainCoreCache,
   setTerrainCorePersistence,
   lastTerrainCoreSource,
+  lastTerrainCorePersistenceMiss,
 } from '../src/terrain/contour/terrainCoreCache';
+import { fakeOpfsDir } from './support/fakeOpfs';
+import { createTerrainCoreStore, TERRAIN_CORE_STORE_DIR } from '../src/terrain/contour/terrainCoreStore';
+import { computeTerrainCore } from '../src/terrain/contour/analyseContours';
+import { smallCloud, SMALL_PARAMS } from './terrainCorePayload.test';
 import type { TerrainCore, TerrainCoreParams } from '../src/terrain/contour/analyseContours';
 
 const PARAMS: TerrainCoreParams = { cellSizeM: 2, crs: 'EPSG:32610' };
@@ -76,5 +82,39 @@ describe('terrain core cache with a persistent tier', () => {
     await expect(getOrComputeCoreAsync(cloud(4), PARAMS, async () => { throw new Error('aborted'); })).rejects.toThrow('aborted');
     await new Promise((r) => setTimeout(r, 0));
     expect(persist).not.toHaveBeenCalled();
+  });
+
+  it('names why a restore did not happen, and clears the name on a hit', async () => {
+    setTerrainCorePersistence({ lookup: async () => ({ miss: 'generation-mismatch' }), persist: async () => true });
+    await getOrComputeCoreAsync(cloud(5), PARAMS, async () => fakeCore('computed'));
+    expect(lastTerrainCorePersistenceMiss()).toBe('generation-mismatch');
+    await getOrComputeCoreAsync(cloud(5), PARAMS, async () => fakeCore('computed'));
+    expect(lastTerrainCoreSource()).toBe('memory');
+    expect(lastTerrainCorePersistenceMiss()).toBeNull();
+  });
+
+  it('a corrupt persisted entry recomputes and reads as an integrity failure', async () => {
+    const root = fakeOpfsDir();
+    const positions = smallCloud();
+    const real = computeTerrainCore(positions, SMALL_PARAMS);
+    const store = createTerrainCoreStore(root, { generation: 'g1' });
+    expect(await store.persist(positions, SMALL_PARAMS, real, 5000)).toBe(true);
+    // Flip a byte of the stored payload: the recorded digest no longer holds.
+    const dir = await root.getDirectoryHandle(TERRAIN_CORE_STORE_DIR);
+    const names: string[] = [];
+    for await (const k of dir.keys()) if (k.endsWith('.bin')) names.push(k);
+    const bytes = new Uint8Array(await (await (await dir.getFileHandle(names[0])).getFile()).arrayBuffer());
+    bytes[bytes.byteLength - 1] ^= 0x01;
+    const w = await (await dir.getFileHandle(names[0], { create: true })).createWritable();
+    await w.write(bytes);
+    await w.close();
+
+    setTerrainCorePersistence(store);
+    const compute = vi.fn(async () => fakeCore('recomputed'));
+    const core = await getOrComputeCoreAsync(positions, SMALL_PARAMS, compute);
+    expect(compute).toHaveBeenCalledTimes(1);
+    expect((core as unknown as { tag: string }).tag).toBe('recomputed');
+    expect(lastTerrainCoreSource()).toBe('computed');
+    expect(lastTerrainCorePersistenceMiss()).toBe('integrity-failure');
   });
 });
