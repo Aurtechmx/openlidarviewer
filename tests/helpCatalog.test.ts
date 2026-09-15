@@ -9,21 +9,12 @@
  * once for the file. Each case reads the catalogue through its exported
  * functions only.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { HELP_TOPICS, helpActionRows, helpKeyRows, orphanActionReferences, searchHelp } from '../src/app/helpCatalog';
-import { buildActionRegistry, type ActionRegistryDeps } from '../src/app/actionDefinitions';
+import { buildTestActionRegistry } from './helpers/actionRegistryFixture';
 import { shortcutDescriptors } from '../src/ui/keyBindings';
 
-const noop = vi.fn();
-const actions = buildActionRegistry({
-  getViewer: () => ({}) as never, getTour: () => null, workflowController: { capture: noop } as never, lassoVolumeTool: {} as never,
-  compass: {} as never, bookmarks: {} as never, showLassoToast: noop, setTheme: noop, syncLassoButton: noop,
-  runDeriveClassification: async () => undefined, saveSnapshot: noop, copyShareLink: noop, terrainAnalysisEntry: {} as never,
-  runFillUnclassified: async () => undefined, buildCurrentStoryInputs: () => ({}) as never, startWorkflowRecording: noop,
-  dispatchWorkflowEvent: noop, ensureWorkflowConfigPanel: async () => ({}) as never, ensureShortcutSheet: async () => ({}) as never,
-  hasScan: () => false, saveCurrentView: noop, applyView: noop, toggleOrbitInvert: noop, resetNavigation: noop,
-  planView: { togglePlanView: noop, notePlanViewPreset: noop },
-} as unknown as ActionRegistryDeps);
+const actions = buildTestActionRegistry();
 
 describe('help catalogue', () => {
   it('topic ids are unique and every topic has prose', () => {
@@ -66,7 +57,7 @@ describe('help catalogue', () => {
   it('keyboard rows describe every labelled binding by its action or its own line', () => {
     const shortcuts = shortcutDescriptors();
     const rows = helpKeyRows(shortcuts, actions);
-    expect(rows.length).toBe(shortcuts.filter((s) => s.displayKeys).length);
+    expect(rows).toHaveLength(shortcuts.filter((s) => s.displayKeys).length);
     expect(rows.find((r) => r.keys === 'M')?.text).toBe('Measure');
     expect(rows.find((r) => r.keys === 'Delete / Backspace')?.text).toMatch(/annotation/);
     expect(rows.find((r) => r.keys.startsWith('1–4'))?.text).toMatch(/Navigation/);

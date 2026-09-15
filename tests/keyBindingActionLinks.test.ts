@@ -9,21 +9,12 @@
  * recorder rows follow its feature flag, so a missing workflow.start is not a
  * failure. Every other id is.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { buildActionRegistry, type ActionRegistryDeps } from '../src/app/actionDefinitions';
+import { describe, it, expect } from 'vitest';
+import { buildTestActionRegistry } from './helpers/actionRegistryFixture';
 import { shortcutDescriptors } from '../src/ui/keyBindings';
 import { CAMERA_PRESET_KEY } from '../src/render/camera/cameraPresets';
 
-const noop = vi.fn();
-const actions = buildActionRegistry({
-  getViewer: () => ({}) as never, getTour: () => null, workflowController: { capture: noop } as never, lassoVolumeTool: {} as never,
-  compass: {} as never, bookmarks: {} as never, showLassoToast: noop, setTheme: noop, syncLassoButton: noop,
-  runDeriveClassification: async () => undefined, saveSnapshot: noop, copyShareLink: noop, terrainAnalysisEntry: {} as never,
-  runFillUnclassified: async () => undefined, buildCurrentStoryInputs: () => ({}) as never, startWorkflowRecording: noop,
-  dispatchWorkflowEvent: noop, ensureWorkflowConfigPanel: async () => ({}) as never, ensureShortcutSheet: async () => ({}) as never,
-  hasScan: () => false, saveCurrentView: noop, applyView: noop, toggleOrbitInvert: noop, resetNavigation: noop,
-  planView: { togglePlanView: noop, notePlanViewPreset: noop },
-} as unknown as ActionRegistryDeps);
+const actions = buildTestActionRegistry();
 const byId = new Map(actions.map((a) => [a.id, a]));
 const shortcuts = shortcutDescriptors();
 
