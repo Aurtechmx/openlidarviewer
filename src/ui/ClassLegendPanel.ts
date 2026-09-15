@@ -102,6 +102,9 @@ export class ClassLegendPanel {
   /** "Counts cover the loaded display sample" caption (hidden unless sampled). */
   private readonly _sampleNote: HTMLElement;
 
+  /** Caption for a classification run that produced nothing (hidden when empty). */
+  private readonly _unavailableNote: HTMLElement;
+
   /** The "Show all" reset button. */
   private readonly _showAllBtn: HTMLButtonElement;
 
@@ -168,6 +171,14 @@ export class ClassLegendPanel {
     });
     this._sampleNote.setAttribute('role', 'note');
 
+    // "Classification unavailable" caption. A failed or refused derive is a
+    // fact about the scan the user must still be able to read a minute later,
+    // so it lives here rather than only in a toast that fades. Shares the
+    // caption CSS, with its own class so tests and styling can target it.
+    this._unavailableNote = el('div', { className: 'olv-cl-unavailable olv-hidden' });
+    this._unavailableNote.setAttribute('role', 'status');
+    this._unavailableNote.setAttribute('aria-live', 'polite');
+
     this._banner = el('div', { className: 'olv-cl-banner olv-hidden' });
     this._banner.setAttribute('role', 'status');
     this._banner.setAttribute('aria-live', 'polite');
@@ -215,6 +226,7 @@ export class ClassLegendPanel {
       this._provenance,
       this._streamingNote,
       this._sampleNote,
+      this._unavailableNote,
       this._banner,
       this._list,
       this._empty,
@@ -332,6 +344,9 @@ export class ClassLegendPanel {
     info?: { confidencePct?: number | null; warnings?: readonly string[] },
   ): void {
     this._derived = on;
+    // A classification landed, so any standing "unavailable" caption from an
+    // earlier refused run no longer describes this scan.
+    if (on) this.setUnavailableNotice(null);
     this._provenance.classList.toggle('olv-hidden', !on);
     let text = 'Derived (heuristic) — not survey-grade. Validate before relying on it.';
     if (on && info) {
@@ -351,6 +366,17 @@ export class ClassLegendPanel {
    * running tally over the unique nodes the session decoded) never read as
    * full-source totals.
    */
+  /**
+   * Show a persistent caption explaining that no classification was produced
+   * (the classifier worker failed and the cloud was too large to rescue on the
+   * main thread), or clear it with null. Independent of the derived-provenance
+   * caption: nothing was derived, so that one stays as it was.
+   */
+  setUnavailableNotice(message: string | null): void {
+    this._unavailableNote.textContent = message ?? '';
+    this._unavailableNote.classList.toggle('olv-hidden', !message);
+  }
+
   setStreamingMode(on: boolean): void {
     this._streamingNote.classList.toggle('olv-hidden', !on);
   }

@@ -90,7 +90,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
+import { afterClassEdit, classCountsOf, noteClassificationEdited, reportClassifyFailure, wireFrameChange } from './app/classLegendRefresh';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { classifierOptions } from './render/class/classifierCues';
 import { classificationCoverage } from './render/class/classificationCoverage';
@@ -1470,8 +1470,8 @@ async function runDeriveClassification(): Promise<void> {
     const warnText = result.warnings.length > 0 ? ` ⚠ ${result.warnings[0]}` : '';
     showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.${confText}${warnText}`);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!/abort/i.test(msg)) showLassoToast(`Classify · failed: ${msg}`);
+    // A refusal also lands on the Classes caption, which outlives the toast.
+    reportClassifyFailure(err, showLassoToast, classLegendPanel);
   } finally {
     classifyRunning = false;
   }

@@ -28,6 +28,7 @@
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { countClasses } from '../render/class/classHistogram';
 import { toClassBuffer } from '../render/class/classBuffer';
+import { SyncFallbackRefusedError } from '../workers/syncFallbackRefusedError';
 
 /** Per-class point counts for any classification source, narrowed to bytes. */
 export function classCountsOf(classification: ArrayLike<number>): Map<number, number> {
@@ -174,4 +175,42 @@ export function wireFrameChange(deps: FrameChangeDeps): void {
       noteStale: deps.noteStale,
     });
   });
+}
+
+/**
+ * Where a failed Classify run is reported.
+ *
+ * Most failures are transient and a toast is the right weight for them. A
+ * {@link SyncFallbackRefusedError} is not: the classifier worker is gone, the
+ * cloud is too large to classify safely on the main thread, and nothing was
+ * changed. That is a standing condition the user has to be able to read after
+ * the toast has faded, so it also goes to the Classes panel caption, which is
+ * the surface this module already owns. An abort is silent: the run was
+ * superseded on purpose.
+ */
+/** The Classes-panel surface this module writes to. */
+export interface ClassifyNoticeSurface {
+  setUnavailableNotice(message: string | null): void;
+  show(): void;
+}
+
+/**
+ * Report a rejected Classify run. Returns the message shown, or null when the
+ * failure was an abort and nothing was said.
+ */
+export function reportClassifyFailure(
+  err: unknown,
+  toast: (message: string) => void,
+  legend?: ClassifyNoticeSurface,
+): string | null {
+  if (err instanceof SyncFallbackRefusedError) {
+    toast(`Classify · ${err.userMessage}`);
+    legend?.setUnavailableNotice(err.userMessage);
+    legend?.show();
+    return err.userMessage;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/abort/i.test(msg)) return null;
+  toast(`Classify · failed: ${msg}`);
+  return msg;
 }

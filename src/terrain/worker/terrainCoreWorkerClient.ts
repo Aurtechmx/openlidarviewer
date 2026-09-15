@@ -29,6 +29,25 @@ interface PendingRequest {
   reject: (error: Error) => void;
   signal?: AbortSignal;
   onAbort?: () => void;
+  /** Reply-deadline timer; cleared by every teardown path. */
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * How long one job may go without a reply before the worker is declared hung,
+ * terminated and the job failed (which routes the caller into the bounded
+ * main-thread fallback). The terrain worker sends NO progress messages (it
+ * computes the whole core inside one message task), so there is nothing to
+ * reset this on, and it has to stay large enough to cover the slowest
+ * legitimate core a strided analysis can ask for. Two minutes is far beyond any
+ * measured core (the 1M-point row of the OPFS restore baseline is 9.4 s) and
+ * still far short of "forever", which is what the client had before.
+ */
+export const TERRAIN_WORKER_REPLY_DEADLINE_MS = 120_000;
+
+/** Constructor options. `replyDeadlineMs` exists so tests can inject a small one. */
+export interface TerrainCoreWorkerClientOptions {
+  readonly replyDeadlineMs?: number;
 }
 
 interface OkReply {
@@ -49,6 +68,11 @@ export class TerrainCoreWorkerClient {
   private readonly _pending = new Map<number, PendingRequest>();
   private _nextJobId = 0;
   private _disposed = false;
+  private readonly _replyDeadlineMs: number;
+
+  constructor(options?: TerrainCoreWorkerClientOptions) {
+    this._replyDeadlineMs = options?.replyDeadlineMs ?? TERRAIN_WORKER_REPLY_DEADLINE_MS;
+  }
 
   /** In-flight job count. Diagnostic — asserted by the settlement tests. */
   get pendingCount(): number {
@@ -121,6 +145,19 @@ export class TerrainCoreWorkerClient {
           );
         };
         signal.addEventListener('abort', pending.onAbort, { once: true });
+      }
+      if (this._replyDeadlineMs > 0 && Number.isFinite(this._replyDeadlineMs)) {
+        // A worker that never replies used to hang this promise forever, which
+        // also meant the bridge's fallback never ran. Terminating through the
+        // shared fail-all path settles the job with a real error, so the
+        // caller's fallback (or its measured refusal) takes over.
+        pending.timer = setTimeout(() => {
+          this._terminateWorker(
+            new Error(
+              `The terrain-core worker missed its ${this._replyDeadlineMs} ms reply deadline.`,
+            ),
+          );
+        }, this._replyDeadlineMs);
       }
       this._pending.set(jobId, pending);
 
@@ -216,6 +253,7 @@ export class TerrainCoreWorkerClient {
     const pending = this._pending.get(jobId);
     if (!pending) return undefined;
     this._pending.delete(jobId);
+    if (pending.timer !== undefined) clearTimeout(pending.timer);
     if (pending.onAbort && pending.signal) {
       pending.signal.removeEventListener('abort', pending.onAbort);
     }
@@ -224,6 +262,7 @@ export class TerrainCoreWorkerClient {
 
   private _failAll(error: Error): void {
     for (const pending of this._pending.values()) {
+      if (pending.timer !== undefined) clearTimeout(pending.timer);
       if (pending.onAbort && pending.signal) {
         pending.signal.removeEventListener('abort', pending.onAbort);
       }

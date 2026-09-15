@@ -6,6 +6,12 @@
  * onerror, unsupported environment, or a reported computation error) it runs
  * {@link deriveClassification} synchronously on the main thread.
  *
+ * The fallback is BOUNDED by measurement: it runs only for a cloud small enough
+ * to finish in about 200 ms on the main thread (see {@link MAX_FALLBACK_POINTS}
+ * and docs/validation/sync-fallback-budget-baseline.json). Anything larger is
+ * refused with a {@link SyncFallbackRefusedError} that states nothing was
+ * changed, rather than freezing the page.
+ *
  * This guarantees Classify still works where the worker chunk can't load, which
  * matters because the worker round-trip can't be verified in the build/test
  * sandbox — only the fallback, cache and abort logic can. The fallback is the
@@ -22,16 +28,33 @@ import type {
   DeriveClassificationResult,
 } from './deriveClassification';
 import type { DeriveClassificationClientLike } from './deriveClassificationWorkerClient';
+import {
+  SyncFallbackRefusedError,
+  syncFallbackLimitsApply,
+} from '../../workers/syncFallbackRefusedError';
 
 /** Which thread last derived a classification. Verification-only instrumentation. */
 export type ClassifyComputePath = 'worker' | 'fallback';
 
 /**
- * Hard ceiling for the synchronous main-thread fallback. The neighbourhood +
- * morphology passes are O(n) over a bounded grid, but a multi-million-point
- * fallback would still stall the UI, so cap it and tell the user how to recover.
+ * Ceiling for the synchronous main-thread fallback, in points. MEASURED, not
+ * assumed: `tests/benchmark/deriveClassificationSyncFallbackBudget.test.ts`
+ * times `deriveClassification` down a point ladder and the curve crosses 200 ms
+ * at 1 000 000 points (169 ms there, 267 ms at 2 000 000). The frozen rows live
+ * in docs/validation/sync-fallback-budget-baseline.json.
  */
-export const MAX_FALLBACK_POINTS = 6_000_000;
+export const MAX_FALLBACK_POINTS = 1_000_000;
+
+/** Per-call override for the fallback ceiling (tests). */
+export interface ClassifyFallbackLimits {
+  readonly maxSyncFallbackPoints?: number;
+  /**
+   * Force the ceiling on or off. Defaults to {@link syncFallbackLimitsApply},
+   * which is true in a browser (where a long synchronous compute freezes the
+   * page) and false in Node (where the fallback is the only compute path).
+   */
+  readonly enforceLimits?: boolean;
+}
 
 let lastComputePath: ClassifyComputePath | null = null;
 
@@ -96,6 +119,7 @@ export async function deriveClassificationAsync(
   signal?: AbortSignal,
   client?: DeriveClassificationClientLike,
   onProgress?: (phase: string) => void,
+  opts?: ClassifyFallbackLimits,
 ): Promise<DeriveClassificationResult> {
   if (signal?.aborted) {
     throw new DOMException('Classification aborted', 'AbortError');
@@ -116,12 +140,10 @@ export async function deriveClassificationAsync(
     if (signal?.aborted) {
       throw new DOMException('Classification aborted', 'AbortError');
     }
-    if (n > MAX_FALLBACK_POINTS) {
-      throw new Error(
-        `The classifier worker is unavailable and the dataset (${n} points) is ` +
-          `too large to classify safely on the main thread (limit ` +
-          `${MAX_FALLBACK_POINTS}). Reload to restore the worker.`,
-      );
+    const enforce = opts?.enforceLimits ?? syncFallbackLimitsApply();
+    const maxPoints = opts?.maxSyncFallbackPoints ?? MAX_FALLBACK_POINTS;
+    if (enforce && n > maxPoints) {
+      throw new SyncFallbackRefusedError({ stage: 'classify', points: n, limit: maxPoints });
     }
     // The ceiling passed — the fallback is actually happening now.
     if (debugEnabled()) console.info(`[classify] falling back to main thread (${n} pts)`);

@@ -300,3 +300,77 @@ describe('TerrainCoreWorkerClient — abort actually stops the work', () => {
     expect(client.pendingCount).toBe(0);
   });
 });
+
+/**
+ * A worker that accepts the post and then goes quiet. Before the reply
+ * deadline this hung the promise forever, which also meant the bridge's
+ * main-thread fallback never ran: the analysis simply never finished.
+ */
+describe('TerrainCoreWorkerClient reply deadline', () => {
+  test('settles at the injected deadline, terminating the silent worker', async () => {
+    instances = [];
+    vi.useFakeTimers();
+    vi.stubGlobal('Worker', FakeWorker);
+    try {
+      const client = new TerrainCoreWorkerClient({ replyDeadlineMs: 5_000 });
+      const pos = hillScene();
+      const job = client.computeCore(pos, pos.length / 3, PARAMS, undefined);
+      const silent = instances[0] as FakeWorker;
+      expect(client.pendingCount).toBe(1);
+
+      vi.advanceTimersByTime(5_000);
+      await expect(job).rejects.toThrow(/5000 ms reply deadline/);
+      expect(silent.terminated).toBe(true);
+      expect(client.pendingCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a reply before the deadline cancels it (no late teardown)', async () => {
+    instances = [];
+    vi.useFakeTimers();
+    vi.stubGlobal('Worker', FakeWorker);
+    try {
+      const client = new TerrainCoreWorkerClient({ replyDeadlineMs: 5_000 });
+      const pos = hillScene();
+      const job = client.computeCore(pos, pos.length / 3, PARAMS, undefined);
+      const worker = instances[0] as FakeWorker;
+      const sentinel = { __replied: true } as unknown as TerrainCore;
+      worker.onmessage?.({
+        data: { jobId: worker.posted[0].jobId as number, ok: true, core: sentinel },
+      } as MessageEvent);
+      await expect(job).resolves.toBe(sentinel);
+      // Long past the deadline, the settled job's timer must not fire.
+      vi.advanceTimersByTime(60_000);
+      expect(worker.terminated).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('the deadline routes a silent worker into the bridge fallback', async () => {
+    instances = [];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.useFakeTimers();
+    vi.stubGlobal('Worker', FakeWorker);
+    try {
+      setTerrainCoreClientFactory(async () =>
+        Promise.resolve(new TerrainCoreWorkerClient({ replyDeadlineMs: 1_000 })),
+      );
+      const pos = hillScene();
+      const promise = computeTerrainCoreAsync(pos, pos.length / 3, PARAMS);
+      // Let the dynamic client resolve and the job post before the clock moves.
+      await vi.advanceTimersByTimeAsync(1_000);
+      const core = await promise;
+      // The silent worker no longer hangs the analysis: it fails at the
+      // deadline and the bounded main-thread fallback produces the core.
+      expect(core.dtm.cols).toBeGreaterThan(0);
+      expect(getLastTerrainComputePath()).toBe('fallback');
+      expect(String(warn.mock.calls[0]?.[0])).toMatch(/worker analysis failed/i);
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
+  });
+});

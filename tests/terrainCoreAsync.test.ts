@@ -16,8 +16,9 @@
  *         aborts before the fallback runs (dataset changed mid-run): rejects
  *         with an AbortError and never returns a fallback core; the inverse
  *         (signal present but never fired) falls back normally; and an
- *         oversize run (n > MAX_FALLBACK_POINTS) rejects with the too-large
- *         error instead of freezing the main thread.
+ *         run over either measured fallback ceiling (points or estimated grid
+ *         cells) rejects with a SyncFallbackRefusedError, having entered no
+ *         compute at all, instead of freezing the main thread.
  *
  *   getOrComputeCoreAsync (the cache + async path):
  *     5. Computes once, reuses on the second call (hit → no recompute).
@@ -34,8 +35,11 @@ import {
   computeTerrainCoreAsync,
   getLastTerrainComputePath,
   MAX_FALLBACK_POINTS,
+  MAX_FALLBACK_CELLS,
+  estimateTerrainCells,
   type TerrainCoreClientLike,
 } from '../src/terrain/worker/computeTerrainCoreAsync';
+import { SyncFallbackRefusedError } from '../src/workers/syncFallbackRefusedError';
 import {
   getOrComputeCoreAsync,
   clearTerrainCoreCache,
@@ -45,6 +49,24 @@ import {
   type TerrainCore,
   type TerrainCoreParams,
 } from '../src/terrain/contour/analyseContours';
+
+/**
+ * Counts entries into the REAL terrain core, so a refusal can be proven to have
+ * computed nothing rather than merely to have thrown. The mock delegates to the
+ * original implementation, so every other test in this file runs the real core.
+ */
+const coreCalls = vi.hoisted(() => ({ n: 0 }));
+vi.mock('../src/terrain/contour/analyseContours', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../src/terrain/contour/analyseContours')>();
+  return {
+    ...actual,
+    computeTerrainCore: (...args: Parameters<typeof actual.computeTerrainCore>) => {
+      coreCalls.n++;
+      return actual.computeTerrainCore(...args);
+    },
+  };
+});
 
 /** A small but real terrain scene — a Gaussian hill on a 26×26 grid. */
 function hillScene(): Float32Array {
@@ -57,6 +79,18 @@ function hillScene(): Float32Array {
     }
   }
   return Float32Array.from(pts);
+}
+
+/** A real cloud of `n` points spread over a `spanM` square, deterministic. */
+function overLimitCloud(n: number, spanM: number): Float32Array {
+  const xyz = new Float32Array(n * 3);
+  const side = Math.ceil(Math.sqrt(n));
+  for (let i = 0; i < n; i++) {
+    xyz[i * 3] = ((i % side) / side) * spanM;
+    xyz[i * 3 + 1] = (Math.floor(i / side) / side) * spanM;
+    xyz[i * 3 + 2] = 100 + ((i % 17) - 8) * 0.05;
+  }
+  return xyz;
 }
 
 const PARAMS: TerrainCoreParams = {
@@ -374,42 +408,101 @@ describe('computeTerrainCoreAsync — fallback stale-result race + oversize guar
     expect(getLastTerrainComputePath()).toBe('fallback');
   });
 
-  it('rejects with the too-large error — never a frozen main thread — when the worker fails on an oversize run', async () => {
+  it('a workload inside BOTH measured ceilings still falls back and returns a real core', async () => {
+    const pos = hillScene();
+    const before = coreCalls.n;
+    const core = await computeTerrainCoreAsync(
+      pos,
+      pos.length / 3,
+      PARAMS,
+      undefined,
+      undefined,
+      throwingClient,
+      { enforceLimits: true },
+    );
+    // Under both bounds by construction: 676 points over a 25 m extent at a
+    // 2 m cell is 169 cells.
+    expect(pos.length / 3).toBeLessThanOrEqual(MAX_FALLBACK_POINTS);
+    expect(estimateTerrainCells(pos, pos.length / 3, 2)).toBeLessThanOrEqual(MAX_FALLBACK_CELLS);
+    const direct = computeTerrainCore(pos, PARAMS);
+    expect(Array.from(core.dtm.z)).toEqual(Array.from(direct.dtm.z));
+    expect(getLastTerrainComputePath()).toBe('fallback');
+    expect(coreCalls.n).toBeGreaterThan(before);
+  });
+
+  it('refuses a REAL over-limit buffer without entering the terrain core', async () => {
     const pos = hillScene();
     await seedWorkerPath(pos);
-
-    const n = MAX_FALLBACK_POINTS + 1;
+    // A real buffer, really over the point ceiling, with no lie about `n`.
+    const big = overLimitCloud(MAX_FALLBACK_POINTS + 1_000, 20);
+    const n = big.length / 3;
+    const before = coreCalls.n;
     const err = await computeTerrainCoreAsync(
-      pos, // the guard fires on the declared count, before any compute
+      big,
       n,
       PARAMS,
       undefined,
       undefined,
       throwingClient,
+      { enforceLimits: true },
     ).then(
       () => {
         throw new Error('resolved — the oversize fallback guard did not fire');
       },
       (e: unknown) => e,
     );
-    expect(err).toBeInstanceOf(Error);
-    const msg = String((err as Error).message);
-    expect(msg).toMatch(/too\s+large/i);
-    // The message names BOTH the offending size and the limit — the figures a
-    // developer needs to size the sample down.
-    expect(msg).toContain(String(n));
-    expect(msg).toContain(String(MAX_FALLBACK_POINTS));
-    // Not an abort (the caller must treat this as a real failure) …
-    expect((err as Error).name).not.toBe('AbortError');
-    // … and no fallback compute happened (path marker keeps its seeded value).
+    expect(err).toBeInstanceOf(SyncFallbackRefusedError);
+    const refusal = err as SyncFallbackRefusedError;
+    expect(refusal.stage).toBe('terrain');
+    expect(refusal.points).toBe(n);
+    expect(refusal.limit).toBe(MAX_FALLBACK_POINTS);
+    expect(refusal.measure).toBe('points');
+    // Nothing was produced: the core was never entered and the path marker
+    // still reads its seeded 'worker' value.
+    expect(coreCalls.n).toBe(before);
+    expect(getLastTerrainComputePath()).toBe('worker');
+    // Recoverable, and distinguishable from a cancellation.
+    expect(refusal.name).toBe('SyncFallbackRefusedError');
+    expect(refusal.name).not.toBe('AbortError');
+    expect(refusal.userMessage).toContain('No result was produced');
+  });
+
+  it('refuses on the estimated CELL count even when the point count is small', async () => {
+    const pos = hillScene();
+    await seedWorkerPath(pos);
+    // Few points, enormous grid: 2 000 points over a 1 000 m extent at a 2 m
+    // cell is 250 000 cells, the shape that measured 48 s in the ladder.
+    const sparse = overLimitCloud(2_000, 1_000);
+    const n = sparse.length / 3;
+    expect(n).toBeLessThanOrEqual(MAX_FALLBACK_POINTS);
+    expect(estimateTerrainCells(sparse, n, PARAMS.cellSizeM)).toBeGreaterThan(MAX_FALLBACK_CELLS);
+    const before = coreCalls.n;
+    const err = await computeTerrainCoreAsync(
+      sparse,
+      n,
+      PARAMS,
+      undefined,
+      undefined,
+      throwingClient,
+      { enforceLimits: true },
+    ).then(
+      () => {
+        throw new Error('resolved: the cell-count fallback guard did not fire');
+      },
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(SyncFallbackRefusedError);
+    expect((err as SyncFallbackRefusedError).measure).toBe('cells');
+    expect((err as SyncFallbackRefusedError).limit).toBe(MAX_FALLBACK_CELLS);
+    expect(coreCalls.n).toBe(before);
     expect(getLastTerrainComputePath()).toBe('worker');
   });
 
-  it('a run exactly AT the limit still falls back (the guard is strictly greater-than)', async () => {
+  it('a run exactly AT the point ceiling is not refused by the point guard', async () => {
+    // The guard is strictly greater-than, so `n === MAX_FALLBACK_POINTS` passes
+    // it. The tiny fixture keeps the compute itself cheap; what is under test is
+    // the boundary, and the cell guard (169 cells here) lets it through too.
     const pos = hillScene();
-    // n == MAX_FALLBACK_POINTS must pass the guard. The synchronous fallback
-    // reads the positions array itself (not n), so the small fixture computes
-    // a real core — what is under test is the boundary of the guard.
     const core = await computeTerrainCoreAsync(
       pos,
       MAX_FALLBACK_POINTS,
@@ -417,10 +510,40 @@ describe('computeTerrainCoreAsync — fallback stale-result race + oversize guar
       undefined,
       undefined,
       throwingClient,
+      { enforceLimits: true },
     );
     const direct = computeTerrainCore(pos, PARAMS);
     expect(Array.from(core.dtm.z)).toEqual(Array.from(direct.dtm.z));
     expect(getLastTerrainComputePath()).toBe('fallback');
+  });
+
+  it('the ceilings follow the environment: no Worker global, no refusal', async () => {
+    // Node has no `Worker`, so the "fallback" is the only compute path and
+    // there is no page to freeze, so the bridge computes instead of refusing.
+    // Barely over the cell ceiling (2 000 points over 100 m at a 2 m cell is
+    // 2 500 cells), so the unguarded compute this asserts stays quick.
+    const sparse = overLimitCloud(2_000, 100);
+    const n = sparse.length / 3;
+    const before = coreCalls.n;
+    const core = await computeTerrainCoreAsync(
+      sparse,
+      n,
+      PARAMS,
+      undefined,
+      undefined,
+      throwingClient,
+    );
+    expect(core.dtm.cols).toBeGreaterThan(0);
+    expect(coreCalls.n).toBeGreaterThan(before);
+    // With a Worker global present the same call refuses.
+    vi.stubGlobal('Worker', class {});
+    try {
+      await expect(
+        computeTerrainCoreAsync(sparse, n, PARAMS, undefined, undefined, throwingClient),
+      ).rejects.toBeInstanceOf(SyncFallbackRefusedError);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
