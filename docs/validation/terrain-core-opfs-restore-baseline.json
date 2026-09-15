@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "label": "terrain-core-opfs-restore-baseline",
+  "generatedAt": "2026-09-15",
+  "revision": "c14cc2c1 (main) plus the benchmark itself",
+  "test": "tests/browser-bench/terrainCoreReopen.bench.ts",
+  "runCommand": "TERRAIN_CORE_OPFS_BENCH=1 npx playwright test --config playwright.oocReopen.config.ts terrainCoreReopen",
+  "environment": {
+    "os": "macOS 26.5.2 (25F84)",
+    "cpu": "Apple M3 Max",
+    "logicalCores": 14,
+    "memoryBytes": 38654705664,
+    "browser": "Chromium (Playwright 1.63.0, Desktop Chrome device profile), Vite dev server, real OPFS",
+    "nodeVersion": "v22.23.2"
+  },
+  "method": {
+    "fresh": "computeTerrainCore on the main thread, 3 runs, first and best reported",
+    "restore": "5 runs of: SHA-256 key over the positions, OPFS read of core.bin and core.json, SHA-256 verify of the payload, header parse, typed-array copy; median and max reported",
+    "parity": "every grid compared byte for byte with the fresh core; the scalar record compared as JSON",
+    "params": {
+      "cellSizeM": 2,
+      "crs": "EPSG:32610",
+      "verticalUnitToMetres": 1,
+      "horizontalUnitToMetres": 1
+    },
+    "cloud": "deterministic rolling surface, 1000 m span, tests/benchmark/terrainCoreRebuildCost.test.ts makeCloud"
+  },
+  "criterion": "restore median <= 50% of fresh best at the large size",
+  "rows": [
+    {
+      "points": 100000,
+      "cells": 248502,
+      "payloadMB": 8.15,
+      "freshFirstMs": 6700,
+      "freshBestMs": 6626,
+      "keyMs": 1,
+      "readMs": 38,
+      "hashMs": 6,
+      "parseMs": 6,
+      "restoreMedianMs": 24,
+      "restoreMaxMs": 155,
+      "speedup": 272.7,
+      "gridsIdentical": true,
+      "recordIdentical": true
+    },
+    {
+      "points": 500000,
+      "cells": 249500,
+      "payloadMB": 14.8,
+      "freshFirstMs": 6399,
+      "freshBestMs": 6190,
+      "keyMs": 5,
+      "readMs": 20,
+      "hashMs": 12,
+      "parseMs": 29,
+      "restoreMedianMs": 62,
+      "restoreMaxMs": 85,
+      "speedup": 99.4,
+      "gridsIdentical": true,
+      "recordIdentical": true
+    },
+    {
+      "points": 1000000,
+      "cells": 250000,
+      "payloadMB": 22.87,
+      "freshFirstMs": 9509,
+      "freshBestMs": 9433,
+      "keyMs": 10,
+      "readMs": 19,
+      "hashMs": 20,
+      "parseMs": 52,
+      "restoreMedianMs": 96,
+      "restoreMaxMs": 129,
+      "speedup": 98.6,
+      "gridsIdentical": true,
+      "recordIdentical": true
+    }
+  ],
+  "verdict": "GO on the performance criterion: restore is about 1% of fresh compute at every size; the max restore (155 ms at 100k, a first-read cold start) is still under 3% of fresh.",
+  "notes": [
+    "Fresh compute here runs on the main thread; production computes in a worker, so the wall time a user waits is the same order.",
+    "The record parity check is JSON-level; the persistence implementation must encode non-finite values explicitly, which JSON cannot carry."
+  ]
+}
