@@ -49,7 +49,8 @@ describe('loadFile hands the worker a File for a planned .laz', () => {
     expect(message.file).toBe(file);
     expect(message.buffer).toBeUndefined();
     expect(transfer ?? []).toHaveLength(0);
-    expect(result.telemetry?.fileReadMs).toBeLessThan(5);
+    // No whole-file read happened, so the row is absent rather than zero.
+    expect(result.telemetry?.fileReadMs).toBeUndefined();
   });
 
   it('still posts transferred bytes for a text cloud', async () => {
@@ -57,8 +58,10 @@ describe('loadFile hands the worker a File for a planned .laz', () => {
     __setParseWorkerFactoryForTests(() => worker as unknown as Worker);
     const file = new File([new TextEncoder().encode('0 0 0\n1 1 1\n')], 'scan.xyz');
 
-    await loadFile(file);
+    await loadFile(file, {}, { isMobile: true });
     const { message, transfer } = worker.posted[0];
+    // The page's device answer rides with every request; a worker cannot ask.
+    expect(message.device).toEqual({ touchFirst: true });
     expect(message.file).toBeUndefined();
     expect(message.buffer).toBeInstanceOf(ArrayBuffer);
     expect(transfer).toHaveLength(1);

@@ -13,13 +13,18 @@ import type { ProgressUpdate, LoadStage } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
 import type { PointCloud } from '../model/PointCloud';
 import { organizedRangeTransferables } from '../model/OrganizedRange';
-import { primeDevFlags } from '../perf/devFlags';
+import { primeDevFlags, parseDevFlags } from '../perf/devFlags';
+import { primeDecodePoolEnvironment } from './workerPool/decodePoolSize';
+import type { LazLoadStats, PreviewChunkSink } from './loadLas';
+import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
 
 interface ParseRequest {
   /** The file's bytes, transferred; absent when `file` is sent instead. */
   buffer?: ArrayBuffer;
   /** The file itself, for a format the worker reads as it needs. */
   file?: File;
+  /** The page's device answer, which a worker cannot ask `matchMedia` for. */
+  device?: { touchFirst: boolean };
   format: DetectedFormat;
   name: string;
   /** Optional point budget — phones pass a lower value than the desktop default. */
@@ -45,8 +50,15 @@ interface ParseRequest {
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent): void => {
-  const { buffer, file, format, name, budget, plan, e57Plan, search } = event.data as ParseRequest;
+  const { buffer, file, format, name, budget, plan, e57Plan, search, device } = event.data as ParseRequest;
   if (typeof search === 'string') primeDevFlags(search);
+  if (device) primeDecodePoolEnvironment({ isMobile: device.touchFirst });
+  // The pool decides from this, handed down explicitly: a lazily loaded chunk
+  // may hold its own copy of the flag module, which priming does not reach.
+  const policy: DecodePoolPolicy = {
+    flags: parseDevFlags(typeof search === 'string' ? search : ''),
+    isMobile: device?.touchFirst ?? false,
+  };
 
   void (async (): Promise<void> => {
     try {
@@ -60,15 +72,16 @@ ctx.onmessage = (event: MessageEvent): void => {
         // Forward each staged-progress update to the main thread.
         ctx.postMessage({ type: 'progress', ...update });
       };
-      const onPreview = (preview: PointCloud): void => {
-        // A stand-in the main thread shows while the decode runs; it owns
-        // its own buffers, so transferring them takes nothing from the final.
-        const { payload, transfer } = cloudPayload(preview);
-        ctx.postMessage({ type: 'preview', cloud: payload }, transfer);
+      const onPreviewChunk: PreviewChunkSink = (chunk) => {
+        // The chunk's own positions, already placed into the final output, so
+        // the buffer transfers to the page with nothing copied.
+        const { positions } = chunk;
+        ctx.postMessage({ type: 'previewChunk', ...chunk }, [positions.buffer as ArrayBuffer]);
       };
+      let stats: LazLoadStats | undefined;
       const { cloud, originalPointCount, downsampled } = file
-        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreview)
-        : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan, onPreview);
+        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreviewChunk, (s) => { stats = s; }, policy)
+        : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan);
 
       const endedAt = performance.now();
       const decodeAt = stageAt.get('decoding');
@@ -78,6 +91,7 @@ ctx.onmessage = (event: MessageEvent): void => {
         decodeMs:
           decodeAt !== undefined ? (optimizeAt ?? endedAt) - decodeAt : undefined,
         downsampleMs: optimizeAt !== undefined ? endedAt - optimizeAt : undefined,
+        ...(stats ?? {}),
       };
 
       const { payload, transfer } = cloudPayload(cloud);

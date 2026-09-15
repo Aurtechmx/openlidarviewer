@@ -40,6 +40,8 @@ import { computeOrigin } from './coordinateBridge';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
+import type { RangeSource } from './range/RangeSource';
+import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
 import {
   allocRawPoints,
   decodeContext,
@@ -157,8 +159,6 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
  * @param stride       Decode every `stride`-th record (1 = every record).
  *                     Used by the fast-load path for huge clouds.
  * @param onProgress   Optional staged-progress callback for the decode loop.
- * @param onPreview    Receives a stratified preview cloud before the decode
- *                     finishes. Pooled `.laz` only; never called otherwise.
  */
 export async function loadLas(
   buffer: ArrayBuffer,
@@ -166,7 +166,6 @@ export async function loadLas(
   name = `cloud.${sourceFormat}`,
   stride = 1,
   onProgress?: (u: ProgressUpdate) => void,
-  onPreview?: (cloud: PointCloud) => void,
 ): Promise<PointCloud> {
   const header = parseLasHeader(buffer);
   // Origin from the floored header min — known before decoding, so records
@@ -190,11 +189,7 @@ export async function loadLas(
     // the fallback for all three.
     const pooled = await (
       await import('./heavy/worker/lazChunkWorkerClient')
-    ).decodeLazPooled(buffer, header, origin, {
-      stride,
-      onProgress,
-      onPreview: onPreview && ((preview) => onPreview(toCloud(preview))),
-    });
+    ).decodeLazPooled(buffer, header, origin, { stride, onProgress });
     raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress));
   } else {
     raw = decodeLas(buffer, header, origin, stride, onProgress);
@@ -222,7 +217,9 @@ export async function loadLazFromFile(
   name = 'cloud.laz',
   stride = 1,
   onProgress?: (u: ProgressUpdate) => void,
-  onPreview?: (cloud: PointCloud) => void,
+  onPreviewChunk?: PreviewChunkSink,
+  onStats?: (stats: LazLoadStats) => void,
+  policy?: DecodePoolPolicy,
 ): Promise<PointCloud> {
   let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
   // The VLRs sit between the public header and the point data; a file whose
@@ -240,16 +237,107 @@ export async function loadLazFromFile(
 
   const { decodeLazPooledFromSource } = await import('./heavy/worker/lazChunkWorkerClient');
   const { LocalFileRangeSource } = await import('./range/LocalFileRangeSource');
-  const pooled = await decodeLazPooledFromSource(new LocalFileRangeSource(file), header, origin, {
+  // Every ranged read is counted so the load can say what it read and when.
+  const inner = new LocalFileRangeSource(file);
+  const stats = {
+    metadataBytes: head.byteLength,
+    rangeRequests: 1,
+    compressedBytesRead: 0,
+    poolWorkers: undefined as number | undefined,
+    decodePath: 'whole-file' as LazLoadStats['decodePath'],
+    poolFallbackReason: undefined as string | undefined,
+  };
+  let planned = false;
+  const counted: RangeSource = {
+    id: () => inner.id(),
+    kind: () => inner.kind(),
+    size: () => inner.size(),
+    readRange: async (offset, length, signal) => {
+      const bytes = await inner.readRange(offset, length, signal);
+      stats.rangeRequests++;
+      if (planned) stats.compressedBytesRead += bytes.byteLength;
+      else stats.metadataBytes += bytes.byteLength;
+      return bytes;
+    },
+  };
+  const frame = previewFrame(header, origin);
+  let expectedPoints = header.pointCount;
+  const pooled = await decodeLazPooledFromSource(counted, header, origin, {
     stride,
     onProgress,
-    onPreview: onPreview && ((preview) => onPreview(toCloud(preview))),
+    onPreviewChunk: onPreviewChunk && ((records) => {
+      // Transport only: the chunk's own buffer, in the frame the decoder wrote it.
+      const { positions } = records;
+      onPreviewChunk({ positions, expectedPoints, frame });
+    }),
+    onPlanned: (info) => {
+      planned = true;
+      expectedPoints = info.expectedPoints;
+    },
+    onPool: ({ workers }) => { stats.poolWorkers = workers; stats.decodePath = 'pooled'; },
+    onFallback: (reason) => { stats.poolFallbackReason = reason; stats.decodePath = 'pool-fallback'; },
+    onSkipped: (reason) => { stats.poolFallbackReason = reason; },
+    policy,
   });
-  if (pooled) return toCloud(pooled);
+  if (pooled) {
+    onStats?.(stats);
+    return toCloud(pooled);
+  }
 
   const { decodeLaz } = await import('./lazDecode');
   const buffer = await file.arrayBuffer();
+  stats.rangeRequests++;
+  stats.compressedBytesRead += buffer.byteLength;
+  onStats?.(stats);
   return toCloud(await decodeLaz(buffer, header, origin, stride, onProgress));
+}
+
+/** What a file-fed LAZ load read and which decoder produced it. */
+export interface LazLoadStats {
+  readonly metadataBytes: number;
+  readonly rangeRequests: number;
+  readonly compressedBytesRead: number;
+  readonly poolWorkers?: number;
+  readonly decodePath: 'pooled' | 'whole-file' | 'pool-fallback';
+  readonly poolFallbackReason?: string;
+}
+
+/** The preview's frame: the header's declared extent, in the cloud's local frame. */
+export type PreviewFrame = { readonly min: [number, number, number]; readonly max: [number, number, number] };
+
+/**
+ * One decoded chunk's positions for a preview that fills in as the decode
+ * runs, with what the receiver needs to size and frame it: the records the
+ * finished decode will hold, and the header's declared extent when usable.
+ */
+export interface PreviewChunk {
+  readonly positions: Float32Array;
+  readonly expectedPoints: number;
+  readonly frame?: PreviewFrame;
+}
+
+/** Receives each preview chunk as it is placed. */
+export type PreviewChunkSink = (chunk: PreviewChunk) => void;
+
+/**
+ * The header's declared bounds shifted into the render-local frame, or
+ * undefined when they cannot frame a view: a non-finite value, a min above
+ * its max, or an extent that is flat on more than one axis. Declared bounds
+ * frame the camera; they do not claim where points are inside them.
+ */
+export function previewFrame(header: LasHeader, origin: [number, number, number]): PreviewFrame | undefined {
+  const min: [number, number, number] = [0, 0, 0];
+  const max: [number, number, number] = [0, 0, 0];
+  let flat = 0;
+  for (let a = 0; a < 3; a++) {
+    const lo = header.min[a] - origin[a];
+    const hi = header.max[a] - origin[a];
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo > hi) return undefined;
+    if (hi - lo <= 0) flat++;
+    min[a] = lo;
+    max[a] = hi;
+  }
+  return flat > 1 ? undefined : { min, max };
 }
 
 /** Sanitise decoded records and wrap them as a cloud with the header's facts. */

@@ -783,22 +783,24 @@ async function defaultGetOpfsRoot(): Promise<OpfsDirHandle | null> {
 
 /**
  * The production digest: a worker of its own, so a multi-gigabyte hash never
- * blocks the page. Without Workers, or when the worker fails before it
- * answers, the in-process hasher runs instead; the result is the same digest.
+ * blocks the page. When the worker fails the answer is null, which the cache
+ * reads as "cannot verify": the open proceeds without a reusable store and
+ * nothing claims a digest that was not computed. Only a runtime with no
+ * Workers at all hashes in process, where nothing else could.
  */
-async function digestOffMainThread(
+export async function digestOffMainThread(
   file: File,
   fileBytes: number,
   signal: AbortSignal,
   openRange: (file: File) => RangeSource,
+  makeWorkerClient: () => Pick<LocalOocIndexerClient, 'digest'> = () => new LocalOocIndexerClient(),
 ): Promise<string | null> {
-  if (typeof Worker !== 'undefined') {
-    try {
-      return await new LocalOocIndexerClient().digest({ file, fileBytes, signal });
-    } catch {
-      /* fall through to the in-process hasher */
-    }
+  if (typeof Worker === 'undefined') {
+    return sourceContentDigestFromRange(openRange(file), fileBytes, signal);
   }
-  if (signal.aborted) return null;
-  return sourceContentDigestFromRange(openRange(file), fileBytes, signal);
+  try {
+    return await makeWorkerClient().digest({ file, fileBytes, signal });
+  } catch {
+    return null;
+  }
 }

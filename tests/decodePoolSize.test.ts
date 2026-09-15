@@ -15,7 +15,7 @@
  *     actually builds with no flag set is 1 — the pre-pool single worker.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   decodeWorkerPoolSize,
   resolveDecodePoolSize,
@@ -23,6 +23,8 @@ import {
   DECODE_POOL_HARD_CAP,
   DECODE_POOL_MOBILE_CAP,
   decodeLazPoolEnabled,
+  primeDecodePoolEnvironment,
+  resetDecodePoolEnvironmentForTest,
   type DecodeFormat,
 } from '../src/io/workerPool/decodePoolSize';
 
@@ -295,5 +297,43 @@ describe('readDecodePoolEnvironment', () => {
     const size = decodeWorkerPoolSize({ ...env, format: 'copc' });
     expect(size).toBeGreaterThanOrEqual(1);
     expect(size).toBeLessThanOrEqual(DECODE_POOL_HARD_CAP);
+  });
+});
+
+describe('readDecodePoolEnvironment: the page device answer, primed into a worker', () => {
+  const g = globalThis as unknown as { matchMedia?: unknown };
+  afterEach(() => {
+    resetDecodePoolEnvironmentForTest();
+    delete g.matchMedia;
+  });
+
+  it('is desktop with no matchMedia and nothing primed, as in a worker today', () => {
+    expect(readDecodePoolEnvironment().isMobile).toBe(false);
+  });
+
+  it('takes the primed answer over a missing matchMedia', () => {
+    primeDecodePoolEnvironment({ isMobile: true });
+    expect(readDecodePoolEnvironment().isMobile).toBe(true);
+  });
+
+  it('takes the primed answer over a contradicting matchMedia', () => {
+    g.matchMedia = () => ({ matches: true });
+    primeDecodePoolEnvironment({ isMobile: false });
+    expect(readDecodePoolEnvironment().isMobile).toBe(false);
+  });
+
+  it('asks matchMedia only when nothing was primed', () => {
+    g.matchMedia = (q: string) => ({ matches: q.includes('coarse') });
+    expect(readDecodePoolEnvironment().isMobile).toBe(true);
+  });
+});
+
+describe('resolveDecodePoolSize with an explicit environment', () => {
+  it('takes the handed-in device answer over what this scope reads', () => {
+    const flags = { decodePool: true, decodePoolOff: false, decodeWorkers: null };
+    const desktopSize = resolveDecodePoolSize('laz', flags, undefined, { isMobile: false, hardwareConcurrency: 16, deviceMemoryGB: 8 });
+    const mobileSize = resolveDecodePoolSize('laz', flags, undefined, { isMobile: true, hardwareConcurrency: 16, deviceMemoryGB: 8 });
+    expect(desktopSize).toBe(DECODE_POOL_HARD_CAP);
+    expect(mobileSize).toBeLessThanOrEqual(DECODE_POOL_MOBILE_CAP);
   });
 });

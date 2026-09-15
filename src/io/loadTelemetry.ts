@@ -16,7 +16,7 @@ export interface LoadTelemetry {
   fileReadMs?: number;
   /** `postMessage` to the worker's first reply — buffer transfer + spin-up. */
   transferMs?: number;
-  /** Load start to the preview cloud's arrival on the main thread, when one was sent. */
+  /** Load start to the first preview chunk's arrival on the main thread, when one was sent. */
   previewMs?: number;
   /** Header parse and decoder setup (worker). */
   parseMs?: number;
@@ -30,6 +30,20 @@ export interface LoadTelemetry {
   firstRenderMs?: number;
   /** The whole load, from drop to resolved (main thread). */
   totalLoadMs?: number;
+  /** Bytes read before the first chunk decode: header, VLRs, chunk table (worker). */
+  metadataBytes?: number;
+  /** Ranged reads issued over the source (worker). */
+  rangeRequests?: number;
+  /** Compressed bytes read through ranged reads (worker). */
+  compressedBytesRead?: number;
+  /** Records handed to the preview as chunks, before any thinning on the page. */
+  previewPoints?: number;
+  /** Workers the chunk pool was sized to, when it engaged (worker). */
+  poolWorkers?: number;
+  /** Which decoder produced the cloud (worker). */
+  decodePath?: 'pooled' | 'whole-file' | 'pool-fallback';
+  /** Why the pool did not produce the cloud: skipped, or engaged and failed. */
+  poolFallbackReason?: string;
 }
 
 /** Ordered (label, key) rows for a telemetry report. */
@@ -59,8 +73,32 @@ export function formatTelemetry(t: LoadTelemetry): string {
   const lines: string[] = [];
   for (const [label, key] of TELEMETRY_ROWS) {
     const value = t[key];
-    if (value === undefined) continue;
+    if (typeof value !== 'number') continue;
     lines.push(`  ${label.padEnd(14)}${value.toFixed(1).padStart(9)} ms`);
   }
+  for (const [label, key, unit] of COUNT_ROWS) {
+    const value = t[key];
+    if (value === undefined) continue;
+    const text = typeof value === 'number' ? formatCount(value, unit) : String(value);
+    lines.push(`  ${label.padEnd(14)}${text.padStart(12)}`);
+  }
   return lines.length > 0 ? lines.join('\n') : '(no telemetry)';
+}
+
+/** Non-timing rows: what the ranged path read and which decoder ran. */
+const COUNT_ROWS: [string, keyof LoadTelemetry, 'bytes' | 'count' | 'text'][] = [
+  ['metadata read', 'metadataBytes', 'bytes'],
+  ['range reads', 'rangeRequests', 'count'],
+  ['compressed', 'compressedBytesRead', 'bytes'],
+  ['preview pts', 'previewPoints', 'count'],
+  ['pool workers', 'poolWorkers', 'count'],
+  ['decode path', 'decodePath', 'text'],
+  ['pool reason', 'poolFallbackReason', 'text'],
+];
+
+function formatCount(value: number, unit: 'bytes' | 'count' | 'text'): string {
+  if (unit === 'bytes') {
+    return value >= 1e6 ? `${(value / 1e6).toFixed(1)} MB` : `${(value / 1e3).toFixed(1)} kB`;
+  }
+  return value.toLocaleString('en-US');
 }

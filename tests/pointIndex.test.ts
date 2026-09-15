@@ -79,3 +79,24 @@ describe('pointIndex nearest queries against a full scan', () => {
     check([[2, 2, 2], [2, 2, 2]], [[0, 0, 0], [2, 2, 2]], 'coincident');
   });
 });
+
+describe('pointIndex: a query far outside the grid', () => {
+  it('answers the scan and scans no more shells than a query inside would', () => {
+    const rnd = prng(21);
+    const points: Vec3[] = [];
+    for (let i = 0; i < 2000; i++) points.push([rnd() * 100, rnd() * 100, rnd() * 10]);
+    const index = buildPointIndex(points);
+    // A far query has to weigh every point on the near face, so its shell
+    // count is bounded by the grid, never by how far away it is.
+    const gridBound = Math.max(index.dimX, index.dimY, index.dimZ);
+    for (const q of [[1e9, 50, 5], [-1e9, -1e9, -1e9], [50, 50, 1e12], [1e15, 1e15, 0]] as Vec3[]) {
+      const ref = scan(points, q[0], q[1], q[2]);
+      const t0 = performance.now();
+      const got = nearestPoint(index, q[0], q[1], q[2]);
+      expect(performance.now() - t0).toBeLessThan(50);
+      expect(got).toBe(ref.index);
+      expect(nearestState.d2).toBe(ref.d2);
+      expect(nearestState.shells).toBeLessThanOrEqual(gridBound);
+    }
+  });
+});

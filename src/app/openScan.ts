@@ -23,8 +23,6 @@ import { scanFactsFromStatic } from './sessionIo';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress } from '../io/loadProgress';
 import { describeLoadError } from '../io/loadErrors';
-import { formatTelemetry } from '../io/loadTelemetry';
-import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
 import { LoadCancelledError } from '../io/loadFile';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
 import type { OpenStreamingDeps } from './openStreaming';
@@ -52,6 +50,9 @@ import type { LayerIdentityService } from './layerIdentityService';
 import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
 import type { CrsCoordinator } from './crsCoordinator';
 import type { ViewBookmarksService } from './viewBookmarks';
+import { loadPreviewCloud, loadLoadDiagnostics } from '../lazyChunks';
+import type { PreviewCloudHandle, PreviewCloudViewer } from './previewCloud';
+import type { PreviewChunk } from '../io/loadLas';
 
 /**
  * The Layers chip names the FILE, so it shows the file total (the same count
@@ -126,6 +127,8 @@ export interface OpenScanDeps {
    * device signal.
    */
   isTouchFirst?: () => boolean;
+  /** Builds the stand-in a load shows while its chunks decode; tests inject a fake. */
+  startPreviewCloud?: typeof import('./previewCloud').startPreviewCloud;
   /** Reported device memory in GB, or undefined when the browser withholds it. */
   deviceMemoryGB: () => number | undefined;
   /** Hide the empty-state placeholder once a scan renders. */
@@ -248,7 +251,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     return;
   }
   const controller = new AbortController();
-  let previewUp = false;
+  let preview: PreviewCloudHandle | null = null;
   // Blue blinking "Opening …" — the prominent first feedback, matching the
   // catalog status vocabulary so device and public-dataset loads read the same.
   // The load's staged progress (decoding / uploading / rendering) supersedes it.
@@ -327,11 +330,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       {
         onProgress: (u) => deps.dropZone.setProgress(formatProgress(u), u.fraction),
         onPreload: (lines) => deps.dropZone.setPreload(lines),
-        onPreview: (cloud) => {
+        onPreviewChunk: (chunk) => {
           if (controller.signal.aborted) return;
+          if (preview) return preview.append(chunk);
           deps.stage.hideEmptyState();
-          deps.getViewer().showPreviewCloud(cloud);
-          previewUp = true;
+          preview = (deps.startPreviewCloud ?? deferredPreviewCloud)(deps.getViewer(), chunk, deps.renderBudget);
         },
       },
       {
@@ -344,10 +347,10 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         head: headSlice,
       },
     );
-    await attachStaticCloud(result, { file, signal: controller.signal, previewUp }, deps);
+    await attachStaticCloud(result, { file, signal: controller.signal, preview }, deps);
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
-    if (previewUp) takeDownPreview(deps);
+    if (preview) takeDownPreview(deps, preview);
     if (err instanceof LoadCancelledError) {
       // A cancelled load is a quiet no-op — no error toast, nothing was added.
       deps.dropZone.setProgress(null);
@@ -365,12 +368,45 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
 }
 
 /**
+ * Start the stand-in through its lazy chunk. Chunks that arrive before the
+ * module lands are held and replayed in order; a dispose that lands first
+ * drops them and never builds the layer.
+ */
+export function deferredPreviewCloud(
+  viewer: PreviewCloudViewer,
+  first: PreviewChunk,
+  renderBudget: number,
+  load: typeof loadPreviewCloud = loadPreviewCloud,
+): PreviewCloudHandle {
+  let inner: PreviewCloudHandle | null = null;
+  let held: PreviewChunk[] | null = [first];
+  void load().then(({ startPreviewCloud }) => {
+    if (!held) return;
+    const [head, ...rest] = held;
+    held = null;
+    inner = startPreviewCloud(viewer, head, renderBudget);
+    for (const chunk of rest) inner.append(chunk);
+  }).catch(() => { held = null; });
+  return {
+    append(chunk) {
+      if (held) held.push(chunk);
+      else inner?.append(chunk);
+    },
+    dispose() {
+      held = null;
+      inner?.dispose();
+      inner = null;
+    },
+  };
+}
+
+/**
  * Remove a stand-in a load put up before it failed or was cancelled, and put
  * the empty state back when nothing else is on screen.
  */
-function takeDownPreview(deps: OpenScanDeps): void {
+function takeDownPreview(deps: OpenScanDeps, preview: PreviewCloudHandle): void {
+  preview.dispose();
   const viewer = deps.getViewer();
-  viewer.clearPreviewCloud();
   if (viewer.clouds().length === 0 && !viewer.hasStreamingCloud) deps.stage.showEmptyState();
 }
 
@@ -386,10 +422,11 @@ export interface AttachedCloudSource {
   /** The cancel signal, checked once more before the commit boundary. */
   readonly signal: AbortSignal;
   /**
-   * A stand-in is on screen and the camera is already fitted to it. The commit
-   * swaps the cloud in under the same pose rather than framing a second time.
+   * The stand-in on screen, with the camera already fitted to it. The commit
+   * disposes it right after the add and keeps the pose rather than framing a
+   * second time.
    */
-  readonly previewUp?: boolean;
+  readonly preview?: PreviewCloudHandle | null;
 }
 
 /**
@@ -446,7 +483,7 @@ export async function attachStaticCloud(
   if (viewer.hasStreamingCloud) deps.closeStreaming();
   const uploadStartedAt = performance.now();
   const id = viewer.addCloud(result.cloud);
-  viewer.clearPreviewCloud();
+  source.preview?.dispose();
   // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that
   // back, so cancelling is no longer a thing this load can honour: retire the
   // control rather than leave a button that would abandon a half-revealed
@@ -502,7 +539,7 @@ export async function attachStaticCloud(
   const renderStartedAt = performance.now();
   // A freshly opened scan starts in the orbit overview, then glides in.
   viewer.setMode('orbit');
-  if (!source.previewUp) viewer.frameAll();
+  if (!source.preview) viewer.frameAll();
   const firstRenderMs = performance.now() - renderStartedAt;
 
   // Colour the fresh scan by the mode its attributes best support (RGB →
@@ -687,37 +724,11 @@ export async function attachStaticCloud(
 
   // Developer diagnostics — the merged telemetry feeds the debug console
   // block, the performance overlay, and (under ?benchmark=1) a benchmark.
+  // The formatters ride their own chunk; a normal session never loads them.
   if ((deps.debug || deps.benchmark) && result.telemetry) {
     const telemetry = { ...result.telemetry, gpuUploadMs, firstRenderMs };
-    if (deps.debug) {
-      console.log(
-        '%cOpenLiDARViewer — load telemetry',
-        'font-weight:600;color:#22dcff',
-        '\n' + formatTelemetry(telemetry),
-      );
-    }
-    deps.getDebugOverlay()?.setTelemetry(telemetry);
-    if (deps.benchmark) {
-      const text = formatBenchmarkResult(
-        buildBenchmarkResult(
-          result.cloud.name,
-          result.cloud.sourceFormat,
-          result.cloud.pointCount,
-          telemetry,
-          // Surface the header-declared point count when the source had
-          // one, so the benchmark output disambiguates "4M of 100M (4 %)"
-          // from "4M of 4M (100 %)" — a budget-capped load shouldn't
-          // read identically to a full one.
-          result.cloud.declaredPointCount,
-        ),
-      );
-      console.log(
-        '%cOpenLiDARViewer — benchmark',
-        'font-weight:600;color:#22dcff',
-        '\n' + text,
-      );
-      deps.getDebugOverlay()?.setBenchmark('benchmark\n' + text);
-    }
+    const cloud = result.cloud;
+    void loadLoadDiagnostics().then((m) => m.reportLoadDiagnostics(deps, cloud, telemetry));
   }
   deps.dropZone.setCancelHandler(null);
   deps.dropZone.setProgress(null);

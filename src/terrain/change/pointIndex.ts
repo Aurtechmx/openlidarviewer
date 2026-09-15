@@ -10,7 +10,9 @@
  * as shells of growing Chebyshev distance around the query's cell, and the
  * search stops once the best distance is within the ring of cells already
  * seen, so no unvisited cell can hold a closer point. A query outside the
- * grid works the same way from its projection onto the grid.
+ * grid starts from its projection onto the grid, so the shell count is
+ * bounded by the grid, never by the query's distance; the stop rule adds
+ * the distance to the grid, which every indexed point shares.
  *
  * Pure: no three.js, no DOM.
  */
@@ -90,8 +92,8 @@ export function buildPointIndex(points: readonly Vec3[]): PointIndex {
   return { xyz, slotIndex, cellStart, minX, minY, minZ, cell, dimX, dimY, dimZ };
 }
 
-/** The squared distance of the last {@link nearestPoint} answer. */
-export const nearestState = { d2: Infinity };
+/** The last {@link nearestPoint} answer's squared distance and the shells it scanned. */
+export const nearestState = { d2: Infinity, shells: 0 };
 
 /**
  * Index of the point nearest to (x, y, z); the lowest index among exact ties.
@@ -104,10 +106,26 @@ export function nearestPoint(index: PointIndex, x: number, y: number, z: number)
   let bestD2 = Infinity;
   if (slotIndex.length === 0) { nearestState.d2 = bestD2; return best; }
 
-  const qx = Math.floor((x - index.minX) / cell);
-  const qy = Math.floor((y - index.minY) / cell);
-  const qz = Math.floor((z - index.minZ) / cell);
+  // The query's cell, clamped into the grid. A query far outside still
+  // starts its shells at the nearest cell: any point in a cell k or more
+  // index steps from that cell is at least k cells from the projection, and
+  // no closer to the query itself, so the stop rule below holds unchanged
+  // and the shell count never grows with the query's distance.
+  const clampQ = (v: number, min: number, dim: number): number =>
+    Math.min(dim - 1, Math.max(0, Math.floor((v - min) / cell)));
+  const qx = clampQ(x, index.minX, dimX);
+  const qy = clampQ(y, index.minY, dimY);
+  const qz = clampQ(z, index.minZ, dimZ);
   const kMax = Math.max(qx, dimX - 1 - qx, qy, dimY - 1 - qy, qz, dimZ - 1 - qz);
+  // Squared distance from the query to the grid's extent: zero inside. Every
+  // indexed point is at least this far, and at least k cells beyond the
+  // projection on some axis once k shells are scanned, so the two add.
+  const gap = (v: number, min: number, dim: number): number => {
+    const d = v < min ? min - v : v > min + dim * cell ? v - (min + dim * cell) : 0;
+    return d * d;
+  };
+  const outside2 = gap(x, index.minX, dimX) + gap(y, index.minY, dimY) + gap(z, index.minZ, dimZ);
+  let shells = 0;
 
   const scanCell = (cx: number, cy: number, cz: number): void => {
     const c = (cz * dimY + cy) * dimX + cx;
@@ -123,6 +141,7 @@ export function nearestPoint(index: PointIndex, x: number, y: number, z: number)
   };
 
   for (let k = 0; k <= kMax; k++) {
+    shells++;
     // Every cell at Chebyshev distance exactly k from (qx, qy, qz), clamped
     // to the grid: full slabs at z = qz ± k, and on the slabs between them the
     // rows y = qy ± k plus the two columns x = qx ± k.
@@ -144,10 +163,12 @@ export function nearestPoint(index: PointIndex, x: number, y: number, z: number)
         }
       }
     }
-    // Nothing outside the scanned shells is nearer than k whole cells.
+    // Nothing outside the scanned shells is nearer than k whole cells past
+    // the projection, and no nearer than the grid's own distance.
     const reach = k * cell;
-    if (bestD2 <= reach * reach) break;
+    if (bestD2 <= outside2 + reach * reach) break;
   }
   nearestState.d2 = bestD2;
+  nearestState.shells = shells;
   return best;
 }

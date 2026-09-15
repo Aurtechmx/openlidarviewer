@@ -567,3 +567,16 @@ export const loadTilesetOpen = () => import('./app/openTilesetLayer');
  * loading any of that weight.
  */
 export const loadHeavyLasExecutor = () => import('./app/heavyLasExecutor');
+
+/**
+ * The stand-in a local load shows while its chunks decode. It is wanted only
+ * once a first chunk has arrived, so the layer, its ramp and its Viewer glue
+ * stay out of the eager shell; the load buffers chunks until it lands.
+ */
+export const loadPreviewCloud = () => import('./app/previewCloud');
+
+/**
+ * The `?debug=1` telemetry block and the `?benchmark=1` result of a local
+ * load: formatters a normal session never runs, kept out of the shell.
+ */
+export const loadLoadDiagnostics = () => import('./app/loadDiagnostics');

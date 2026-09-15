@@ -8,6 +8,8 @@ import { LoadError } from './loadErrors';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
+import type { LazLoadStats, PreviewChunkSink } from './loadLas';
+import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
 
 export type { LoaderFn } from './loaderRegistry';
 
@@ -85,7 +87,6 @@ export async function parseBuffer(
   plan?: LoadPlan,
   onProgress?: (u: ProgressUpdate) => void,
   e57Plan?: E57DecodePlan,
-  onPreview?: (cloud: PointCloud) => void,
 ): Promise<LoadResult> {
   // --- Budget-aware fast load: LAS/LAZ with a preflight plan. ---
   if (plan && (format === 'las' || format === 'laz')) {
@@ -94,7 +95,7 @@ export async function parseBuffer(
     // `loadLas` carries the laz-perf WASM — imported on demand so that heavy
     // decoder is its own chunk, fetched only when a LAS/LAZ file is opened.
     const { loadLas } = await import('./loadLas');
-    const cloud = await loadLas(buffer, format, name, stride, onProgress, onPreview);
+    const cloud = await loadLas(buffer, format, name, stride, onProgress);
     return budgetedLas(cloud, plan, onProgress);
   }
 
@@ -133,18 +134,20 @@ export async function parseFile(
   plan?: LoadPlan,
   onProgress?: (u: ProgressUpdate) => void,
   e57Plan?: E57DecodePlan,
-  onPreview?: (cloud: PointCloud) => void,
+  onPreviewChunk?: PreviewChunkSink,
+  onStats?: (stats: LazLoadStats) => void,
+  policy?: DecodePoolPolicy,
 ): Promise<LoadResult> {
   if (plan && format === 'laz') {
     onProgress?.({ stage: 'decoding' });
     const stride = plan.mode === 'stride' ? plan.stride : 1;
     const { loadLazFromFile } = await import('./loadLas');
-    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreview);
+    const cloud = await loadLazFromFile(file, name, stride, onProgress, onPreviewChunk, onStats, policy);
     return budgetedLas(cloud, plan, onProgress);
   }
   onProgress?.({ stage: 'reading-file' });
   const buffer = await file.arrayBuffer();
-  return parseBuffer(buffer, format, name, budget, plan, onProgress, e57Plan, onPreview);
+  return parseBuffer(buffer, format, name, budget, plan, onProgress, e57Plan);
 }
 
 /** The plan's budget step after a LAS/LAZ decode: voxel-reduce, or stride then reduce. */

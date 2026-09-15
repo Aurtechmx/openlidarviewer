@@ -270,7 +270,7 @@ import {
 import { selectStreamingPick } from './streaming/streamingPickSelection';
 // The shared sRGB → linear seam — every Float32 colour-attribute write goes
 // through this so recolour paths match the initial `toFloatColors` upload.
-import { writeFloatColorsInto } from './colorEncode';
+import { writeFloatColorsInto, toFloatColors } from './colorEncode';
 // The streaming render engine is type-only here and dynamically imported in
 // `attachStreamingCloud`, so `src/render/streaming/*` (scheduler, renderer,
 // octree, cache) stays out of the initial bundle and loads only when a COPC
@@ -524,22 +524,6 @@ const FRAME_SAMPLE_COUNT = 60;
  */
 const BYTES_PER_GPU_POINT = 24;
 
-/**
- * Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute,
- * linearising sRGB on the way (exact IEC 61966-2-1 piecewise EOTF, as
- * `Color.SRGBToLinear`). The TSL colour node bypasses three.js's automatic
- * conversion, so without this the renderer re-encodes sRGB twice and colours
- * wash out.
- */
-
-function toFloatColors(u8: Uint8Array): Float32Array {
-  const f = new Float32Array(u8.length);
-  // Delegates to the shared EOTF seam in `colorEncode.ts` so the in-place
-  // recolour paths (colour-mode switch, coverage grid, percentile trim,
-  // classification refresh, streaming recolour) apply byte-identical maths.
-  writeFloatColorsInto(f, u8);
-  return f;
-}
 
 /*
  * TSL (three.js Shading Language) is a dynamically-typed embedded DSL: its
@@ -782,7 +766,6 @@ export class Viewer {
   /** The scheduler/renderer/cloud, present only while a COPC is streaming. */
   private _streaming: StreamingSession | null = null;
   /** The stand-in a load shows before its cloud commits. Never a layer. */
-  private _preview: { mesh: THREE.Mesh; material: THREE.PointsNodeMaterial } | null = null;
   /**
    * Streaming heartbeat — a timer that ticks the scheduler INDEPENDENTLY of
    * the render loop. The RAF loop is deliberately cancelled while the tab is
@@ -1671,17 +1654,13 @@ export class Viewer {
 
   /** A cloud's point mesh coloured by `mode`; the layer and the preview share it. */
   private _meshForCloud(cloud: PointCloud, mode: ColorMode): PointMeshHandle {
+    // upAxis from the source format so a Y-up scan's elevation ramp follows
+    // true height. Classification and intensity are the cloud's own, already
+    // in lockstep with its positions, so every attribute aligns per point.
     return this.buildPointMesh(
       cloud.positions,
-      // upAxis from the source format so a Y-up phone scan's elevation ramp
-      // follows true height, not a horizontal axis.
       colorForMode(mode, cloud, { upAxis: isZUpFormat(cloud.sourceFormat) ? 2 : 1 }),
-      // Feed the DOWNSAMPLED classification (carried in lockstep with the
-      // downsampled positions by `downsampleToBudget`), never the original
-      // input — the attribute must align 1:1 with the uploaded points.
       cloud.classification ?? null,
-      // Intensity rides along 1:1 for the intensity filter (v0.5.6); the
-      // downsampled cloud carries a downsampled intensity in lockstep.
       cloud.intensity ?? null,
     );
   }
@@ -4284,38 +4263,20 @@ export class Viewer {
   }
 
   /**
-   * Show a stand-in cloud while a load's decode is still running. Drawn like a
-   * layer but not one: nothing lists, measures or exports it, and `addCloud`
-   * does not know it exists. The camera is fitted to it once, with the fit
-   * `frameAll` makes, so the commit that replaces it need not frame again.
+   * Fit the camera for a load's stand-in cloud (`app/previewCloud.ts`), which
+   * lives outside the layer table: Z up, navigation on, one fit to `min`..
+   * `max` with the fit `frameAll` makes, so the commit need not frame again.
    */
-  showPreviewCloud(cloud: PointCloud): void {
-    this.clearPreviewCloud();
-    const { mesh, material } = this._meshForCloud(cloud, defaultMode(cloud));
-    this._scene.add(mesh);
-    const zUp = isZUpFormat(cloud.sourceFormat);
-    this._preview = { mesh, material };
-    this._worldUp.set(0, zUp ? 0 : 1, zUp ? 1 : 0);
+  framePreviewExtent(min: readonly [number, number, number], max: readonly [number, number, number]): void {
+    this._worldUp.set(0, 0, 1);
     this._nav.setWorldUp(this._worldUp);
     this._nav.setHasCloud(true);
-    const b = cloud.bounds();
-    this._frameBox(new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
-    this.requestFrame();
+    this._frameBox(new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max)));
   }
 
-  clearPreviewCloud(): void {
-    const p = this._preview;
-    if (!p) return;
-    this._scene.remove(p.mesh);
-    p.mesh.geometry.dispose();
-    p.material.dispose();
-    this._preview = null;
+  /** The stand-in is gone; navigation follows the layers again. */
+  previewCloudEnded(): void {
     this._nav.setHasCloud(this._clouds.size > 0 || this._streaming !== null);
-    this.requestFrame();
-  }
-
-  get hasPreviewCloud(): boolean {
-    return this._preview !== null;
   }
 
   /** Tween the camera to an oblique fit of `box`. */
