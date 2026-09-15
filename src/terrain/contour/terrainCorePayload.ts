@@ -44,6 +44,11 @@ interface Header { readonly format: number; readonly layout: Layout[]; readonly 
 
 const MARK = '$olvCore';
 
+function nonFiniteMark(n: number): string {
+  if (Number.isNaN(n)) return 'nan';
+  return n > 0 ? '+inf' : '-inf';
+}
+
 /** True for a value JSON can carry as is, or that the markers cover. */
 function isPlain(v: unknown): boolean {
   if (v === null || typeof v !== 'object') return typeof v !== 'function' && typeof v !== 'symbol' && typeof v !== 'bigint';
@@ -64,7 +69,7 @@ export function encodeTerrainCore(core: TerrainCore): Uint8Array | null {
     // `this[key]` is the raw value before any toJSON; JSON only hands `value`.
     const raw = this !== null && typeof this === 'object' ? (this as Record<string, unknown>)[key] : value;
     if (typeof raw === 'number' && !Number.isFinite(raw)) {
-      return { [MARK]: Number.isNaN(raw) ? 'nan' : raw > 0 ? '+inf' : '-inf' };
+      return { [MARK]: nonFiniteMark(raw) };
     }
     if (ArrayBuffer.isView(raw)) {
       const kind = kindOf(raw);

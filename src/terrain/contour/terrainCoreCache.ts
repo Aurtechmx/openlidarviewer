@@ -219,6 +219,12 @@ function classificationHash(
  * classification length stay unchanged. Keying only presence + length would let
  * such an edit reuse a stale core and silently emit the wrong DTM.
  */
+/** An optional boolean as a key field: '' when unset, else 1 or 0. */
+function flag(v: boolean | undefined): string {
+  if (v === undefined) return '';
+  return v ? '1' : '0';
+}
+
 export function paramsKey(params: TerrainCoreParams): string {
   const g = params.ground;
   const ground = g
@@ -261,11 +267,11 @@ export function paramsKey(params: TerrainCoreParams): string {
     // the in-memory key never needed them; a key that outlives the scan does.
     `hepsg=${params.horizontalEpsg ?? ''}`,
     `vepsg=${params.verticalEpsg ?? ''}`,
-    `vsk=${params.verticalScaleKnown === undefined ? '' : params.verticalScaleKnown ? 1 : 0}`,
-    `hsk=${params.horizontalScaleKnown === undefined ? '' : params.horizontalScaleKnown ? 1 : 0}`,
+    `vsk=${flag(params.verticalScaleKnown)}`,
+    `hsk=${flag(params.horizontalScaleKnown)}`,
     `h2m=${params.horizontalUnitToMetres ?? ''}`,
-    `trust=${params.trustGroundClassification === undefined ? '' : params.trustGroundClassification ? 1 : 0}`,
-    `res=${params.residentOnly === undefined ? '' : params.residentOnly ? 1 : 0}`,
+    `trust=${flag(params.trustGroundClassification)}`,
+    `res=${flag(params.residentOnly)}`,
   ].join('|');
 }
 

@@ -85,6 +85,14 @@ export async function opfsRoot(): Promise<OpfsDirHandle | null> {
 
 const emptyIndex = (): Index => ({ version: TERRAIN_CORE_INDEX_VERSION, next: 1, entries: [] });
 
+/** Name the axis on which a lookup missed, from the entries that do exist. */
+function classifyMiss(index: Index, parts: PersistentKeyParts): TerrainCoreMissReason {
+  const sameContent = index.entries.filter((e) => e.content === parts.content);
+  if (sameContent.length === 0) return index.entries.length === 0 ? 'not-found' : 'source-mismatch';
+  if (sameContent.some((e) => e.params === parts.params)) return 'generation-mismatch';
+  return 'parameter-mismatch';
+}
+
 /**
  * Build a persistence over a root directory. `null` when the root is absent
  * keeps every lookup a miss and every persist a no-op.
@@ -133,13 +141,6 @@ export function createTerrainCoreStore(root: OpfsDirHandle | null, options: Terr
     } catch {
       /* already gone */
     }
-  }
-
-  function classifyMiss(index: Index, parts: PersistentKeyParts): TerrainCoreMissReason {
-    const sameContent = index.entries.filter((e) => e.content === parts.content);
-    if (sameContent.length === 0) return index.entries.length === 0 ? 'not-found' : 'source-mismatch';
-    if (sameContent.some((e) => e.params === parts.params)) return 'generation-mismatch';
-    return 'parameter-mismatch';
   }
 
   return {
