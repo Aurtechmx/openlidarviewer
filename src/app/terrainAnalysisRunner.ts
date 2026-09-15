@@ -650,7 +650,8 @@ export function createTerrainAnalysisRunner(
       // main thread in a dedicated worker, with a SAFE main-thread fallback if the
       // worker can't load. Lazily imported alongside the cache chunk; importing it
       // never constructs a Worker (the client is itself dynamic-imported on use).
-      const { computeTerrainCoreAsync } = await loadComputeTerrainCoreAsync();
+      const { computeTerrainCoreAsync, getLastTerrainComputePath } =
+        await loadComputeTerrainCoreAsync();
       // Remember the clear fn so dataset close / new-cloud load can drop cached
       // cores without re-importing this heavy chunk.
       clearTerrainCoreCacheFn = clearTerrainCoreCache;
@@ -697,6 +698,13 @@ export function createTerrainAnalysisRunner(
       if (coreSource === 'restored') {
         analysePanel.setStatus(
           'Terrain core restored from the on-device cache. The analysed points, the classification, the parameters and the method versions all matched.',
+        );
+      } else if (getLastTerrainComputePath() === 'fallback') {
+        // The worker died and the core was small enough to rescue inline. The
+        // result is real, but the page blocked while it ran, so say so rather
+        // than let a successful-looking analysis hide a broken worker.
+        analysePanel.setStatus(
+          'Computed on the main thread because the analysis worker was unavailable; the page may have paused. Reload to restore the worker.',
         );
       }
       // Contour Studio launcher: hand the panel the CRS frame facts (projected

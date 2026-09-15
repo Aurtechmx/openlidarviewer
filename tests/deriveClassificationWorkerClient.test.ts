@@ -12,6 +12,10 @@
 import { describe, test, expect, afterEach, vi } from 'vitest';
 import { DeriveClassificationWorkerClient } from '../src/render/class/deriveClassificationWorkerClient';
 import type { DeriveClassificationOptions } from '../src/render/class/deriveClassification';
+import {
+  deriveClassificationAsync,
+  getLastClassifyComputePath,
+} from '../src/render/class/deriveClassificationAsync';
 
 /** A fake Worker recording posts; the test drives onmessage / onerror. */
 class FakeWorker {
@@ -163,5 +167,82 @@ describe('DeriveClassificationWorkerClient — abort terminates the computation'
       },
     } as MessageEvent);
     await expect(next).resolves.toMatchObject({ derived: true });
+  });
+});
+
+/**
+ * A worker that accepts the post and then goes quiet. Before the reply deadline
+ * this hung the promise forever, which also meant the bridge's main-thread
+ * fallback never ran: Classify simply never finished. Progress messages reset
+ * the clock, so the deadline measures SILENCE rather than total run time and a
+ * legitimately long derive is never killed.
+ */
+describe('DeriveClassificationWorkerClient reply deadline', () => {
+  test('settles at the injected deadline, terminating the silent worker', async () => {
+    instances = [];
+    vi.useFakeTimers();
+    vi.stubGlobal('Worker', FakeWorker);
+    try {
+      const client = new DeriveClassificationWorkerClient({ replyDeadlineMs: 5_000 });
+      const job = client.classify(positions(), 3, OPTIONS);
+      const silent = instances[0];
+      expect(client.pendingCount).toBe(1);
+
+      vi.advanceTimersByTime(5_000);
+      await expect(job).rejects.toThrow(/5000 ms reply deadline/);
+      expect(silent.terminated).toBe(true);
+      expect(client.pendingCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a progress message resets the deadline, so a long derive survives', async () => {
+    instances = [];
+    vi.useFakeTimers();
+    vi.stubGlobal('Worker', FakeWorker);
+    try {
+      const phases: string[] = [];
+      const client = new DeriveClassificationWorkerClient({ replyDeadlineMs: 5_000 });
+      const job = client.classify(positions(), 3, OPTIONS, undefined, (p) => phases.push(p));
+      const worker = instances[0];
+      const jobId = worker.posted[0].jobId as number;
+
+      // Four minutes of work, reporting every three seconds: far past the
+      // deadline in total, never silent for as long as it.
+      for (let i = 0; i < 80; i++) {
+        vi.advanceTimersByTime(3_000);
+        worker.onmessage?.({ data: { jobId, phase: `phase ${i}` } } as MessageEvent);
+      }
+      expect(phases).toHaveLength(80);
+      expect(worker.terminated).toBe(false);
+      expect(client.pendingCount).toBe(1);
+
+      // Then it goes quiet, and the deadline fires on the silence.
+      vi.advanceTimersByTime(5_000);
+      await expect(job).rejects.toThrow(/reply deadline/);
+      expect(worker.terminated).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('the deadline routes a silent worker into the bridge fallback', async () => {
+    instances = [];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.useFakeTimers();
+    vi.stubGlobal('Worker', FakeWorker);
+    try {
+      const client = new DeriveClassificationWorkerClient({ replyDeadlineMs: 1_000 });
+      const promise = deriveClassificationAsync(positions(), 3, OPTIONS, undefined, client);
+      await vi.advanceTimersByTimeAsync(1_000);
+      const result = await promise;
+      expect(result.derived).toBe(true);
+      expect(getLastClassifyComputePath()).toBe('fallback');
+      expect(String(warn.mock.calls[0]?.[0])).toMatch(/worker failed/i);
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
   });
 });

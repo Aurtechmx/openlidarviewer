@@ -87,6 +87,7 @@
 .olv-cl-derived,
 .olv-cl-samplenote,
 .olv-cl-streamnote,
+.olv-cl-unavailable,
 .olv-workbench-basis {
   /* Same metrics as `.olv-cl-banner` above, on the token scale: the two sit
      in one panel and read as one family, so a half-pixel apart in type size

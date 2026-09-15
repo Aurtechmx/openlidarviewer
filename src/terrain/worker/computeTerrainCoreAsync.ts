@@ -8,6 +8,13 @@
  * computation error reported by the worker — it falls back to running
  * {@link computeTerrainCore} synchronously on the main thread.
  *
+ * The fallback is BOUNDED by measurement. It runs only for a workload small
+ * enough to finish in about 200 ms on the main thread (see
+ * {@link MAX_FALLBACK_POINTS} / {@link MAX_FALLBACK_CELLS} and
+ * docs/validation/sync-fallback-budget-baseline.json). Anything larger is
+ * refused with a {@link SyncFallbackRefusedError}, which states that nothing
+ * was produced and what to do, rather than freezing the page for seconds.
+ *
  * This guarantees analysis still works even where the worker can't load (e.g.
  * if the bundle's worker chunk fails to resolve), which matters because the
  * worker round-trip can't be verified in the build/test sandbox — only the
@@ -30,6 +37,10 @@ import {
   type TerrainCore,
   type TerrainCoreParams,
 } from '../contour/analyseContours';
+import {
+  SyncFallbackRefusedError,
+  syncFallbackLimitsApply,
+} from '../../workers/syncFallbackRefusedError';
 
 /** The minimal worker-client surface {@link computeTerrainCoreAsync} drives. */
 export interface TerrainCoreClientLike {
@@ -59,12 +70,70 @@ function isAbortError(err: unknown): boolean {
 export type TerrainComputePath = 'worker' | 'fallback';
 
 /**
- * Hard ceiling for the synchronous main-thread fallback. Production callers
- * stride to ≤ 300 000 points before reaching this module, so the limit is
- * future-proofing, not a live constraint — see the guard in
- * {@link computeTerrainCoreAsync} for the rationale.
+ * Ceiling for the synchronous main-thread fallback, in points. MEASURED, not
+ * assumed: `tests/benchmark/terrainCoreSyncFallbackBudget.test.ts` times
+ * `computeTerrainCore` down a point ladder at a fixed 625-cell grid and the
+ * curve crosses 200 ms between 100 000 and 200 000 points; the corner case
+ * (this limit together with {@link MAX_FALLBACK_CELLS}) measures 195 ms. The
+ * frozen rows live in docs/validation/sync-fallback-budget-baseline.json.
  */
-export const MAX_FALLBACK_POINTS = 1_000_000;
+export const MAX_FALLBACK_POINTS = 25_000;
+
+/**
+ * Ceiling for the synchronous main-thread fallback, in DTM grid cells. The
+ * point count alone does not bound the cost: a sparse cloud over a fine grid
+ * spends nearly all of its time filling voids, and the same ladder measures
+ * 2 000 points over 250 000 cells at 48 s while 2 000 points over 1 024 cells
+ * take 194 ms. The estimate below multiplies the two extent spans, so a scan
+ * that would rasterise past this many cells is refused whatever its size.
+ */
+export const MAX_FALLBACK_CELLS = 1_000;
+
+/** Per-call overrides for the fallback ceilings (tests). */
+export interface TerrainFallbackLimits {
+  readonly maxSyncFallbackPoints?: number;
+  readonly maxSyncFallbackCells?: number;
+  /**
+   * Force the ceilings on or off. Defaults to {@link syncFallbackLimitsApply},
+   * which is true in a browser (where a long synchronous compute freezes the
+   * page) and false in Node (where the fallback is the only compute path).
+   */
+  readonly enforceLimits?: boolean;
+}
+
+/**
+ * Estimated DTM grid cells for this cloud: the XY extent of the first `n`
+ * points divided by the cell size, per axis. Cheap (one linear pass, no
+ * allocation) and deliberately independent of the terrain core, so the refusal
+ * can be decided BEFORE any grid is built. Returns null when the extent is not
+ * finite or the cell size is not usable, so an unknown estimate never refuses.
+ */
+export function estimateTerrainCells(
+  positions: Float32Array,
+  n: number,
+  cellSizeM: number,
+): number | null {
+  if (!Number.isFinite(cellSizeM) || cellSizeM <= 0) return null;
+  const count = Math.min(Math.max(0, Math.floor(n)), Math.floor(positions.length / 3));
+  if (count <= 0) return null;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < count; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+  const cols = Math.max(1, Math.ceil((maxX - minX) / cellSizeM));
+  const rows = Math.max(1, Math.ceil((maxY - minY) / cellSizeM));
+  return cols * rows;
+}
 
 let lastComputePath: TerrainComputePath | null = null;
 
@@ -141,6 +210,7 @@ export async function computeTerrainCoreAsync(
   classification?: ReadonlyArray<number> | Uint8Array,
   signal?: AbortSignal,
   client?: TerrainCoreClientLike,
+  opts?: TerrainFallbackLimits,
 ): Promise<TerrainCore> {
   if (signal?.aborted) {
     throw new DOMException('Terrain analysis aborted', 'AbortError');
@@ -182,19 +252,24 @@ export async function computeTerrainCoreAsync(
     if (signal?.aborted) {
       throw new DOMException('Terrain analysis aborted', 'AbortError');
     }
-    // Ceiling on the synchronous fallback. Every production caller routes
-    // through `gatherTerrainPositions()` which strides to ≤ 300 000 points,
-    // so this never fires today — it exists to protect FUTURE callers (e.g.
-    // a full-resolution analysis path) from silently freezing the main
-    // thread when the worker is unavailable. 1M points keeps generous
-    // headroom over the current cap while still bounding the stall.
-    if (n > MAX_FALLBACK_POINTS) {
-      throw new Error(
-        `Terrain worker unavailable and the dataset (${n} points) is too ` +
-          `large to analyse safely on the main thread (limit ` +
-          `${MAX_FALLBACK_POINTS}). Reload to restore the worker, or reduce ` +
-          `the analysis sample size.`,
-      );
+    // Ceilings on the synchronous fallback, both measured (see the constants).
+    // The worker is gone, so the only choice left is "freeze the page" or "say
+    // nothing was produced". Above either bound the honest answer is the
+    // refusal, which the runner surfaces as a failed analysis.
+    const enforce = opts?.enforceLimits ?? syncFallbackLimitsApply();
+    const maxPoints = opts?.maxSyncFallbackPoints ?? MAX_FALLBACK_POINTS;
+    const maxCells = opts?.maxSyncFallbackCells ?? MAX_FALLBACK_CELLS;
+    if (enforce && n > maxPoints) {
+      throw new SyncFallbackRefusedError({ stage: 'terrain', points: n, limit: maxPoints });
+    }
+    const cells = enforce ? estimateTerrainCells(positions, n, fallbackParams.cellSizeM) : null;
+    if (cells !== null && cells > maxCells) {
+      throw new SyncFallbackRefusedError({
+        stage: 'terrain',
+        points: n,
+        limit: maxCells,
+        measure: 'cells',
+      });
     }
     // The ceiling passed — the fallback is actually happening now.
     if (debugEnabled()) console.info(`[terrain] falling back to main thread (${n} pts)`);

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "label": "sync-fallback-budget-baseline",
+  "generatedAt": "2026-09-15",
+  "revision": "51e424c9 plus the two benchmarks themselves",
+  "budgetMs": 200,
+  "tests": [
+    "tests/benchmark/terrainCoreSyncFallbackBudget.test.ts",
+    "tests/benchmark/deriveClassificationSyncFallbackBudget.test.ts"
+  ],
+  "runCommand": "SYNC_FALLBACK_BENCH=1 npx vitest run tests/benchmark/terrainCoreSyncFallbackBudget.test.ts tests/benchmark/deriveClassificationSyncFallbackBudget.test.ts",
+  "environment": {
+    "os": "macOS 25.5.0 (Darwin)",
+    "cpu": "Apple M3 Max",
+    "logicalCores": 14,
+    "runtime": "Node v26.7.0 under vitest 5, forks pool",
+    "commit": "51e424c9"
+  },
+  "method": {
+    "budget": "200 ms is the longest main-thread stall a worker-failure rescue may cost. Above it the honest answer is a refusal that says nothing was produced, not a frozen page.",
+    "terrain": "computeTerrainCore over the deterministic bench cloud in tests/helpers/terrainBenchCloud.ts (a 1000 m span of rolling terrain). Best of 3 runs per row. Ladder A moves the point count at a fixed 40 m cell (625 cells); ladder B moves the cell size over a fixed 2 000-point cloud; ladder C times the candidate limit pairs together.",
+    "classify": "deriveClassification over the same bench cloud, default options, best of 3 runs per row.",
+    "proxy": "These are Node timings. Node and a browser tab run the same V8 on different heaps and under different scheduling, so the numbers stand as a proxy for the browser main thread, not as a measurement of it. Read a crossing point as an order of magnitude.",
+    "shape": "Terrain cost is driven by grid cells more than by points: a sparse cloud over a fine grid spends nearly all of its time filling voids (2 000 points over 250 000 cells measured 48 s in the same harness). That is why the terrain guard bounds both terms."
+  },
+  "rows": {
+    "terrainPoints": [
+      { "points": 2000, "cellSizeM": 40, "cells": 625, "ms": 117.6 },
+      { "points": 10000, "cellSizeM": 40, "cells": 625, "ms": 109.2 },
+      { "points": 50000, "cellSizeM": 40, "cells": 625, "ms": 126.0 },
+      { "points": 100000, "cellSizeM": 40, "cells": 625, "ms": 167.9 },
+      { "points": 200000, "cellSizeM": 40, "cells": 625, "ms": 256.2 },
+      { "points": 500000, "cellSizeM": 40, "cells": 625, "ms": 454.6 }
+    ],
+    "terrainCells": [
+      { "points": 2000, "cellSizeM": 50, "cells": 400, "ms": 61.8 },
+      { "points": 2000, "cellSizeM": 40, "cells": 625, "ms": 110.0 },
+      { "points": 2000, "cellSizeM": 32, "cells": 1024, "ms": 194.6 },
+      { "points": 2000, "cellSizeM": 25, "cells": 1600, "ms": 224.8 }
+    ],
+    "terrainCorners": [
+      { "points": 25000, "cellSizeM": 32, "cells": 1024, "ms": 198.8 },
+      { "points": 50000, "cellSizeM": 32, "cells": 1024, "ms": 223.4 },
+      { "points": 100000, "cellSizeM": 32, "cells": 1024, "ms": 270.7 }
+    ],
+    "classifyPoints": [
+      { "points": 10000, "ms": 20.1 },
+      { "points": 50000, "ms": 22.3 },
+      { "points": 100000, "ms": 18.0 },
+      { "points": 250000, "ms": 31.8 },
+      { "points": 500000, "ms": 61.7 },
+      { "points": 1000000, "ms": 132.9 },
+      { "points": 2000000, "ms": 266.5 }
+    ]
+  },
+  "limits": {
+    "terrainMaxFallbackPoints": {
+      "value": 25000,
+      "basis": "The corner row 25 000 points over 1 024 cells measures 198.8 ms, inside the budget; 50 000 over the same grid measures 223.4 ms and is outside it."
+    },
+    "terrainMaxFallbackCells": {
+      "value": 1000,
+      "basis": "The cell ladder crosses the budget at 1 024 cells (194.6 ms at 2 000 points, 224.8 ms at 1 600 cells), so the shipped bound sits just under the last row inside the budget."
+    },
+    "classifyMaxFallbackPoints": {
+      "value": 1000000,
+      "basis": "132.9 ms at 1 000 000 points, 266.5 ms at 2 000 000, so the crossing lies between the two and the shipped bound is the last row inside the budget."
+    }
+  }
+}
