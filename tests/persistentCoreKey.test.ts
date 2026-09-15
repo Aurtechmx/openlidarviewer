@@ -105,6 +105,13 @@ describe('persistentCoreKey', () => {
       { ...BASE_PARAMS, samplePointScale: 4 },
       { ...BASE_PARAMS, aggregation: 'mean' },
       { ...BASE_PARAMS, latitudeDeg: 37 },
+      { ...BASE_PARAMS, horizontalEpsg: 32610 },
+      { ...BASE_PARAMS, verticalEpsg: 5703 },
+      { ...BASE_PARAMS, verticalScaleKnown: true },
+      { ...BASE_PARAMS, horizontalScaleKnown: false },
+      { ...BASE_PARAMS, horizontalUnitToMetres: 0.3048 },
+      { ...BASE_PARAMS, trustGroundClassification: true },
+      { ...BASE_PARAMS, residentOnly: true },
     ];
     for (const v of variants) {
       expect(await persistentCoreKey(pos, v), JSON.stringify(v)).not.toBe(base);
@@ -146,6 +153,15 @@ describe('persistentCoreKey', () => {
     expect(await persistentCoreKey(b, BASE_PARAMS)).not.toBe(
       await persistentCoreKey(a, BASE_PARAMS),
     );
+  });
+
+  it('catches a classification edit the sampled hash misses', async () => {
+    const pos = makeCloud(500);
+    const cls = new Uint8Array(500).fill(2);
+    const edited = cls.slice();
+    edited[1] = 5; // between the stride samples of the in-memory hash
+    const withCls = (c: Uint8Array): TerrainCoreParams => ({ ...BASE_PARAMS, classification: c });
+    expect(await persistentCoreKey(pos, withCls(edited))).not.toBe(await persistentCoreKey(pos, withCls(cls)));
   });
 
   it('cryptoContentFingerprint folds the triple count', async () => {

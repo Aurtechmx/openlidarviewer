@@ -580,3 +580,9 @@ export const loadPreviewCloud = () => import('./app/previewCloud');
  * load: formatters a normal session never runs, kept out of the shell.
  */
 export const loadLoadDiagnostics = () => import('./app/loadDiagnostics');
+
+/**
+ * The persistent TerrainCore tier on OPFS: the key, the payload codec and the
+ * bounded store. Loaded beside the terrain-core cache on the first analysis.
+ */
+export const loadTerrainCoreStore = () => import('./terrain/contour/terrainCoreStore');

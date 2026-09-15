@@ -257,6 +257,15 @@ export function paramsKey(params: TerrainCoreParams): string {
     `seed=${params.holdoutSeed ?? ''}`,
     `agg=${params.aggregation ?? ''}`,
     `g=${ground}`,
+    // The remaining inputs the core reads. Constant within one open scan, so
+    // the in-memory key never needed them; a key that outlives the scan does.
+    `hepsg=${params.horizontalEpsg ?? ''}`,
+    `vepsg=${params.verticalEpsg ?? ''}`,
+    `vsk=${params.verticalScaleKnown === undefined ? '' : params.verticalScaleKnown ? 1 : 0}`,
+    `hsk=${params.horizontalScaleKnown === undefined ? '' : params.horizontalScaleKnown ? 1 : 0}`,
+    `h2m=${params.horizontalUnitToMetres ?? ''}`,
+    `trust=${params.trustGroundClassification === undefined ? '' : params.trustGroundClassification ? 1 : 0}`,
+    `res=${params.residentOnly === undefined ? '' : params.residentOnly ? 1 : 0}`,
   ].join('|');
 }
 
@@ -345,6 +354,48 @@ export type ComputeCoreAsyncFn = (
 // promise settles; only a fulfilled result is stored in the LRU.
 const inFlight = new Map<string, Promise<TerrainCore>>();
 
+/** Where the last core handed out by {@link getOrComputeCoreAsync} came from. */
+export type TerrainCoreSource = 'computed' | 'memory' | 'restored';
+let lastSource: TerrainCoreSource = 'computed';
+export function lastTerrainCoreSource(): TerrainCoreSource {
+  return lastSource;
+}
+
+/**
+ * The persistent (across reopen) tier behind the in-memory LRU. A miss here
+ * consults it before computing; a computed core is handed to it afterwards,
+ * in the background, so a write never delays the result. Null keeps the cache
+ * memory-only.
+ */
+export interface TerrainCorePersistenceTier {
+  lookup(positions: Float32Array, params: TerrainCoreParams): Promise<{ core: TerrainCore } | { miss: string }>;
+  persist(positions: Float32Array, params: TerrainCoreParams, core: TerrainCore, computeMs: number): Promise<boolean>;
+}
+let persistence: TerrainCorePersistenceTier | null = null;
+export function setTerrainCorePersistence(tier: TerrainCorePersistenceTier | null): void {
+  persistence = tier;
+}
+
+/** Restore from the persistent tier, or compute; a tier failure is a miss. */
+async function restoreOrCompute(
+  positions: Float32Array,
+  params: TerrainCoreParams,
+  compute: ComputeCoreAsyncFn,
+): Promise<{ core: TerrainCore; source: TerrainCoreSource; computeMs: number }> {
+  const tier = persistence;
+  if (tier) {
+    try {
+      const found = await tier.lookup(positions, params);
+      if ('core' in found) return { core: found.core, source: 'restored', computeMs: 0 };
+    } catch {
+      /* the tier is an optimisation; a failure here means compute */
+    }
+  }
+  const t0 = performance.now();
+  const core = await compute(positions, params);
+  return { core, source: 'computed', computeMs: performance.now() - t0 };
+}
+
 /**
  * Async sibling of {@link getOrComputeCore}: return the cached core for these
  * positions + core params, or AWAIT `compute` (which may run in a worker), store
@@ -368,6 +419,7 @@ export async function getOrComputeCoreAsync(
     // Refresh recency: delete + re-set moves the key to the most-recent end.
     cache.delete(key);
     cache.set(key, hit);
+    lastSource = 'memory';
     return hit;
   }
   // Coalesce concurrent misses for the same key onto one compute.
@@ -380,14 +432,29 @@ export async function getOrComputeCoreAsync(
   // in the cache the clear was meant to empty, defeating the "reuse only within
   // one open scan" guarantee.
   const epoch = cacheEpoch;
-  const promise = compute(positions, params);
+  const outcome = restoreOrCompute(positions, params, compute);
+  const promise = outcome.then((o) => o.core);
+  // The rejection reaches the awaiter below through `outcome`; this branch
+  // exists for coalesced callers and must not surface as an unhandled one.
+  promise.catch(() => undefined);
   inFlight.set(key, promise);
   let core: TerrainCore;
+  let source: TerrainCoreSource;
+  let computeMs: number;
   try {
-    core = await promise;
+    ({ core, source, computeMs } = await outcome);
   } finally {
     // Always release the in-flight slot, success or failure.
     inFlight.delete(key);
+  }
+  lastSource = source;
+  // A computed core goes to the persistent tier AFTER this call has returned
+  // it: the write is queued behind the current task, never awaited here.
+  const tier = persistence;
+  if (tier && source === 'computed') {
+    setTimeout(() => {
+      void tier.persist(positions, params, core, computeMs).catch(() => undefined);
+    }, 0);
   }
   // Store only on success (a rejection threw above and never reaches here) AND
   // only if no clear() intervened. The caller still receives the value either

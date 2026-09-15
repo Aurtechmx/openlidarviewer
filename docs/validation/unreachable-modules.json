@@ -27,13 +27,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/terrain/contour/persistentCoreKey.ts",
-      "status": "staged",
-      "why": "The identity and invalidation contract for a persistent (across-reopen) terrain core cache: a full SHA-256 content fingerprint, the core-method generation string, and an integrity digest. It is the library half of the recompute-vs-reuse gate in tests/benchmark/terrainCoreRebuildCost.test.ts, which returned GO (conditional). No storage or reopen path is built, so nothing in the application computes a persistent key; only its own test imports it.",
-      "graduation": "A browser measurement of real OPFS read and deserialization confirms the reuse payoff, then the terrain analysis path keys a persisted core through this module and a monotonicity re-check graduates into the application graph.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/validation/evidenceBoundaryInspector.ts",
       "status": "validation-only",
       "why": "A read-only projection of one resolveEvidence() lookup: it copies the resolver's decision verbatim and adds a per-envelope-field breakdown so the scoped-evidence verdict is human-auditable. It holds no applicability logic and produces evidence ABOUT the resolver; only its own test imports it, and becoming reachable would give the running app a second place that describes the evidence boundary.",

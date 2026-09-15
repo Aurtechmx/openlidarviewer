@@ -52,7 +52,7 @@ import type { ContourLayerService } from './contourLayerService';
 import type { DerivedLayer, DerivedLayerStore } from '../model/DerivedLayer';
 import type { DerivedLayersList } from '../ui/DerivedLayersList';
 import {
-  loadTerrainCoreCache,
+  loadTerrainCoreCache, loadTerrainCoreStore,
   loadComputeTerrainCoreAsync,
   loadContourLayerService,
   loadContourOverlay,
@@ -318,6 +318,13 @@ export function createTerrainAnalysisRunner(
   // pulling the heavy analysis chunk. Null until the first analysis happens —
   // before that there is nothing cached to clear anyway.
   let clearTerrainCoreCacheFn: (() => void) | null = null;
+  // The persistent tier is armed once per session; a platform without OPFS
+  // arms a tier whose every lookup misses.
+  let persistenceArmed: Promise<void> | null = null;
+  const armTerrainCorePersistence = (): Promise<void> =>
+    (persistenceArmed ??= loadTerrainCoreStore()
+      .then((m) => m.armTerrainCorePersistence())
+      .catch(() => undefined));
   // AbortController for the in-flight terrain-core compute (worker or
   // fallback). A newer run, an interval re-pick, or a dataset close aborts the
   // previous controller so a superseded worker job is cancelled and its reply
@@ -629,8 +636,9 @@ export function createTerrainAnalysisRunner(
       // change (or a re-opened panel, or a re-run on the same scan) reuses it and
       // only the cheap contour stage reruns. The cache rides the same lazy chunk
       // as the analysis pipeline, so there is no extra dynamic import.
-      const { getOrComputeCoreAsync, contoursFromCore, clearTerrainCoreCache } =
+      const { getOrComputeCoreAsync, contoursFromCore, clearTerrainCoreCache, lastTerrainCoreSource } =
         await loadTerrainCoreCache();
+      await armTerrainCorePersistence();
       // The worker-backed async compute bridge: it runs the heavy core OFF the
       // main thread in a dedicated worker, with a SAFE main-thread fallback if the
       // worker can't load. Lazily imported alongside the cache chunk; importing it
@@ -667,6 +675,7 @@ export function createTerrainAnalysisRunner(
         ),
       );
       if (bail()) return;
+      const coreSource = lastTerrainCoreSource();
       // Cheap interval-dependent stage: contours → stitch → style → labels.
       const result = contoursFromCore(core, { intervalM });
       // Final guard before touching the panel: a newer run, a swapped/closed
@@ -678,6 +687,11 @@ export function createTerrainAnalysisRunner(
       // whatever was live at land time is how a superseded frame got recorded as
       // current in the first place.
       analysePanel.update(result, { targetId: runDatasetId, crsRevision: runCrsRevision });
+      if (coreSource === 'restored') {
+        analysePanel.setStatus(
+          'Terrain core restored from the on-device cache: source digest, parameters and method generation matched.',
+        );
+      }
       // Contour Studio launcher: hand the panel the CRS frame facts (projected
       // vs geographic, vertical unit known) that live here on the CRS service.
       // The panel lazily loads the launcher (adapter + render), computes the

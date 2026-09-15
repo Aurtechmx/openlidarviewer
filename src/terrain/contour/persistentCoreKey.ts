@@ -44,8 +44,9 @@ import type { TerrainCoreParams } from './analyseContours';
  * Bumped when the persistent key's own scheme changes (field order, digest
  * input, generation format) in a way that must not match keys written under an
  * older scheme. Independent of the method versions folded into the generation.
+ * v2 folds a full SHA-256 of the classification into the content half.
  */
-export const PERSISTENT_CORE_KEY_VERSION = 1;
+export const PERSISTENT_CORE_KEY_VERSION = 2;
 
 /**
  * The registered methods whose output is baked into an interval-INDEPENDENT
@@ -137,10 +138,44 @@ export async function cryptoContentFingerprint(positions: Float32Array): Promise
 }
 
 /**
+ * Full SHA-256 over the per-point classification, or `c0` when there is none.
+ * {@link paramsKey} folds only a sampled hash of it, which is enough within one
+ * session and not across sessions: an edit to an unsampled code changes the
+ * bare-earth surface without changing that key.
+ */
+export async function cryptoClassificationFingerprint(
+  classification: TerrainCoreParams['classification'],
+): Promise<string> {
+  if (!classification) return 'c0';
+  const bytes = classification instanceof Uint8Array ? classification : Uint8Array.from(classification);
+  return `c${bytes.length}.${await sha256Hex(bytes)}`;
+}
+
+/** The three axes of a persistent key, kept apart so a miss can be named. */
+export interface PersistentKeyParts {
+  /** Positions digest plus classification digest. */
+  readonly content: string;
+  readonly params: string;
+  readonly generation: string;
+  readonly key: string;
+}
+
+/** {@link persistentCoreKey}, with the axes exposed. */
+export async function persistentCoreKeyParts(
+  positions: Float32Array,
+  params: TerrainCoreParams,
+  generation: string = coreMethodGeneration(),
+): Promise<PersistentKeyParts> {
+  const content = `${await cryptoContentFingerprint(positions)}.${await cryptoClassificationFingerprint(params.classification)}`;
+  const p = paramsKey(params);
+  return { content, params: p, generation, key: `${content}#${p}#${generation}` };
+}
+
+/**
  * The persistent cache key for a (positions, core params) pair under a given
  * method generation: `contentFingerprint # paramsKey # generation`. All three
- * axes must match for a hit; a change in the cloud content, any core param, or
- * any folded method version yields a different key (a miss).
+ * axes must match for a hit; a change in the cloud content, the classification,
+ * any core param, or any folded method version yields a different key (a miss).
  *
  * `generation` defaults to the live {@link coreMethodGeneration}; it is a
  * parameter so a caller (or a test) can pin or vary it explicitly.
@@ -150,8 +185,7 @@ export async function persistentCoreKey(
   params: TerrainCoreParams,
   generation: string = coreMethodGeneration(),
 ): Promise<string> {
-  const content = await cryptoContentFingerprint(positions);
-  return `${content}#${paramsKey(params)}#${generation}`;
+  return (await persistentCoreKeyParts(positions, params, generation)).key;
 }
 
 /**
