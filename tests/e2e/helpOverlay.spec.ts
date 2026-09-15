@@ -14,7 +14,8 @@ test.describe('help overlay', () => {
     await page.goto('/');
     await expect(page.locator('.olv-empty-title')).toBeVisible();
     await page.locator('.olv-file-input').first().setInputFiles(FIXTURE);
-    await expect(page.locator('.olv-empty')).toBeHidden();
+    // The decode is pooled off-thread and takes longer on the CI runner than the default assertion wait.
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
     await page.getByRole('button', { name: /^Help$/ }).first().click();
     const backdrop = page.locator('.olv-help-backdrop');
     await expect(backdrop).toBeVisible();
