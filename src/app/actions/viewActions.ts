@@ -25,6 +25,8 @@ export interface ViewActionDeps {
   saveCurrentView: () => void;
   applyView: (index: number) => void;
   showLassoToast: (message: string) => void;
+  /** Re-flash the touch-gesture hint over the scan (NavBar.flashTouchHint). */
+  showTouchGestures: () => void;
 }
 
 export function contributeViewActions(deps: ViewActionDeps): Action[] {
@@ -68,6 +70,14 @@ export function contributeViewActions(deps: ViewActionDeps): Action[] {
       hint: 'Flip the left / right mouse-orbit direction. Persists.',
       keywords: ['invert', 'horizontal', 'yaw', 'orbit', 'mouse', 'gyroscope', 'handedness', 'camera', 'navigation'],
       run: () => deps.toggleOrbitInvert('x'),
+    },
+    {
+      id: 'nav.gestures',
+      title: 'Show navigation gestures',
+      section: 'View',
+      hint: 'Flash the drag / pinch / two-finger reminder over the scan again.',
+      keywords: ['touch', 'gesture', 'pinch', 'drag', 'pan', 'rotate', 'hint', 'tablet', 'phone', 'trackpad'],
+      run: () => deps.showTouchGestures(),
     },
     {
       id: 'nav.reset',

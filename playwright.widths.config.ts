@@ -46,6 +46,12 @@ export default defineConfig({
     // config: a spec whose outcome depends on the runner's GPU adapter must
     // not be pulled in here by widening the viewport list.
     grepInvert: /@gpu/,
+    // The startup smoke spec plus the top-centre lane collision spec: the two
+    // whose whole subject is what a given width does to the layout. Selecting
+    // here rather than on the command line means `playwright test --config=
+    // playwright.widths.config.ts` with no path runs exactly these, instead of
+    // dragging the whole e2e suite through seven viewports.
+    testMatch: /(smoke|hudCollision)\.spec/,
     use: {
       ...devices['Desktop Chrome'],
       viewport: { width: v.width, height: v.height },

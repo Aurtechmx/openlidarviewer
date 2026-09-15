@@ -384,3 +384,36 @@ describe('MobileSheet detents', () => {
     expect(sheet.getDetent()).toBe('full');
   });
 });
+
+/**
+ * A run's result must not land below the fold.
+ *
+ * On a phone the Analyse panel lives in this sheet, and the sheet opens at
+ * 'peek', which is just its head. A terrain run therefore finished with its verdict
+ * scrolled out of sight under the parameters that asked for it, and with
+ * nothing on screen saying the run had produced anything at all.
+ */
+describe('MobileSheet.revealResult', () => {
+  it('opens a collapsed sheet to half on the result tab', async () => {
+    const { sheet, tab } = await makeSheet({ initialTab: 'view', initialDetent: 'peek' });
+    expect(sheet.revealResult('analyse', '.olv-analyse-assessment')).toBe(true);
+    expect(sheet.getDetent()).toBe('half');
+    expect(sheet.getActive()).toBe('analyse');
+    expect(tab('analyse').attrs['aria-selected']).toBe('true');
+  });
+
+  it('leaves a sheet the user has already opened where they put it', async () => {
+    const { sheet } = await makeSheet({ initialTab: 'view', initialDetent: 'full' });
+    expect(sheet.revealResult('analyse', '.olv-analyse-assessment')).toBe(true);
+    expect(sheet.getDetent()).toBe('full');
+    expect(sheet.getActive()).toBe('analyse');
+  });
+
+  it('does nothing while the sheet is hidden, which is the desktop layout', async () => {
+    const { sheet } = await makeSheet({ initialTab: 'view', initialDetent: 'peek' });
+    sheet.setVisible(false);
+    expect(sheet.revealResult('analyse', '.olv-analyse-assessment')).toBe(false);
+    expect(sheet.getDetent()).toBe('peek');
+    expect(sheet.getActive()).toBe('view');
+  });
+});

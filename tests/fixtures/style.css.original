@@ -237,6 +237,16 @@
 }
 
 /*
+ * The top-centre lane. One band hosts the transient centred surfaces — the
+ * progress toast, the "Project ready" card, the recommended-view chip, the
+ * measure and annotation hints, the measurement toolbar — and only one of them
+ * is ever up at a time. They shared a literal `top: 56px`, so moving the lane
+ * meant finding five files. The token is the lane; 65-mobile-touch.css
+ * redefines it for the notch instead of overriding each surface's own `top`.
+ */
+:root { --olv-lane-top: calc(56px + env(safe-area-inset-top)); }
+
+/*
  * v0.3.9 workflow recorder badge — fixed pill on the top edge of
  * the viewport that displays the current state ("● Recording…" or
  * "▶ Playing 3/12") with a Stop button. Pulsing rose dot during
@@ -1408,9 +1418,12 @@ body.olv-theme-light .olv-empty::before {
 .olv-rvc {
   position: fixed;
   left: 50%;
-  top: calc(64px + env(safe-area-inset-top));
+  top: var(--olv-lane-top);
   transform: translateX(-50%);
-  z-index: var(--z-modal);
+  /* The chip shares the top-centre lane with the "Project ready" card and
+     waits for it (ProjectCard's onDismiss), so it no longer needs the modal
+     layer it used to sit on to win that collision. */
+  z-index: var(--z-float);
   display: inline-flex; align-items: center; gap: var(--space-xs);
   padding: 4px 6px 4px 10px;
   background: rgba(11, 17, 33, 0.92);
@@ -1737,9 +1750,30 @@ body.olv-theme-light .olv-empty::before {
 .olv-tool-ico svg { width: 15px; height: 15px; flex: none; display: block; }
 .olv-tool-label { white-space: nowrap; }
 /* "More" disclosure surfaces secondary tools (Snapshot, Help) on phones
-   where they're hidden by default. On desktop every tool is visible, so
-   the More toggle has no role — keep it out of the way. */
+   where they're hidden by default. On a full desktop every tool is visible,
+   so the More toggle has no role — keep it out of the way. */
 .olv-tool-more { display: none; }
+/* Laptop tier. Between the phone breakpoint and 1100px the eleven-button dock
+   runs the full width of the canvas, so three tools that each have another way
+   in fold under More: Snapshot (also the command palette), Copy view link (also
+   the palette) and Probe (a hover affordance, and Inspect covers the same read
+   with a click). Analyse and Help stay out, because Analyse is the entry to the
+   terrain work and Help is where a stuck user looks first. The disclosure
+   itself is the same button and the same `.olv-dock-more-open` class the phone
+   tier uses. Above 1100px nothing here applies and the dock is unchanged. */
+@media (max-width: 1100px) and (min-width: 768px) {
+  .olv-dock .olv-tool-more { display: inline-flex; justify-content: center; }
+  .olv-dock .olv-tool-snapshot,
+  .olv-dock .olv-tool-share,
+  .olv-dock .olv-tool-probe { display: none; }
+  .olv-dock.olv-dock-more-open .olv-tool-snapshot,
+  .olv-dock.olv-dock-more-open .olv-tool-share,
+  .olv-dock.olv-dock-more-open .olv-tool-probe { display: inline-flex; }
+  .olv-dock.olv-dock-more-open .olv-tool-more {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+}
 /* Close is destructive, so it carries a rose-tinted resting
    state to set it apart from neutral tools and a brighter rose on hover.
    Subtle at rest (still readable at 11px on dark background), unmissable on
@@ -1969,7 +2003,7 @@ body.olv-theme-light .olv-empty::before {
 
 /* Progress toast */
 .olv-toast {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; gap: var(--space-md);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
@@ -2790,7 +2824,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* "Project ready" summary card */
 .olv-project-card {
-  position: absolute; top: 56px; left: 50%;
+  position: absolute; top: var(--olv-lane-top); left: 50%;
   transform: translateX(-50%) translateY(-6px);
   width: 290px;
   background: rgba(11, 17, 33,0.9);
@@ -2910,7 +2944,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* The instruction hint shown while measuring */
 .olv-measure-hint {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: var(--space-2xl);
   background: rgba(11, 17, 33,0.9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
@@ -3339,12 +3373,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     max-width: 560px;
   }
 
-  /* Transient top-centre cards clear the notch and never exceed the screen. */
-  .olv-project-card {
-    top: calc(58px + env(safe-area-inset-top));
-    width: min(290px, calc(100vw - 28px));
-  }
-  .olv-toast, .olv-measure-hint { top: calc(58px + env(safe-area-inset-top)); }
+  /* Transient top-centre cards clear the notch and never exceed the screen.
+     Every surface in the lane reads the token, so shifting the lane for the
+     notch is one declaration rather than one per surface. */
+  :root { --olv-lane-top: calc(58px + env(safe-area-inset-top)); }
+  .olv-project-card { width: min(290px, calc(100vw - 28px)); }
   /* Keep the progress toast clear of a landscape side-notch — cap its width to
      the inset-free area. Centred, so this only ever shrinks, never shifts. */
   .olv-toast { max-width: min(360px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right))); }
@@ -3758,7 +3791,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* ── Annotation hint bar ─────────────────────────────────────────────────── */
 .olv-anno-hint {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: var(--space-md);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
@@ -3782,7 +3815,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * the live instruction, then the action buttons.
  */
 .olv-measure-bar {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center;
   gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
   background: rgba(11, 17, 33, 0.82);

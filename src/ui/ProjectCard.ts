@@ -19,6 +19,17 @@ export interface ProjectInfo {
   hasRgb: boolean;
   hasIntensity: boolean;
   hasClassification: boolean;
+  /**
+   * Fired once when the card gives the top-centre lane back: its own timer
+   * expiring, or the user pressing ×. NOT fired when something else takes the
+   * lane by calling {@link ProjectCard.hide} (arming a measurement, closing the
+   * scan): there the lane is wanted for that, not for a successor.
+   *
+   * The lane holds one surface at a time. The recommended-view chip is the
+   * successor this exists for: it used to be shown in the same breath as the
+   * card and covered it for the card's whole seven seconds.
+   */
+  onDismiss?: () => void;
 }
 
 /** How long the card lingers before fading out on its own. */
@@ -59,6 +70,8 @@ function row(label: string, value: string): HTMLElement {
 export class ProjectCard {
   readonly element: HTMLElement;
   private _timer: number | null = null;
+  /** The pending lane successor, dropped by `hide()` and consumed by `_dismiss()`. */
+  private _onDismiss: (() => void) | null = null;
 
   constructor() {
     this.element = el('div', { className: 'olv-project-card' });
@@ -81,7 +94,7 @@ export class ProjectCard {
       text: '×',
       ariaLabel: 'Dismiss',
     });
-    dismiss.addEventListener('click', () => this.hide());
+    dismiss.addEventListener('click', () => this._dismiss());
 
     this.element.replaceChildren(
       el('div', { className: 'olv-pc-head' }, [
@@ -102,15 +115,24 @@ export class ProjectCard {
 
     this.element.classList.add('olv-visible');
     if (this._timer !== null) clearTimeout(this._timer);
-    this._timer = window.setTimeout(() => this.hide(), DISMISS_MS);
+    this._onDismiss = info.onDismiss ?? null;
+    this._timer = window.setTimeout(() => this._dismiss(), DISMISS_MS);
   }
 
-  /** Fade the card out. */
+  /** Fade the card out and drop any pending lane successor. */
   hide(): void {
     if (this._timer !== null) {
       clearTimeout(this._timer);
       this._timer = null;
     }
+    this._onDismiss = null;
     this.element.classList.remove('olv-visible');
+  }
+
+  /** Hide, then hand the lane to the successor `show` registered. */
+  private _dismiss(): void {
+    const next = this._onDismiss;
+    this.hide();
+    next?.();
   }
 }

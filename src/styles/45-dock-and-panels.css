@@ -31,9 +31,30 @@
 .olv-tool-ico svg { width: 15px; height: 15px; flex: none; display: block; }
 .olv-tool-label { white-space: nowrap; }
 /* "More" disclosure surfaces secondary tools (Snapshot, Help) on phones
-   where they're hidden by default. On desktop every tool is visible, so
-   the More toggle has no role — keep it out of the way. */
+   where they're hidden by default. On a full desktop every tool is visible,
+   so the More toggle has no role — keep it out of the way. */
 .olv-tool-more { display: none; }
+/* Laptop tier. Between the phone breakpoint and 1100px the eleven-button dock
+   runs the full width of the canvas, so three tools that each have another way
+   in fold under More: Snapshot (also the command palette), Copy view link (also
+   the palette) and Probe (a hover affordance, and Inspect covers the same read
+   with a click). Analyse and Help stay out, because Analyse is the entry to the
+   terrain work and Help is where a stuck user looks first. The disclosure
+   itself is the same button and the same `.olv-dock-more-open` class the phone
+   tier uses. Above 1100px nothing here applies and the dock is unchanged. */
+@media (max-width: 1100px) and (min-width: 768px) {
+  .olv-dock .olv-tool-more { display: inline-flex; justify-content: center; }
+  .olv-dock .olv-tool-snapshot,
+  .olv-dock .olv-tool-share,
+  .olv-dock .olv-tool-probe { display: none; }
+  .olv-dock.olv-dock-more-open .olv-tool-snapshot,
+  .olv-dock.olv-dock-more-open .olv-tool-share,
+  .olv-dock.olv-dock-more-open .olv-tool-probe { display: inline-flex; }
+  .olv-dock.olv-dock-more-open .olv-tool-more {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+}
 /* Close is destructive, so it carries a rose-tinted resting
    state to set it apart from neutral tools and a brighter rose on hover.
    Subtle at rest (still readable at 11px on dark background), unmissable on
@@ -263,7 +284,7 @@
 
 /* Progress toast */
 .olv-toast {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; gap: var(--space-md);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);

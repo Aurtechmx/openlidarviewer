@@ -1,4 +1,14 @@
 /*
+ * The top-centre lane. One band hosts the transient centred surfaces — the
+ * progress toast, the "Project ready" card, the recommended-view chip, the
+ * measure and annotation hints, the measurement toolbar — and only one of them
+ * is ever up at a time. They shared a literal `top: 56px`, so moving the lane
+ * meant finding five files. The token is the lane; 65-mobile-touch.css
+ * redefines it for the notch instead of overriding each surface's own `top`.
+ */
+:root { --olv-lane-top: calc(56px + env(safe-area-inset-top)); }
+
+/*
  * v0.3.9 workflow recorder badge — fixed pill on the top edge of
  * the viewport that displays the current state ("● Recording…" or
  * "▶ Playing 3/12") with a Stop button. Pulsing rose dot during
