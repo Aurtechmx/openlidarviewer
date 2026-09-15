@@ -75,7 +75,7 @@ describe('a frame change cancels or invalidates what it invalidates', () => {
     expect(i, 'the shell no longer wires the frame change').toBeGreaterThan(0);
     const block = main.slice(i, i + 900);
     expect(block).toMatch(/crsService,/);
-    expect(block).toMatch(/cancelFullCloudGrade: \(\) => cancelFullCloudGrade\(\)/);
+    expect(block).toMatch(/cancelFullCloudGrade: \(\) => streamingUi\.cancelGrade\(\)/);
     const wiring = fs.readFileSync('src/app/classLegendRefresh.ts', 'utf8');
     const w = wiring.indexOf('export function wireFrameChange');
     expect(w).toBeGreaterThan(0);
