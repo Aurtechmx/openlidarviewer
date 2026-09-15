@@ -384,7 +384,7 @@ export async function decodeLazParallel(
       const i = order ? order[k] : k;
       const planned = chunks[i];
       // A chunk the sample skips entirely holds no output record.
-      if (!(planned.keep && planned.keep.length === 0)) {
+      if (planned.keep?.length !== 0) {
         const job = jobFor(buffer, header, plan.ctx, planned);
         placeChunk(plan.out, await decodeChunk(job, signal), planned.outIndex);
         done += keptOf(planned);
