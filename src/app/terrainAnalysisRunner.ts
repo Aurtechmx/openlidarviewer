@@ -567,7 +567,14 @@ export function createTerrainAnalysisRunner(
     const analysePanel = getAnalysePanel();
     const gathered = viewer.gatherTerrainPositions();
     if (!gathered) {
-      analysePanel.setStatus('Load a scan first, then run terrain analysis.');
+      // Nothing gathers either because nothing is loaded or because several
+      // visible layers would be combined without a proven shared frame; the
+      // status names which, so the way out is clear.
+      analysePanel.setStatus(
+        viewer.clouds().length > 1
+          ? 'Terrain analysis combines every visible, unlocked layer, and these layers have not proven they share a frame. Hide or lock all but one layer, then run.'
+          : 'Load a scan first, then run terrain analysis.',
+      );
       return;
     }
     // Remember the frame this scan was gathered in — the map-sheet export reads
