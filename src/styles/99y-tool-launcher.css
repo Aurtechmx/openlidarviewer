@@ -2,7 +2,7 @@
    session counts, plus the compact strip the card folds to while a tool panel
    holds the column. */
 .olv-tool-launcher {
-  width: 222px; box-sizing: border-box;
+  width: 100%; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-xl);
   display: flex; flex-direction: column; gap: var(--space-md);
