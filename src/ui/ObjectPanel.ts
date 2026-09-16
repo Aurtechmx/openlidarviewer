@@ -230,10 +230,11 @@ export class ObjectPanel {
     this._scanTypeControl = createScanTypeControl({
       onChange: (o) => this._cb.onScanTypeChange?.(o),
     });
-    // The escape hatch leads the panel: it sits between the Analyse panel's
-    // Terrain Products and the scan title, so a misrouted ground scan is one
-    // visible click from the terrain pipeline. It is built once; the body
-    // below is rebuilt on every render and never touches it.
+    // Built here because it is drawn first: the escape hatch leads the panel,
+    // above the scan title, between it and the Analyse panel's Terrain
+    // Products, so a misrouted ground scan is one visible click from the
+    // terrain pipeline. Built once; the body below is rebuilt on every render
+    // and never touches it.
     this._runAnyway = el('button', {
       className: 'olv-object-run-anyway',
       text: 'Run terrain contours anyway',
@@ -248,7 +249,8 @@ export class ObjectPanel {
    * Reflect the host's override + the effective route in the "Treat as"
    * control. `disabled` greys out segments the detection has ruled out (e.g.
    * Terrain on an interior/object scan) with their visible reasons — the
-   * "Run terrain contours anyway" escape hatch below stays functional.
+   * "Run terrain contours anyway" button at the top of the panel stays
+   * functional.
    */
   setScanType(
     override: ScanTypeOverride,
