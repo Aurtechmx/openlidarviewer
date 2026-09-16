@@ -119,7 +119,7 @@ describe('verticalReferenceFromDatum', () => {
       'Site benchmark 1972',
     ]) {
       const resolved = resolveVerticalEpsg({ verticalDatum });
-      expect(verticalReferenceKey({ verticalDatum }), verticalDatum).toBe(
+      expect(verticalReferenceKey({ id: 'layer-a', verticalDatum }), verticalDatum).toBe(
         resolved !== undefined ? `epsg:${resolved}` : `name:${verticalDatum.toLowerCase()}`,
       );
     }
