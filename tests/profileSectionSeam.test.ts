@@ -322,21 +322,21 @@ describe('profile section seam — the scope says where the returns came from', 
       deps({
         residentNodes: residents,
         streamingMayCombine: () => true,
-        streamingCoverage: () => ({ knownNodeCount: null, residentNodeCount: 1 }),
+        streamingCoverage: () => ({ knownNodeCount: null, residentNodeCount: 1, hierarchyComplete: true }),
       }),
     );
     const partial = createProfileSectionSeam(
       deps({
         residentNodes: residents,
         streamingMayCombine: () => true,
-        streamingCoverage: () => ({ knownNodeCount: 8, residentNodeCount: 1 }),
+        streamingCoverage: () => ({ knownNodeCount: 8, residentNodeCount: 1, hierarchyComplete: true }),
       }),
     );
     const whole = createProfileSectionSeam(
       deps({
         residentNodes: residents,
         streamingMayCombine: () => true,
-        streamingCoverage: () => ({ knownNodeCount: 1, residentNodeCount: 1 }),
+        streamingCoverage: () => ({ knownNodeCount: 1, residentNodeCount: 1, hierarchyComplete: true }),
       }),
     );
     expect(unknown.section({ a: A, b: B, corridorWidth: 1 })!.streamingComplete).toBeNull();

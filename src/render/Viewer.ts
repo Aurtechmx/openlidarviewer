@@ -1914,7 +1914,7 @@ export class Viewer {
   private _streamingCoverage() {
     const s = this._streaming;
     return s
-      ? { knownNodeCount: s.cloud.octree.nodes().length || null, residentNodeCount: this._streamingPickData.size }
+      ? { knownNodeCount: s.cloud.octree.nodes().length || null, residentNodeCount: this._streamingPickData.size, hierarchyComplete: s.cloud.octree.isComplete }
       : null;
   }
 
@@ -2225,7 +2225,7 @@ export class Viewer {
     let residentOnly = streamingPoints > 0;
     if (residentOnly && this._streaming) {
       const totalNodes = this._streaming.cloud.octree.nodes().length;
-      if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
+      if (totalNodes > 0 && this._streaming.cloud.octree.isComplete && this._streamingPickData.size >= totalNodes) residentOnly = false;
     }
     // Normalise the buffer into the canonical Z-up survey frame BEFORE anything
     // reads it. Nine modules under `src/terrain` index positions as "X/Y
