@@ -10,6 +10,9 @@ import { fileURLToPath } from 'node:url';
 const FIXTURE = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
 test.describe('help overlay', () => {
+  // A cold decode of the fixture can take most of a minute when the whole suite
+  // runs in parallel, and the default 30 s budget then expires before the click.
+  test.slow();
   test('opens from the dock with searchable topics and canonical shortcuts', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('.olv-empty-title')).toBeVisible();

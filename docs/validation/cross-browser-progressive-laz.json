@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "label": "cross-browser-progressive-laz",
+  "specs": [
+    "tests/e2e/localLazProgressive.spec.ts",
+    "tests/e2e/smoke.spec.ts"
+  ],
+  "runs": [
+    {
+      "commit": "49b25e56",
+      "date": "2026-09-15",
+      "role": "advisory, before the last code changes",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "3480251f",
+      "date": "2026-09-16",
+      "role": "advisory, before the Tools tab launcher landed",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "3915e664",
+      "date": "2026-09-16",
+      "role": "final tree, the commit this release branch is prepared on",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    }
+  ],
+  "engines": {
+    "chromium": "153.0.8010.12",
+    "firefox": "155.0",
+    "webkit": "26.6"
+  },
+  "environment": {
+    "playwright": "1.63.0",
+    "os": "macOS 26.5.2 (25F84)",
+    "cpu": "Apple M3 Max"
+  },
+  "note": "Real renderers on every engine; no renderer-absent skip. Firefox and WebKit remain advisory in CI; this record is the human freeze condition for the tag."
+}

@@ -58,6 +58,9 @@ async function pointsShown(page: Page, expected: number): Promise<number> {
 }
 
 test.describe('local LAZ, progressive path', () => {
+  // A cold decode of the fixture can take most of a minute when the whole suite
+  // runs in parallel, and the default 30 s budget then expires before the click.
+  test.slow();
   test('File to worker, ranged reads, chunk pool, preview, final cloud', async ({ page, browserName }) => {
     const r = await openProgressive(page, '&decodePool=on');
 

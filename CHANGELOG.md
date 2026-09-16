@@ -2,6 +2,58 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.9] - 2026-09-16
+
+### Added
+
+- The interactive stockpile volume is integrated over a grid instead of summed over a point sample. Each cell is clipped to the lasso polygon and contributes the median surface within it, registered as `olv.volume.stockpile-area-grid` at method generation 2, replacing `olv.volume.stockpile`. The estimate is live in the lasso toast with its authority on the result: MEASURED on a fully resident source, PREVIEW while it is not, and withheld where the scope does not support a figure. The claim VOL-STOCKPILE stays at E3. The canonical stockpile record beyond the toast is not integrated: the session record, the technical report and the measurement CSV still carry the point-sample cut and fill volume record.
+- A local LAZ opens progressively; an ordinary LAS still reads whole under the memory guard, or through the out-of-core index when it is heavy. The header prefix is read first, a parse worker frames the file from it, a range source reads the chunk table, and chunks decode from a pool, so the file is never resident whole. A stand-in preview cloud is drawn while the decode continues, sampled by one global stride so only the preview budget crosses the worker boundary, the smaller of the render budget and 2,000,000 points. The load telemetry names the file, its bytes, the declared point count, the point format, the chunk count, the stride, the preview budget, and the requested, unique and re-read bytes. Measurements are in `docs/validation/local-laz-open-baseline.json`.
+- A computed TerrainCore is persisted to the Origin Private File System and restored when the same analysis is asked for again. The key is the identity of the analysed input, a SHA-256 over the analysed positions and a SHA-256 over the classification with the core parameters and the method generation, not the identity of the file, and any mismatch recomputes. Only cores that took at least a second are persisted, and the store is bounded to 512 MiB by least-recent use. The benchmark in `docs/validation/terrain-core-opfs-restore-baseline.json` records fresh computes of 6.6 s, 6.2 s and 9.4 s against restore medians of 24 ms, 62 ms and 96 ms at 100k, 500k and 1M points, on Chromium against real OPFS at revision c14cc2c1 plus the benchmark commit, with byte-identical grids. `docs/terrain-intelligence.md` describes the cache.
+- The Tools tab opens with a launcher card that lists Measure, Inspect point, Annotate and Clip box from the action registry with their keys and hints, counts what the session has placed so far, and collapses to a strip while a tool panel is active. Probe stays on the dock only.
+- Help is derived from the action registry, the key binding table and the help catalog, covering 7 topics with search.
+- One authorization backbone sits behind every contour permit, and a granted decision always states its claim set.
+- The Dataset Story is mounted in the Analyse panel when a scan opens, and stays reachable from the palette.
+
+### Changed
+
+- A worker failure falls back to the main thread only for workloads measured as safe: 25,000 points and 1,000 estimated cells for terrain, 1,000,000 points for classification, from `docs/validation/sync-fallback-budget-baseline.json`. Anything larger refuses with a typed error stating that nothing was produced. Both worker clients hold a 120 s reply deadline, and the Analyse panel says when a result was computed on the main thread.
+- Four numeric paths were rewritten for speed and held to byte identity against the code they replace: DTM cell samples are stored contiguously for the sorted aggregations, the ICP target is indexed once and the solver's buffers reused, the voxel accumulator is typed with an open-addressing lookup, and the two square-opening implementations in the morphology step are tested against each other. The timings, including a DTM aggregation median falling from 994 ms to 168 ms, are in `docs/validation/local-laz-open-baseline.json` at the revisions recorded there.
+- `src/main.ts` goes from 5,557 lines to 4,977 and `src/render/Viewer.ts` from 6,423 to 6,223, with the Analyse panel at 2,865. The module graph holds 840 modules and no cycles. The scan route, the Viewer-to-Inspector visual synchronisation and the streaming panel controls each moved into a coordinator over narrow ports, the action registry is split into contributors and built lazily, the Viewer's render core is built in a bootstrap module, and the Analyse panel's raster and relief previews moved into a surface-tiles module. Fan-out on the concentration modules is watched and printed as a table: 112, 77 and 22.
+- The source file is hashed in the indexer worker rather than on the main thread, and the load budget reads a device signal with the voxel reduction bounded.
+- Headings are sentence case, values that carry the result take a focal size, hairlines are fewer, and motion is bounded under a reduced-motion preference.
+- One owner holds the top-centre lane, the project card first and the recommended-view chip after it. Between 768 and 1100 px the dock folds Snapshot, Copy view link and Probe into More. The touch hint yields after the first gesture and is reopenable from the palette. On a phone the results come first and the sheet opens to half height when a run completes.
+- Scientific state reads in one grammar across the interface, a glyph and a word, Export Health rows carry a glyph as a second channel, and the informational tier is styled.
+- Analyse status is announced in a live region, the report verifier traps focus, a disabled export product explains why, ten empty states say what fills them, and the load stages read "Reading metadata" and "Preparing display".
+- A classification run names an assumed unit and reports support rather than a percentage, and the corpus test is gated on the method identity with abort terminating the worker.
+- The module-graph lint refuses to bank a raise and records fan-in, and a deposited release's limitations document keeps the counts it shipped with.
+- The dev-tooling dependency group was bumped, including `@loaders.gl/las` from 4.4.5 to 4.5.1, and the bundler it pulls is pinned.
+
+- Panel rows lead with the result: values take a 12 px size while labels stay at 11 px, the readouts that carry figures use tabular numbers, the dock and the workspace tab strip are concentric with what they contain, floating surfaces share one layered shadow, and a press has one scale.
+- Layer Health folds frame and mount detail behind a disclosure when one layer is loaded, the Export summary keeps a neutral line and moves its caveat to a note, Provenance bounds read label left and figure right with the citation below, Workflow, RGB and Background are collapsible with their open state remembered, and Scan Intelligence replaces three unknown rows with one line.
+- The persistent-core key comment names the store that now exists, and the unreachable register states the passport's remaining conditions as integration rather than canonicalisation.
+
+### Fixed
+
+- A stockpile estimate from a streaming source (COPC, EPT or an out-of-core index) stays at PREVIEW until the source is fully resident. Renderer readiness was read as source completeness.
+- A terrain gather that several layers refuse to join names the shared-frame rule it applied, instead of reporting a bare refusal.
+- A coordinate-system refusal links to the Help topic that explains it, and a shadowed help-overlay key binding is removed.
+- A torn out-of-core index left payload files it no longer named; those are swept.
+- The confidence surface no longer describes itself as calibrated, and the pooled row is dropped.
+- Each reason string names the condition it reports.
+- Scan output states the real analysed basis, withholds a capture type it has no evidence for, and analysis is reachable from the palette.
+- A non-finite digest is refused, the layer table is derived rather than assembled twice, and navigation listeners are released.
+- The Output panel's findings ledger is styled, empty launchers are hidden, and a site KML is written without measurements.
+- The palette's hover follows the pointer only after the pointer moves, and the empty-state tooltip closes when the stage hides.
+
+- A streaming source counts as complete only once its hierarchy is, not once every node known so far is resident. An EPT source opens shallow and deepens afterwards, so the stockpile authority, the profile provenance and the terrain resident-only flag read a coverage answer that can be unknown.
+- Terrain Intelligence Report rows wrap a long label inside its column, a scan name wider than the page shrinks to fit, a verdict reason is printed once, and the stride-scaled ground density warning says the scale reaches the loaded display sample rather than the whole file.
+- Export Health names a strided local file as a display sample instead of reporting an unknown scope, and the Layer Health loading row says which count is declared and which is resident.
+- The top lane is handed on when the project card's fade ends rather than when it begins, with a bounded fallback for a card that reports no transition end, so the recommended-view chip no longer paints beside a card still on screen.
+
+### Evidence
+
+- No product changed evidence level. The register holds 34 claims: 2 at E1, 6 at E2, 9 at E3 and 17 at E4, with none at E5. The stockpile method change does not move VOL-STOCKPILE, which stays at E3 on synthetic known truth with field accuracy unestablished.
+
 ## [0.6.8] - 2026-09-12
 
 ### Added

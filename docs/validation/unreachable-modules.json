@@ -4,9 +4,9 @@
   "whyThisExists": "docs/releases/RELEASE_NOTES_v0.6.6.md declares staged code publicly, under \"Foundations added for a later release, not reachable in v0.6.6\": implemented, tested, and not passed through by the running application, listed so the source is not mistaken for dead code. Nothing enforced that practice. A module staged deliberately in one release and forgotten in the next leave the same tree behind, and a superseded module is indistinguishable from one waiting to be wired. The register is where those cases are told apart.",
   "method": "Breadth-first closure from the module scripts index.html loads, over static value imports, static type-only imports, dynamic import() with a literal specifier, and new Worker(new URL(...)). Dynamic edges are counted, which is why src/lazyChunks.ts is not a leaf: it holds this repository's dynamic import() literals and most lazy features hang off it. Type-only edges are counted too, so a module reached only by an erased import is NOT listed here; that widening keeps the register about modules nothing in the product refers to at all. It is a file-level graph, so it cannot see an unused export, and reachable is not executed.",
   "measuredAt": {
-    "commit": "f787bf12",
-    "modulesUnderSrc": 835,
-    "reachable": 799,
+    "commit": "3915e664",
+    "modulesUnderSrc": 840,
+    "reachable": 804,
     "unreachable": 36,
     "unreachableCountingRuntimeEdgesOnly": 124,
     "note": "The runtime-only figure drops type-only edges and is recorded for context. It is larger because 88 modules are reached from production solely through an `import type`, which is erased at build time. The register is keyed on the wider graph."

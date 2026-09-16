@@ -374,7 +374,7 @@ No. WebGPU is the primary path and it falls back to WebGL 2 automatically.
 
 OpenLiDARViewer started as an experiment: how far can modern browser technology go in making LiDAR and point-cloud data easy to reach? It explores browser-native rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, and local-first workflows. The aim is not to replace full GIS or survey-grade processing, but to give people a fast, approachable way to open, inspect, navigate, measure, and present point clouds. See [`docs/research-notes.md`](docs/research-notes.md).
 
-The current release is **v0.6.8**. The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release records live in [`docs/releases/`](docs/releases/).
+The current release is **v0.6.9**. The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release records live in [`docs/releases/`](docs/releases/).
 
 ### Help test OpenLiDARViewer
 
@@ -387,8 +387,8 @@ The quick report takes five to ten minutes. A longer comparison against a refere
 For reviewers, and anyone who wants to check the claims above rather than take them on trust:
 
 - [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md): install and run the offline test suite from a clean clone in about two minutes.
-- [VALIDATION_REPORT_v0.6.8.md](docs/releases/VALIDATION_REPORT_v0.6.8.md): what this release validates and what it does not. No product changed evidence level this cycle; the register holds 34 claims, 17 of them at E4 and none at E5. One claim was added at E2, CONTOURS-CARTOGRAPHIC, so the set is no longer the one carried in [VALIDATION_REPORT_v0.6.7.md](docs/releases/VALIDATION_REPORT_v0.6.7.md).
-- [KNOWN_LIMITATIONS_v0.6.8.md](docs/releases/KNOWN_LIMITATIONS_v0.6.8.md): the documented limits of this release (no evidence promotion, a registration stack that ships without a user path, touch verified on one engine, five measurement figures with a known basis problem, no cross-CRS reprojection).
+- [VALIDATION_REPORT_v0.6.9.md](docs/releases/VALIDATION_REPORT_v0.6.9.md): what this release validates and what it does not. No product changed evidence level this cycle; the register holds 34 claims, 17 of them at E4 and none at E5. One measurement method changed: the interactive stockpile volume is integrated over an area grid, and VOL-STOCKPILE stays at E3.
+- [KNOWN_LIMITATIONS_v0.6.9.md](docs/releases/KNOWN_LIMITATIONS_v0.6.9.md): the documented limits of this release (no evidence promotion, a stockpile record that is not integrated beyond the toast, a registration stack that ships without a user path, touch verified on one engine in CI, three measurement figures with a known basis problem, no cross-CRS reprojection).
 - [REPRODUCIBILITY.md](REPRODUCIBILITY.md): the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
 - [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md): how to evaluate the artifact without special hardware or private data.
 - [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md): where the test fixtures and streamed sample datasets come from, and how they are licensed.
