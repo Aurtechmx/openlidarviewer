@@ -11,7 +11,7 @@
  *
  * The fix is ownership rather than offsets: the card takes the lane, and hands
  * it on when it leaves. These cases hold that contract. The successor waits,
- * runs once when the card's own timer expires or its × is pressed, and is
+ * runs once after the fade that follows the card's own timer or its ×, and is
  * dropped when something else takes the lane instead.
  */
 
@@ -75,8 +75,12 @@ describe('the project card owns the top-centre lane', () => {
     card.show({ ...INFO, onDismiss: successor });
     runTimers();
     expect(el.classList.contains('olv-visible')).toBe(false);
+    // The card is fading; the lane is handed on when the fade ends, here by
+    // the fallback timer since this DOM reports no transition end.
+    expect(successor).not.toHaveBeenCalled();
+    runTimers();
     expect(successor).toHaveBeenCalledTimes(1);
-    // The timer is spent; nothing fires the successor a second time.
+    // Both timers are spent; nothing fires the successor a second time.
     runTimers();
     expect(successor).toHaveBeenCalledTimes(1);
   });
@@ -88,6 +92,8 @@ describe('the project card owns the top-centre lane', () => {
     const dismiss = el.querySelector('.olv-pc-dismiss');
     expect(dismiss, 'the card renders a dismiss control').not.toBeNull();
     dismiss!.click();
+    expect(successor).not.toHaveBeenCalled();
+    runTimers();
     expect(successor).toHaveBeenCalledTimes(1);
     runTimers();
     expect(successor).toHaveBeenCalledTimes(1);
