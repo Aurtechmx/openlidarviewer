@@ -358,7 +358,7 @@ describe('buildTerrainReportContent — Good + Ready scan', () => {
 });
 
 describe('buildTerrainReportContent — Preview + datum-unknown scan', () => {
-  it('marks every product Preview on a partial stream, each row quoting the verdict reason in full', () => {
+  it('marks every product Preview on a partial stream, leaving the verdict reason to Terrain Assessment', () => {
     // This fixture is a resident-only PARTIAL STREAM (high interpolation, datum
     // unknown). A partial stream is preliminary, so the inspection-class rows
     // are held at caution → Preview (not promoted to a confident Available) and
@@ -371,12 +371,13 @@ describe('buildTerrainReportContent — Preview + datum-unknown scan', () => {
     const c = buildTerrainReportContent(result, OPTS);
     expect(c.products).toHaveLength(6);
     const a = terrainAssessment(result);
+    expect(a.reason).toMatch(/Preliminary/);
+    expect(a.reason).toMatch(/stream/i);
     for (const p of c.products) {
       expect(p.availability).toBe('Preview');
-      // The SAME engine string the panel renders, byte-identical and whole.
-      expect(p.note).toBe(a.reason);
-      expect(p.note).toMatch(/Preliminary/);
-      expect(p.note).toMatch(/stream/i);
+      // The verdict reason is printed once, under Terrain Assessment; a product
+      // row carries a note only when its reason is its own.
+      expect(p.note).toBeUndefined();
     }
   });
 
@@ -385,7 +386,8 @@ describe('buildTerrainReportContent — Preview + datum-unknown scan', () => {
     const c = buildTerrainReportContent(result, OPTS);
     const a = terrainAssessment(result);
     const view = terrainProducts(a, recommendedWorkflows(a, result.quality));
-    expect(c.products.map((p) => p.note)).toEqual(view.map((v) => v.reason));
+    expect(c.products.map((p) => p.note ?? a.reason)).toEqual(view.map((v) => v.reason));
+    expect(c.products.map((p) => p.availability)).toEqual(view.map((v) => v.statusWord));
   });
 
   it('the Executive Summary readiness line names the datum gap', () => {
