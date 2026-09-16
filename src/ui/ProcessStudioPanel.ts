@@ -250,7 +250,10 @@ export class ProcessStudioPanel {
       if (this._opts.canRemediate?.(r.action, pre.tool) !== true) {
         return el('span', { className: 'olv-ps-advice', text: r.label });
       }
-      const button = el('button', { className: 'olv-ps-remedy', text: r.label });
+      const button = el('button', {
+        className: 'olv-ps-remedy', text: r.label,
+        title: 'Fix what is blocking this step, then the step can run.',
+      });
       button.type = 'button';
       button.addEventListener('click', () => {
         button.blur();

@@ -298,7 +298,10 @@ export class ExportPanel {
     // The note is a sibling, not a tail on the summary line: the neutral
     // "what you'll get" facts stay readable while the caveat keeps its level.
     this._summaryNote = el('p', { className: 'olv-export-summary-note olv-hidden', text: '' });
-    this._exportBtn = el('button', { className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export' }) as HTMLButtonElement;
+    this._exportBtn = el('button', {
+      className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export',
+      title: 'Write the open scan in the chosen format. An active clip or class filter limits what is written.',
+    }) as HTMLButtonElement;
     this._exportBtn.addEventListener('click', () => void this._export());
     this._status = el('p', { className: 'olv-export-status', text: 'Export the open scan to another format.' });
     // The collapsed "Products" lane — derived artifacts (measurements today;
@@ -629,6 +632,7 @@ export class ExportPanel {
             count > 0,
             () => this._cb.exportMeasurements?.(fmt),
             NO_MEASUREMENTS_HINT,
+            `Save the measurements you placed as ${label}.`,
           ),
         );
       });
@@ -641,6 +645,7 @@ export class ExportPanel {
           count > 0,
           () => this._cb.exportIntegrityReport?.(),
           NO_MEASUREMENTS_HINT,
+          'Save the measurements with a checksum, so a later edit to the file shows up.',
         );
         btn.setAttribute('data-testid', 'export-integrity-report');
         measureRow.append(btn);
@@ -689,6 +694,7 @@ export class ExportPanel {
           status.ready,
           () => this._cb.exportKml?.(),
           status.reason || 'Needs a georeferenced scan.',
+          'Open the scan outline, notes and measurements in Google Earth.',
         ),
       );
       mapHints.push(
@@ -704,6 +710,7 @@ export class ExportPanel {
         status.ready,
         () => this._cb.exportScanFootprint?.(),
         status.reason || 'Needs a scan with a known coordinate system.',
+        'Save the ground area the scan covers, as one polygon for a map.',
       );
       btn.setAttribute('data-testid', 'export-scan-footprint');
       mapRow.append(btn);
@@ -807,6 +814,7 @@ export class ExportPanel {
     enabled: boolean,
     onClick: () => void,
     reason?: string,
+    enabledTitle?: string,
   ): HTMLButtonElement {
     const btn = el('button', {
       className: 'olv-bc-pill olv-export-product-btn',
@@ -817,7 +825,11 @@ export class ExportPanel {
     // A disabled product says WHY on hover: the group hint below the row carries
     // the same sentence, but a user who reaches for the button first would
     // otherwise get an inert control with no explanation.
+    // An enabled product says what it writes, in the same place the disabled
+    // one says why it cannot: the group hint below reads as a caption for the
+    // row, so a reader reaching for one button had nothing under the pointer.
     if (!enabled && reason) btn.title = reason;
+    else if (enabled && enabledTitle) btn.title = enabledTitle;
     btn.addEventListener('click', onClick);
     return btn;
   }

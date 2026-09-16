@@ -21,6 +21,7 @@
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { ContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
 import { pdfInfoDate } from '../../pdfInfoDate';
+import { winAnsiSafe } from '../../winAnsiText';
 
 const INK = rgb(0.12, 0.14, 0.18);
 const DIM = rgb(0.42, 0.46, 0.52);
@@ -33,13 +34,7 @@ const PAGE_H = 792;
 const MARGIN = 54;
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
-function safe(s: string): string {
-  const map: Record<string, string> = {
-    '×': 'x', '—': '-', '–': '-', '•': '-', '’': "'", '“': '"', '”': '"',
-    '…': '...', '°': ' deg', '≈': '~', '±': '+/-', '²': '2',
-  };
-  return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => map[ch] ?? '?');
-}
+const safe = winAnsiSafe;
 
 /**
  * Greedy word-wrap a string to a maximum width using the embedded font's

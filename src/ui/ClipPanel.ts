@@ -97,7 +97,10 @@ export class ClipPanel {
       );
     }
 
-    const fit = el('button', { className: 'olv-bc-pill', type: 'button', text: 'Fit to scan' }) as HTMLButtonElement;
+    const fit = el('button', {
+      className: 'olv-bc-pill', type: 'button', text: 'Fit to scan',
+      title: 'Reset the box to the full extent of the open scan.',
+    }) as HTMLButtonElement;
     fit.addEventListener('click', () => this._fit());
 
     this._readout = el('p', { className: 'olv-export-fullres-hint', text: '' });

@@ -43,6 +43,7 @@ import {
   type Box,
 } from '../../terrain/contour/mapSheetLayout';
 import { evidenceNote, evidenceStatus } from '../../validation/exportEvidenceNote';
+import { winAnsiSafe } from '../../winAnsiText';
 
 /**
  * The claim the map sheet stands on (§19). A printed contour map sheet is the
@@ -360,12 +361,7 @@ export function mapLinearUnitLabel(linearUnit: MapSheetInput['linearUnit']): str
 }
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
-function safe(s: string): string {
-  const map: Record<string, string> = {
-    '×': 'x', '—': '-', '–': '-', '•': '-', '’': "'", '“': '"', '”': '"', '…': '...', '°': ' deg',
-  };
-  return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => map[ch] ?? '?');
-}
+const safe = winAnsiSafe;
 
 /** Build the map-sheet PDF and return its bytes. */
 export async function buildMapSheetPdf(input: MapSheetInput): Promise<Uint8Array> {
@@ -501,7 +497,7 @@ function drawPurposeAppendix(
   else geometry = 'none';
   const generalization =
     purpose.generalizeToleranceCells > 0
-      ? `e = ${purpose.generalizeToleranceCells} x cell (Douglas-Peucker tolerance)`
+      ? `tolerance ${purpose.generalizeToleranceCells} x cell (Douglas-Peucker)`
       : 'exact - no generalization';
   const settings: Array<[string, string]> = [
     ['Geometry', geometry],

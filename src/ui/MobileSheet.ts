@@ -52,10 +52,10 @@ export type SheetDetent = 'peek' | 'half' | 'full';
 /** Detents low → high; index order is used for fling stepping + clamping. */
 export const DETENTS: readonly SheetDetent[] = ['peek', 'half', 'full'];
 
-const TABS: ReadonlyArray<{ id: MobileTab; label: string }> = [
-  { id: 'view', label: 'View' },
-  { id: 'analyse', label: 'Analyse' },
-  { id: 'layers', label: 'Layers' },
+const TABS: ReadonlyArray<{ id: MobileTab; label: string; title: string }> = [
+  { id: 'view', label: 'View', title: 'How the scan is drawn: colour, quality, what is on screen.' },
+  { id: 'analyse', label: 'Analyse', title: 'Measure, run terrain analysis, and export what it produces.' },
+  { id: 'layers', label: 'Layers', title: 'The scans that are open and the classes they carry.' },
 ];
 
 /** Movement (px) below which a pointer gesture counts as a tap, not a drag. */
@@ -169,8 +169,8 @@ export class MobileSheet {
     const tablist = el('div', { className: 'olv-msheet-tabs' });
     tablist.setAttribute('role', 'tablist');
     tablist.setAttribute('aria-label', 'Panel group');
-    for (const { id, label } of TABS) {
-      const tab = el('button', { className: 'olv-msheet-tab', text: label, type: 'button' });
+    for (const { id, label, title } of TABS) {
+      const tab = el('button', { className: 'olv-msheet-tab', text: label, type: 'button', title });
       tab.setAttribute('role', 'tab');
       tab.dataset.tab = id;
       tab.id = `olv-msheet-tab-${id}`;

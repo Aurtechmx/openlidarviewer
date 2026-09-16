@@ -35,6 +35,7 @@ import {
 } from '../../terrain/export/terrainReportContent';
 import { NO_RESOLVED_VERTICAL_SCALE } from '../../terrain/export/exportProvenance';
 import { pdfInfoDate } from '../../pdfInfoDate';
+import { winAnsiSafe } from '../../winAnsiText';
 
 const INK = rgb(0.12, 0.14, 0.18);
 const DIM = rgb(0.42, 0.46, 0.52);
@@ -63,13 +64,7 @@ const NOTE_SIZE = 8.5;
 const NOTE_LEAD = 11;
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
-function safe(s: string): string {
-  const map: Record<string, string> = {
-    '×': 'x', '—': '-', '–': '-', '•': '-', '’': "'", '“': '"', '”': '"', '…': '...',
-    '²': '2', '³': '3', '°': ' deg', '≈': '~', '→': '->', '✓': '[OK]', '⚠': '[!]', '✕': '[X]',
-  };
-  return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => map[ch] ?? '?');
-}
+const safe = winAnsiSafe;
 
 /** True when the argument is a pre-built content object (vs. a raw result). */
 function isContent(x: unknown): x is TerrainReportContent {

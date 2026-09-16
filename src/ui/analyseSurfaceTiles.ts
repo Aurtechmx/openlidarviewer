@@ -186,7 +186,10 @@ export class SurfaceTiles {
     const readout = this._sampleReadout();
     this._attachCoverageSampler(canvas, wrap.crosshair, cols, rows, readout);
 
-    const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
+    const dl = el('button', {
+      className: 'olv-analyse-surface-dl', text: 'Export PNG',
+      title: 'Save this tile as a PNG image at its own cell grid. Not a georeferenced raster.',
+    });
     dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'coverage'));
     tile.append(this._tileFooter(readout, dl));
 
@@ -326,7 +329,10 @@ export class SurfaceTiles {
     const readout = this._sampleReadout();
     this._attachSampler(canvas, wrap.crosshair, cols, rows, readout);
 
-    const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
+    const dl = el('button', {
+      className: 'olv-analyse-surface-dl', text: 'Export PNG',
+      title: 'Save this tile as a PNG image at its own cell grid. Not a georeferenced raster.',
+    });
     dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, opts.filename));
     tile.append(this._tileFooter(readout, dl));
     return tile;
@@ -537,7 +543,10 @@ export class SurfaceTiles {
     const readout = this._sampleReadout();
     this._attachSampler(canvas, wrap.crosshair, cols, rows, readout);
 
-    const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
+    const dl = el('button', {
+      className: 'olv-analyse-surface-dl', text: 'Export PNG',
+      title: 'Save this tile as a PNG image at its own cell grid. Not a georeferenced raster.',
+    });
     dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'relief'));
     tile.append(this._tileFooter(readout, dl));
 

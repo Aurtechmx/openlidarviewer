@@ -36,6 +36,7 @@ import { describeAnnotationGroups } from '../render/annotate/annotationClusterin
 import type { AnnotationType } from '../render/annotate/types';
 import type { FindingTier, ReportFinding, ReportInspectionSummary } from './ReportFindings';
 import { pdfInfoDate } from '../pdfInfoDate';
+import { WIN_ANSI_TRANSLITERATIONS } from '../winAnsiText';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants — letter portrait, 0.6 inch margins.
@@ -1345,7 +1346,11 @@ export function sanitiseForPdf(input: string): string {
       // €, ‰, ™, Š/š, Ž/ž, Œ/œ, Ÿ, ƒ, †, ‡, ‹›, ‚„, ˆ, ˜) — is
       // replaced with '?'. The section keeps rendering and the
       // substitution stays visible so the user can clean up the source.
-      .replace(/[^\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g, '?')
+      // Known symbols (>=, arrows, Greek used in formulas) transliterate to
+      // their ASCII stand-ins first, so a warning quoting a threshold reads
+      // as text rather than as a question mark.
+      .replace(/[^\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g,
+        (ch) => WIN_ANSI_TRANSLITERATIONS[ch] ?? '?')
   );
 }
 

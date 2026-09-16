@@ -345,6 +345,7 @@ export class StreamingPanel {
       const chip = el('button', {
         className: 'olv-chip',
         text: quality[0].toUpperCase() + quality.slice(1),
+        title: 'How many points to keep on screen while you move. Higher looks better and loads more.',
       });
       chip.addEventListener('click', () => {
         this._selectQuality(quality);
@@ -353,7 +354,10 @@ export class StreamingPanel {
       this._qualityRow.append(chip);
     }
 
-    this._pause = el('button', { className: 'olv-streaming-btn', text: 'Pause' });
+    this._pause = el('button', {
+      className: 'olv-streaming-btn', text: 'Pause',
+      title: 'Stop fetching new parts of the scan. What is already on screen stays.',
+    });
     this._pause.addEventListener('click', () => {
       this._paused = !this._paused;
       this._pause.textContent = this._paused ? 'Resume' : 'Pause';
@@ -365,6 +369,7 @@ export class StreamingPanel {
     const clearCache = el('button', {
       className: 'olv-streaming-btn olv-streaming-btn-danger',
       text: 'Clear cache',
+      title: 'Delete the copies kept on this device. The scan reloads from its source next time.',
     });
     clearCache.addEventListener('click', () => this._callbacks.onClearCache());
 
@@ -374,7 +379,10 @@ export class StreamingPanel {
     // grades its density, vertical extent, and footprint coverage — with an
     // honest "exact vs sampled at N%" label so the figure never implies a
     // completeness it doesn't have.
-    this._gradeBtn = el('button', { className: 'olv-streaming-btn', text: GRADE_LABEL });
+    this._gradeBtn = el('button', {
+      className: 'olv-streaming-btn', text: GRADE_LABEL,
+      title: 'Sample the whole scan, not just what is on screen, and report its density and extent.',
+    });
     // One button, two roles: it starts the grade, and while a grade runs it
     // becomes a Cancel control. Branch on the running flag so a single click
     // handler serves both without a second button.

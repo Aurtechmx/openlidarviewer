@@ -80,8 +80,11 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     return b;
   };
   const armBtn = mkBtn('Reclassify (lasso)', 'reclass-arm', 'olv-reclass-go');
+  armBtn.title = 'Draw around points to give them the class chosen above. The source file is not changed.';
   const undoBtn = mkBtn('Undo', 'reclass-undo');
+  undoBtn.title = 'Take back the last class change.';
   const redoBtn = mkBtn('Redo', 'reclass-redo');
+  redoBtn.title = 'Put back the change you just undid.';
   // Primary action: derive a whole-scan classification (heuristic). Only built
   // when the host wires a handler, so the panel degrades cleanly without it.
   const autoBtn = opts.onAutoClassify

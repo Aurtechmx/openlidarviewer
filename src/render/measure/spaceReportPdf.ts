@@ -26,6 +26,7 @@ import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
 import { pdfInfoDate } from '../../pdfInfoDate';
+import { winAnsiSafe } from '../../winAnsiText';
 
 export interface SpaceReportPdfInput {
   readonly space: SpaceMetrics | null;
@@ -54,13 +55,7 @@ const WARN = rgb(0.54, 0.18, 0.11);
 const WHITE = rgb(1, 1, 1);
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
-function safe(s: string): string {
-  const map: Record<string, string> = {
-    '×': 'x', '—': '-', '–': '-', '•': '-', '’': "'", '“': '"', '”': '"', '…': '...',
-    '²': '2', '³': '3', '°': ' deg', '→': '->',
-  };
-  return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => map[ch] ?? '?');
-}
+const safe = winAnsiSafe;
 
 /** Build the Space / Object report PDF and return its bytes. */
 export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<Uint8Array> {

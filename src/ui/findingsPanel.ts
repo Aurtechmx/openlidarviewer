@@ -69,6 +69,7 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
   exportBtn.title = 'Export the whole ledger as the tamper-evident integrity report (JSON, SHA-256 digest).';
   const clearBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-clear', text: 'Clear all' });
   clearBtn.type = 'button';
+  clearBtn.title = 'Empty the findings ledger for this session. Exported reports are unaffected.';
   const status = el('div', { className: 'olv-findings-status', text: '' });
   actions.append(addBtn, exportBtn, clearBtn);
 

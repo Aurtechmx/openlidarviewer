@@ -36,10 +36,14 @@ export interface CellMetricsSummary {
   /** Mean local completeness (0..1) over measured cells. */
   readonly meanCompleteness: number;
   /**
-   * Fraction of measured cells within `edgeThresholdCells` of the raster
-   * boundary. Boundary proximity of MEASURED cells (they have real returns,
-   * just the least neighbour support). Not the dtmCellStatus 'edgeRisk'
-   * vocabulary, which tallies interpolated cells far from any measurement.
+   * Fraction of measured cells within `edgeThresholdCells` of the data
+   * boundary, where the distance is to the nearest cell WITHOUT a measurement
+   * or to the grid edge, whichever is closer. On a scattered ground mask most
+   * measured cells sit beside a hole, so this runs high while the grid border
+   * itself holds few cells. Boundary proximity of MEASURED cells (they have
+   * real returns, just the least neighbour support). Not the dtmCellStatus
+   * 'edgeRisk' vocabulary, which tallies interpolated cells far from any
+   * measurement.
    */
   readonly boundaryMeasuredRatio: number;
 }
@@ -47,7 +51,7 @@ export interface CellMetricsSummary {
 export interface CellMetricsParams {
   /** Neighbourhood radius (cells) for local completeness. Default 1 (3×3). */
   readonly completenessRadius?: number;
-  /** Edge-distance (cells) at/below which a measured cell counts as boundary-proximate. Default 2. */
+  /** Distance in cells to the nearest unmeasured cell at/below which a measured cell counts as boundary-proximate. Default 2. */
   readonly edgeThresholdCells?: number;
   /**
    * Metres per source horizontal unit, so point densities read as genuine

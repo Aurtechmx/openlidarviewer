@@ -401,7 +401,7 @@ describe('provenance consistency — export-ready run', () => {
     // The user-visible rows are sourced from it too.
     expect(reportRow(report, 'Dataset Statistics', 'Horizontal CRS')).toBe(prov.horizontalCrs);
     expect(reportRow(report, 'Dataset Statistics', 'Vertical datum')).toBe(prov.verticalDatum);
-    expect(reportRow(report, 'Dataset Statistics', 'Coverage mode')).toBe(prov.coverageMode);
+    expect(reportRow(report, 'Dataset Statistics', 'Coverage mode (of the analysed points)')).toBe(prov.coverageMode);
     expect(reportRow(report, 'Dataset Statistics', 'Software')).toBe(`${prov.software} ${prov.softwareVersion}`);
     expect(reportRow(report, 'Terrain Assessment', 'Surface quality')).toBe(prov.surfaceQuality);
     expect(reportRow(report, 'Terrain Assessment', 'Export readiness')).toBe(prov.exportReadiness);

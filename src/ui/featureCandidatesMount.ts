@@ -150,6 +150,7 @@ export function mountFeatureCandidates(
   const button = el('button', {
     className: 'olv-feature-launcher-action',
     text: 'Extract candidates',
+    title: 'Group the classified points into candidate footprints for review. Nothing is accepted until you say so.',
   });
   button.type = 'button';
   button.addEventListener('click', () => {
@@ -333,6 +334,7 @@ function buildFootprintExport(
   const button = el('button', {
     className: 'olv-feature-export-action',
     text: 'Export accepted (GeoJSON)',
+    title: 'Write only the candidates you accepted, as GeoJSON in the scan coordinate reference system.',
   });
   button.type = 'button';
   button.title = 'Download the ACCEPTED building-footprint candidates as RFC 7946 GeoJSON. Derived candidates, not surveyed outlines.';
