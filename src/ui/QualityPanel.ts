@@ -133,13 +133,19 @@ export class QualityPanel {
     this._autoInput = auto.input;
 
     for (const preset of STREAMING_PRESETS) {
-      const chip = el('button', { className: 'olv-chip', text: presetLabel(preset) }) as HTMLButtonElement;
+      const chip = el('button', {
+        className: 'olv-chip', text: presetLabel(preset),
+        title: 'Pin how much of a streamed scan is drawn. Turns off the automatic setting.',
+      }) as HTMLButtonElement;
       chip.type = 'button';
       chip.addEventListener('click', () => this._pin({ streamingQuality: preset }));
       this._presetChips.set(preset, chip);
     }
     for (const ratio of PIXEL_RATIO_CHOICES) {
-      const chip = el('button', { className: 'olv-chip', text: `${ratio}×` }) as HTMLButtonElement;
+      const chip = el('button', {
+        className: 'olv-chip', text: `${ratio}×`,
+        title: 'How sharply the view is drawn. Higher is crisper on a retina screen and slower.',
+      }) as HTMLButtonElement;
       chip.type = 'button';
       chip.addEventListener('click', () => this._pin({ maxPixelRatio: ratio }));
       this._ratioChips.set(ratio, chip);

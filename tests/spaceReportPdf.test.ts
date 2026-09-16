@@ -123,6 +123,31 @@ describe('buildSpaceReportPdf', () => {
     expect(ops.some((o) => o.text.startsWith('Suitability:'))).toBe(true);
   });
 
+  it('keeps the notes off the footer, breaking to a second page instead', async () => {
+    // A room scan with an embedded plan and four notes ran the last two notes
+    // straight through the provenance stamp: the body had no floor, and the
+    // footer is anchored to the bottom margin. The notes now break to a new
+    // page, and nothing in the body draws into the footer band.
+    const pos = room();
+    const shape = classifyScanShape(pos);
+    const space = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior', hasRgb: true });
+    const floorPlan = extractFloorPlan(pos, { upAxis: shape.up });
+    const bytes = await buildSpaceReportPdf({
+      space, name: 'Warehouse bay', softwareVersion: '0.6.9', metricVersion: 'v0.4.4', floorPlan,
+    });
+    const ops = await extractTextOps(bytes);
+    const last = Math.max(...ops.map((o) => o.page));
+    expect(last).toBeGreaterThan(0); // the notes did not fit on one page
+    const stamp = ops.filter((o) => o.size === 7.5 && o.page === last);
+    expect(stamp.length).toBeGreaterThan(0);
+    const footerTop = Math.max(...stamp.map((o) => o.y));
+    // Every note (8.5 pt body text) sits above the footer band on its page.
+    for (const note of ops.filter((o) => o.size === 8.5)) {
+      if (note.page !== last) continue;
+      expect(note.y, note.text).toBeGreaterThan(footerTop + 8);
+    }
+  });
+
   it('builds the imperial-unit interior report with rooms in the embed', async () => {
     // v0.4.6: the embedded plan's dimension line follows the caller's unit
     // system, and segmented rooms draw their labels — smoke both paths in one

@@ -65,10 +65,15 @@ TOUCH_STAMP="$(epoch_fmt +%Y%m%d%H%M.%S)"
 # Zip a directory deterministically: every entry stamped at SOURCE_DATE_EPOCH,
 # entries added in a stable byte-order (LC_ALL=C), and -X to drop the extra
 # platform metadata that otherwise varies per machine.
+# Directories are listed alongside files. Enumerating `-type f` alone stored no
+# directory entries at all, so the 755 modes set above were never recorded: a
+# host extracting under a restrictive umask created assets/ as 700 and served
+# 403s for every hashed bundle inside it, which is the exact failure this script
+# says it prevents. Sorted together so the archive stays byte-reproducible.
 zip_deterministic() {
   src="$1"; out="$2"
   find "$src" -exec touch -h -t "$TOUCH_STAMP" {} + 2>/dev/null || true
-  ( cd "$src" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 zip -qX "$out" )
+  ( cd "$src" && find . \( -type f -o -type d \) ! -name . -print0 | LC_ALL=C sort -z | xargs -0 zip -qX "$out" )
 }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

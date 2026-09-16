@@ -771,7 +771,7 @@ describe('buildTerrainReportContent — every row names its basis', () => {
 
   it('#12 prints Coverage mode once and no constant Export note', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
-    const all = c.sections.flatMap((s) => s.rows.filter((r) => r.label === 'Coverage mode'));
+    const all = c.sections.flatMap((s) => s.rows.filter((r) => r.label === 'Grid extent walked'));
     expect(all).toHaveLength(1);
     expect(labels(c, 'Terrain Assessment')).not.toContain('Export note');
     expect(allValues(c)).not.toMatch(/ready to hand off/);

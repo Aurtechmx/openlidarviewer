@@ -36,6 +36,8 @@ export type WorkspaceMode = 'data' | 'work' | 'analyse' | 'output';
 interface ModeDef {
   readonly id: WorkspaceMode;
   readonly label: string;
+  /** Hover text saying what the tab holds, so the four labels are not a guess. */
+  readonly title: string;
 }
 
 /**
@@ -51,10 +53,10 @@ interface ModeDef {
  * gain, so `work` still means the Tools tab and `output` the Export tab.
  */
 const MODES: readonly ModeDef[] = [
-  { id: 'data', label: 'Data' },
-  { id: 'work', label: 'Tools' },
-  { id: 'analyse', label: 'Analyse' },
-  { id: 'output', label: 'Export' },
+  { id: 'data', label: 'Data', title: 'What the scan is: layers, their health, and the classes it carries.' },
+  { id: 'work', label: 'Tools', title: 'What you do to it: measure, inspect, annotate, clip.' },
+  { id: 'analyse', label: 'Analyse', title: 'Terrain analysis, contours and the products a run yields.' },
+  { id: 'output', label: 'Export', title: 'Write the scan, the rasters, the reports and the session out.' },
 ];
 
 const MODE_IDS: readonly WorkspaceMode[] = MODES.map((m) => m.id);
@@ -143,8 +145,8 @@ export class DesktopWorkspace {
     const tablist = el('div', { className: 'olv-ws-tabs' });
     tablist.setAttribute('role', 'tablist');
     tablist.setAttribute('aria-label', 'Workspace');
-    for (const { id, label } of MODES) {
-      const tab = el('button', { className: 'olv-ws-tab', text: label, type: 'button' });
+    for (const { id, label, title } of MODES) {
+      const tab = el('button', { className: 'olv-ws-tab', text: label, type: 'button', title });
       tab.setAttribute('role', 'tab');
       tab.dataset.mode = id;
       tab.id = `olv-ws-tab-${id}`;

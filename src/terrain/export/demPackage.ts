@@ -211,7 +211,10 @@ export interface DemReadmeOptions {
 /** Map a coverage mode to a one-line plain-English label. */
 function coverageLabel(mode: string): string {
   switch (mode) {
-    case 'full': return 'full (every source point participated)';
+    // "every point the analysis was handed", not every point in the file: on a
+    // display sample those differ, and the Analysed basis line below says by
+    // how much. The old wording read as a claim about the whole file.
+    case 'full': return 'full (every point handed to the analysis participated)';
     case 'resident-only': return 'resident-only (streaming scan — only resident nodes were walked)';
     case 'sampled': return 'sampled (a stride / random subset was analysed under budget)';
     default: return mode || 'unknown';

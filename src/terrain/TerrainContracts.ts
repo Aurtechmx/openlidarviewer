@@ -106,7 +106,7 @@ export interface TerrainMetric {
 
 /** How thoroughly the analysis walked the source cloud. */
 export type TerrainCoverageMode =
-  | 'full' // every source point participated
+  | 'full' // every point handed to the analysis participated (a sample, when the read was one)
   | 'resident-only' // streaming scan; only resident nodes were walked
   | 'sampled'; // budget triggered a stride / random sample
 

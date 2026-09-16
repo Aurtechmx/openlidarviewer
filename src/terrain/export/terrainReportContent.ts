@@ -345,7 +345,15 @@ export function buildTerrainReportContent(
         value: density != null ? `${density.toFixed(1)} pts/m²` : DASH,
       },
       ...intelligenceRows,
-      { label: 'Coverage mode', value: provenance.coverageMode },
+      {
+        // This is the GRID's extent, not the read: a strided read still builds
+        // a full grid, and the row below says which points were read. The bare
+        // "Coverage mode / full" label read as a claim about the file and sat
+        // directly above a basis line that said otherwise. Reads gridExtent,
+        // the live field; `coverageMode` is its deprecated alias.
+        label: 'Grid extent walked',
+        value: provenance.gridExtent,
+      },
       { label: 'Analysed basis', value: provenance.analysedBasisLine },
       { label: 'Horizontal CRS', value: provenance.horizontalCrs },
       { label: 'Vertical datum', value: provenance.verticalDatum },
@@ -411,7 +419,16 @@ export function buildTerrainReportContent(
         label: 'Interpolated (of covered surface)',
         value: fmtPct(q?.interpolatedOfSurfaceRatio),
       },
-      { label: 'Edge risk', value: fmtPct(q?.edgeRiskRatio) },
+      { label: 'Edge risk (interpolated far from any measurement)', value: fmtPct(q?.edgeRiskRatio) },
+      {
+        // The verdict sentence quotes this share when it is high, so the sheet
+        // prints it too. Without the row a reader met an unexplained 88% in the
+        // verdict beside a 7% "Edge risk" and had no way to see that the two
+        // count different cells: measured cells near the boundary here,
+        // interpolated cells far from any measurement above.
+        label: 'Measured cells near the data boundary',
+        value: fmtPct(result.cellMetrics?.boundaryMeasuredRatio),
+      },
       {
         // Not the same quantity as the "Ground visibility" bucket in Dataset
         // Statistics, which is a categorical read. groundPointRatio is

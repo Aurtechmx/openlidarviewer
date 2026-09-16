@@ -437,8 +437,10 @@ function assemble(
  * report makes NO cross-validation claim and states what its figures actually
  * are. Registering a claim for these products is the way to change this line.
  */
+// The footer prints this under an "Evidence" key, so the sentence does not
+// repeat the word: the line read "Evidence   Evidence: unvalidated ...".
 export const SPACE_REPORT_EVIDENCE_NOTE =
-  'Evidence: unvalidated envelope estimate. The areas, volumes, angular ' +
+  'Unvalidated envelope estimate. The areas, volumes, angular ' +
   'coverage and density here are bounding-envelope and grid estimates from the ' +
   'loaded point sample. No registered claim covers them, so they carry no ' +
   'cross-implementation and no field validation. Do not present this as a ' +

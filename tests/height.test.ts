@@ -15,6 +15,7 @@ import {
   heightLabel,
   heightReferenceNote,
   makeHeight,
+  resolveVerticalEpsg,
   verticalReferenceFromDatum,
 } from '../src/geo/height';
 
@@ -80,6 +81,50 @@ describe('verticalReferenceFromDatum', () => {
     expect(verticalReferenceFromDatum({ verticalDatum: 'EGM2008 height' })).toBe('orthometric');
   });
 
+  // A WKT citation carries the datum's qualifiers. "NAVD88 height - Geoid12B (m)"
+  // is what a USGS 3DEP tile states and what the terrain report prints for it;
+  // matching whole strings only, it read as unknown, so a profile sheet said
+  // "datum unknown" for a scan whose report named the datum. The name must open
+  // the string and end on a word boundary, so an unrelated datum is never
+  // adopted from a mention.
+  test.each([
+    ['NAVD88 height - Geoid12B (m)', 'orthometric'],
+    ['NAVD88 height (ftUS)', 'orthometric'],
+    ['MSL depth (m)', 'depth'],
+    ['NAVD88x local adjustment', 'unknown'],
+    ['Local datum referenced to NAVD88', 'unknown'],
+    // Qualifiers that name a DIFFERENT vertical reference derived from the
+    // datum, or that declare doubt, leave it unresolved: accepting them would
+    // assert a geodetic identity the source never stated, and would disagree
+    // with the compatibility key, which reads the same string.
+    ['NAVD88 local adjustment', 'unknown'],
+    ['NAVD88-derived local datum', 'unknown'],
+    ['NAVD88? uncertain', 'unknown'],
+    ['NAVD88 approximate', 'unknown'],
+    ['NAVD88 height, adjusted locally', 'unknown'],
+    ['NAVD88x local adjustment', 'unknown'],
+    ['Local datum referenced to NAVD88', 'unknown'],
+    // An axis that contradicts its own datum is refused, not reinterpreted.
+    ['NAVD88 depth', 'unknown'],
+  ] as const)('a qualified datum name resolves: %s', (verticalDatum, expected) => {
+    expect(verticalReferenceFromDatum({ verticalDatum })).toBe(expected);
+  });
+
+  test('the compatibility key and the height classification read a name the same way', async () => {
+    const { verticalReferenceKey } = await import('../src/model/layerCompatibility');
+    for (const verticalDatum of [
+      'NAVD88 height - Geoid12B (m)',
+      'NAVD88 local adjustment',
+      'MSL depth (m)',
+      'Site benchmark 1972',
+    ]) {
+      const resolved = resolveVerticalEpsg({ verticalDatum });
+      expect(verticalReferenceKey({ id: 'layer-a', verticalDatum }), verticalDatum).toBe(
+        resolved !== undefined ? `epsg:${resolved}` : `name:${verticalDatum.toLowerCase()}`,
+      );
+    }
+  });
+
   test('the authoritative EPSG wins over the name', () => {
     expect(
       verticalReferenceFromDatum({ verticalEpsg: 5715, verticalDatum: 'NAVD88' }),
@@ -123,8 +168,12 @@ describe('heightLabel', () => {
 describe('heightReferenceNote', () => {
   test('the unknown note states the consequence rather than implying a datum', () => {
     const note = heightReferenceNote('unknown');
-    expect(note.toLowerCase()).toContain('no vertical datum');
+    // "not known here" rather than "not declared": the reference also reads
+    // unknown for a datum the source DID declare under a name this build does
+    // not classify, and the note is printed for both.
+    expect(note.toLowerCase()).toContain('not known here');
     expect(note.toLowerCase()).toContain('not tied');
+    expect(note.toLowerCase()).not.toMatch(/sea.level|ellipsoid/);
   });
 
   test('the ellipsoidal note warns it is not a sea-level elevation', () => {

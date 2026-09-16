@@ -396,7 +396,10 @@ export class BatchConverter {
       // In that case steer to the per-file Download buttons below instead.
       const z = assessZipDownload(this._produced.map((p) => ({ name: p.filename, bytes: p.bytes })));
       if (z.ok) {
-        const all = el('button', { className: 'olv-bc-dlall', text: `Download all (.zip)`, type: 'button' });
+        const all = el('button', {
+          className: 'olv-bc-dlall', text: `Download all (.zip)`, type: 'button',
+          title: 'Download every converted file in one zip archive.',
+        });
         all.addEventListener('click', () => this._downloadZip());
         header.append(all);
       } else {
@@ -420,7 +423,10 @@ export class BatchConverter {
         el('span', { className: 'olv-bc-row-meta', text: ok ? `${r.report.pointCount.toLocaleString()} pts · ${r.report.crsNote}` : 'failed' }),
       );
       if (ok && r.file) {
-        const dl = el('button', { className: 'olv-bc-row-dl', text: 'Download', type: 'button' });
+        const dl = el('button', {
+          className: 'olv-bc-row-dl', text: 'Download', type: 'button',
+          title: 'Download this converted file on its own.',
+        });
         dl.addEventListener('click', () => downloadBytes(r.file!.filename, r.file!.bytes, r.file!.mime));
         top.append(dl);
       }

@@ -26,6 +26,7 @@ import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
 import { pdfInfoDate } from '../../pdfInfoDate';
+import { winAnsiSafe } from '../../winAnsiText';
 
 export interface SpaceReportPdfInput {
   readonly space: SpaceMetrics | null;
@@ -54,13 +55,7 @@ const WARN = rgb(0.54, 0.18, 0.11);
 const WHITE = rgb(1, 1, 1);
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
-function safe(s: string): string {
-  const map: Record<string, string> = {
-    '×': 'x', '—': '-', '–': '-', '•': '-', '’': "'", '“': '"', '”': '"', '…': '...',
-    '²': '2', '³': '3', '°': ' deg', '→': '->',
-  };
-  return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => map[ch] ?? '?');
-}
+const safe = winAnsiSafe;
 
 /** Build the Space / Object report PDF and return its bytes. */
 export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<Uint8Array> {
@@ -84,14 +79,40 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
   const [PW, PH] = [612, 792]; // US Letter portrait
-  const page = doc.addPage([PW, PH]);
+  let page = doc.addPage([PW, PH]);
   const M = 48;
 
   const text = (s: string, x: number, y: number, sz: number, f: PDFFont = font, c = INK): void => {
     page.drawText(safe(s), { x, y, size: sz, font: f, color: c });
   };
 
+  // The footer is bottom-anchored, so the body needs a floor or it draws over
+  // it. A room scan with a floor plan and four notes did exactly that: the last
+  // two notes landed on the provenance stamp. The footer's height depends only
+  // on the content, so it is measured before anything is drawn, and the body
+  // breaks to a new page rather than crossing it.
+  const footerW = PW - 2 * M;
+  const stampIndent = 24;
+  const stamp = content.provenanceLines.flatMap((line) =>
+    wrapStampLine(font, line, footerW, 7.5, stampIndent).map((seg, i) => ({
+      seg,
+      x: i === 0 ? M : M + stampIndent,
+    })),
+  );
+  const note = wrapStampLine(bold, content.provenance.notSurveyGrade, footerW, 8, 0);
+  const noteTop = M - 4 + (note.length - 1) * 11;
+  const fy0 = noteTop + 16 + (stamp.length - 1) * 10;
+  /** Lowest baseline the body may use: clear of the footer rule above the stamp. */
+  const BODY_FLOOR = fy0 + 24;
+
   let y = PH - M;
+
+  /** Break to a fresh page when `need` points of body would cross the footer. */
+  const room = (need: number): void => {
+    if (y - need >= BODY_FLOOR) return;
+    page = doc.addPage([PW, PH]);
+    y = PH - M;
+  };
 
   // ── Title + subtitle ──
   text(content.title, M, y - 16, 18, bold);
@@ -105,9 +126,11 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   const labelX = M;
   const valueX = M + 168;
   for (const section of content.sections) {
+    room(30);
     text(section.title, M, y, 11, bold, INK);
     y -= 16;
     for (const row of section.rows) {
+      room(14);
       text(row.label, labelX, y, 9.5, bold, DIM);
       text(row.value, valueX, y, 9.5, font, INK);
       y -= 14;
@@ -125,6 +148,7 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   // ── Interior floor plan (embedded, clearly approximate) ──
   if (input.floorPlan && input.floorPlan.wallRings.length > 0) {
     y -= 4;
+    room(200);
     text('Floor plan preview (walls traced from the scan)', M, y, 11, bold, INK);
     y -= 8;
     const planTop = y;
@@ -135,9 +159,12 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
 
   // ── Caveats ──
   if (content.caveats.length > 0) {
+    room(30);
     text('Notes', M, y, 10, bold, INK);
     y -= 14;
     for (const c of content.caveats) {
+      // Two lines of headroom, so a note that wraps starts on the page it ends on.
+      room(24);
       y = drawWrapped(page, font, `- ${c}`, M, y, PW - 2 * M, 8.5, DIM);
       y -= 3;
     }
@@ -149,17 +176,6 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   // joined it), and long lines wrap with a hanging indent instead of leaving
   // the sheet. The bold note keeps its bottom-margin slot (last line at
   // M - 4), wrapping upward from there.
-  const footerW = PW - 2 * M;
-  const stampIndent = 24;
-  const stamp = content.provenanceLines.flatMap((line) =>
-    wrapStampLine(font, line, footerW, 7.5, stampIndent).map((seg, i) => ({
-      seg,
-      x: i === 0 ? M : M + stampIndent,
-    })),
-  );
-  const note = wrapStampLine(bold, content.provenance.notSurveyGrade, footerW, 8, 0);
-  const noteTop = M - 4 + (note.length - 1) * 11;
-  const fy0 = noteTop + 16 + (stamp.length - 1) * 10;
   page.drawLine({ start: { x: M, y: fy0 + 12 }, end: { x: PW - M, y: fy0 + 12 }, thickness: 0.75, color: FRAME });
   let fy = fy0;
   for (const s of stamp) {

@@ -128,6 +128,7 @@ import { pdfInfoDate } from '../../pdfInfoDate';
 import { buildStationBand } from './profileSheetLayout';
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
+import { winAnsiSafe as sharedWinAnsiSafe } from '../../winAnsiText';
 
 
 export interface ProfilePdfInput {
@@ -350,13 +351,7 @@ const BAND_PAD = 5;
  * typographic glyphs to ASCII, and replaces anything else with '?'. This
  * guarantees the PDF never fails to render because of a stray glyph.
  */
-function winAnsiSafe(s: string): string {
-  const map: Record<string, string> = {
-    'Δ': 'd', '×': 'x', '—': '-', '–': '-', '•': '-', '→': '->',
-    '’': "'", '‘': "'", '“': '"', '”': '"', '…': '...',
-  };
-  return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => map[ch] ?? '?');
-}
+const winAnsiSafe = sharedWinAnsiSafe;
 
 /** Draw one WinAnsi-safe string. Every string on this sheet goes through it. */
 function put(
@@ -1385,7 +1380,10 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     },
     {
       item: 'Vertical reference',
-      value: reference,
+      // The plain word the rest of the sheet uses, not the internal enum: the
+      // general note and the axis both say "Elevation" where this said
+      // "orthometric".
+      value: heightLabel(reference),
       remark: heightReferenceNote(reference),
       limit: reference === 'unknown' || reference === 'local',
     },
@@ -1398,7 +1396,12 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     {
       item: 'Vertical datum',
       value: datumKnown ? (input.verticalDatum ?? '—') : DATUM_CONFLICT_MEASURE_NOTICE,
-      remark: 'A datum the tables do not recognise is not upgraded to a sea-level elevation.',
+      // The remark follows the classification in the row above. Stating that
+      // the datum is unrecognised under a datum this build DID classify
+      // contradicted the reference row two lines up.
+      remark: reference === 'unknown'
+        ? 'A datum the tables do not recognise is not upgraded to a sea-level elevation.'
+        : 'What the heights above are measured from.',
       limit: !datumKnown || input.verticalDatum == null,
     },
     {

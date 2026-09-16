@@ -2006,7 +2006,10 @@ export class AnalysePanel {
       dxf: 'DXF',
     };
     for (const fmt of formats) {
-      const btn = el('button', { className: 'olv-analyse-dl', text: LABEL[fmt] });
+      const btn = el('button', {
+        className: 'olv-analyse-dl', text: LABEL[fmt],
+        title: `Download the contour lines as ${LABEL[fmt]}, at the interval the run used.`,
+      });
       btn.addEventListener('click', () => void this._exportContourFormat(fmt, btn));
       this._exportButtons.push(btn);
       this._studioExportBtns.set(fmt, btn);
@@ -2015,7 +2018,10 @@ export class AnalysePanel {
     // Printable map sheet — the field deliverable (contours + collar + accuracy).
     // Clicking opens a pre-export dialog (title-block fields + interval +
     // filename) rather than exporting immediately.
-    const mapBtn = el('button', { className: 'olv-analyse-dl', text: 'Export Contours' });
+    const mapBtn = el('button', {
+      className: 'olv-analyse-dl', text: 'Export Contours',
+      title: 'Open the map-sheet dialog: title block, interval and filename, then a printable PDF.',
+    });
     mapBtn.addEventListener('click', () => this._openMapPdfDialog(mapBtn));
     this._exportButtons.push(mapBtn);
     this._studioExportBtns.set('pdf', mapBtn);
