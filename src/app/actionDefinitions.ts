@@ -52,6 +52,7 @@ export interface ActionRegistryDeps {
   copyShareLink: () => void | Promise<void>;
   terrainAnalysisEntry: TerrainAnalysisEntryDeps;
   runFillUnclassified: () => Promise<void>;
+  toggleClip: () => void;
   buildCurrentStoryInputs: () => ScanStoryInputs;
   startWorkflowRecording: () => void;
   dispatchWorkflowEvent: (event: WorkflowEvent) => void;
@@ -97,6 +98,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     runDeriveClassification: deps.runDeriveClassification,
     runFillUnclassified: deps.runFillUnclassified,
     showLassoToast: deps.showLassoToast,
+    toggleClip: deps.toggleClip,
   });
   const analysis = contributeAnalysisActions({
     terrainAnalysisEntry: deps.terrainAnalysisEntry,

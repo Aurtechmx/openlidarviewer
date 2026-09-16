@@ -53,9 +53,10 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Tools',
     summary: 'Measure, inspect, annotate, or lasso a volume.',
     paragraphs: [
+      'The Tools tab lists these tools with their keys, and says how many measurements and annotations the session holds.',
       'Probe reads a live point under the cursor with no click. With Annotate on, click a point, fill the card and Save; the Annotations panel jumps to, edits or deletes any finding.',
     ],
-    actionIds: ['tool.measure', 'tool.inspect', 'tool.annotate', 'tool.lasso-volume', 'tool.lasso-selection-basis'],
+    actionIds: ['tool.measure', 'tool.inspect', 'tool.annotate', 'tool.clip', 'tool.lasso-volume', 'tool.lasso-selection-basis'],
     keywords: ['measure', 'distance', 'area', 'volume', 'inspect', 'probe', 'annotate', 'note', 'lasso'],
   },
   {

@@ -19,6 +19,8 @@ export interface ToolActionDeps {
   runDeriveClassification: () => Promise<void>;
   runFillUnclassified: () => Promise<void>;
   showLassoToast: (message: string) => void;
+  /** Flip the clip box, through the Clip panel's own write path. */
+  toggleClip: () => void;
 }
 
 export function contributeToolActions(deps: ToolActionDeps): Action[] {
@@ -55,6 +57,19 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
       keywords: ['note', 'comment', 'mark'],
       run: () => {
         toggleTool(deps.getViewer(), deps.workflowController, 'annotate');
+      },
+    },
+    {
+      id: 'tool.clip',
+      title: 'Clip box',
+      section: 'Tools',
+      hint: 'Show only the points inside a box, or hide them.',
+      keywords: ['slab', 'section', 'crop', 'box', 'hide'],
+      help: {
+        summary: 'Restricts what the viewer draws to an axis-aligned box. Nothing is removed from the scan and no export is changed.',
+      },
+      run: () => {
+        deps.toggleClip();
       },
     },
     {

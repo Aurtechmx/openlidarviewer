@@ -593,3 +593,9 @@ export const loadTerrainCoreStore = () => import('./terrain/contour/terrainCoreS
  * ids it dispatches by name, none of which has to exist at boot.
  */
 export const loadActionRegistry = () => import('./app/actionDefinitions');
+
+/**
+ * The Tools-tab launcher card. It is registry-driven and only ever seen once a
+ * scan has opened the left rail, so it stays out of the startup shell.
+ */
+export const loadToolLauncher = () => import('./ui/toolLauncher');

@@ -59,7 +59,7 @@ describe('action contributors', () => {
 
   it('tool actions run the derived classification and toggle the lasso', async () => {
     const lasso = { enabled: false, enable: vi.fn(), disable: vi.fn(), selectionBasis: 'through-surfaces' };
-    const deps = { getViewer: () => ({ clearSelectionHighlight: vi.fn() }) as never, workflowController: {} as never, lassoVolumeTool: lasso as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(async () => undefined), runFillUnclassified: vi.fn(async () => undefined), showLassoToast: toast };
+    const deps = { getViewer: () => ({ clearSelectionHighlight: vi.fn() }) as never, workflowController: {} as never, lassoVolumeTool: lasso as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(async () => undefined), runFillUnclassified: vi.fn(async () => undefined), showLassoToast: toast, toggleClip: vi.fn() };
     const actions = contributeToolActions(deps);
     actions.find((a) => a.id === 'tool.classify')!.run();
     expect(deps.runDeriveClassification).toHaveBeenCalled();
@@ -89,7 +89,7 @@ describe('action contributors', () => {
     const all = [
       ...contributeCameraActions({ getViewer: () => ({}) as never, planView: { togglePlanView() {}, notePlanViewPreset() {} }, capture: vi.fn(), showLassoToast: toast }),
       ...contributeViewActions({ setTheme: vi.fn(), capture: vi.fn(), compass: {} as never, bookmarks: {} as never, toggleOrbitInvert: vi.fn(), resetNavigation: vi.fn(), showTouchGestures: vi.fn(), hasScan: () => false, saveCurrentView: vi.fn(), applyView: vi.fn(), showLassoToast: toast }),
-      ...contributeToolActions({ getViewer: () => ({}) as never, workflowController: {} as never, lassoVolumeTool: {} as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(), runFillUnclassified: vi.fn(), showLassoToast: toast }),
+      ...contributeToolActions({ getViewer: () => ({}) as never, workflowController: {} as never, lassoVolumeTool: {} as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(), runFillUnclassified: vi.fn(), showLassoToast: toast, toggleClip: vi.fn() }),
       ...contributeAnalysisActions({ terrainAnalysisEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never }),
       ...contributeExportActions({ saveSnapshot: vi.fn(), copyShareLink: vi.fn(), buildCurrentStoryInputs: () => ({}) as never }),
       ...contributeWorkflowActions({ workflowController: {} as never, startWorkflowRecording: vi.fn(), dispatchWorkflowEvent: vi.fn(), ensureWorkflowConfigPanel: vi.fn(), showLassoToast: toast }),

@@ -199,6 +199,17 @@ describe('DesktopWorkspace', () => {
     expect(tab('work').focused).toBe(true);
   });
 
+  it('leads the work mode with the tools launcher, ahead of measure, annotation and clip', async () => {
+    const { ws } = await make();
+    const node = (): FakeEl => new FakeEl('section');
+    const launcher = node(); const measure = node(); const annotation = node(); const clip = node();
+    ws.layoutDesktop({
+      dataLayers: node(), dataLayerHealth: node(), classLegend: node(), processStudio: node(), export: node(),
+      toolLauncher: launcher, measure, annotation, clip,
+    } as never);
+    expect((ws.mode('work') as unknown as FakeEl).children).toEqual([launcher, measure, annotation, clip]);
+  });
+
   it('exposes a callable dispose()', async () => {
     const { ws } = await make();
     expect(() => ws.dispose()).not.toThrow();

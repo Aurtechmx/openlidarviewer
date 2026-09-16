@@ -243,6 +243,7 @@ import {
   loadObjectPanel,
   loadTilesetOpen,
   loadActionRegistry,
+  loadToolLauncher,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -830,9 +831,7 @@ if (
 const showLassoToast = createToastHost().show;
 
 /** Input-aware mobile check — drives the touch hint and the tighter point budget. */
-function isPhone(): boolean {
-  return isMobileDevice();
-}
+function isPhone(): boolean { return isMobileDevice(); }
 
 // The previously-loaded scan's label, so a 2nd drop's instant answer can name
 // both epochs in its before/after offer.
@@ -1644,6 +1643,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   syncLassoButton,
   runDeriveClassification,
   runFillUnclassified,
+  toggleClip: () => clipPanel.toggleEnabled(),
   buildCurrentStoryInputs,
   startWorkflowRecording,
   dispatchWorkflowEvent,
@@ -1857,7 +1857,7 @@ const analyseProfileVisibility = createAnalyseProfileVisibility({
   setDockActive: (v) => dock.setAnalyseActive(v),
 });
 /** Refresh the Measurements panel's contents and visibility (thin delegate). */
-const refreshMeasurePanel = (): void => measureMount.refresh();
+const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLauncher(); };
 
 // B2 (v0.4.5) — feed the measure stack the SAME render-units to metres seam
 // the terrain/space paths read (`crsService.linearUnitToMetres`). Render space
@@ -2165,9 +2165,7 @@ async function showReclassifyUi(): Promise<void> {
   // Cast: TS can't see the async IIFE reassign the outer `let` across the await.
   (reclassifyUi as ReclassifyUi | null)?.setVisible(true);
 }
-function hideReclassifyUi(): void {
-  reclassifyUi?.setVisible(false);
-}
+function hideReclassifyUi(): void { reclassifyUi?.setVisible(false); }
 
 classLegendPanel.onChange((visibility) => {
   viewer.applyClassVisibility(visibility);
@@ -2575,9 +2573,7 @@ function streamingExportCloud(): PointCloud | null {
  * honesty rule (`effectiveCrsName`) live in that module; here we bind the shell's
  * running state through `reportExportDeps`.
  */
-function exportGeoContext(): GeoExportContext {
-  return runExportGeoContext(reportExportDeps);
-}
+function exportGeoContext(): GeoExportContext { return runExportGeoContext(reportExportDeps); }
 
 /**
  * The running-app seam the two Google Earth products write through (see
@@ -2812,11 +2808,29 @@ const clipPanel = new ClipPanel({
   // `null` until the first scan loads). Clearing a clip on a non-existent viewer
   // is a no-op, so guard like every other boot-reachable viewer callback here.
   onApply: (clip: ClipBox | null) => viewer?.setClip(clip),
-  fitBounds: () => {
-    const c = scans.activeCloud();
-    return c ? c.bounds() : null;
-  },
+  fitBounds: () => scans.activeCloud()?.bounds() ?? null,
   keptCount: () => (scans.activeId ? viewer.clipKeptCount(scans.activeId) : null),
+});
+
+// The Tools tab held only the Clip box until a tool had been used, so it could
+// not say what the tab was for. This card (lazy chunk) lists the tools from the
+// action registry with their keys, and the counts the measurement controller and
+// the annotation store already hold. It owns no tool state and no count.
+const toolLauncherHost = document.createElement('div');
+let toolLauncherCard: { readonly element: HTMLElement; refresh: () => void } | null = null;
+const refreshToolLauncher = (): void => toolLauncherCard?.refresh();
+void loadToolLauncher().then(({ createToolLauncher }) => {
+  toolLauncherCard = createToolLauncher({
+    getActions: () => ensureActionRegistry(),
+    counts: () => ({
+      measurements: viewerReady ? viewer.measure.getMeasurements().length : 0,
+      annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0,
+    }),
+    isToolPanelActive: () => [measureMount.panel?.element, annotationPanel.element]
+      .some((e) => e != null && !e.classList.contains('olv-hidden')),
+    disabledReason: () => (viewerReady && hasScan() ? null : 'Load a scan to use the tools.'),
+  });
+  toolLauncherHost.append(toolLauncherCard.element);
 });
 
 // ── Scan-type routing ────────────────────────────────────────────────────────
@@ -3253,7 +3267,7 @@ void viewerLoaded.then(() => {
     // re-hosting the existing live panels. Root keeps `.olv-left-panels`#olv-left-panels
     // so the rail-collapse chrome, clearance vars and wheel containment target it
     // unchanged. measure/analyse/object lazy-mount into their modes below.
-    const workspace = new DesktopWorkspace();
+    const workspace = new DesktopWorkspace({ onModeChange: () => refreshToolLauncher() });
     showWorkspaceMode = (m) => workspace.setMode(m);
     const leftPanels = workspace.element;
     // Data mode = the live layer browser (re-parented out of the Inspector, which
@@ -3264,6 +3278,7 @@ void viewerLoaded.then(() => {
       dataLayerHealth: dataEls.layerHealth,
       classLegend: classLegendPanel.element,
       annotation: annotationPanel.element,
+      toolLauncher: toolLauncherHost,
       clip: clipPanel.element,
       processStudio: processStudio.panel.element,
       export: exportPanel.element,
@@ -3938,6 +3953,7 @@ function applyPrefs(): void {
 function refreshAnnotationPanel(): void {
   annotationPanel.update(viewer.annotate.getSummaries());
   annotationPanel.setVisible(viewer.annotateMode || viewer.annotate.getAnnotations().length > 0);
+  refreshToolLauncher();
   // Keep the Export panel's Site-KML enablement in sync — annotations alone can
   // make a KML worth exporting, not only measurements.
   exportPanel.refresh();
@@ -3965,33 +3981,19 @@ const viewStateCoordinator = createViewStateCoordinator({
   hasScan,
   getActiveScanId: () => scans.activeId,
   getPointFilters: () => ({ elevation: activeElevFilter, intensity: activeIntenFilter }),
-  onElevationFilterRestored: (range) => {
-    activeElevFilter = range;
-  },
-  onIntensityFilterRestored: (range) => {
-    activeIntenFilter = range;
-  },
+  onElevationFilterRestored: (range) => { activeElevFilter = range; },
+  onIntensityFilterRestored: (range) => { activeIntenFilter = range; },
 });
 
-function captureViewState(): ViewStateBundle {
-  return viewStateCoordinator.capture();
-}
+function captureViewState(): ViewStateBundle { return viewStateCoordinator.capture(); }
 
-function applyViewState(vs: ViewStateBundle): void {
-  viewStateCoordinator.apply(vs);
-}
+function applyViewState(vs: ViewStateBundle): void { viewStateCoordinator.apply(vs); }
 
-function saveCurrentView(): void {
-  viewStateCoordinator.saveCurrentView();
-}
+function saveCurrentView(): void { viewStateCoordinator.saveCurrentView(); }
 
-function refreshViewsUI(): void {
-  viewStateCoordinator.refreshViewsUi();
-}
+function refreshViewsUI(): void { viewStateCoordinator.refreshViewsUi(); }
 
-function applyView(index: number): void {
-  viewStateCoordinator.applyView(index);
-}
+function applyView(index: number): void { viewStateCoordinator.applyView(index); }
 
 /**
  * Copy a link that reproduces the current view — camera, colour mode, point
@@ -4521,9 +4523,7 @@ function hasResidentAtDepth(
 }
 
 /** Poll the streaming state ~4 Hz so the panel reflects progress. */
-function startStreamingStatusPolling(): void {
-  streamingUi.startPolling();
-}
+function startStreamingStatusPolling(): void { streamingUi.startPolling(); }
 
 // The readers of each streaming poll tick: they all see the one snapshot the
 // panel was drawn from, so residency, the settle one-shot and the benchmark
