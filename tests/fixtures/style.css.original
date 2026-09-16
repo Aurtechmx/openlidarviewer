@@ -8637,13 +8637,15 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-fp-toggle-input { accent-color: var(--accent); cursor: pointer; }
 .olv-fp-toggle-text { font-size: var(--text-2xs); color: var(--text-dim); }
 
+/* The escape hatch leads the panel, full width, in the Report PDF primary
+   look, so a misrouted ground scan reaches terrain analysis in one click. */
 .olv-object-run-anyway {
-  align-self: flex-start; margin-top: var(--space-sm); font: inherit; font-size: var(--text-xs); font-weight: 600;
-  color: var(--text-dim); background: transparent;
-  border: 0.5px solid var(--hairline); border-radius: var(--radius-md);
-  padding: var(--space-sm) var(--space-xl); cursor: pointer;
+  display: block; width: 100%; box-sizing: border-box; margin-bottom: var(--space-md);
+  font: inherit; font-size: var(--text-xs); font-weight: 600;
+  color: var(--on-accent); background: var(--accent);
+  border: 0.5px solid var(--accent); border-radius: var(--radius-sm);
+  padding: var(--space-sm); cursor: pointer;
 }
-.olv-object-run-anyway:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Manual scan-type override ("Treat as") — the safety net for a misdetection.
  * Reused verbatim by the Object/Space panel and the terrain Analyse panel; the
@@ -8823,6 +8825,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-run:not(.is-rerun):not(:disabled),
 .olv-analyse-dl.is-primary:not(:disabled),
 .olv-object-dl.is-primary:not(:disabled),
+.olv-object-run-anyway:not(:disabled),
 .olv-bc-convert:not(:disabled) {
   color: var(--on-accent);
   background: var(--accent);
@@ -8833,6 +8836,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-run:not(.is-rerun):not(:disabled):hover,
 .olv-analyse-dl.is-primary:not(:disabled):hover,
 .olv-object-dl.is-primary:not(:disabled):hover,
+.olv-object-run-anyway:not(:disabled):hover,
 .olv-bc-convert:not(:disabled):hover {
   color: var(--on-accent);
   background: color-mix(in srgb, var(--accent) 88%, white);
@@ -8845,6 +8849,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-run:not(.is-rerun),
 .olv-analyse-dl.is-primary,
 .olv-object-dl.is-primary,
+.olv-object-run-anyway,
 .olv-bc-convert,
 .olv-modal-cta {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset,
