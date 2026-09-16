@@ -12,6 +12,11 @@ import { showWorkspaceMode } from './helpers';
 const FIXTURE = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
 test.describe('tools launcher', () => {
+  // The scan this drives is the multi-chunk LAZ, and its cold decode is
+  // allowed a minute on its own below. That does not fit the default 30 s a
+  // test gets, so the budget follows the decode.
+  test.slow();
+
   test('lists the tools, the counts, and folds to its strip once Measure is up', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('.olv-empty-title')).toBeVisible();
