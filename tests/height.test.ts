@@ -80,18 +80,20 @@ describe('verticalReferenceFromDatum', () => {
     expect(verticalReferenceFromDatum({ verticalDatum: 'EGM2008 height' })).toBe('orthometric');
   });
 
-  test('a datum name carrying its WKT qualifiers resolves to the same datum', () => {
-    // What a USGS 3DEP tile states, and what the terrain report prints for it.
-    // Matching whole strings only, this read as unknown, so a profile sheet
-    // said "datum unknown" for a scan whose report named the datum.
-    expect(verticalReferenceFromDatum({ verticalDatum: 'NAVD88 height - Geoid12B (m)' })).toBe('orthometric');
-    expect(verticalReferenceFromDatum({ verticalDatum: 'NAVD88 height (ftUS)' })).toBe('orthometric');
-    expect(verticalReferenceFromDatum({ verticalDatum: 'MSL depth (m)' })).toBe('depth');
-  });
-
-  test('a prefix match needs a word boundary, so a different datum is never adopted', () => {
-    expect(verticalReferenceFromDatum({ verticalDatum: 'NAVD88x local adjustment' })).toBe('unknown');
-    expect(verticalReferenceFromDatum({ verticalDatum: 'Local datum referenced to NAVD88' })).toBe('unknown');
+  // A WKT citation carries the datum's qualifiers. "NAVD88 height - Geoid12B (m)"
+  // is what a USGS 3DEP tile states and what the terrain report prints for it;
+  // matching whole strings only, it read as unknown, so a profile sheet said
+  // "datum unknown" for a scan whose report named the datum. The name must open
+  // the string and end on a word boundary, so an unrelated datum is never
+  // adopted from a mention.
+  test.each([
+    ['NAVD88 height - Geoid12B (m)', 'orthometric'],
+    ['NAVD88 height (ftUS)', 'orthometric'],
+    ['MSL depth (m)', 'depth'],
+    ['NAVD88x local adjustment', 'unknown'],
+    ['Local datum referenced to NAVD88', 'unknown'],
+  ] as const)('a qualified datum name resolves: %s', (verticalDatum, expected) => {
+    expect(verticalReferenceFromDatum({ verticalDatum })).toBe(expected);
   });
 
   test('the authoritative EPSG wins over the name', () => {
