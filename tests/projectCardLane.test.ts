@@ -99,6 +99,27 @@ describe('the project card owns the top-centre lane', () => {
     expect(successor).toHaveBeenCalledTimes(1);
   });
 
+  it('waits for the fade before handing the lane on, when the style engine says so', async () => {
+    // The fallback timer used to hand the lane on the moment it fired. On a
+    // loaded runner the style recalc that starts the fade can land after it, so
+    // the successor was painted over a card still at full opacity. The card now
+    // re-checks until the fade is real.
+    const { card, el } = await makeCard();
+    const successor = vi.fn();
+    let opacity = '1';
+    const view = { getComputedStyle: () => ({ opacity }) };
+    Object.defineProperty(el, 'ownerDocument', { value: { defaultView: view }, configurable: true });
+    card.show({ ...INFO, onDismiss: successor });
+    runTimers(); // the card's own display timer
+    runTimers(); // the fallback fires while the card still reads as painted
+    expect(successor).not.toHaveBeenCalled();
+    runTimers(); // one poll later, still painted
+    expect(successor).not.toHaveBeenCalled();
+    opacity = '0';
+    runTimers();
+    expect(successor).toHaveBeenCalledTimes(1);
+  });
+
   it('drops the successor when something else takes the lane', async () => {
     // hide() is what arming a measurement or closing the scan calls. The lane
     // is wanted for that, not for a camera suggestion arriving on top of it.

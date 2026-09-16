@@ -36,6 +36,12 @@ export interface ProjectInfo {
 const DISMISS_MS = 7000;
 /** Upper bound on the fade before the lane is handed on regardless. */
 const HANDOFF_FALLBACK_MS = 400;
+/** Opacity at or above which the card still counts as painted over the lane. */
+const FADED_OPACITY = 0.05;
+/** Gap between fade checks once the fallback has fired. */
+const HANDOFF_POLL_MS = 60;
+/** Longest the successor waits for a fade before taking the lane regardless. */
+const HANDOFF_CEILING_MS = 2000;
 
 /**
  * A suggested navigation mode from the scan's PHYSICAL size (metres). Only shown
@@ -152,6 +158,28 @@ export class ProjectCard {
       if ((e as TransitionEvent).propertyName === 'opacity') hand();
     };
     this.element.addEventListener('transitionend', onEnd);
-    window.setTimeout(hand, HANDOFF_FALLBACK_MS);
+    // The fallback exists for a browser that reports no transitionend. It used
+    // to hand the lane on as soon as it fired, which on a loaded runner arrived
+    // while the fade had barely started: the style recalc that begins the
+    // transition can land hundreds of milliseconds after the class is set, so
+    // the successor was painted over a card still at full opacity. The fallback
+    // now checks what the card actually looks like and waits for it to fade,
+    // up to a ceiling so a card that never transitions still yields the lane.
+    let waited = 0;
+    const faded = (): boolean => {
+      const view = (this.element.ownerDocument as Document | null)?.defaultView;
+      if (!view?.getComputedStyle) return true; // no style engine: nothing to wait for
+      return Number(view.getComputedStyle(this.element).opacity) < FADED_OPACITY;
+    };
+    const check = (): void => {
+      if (handed) return;
+      if (faded() || waited >= HANDOFF_CEILING_MS) {
+        hand();
+        return;
+      }
+      waited += HANDOFF_POLL_MS;
+      window.setTimeout(check, HANDOFF_POLL_MS);
+    };
+    window.setTimeout(check, HANDOFF_FALLBACK_MS);
   }
 }
