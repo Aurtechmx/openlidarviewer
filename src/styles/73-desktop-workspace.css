@@ -35,7 +35,8 @@
   margin-bottom: var(--space-md);
   background: var(--panel-raised);
   border: 1px solid var(--hairline);
-  border-radius: 10px;
+  /* 2px padding around --radius-md segments. */
+  border-radius: var(--radius-lg);
 }
 
 /* One segment per mode — uppercase, mono-adjacent, low-noise until active. */
@@ -50,7 +51,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: var(--space-sm) var(--space-xs);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: color 160ms var(--ease-standard), background 160ms var(--ease-standard);
 }

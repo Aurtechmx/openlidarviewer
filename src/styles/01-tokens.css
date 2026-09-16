@@ -98,10 +98,11 @@
    * a release branch; they resolve to the neighbouring real step. Prefer the
    * canonical names in new code.
    *
-   * Not yet fixed: 11px still carries ~75% of the app's text, so the floor of
-   * this scale is doing the work a 12–13px body should. Raising it is a
-   * deliberate re-typing pass, not a token edit — every dense chip and badge
-   * has to be re-checked for overflow. */
+   * Being fixed in steps: --text-body is the 12px the read-me side of the
+   * interface wants, and panel row VALUES now take it while their labels stay
+   * at 11px, so a number outranks the word naming it. Chips, badges, keycaps
+   * and table cells stay on the 11px floor, where a bump would overflow. */
+  --text-body: 12px; /* readable body + panel row values */
   --text-2xs: 11px; /* alias of --text-xs */
   --text-xs: 11px; /* dense chips, badges, table cells */
   --text-sm: 12px; /* secondary rows */
@@ -121,13 +122,31 @@
    *   --radius-sm   6    default control radius (most common)
    *   --radius-md   8    cards / panels
    *   --radius-lg  10    large panels / overlays
+   *   --radius-xl  12    floating cards, dialogs, the dock
    *   --radius-pill 999  fully rounded pills
+   *
+   * Nested surfaces read concentric when the outer radius equals the inner
+   * radius plus the padding between them: the dock (6px padding around
+   * --radius-sm buttons) is --radius-xl, the workspace tab strip (2px around
+   * --radius-md segments) is --radius-lg.
    */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
+  --radius-xl: 12px;
   --radius-pill: 999px;
+
+  /*
+   * Floating surfaces over the canvas — cards, toasts, hints, dialogs. One
+   * layered shadow does the separating: a half-pixel contact edge, a close
+   * contact shadow, and a wide ambient one. No extra blur, and a surface keeps
+   * its own border where the canvas behind it would otherwise win.
+   */
+  --shadow-floating:
+    0 0 0 0.5px rgba(4, 8, 18, 0.55),
+    0 4px 10px -4px rgba(0, 0, 0, 0.30),
+    0 16px 34px -18px rgba(0, 0, 0, 0.48);
 
   /*
    * Motion scale — three durations and the standard easing. 130ms
@@ -152,7 +171,7 @@
    *   --focus-ring        crisp keyboard focus outline (a11y)
    *   --focus-ring-offset gap between control edge and ring
    */
-  --btn-press: scale(0.97);
+  --btn-press: scale(0.96);
   --focus-ring: 2px solid var(--accent);
   --focus-ring-offset: 2px;
 

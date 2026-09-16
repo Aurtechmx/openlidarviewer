@@ -248,12 +248,14 @@
 .olv-story-assess.is-limited { color: var(--state-review); }
 .olv-story-assess.is-blocked { color: var(--state-blocked); }
 .olv-story-assess.is-unknown { color: var(--state-info); }
-.olv-story-headline { font-size: var(--text-sm); opacity: 0.92; }
+.olv-story-headline { font-size: var(--text-sm); opacity: 0.92; text-wrap: balance; }
 .olv-story-row { display: grid; grid-template-columns: 116px 1fr; gap: 8px; align-items: baseline; }
 .olv-story-k { color: var(--muted, #8a8f98); font-size: var(--text-xs); }
-.olv-story-v { min-width: 0; word-break: break-word; }
+.olv-story-v { min-width: 0; word-break: break-word; font-variant-numeric: tabular-nums; }
 .olv-story-next {
-  margin-top: 2px; padding-top: 7px; font-weight: 500;
+  /* One separator rhythm across the cards: 8px above the rule, 6px below. */
+  margin-top: var(--space-md); padding-top: var(--space-sm); font-weight: 500;
+  text-wrap: pretty;
   border-top: 0.5px solid color-mix(in srgb, currentColor 14%, transparent);
 }
 
@@ -269,7 +271,8 @@
 .olv-health-rows { display: flex; flex-direction: column; gap: 4px; }
 /* Leading `auto` track holds the state glyph, so the tier reads without colour. */
 .olv-health-row { display: grid; grid-template-columns: auto 140px 1fr; gap: 8px; align-items: baseline; }
-.olv-health-row .olv-health-k { color: var(--muted, #8a8f98); }
+.olv-health-row .olv-health-k { color: var(--muted, #8a8f98); font-size: var(--text-xs); }
+.olv-health-v { min-width: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .olv-health-row.is-caution .olv-health-v { color: var(--state-review); }
 .olv-health-row.is-blocked .olv-health-v { color: var(--state-blocked); }
 .olv-health-row.is-good .olv-health-v { color: var(--state-measured); }

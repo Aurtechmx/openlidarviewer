@@ -12,12 +12,12 @@
 }
 .olv-object-row { display: flex; justify-content: space-between; gap: var(--space-md); font-size: var(--text-xs); }
 .olv-object-label { color: var(--text-dim); }
-.olv-object-value { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.olv-object-value { font-size: var(--text-body); color: var(--text); text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 /* v0.4.6: Object/Space notes carry honest Suitability caveats — they ride
    the shared caveat primitive (tinted bg + left-rule) so they read as the
    same "honest limit" language used in the Analyse panel. */
 .olv-object-note {
-  font-size: var(--text-2xs); color: var(--text-dim); line-height: 1.45; margin-top: var(--space-xs);
+  font-size: var(--text-2xs); color: var(--text-dim); line-height: 1.45; margin-top: var(--space-xs); text-wrap: pretty;
   padding: var(--space-xs) var(--space-md);
   background: var(--caveat-tint);
   border-left: 2px solid var(--caveat-rule);

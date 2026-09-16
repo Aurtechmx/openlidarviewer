@@ -8,7 +8,7 @@
 .olv-tool:active:not(:disabled),
 .olv-chip:active,
 .olv-sample:active,
-.olv-layer-x:active { transform: scale(0.95); }
+.olv-layer-x:active { transform: var(--btn-press); }
 .olv-chip-active { transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard); }
 
 /* Keyboard focus — visible, on-brand, never on mouse click */

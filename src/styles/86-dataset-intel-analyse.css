@@ -152,9 +152,9 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   display: flex; justify-content: space-between;
   font-size: var(--text-xs); color: var(--text-dim);
 }
-.olv-di-detail-value { color: var(--text); font-variant-numeric: tabular-nums; }
+.olv-di-detail-value { font-size: var(--text-body); color: var(--text); font-variant-numeric: tabular-nums; }
 .olv-di-empty {
-  font-size: var(--text-sm); color: var(--text-dim); padding: var(--space-xs) 0;
+  font-size: var(--text-sm); color: var(--text-dim); padding: var(--space-xs) 0; text-wrap: pretty;
 }
 
 /* ─── Get-Started stepper (empty state) ──────────────────────────────
