@@ -44,7 +44,7 @@ These are engineering changes. No terrain number moves, and no claim changes lev
 
 ## The shell and the renderer are decomposed
 
-`src/main.ts` goes from 5,557 lines to 4,977 and `src/render/Viewer.ts` from 6,423 to 6,223, with the Analyse panel at 2,865. The module graph holds 840 modules and zero cycles. Fan-out on the concentration modules is watched and printed as a table: 112 for the shell, 77 for the renderer, 22 for the Analyse panel.
+`src/main.ts` goes from 5,557 lines to 4,977 and `src/render/Viewer.ts` from 6,423 to 6,223, with the Analyse panel at 2,905. The module graph holds 840 modules and zero cycles. Fan-out on the concentration modules is watched and printed as a table: 112 for the shell, 77 for the renderer, 23 for the Analyse panel.
 
 The scan route, the Viewer-to-Inspector visual synchronisation and the streaming panel controls each moved into a coordinator over narrow ports. The action registry is split into contributors and built lazily. The Viewer's render core is built in a bootstrap module, and the Analyse panel's raster and relief previews moved into a surface-tiles module.
 

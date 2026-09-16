@@ -90,7 +90,7 @@ its recorded baseline, and `--update` banks a drop and refuses a raise, so
 raising a baseline is a hand edit to
 `docs/validation/monolith-size-baseline.json` and always shows up in the diff.
 Fan-out on the concentration modules is 112 for the shell, 77 for the renderer
-and 22 for the Analyse panel, and the module-graph lint prints the table.
+and 23 for the Analyse panel, and the module-graph lint prints the table.
 
 Two disposal gaps remain from the decomposition: `NavBar.dispose` has no caller,
 and `ViewerRenderCore` has no dispose seam.
