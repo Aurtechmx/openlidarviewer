@@ -244,3 +244,12 @@ describe('footprintAreaM2 — fail closed on an unknown linear unit', () => {
     expect(footprintAreaM2(-5, 20, { linearUnit: 'metre', linearUnitToMetres: 1 })).toBeUndefined();
   });
 });
+
+describe('buildExportHealth scope for a strided local file', () => {
+  it('names a display sample rather than reporting the scope as unknown', () => {
+    const rows = buildExportHealth({ coverageMode: 'display-sample' } as never).rows;
+    const scope = rows.find((r) => r.label === 'Scan scope');
+    expect(scope?.value).toBe('Display sample of the file');
+    expect(scope?.tier).toBe('caution');
+  });
+});

@@ -310,7 +310,7 @@ function loadingRow(residency: LayerHealthInput['residency']): LayerHealthRow {
   if (resident < source) {
     return {
       label: 'Loading',
-      value: `display sample — ${resident.toLocaleString('en-US')} of ${source.toLocaleString('en-US')} resident`,
+      value: `display sample: ${resident.toLocaleString('en-US')} of ${source.toLocaleString('en-US')} declared points resident`,
       status: 'info',
     };
   }
