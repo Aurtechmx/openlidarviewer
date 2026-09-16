@@ -138,6 +138,9 @@ const NAME_TO_EPSG: Readonly<Record<string, number>> = {
   'egm84 height': 5612,
 };
 
+/** Known datum names, longest first, so a prefix match takes the most specific. */
+const NAMES_BY_LENGTH: readonly string[] = Object.keys(NAME_TO_EPSG).sort((a, b) => b.length - a.length);
+
 /** A declared vertical datum, however the source spelled it. */
 export interface VerticalDatumRef {
   /** Vertical CRS EPSG code, when declared. Authoritative. */
@@ -157,12 +160,24 @@ export function resolveVerticalEpsg(d: VerticalDatumRef): number | undefined {
   if (d.verticalEpsg !== undefined && Number.isFinite(d.verticalEpsg) && d.verticalEpsg > 0) {
     return d.verticalEpsg;
   }
-  const raw = d.verticalDatum?.trim().toLowerCase();
+  const raw = d.verticalDatum?.trim().toLowerCase().replace(/\s+/g, ' ');
   if (!raw) return undefined;
   const viaName = NAME_TO_EPSG[raw];
   if (viaName !== undefined) return viaName;
   const viaCode = /^epsg:(\d{4,6})$/.exec(raw) ?? /^(\d{4,6})$/.exec(raw);
   if (viaCode) return Number(viaCode[1]);
+  // A datum read from a WKT citation carries its qualifiers: a USGS tile states
+  // "NAVD88 height - Geoid12B (m)", which is the same datum the exact table
+  // holds under "navd88". Matching only whole strings classified that as
+  // unknown, so a profile sheet printed "datum unknown" for a scan whose
+  // terrain report printed the datum on the same session. The name must still
+  // open the string and end on a word boundary, so an unrelated datum is never
+  // read as a known one, and the longest name wins ("msl depth" before "msl").
+  for (const name of NAMES_BY_LENGTH) {
+    if (!raw.startsWith(name)) continue;
+    const next = raw.charAt(name.length);
+    if (next === '' || !/[a-z0-9]/.test(next)) return NAME_TO_EPSG[name];
+  }
   return undefined;
 }
 
@@ -225,6 +240,6 @@ export function heightReferenceNote(reference: VerticalReference): string {
     case 'local':
       return 'Height in the dataset local frame; not tied to a geodetic datum.';
     case 'unknown':
-      return 'No vertical datum is declared, so this height is not tied to a known reference.';
+      return 'The vertical datum is not known here, so this height is not tied to a known reference.';
   }
 }

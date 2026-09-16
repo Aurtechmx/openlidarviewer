@@ -616,7 +616,7 @@ describe('height wording follows heightLabel, never the sheet author', () => {
     expect(text).toContain('Height (datum unknown) (m)');
     expect(text).toContain('Height (datum unknown) min / max');
     expect(text).toContain('Highest / Lowest height (datum unknown)');
-    expect(text).toContain('No vertical datum is declared');
+    expect(text).toContain('vertical datum is not known here');
     // Nothing on the sheet may call these elevations.
     expect(text).not.toContain('Elevation (m)');
     expect(text).not.toContain('Elevation min / max');

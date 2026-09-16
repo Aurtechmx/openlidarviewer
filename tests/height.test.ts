@@ -80,6 +80,20 @@ describe('verticalReferenceFromDatum', () => {
     expect(verticalReferenceFromDatum({ verticalDatum: 'EGM2008 height' })).toBe('orthometric');
   });
 
+  test('a datum name carrying its WKT qualifiers resolves to the same datum', () => {
+    // What a USGS 3DEP tile states, and what the terrain report prints for it.
+    // Matching whole strings only, this read as unknown, so a profile sheet
+    // said "datum unknown" for a scan whose report named the datum.
+    expect(verticalReferenceFromDatum({ verticalDatum: 'NAVD88 height - Geoid12B (m)' })).toBe('orthometric');
+    expect(verticalReferenceFromDatum({ verticalDatum: 'NAVD88 height (ftUS)' })).toBe('orthometric');
+    expect(verticalReferenceFromDatum({ verticalDatum: 'MSL depth (m)' })).toBe('depth');
+  });
+
+  test('a prefix match needs a word boundary, so a different datum is never adopted', () => {
+    expect(verticalReferenceFromDatum({ verticalDatum: 'NAVD88x local adjustment' })).toBe('unknown');
+    expect(verticalReferenceFromDatum({ verticalDatum: 'Local datum referenced to NAVD88' })).toBe('unknown');
+  });
+
   test('the authoritative EPSG wins over the name', () => {
     expect(
       verticalReferenceFromDatum({ verticalEpsg: 5715, verticalDatum: 'NAVD88' }),
@@ -123,8 +137,12 @@ describe('heightLabel', () => {
 describe('heightReferenceNote', () => {
   test('the unknown note states the consequence rather than implying a datum', () => {
     const note = heightReferenceNote('unknown');
-    expect(note.toLowerCase()).toContain('no vertical datum');
+    // "not known here" rather than "not declared": the reference also reads
+    // unknown for a datum the source DID declare under a name this build does
+    // not classify, and the note is printed for both.
+    expect(note.toLowerCase()).toContain('not known here');
     expect(note.toLowerCase()).toContain('not tied');
+    expect(note.toLowerCase()).not.toMatch(/sea.level|ellipsoid/);
   });
 
   test('the ellipsoidal note warns it is not a sea-level elevation', () => {
