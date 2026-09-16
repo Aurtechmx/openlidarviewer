@@ -143,9 +143,8 @@ export function lonLatUpAxisRefusal(upAxis: SpatialUpAxis | null | undefined): s
       + 'placement is built from. Every feature would be positioned using its height as a '
       + 'northing, so nothing is written for Y-up sources.';
   }
-  return "The scan's up-axis was not determined, so there is no way to tell which two axes are "
-    + 'horizontal. Features placed from the wrong pair would still look like plausible '
-    + 'coordinates on the map, so nothing is written.';
+  return "The scan's up-axis was not determined, so which two axes are horizontal is unknown. "
+    + 'Nothing is written, because a wrong pair would still look like plausible map coordinates.';
 }
 
 /**
@@ -178,9 +177,8 @@ export function footprintUpAxisRefusal(upAxis: SpatialUpAxis | null | undefined)
       + 'is measured from. Exporting one would draw a vertical slice of the site as if it were '
       + 'the area covered, so no outline is written for Y-up sources.';
   }
-  return 'The scan\'s up-axis was not determined, so there is no way to tell which two axes are '
-    + 'horizontal. An outline drawn from the wrong pair would still look like a plausible '
-    + 'rectangle on the map, so it is not written.';
+  return 'The scan\'s up-axis was not determined, so which two axes are horizontal is unknown. '
+    + 'No outline is written, because a wrong pair would still look like a plausible rectangle on the map.';
 }
 
 /**

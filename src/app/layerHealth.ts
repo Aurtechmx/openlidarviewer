@@ -81,7 +81,22 @@ export interface LayerHealthRow {
   readonly value: string;
   readonly status: LayerHealthStatus;
   readonly mono?: boolean;
+  /**
+   * Frame/mount detail that only matters once a second layer exists. The
+   * card tucks these behind a disclosure for a single-layer session; the
+   * fact itself is unchanged and still reachable.
+   */
+  readonly secondary?: true;
 }
+
+/** Rows demoted to the frame-and-mount disclosure in a sole-layer session. */
+const SOLE_LAYER_SECONDARY: ReadonlySet<string> = new Set([
+  'Compatibility',
+  'Project frame',
+  'Source origin',
+  'Offset to project',
+  'Mount precision',
+]);
 
 /** Input to the cross-layer report — one entry per loaded layer. */
 export interface CompatibilityReportLayer {
@@ -296,6 +311,10 @@ export function buildLayerHealth(input: LayerHealthInput): LayerHealthRow[] {
         }
       : loadingRow(input.residency),
   );
+
+  if (input.soleLayer ?? false) {
+    return rows.map((r) => (SOLE_LAYER_SECONDARY.has(r.label) ? { ...r, secondary: true } : r));
+  }
 
   return rows;
 }

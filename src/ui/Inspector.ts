@@ -5,6 +5,7 @@ import {
   type StreamingDetail,
 } from './streamingDetail';
 import { collapsibleSection } from './collapsibleSection';
+import { loadInspectorSections, saveInspectorSection } from '../prefs';
 import type { LayerGroupsPanel } from './LayerGroupsPanel';
 import type { SessionLayerGroup } from '../io/session';
 import {
@@ -597,6 +598,8 @@ export class Inspector {
   // active and their streaming-equivalents in StreamingPanel take over.
   private readonly _layersSection!: HTMLElement;
   private readonly _colorBySection!: HTMLElement;
+  /** Stored open/closed state for the persisted collapsible sections. */
+  private readonly _sectionState: Record<string, boolean> = loadInspectorSections();
   private readonly _renderingSection!: HTMLElement;
   private readonly _viewList = el('div', { className: 'olv-views' });
   /** Session-stats body — rebuilt lazily when the details section opens. */
@@ -1197,17 +1200,15 @@ export class Inspector {
       advancedBody,
     );
 
+    // Four bare rails stacked in one open section made the Studio a wall of
+    // chips. Depth is the one people reach for by default and stays visible;
+    // the other three collapse, and their state persists per user.
     const visualsBody = el('div', { className: 'olv-visuals-body' }, [
-      // Workflow presets lead the Studio: the highest-leverage, least-effort
-      // control answers "what job is this scan for?" before per-knob rails.
-      el('div', { className: 'olv-visuals-group-label', text: 'Workflow' }),
-      this._visualsWorkflowRail,
-      el('div', { className: 'olv-visuals-group-label', text: 'RGB' }),
-      this._visualsRgbRail,
+      this._persistSection('visuals.workflow', collapsibleSection('Workflow', this._visualsWorkflowRail)),
+      this._persistSection('visuals.rgb', collapsibleSection('RGB', this._visualsRgbRail)),
       el('div', { className: 'olv-visuals-group-label', text: 'Depth (EDL)' }),
       this._visualsEdlRail,
-      el('div', { className: 'olv-visuals-group-label', text: 'Background' }),
-      this._visualsSkyRail,
+      this._persistSection('visuals.background', collapsibleSection('Background', this._visualsSkyRail)),
       this._wbAdvancedDetails,
     ]);
     // Visuals Studio is the curator's tool — preset chips that pick a
@@ -1221,7 +1222,10 @@ export class Inspector {
     // Point size, point-size mode, EDL and antialiasing share this one
     // "Rendering" section; it stays visible during streaming so point
     // thickness remains adjustable on a streaming COPC / EPT.
-    this._renderingSection = collapsibleSection('Rendering', renderingBody);
+    this._renderingSection = this._persistSection(
+      'rendering',
+      collapsibleSection('Rendering', renderingBody),
+    );
 
     // Dataset Intelligence — informational summary of the Terrain
     // Foundation outputs. Lives directly under the Scan Intelligence
@@ -1247,17 +1251,20 @@ export class Inspector {
       // three overlapping ones.
       visualsStudioSection,
       this._renderingSection,
-      collapsibleSection('Detail', this._detail),
-      collapsibleSection(
-        'Provenance',
-        el('div', { className: 'olv-provenance-wrap' }, [
-          this._declaredProvenanceBody,
-          this._provenanceBody,
-        ]),
+      this._persistSection('detail', collapsibleSection('Detail', this._detail)),
+      this._persistSection(
+        'provenance',
+        collapsibleSection(
+          'Provenance',
+          el('div', { className: 'olv-provenance-wrap' }, [
+            this._declaredProvenanceBody,
+            this._provenanceBody,
+          ]),
+        ),
       ),
       this._crsSection,
-      collapsibleSection('Scan report', this._report),
-      collapsibleSection('Saved views', views),
+      this._persistSection('scanReport', collapsibleSection('Scan report', this._report)),
+      this._persistSection('savedViews', collapsibleSection('Saved views', views)),
       sessionStats,
     ]);
     this._showReportPlaceholder();
@@ -1483,6 +1490,21 @@ export class Inspector {
    * Honest overlay guard: a silently mismatched frame is called out, not trusted.
    */
   /** Feed the layer health card — same cadence as setLayerCrsFlags. */
+  /**
+   * Apply the stored open state to a collapsible section and record every
+   * later toggle under `id`. Sections with no stored entry keep their own
+   * default.
+   */
+  private _persistSection(id: string, section: HTMLDetailsElement): HTMLDetailsElement {
+    const stored = this._sectionState[id];
+    if (typeof stored === 'boolean') section.open = stored;
+    section.addEventListener('toggle', () => {
+      this._sectionState[id] = section.open;
+      saveInspectorSection(id, section.open);
+    });
+    return section;
+  }
+
   setLayerHealth(
     layers: Parameters<LayerHealthCard['update']>[0],
     report: Parameters<LayerHealthCard['update']>[1],

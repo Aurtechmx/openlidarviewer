@@ -434,7 +434,9 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
           verticalDatumKnown: (info.verticalDatum ?? null) !== null,
         })),
       );
-      inspector.setLayerHealth(healthLayers, report);
+      // One layer has nothing to compare against, so the cross-layer report
+      // would only say so. The card drops the block entirely instead.
+      inspector.setLayerHealth(healthLayers, infos.length <= 1 ? null : report);
     }
     // The two-epoch compare needs exactly two loaded layers.
     inspector.setLayerCompareAvailable(getViewer().clouds().length === 2);

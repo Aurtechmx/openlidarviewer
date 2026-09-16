@@ -147,9 +147,8 @@ export interface ScanSignals {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DISCLAIMER =
-  'These are expected ranges from the cited literature, not guarantees. ' +
-  'Your scan may differ — validate against ground control if survey-grade ' +
-  'accuracy is required.';
+  'Expected ranges from the cited literature, not guarantees; validate against ' +
+  'ground control if survey-grade accuracy is required.';
 
 /** Source string for the USGS Lidar Base Specification (QL floors, RMSEz, NVA). */
 const USGS_LBS_SOURCE = 'USGS Lidar Base Specification';

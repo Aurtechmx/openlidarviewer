@@ -133,3 +133,13 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   font-size: var(--text-xs); color: var(--text-dim);
 }
 
+.olv-layerhealth-details {
+  margin-top: var(--space-2xs);
+  border-top: 1px solid var(--hairline);
+}
+.olv-layerhealth-details-summary {
+  cursor: pointer; list-style: none;
+  font-size: var(--text-xs); color: var(--text-dim);
+  padding: var(--space-xs) 0;
+}
+.olv-layerhealth-details-summary::-webkit-details-marker { display: none; }

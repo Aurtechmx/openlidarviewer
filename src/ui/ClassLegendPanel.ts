@@ -44,6 +44,10 @@ import {
 } from '../render/colorModes';
 import { classificationLabel } from '../render/pointInfo';
 
+/** Shown under class 1 when it holds more than half the counted points. */
+export const UNCLASSIFIED_MAJORITY_HINT =
+  'Most returns in this file are unclassified. Canopy and structures are usually here.';
+
 /** A change the panel reports back to the host after a user interaction. */
 export type ClassLegendChange = (visibility: ClassVisibility) => void;
 
@@ -484,7 +488,20 @@ export class ClassLegendPanel {
     // FROM — with a single class, "Solo" would just flip the panel into a
     // filtered state with no visible change, so it's disabled.
     const soloUseful = codes.length > 1;
-    this._list.replaceChildren(...codes.map((code) => this._row(code, soloUseful)));
+    // Code 1 dominating the file is the common "nothing is classified yet"
+    // case; say where the missing canopy and buildings actually are.
+    let total = 0;
+    for (const [, n] of this._counts) total += n;
+    const unclassified = this._counts.get(1) ?? 0;
+    const majorityUnclassified = total > 0 && unclassified * 2 > total;
+    const children: HTMLElement[] = [];
+    for (const code of codes) {
+      children.push(this._row(code, soloUseful));
+      if (code === 1 && majorityUnclassified) {
+        children.push(el('p', { className: 'olv-cl-row-hint', text: UNCLASSIFIED_MAJORITY_HINT }));
+      }
+    }
+    this._list.replaceChildren(...children);
 
     // Persistent banner — only while a filter is active.
     if (this._visibility.isFiltered()) {

@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { ClassLegendPanel } from '../src/ui/ClassLegendPanel';
+import { ClassLegendPanel, UNCLASSIFIED_MAJORITY_HINT } from '../src/ui/ClassLegendPanel';
 import { classify } from '../src/diagnostics/provenance';
 
 type Handler = (e: unknown) => void;
@@ -221,5 +221,30 @@ describe('Classes legend — every figure names the loaded sample', () => {
     panel.setClasses(COUNTS, { loaded: LOADED, declared: 47_900_000 });
     expect(caption(panel)?.textContent ?? '').toMatch(/Solo/);
     expect(caption(panel)?.textContent ?? '').toMatch(/loaded display sample/);
+  });
+});
+
+describe('Classes legend: an unclassified majority says where the rest went', () => {
+  /** The hint node under class 1, or null when the panel never built one. */
+  function hint(panel: ClassLegendPanel): FakeEl | null {
+    return (panel.element as unknown as FakeEl).querySelector('.olv-cl-row-hint');
+  }
+
+  it('shows the hint when code 1 holds more than half the counted points', () => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(new Map([[1, 900], [2, 100]]));
+    expect(hint(panel)?.textContent).toBe(UNCLASSIFIED_MAJORITY_HINT);
+  });
+
+  it('stays silent when the file is mostly classified', () => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(new Map([[1, 100], [2, 900]]));
+    expect(hint(panel)).toBeNull();
+  });
+
+  it('stays silent at exactly half', () => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(new Map([[1, 500], [2, 500]]));
+    expect(hint(panel)).toBeNull();
   });
 });

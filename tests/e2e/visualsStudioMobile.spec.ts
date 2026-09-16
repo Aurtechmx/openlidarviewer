@@ -58,6 +58,16 @@ async function loadOnPhoneAndOpenSheet(
       await activate(visualsDetails.locator('summary').first());
     }
   }
+
+  // Workflow, RGB and Background are collapsible sub-groups and start
+  // closed; open them so their chips have a layout box to measure.
+  const groups = page.locator('.olv-visuals-body > details.olv-section-collapsible');
+  const groupCount = await groups.count();
+  for (let i = 0; i < groupCount; i++) {
+    const group = groups.nth(i);
+    const open = await group.evaluate((el) => (el as HTMLDetailsElement).open);
+    if (!open) await activate(group.locator('summary').first());
+  }
 }
 
 for (const phone of PHONES) {
@@ -67,14 +77,15 @@ for (const phone of PHONES) {
     }) => {
       await loadOnPhoneAndOpenSheet(page, phone.width, phone.height);
 
-      await expect(
-        page.locator('.olv-visuals-group-label', { hasText: 'RGB' }),
-      ).toBeVisible();
+      for (const label of ['RGB', 'Background']) {
+        await expect(
+          page.locator('.olv-visuals-body > details.olv-section-collapsible > summary', {
+            hasText: label,
+          }),
+        ).toBeVisible();
+      }
       await expect(
         page.locator('.olv-visuals-group-label', { hasText: 'Depth (EDL)' }),
-      ).toBeVisible();
-      await expect(
-        page.locator('.olv-visuals-group-label', { hasText: 'Background' }),
       ).toBeVisible();
     });
 

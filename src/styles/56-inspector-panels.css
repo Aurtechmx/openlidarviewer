@@ -183,10 +183,23 @@
   letter-spacing: 0.02em;
   color: var(--text-faint);
 }
-.olv-prov-bound { display: flex; flex-direction: column; gap: 1px; }
+/* Label left, figure right on one line; the citation drops to its own row. */
+.olv-prov-bound {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  column-gap: var(--space-md);
+  row-gap: 1px;
+}
 .olv-prov-bound-label  { font-size: var(--text-xs); color: var(--text-faint); }
-.olv-prov-bound-value  { font-size: var(--text-value); color: var(--text); font-variant-numeric: tabular-nums; }
-.olv-prov-bound-source { font-size: var(--text-2xs);   color: var(--text-faint); font-style: italic; }
+.olv-prov-bound-value  {
+  font-size: var(--text-sm); color: var(--text);
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+.olv-prov-bound-source {
+  grid-column: 1 / -1;
+  font-size: var(--text-2xs); color: var(--text-dim); font-style: italic;
+}
 .olv-prov-disclaimer {
   font-size: var(--text-xs);
   color: var(--text-faint);
@@ -340,3 +353,14 @@
 }
 @keyframes olv-pc-deplete { from { width: 100%; } to { width: 0%; } }
 
+
+/*
+ * Visuals Studio sub-groups are real collapsible sections nested inside an
+ * already-indented section body, so they drop the outer rule and top padding
+ * and keep only the summary row.
+ */
+.olv-visuals-body > .olv-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
