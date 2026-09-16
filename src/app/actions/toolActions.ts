@@ -66,7 +66,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
       hint: 'Show only the points inside a box, or hide them.',
       keywords: ['slab', 'section', 'crop', 'box', 'hide'],
       help: {
-        summary: 'Restricts what the viewer draws to an axis-aligned box. Nothing is removed from the scan and no export is changed.',
+        summary: 'Restricts what the viewer draws to an axis-aligned box without changing the source scan. A point-cloud export made while the clip is on carries the clipped points, not the whole cloud.',
       },
       run: () => {
         deps.toggleClip();

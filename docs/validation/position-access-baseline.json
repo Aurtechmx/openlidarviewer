@@ -1,5 +1,5 @@
 {
-  "total": 160,
+  "total": 154,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/featureExtractionInput.ts": 1,
@@ -25,7 +25,7 @@
     "src/io/loadXyz.ts": 1,
     "src/io/parseWorker.ts": 2,
     "src/io/tiles3d/pntsDecode.ts": 1,
-    "src/main.ts": 12,
+    "src/main.ts": 6,
     "src/model/PointCloud.ts": 17,
     "src/model/pointFrames.ts": 2,
     "src/render/ContourOverlay.ts": 1,
