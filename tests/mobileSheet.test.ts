@@ -3,103 +3,15 @@
  *
  * The phone bottom-sheet chrome: a three-way tablist (View / Analyse / Layers)
  * over three tabpanel slots the host re-parents panels into, plus a collapse
- * handle. Runs in the node environment through a small recording DOM stub (the
- * same stub-the-slice approach the other UI tests use), asserting on state and
- * ARIA rather than pixels.
+ * handle. Runs in the node environment through the shared live fake DOM
+ * (tests/helpers/liveFakeDom.ts), asserting on state and ARIA rather than
+ * pixels.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { FakeEl, installLiveFakeDom } from './helpers/liveFakeDom';
 
-class FakeEl {
-  title = '';
-  type = '';
-  id = '';
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly attrs: Record<string, string> = {};
-  private _classes = new Set<string>();
-  private readonly _listeners = new Map<string, ((ev: unknown) => void)[]>();
-  focused = false;
-  parent: FakeEl | null = null;
-  readonly tagName: string;
-  // `className` and `classList` share ONE backing set, so el()'s
-  // `node.className = '…'` and later `classList.toggle()` stay consistent.
-  get className(): string { return [...this._classes].join(' '); }
-  set className(v: string) { this._classes = new Set(v.split(/\s+/).filter(Boolean)); }
-  readonly classList = {
-    toggle: (c: string, force?: boolean): void => {
-      const on = force === undefined ? !this._classes.has(c) : force;
-      if (on) this._classes.add(c);
-      else this._classes.delete(c);
-    },
-    contains: (c: string): boolean => this._classes.has(c),
-    add: (c: string): void => { this._classes.add(c); },
-    remove: (c: string): void => { this._classes.delete(c); },
-  };
-  constructor(tagName: string) { this.tagName = tagName; }
-  hasClass(c: string): boolean { return this._classes.has(c); }
-  setAttribute(k: string, v: string): void { this.attrs[k] = v; }
-  getAttribute(k: string): string | null { return this.attrs[k] ?? null; }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void {
-    for (const k of kids) { k.parent = this; this.children.push(k); }
-  }
-  private _matches(sel: string): boolean {
-    if (sel.startsWith('.')) return this._classes.has(sel.slice(1));
-    const attr = /^\[([^=\]]+)="([^"]+)"\]$/.exec(sel);
-    if (attr) return this.attrs[attr[1]] === attr[2];
-    return false;
-  }
-  /** Minimal `closest`: walks up parents matching `.class` or `[attr="v"]`. */
-  closest(sel: string): FakeEl | null {
-    let node: FakeEl | null = this;
-    while (node) {
-      if (node._matches(sel)) return node;
-      node = node.parent;
-    }
-    return null;
-  }
-  addEventListener(type: string, fn: (ev: unknown) => void): void {
-    const list = this._listeners.get(type) ?? [];
-    list.push(fn);
-    this._listeners.set(type, list);
-  }
-  fire(type: string, ev: unknown = {}): void {
-    for (const fn of this._listeners.get(type) ?? []) fn(ev);
-  }
-  focus(): void { this.focused = true; }
-  /** Depth-first find of the first descendant (or self) matching a predicate. */
-  find(pred: (e: FakeEl) => boolean): FakeEl | undefined {
-    if (pred(this)) return this;
-    for (const c of this.children) {
-      const hit = c.find(pred);
-      if (hit) return hit;
-    }
-    return undefined;
-  }
-  findAll(pred: (e: FakeEl) => boolean): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (pred(this)) out.push(this);
-    for (const c of this.children) out.push(...c.findAll(pred));
-    return out;
-  }
-}
-
-beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-  };
-  // `el()` guards `node instanceof HTMLInputElement / HTMLAnchorElement` before
-  // assigning `type` / `href`. Those globals don't exist in the node stub, so
-  // define inert classes — a FakeEl is never an instance, so the branches no-op.
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.HTMLInputElement = class {};
-  g.HTMLAnchorElement = class {};
-});
+beforeAll(installLiveFakeDom);
 
 async function makeSheet(opts = {}) {
   const { MobileSheet } = await import('../src/ui/MobileSheet');

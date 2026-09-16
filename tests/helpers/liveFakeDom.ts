@@ -27,7 +27,7 @@ export class FakeEl {
   set className(v: string) { this._classes = new Set(v.split(/\s+/).filter(Boolean)); }
   readonly classList = {
     toggle: (c: string, force?: boolean): void => {
-      const on = force === undefined ? !this._classes.has(c) : force;
+      const on = force ?? !this._classes.has(c);
       if (on) this._classes.add(c);
       else this._classes.delete(c);
     },
@@ -60,6 +60,21 @@ export class FakeEl {
     else this.children.splice(i, 0, node);
   }
   get parentElement(): FakeEl | null { return this.parent; }
+  private _matches(sel: string): boolean {
+    if (sel.startsWith('.')) return this._classes.has(sel.slice(1));
+    const attr = /^\[([^=\]]+)="([^"]+)"\]$/.exec(sel);
+    if (attr) return this.attrs[attr[1]] === attr[2];
+    return false;
+  }
+  /** Minimal `closest`: walks up parents matching `.class` or `[attr="v"]`. */
+  closest(sel: string): FakeEl | null {
+    let node: FakeEl | null = this;
+    while (node) {
+      if (node._matches(sel)) return node;
+      node = node.parent;
+    }
+    return null;
+  }
   addEventListener(type: string, fn: (ev: unknown) => void): void {
     const list = this._listeners.get(type) ?? [];
     list.push(fn);
@@ -93,14 +108,24 @@ export class FakeEl {
 }
 
 /**
- * Install the stub as the global `document`, plus the two element globals
- * `el()` tests against. Call from `beforeAll`.
+ * The stand-in for the element globals `el()` tests with `instanceof` before it
+ * writes `type` or `href`. Neither global exists in the node runtime, and a
+ * FakeEl is never an instance of this, so both branches stay unvisited. One
+ * class serves both names: nothing reads which one it is.
+ */
+class InertElementGlobal {
+  readonly inert = true;
+}
+
+/**
+ * Install the stub as the global `document`, plus the two element globals.
+ * Call from `beforeAll`.
  */
 export function installLiveFakeDom(): void {
   (globalThis as unknown as { document: unknown }).document = {
     createElement: (tag: string) => new FakeEl(tag),
   };
   const g = globalThis as unknown as Record<string, unknown>;
-  g.HTMLInputElement = class {};
-  g.HTMLAnchorElement = class {};
+  g.HTMLInputElement = InertElementGlobal;
+  g.HTMLAnchorElement = InertElementGlobal;
 }

@@ -2831,7 +2831,6 @@ async function fillToolLauncher(): Promise<void> {
   });
   toolLauncherHost.append(toolLauncherCard.element);
 }
-void fillToolLauncher();
 
 // ── Scan-type routing ────────────────────────────────────────────────────────
 // The route (terrain / interior / object), its streaming re-evaluation and the
@@ -3284,6 +3283,7 @@ void viewerLoaded.then(() => {
       export: exportPanel.element,
     };
     workspace.layoutDesktop(workspacePanels);
+    void fillToolLauncher(); // the card fills its mounted host when its chunk lands
     exportPanel.element.classList.remove('olv-collapsed'); // ditto, at first build
     stage.overlay.append(leftPanels);
     stage.addTeardown(() => workspace.dispose());
