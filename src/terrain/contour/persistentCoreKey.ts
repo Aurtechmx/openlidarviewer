@@ -5,11 +5,12 @@
  * core cache must satisfy — the "Phase-0.5" library increment behind the
  * recompute-vs-reuse gate in `tests/benchmark/terrainCoreRebuildCost.test.ts`.
  *
- * It deliberately stops short of any storage: no OPFS, no serialization of the
- * core, no reopen wiring. The gate's own condition — "a browser measurement of
- * real OPFS read + deserialization must confirm before any storage code is
- * written" — still stands. What this module provides is the part that is pure,
- * deterministic and fully Node-testable *now*: how a persisted core would be
+ * This module holds no storage of its own. The OPFS store lives in
+ * `terrainCoreStore.ts` and the payload format in `terrainCorePayload.ts`;
+ * both were written after the browser measurement in
+ * `tests/browser-bench/terrainCoreReopen.bench.ts` confirmed the reuse gate.
+ * What this module provides is the part that is pure,
+ * deterministic and fully Node-testable: how a persisted core is
  * keyed, and exactly which input changes must force a miss.
  *
  * It differs from the in-memory {@link coreFingerprint} in two ways that only
