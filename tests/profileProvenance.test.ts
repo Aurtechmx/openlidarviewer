@@ -359,7 +359,7 @@ describe('a resident-only read is not a complete one', () => {
 
   it('reports resident-only with unknown coverage as unknown, never as complete', () => {
     const rec = buildProfileProvenance(
-      streamingSource({ knownNodeCount: null, residentNodeCount: 40 }),
+      streamingSource({ knownNodeCount: null, residentNodeCount: 40, hierarchyComplete: true }),
     );
     expect(rec.residentOnly).toBe(true);
     expect(rec.complete).toBe(null);
@@ -369,7 +369,7 @@ describe('a resident-only read is not a complete one', () => {
 
   it('reports a provable gap as incomplete', () => {
     const rec = buildProfileProvenance(
-      streamingSource({ knownNodeCount: 120, residentNodeCount: 40 }),
+      streamingSource({ knownNodeCount: 120, residentNodeCount: 40, hierarchyComplete: true }),
     );
     expect(rec.residentOnly).toBe(true);
     expect(rec.complete).toBe(false);
@@ -377,7 +377,7 @@ describe('a resident-only read is not a complete one', () => {
 
   it('allows complete only when residency is actually established', () => {
     const rec = buildProfileProvenance(
-      streamingSource({ knownNodeCount: 120, residentNodeCount: 120 }),
+      streamingSource({ knownNodeCount: 120, residentNodeCount: 120, hierarchyComplete: true }),
     );
     expect(rec.residentOnly).toBe(true);
     expect(rec.complete).toBe(true);
@@ -392,7 +392,7 @@ describe('a resident-only read is not a complete one', () => {
             slot: 1,
             layerId: 'stream-b',
             streaming: true,
-            coverage: { knownNodeCount: null, residentNodeCount: 3 },
+            coverage: { knownNodeCount: null, residentNodeCount: 3, hierarchyComplete: true },
           }),
         ],
         accepted: accepted(8, [0, 1]),
@@ -523,7 +523,7 @@ describe('rule 4 — the field is additive, so an older session still loads', ()
             layerId: 'layer-beta-41ab',
             displayName: 'Haul road',
             streaming: true,
-            coverage: { knownNodeCount: 40, residentNodeCount: 12 },
+            coverage: { knownNodeCount: 40, residentNodeCount: 12, hierarchyComplete: true },
           }),
         ],
         accepted: accepted(30, [0, 1]),

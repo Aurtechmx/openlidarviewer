@@ -44,6 +44,13 @@ export interface StreamingCoverage {
   readonly knownNodeCount: number | null;
   /** Nodes currently resident. */
   readonly residentNodeCount: number;
+  /**
+   * Whether the source's hierarchy has been read to its end. An EPT source
+   * opens with a shallow hierarchy and deepens it afterwards, so a resident
+   * count that matches the known count says nothing until this is true. Null
+   * means the source did not say.
+   */
+  readonly hierarchyComplete: boolean | null;
 }
 
 const KEY_PATTERN = /^(\d+)-(\d+)-(\d+)-(\d+)$/;
@@ -84,9 +91,12 @@ export function orderResidentNodes(nodes: readonly ResidentNodeRef[]): ResidentN
  * source whose hierarchy has not been read far enough to count its nodes
  * cannot support either claim, and an absence of pending requests is not
  * evidence of coverage: a scheduler with nothing queued has often simply
- * stopped asking.
+ * stopped asking. A hierarchy still being discovered is false outright: every
+ * known node can be resident while thousands of deeper nodes are not yet known.
  */
 export function streamingIsComplete(coverage: StreamingCoverage): boolean | null {
+  if (coverage.hierarchyComplete === false) return false;
+  if (coverage.hierarchyComplete !== true) return null;
   const known = coverage.knownNodeCount;
   if (known == null || !Number.isFinite(known) || known < 0) return null;
   if (!Number.isFinite(coverage.residentNodeCount) || coverage.residentNodeCount < 0) return null;

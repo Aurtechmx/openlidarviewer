@@ -92,24 +92,33 @@ describe('resident nodes read in a fixed order', () => {
 
 describe('completeness is refused when it cannot be supported', () => {
   it('is unknown when the node count is unknown', () => {
-    expect(streamingIsComplete({ knownNodeCount: null, residentNodeCount: 40 })).toBeNull();
+    expect(streamingIsComplete({ knownNodeCount: null, residentNodeCount: 40, hierarchyComplete: true })).toBeNull();
   });
 
   it('is false when nodes are known to be missing', () => {
-    expect(streamingIsComplete({ knownNodeCount: 100, residentNodeCount: 99 })).toBe(false);
+    expect(streamingIsComplete({ knownNodeCount: 100, residentNodeCount: 99, hierarchyComplete: true })).toBe(false);
   });
 
   it('is true only when every known node is resident', () => {
-    expect(streamingIsComplete({ knownNodeCount: 100, residentNodeCount: 100 })).toBe(true);
-    expect(streamingIsComplete({ knownNodeCount: 0, residentNodeCount: 0 })).toBe(true);
+    expect(streamingIsComplete({ knownNodeCount: 100, residentNodeCount: 100, hierarchyComplete: true })).toBe(true);
+    expect(streamingIsComplete({ knownNodeCount: 0, residentNodeCount: 0, hierarchyComplete: true })).toBe(true);
+  });
+
+  it('an EPT hierarchy still being discovered is not complete, however many known nodes are resident', () => {
+    // EPT opens with a shallow hierarchy for first paint and deepens it later:
+    // every known node can be resident while thousands are not yet known.
+    expect(streamingIsComplete({ knownNodeCount: 20, residentNodeCount: 20, hierarchyComplete: false })).toBe(false);
+    expect(streamingIsComplete({ knownNodeCount: 20, residentNodeCount: 20, hierarchyComplete: null })).toBeNull();
+    expect(streamingIsComplete({ knownNodeCount: 200, residentNodeCount: 200, hierarchyComplete: true })).toBe(true);
+    expect(streamingIsComplete({ knownNodeCount: 200, residentNodeCount: 199, hierarchyComplete: true })).toBe(false);
   });
 
   it('is unknown for a nonsensical count rather than defaulting either way', () => {
     for (const c of [
-      { knownNodeCount: Number.NaN, residentNodeCount: 1 },
-      { knownNodeCount: -1, residentNodeCount: 1 },
-      { knownNodeCount: 10, residentNodeCount: Number.NaN },
-      { knownNodeCount: 10, residentNodeCount: -3 },
+      { knownNodeCount: Number.NaN, residentNodeCount: 1, hierarchyComplete: true },
+      { knownNodeCount: -1, residentNodeCount: 1, hierarchyComplete: true },
+      { knownNodeCount: 10, residentNodeCount: Number.NaN, hierarchyComplete: true },
+      { knownNodeCount: 10, residentNodeCount: -3, hierarchyComplete: true },
     ]) {
       expect(streamingIsComplete(c)).toBeNull();
     }

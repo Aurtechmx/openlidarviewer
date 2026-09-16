@@ -317,7 +317,7 @@ describe('stockpileToastSuffix (area-grid)', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
     const suffix = stockpileToastSuffix(RECT, pts, 1, {
       streamingContributed: true,
-      streamingCoverage: { knownNodeCount: 100, residentNodeCount: 5 },
+      streamingCoverage: { knownNodeCount: 100, residentNodeCount: 5, hierarchyComplete: true },
     });
     expect(suffix).toMatch(/PREVIEW \(source is streaming and not fully resident\)/);
     expect(suffix).not.toMatch(/MEASURED/);
@@ -325,18 +325,25 @@ describe('stockpileToastSuffix (area-grid)', () => {
   test('unknown streaming coverage is not evidence of completeness', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
     for (const streamingCoverage of [
-      { knownNodeCount: null, residentNodeCount: 5 },
+      { knownNodeCount: null, residentNodeCount: 5, hierarchyComplete: true },
       null,
     ]) {
       expect(stockpileToastSuffix(RECT, pts, 1, { streamingContributed: true, streamingCoverage }))
         .toMatch(/PREVIEW \(source is streaming and not fully resident\)/);
     }
   });
+  test('an EPT source whose hierarchy is still deepening stays PREVIEW even with every known node resident', () => {
+    const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+    expect(stockpileToastSuffix(RECT, pts, 1, {
+      streamingContributed: true,
+      streamingCoverage: { knownNodeCount: 20, residentNodeCount: 20, hierarchyComplete: false },
+    })).toMatch(/PREVIEW \(source is streaming and not fully resident\)/);
+  });
   test('a fully resident streaming source reads MEASURED', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
     expect(stockpileToastSuffix(RECT, pts, 1, {
       streamingContributed: true,
-      streamingCoverage: { knownNodeCount: 12, residentNodeCount: 12 },
+      streamingCoverage: { knownNodeCount: 12, residentNodeCount: 12, hierarchyComplete: true },
     })).toMatch(/· MEASURED ·/);
   });
   test('a degenerate footprint or too few points yields nothing', () => {
