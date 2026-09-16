@@ -1729,7 +1729,7 @@ export class AnalysePanel {
         const strideNote = (this._result?.warnings ?? []).some((w) =>
           w.includes('uniform-stride assumption'),
         )
-          ? ' Density is scaled from the analysed sample (uniform-stride assumption).'
+          ? ' Density is scaled from the analysed subsample to the loaded display sample (uniform-stride assumption).'
           : '';
         // A density REFERENCE, not a quality-level grade: ground-return density
         // is not a nominal-pulse-density determination. The chip names the 3DEP

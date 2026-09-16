@@ -1285,9 +1285,9 @@ export function computeTerrainCore(
       : 1;
   if (densityScale > 1 && cellMetrics.meanDensity > 0) {
     warnings.push(
-      'Ground density is scaled from the analysed sample to the full scan ' +
-        '(uniform-stride assumption); the USGS 3DEP density reference is derived ' +
-        'from that scaled density, not a directly counted one.',
+      'Ground density is scaled from the analysed subsample to the loaded display sample ' +
+        '(uniform-stride assumption), not counted across the whole file; the USGS 3DEP ' +
+        'density reference is derived from that scaled density.',
     );
   }
   const coveredCells =

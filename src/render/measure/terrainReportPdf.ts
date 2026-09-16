@@ -134,7 +134,11 @@ export async function buildTerrainReportPdf(
   // ── Title + subtitle ─────────────────────────────────────────────────────
   text(content.subtitle, M, y - 12, 11, bold, DIM);
   y -= 18;
-  text(content.title, M, y - 18, 20, bold, INK);
+  // A long scan name shrinks to the page width rather than running off it.
+  const titleW = PW - 2 * M;
+  let titleSize = 20;
+  while (titleSize > 11 && bold.widthOfTextAtSize(safe(content.title), titleSize) > titleW) titleSize -= 1;
+  text(content.title, M, y - 18, titleSize, bold, INK);
   y -= 26;
   page.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 1, color: FRAME });
   y -= 20;
@@ -143,6 +147,7 @@ export async function buildTerrainReportPdf(
   const labelX = M;
   const valueX = M + 170;
   const valueW = PW - M - valueX;
+  const labelW = valueX - labelX - 8;
   for (const sec of content.sections) {
     // Keep a section header with at least its first row on the same page.
     ensure(34);
@@ -152,10 +157,10 @@ export async function buildTerrainReportPdf(
     y -= 14;
     for (const row of sec.rows) {
       ensure(16);
-      text(row.label, labelX, y, 9.5, bold, DIM);
-      // Value may wrap (long reasons / notes) — keep label fixed, wrap the value.
+      // Both columns wrap inside their own width; the row advances by the taller.
+      const labelEndY = drawWrapped(page, bold, row.label, labelX, y, labelW, 9.5, DIM);
       const endY = drawWrapped(page, font, row.value, valueX, y, valueW, 9.5, INK);
-      y = Math.min(y - 14, endY - 2);
+      y = Math.min(y - 14, endY - 2, labelEndY - 2);
     }
     y -= 10;
   }

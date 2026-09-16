@@ -586,7 +586,9 @@ export function buildTerrainReportContent(
   const products: TerrainReportProduct[] = terrainProducts(assessment, workflowItems).map(
     (p) => {
       const evidence = productEvidence(p.label, provenance);
-      return p.statusWord === 'Ready' || p.reason == null
+      // The surface reason already stands in Terrain Assessment; a product row
+      // repeats only a reason of its own (a georeferencing gap, for instance).
+      return p.statusWord === 'Ready' || p.reason == null || p.reason === assessment.reason
         ? { label: p.label, availability: p.statusWord === 'Ready' ? ('Available' as const) : p.statusWord, evidence }
         : { label: p.label, availability: p.statusWord, note: p.reason, evidence };
     },
