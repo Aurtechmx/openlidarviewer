@@ -211,7 +211,7 @@ describe('buildLayerHealth — frame membership, origin and streaming', () => {
       buildLayerHealth(base({ residency: { resident: 2_880_236, source: 53_670_848 } })),
       'Loading',
     );
-    expect(r.value).toBe('display sample — 2,880,236 of 53,670,848 resident');
+    expect(r.value).toBe('display sample: 2,880,236 of 53,670,848 declared points resident');
     expect(r.status).toBe('info');
   });
 });
