@@ -346,12 +346,13 @@ export function buildTerrainReportContent(
       },
       ...intelligenceRows,
       {
-        // "full" means the surface walked every point it was handed, which on
-        // a display sample is the analysed subsample named in the row below,
-        // not the whole file. The bare label read as a claim about the file
-        // and sat directly above a basis line that said otherwise.
-        label: 'Coverage mode (of the analysed points)',
-        value: provenance.coverageMode,
+        // This is the GRID's extent, not the read: a strided read still builds
+        // a full grid, and the row below says which points were read. The bare
+        // "Coverage mode / full" label read as a claim about the file and sat
+        // directly above a basis line that said otherwise. Reads gridExtent,
+        // the live field; `coverageMode` is its deprecated alias.
+        label: 'Grid extent walked',
+        value: provenance.gridExtent,
       },
       { label: 'Analysed basis', value: provenance.analysedBasisLine },
       { label: 'Horizontal CRS', value: provenance.horizontalCrs },
