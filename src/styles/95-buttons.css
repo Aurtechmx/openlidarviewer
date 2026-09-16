@@ -105,6 +105,7 @@
 .olv-analyse-run:not(.is-rerun):not(:disabled),
 .olv-analyse-dl.is-primary:not(:disabled),
 .olv-object-dl.is-primary:not(:disabled),
+.olv-object-run-anyway:not(:disabled),
 .olv-bc-convert:not(:disabled) {
   color: var(--on-accent);
   background: var(--accent);
@@ -115,6 +116,7 @@
 .olv-analyse-run:not(.is-rerun):not(:disabled):hover,
 .olv-analyse-dl.is-primary:not(:disabled):hover,
 .olv-object-dl.is-primary:not(:disabled):hover,
+.olv-object-run-anyway:not(:disabled):hover,
 .olv-bc-convert:not(:disabled):hover {
   color: var(--on-accent);
   background: color-mix(in srgb, var(--accent) 88%, white);
@@ -127,6 +129,7 @@
 .olv-analyse-run:not(.is-rerun),
 .olv-analyse-dl.is-primary,
 .olv-object-dl.is-primary,
+.olv-object-run-anyway,
 .olv-bc-convert,
 .olv-modal-cta {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset,

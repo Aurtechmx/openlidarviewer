@@ -166,13 +166,15 @@
 .olv-fp-toggle-input { accent-color: var(--accent); cursor: pointer; }
 .olv-fp-toggle-text { font-size: var(--text-2xs); color: var(--text-dim); }
 
+/* The escape hatch leads the panel, full width, in the Report PDF primary
+   look, so a misrouted ground scan reaches terrain analysis in one click. */
 .olv-object-run-anyway {
-  align-self: flex-start; margin-top: var(--space-sm); font: inherit; font-size: var(--text-xs); font-weight: 600;
-  color: var(--text-dim); background: transparent;
-  border: 0.5px solid var(--hairline); border-radius: var(--radius-md);
-  padding: var(--space-sm) var(--space-xl); cursor: pointer;
+  display: block; width: 100%; box-sizing: border-box; margin-bottom: var(--space-md);
+  font: inherit; font-size: var(--text-xs); font-weight: 600;
+  color: var(--on-accent); background: var(--accent);
+  border: 0.5px solid var(--accent); border-radius: var(--radius-sm);
+  padding: var(--space-sm); cursor: pointer;
 }
-.olv-object-run-anyway:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Manual scan-type override ("Treat as") — the safety net for a misdetection.
  * Reused verbatim by the Object/Space panel and the terrain Analyse panel; the

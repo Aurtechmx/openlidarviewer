@@ -379,4 +379,18 @@ describe('ObjectPanel - point populations are named as the report names them', (
     expect(text).toMatch(/measured/i);
     expect(text).not.toContain('Points (used');
   });
+
+  it('the escape hatch leads the panel, ahead of the scan title', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    // It used to sit at the foot of the panel, below the measurements, the
+    // caveats, the export row and the "Treat as" selector. A ground scan routed
+    // to the object path had its recovery furthest from the eye.
+    const panel = new ObjectPanel({});
+    const root = panel.element as unknown as FakeEl;
+    const first = root.children[0] as FakeEl;
+    expect(first.className).toContain('olv-object-run-anyway');
+    expect(first.tagName.toLowerCase()).toBe('button');
+    const titleIndex = root.children.findIndex((c) => (c as FakeEl).className.includes('olv-panel-head'));
+    expect(titleIndex).toBeGreaterThan(0);
+  });
 });

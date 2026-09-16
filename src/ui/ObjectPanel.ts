@@ -203,6 +203,7 @@ export class ObjectPanel {
   private readonly _title: HTMLElement;
   private readonly _body: HTMLElement;
   private readonly _scanTypeControl: ScanTypeControl;
+  private readonly _runAnyway: HTMLButtonElement;
   // Current override + effective route + disabled-with-reason map, re-applied
   // on every render (the body is rebuilt each showSpace/showObject) so the
   // control never loses its state.
@@ -229,14 +230,27 @@ export class ObjectPanel {
     this._scanTypeControl = createScanTypeControl({
       onChange: (o) => this._cb.onScanTypeChange?.(o),
     });
-    this.element = el('aside', { className: 'olv-object-panel olv-hidden' }, [head, this._body]);
+    // Built here because it is drawn first: the escape hatch leads the panel,
+    // above the scan title, between it and the Analyse panel's Terrain
+    // Products, so a misrouted ground scan is one visible click from the
+    // terrain pipeline. Built once; the body below is rebuilt on every render
+    // and never touches it.
+    this._runAnyway = el('button', {
+      className: 'olv-object-run-anyway',
+      text: 'Run terrain contours anyway',
+      title: 'Treat this as a ground scan and run the DTM / contour pipeline.',
+    }) as HTMLButtonElement;
+    this._runAnyway.type = 'button';
+    this._runAnyway.addEventListener('click', () => this._cb.onRunTerrainAnyway?.());
+    this.element = el('aside', { className: 'olv-object-panel olv-hidden' }, [this._runAnyway, head, this._body]);
   }
 
   /**
    * Reflect the host's override + the effective route in the "Treat as"
    * control. `disabled` greys out segments the detection has ruled out (e.g.
    * Terrain on an interior/object scan) with their visible reasons — the
-   * "Run terrain contours anyway" escape hatch below stays functional.
+   * "Run terrain contours anyway" button at the top of the panel stays
+   * functional.
    */
   setScanType(
     override: ScanTypeOverride,
@@ -537,9 +551,9 @@ export class ObjectPanel {
     return fieldset;
   }
 
-  /** The "Treat as" override row — placed near the run-anyway escape hatch so
-   *  fixing a misdetection is one obvious click. Re-applies the current state
-   *  because the body is rebuilt on every render. */
+  /** The "Treat as" override row, the full four-way sibling of the run-anyway
+   *  button at the top of the panel. Re-applies the current state because the
+   *  body is rebuilt on every render. */
   private _scanTypeRow(): void {
     this._scanTypeControl.set(
       this._scanTypeOverride,
@@ -550,25 +564,13 @@ export class ObjectPanel {
     this._body.append(this._scanTypeControl.element);
   }
 
-  private _runAnywayButton(): void {
-    this._scanTypeRow();
-    const runBtn = el('button', {
-      className: 'olv-object-run-anyway',
-      text: 'Run terrain contours anyway',
-      title: 'Treat this as a ground scan and run the DTM / contour pipeline.',
-    }) as HTMLButtonElement;
-    runBtn.type = 'button';
-    runBtn.addEventListener('click', () => this._cb.onRunTerrainAnyway?.());
-    this._body.append(runBtn);
-  }
-
   /** Render the INTERIOR (room) report. */
   showSpace(space: SpaceMetrics | null, shape: ScanShape | null): void {
     this._title.textContent = 'Space scan';
     this._body.replaceChildren();
     if (!space) {
       this._body.append(el('div', { className: 'olv-object-note', text: 'No space measurements yet. They appear once the scan points are loaded.' }));
-      this._runAnywayButton();
+      this._scanTypeRow();
       return;
     }
     const d = space.dims;
@@ -608,7 +610,7 @@ export class ObjectPanel {
       className: 'olv-object-note',
       text: `This looks like a ${why}. Terrain analysis — contours, slope, DTM — is for ground scans and would be misleading here.`,
     }));
-    this._runAnywayButton();
+    this._scanTypeRow();
   }
 
   /** Render the OBJECT measurements (with optional capture quality). */
@@ -617,7 +619,7 @@ export class ObjectPanel {
     this._body.replaceChildren();
     if (!metrics) {
       this._body.append(el('div', { className: 'olv-object-note', text: 'No object measurements yet. They appear once the scan points are loaded.' }));
-      this._runAnywayButton();
+      this._scanTypeRow();
       return;
     }
     const o = metrics.obb;
@@ -656,7 +658,7 @@ export class ObjectPanel {
       className: 'olv-object-note',
       text: `This looks like an object${why}. Terrain analysis — contours, slope, DTM — is for ground scans and would be misleading here.`,
     }));
-    this._runAnywayButton();
+    this._scanTypeRow();
   }
 
   /** Back-compat shim — render object metrics only. */
