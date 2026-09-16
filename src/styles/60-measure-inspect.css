@@ -81,6 +81,7 @@
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border: 0.5px solid rgba(0, 178, 255, 0.34);
   border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
+  box-shadow: var(--shadow-floating);
 }
 /* The live instruction ("Tap the first point…") sits as a tidy inline row
  * between the kind tools and the actions on desktop. (On the phone rail it is
@@ -96,7 +97,7 @@
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
   letter-spacing: 0.05em; text-transform: uppercase;
 }
-.olv-measure-hint-text { font-size: var(--text-sm); color: var(--text); }
+.olv-measure-hint-text { font-size: var(--text-sm); color: var(--text); text-wrap: pretty; }
 .olv-measure-actions {
   display: flex; flex-direction: row; align-items: center; gap: var(--space-sm);
 }

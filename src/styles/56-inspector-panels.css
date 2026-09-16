@@ -148,7 +148,10 @@
   font-size: var(--text-xs);
 }
 .olv-declared-prov-key { color: var(--text-dim); }
-.olv-declared-prov-val { color: var(--text); text-align: right; }
+.olv-declared-prov-val {
+  font-size: var(--text-body); color: var(--text); text-align: right;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
 .olv-declared-prov-note { font-size: var(--text-xs); color: var(--accent); margin-top: var(--space-2xs); }
 .olv-declared-prov-limits { font-size: var(--text-2xs); color: var(--text-dim); line-height: 1.4; }
 
@@ -182,7 +185,7 @@
 }
 .olv-prov-bound { display: flex; flex-direction: column; gap: 1px; }
 .olv-prov-bound-label  { font-size: var(--text-xs); color: var(--text-faint); }
-.olv-prov-bound-value  { font-size: var(--text-value); color: var(--text); }
+.olv-prov-bound-value  { font-size: var(--text-value); color: var(--text); font-variant-numeric: tabular-nums; }
 .olv-prov-bound-source { font-size: var(--text-2xs);   color: var(--text-faint); font-style: italic; }
 .olv-prov-disclaimer {
   font-size: var(--text-xs);
@@ -291,7 +294,8 @@
   background: rgba(11, 17, 33,0.9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border: 0.5px solid rgba(0, 178, 255, 0.28);
-  border-radius: 12px; padding: var(--space-xl) var(--space-2xl);
+  border-radius: var(--radius-xl); padding: var(--space-xl) var(--space-2xl);
+  box-shadow: var(--shadow-floating);
   opacity: 0; pointer-events: none;
   transition: opacity var(--dur-slow) var(--ease-standard), transform var(--dur-slow) var(--ease-standard);
 }
@@ -304,9 +308,17 @@
   letter-spacing: 0.02em;
 }
 .olv-pc-dismiss {
+  position: relative;
   background: none; border: none; color: var(--text-faint);
   font-size: var(--text-xl); line-height: 1; padding: 0 var(--space-2xs);
   transition: color var(--dur-fast) var(--ease-standard);
+}
+/* The glyph is ~14x16; the pointer target is 40x40. Nothing else is inside the
+   card head but the title, which sits well left of the grown edge. */
+.olv-pc-dismiss::before {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px; height: 40px;
 }
 .olv-pc-dismiss:hover { color: var(--text); }
 .olv-pc-name {
@@ -318,7 +330,7 @@
 .olv-pc-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-xl); }
 .olv-pc-label { font-size: var(--text-xs); color: var(--text-faint); flex-shrink: 0; }
 .olv-pc-value {
-  font-size: var(--text-xs); color: var(--text); font-variant-numeric: tabular-nums;
+  font-size: var(--text-body); color: var(--text); font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .olv-pc-countdown {

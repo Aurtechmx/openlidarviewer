@@ -15,7 +15,7 @@
   background: var(--panel);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md, 8px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-floating);
   color: var(--text);
   pointer-events: auto;
 }
@@ -27,11 +27,19 @@
 }
 .olv-colorbar-close {
   border: none; background: none; color: var(--text-dim); cursor: pointer;
-  font-size: var(--text-xl); line-height: 1; padding: 2px 5px; border-radius: 4px;
+  position: relative;
+  font-size: var(--text-xl); line-height: 1; padding: 2px 5px; border-radius: var(--radius-xs);
+}
+/* The glyph is ~26x20 of chrome; the pointer target is 40x40. The legend head
+   holds only the range readout to its left, which the grown edge clears. */
+.olv-colorbar-close::before {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px; height: 40px;
 }
 .olv-colorbar-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .olv-colorbar-svg { line-height: 0; }
-.olv-colorbar-note { font-size: var(--text-2xs); color: var(--text-dim); max-width: 150px; }
+.olv-colorbar-note { font-size: var(--text-2xs); color: var(--text-dim); max-width: 150px; text-wrap: pretty; }
 @media (max-width: 767px) {
   .olv-colorbar { right: 14px; }
 }
@@ -55,7 +63,7 @@
 .olv-layerhealth-layers { display: flex; flex-direction: column; gap: var(--space-md); }
 .olv-layerhealth-layer-name {
   font-size: var(--text-sm); font-weight: 600; color: var(--text);
-  margin-bottom: var(--space-2xs); overflow-wrap: anywhere;
+  margin-bottom: var(--space-2xs); overflow-wrap: anywhere; text-wrap: balance;
 }
 /* dl/dt/dd rows — neutralise browser defaults, keep the tight layout
  * (same additive-semantics pattern as .olv-di-rows). */
@@ -68,7 +76,12 @@
 }
 .olv-layerhealth-row-name { color: var(--text-dim); flex: none; }
 .olv-layerhealth-row-value {
+  /* 12px against an 11px label: the fact outranks the word naming it, and the
+     existing `overflow-wrap: anywhere` absorbs the extra width in the 285px
+     left rail rather than pushing the row wider. */
+  font-size: var(--text-body);
   color: var(--text); text-align: right; overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 .olv-layerhealth-row-value.is-mono {
   font-variant-numeric: tabular-nums;
@@ -114,7 +127,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-layerhealth-verdict {
   margin: var(--space-xs) 0 0;
   font-size: var(--text-xs); line-height: 1.45;
-  color: var(--text-dim);
+  color: var(--text-dim); text-wrap: pretty;
 }
 .olv-layerhealth-empty {
   font-size: var(--text-xs); color: var(--text-dim);

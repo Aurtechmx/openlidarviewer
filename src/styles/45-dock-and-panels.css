@@ -7,7 +7,8 @@
   z-index: var(--z-dock);
   display: flex; gap: var(--space-sm);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-md); padding: var(--space-sm);
+  /* 6px padding around --radius-sm buttons, so the shell reads concentric. */
+  border-radius: var(--radius-xl); padding: var(--space-sm);
 }
 /*
  * Gestalt proximity: 6 px gap inside a cluster, 16 px gap between

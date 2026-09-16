@@ -264,8 +264,8 @@
 .olv-findings-empty, .olv-findings-status { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; }
 .olv-findings-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs); font-size: var(--text-xs); }
 .olv-findings-label { color: var(--text-dim); }
-.olv-findings-value { color: var(--text); font-variant-numeric: tabular-nums; }
-.olv-findings-confidence, .olv-findings-caveats { font-size: var(--text-2xs); color: var(--text-faint); flex-basis: 100%; }
+.olv-findings-value { font-size: var(--text-body); color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.olv-findings-confidence, .olv-findings-caveats { font-size: var(--text-2xs); color: var(--text-faint); flex-basis: 100%; text-wrap: pretty; }
 .olv-findings-remove { font-size: var(--text-2xs); color: var(--text-faint); background: none; border: 0; cursor: pointer; padding: 0; }
 .olv-findings-remove:hover { color: var(--text); }
 .olv-findings-actions { display: flex; flex-direction: column; gap: var(--space-xs); }

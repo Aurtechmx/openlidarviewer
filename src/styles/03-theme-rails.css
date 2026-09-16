@@ -39,6 +39,12 @@ body.olv-theme-light {
   --shadow-raised: 0 8px 22px -12px rgba(30, 50, 95, 0.28), 0 0 0 0.5px rgba(35, 60, 110, 0.10);
   --hairline-strong: rgba(35, 60, 110, 0.34);
   --caveat-tint: color-mix(in srgb, var(--rating-good) 16%, white);
+  /* Near-white ground: the same three layers, pitched down so a floating card
+     separates without printing a grey halo on the page. */
+  --shadow-floating:
+    0 0 0 0.5px rgba(35, 60, 110, 0.16),
+    0 4px 10px -4px rgba(30, 50, 95, 0.14),
+    0 16px 34px -18px rgba(30, 50, 95, 0.26);
 }
 
 /*
@@ -89,7 +95,13 @@ html, body {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-body { background: var(--bg); font-family: var(--font); color: var(--text); overflow: hidden; }
+body {
+  background: var(--bg); font-family: var(--font); color: var(--text); overflow: hidden;
+  /* Stem weights at 11–12px render heavy under subpixel smoothing on macOS;
+     grayscale antialiasing keeps the dense panels from looking bolded. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 button { font-family: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
