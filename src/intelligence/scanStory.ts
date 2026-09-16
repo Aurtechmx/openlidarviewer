@@ -240,6 +240,8 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
     scope = { value: 'Resident preview', tier: 'caution' };
   } else if (i.coverageMode === 'sampled') {
     scope = { value: 'Sampled', tier: 'caution' };
+  } else if (i.coverageMode === 'display-sample') {
+    scope = { value: 'Display sample of the file', tier: 'caution' };
   } else {
     scope = { value: 'Unknown', tier: 'info' };
   }
