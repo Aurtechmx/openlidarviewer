@@ -10454,6 +10454,56 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
 }
 
+/* Tools-tab launcher: the registry-driven tool rows, their key chips and the
+   session counts, plus the compact strip the card folds to while a tool panel
+   holds the column. */
+.olv-tool-launcher {
+  width: 100%; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md); padding: var(--space-xl);
+  display: flex; flex-direction: column; gap: var(--space-md);
+}
+.olv-tl-head {
+  font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.02em; color: var(--accent);
+}
+.olv-tl-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-tl-row {
+  display: grid; grid-template-columns: 1fr auto; align-items: center;
+  gap: 0 var(--space-md); width: 100%; box-sizing: border-box; text-align: left;
+  font: inherit; color: var(--text); cursor: pointer;
+  background: none; border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md);
+}
+.olv-tl-row:hover:not(:disabled) { border-color: var(--accent); }
+.olv-tl-row:active:not(:disabled) { transform: var(--btn-press); }
+.olv-tl-row:disabled { opacity: 0.55; cursor: not-allowed; }
+.olv-tl-row .olv-tl-title { font-size: var(--text-xs); font-weight: 600; }
+.olv-tl-row .olv-tl-key { grid-row: 1; grid-column: 2; }
+.olv-tl-hint {
+  grid-column: 1 / -1; font-size: var(--text-body); color: var(--text-dim);
+  line-height: 1.35; text-wrap: pretty;
+}
+.olv-tl-key {
+  font-family: var(--mono, ui-monospace, monospace); font-size: var(--text-xs); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0 var(--space-xs); white-space: nowrap;
+}
+.olv-tl-counts {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: var(--text-xs); color: var(--text-dim);
+}
+.olv-tl-counts-value { font-variant-numeric: tabular-nums; color: var(--text); }
+.olv-tool-launcher.is-strip { flex-direction: column; gap: var(--space-sm); padding: var(--space-md) var(--space-xl); }
+.olv-tool-launcher.is-strip .olv-tl-rows { flex-direction: row; flex-wrap: wrap; gap: var(--space-xs); }
+.olv-tl-chip {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  font: inherit; font-size: var(--text-xs); color: var(--text-dim); cursor: pointer;
+  background: none; border: 1px solid var(--border); border-radius: 999px;
+  padding: 2px var(--space-md);
+}
+.olv-tl-chip:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.olv-tl-chip:active:not(:disabled) { transform: var(--btn-press); }
+.olv-tl-chip:disabled { opacity: 0.55; cursor: not-allowed; }
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
    Windows High Contrast replaces the author palette with a small system one.
    Backgrounds, borders and shadows are forced, `backdrop-filter` stops

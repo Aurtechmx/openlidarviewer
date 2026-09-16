@@ -119,6 +119,17 @@ export class ClipPanel {
     this.setVisible(false);
   }
 
+  /**
+   * Flip the clip on or off exactly as the panel's own checkbox does. The
+   * Tools launcher's Clip row runs this, so there is one write path and the
+   * checkbox, the clip state and the viewer can never disagree.
+   */
+  toggleEnabled(): void {
+    this._enabled = !this._enabled;
+    this._enableBox.checked = this._enabled;
+    this._apply();
+  }
+
   setVisible(on: boolean): void {
     this.element.style.display = on ? '' : 'none';
     if (!on) {

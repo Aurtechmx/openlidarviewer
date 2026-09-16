@@ -77,6 +77,8 @@ export interface WorkspacePanels {
   readonly dataLayerHealth: HTMLElement;
   readonly classLegend: HTMLElement;
   readonly annotation: HTMLElement;
+  /** The Tools-tab launcher card; leads the work mode when present. */
+  readonly toolLauncher?: HTMLElement | null;
   readonly clip: HTMLElement;
   readonly processStudio: HTMLElement;
   readonly export: HTMLElement;
@@ -195,7 +197,9 @@ export class DesktopWorkspace {
     this.mountInMode('data', p.dataLayers);
     this.mountInMode('data', p.dataLayerHealth);
     this.mountInMode('data', p.classLegend);
-    // Work carries the scene-work tools: measurement, annotation, clip.
+    // Work carries the scene-work tools: measurement, annotation, clip. The
+    // launcher leads, so the tab names its tools before any of them is used.
+    if (p.toolLauncher) this.mountInMode('work', p.toolLauncher);
     if (p.measure) this.mountInMode('work', p.measure);
     this.mountInMode('work', p.annotation);
     this.mountInMode('work', p.clip);
