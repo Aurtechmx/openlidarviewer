@@ -118,9 +118,9 @@ describe('buildExportSummary — warnings', () => {
     );
   });
 
-  it('a decimated view warns unless full-res is ticked', () => {
+  it('a decimated view is flagged unless full-res is ticked', () => {
     expect(warns({ ...base, viewDecimated: true })).toEqual(
-      expect.arrayContaining([expect.stringMatching(/warn:.*full resolution/i)]),
+      expect.arrayContaining([expect.stringMatching(/info:.*full resolution/i)]),
     );
     expect(warns({ ...base, viewDecimated: true, fullRes: true })).not.toEqual(
       expect.arrayContaining([expect.stringMatching(/full resolution/i)]),

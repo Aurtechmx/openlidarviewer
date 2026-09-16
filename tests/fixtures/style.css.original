@@ -2755,10 +2755,23 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   letter-spacing: 0.02em;
   color: var(--text-faint);
 }
-.olv-prov-bound { display: flex; flex-direction: column; gap: 1px; }
+/* Label left, figure right on one line; the citation drops to its own row. */
+.olv-prov-bound {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  column-gap: var(--space-md);
+  row-gap: 1px;
+}
 .olv-prov-bound-label  { font-size: var(--text-xs); color: var(--text-faint); }
-.olv-prov-bound-value  { font-size: var(--text-value); color: var(--text); font-variant-numeric: tabular-nums; }
-.olv-prov-bound-source { font-size: var(--text-2xs);   color: var(--text-faint); font-style: italic; }
+.olv-prov-bound-value  {
+  font-size: var(--text-sm); color: var(--text);
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+.olv-prov-bound-source {
+  grid-column: 1 / -1;
+  font-size: var(--text-2xs); color: var(--text-dim); font-style: italic;
+}
 .olv-prov-disclaimer {
   font-size: var(--text-xs);
   color: var(--text-faint);
@@ -2912,6 +2925,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 @keyframes olv-pc-deplete { from { width: 100%; } to { width: 0%; } }
 
+
+/*
+ * Visuals Studio sub-groups are real collapsible sections nested inside an
+ * already-indented section body, so they drop the outer rule and top padding
+ * and keep only the summary row.
+ */
+.olv-visuals-body > .olv-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
 /* ───────────────────────────────────────────────────────────────────────────
    Measure tool — active button, SVG overlay, instruction hint
    ─────────────────────────────────────────────────────────────────────────── */
@@ -5524,6 +5548,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-cl-showall:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-cl-showall:disabled { opacity: 0.4; cursor: default; }
 
+.olv-cl-row-hint {
+  margin: 0 0 var(--space-2xs);
+  padding: 0 var(--space-xs) 0 calc(var(--space-xs) * 2);
+  font-size: var(--text-2xs); line-height: 1.4;
+  color: var(--text-dim); text-wrap: pretty;
+}
 /* ── Keyboard shortcut sheet — v0.3.9 ────────────────────────────────────── */
 .olv-shortcuts {
   position: fixed;
@@ -7450,6 +7480,10 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-georef.is-floating { border-color: var(--hairline); }
 .olv-georef.is-floating .olv-georef-glyph { color: var(--text-faint); }
 
+.olv-di-pending {
+  font-size: var(--text-xs); color: var(--text-dim);
+  line-height: 1.45; padding: var(--space-2xs) 0; text-wrap: pretty;
+}
 /* ── Data Fitness scorecard — verdict-led panel (one verdict + traffic-light
    rows with friendly metaphor icons + shape-distinct tone glyphs). ─────────── */
 .olv-analyse-fitness { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-md); }
@@ -7790,8 +7824,14 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* Live "what you'll get" line — size · format · CRS · classification, before any write. */
 .olv-export-summary { font-size: var(--text-xs); color: var(--text-bright); margin: var(--space-sm) 0 var(--space-xs); line-height: 1.45; }
 .olv-export-summary:empty { display: none; }
-.olv-export-summary.is-warn { color: var(--rating-moderate); }
-.olv-export-summary.is-error { color: var(--rating-weak); }
+/* The caveat is a separate, quieter line so the facts above stay neutral. */
+.olv-export-summary-note {
+  font-size: var(--text-xs); color: var(--text-dim);
+  margin: 0 0 var(--space-xs); line-height: 1.45; text-wrap: pretty;
+}
+.olv-export-summary-note:empty { display: none; }
+.olv-export-summary-note.is-warn { color: var(--rating-moderate); }
+.olv-export-summary-note.is-error { color: var(--rating-weak); }
 /*
  * "Products" section: the artifacts derived FROM a scan (measurement vectors,
  * the integrity report, the Google Earth outlines), as opposed to the point
@@ -9614,6 +9654,16 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   font-size: var(--text-xs); color: var(--text-dim);
 }
 
+.olv-layerhealth-details {
+  margin-top: var(--space-2xs);
+  border-top: 1px solid var(--hairline);
+}
+.olv-layerhealth-details-summary {
+  cursor: pointer; list-style: none;
+  font-size: var(--text-xs); color: var(--text-dim);
+  padding: var(--space-xs) 0;
+}
+.olv-layerhealth-details-summary::-webkit-details-marker { display: none; }
 /* Process Studio panel: adaptive stages, product eligibility and QA checks.
  * Display-only view (src/ui/ProcessStudioPanel.ts) over the Phase 1/2 services.
  * Colours reuse the semantic ready/review/blocked grammar; the accent hue is not

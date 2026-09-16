@@ -207,6 +207,7 @@ export class ExportPanel {
   private readonly _gzipRow: HTMLElement;
   private readonly _classRow: HTMLElement;
   private readonly _summary: HTMLElement;
+  private readonly _summaryNote: HTMLElement;
   private readonly _products: HTMLElement;
   /** The export-health block at the top of the panel; empty when no scan is exportable. */
   private readonly _health: HTMLElement;
@@ -294,6 +295,9 @@ export class ExportPanel {
     this._classRow = el('div', { className: 'olv-export-fullres' });
     // The live "what you'll get" line — size, CRS, classification, before any write.
     this._summary = el('p', { className: 'olv-export-summary', text: '' });
+    // The note is a sibling, not a tail on the summary line: the neutral
+    // "what you'll get" facts stay readable while the caveat keeps its level.
+    this._summaryNote = el('p', { className: 'olv-export-summary-note olv-hidden', text: '' });
     this._exportBtn = el('button', { className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export' }) as HTMLButtonElement;
     this._exportBtn.addEventListener('click', () => void this._export());
     this._status = el('p', { className: 'olv-export-status', text: 'Export the open scan to another format.' });
@@ -317,6 +321,7 @@ export class ExportPanel {
       this._fullResRow,
       this._classRow,
       this._summary,
+      this._summaryNote,
       this._exportBtn,
       this._status,
       this._products,
@@ -533,6 +538,8 @@ export class ExportPanel {
       : cloudToSummary(this._cb.getCloud());
     if (!info) {
       this._summary.textContent = '';
+      this._summaryNote.textContent = '';
+      this._summaryNote.classList.add('olv-hidden');
       return;
     }
     const input: ExportSummaryInput = {
@@ -552,10 +559,16 @@ export class ExportPanel {
       gzip: this._gzip,
     };
     const s = buildExportSummary(input);
-    const warn = s.warnings.find((w) => w.level === 'error') ?? s.warnings.find((w) => w.level === 'warn');
-    this._summary.textContent = warn ? `${s.line} — ${warn.message}` : s.line;
-    const summaryModifier = warn ? ` is-${warn.level}` : '';
-    this._summary.className = `olv-export-summary${summaryModifier}`;
+    const note =
+      s.warnings.find((w) => w.level === 'error') ??
+      s.warnings.find((w) => w.level === 'warn') ??
+      s.warnings.find((w) => w.level === 'info');
+    this._summary.textContent = s.line;
+    this._summary.className = 'olv-export-summary';
+    this._summaryNote.textContent = note ? note.message : '';
+    this._summaryNote.className = note
+      ? `olv-export-summary-note is-${note.level}`
+      : 'olv-export-summary-note olv-hidden';
   }
 
   /**

@@ -109,15 +109,33 @@ export class LayerHealthCard {
 
   /** One layer: name heading + its fact rows as a term/definition list. */
   private _layerBlock(layer: LayerHealthSection): HTMLElement {
+    const primary = layer.rows.filter((r) => r.secondary !== true);
+    const secondary = layer.rows.filter((r) => r.secondary === true);
     const rows = el(
       'dl',
       { className: 'olv-layerhealth-rows' },
-      layer.rows.map((r) => this._row(r)),
+      primary.map((r) => this._row(r)),
     );
-    return el('div', { className: 'olv-layerhealth-layer' }, [
+    const children: HTMLElement[] = [
       el('div', { className: 'olv-layerhealth-layer-name', text: layer.name }),
       rows,
-    ]);
+    ];
+    if (secondary.length > 0) {
+      const details = el('details', { className: 'olv-layerhealth-details' });
+      details.append(
+        el('summary', {
+          className: 'olv-layerhealth-details-summary',
+          text: 'Frame and mount detail',
+        }),
+        el(
+          'dl',
+          { className: 'olv-layerhealth-rows' },
+          secondary.map((r) => this._row(r)),
+        ),
+      );
+      children.push(details);
+    }
+    return el('div', { className: 'olv-layerhealth-layer' }, children);
   }
 
   /**

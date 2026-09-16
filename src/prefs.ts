@@ -67,6 +67,12 @@ export interface ViewerPrefs {
    *  session schema on purpose, so restoring a session never stomps a user's
    *  handedness — it's a device preference, not a per-scan view setting. */
   navigation: NavigationPreferences;
+  /**
+   * Open/closed state of the Inspector's collapsible sections, keyed by a
+   * stable section id. Absent ids keep the section's own default, so a new
+   * section does not need a migration.
+   */
+  inspectorSections?: Record<string, boolean>;
 }
 
 /** The `localStorage` key; the `.v1` suffix lets the schema evolve later. */
@@ -132,6 +138,13 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   if (o.navigation !== undefined) {
     out.navigation = parseNavigationPreferences(o.navigation);
   }
+  if (typeof o.inspectorSections === 'object' && o.inspectorSections !== null) {
+    const sections: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(o.inspectorSections as Record<string, unknown>)) {
+      if (typeof v === 'boolean') sections[k] = v;
+    }
+    out.inspectorSections = sections;
+  }
   return out;
 }
 
@@ -152,8 +165,39 @@ export function loadPrefs(): Partial<ViewerPrefs> {
 /** Persist the given preferences. A storage failure is silently ignored. */
 export function savePrefs(prefs: ViewerPrefs): void {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    // Section state is written by its own helper, so a caller that does not
+    // carry it must not erase it here.
+    const kept = prefs.inspectorSections ?? loadPrefs().inspectorSections;
+    const record = kept ? { ...prefs, inspectorSections: kept } : prefs;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
   } catch {
     // Storage unavailable — preferences just will not persist this session.
+  }
+}
+
+/** The stored open/closed state of the Inspector sections, or `{}`. */
+export function loadInspectorSections(): Record<string, boolean> {
+  return loadPrefs().inspectorSections ?? {};
+}
+
+/**
+ * Persist one section's open state, merging into whatever else is stored.
+ * Read-modify-write on the same record, so this never drops the other
+ * preferences and never throws.
+ */
+export function saveInspectorSection(id: string, open: boolean): void {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    const record =
+      typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+    const prev = record.inspectorSections;
+    const sections: Record<string, unknown> =
+      typeof prev === 'object' && prev !== null ? { ...(prev as Record<string, unknown>) } : {};
+    sections[id] = open;
+    record.inspectorSections = sections;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+  } catch {
+    // Storage unavailable, so the section state just will not persist.
   }
 }

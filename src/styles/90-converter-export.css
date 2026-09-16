@@ -212,8 +212,14 @@
 /* Live "what you'll get" line — size · format · CRS · classification, before any write. */
 .olv-export-summary { font-size: var(--text-xs); color: var(--text-bright); margin: var(--space-sm) 0 var(--space-xs); line-height: 1.45; }
 .olv-export-summary:empty { display: none; }
-.olv-export-summary.is-warn { color: var(--rating-moderate); }
-.olv-export-summary.is-error { color: var(--rating-weak); }
+/* The caveat is a separate, quieter line so the facts above stay neutral. */
+.olv-export-summary-note {
+  font-size: var(--text-xs); color: var(--text-dim);
+  margin: 0 0 var(--space-xs); line-height: 1.45; text-wrap: pretty;
+}
+.olv-export-summary-note:empty { display: none; }
+.olv-export-summary-note.is-warn { color: var(--rating-moderate); }
+.olv-export-summary-note.is-error { color: var(--rating-weak); }
 /*
  * "Products" section: the artifacts derived FROM a scan (measurement vectors,
  * the integrity report, the Google Earth outlines), as opposed to the point

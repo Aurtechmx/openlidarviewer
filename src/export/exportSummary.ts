@@ -236,8 +236,10 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
     });
   }
   if (input.viewDecimated && !input.fullRes) {
+    // Informational, not a warning: exporting the display view is the default
+    // behaviour of the panel, and the next sentence says how to change it.
     warnings.push({
-      level: 'warn',
+      level: 'info',
       message:
         'Exporting the reduced display view, not every point. ' +
         'Tick "convert at full resolution" to write the whole scan.',

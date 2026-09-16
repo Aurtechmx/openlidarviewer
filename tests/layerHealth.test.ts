@@ -396,3 +396,28 @@ describe('buildLayerHealth — the self-anchored single layer', () => {
     }
   });
 });
+
+describe('sole-layer secondary rows', () => {
+  const SECONDARY = [
+    'Compatibility',
+    'Project frame',
+    'Source origin',
+    'Offset to project',
+    'Mount precision',
+  ];
+
+  it('flags the frame and mount rows when one layer is loaded', () => {
+    const rows = buildLayerHealth(base({ soleLayer: true }));
+    const flagged = rows.filter((r) => r.secondary === true).map((r) => r.label);
+    expect(flagged.sort()).toEqual([...SECONDARY].sort());
+    // Every fact is still present, just demoted.
+    for (const label of SECONDARY) {
+      expect(rows.some((r) => r.label === label)).toBe(true);
+    }
+  });
+
+  it('leaves every row primary once a second layer exists', () => {
+    const rows = buildLayerHealth(base({ soleLayer: false }));
+    expect(rows.some((r) => r.secondary === true)).toBe(false);
+  });
+});

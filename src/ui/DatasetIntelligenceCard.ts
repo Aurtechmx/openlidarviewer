@@ -91,6 +91,10 @@ export class DatasetIntelligenceCard {
   private readonly _rows: HTMLElement;
   private readonly _details: HTMLDetailsElement;
   private readonly _detailsBody: HTMLElement;
+  private readonly _complexityRow: HTMLElement;
+  private readonly _groundRow: HTMLElement;
+  private readonly _stabilityRow: HTMLElement;
+  private readonly _pending: HTMLElement;
 
   private readonly _densityValue: HTMLElement;
   private readonly _densityName: HTMLElement;
@@ -153,25 +157,41 @@ export class DatasetIntelligenceCard {
     // that are obvious to a survey/civil analyst but read as jargon
     // to a first-time user; the tooltips disambiguate without adding
     // visible clutter to the panel.
+    this._complexityRow = this._row(
+      'Terrain Complexity',
+      this._complexityValue,
+      'How varied the underlying surface is. After a terrain run this is ' +
+        'the vector ruggedness measure (VRM, slope-independent) banded ' +
+        'over its median — hover the value for the numbers, window and ' +
+        'units. Renders "—" until a measurement is available.',
+    );
+    this._groundRow = this._row(
+      'Ground Visibility',
+      this._groundValue,
+      'How clearly the terrain surface can be inferred from the ' +
+        'points — combines roughness, density, and any classification ' +
+        'signal in the source file. Renders "—" until a terrain run has ' +
+        'measured the ground-return share. This is NOT ground-' +
+        'classification accuracy.',
+    );
+    this._stabilityRow = this._row(
+      'Metric Stability',
+      el('dd', { className: 'olv-di-row-value olv-di-confidence-cell' }, [
+        this._confidenceChip,
+        this._confidenceValue,
+      ]),
+      TOOLTIP_METRIC_STABILITY,
+    );
+    // Three rows with no reading before a terrain run are noise; one line
+    // saying what produces them is the same information, said once.
+    this._pending = el('div', {
+      className: 'olv-di-pending olv-hidden',
+      text: 'Terrain signals appear after a terrain analysis run.',
+    });
     this._rows = el('dl', { className: 'olv-di-rows' }, [
       el('div', { className: 'olv-di-row' }, [this._densityName, this._densityValue]),
-      this._row(
-        'Terrain Complexity',
-        this._complexityValue,
-        'How varied the underlying surface is. After a terrain run this is ' +
-          'the vector ruggedness measure (VRM, slope-independent) banded ' +
-          'over its median — hover the value for the numbers, window and ' +
-          'units. Renders "—" until a measurement is available.',
-      ),
-      this._row(
-        'Ground Visibility',
-        this._groundValue,
-        'How clearly the terrain surface can be inferred from the ' +
-          'points — combines roughness, density, and any classification ' +
-          'signal in the source file. Renders "—" until a terrain run has ' +
-          'measured the ground-return share. This is NOT ground-' +
-          'classification accuracy.',
-      ),
+      this._complexityRow,
+      this._groundRow,
       this._row(
         'Streaming Coverage',
         this._coverageValue,
@@ -180,14 +200,8 @@ export class DatasetIntelligenceCard {
           'resident in memory (streaming clouds mid-load), or a sampled ' +
           'subset. Drives the "may refine" caveat below.',
       ),
-      this._row(
-        'Metric Stability',
-        el('dd', { className: 'olv-di-row-value olv-di-confidence-cell' }, [
-          this._confidenceChip,
-          this._confidenceValue,
-        ]),
-        TOOLTIP_METRIC_STABILITY,
-      ),
+      this._stabilityRow,
+      this._pending,
     ]);
 
     this._detailsBody = el('dl', { className: 'olv-di-details-body' });
@@ -353,6 +367,16 @@ export class DatasetIntelligenceCard {
 
     this._confidenceValue.textContent = intel.confidence.label;
     this._confidenceChip.dataset.band = intel.confidence.band;
+
+    // Hide the three terrain-derived rows while none of them has a signal.
+    const noTerrainSignal =
+      intel.complexity.bucket === 'unknown' &&
+      intel.groundVisibility.bucket === 'unknown' &&
+      !Number.isFinite(intel.confidence.value);
+    for (const row of [this._complexityRow, this._groundRow, this._stabilityRow]) {
+      row.classList.toggle('olv-hidden', noTerrainSignal);
+    }
+    this._pending.classList.toggle('olv-hidden', !noTerrainSignal);
 
     this._renderDetails(intel);
   }

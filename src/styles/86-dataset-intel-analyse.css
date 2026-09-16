@@ -549,3 +549,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-georef.is-floating { border-color: var(--hairline); }
 .olv-georef.is-floating .olv-georef-glyph { color: var(--text-faint); }
 
+.olv-di-pending {
+  font-size: var(--text-xs); color: var(--text-dim);
+  line-height: 1.45; padding: var(--space-2xs) 0; text-wrap: pretty;
+}

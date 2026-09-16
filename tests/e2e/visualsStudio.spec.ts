@@ -39,25 +39,37 @@ async function loadSampleAndOpenVisuals(page: Page): Promise<void> {
   }
 }
 
+
+/**
+ * Workflow, RGB and Background are collapsible sub-groups inside the Studio
+ * and start closed; Depth (EDL) stays a bare rail. Open one by label.
+ */
+async function expandVisualsGroup(page: Page, label: string): Promise<void> {
+  const group = page.locator('.olv-visuals-body > details.olv-section-collapsible', {
+    has: page.locator('summary', { hasText: label }),
+  });
+  const isOpen = await group.first().evaluate((el) => (el as HTMLDetailsElement).open);
+  if (!isOpen) await group.locator('summary').first().click();
+}
+
 test('Visuals Studio surfaces all four chip rails', async ({ page }) => {
   await loadSampleAndOpenVisuals(page);
-  // The four group labels read Workflow / RGB / Depth (EDL) / Background.
-  await expect(
-    page.locator('.olv-visuals-group-label', { hasText: 'Workflow' }),
-  ).toBeVisible();
-  await expect(
-    page.locator('.olv-visuals-group-label', { hasText: 'RGB' }),
-  ).toBeVisible();
+  // Three collapsible groups plus the always-visible Depth (EDL) rail.
+  for (const label of ['Workflow', 'RGB', 'Background']) {
+    await expect(
+      page.locator('.olv-visuals-body > details.olv-section-collapsible > summary', {
+        hasText: label,
+      }),
+    ).toBeVisible();
+  }
   await expect(
     page.locator('.olv-visuals-group-label', { hasText: 'Depth (EDL)' }),
-  ).toBeVisible();
-  await expect(
-    page.locator('.olv-visuals-group-label', { hasText: 'Background' }),
   ).toBeVisible();
 });
 
 test('Workflow rail has six presets plus the inert Custom chip', async ({ page }) => {
   await loadSampleAndOpenVisuals(page);
+  await expandVisualsGroup(page, 'Workflow');
   // v0.4.5 — the Workflow preset rail leads the Studio: six job presets
   // plus the disabled "Custom" state chip (7 chips total).
   const rails = page.locator('.olv-visuals-body .olv-chips');
@@ -79,6 +91,7 @@ test('Workflow rail has six presets plus the inert Custom chip', async ({ page }
 
 test('RGB rail has six chips and clicking one flips .olv-chip-active', async ({ page }) => {
   await loadSampleAndOpenVisuals(page);
+  await expandVisualsGroup(page, 'RGB');
   // Rail mount order: Workflow(0) → RGB(1) → EDL(2) → Background(3).
   const rails = page.locator('.olv-visuals-body .olv-chips');
   const rgbRail = rails.nth(1);
@@ -102,6 +115,7 @@ test('EDL rail has four chips including Off', async ({ page }) => {
 
 test('Background rail has five chips and Black is selectable', async ({ page }) => {
   await loadSampleAndOpenVisuals(page);
+  await expandVisualsGroup(page, 'Background');
   const rails = page.locator('.olv-visuals-body .olv-chips');
   const skyRail = rails.nth(3);
   await expect(skyRail.locator('.olv-chip')).toHaveCount(5);
@@ -115,6 +129,7 @@ test('Desktop applies the rich radial gradient on the canvas parent', async ({ p
   // string `background-image` reads as a `radial-gradient(...)`.
   await page.setViewportSize({ width: 1280, height: 800 });
   await loadSampleAndOpenVisuals(page);
+  await expandVisualsGroup(page, 'Background');
   const rails = page.locator('.olv-visuals-body .olv-chips');
   await rails.nth(3).locator('.olv-chip', { hasText: 'Studio Dark' }).click();
   await page.waitForTimeout(120);
@@ -155,6 +170,7 @@ test('Phone uses the flat fallback colour (no gradient bleed under chrome)', asy
     if (!isOpen) await visualsDetails.locator('summary').first().click();
   }
 
+  await expandVisualsGroup(page, 'Background');
   const rails = page.locator('.olv-visuals-body .olv-chips');
   await rails.nth(3).locator('.olv-chip', { hasText: 'Studio Dark' }).click();
   await page.waitForTimeout(120);
@@ -180,6 +196,7 @@ test('Background chip click actually updates the canvas container background', a
   //      `_applySkyPreset` updates both atomically, so a successful
   //      CSS change proves the call ran end-to-end.
   await loadSampleAndOpenVisuals(page);
+  await expandVisualsGroup(page, 'Background');
   const rails = page.locator('.olv-visuals-body .olv-chips');
   const skyRail = rails.nth(3);
 

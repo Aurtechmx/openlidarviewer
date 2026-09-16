@@ -161,3 +161,9 @@
 .olv-cl-showall:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-cl-showall:disabled { opacity: 0.4; cursor: default; }
 
+.olv-cl-row-hint {
+  margin: 0 0 var(--space-2xs);
+  padding: 0 var(--space-xs) 0 calc(var(--space-xs) * 2);
+  font-size: var(--text-2xs); line-height: 1.4;
+  color: var(--text-dim); text-wrap: pretty;
+}
