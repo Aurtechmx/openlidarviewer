@@ -34,6 +34,8 @@ export interface ProjectInfo {
 
 /** How long the card lingers before fading out on its own. */
 const DISMISS_MS = 7000;
+/** Upper bound on the fade before the lane is handed on regardless. */
+const HANDOFF_FALLBACK_MS = 400;
 
 /**
  * A suggested navigation mode from the scan's PHYSICAL size (metres). Only shown
@@ -129,10 +131,27 @@ export class ProjectCard {
     this.element.classList.remove('olv-visible');
   }
 
-  /** Hide, then hand the lane to the successor `show` registered. */
+  /**
+   * Hide, then hand the lane to the successor `show` registered, once the
+   * card's fade has ended: a successor painted during the fade shares the lane
+   * with a card that is still visible. The timer is the fallback for a card
+   * whose transition never reports an end (reduced motion, a detached node).
+   */
   private _dismiss(): void {
     const next = this._onDismiss;
     this.hide();
-    next?.();
+    if (!next) return;
+    let handed = false;
+    const hand = (): void => {
+      if (handed) return;
+      handed = true;
+      this.element.removeEventListener('transitionend', onEnd);
+      next();
+    };
+    const onEnd = (e: Event): void => {
+      if ((e as TransitionEvent).propertyName === 'opacity') hand();
+    };
+    this.element.addEventListener('transitionend', onEnd);
+    window.setTimeout(hand, HANDOFF_FALLBACK_MS);
   }
 }
