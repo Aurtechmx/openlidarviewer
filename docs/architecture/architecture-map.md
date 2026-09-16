@@ -120,8 +120,9 @@ with their legends, samplers and PNG export) now live in
 `src/ui/analyseSurfaceTiles.ts` as `SurfaceTiles` over a narrow host (the
 panel's map-context, basename and confidence-toggle callbacks, the current
 result, and the slot for the confidence button). `AnalysePanel.ts` 3555 to
-2865 lines, runtime fan-out 32 to 22; the readout wording is Node-tested in
-`tests/analyseSurfaceTiles.test.ts`.
+2865 lines, runtime fan-out 32 to 22, measured when the extraction landed; the
+v0.6.9 tree reads 2905 lines and fan-out 23 after the UI wiring that followed.
+The readout wording is Node-tested in `tests/analyseSurfaceTiles.test.ts`.
 
 Done: the streaming panel's controls (quality, pause, cache, the full-cloud
 grade with its re-entry guard and cancel) and the status poll now live in

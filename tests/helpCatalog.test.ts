@@ -35,6 +35,15 @@ describe('help catalogue', () => {
     expect(measure.hint).toMatch(/measurement/i);
   });
 
+  // The clip is applied to the exported cloud in ExportPanel, so a summary
+  // that promised an untouched export was telling the user the opposite of
+  // what the file would contain.
+  it('the clip summary says exports follow the clip', () => {
+    const clip = actions.find((a) => a.id === 'tool.clip')!;
+    expect(clip.help?.summary).toMatch(/export/i);
+    expect(clip.help?.summary).not.toMatch(/no export is changed/i);
+  });
+
   it('search finds the concepts a user types', () => {
     for (const [query, topicId] of [
       ['volume', 'tools'], ['CRS', 'export-trust'], ['preview', 'scientific-states'], ['classification', 'analyse'],
