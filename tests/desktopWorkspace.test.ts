@@ -9,83 +9,9 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { FakeEl, installLiveFakeDom } from './helpers/liveFakeDom';
 
-class FakeEl {
-  title = '';
-  type = '';
-  id = '';
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly attrs: Record<string, string> = {};
-  private _classes = new Set<string>();
-  private readonly _listeners = new Map<string, ((ev: unknown) => void)[]>();
-  focused = false;
-  parent: FakeEl | null = null;
-  readonly tagName: string;
-  get className(): string { return [...this._classes].join(' '); }
-  set className(v: string) { this._classes = new Set(v.split(/\s+/).filter(Boolean)); }
-  readonly classList = {
-    toggle: (c: string, force?: boolean): void => {
-      const on = force === undefined ? !this._classes.has(c) : force;
-      if (on) this._classes.add(c);
-      else this._classes.delete(c);
-    },
-    contains: (c: string): boolean => this._classes.has(c),
-    add: (c: string): void => { this._classes.add(c); },
-    remove: (c: string): void => { this._classes.delete(c); },
-  };
-  constructor(tagName: string) { this.tagName = tagName; }
-  hasClass(c: string): boolean { return this._classes.has(c); }
-  setAttribute(k: string, v: string): void { this.attrs[k] = v; }
-  getAttribute(k: string): string | null { return this.attrs[k] ?? null; }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void {
-    for (const k of kids) { k.parent = this; this.children.push(k); }
-  }
-  insertBefore(node: FakeEl, ref: FakeEl | null): void {
-    node.parent = this;
-    const i = ref ? this.children.indexOf(ref) : -1;
-    if (i < 0) this.children.push(node);
-    else this.children.splice(i, 0, node);
-  }
-  get parentElement(): FakeEl | null { return this.parent; }
-  addEventListener(type: string, fn: (ev: unknown) => void): void {
-    const list = this._listeners.get(type) ?? [];
-    list.push(fn);
-    this._listeners.set(type, list);
-  }
-  fire(type: string, ev: unknown = {}): void {
-    for (const fn of this._listeners.get(type) ?? []) fn(ev);
-  }
-  focus(): void { this.focused = true; }
-  find(pred: (e: FakeEl) => boolean): FakeEl | undefined {
-    if (pred(this)) return this;
-    for (const c of this.children) {
-      const hit = c.find(pred);
-      if (hit) return hit;
-    }
-    return undefined;
-  }
-  findAll(pred: (e: FakeEl) => boolean): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (pred(this)) out.push(this);
-    for (const c of this.children) out.push(...c.findAll(pred));
-    return out;
-  }
-}
-
-beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-  };
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.HTMLInputElement = class {};
-  g.HTMLAnchorElement = class {};
-});
+beforeAll(installLiveFakeDom);
 
 /** A recording in-memory storage stub. */
 class MemStore {

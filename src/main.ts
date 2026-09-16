@@ -1471,9 +1471,7 @@ async function runDeriveClassification(): Promise<void> {
   } catch (err) {
     // A refusal also lands on the Classes caption, which outlives the toast.
     reportClassifyFailure(err, showLassoToast, classLegendPanel);
-  } finally {
-    classifyRunning = false;
-  }
+  } finally { classifyRunning = false; }
 }
 
 /**
@@ -2819,7 +2817,8 @@ const clipPanel = new ClipPanel({
 const toolLauncherHost = document.createElement('div');
 let toolLauncherCard: { readonly element: HTMLElement; refresh: () => void } | null = null;
 const refreshToolLauncher = (): void => toolLauncherCard?.refresh();
-void loadToolLauncher().then(({ createToolLauncher }) => {
+async function fillToolLauncher(): Promise<void> {
+  const { createToolLauncher } = await loadToolLauncher();
   toolLauncherCard = createToolLauncher({
     getActions: () => ensureActionRegistry(),
     counts: () => ({
@@ -2831,7 +2830,8 @@ void loadToolLauncher().then(({ createToolLauncher }) => {
     disabledReason: () => (viewerReady && hasScan() ? null : 'Load a scan to use the tools.'),
   });
   toolLauncherHost.append(toolLauncherCard.element);
-});
+}
+void fillToolLauncher();
 
 // ── Scan-type routing ────────────────────────────────────────────────────────
 // The route (terrain / interior / object), its streaming re-evaluation and the
