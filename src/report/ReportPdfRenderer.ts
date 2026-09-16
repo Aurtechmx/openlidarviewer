@@ -1313,16 +1313,29 @@ async function renderMeasurements(
  *
  * Exported for the glyph-substitution unit tests.
  */
+/** CP1252 keeps these beyond Latin-1, so this sheet prints them as written. */
+const CP1252_EXTRAS = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+
+/**
+ * The shared table's entries this sheet actually needs: the symbols CP1252
+ * cannot encode. Entries WinAnsi already has (×, the dashes, the curly quotes)
+ * are left alone, since this sheet prints them verbatim.
+ */
+const SHARED_SYMBOLS_RE = new RegExp(
+  `[${Object.keys(WIN_ANSI_TRANSLITERATIONS)
+    .filter((ch) => ch.codePointAt(0)! > 0xff && !CP1252_EXTRAS.includes(ch))
+    .join('')}]`,
+  'g',
+);
+
 export function sanitiseForPdf(input: string): string {
   return (
     input
-      // Operators WinAnsi genuinely lacks.
-      .replaceAll('≥', '>=')
-      .replaceAll('≤', '<=')
-      .replaceAll('≠', '!=')
-      .replaceAll('√', 'sqrt')
-      .replaceAll('Δ', 'd')
-      .replaceAll('σ', 'sigma')
+      // Operators and Greek WinAnsi genuinely lacks come from the shared table,
+      // so a glyph added there is covered on this sheet too. Applied ahead of
+      // the letter transliterations below, which this sheet needs and the other
+      // sheets do not: cited author names carry Latin-Extended letters.
+      .replace(SHARED_SYMBOLS_RE, (ch) => WIN_ANSI_TRANSLITERATIONS[ch] ?? ch)
       // Latin-Extended letters that appear in cited author names
       // (e.g. "Ruzgienė") — transliterated to their base letter rather
       // than degraded to '?'. This list covers the Latin-Extended-A
