@@ -15,6 +15,7 @@ import {
   heightLabel,
   heightReferenceNote,
   makeHeight,
+  resolveVerticalEpsg,
   verticalReferenceFromDatum,
 } from '../src/geo/height';
 
@@ -92,8 +93,36 @@ describe('verticalReferenceFromDatum', () => {
     ['MSL depth (m)', 'depth'],
     ['NAVD88x local adjustment', 'unknown'],
     ['Local datum referenced to NAVD88', 'unknown'],
+    // Qualifiers that name a DIFFERENT vertical reference derived from the
+    // datum, or that declare doubt, leave it unresolved: accepting them would
+    // assert a geodetic identity the source never stated, and would disagree
+    // with the compatibility key, which reads the same string.
+    ['NAVD88 local adjustment', 'unknown'],
+    ['NAVD88-derived local datum', 'unknown'],
+    ['NAVD88? uncertain', 'unknown'],
+    ['NAVD88 approximate', 'unknown'],
+    ['NAVD88 height, adjusted locally', 'unknown'],
+    ['NAVD88x local adjustment', 'unknown'],
+    ['Local datum referenced to NAVD88', 'unknown'],
+    // An axis that contradicts its own datum is refused, not reinterpreted.
+    ['NAVD88 depth', 'unknown'],
   ] as const)('a qualified datum name resolves: %s', (verticalDatum, expected) => {
     expect(verticalReferenceFromDatum({ verticalDatum })).toBe(expected);
+  });
+
+  test('the compatibility key and the height classification read a name the same way', async () => {
+    const { verticalReferenceKey } = await import('../src/model/layerCompatibility');
+    for (const verticalDatum of [
+      'NAVD88 height - Geoid12B (m)',
+      'NAVD88 local adjustment',
+      'MSL depth (m)',
+      'Site benchmark 1972',
+    ]) {
+      const resolved = resolveVerticalEpsg({ verticalDatum });
+      expect(verticalReferenceKey({ verticalDatum }), verticalDatum).toBe(
+        resolved !== undefined ? `epsg:${resolved}` : `name:${verticalDatum.toLowerCase()}`,
+      );
+    }
   });
 
   test('the authoritative EPSG wins over the name', () => {

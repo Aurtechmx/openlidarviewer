@@ -138,8 +138,48 @@ const NAME_TO_EPSG: Readonly<Record<string, number>> = {
   'egm84 height': 5612,
 };
 
-/** Known datum names, longest first, so a prefix match takes the most specific. */
+/** Known datum names, longest first, so a match takes the most specific. */
 const NAMES_BY_LENGTH: readonly string[] = Object.keys(NAME_TO_EPSG).sort((a, b) => b.length - a.length);
+
+/**
+ * Linear units a citation may name after the datum. A unit says nothing about
+ * which reference surface the datum is, so carrying one does not change it.
+ */
+const CITATION_UNITS = new Set([
+  'm', 'metre', 'metres', 'meter', 'meters',
+  'ft', 'foot', 'feet', 'ftus', 'usft', 'us-ft', 'ift',
+]);
+
+/**
+ * Whether the qualifiers a citation carries after its datum name are the
+ * harmless kind.
+ *
+ * A WKT citation states the datum and then its axis, its realisation and its
+ * unit: "NAVD88 height - Geoid12B (m)". Those describe the SAME datum, so the
+ * name still identifies it. Anything else does not: "NAVD88 local adjustment"
+ * and "NAVD88-derived local datum" name a DIFFERENT vertical reference derived
+ * from that one, and "NAVD88? uncertain" declares doubt. Accepting the datum
+ * for those would assert a geodetic identity the source did not, so they stay
+ * unresolved and travel as free text.
+ *
+ * `axisWord` is the axis the resolved code actually has, so a citation whose
+ * axis contradicts its datum ("NAVD88 depth") is refused too.
+ */
+function qualifiersAreHarmless(rest: string, axisWord: 'height' | 'depth'): boolean {
+  if (rest === '') return true;
+  // Detach dashes so "-derived" reads as its own word rather than a separator.
+  const tokens = rest.replace(/-/g, ' - ').split(/\s+/).filter((t) => t !== '');
+  for (const t of tokens) {
+    if (t === '-' || t === axisWord) continue;
+    // A realisation: geoid12b, geoid18, geoid2012.
+    if (/^geoid[a-z0-9]*$/.test(t)) continue;
+    // A parenthesised unit, whole or split across tokens by the parentheses.
+    const unit = /^\(?([a-z-]+)\)?$/.exec(t);
+    if (unit && CITATION_UNITS.has(unit[1])) continue;
+    return false;
+  }
+  return true;
+}
 
 /** A declared vertical datum, however the source spelled it. */
 export interface VerticalDatumRef {
@@ -170,13 +210,17 @@ export function resolveVerticalEpsg(d: VerticalDatumRef): number | undefined {
   // "NAVD88 height - Geoid12B (m)", which is the same datum the exact table
   // holds under "navd88". Matching only whole strings classified that as
   // unknown, so a profile sheet printed "datum unknown" for a scan whose
-  // terrain report printed the datum on the same session. The name must still
-  // open the string and end on a word boundary, so an unrelated datum is never
-  // read as a known one, and the longest name wins ("msl depth" before "msl").
+  // terrain report printed the datum on the same session. The name must open
+  // the string, end on a word boundary, and be followed only by qualifiers that
+  // describe that same datum; the longest name wins ("msl depth" before "msl").
   for (const name of NAMES_BY_LENGTH) {
     if (!raw.startsWith(name)) continue;
     const next = raw.charAt(name.length);
-    if (next === '' || !/[a-z0-9]/.test(next)) return NAME_TO_EPSG[name];
+    if (next !== '' && /[a-z0-9]/.test(next)) continue;
+    const code = NAME_TO_EPSG[name];
+    const axisWord = DEPTH_EPSG.has(code) ? 'depth' : 'height';
+    if (qualifiersAreHarmless(raw.slice(name.length).trim(), axisWord)) return code;
+    return undefined;
   }
   return undefined;
 }

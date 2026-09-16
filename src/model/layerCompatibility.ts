@@ -16,6 +16,7 @@
  * in X/Y — the alignment is true — and must not be aligned or compared in Z.
  */
 import { compareCodeUnits } from '../canonicalHash';
+import { resolveVerticalEpsg } from '../geo/height';
 
 /** What a layer has proven about its relationship to the project frame. */
 export type LayerCompatibility =
@@ -54,25 +55,14 @@ export interface CompatibilityInput {
  * Kept deliberately small and explicit. Height and depth codes stay separate
  * because they are opposite axes, not spellings of one thing.
  */
-const VERTICAL_NAME_TO_EPSG: Readonly<Record<string, number>> = {
-  'navd88': 5703,
-  'odn (newlyn)': 5701,
-  'msl height': 5714,
-  'msl depth': 5715,
-  'egm2008 height': 3855,
-  'egm96 height': 5773,
-  'cgvd2013': 6647,
-  'baltic 1977': 5705,
-  'egm84 height': 5612,
-};
-
 /**
  * A comparable identity for a layer's vertical reference, or null when it
  * declared none.
  *
- * An EPSG code is authoritative and wins. Failing that, a name recognised in
- * the catalog resolves to its code, so the two spellings of one datum agree.
- * An unrecognised name normalises to itself — it still matches another layer
+ * An EPSG code is authoritative and wins. Failing that, {@link resolveVerticalEpsg}
+ * decides whether the name identifies a catalogued datum, including a WKT
+ * citation that carries the datum's own axis, realisation and unit. A name it
+ * does not resolve normalises to itself — it still matches another layer
  * carrying the same name, which is the most that can honestly be concluded
  * from free text.
  */
@@ -82,10 +72,12 @@ export function verticalReferenceKey(l: CompatibilityInput): string | null {
   }
   const raw = l.verticalDatum?.trim().toLowerCase();
   if (!raw) return null;
-  const viaName = VERTICAL_NAME_TO_EPSG[raw];
-  if (viaName !== undefined) return `epsg:${viaName}`;
-  const viaCode = /^epsg:(\d{4,6})$/.exec(raw);
-  if (viaCode) return `epsg:${Number(viaCode[1])}`;
+  // One resolver decides what a datum string names, so this key and the height
+  // classification can never disagree about the same layer. A second copy of
+  // the catalogue here read "NAVD88 height - Geoid12B (m)" as free text while
+  // the other copy read it as NAVD88.
+  const code = resolveVerticalEpsg({ verticalDatum: raw });
+  if (code !== undefined) return `epsg:${code}`;
   return `name:${raw}`;
 }
 
