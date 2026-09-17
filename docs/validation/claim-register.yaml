@@ -153,8 +153,8 @@ schemaVersion: 1
 # work registers the Rogue tiles and makes the dev/holdout split deterministic
 # and exposure-honest; the holdout has not been run, so no product advances
 # beyond E4 and the register stands at 17 there and none at E5.
-softwareVersion: 0.6.8
-generated: 2026-07-26
+softwareVersion: 0.6.9
+generated: 2026-09-16
 validationOwner: A. Urias / Aurtech
 
 claims:

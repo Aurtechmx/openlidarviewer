@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "label": "cross-browser-progressive-laz",
+  "specs": [
+    "tests/e2e/localLazProgressive.spec.ts",
+    "tests/e2e/smoke.spec.ts"
+  ],
+  "runs": [
+    {
+      "commit": "49b25e56",
+      "date": "2026-09-15",
+      "role": "advisory, before the last code changes",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "3480251f",
+      "date": "2026-09-16",
+      "role": "advisory, before the Tools tab launcher landed",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "3915e664",
+      "date": "2026-09-16",
+      "role": "advisory, before the final UI and report fixes",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "9cf459f3",
+      "date": "2026-09-17",
+      "role": "advisory, before the release-hygiene fixes",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "a46c6cbe",
+      "date": "2026-09-17",
+      "role": "advisory, before the documentation and packaging cleanups",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "a856532b",
+      "date": "2026-09-17",
+      "role": "advisory, before the prose pass",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "d68d2fcd",
+      "date": "2026-09-17",
+      "role": "pre-tag freeze candidate: the tree the development gate measured and the last one exercised before the tag",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    }
+  ],
+  "engines": {
+    "chromium": "153.0.8010.12",
+    "firefox": "155.0",
+    "webkit": "26.6"
+  },
+  "environment": {
+    "playwright": "1.63.0",
+    "os": "macOS 26.5.2 (25F84)",
+    "cpu": "Apple M3 Max"
+  },
+  "note": "Real renderers on every engine; no renderer-absent skip. Firefox and WebKit remain advisory in CI; this record is the human freeze condition for the tag. No entry here is the tagged commit: the tag does not exist while this file is written, and the release workflow records the tagged run."
+}

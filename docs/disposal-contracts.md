@@ -36,7 +36,7 @@ long-session spec — see the checklist at the bottom.
 | `WebGLRenderer` / `WebGPURenderer` GL context | `Viewer._renderer` | Per Viewer instance | `viewer.dispose()` → `renderer.dispose()` + `renderer.forceContextLoss()` |
 | `requestAnimationFrame` loop | `Viewer` | Per Viewer instance | `viewer.dispose()` cancels the next frame |
 | ResizeObserver on the canvas parent | `Viewer` | Per Viewer instance | `viewer.dispose()` → `observer.disconnect()` |
-| COPC decode worker | `CopcWorkerClient` (created lazy in main.ts) | Per session, lazy on first COPC open | `copcDecoder?.terminate()` on close |
+| COPC / EPT decode worker | `CopcWorkerClient` (created lazy in main.ts) | Page session: created on the first COPC or EPT open and reused by every scan after it | None on scan close. The warm decoder outlives each scan on purpose; it goes when the page does |
 | Streaming scheduler / renderer pair | `Viewer._streaming` | Per streaming scan | `viewer.detachStreamingCloud()` → scheduler.dispose() + renderer.dispose() |
 | HTTP range-source pending fetches | `HttpRangeSource` | Per streaming scan | `streamingSource.abort()` on detach |
 | Color attribute snapshots | `Viewer._selectionSnapshots` | Per highlight | `viewer.clearSelectionHighlight()` |
@@ -81,9 +81,12 @@ vitest. Use the e2e long-session spec for these:
 4. **Streaming detach**: Open a streaming COPC, then open a static
    LAZ. Expected: streaming scheduler disposed before the static
    cloud attaches; `viewer._streaming` is `undefined`.
-5. **Worker termination**: After ten COPC opens, only ONE
-   `CopcWorkerClient` should exist (it's lazy + session-cached).
-   Closing the session via reload terminates the worker.
+5. **Worker population**: After ten COPC opens, only ONE
+   `CopcWorkerClient` should exist: it is lazy and session-cached, so
+   repeated open and close cycles must leave the worker population
+   bounded rather than growing. Reloading the page ends it. Closing a
+   scan does not, and adding a terminate there would throw away a warm
+   decoder before the next scan needs it.
 6. **Texture/buffer disposal**: Spec uses three.js's `WebGLRenderer`
    info hooks (`memory.geometries`, `memory.textures`) — assert
    counts return to baseline after close.

@@ -63,7 +63,7 @@ If you cannot find something below, the directory listing is still the full pict
 | [benchmarks.md](benchmarks.md) | Field measurements from opening real scans. Not a formal benchmark suite. |
 | [architecture/heavy-cloud-native.md](architecture/heavy-cloud-native.md) | How very large clouds are handled without loading them whole. |
 | [project/CLAIMS_AND_LIMITATIONS.md](project/CLAIMS_AND_LIMITATIONS.md) | The claims the project makes, and the ones it deliberately does not. |
-| [releases/KNOWN_LIMITATIONS_v0.6.8.md](releases/KNOWN_LIMITATIONS_v0.6.8.md) | Known limitations as of the current release. |
+| [releases/KNOWN_LIMITATIONS_v0.6.9.md](releases/KNOWN_LIMITATIONS_v0.6.9.md) | Known limitations as of the current release. |
 
 ## Scientific validation and evidence
 
@@ -108,9 +108,9 @@ repository and out of the released archive, so they are not linked here.
 
 | Document | What it covers |
 | --- | --- |
-| [releases/RELEASE_NOTES_v0.6.8.md](releases/RELEASE_NOTES_v0.6.8.md) | What changed in the current release. |
-| [releases/VALIDATION_REPORT_v0.6.8.md](releases/VALIDATION_REPORT_v0.6.8.md) | The evidence standing behind that release. |
-| [releases/REPRODUCIBILITY_v0.6.8.md](releases/REPRODUCIBILITY_v0.6.8.md) | How to rebuild the release and reproduce its figures. |
+| [releases/RELEASE_NOTES_v0.6.9.md](releases/RELEASE_NOTES_v0.6.9.md) | What changed in the current release. |
+| [releases/VALIDATION_REPORT_v0.6.9.md](releases/VALIDATION_REPORT_v0.6.9.md) | The evidence standing behind that release. |
+| [releases/REPRODUCIBILITY_v0.6.9.md](releases/REPRODUCIBILITY_v0.6.9.md) | How to rebuild the release and reproduce its figures. |
 | [release/RELEASE_ASSETS.md](release/RELEASE_ASSETS.md) | What ships with a release, and how each asset is produced. |
 | [release/ERRATUM_v0.6.2.md](release/ERRATUM_v0.6.2.md) | A correction to a published release, kept in the open. |
 

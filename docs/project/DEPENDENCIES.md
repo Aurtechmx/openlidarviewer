@@ -1,32 +1,29 @@
-# Dependency audit (v0.6.8)
+# Dependency audit (v0.6.9)
 
 This is the committed dependency baseline for OpenLiDARViewer, re-verified for
-v0.6.8 on 2026-09-03 (UTC) from the committed `package-lock.json`. The v0.6.8
-cycle added and removed no runtime package, and moved three: `@loaders.gl/core`
-4.4.4 to 4.4.5, `@loaders.gl/obj` 4.4.3 to 4.4.5 and `@loaders.gl/ply` 4.4.4 to
-4.4.5. The production set is 56 components either side. It is a baseline, not
-the per-release record: the exact commit, toolchain, and lockfile hash for a
-published release live in the release manifest and the exact-tag evidence
-attached to that release. A committed document cannot name the commit it ships
-in; those generated records can.
+v0.6.9 on 2026-09-16 (UTC) from the committed `package-lock.json`. The v0.6.9
+cycle added, removed and moved no runtime package: the production set is the
+same 56 components either side, and the direct runtime table below is unchanged.
+Every move this cycle is development tooling: `@loaders.gl/las` 4.4.5 to 4.5.1,
+`@playwright/test` 1.62.1 to 1.63.0, `vitest` and `@vitest/coverage-v8` from 4 to
+5, `vite` 8.2.1 to 8.2.2, and the `rolldown` pin at 1.2.3 that the bundler pulls.
+None of it reaches the deployed app, which is why the production component set is
+unaffected. It is a baseline, not the per-release record: the exact commit,
+toolchain, and lockfile hash for a published release live in the release manifest
+and the exact-tag evidence attached to that release. A committed document cannot
+name the commit it ships in; those generated records can.
 
 Since v0.6.0 the three bundled font packages moved from 5.2.8 to 5.3.0. No
 package was added or removed, and no other bundled package changed.
 
-The development toolchain moved after that baseline was taken: TypeScript to
-7.0.2, Vite to 8.2.1, and Playwright to 1.62.1. The v0.6.8 cycle moved it again,
-most visibly Babel from 7 to 8 across the Stryker mutation tooling. None of it
-is development-only by accident: none reaches the deployed app, which is why the
-production component set above is unaffected by any of it.
-
 | Field | Value |
 |---|---|
-| Release line | v0.6.8 |
+| Release line | v0.6.9 |
 | Baseline date (UTC) | 2026-07-25 |
 | Canonical Node | 22.18.0 (`.nvmrc`) |
 | Canonical npm | 10.9.3 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.8`, 56 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.9`, 56 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](../../sbom.json). Licences are credited in
