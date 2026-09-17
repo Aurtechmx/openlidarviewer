@@ -66,12 +66,13 @@ exact-tag workflow under `OLV_GATE_MODE=release`, which also runs the
 deterministic e2e suite, the documentation build, the production audit, the
 fixture checksums and coverage, and attaches `test-evidence-v0.6.9.json` to the
 release. Until that run exists, treat every figure here as a development-channel
-measurement of the release branch prepared on commit 3915e664 rather than as
+measurement of the pre-tag freeze candidate, commit 9cf459f3, rather than as
 release evidence, and cite the
 attached record instead once it does.
 
-Cross-browser runs were executed for this work. At commit 3915e664 the
-progressive LAZ specs and the smoke suites report 12 passed across Chromium
+Cross-browser runs were executed for this work. At commit 9cf459f3, the
+pre-tag freeze candidate, the progressive LAZ specs and the smoke suites report
+12 passed with no skips across Chromium
 153.0.8010.12, Firefox 155.0 and WebKit 26.6, under Playwright 1.63.0 on macOS
 26.5.2 arm64. Firefox and WebKit remain advisory rather than blocking, and the
 Windows job is advisory and green.

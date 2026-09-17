@@ -36,7 +36,7 @@
     {
       "commit": "9cf459f3",
       "date": "2026-09-17",
-      "role": "final tree, the commit this release is tagged from and the one the development evidence records",
+      "role": "pre-tag freeze candidate: the tree the development gate measured and the last one exercised before the tag",
       "tests": 12,
       "passed": 12,
       "skipped": 0,
@@ -53,5 +53,5 @@
     "os": "macOS 26.5.2 (25F84)",
     "cpu": "Apple M3 Max"
   },
-  "note": "Real renderers on every engine; no renderer-absent skip. Firefox and WebKit remain advisory in CI; this record is the human freeze condition for the tag."
+  "note": "Real renderers on every engine; no renderer-absent skip. Firefox and WebKit remain advisory in CI; this record is the human freeze condition for the tag. No entry here is the tagged commit: the tag does not exist while this file is written, and the release workflow records the tagged run."
 }

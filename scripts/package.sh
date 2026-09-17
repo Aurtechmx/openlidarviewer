@@ -62,6 +62,17 @@ epoch_fmt() { # $1 = strftime format
 TS="$(epoch_fmt +%Y%m%d-%H%M)"
 TOUCH_STAMP="$(epoch_fmt +%Y%m%d%H%M.%S)"
 
+# Set every directory to exactly 0755 and every file to exactly 0644 on a
+# staging copy. The symbolic form clears the setuid, setgid and sticky bits;
+# the numeric `chmod 755` left them in place, so a directory that inherited
+# setgid from its parent carried that bit into the archive and out to whoever
+# extracted it. Modes are what make the deploy archive servable, so they are
+# stated rather than inherited.
+normalise_modes() {
+  find "$1" -type d -exec chmod a-s,u=rwx,go=rx {} +
+  find "$1" -type f -exec chmod a-s,u=rw,go=r {} +
+}
+
 # Zip a directory deterministically: every entry stamped at SOURCE_DATE_EPOCH,
 # entries added in a stable byte-order (LC_ALL=C), and -X to drop the extra
 # platform metadata that otherwise varies per machine.
@@ -118,8 +129,7 @@ if [[ "$SOURCE_ONLY" != "1" ]]; then
   # ── Deploy archive: dist contents at the zip root, web-safe modes ────────
   echo "→ Normalising deploy modes (644 files / 755 dirs)…"
   cp -R dist "$TMP/deploy"
-  find "$TMP/deploy" -type d -exec chmod 755 {} +
-  find "$TMP/deploy" -type f -exec chmod 644 {} +
+  normalise_modes "$TMP/deploy"
 
   DEPLOY="openlidarviewer-v${VERSION}-deploy-${TS}-root.zip"
   zip_deterministic "$TMP/deploy" "$TMP/$DEPLOY"
@@ -156,8 +166,7 @@ else
         --exclude '.DS_Store' \
         ./ "$TMP/source/$SRC_PREFIX/"
 fi
-find "$TMP/source" -type d -exec chmod 755 {} +
-find "$TMP/source" -type f -exec chmod 644 {} +
+normalise_modes "$TMP/source"
 
 # ── Internal-material guard ────────────────────────────────────────────────
 # The archive must carry what the release IS, not the reasoning about whether
