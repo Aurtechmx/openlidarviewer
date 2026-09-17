@@ -34,13 +34,15 @@ describe('the decode worker client is session-cached', () => {
   });
 
   it('no scan-close path terminates it', () => {
+    let readAny = 0;
     for (const file of ['src/main.ts', 'src/app/openStreaming.ts', 'src/app/closeScan.ts']) {
       let src: string;
       try {
         src = read(file);
       } catch {
-        continue; // the file is optional; the ones that exist carry the rule
+        continue; // a renamed or removed file is covered by the count below
       }
+      readAny++;
       for (const line of src.split('\n')) {
         if (!/terminate\s*\(/.test(line)) continue;
         expect(line, `${file} terminates a worker on a scan path: ${line.trim()}`).not.toMatch(
@@ -48,5 +50,8 @@ describe('the decode worker client is session-cached', () => {
         );
       }
     }
+    // A rename that emptied the candidate list would otherwise pass this test
+    // by reading nothing at all.
+    expect(readAny, 'at least one scan path was read').toBeGreaterThan(0);
   });
 });

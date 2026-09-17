@@ -82,6 +82,7 @@ normalise_modes() {
 # 403s for every hashed bundle inside it, which is the exact failure this script
 # says it prevents. Sorted together so the archive stays byte-reproducible.
 zip_deterministic() {
+  local src out
   src="$1"; out="$2"
   find "$src" -exec touch -h -t "$TOUCH_STAMP" {} + 2>/dev/null || true
   ( cd "$src" && find . \( -type f -o -type d \) ! -name . -print0 | LC_ALL=C sort -z | xargs -0 zip -qX "$out" )
