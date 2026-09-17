@@ -126,7 +126,7 @@ Each suite runs on its own and states what it does not cover.
 
 The tracked result is at `docs/validation/evidence/portability-v0.6.2/`: `status: reproduced`, platforms darwin-arm64 and linux-x64, from one workflow run at one commit. The seeded source cloud hashes identically on both, then 15 artifact hashes and 18 scalars are compared at a tolerance of exactly zero, and none differ. Host, timing and build-identity fields differ and are published per platform rather than pooled.
 
-Scope: two little-endian platforms, one commit, one synthetic seeded fixture. Windows is untested, no big-endian host has run a leg, and no real scan data is in the comparison.
+The comparison covers two little-endian platforms at one commit, on one synthetic seeded fixture. Windows is untested, no big-endian host has run a leg, and no real scan data takes part.
 
 ## Environment notes
 

@@ -2,7 +2,7 @@
 
 Open any 3D scan (drone LiDAR, terrestrial laser scan, or phone scan) in a browser tab. Nothing to install, and **nothing is uploaded**: your files are read and rendered on your own machine, so there is no server to send them to.
 
-This guide walks through opening a scan, finding your way around, measuring, analysing terrain, comparing two scans, and sharing your work. It assumes no GIS background.
+This guide walks through opening a scan and finding your way around it. Then measuring, terrain analysis, comparing two scans, and sharing what you found. It assumes no GIS background.
 
 ---
 
@@ -173,7 +173,7 @@ lost.
 
 Load two scans of the same place, a "before" and an "after", and a **Compare elevation** button appears in the **Layers** section of the Inspector. A one-click prompt also appears when the second scan lands. Both are there only while exactly two scans are loaded.
 
-The comparison lines the two up horizontally, turning and shifting sideways but never vertically, so real settlement or fill is measured rather than absorbed into the fit. It builds both bare-earth surfaces on one shared grid, differences them, and reports what the alignment did, the net change, the gain and loss separately, and how many grid cells were comparable. Cell by cell, a change below a small noise floor counts as unchanged, and the gain and loss figures cover only what clears it. You can export the difference grid for use elsewhere.
+The comparison lines the two up horizontally, turning and shifting sideways but never vertically, so real settlement or fill is measured rather than absorbed into the fit. It builds both bare-earth surfaces on one shared grid and differences them. The panel reports what the alignment did, the net change, the gain and the loss separately, and how many grid cells were comparable. Cell by cell, a change below a small noise floor counts as unchanged, and the gain and loss figures cover only what clears it. You can export the difference grid for use elsewhere.
 
 The comparison refuses rather than guessing. If the two scans are in provably different coordinate systems or vertical datums, if the horizontal unit is unknown, or if their footprints do not overlap, you get a line saying so and what to fix, with no volume attached.
 
@@ -215,7 +215,7 @@ A product that cannot be made yet says why on hover rather than failing when you
 
 ## Save and share
 
-Your work saves to a single **`.olvsession`** file from the Measurements panel: measurements, annotations, saved viewpoints, the camera, render and colour settings, and the class filter. It is plain text you can read in any editor, and it never contains the scan itself, so it stays small and private.
+Your work saves to a single **`.olvsession`** file from the Measurements panel. It holds your measurements and annotations, your saved viewpoints and the camera, the render and colour settings, and the class filter. It is plain text you can read in any editor, and it never contains the scan itself, so it stays small and private.
 
 Use **Export** in that panel to write one and **Open** to read one back, or just drag the session onto the window. The viewer restores everything, including the trust grade on each measurement. Because the scan does not travel inside the session, open it alongside the same scan file; if the scan is not loaded, the viewer tells you which file to drop.
 
