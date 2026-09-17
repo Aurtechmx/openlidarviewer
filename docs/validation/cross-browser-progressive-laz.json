@@ -36,6 +36,15 @@
     {
       "commit": "9cf459f3",
       "date": "2026-09-17",
+      "role": "advisory, before the release-hygiene fixes",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "a46c6cbe",
+      "date": "2026-09-17",
       "role": "pre-tag freeze candidate: the tree the development gate measured and the last one exercised before the tag",
       "tests": 12,
       "passed": 12,
