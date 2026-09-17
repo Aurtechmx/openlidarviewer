@@ -45,6 +45,15 @@
     {
       "commit": "a46c6cbe",
       "date": "2026-09-17",
+      "role": "advisory, before the documentation and packaging cleanups",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "a856532b",
+      "date": "2026-09-17",
       "role": "pre-tag freeze candidate: the tree the development gate measured and the last one exercised before the tag",
       "tests": 12,
       "passed": 12,
