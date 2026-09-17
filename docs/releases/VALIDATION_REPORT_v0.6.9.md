@@ -55,8 +55,8 @@ The development gate has run to completion on this commit: typecheck, the lint
 scripts, the test buckets, 49 skipped, the build, the bundle budget,
 the dataset and validation verifiers, the freeze and snapshot verifiers, archive
 portability, and the smoke suites.
-The gate for this release ran the test buckets unit 9,488, export 1,062, terrain 2,943, ui 862, slow 1,240. The deterministic e2e
-suite reports 207 passed and 5 skipped on this tree; the five skips are the fixture-gated COPC specs. The blocking answer for the tag is the CI run on the tagged commit. The eager entry measures 801 KiB against its 812
+The gate for this release ran the test buckets unit 9,488, export 1,062, terrain 2,943, ui 862, slow 1,243. The deterministic e2e
+suite reports 207 passed and 5 skipped on this tree; the five skips are the fixture-gated COPC specs. The blocking answer for the tag is the CI run on the tagged commit. The eager entry measures 803 KiB against its 812
 KiB ceiling. The figures in this document come from
 `docs/validation/test-evidence.json`, which records `releaseAuthoritative:
 false` because a development run produced it.

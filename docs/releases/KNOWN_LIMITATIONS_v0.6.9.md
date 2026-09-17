@@ -4,7 +4,7 @@
 
 The register holds 34 claims: 2 at E1, 6 at E2, 9 at E3 and 17 at E4. No product
 is at E5, and none moved this cycle. Nothing was added or removed. A product
-reaches E5 only against surveyed field reference, and nothing here is that. The gate for this release ran the test buckets unit 9,488, export 1,062, terrain 2,943, ui 862, slow 1,240.
+reaches E5 only against surveyed field reference, and nothing here is that. The gate for this release ran the test buckets unit 9,488, export 1,062, terrain 2,943, ui 862, slow 1,243.
 
 ## The stockpile volume changed method and did not change level
 
@@ -76,7 +76,7 @@ rather than changed in this release.
 
 ## The shell has little headroom
 
-The eager bundle measures about 801 KiB against an 812 KiB ceiling. The ceiling
+The eager bundle measures about 803 KiB against an 812 KiB ceiling. The ceiling
 did not move this cycle, and the decomposition and lazy loading in this release
 are what kept the number under it. New shell work is added behind a lazy seam
 rather than paid for by a raise. Every raise of this ceiling is recorded beside
