@@ -53,8 +53,8 @@ CI is the integration, not the maths.
 The blocking browser gate is Chromium. Firefox and WebKit run the full
 deterministic suite, and a regression in either would not by itself stop a
 release. The Windows job is advisory as well. The progressive LAZ and smoke specs
-ran green on all three engines at commit a856532b, the pre-tag freeze candidate,
-and earlier at a46c6cbe, 9cf459f3, 3915e664, 3480251f and 49b25e56; all six runs are
+ran green on all three engines at commit d68d2fcd, the pre-tag freeze candidate,
+and earlier at a856532b, a46c6cbe, 9cf459f3, 3915e664, 3480251f and 49b25e56; all seven runs are
 recorded in `docs/validation/cross-browser-progressive-laz.json` (Chromium 153.0.8010.12,
 Firefox 155.0, WebKit 26.6, Playwright 1.63.0, macOS 26.5.2 arm64). The release has not been cut, so nothing here
 reports a tagged run.

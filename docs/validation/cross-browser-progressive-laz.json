@@ -54,6 +54,15 @@
     {
       "commit": "a856532b",
       "date": "2026-09-17",
+      "role": "advisory, before the prose pass",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "d68d2fcd",
+      "date": "2026-09-17",
       "role": "pre-tag freeze candidate: the tree the development gate measured and the last one exercised before the tag",
       "tests": 12,
       "passed": 12,
