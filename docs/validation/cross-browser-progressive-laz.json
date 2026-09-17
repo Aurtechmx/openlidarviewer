@@ -27,7 +27,16 @@
     {
       "commit": "3915e664",
       "date": "2026-09-16",
-      "role": "final tree, the commit this release branch is prepared on",
+      "role": "advisory, before the final UI and report fixes",
+      "tests": 12,
+      "passed": 12,
+      "skipped": 0,
+      "failed": 0
+    },
+    {
+      "commit": "9cf459f3",
+      "date": "2026-09-17",
+      "role": "final tree, the commit this release is tagged from and the one the development evidence records",
       "tests": 12,
       "passed": 12,
       "skipped": 0,

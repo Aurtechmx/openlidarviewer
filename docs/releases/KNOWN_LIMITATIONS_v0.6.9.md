@@ -4,7 +4,7 @@
 
 The register holds 34 claims: 2 at E1, 6 at E2, 9 at E3 and 17 at E4. No product
 is at E5, and none moved this cycle. Nothing was added or removed. A product
-reaches E5 only against surveyed field reference, and nothing here is that. The gate for this release ran the test buckets unit 9,467, export 1,061, terrain 2,943, ui 861, slow 1,240.
+reaches E5 only against surveyed field reference, and nothing here is that. The gate for this release ran the test buckets unit 9,488, export 1,062, terrain 2,943, ui 862, slow 1,240.
 
 ## The stockpile volume changed method and did not change level
 
