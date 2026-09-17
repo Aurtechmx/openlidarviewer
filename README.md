@@ -29,7 +29,9 @@ New here? The [User Guide](docs/USER_GUIDE.md) walks through opening a scan, mea
 
 ## Overview
 
-OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. You inspect a scan, navigate it in 3D, switch how it is colored, measure distances, run terrain analysis, and export results, without setting up a desktop GIS workflow. Files are read and rendered locally, so there is no server to upload to. Opening a point cloud should feel about as easy as opening an image, while still giving you the spatial depth, navigation, and inspection tools that LiDAR work needs. It is a viewer and inspection tool, not a GIS, photogrammetry, or survey-grade processing suite: every result discloses its coverage, method, and uncertainty, and terrain and contour exports are evidence-gated so they refuse to over-claim.
+OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. You inspect a scan, navigate it in 3D, change how it is coloured, measure, run terrain analysis and export the results, with no desktop GIS to set up. Files are read and rendered locally, so there is no server to upload to.
+
+It is a viewer and an inspection tool, not a GIS or a survey-grade processing suite. Every result states its coverage, its method and its uncertainty, and a terrain or contour export is gated on evidence rather than produced on request.
 
 ## Features
 
@@ -63,7 +65,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 
 - COPC streaming: a `.copc.laz` file, on disk or hosted at a URL, opens through progressive, octree-based, view-dependent streaming with worker-based decoding and bounded memory, never a full-file load. A remote scan opens from the start screen's open-from-URL field or a shareable `?copc=<url>` deep link
 - EPT (Entwine Point Tile) streaming: local and remote, `binary` and `laszip` tiles
-- 3D Tiles / `.pnts`: a single `.pnts` tile opens as a point cloud — detected by its magic bytes, decoded from uncompressed or quantised positions with colour, and placed by its `RTC_CENTER`
+- 3D Tiles / `.pnts`: a single `.pnts` tile opens as a point cloud. It is detected by its magic bytes, decoded from uncompressed or quantised positions with colour, and placed by its `RTC_CENTER`
 - 3D Tiles / `tileset.json`: a 3D Tiles 1.0 or 1.1 tileset whose content is PNTS opens from a URL and streams the way COPC and EPT do. The scheduler culls against the camera, selects what fits the point budget, and fetches and decodes tile bodies as they are needed; each tile is placed by its own cumulative transform, after its `RTC_CENTER` and before the render origin, in float64. A streamed tileset reports no source point total, because a `tileset.json` never states one and the per-tile figures are decode-admission estimates rather than counts. A tileset whose hierarchy is implicit, a quadtree or octree of subtree files rather than a written-out tree, opens too: it is expanded to the equivalent explicit tileset before parsing, so the same refusals apply. Both refinement modes stream: ADD draws every resident node, and REPLACE swaps a parent for its children atomically once all of them are resident, with no doubled geometry and no hole. A tile whose content is a nested external `tileset.json` is followed and spliced in as a child, so a set split across several documents opens as one scene. Both the single `content` and the 3D Tiles 1.1 `contents[]` array are read, and a tile whose entries are all point clouds streams every one. Mesh content (B3DM, I3DM, CMPT, glTF) and Draco are refused by name, because point streaming is the whole of the subset. See [`docs/supported-formats.md`](docs/supported-formats.md) for the limits of the subset
 - A curated catalog of 12 hand-vetted public COPC / EPT datasets
 
@@ -338,7 +340,7 @@ For real-world figures (a 9.6M-point drone LAZ survey and a 55K-point iPhone sca
 
 ## Limitations
 
-OpenLiDARViewer is an actively maintained project focused on lightweight visualization and interaction. It is not meant to replace full GIS, photogrammetry, or survey-grade processing tools. It leaves CRS reprojection to dedicated tools and analyses each scan in its own frame.
+OpenLiDARViewer is a viewer, not a replacement for a GIS or a survey-grade processing tool. It leaves CRS reprojection to dedicated tools and analyses each scan in its own frame.
 
 - Large files are limited by browser memory and GPU performance; some formats need preprocessing or conversion before they load, and format support is still evolving.
 - Measurement is for visual inspection, not survey-grade use.
@@ -359,7 +361,9 @@ Yes. Drag a `.las`, `.laz`, or `.copc.laz` onto [app.openlidarviewer.org](https:
 No. Files are read and rendered locally. The only network calls are for remote datasets you choose to open; your local files never leave your device.
 
 **What's the largest scan it can open?**
-Most local files are bounded by browser memory and GPU. A very large uncompressed LAS or chunked LAZ is the exception: it is indexed out of core into browser storage and streamed through the same scheduler, when the browser provides that storage and enough space; the index is a persistent local cache, so reopening the same file reuses it and skips the out-of-core decode and index rebuild. Reuse is authorised by a whole-file content hash (so an edited source can never receive a stale hit), and that verification hash is paid on reopen, so the saving is largest when re-decode would dominate rather than a fixed order-of-magnitude speedup. It is not durable — the browser or user may clear that storage, and old indexes are evicted under a size cap. If storage is unavailable or too small the file is refused with guidance rather than loaded whole. For anything else that is too large, stream it as COPC or EPT (local or remote) or convert with PDAL / Entwine. Streaming only loads the resident set the camera needs.
+Most local files are bounded by browser memory and the GPU. A very large uncompressed LAS or chunked LAZ is the exception: it is indexed out of core into browser storage and streamed through the same scheduler, and reopening the same file reuses that index. A content hash authorises the reuse, so an edited file never gets a stale one. The index is a cache, not durable storage: the browser or you may clear it, and old ones are evicted under a size cap. Where storage is missing or too small, the file is refused with guidance rather than loaded whole.
+
+For anything else too large, stream it as COPC or EPT, or convert it with PDAL or Entwine. Streaming loads only the set the camera needs.
 
 **Which formats are supported?**
 LAS / LAZ, PLY, XYZ / CSV, E57, and glTF / GLB for static loads; for streaming: COPC, EPT, a 3D Tiles PNTS tileset, and a very large uncompressed LAS or chunked LAZ indexed out of core. See [Formats & requirements](#formats--requirements).

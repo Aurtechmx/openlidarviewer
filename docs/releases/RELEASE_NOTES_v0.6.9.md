@@ -14,7 +14,7 @@ The estimate is live in the lasso toast, with its authority stated on the result
 
 VOL-STOCKPILE stays at E3. The area-grid method is checked against synthetic known truth; its accuracy against surveyed field volume is not established.
 
-The v0.6.8 limitation that recorded the area-grid estimator as implemented and unreachable no longer holds. What is still true is narrower: the canonical stockpile record beyond the toast is not integrated. The session record, the report and the measurement CSV still carry the point-sample cut and fill volume record. Read the release as delivering an interactive area-weighted stockpile estimate, not a new record in the exports.
+The v0.6.8 limitation that recorded the area-grid estimator as implemented and unreachable no longer holds. A narrower one takes its place: the canonical stockpile record beyond the toast is not integrated. The session record, the report and the measurement CSV still carry the point-sample cut and fill record. What ships here is the interactive estimate, not a new record in the exports.
 
 ## A local LAZ file opens progressively
 
@@ -52,13 +52,19 @@ Help is derived from the action registry, the key binding table and the help cat
 
 ## Interface
 
-Headings are sentence case, values that carry the result are set at a focal size, hairlines are fewer, and motion is bounded under a reduced-motion preference. One owner holds the top-centre lane, the project card first and the recommended-view chip after it. Between 768 and 1100 px the dock folds Snapshot, Copy view link and Probe into More. The touch hint yields after the first gesture and can be reopened from the palette. On a phone the results come first, and the sheet opens to half height when a run completes.
+Headings are sentence case. A value that carries the result is set at a focal size, there are fewer hairlines, and motion is bounded under a reduced-motion preference.
 
-Scientific state reads in one grammar across the interface, a glyph and a word. Export Health rows carry a glyph as a second channel and the informational tier is styled. The Dataset Story is mounted in the Analyse panel when a scan opens, and stays reachable from the palette. Analyse status is announced in a live region, the report verifier traps focus, a disabled export product explains why it is disabled, ten empty states say what fills them, and the load stages read "Reading metadata" and "Preparing display".
+One owner holds the top-centre lane: the project card first, the recommended-view chip after it. Between 768 and 1100 px the dock folds Snapshot, Copy view link and Probe into More. The touch hint yields after the first gesture and reopens from the palette. On a phone the results come first, and the sheet opens to half height when a run completes.
+
+Scientific state reads in one grammar everywhere, a glyph and a word. Export Health rows carry the glyph as a second channel, and the informational tier is styled. The Dataset Story mounts in the Analyse panel when a scan opens and stays reachable from the palette.
+
+Analyse status is announced in a live region. The report verifier traps focus, a disabled export product says why, ten empty states say what fills them, and the load stages read "Reading metadata" and "Preparing display".
 
 The Tools tab opens with a launcher card. It lists Measure, Inspect point, Annotate and Clip box from the action registry with their keys and hints, states how many of each the session has placed so far, and folds to a strip while a tool panel is up. Probe stays on the dock only.
 
-Panel rows lead with the result. A value that carries the figure is set at 12 px against an 11 px label, the readouts that carry figures use tabular numbers, the dock and the workspace tab strip are concentric with what they contain, floating surfaces share one layered shadow, and a press has one scale. Layer Health folds frame and mount detail behind a disclosure when one layer is loaded, the Export summary keeps a neutral line and moves its caveat to a note, Provenance bounds read label left and figure right with the citation below, Workflow, RGB and Background are collapsible with their open state remembered, and Scan Intelligence replaces three unknown rows with one line.
+Panel rows lead with the result. A figure is set at 12 px against an 11 px label and uses tabular numbers, the dock and the workspace tab strip are concentric with what they contain, floating surfaces share one layered shadow, and a press has one scale.
+
+Layer Health folds frame and mount detail behind a disclosure when one layer is loaded. The Export summary keeps a neutral line and moves its caveat to a note, Provenance bounds read label left and figure right with the citation below, Workflow, RGB and Background remember whether they were open, and Scan Intelligence replaces three unknown rows with one line.
 
 ## Fixed
 
@@ -80,6 +86,15 @@ Panel rows lead with the result. A value that carries the figure is set at 12 px
 - The top lane is handed on when the project card's fade ends rather than when it begins, with a bounded fallback for a card that reports no transition end.
 - The module-graph lint refuses to bank a raise and records fan-in.
 - A deposited release's limitations document keeps the counts it shipped with, so the release-truth lint does not demand an edit to a published file.
+- A datum name that carries its own axis, geoid realisation and unit resolves to that datum; one that carries a qualifier naming a different reference, such as a local adjustment, does not. The layer compatibility key and the height classification read a name through the same resolver.
+- Every PDF sheet transliterates through one table, so a threshold such as "at least 4 pts/m²" prints as text rather than as a question mark.
+- The space report breaks to a second page instead of running its notes through the provenance footer, and the terrain report prints the share of measured cells near the data boundary that its verdict quotes.
+- The Clip box help says that a point-cloud export made with the converter carries the clipped points.
+- The archives record their directory modes, so a host extracting under a restrictive umask still serves every asset.
+
+## Documentation
+
+The user guide is rewritten against the shipped interface. It describes the Data, Tools, Analyse and Export tabs, starts Measure where the app starts it, and covers 3D Tiles, progressive LAZ, display-sample thinning and the object and interior route. The website publishes the same file.
 
 ## Known limitations
 
