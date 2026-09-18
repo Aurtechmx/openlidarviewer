@@ -13,6 +13,13 @@ updates:
     groups:
       dev-tooling:
         dependency-type: "development"
+      # The loaders.gl packages must move as a set: every 4.5.x loader declares a
+      # peer dependency on @loaders.gl/core ~4.4.0, so a bump that moves core on
+      # its own cannot install. One grouped PR shows that conflict in a single
+      # place instead of splitting it across four.
+      loaders-gl:
+        patterns:
+          - "@loaders.gl/*"
     labels:
       - "dependencies"
 
