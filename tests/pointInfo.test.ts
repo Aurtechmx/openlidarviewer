@@ -48,13 +48,13 @@ test('classificationLabel names class 12 by the format that carries it', () => {
   // of the same file. Passing the point data record format settles both.
   expect(classificationLabel(12, 1)).toBe('Overlap Points');
   expect(classificationLabel(12, 6)).toBe('Reserved');
-  expect(classificationLabel(8, 1)).toBe('Model Key-point');
+  expect(classificationLabel(8, 1)).toBe('Model Key-Point (Mass Point)');
   expect(classificationLabel(8, 6)).toBe('Reserved');
 });
 
 test('classificationLabel reports both readings when the format is unknown', () => {
   expect(classificationLabel(12)).toBe('Overlap or reserved (12)');
-  expect(classificationLabel(8)).toBe('Model Key-point or reserved (8)');
+  expect(classificationLabel(8)).toBe('Model Key-Point or reserved (8)');
   expect(classificationLabel(10)).toBe('Rail or reserved (10)');
   expect(classificationLabel(11)).toBe('Road Surface or reserved (11)');
 });
@@ -67,7 +67,7 @@ test('classificationLabel covers the classes 19 to 22', () => {
 });
 
 test('classificationLabel separates reserved from user definable', () => {
-  expect(classificationLabel(99)).toBe('User definable (99)'); // 64-255
+  expect(classificationLabel(99)).toBe('User Definable (99)'); // 64-255
   expect(classificationLabel(40)).toBe('Reserved (40)');       // 23-63
 });
 

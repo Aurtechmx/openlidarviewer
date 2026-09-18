@@ -38,8 +38,10 @@ describe('splitting the legacy classification byte', () => {
     expect(flags.withheld).toBe(true);
   });
 
-  it('treats legacy class 12 as carrying overlap', () => {
-    expect(decodeLegacyClassificationByte(12).flags.overlap).toBe(true);
+  it('reports no overlap flag, because the legacy byte has no such bit', () => {
+    // Table 8 defines bits 5, 6 and 7 only. Legacy files carry overlap as
+    // class 12; isOverlapPoint() answers that question per format.
+    expect(decodeLegacyClassificationByte(12).flags.overlap).toBe(false);
     expect(decodeLegacyClassificationByte(2).flags.overlap).toBe(false);
   });
 });
