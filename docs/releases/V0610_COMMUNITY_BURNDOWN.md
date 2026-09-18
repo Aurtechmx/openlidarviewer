@@ -57,6 +57,9 @@ TEST means a failing test exists.
 | B23 | READ, whole tree | io, model | Classification flags are never decoded. `synthetic`, `keyPoint` and `withheld` appear nowhere in `src/` outside the semantics module added this cycle. Sections 6 and 8 are therefore new capability across the decoders, the point model, the workers and the writers, not repair of an existing path. | F | high | READ | OPEN | |
 | B24 | READ `writeLas14.ts:618` | export | The extended writer already writes the full 8-bit classification and its comment names the 5-bit clamp it avoids. No correction is needed on the extended path. | B | n/a | READ | OPEN | NOT REPRODUCIBLE |
 
+| B25 | TEST `lint:evidence` | release | Adding any test while `package.json` still reads 0.6.9 turns the next gate red. The lint checks the published v0.6.9 release documents against the current evidence figures, and those documents correctly record what v0.6.9 ran. The unit bucket moved from 9,488 to 9,526 this cycle, so the three v0.6.9 documents now disagree with the tree. Neither editing them nor bumping the version is available: the first alters published release documentation and would state something false about v0.6.9, the second is gated on testing. | A | high | TEST | OPEN | |
+| B26 | READ ASPRS Table 9 note 3 | io, terrain | The specification says the Withheld bit should generally be set on legacy Overlap Points, since they are culled during flight-line merging. OLV discards Withheld, so a conforming producer's excluded points enter terrain, density and stockpile as ordinary returns. This raises B23 from a missing capability to a data-integrity defect. | B | high | READ | OPEN | |
+
 ## Constraints carried into this cycle
 
 These are not defects. They bound what the cycle may do.

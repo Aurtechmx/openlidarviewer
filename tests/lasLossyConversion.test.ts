@@ -65,7 +65,7 @@ describe('the wrap is silent, which is the danger', () => {
   it('names what would be lost', () => {
     const text = describeLoss(inspectLegacyConversion([64], true), 6);
     expect(text).toContain('64');
-    expect(text).toContain('User definable');
+    expect(text).toContain('User Definable');
     expect(text).toContain('overlap flag');
   });
 });

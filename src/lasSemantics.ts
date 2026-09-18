@@ -43,10 +43,10 @@ const LEGACY_CLASS_NAMES: Readonly<Record<number, string>> = {
   5: 'High Vegetation',
   6: 'Building',
   7: 'Low Point (Noise)',
-  8: 'Model Key-point',
+  8: 'Model Key-Point (Mass Point)',
   9: 'Water',
-  10: 'Reserved',
-  11: 'Reserved',
+  10: 'Reserved for ASPRS Definition',
+  11: 'Reserved for ASPRS Definition',
   12: 'Overlap Points',
 };
 
@@ -108,7 +108,7 @@ export function classificationName(code: number, pdrf: number): string {
   const table = isExtendedPdrf(pdrf) ? EXTENDED_CLASS_NAMES : LEGACY_CLASS_NAMES;
   const name = table[code];
   if (name !== undefined) return name;
-  if (classAllocation(code, pdrf) === 'user-definable') return `User definable (${code})`;
+  if (classAllocation(code, pdrf) === 'user-definable') return `User Definable (${code})`;
   return `Reserved (${code})`;
 }
 
@@ -117,7 +117,7 @@ export function classificationName(code: number, pdrf: number): string {
  * that does not know the format cannot choose between them.
  */
 const FORMAT_DEPENDENT_CODES: Readonly<Record<number, string>> = {
-  8: 'Model Key-point or reserved (8)',
+  8: 'Model Key-Point or reserved (8)',
   10: 'Rail or reserved (10)',
   11: 'Road Surface or reserved (11)',
   12: 'Overlap or reserved (12)',
@@ -134,7 +134,7 @@ export function classificationNameUnknownFormat(code: number): string {
   const ambiguous = FORMAT_DEPENDENT_CODES[code];
   if (ambiguous !== undefined) return ambiguous;
   if (!Number.isInteger(code) || code < 0 || code > 255) return `Invalid (${code})`;
-  if (code >= FIRST_USER_DEFINABLE_CLASS) return `User definable (${code})`;
+  if (code >= FIRST_USER_DEFINABLE_CLASS) return `User Definable (${code})`;
   const extended = EXTENDED_CLASS_NAMES[code];
   if (extended !== undefined && extended !== 'Reserved') return extended;
   const legacy = LEGACY_CLASS_NAMES[code];
@@ -180,7 +180,10 @@ export function decodeLegacyClassificationByte(byte: number): {
       synthetic: (byte & LEGACY_SYNTHETIC_BIT) !== 0,
       keyPoint: (byte & LEGACY_KEY_POINT_BIT) !== 0,
       withheld: (byte & LEGACY_WITHHELD_BIT) !== 0,
-      overlap: (byte & 0x1f) === 12,
+      // Table 8 defines bits 5, 6 and 7 only. Legacy files carry overlap as
+      // class 12, not as a flag, so reporting one here would render a class 12
+      // point as "Overlap Points and Overlap".
+      overlap: false,
     },
   };
 }
@@ -197,6 +200,50 @@ export function encodeLegacyClassificationByte(
   return byte;
 }
 
+/** Bit positions inside the extended Classification Flags field (Table 16). */
+const EXT_SYNTHETIC_BIT = 0x1;
+const EXT_KEY_POINT_BIT = 0x2;
+const EXT_WITHHELD_BIT = 0x4;
+const EXT_OVERLAP_BIT = 0x8;
+
+/**
+ * Read the extended Classification Flags field.
+ *
+ * Formats 6 to 10 keep the flags in their own 4-bit field rather than in the
+ * classification byte, which is how they carry a full 256-class code and an
+ * overlap flag at the same time.
+ */
+export function decodeExtendedClassificationFlags(nibble: number): ClassificationFlags {
+  return {
+    synthetic: (nibble & EXT_SYNTHETIC_BIT) !== 0,
+    keyPoint: (nibble & EXT_KEY_POINT_BIT) !== 0,
+    withheld: (nibble & EXT_WITHHELD_BIT) !== 0,
+    overlap: (nibble & EXT_OVERLAP_BIT) !== 0,
+  };
+}
+
+/** Rebuild the extended Classification Flags field. */
+export function encodeExtendedClassificationFlags(flags: Partial<ClassificationFlags>): number {
+  let nibble = 0;
+  if (flags.synthetic) nibble |= EXT_SYNTHETIC_BIT;
+  if (flags.keyPoint) nibble |= EXT_KEY_POINT_BIT;
+  if (flags.withheld) nibble |= EXT_WITHHELD_BIT;
+  if (flags.overlap) nibble |= EXT_OVERLAP_BIT;
+  return nibble;
+}
+
+/**
+ * Whether a point sits in an overlap region, which the two schemes express
+ * differently: legacy files as class 12, extended files as the overlap flag.
+ */
+export function isOverlapPoint(
+  code: number,
+  pdrf: number,
+  flags: Readonly<ClassificationFlags> = NO_FLAGS,
+): boolean {
+  return isExtendedPdrf(pdrf) ? flags.overlap : code === 12;
+}
+
 /**
  * How a class and its flags read to a person: the base class, with any
  * overlap shown beside it rather than replacing it.
@@ -210,7 +257,7 @@ export function describeClassification(
   const marks: string[] = [];
   if (flags.overlap) marks.push('Overlap');
   if (flags.synthetic) marks.push('Synthetic');
-  if (flags.keyPoint) marks.push('Key-point');
+  if (flags.keyPoint) marks.push('Key-Point');
   if (flags.withheld) marks.push('Withheld');
   return marks.length === 0 ? base : `${base} · ${marks.join(' · ')}`;
 }

@@ -490,7 +490,7 @@ test('asprsLabel separates the named, reserved and user-definable ranges', () =>
   // classes. Only 64 and above are user definable.
   expect(asprsLabel(20, 6)).toBe('Ignored Ground');
   expect(asprsLabel(42, 6)).toBe('Reserved (42)');
-  expect(asprsLabel(200, 6)).toBe('User definable (200)');
+  expect(asprsLabel(200, 6)).toBe('User Definable (200)');
 });
 
 test('DEFAULT_LEGEND_CODES includes the high-frequency ASPRS classes', () => {

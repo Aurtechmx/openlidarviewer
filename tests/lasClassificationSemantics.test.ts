@@ -15,6 +15,10 @@ import {
   describeClassification,
   isExtendedPdrf,
   isValidPdrf,
+  isOverlapPoint,
+  decodeLegacyClassificationByte,
+  decodeExtendedClassificationFlags,
+  encodeExtendedClassificationFlags,
   FIRST_EXTENDED_PDRF,
 } from '../src/lasSemantics';
 
@@ -74,14 +78,14 @@ describe('codes 19 to 22 are defined, not user-defined', () => {
   it('reports 64 and above as user definable', () => {
     for (const code of [64, 128, 255]) {
       expect(classAllocation(code, 6)).toBe('user-definable');
-      expect(classificationName(code, 6)).toBe(`User definable (${code})`);
+      expect(classificationName(code, 6)).toBe(`User Definable (${code})`);
     }
   });
 });
 
 describe('the legacy table keeps its own meanings', () => {
   it.each([
-    [8, 'Model Key-point'],
+    [8, 'Model Key-Point (Mass Point)'],
     [9, 'Water'],
     [2, 'Ground'],
   ])('names legacy class %i as %s', (code, name) => {
@@ -91,8 +95,8 @@ describe('the legacy table keeps its own meanings', () => {
   it('names rail and road surface only in the extended table', () => {
     expect(classificationName(10, 6)).toBe('Rail');
     expect(classificationName(11, 6)).toBe('Road Surface');
-    expect(classificationName(10, 1)).toBe('Reserved');
-    expect(classificationName(11, 1)).toBe('Reserved');
+    expect(classificationName(10, 1)).toBe('Reserved for ASPRS Definition');
+    expect(classificationName(11, 1)).toBe('Reserved for ASPRS Definition');
   });
 });
 
@@ -109,6 +113,41 @@ describe('overlap reads beside the base class, not instead of it', () => {
 
   it('shows the base class alone when no flag is set', () => {
     expect(describeClassification(6, 6)).toBe('Building');
+  });
+});
+
+describe('a legacy class 12 point does not report overlap twice', () => {
+  it('names the class without repeating it as a flag', () => {
+    const { code, flags } = decodeLegacyClassificationByte(12);
+    expect(describeClassification(code, 1, flags)).toBe('Overlap Points');
+  });
+
+  it('still reports overlap through the format-aware helper', () => {
+    expect(isOverlapPoint(12, 1)).toBe(true);
+    expect(isOverlapPoint(12, 6)).toBe(false);
+    expect(isOverlapPoint(2, 6, decodeExtendedClassificationFlags(0x8))).toBe(true);
+  });
+});
+
+describe('extended classification flags live in their own field', () => {
+  it.each([
+    ['synthetic', 0x1],
+    ['keyPoint', 0x2],
+    ['withheld', 0x4],
+    ['overlap', 0x8],
+  ] as const)('reads %s from bit value %i', (flag, bit) => {
+    expect(decodeExtendedClassificationFlags(bit)[flag]).toBe(true);
+  });
+
+  it('round-trips every combination', () => {
+    for (let n = 0; n <= 0xf; n++) {
+      expect(encodeExtendedClassificationFlags(decodeExtendedClassificationFlags(n))).toBe(n);
+    }
+  });
+
+  it('keeps a ground point with the overlap flag readable as both', () => {
+    const flags = decodeExtendedClassificationFlags(0x8);
+    expect(describeClassification(2, 6, flags)).toBe('Ground · Overlap');
   });
 });
 
