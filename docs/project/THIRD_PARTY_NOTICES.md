@@ -25,11 +25,11 @@ only the direct entry points.
 
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
-| three | ^0.184.0 | 0.184.0 | MIT | https://github.com/mrdoob/three.js |
+| three | ^0.186.0 | 0.186.0 | MIT | https://github.com/mrdoob/three.js |
 | @loaders.gl/core | ^4.4.5 | 4.4.5 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/obj | ^4.4.5 | 4.4.5 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/ply | ^4.4.5 | 4.4.5 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/obj | ^4.5.1 | 4.5.1 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/ply | ^4.5.1 | 4.5.1 | MIT | https://github.com/visgl/loaders.gl |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
 | proj4 | ^2.22.0 | 2.22.0 | MIT | https://github.com/proj4js/proj4js |
@@ -55,8 +55,8 @@ MIT (46 packages):
 - @loaders.gl/gltf 4.4.3
 - @loaders.gl/images 4.4.3
 - @loaders.gl/loader-utils 4.4.3
-- @loaders.gl/obj 4.4.5
-- @loaders.gl/ply 4.4.5
+- @loaders.gl/obj 4.5.1
+- @loaders.gl/ply 4.5.1
 - @loaders.gl/schema 4.4.3
 - @loaders.gl/schema-utils 4.4.3
 - @loaders.gl/textures 4.4.3
@@ -91,7 +91,7 @@ MIT (46 packages):
 - supports-color 7.2.0
 - table-layout 4.1.1
 - texture-compressor 1.0.2
-- three 0.184.0
+- three 0.186.0
 - typical 7.3.0
 - undici-types 7.18.2
 - wkt-parser 1.5.5
@@ -129,14 +129,14 @@ here for transparency.
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 | https://github.com/microsoft/TypeScript |
-| vite | ^8.2.2 | 8.2.2 | MIT | https://github.com/vitejs/vite |
-| vitest | ^5.0.0 | 5.0.0 | MIT | https://github.com/vitest-dev/vitest |
+| vite | ^8.3.0 | 8.3.0 | MIT | https://github.com/vitejs/vite |
+| vitest | ^5.0.0 | 5.0.1 | MIT | https://github.com/vitest-dev/vitest |
 | vitepress | 1.6.4 | 1.6.4 | MIT | https://github.com/vuejs/vitepress |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT | https://github.com/elmesutupu/vite-plugin-javascript-obfuscator |
 | @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 | https://github.com/microsoft/playwright |
-| @types/three | ^0.184.1 | 0.184.1 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
+| @types/three | ^0.186.0 | 0.186.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT | https://github.com/btd/rollup-plugin-visualizer |
-| @vitest/coverage-v8 | ^5.0.0 | 5.0.0 | MIT | https://github.com/vitest-dev/vitest |
+| @vitest/coverage-v8 | ^5.0.1 | 5.0.1 | MIT | https://github.com/vitest-dev/vitest |
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |

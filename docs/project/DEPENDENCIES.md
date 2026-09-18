@@ -40,12 +40,12 @@ These ship in the deploy archive.
 | @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @loaders.gl/core | ^4.4.5 | 4.4.5 | MIT |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT |
-| @loaders.gl/obj | ^4.4.5 | 4.4.5 | MIT |
-| @loaders.gl/ply | ^4.4.5 | 4.4.5 | MIT |
+| @loaders.gl/obj | ^4.5.1 | 4.5.1 | MIT |
+| @loaders.gl/ply | ^4.5.1 | 4.5.1 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.22.0 | 2.22.0 | MIT |
-| three | ^0.184.0 | 0.184.0 | MIT |
+| three | ^0.186.0 | 0.186.0 | MIT |
 
 ## Direct development dependencies
 
@@ -58,14 +58,14 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
-| @types/three | ^0.184.1 | 0.184.1 | MIT |
-| @vitest/coverage-v8 | ^5.0.0 | 5.0.0 | MIT |
+| @types/three | ^0.186.0 | 0.186.0 | MIT |
+| @vitest/coverage-v8 | ^5.0.1 | 5.0.1 | MIT |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
-| vite | ^8.2.2 | 8.2.2 | MIT |
+| vite | ^8.3.0 | 8.3.0 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
-| vitest | ^5.0.0 | 5.0.0 | MIT |
+| vitest | ^5.0.0 | 5.0.1 | MIT |
 
 ## Production security status
 
