@@ -62,6 +62,8 @@ TEST means a failing test exists.
 
 | B27 | TEST `tests/evidenceReleasePathLint.test.ts` | release | Scoping the B25 figure check to untagged versions was attempted and reverted. That test injects a false bucket total into the published v0.6.9 validation report and requires the lint to refuse it, which guards against the lint reading paths that do not exist, a fault that shipped in v0.6.4. Skipping the comparison for a tagged version makes that guard vacuous for as long as the version stays tagged. B25 is unlocked by the version bump, not by narrowing the check. | A | n/a | TEST | OPEN | NOT REPRODUCIBLE |
 
+| B28 | READ `clipCloud.ts`, `voxelDownsample.ts` | model | Classification flags survive a load but not a derivation. Clipping and voxel downsampling filter the class channel in lockstep and drop the flags, so a withheld point becomes indistinguishable after either. EPT and COPC decode on their own path and produce no flags at all, which reads as absent rather than as false zeros. Nothing consumes the flags yet, so no result is wrong today; a withheld processing policy would depend on closing this. | B | med | READ | OPEN | |
+
 ## Constraints carried into this cycle
 
 These are not defects. They bound what the cycle may do.
