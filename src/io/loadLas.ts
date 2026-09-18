@@ -135,6 +135,7 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
   const metadata: CloudMetadata = {};
   if (header.systemIdentifier) metadata.captureSensor = header.systemIdentifier;
   if (header.generatingSoftware) metadata.sourceSoftware = header.generatingSoftware;
+  metadata.pointFormat = header.pointFormat;
   const captureDate = formatCreationDate(header.creationYear, header.creationDay);
   if (captureDate) metadata.captureDate = captureDate;
   // surface the CRS parsed from LASF_Projection VLRs so the

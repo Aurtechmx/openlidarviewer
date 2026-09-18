@@ -112,6 +112,36 @@ export function classificationName(code: number, pdrf: number): string {
   return `Reserved (${code})`;
 }
 
+/**
+ * Codes whose meaning differs between the legacy and extended tables. A caller
+ * that does not know the format cannot choose between them.
+ */
+const FORMAT_DEPENDENT_CODES: Readonly<Record<number, string>> = {
+  8: 'Model Key-point or reserved (8)',
+  10: 'Rail or reserved (10)',
+  11: 'Road Surface or reserved (11)',
+  12: 'Overlap or reserved (12)',
+};
+
+/**
+ * The name for a code when the point data record format is not known.
+ *
+ * Four codes mean different things in the two tables, and naming one of them
+ * after a guess is how class 12 came to read "Overlap" on extended files. Those
+ * four report both readings; every other code is named the same either way.
+ */
+export function classificationNameUnknownFormat(code: number): string {
+  const ambiguous = FORMAT_DEPENDENT_CODES[code];
+  if (ambiguous !== undefined) return ambiguous;
+  if (!Number.isInteger(code) || code < 0 || code > 255) return `Invalid (${code})`;
+  if (code >= FIRST_USER_DEFINABLE_CLASS) return `User definable (${code})`;
+  const extended = EXTENDED_CLASS_NAMES[code];
+  if (extended !== undefined && extended !== 'Reserved') return extended;
+  const legacy = LEGACY_CLASS_NAMES[code];
+  if (legacy !== undefined && legacy !== 'Reserved') return legacy;
+  return `Reserved (${code})`;
+}
+
 /** Classification flags carried beside the class code. */
 export interface ClassificationFlags {
   synthetic: boolean;

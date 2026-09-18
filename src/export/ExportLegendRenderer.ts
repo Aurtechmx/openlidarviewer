@@ -1,3 +1,4 @@
+import { classificationName, classificationNameUnknownFormat } from '../lasSemantics';
 /**
  * ExportLegendRenderer.ts
  *
@@ -28,31 +29,17 @@ export interface LegendSwatch {
 
 /**
  * The standard ASPRS classification label for a class code.
- * Codes ≥ 19 are user-defined per spec and labelled accordingly.
+ *
+ * Names come from src/lasSemantics.ts. This function previously owned a switch
+ * that named code 12 "Reserved (12)" for every format and returned "User class
+ * N" for everything from 19 up, so the named classes 19 to 22 and the reserved
+ * range 23 to 63 were both reported as user classes. Pass the point data
+ * record format when the source declares one.
  */
-export function asprsLabel(code: number): string {
-  switch (code) {
-    case 0:  return 'Never classified';
-    case 1:  return 'Unclassified';
-    case 2:  return 'Ground';
-    case 3:  return 'Low vegetation';
-    case 4:  return 'Medium vegetation';
-    case 5:  return 'High vegetation';
-    case 6:  return 'Building';
-    case 7:  return 'Low point / noise';
-    case 8:  return 'Reserved (8)';
-    case 9:  return 'Water';
-    case 10: return 'Rail';
-    case 11: return 'Road surface';
-    case 12: return 'Reserved (12)';
-    case 13: return 'Wire — guard / shield';
-    case 14: return 'Wire — conductor';
-    case 15: return 'Transmission tower';
-    case 16: return 'Wire connector';
-    case 17: return 'Bridge deck';
-    case 18: return 'High noise';
-    default: return `User class ${code}`;
-  }
+export function asprsLabel(code: number, pdrf?: number): string {
+  return pdrf === undefined
+    ? classificationNameUnknownFormat(code)
+    : classificationName(code, pdrf);
 }
 
 /**

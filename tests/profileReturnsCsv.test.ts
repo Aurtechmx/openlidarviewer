@@ -124,7 +124,7 @@ describe('profile returns CSV — absent channels', () => {
     // ABSENT channel are different cells.
     expect(col(header, body, 'intensity')).toEqual(['0', '7', '']);
     expect(col(header, body, 'classification')).toEqual(['2', '5', '']);
-    expect(col(header, body, 'classification_label')).toEqual(['Ground', 'High vegetation', '']);
+    expect(col(header, body, 'classification_label')).toEqual(['Ground', 'High Vegetation', '']);
     expect(col(header, body, 'return_number')).toEqual(['1', '2', '']);
     expect(col(header, body, 'return_count')).toEqual(['2', '2', '']);
     expect(col(header, body, 'point_source_id')).toEqual(['11', '11', '']);
