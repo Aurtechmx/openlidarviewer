@@ -39,6 +39,13 @@ export interface CloudMetadata {
    * shown as "System identifier", not as a capture sensor.
    */
   captureSensor?: string;
+  /**
+   * The LAS Point Data Record Format the source declared, when the format is a
+   * LAS family one. Class names depend on it: code 12 is Overlap Points under
+   * formats 0 to 5 and reserved from format 6. Absent for formats that carry
+   * no PDRF, where ASPRS class semantics do not apply.
+   */
+  pointFormat?: number;
   /** Software that produced the file, e.g. the LAS Generating Software field. */
   sourceSoftware?: string;
   /**

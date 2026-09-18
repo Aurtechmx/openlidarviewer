@@ -60,13 +60,6 @@
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
     {
-      "path": "src/lasSemantics.ts",
-      "status": "staged",
-      "why": "The single source of ASPRS/LAS point semantics: class names keyed by point data record format, the classification flag bits of the legacy byte, and the safety of a conversion into the 5-bit legacy field. It exists because eight modules decided class names independently and disagreed. The point inspector named class 12 Overlap for every format while the export legend named it Reserved (12), and the legend reported every code at or above 19 as user-defined. The module is pure and imports nothing. No consumer reads from it yet, so only its own tests import it.",
-      "graduation": "Each of the eight naming sites (main.ts, MeasurePanel.ts, Inspector.ts, panelChrome.ts, DesktopWorkspace.ts, pointInfo.ts, colorModes.ts, ExportLegendRenderer.ts) reads its class name from classificationName() instead of its own table. That requires the point data record format to reach each call site, since the function takes it as a required argument and a caller that does not know the format cannot name class 12 correctly. The first consumer to land removes this entry.",
-      "review": "2026-12-31"
-    },
-    {
       "path": "src/process/ProductExecutorRegistry.ts",
       "status": "staged",
       "why": "Named in the v0.6.6 release notes: \"a product executor registry foundation that invokes a registered compute core through ProcessService.runIfAuthorized ... production product routes do not pass through it yet\".",

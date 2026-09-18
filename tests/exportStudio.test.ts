@@ -478,14 +478,19 @@ test('classificationExporter is unavailable when no cloud is loaded', () => {
 
 test('asprsLabel returns the standard label for known codes', () => {
   expect(asprsLabel(2)).toBe('Ground');
-  expect(asprsLabel(5)).toBe('High vegetation');
+  expect(asprsLabel(5)).toBe('High Vegetation');
   expect(asprsLabel(6)).toBe('Building');
   expect(asprsLabel(9)).toBe('Water');
-  expect(asprsLabel(17)).toBe('Bridge deck');
+  expect(asprsLabel(17)).toBe('Bridge Deck');
 });
 
-test('asprsLabel marks user-defined codes (>= 19) explicitly', () => {
-  expect(asprsLabel(42)).toBe('User class 42');
+test('asprsLabel separates the named, reserved and user-definable ranges', () => {
+  // The switch this replaced returned "User class N" from 19 up, which named
+  // the defined classes 19 to 22 and the reserved range 23 to 63 as user
+  // classes. Only 64 and above are user definable.
+  expect(asprsLabel(20, 6)).toBe('Ignored Ground');
+  expect(asprsLabel(42, 6)).toBe('Reserved (42)');
+  expect(asprsLabel(200, 6)).toBe('User definable (200)');
 });
 
 test('DEFAULT_LEGEND_CODES includes the high-frequency ASPRS classes', () => {

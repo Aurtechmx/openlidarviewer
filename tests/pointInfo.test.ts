@@ -39,23 +39,36 @@ function fullRaw(): RawPointInfo {
 test('classificationLabel maps ASPRS codes to names', () => {
   expect(classificationLabel(2)).toBe('Ground');
   expect(classificationLabel(6)).toBe('Building');
-  expect(classificationLabel(0)).toBe('Created, never classified');
+  expect(classificationLabel(0)).toBe('Created, Never Classified');
 });
 
-test('classificationLabel covers the LAS 1.4 R15 standard classes (8, 12, 19–22)', () => {
-  // The 1.4 additions and the reserved-but-real codes that were previously
-  // falling through to the generic "Class N" label.
-  expect(classificationLabel(8)).toBe('Reserved');
-  expect(classificationLabel(12)).toBe('Overlap');
-  expect(classificationLabel(19)).toBe('Overhead structure');
-  expect(classificationLabel(20)).toBe('Ignored ground');
-  expect(classificationLabel(21)).toBe('Snow');
-  expect(classificationLabel(22)).toBe('Temporal exclusion');
+test('classificationLabel names class 12 by the format that carries it', () => {
+  // The table this function used to own named 12 "Overlap" for every format
+  // while naming 8 "Reserved", which are the legacy and the extended readings
+  // of the same file. Passing the point data record format settles both.
+  expect(classificationLabel(12, 1)).toBe('Overlap Points');
+  expect(classificationLabel(12, 6)).toBe('Reserved');
+  expect(classificationLabel(8, 1)).toBe('Model Key-point');
+  expect(classificationLabel(8, 6)).toBe('Reserved');
 });
 
-test('classificationLabel falls back for reserved / user-definable codes', () => {
-  expect(classificationLabel(99)).toBe('Class 99'); // user-definable (64–255)
-  expect(classificationLabel(40)).toBe('Class 40'); // reserved (23–63)
+test('classificationLabel reports both readings when the format is unknown', () => {
+  expect(classificationLabel(12)).toBe('Overlap or reserved (12)');
+  expect(classificationLabel(8)).toBe('Model Key-point or reserved (8)');
+  expect(classificationLabel(10)).toBe('Rail or reserved (10)');
+  expect(classificationLabel(11)).toBe('Road Surface or reserved (11)');
+});
+
+test('classificationLabel covers the classes 19 to 22', () => {
+  expect(classificationLabel(19, 6)).toBe('Overhead Structure');
+  expect(classificationLabel(20, 6)).toBe('Ignored Ground');
+  expect(classificationLabel(21, 6)).toBe('Snow');
+  expect(classificationLabel(22, 6)).toBe('Temporal Exclusion');
+});
+
+test('classificationLabel separates reserved from user definable', () => {
+  expect(classificationLabel(99)).toBe('User definable (99)'); // 64-255
+  expect(classificationLabel(40)).toBe('Reserved (40)');       // 23-63
 });
 
 test('makePointInfo rounds coordinates to 3 decimals and distance to 2', () => {
