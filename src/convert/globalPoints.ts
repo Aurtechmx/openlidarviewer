@@ -24,6 +24,8 @@ export interface GlobalPoints {
   readonly colors?: Uint8Array;
   readonly intensity?: Uint16Array;
   readonly classification?: Uint8Array;
+  /** Classification flags in the extended layout (Synthetic 1, Key-Point 2, Withheld 4, Overlap 8). */
+  readonly classificationFlags?: Uint8Array;
   readonly returnNumber?: Uint8Array;
   readonly returnCount?: Uint8Array;
   readonly pointSourceId?: Uint16Array;
@@ -57,6 +59,7 @@ export function cloudToGlobal(cloud: PointCloud): GlobalPoints {
     colors: cloud.colors,
     intensity: cloud.intensity,
     classification: cloud.classification,
+    classificationFlags: cloud.classificationFlags,
     returnNumber: cloud.returnNumber,
     returnCount: cloud.returnCount,
     pointSourceId: cloud.pointSourceId,

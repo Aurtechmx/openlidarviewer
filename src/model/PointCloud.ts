@@ -136,6 +136,13 @@ export interface PointCloudOptions {
   intensity?: Uint16Array;
   /** Optional per-point ASPRS classification code. */
   classification?: Uint8Array;
+  /**
+   * Optional per-point classification flags in the extended layout
+   * (Synthetic 1, Key-Point 2, Withheld 4, Overlap 8). A producer sets
+   * Withheld on points that should not be processed, so this travels with the
+   * class rather than being dropped at decode.
+   */
+  classificationFlags?: Uint8Array;
   /** Optional interleaved per-point normal vectors (xyz). */
   normals?: Float32Array;
   /** Optional per-point LAS return number (which return of a pulse this is). */
@@ -206,6 +213,7 @@ export class PointCloud {
    * class editor (swap / polygon reclassify).
    */
   private _classification?: Uint8Array;
+  private readonly _classificationFlags?: Uint8Array;
   private _classificationDerived = false;
   private _derivedClassFrameInvalid = false;
   readonly normals?: Float32Array;
@@ -290,6 +298,7 @@ export class PointCloud {
     expectLength('normals', options.normals, count * 3);
     expectLength('intensity', options.intensity, count);
     expectLength('classification', options.classification, count);
+    expectLength('classificationFlags', options.classificationFlags, count);
     expectLength('returnNumber', options.returnNumber, count);
     expectLength('returnCount', options.returnCount, count);
     expectLength('pointSourceId', options.pointSourceId, count);
@@ -299,6 +308,7 @@ export class PointCloud {
     this.colors = options.colors;
     this.intensity = options.intensity;
     this._classification = options.classification;
+    this._classificationFlags = options.classificationFlags;
     this.normals = options.normals;
     this.returnNumber = options.returnNumber;
     this.returnCount = options.returnCount;
@@ -323,6 +333,11 @@ export class PointCloud {
   /** Number of points: three position components per point. */
   get pointCount(): number {
     return this.positions.length / 3;
+  }
+
+  /** Per-point classification flags, when the source carried them. */
+  get classificationFlags(): Uint8Array | undefined {
+    return this._classificationFlags;
   }
 
   /** Per-point ASPRS classification (original from the file, or derived). */

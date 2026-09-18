@@ -475,7 +475,16 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
     const rn = g.returnNumber ? Math.min(7, Math.max(1, g.returnNumber[i])) : 1;
     const rc = g.returnCount ? Math.min(7, Math.max(1, g.returnCount[i])) : 1;
     view.setUint8(rp + 14, (rn & 0x07) | ((rc & 0x07) << 3));
-    view.setUint8(rp + 15, g.classification ? g.classification[i] & 0x1f : 0);
+    // The legacy class byte is the class in bits 0 to 4 with Synthetic,
+    // Key-Point and Withheld above it, so writing `class & 0x1f` alone erased
+    // all three. Classes above 31 still cannot be represented here; the caller
+    // counts them and warns before choosing this format.
+    const cls = g.classification ? g.classification[i] & 0x1f : 0;
+    const f = g.classificationFlags ? g.classificationFlags[i] : 0;
+    view.setUint8(
+      rp + 15,
+      cls | ((f & 0x1) << 5) | ((f & 0x2) << 5) | ((f & 0x4) << 5),
+    );
     view.setInt8(rp + 16, 0); // scan angle rank
     view.setUint8(rp + 17, 0); // user data
     view.setUint16(rp + 18, g.pointSourceId ? g.pointSourceId[i] : 0, true);
@@ -611,9 +620,9 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
     const rn = g.returnNumber ? Math.min(15, Math.max(1, g.returnNumber[i])) : 1;
     const rc = g.returnCount ? Math.min(15, Math.max(1, g.returnCount[i])) : 1;
     view.setUint8(rp + 14, (rn & 0x0f) | ((rc & 0x0f) << 4));
-    // class flags (0–3) | scanner channel (4–5) | scan direction (6) |
-    // edge of flight line (7) — the model carries none of these.
-    view.setUint8(rp + 15, 0);
+    // class flags (0-3) | scanner channel (4-5) | scan direction (6) |
+    // edge of flight line (7). The model carries the flags; the rest stay zero.
+    view.setUint8(rp + 15, g.classificationFlags ? g.classificationFlags[i] & 0x0f : 0);
     // FULL 8-bit classification — the extended record's whole reason to
     // exist here: LAS 1.2's 5-bit field clamps class 64/200 to garbage.
     view.setUint8(rp + 16, g.classification ? g.classification[i] : 0);

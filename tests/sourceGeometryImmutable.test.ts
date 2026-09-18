@@ -88,6 +88,7 @@ describe('source geometry stays byte-identical', () => {
       'attachDerivedClassification',
       'bounds',
       'classification',
+      'classificationFlags',
       'classificationIsDerived',
       'derivedClassificationFrameInvalid',
       'markDerivedClassificationFrameInvalid',
@@ -102,6 +103,7 @@ describe('source geometry stays byte-identical', () => {
     c.attachDerivedClassification(new Uint8Array(c.pointCount));
     c.bounds();
     void c.classification;
+    void c.classificationFlags;
     void c.classificationIsDerived;
     void c.pointCount;
     c.projectXYZ(0, { sourceToProject: [1_000, -2_000, 30] });
