@@ -20,6 +20,13 @@ updates:
       loaders-gl:
         patterns:
           - "@loaders.gl/*"
+    ignore:
+      # @loaders.gl/core 4.5.1 cannot be installed: every 4.5.1 loader declares a
+      # peer dependency on @loaders.gl/core ~4.4.0, so npm cannot resolve the
+      # tree. Reported upstream as visgl/loaders.gl#4027. Only this version is
+      # ignored, so the release that fixes the peer range is still offered.
+      - dependency-name: "@loaders.gl/core"
+        versions: ["4.5.1"]
     labels:
       - "dependencies"
 
