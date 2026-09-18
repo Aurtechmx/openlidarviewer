@@ -3,15 +3,15 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
   "version": 1,
-  "serialNumber": "urn:uuid:d4fe248d-5327-41b6-8f42-86f899cb671a",
+  "serialNumber": "urn:uuid:de6e3f22-869d-45ac-8c7f-16bcf27879dc",
   "metadata": {
-    "timestamp": "2026-09-03T19:31:05.925Z",
+    "timestamp": "2026-09-18T13:24:25.436Z",
     "tools": {
       "components": [
         {
           "type": "application",
           "name": "npm",
-          "version": "11.19.0"
+          "version": "10.9.8"
         },
         {
           "type": "application",
@@ -555,8 +555,8 @@
       "type": "library",
       "name": "obj",
       "group": "@loaders.gl",
-      "version": "4.4.5",
-      "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5",
+      "version": "4.5.1",
+      "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1",
       "description": "Framework-independent loader for the OBJ format",
       "licenses": [
         {
@@ -566,7 +566,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/obj@4.4.5",
+      "purl": "pkg:npm/%40loaders.gl/obj@4.5.1",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -584,7 +584,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/obj/-/obj-4.4.5.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/obj/-/obj-4.5.1.tgz",
           "type": "distribution",
           "comment": "as detected from npm-ls property \"resolved\""
         }
@@ -600,8 +600,8 @@
           "type": "library",
           "name": "loader-utils",
           "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/loader-utils@4.4.5",
+          "version": "4.5.1",
+          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/loader-utils@4.5.1",
           "description": "Framework-independent loaders for 3D graphics formats",
           "licenses": [
             {
@@ -611,7 +611,7 @@
               }
             }
           ],
-          "purl": "pkg:npm/%40loaders.gl/loader-utils@4.4.5",
+          "purl": "pkg:npm/%40loaders.gl/loader-utils@4.5.1",
           "externalReferences": [
             {
               "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -629,7 +629,7 @@
               "comment": "as detected from PackageJson property \"bugs.url\""
             },
             {
-              "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.4.5.tgz",
+              "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.5.1.tgz",
               "type": "distribution",
               "comment": "as detected from npm-ls property \"resolved\""
             }
@@ -645,8 +645,8 @@
           "type": "library",
           "name": "schema-utils",
           "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/schema-utils@4.4.5",
+          "version": "4.5.1",
+          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/schema-utils@4.5.1",
           "description": "Schema-related utilities for loaders.gl...",
           "licenses": [
             {
@@ -656,7 +656,7 @@
               }
             }
           ],
-          "purl": "pkg:npm/%40loaders.gl/schema-utils@4.4.5",
+          "purl": "pkg:npm/%40loaders.gl/schema-utils@4.5.1",
           "externalReferences": [
             {
               "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -674,7 +674,7 @@
               "comment": "as detected from PackageJson property \"bugs.url\""
             },
             {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.4.5.tgz",
+              "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.5.1.tgz",
               "type": "distribution",
               "comment": "as detected from npm-ls property \"resolved\""
             }
@@ -690,8 +690,8 @@
           "type": "library",
           "name": "schema",
           "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/schema@4.4.5",
+          "version": "4.5.1",
+          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1",
           "description": "Table format APIs for JSON, CSV, etc...",
           "licenses": [
             {
@@ -701,7 +701,7 @@
               }
             }
           ],
-          "purl": "pkg:npm/%40loaders.gl/schema@4.4.5",
+          "purl": "pkg:npm/%40loaders.gl/schema@4.5.1",
           "externalReferences": [
             {
               "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -719,7 +719,7 @@
               "comment": "as detected from PackageJson property \"bugs.url\""
             },
             {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.4.5.tgz",
+              "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.5.1.tgz",
               "type": "distribution",
               "comment": "as detected from npm-ls property \"resolved\""
             }
@@ -735,8 +735,8 @@
           "type": "library",
           "name": "worker-utils",
           "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/worker-utils@4.4.5",
+          "version": "4.5.1",
+          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/worker-utils@4.5.1",
           "description": "Utilities for running tasks on worker threads",
           "licenses": [
             {
@@ -746,7 +746,7 @@
               }
             }
           ],
-          "purl": "pkg:npm/%40loaders.gl/worker-utils@4.4.5",
+          "purl": "pkg:npm/%40loaders.gl/worker-utils@4.5.1",
           "externalReferences": [
             {
               "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -764,7 +764,7 @@
               "comment": "as detected from PackageJson property \"bugs.url\""
             },
             {
-              "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.4.5.tgz",
+              "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.5.1.tgz",
               "type": "distribution",
               "comment": "as detected from npm-ls property \"resolved\""
             }
@@ -782,8 +782,8 @@
       "type": "library",
       "name": "ply",
       "group": "@loaders.gl",
-      "version": "4.4.5",
-      "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5",
+      "version": "4.5.1",
+      "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1",
       "description": "Framework-independent loader for the PLY format",
       "licenses": [
         {
@@ -793,7 +793,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/ply@4.4.5",
+      "purl": "pkg:npm/%40loaders.gl/ply@4.5.1",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -811,7 +811,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/ply/-/ply-4.4.5.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/ply/-/ply-4.5.1.tgz",
           "type": "distribution",
           "comment": "as detected from npm-ls property \"resolved\""
         }
@@ -827,8 +827,8 @@
           "type": "library",
           "name": "loader-utils",
           "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/loader-utils@4.4.5",
+          "version": "4.5.1",
+          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/loader-utils@4.5.1",
           "description": "Framework-independent loaders for 3D graphics formats",
           "licenses": [
             {
@@ -838,7 +838,7 @@
               }
             }
           ],
-          "purl": "pkg:npm/%40loaders.gl/loader-utils@4.4.5",
+          "purl": "pkg:npm/%40loaders.gl/loader-utils@4.5.1",
           "externalReferences": [
             {
               "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -856,7 +856,7 @@
               "comment": "as detected from PackageJson property \"bugs.url\""
             },
             {
-              "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.4.5.tgz",
+              "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.5.1.tgz",
               "type": "distribution",
               "comment": "as detected from npm-ls property \"resolved\""
             }
@@ -872,8 +872,8 @@
           "type": "library",
           "name": "schema-utils",
           "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/schema-utils@4.4.5",
+          "version": "4.5.1",
+          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/schema-utils@4.5.1",
           "description": "Schema-related utilities for loaders.gl...",
           "licenses": [
             {
@@ -883,7 +883,7 @@
               }
             }
           ],
-          "purl": "pkg:npm/%40loaders.gl/schema-utils@4.4.5",
+          "purl": "pkg:npm/%40loaders.gl/schema-utils@4.5.1",
           "externalReferences": [
             {
               "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -901,7 +901,7 @@
               "comment": "as detected from PackageJson property \"bugs.url\""
             },
             {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.4.5.tgz",
+              "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.5.1.tgz",
               "type": "distribution",
               "comment": "as detected from npm-ls property \"resolved\""
             }
@@ -917,8 +917,8 @@
           "type": "library",
           "name": "schema",
           "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/schema@4.4.5",
+          "version": "4.5.1",
+          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1",
           "description": "Table format APIs for JSON, CSV, etc...",
           "licenses": [
             {
@@ -928,7 +928,7 @@
               }
             }
           ],
-          "purl": "pkg:npm/%40loaders.gl/schema@4.4.5",
+          "purl": "pkg:npm/%40loaders.gl/schema@4.5.1",
           "externalReferences": [
             {
               "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -946,7 +946,7 @@
               "comment": "as detected from PackageJson property \"bugs.url\""
             },
             {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.4.5.tgz",
+              "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.5.1.tgz",
               "type": "distribution",
               "comment": "as detected from npm-ls property \"resolved\""
             }
@@ -962,8 +962,8 @@
           "type": "library",
           "name": "worker-utils",
           "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/worker-utils@4.4.5",
+          "version": "4.5.1",
+          "bom-ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/worker-utils@4.5.1",
           "description": "Utilities for running tasks on worker threads",
           "licenses": [
             {
@@ -973,7 +973,7 @@
               }
             }
           ],
-          "purl": "pkg:npm/%40loaders.gl/worker-utils@4.4.5",
+          "purl": "pkg:npm/%40loaders.gl/worker-utils@4.5.1",
           "externalReferences": [
             {
               "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -991,7 +991,7 @@
               "comment": "as detected from PackageJson property \"bugs.url\""
             },
             {
-              "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.4.5.tgz",
+              "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.5.1.tgz",
               "type": "distribution",
               "comment": "as detected from npm-ls property \"resolved\""
             }
@@ -1163,7 +1163,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/proj4/-/proj4-2.21.0.tgz",
+          "url": "https://registry.npmjs.org/proj4/-/proj4-2.22.0.tgz",
           "type": "distribution",
           "comment": "as detected from npm-ls property \"resolved\""
         }
@@ -1178,8 +1178,8 @@
     {
       "type": "library",
       "name": "three",
-      "version": "0.184.0",
-      "bom-ref": "openlidarviewer@0.6.9|three@0.184.0",
+      "version": "0.186.0",
+      "bom-ref": "openlidarviewer@0.6.9|three@0.186.0",
       "author": "mrdoob",
       "description": "JavaScript 3D library",
       "licenses": [
@@ -1190,7 +1190,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/three@0.184.0",
+      "purl": "pkg:npm/three@0.186.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/mrdoob/three.js.git",
@@ -1208,7 +1208,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/three/-/three-0.184.0.tgz",
+          "url": "https://registry.npmjs.org/three/-/three-0.186.0.tgz",
           "type": "distribution",
           "comment": "as detected from npm-ls property \"resolved\""
         }
@@ -2166,23 +2166,16 @@
     {
       "type": "library",
       "name": "texture-compressor",
-      "version": "1.0.2",
-      "bom-ref": "openlidarviewer@0.6.9|texture-compressor@1.0.2",
-      "description": "Local empty stub. @loaders.gl/textures' encode path shells out to `npx texture-compressor`; OLV only decodes glTF and never invokes it. The real package pulls image-size@0.7.5 (CVE-2025-71329/71330, no upstream fix). Stubbing removes that vulnerable transitive.",
-      "licenses": [
+      "bom-ref": "openlidarviewer@0.6.9|texture-compressor",
+      "purl": "pkg:npm/texture-compressor?download_url=node_modules%2F%40loaders.gl%2Ftextures%2Fvendor-stubs%2Ftexture-compressor",
+      "externalReferences": [
         {
-          "license": {
-            "id": "AGPL-3.0-only",
-            "acknowledgement": "declared"
-          }
+          "url": "node_modules/@loaders.gl/textures/vendor-stubs/texture-compressor",
+          "type": "distribution",
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
-      "purl": "pkg:npm/texture-compressor@1.0.2",
       "properties": [
-        {
-          "name": "cdx:npm:package:private",
-          "value": "true"
-        },
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/texture-compressor"
@@ -3289,12 +3282,12 @@
         "openlidarviewer@0.6.9|@fontsource/manrope@5.3.0",
         "openlidarviewer@0.6.9|@loaders.gl/core@4.4.5",
         "openlidarviewer@0.6.9|@loaders.gl/gltf@4.4.3",
-        "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5",
+        "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1",
+        "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1",
         "openlidarviewer@0.6.9|laz-perf@0.0.7",
         "openlidarviewer@0.6.9|pdf-lib@1.17.1",
         "openlidarviewer@0.6.9|proj4@2.22.0",
-        "openlidarviewer@0.6.9|three@0.184.0"
+        "openlidarviewer@0.6.9|three@0.186.0"
       ]
     },
     {
@@ -3361,83 +3354,83 @@
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1",
       "dependsOn": [
         "openlidarviewer@0.6.9|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/loader-utils@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/schema-utils@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/schema@4.4.5"
+        "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/loader-utils@4.5.1",
+        "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/schema-utils@4.5.1",
+        "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/loader-utils@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/loader-utils@4.5.1",
       "dependsOn": [
-        "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/schema@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/worker-utils@4.4.5",
+        "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1",
+        "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/worker-utils@4.5.1",
         "openlidarviewer@0.6.9|@probe.gl/log@4.1.1",
         "openlidarviewer@0.6.9|@probe.gl/stats@4.1.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/schema-utils@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/schema-utils@4.5.1",
       "dependsOn": [
         "openlidarviewer@0.6.9|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/schema@4.4.5",
+        "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1",
         "openlidarviewer@0.6.9|@math.gl/types@4.1.0",
         "openlidarviewer@0.6.9|@types/geojson@7946.0.16",
         "openlidarviewer@0.6.9|apache-arrow@21.1.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/schema@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1",
       "dependsOn": [
         "openlidarviewer@0.6.9|@types/geojson@7946.0.16",
         "openlidarviewer@0.6.9|apache-arrow@21.1.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.4.5|@loaders.gl/worker-utils@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/obj@4.5.1|@loaders.gl/worker-utils@4.5.1",
       "dependsOn": [
         "openlidarviewer@0.6.9|@loaders.gl/core@4.4.5"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1",
       "dependsOn": [
         "openlidarviewer@0.6.9|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/loader-utils@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/schema-utils@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/schema@4.4.5"
+        "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/loader-utils@4.5.1",
+        "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/schema-utils@4.5.1",
+        "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/loader-utils@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/loader-utils@4.5.1",
       "dependsOn": [
-        "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/schema@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/worker-utils@4.4.5",
+        "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1",
+        "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/worker-utils@4.5.1",
         "openlidarviewer@0.6.9|@probe.gl/log@4.1.1",
         "openlidarviewer@0.6.9|@probe.gl/stats@4.1.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/schema-utils@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/schema-utils@4.5.1",
       "dependsOn": [
         "openlidarviewer@0.6.9|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/schema@4.4.5",
+        "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1",
         "openlidarviewer@0.6.9|@math.gl/types@4.1.0",
         "openlidarviewer@0.6.9|@types/geojson@7946.0.16",
         "openlidarviewer@0.6.9|apache-arrow@21.1.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/schema@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1",
       "dependsOn": [
         "openlidarviewer@0.6.9|@types/geojson@7946.0.16",
         "openlidarviewer@0.6.9|apache-arrow@21.1.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.4.5|@loaders.gl/worker-utils@4.4.5",
+      "ref": "openlidarviewer@0.6.9|@loaders.gl/ply@4.5.1|@loaders.gl/worker-utils@4.5.1",
       "dependsOn": [
         "openlidarviewer@0.6.9|@loaders.gl/core@4.4.5"
       ]
@@ -3465,7 +3458,7 @@
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.9|three@0.184.0"
+      "ref": "openlidarviewer@0.6.9|three@0.186.0"
     },
     {
       "ref": "openlidarviewer@0.6.9|@probe.gl/log@4.1.1",
@@ -3517,7 +3510,7 @@
         "openlidarviewer@0.6.9|@loaders.gl/worker-utils@4.4.3",
         "openlidarviewer@0.6.9|@math.gl/types@4.1.0",
         "openlidarviewer@0.6.9|ktx-parse@0.7.1",
-        "openlidarviewer@0.6.9|texture-compressor@1.0.2"
+        "openlidarviewer@0.6.9|texture-compressor"
       ]
     },
     {
@@ -3595,7 +3588,7 @@
       "ref": "openlidarviewer@0.6.9|ktx-parse@0.7.1"
     },
     {
-      "ref": "openlidarviewer@0.6.9|texture-compressor@1.0.2"
+      "ref": "openlidarviewer@0.6.9|texture-compressor"
     },
     {
       "ref": "openlidarviewer@0.6.9|@swc/helpers@0.5.23",
