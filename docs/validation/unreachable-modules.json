@@ -21,20 +21,6 @@
   "reviewDates": "Reported by the lint when they pass, never enforced. A gate that turns red on a date with no change to the tree teaches people to edit the date rather than the code.",
   "modules": [
     {
-      "path": "src/science/scientificArtifactPassport.ts",
-      "status": "staged",
-      "why": "A self-verifying provenance record binding source digest, methods and parameters, the analysis content, the evidence decision and the exported artifact bytes into one tamper-evident document (separate cryptographic fields beside the record's legacy FNV fingerprint). It reuses the existing synchronous SHA-256 and canonicalize; it introduces no second crypto and changes no numerical result. The export/validation path does not construct a passport yet, so only its own tests import it. Kept out of the eager graph because index.html's bundle has near-zero headroom.",
-      "graduation": "The export path (or a validation harness) builds a ScientificArtifactPassport for an emitted artifact and surfaces its scienceId / reproducibility line, at which point it is reached through src/lazyChunks.ts. canonicalize() now refuses non-finite numbers, so the remaining conditions are integration ones: an export path that emits the passport beside its artifact, the eager-shell bundle budget (the module must load lazily), and a release-validation record that cites its digests.",
-      "review": "2027-02-28"
-    },
-    {
-      "path": "src/validation/evidenceBoundaryInspector.ts",
-      "status": "validation-only",
-      "why": "A read-only projection of one resolveEvidence() lookup: it copies the resolver's decision verbatim and adds a per-envelope-field breakdown so the scoped-evidence verdict is human-auditable. It holds no applicability logic and produces evidence ABOUT the resolver; only its own test imports it, and becoming reachable would give the running app a second place that describes the evidence boundary.",
-      "graduation": "A provenance or report surface renders the field-by-field envelope breakdown and calls buildEvidenceContractView from the application graph.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/classification/classificationEvidence.ts",
       "status": "staged",
       "why": "The per-point evidence record for a classification decision. The derived classifier that ships does not attach one, so no production module constructs or reads the record.",
@@ -50,18 +36,18 @@
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
     {
-      "path": "src/geo/tiePointRegister.ts",
-      "status": "staged",
-      "why": "Named in the v0.6.6 release notes as \"tie-point rigid registration with control-network validation\". Horn absolute orientation over labelled correspondences; no UI collects the correspondences.",
-      "graduation": "A tie-point capture surface exists and calls registerFromTiePoints.",
-      "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
-    },
-    {
       "path": "src/geo/tiePointGeometry.ts",
       "status": "staged",
       "why": "The control-network validation half of the same release-notes entry: it decides whether a correspondence set can determine a rigid transform at all. Its only non-test importer is tiePointRegister.ts, which is itself unreachable.",
       "graduation": "tiePointRegister graduates; this arrives with it.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/geo/tiePointRegister.ts",
+      "status": "staged",
+      "why": "Named in the v0.6.6 release notes as \"tie-point rigid registration with control-network validation\". Horn absolute orientation over labelled correspondences; no UI collects the correspondences.",
+      "graduation": "A tie-point capture surface exists and calls registerFromTiePoints.",
       "review": "2027-02-28",
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
@@ -72,6 +58,13 @@
       "graduation": "Either this becomes the shared LAS-plus-future-LAZ read planner the open path consults before choosing a reader, or, if the heavy-LAS bridge covers the need and the LAZ builder lands separately, it is removed. Decide when the chunked-LAZ path is designed.",
       "review": "2027-02-28",
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/lasSemantics.ts",
+      "status": "staged",
+      "why": "The single source of ASPRS/LAS point semantics: class names keyed by point data record format, the classification flag bits of the legacy byte, and the safety of a conversion into the 5-bit legacy field. It exists because eight modules decided class names independently and disagreed. The point inspector named class 12 Overlap for every format while the export legend named it Reserved (12), and the legend reported every code at or above 19 as user-defined. The module is pure and imports nothing. No consumer reads from it yet, so only its own tests import it.",
+      "graduation": "Each of the eight naming sites (main.ts, MeasurePanel.ts, Inspector.ts, panelChrome.ts, DesktopWorkspace.ts, pointInfo.ts, colorModes.ts, ExportLegendRenderer.ts) reads its class name from classificationName() instead of its own table. That requires the point data record format to reach each call site, since the function takes it as a required argument and a caller that does not know the format cannot name class 12 correctly. The first consumer to land removes this entry.",
+      "review": "2026-12-31"
     },
     {
       "path": "src/process/ProductExecutorRegistry.ts",
@@ -96,12 +89,11 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/registration/registrationModel.ts",
+      "path": "src/registration/generalIcp.ts",
       "status": "staged",
-      "why": "Named in the v0.6.6 release notes as the model that \"selects [a planar ICP solver] directly instead of refusing the planar case\". It chooses mount / planar ICP / general ICP / tie-point; no caller asks it to choose.",
-      "graduation": "The multi-layer mount or a registration surface asks chooseRegistrationModel before placing two clouds.",
-      "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "why": "Trimmed 6-DOF ICP, one of the models registrationModel selects. No caller reaches the selector, so no caller reaches the solver.",
+      "graduation": "registrationModel graduates and its general-ICP branch executes.",
+      "review": "2027-02-28"
     },
     {
       "path": "src/registration/planarIcp.ts",
@@ -112,11 +104,12 @@
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
     {
-      "path": "src/registration/generalIcp.ts",
+      "path": "src/registration/registrationModel.ts",
       "status": "staged",
-      "why": "Trimmed 6-DOF ICP, one of the models registrationModel selects. No caller reaches the selector, so no caller reaches the solver.",
-      "graduation": "registrationModel graduates and its general-ICP branch executes.",
-      "review": "2027-02-28"
+      "why": "Named in the v0.6.6 release notes as the model that \"selects [a planar ICP solver] directly instead of refusing the planar case\". It chooses mount / planar ICP / general ICP / tie-point; no caller asks it to choose.",
+      "graduation": "The multi-layer mount or a registration surface asks chooseRegistrationModel before placing two clouds.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/registration/rigidSolve.ts",
@@ -168,11 +161,67 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/science/dtmProductDigest.ts",
+      "status": "validation-only",
+      "why": "A SHA-256 over the delivered DTM surface itself \u2014 grid geometry, CRS codes, the explicit little-endian Z bytes, the per-cell coverage bytes and an optional method digest \u2014 so two runs can be proven to have produced the SAME surface. It complements liveDtmDescriptor.dtmMethodDigest, which proves only that the same algorithm was configured, not that the heights match. It reuses the repository's byte-wise sha256Hex and canonicalize and changes no numerical result. No export or validation harness constructs a product digest yet, so only its own test imports it; kept out of the eager graph because index.html's bundle has near-zero headroom.",
+      "graduation": "Export provenance or a reproduction harness digests an emitted DTM surface and records the value beside the method digest, at which point the application graph reaches it through src/lazyChunks.ts. Before this graduates, canonicalize() must refuse non-finite numbers: JSON.stringify renders NaN, Infinity and -Infinity all as null, so distinct invalid states hash identically today. That is tolerable only while nothing reaches this module and no published claim cites its digests.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/science/liveDtmDescriptor.ts",
+      "status": "validation-only",
+      "why": "The canonical descriptor of the delivered DTM method plus a SHA-256 method digest, for the external-validation and export-provenance paths: a stamped digest can be compared against a fresh resolve to prove the delivered method has not drifted. The scoped-evidence resolver and the E5 reduce path will read it, but neither construction is wired into the application graph yet, so only its test imports it.",
+      "graduation": "Export provenance stamps dtmMethodDigest into the DTM evidence context, or the E5 reduce path resolves the descriptor to verify the candidate method, at which point the application graph reaches it. Before this graduates, the method-identity contract must be settled: the header says per-dataset fields are context and do NOT feed dtmMethodDigest, while methodBehaviourFields includes horizontalUnitToMetres and verticalUnitToMetres and a test requires 1 -> 0.3048 to change the digest. Either the unit scales are run context and leave the digest, or the digest is a fully parameterised method identity and the header says so. A digest whose own module disagrees about what it identifies cannot support a published reproducibility claim.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/science/scientificArtifactPassport.ts",
+      "status": "staged",
+      "why": "A self-verifying provenance record binding source digest, methods and parameters, the analysis content, the evidence decision and the exported artifact bytes into one tamper-evident document (separate cryptographic fields beside the record's legacy FNV fingerprint). It reuses the existing synchronous SHA-256 and canonicalize; it introduces no second crypto and changes no numerical result. The export/validation path does not construct a passport yet, so only its own tests import it. Kept out of the eager graph because index.html's bundle has near-zero headroom.",
+      "graduation": "The export path (or a validation harness) builds a ScientificArtifactPassport for an emitted artifact and surfaces its scienceId / reproducibility line, at which point it is reached through src/lazyChunks.ts. canonicalize() now refuses non-finite numbers, so the remaining conditions are integration ones: an export path that emits the passport beside its artifact, the eager-shell bundle budget (the module must load lazily), and a release-validation record that cites its digests.",
+      "review": "2027-02-28"
+    },
+    {
       "path": "src/terrain/contourStudio/contourAdaptiveGeneralize.ts",
       "status": "staged",
       "why": "The staged source-unit product pipeline for terrain-aware generalization. src/terrain/contour/terrainAwareTolerance.ts names it as exactly that and is the shared policy both readers use; the live honesty-gated styler is what v0.6.6 shipped.",
       "graduation": "The Contour Studio product pipeline runs a generalization pass and calls this module.",
       "review": "2027-02-28"
+    },
+    {
+      "path": "src/validation/accuracyEnvelope.ts",
+      "status": "validation-only",
+      "why": "Carries the validation envelope with an accuracy claim and refuses a scan outside it. Exercised by its own test.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/authorizationBenchmark.ts",
+      "status": "validation-only",
+      "why": "A frozen adversarial benchmark over the existing authorization machinery. It consumes the production decision and must never be part of it.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/checkpointAccuracy.ts",
+      "status": "validation-only",
+      "why": "Statistics over independent checkpoints, with the leakage refusal. Consumed by the field-study tests and scripts/verify-field-study.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/classificationAgreement.ts",
+      "status": "validation-only",
+      "why": "Label-agreement statistics for ground filtering, consumed by the classification and PDAL agreement tests and scripts/verify-ground-filter-metrics.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/classifierCorpus.ts",
+      "status": "validation-only",
+      "why": "The frozen synthetic corpus the derived classifier is measured on, plus its reducer. Consumed by three tests and scripts/verify-classifier-corpus.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
     },
     {
       "path": "src/validation/crossCheck.ts",
@@ -182,9 +231,30 @@
       "review": "2027-08-27"
     },
     {
+      "path": "src/validation/evidenceBoundaryInspector.ts",
+      "status": "validation-only",
+      "why": "A read-only projection of one resolveEvidence() lookup: it copies the resolver's decision verbatim and adds a per-envelope-field breakdown so the scoped-evidence verdict is human-auditable. It holds no applicability logic and produces evidence ABOUT the resolver; only its own test imports it, and becoming reachable would give the running app a second place that describes the evidence boundary.",
+      "graduation": "A provenance or report surface renders the field-by-field envelope breakdown and calls buildEvidenceContractView from the application graph.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/validation/evidenceMonotonicity.ts",
+      "status": "validation-only",
+      "why": "The authority-tier monotonicity invariant. Its own header says \"validation-only; imported by studies and tests, not by the viewer\".",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
       "path": "src/validation/gridAgreement.ts",
       "status": "validation-only",
       "why": "Cell-by-cell comparison of two rasters, used by the grid agreement and PDAL ground-filter tests.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/spatialBootstrap.ts",
+      "status": "validation-only",
+      "why": "Block resampling that respects spatial correlation, so an interval reflects independent places rather than cells.",
       "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
       "review": "2027-08-27"
     },
@@ -210,74 +280,11 @@
       "review": "2027-08-27"
     },
     {
-      "path": "src/validation/evidenceMonotonicity.ts",
-      "status": "validation-only",
-      "why": "The authority-tier monotonicity invariant. Its own header says \"validation-only; imported by studies and tests, not by the viewer\".",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/checkpointAccuracy.ts",
-      "status": "validation-only",
-      "why": "Statistics over independent checkpoints, with the leakage refusal. Consumed by the field-study tests and scripts/verify-field-study.mjs.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/accuracyEnvelope.ts",
-      "status": "validation-only",
-      "why": "Carries the validation envelope with an accuracy claim and refuses a scan outside it. Exercised by its own test.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/classificationAgreement.ts",
-      "status": "validation-only",
-      "why": "Label-agreement statistics for ground filtering, consumed by the classification and PDAL agreement tests and scripts/verify-ground-filter-metrics.mjs.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/classifierCorpus.ts",
-      "status": "validation-only",
-      "why": "The frozen synthetic corpus the derived classifier is measured on, plus its reducer. Consumed by three tests and scripts/verify-classifier-corpus.mjs.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/spatialBootstrap.ts",
-      "status": "validation-only",
-      "why": "Block resampling that respects spatial correlation, so an interval reflects independent places rather than cells.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/authorizationBenchmark.ts",
-      "status": "validation-only",
-      "why": "A frozen adversarial benchmark over the existing authorization machinery. It consumes the production decision and must never be part of it.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
       "path": "src/workers/workerRegistry.ts",
       "status": "reference-only",
       "why": "The single source of truth for every Web Worker the app ships, consumed at BUILD time by vite.config.ts (live-transform excludes and chunk-emission pins) and by scripts/lint-worker-registry.mjs. The application graph reaches the workers by new Worker(new URL(...)) from their clients, never through this file, so a walk from index.html cannot see it.",
       "graduation": "None expected. It is reachable from the build configuration by design; this entry records that the application entry graph is not where to look for it.",
       "review": "2027-08-27"
-    },
-    {
-      "path": "src/science/liveDtmDescriptor.ts",
-      "status": "validation-only",
-      "why": "The canonical descriptor of the delivered DTM method plus a SHA-256 method digest, for the external-validation and export-provenance paths: a stamped digest can be compared against a fresh resolve to prove the delivered method has not drifted. The scoped-evidence resolver and the E5 reduce path will read it, but neither construction is wired into the application graph yet, so only its test imports it.",
-      "graduation": "Export provenance stamps dtmMethodDigest into the DTM evidence context, or the E5 reduce path resolves the descriptor to verify the candidate method, at which point the application graph reaches it. Before this graduates, the method-identity contract must be settled: the header says per-dataset fields are context and do NOT feed dtmMethodDigest, while methodBehaviourFields includes horizontalUnitToMetres and verticalUnitToMetres and a test requires 1 -> 0.3048 to change the digest. Either the unit scales are run context and leave the digest, or the digest is a fully parameterised method identity and the header says so. A digest whose own module disagrees about what it identifies cannot support a published reproducibility claim.",
-      "review": "2027-02-28"
-    },
-    {
-      "path": "src/science/dtmProductDigest.ts",
-      "status": "validation-only",
-      "why": "A SHA-256 over the delivered DTM surface itself \u2014 grid geometry, CRS codes, the explicit little-endian Z bytes, the per-cell coverage bytes and an optional method digest \u2014 so two runs can be proven to have produced the SAME surface. It complements liveDtmDescriptor.dtmMethodDigest, which proves only that the same algorithm was configured, not that the heights match. It reuses the repository's byte-wise sha256Hex and canonicalize and changes no numerical result. No export or validation harness constructs a product digest yet, so only its own test imports it; kept out of the eager graph because index.html's bundle has near-zero headroom.",
-      "graduation": "Export provenance or a reproduction harness digests an emitted DTM surface and records the value beside the method digest, at which point the application graph reaches it through src/lazyChunks.ts. Before this graduates, canonicalize() must refuse non-finite numbers: JSON.stringify renders NaN, Infinity and -Infinity all as null, so distinct invalid states hash identically today. That is tolerable only while nothing reaches this module and no published claim cites its digests.",
-      "review": "2027-02-28"
     }
   ]
 }
