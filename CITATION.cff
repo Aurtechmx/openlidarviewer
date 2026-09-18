@@ -40,6 +40,9 @@ identifiers:
     value: "10.5281/zenodo.22730189"
     description: "Version DOI for the archived v0.6.8 release"
   - type: doi
+    value: "10.5281/zenodo.22821525"
+    description: "Version DOI for the archived v0.6.9 release"
+  - type: doi
     value: "10.5281/zenodo.21544619"
     description: "Concept DOI, resolves to the newest version"
   - type: swh
