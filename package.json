@@ -186,7 +186,7 @@
     "laz-perf": "^0.0.7",
     "pdf-lib": "^1.17.1",
     "proj4": "^2.22.0",
-    "three": "^0.184.0"
+    "three": "^0.186.0"
   },
   "devDependencies": {
     "@loaders.gl/las": "^4.5.1",
@@ -194,7 +194,7 @@
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/proj4": "^2.19.0",
-    "@types/three": "^0.184.1",
+    "@types/three": "^0.186.0",
     "@vitest/coverage-v8": "^5.0.0",
     "rollup-plugin-visualizer": "^7.1.1",
     "typescript": "~7.0.2",
