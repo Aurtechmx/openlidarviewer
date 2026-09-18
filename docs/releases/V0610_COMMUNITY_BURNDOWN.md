@@ -32,9 +32,9 @@ TEST means a failing test exists.
 
 | ID | Source | Subsystem | Description | Class | Sev | Repro | Status | Disposition |
 |---|---|---|---|---|---|---|---|---|
-| B01 | READ `src/convert/writeLas.ts:478` | export | LAS export masks classification with `0x1f`. Classes above 31 wrap to another valid class, and the Synthetic, Key-point and Withheld flags in bits 5 to 7 are erased in the same operation. | B | high | READ | OPEN | |
-| B02 | READ `src/convert/writeLas.ts:479` | export | Scan angle rank is written as a constant zero for every point. | B | med | READ | OPEN | |
-| B03 | READ `src/convert/writeLas.ts:480` | export | User data is written as a constant zero for every point. | B | med | READ | OPEN | |
+| B01 | READ `src/convert/writeLas.ts:478` | export | The LAS 1.2 write masks classification with `0x1f`, so a class above 31 wraps to another valid class. `convertCloud.ts:287` counts the affected points first and warns with the exact arithmetic, naming LAS 1.4 as the remedy, so the loss is reported rather than silent. Section 7 asks for refusal by default, which is the remaining gap. | B | med | READ | OPEN | |
+| B02 | READ `writeLas.ts:479`, `globalPoints.ts:17` | model, export | Scan angle rank is written as a constant zero because `GlobalPoints` has no scan angle field. This is a model gap, not a writer defect. | B | med | READ | OPEN | |
+| B03 | READ `writeLas.ts:480`, `globalPoints.ts:17` | model, export | User data is written as a constant zero because `GlobalPoints` has no user data field. Same cause as B02. | B | med | READ | OPEN | |
 | B04 | READ, 8 modules | ui, export, render | ASPRS class names are defined independently in `main.ts`, `MeasurePanel.ts`, `Inspector.ts`, `panelChrome.ts`, `DesktopWorkspace.ts`, `pointInfo.ts`, `colorModes.ts` and `ExportLegendRenderer.ts`. There is no single semantics source. | B | high | READ | OPEN | |
 | B05 | DOC limitations | measure, export | The canonical stockpile record is not integrated. The lasso toast reports the area-grid estimate while the session, report and CSV hold the point-sample record, so the two can disagree for one lasso. | E | high | DOC | OPEN | |
 | B06 | DOC limitations | analyse, report | Analyse ground density derives from the resident gather and the Scan Report back-scales to the declared count. The two disagree by roughly the stride factor. | B | high | DOC | OPEN | |
@@ -54,6 +54,8 @@ TEST means a failing test exists.
 | B20 | DOC limitations | geo | No cross-CRS reprojection. Scans must share a reference system to be compared, and the viewer refuses rather than approximating. | B | known | DOC | OPEN | INTENTIONAL LIMITATION |
 | B21 | READ | standards | No CityGML or LoD terminology appears anywhere in `src/` or `docs/`. The spec treats this as a defect to correct; there is nothing to correct. A lint is still justified to keep it that way. | B | n/a | READ | OPEN | NOT REPRODUCIBLE |
 | B22 | READ | io | `lasDecodeShared.ts:46` and `eptLaszipDecode.ts:342` already select `0xff` for extended formats and `0x1f` for legacy. The decode side reads extended classes correctly. | B | n/a | READ | OPEN | NOT REPRODUCIBLE |
+| B23 | READ, whole tree | io, model | Classification flags are never decoded. `synthetic`, `keyPoint` and `withheld` appear nowhere in `src/` outside the semantics module added this cycle. Sections 6 and 8 are therefore new capability across the decoders, the point model, the workers and the writers, not repair of an existing path. | F | high | READ | OPEN | |
+| B24 | READ `writeLas14.ts:618` | export | The extended writer already writes the full 8-bit classification and its comment names the 5-bit clamp it avoids. No correction is needed on the extended path. | B | n/a | READ | OPEN | NOT REPRODUCIBLE |
 
 ## Constraints carried into this cycle
 
@@ -76,10 +78,8 @@ The ground filter is not to be tuned against its current benchmark numbers.
 These areas have no register entry yet because reproduction has not been
 attempted.
 
-Class 12 semantics under extended PDRF. Classes 19 to 22 and 23 to 63 labelling.
-LAS version and PDRF matrix coverage. LAS 1.5 support scope. Withheld processing
-policy. ASPRS 2024 accuracy terminology. Transactional dataset open.
-Cancellation. Range and remote loading robustness. The parser fail-closed
-surface.
+LAS version and PDRF matrix coverage. LAS 1.5 support scope. ASPRS 2024
+accuracy terminology. Transactional dataset open. Cancellation. Range and
+remote loading robustness. The parser fail-closed surface.
 
 Each gets an entry once it is reproduced or cleared.
