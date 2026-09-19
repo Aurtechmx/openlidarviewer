@@ -55,16 +55,18 @@ of, so a finding can be traced to where it was first written down.
 | L28 | SEMANTICS | TEST | med | PARTIAL | B28 | Classification flags survived a load but not a derivation. |
 | L29 | STATE | TEST | high | FIXED | new | A failed candidate open closed a streaming scan that belonged to the project, not to the candidate. |
 | L30 | ARCHITECTURE | TEST | med | FIXED | new | Three version parsers could not read a prerelease, so the release machinery had never been exercised against one. |
+| L31 | SESSION | TEST | med | FIXED | new | A lazy chunk awaited after the restore was committed reported a restored session as a failed import. |
+| L32 | LIFECYCLE | READ | n/a | NOT REPRODUCIBLE | new | Ad hoc cancellation flags as a class. |
 
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 4
-- NOT REPRODUCIBLE: 4
+- FIXED: 5
+- NOT REPRODUCIBLE: 5
 - OPEN: 16
 - PARTIAL: 2
 - SUPERSEDED: 1
-- total: 30
+- total: 32
 
 ## Detail
 
@@ -269,3 +271,30 @@ disagreed with the archive.
 None of them could fail while the version was plain, which is why a release
 line that had cut alphas before still carried them. Covered by the archive
 portability check and the dependency document sync tests.
+
+### L31 · FIXED · SESSION
+
+Session restore commits bookmarks, the view state and the measurements, and
+then awaits a lazy chunk to compute one disclosure line. The step is explicitly
+allowed to produce nothing: the comment above it reads that an absent, legacy or
+tampered manifest still restores every measurement. A dynamic import can reject
+for reasons that have nothing to do with the manifest, and that rejection
+reached the outer catch, which reported "Could not import the session" over a
+session that was already restored.
+
+The disclosure now degrades on its own rather than failing the restore around
+it. Verified red-green: with the guard removed the test sees the error reported,
+and with it in place the restore reports success. Covered by
+`tests/sessionIo.test.ts`.
+
+### L32 · NOT REPRODUCIBLE · LIFECYCLE
+
+Section 7 asks for an operation-lifetime primitive to replace ad hoc
+cancellation flags. Five such flags exist. Three are `let disposed = false`
+inside dispose closures, which is idempotent-disposal bookkeeping rather than
+operation cancellation, and is the concern `DisposableGroup` now carries. The
+other two are genuine but isolated, and sixteen modules already cancel through
+an `AbortController`.
+
+The premise as stated is not reproduced, so no primitive was built. Section 57's
+cancellation-ownership question is separate and stays open.
