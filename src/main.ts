@@ -3618,7 +3618,7 @@ function streamingDebugSample(): StreamingDebugStats | null {
     sourcePoints: cloud.sourcePointCount,
     cacheBytes: cs.byteSize,
     decodedBytes: estimateDecodedBytes(cloud.residentPointCount),
-    gpuBytes: estimateGpuBytes(cloud.residentPointCount, viewer.streamingUploadedAttributes),
+    gpuBytes: estimateGpuBytes(cloud.residentPointCount, viewer.streamingUploadedAttributes), gpuAttributes: viewer.streamingUploadedAttributes,
     schedulerMs: stats.lastTickMs,
     cacheHits: cs.hits,
     cacheMisses: cs.misses,
