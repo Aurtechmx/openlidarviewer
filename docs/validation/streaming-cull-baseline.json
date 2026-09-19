@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "label": "streaming-cull-baseline",
-  "revision": "60ee59c3",
+  "revision": "ade1a6d3",
   "environment": {
     "runtime": "node",
     "os": "darwin",
@@ -57,5 +57,13 @@
   "submittedPointCount": {
     "status": "unavailable",
     "reason": "point counts per node depend on a decoded source; this baseline measures node geometry only"
+  },
+  "interpretation": {
+    "measures": "the share of resident nodes a stored view contains, by bounds alone",
+    "doesNotMeasure": [
+      "GPU time saved: a node costs what its points cost, and these nodes carry no point counts, so a node share is not a work share",
+      "a real resident set: the scene is three uniform grids over one area, all resident at once, where a scheduler would hold a level-of-detail selection instead, so the drawn share here is likely lower than a real one",
+      "perspective behaviour: the stored views are axis-aligned boxes, which is an orthographic camera; a perspective frustum has slanted side planes and would contain a different set"
+    ]
   }
 }

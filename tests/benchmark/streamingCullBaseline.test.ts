@@ -140,17 +140,41 @@ describe('streamed-node culling baseline', () => {
         status: 'unavailable',
         reason: 'point counts per node depend on a decoded source; this baseline measures node geometry only',
       },
+      // What the case figures do and do not support. Written into the record
+      // because a fraction of NODES reads like a fraction of work, and it is
+      // not the same quantity.
+      interpretation: {
+        measures: 'the share of resident nodes a stored view contains, by bounds alone',
+        doesNotMeasure: [
+          'GPU time saved: a node costs what its points cost, and these nodes carry no point counts, so a node share is not a work share',
+          'a real resident set: the scene is three uniform grids over one area, all resident at once, where a scheduler would hold a level-of-detail selection instead, so the drawn share here is likely lower than a real one',
+          'perspective behaviour: the stored views are axis-aligned boxes, which is an orthographic camera; a perspective frustum has slanted side planes and would contain a different set',
+        ],
+      },
     };
 
     const abs = resolve(ROOT, OUT);
     const previous = existsSync(abs) ? JSON.parse(readFileSync(abs, 'utf8')) : null;
-    // Rewrite only when a measured figure moved, so a rerun does not churn the
-    // file with a new revision alone.
-    const measuredChanged =
-      previous === null || JSON.stringify(previous.cases) !== JSON.stringify(record.cases);
-    if (measuredChanged) writeFileSync(abs, `${JSON.stringify(record, null, 2)}\n`);
+    // Rewrite when anything but the revision differs, so a rerun does not churn
+    // the file with a new commit alone. Comparing only the measured cases was
+    // too narrow: it meant a correction to what the record SAYS about those
+    // figures could never be written, because the figures themselves had not
+    // moved.
+    const withoutRevision = (r: Record<string, unknown> | null): string =>
+      r === null ? '' : JSON.stringify({ ...r, revision: null });
+    if (withoutRevision(previous) !== withoutRevision(record as unknown as Record<string, unknown>)) {
+      writeFileSync(abs, `${JSON.stringify(record, null, 2)}\n`);
+    }
 
     expect(record.cases.length).toBe(CAMERAS.length);
+  });
+
+  it('states what a node share does not measure', () => {
+    const rec = JSON.parse(readFileSync(resolve(ROOT, OUT), 'utf8'));
+    // A reader who takes the drawn fraction for a GPU saving has been misled by
+    // the record rather than by their own inference, so the record says so.
+    expect(rec.interpretation.doesNotMeasure.join(' ')).toContain('not a work share');
+    expect(rec.interpretation.doesNotMeasure.join(' ')).toContain('orthographic');
   });
 
   it('never reports a GPU measurement this runtime cannot take', () => {
