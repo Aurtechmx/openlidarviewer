@@ -988,3 +988,35 @@ The tolerance is a starting value. The figure that survives near geometry and
 distant terrain has to come from a real scene, so nothing here claims it is
 measured.
 
+### L59 · PARTIAL · CORRECTNESS
+
+Drawing a cloud as sprites leaves single-pixel holes across a surface that is
+continuous in the data, and closing them reads as a surface rather than a screen
+door. One pixel further out is the same operation applied to a gap that is not a
+sampling artefact but the absence of data, presented as though something had
+been measured there. Four rules hold the two apart.
+
+A pixel already carrying a sample is never touched, so this pass blurs nothing
+measured.
+
+A gap closes only when neighbours on opposite sides agree, left with right or
+above with below, or when three of the four cardinals do. A single neighbour, or
+two adjacent ones, is a corner or an edge; nothing spans the pixel.
+
+Supporting neighbours must lie on one surface, judged by the depth rule the
+accumulation pass already uses rather than a second one written for this. The
+comparison is pairwise, because a chain of individually close neighbours can
+otherwise span any depth at all and weld two surfaces that never touch.
+
+A reconstructed pixel is never evidence for another reconstruction. Without that
+each pass seeds the next and a fill creeps outward across sparse geometry, a
+pixel per frame, until a hole has become a surface. Support traces back to a
+sample in every case, and removing the rule fails two assertions rather than
+quietly widening what the pass will do.
+
+Refusals are typed rather than a bare false, so a pixel left alone can say
+whether it was occupied, unsupported or sitting on a discontinuity. The fill
+depth is the nearest supporting neighbour: they already agree within tolerance,
+so it barely moves the value, and the nearest keeps a filled pixel from sitting
+behind the surface it belongs to.
+
