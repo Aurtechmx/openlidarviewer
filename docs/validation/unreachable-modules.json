@@ -154,6 +154,13 @@
       "review": "2027-03-31"
     },
     {
+      "path": "src/render/streaming/microGap.ts",
+      "status": "staged",
+      "why": "Decides whether a background pixel may borrow a depth from its cardinal neighbours. No reconstruction pass runs, so no pixel is ever offered.",
+      "graduation": "The reconstruction pass runs over unsupported pixels and marks what it writes as reconstructed, with the evidence lens able to show those pixels apart from measured ones.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/movingSubset.ts",
       "status": "staged",
       "why": "Decides how many temporal phases a moving frame draws and how much wider each drawn point must be. No frame draws a subset today, so nothing asks.",
