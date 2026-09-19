@@ -108,7 +108,6 @@ import {
 } from './splatShader';
 import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
-import { NO_OPTIONAL_CHANNELS, type UploadedAttributes } from './pointAttributeLayout';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
 import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions } from './measure/lassoVolumeCompute';
 import type { LassoCloudEntry, LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
@@ -1892,7 +1891,7 @@ export class Viewer {
   get streamingCloud(): StreamingSource | null { return this._streaming?.cloud ?? null; }
 
   /** Optional point channels the resident streaming meshes uploaded, so a memory readout prices a point by what it carries. */
-  get streamingUploadedAttributes(): UploadedAttributes { return this._streaming?.renderer.uploadedAttributes ?? NO_OPTIONAL_CHANNELS; }
+  get streamingUploadedAttributes(): { classification: boolean; intensity: boolean } { return this._streaming?.renderer.uploadedAttributes ?? { classification: false, intensity: false }; }
 
   /** The streaming scheduler, or null — for the streaming panel and diagnostics. */
   get streamingScheduler(): StreamingScheduler | null { return this._streaming?.scheduler ?? null; }
