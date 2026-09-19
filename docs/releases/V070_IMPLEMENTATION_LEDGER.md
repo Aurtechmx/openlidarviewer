@@ -62,16 +62,18 @@ of, so a finding can be traced to where it was first written down.
 | L35 | LOADER | READ | n/a | NOT REPRODUCIBLE | new | A truncated LAS presented as complete. |
 | L36 | STANDARDS | READ | n/a | NOT REPRODUCIBLE | new | LAS 1.5 routed through 1.4 logic. |
 | L37 | SEMANTICS | TEST | high | FIXED | new | GPS time was exported under a time interpretation the source never declared. |
+| L38 | STANDARDS | TEST | med | FIXED | new | Nothing guarded the standards statements this release corrected. |
+| L39 | STANDARDS | READ | n/a | FIXED | new | No register recorded which standards the application reads or when its text was last checked. |
 
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 9
+- FIXED: 11
 - NOT REPRODUCIBLE: 8
 - OPEN: 13
 - PARTIAL: 4
 - SUPERSEDED: 1
-- total: 37
+- total: 39
 
 ## Detail
 
@@ -462,3 +464,35 @@ point-sample numbers. Moving it to the area-grid figure changes an exported
 value, so it needs the section 80 classification, the unit handling between the
 grid's metres and the record's native units, and the coverage verdict carried
 with it rather than dropped. Covered by `tests/stockpileMethodIdentity.test.ts`.
+
+### L38 · FIXED · STANDARDS
+
+Every classification statement corrected this release was corrected by hand, and
+nothing stopped the next edit putting it back. `lint:standards-truth` refuses
+six statements that contradict the specification: class 12 named Overlap for the
+extended formats, classes 19 to 22 or 23 to 63 called user-defined, an accuracy
+figure described only as 95 per cent confidence, an ISO crosswalk described as
+certification, and CityGML level-of-detail vocabulary in an application that
+holds no CityGML objects.
+
+Historical release documents are exempt. A document describing what a past
+release said is a record of that release, and correcting it would make it
+describe something that did not happen.
+
+The first version failed on a correct sentence of its own changelog: "23 to 63
+are reserved, and only 64 and above are user definable" matched because the
+user-definable range appears downstream of the reserved one. A lint that cries
+wolf gets switched off, so the rules exempt a line that says the range is
+reserved or named. Twelve tests inject each refusal and each correct wording.
+Covered by `tests/standardsTruthLint.test.ts`.
+
+### L39 · FIXED · STANDARDS
+
+`docs/standards/standards-sources.yaml` records the two specifications the
+application actually reads, the edition, the date the text was last read, the
+sections that were read, and the modules that encode an interpretation of each.
+No standard is reproduced.
+
+The LAS 1.5 entry is there for the refusal rather than for decoding: the parser
+recognises the version and declines it instead of reading it through the 1.4
+layout, and that decision rests on the 1.5 text as much as a decode would.
