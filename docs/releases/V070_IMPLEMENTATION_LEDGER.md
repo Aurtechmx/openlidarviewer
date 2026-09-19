@@ -1426,3 +1426,49 @@ machines that cannot reproduce the failure, and putting the bug back names the
 file that carries it. The guard is excluded from its own sweep, because the case
 that checks the matcher holds the bad pattern as a string.
 
+### L77 · PARTIAL · EVIDENCE
+
+Metrics for judging whether the field helped or only looked like it did. They
+take buffers rather than a canvas, so a case builds a frame by hand and the
+answer is the same on every machine. A metric that needed a device would be
+unrunnable exactly where it is most useful, which is a test that fails when
+reconstruction starts reaching further than it should.
+
+Edge leakage is the one that earns its place. It counts filled pixels whose
+drawn neighbours disagree about depth, which is a patch laid across a ridge or a
+wall against the ground behind it, and it judges that by the same depth rule the
+renderer uses rather than a second one written for measuring.
+
+The programme asks that one figure not be improved while another is ignored, so
+the tension is built rather than noted. Filling more raises what a frame covers
+and can raise leakage at the same time, and a case shows a single fill doing
+both: coverage of measured pixels falls, leakage goes from nothing to complete.
+Either figure read alone rewards what the other exists to catch.
+
+Shares answer nothing rather than zero when there is nothing to divide by. A
+frame that reconstructed nothing has no leakage rate, and reporting zero would
+read as a clean result.
+
+These live under the test tree rather than in the shipped source, so they are
+used by the cases that define them instead of waiting to be wired.
+
+### L78 · FIXED · EVIDENCE
+
+The stored cull baseline named its cameras and never defined them. A reader
+holding the record could see that a view drew twenty-four of eighty-four nodes
+and had no way to rebuild the view, because the geometry lived only in the test
+that wrote it. A corpus that cannot be reproduced from its own artifact is not
+serving the purpose a corpus has.
+
+Each case now publishes its projection, half extents and depth range beside its
+result, and the planes are derived from those same numbers, so the published
+definition cannot describe a different view from the one measured.
+
+What this is remains narrow, and the record already said so before this entry:
+the views are axis-aligned boxes, which is an orthographic camera, over a
+synthetic scene of three uniform grids. A corpus of the kind the programme
+describes needs cameras bound to real datasets and a renderer that can execute
+one and produce a frame. Neither exists here yet, and writing definitions
+against datasets that have not been rendered would be filling a schema rather
+than recording evidence.
+

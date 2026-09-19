@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "label": "streaming-cull-baseline",
-  "revision": "ade1a6d3",
+  "revision": "40fb80ef",
   "environment": {
     "runtime": "node",
     "os": "darwin",
@@ -20,6 +20,13 @@
     {
       "camera": "overview",
       "note": "whole tile in view",
+      "definition": {
+        "projection": "orthographic",
+        "halfExtentX": 400,
+        "halfExtentY": 400,
+        "nearZ": 60,
+        "farZ": 400
+      },
       "residentNodes": 84,
       "drawnNodes": 84,
       "residentNotDrawn": 0,
@@ -28,6 +35,13 @@
     {
       "camera": "half-tile",
       "note": "panned so half the tile is off-screen",
+      "definition": {
+        "projection": "orthographic",
+        "halfExtentX": 100,
+        "halfExtentY": 400,
+        "nearZ": 60,
+        "farZ": 400
+      },
       "residentNodes": 84,
       "drawnNodes": 68,
       "residentNotDrawn": 16,
@@ -36,6 +50,13 @@
     {
       "camera": "corner",
       "note": "zoomed into one corner",
+      "definition": {
+        "projection": "orthographic",
+        "halfExtentX": 60,
+        "halfExtentY": 60,
+        "nearZ": 60,
+        "farZ": 400
+      },
       "residentNodes": 84,
       "drawnNodes": 24,
       "residentNotDrawn": 60,
@@ -44,6 +65,13 @@
     {
       "camera": "narrow-far",
       "note": "narrow view with a short far plane",
+      "definition": {
+        "projection": "orthographic",
+        "halfExtentX": 40,
+        "halfExtentY": 40,
+        "nearZ": 60,
+        "farZ": 120
+      },
       "residentNodes": 84,
       "drawnNodes": 12,
       "residentNotDrawn": 72,

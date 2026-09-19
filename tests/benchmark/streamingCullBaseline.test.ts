@@ -63,22 +63,40 @@ function scene(): CullableNode[] {
   return nodes;
 }
 
-/** The stored cameras. Each is a named view over the same scene. */
+/**
+ * The stored cameras, as parameters rather than as planes.
+ *
+ * The record published beside the results carries these numbers, so a reader
+ * can rebuild a view from the artifact instead of from this file. A baseline
+ * that names a camera it does not define cannot be reproduced by anyone who
+ * only has the baseline, which is the thing a stored corpus is for.
+ *
+ * One definition drives both: the planes below are derived from these, so the
+ * published parameters cannot describe a different view from the one measured.
+ */
 const CAMERAS = [
-  { id: 'overview', planes: viewBox(400, 400, 60, 400), note: 'whole tile in view' },
-  { id: 'half-tile', planes: viewBox(100, 400, 60, 400), note: 'panned so half the tile is off-screen' },
-  { id: 'corner', planes: viewBox(60, 60, 60, 400), note: 'zoomed into one corner' },
-  { id: 'narrow-far', planes: viewBox(40, 40, 60, 120), note: 'narrow view with a short far plane' },
+  { id: 'overview', halfX: 400, halfY: 400, nearZ: 60, farZ: 400, note: 'whole tile in view' },
+  { id: 'half-tile', halfX: 100, halfY: 400, nearZ: 60, farZ: 400, note: 'panned so half the tile is off-screen' },
+  { id: 'corner', halfX: 60, halfY: 60, nearZ: 60, farZ: 400, note: 'zoomed into one corner' },
+  { id: 'narrow-far', halfX: 40, halfY: 40, nearZ: 60, farZ: 120, note: 'narrow view with a short far plane' },
 ] as const;
 
 describe('streamed-node culling baseline', () => {
   it('records how many resident nodes each stored camera contains', () => {
     const nodes = scene();
     const cases = CAMERAS.map((c) => {
-      const d = cullResidentNodes(nodes, c.planes);
+      const d = cullResidentNodes(nodes, viewBox(c.halfX, c.halfY, c.nearZ, c.farZ));
       return {
         camera: c.id,
         note: c.note,
+        // Published so the view can be rebuilt from the record alone.
+        definition: {
+          projection: 'orthographic',
+          halfExtentX: c.halfX,
+          halfExtentY: c.halfY,
+          nearZ: c.nearZ,
+          farZ: c.farZ,
+        },
         residentNodes: nodes.length,
         drawnNodes: d.drawn.length,
         residentNotDrawn: d.residentNotDrawn.length,
