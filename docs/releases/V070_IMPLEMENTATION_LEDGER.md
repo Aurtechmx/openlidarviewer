@@ -1853,3 +1853,49 @@ open rather than fixed. The fourteen-module continuity island needs integration
 and a device to graduate, not an edit. Six thresholds are unmeasured because the
 field data that would set them does not exist yet. Coverage sizing has no
 WebGL2 render-parity evidence, which is the same gap L92 closes with.
+
+### L94 · BUILT · SCIENTIFIC
+
+Every Studio export renders to the live on-screen canvas and encodes what is
+there, which is the property that makes a screenshot a screenshot. It is also
+the property that lets a reconstructed pixel into a file somebody reads back as
+data. Four of the seven raster modes encode geometry in their pixel values: a
+height map's grey level is an elevation, a depth map's a range, a normal map's
+channels an orientation, a contour raster's lines the same elevations again.
+
+So the phase has two answers rather than one. Appearance rasters are captured
+as they stand and carry a label. Geometry rasters suspend gap closure for the
+duration of the capture, and the figure records the mode it was captured in
+rather than the mode the screen was showing. That last part follows the rule
+the colour mode already sets, where an export that forces elevation records
+elevation because that is the artefact's truth. Labelling a suspended capture
+by what the live view had been doing would be a warning that is wrong, and a
+warning that is wrong the first time is ignored the tenth.
+
+The line between invented and measured is the one the support vocabulary
+already draws. Accumulated pixels compose source samples across frames of one
+epoch and trace back to measurements; reconstructed pixels are borrowed from
+neighbours and trace back to no sample of their own. Only micro-gap fill
+invents, so only micro-gap fill triggers the refusal, and accumulation with
+everything else switched on still reports no reconstruction.
+
+The share is emitted only when a census counted it. Capabilities say what the
+renderer was permitted to do; the census says what it did, and a percentage
+derived from the permission would be a number nobody counted. A frame that drew
+nothing yields no share either, and a value that is not finite or falls outside
+zero to one is refused rather than printed. The mode itself is always stated,
+including 'source', because a reader who finds the key missing on some figures
+cannot tell an unstamped file from a plainly rendered one.
+
+The share arrives already computed. Reaching into `supportCensus` to tally it
+here would have grown the export-to-render coupling the module-graph ratchet
+holds shrink-only, and the ratchet was right: a figure's metadata needs a
+number, not a framebuffer. One definition of the share stays in the census,
+including its decision to exclude background from the denominator, where a
+second copy on the export side would have been free to drift.
+
+Point-cloud data exports are untouched. They are written from the authoritative
+points rather than the framebuffer, so no screen-space pass can reach them.
+
+Staged, not wired. With no capability able to be on, every call returns as-is
+and source today, and a branch no input can vary is not an integration.

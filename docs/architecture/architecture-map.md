@@ -29,7 +29,7 @@ from the tree and fails when a cell drifts.
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~46k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. **UI-free by lint.** |
 | I/O | `src/io` | ~35k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~66k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
-| Export / report | `src/export`, `src/report`, `src/convert` | ~12k | Studio exporters, PDF/report builders, batch conversion. |
+| Export / report | `src/export`, `src/report`, `src/convert` | ~13k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~16k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~31k | Panels, Inspector, Studio surfaces, onboarding. |
 | Shell | `src/main.ts` | 4,977 | Wiring. **A monolith under decomposition.** |
