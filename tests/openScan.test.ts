@@ -227,11 +227,27 @@ describe('openScan — the file router', () => {
     await openScan(fakeFile('scan.las', new ArrayBuffer(0)), deps);
     expect(calls.loadLocalSource).toHaveBeenCalledTimes(1);
     expect(calls.openLocalCopc).not.toHaveBeenCalled();
-    // A failed load surfaces on the drop zone, tidies any half-open stream,
-    // and always releases the loading flag in `finally`.
+    // A failed load surfaces on the drop zone and always releases the loading
+    // flag in `finally`. It tidies a HALF-OPEN stream, which is the one this
+    // open was attaching; a static file that never parsed opened no stream, so
+    // there is nothing of its own to tidy. Closing here used to take down a
+    // streaming scan that belonged to the project rather than to the
+    // candidate.
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+    expect(calls.setLoading).toHaveBeenNthCalledWith(1, true);
+    expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it('tidies the stream when the streaming open itself fails mid-flight', async () => {
+    const { deps, calls } = makeDeps();
+    calls.openLocalCopc.mockRejectedValueOnce(new Error('range read failed'));
+
+    await openScan(fakeFile('cloud.copc.laz', copcHead()), deps);
+
+    expect(calls.openLocalCopc).toHaveBeenCalledTimes(1);
     expect(calls.setError).toHaveBeenCalledTimes(1);
     expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
-    expect(calls.setLoading).toHaveBeenNthCalledWith(1, true);
     expect(calls.setLoading).toHaveBeenLastCalledWith(false);
   });
 });
