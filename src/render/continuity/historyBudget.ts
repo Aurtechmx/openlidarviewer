@@ -39,7 +39,15 @@ export const COLOR_RGBA8: HistoryFormat = { label: 'rgba8unorm', bytesPerPixel: 
 /** Accumulated colour at half precision, for a sweep long enough to need it. */
 export const COLOR_RGBA16F: HistoryFormat = { label: 'rgba16float', bytesPerPixel: 8 };
 
-/** History depth. Full float, because the merge rule compares depths as a ratio. */
+/**
+ * History depth. Full float, because the merge rule compares depths as a ratio.
+ *
+ * The one format here that a backend may refuse. Measured on both: WebGPU
+ * accepts `r32float` as a render attachment outright, while WebGL2 needs
+ * `EXT_color_buffer_float` for the same surface and reports an incomplete
+ * framebuffer without it. The colour and support formats were accepted by both
+ * without conditions.
+ */
 export const DEPTH_R32F: HistoryFormat = { label: 'r32float', bytesPerPixel: 4 };
 
 /** Per-pixel support. A count that saturates long before 255. */

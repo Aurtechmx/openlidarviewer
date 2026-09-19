@@ -1797,3 +1797,38 @@ temporal partition exists to prevent, returning through colour. Letting
 categorical blend fails three assertions, and a caller that says nothing still
 gets the continuous behaviour it had.
 
+### L92 · MEASURED · ARCHITECTURE
+
+The history formats were chosen by arithmetic and are now measured on a device.
+Both backends accept all three, so the layout is not a guess any more.
+
+WebGPU, on an Apple metal-3 adapter, created all three
+textures and takes the depth surface as a render attachment without conditions.
+Three surfaces at 1080p allocated 17.8 MB, which is the figure the cost table
+already carried.
+
+WebGL2, through ANGLE on the same machine, reported every one of the three
+framebuffer-complete, with eight colour attachments available against the three
+this needs. The depth surface is the exception worth recording: it is an `R32F`
+colour attachment there, renderable only where `EXT_color_buffer_float` is
+present, and that extension is not core WebGL2. Without it the framebuffer is
+incomplete rather than slow.
+
+So the two backends differ, in the way the tier ladder exists to absorb, and
+this is the first divergence in this programme that was measured rather than
+inferred from the point-size precedent. The capability flag now says what a
+caller on WebGL2 has to ask before answering yes, and a device that refuses the
+extension takes the rung that keeps no history rather than failing to draw.
+
+Coverage sizing was also confirmed on a real streamed source, fifteen point
+seven million points over four hundred and eighty-five nodes: mean frame energy
+rose from 69.75 to 82.08 when density sizing was selected and returned to
+exactly 69.75 on switching back. Before this cycle that selection changed
+nothing on a streamed scan. The exact return is the second result, since a
+switch that rebuilt the pipeline rather than writing a uniform would not land on
+the same number.
+
+What remains untested is that same sizing rendering under WebGL2. The formats
+are there and the fold is backend-neutral in principle, which is the kind of
+claim this programme keeps refusing to make, so it stays open.
+

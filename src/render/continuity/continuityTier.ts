@@ -47,7 +47,20 @@ export const TIER_ORDER: readonly ContinuityTier[] = ['full', 'closure', 'sizing
  * nothing reliable about a driver.
  */
 export interface BackendSupport {
-  /** Can history textures be allocated and read back across frames? */
+  /**
+   * Can the history's three surfaces be allocated and drawn into?
+   *
+   * Measured rather than assumed, because the two backends genuinely differ
+   * here. On WebGPU the depth surface's format is renderable unconditionally.
+   * On WebGL2 the same surface is an `R32F` colour attachment, which is
+   * renderable only where `EXT_color_buffer_float` is present: that extension
+   * is not core WebGL2, and without it the framebuffer is incomplete rather
+   * than slow. The colour and support surfaces have no such condition.
+   *
+   * A caller on WebGL2 therefore has to ask for the extension before answering
+   * yes, and a device that refuses it takes the rung that keeps no history
+   * rather than failing to draw.
+   */
   readonly historyTextures: boolean;
   /** Is there room for the history at the current backing store? */
   readonly historyFits: boolean;
