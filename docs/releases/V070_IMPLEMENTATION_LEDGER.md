@@ -2343,3 +2343,36 @@ build, which against a live head figure would have shown a 450 KiB regression
 that does not exist. The gate also runs a plain build after its live one, so the
 `dist/` left on disk afterwards is not the artifact the budget measured, and
 reading sizes from it gives the wrong pair.
+
+### L106 · MEASURED · ARCHITECTURE
+
+The estimate was wrong and the measurement is the entry. Four modules decide
+which rung a device can carry, they are eight kilobytes of source, and the
+subsystem is 29 per cent code rather than documentation, so three or four
+kilobytes minified looked like the answer. Importing them eagerly measures nine
+and fails the 812 KiB ceiling at 814. The whole subsystem eager measures 835.
+Figures and method are in `docs/architecture/continuity-bundle-strategy.md`.
+
+Two of the nine are not the modules. `mobilePolicy` imports two numeric
+constants from `adaptiveDpr`, a runtime import of a module that otherwise lives
+in the lazy Viewer chunk, so importing the decision half hoists `adaptiveDpr`
+out of that chunk and into the shell. The hoist shows on both sides: the entry
+gains while Viewer falls from 726 to 724, and removing the import puts Viewer
+back at 726 and the entry at 812. That is exactly the ceiling, which the budget
+script passes and the budget's own rule calls measuring noise rather than creep.
+
+So the seam is not between decision and passes. It is around all of it, and the
+reason it can be is that the field ships disabled: a device that cannot carry it
+renders as it does today, so there is no rung to choose before the first frame.
+That is what separates this from the Speed to Quality control, which the budget
+records as unavoidably eager because a weak device must have its degraded
+display settings on frame one. This one decides whether to add something to a
+renderer that is already correct.
+
+The `adaptiveDpr` import stays. The history ratio is quantised onto the same
+grid the adaptive ratio snaps to, and copying two constants to dodge a hoist
+would trade a shared definition for a bundling convenience. On the lazy side the
+hoist does not occur.
+
+All three builds ran in a throwaway worktree and the working tree was verified
+clean afterwards, so no probe reached a commit.
