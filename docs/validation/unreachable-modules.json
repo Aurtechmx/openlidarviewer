@@ -133,6 +133,13 @@
       "review": "2027-03-31"
     },
     {
+      "path": "src/render/continuity/historyTargets.ts",
+      "status": "staged",
+      "why": "Owns the accumulation history's render targets. No capability allocates a history, so nothing calls resize and no surface is ever made.",
+      "graduation": "Temporal accumulation turns on and the render loop resizes this with the backing store, clears it on a display-epoch change rather than reallocating, and leaves source rendering in place when it declines above the ceiling. Whether a backend accepts these formats is not established by anything here.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/hillshadeColors.ts",
       "status": "staged",
       "why": "Sun-direction shading over the elevation ramp. src/render/inspectionPresets.ts states the matching fact from the other side: the preset it belongs to has \"no runtime setter behind\" it and \"there is no live hillshade renderer to switch\".",

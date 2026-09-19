@@ -1472,3 +1472,89 @@ one and produce a frame. Neither exists here yet, and writing definitions
 against datasets that have not been rendered would be filling a schema rather
 than recording evidence.
 
+### L79 · FIXED · EXPORT
+
+A DEM package defaulted its generation time twice when the caller gave none,
+once for the README and once for the passport. Two readings of the clock a
+millisecond apart put different times in the two files, so a rebuild from the
+same inputs produced different bytes and neither file looked wrong on its own.
+It is the defect the PDF builders already carry a note about, in a second place.
+
+The package now reads the clock once and both files take that value.
+
+The test counts readings rather than comparing stamps. Comparing would pass
+whenever both readings landed inside the same millisecond, which is most of the
+time on a fast machine and none of the time on a loaded one, so the case would
+have been a flake that reported the bug as fixed. A second case holds that a
+supplied time reads no clock at all.
+
+Two earlier attempts at that test were wrong and are worth recording. Scanning
+the archive for timestamps caught the build identity, which carries its own fixed
+time and is not a generation stamp. Narrowing the scan to generation stamps then
+found none, because the entries are deflated and only an uncompressed fragment
+had been visible. The property is about how many times the clock is read, so
+that is what the test measures.
+
+### L80 · PARTIAL · ARCHITECTURE
+
+The history's render targets, and who owns them.
+
+Three surfaces or none. A colour history with no depth beside it is the
+photographic accumulation this renderer must not do, so they are allocated and
+freed together and a partial set is never held.
+
+The distinction worth having is between the two ways a history goes wrong. A
+changed display state leaves the buffers the right shape with stale pixels, so
+they are cleared and the next sweep writes over them. A changed backing store
+leaves them the wrong shape, so they are freed and remade. Treating an epoch
+change as a resize would rebuild three textures on every camera nudge and cost
+more than the accumulation saves; making that mistake fails an assertion.
+
+A resize frees before it allocates. Holding both sets at once is the moment a
+device is most likely to refuse the second, and allocating first fails three
+assertions rather than merely using more memory for an instant.
+
+Above the ceiling nothing is allocated and the caller is told which refusal it
+was. That is the failure path working: a worse picture beats a lost context. The
+same viewport that fits conservatively is refused under the full-float layout,
+which is the choice made when the layout was costed.
+
+What the cases cover is how a set is allocated, how it is replaced, and how it is freed, through a
+factory that stands in for the device. What they do not cover, and what nothing
+here should be read as establishing, is whether a real backend accepts these
+formats or samples them correctly. That needs a device on both backends, and
+until it has one this is a lifetime with no surfaces in it.
+
+The three surfaces are in the disposal register with an owner, a lifetime and a
+trigger, because a GPU resource without those is the defect that register exists
+to prevent.
+
+### L81 · PARTIAL · EVIDENCE
+
+The comparison a capability has to survive, written now because now is the only
+time it can be written honestly. A rule composed after the measurements is a
+rule composed to fit them, and the programme's own line is that a feature does
+not graduate because it is visually interesting.
+
+So the rule refuses rather than weighs. A candidate that improves everything
+graduates by itself, and one that makes anything worse is refused with the
+regression named, because whether a trade is worth taking is a judgement a
+person makes with the cost in front of them. Letting a majority of improvements
+carry one regression fails two assertions.
+
+A hole is not a pass. Most of these figures need a device, and a comparison
+missing one is undecided rather than clean, which is the same reasoning that
+gives an empty frame no reconstruction share instead of a share of zero.
+Undecided also outranks refusal, so a candidate is never turned down for a
+number nobody took. Treating a hole as measured fails three assertions.
+
+The columns are fixed in the source rather than assembled per run, so a later
+comparison cannot quietly drop the one it did badly on.
+
+Run against what this release can produce, every metric is unmeasured and the
+verdict is undecided. That is the honest standing of the continuity work: no
+capability has earned graduation, and none has been refused either, because the
+measurements that would decide need a device and a reconstruction pass that
+writes per-pixel support. A case asserts exactly that state, so the day it stops
+being true will show up as a failure rather than as a memory.
+

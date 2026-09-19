@@ -196,10 +196,52 @@ describe('parseEpsg', () => {
 });
 
 describe('buildDemPackage', () => {
-  // A COMPLETE, full-coverage, export-ready result. buildDemPackage now derives
-  // the README's shared provenance via terrainAssessment(result), so the fixture
-  // carries the same fields a real analysis run produces (cellStatusTally,
-  // cellMetrics, qualityScore) — this is a fuller, not weaker, fixture.
+  /** Run `fn` with the clock counted, and report how many times it was read. */
+  function countingClock(fn: () => void): number {
+    const RealDate = Date;
+    let reads = 0;
+    globalThis.Date = new Proxy(RealDate, {
+      construct(target, args) {
+        if (args.length === 0) reads += 1;
+        return Reflect.construct(target, args);
+      },
+      get(target, prop, receiver) {
+        if (prop === 'now') {
+          return () => {
+            reads += 1;
+            return RealDate.now();
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as DateConstructor;
+    try {
+      fn();
+    } finally {
+      globalThis.Date = RealDate;
+    }
+    return reads;
+  }
+
+  // Two clocks read a millisecond apart would stamp the README and the passport
+  // differently, so the same inputs would not rebuild to the same bytes and
+  // neither file would look wrong on its own. Counted rather than compared,
+  // because a second reading inside the same millisecond would pass a
+  // comparison while leaving the race in place.
+  it('reads the clock once when no generation time is given', () => {
+    expect(countingClock(() => buildDemPackage(fixtureResult(), { basename: 'terrain' }))).toBe(1);
+  });
+
+  it('reads no clock at all when a generation time is given', () => {
+    const reads = countingClock(() =>
+      buildDemPackage(fixtureResult(), {
+        basename: 'terrain',
+        generationDateIso: '2026-01-01T00:00:00.000Z',
+      }),
+    );
+    expect(reads).toBe(0);
+  });
+
   function fixtureResult(): AnalyseContoursResult {
     return {
       dtm: {
