@@ -147,6 +147,13 @@
       "review": "2027-03-31"
     },
     {
+      "path": "src/render/streaming/continuitySupport.ts",
+      "status": "staged",
+      "why": "Scores how well a pixel is backed by nearby samples and gates reconstruction on it. Nothing reconstructs, so no pixel is scored.",
+      "graduation": "The reconstruction pass scores each candidate pixel and fills only above the threshold, with that threshold and the sample count set from real scenes at several densities rather than the starting values here.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/continuityTier.ts",
       "status": "staged",
       "why": "Chooses how far the field may go on a given backend and what it falls back to. Every capability is off, so no tier is ever selected.",
