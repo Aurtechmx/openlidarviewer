@@ -7,6 +7,7 @@
  * for the fields we touch).
  */
 
+import { isValidPdrf, recordLengthFitsFormat, minimumRecordLength } from '../lasSemantics';
 import type { PointAttributes } from './loadPlan';
 import { LoadError } from './loadErrors';
 import { parseCrsFromVlrs } from './crs';
@@ -229,6 +230,24 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
   const pointFormat = view.getUint8(OFFSET_POINT_FORMAT) & 0x3f;
   const offsetToPointData = view.getUint32(OFFSET_TO_POINT_DATA, true);
   const pointDataRecordLength = view.getUint16(OFFSET_POINT_RECORD_LENGTH, true);
+  // A record shorter than its format requires is not a record missing a field
+  // at the end. Every field is addressed by a fixed offset from the record
+  // start, so the classification, returns and point source id would be read
+  // from inside the NEXT record and decode silently into plausible garbage.
+  // Refuse the file instead, before a point is decoded.
+  if (!isValidPdrf(pointFormat)) {
+    throw new LoadError(
+      'malformed-file',
+      `LAS point data record format ${pointFormat} is not one the specification defines (0 to 10).`,
+    );
+  }
+  if (!recordLengthFitsFormat(pointFormat, pointDataRecordLength)) {
+    throw new LoadError(
+      'malformed-file',
+      `LAS point data record length ${pointDataRecordLength} is shorter than the ` +
+        `${minimumRecordLength(pointFormat)} bytes point data record format ${pointFormat} requires.`,
+    );
+  }
 
   // CRS / linear-unit detection — walk the LASF_Projection VLRs starting at
   // the recorded header size. The buffer may be a head-slice that stopped
