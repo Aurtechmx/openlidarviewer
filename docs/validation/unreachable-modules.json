@@ -147,6 +147,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/streaming/continuityFailure.ts",
+      "status": "staged",
+      "why": "Decides what to run after a continuity pass fails, and wraps a pass so a throw cannot reach the render loop. No pass runs, so nothing fails and nothing is wrapped.",
+      "graduation": "The render loop runs each continuity pass through runContinuityPass and takes the tier from afterFailure, so a refused allocation or a thrown pass leaves a simpler picture rather than a broken frame.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/continuityPressure.ts",
       "status": "staged",
       "why": "Maps the renderer's existing frame-time pressure onto a continuity tier. No tier is selected and every capability is off, so nothing asks.",

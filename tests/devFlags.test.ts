@@ -34,6 +34,12 @@ describe('parseDevFlags — defaults', () => {
       decodePoolOff: false,
       decodeWorkers: null,
       residentStickiness: false,
+      continuityNodeCulling: false,
+      continuityPackedAttributes: false,
+      continuityCoverageSizing: false,
+      continuityMicroGapFill: false,
+      continuityTemporalAccumulation: false,
+      continuityEvidenceLens: false,
     });
   });
 
@@ -68,7 +74,7 @@ describe('parseDevFlags — the program §P0 flag set', () => {
     },
   );
 
-  it('all seven flags parse together from one query string', () => {
+  it('every flag parses together from one query string', () => {
     const flags = parseDevFlags(
       '?streamingScore=legacy&wheelDolly=legacy&handPan=off&refinementPhase=off' +
         '&adaptiveDpr=off&uploadQueue=off&angularPrediction=off',
@@ -86,6 +92,12 @@ describe('parseDevFlags — the program §P0 flag set', () => {
       decodePoolOff: false,
       decodeWorkers: null,
       residentStickiness: false,
+      continuityNodeCulling: false,
+      continuityPackedAttributes: false,
+      continuityCoverageSizing: false,
+      continuityMicroGapFill: false,
+      continuityTemporalAccumulation: false,
+      continuityEvidenceLens: false,
     });
   });
 

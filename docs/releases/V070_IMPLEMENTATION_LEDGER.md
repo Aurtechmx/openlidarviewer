@@ -1558,3 +1558,72 @@ measurements that would decide need a device and a reconstruction pass that
 writes per-pixel support. A case asserts exactly that state, so the day it stops
 being true will show up as a failure rather than as a memory.
 
+### L82 · PARTIAL · ARCHITECTURE
+
+Six switches for bisecting the continuity work, in the module that already
+holds the others and already states the rule they follow: a flag with no
+consumer changes nothing. All six are staged and parse-only, and the metrics
+export lists them where it lists the other staged controllers, so none can be
+read as active.
+
+They default off, for the reason pooled decoding does. A default nobody has
+measured on a device is the mistake the multi-layer mount already made once, and
+that note was already in this file before these were added.
+
+Six switches is sixty-four combinations, and claiming they all work would be a
+promise nobody has kept. The supported set is the tier ladder, which is four
+configurations, each a subset of the one above; the rest are for bisecting a
+problem rather than for running the viewer. A case holds the arithmetic of that
+gap so the claim cannot quietly widen.
+
+The first version used the wrong parse helper. This module reads an absent flag
+as on, which is right for a path that already shipped and wrong for every one of
+these, so an empty query would have turned all six on while the defaults record
+said they were off. Two sources of truth disagreeing about what the viewer is
+doing is worse than either answer. The opt-in helper the other off-by-default
+flags use fixes it, and putting one flag back on the wrong helper fails two
+assertions.
+
+`coverageSizing` needs saying plainly: coverage sizing is live in the renderer
+and this flag does not gate it. What is live is reached by choosing density
+point sizing. The flag stands for the capability record, which nothing consults
+yet, and the module says so where someone would look.
+
+Two existing cases enumerate every flag and its default, so adding these made
+them fail until each new default was declared. That is the case working. One of
+them was called "all seven flags" and is now called what it does.
+
+### L83 · PARTIAL · ARCHITECTURE
+
+Every way the field can fail has one right answer, which is to do less of it. A
+target that will not allocate, a pass that throws, a backend that refuses a
+format all mean the same thing to someone looking at the screen: the picture
+should be simpler and the application should still be there.
+
+So nothing rethrows, and a failure gives up one rung rather than everything. A
+device that cannot hold a history may still close gaps, and dropping the lot on
+the first refusal would surrender capabilities that were never implicated.
+Repeated failures reach source rendering and stop, because there is nothing
+below the renderer that already worked.
+
+The guarantee is narrower than it sounds and worth stating exactly. It is that a
+continuity failure does not reach the render loop as an exception. It is not
+that the picture is unaffected, which would be false, and not that the failure
+is quiet, which would be worse: the outcome names what failed so a diagnostics
+surface can report it.
+
+The case that earns its place is a reporter that throws while recording a
+failure. That turns a degraded frame into a broken one, which is this module's
+own purpose defeated through its own handler, so the report is wrapped too and
+letting it escape fails an assertion. A pass may also throw something that is
+not an Error, so the cases throw a string, a number, an object, null and
+undefined.
+
+A pass returning zero, false or an empty string is a result rather than a
+failure, and is returned as one.
+
+Two of the four things this phase asks to protect need nothing here. The dataset
+and the measurement tools are out of reach of this subsystem entirely, held by
+the parity and authority guards, so a continuity failure cannot put a
+measurement wrong however it fails.
+
