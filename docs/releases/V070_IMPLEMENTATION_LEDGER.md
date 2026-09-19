@@ -2443,3 +2443,40 @@ The proof enumerates rather than samples. Six devices by 101 positions by all
 eight backend support combinations, with nothing opted in, and every one
 returns `source`. Removing the opt-in cap fails it, and so does permitting a
 partly opted-in rung.
+
+### L109 · PARTIAL · SCIENTIFIC
+
+Seven documentation items were asked for and one document was written,
+`docs/continuity-field.md`, covering all seven with the architecture notes from
+earlier phases linked rather than restated.
+
+Three of the seven were held back deliberately and the reasons are worth
+recording, because each is a way this could have gone wrong.
+
+No release notes were written and the version was not touched. Release notes
+are a release artifact, releases here are user-driven, and adding a document
+that clears `lint:release-truth` before anybody has tested the tree would turn
+a real red into a green by writing prose. The red stands.
+
+`docs/limitations.md` was left alone. Adding a continuity entry would describe
+a limitation of something no shipped build runs, which reads as a feature
+users have and a caveat about it, and the doc exists for the opposite purpose.
+
+There is no benchmark report, and the note says so in the section where one
+would be rather than omitting the section. No runner here exposes a WebGPU
+adapter and there is no phone, tablet or WebKit device, so frame time under the
+field has never been measured anywhere. The two figures that do exist, the
+streamed coverage-sizing run and the bundle measurements, are quoted with the
+statement that neither describes the field drawing a frame.
+
+The language requirement is met and checked. Presentation reconstruction is
+defined once, the sentence that it is never new measured geometry appears
+beside the definition, and the structural reason is named: a fill decision
+carries a depth and a support kind and no identity, which a test reads off the
+keys rather than trusting.
+
+The browser table and the memory section carry measurements rather than
+expectations. `r32float` renderable unconditionally on WebGPU and needing
+`EXT_color_buffer_float` on WebGL 2 was measured on both backends this
+programme, and the coverage-sizing render under WebGL 2 is listed as having no
+device evidence rather than as backend-neutral.
