@@ -1,3 +1,4 @@
+import { bytesPerPoint, gpuAttributeBytes, type UploadedAttributes } from '../pointAttributeLayout';
 /**
  * streamingBudget.ts
  *
@@ -39,11 +40,19 @@ const MOBILE_POINT_BUDGET: Record<StreamingQuality, number> = {
 };
 
 /**
- * Rough GPU bytes per resident streaming point: an instanced position
- * (vec3 f32, 12 B) and an instanced colour (vec3 f32, 12 B) — the same figure
- * the debug overlay uses for static clouds.
+ * GPU bytes per resident streaming point with position and colour only.
+ *
+ * Derived from `pointAttributeLayout` rather than written out, so it cannot
+ * drift from what the mesh builder uploads. It is the floor, not the whole
+ * cost: a classified cloud also uploads `aClass` and one carrying intensity
+ * uploads `aIntensity`, four bytes each. Callers that know which channels a
+ * cloud has should ask `gpuAttributeBytes` for its real figure; this constant
+ * remains for the budget arithmetic, which reasons about a point's minimum.
  */
-export const BYTES_PER_STREAMING_POINT = 24;
+export const BYTES_PER_STREAMING_POINT = bytesPerPoint({
+  classification: false,
+  intensity: false,
+});
 
 /**
  * CPU-side worst-case bytes per decoded point — the widest shape a LAS-family
@@ -259,9 +268,19 @@ function greedyFill(sorted: readonly ScoredCandidate[], pointBudget: number): Se
   return wanted;
 }
 
-/** Estimated GPU bytes for a resident point count. */
-export function estimateGpuBytes(residentPointCount: number): number {
-  return residentPointCount * BYTES_PER_STREAMING_POINT;
+/**
+ * Estimated GPU attribute bytes for a resident point count.
+ *
+ * `present` names the optional channels the cloud uploads. Omitting it keeps
+ * the position-and-colour floor, which is what a caller that does not know the
+ * channels can honestly claim; passing it gives the figure the renderer is
+ * actually holding.
+ */
+export function estimateGpuBytes(
+  residentPointCount: number,
+  present: UploadedAttributes = { classification: false, intensity: false },
+): number {
+  return gpuAttributeBytes(residentPointCount, present);
 }
 
 /**
