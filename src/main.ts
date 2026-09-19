@@ -1444,7 +1444,7 @@ async function runDeriveClassification(): Promise<void> {
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount });
+    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
     // Surface the run's honest confidence + caveats in the legend caption, not
     // just a flat "derived" tag — so the user sees WHEN to trust it.
     const confPct = Number.isFinite(result.confidence)
@@ -1530,7 +1530,7 @@ async function runFillUnclassified(): Promise<void> {
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount });
+    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
     classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
     classLegendPanel.show();
