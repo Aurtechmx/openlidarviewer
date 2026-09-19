@@ -882,3 +882,31 @@ already covers all sixteen, with a viewport resize reaching both the width and
 the height, so this phase closed a hole in the proof rather than adding a
 mechanism.
 
+### L55 · PARTIAL · ARCHITECTURE
+
+Drawing a subset of points per frame and accumulating them needs a partition
+that holds still. A point that moved between subsets while the image was being
+built would appear and disappear, so the phase is a function of the point's
+identity and nothing else, with no frame number in it.
+
+No new hash was written. `fadeHashUnit` already spreads instance indices over
+the unit interval by a golden-ratio sequence, is already tested in Node, and is
+already mirrored exactly in the size graph, so the shader and the CPU agree on
+it today. A second hash would have been a second thing to keep in step. The seed
+shifts that sequence by whole steps, so two nodes stop agreeing about which of
+their points are in phase zero merely because both number from zero.
+
+The first version clamped the top of the range against a hash near one rounding
+up to the phase count, which would name a phase no frame draws and drop the
+point from the image. Removing the clamp broke no test, which is the reason to
+look rather than to leave it: scaling a double by a power of two shifts its
+exponent and rounds nothing, so a hash below one stays below the count and the
+floor cannot reach it. The clamp could not fire. It is gone, the reason is
+written down, and a test pins it at the largest hash below one. That reasoning
+holds only because the count is a power of two, which is all the type admits.
+
+Registered staged. It graduates when accumulation turns on and the size graph
+folds the phase in as its own node. It cannot ride on the fade dither:
+`endNodeDissolve` drops that fold once a node settles, which is exactly when
+accumulation matters.
+

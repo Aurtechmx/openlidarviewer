@@ -161,6 +161,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/streaming/temporalPhase.ts",
+      "status": "staged",
+      "why": "Assigns each point a temporal phase for the accumulation capability. That capability is off, so no frame draws a subset and nothing asks a point which phase it is in.",
+      "graduation": "Temporal accumulation turns on and the size graph folds the phase in as its own node, independent of the fade dither, which endNodeDissolve drops once a node settles.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/tierAdaptation.ts",
       "status": "staged",
       "why": "Runtime FPS-driven tier stepping with hysteresis, written to layer on top of streamingProfile. Nothing feeds it FPS samples.",
