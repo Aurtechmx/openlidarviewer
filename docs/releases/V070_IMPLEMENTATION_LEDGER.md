@@ -2549,3 +2549,40 @@ estimate. The shared byte formatter divides by 1024 and labels the result MB,
 so every byte figure in the application reads about 4.9 per cent below the unit
 it claims. It understates rather than hides, and correcting it is a repo-wide
 change to shipped text.
+
+### L112 · MEASURED · ARCHITECTURE
+
+Twenty-five steps audited against where they actually stand, in
+`docs/validation/v070-implementation-order.md`. Two are wired and reach a user,
+fifteen are tested pure cores nothing calls, five need hardware, three are
+unimplemented.
+
+The programme did not follow the order and the audit says so. Groups C through
+F were designed before group A was finished, which would be wrong if any of it
+were wired, because a core built on an unmeasured foundation inherits what the
+foundation got wrong. Nothing is wired, so the cost of the order is currently
+zero and stays zero only while that holds.
+
+The audit also carries the one prerequisite that comes from outside the list.
+Whatever capability is switched on first has to be preceded by the export
+capture guard, since every Studio exporter renders to the live canvas and four
+raster modes encode geometry in their pixel values. Wiring the guard afterwards
+means some number of height maps and depth maps carry invented elevations in
+the interval, and those files outlive it.
+
+Two numbers in the first draft were wrong and are worth recording as the same
+class of error. It claimed 79 commits where the log says 84, and it claimed
+four gate failures across the whole branch when only the recent stretch is
+reconstructable. Both were plausible, neither was counted, and the instruction
+against inventing counts covers a number written from memory as much as one
+made up.
+
+The code review on this stretch raised the register entry for `continuityField`
+and was right about the substance while wrong about one detail. Every one of
+that module's four importers uses `import type`, so it emits nothing into any
+bundle, and `continuityTier` is reached from production only by the same kind
+of edge, its value importers all being staged themselves. The register had to
+drop both, because it records what production refers to at all. What it could
+no longer convey is that neither contributes runtime code, so the register's
+purpose field now says that leaving the list does not imply runtime presence
+and points at the runtime-only figure printed beside the count.
