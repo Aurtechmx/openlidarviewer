@@ -2115,3 +2115,39 @@ would quietly deprioritise every node of a source that does not report spacing.
 Staged. The scheduler's score is unchanged, because wiring this alters which
 nodes arrive first on every streamed scan, and that wants a measurement instead
 of a merge.
+
+### L100 · REFUSED · ARCHITECTURE
+
+The phase gates itself on micro-gap closure being stable. Closure has never run,
+being one of the capabilities that cannot be switched on, so it has no behaviour
+on a device to be stable or otherwise. The phase also calls itself optional and
+says not to delay the core set for it. Nothing was built. The reasoning is in
+`docs/architecture/edge-aware-kernel.md`.
+
+Two things are decidable without a device. The first is that the postprocess the
+phase asks about already ships: Eye Dome Lighting traces every depth
+discontinuity in screen space by sampling neighbouring depths at a pixel radius,
+which is the quantity an edge-aware kernel wants. A per-point screen-space edge
+test would compute a second time what the renderer already produces each frame.
+
+The second shapes every option. A kernel's size is decided in the vertex stage
+and the EDL response is a function of the completed depth buffer, so the signal
+exists one stage too late to be read by the thing that needs it. A depth prepass
+and a second point draw does exactly what the phase describes and draws every
+point twice, which spends the budget the temporal block investigation was opened
+to save. Sharpening in the postprocess alone is cheap and leaves the splat
+covering the same pixels, so it shades a fringe instead of preventing one.
+
+The third option is the interesting one and it has a limit worth writing down
+before someone builds it. The density grid behind `localDensitySizes` already
+visits every point and already feeds the size graph at vertex time, so a
+per-cell measure of depth disagreement would arrive exactly where the decision
+is made at no screen-space cost. It would also be view-independent, so it
+describes the edge of a roof or the boundary of a canopy and says nothing about
+a near object crossing a far one, which is the case a viewer is most likely to
+notice. The cheap design does not do the job and the one that does costs a
+second draw.
+
+The predicate itself is not missing. `depthCompatible` is written and already
+shared by the merge, by closure and by the support rules. What is missing is a place to
+evaluate it before rasterisation.
