@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * The Continuity Field may invent pixels. Measurement must never be able to
@@ -17,7 +18,9 @@ import { join, relative } from 'node:path';
  * an allowlist would flag every legitimate image composition in the app and
  * would be widened until it meant nothing.
  */
-const SRC = new URL('../src/', import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: on Windows the latter yields `/D:/...`,
+// which Node resolves against the current drive as `D:\\D:\\...`.
+const SRC = fileURLToPath(new URL('../src/', import.meta.url));
 
 /** Moves pixels from a rendered surface back into JavaScript. Member calls only. */
 const READBACK = [

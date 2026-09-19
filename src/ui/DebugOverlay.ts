@@ -12,6 +12,7 @@
  */
 
 import { attributeBreakdown, type UploadedAttributes } from '../render/pointAttributeLayout';
+import { historyBytes, historyFits } from '../render/streaming/historyBudget';
 import { el } from './dom';
 import { registerMetricsHook } from '../perf/metricsHook';
 import { formatByteSize as formatBytes, groupInt as formatInt } from '../io/formatByteSize';
@@ -359,6 +360,12 @@ export class DebugOverlay {
         `points        ${formatInt(stats.displayedPoints)} shown` +
           ` / ${formatInt(stats.totalPoints)} total`,
         `gpu estimate  ${formatBytes(stats.gpuBytesEstimate)}`,
+        // What a continuity history would cost at the store actually allocated,
+        // and whether it would fit. Worth knowing before anything is switched
+        // on: the answer is a property of this device and this window, and on a
+        // high-ratio panel it is the figure that decides the feature.
+        `history est   ${formatBytes(historyBytes(stats.bufferWidthPx, stats.bufferHeightPx))}` +
+          `${historyFits(stats.bufferWidthPx, stats.bufferHeightPx) ? '' : ' (over ceiling)'}`,
         `terrain comp  ${formatTerrainCompute(terrainCompute)}`,
       ].join('\n');
     } else {

@@ -1328,3 +1328,101 @@ every write.
 This is the first capability in the continuity work to reach a rendered frame.
 The rest remain staged.
 
+### L73 · FIXED · PERFORMANCE
+
+The convergence schedule began the moment the camera stopped, which is not the
+moment the picture stops changing. Parking enters the first of three refinement
+phases, and the scheduler is still admitting nodes through all of them, at three
+quarters of its budget and then nine tenths.
+
+Every node that arrives changes the visible frontier, and the frontier is one of
+the display inputs, so it opens an epoch and the sweep starts again. Correctness
+was never at stake, because that is the epoch doing its job. The cost was: a
+sweep would restart for as long as refinement continued and never finish, and
+every frame it contributed was thrown away. That is the waste the terminal
+converged state exists to prevent, reached from the other end.
+
+It now takes the refinement phase the scheduler already publishes instead of a
+bare moving flag, and waits for the last one. Starting earlier buys nothing,
+because the epoch will discard it. Beginning at park, which is what it did, fails
+four assertions.
+
+Nothing else in this phase needed writing. Improving node coverage and favouring
+the centre of the view are what the scheduler's selection factor and focus
+strength already do, and a continuity layer repeating them would be the second
+scheduler the programme forbids.
+
+### L74 · FIXED · SCIENTIFIC
+
+A reconstructed view can be beautiful while the source stays incomplete. The
+field decides which pixels came from samples, which were carried between frames
+and which were filled in, and none of that says whether the points that exist
+are all the points there will be.
+
+The separation already held. A stockpile figure caps at preview when the source
+is not proven complete, and the function that decides it says so plainly:
+footprint support is geometric and tells you nothing about whether the cells
+were filled by every point there is. The reduced-view test reads resident count
+against source count, which is a fact about points rather than pixels.
+
+What was missing is anything stopping that from eroding once a sweep can report
+itself converged, because the words for these ideas sit close together. So the
+separation is now structural: the code that decides what a figure may be called
+cannot import the code that decides how a frame was drawn, and the reverse holds
+too. Letting a convergence check into the authority module fails the first
+assertion.
+
+The behaviour is pinned beside the structure. An incomplete source caps at
+preview however good the footprint, a refused coverage stays withheld whatever
+the source, and a display sample caps the figure as well, since deciding to draw
+fewer points is a presentation choice and not a property of the ground. Removing
+the incomplete-source cap fails the behavioural assertion rather than only the
+import one.
+
+### L75 · PARTIAL · PERFORMANCE
+
+Most of what this phase asks for was already on the developer overlay: resident
+and visible nodes, the queue, resident points, frame time, the longest task, the
+effective ratio, and the per-attribute upload bytes this cycle added. The
+metrics that are missing are missing because the thing they would measure does
+not run. There is no temporal phase to report while nothing accumulates, no
+convergence to show progress on, no reconstructed share while nothing is filled
+in, and no settle time until a sweep exists to settle.
+
+One of them can be answered now, and it is the one worth having early: what a
+continuity history would cost on this device, in this window, and whether it
+would fit. That is decision-relevant before anything is switched on rather than
+after, because on a high-ratio panel it is the figure that settles whether the
+feature is possible at all.
+
+The overlay takes it from the backing store in device pixels rather than the CSS
+size, which understates a doubled ratio fourfold, so `FrameStats` now carries the
+store's dimensions. Adding those took lines from a file that may only shrink, so
+five accessors collapsed to pay for them and the baseline was re-banked.
+
+`historyBudget` has left the unreachable register. The overlay reaches it, the
+lint said so before this entry was written, and the register describes what the
+application does not pass through. It is the second thing in this programme to
+graduate, after coverage sizing, and the first of the continuity modules.
+
+### L76 · FIXED · CORRECTNESS
+
+The Windows leg failed on a test written in this cycle. It read a source file
+through `new URL(..., import.meta.url).pathname`, which on that platform returns
+`/D:/a/...`; Node resolved the leading slash against the current drive and opened
+`D:\D:\a\...`, which does not exist.
+
+It is wrong in a way that hides. On a POSIX machine `.pathname` returns exactly
+what `fileURLToPath` returns, so the test passed here and on the blocking leg,
+and only the advisory Windows job could see it. The same mistake was in two more
+tests from this cycle, one of them already pushed, neither of which had run on
+that leg yet. All three now use `fileURLToPath`, which is what the rest of the
+suite already uses.
+
+Fixing three instances leaves the fourth to be written, so the class is guarded:
+no file in the unit bucket may derive a filesystem path from `URL.pathname`. The
+bucket is the set the Windows leg runs, the guard runs everywhere including
+machines that cannot reproduce the failure, and putting the bug back names the
+file that carries it. The guard is excluded from its own sweep, because the case
+that checks the matcher holds the bad pattern as a string.
+
