@@ -58,16 +58,19 @@ of, so a finding can be traced to where it was first written down.
 | L31 | SESSION | TEST | med | FIXED | new | A lazy chunk awaited after the restore was committed reported a restored session as a failed import. |
 | L32 | LIFECYCLE | READ | n/a | NOT REPRODUCIBLE | new | Ad hoc cancellation flags as a class. |
 | L33 | STANDARDS | TEST | high | FIXED | new | An unknown record format still asserted the extended reading for codes 13 to 22. |
+| L34 | LOADER | TEST | high | FIXED | new | A record shorter than its format requires was decoded, reading fields from the following record. |
+| L35 | LOADER | READ | n/a | NOT REPRODUCIBLE | new | A truncated LAS presented as complete. |
+| L36 | STANDARDS | READ | n/a | NOT REPRODUCIBLE | new | LAS 1.5 routed through 1.4 logic. |
 
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 6
-- NOT REPRODUCIBLE: 5
+- FIXED: 7
+- NOT REPRODUCIBLE: 7
 - OPEN: 16
 - PARTIAL: 2
 - SUPERSEDED: 1
-- total: 33
+- total: 36
 
 ## Detail
 
@@ -318,3 +321,40 @@ available.
 The export legend reads "Bridge Deck or reserved (17)" where it has no format
 to work from. Passing the format at that call site gives the exact name, and
 that wiring is open. Covered by `tests/lasClassificationSemantics.test.ts`.
+
+### L34 · FIXED · LOADER
+
+The header read the declared point record length straight out of the file and
+used it. Nothing compared it against the format the same header declared.
+
+A record shorter than its format requires is not a record missing a field at the
+end. Every field is addressed by a fixed offset from the record start, so a
+short record puts the classification, the return bits and the point source id
+inside the following record, and they decode into plausible values belonging to
+a different point. The file is now refused before a point is decoded, naming the
+format and both lengths. A longer record stays legal and carries Extra Bytes.
+
+The minimums are the ASPRS LAS Specification 1.4 R15 figures for all eleven
+formats, read from Tables 7 and 10 to 21 rather than derived by adding field
+sizes. Covered by `tests/lasVersionPdrfMatrix.test.ts`.
+
+### L35 · NOT REPRODUCIBLE · LOADER
+
+Section 26 asks that a truncated LAS not be silently clamped to the records
+present and presented as complete. The decoder does clamp, to avoid reading past
+the buffer and throwing an opaque range error partway through, but the result is
+not presented as complete: the cloud keeps the declared count from the header
+beside the count the decoder produced, and the Health Check compares them and
+reports a mismatch on a full decode as a warning, distinguishing it from a
+display-sample cap.
+
+What differs from section 26 is the policy, not the honesty. Refusing outright
+would stop a partially written file being inspected at all, which is a product
+decision rather than a correctness one.
+
+### L36 · NOT REPRODUCIBLE · STANDARDS
+
+Section 27 asks that LAS 1.5 not be routed through 1.4 logic and called
+conforming support. The header parser already recognises 1.5 and refuses it,
+with the R00 restrictions recorded beside the refusal. The honest boundary
+section 27 asks for is the one in place.

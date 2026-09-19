@@ -144,6 +144,46 @@ export function classificationNameUnknownFormat(code: number): string {
   return `Reserved (${code})`;
 }
 
+/**
+ * Minimum point record length for each format, in bytes, from the ASPRS LAS
+ * Specification 1.4 R15, Tables 7 and 10 to 21.
+ *
+ * A file may declare a LONGER record than its format requires: the surplus is
+ * the Extra Bytes region. A shorter one is malformed, and reading it is not a
+ * matter of missing a field at the end. The decoder addresses every field by a
+ * fixed offset from the record start, so a record shorter than the format
+ * demands puts those offsets inside the NEXT record, and the classification,
+ * returns and point source id of one point are then read from its neighbour.
+ */
+export const MINIMUM_RECORD_LENGTH: Readonly<Record<Pdrf, number>> = {
+  0: 20,
+  1: 28,
+  2: 26,
+  3: 34,
+  4: 57,
+  5: 63,
+  6: 30,
+  7: 36,
+  8: 38,
+  9: 59,
+  10: 67,
+};
+
+/** The minimum record length for a format, or null when the format is not one. */
+export function minimumRecordLength(pdrf: number): number | null {
+  return isValidPdrf(pdrf) ? MINIMUM_RECORD_LENGTH[pdrf] : null;
+}
+
+/**
+ * Whether a declared record length can hold the format it claims. A longer
+ * record is legal and carries Extra Bytes; a shorter one cannot be decoded
+ * without reading across the record boundary.
+ */
+export function recordLengthFitsFormat(pdrf: number, recordLength: number): boolean {
+  const min = minimumRecordLength(pdrf);
+  return min !== null && Number.isInteger(recordLength) && recordLength >= min;
+}
+
 /** Classification flags carried beside the class code. */
 export interface ClassificationFlags {
   synthetic: boolean;
