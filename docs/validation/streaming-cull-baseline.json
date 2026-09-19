@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "label": "streaming-cull-baseline",
+  "revision": "60ee59c3",
+  "environment": {
+    "runtime": "node",
+    "os": "darwin",
+    "architecture": "arm64",
+    "nodeVersion": "v22.23.2",
+    "browser": null,
+    "backend": "none"
+  },
+  "workload": {
+    "sceneId": "synthetic-octree-400m",
+    "nodeCount": 84,
+    "depths": 3,
+    "cameras": 4
+  },
+  "cases": [
+    {
+      "camera": "overview",
+      "note": "whole tile in view",
+      "residentNodes": 84,
+      "drawnNodes": 84,
+      "residentNotDrawn": 0,
+      "drawnFraction": 1
+    },
+    {
+      "camera": "half-tile",
+      "note": "panned so half the tile is off-screen",
+      "residentNodes": 84,
+      "drawnNodes": 68,
+      "residentNotDrawn": 16,
+      "drawnFraction": 0.8095
+    },
+    {
+      "camera": "corner",
+      "note": "zoomed into one corner",
+      "residentNodes": 84,
+      "drawnNodes": 24,
+      "residentNotDrawn": 60,
+      "drawnFraction": 0.2857
+    },
+    {
+      "camera": "narrow-far",
+      "note": "narrow view with a short far plane",
+      "residentNodes": 84,
+      "drawnNodes": 12,
+      "residentNotDrawn": 72,
+      "drawnFraction": 0.1429
+    }
+  ],
+  "gpuFrameTimeMs": {
+    "status": "unavailable",
+    "reason": "no renderer or GPU in this runtime; frame time is captured on a real device and must not be recorded as zero"
+  },
+  "submittedPointCount": {
+    "status": "unavailable",
+    "reason": "point counts per node depend on a decoded source; this baseline measures node geometry only"
+  }
+}

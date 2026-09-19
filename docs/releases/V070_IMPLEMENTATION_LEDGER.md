@@ -70,7 +70,7 @@ of, so a finding can be traced to where it was first written down.
 | L43 | STATE | TEST | high | FIXED | new | The streaming tidy-up predicted the attach with a flag, so a throw from the heavy bridge still closed an unrelated scan. |
 | L44 | LIFECYCLE | TEST | med | FIXED | new | NavBar disposed its teardown group before clearing its timer, and the group rethrows. |
 | L45 | ARCHITECTURE | TEST | high | FIXED | new | The standards lint skipped any directory whose path contained 'dist' and all of `docs/release`. |
-| L46 | PERFORMANCE | READ | med | OPEN | new | Streaming node meshes disable frustum culling, so an off-screen resident node is still submitted. |
+| L46 | PERFORMANCE | TEST | med | PARTIAL | new | Streaming node meshes disable frustum culling. The decision and its baseline exist; the renderer is not yet wired to them. |
 | L47 | UI | READ | med | OPEN | new | Density point sizing keys a 2D grid on (x, y), so it is not orientation invariant. |
 
 ## Totals
@@ -78,8 +78,8 @@ of, so a finding can be traced to where it was first written down.
 - DEFERRED: 4
 - FIXED: 18
 - NOT REPRODUCIBLE: 9
-- OPEN: 12
-- PARTIAL: 4
+- OPEN: 11
+- PARTIAL: 5
 - SUPERSEDED: 1
 - total: 47
 
@@ -684,3 +684,29 @@ the opposite of what the mode is for.
 Sizing from projected sample spacing rather than plan-view density would be
 orientation independent. It is a display attribute either way and touches no
 measurement.
+
+### L46 · PARTIAL · PERFORMANCE
+
+`Viewer.buildPointMesh` sets `frustumCulled = false`, and `StreamingRenderer`
+builds every resident COPC node through it, so a node held warm in the cache is
+submitted for drawing whether or not the camera contains it. Residency and
+visibility are one decision where they should be two.
+
+`nodeFrustumCulling.ts` makes the decision from the node's own bounds. It is
+pure arithmetic with no three.js, so the part that can be got wrong silently is
+testable without a renderer: eleven tests cover a node inside, outside on each
+of six sides, straddling a plane, enclosing the camera, touching a plane
+exactly, and a survey-coordinate node that is culled by its raw bounds and drawn
+by its render-frame ones. The arithmetic errs toward drawing, because a false
+positive costs a draw call and a false negative hides what the user is looking
+at.
+
+`docs/validation/streaming-cull-baseline.json` measures what the current
+behaviour costs over four stored cameras: an overview draws all 84 resident
+nodes, a half-panned view 68, a corner view 24, a narrow view 12. So on the
+tighter views most resident nodes are submitted for nothing.
+
+The renderer is not wired to it. That step changes what is drawn, and the
+evidence for it is GPU frame time on a real device, which this runtime cannot
+take. The baseline says so rather than recording a zero. The module is staged
+with that as its graduation condition.
