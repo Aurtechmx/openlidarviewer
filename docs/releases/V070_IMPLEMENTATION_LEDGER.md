@@ -72,16 +72,18 @@ of, so a finding can be traced to where it was first written down.
 | L45 | ARCHITECTURE | TEST | high | FIXED | new | The standards lint skipped any directory whose path contained 'dist' and all of `docs/release`. |
 | L46 | PERFORMANCE | TEST | med | PARTIAL | new | Streaming node meshes disable frustum culling. The decision and its baseline exist; the renderer is not yet wired to them. |
 | L47 | UI | READ | med | OPEN | new | Density point sizing keys a 2D grid on (x, y), so it is not orientation invariant. |
+| L48 | PERFORMANCE | TEST | med | FIXED | new | Render-memory telemetry counted position and colour only, so a classified cloud was reported at three quarters of what it used. |
+| L49 | PERFORMANCE | READ | med | OPEN | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 18
+- FIXED: 19
 - NOT REPRODUCIBLE: 9
-- OPEN: 11
+- OPEN: 12
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 47
+- total: 49
 
 ## Detail
 
@@ -718,3 +720,33 @@ The renderer is not wired to it. That step changes what is drawn, and the
 evidence for it is GPU frame time on a real device, which this runtime cannot
 take. The baseline says so rather than recording a zero. The module is staged
 with that as its graduation condition.
+
+### L48 · FIXED · PERFORMANCE
+
+The GPU figure was one constant, `BYTES_PER_STREAMING_POINT = 24`, documented
+as an instanced position and an instanced colour. The mesh builder uploads more
+than that: a classified cloud binds `aClass` and one carrying intensity binds
+`aIntensity`, both Float32 per point. A cloud with either was reported at 28 of
+its bytes as 24, and a cloud with both at 32 as 24, which is three quarters.
+
+A fixed number cannot follow a layout that varies per cloud, so
+`pointAttributeLayout.ts` describes the layout and the figure is derived from
+it. The constant is still there for the budget arithmetic, which reasons about
+a point's minimum, but it now reads from the layout rather than restating it,
+and `estimateGpuBytes` takes the channels a cloud actually uploads.
+
+The breakdown sums to the total by construction, so a readout showing where the
+bytes went cannot disagree with the figure beside it. Covered by
+`tests/renderMemoryAccounting.test.ts`.
+
+### L49 · OPEN · PERFORMANCE
+
+The same reading shows what the uploads cost against what the source carries. A
+colour is three bytes in the file and twelve in the buffer, a classification one
+byte and four, an intensity two bytes and four. That is fourteen bytes a point
+of expansion, against a 32-byte point.
+
+Packing them back to their source widths is a real saving and a real risk:
+classification codes have to survive as exact integers, colour has to keep its
+transfer function, and both backends have to agree. Measuring it first is why
+the accounting above came first.
