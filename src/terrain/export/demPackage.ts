@@ -19,6 +19,7 @@
  * a prominent PRELIMINARY caveat whenever the data is not full + ready.
  */
 
+import { buildEvidenceContractView } from '../../validation/evidenceBoundaryInspector';
 import { buildScientificArtifactPassport } from '../../science/scientificArtifactPassport';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import type { AnalysedBasis } from './analysedBasis';
@@ -239,6 +240,41 @@ function coverageLabel(mode: string): string {
  * version + metric version. Leads with a PRELIMINARY caveat when the data is
  * not full + ready, so a partial / preview export can never read as final.
  */
+/**
+ * The evidence decision for this artifact, field by field.
+ *
+ * Answers the questions a reader has about a level: which claim it belongs to,
+ * what the claim carries before any study is considered, what it resolved to
+ * here, and what the resolver said about applicability. Where a scoped study
+ * matched, each envelope field it was checked against is listed with its
+ * verdict.
+ *
+ * This renders `buildEvidenceContractView`, which resolves through the one
+ * evidence resolver. It holds no applicability rules of its own.
+ */
+function evidenceContractLines(result: AnalyseContoursResult): string[] {
+  const claims = dtmArtifactClaims(result);
+  if (claims.length === 0) return [];
+  const view = buildEvidenceContractView(claims[0]);
+  const lines = [
+    `Evidence contract`,
+    `  Claim          ${view.claimId}`,
+    `  Baseline       ${view.baselineEvidence ?? 'none recorded'}`,
+    `  Effective      ${view.effectiveEvidence ?? 'none recorded'}`,
+    `  Resolution     ${view.resolutionState}`,
+    `  Matched study  ${view.matchedStudy ?? 'none applies'}`,
+    `  Verdict        ${view.applicabilityVerdict}`,
+  ];
+  if (view.envelopeChecks.length > 0) {
+    lines.push(`  Envelope`);
+    for (const c of view.envelopeChecks) {
+      lines.push(`    ${c.field.padEnd(22)} ${c.status}`);
+    }
+  }
+  lines.push(``);
+  return lines;
+}
+
 export function buildDemReadme(opts: DemReadmeOptions): string {
   const { result, basename, isGeographic } = opts;
   const dtm = result.dtm;
@@ -414,6 +450,11 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `Provenance`,
     ...provenanceLines(p).map((l) => `  ${l}`),
     ``,
+    // A read-only explanation of the evidence decision the resolver made:
+    // which claim, what it starts at, what it resolved to, and why. The view is
+    // built by the resolver itself rather than by a second reading of the same
+    // rules, so this section cannot disagree with the decision it describes.
+    ...evidenceContractLines(result),
     `The ASCII grids and GeoTIFFs describe the same surfaces; use whichever your`,
     `software prefers. Interpolated cells are real estimates between measured`,
     `ground; treat them with the coverage figure above in mind.`,
