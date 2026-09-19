@@ -52,7 +52,10 @@ describe('after a failure', () => {
 
   it('always leaves something to draw with', () => {
     for (const tier of TIER_ORDER) {
-      expect(sourceRenderingAvailable(afterFailure(tier, 'pass-threw'))).toBe(true);
+      // The outcome is computed and deliberately not consulted: no failure can
+      // answer this differently, which is why it takes nothing.
+      afterFailure(tier, 'pass-threw');
+      expect(sourceRenderingAvailable()).toBe(true);
     }
   });
 });

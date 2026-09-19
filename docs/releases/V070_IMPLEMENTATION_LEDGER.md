@@ -1832,3 +1832,24 @@ What remains untested is that same sizing rendering under WebGL2. The formats
 are there and the fold is backend-neutral in principle, which is the kind of
 claim this programme keeps refusing to make, so it stays open.
 
+
+### L93 · FIXED · ARCHITECTURE
+
+Two signatures took an argument and threw it away. `activePhases` accepted a
+refinement phase, indexed `PHASES_DRAWN_WHILE` with it, then discarded the
+result; `sourceRenderingAvailable` accepted an outcome it never read. Both now
+take only what they use. `PHASES_DRAWN_WHILE` stays as the record of which
+phases draw under which refinement, with a comment saying nothing looks it up.
+
+Both clamp sites now call `clamp01` from `src/numeric.ts` under a local finite
+guard. Calling it bare would have been wrong: the shared clamp propagates NaN,
+and these two return zero for a degenerate input on purpose, so a sample with no
+usable geometry contributes nothing instead of counting as full support. Passing
+the bare clamp through fails the support test, which is how the difference was
+confirmed rather than assumed.
+
+Three findings from the same audit were left alone and are recorded here as
+open rather than fixed. The fourteen-module continuity island needs integration
+and a device to graduate, not an edit. Six thresholds are unmeasured because the
+field data that would set them does not exist yet. Coverage sizing has no
+WebGL2 render-parity evidence, which is the same gap L92 closes with.

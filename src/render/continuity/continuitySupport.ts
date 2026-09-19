@@ -22,6 +22,7 @@
  * measurement, has no units, and nothing derived from it may reach picking,
  * measurement, terrain, export or claim evidence.
  */
+import { clamp01 } from '../../numeric';
 import type { PhaseCount } from './temporalPhase';
 
 /** What is known about a pixel's neighbourhood. */
@@ -49,11 +50,14 @@ export interface SupportInput {
  */
 export const SAMPLES_FOR_FULL_SUPPORT = 4;
 
-const clamp01 = (v: number): number => {
-  if (!Number.isFinite(v)) return 0;
-  if (v < 0) return 0;
-  return v > 1 ? 1 : v;
-};
+/**
+ * The shared clamp with this module's policy in front of it.
+ *
+ * `clamp01` propagates NaN, which is right for a quantity and wrong for this
+ * one: a part nobody could measure has to score nothing rather than poison the
+ * minimum, because not knowing must never arrive as permission to invent.
+ */
+const unitOrNone = (v: number): number => (Number.isFinite(v) ? clamp01(v) : 0);
 
 /**
  * A pixel's continuity support, in `[0, 1]`.
@@ -63,14 +67,14 @@ const clamp01 = (v: number): number => {
  */
 export function continuitySupport(input: SupportInput): number {
   const samples = Number.isFinite(input.directSamples) ? Math.max(0, input.directSamples) : 0;
-  const sampleTerm = clamp01(samples / SAMPLES_FOR_FULL_SUPPORT);
+  const sampleTerm = unitOrNone(samples / SAMPLES_FOR_FULL_SUPPORT);
 
   const contributed = Number.isFinite(input.phasesContributed)
     ? Math.max(0, input.phasesContributed)
     : 0;
-  const sweepTerm = clamp01(contributed / input.phaseCount);
+  const sweepTerm = unitOrNone(contributed / input.phaseCount);
 
-  const coherenceTerm = clamp01(input.neighbourCoherence);
+  const coherenceTerm = unitOrNone(input.neighbourCoherence);
 
   return Math.min(sampleTerm, sweepTerm, coherenceTerm);
 }

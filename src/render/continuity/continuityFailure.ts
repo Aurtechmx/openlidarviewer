@@ -91,11 +91,13 @@ export function runContinuityPass<T>(
 /**
  * Whether the viewer still has something to draw with.
  *
- * Always true. The bottom of the ladder is the renderer as it shipped, so there
- * is no state in which continuity has failed badly enough to leave nothing.
- * Written as a function because a reader deserves to find the answer where they
- * look for it rather than infer it from an absence.
+ * Always true, and it takes nothing, because there is no outcome it could
+ * inspect that would change the answer: the bottom of the ladder is the renderer
+ * as it shipped. It reads an argument it ignored before, which invited a caller
+ * to believe some failure might answer differently.
+ *
+ * Kept as a function rather than dropped so the guarantee is findable by name.
  */
-export function sourceRenderingAvailable(_outcome: FailureOutcome): true {
+export function sourceRenderingAvailable(): true {
   return true;
 }
