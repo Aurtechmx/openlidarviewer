@@ -28,11 +28,52 @@ streaming source declares none here, and the four codes whose meaning differs
 between the legacy and extended tables report both readings rather than one
 guess.
 
-## Inherited from v0.6.9, not yet reproduced
+## What the ledger settled, and what it did not
 
-The v0.6.9 limitations are not carried into this document automatically. Each is
-reproduced or cleared through the implementation ledger, and only what survives
-that check appears here.
+Every v0.6.9 limitation was reproduced or cleared rather than carried forward.
+The implementation ledger records each one with how it was established and the
+test that proves its status. Of the inherited set, the boundary share was fixed,
+the stockpile split was half closed, and two turned out not to reproduce: the
+oriented extent is presented as a principal-axis estimate with its failure mode
+named, and truncation is reported rather than hidden.
+
+## The boundary share now measures the survey edge
+
+It seeded a distance field at every cell that was not measured, so on a grid
+thinned by a display stride nearly every measured cell sat beside a seed. Over
+one geometry it read 33 per cent at full decode and 100 per cent strided. It
+seeds only from cells with no reachable data now, and distances travel through
+the surveyed region, so neither depends on how densely the surface was sampled.
+
+## One lasso still answers twice
+
+The toast reports an area-weighted grid volume. The stored record holds the
+point-sample figure, and they do not agree. The record now names which estimator
+produced it, and a record written before that field carries none rather than
+being read as the newer method, but the two numbers are still two numbers.
+Moving the stored figure changes an exported value and is not done here.
+
+## Two densities, each stating its basis
+
+Analyse reads the resident gather and the Scan Report divides the declared count
+by the sampled footprint. They differ by roughly the stride factor. Neither
+hides its basis: on a strided load the report says in the value itself that it
+is the declared count over the display-sample footprint. What is missing is one
+record rather than two computations.
+
+## Registration is not exposed
+
+Six modules implement alignment. No user path reaches them.
+
+A half-wired alignment tool is worse than none, and the workflow it would need
+is not built.
+
+## The browser matrix is advisory
+
+Chromium blocks a release; Firefox, WebKit and Windows do not. Touch gestures
+run end to end on Chromium only, because the harness cannot grant the permission
+the others read their result through. No matrix is recorded for this development
+cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
