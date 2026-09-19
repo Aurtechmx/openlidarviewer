@@ -9,8 +9,8 @@ authors:
     affiliation: "Aurtech"
     orcid: "https://orcid.org/0009-0007-3147-323X"
 
-version: "0.6.9"
-date-released: "2026-09-17"
+version: "0.7.0-alpha.1"
+date-released: "2026-09-18"
 license: AGPL-3.0-only
 repository-code: "https://github.com/Aurtechmx/openlidarviewer"
 url: "https://openlidarviewer.org/"

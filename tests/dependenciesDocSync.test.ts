@@ -72,13 +72,13 @@ describe('DEPENDENCIES.md stays in sync with its sources', () => {
   });
 
   it('the release line names the current package version', () => {
-    const m = doc.match(/^\|\s*Release line\s*\|\s*v([\d.]+)\s*\|/m);
+    const m = doc.match(/^\|\s*Release line\s*\|\s*v([\d.]+(?:-[0-9A-Za-z.]+)?)\s*\|/m);
     expect(m, 'no "Release line" row found').not.toBeNull();
     expect(m![1]).toBe(pkg.version);
   });
 
   it('the SBOM root reference names the current package version', () => {
-    const m = doc.match(/root `openlidarviewer@([\d.]+)`/);
+    const m = doc.match(/root `openlidarviewer@([\d.]+(?:-[0-9A-Za-z.]+)?)`/);
     expect(m, 'no SBOM root reference found').not.toBeNull();
     expect(m![1]).toBe(pkg.version);
   });
