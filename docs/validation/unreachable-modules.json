@@ -140,6 +140,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/streaming/continuityPressure.ts",
+      "status": "staged",
+      "why": "Maps the renderer's existing frame-time pressure onto a continuity tier. No tier is selected and every capability is off, so nothing asks.",
+      "graduation": "The render loop holds a current tier and asks this each decision, feeding the same smoothed frame time the scheduler already reacts to rather than sampling its own.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/continuityTier.ts",
       "status": "staged",
       "why": "Chooses how far the field may go on a given backend and what it falls back to. Every capability is off, so no tier is ever selected.",

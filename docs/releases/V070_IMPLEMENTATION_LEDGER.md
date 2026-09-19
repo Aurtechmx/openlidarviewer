@@ -1180,3 +1180,37 @@ forbids brand lists, and a model string says nothing dependable about a driver.
 The bottom rung is the renderer as it ships, because none of this is worth
 failing a viewer over.
 
+### L67 · PARTIAL · PERFORMANCE
+
+The renderer already adapts to frame time. The streaming scheduler concedes
+budget after two seconds slower than 45 frames a second and takes it back after
+five seconds faster than 55, and that band was tuned.
+
+So this phase adds a mapping rather than a second controller. Two loops reading
+one frame time through their own numbers would both give ground for a single
+stutter, correcting twice for one problem, then recover together and oscillate
+in step, which is the tier hunting the programme asks to avoid arriving through
+the fix for it.
+
+The band now has one definition. It moved to `streamingBudget.ts`, which both
+consumers already import, and the scheduler reads it from there instead of
+holding its own copies. The scheduler's forty-seven assertions pass unedited,
+so the values did not move.
+
+Conceding quickly and recovering slowly is the whole mechanism, and it is
+covered rather than described: collapsing the two holds into one fails two
+assertions, including a device that alternates a qualifying slow spell with a
+nearly qualifying fast one, which walks down to source rendering instead of
+sitting on a rung it cannot hold.
+
+Capability and performance stay separate questions. The ceiling is what a
+backend can carry and does not move with frame rate, so a tier above it is
+clamped whatever the frames are doing, and a device is never promoted into
+something its backend cannot run by going fast. Ground is given one rung at a
+time, so a single bad second does not cost every capability.
+
+A reading of the scheduler's pressure state looked at first like a swapped pair
+of timestamps. It is not: the fields are named for frames per second while the
+thresholds are frame times, so the slow branch measuring `_fpsLowSinceTs`
+against the back-off hold is correct.
+

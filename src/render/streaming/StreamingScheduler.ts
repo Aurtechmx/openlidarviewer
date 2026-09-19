@@ -29,7 +29,14 @@ import {
   nodeScore,
   depthCapForVelocity,
 } from './streamingScore';
-import { selectWithinBudget, firstAdmissionMaxPoints } from './streamingBudget';
+import {
+  selectWithinBudget,
+  firstAdmissionMaxPoints,
+  FPS_PRESSURE_HIGH_MS,
+  FPS_PRESSURE_LOW_MS,
+  FPS_PRESSURE_HIGH_HOLD_MS,
+  FPS_PRESSURE_LOW_HOLD_MS,
+} from './streamingBudget';
 import type { StreamingBudgets, ScoredCandidate } from './streamingBudget';
 import { CompressedChunkCache } from './StreamingCache';
 import {
@@ -208,10 +215,6 @@ const PRESSURE_DEPTH_REDUCTION = 1;
  * back-off — a stutter immediately backs off; smooth frames take longer
  * to fully restore — so the system doesn't oscillate around the threshold.
  */
-const FPS_PRESSURE_HIGH_MS = 22.2;       // ≈ 45 fps
-const FPS_PRESSURE_LOW_MS = 18.2;        // ≈ 55 fps
-const FPS_PRESSURE_HIGH_HOLD_MS = 2_000; // 2 s of < 45 fps before back-off
-const FPS_PRESSURE_LOW_HOLD_MS = 5_000;  // 5 s of > 55 fps before recovery
 const FPS_PRESSURE_STEP_DOWN = 0.15;     // -15 % budget per back-off step
 const FPS_PRESSURE_STEP_UP = 0.075;      // +7.5 % budget per recovery step
 const FPS_BUDGET_FLOOR = 0.5;            // never below half-budget
