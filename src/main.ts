@@ -3618,7 +3618,7 @@ function streamingDebugSample(): StreamingDebugStats | null {
     sourcePoints: cloud.sourcePointCount,
     cacheBytes: cs.byteSize,
     decodedBytes: estimateDecodedBytes(cloud.residentPointCount),
-    gpuBytes: estimateGpuBytes(cloud.residentPointCount),
+    gpuBytes: estimateGpuBytes(cloud.residentPointCount, viewer.streamingUploadedAttributes),
     schedulerMs: stats.lastTickMs,
     cacheHits: cs.hits,
     cacheMisses: cs.misses,
@@ -4555,7 +4555,7 @@ streamingUi.onTick(({ cloud, scheduler, counts, diagnostics: diag }) => {
       cloud.residentPointCount,
       scheduler.pointBudget,
     );
-    streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount));
+    streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount, viewer.streamingUploadedAttributes));
     // Coarse stable: the first poll at which the scheduler has settled
     // AND the resident set has meaningful coverage — i.e. spans at
     // least one refinement level beyond the root. On a slow link the
