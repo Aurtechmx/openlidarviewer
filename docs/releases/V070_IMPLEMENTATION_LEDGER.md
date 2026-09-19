@@ -54,16 +54,17 @@ of, so a finding can be traced to where it was first written down.
 | L27 | EVIDENCE | TEST | n/a | NOT REPRODUCIBLE | B27 | Scoping the evidence figure check to untagged versions. |
 | L28 | SEMANTICS | TEST | med | PARTIAL | B28 | Classification flags survived a load but not a derivation. |
 | L29 | STATE | TEST | high | FIXED | new | A failed candidate open closed a streaming scan that belonged to the project, not to the candidate. |
+| L30 | ARCHITECTURE | TEST | med | FIXED | new | Three version parsers could not read a prerelease, so the release machinery had never been exercised against one. |
 
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 3
+- FIXED: 4
 - NOT REPRODUCIBLE: 4
 - OPEN: 16
 - PARTIAL: 2
 - SUPERSEDED: 1
-- total: 29
+- total: 30
 
 ## Detail
 
@@ -247,3 +248,17 @@ The tidy-up is now scoped to the open that was attaching a streaming scan. The
 static attach already refused to clear the scene for a candidate that had not
 parsed, and said so in its own comment; the error path did not follow the same
 rule. Covered by `tests/openScanAttachSequence.test.ts`.
+
+### L30 · FIXED · ARCHITECTURE
+
+Moving the development identity to a prerelease exposed three version parsers
+that could not read one. Two in `tests/dependenciesDocSync.test.ts` matched with
+a pattern that stops at the hyphen, the same defect `lint-release-sync` records
+having fixed for itself and never propagated. The third, in
+`verify-archive-portability.mjs`, allowed a prerelease but let the identifier
+run on into the file extension, so `v0.7.0-alpha.1.json` read as a version that
+disagreed with the archive.
+
+None of them could fail while the version was plain, which is why a release
+line that had cut alphas before still carried them. Covered by the archive
+portability check and the dependency document sync tests.

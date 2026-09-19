@@ -807,8 +807,14 @@ check('version-coherence', 'package.json, the citation file, the changelog and t
   const manifestDoc = c.read('docs/project/MANIFEST.md');
   if (manifestDoc == null) f.push({ level: 'error', message: 'docs/project/MANIFEST.md is not in the archive.' });
   else {
+    // A prerelease identifier is dot-separated alphanumerics, and so is a file
+    // extension, so `v0.7.0-alpha.1.json` captures the extension as part of the
+    // version. The group never engaged while the version was plain, which is
+    // why this only appears against a prerelease cut.
+    const FILE_SUFFIX = /\.(?:md|json|zip|txt|ya?ml|html|js|mjs|cff)$/;
     for (const m of manifestDoc.matchAll(/v(\d+\.\d+\.\d+(?:-[\w.]+)?)/g)) {
-      if (m[1] !== v) f.push({ level: 'error', message: `docs/project/MANIFEST.md names v${m[1]}, but this archive is v${v}.` });
+      const named = m[1].replace(FILE_SUFFIX, '');
+      if (named !== v) f.push({ level: 'error', message: `docs/project/MANIFEST.md names v${named}, but this archive is v${v}.` });
     }
   }
   // A CITATION date must match the changelog entry for the same version.
