@@ -89,3 +89,26 @@ describe('scaling to a resident cloud', () => {
     expect(gpuAttributeBytes(1.9, NONE)).toBe(24);
   });
 });
+
+describe('the readout asks for the channels it has', () => {
+  // Building the capability was not the fix. Both callers of estimateGpuBytes
+  // passed nothing, so the default kept the position-and-colour floor and the
+  // readout still understated a classified cloud by a quarter. These pin the
+  // signature that makes the difference visible at the call site.
+
+  it('prices a classified cloud above the floor when told its channels', async () => {
+    const { estimateGpuBytes } = await import('../src/render/streaming/streamingBudget');
+    const floor = estimateGpuBytes(1_000_000);
+    const real = estimateGpuBytes(1_000_000, { classification: true, intensity: true });
+    expect(floor).toBe(24_000_000);
+    expect(real).toBe(32_000_000);
+    expect(real).toBeGreaterThan(floor);
+  });
+
+  it('keeps the floor for a caller that cannot name the channels', async () => {
+    const { estimateGpuBytes } = await import('../src/render/streaming/streamingBudget');
+    // Honest rather than optimistic: a caller that does not know what a cloud
+    // carries reports the minimum it certainly has, not a guess at the rest.
+    expect(estimateGpuBytes(1000)).toBe(estimateGpuBytes(1000, NONE));
+  });
+});

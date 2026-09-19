@@ -736,8 +736,15 @@ a point's minimum, but it now reads from the layout rather than restating it,
 and `estimateGpuBytes` takes the channels a cloud actually uploads.
 
 The breakdown sums to the total by construction, so a readout showing where the
-bytes went cannot disagree with the figure beside it. Covered by
-`tests/renderMemoryAccounting.test.ts`.
+bytes went cannot disagree with the figure beside it.
+
+Adding the capability was not the fix, and calling it one was premature. Both
+callers still passed nothing and so still took the floor, which left the readout
+exactly as wrong as before. `StreamingRenderer` now reports which channels its
+resident meshes uploaded, read from the decoded chunks rather than from a flag,
+and the two callers ask for it. A caller that cannot name the channels still
+gets the floor, which is the honest answer for one that does not know. Covered
+by `tests/renderMemoryAccounting.test.ts`.
 
 ### L49 · OPEN · PERFORMANCE
 

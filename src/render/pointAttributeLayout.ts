@@ -73,6 +73,9 @@ export interface UploadedAttributes {
   readonly intensity: boolean;
 }
 
+/** A cloud carrying neither optional channel. */
+export const NO_OPTIONAL_CHANNELS: UploadedAttributes = { classification: false, intensity: false };
+
 /** The attributes a cloud uploads, in upload order. */
 export function pointAttributeLayout(present: UploadedAttributes): PointAttributeSpec[] {
   const layout = [POSITION_ATTRIBUTE, COLOR_ATTRIBUTE];
