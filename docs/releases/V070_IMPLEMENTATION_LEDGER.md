@@ -30,9 +30,9 @@ of, so a finding can be traced to where it was first written down.
 | L03 | EXPORT | READ | med | OPEN | B03 | User data written as constant zero. |
 | L04 | STANDARDS | TEST | high | FIXED | B04 | ASPRS class names defined independently in eight modules, and they disagreed. |
 | L05 | SCIENTIFIC | DOC | high | OPEN | B05 | Canonical stockpile record not integrated: the toast and the exported record can disagree for one lasso. |
-| L06 | SCIENTIFIC | DOC | high | OPEN | B06 | Analyse ground density and the Scan Report disagree by roughly the stride factor. |
+| L06 | SCIENTIFIC | READ | med | PARTIAL | B06 | Two density figures on different bases. Each states its basis; neither is the other's source. |
 | L07 | SCIENTIFIC | TEST | high | FIXED | B07 | The boundary share counted a sampling gap as a survey edge, so it rose with the thinning rather than with the geometry. |
-| L08 | SCIENTIFIC | DOC | med | OPEN | B08 | PCA oriented bounding box overstates length on an elongated footprint. |
+| L08 | SCIENTIFIC | READ | n/a | NOT REPRODUCIBLE | B08 | PCA extent presented as minimum physical dimensions. |
 | L09 | LIFECYCLE | DOC | med | OPEN | B09 | `NavBar.dispose` has no caller. |
 | L10 | LIFECYCLE | DOC | med | OPEN | B10 | `ViewerRenderCore` has no dispose seam. |
 | L11 | UI | DOC | med | OPEN | B11 | Between 768 and 1000 px two open rails leave no top-centre gap wider than the project card. |
@@ -67,9 +67,9 @@ of, so a finding can be traced to where it was first written down.
 
 - DEFERRED: 3
 - FIXED: 9
-- NOT REPRODUCIBLE: 7
-- OPEN: 15
-- PARTIAL: 2
+- NOT REPRODUCIBLE: 8
+- OPEN: 14
+- PARTIAL: 3
 - SUPERSEDED: 1
 - total: 37
 
@@ -411,3 +411,33 @@ Classified under section 80 as a bug fix rather than a scientific change: the
 metric now measures what its label says. No registered method computes it, and
 no frozen validation record pins it, so no evidence applicability moves.
 Covered by `tests/terrainBoundaryStrideInvariant.test.ts`.
+
+### L08 · NOT REPRODUCIBLE · SCIENTIFIC
+
+Section 34 asks that a principal-axis extent not be presented as minimum
+physical object dimensions. The panel presents it as what it is. The oriented
+row reads "tight box from the object's own principal axes", and the headline
+figure is labelled unvalidated with a hint that names the failure mode: the box
+is fitted by principal axes, which drift toward the diagonal on flat or
+symmetric point sets, so it is an unvalidated estimate rather than a measured
+extent.
+
+The overstatement on an elongated footprint is real and inherited, but it is
+disclosed rather than presented as a measurement. A convex hull into a
+minimum-area rectangle would be a new capability, not a correction to a false
+claim, and section 67 would want it checked against an independent
+implementation before it replaced anything.
+
+### L06 · PARTIAL · SCIENTIFIC
+
+Section 32 asks for one density result carrying an explicit basis. Two figures
+are computed independently: Analyse reads the resident gather, and the Scan
+Report divides the declared count by the sampled footprint. They differ by
+roughly the stride factor.
+
+What section 105 forbids is a hidden or inconsistent basis, and the basis is
+neither. On a strided load the report's row says in the value itself that it is
+the declared count over the display-sample footprint. The gap is that two
+surfaces compute the same quantity separately rather than presenting one record,
+which is architecture rather than a truth defect, and it is what a canonical
+density result would close.
