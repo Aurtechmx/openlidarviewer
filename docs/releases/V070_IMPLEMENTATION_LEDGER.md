@@ -64,7 +64,7 @@ of, so a finding can be traced to where it was first written down.
 | L37 | SEMANTICS | TEST | high | FIXED | new | GPS time was exported under a time interpretation the source never declared. |
 | L38 | STANDARDS | TEST | med | FIXED | new | Nothing guarded the standards statements this release corrected. |
 | L39 | STANDARDS | READ | n/a | FIXED | new | No register recorded which standards the application reads or when its text was last checked. |
-| L40 | ARCHITECTURE | READ | n/a | DEFERRED | new | AnalysePanel mixes execution and presentation. Real, and larger than this cycle. |
+| L40 | ARCHITECTURE | READ | n/a | NOT REPRODUCIBLE | new | AnalysePanel mixing analysis execution with presentation. It orchestrates exports, and those already snapshot their inputs. |
 | L41 | ARCHITECTURE | READ | n/a | FIXED | new | Nineteen staged modules reviewed for graduation, staging or removal. |
 | L42 | UI | READ | n/a | DEFERRED | new | Browser matrix, mobile and responsive verification need real engines. |
 | L43 | STATE | TEST | high | FIXED | new | The streaming tidy-up predicted the attach with a flag, so a throw from the heavy bridge still closed an unrelated scan. |
@@ -72,9 +72,9 @@ of, so a finding can be traced to where it was first written down.
 
 ## Totals
 
-- DEFERRED: 5
+- DEFERRED: 4
 - FIXED: 17
-- NOT REPRODUCIBLE: 8
+- NOT REPRODUCIBLE: 9
 - OPEN: 10
 - PARTIAL: 4
 - SUPERSEDED: 1
@@ -567,18 +567,30 @@ through `resolveEvidence`, the same resolver the provenance block is stamped
 from. A test asserts the two agree, so the section cannot contradict the
 decision it describes. Covered by `tests/demPackageReadme.test.ts`.
 
-### L40 · DEFERRED · ARCHITECTURE
+### L40 · NOT REPRODUCIBLE · ARCHITECTURE
 
 Section 58 asks that AnalysePanel separate running an analysis from presenting
-it. The premise holds: the module carries no coordinator and no presenter, and
-it is 2,911 lines with a fan-out of 23.
+it, and names operation execution among the things it should not own. The panel
+runs no analyses. Every await in it loads an export writer: the DEM package, the
+contour deliverable, the terrain report, the map sheet. What it orchestrates is
+export, not computation, so the coordinator that section describes has no
+operation to coordinate.
 
-It is deferred rather than attempted because section 97 sets the bar an
-extraction has to clear. A split that moves lines while the new module imports
-the same dependencies, owns the same state and cannot be tested on its own is
-not an improvement, and doing it properly is a piece of work in its own right.
-The sections that would have justified starting it here, the dataset
-transaction and the result commit seam, did not reproduce as defects.
+Section 92's snapshot is already there. Each export captures the result, the map
+context, the basename and the evidence permit before the writer chunk loads, and
+a comment on the first of them says why: so the raster and its sidecars describe
+the scan the result came from. The bytes are built from one coherent capture.
+
+What is missing is the revalidation section 92 asks for after the expensive work.
+Its consequence is narrow: because every input was captured together, a file
+written after the active dataset changed is internally consistent and describes
+the dataset it was started for. It arrives unexpectedly rather than wrongly, so
+section 104's mixed revisions do not reproduce here.
+
+The module is 2,911 lines with a fan-out of 23 and is worth splitting on its own
+merits. It is not split here, because section 97 rejects an extraction that moves
+lines while the new module imports the same dependencies and owns the same
+state, and no reproduced defect points at a seam.
 
 ### L41 · FIXED · ARCHITECTURE
 
