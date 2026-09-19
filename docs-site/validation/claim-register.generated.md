@@ -5,7 +5,7 @@
   `npm run docs:render`. tests/renderClaimRegister.test.ts fails on drift.
 -->
 
-_Register last reviewed at software version **0.6.9**, dated 2026-09-16. 34 claims._
+_Register last reviewed at software version **0.7.0-alpha.1**, dated 2026-09-16. 34 claims._
 
 | Claim | Product | Method@version | Current evidence | Required | External status | Approved claim | Prohibited claims |
 | --- | --- | --- | --- | --- | --- | --- | --- |

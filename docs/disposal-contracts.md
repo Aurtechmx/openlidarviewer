@@ -47,6 +47,9 @@ long-session spec — see the checklist at the bottom.
 | `window` event listeners (keydown, resize) | main.ts | Per session | Page reload — no per-scan cleanup needed |
 | Streaming status poll (`setInterval`) | `streamingUiCoordinator` | Per streaming scan | `endSession()` on close (also aborts an in-flight full-cloud grade) |
 | Scheduled task timers (recorder badge, settle clamp) | individual controllers | Per scope | `controller.dispose()` clears |
+| Continuity history colour surface | `HistoryTargets` | From `resize` at one backing-store size and device generation until either changes, or `dispose` | `HistoryTargets.dispose()`, and `resize` to a different size or device generation, which frees before allocating |
+| Continuity history depth surface | `HistoryTargets` | Allocated and freed with the colour surface; a partial set is never held | `HistoryTargets.dispose()`, and `resize` to a different size |
+| Continuity history support surface | `HistoryTargets` | Allocated and freed with the colour surface | `HistoryTargets.dispose()`, and `resize` to a different size |
 
 ## Disposal triggers — when each fires
 

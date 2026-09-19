@@ -115,9 +115,14 @@ function makeDeps(over: { loading?: boolean } = {}) {
     closeStreaming: vi.fn(),
   };
 
+  // One stable viewer stub, not a fresh object per call: the router reads
+  // `hasStreamingCloud` when the open begins and again if it fails, and those
+  // two reads have to see the same object for the comparison to mean anything.
+  const viewerStub = { hasStreamingCloud: false };
+
   const deps: OpenScanDeps = {
     viewerReady: Promise.resolve(),
-    getViewer: () => ({}) as unknown as Viewer,
+    getViewer: () => viewerStub as unknown as Viewer,
     importSession: calls.importSession,
     isLoading: calls.isLoading,
     setLoading: calls.setLoading,
@@ -227,12 +232,49 @@ describe('openScan — the file router', () => {
     await openScan(fakeFile('scan.las', new ArrayBuffer(0)), deps);
     expect(calls.loadLocalSource).toHaveBeenCalledTimes(1);
     expect(calls.openLocalCopc).not.toHaveBeenCalled();
-    // A failed load surfaces on the drop zone, tidies any half-open stream,
-    // and always releases the loading flag in `finally`.
+    // A failed load surfaces on the drop zone and always releases the loading
+    // flag in `finally`. It tidies a HALF-OPEN stream, which is the one this
+    // open was attaching; a static file that never parsed opened no stream, so
+    // there is nothing of its own to tidy. Closing here used to take down a
+    // streaming scan that belonged to the project rather than to the
+    // candidate.
     expect(calls.setError).toHaveBeenCalledTimes(1);
-    expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
     expect(calls.setLoading).toHaveBeenNthCalledWith(1, true);
     expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it('tidies the stream when the streaming open itself fails mid-flight', async () => {
+    const { deps, calls } = makeDeps();
+    const viewer = deps.getViewer() as unknown as { hasStreamingCloud: boolean };
+    // Mid-flight means the scan reached the screen and then the open failed, so
+    // the fake attaches before it rejects. A rejection that attached nothing
+    // leaves nothing to tidy, which the assertion below would not distinguish.
+    calls.openLocalCopc.mockImplementationOnce(async () => {
+      viewer.hasStreamingCloud = true;
+      throw new Error('range read failed');
+    });
+
+    await openScan(fakeFile('cloud.copc.laz', copcHead()), deps);
+
+    expect(calls.openLocalCopc).toHaveBeenCalledTimes(1);
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+    expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
+    expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it('leaves a streaming scan that was already open when a later open fails', async () => {
+    // The regression this guards: a flag set before the heavy bridge ran stayed
+    // set when the bridge threw, so a failure on a plain file closed the scan
+    // already on screen. Observing what appeared during the open cannot make
+    // that mistake.
+    const { deps, calls } = makeDeps();
+    (deps.getViewer() as unknown as { hasStreamingCloud: boolean }).hasStreamingCloud = true;
+
+    await openScan(fakeFile('scan.las', new ArrayBuffer(0)), deps);
+
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
   });
 });
 

@@ -1,3 +1,4 @@
+import { bytesPerPoint, gpuAttributeBytes, type UploadedAttributes } from '../pointAttributeLayout';
 /**
  * streamingBudget.ts
  *
@@ -39,11 +40,19 @@ const MOBILE_POINT_BUDGET: Record<StreamingQuality, number> = {
 };
 
 /**
- * Rough GPU bytes per resident streaming point: an instanced position
- * (vec3 f32, 12 B) and an instanced colour (vec3 f32, 12 B) — the same figure
- * the debug overlay uses for static clouds.
+ * GPU bytes per resident streaming point with position and colour only.
+ *
+ * Derived from `pointAttributeLayout` rather than written out, so it cannot
+ * drift from what the mesh builder uploads. It is the floor, not the whole
+ * cost: a classified cloud also uploads `aClass` and one carrying intensity
+ * uploads `aIntensity`, four bytes each. Callers that know which channels a
+ * cloud has should ask `gpuAttributeBytes` for its real figure; this constant
+ * remains for the budget arithmetic, which reasons about a point's minimum.
  */
-export const BYTES_PER_STREAMING_POINT = 24;
+export const BYTES_PER_STREAMING_POINT = bytesPerPoint({
+  classification: false,
+  intensity: false,
+});
 
 /**
  * CPU-side worst-case bytes per decoded point — the widest shape a LAS-family
@@ -57,6 +66,28 @@ export const BYTES_PER_STREAMING_POINT = 24;
  * known chunk is {@link decodedBytesPerPoint}.
  */
 export const DECODED_BYTES_PER_POINT = 30;
+
+/**
+ * Frame-time pressure band, shared by everything that adapts to how the frames
+ * are going.
+ *
+ * Above the high threshold the renderer is slower than 45 frames a second and
+ * gives ground; below the low one it is faster than 55 and takes some back. The
+ * gap between them is the point: a single threshold would flip on every frame
+ * that straddled it.
+ *
+ * The holds are lopsided on purpose. Two seconds of slow frames is enough to
+ * concede, five seconds of fast ones to recover, so a device that cannot quite
+ * sustain a setting loses it rather than oscillating around it.
+ *
+ * Here rather than beside any one consumer, because a second controller reading
+ * the same frame time through its own numbers would back off twice for one
+ * stutter and then recover in step with the first.
+ */
+export const FPS_PRESSURE_HIGH_MS = 22.2;
+export const FPS_PRESSURE_LOW_MS = 18.2;
+export const FPS_PRESSURE_HIGH_HOLD_MS = 2_000;
+export const FPS_PRESSURE_LOW_HOLD_MS = 5_000;
 
 /** Which optional channels a decoded chunk carries, for a byte estimate. */
 export interface DecodedChannelPresence {
@@ -259,9 +290,19 @@ function greedyFill(sorted: readonly ScoredCandidate[], pointBudget: number): Se
   return wanted;
 }
 
-/** Estimated GPU bytes for a resident point count. */
-export function estimateGpuBytes(residentPointCount: number): number {
-  return residentPointCount * BYTES_PER_STREAMING_POINT;
+/**
+ * Estimated GPU attribute bytes for a resident point count.
+ *
+ * `present` names the optional channels the cloud uploads. Omitting it keeps
+ * the position-and-colour floor, which is what a caller that does not know the
+ * channels can honestly claim; passing it gives the figure the renderer is
+ * actually holding.
+ */
+export function estimateGpuBytes(
+  residentPointCount: number,
+  present: UploadedAttributes = { classification: false, intensity: false },
+): number {
+  return gpuAttributeBytes(residentPointCount, present);
 }
 
 /**

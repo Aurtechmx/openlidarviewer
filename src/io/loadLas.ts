@@ -135,6 +135,8 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
   const metadata: CloudMetadata = {};
   if (header.systemIdentifier) metadata.captureSensor = header.systemIdentifier;
   if (header.generatingSoftware) metadata.sourceSoftware = header.generatingSoftware;
+  metadata.pointFormat = header.pointFormat;
+  if (header.gpsTimeType !== null) metadata.gpsTimeType = header.gpsTimeType;
   const captureDate = formatCreationDate(header.creationYear, header.creationDay);
   if (captureDate) metadata.captureDate = captureDate;
   // surface the CRS parsed from LASF_Projection VLRs so the
@@ -422,6 +424,7 @@ function cloudFromRaw(
     colors: raw.colors ?? undefined,
     intensity: raw.intensity,
     classification: raw.classification,
+    classificationFlags: raw.classificationFlags,
     returnNumber: raw.returnNumber,
     returnCount: raw.returnCount,
     pointSourceId: raw.pointSourceId,
@@ -433,6 +436,7 @@ function cloudFromRaw(
     colors: clean.attributes.colors,
     intensity: clean.attributes.intensity,
     classification: clean.attributes.classification,
+    classificationFlags: clean.attributes.classificationFlags,
     returnNumber: clean.attributes.returnNumber,
     returnCount: clean.attributes.returnCount,
     pointSourceId: clean.attributes.pointSourceId,

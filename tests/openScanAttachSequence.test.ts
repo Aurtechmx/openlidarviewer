@@ -565,3 +565,58 @@ describe('the load plan reads the device, not the window', () => {
     expect(options.isMobile).toBe(true);
   });
 });
+
+describe('a failed candidate leaves an open project alone', () => {
+  // The suite above fails the FIRST open, with no cloud in the scene, and
+  // asserts the empty state comes back. The case a user actually loses work to
+  // is the other one: a project is open, a second file is dropped, and that
+  // file does not parse. Nothing may be torn down for a scan that never
+  // arrived. The attach names this as its rule; nothing tested it.
+
+  it('adds no layer and never hides the scene when the load fails', async () => {
+    const h = harness({ failLoad: true });
+
+    await openScan(fakeFile('broken.laz'), h.deps);
+
+    expect(h.calls.addCloud).not.toHaveBeenCalled();
+    expect(h.calls.hideEmptyState).not.toHaveBeenCalled();
+    expect(h.calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the saved work of the project that is still open', async () => {
+    const h = harness({ failLoad: true });
+
+    await openScan(fakeFile('broken.laz'), h.deps);
+
+    expect(h.calls.bookmarksClear).not.toHaveBeenCalled();
+    expect(h.calls.annotateClear).not.toHaveBeenCalled();
+  });
+
+  it('does not restore the empty state over a scene that still has a cloud', async () => {
+    // showEmptyState belongs to the first-open failure. Firing it here would
+    // blank a stage that still holds the open project.
+    const h = harness({ failLoad: true });
+
+    await openScan(fakeFile('broken.laz'), h.deps);
+
+    expect(h.calls.showEmptyState).not.toHaveBeenCalled();
+  });
+
+  it('leaves the loading state and retires the cancel control', async () => {
+    const h = harness({ failLoad: true });
+
+    await openScan(fakeFile('broken.laz'), h.deps);
+
+    expect(h.calls.setLoading).toHaveBeenLastCalledWith(false);
+    expect(h.trace.at(-1) === 'cancel:retired' || h.at('cancel:retired') > -1).toBe(true);
+  });
+
+  it('leaves the streaming scan it would have replaced', async () => {
+    const h = harness({ failLoad: true });
+    (h.deps.getViewer() as unknown as { hasStreamingCloud: boolean }).hasStreamingCloud = true;
+
+    await openScan(fakeFile('broken.laz'), h.deps);
+
+    expect(h.calls.closeStreaming).not.toHaveBeenCalled();
+  });
+});

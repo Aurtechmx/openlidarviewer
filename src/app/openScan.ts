@@ -253,6 +253,16 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   }
   const controller = new AbortController();
   let preview: PreviewCloudHandle | null = null;
+  // Whether a streaming scan was already on screen when this open began.
+  //
+  // The failure path tidies a streaming scan this open put there, and that
+  // tidy-up used to run for every failure: dropping an unparseable LAS while a
+  // COPC or out-of-core scan was open closed the working scan for a candidate
+  // that never arrived. Predicting the attach with a flag set before the call
+  // has the same hole, because a throw from inside the heavy bridge leaves the
+  // flag set for a scan it never attached. This observes instead: only a scan
+  // that was NOT there when the open began can belong to the open.
+  let hadStreamingOnEntry = false;
   // Blue blinking "Opening …" — the prominent first feedback, matching the
   // catalog status vocabulary so device and public-dataset loads read the same.
   // The load's staged progress (decoding / uploading / rendering) supersedes it.
@@ -261,6 +271,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   try {
     // ensure the lazy-loaded Viewer is ready before touching it.
     await deps.viewerReady;
+    hadStreamingOnEntry = deps.getViewer().hasStreamingCloud;
     // One read of the file's first 64 KiB serves every prefix consumer on
     // this path: the COPC sniff here (589 bytes), the heavy peek (64 KiB) and
     // the loader's preflight (16 KiB). They used to read the same prefix three
@@ -363,8 +374,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       // reaches the console for developers under ?debug=1.
       if (deps.debug) console.error('OpenLiDARViewer — load error', err);
       deps.dropZone.setError(describeLoadError(err));
-      // A streaming open that failed mid-flight leaves no scan — tidy up.
-      deps.closeStreaming();
+      // Tidy a streaming scan that appeared during this open and no other. One
+      // that was already on screen belongs to the project, not to the
+      // candidate, and closing it would destroy working state for a file that
+      // never arrived.
+      if (!hadStreamingOnEntry && deps.getViewer().hasStreamingCloud) deps.closeStreaming();
     }
   } finally {
     deps.setLoading(false);

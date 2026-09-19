@@ -181,7 +181,7 @@ import {
   createProfileSectionSeam,
   type ProfileSectionSeam,
 } from './measure/profileSectionSeam';
-import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
+import { volumeCutFill, assembleVolumePositions, POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
   integrableClouds, isIntegrable, streamingMayCombine, sourceClassifiesGround,
   analysisClassification,
@@ -438,6 +438,10 @@ export interface FrameStats {
   totalPoints: number;
   /** Rough GPU memory held by the visible clouds' instance attributes, in bytes. */
   gpuBytesEstimate: number;
+  /** Backing-store width in device pixels. */
+  bufferWidthPx: number;
+  /** Backing-store height in device pixels. */
+  bufferHeightPx: number;
 }
 
 /** A built (but not yet mounted) instanced-quad point mesh and its handles. */
@@ -1217,7 +1221,7 @@ export class Viewer {
           footprintArea: result.footprintArea,
           pointsInPolygon: result.pointsInPolygon,
           densityNative: result.densityNative,
-          confidence,
+          confidence, method: POINT_SAMPLE_VOLUME_METHOD,
         };
         // Non-finite returns inside the footprint were excluded from the
         // integration — carry the count so the record discloses the
@@ -1876,9 +1880,7 @@ export class Viewer {
   }
 
   /** Whether a streaming COPC cloud is currently open. */
-  get hasStreamingCloud(): boolean {
-    return this._streaming !== null;
-  }
+  get hasStreamingCloud(): boolean { return this._streaming !== null; }
 
   /**
    * The open streaming cloud, or null. Widens this from the
@@ -1888,14 +1890,13 @@ export class Viewer {
    * regardless of whether COPC or EPT is open. Callers that need
    * COPC-specific shape can narrow with `cloud.kind === 'copc'`.
    */
-  get streamingCloud(): StreamingSource | null {
-    return this._streaming?.cloud ?? null;
-  }
+  get streamingCloud(): StreamingSource | null { return this._streaming?.cloud ?? null; }
+
+  /** Optional point channels the resident streaming meshes uploaded, so a memory readout prices a point by what it carries. */
+  get streamingUploadedAttributes(): { classification: boolean; intensity: boolean } { return this._streaming?.renderer.uploadedAttributes ?? { classification: false, intensity: false }; }
 
   /** The streaming scheduler, or null — for the streaming panel and diagnostics. */
-  get streamingScheduler(): StreamingScheduler | null {
-    return this._streaming?.scheduler ?? null;
-  }
+  get streamingScheduler(): StreamingScheduler | null { return this._streaming?.scheduler ?? null; }
 
   /**
    * Wanted-set refinement readiness for the active streaming session, or null
@@ -1923,9 +1924,7 @@ export class Viewer {
    * full-cloud grade can re-decode a sampling plan through the same decoder the
    * scheduler drives (one worker pool, not two).
    */
-  get streamingDecoder(): ChunkDecoder | null {
-    return this._streaming?.decoder ?? null;
-  }
+  get streamingDecoder(): ChunkDecoder | null { return this._streaming?.decoder ?? null; }
 
   /** Switch the streaming cloud's colour mode. */
   setStreamingColorMode(mode: ColorMode): void {
@@ -2430,18 +2429,14 @@ export class Viewer {
   }
 
   /** Read the current percentile-trim setting. */
-  get heightPercentileTrim(): number {
-    return this._heightPercentileTrim;
-  }
+  get heightPercentileTrim(): number { return this._heightPercentileTrim; }
 
   // ── Project-shared elevation scale (math in projectElevationScale.ts) ──────
   // Off (default) = per-cloud percentile windows; on = every frame-sharing layer
   // colours elevation against one world-Z window.
   private _projectSharedElevation = false;
 
-  get projectSharedElevation(): boolean {
-    return this._projectSharedElevation;
-  }
+  get projectSharedElevation(): boolean { return this._projectSharedElevation; }
 
   /** World-Z union of the frame-sharing elevation clouds; null when < 2 share. */
   projectSharedElevationRange(): { min: number; max: number } | null {
@@ -2590,14 +2585,10 @@ export class Viewer {
   }
 
   /** The active RGB appearance bundle (deep copy). */
-  get rgbAppearance(): RgbAppearance {
-    return { ...this._rgbAppearance };
-  }
+  get rgbAppearance(): RgbAppearance { return { ...this._rgbAppearance }; }
 
   /** The active RGB appearance preset id, or `null` when custom. */
-  get rgbAppearancePresetId(): RgbAppearancePresetId | null {
-    return this._rgbAppearancePresetId;
-  }
+  get rgbAppearancePresetId(): RgbAppearancePresetId | null { return this._rgbAppearancePresetId; }
 
   /**
    * Apply a sky preset by id. Public surface of the existing private
@@ -2610,9 +2601,7 @@ export class Viewer {
   }
 
   /** The active sky preset id. */
-  get skyPresetId(): SkyPresetId {
-    return this._skyPresetId;
-  }
+  get skyPresetId(): SkyPresetId { return this._skyPresetId; }
 
   /**
    * Apply a named EDL preset bundle (Subtle / Balanced / Inspection)
@@ -2632,9 +2621,7 @@ export class Viewer {
   }
 
   /** The active EDL preset id, or `null` when EDL is off. */
-  get edlPresetId(): EdlPresetId | null {
-    return this._edlPresetId;
-  }
+  get edlPresetId(): EdlPresetId | null { return this._edlPresetId; }
 
   /**
    * Set the splat rendering mode.
@@ -2677,9 +2664,7 @@ export class Viewer {
   }
 
   /** The active splat mode. */
-  get splatMode(): SplatMode {
-    return this._splatMode;
-  }
+  get splatMode(): SplatMode { return this._splatMode; }
 
   /**
    * Walk every RGB-mode static cloud and re-upload its colour attribute
@@ -3202,6 +3187,9 @@ export class Viewer {
   setPointSizeMode(mode: PointSizeMode): void {
     this._pointSizeMode = mode;
     if (mode === 'density') ensureDensitySizes(this._clouds.values());
+    // Static clouds size from their own points; a streamed node has none to
+    // count, so it sizes from the spacing its source recorded.
+    this._lodSize.setMode(mode);
     this._reapplyAllSizeModes();
   }
 
@@ -4426,7 +4414,7 @@ export class Viewer {
       const resident = this._streaming.cloud.residentPointCount;
       displayedPoints += resident;
       totalPoints += this._streaming.cloud.sourcePointCount ?? resident;
-      gpuBytesEstimate += estimateGpuBytes(resident);
+      gpuBytesEstimate += estimateGpuBytes(resident, this._streaming.renderer.uploadedAttributes);
     }
 
     // three.js names this counter `drawCalls` on the WebGPU backend and
@@ -4443,6 +4431,11 @@ export class Viewer {
       displayedPoints,
       totalPoints,
       gpuBytesEstimate,
+      // Device pixels, so the continuity history can be costed against the
+      // store actually allocated rather than the CSS size, which understates a
+      // doubled ratio fourfold.
+      bufferWidthPx: this._renderer.domElement.width,
+      bufferHeightPx: this._renderer.domElement.height,
     };
   }
   /**
@@ -5870,7 +5863,7 @@ export class Viewer {
     const normals = cloud.normals;
     return makePointInfo({
       geographicHorizontal: this._inspectGeographicHorizontal,
-      layer: cloud.name,
+      layer: cloud.name, pointFormat: cloud.metadata?.pointFormat,
       layerId: this._organized.layerIdOf(cloud),
       index,
       // `point` is the PLACED pick; for a non-anchor mounted layer it would

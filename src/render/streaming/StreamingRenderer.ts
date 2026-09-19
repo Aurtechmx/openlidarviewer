@@ -272,6 +272,31 @@ export class StreamingRenderer {
   }
 
   /**
+   * Which optional channels the resident meshes actually uploaded.
+   *
+   * The memory readout needs this because a point costs what its attributes
+   * cost: a classified node binds `aClass` and one carrying intensity binds
+   * `aIntensity`, four bytes each on top of position and colour. Reporting the
+   * position-and-colour floor for every cloud understated a classified one by a
+   * quarter.
+   *
+   * Reads the decoded chunks rather than a flag set at construction, so it
+   * cannot claim a channel the meshes do not carry. A channel counts as present
+   * when any resident node uploaded it, which is what the allocated buffers
+   * reflect.
+   */
+  get uploadedAttributes(): { classification: boolean; intensity: boolean } {
+    let classification = false;
+    let intensity = false;
+    for (const entry of this._meshes.values()) {
+      if (entry.decoded.classification !== undefined) classification = true;
+      if (entry.decoded.intensity !== undefined) intensity = true;
+      if (classification && intensity) break;
+    }
+    return { classification, intensity };
+  }
+
+  /**
    * Ids the replace frontier says must not draw this frame — a coarse parent a
    * REPLACE tileset has refined away, or a node withheld under an incomplete
    * replacement. Held so a mesh that arrives after the frontier was computed is

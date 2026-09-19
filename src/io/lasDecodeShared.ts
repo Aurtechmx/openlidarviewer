@@ -27,6 +27,8 @@ const RECORD_RETURN_BITS = 14;
 /** Classification byte offset for legacy / extended point formats. */
 const RECORD_CLASSIFICATION_LEGACY = 15;
 const RECORD_CLASSIFICATION_EXT = 16;
+/** Extended records keep the classification flags in their own byte (bits 0-3). */
+const RECORD_CLASSIFICATION_FLAGS_EXT = 15;
 /** Point source ID — uint16 LE — byte 18 in legacy records, byte 20 in extended. */
 const RECORD_POINT_SOURCE_ID_LEGACY = 18;
 const RECORD_POINT_SOURCE_ID_EXT = 20;
@@ -83,6 +85,14 @@ export interface RawPoints {
   positions: Float32Array;
   intensity: Uint16Array;
   classification: Uint8Array;
+  /**
+   * Classification flags, one byte per point, always in the extended layout
+   * (Synthetic 1, Key-Point 2, Withheld 4, Overlap 8) whatever the source
+   * format used. Legacy records carry the first three in bits 5 to 7 of the
+   * classification byte and express overlap as class 12 instead, so
+   * normalising here means one representation reaches the rest of the app.
+   */
+  classificationFlags: Uint8Array;
   returnNumber: Uint8Array;
   returnCount: Uint8Array;
   pointSourceId: Uint16Array;
@@ -103,6 +113,8 @@ export interface DecodeContext {
   origin: [number, number, number];
   classificationOffset: number;
   classMask: number;
+  /** Byte holding the flags: its own byte when extended, the class byte when not. */
+  classificationFlagsOffset: number;
   extended: boolean;
   pointSourceIdOffset: number;
   gpsTimeOffset: number | null;
@@ -120,6 +132,9 @@ export function decodeContext(
     origin,
     classificationOffset: classificationOffsetFor(header.pointFormat),
     classMask: classificationMaskFor(header.pointFormat),
+    classificationFlagsOffset: extended
+      ? RECORD_CLASSIFICATION_FLAGS_EXT
+      : RECORD_CLASSIFICATION_LEGACY,
     extended,
     pointSourceIdOffset: extended
       ? RECORD_POINT_SOURCE_ID_EXT
@@ -153,6 +168,13 @@ export function decodeRecord(
   out.positions[i * 3 + 2] = zi * ctx.scale[2] + ctx.offset[2] - ctx.origin[2];
   out.intensity[i] = view.getUint16(base + RECORD_INTENSITY, true);
   out.classification[i] = view.getUint8(base + ctx.classificationOffset) & ctx.classMask;
+  const flagByte = view.getUint8(base + ctx.classificationFlagsOffset);
+  // Extended keeps the flags in the low nibble of their own byte. Legacy packs
+  // Synthetic, Key-Point and Withheld into bits 5, 6 and 7 of the class byte,
+  // which is why reading the class with `& 0x1f` alone discards them.
+  out.classificationFlags[i] = ctx.extended
+    ? flagByte & 0x0f
+    : ((flagByte & 0x20) >> 5) | ((flagByte & 0x40) >> 5) | ((flagByte & 0x80) >> 5);
   const returnBits = view.getUint8(base + RECORD_RETURN_BITS);
   if (ctx.extended) {
     out.returnNumber[i] = returnBits & 0x0f;
@@ -186,6 +208,7 @@ export function allocRawPoints(
     positions: new Float32Array(count * 3),
     intensity: new Uint16Array(count),
     classification: new Uint8Array(count),
+    classificationFlags: new Uint8Array(count),
     returnNumber: new Uint8Array(count),
     returnCount: new Uint8Array(count),
     pointSourceId: new Uint16Array(count),
@@ -240,6 +263,7 @@ export function rawPointsTransferables(raw: RawPoints): ArrayBuffer[] {
     raw.positions.buffer as ArrayBuffer,
     raw.intensity.buffer as ArrayBuffer,
     raw.classification.buffer as ArrayBuffer,
+    raw.classificationFlags.buffer as ArrayBuffer,
     raw.returnNumber.buffer as ArrayBuffer,
     raw.returnCount.buffer as ArrayBuffer,
     raw.pointSourceId.buffer as ArrayBuffer,

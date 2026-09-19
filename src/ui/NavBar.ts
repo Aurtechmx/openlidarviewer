@@ -1,3 +1,4 @@
+import { DisposableGroup } from '../disposableGroup';
 import { el } from './dom';
 import { storageGet, storageSet } from './safeStorage';
 import type { NavMode } from '../render/NavController';
@@ -202,7 +203,7 @@ export class NavBar {
 
   private readonly _cb: NavBarCallbacks;
   /** Removals for every listener this panel put outside its own DOM. */
-  private readonly _teardown: Array<() => void> = [];
+  private readonly _teardown = new DisposableGroup();
   private readonly _hud: HTMLElement;
   /**
    * The dismissible half of the HUD: the movement / mode / meta legend. Held
@@ -562,10 +563,10 @@ export class NavBar {
         if (onScan) this._yieldTouchHint();
       };
       window.addEventListener('pointerdown', onPointerDown, { capture: true });
-      this._teardown.push(() => window.removeEventListener('pointerdown', onPointerDown, { capture: true }));
+      this._teardown.add(() => window.removeEventListener('pointerdown', onPointerDown, { capture: true }));
       for (const end of ['pointerup', 'pointercancel'] as const) {
         window.addEventListener(end, onPointerEnd, { capture: true });
-        this._teardown.push(() => window.removeEventListener(end, onPointerEnd, { capture: true }));
+        this._teardown.add(() => window.removeEventListener(end, onPointerEnd, { capture: true }));
       }
     }
 
@@ -738,11 +739,14 @@ export class NavBar {
    * accumulates a live listener set per construction.
    */
   dispose(): void {
-    for (const off of this._teardown.splice(0)) off();
+    // The timer first. The teardown group rethrows the first error a teardown
+    // raised, once the rest have run, so a listener detach that throws would
+    // otherwise leave this timer armed on a disposed nav bar.
     if (this._hintTimer !== null) {
       clearTimeout(this._hintTimer);
       this._hintTimer = null;
     }
+    this._teardown.dispose();
   }
 
   /**

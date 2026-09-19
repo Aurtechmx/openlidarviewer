@@ -115,6 +115,8 @@ export class ClassLegendPanel {
   /** The empty / disabled state shown when there's no classification channel. */
   private readonly _empty: HTMLElement;
 
+  private _pointFormat?: number;
+
   constructor() {
     // Collapsible head — same pattern as the Measurements / Analyse panels.
     const title = el('div', {
@@ -315,7 +317,15 @@ export class ClassLegendPanel {
    * then renders its empty state. This does NOT emit `onChange`; the host
    * applies the (all-visible) mask itself on load.
    */
-  setClasses(counts: Map<number, number>, sample?: ClassCountSample): void {
+  setClasses(
+    counts: Map<number, number>,
+    sample?: ClassCountSample,
+    pointFormat?: number,
+  ): void {
+    // Class names depend on the record format: code 12 is Overlap Points under
+    // formats 0 to 5 and reserved from 6. A streaming source carries no format
+    // here, and the row then reports both readings rather than picking one.
+    this._pointFormat = pointFormat;
     this._counts = new Map(counts);
     this._hasChannel = this._presentCodes().length > 0;
     this._visibility = new ClassVisibility();
@@ -518,7 +528,7 @@ export class ClassLegendPanel {
   /** Build one class row: swatch · name · count · solo · checkbox. */
   private _row(code: number, soloUseful = true): HTMLElement {
     const on = this._visibility.isVisible(code);
-    const name = classificationLabel(code);
+    const name = classificationLabel(code, this._pointFormat);
 
     const swatch = el('span', { className: 'olv-cl-swatch' });
     const [r, g, b] = classColor(code);

@@ -1,4 +1,4 @@
-# Dependency audit (v0.6.9)
+# Dependency audit (v0.7.0-alpha.1)
 
 This is the committed dependency baseline for OpenLiDARViewer, re-verified for
 v0.6.9 on 2026-09-16 (UTC) from the committed `package-lock.json`. The v0.6.9
@@ -18,12 +18,12 @@ package was added or removed, and no other bundled package changed.
 
 | Field | Value |
 |---|---|
-| Release line | v0.6.9 |
+| Release line | v0.7.0-alpha.1 |
 | Baseline date (UTC) | 2026-07-25 |
 | Canonical Node | 22.18.0 (`.nvmrc`) |
 | Canonical npm | 10.9.3 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.9`, 56 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.7.0-alpha.1`, 56 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](../../sbom.json). Licences are credited in

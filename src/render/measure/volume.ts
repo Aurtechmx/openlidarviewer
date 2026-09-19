@@ -37,6 +37,7 @@
  * fewer than ~100 points fell in the footprint.
  */
 
+import { methodRef, methodTag } from '../../science/methodRegistry';
 import type { Vec3 } from '../navMath';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import { placeBufferInto } from '../layerPlacement';
@@ -194,6 +195,13 @@ export function polygonHorizontalArea(
 }
 
 /** Cut / fill estimation result. */
+/**
+ * The estimator this module implements, as `id@version`, for a record to name
+ * itself by. Read from the registry rather than written out, so the tag cannot
+ * drift from the method it refers to.
+ */
+export const POINT_SAMPLE_VOLUME_METHOD = methodTag(methodRef('olv.volume.stockpile'));
+
 export interface VolumeResult {
   /** Volume above the reference plane, m³. Always ≥ 0. */
   fill: number;

@@ -378,14 +378,19 @@ describe('a header that cannot be believed', () => {
     expect(flat.max[2] - flat.min[2]).toBe(0);
   });
 
-  test('a zero point-record length yields no points and a refusal, never a fabricated cloud', async () => {
-    // A record length of 0 makes the byte-derived available count 0, so the
-    // decode produces nothing. The value of the check is what happens NEXT: the
-    // empty cloud is refused at the parse choke point rather than reaching the
-    // renderer as a scan with no points.
-    const cloud = await loadLas(lasFile({ recordLength: 0 }), 'las', 'zero-record.las');
-    expect(cloud.pointCount).toBe(0);
-    expect(cloud.declaredPointCount).toBe(100);
+  test('a zero point-record length is refused by its cause, not by its symptom', async () => {
+    // This used to pin the weaker behaviour: the decode produced nothing, the
+    // empty cloud was refused at the parse choke point, and the message said
+    // the file was empty. The comment here named the reason, that
+    // `pointDataRecordLength` was never validated in `parseLasHeader`, and that
+    // a reader was told the file was empty when it was structurally corrupt.
+    //
+    // The length is validated against the format now, so the refusal happens
+    // before a point is decoded and names the cause. A record of zero bytes
+    // cannot hold format 0, which needs 20.
+    await expect(loadLas(lasFile({ recordLength: 0 }), 'las', 'zero-record.las')).rejects.toThrow(
+      /record length 0 is shorter than the 20 bytes/,
+    );
 
     let caught: unknown;
     try {
@@ -395,12 +400,9 @@ describe('a header that cannot be believed', () => {
     }
     expect(caught).toBeInstanceOf(LoadError);
     expect((caught as LoadError).category).toBe('malformed-file');
-    // PINNED: the message describes the SYMPTOM (an empty file) rather than the
-    // cause (a record length of zero), because `pointDataRecordLength` is never
-    // validated in `parseLasHeader`. A reader is told the file is empty when it
-    // is in fact structurally corrupt. No number is fabricated, so the contract
-    // holds; the diagnosis is what is lost.
-    expect((caught as Error).message).toContain('empty');
+    // The diagnosis the pin said was lost: the cause, not the symptom.
+    expect((caught as Error).message).toContain('record length 0');
+    expect((caught as Error).message).not.toContain('empty');
   });
 
   test('a declared count the bytes cannot support is refused, and the message survives a worker hop', () => {

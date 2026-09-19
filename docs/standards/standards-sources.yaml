@@ -1,0 +1,46 @@
+# Standards this application relies on, and where its reading of them comes
+# from. Only sources a module actually depends on are listed: a register of
+# standards nobody reads is a claim rather than a record.
+#
+# No standard is reproduced here. What is recorded is the citation, the date the
+# text was last read, and which modules encode an interpretation of it.
+schemaVersion: 1
+sources:
+  - key: asprs-las-1.4-r15
+    title: LAS Specification 1.4 - R15
+    publisher: American Society for Photogrammetry and Remote Sensing
+    edition: R15
+    year: 2019
+    canonicalReference: https://www.asprs.org/divisions-committees/lidar-division/laser-las-file-format-exchange-activities
+    dateVerified: 2026-09-18
+    role: normative
+    # What was read, so a later reader knows how far the check went.
+    sectionsRead:
+      - Table 7, 10-14 - point data record formats 0 to 5 and their minimum sizes
+      - Table 8 - classification bit field encoding, formats 0 to 5
+      - Table 9 - ASPRS standard point classes, formats 0 to 5
+      - Table 15, 18-21 - point data record formats 6 to 10 and their minimum sizes
+      - Table 16 - classification bit field encoding, formats 6 to 10
+      - Table 17 - ASPRS standard point classes, formats 6 to 10
+      - Section 2.6.2 - GPS time type and Global Encoding bit 0
+    dependents:
+      - src/lasSemantics.ts
+      - src/io/lasHeader.ts
+      - src/io/lasDecodeShared.ts
+      - src/convert/writeLas.ts
+
+  - key: asprs-las-1.5-r00
+    title: LAS Specification 1.5 - R00
+    publisher: American Society for Photogrammetry and Remote Sensing
+    edition: R00
+    year: 2025
+    canonicalReference: https://asprslas.org/
+    dateVerified: 2026-09-18
+    role: normative
+    # Relied on for the refusal, not for decoding: the parser recognises 1.5 and
+    # declines it rather than reading it through the 1.4 layout.
+    sectionsRead:
+      - Status - approved by the ASPRS Board, August 2025
+      - Point data record formats - 0 to 5 are not valid in 1.5
+    dependents:
+      - src/io/lasHeader.ts

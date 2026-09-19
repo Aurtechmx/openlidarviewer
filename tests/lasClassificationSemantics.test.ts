@@ -1,0 +1,204 @@
+/**
+ * lasClassificationSemantics.test.ts — pins ASPRS class naming to the point
+ * data record format that carries it.
+ *
+ * Before this module, class 12 was named "Overlap" for every format in the
+ * point inspector and "Reserved (12)" in the export legend, and every code at
+ * or above 19 was reported as user-defined. These tests fix the meaning of
+ * both ranges so a future table cannot drift apart again.
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  classificationName,
+  classAllocation,
+  describeClassification,
+  isExtendedPdrf,
+  isValidPdrf,
+  isOverlapPoint,
+  classificationNameUnknownFormat,
+  decodeLegacyClassificationByte,
+  decodeExtendedClassificationFlags,
+  encodeExtendedClassificationFlags,
+  FIRST_EXTENDED_PDRF,
+} from '../src/lasSemantics';
+
+describe('point data record format', () => {
+  it('treats formats 6 and above as extended', () => {
+    expect(isExtendedPdrf(5)).toBe(false);
+    expect(isExtendedPdrf(FIRST_EXTENDED_PDRF)).toBe(true);
+    expect(isExtendedPdrf(10)).toBe(true);
+  });
+
+  it('accepts only the formats the specification defines', () => {
+    expect(isValidPdrf(0)).toBe(true);
+    expect(isValidPdrf(10)).toBe(true);
+    expect(isValidPdrf(11)).toBe(false);
+    expect(isValidPdrf(-1)).toBe(false);
+    expect(isValidPdrf(2.5)).toBe(false);
+  });
+});
+
+describe('class 12 depends on the format', () => {
+  it('is Overlap Points in the legacy formats', () => {
+    for (const pdrf of [0, 1, 2, 3, 4, 5]) {
+      expect(classificationName(12, pdrf)).toBe('Overlap Points');
+    }
+  });
+
+  it('is reserved in the extended formats', () => {
+    for (const pdrf of [6, 7, 8, 9, 10]) {
+      expect(classificationName(12, pdrf)).toBe('Reserved');
+      expect(classAllocation(12, pdrf)).toBe('reserved');
+    }
+  });
+
+  it('never names an extended class 12 Overlap', () => {
+    expect(classificationName(12, 6)).not.toMatch(/overlap/i);
+  });
+});
+
+describe('codes 19 to 22 are defined, not user-defined', () => {
+  it.each([
+    [19, 'Overhead Structure'],
+    [20, 'Ignored Ground'],
+    [21, 'Snow'],
+    [22, 'Temporal Exclusion'],
+  ])('names extended class %i as %s', (code, name) => {
+    expect(classificationName(code, 6)).toBe(name);
+    expect(classAllocation(code, 6)).toBe('defined');
+  });
+
+  it('reports 23 to 63 as reserved rather than user-definable', () => {
+    for (const code of [23, 40, 63]) {
+      expect(classAllocation(code, 6)).toBe('reserved');
+      expect(classificationName(code, 6)).toBe(`Reserved (${code})`);
+    }
+  });
+
+  it('reports 64 and above as user definable', () => {
+    for (const code of [64, 128, 255]) {
+      expect(classAllocation(code, 6)).toBe('user-definable');
+      expect(classificationName(code, 6)).toBe(`User Definable (${code})`);
+    }
+  });
+});
+
+describe('the legacy table keeps its own meanings', () => {
+  it.each([
+    [8, 'Model Key-Point (Mass Point)'],
+    [9, 'Water'],
+    [2, 'Ground'],
+  ])('names legacy class %i as %s', (code, name) => {
+    expect(classificationName(code, 1)).toBe(name);
+  });
+
+  it('names rail and road surface only in the extended table', () => {
+    expect(classificationName(10, 6)).toBe('Rail');
+    expect(classificationName(11, 6)).toBe('Road Surface');
+    expect(classificationName(10, 1)).toBe('Reserved for ASPRS Definition');
+    expect(classificationName(11, 1)).toBe('Reserved for ASPRS Definition');
+  });
+});
+
+describe('overlap reads beside the base class, not instead of it', () => {
+  it('keeps the base class when the overlap flag is set', () => {
+    const shown = describeClassification(2, 6, {
+      synthetic: false,
+      keyPoint: false,
+      withheld: false,
+      overlap: true,
+    });
+    expect(shown).toBe('Ground · Overlap');
+  });
+
+  it('shows the base class alone when no flag is set', () => {
+    expect(describeClassification(6, 6)).toBe('Building');
+  });
+});
+
+describe('an unknown profile never asserts one table over the other', () => {
+  // Legacy reserves 13 to 31; the extended table names 13 through 22. Reading
+  // code 19 as Overhead Structure claims extended semantics the source has not
+  // declared, which is the case this covers beyond the four codes that were
+  // handled first.
+  it.each([
+    [13, 'Wire - Guard (Shield)'],
+    [17, 'Bridge Deck'],
+    [19, 'Overhead Structure'],
+    [22, 'Temporal Exclusion'],
+  ])('reports both readings for code %i', (code, extendedName) => {
+    const shown = classificationNameUnknownFormat(code);
+    expect(shown).toContain(extendedName);
+    expect(shown).toContain('reserved');
+    expect(shown).toContain(String(code));
+  });
+
+  it('reports both readings for the four codes the tables swap', () => {
+    expect(classificationNameUnknownFormat(8)).toBe('Model Key-Point (Mass Point) or reserved (8)');
+    expect(classificationNameUnknownFormat(10)).toBe('Rail or reserved (10)');
+    expect(classificationNameUnknownFormat(11)).toBe('Road Surface or reserved (11)');
+    expect(classificationNameUnknownFormat(12)).toBe('Overlap Points or reserved (12)');
+  });
+
+  it('names a code both tables agree on', () => {
+    expect(classificationNameUnknownFormat(2)).toBe('Ground');
+    expect(classificationNameUnknownFormat(6)).toBe('Building');
+    expect(classificationNameUnknownFormat(9)).toBe('Water');
+  });
+
+  it('reports a code both tables reserve as reserved', () => {
+    expect(classificationNameUnknownFormat(23)).toBe('Reserved (23)');
+    expect(classificationNameUnknownFormat(31)).toBe('Reserved (31)');
+  });
+
+  it('settles a code above the legacy field, which proves extended semantics', () => {
+    // The legacy classification field is five bits, so 32 and above cannot
+    // have come from a legacy record.
+    expect(classificationNameUnknownFormat(40)).toBe('Reserved (40)');
+    expect(classificationNameUnknownFormat(64)).toBe('User Definable (64)');
+    expect(classificationNameUnknownFormat(200)).toBe('User Definable (200)');
+  });
+});
+
+describe('a legacy class 12 point does not report overlap twice', () => {
+  it('names the class without repeating it as a flag', () => {
+    const { code, flags } = decodeLegacyClassificationByte(12);
+    expect(describeClassification(code, 1, flags)).toBe('Overlap Points');
+  });
+
+  it('still reports overlap through the format-aware helper', () => {
+    expect(isOverlapPoint(12, 1)).toBe(true);
+    expect(isOverlapPoint(12, 6)).toBe(false);
+    expect(isOverlapPoint(2, 6, decodeExtendedClassificationFlags(0x8))).toBe(true);
+  });
+});
+
+describe('extended classification flags live in their own field', () => {
+  it.each([
+    ['synthetic', 0x1],
+    ['keyPoint', 0x2],
+    ['withheld', 0x4],
+    ['overlap', 0x8],
+  ] as const)('reads %s from bit value %i', (flag, bit) => {
+    expect(decodeExtendedClassificationFlags(bit)[flag]).toBe(true);
+  });
+
+  it('round-trips every combination', () => {
+    for (let n = 0; n <= 0xf; n++) {
+      expect(encodeExtendedClassificationFlags(decodeExtendedClassificationFlags(n))).toBe(n);
+    }
+  });
+
+  it('keeps a ground point with the overlap flag readable as both', () => {
+    const flags = decodeExtendedClassificationFlags(0x8);
+    expect(describeClassification(2, 6, flags)).toBe('Ground · Overlap');
+  });
+});
+
+describe('invalid input', () => {
+  it('does not invent a name for an out-of-range code', () => {
+    expect(classificationName(-1, 6)).toBe('Invalid (-1)');
+    expect(classificationName(256, 6)).toBe('Invalid (256)');
+  });
+});

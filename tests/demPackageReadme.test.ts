@@ -318,3 +318,94 @@ describe('buildDemReadme — elevation unit on the live unresolved-frame path', 
     expect(txt).not.toMatch(/Elevation unit metres/);
   });
 });
+
+describe('the surface digest the package ships', () => {
+  // A DERIVED-PRODUCT digest: taken over the grid the deliverable emits, not
+  // over the source file and not over the analysis inputs. It answers a
+  // question the method digest cannot, namely whether two packages carry the
+  // same surface.
+
+  it('prints a digest for the emitted surface', () => {
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    expect(txt).toContain('Surface digest');
+    expect(txt).toMatch(/Surface digest\s+[0-9a-f]{64}/);
+  });
+
+  it('gives the same surface the same digest', () => {
+    const a = buildDemReadme({ result: readyResult(), ...OPTS });
+    const b = buildDemReadme({ result: readyResult(), ...OPTS });
+    const digest = (s: string) => /Surface digest\s+([0-9a-f]{64})/.exec(s)?.[1];
+    expect(digest(a)).toBe(digest(b));
+  });
+
+  it('moves the digest when a cell of the surface changes', () => {
+    // readyResult() returns a fresh object but shares the module-level Z array,
+    // so the digest has to be read before the surface is touched and the cell
+    // put back afterwards.
+    const digest = (): string | undefined =>
+      /Surface digest\s+([0-9a-f]{64})/.exec(buildDemReadme({ result: readyResult(), ...OPTS }))?.[1];
+
+    const before = digest();
+    const original = Z[0];
+    try {
+      Z[0] = original + 1;
+      expect(digest()).not.toBe(before);
+    } finally {
+      Z[0] = original;
+    }
+    expect(digest()).toBe(before);
+  });
+});
+
+describe('the passport that travels with the raster', () => {
+  // A tamper-evident provenance record, not a signature. It digests ONE file,
+  // the bare-earth raster, rather than the package it rides in: a record
+  // digesting the archive that contains it could never verify, because adding
+  // it changes what it measured.
+
+  it('is written beside the raster it describes', async () => {
+    const { buildDemPackage } = await import('../src/terrain/export/demPackage');
+    const zip = buildDemPackage(readyResult(), { basename: 'terrain', linearUnit: 'metre' });
+    const text = new TextDecoder().decode(zip);
+    expect(text).toContain('terrain-dtm.tif.olv-passport.json');
+  });
+
+  it('names the artifact it digested and records no signature claim', async () => {
+    const { buildDemPackage } = await import('../src/terrain/export/demPackage');
+    const zip = buildDemPackage(readyResult(), { basename: 'terrain', linearUnit: 'metre' });
+    const text = new TextDecoder().decode(zip);
+    expect(text).toContain('terrain-dtm.tif');
+    expect(text.toLowerCase()).not.toContain('digital signature');
+    expect(text.toLowerCase()).not.toContain('notaris');
+  });
+});
+
+describe('the evidence contract the README explains', () => {
+  // A read-only view over the one resolver. It says which claim the artifact
+  // belongs to, what that claim carries before any study is considered, what it
+  // resolved to here, and why. It holds no applicability rules of its own.
+
+  it('names the claim, both levels and the verdict', () => {
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    expect(txt).toContain('Evidence contract');
+    expect(txt).toContain('Claim');
+    expect(txt).toContain('Baseline');
+    expect(txt).toContain('Effective');
+    expect(txt).toContain('Verdict');
+  });
+
+  it('says plainly when no scoped study applies', () => {
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    expect(txt).toMatch(/Matched study\s+none applies/);
+  });
+
+  it('agrees with the provenance block beside it', async () => {
+    // Both read the same resolver, so the level the contract reports cannot
+    // contradict the one the provenance stamps.
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    const { buildEvidenceContractView } = await import('../src/validation/evidenceBoundaryInspector');
+    const { dtmArtifactClaims } = await import('../src/terrain/export/exportProvenance');
+    const view = buildEvidenceContractView(dtmArtifactClaims(readyResult())[0]);
+    expect(txt).toContain(view.applicabilityVerdict);
+  });
+});

@@ -53,6 +53,7 @@ export interface CloudAttributes {
   normals?: Float32Array;
   intensity?: Uint16Array;
   classification?: Uint8Array;
+  classificationFlags?: Uint8Array;
   returnNumber?: Uint8Array;
   returnCount?: Uint8Array;
   pointSourceId?: Uint16Array;
@@ -65,6 +66,7 @@ const ATTRIBUTE_WIDTH: Record<keyof CloudAttributes, number> = {
   normals: 3,
   intensity: 1,
   classification: 1,
+  classificationFlags: 1,
   returnNumber: 1,
   returnCount: 1,
   pointSourceId: 1,

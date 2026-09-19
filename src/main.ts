@@ -1444,7 +1444,7 @@ async function runDeriveClassification(): Promise<void> {
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount });
+    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
     // Surface the run's honest confidence + caveats in the legend caption, not
     // just a flat "derived" tag — so the user sees WHEN to trust it.
     const confPct = Number.isFinite(result.confidence)
@@ -1530,7 +1530,7 @@ async function runFillUnclassified(): Promise<void> {
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount });
+    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
     classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
     classLegendPanel.show();
@@ -3618,7 +3618,7 @@ function streamingDebugSample(): StreamingDebugStats | null {
     sourcePoints: cloud.sourcePointCount,
     cacheBytes: cs.byteSize,
     decodedBytes: estimateDecodedBytes(cloud.residentPointCount),
-    gpuBytes: estimateGpuBytes(cloud.residentPointCount),
+    gpuBytes: estimateGpuBytes(cloud.residentPointCount, viewer.streamingUploadedAttributes), gpuAttributes: viewer.streamingUploadedAttributes,
     schedulerMs: stats.lastTickMs,
     cacheHits: cs.hits,
     cacheMisses: cs.misses,
@@ -4555,7 +4555,7 @@ streamingUi.onTick(({ cloud, scheduler, counts, diagnostics: diag }) => {
       cloud.residentPointCount,
       scheduler.pointBudget,
     );
-    streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount));
+    streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount, viewer.streamingUploadedAttributes));
     // Coarse stable: the first poll at which the scheduler has settled
     // AND the resident set has meaningful coverage — i.e. spans at
     // least one refinement level beyond the root. On a slow link the
