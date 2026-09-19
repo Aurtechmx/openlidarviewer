@@ -2513,3 +2513,39 @@ measurement is the state this programme is in rather than a validation
 failure, and a gate that went red for it would be disabled rather than
 satisfied. It is wired into the release chain now, so it is live on the day a
 record appears instead of being remembered then.
+
+### L111 · MEASURED · SCIENTIFIC
+
+Fourteen blockers, none reproduced, and the register says which kind of "not
+reproduced" each one is, because a subsystem that never runs reproduces nothing
+and a bare status would be true of all fourteen while meaning nothing. Seven
+are held by a named test or cannot occur, five wait on hardware, one is an open
+risk and one an open gap. The register is
+`docs/validation/v070-release-blockers.md`.
+
+The open risk is the sharpest thing this phase found, and it is an ordering
+constraint rather than a defect. Every Studio exporter renders to the live
+canvas, four of the seven raster modes encode geometry in their pixel values,
+and the guard that suspends reconstruction for exactly those four exists and is
+not wired. Nothing can fire today because nothing reconstructs. It fires on the
+day the field is switched on if that wiring has not happened first.
+
+Two blockers were checked rather than assumed. Classification codes reach the
+GPU as a float attribute rather than an integer one, so exactness is a real
+question: every value to two to the twenty-fourth survives the round trip, and
+a test now pins it, because the risk is a future change of attribute type
+rather than IEEE 754. Frustum culling cannot hide a node because
+`nodeFrustumCulling.ts` has no importer and its flag has no consumer.
+
+The closure row needed a qualifier rather than a yes. Strong edges hold, with
+the corpus keeping a silhouette seam empty and filling nothing in a hole two or
+more pixels wide. A roof ridge closes, since two slopes either side of a fold
+are nearly equidistant from the camera, and that is recorded as the documented
+weak-edge limitation the blocker does not name rather than folded into a pass.
+
+Telemetry reports honestly and carries one inaccuracy that predates this work.
+The overlay reads the real backing-store dimensions and flags an over-ceiling
+estimate. The shared byte formatter divides by 1024 and labels the result MB,
+so every byte figure in the application reads about 4.9 per cent below the unit
+it claims. It understates rather than hides, and correcting it is a repo-wide
+change to shipped text.
