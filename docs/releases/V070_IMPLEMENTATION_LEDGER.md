@@ -1080,3 +1080,42 @@ The ceiling is a starting value. Closing single-pixel seams touches a small
 minority of drawn pixels and a fifth of the visible surface is well past a seam,
 but the figure that belongs there comes from real scenes at several densities.
 
+### L63 · FIXED · CORRECTNESS
+
+Parity between the current renderer and the field was asked for as a comparison
+of measured values with the field off and on. That comparison passes today for
+the uninteresting reason that the field is off, and would keep passing until
+somebody wired reconstruction into a coordinate.
+
+The guarantee holds for a better reason, which a test can hold to. Nothing on
+the measurement path reads a rendered pixel: an inspected point is resolved from
+the stored positions, and the only readbacks in the tree are the terrain compute
+reading its own buffers and the exporters capturing the picture. A reconstructed
+pixel therefore cannot become a coordinate whatever the renderer does. The test
+asserts exactly that, and putting a readback into `InspectTool` fails it by name.
+
+The first version swept the whole tree against an allowlist and flagged three
+image compositions, one of which was not a call at all: the matcher took
+`composeClassScopeBannerOntoBlob(` for a `toBlob(` because the name contains it.
+A guard that flags every legitimate canvas in the app gets widened until it means
+nothing, so it is scoped to the modules that turn a pointer into a coordinate,
+and a case pins the matcher against that identifier.
+
+### L64 · OPEN · CORRECTNESS
+
+The exporters are the leak this phase found. `BaseExportMode` captures the live
+on-screen canvas with no offscreen pass, and six raster exporters go through it:
+depth, contour, normal, intensity, height, orthographic RGB. With
+reconstruction on, a height or depth raster would carry invented geometry, and
+those files are offered for machine learning datasets and geometry review.
+
+Nothing in `FigureStampContext` would record it. The stamp carries the reference
+system, the colour mode, the palette, the camera and the clip, so a raster
+containing reconstructed pixels would be indistinguishable from one that does
+not.
+
+Nothing is wrong today, because the field is off and no pixel is reconstructed.
+The constraint is recorded against the reconstruction module's graduation so it
+is read before the field is enabled: either a capture turns the field off, or
+the stamp declares the reconstruction.
+
