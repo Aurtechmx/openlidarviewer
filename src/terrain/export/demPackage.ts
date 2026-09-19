@@ -471,6 +471,11 @@ export function buildDemPackage(
 ): Uint8Array {
   const dtm = result.dtm;
   const basename = options.basename || 'terrain';
+  // Defaulted once for the whole package. Two clocks read a millisecond apart
+  // would stamp the README and the passport differently, so a rebuild from the
+  // same inputs would not produce the same bytes and neither file would be
+  // wrong enough to notice.
+  const generationDateIso = options.generationDateIso ?? new Date().toISOString();
   const ox = options.worldOrigin?.x ?? 0;
   const oy = options.worldOrigin?.y ?? 0;
   const xll = ox + dtm.originH1;
@@ -553,7 +558,7 @@ export function buildDemPackage(
     isGeographic,
     linearUnit: options.linearUnit,
     boundsMinX, boundsMinY, boundsMaxX, boundsMaxY,
-    generationDateIso: options.generationDateIso ?? new Date().toISOString(),
+    generationDateIso,
     softwareName: options.softwareName ?? 'OpenLiDARViewer',
     softwareVersion: options.softwareVersion ?? 'unknown',
     metricVersion: options.metricVersion ?? 'unknown',
@@ -580,7 +585,7 @@ export function buildDemPackage(
     const passportProvenance = buildExportProvenance(result, {
       verticalUnitToMetres: options.verticalUnitToMetres ?? null,
       basename,
-      generatedAt: options.generationDateIso ?? new Date().toISOString(),
+      generatedAt: generationDateIso,
       softwareVersion: options.softwareVersion ?? 'unknown',
       metricVersion: options.metricVersion ?? 'unknown',
       exportPermit: options.exportPermit ?? null,
