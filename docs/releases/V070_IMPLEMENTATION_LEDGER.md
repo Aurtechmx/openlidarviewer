@@ -2151,3 +2151,38 @@ second draw.
 The predicate itself is not missing. `depthCompatible` is written and already
 shared by the merge, by closure and by the support rules. What is missing is a place to
 evaluate it before rasterisation.
+
+### L101 · REFUSED · SCIENTIFIC
+
+Of the two gates, one is half open and the other is shut. Normals do exist: the
+cloud type carries an optional array and E57, PCD and `.pnts` tiles populate it,
+while the renderer records at the point of use that LAS never does, so the
+formats carrying orientation are the minority ones. No benchmark exists, so
+nothing was built. The reasoning is in `docs/architecture/oriented-footprints.md`.
+
+Normals reach the renderer only as colour. `colorByNormal` returns RGB bytes and
+they travel through the same colour attribute as every other mode, and inspect
+reads the array for point info. `buildPointMesh` takes positions, colours,
+classification and intensity, so there is no normal attribute and nothing in the
+size graph could read one. An oriented footprint needs a fifth per-point
+channel, four to twelve bytes depending on the encoding.
+
+The part that matters more than the cost is that this would invert a stance the
+programme already took. `normalAgreement` decides what a normal may do here and
+the rule is that normals only ever refuse: they can stop a fill across a roof
+ridge and can never turn a refusal into a fill, so a normals channel can only
+make the renderer more careful with a dataset. Orienting a footprint is the
+opposite use, where a wrong normal draws a wrong shape and a bad orientation
+channel produces a worse picture than none at all.
+
+That argues for a mode a viewer switches on rather than a quality applied
+whenever a normals array is noticed, with the provenance recording that it was
+on. The same module also settles the phase's other constraint more strictly than
+it was asked: the rule is not merely that the app must not depend on generated
+normals, it is that normals are never computed at all, because fitting one
+mid-frame would invent the thing being used to check an invention.
+
+An oriented disc remains the footprint of one sample. It interpolates nothing,
+infers no surface between points and leaves the sample count identical, so it is
+a display mode and the word reconstruction belongs nowhere near it, the evidence
+register included.
