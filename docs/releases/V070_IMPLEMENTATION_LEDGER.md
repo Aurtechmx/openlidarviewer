@@ -61,16 +61,17 @@ of, so a finding can be traced to where it was first written down.
 | L34 | LOADER | TEST | high | FIXED | new | A record shorter than its format requires was decoded, reading fields from the following record. |
 | L35 | LOADER | READ | n/a | NOT REPRODUCIBLE | new | A truncated LAS presented as complete. |
 | L36 | STANDARDS | READ | n/a | NOT REPRODUCIBLE | new | LAS 1.5 routed through 1.4 logic. |
+| L37 | SEMANTICS | TEST | high | FIXED | new | GPS time was exported under a time interpretation the source never declared. |
 
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 7
+- FIXED: 8
 - NOT REPRODUCIBLE: 7
 - OPEN: 16
 - PARTIAL: 2
 - SUPERSEDED: 1
-- total: 36
+- total: 37
 
 ## Detail
 
@@ -365,3 +366,24 @@ Section 27 asks that LAS 1.5 not be routed through 1.4 logic and called
 conforming support. The header parser already recognises 1.5 and refuses it,
 with the R00 restrictions recorded beside the refusal. The honest boundary
 section 27 asks for is the one in place.
+
+### L37 · FIXED · SEMANTICS
+
+The LAS header declares in Global Encoding bit 0 which of two quantities the
+gpsTime field holds: Adjusted Standard GPS Time when set, GPS Week Time when
+clear. They are not interchangeable, and one read as the other is wrong by
+years.
+
+`parseLasHeader` had no offset for Global Encoding and never read the bit. The
+writer did know about it, and declared Adjusted Standard for everything it
+wrote, on the stated reasoning that every modern source uses that convention. So
+a genuine GPS Week Time file came back out carrying its original numbers under a
+declaration that changed what they meant, with nothing in the application able
+to report which it had been.
+
+The header reads the bit now, the cloud carries it, and an export declares what
+its source declared. A source that declared nothing, which includes every format
+that is not LAS, keeps the writer's modern default rather than acquiring a claim
+it never made. The field is reserved before LAS 1.2, so a set bit there is
+reported as no declaration rather than as Adjusted Standard. Covered by
+`tests/lasGpsTimeType.test.ts`.
