@@ -40,7 +40,7 @@ of, so a finding can be traced to where it was first written down.
 | L13 | EVIDENCE | DOC | med | OPEN | B13 | Firefox, WebKit and Windows are advisory; only Chromium blocks. |
 | L14 | ARCHITECTURE | DOC | low | OPEN | B14 | Far-apart mounts do not fold `renderOrigin` on the CPU per mesh. |
 | L15 | ARCHITECTURE | DOC | n/a | DEFERRED | B15 | The registration stack ships and no user path reaches it. |
-| L16 | EVIDENCE | DOC | n/a | OPEN | B16 | `scientificArtifactPassport` ships and is unreachable. |
+| L16 | EVIDENCE | TEST | n/a | FIXED | B16 | The passport shipped and nothing reached it. A DEM package now emits one beside its bare-earth raster. |
 | L17 | EVIDENCE | DOC | n/a | OPEN | B17 | `evidenceBoundaryInspector` ships and is unreachable. |
 | L18 | EVIDENCE | TEST | n/a | FIXED | B18 | `dtmProductDigest` shipped and nothing reached it. The DEM package now records the surface it emits. |
 | L19 | SCIENTIFIC | DOC | known | DEFERRED | B19 | Ground filter near F1 0.5 on mountain scenes, 0.34 precision under dense canopy. |
@@ -68,9 +68,9 @@ of, so a finding can be traced to where it was first written down.
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 12
+- FIXED: 13
 - NOT REPRODUCIBLE: 8
-- OPEN: 12
+- OPEN: 11
 - PARTIAL: 4
 - SUPERSEDED: 1
 - total: 39
@@ -518,3 +518,28 @@ analysis-input digest, and the README says which one it is.
 The digest lands in the lazy export chunk, so the eager shell is unchanged at
 805 KiB. Covered by `tests/demPackageReadme.test.ts`, including that the value
 moves when a cell does.
+
+### L16 · FIXED · EVIDENCE
+
+The Scientific Artifact Passport was implemented, tested and unreachable. Its
+register entry listed integration conditions rather than missing behaviour: an
+export path that emits it beside its artifact, a lazy load so the eager shell
+does not carry it, and a record citing its digests.
+
+A DEM package now writes `<basename>-dtm.tif.olv-passport.json` beside the
+raster. The artifact is one file rather than the package: a record digesting the
+archive it travels inside could never verify, because adding it changes what it
+measured.
+
+Its inputs are the ones the export already derives. The analysis record and the
+processing manifest come from the same provenance object the README is stamped
+from, so the passport cannot describe a different run than the document beside
+it. The source digest is recorded where the loader verified one and left null
+otherwise, which the passport reports as unavailable rather than as an absent
+field that might have held a value.
+
+It is called a tamper-evident provenance record. A recipient who rehashes the
+raster can tell whether the file they hold is the one this analysis produced.
+Nothing here proves who produced it, and a test asserts the document claims no
+signature. The eager shell is unchanged at 805 KiB. Covered by
+`tests/demPackageReadme.test.ts`.

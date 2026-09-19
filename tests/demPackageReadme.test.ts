@@ -356,3 +356,26 @@ describe('the surface digest the package ships', () => {
     expect(digest()).toBe(before);
   });
 });
+
+describe('the passport that travels with the raster', () => {
+  // A tamper-evident provenance record, not a signature. It digests ONE file,
+  // the bare-earth raster, rather than the package it rides in: a record
+  // digesting the archive that contains it could never verify, because adding
+  // it changes what it measured.
+
+  it('is written beside the raster it describes', async () => {
+    const { buildDemPackage } = await import('../src/terrain/export/demPackage');
+    const zip = buildDemPackage(readyResult(), { basename: 'terrain', linearUnit: 'metre' });
+    const text = new TextDecoder().decode(zip);
+    expect(text).toContain('terrain-dtm.tif.olv-passport.json');
+  });
+
+  it('names the artifact it digested and records no signature claim', async () => {
+    const { buildDemPackage } = await import('../src/terrain/export/demPackage');
+    const zip = buildDemPackage(readyResult(), { basename: 'terrain', linearUnit: 'metre' });
+    const text = new TextDecoder().decode(zip);
+    expect(text).toContain('terrain-dtm.tif');
+    expect(text.toLowerCase()).not.toContain('digital signature');
+    expect(text.toLowerCase()).not.toContain('notaris');
+  });
+});
