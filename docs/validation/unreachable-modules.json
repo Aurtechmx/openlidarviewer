@@ -161,6 +161,13 @@
       "review": "2027-03-31"
     },
     {
+      "path": "src/render/streaming/historyBudget.ts",
+      "status": "staged",
+      "why": "Sizes the accumulation history and picks its texture formats. No history is allocated, so nothing asks what it would cost.",
+      "graduation": "The accumulation pass allocates history at these formats, declines above the ceiling and leaves source rendering in place, and releases the textures when the device pixel ratio changes rather than keeping an oversized one.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/microGap.ts",
       "status": "staged",
       "why": "Decides whether a background pixel may borrow a depth from its cardinal neighbours. No reconstruction pass runs, so no pixel is ever offered.",
