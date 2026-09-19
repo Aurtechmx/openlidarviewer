@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -154,7 +154,20 @@ describe('streamed-node culling baseline', () => {
     };
 
     const abs = resolve(ROOT, OUT);
-    const previous = existsSync(abs) ? JSON.parse(readFileSync(abs, 'utf8')) : null;
+    // Read straight through rather than asking whether the file exists first.
+    // A check followed by a read is two answers about one file and they can
+    // disagree, so absence is taken from the read itself. Only a missing file
+    // counts as no previous record: a corrupt or unreadable one throws, because
+    // silently overwriting a baseline the gate compares against would hide the
+    // very difference the record exists to show.
+    const previous = ((): Record<string, unknown> | null => {
+      try {
+        return JSON.parse(readFileSync(abs, 'utf8')) as Record<string, unknown>;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw err;
+      }
+    })();
     // Rewrite when anything but the revision differs, so a rerun does not churn
     // the file with a new commit alone. Comparing only the measured cases was
     // too narrow: it meant a correction to what the record SAYS about those
