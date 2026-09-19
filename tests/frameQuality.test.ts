@@ -6,7 +6,7 @@ import {
   temporalVariance,
   type Frame,
 } from './quality/frameQuality';
-import type { SupportKind } from '../src/render/streaming/microGap';
+import type { SupportKind } from '../src/render/continuity/microGap';
 
 /** Build a frame from a picture: `.` empty, `d` direct, `a` accumulated, `r` reconstructed. */
 function frame(rows: string[], depths: number[][]): Frame {

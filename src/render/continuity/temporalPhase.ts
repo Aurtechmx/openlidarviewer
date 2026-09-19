@@ -25,7 +25,7 @@
  * what it measures, and nothing here may reach picking, measurement, terrain,
  * export or claim evidence.
  */
-import { fadeHashUnit } from './fadeDither';
+import { fadeHashUnit } from '../streaming/fadeDither';
 
 /**
  * How many phases the frame budget is split across. Powers of two so a phase

@@ -17,8 +17,8 @@
  * Validation only. These describe a picture, never the ground it was made from,
  * and no figure here may reach a measurement, an export or claim evidence.
  */
-import { depthCompatible, DEFAULT_DEPTH_EPSILON } from '../../src/render/streaming/depthMerge';
-import type { SupportKind } from '../../src/render/streaming/microGap';
+import { depthCompatible, DEFAULT_DEPTH_EPSILON } from '../../src/render/continuity/depthMerge';
+import type { SupportKind } from '../../src/render/continuity/microGap';
 
 /** One frame, as the buffers a renderer would hold. */
 export interface Frame {

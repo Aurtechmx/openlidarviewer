@@ -4,7 +4,7 @@ import {
   drawnThisPhase,
   DEFAULT_PHASE_COUNT,
   type PhaseCount,
-} from '../src/render/streaming/temporalPhase';
+} from '../src/render/continuity/temporalPhase';
 import { fadeHashUnit } from '../src/render/streaming/fadeDither';
 
 const COUNTS: PhaseCount[] = [2, 4, 8];

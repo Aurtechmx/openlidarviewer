@@ -5,7 +5,7 @@ import {
   insideLens,
   admitsReconstruction,
   type Lens,
-} from '../src/render/streaming/evidenceLens';
+} from '../src/render/continuity/evidenceLens';
 
 const OPEN: Lens = {
   centreXPx: 100,

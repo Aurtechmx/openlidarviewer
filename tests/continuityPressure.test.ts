@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { nextTierUnderPressure } from '../src/render/streaming/continuityPressure';
-import { TIER_ORDER, type ContinuityTier } from '../src/render/streaming/continuityTier';
+import { nextTierUnderPressure } from '../src/render/continuity/continuityPressure';
+import { TIER_ORDER, type ContinuityTier } from '../src/render/continuity/continuityTier';
 import {
   FPS_PRESSURE_HIGH_MS,
   FPS_PRESSURE_LOW_MS,

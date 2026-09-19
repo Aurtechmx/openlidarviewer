@@ -147,63 +147,63 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/render/streaming/continuityFailure.ts",
+      "path": "src/render/continuity/continuityFailure.ts",
       "status": "staged",
       "why": "Decides what to run after a continuity pass fails, and wraps a pass so a throw cannot reach the render loop. No pass runs, so nothing fails and nothing is wrapped.",
       "graduation": "The render loop runs each continuity pass through runContinuityPass and takes the tier from afterFailure, so a refused allocation or a thrown pass leaves a simpler picture rather than a broken frame.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/continuityPressure.ts",
+      "path": "src/render/continuity/continuityPressure.ts",
       "status": "staged",
       "why": "Maps the renderer's existing frame-time pressure onto a continuity tier. No tier is selected and every capability is off, so nothing asks.",
       "graduation": "The render loop holds a current tier and asks this each decision, feeding the same smoothed frame time the scheduler already reacts to rather than sampling its own.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/continuitySupport.ts",
+      "path": "src/render/continuity/continuitySupport.ts",
       "status": "staged",
       "why": "Scores how well a pixel is backed by nearby samples and gates reconstruction on it. Nothing reconstructs, so no pixel is scored.",
       "graduation": "The reconstruction pass scores each candidate pixel and fills only above the threshold, with that threshold and the sample count set from real scenes at several densities rather than the starting values here.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/continuityTier.ts",
+      "path": "src/render/continuity/continuityTier.ts",
       "status": "staged",
       "why": "Chooses how far the field may go on a given backend and what it falls back to. Every capability is off, so no tier is ever selected.",
       "graduation": "The renderer detects what a backend supports, asks for a tier and applies its capabilities, falling to source rendering rather than failing when none can be carried.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/convergence.ts",
+      "path": "src/render/continuity/convergence.ts",
       "status": "staged",
       "why": "Schedules which temporal phase a parked frame contributes and when the sweep is complete. No frame accumulates, so nothing asks it.",
       "graduation": "Accumulation turns on and the render loop drives the sweep from this state, feeding the scheduler's own refinement phase, stopping when it reports converged. The EDL repaint must move with it: edlMotionGate runs EDL once the moment motion stops, which is the first frame of the sweep, so it would shade an image that is one phase complete and never run again. It has to fire on converged instead of on parked.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/depthMerge.ts",
+      "path": "src/render/continuity/depthMerge.ts",
       "status": "staged",
       "why": "Decides whether a new sample replaces, joins or loses to the accumulation history at a pixel. No history buffers exist, so no sample is ever tested against one.",
       "graduation": "The accumulation pass keeps history colour, depth and support, and applies this decision per sample, with the depth tolerance measured against near geometry and distant terrain.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/evidenceLens.ts",
+      "path": "src/render/continuity/evidenceLens.ts",
       "status": "staged",
       "why": "Decides where the renderer stops substituting reconstruction and shows measured evidence. Nothing reconstructs, so there is nothing to reveal and no lens is opened.",
       "graduation": "Reconstruction runs and the lens suppresses it under the cursor, reachable from Inspect, Measure or Probe, with picking unchanged whether it is open or shut.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/microGap.ts",
+      "path": "src/render/continuity/microGap.ts",
       "status": "staged",
       "why": "Decides whether a background pixel may borrow a depth from its cardinal neighbours. No reconstruction pass runs, so no pixel is ever offered.",
       "graduation": "The reconstruction pass runs over unsupported pixels and marks what it writes as reconstructed, with the evidence lens able to show those pixels apart from measured ones. Before it is enabled, the six raster exporters must be settled: BaseExportMode captures the live on-screen canvas, so a height, depth or normal raster would carry invented geometry with nothing in FigureStampContext recording it. Either the field is off for a capture, or the stamp declares reconstruction.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/movingSubset.ts",
+      "path": "src/render/continuity/movingSubset.ts",
       "status": "staged",
       "why": "Decides how many temporal phases a moving frame draws and how much wider each drawn point must be. No frame draws a subset today, so nothing asks.",
       "graduation": "A measurement on a real device shows a phase subset buys frame time that the existing motion reductions have not already taken, and the render loop draws that subset.",
@@ -217,7 +217,7 @@
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/normalAgreement.ts",
+      "path": "src/render/continuity/normalAgreement.ts",
       "status": "staged",
       "why": "Refuses a gap fill where the surrounding normals face different ways. Nothing fills a gap, so nothing asks, and most sources carry no normals at all.",
       "graduation": "The reconstruction pass reads normals where a source provides them and refuses a fill they object to, with the angle set from real scans rather than the starting value here.",
@@ -238,14 +238,14 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/render/streaming/supportCensus.ts",
+      "path": "src/render/continuity/supportCensus.ts",
       "status": "staged",
       "why": "Counts drawn pixels by whether they were measured, carried over or invented. No pass records support per pixel, so there is nothing to count.",
       "graduation": "The renderer tracks support provenance per pixel and a regression test fails a frame whose reconstructed share passes the ceiling, with that ceiling set from real scenes at several densities.",
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/temporalPhase.ts",
+      "path": "src/render/continuity/temporalPhase.ts",
       "status": "staged",
       "why": "Assigns each point a temporal phase for the accumulation capability. That capability is off, so no frame draws a subset and nothing asks a point which phase it is in.",
       "graduation": "Temporal accumulation turns on and the size graph folds the phase in as its own node, independent of the fade dither, which endNodeDissolve drops once a node settles.",

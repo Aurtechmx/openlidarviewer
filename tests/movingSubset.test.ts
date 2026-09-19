@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { activePhases, footprintCompensation, PHASES_DRAWN_WHILE } from '../src/render/streaming/movingSubset';
-import { temporalPhase, type PhaseCount } from '../src/render/streaming/temporalPhase';
+import { activePhases, footprintCompensation, PHASES_DRAWN_WHILE } from '../src/render/continuity/movingSubset';
+import { temporalPhase, type PhaseCount } from '../src/render/continuity/temporalPhase';
 import { REFINEMENT_PHASE_ORDER } from '../src/render/refinementPhase';
 
 const COUNTS: PhaseCount[] = [2, 4, 8];

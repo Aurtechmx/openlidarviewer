@@ -6,7 +6,7 @@ import {
   degrade,
   type ContinuityTier,
   type BackendSupport,
-} from '../src/render/streaming/continuityTier';
+} from '../src/render/continuity/continuityTier';
 import type { ContinuityCapabilities } from '../src/render/continuity/continuityField';
 
 const on = (c: ContinuityCapabilities): string[] =>

@@ -229,6 +229,18 @@ export class CoarseLodSizeNodes {
    * Point the coverage uniform at a size mode. A value write only, like
    * {@link setPhase}: the graph shape does not depend on the mode, so a switch
    * rebuilds no pipeline.
+   *
+   * This is the shape every continuity capability has to take. The size graph
+   * already varies with five conditional folds and three size modes, which is
+   * ninety-six possible shapes; six capabilities each adding a fold of their own
+   * would be six thousand. Ride an existing fold as a uniform, and `has` stays
+   * the same test it was, so nothing new is compiled and no combination is added
+   * to the set a device might have to build.
+   *
+   * Folding unconditionally instead, and relying on an identity value to make an
+   * inactive capability free, is the mistake the filter masks already made: it
+   * compiled attribute reads into essentially every scan's vertex shader and is
+   * the regression `_applySizeMode` carries a note about.
    */
   setMode(mode: PointSizeMode): void {
     this._coverage.value = mode === 'density' ? 1 : 0;
