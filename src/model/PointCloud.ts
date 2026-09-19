@@ -46,6 +46,13 @@ export interface CloudMetadata {
    * no PDRF, where ASPRS class semantics do not apply.
    */
   pointFormat?: number;
+  /**
+   * How the source declared its GPS time: Adjusted Standard GPS Time or GPS
+   * Week Time, from Global Encoding bit 0. Absent where the source cannot say.
+   * The two are different quantities, so an export has to declare what it
+   * carried rather than assume the modern convention.
+   */
+  gpsTimeType?: 'adjusted-standard' | 'week';
   /** Software that produced the file, e.g. the LAS Generating Software field. */
   sourceSoftware?: string;
   /**
