@@ -216,6 +216,12 @@ export interface PointInfo {
   /** Source layer / file name. */
   layer: string;
   /**
+   * The LAS point data record format the source declared, when it declared
+   * one. Class names depend on it, so without it the four codes that differ
+   * between the legacy and extended tables have to report both readings.
+   */
+  pointFormat?: number;
+  /**
    * The renderer's own id for the layer this point belongs to.
    *
    * ADDED for the Range Frame Workbench's identity link, and kept as small as
@@ -272,6 +278,8 @@ export interface PointInfo {
 
 /** Inputs for {@link makePointInfo} — local coordinates plus the load origin. */
 export interface RawPointInfo {
+  /** The LAS point data record format the source declared, when it has one. */
+  pointFormat?: number;
   layer: string;
   /** See {@link PointInfo.layerId}. Null and undefined both mean "no id". */
   layerId?: string | null;
@@ -340,6 +348,7 @@ export function makePointInfo(raw: RawPointInfo): PointInfo {
     classificationDerived: raw.classificationDerived ?? false,
     rgb: raw.rgb,
   };
+  if (raw.pointFormat !== undefined) info.pointFormat = raw.pointFormat;
   // The inspection extras — carried only when the cloud supplies them,
   // so the inspector card can omit a row entirely rather than show a blank.
   if (raw.returnNumber !== undefined) info.returnNumber = raw.returnNumber;
@@ -405,7 +414,7 @@ export function intensityText(info: PointInfo): string {
 /** The classification field's display text — a name, or "Not available". */
 export function classificationText(info: PointInfo): string {
   if (info.classification === null) return 'Not available';
-  const label = classificationLabel(info.classification);
+  const label = classificationLabel(info.classification, info.pointFormat);
   // Mark a viewer-derived class so it is never read as an authoritative
   // producer label — the single most important per-point provenance fact.
   return info.classificationDerived ? `${label} · derived (heuristic)` : label;
@@ -547,7 +556,7 @@ export function pointInfoJson(
     z: info.z,
     intensity: info.intensity,
     classification:
-      info.classification === null ? null : classificationLabel(info.classification),
+      info.classification === null ? null : classificationLabel(info.classification, info.pointFormat),
     rgb: info.rgb,
   };
   // Optional LAS extras are added only when present, so a non-LAS cloud's

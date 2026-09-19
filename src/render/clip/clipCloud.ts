@@ -69,6 +69,10 @@ export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
     colors: filterChannel(cloud.colors, keep, n),
     intensity: filterChannel(cloud.intensity, keep, n),
     classification: derived ? undefined : classification,
+    // Flags are the producer's, never the viewer's, so they travel even when a
+    // derived classification does not. Dropping them here made a withheld
+    // point indistinguishable from an ordinary one after a clip.
+    classificationFlags: filterChannel(cloud.classificationFlags, keep, n),
     normals: filterChannel(cloud.normals, keep, n),
     returnNumber: filterChannel(cloud.returnNumber, keep, n),
     returnCount: filterChannel(cloud.returnCount, keep, n),
