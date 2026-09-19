@@ -1020,3 +1020,63 @@ depth is the nearest supporting neighbour: they already agree within tolerance,
 so it barely moves the value, and the nearest keeps a filled pixel from sitting
 behind the surface it belongs to.
 
+### L60 · MEASURED · ARCHITECTURE
+
+The programme asks for the EDL ordering to be settled experimentally. Two of the
+arrangements are settled before any experiment runs, because they are wrong
+rather than merely worse.
+
+EDL ahead of accumulation would shade each partial image and then accumulate
+what it shaded, so the result carries shading computed from several different
+partial depth buffers and corresponds to no single depth image. EDL ahead of gap
+closure would read the seams between splats as depth discontinuities and trace
+them, which is the hole artefact the programme asks to remove. Samples, then
+accumulation, then closure, then EDL. What a device would settle is how much the
+difference is worth, not which way round it goes.
+
+There is one EDL implementation, pure in `edl.ts` and mirrored in the size graph,
+so nothing here adds a second.
+
+The useful finding is a collision rather than an order. `edlMotionGate` runs EDL
+only while the camera is parked, and the Viewer forces exactly one repaint the
+moment motion stops. That moment is the first frame of a convergence sweep, so
+EDL would shade an image one phase complete and never run again. Nothing is
+broken while accumulation is off, so this is recorded against the convergence
+module's graduation rather than patched now.
+
+### L61 · PARTIAL · CORRECTNESS
+
+The field draws pixels no point was recorded at. The lens is how that gets
+checked: under it nothing is substituted, so what remains is coverage the data
+paid for.
+
+The edge is a decision, not a decoration. A lens that faded reconstruction in
+across its rim would leave a ring of partly invented pixels, and a viewer holding
+it over a doubtful patch is often reading that exact band, so the instrument
+would be least trustworthy where it is most used. Coverage softens how the two
+renderings blend; it never softens whether a pixel may be invented. That decision
+is hard and reaches the outer edge of the feather rather than the radius, which
+errs toward showing less than the field would. Tying it to the soft value instead
+fails three assertions.
+
+Nothing in the module takes or returns a coordinate anything could measure with,
+so the rule that picking is unchanged whether the lens is open or shut holds by
+construction rather than by comment.
+
+### L62 · PARTIAL · CORRECTNESS
+
+The claim that the field closes seams and never paints across unrecorded ground
+is countable. Tally drawn pixels by where the colour came from, and a test fails
+on the share rather than on somebody reading a screenshot.
+
+The denominator is the decision. Measured against the whole frame the same
+reconstruction shrinks by pulling the camera back until most of the image is
+background, which is the one direction this number must not be easy to move.
+Against drawn pixels it answers what is being asked: of the surface in view, how
+much was not measured. A frame that drew nothing reports no share rather than a
+clean one, so an empty view cannot pass as a good result.
+
+The ceiling is a starting value. Closing single-pixel seams touches a small
+minority of drawn pixels and a fifth of the visible surface is well past a seam,
+but the figure that belongs there comes from real scenes at several densities.
+

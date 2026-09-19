@@ -143,7 +143,7 @@
       "path": "src/render/streaming/convergence.ts",
       "status": "staged",
       "why": "Schedules which temporal phase a parked frame contributes and when the sweep is complete. No frame accumulates, so nothing asks it.",
-      "graduation": "Accumulation turns on and the render loop drives the sweep from this state, stopping when it reports converged.",
+      "graduation": "Accumulation turns on and the render loop drives the sweep from this state, stopping when it reports converged. The EDL repaint must move with it: edlMotionGate runs EDL once the moment motion stops, which is the first frame of the sweep, so it would shade an image that is one phase complete and never run again. It has to fire on converged instead of on parked.",
       "review": "2027-03-31"
     },
     {
@@ -151,6 +151,13 @@
       "status": "staged",
       "why": "Decides whether a new sample replaces, joins or loses to the accumulation history at a pixel. No history buffers exist, so no sample is ever tested against one.",
       "graduation": "The accumulation pass keeps history colour, depth and support, and applies this decision per sample, with the depth tolerance measured against near geometry and distant terrain.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/streaming/evidenceLens.ts",
+      "status": "staged",
+      "why": "Decides where the renderer stops substituting reconstruction and shows measured evidence. Nothing reconstructs, so there is nothing to reveal and no lens is opened.",
+      "graduation": "Reconstruction runs and the lens suppresses it under the cursor, reachable from Inspect, Measure or Probe, with picking unchanged whether it is open or shut.",
       "review": "2027-03-31"
     },
     {
@@ -187,6 +194,13 @@
       "why": "It maps a device tier onto a full bundle of streaming-session defaults: quality preset, EDL default and fade-in. The direct calls did not settle its question, they left its value unrealised. src/main.ts hardcodes the initial streamingQuality to 'balanced' and never derives it from deviceCapsValue.tier; streamingBudgets(quality, isMobile) is called with that fixed quality. So no path yet turns a device tier into these session defaults as a whole. tierAdaptation.ts, itself staged, is written to layer runtime FPS stepping on top of this bundle, which marks it as intended future work rather than a superseded module. Wiring it would edit src/main.ts, held off here because concurrent work owns that file.",
       "graduation": "The attach path in src/main.ts derives its initial streaming quality, EDL and fade-in defaults from streamingProfileForTier(deviceCapsValue.tier, isPhone()) instead of the hardcoded 'balanced'.",
       "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/streaming/supportCensus.ts",
+      "status": "staged",
+      "why": "Counts drawn pixels by whether they were measured, carried over or invented. No pass records support per pixel, so there is nothing to count.",
+      "graduation": "The renderer tracks support provenance per pixel and a regression test fails a frame whose reconstructed share passes the ceiling, with that ceiling set from real scenes at several densities.",
+      "review": "2027-03-31"
     },
     {
       "path": "src/render/streaming/temporalPhase.ts",
