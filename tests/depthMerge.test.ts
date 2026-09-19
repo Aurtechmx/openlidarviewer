@@ -3,6 +3,7 @@ import {
   mergeDecision,
   depthCompatible,
   DEFAULT_DEPTH_EPSILON,
+  type ColorSemantics,
 } from '../src/render/continuity/depthMerge';
 
 const EPS = DEFAULT_DEPTH_EPSILON;
@@ -95,5 +96,43 @@ describe('mergeDecision', () => {
   it('honours a caller-supplied tolerance', () => {
     expect(mergeDecision(10, 12, 1)).toBe('replace');
     expect(mergeDecision(10, 12, 1, 1)).toBe('blend');
+  });
+});
+
+describe('categorical colour', () => {
+  const sameSurface = 10 * 2 ** (EPS / 2);
+
+  // Classification numbers are labels. A colour between two of them is not a
+  // value at all: it reads as a class the data does not contain, which is the
+  // honesty gate the colour modes already apply, arriving through time.
+  it('never blends two labels on one surface', () => {
+    expect(mergeDecision(10, sameSurface, 1, EPS, 'categorical')).not.toBe('blend');
+    expect(mergeDecision(10, sameSurface, 1, EPS, 'continuous')).toBe('blend');
+  });
+
+  it('takes the nearer label rather than making a third', () => {
+    expect(mergeDecision(10, 10.05, 1, EPS, 'categorical')).toBe('replace');
+    expect(mergeDecision(10.05, 10, 1, EPS, 'categorical')).toBe('keep');
+  });
+
+  // Without a deterministic tie-break a surface carrying two classes alternates
+  // between them frame after frame, which is the sparkle the stable temporal
+  // partition exists to prevent, returning through colour.
+  it('settles an exact tie on what is already there', () => {
+    expect(mergeDecision(10, 10, 1, EPS, 'categorical')).toBe('keep');
+    for (let i = 0; i < 20; i++) expect(mergeDecision(10, 10, 1, EPS, 'categorical')).toBe('keep');
+  });
+
+  it.each(['continuous', 'categorical'] as ColorSemantics[])(
+    'still accepts a first sample and still keeps a nearer history under %s',
+    (semantics) => {
+      expect(mergeDecision(10, 0, 0, EPS, semantics)).toBe('accept');
+      expect(mergeDecision(50, 5, 1, EPS, semantics)).toBe('keep');
+      expect(mergeDecision(5, 50, 1, EPS, semantics)).toBe('replace');
+    },
+  );
+
+  it('defaults to continuous, so an unaware caller is unchanged', () => {
+    expect(mergeDecision(10, sameSurface, 1, EPS)).toBe('blend');
   });
 });

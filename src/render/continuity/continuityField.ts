@@ -89,7 +89,29 @@ export interface DisplayState {
   readonly renderOrigin: string;
   /** Which dataset or datasets are mounted. */
   readonly dataset: string;
-  /** The resident LOD frontier, when a change to it replaces drawn geometry. */
+  /**
+   * What the streamed frontier is drawing, when a change to it replaces drawn
+   * geometry.
+   *
+   * The choice of what goes in here decides whether this field is useful or
+   * ruinous, so it is worth stating. Too fine, such as every resident node id,
+   * and the epoch moves whenever anything lands anywhere, including behind the
+   * camera. Too coarse, such as a frontier depth, and a child replacing its
+   * parent's support in the middle of the view leaves a history describing
+   * geometry that is no longer drawn.
+   *
+   * Start with the ids of the nodes actually drawn. That is the conservative
+   * choice: it can invalidate more often than it strictly must, never less, and
+   * being wrong in that direction costs work rather than correctness.
+   *
+   * It costs less work than it appears, because a sweep only runs at full
+   * refinement. While nodes are still arriving there is no accumulation to
+   * discard, so a frontier that churns during refinement throws nothing away.
+   * That is what makes the conservative choice affordable, and it is why the
+   * narrower rules, ignoring arrivals outside the viewport and arrivals that do
+   * not change visible support, are an optimisation to make once something has
+   * been measured rather than a thing to guess at now.
+   */
   readonly lodFrontier: string;
   /** Classification visibility mask. */
   readonly classFilter: string;

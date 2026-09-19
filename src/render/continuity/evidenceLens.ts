@@ -26,6 +26,38 @@
  * takes or returns a coordinate that anything could measure with.
  */
 
+/**
+ * What the lens is able to show, which is not always what a viewer will read
+ * into it.
+ *
+ * Under the lens nothing is substituted, so every pixel left is one a sample
+ * paid for. On a streamed scan that sentence is still true and still
+ * misleading: the samples present are the ones that have loaded, not the ones
+ * the file holds, and a viewer holding the lens over a thin patch cannot tell
+ * whether the ground was sparsely measured or the data has not arrived. Those
+ * are opposite conclusions and the lens looks identical in both.
+ *
+ * So the lens carries the same qualifier a measurement does, from the same
+ * fact. It can report complete evidence only where the source is proven
+ * complete, and never on its own say.
+ */
+export type LensEvidence =
+  /** Every sample the source holds for this view is present. */
+  | 'complete'
+  /** Some of the source is not here yet; absence is not evidence of absence. */
+  | 'partial';
+
+/**
+ * What the lens may claim, given whether the source is proven complete.
+ *
+ * Takes the fact rather than deriving it, because completeness is a property of
+ * the source and is decided where residency is known. A lens that worked it out
+ * for itself would be a second opinion on a question that already has an owner.
+ */
+export function lensEvidence(sourceComplete: boolean): LensEvidence {
+  return sourceComplete === true ? 'complete' : 'partial';
+}
+
 /** The lens as the renderer holds it. */
 export interface Lens {
   /** Cursor position in device pixels. */
