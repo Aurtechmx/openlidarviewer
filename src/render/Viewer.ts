@@ -4425,7 +4425,7 @@ export class Viewer {
       const resident = this._streaming.cloud.residentPointCount;
       displayedPoints += resident;
       totalPoints += this._streaming.cloud.sourcePointCount ?? resident;
-      gpuBytesEstimate += estimateGpuBytes(resident);
+      gpuBytesEstimate += estimateGpuBytes(resident, this._streaming.renderer.uploadedAttributes);
     }
 
     // three.js names this counter `drawCalls` on the WebGPU backend and

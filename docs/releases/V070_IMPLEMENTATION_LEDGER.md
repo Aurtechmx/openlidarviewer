@@ -738,15 +738,15 @@ and `estimateGpuBytes` takes the channels a cloud actually uploads.
 The breakdown sums to the total by construction, so a readout showing where the
 bytes went cannot disagree with the figure beside it.
 
-Adding the capability was not the fix, and calling it one was premature. Both
-callers still passed nothing and so still took the floor, which left the readout
-exactly as wrong as before. `StreamingRenderer` now reports which channels its
+The capability alone did not change the readout. Both callers still passed
+nothing and so still took the floor, leaving the figure exactly as wrong as
+before. `StreamingRenderer` now reports which channels its
 resident meshes uploaded, read from the decoded chunks rather than from a flag,
 and the two callers ask for it. A caller that cannot name the channels still
 gets the floor, which is the honest answer for one that does not know. Covered
 by `tests/renderMemoryAccounting.test.ts`.
 
-### L49 · OPEN · PERFORMANCE
+### L49 · MEASURED · PERFORMANCE
 
 The same reading shows what the uploads cost against what the source carries. A
 colour is three bytes in the file and twelve in the buffer, a classification one
@@ -757,3 +757,37 @@ Packing them back to their source widths is a real saving and a real risk:
 classification codes have to survive as exact integers, colour has to keep its
 transfer function, and both backends have to agree. Measuring it first is why
 the accounting above came first.
+
+Two of the three packings save nothing as the renderer is built. Each attribute
+is uploaded as its own instanced buffer, and WebGPU requires a vertex buffer's
+stride to be a multiple of four bytes, so a one-byte classification and a
+two-byte intensity cannot occupy less than four. Narrowing either leaves the
+buffer the size it already was. Only colour crosses a stride boundary: three
+bytes pad to four, against the twelve it takes now.
+
+The saving available without changing the layout is therefore eight bytes a
+point, all of it colour, and colour is the attribute carrying the sRGB transfer
+function. Taking it means the piecewise EOTF that `colorEncode.ts` holds as one
+seam has to run in the shader instead, matching the 256-entry table exactly. The
+rest of the expansion is reachable only by interleaving the four attributes into
+one buffer, which reaches twenty bytes a point against thirty-two.
+
+Against the desktop budgets, in the 1024-based units the overlay prints: 76.3 MB
+at 2.5M resident points today, 57.2 MB with colour packed, 47.7 MB interleaved.
+At the 8M setting, 244.1 MB, 183.1 MB and 152.6 MB.
+
+Neither change is made here. No attribute in the tree is anything but Float32,
+and `Viewer.ts` records one case where the two backends did not agree about a GPU
+primitive: the point size WebGPU locked to a single pixel, which the quad sprite
+exists to work around. Settling it needs a parity measurement on both backends on
+real devices, against the 256 values of the sRGB table. The browser evidence this
+release carries is Chromium-blocking with the other engines advisory.
+
+### L50 · FIXED · CORRECTNESS
+
+A third caller of `estimateGpuBytes`, the one building the renderer stats inside
+`Viewer`, still passed no channels and so still took the floor, while its comment
+said it used the streaming layout's own per-point cost. It reported a classified
+cloud carrying intensity at 24 bytes a point instead of 32. The channel set was
+already in scope a line above it.
+
