@@ -383,6 +383,13 @@
       "why": "Places the evidence lens for sources that do not report a position continuously, so touch and keyboard viewers can hold it somewhere instead of only under a hovering mouse. Nothing calls it because the evidence lens capability cannot be switched on, so there is no lens for an intent to move.",
       "graduation": "Reachable when evidenceLens graduates. The canvas input layer translates pointer, touch and key events into LensIntent values and keeps the Lens this reducer returns, rather than writing lens fields at each event site.",
       "review": "2027-09-19"
+    },
+    {
+      "path": "src/render/continuity/mobilePolicy.ts",
+      "status": "staged",
+      "why": "Caps the tier ladder on touch-first devices and sizes the accumulation history from the parked pixel ratio rather than the motion-reduced one, so a ratio change does not free and reallocate three surfaces on the frame a sweep begins. Nothing calls it because no continuity capability can be switched on: there is no history to size and no tier to cap.",
+      "graduation": "Reachable when any capability graduates. The Viewer asks tierUnderPolicy with its measured BackendSupport and isTouchFirstDevice, and HistoryTargets.resize takes allocatedHistoryDpr instead of the renderer's current pixel ratio.",
+      "review": "2027-09-19"
     }
   ]
 }

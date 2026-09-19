@@ -1948,3 +1948,51 @@ phase about something else.
 
 Both staged. Neither capability can be switched on, so exposure has no history
 to present and placement has no lens to move.
+
+### L96 · PARTIAL · ARCHITECTURE
+
+The benchmark this phase asks for was not run. There is no iPhone-class WebKit
+runner here, no Android device and no tablet, so the frame budget on those
+classes is unmeasured and nothing in this entry reports otherwise.
+
+That absence decides the policy rather than blocking it. A touch-first device is
+capped at coverage sizing, the rung that reconstructs nothing and keeps no
+history, and the cap lifts only on evidence naming a higher sustained rung for a
+device class somebody measured. No such record exists, so a phone gets coverage
+sizing under every combination of backend inputs, which a test asserts by
+enumerating all eight rather than by checking the one path. Lifting the cap
+because the memory arithmetic works would be answering a frame-budget question
+with a memory-budget answer.
+
+The coordination the phase asks for turned out to be a real collision. Applying
+a pixel ratio reallocates the drawing buffer, which is why the adaptive ratio
+rate-limits its reductions, and the history keeps three surfaces sized to that
+same backing store. Sizing the history from the ratio in force would reallocate
+all three on every motion episode, and it would do it at the worst moment: the
+ratio snaps back to full the instant the camera parks, and parking is when a
+sweep starts. The history would be thrown away on the frame it was about to be
+used.
+
+So the history is sized from the parked ratio and ignores the reductions, which
+costs nothing. Reductions happen only while the camera moves, and a moving
+camera has no sweep, because convergence needs a fully refined view. The reduced
+frames are the ones nothing was going to be written from.
+
+The bound under a high ratio is solved, not picked. The budget ceiling already
+exists and the cost is backing-store area times bytes per pixel, so the largest
+ratio that fits is the square root of one over the other. It is quantised down
+onto the same grid the adaptive ratio snaps to, so the two never ask for backing
+stores a quarter-step apart, and down rather than to nearest because a ratio
+that rounds up does not fit.
+
+What the bound must not do is lower the render ratio. The history enhances the
+picture; degrading the picture to afford the enhancement has that backwards. The
+history takes a ratio at or below the render one, and where the legibility floor
+will not fit it reports no history at all, which the ladder already absorbs.
+
+Touch-first comes from the existing pointer query, which asks whether the
+pointer is coarse and hoverless. A user-agent string says nothing reliable about
+a GPU and the programme forbids brand lists.
+
+Staged. No capability can be switched on, so there is no history to size and no
+tier to cap.
