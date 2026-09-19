@@ -2231,3 +2231,40 @@ neighbours now fails two of them, where the original version noticed nothing.
 The rule that a reconstructed pixel is never evidence is a second line behind a
 first that already holds in this geometry, so it is asserted directly rather
 than through a hole that never reaches it.
+
+### L103 · PARTIAL · SCIENTIFIC
+
+A screenshot corpus needs the field wired into a renderer and a device to
+render on, and there is neither. What the five defect classes need is narrower
+and available now: a frame with known depths, known support and known labels,
+run through the same pure rules a shader would mirror. Ten scenes were built as
+deterministic grids, one per case the phase names, with no randomness anywhere,
+so a failure names a rule instead of a driver.
+
+This is not the screenshots and does not replace them. A rule can be right
+while a shader mirroring it is wrong, and only a device shows that. What it
+catches is a rule that would produce the defect however faithfully it were
+drawn, which is the cheaper half and the half that is findable today.
+
+The corpus immediately found something the assertions had been hiding. The roof
+ridge fills. Two slopes either side of a fold sit at nearly the same distance
+from the camera, pass the depth test comfortably, and closure lays a patch
+across the fold. That is the exact limitation `normalAgreement` was written
+for, and says so in its own header, so the corpus now records both halves:
+depth alone closes the ridge, and normals refuse it.
+
+Three of the first assertions were vacuous and passed for reasons unrelated to
+what they claimed. One compared a value against itself through a ternary
+identical on both branches. Two sat behind conditions that were never true, so
+they asserted nothing while reading as coverage. Rewritten, they check that
+every fill takes a depth some direct neighbour actually had, that a steeply
+receding facade is never interpolated across, and that the near and far bands
+of a three-order-of-magnitude scene are never one surface.
+
+Probing found one more gap. Replacing the nearest-neighbour fill depth with
+their mean changed nothing, because every scene had supporting neighbours at
+identical depths, where the two rules agree. The roof was symmetric. Making its
+slopes unequal, which is also what a roof is like, gives the scene a case where
+nearest and mean differ, and the substitution now fails two assertions. Three
+separate probes bite: widening the depth tolerance, averaging the fill depth,
+and letting disagreeing normals permit a fill.
