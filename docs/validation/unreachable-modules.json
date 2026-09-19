@@ -126,6 +126,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/continuity/continuityField.ts",
+      "status": "staged",
+      "why": "The Continuity Field's display-epoch core. The subsystem ships with every capability off, so the renderer does not yet open an epoch or ask whether one is still valid, and nothing constructs a DisplayState.",
+      "graduation": "A capability turns on and the render loop drives the epoch, so a reused frame is gated on advanceEpoch rather than redrawn unconditionally.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/hillshadeColors.ts",
       "status": "staged",
       "why": "Sun-direction shading over the elevation ramp. src/render/inspectionPresets.ts states the matching fact from the other side: the preset it belongs to has \"no runtime setter behind\" it and \"there is no live hillshade renderer to switch\".",

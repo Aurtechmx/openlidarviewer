@@ -821,3 +821,64 @@ now carries the axis pair.
 Density sizing stays a display multiplier on `aSize`. Its one caller builds that
 attribute, and no analytical density reads it.
 
+### L52 · PARTIAL · ARCHITECTURE
+
+The Continuity Field reuses work between frames, so it needs one answer to
+whether the previous frame's work still describes the same picture. That is the
+display epoch, and it is the first piece of the subsystem because every other
+capability depends on it.
+
+`src/render/continuity/continuityField.ts` holds it. The module is pure and
+imports no three.js, the way `refinementPhase.ts` keeps its maths out of the
+Viewer. A camera matrix or a clip volume arrives already reduced to a string by
+whoever owns it, so the core stays testable in Node.
+
+History must not survive a change that alters what a pixel means, and must not
+be discarded by a change that does not. The second is the easier one to get
+wrong, so the inputs are a fixed record of seventeen fields rather than an open
+bag. Adding a field makes it invalidating and leaving one out makes it
+irrelevant, which puts everything that can throw away history in one reviewable
+place and leaves a panel opening structurally unable to reach it. A test covers
+each of the seventeen.
+
+Each epoch carries the state that opened it, so the caller cannot hand back a
+previous state that disagrees with the key and get a diff against something that
+was never in force. Epoch numbers are monotonic, so returning to an earlier
+display state opens a new epoch rather than reviving the old one and a buffer
+carrying a stale number stays recognisable. Field values are length-prefixed before joining, so a camera
+of `a|b` beside an empty projection cannot spell the same key as a camera of `a`
+beside a projection of `b`.
+
+All six capabilities are off. Nothing constructs a `DisplayState` yet, so the
+module is registered staged, and it graduates when a capability turns on and the
+render loop gates a reused frame on `advanceEpoch`. Nothing the subsystem
+produces may reach picking, measurement, terrain, export or claim evidence.
+
+### L53 · FIXED · CORRECTNESS
+
+The streaming-cull baseline asked whether its record existed and then read it.
+Two answers about one file, which can disagree, and CodeQL reported it against
+the branch. The read now stands alone and absence comes from the read itself. A
+missing file is the only case treated as no previous record: a corrupt or
+unreadable one throws, because overwriting a baseline the gate compares against
+would hide the difference the record exists to report. Verified by removing the
+file and rerunning, which rebuilt it whole.
+
+### L54 · FIXED · ARCHITECTURE
+
+The display epoch invalidates on every change the programme names, and the test
+that walked the fields could not prove it. It iterated whatever `DisplayState`
+contained, so deleting a field would have shrunk the set it checked and still
+passed.
+
+The sixteen named triggers are now pinned to fields by name, and the two sets
+are compared both ways. Dropping a trigger fails, and so does adding a field
+that invalidates without being named. Deleting the EDL field from the state
+fails two assertions rather than quietly reducing the count, which is how the
+guard was checked.
+
+Nothing else was needed for the epoch itself. The record built for the core
+already covers all sixteen, with a viewport resize reaching both the width and
+the height, so this phase closed a hole in the proof rather than adding a
+mechanism.
+
