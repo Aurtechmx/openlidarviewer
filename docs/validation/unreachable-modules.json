@@ -164,7 +164,7 @@
       "path": "src/render/streaming/microGap.ts",
       "status": "staged",
       "why": "Decides whether a background pixel may borrow a depth from its cardinal neighbours. No reconstruction pass runs, so no pixel is ever offered.",
-      "graduation": "The reconstruction pass runs over unsupported pixels and marks what it writes as reconstructed, with the evidence lens able to show those pixels apart from measured ones.",
+      "graduation": "The reconstruction pass runs over unsupported pixels and marks what it writes as reconstructed, with the evidence lens able to show those pixels apart from measured ones. Before it is enabled, the six raster exporters must be settled: BaseExportMode captures the live on-screen canvas, so a height, depth or normal raster would carry invented geometry with nothing in FigureStampContext recording it. Either the field is off for a capture, or the stamp declares reconstruction.",
       "review": "2027-03-31"
     },
     {
