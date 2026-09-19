@@ -39,6 +39,16 @@ export const PHASE_LOD_GAIN: Readonly<Record<RefinementPhase, number>> = {
   'full-refine': 0,
 };
 
+/**
+ * The largest multiplier a fully coarse node may take from coverage sizing.
+ *
+ * Deliberately its own number rather than {@link MAX_LOD_SCALE}. That one
+ * compensates a view that is still refining and is gone once it settles; this
+ * one is the settled sizing. They happen to start equal, and tuning either for
+ * its own reason must not silently move the other.
+ */
+export const MAX_COVERAGE_SCALE = 1.6;
+
 /** userData keys carrying a streamed node's resolution and its source's root. */
 export const NODE_RESOLUTION_KEY = 'olvNodeResolution';
 export const ROOT_RESOLUTION_KEY = 'olvRootResolution';
@@ -85,6 +95,36 @@ export function coarseLodScale(
   const scale = 1 + phaseLodGain(phase) * (MAX_LOD_SCALE - 1) * rel;
   if (!Number.isFinite(scale)) return 1;
   return Math.min(MAX_LOD_SCALE, Math.max(1, scale));
+}
+
+/**
+ * The settled display multiplier for one streamed node under coverage sizing:
+ *
+ *   `1 + (MAX_COVERAGE_SCALE − 1) × relativeResolution`
+ *
+ * Only in `density` mode; `adaptive` and `fixed` return exactly 1, so a mode the
+ * user did not ask for is unaffected.
+ *
+ * Unlike {@link coarseLodScale} there is no phase term, and that is the whole
+ * point. Compensation exists to carry a view while it refines and is gone when
+ * it settles. Coverage sizing is what a settled view should look like: a frontier
+ * mixes nodes from several depths, and without it the coarse ones read as
+ * speckle beside the fine ones however long the camera sits still.
+ *
+ * A node whose resolutions are unusable takes 1, because
+ * {@link relativeNodeResolution} answers 0 rather than guessing, and no sizing
+ * is better than sizing from a number that was not there.
+ */
+export function nodeCoverageScale(
+  nodeResolution: number,
+  rootResolution: number,
+  mode: PointSizeMode,
+): number {
+  if (mode !== 'density') return 1;
+  const rel = relativeNodeResolution(nodeResolution, rootResolution);
+  const scale = 1 + (MAX_COVERAGE_SCALE - 1) * rel;
+  if (!Number.isFinite(scale)) return 1;
+  return Math.min(MAX_COVERAGE_SCALE, Math.max(1, scale));
 }
 
 /**
@@ -135,6 +175,7 @@ interface LodMaterial {
  */
 export class CoarseLodSizeNodes {
   private readonly _uniform: (value: number) => UniformLike;
+  private readonly _coverage: UniformLike;
   private readonly _gain: UniformLike;
   private readonly _baseSize: SizeNode;
   private readonly _minSize: SizeNode;
@@ -143,6 +184,9 @@ export class CoarseLodSizeNodes {
   constructor(uniform: (value: number) => UniformLike, baseSize: SizeNode, minSize: SizeNode) {
     this._uniform = uniform;
     this._gain = uniform(PHASE_LOD_GAIN['full-refine']);
+    // 0 unless the user asks for density sizing, so the fold is identity for
+    // every other mode and nothing that renders today moves.
+    this._coverage = uniform(0);
     this._baseSize = baseSize;
     this._minSize = minSize;
   }
@@ -181,6 +225,15 @@ export class CoarseLodSizeNodes {
     return true;
   }
 
+  /**
+   * Point the coverage uniform at a size mode. A value write only, like
+   * {@link setPhase}: the graph shape does not depend on the mode, so a switch
+   * rebuilds no pipeline.
+   */
+  setMode(mode: PointSizeMode): void {
+    this._coverage.value = mode === 'density' ? 1 : 0;
+  }
+
   /** Whether this material folds compensation under the given size mode. */
   has(material: LodMaterial, mode: PointSizeMode): boolean {
     return mode !== 'fixed' && this._rel.has(material);
@@ -201,6 +254,11 @@ export class CoarseLodSizeNodes {
     const rel = this._rel.get(material);
     if (!rel) return node;
     const compensated = node.add(node.mul(this._gain).mul(rel).mul(MAX_LOD_SCALE - 1));
-    return compensated.clamp(this._minSize, this._baseSize.mul(MAX_COMPENSATED_SIZE_FACTOR));
+    // Mirrors `nodeCoverageScale`: a second, persistent term that survives the
+    // settle the phase gain is built to fade out of.
+    const covered = compensated.add(
+      compensated.mul(this._coverage).mul(rel).mul(MAX_COVERAGE_SCALE - 1),
+    );
+    return covered.clamp(this._minSize, this._baseSize.mul(MAX_COMPENSATED_SIZE_FACTOR));
   }
 }

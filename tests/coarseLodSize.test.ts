@@ -173,8 +173,13 @@ describe('CoarseLodSizeNodes', () => {
     expect(h.nodes.register(a)).toBe(false);
     const b = material(1, 4);
     expect(h.nodes.register(b)).toBe(true);
-    // one shared gain uniform + one per material
-    expect(h.made()).toBe(3);
+    // Two shared uniforms, the phase gain and the coverage switch, plus exactly
+    // one per material. The count matters because a per-frame or per-draw
+    // uniform here would rebuild the pipeline on every write.
+    expect(h.made()).toBe(4);
+    // A third material adds one more and no shared ones.
+    expect(h.nodes.register(material(2, 4))).toBe(true);
+    expect(h.made()).toBe(5);
   });
 
   it('does not fold on an unregistered material or in fixed mode', () => {

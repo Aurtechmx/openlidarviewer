@@ -1293,3 +1293,38 @@ did not, which is how a support score of NaN scores nothing.
 Nothing here computes a normal. Fitting one to a neighbourhood mid-frame would
 invent the quantity being used to check an invention.
 
+### L72 · FIXED · UI
+
+Choosing density point sizing on a streamed scan did nothing. The chip lit, the
+mode was set, and the sizing stayed exactly what adaptive produced.
+
+Three things made that so. `setPointSizeMode` builds the per-point size
+attribute for the static clouds only, a streamed material carries no such
+attribute so `pointSizeBaseNode` degrades it to the plain adaptive node, and the
+one spacing-aware term a streamed node does have is multiplied by a phase gain
+that reaches zero at `full-refine`. A settled streaming view had no sizing from
+spacing at all.
+
+A streamed node has no points of its own to count, but it does know the spacing
+its source recorded, which is what the programme asked to use. So the fold that
+already carries a node's relative resolution now carries a second term that does
+not fade, and `nodeCoverageScale` is its arithmetic. A frontier mixes nodes from
+several depths, and without this the coarse ones read as speckle beside the fine
+ones however long the camera sits still.
+
+It applies in density mode alone, so adaptive and fixed are untouched and the
+only behaviour that moves is a mode that previously did nothing. Its bound is a
+separate constant from the compensation bound. The two start equal and mean
+different things, and tuning one for its own reason must not move the other.
+
+Phase-gating the new term, which is the defect being fixed, fails five
+assertions.
+
+An existing case counted the uniforms the fold allocates. It now expects the
+second shared one and also checks that a third material adds one uniform and no
+further shared ones, since a per-draw uniform here would rebuild the pipeline on
+every write.
+
+This is the first capability in the continuity work to reach a rendered frame.
+The rest remain staged.
+
