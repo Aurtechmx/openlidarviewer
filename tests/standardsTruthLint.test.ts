@@ -67,3 +67,33 @@ describe('lint:standards-truth', () => {
     expect(run().status).toBe(0);
   });
 });
+
+describe('which directories the lint actually reads', () => {
+  // The skip list was an unanchored alternation: `dist` matched any path
+  // containing those letters, and `release$` matched `docs/release`, so two
+  // documents were excluded without the output saying so. A check that stops
+  // reading files reports the same clean line as one that read them all.
+
+  it('reads a document under docs/release', () => {
+    const abs = resolve(ROOT, 'docs/release/_standards_lint_probe.md');
+    mkdirSync(dirname(abs), { recursive: true });
+    try {
+      writeFileSync(abs, '# probe\n\nPDFR 6 class 12 means Overlap.\n');
+      const r = run();
+      expect(r.status).toBe(0); // the line above is deliberately misspelled
+      writeFileSync(abs, '# probe\n\nPDRF 6 class 12 means Overlap.\n');
+      const caught = run();
+      expect(caught.status).toBe(1);
+      expect(caught.out).toContain('docs/release/_standards_lint_probe.md');
+    } finally {
+      rmSync(abs, { force: true });
+    }
+  });
+
+  it('still skips the packaged output at the repository root', () => {
+    // `release/` at the root holds build artifacts; `docs/release` does not.
+    const r = run();
+    expect(r.status).toBe(0);
+    expect(r.out).not.toContain('release/openlidarviewer-');
+  });
+});
