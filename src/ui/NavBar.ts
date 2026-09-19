@@ -739,11 +739,14 @@ export class NavBar {
    * accumulates a live listener set per construction.
    */
   dispose(): void {
-    this._teardown.dispose();
+    // The timer first. The teardown group rethrows the first error a teardown
+    // raised, once the rest have run, so a listener detach that throws would
+    // otherwise leave this timer armed on a disposed nav bar.
     if (this._hintTimer !== null) {
       clearTimeout(this._hintTimer);
       this._hintTimer = null;
     }
+    this._teardown.dispose();
   }
 
   /**

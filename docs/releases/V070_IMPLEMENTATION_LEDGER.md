@@ -67,16 +67,18 @@ of, so a finding can be traced to where it was first written down.
 | L40 | ARCHITECTURE | READ | n/a | DEFERRED | new | AnalysePanel mixes execution and presentation. Real, and larger than this cycle. |
 | L41 | ARCHITECTURE | READ | n/a | FIXED | new | Nineteen staged modules reviewed for graduation, staging or removal. |
 | L42 | UI | READ | n/a | DEFERRED | new | Browser matrix, mobile and responsive verification need real engines. |
+| L43 | STATE | TEST | high | FIXED | new | The streaming tidy-up predicted the attach with a flag, so a throw from the heavy bridge still closed an unrelated scan. |
+| L44 | LIFECYCLE | TEST | med | FIXED | new | NavBar disposed its teardown group before clearing its timer, and the group rethrows. |
 
 ## Totals
 
 - DEFERRED: 5
-- FIXED: 15
+- FIXED: 17
 - NOT REPRODUCIBLE: 8
 - OPEN: 10
 - PARTIAL: 4
 - SUPERSEDED: 1
-- total: 42
+- total: 44
 
 ## Detail
 
@@ -598,3 +600,34 @@ section 101 wants a recorded matrix of engine versions with pass, skip and fail
 counts. That evidence comes from running the suite on real engines, which the
 CI matrix does on push and a local session cannot. Recording a matrix from here
 would be inventing it.
+
+### L43 · FIXED · STATE
+
+The first fix for L29 set a flag before the heavy bridge ran and cleared it on
+the returns that meant the file was not routed out of core. A throw from inside
+the bridge reached neither, so the flag stayed set and the failure path closed
+whatever streaming scan was on screen. That is the defect L29 was about,
+re-entering through the path L29 did not cover.
+
+The tidy-up observes instead of predicting. It records whether a streaming scan
+was already on screen when the open began, and on failure closes one only if a
+scan is there now that was not there then. A flag has to anticipate every exit;
+a comparison of before and after does not.
+
+The test that covered the mid-flight case was passing for the wrong reason: its
+fake rejected without attaching anything, so there was nothing to tidy and the
+assertion could not tell the two situations apart. It attaches before it
+rejects now, and the router harness returns one stable viewer rather than a
+fresh object per call, which is what let the earlier version pass. Covered by
+`tests/openScan.test.ts`.
+
+### L44 · FIXED · LIFECYCLE
+
+`NavBar.dispose` ran its teardown group and then cleared its hint timer. The
+group runs every teardown and rethrows the first error one raised, so a listener
+detach that threw left the timer armed on a disposed nav bar.
+
+The timer is cleared first. The group's rethrow is the contract, not a defect:
+it reports a failure without stranding the teardowns that follow it, and an
+owner with its own cleanup orders around it. Covered by
+`tests/disposableGroup.test.ts`.

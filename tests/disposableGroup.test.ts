@@ -72,3 +72,21 @@ describe('DisposableGroup', () => {
     expect(g.disposed).toBe(true);
   });
 });
+
+describe('what a throwing teardown must not strand', () => {
+  it('rethrows after running the rest, so an owner must clear its own timers first', () => {
+    // NavBar disposed the group before clearing its hint timer. The group runs
+    // every teardown and then rethrows the first error, so a listener detach
+    // that threw left the timer armed on a disposed component. The contract
+    // here is the rethrow; the owner orders around it.
+    const g = new DisposableGroup();
+    const later = vi.fn();
+    g.add(later);
+    g.add(() => {
+      throw new Error('detach failed');
+    });
+
+    expect(() => g.dispose()).toThrow('detach failed');
+    expect(later).toHaveBeenCalledTimes(1);
+  });
+});
