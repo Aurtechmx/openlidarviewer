@@ -1899,3 +1899,52 @@ points rather than the framebuffer, so no screen-space pass can reach them.
 
 Staged, not wired. With no capability able to be on, every call returns as-is
 and source today, and a branch no input can vary is not an integration.
+
+### L95 · BUILT · ARCHITECTURE
+
+Convergence contributes one phase per frame, so presenting the history as it
+builds fills the image in over several frames, and on a sparse scan it pulses:
+each phase lands in a different subset of pixels. That is refinement rather than
+movement, but a viewer who asked their system for less motion did not ask to be
+shown the difference.
+
+Under reduced motion the accumulation still runs and the exposure of it does
+not. The direct rendering holds for the whole sweep and the accumulated result
+replaces it once, at convergence. Reading the preference as "turn accumulation
+off" would have been cheaper and a worse deal, since it answers a request about
+motion by taking away image quality. Both viewers reach the same final image on
+the same frame and one of them watched it arrive; a test drives a whole sweep
+and counts exactly one transition.
+
+What stops one transition becoming a flicker is a property convergence already
+has. A sweep needs a fully refined view, so an epoch change during it returns
+the state to idle, where the direct rendering is what is shown anyway. Reaching
+the swap twice quickly takes a viewer who parks, moves, then parks again, where
+the image changing is what they just asked for. One transition remains, and it
+is a surface becoming less grainy rather than anything that translates, scales
+or flashes. That is the limit of what the policy claims.
+
+The lens gap was not in its shape. `Lens` carries a position in device pixels
+and mentions no pointer. It is that a hovering mouse supplies a position every
+frame and nothing else does: a touch ends when the finger lifts, a keyboard has
+no position at all. So a source that reports continuously is tracked and a
+source that does not is pinned, and a release closes a pointer lens while
+leaving a touch one where the viewer put it. Closing on touchend would have been
+hover-only behaviour under another name, with a touch viewer unable to look
+anywhere while holding the lens over the patch they doubt.
+
+A keyboard lens opens at the viewport centre rather than the origin, because the
+top-left corner is off the scan in most views and a lens revealing nothing reads
+as a feature that does not work. Nudges clamp to the viewport for the same
+reason, and an arrow key does not open a closed lens, which would put one on
+screen for a viewer who was scrolling.
+
+Both take the fact rather than deriving it, as the lens already takes source
+completeness. Worth recording that the preference itself has three separate
+`matchMedia` readers in the tree (`ResultFocus`, `profileWorkbenchStage` and
+`NavController`) and no shared helper. Consolidating them touches reachable
+code for no behaviour change, so it is noted here rather than done inside a
+phase about something else.
+
+Both staged. Neither capability can be switched on, so exposure has no history
+to present and placement has no lens to move.
