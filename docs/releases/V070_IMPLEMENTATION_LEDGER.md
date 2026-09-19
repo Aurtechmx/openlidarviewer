@@ -42,7 +42,7 @@ of, so a finding can be traced to where it was first written down.
 | L15 | ARCHITECTURE | DOC | n/a | DEFERRED | B15 | The registration stack ships and no user path reaches it. |
 | L16 | EVIDENCE | DOC | n/a | OPEN | B16 | `scientificArtifactPassport` ships and is unreachable. |
 | L17 | EVIDENCE | DOC | n/a | OPEN | B17 | `evidenceBoundaryInspector` ships and is unreachable. |
-| L18 | EVIDENCE | DOC | n/a | OPEN | B18 | `dtmProductDigest` ships and is unreachable. |
+| L18 | EVIDENCE | TEST | n/a | FIXED | B18 | `dtmProductDigest` shipped and nothing reached it. The DEM package now records the surface it emits. |
 | L19 | SCIENTIFIC | DOC | known | DEFERRED | B19 | Ground filter near F1 0.5 on mountain scenes, 0.34 precision under dense canopy. |
 | L20 | SEMANTICS | DOC | known | DEFERRED | B20 | No cross-CRS reprojection; the viewer refuses rather than approximating. |
 | L21 | STANDARDS | READ | n/a | NOT REPRODUCIBLE | B21 | CityGML LoD terminology misuse. |
@@ -68,9 +68,9 @@ of, so a finding can be traced to where it was first written down.
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 11
+- FIXED: 12
 - NOT REPRODUCIBLE: 8
-- OPEN: 13
+- OPEN: 12
 - PARTIAL: 4
 - SUPERSEDED: 1
 - total: 39
@@ -496,3 +496,25 @@ No standard is reproduced.
 The LAS 1.5 entry is there for the refusal rather than for decoding: the parser
 recognises the version and declines it instead of reading it through the 1.4
 layout, and that decision rests on the 1.5 text as much as a decode would.
+
+### L18 · FIXED · EVIDENCE
+
+`dtmProductDigest` was implemented, tested and unreachable. Its register entry
+named a precondition rather than a plan: `canonicalize()` had to refuse
+non-finite numbers first, because `JSON.stringify` renders NaN and both
+infinities as null, so distinct invalid states would have hashed identically.
+That was fixed earlier and verified here before anything was wired.
+
+The DEM package now digests the surface it ships and prints it in the README
+beside the grid it describes. Two packages carrying the same heights and
+coverage states share the value; a changed cell, coverage state, grid geometry
+or CRS code moves it. Where the evidence resolution supplied a method digest the
+two are bound, so the pair is what the value proves equal.
+
+Section 48's vocabulary is kept: this is the DERIVED-PRODUCT digest, taken over
+what the deliverable emits. It is not the source-file digest and not the
+analysis-input digest, and the README says which one it is.
+
+The digest lands in the lazy export chunk, so the eager shell is unchanged at
+805 KiB. Covered by `tests/demPackageReadme.test.ts`, including that the value
+moves when a cell does.
