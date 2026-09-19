@@ -22,13 +22,35 @@
  * accumulated pixel is not a measurement and never becomes one.
  */
 
+/**
+ * Whether a colour mode's values mean a quantity or a name.
+ *
+ * The same honesty gate the colour modes already apply, carried into
+ * accumulation. Classification and point source id are categorical: the numbers
+ * are labels, and a value between two of them is not a value at all. Painting
+ * unordered ids on a ramp would invent an ordering the data does not have, and
+ * averaging two class colours across frames invents a class, which is the same
+ * mistake arriving through time rather than through a palette.
+ */
+export type ColorSemantics =
+  /** A scalar where an intermediate value means something. Elevation, intensity. */
+  | 'continuous'
+  /** A label where it does not. Classification, point source id. */
+  | 'categorical';
+
 /** What to do with a new sample at a pixel. */
 export type MergeDecision =
   /** Nothing there yet. Take the sample. */
   | 'accept'
   /** The sample is in front of the history by more than the tolerance. */
   | 'replace'
-  /** Same surface within tolerance. Add the sample's colour and support. */
+  /**
+   * Same surface within tolerance. Add the sample's colour and support.
+   *
+   * Never returned for categorical colour: two samples on one surface may carry
+   * different labels, and the honest answers are to take one of them, not to
+   * make a third.
+   */
   | 'blend'
   /** The sample is behind the history. Keep what is there. */
   | 'keep';
@@ -73,9 +95,17 @@ export function mergeDecision(
   historyZ: number,
   historyWeight: number,
   epsilon: number = DEFAULT_DEPTH_EPSILON,
+  semantics: ColorSemantics = 'continuous',
 ): MergeDecision {
   if (!(historyWeight > 0)) return 'accept';
   if (!(sampleZ > 0) || !Number.isFinite(sampleZ)) return 'keep';
-  if (depthCompatible(sampleZ, historyZ, epsilon)) return 'blend';
+  if (depthCompatible(sampleZ, historyZ, epsilon)) {
+    if (semantics === 'continuous') return 'blend';
+    // Categorical: one of the two labels, never a colour between them. The
+    // nearer sample wins and an exact tie keeps what is already there, so a
+    // surface carrying two classes settles on one rather than alternating
+    // between them frame after frame.
+    return sampleZ < historyZ ? 'replace' : 'keep';
+  }
   return sampleZ < historyZ ? 'replace' : 'keep';
 }

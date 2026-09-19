@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   LENS_CLOSED,
+  lensEvidence,
   lensCoverage,
   insideLens,
   admitsReconstruction,
@@ -83,5 +86,25 @@ describe('evidence lens', () => {
     expect(lensCoverage(100 + 39, 100, hard)).toBe(1);
     expect(lensCoverage(100 + 41, 100, hard)).toBe(0);
     expect(admitsReconstruction(100 + 41, 100, hard)).toBe(true);
+  });
+});
+
+describe('what the lens may claim', () => {
+  // Under the lens every remaining pixel is one a sample paid for. On a streamed
+  // scan that is true and still misleading: the samples present are the ones
+  // that loaded, not the ones the file holds, so a thin patch could be sparse
+  // ground or absent data. Opposite conclusions, identical appearance.
+  it('claims complete evidence only where the source is proven complete', () => {
+    expect(lensEvidence(true)).toBe('complete');
+    expect(lensEvidence(false)).toBe('partial');
+  });
+
+  it('never decides completeness for itself', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../src/render/continuity/evidenceLens.ts', import.meta.url)),
+      'utf8',
+    );
+    // No imports at all: it cannot reach residency to ask, and cannot alter it.
+    expect(/^import\s/m.test(src)).toBe(false);
   });
 });

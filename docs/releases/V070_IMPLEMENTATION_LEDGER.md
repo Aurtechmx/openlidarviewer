@@ -1747,3 +1747,53 @@ Preview authority is independent of all of this and stays so. A figure caps at
 preview while the source is not proven complete, held by the guard that keeps
 the authority surface and the continuity modules from importing each other.
 
+### L89 · PARTIAL · ARCHITECTURE
+
+Refining nodes were never going to churn a history away, for the reason parked
+convergence already gave: a sweep runs only at full refinement, so while nodes
+arrive there is no accumulation to discard. The narrower rules this phase
+suggests, ignoring arrivals outside the view and arrivals that change no visible
+support, are the optimisation it says to leave until correctness is settled.
+
+What needed fixing was an ambiguity of mine. The frontier field carried one line
+of description, and what an integrator puts there decides whether it is useful
+or ruinous: every resident node id moves the epoch whenever anything lands
+anywhere, a frontier depth misses a child replacing its parent in the middle of
+the view. It now says to use the ids of the nodes actually drawn, which
+invalidates more often than it must and never less, and says why that is
+affordable rather than leaving the reader to find the connection.
+
+### L90 · PARTIAL · SCIENTIFIC
+
+The lens cannot alter what is resident, and that is structural rather than
+observed: the module imports nothing at all, so it cannot reach a scheduler to
+ask for a node.
+
+The harder requirement is what it implies. Under the lens every remaining pixel
+is one a sample paid for, which on a streamed scan is true and still misleading:
+the samples present are the ones that have loaded, not the ones the file holds.
+A viewer holding the lens over a thin patch cannot tell sparse ground from
+absent data, and those are opposite conclusions with the same appearance. The
+lens now carries the qualifier a measurement carries, and takes completeness as
+a fact rather than working it out, because that question already has an owner.
+
+### L91 · FIXED · SCIENTIFIC
+
+Accumulation would have averaged classification colours. Two samples on one
+surface with different classes are depth-compatible, the merge blended, and the
+result is a colour between two classes, which reads as a class the data does not
+contain.
+
+The colour modes already refuse this in the other direction, and say so: the
+categorical ids stay categorical, point source id gets no ramp, because painting
+unordered ids on a sequential ramp invents an ordering the data does not have.
+Averaging two class colours across frames is the same invention arriving through
+time, so the merge now takes the semantics and never blends a label.
+
+The nearer sample wins and an exact tie keeps what is there. Determinism is the
+point of the tie rather than tidiness: without it a surface carrying two classes
+alternates between them frame after frame, which is the sparkle the stable
+temporal partition exists to prevent, returning through colour. Letting
+categorical blend fails three assertions, and a caller that says nothing still
+gets the continuous behaviour it had.
+
