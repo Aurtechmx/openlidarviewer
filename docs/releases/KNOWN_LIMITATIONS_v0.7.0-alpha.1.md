@@ -77,8 +77,8 @@ cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,977 lines and `src/render/Viewer.ts` is 6,223, unchanged from
-v0.6.9. A shrink-only lint fails the build when either passes its recorded
+`src/main.ts` is 4,977 lines and `src/render/Viewer.ts` is 6,222, one below
+v0.6.9 after two getters collapsed to make room for a memory accessor. A shrink-only lint fails the build when either passes its recorded
 baseline, so a raise is a hand edit to
 `docs/validation/monolith-size-baseline.json` and always shows in the diff. It
 caught one added line during this cycle. Fan-out is 112 for the shell, 77 for
