@@ -1119,3 +1119,39 @@ The constraint is recorded against the reconstruction module's graduation so it
 is read before the field is enabled: either a capture turns the field off, or
 the stamp declares the reconstruction.
 
+### L65 · PARTIAL · PERFORMANCE
+
+Three surfaces persist between frames: the colour built so far, the depth it was
+built at, and each pixel's support. Asking for a 32-bit float for all three is
+the easy path and costs twenty-four bytes a pixel against nine.
+
+Measured at device-pixel sizes, since the ratio is already in that figure and a
+CSS size understates the allocation fourfold. At 1080p the conservative layout
+takes 17.8 MB against 47.5. At 1440p, 31.6 against 84.4. At 4K, 71.2 against
+189.8. At 4K with a doubled ratio, 284.8 against 759.4.
+
+The case most easily missed is the tablet. A 2388 by 1668 panel at a doubled
+ratio is 15.9 million device pixels, more than a 4K monitor's 8.3 million, so it
+costs 136.8 MB conservatively and 364.7 at full float. That is the device least
+able to survive the second figure, reached by reasoning about panel names rather
+than pixels.
+
+Eight bits a channel carries the colour, and that follows from the sweep being
+four phases rather than hundreds. Rounding compounds across an accumulation, so
+a photographic one needs the headroom; this one takes a handful of contributions
+per pixel and stays under what an 8-bit display resolves. If the phase count ever
+grew into the hundreds this is the choice to revisit.
+
+Depth is the one that cannot be economised. The merge rule compares depths as a
+ratio across a scene spanning metres to kilometres, and a half float carries
+about three decimal digits, so it would collapse the distinctions that rule
+exists to draw.
+
+Above the ceiling the field declines and leaves source rendering in place. 4K at
+a doubled ratio passes it even at nine bytes a pixel, which is the right
+outcome: no history is a worse picture, a history that will not fit is a lost
+context.
+
+A ratio change already invalidates, because the ratio is one of the display
+inputs and moving it opens an epoch.
+
