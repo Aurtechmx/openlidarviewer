@@ -5870,8 +5870,7 @@ export class Viewer {
     const normals = cloud.normals;
     return makePointInfo({
       geographicHorizontal: this._inspectGeographicHorizontal,
-      layer: cloud.name,
-      pointFormat: cloud.metadata?.pointFormat,
+      layer: cloud.name, pointFormat: cloud.metadata?.pointFormat,
       layerId: this._organized.layerIdOf(cloud),
       index,
       // `point` is the PLACED pick; for a non-anchor mounted layer it would
