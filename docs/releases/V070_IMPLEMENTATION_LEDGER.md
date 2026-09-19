@@ -1214,3 +1214,43 @@ of timestamps. It is not: the fields are named for frames per second while the
 thresholds are frame times, so the slow branch measuring `_fpsLowSinceTs`
 against the back-off hold is correct.
 
+### L68 · DEFERRED · PERFORMANCE
+
+Choosing the phase count per scene is held, on the programme's own terms: it
+asks that no adaptive logic be added until fixed behaviour is validated, and
+fixed behaviour has never run. Accumulation appears enabled in one tier
+definition and is selected nowhere, so no sweep has happened on any device.
+
+Picking a phase count now would tune against nothing and
+bake a guess into the one part of this that a measurement can settle cheaply
+once a sweep exists. It waits for that.
+
+### L69 · PARTIAL · CORRECTNESS
+
+How well a pixel is backed by nearby samples, and whether that is enough to
+fill it.
+
+The name carries weight here. This viewer already reports confidence about
+measured things in the measure panel, the analyse panel, the findings list, the
+object panel and the contour workspace, and those numbers say how well something
+was surveyed. This one says how safe a pixel is to draw. Sharing the word would
+put the two beside each other in one interface reading as the same kind of
+claim, so the module says support throughout and a test strips the comments and
+fails on the other word.
+
+The parts combine by their weakest rather than their average. A pixel bracketed
+by many samples that disagree about depth is on an edge, and one with perfect
+depth agreement and almost nothing under it is a guess; a mean lets either be
+carried by the other into a fill. A thousand samples and a complete sweep still
+do not rescue a pixel whose neighbours disagree, and averaging instead fails
+four assertions.
+
+An input that is not a number scores nothing rather than everything. A count of
+NaN means the caller does not know, and not knowing must never arrive as
+permission to invent.
+
+The threshold errs high. Refusing costs a visible gap and allowing wrongly costs
+a surface that was never there, so it sits well above half. That figure and the
+sample count are starting values; what belongs there comes from real scenes at
+several densities.
+
