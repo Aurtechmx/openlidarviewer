@@ -253,6 +253,12 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   }
   const controller = new AbortController();
   let preview: PreviewCloudHandle | null = null;
+  // Whether THIS open is the one attaching a streaming scan. The failure path
+  // tidies a streaming open that died mid-flight, and that tidy-up used to run
+  // for every failure on this path: dropping an unparseable LAS while a COPC
+  // or out-of-core scan was on screen closed the working scan for a candidate
+  // that never arrived.
+  let openingStreaming = false;
   // Blue blinking "Opening …" — the prominent first feedback, matching the
   // catalog status vocabulary so device and public-dataset loads read the same.
   // The load's staged progress (decoding / uploading / rendering) supersedes it.
@@ -268,6 +274,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // COPC is part of the lazy COPC chunk.
     const headSlice = await file.slice(0, HEADER_PEEK_BYTES).arrayBuffer();
     if (detectCopc(headSlice).isCopc) {
+      openingStreaming = true;
       await deps.openLocalCopc(file, controller.signal);
       return;
     }
@@ -281,6 +288,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // the file IS heavy and the out-of-core path could not run: the whole-file
     // loader would face the same too-large allocation, so this REFUSES with a
     // named reason instead of falling through into an out-of-memory crash.
+    openingStreaming = true;
     const heavy = await openLocalHeavyLas(file, controller.signal, {
       viewerReady: deps.viewerReady,
       getViewer: deps.getViewer,
@@ -309,6 +317,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       deps.dropZone.setProgress(null);
       return;
     }
+    // Past the attached and cancelled returns the file was not routed out of
+    // core, so the whole-file loader below owns it and no streaming scan
+    // belongs to this open.
+    if (heavy.status === 'not-heavy') openingStreaming = false;
+    else if (!heavy.heavy) openingStreaming = false;
     // A CONFIRMED-heavy file whose out-of-core index could not be built must NOT
     // reach the whole-file loader. Surface the named reason on the drop zone the
     // same way a load failure is surfaced, and stop. `not-heavy` (and a
@@ -363,8 +376,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       // reaches the console for developers under ?debug=1.
       if (deps.debug) console.error('OpenLiDARViewer — load error', err);
       deps.dropZone.setError(describeLoadError(err));
-      // A streaming open that failed mid-flight leaves no scan — tidy up.
-      deps.closeStreaming();
+      // Only tidy a streaming scan this open was attaching. One that was
+      // already on screen belongs to the project, not to the candidate.
+      if (openingStreaming) deps.closeStreaming();
     }
   } finally {
     deps.setLoading(false);
