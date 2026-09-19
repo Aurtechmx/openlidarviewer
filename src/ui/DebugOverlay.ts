@@ -12,7 +12,7 @@
  */
 
 import { attributeBreakdown, type UploadedAttributes } from '../render/pointAttributeLayout';
-import { historyBytes, historyFits } from '../render/streaming/historyBudget';
+import { historyBytes, historyFits } from '../render/continuity/historyBudget';
 import { el } from './dom';
 import { registerMetricsHook } from '../perf/metricsHook';
 import { formatByteSize as formatBytes, groupInt as formatInt } from '../io/formatByteSize';

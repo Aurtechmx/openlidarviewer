@@ -6,7 +6,7 @@ import {
   historyBytes,
   historyFits,
   HISTORY_BYTES_CEILING,
-} from '../src/render/streaming/historyBudget';
+} from '../src/render/continuity/historyBudget';
 
 const MB = 1024 * 1024;
 

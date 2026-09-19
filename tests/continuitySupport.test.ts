@@ -7,7 +7,7 @@ import {
   SAMPLES_FOR_FULL_SUPPORT,
   MIN_SUPPORT_TO_RECONSTRUCT,
   type SupportInput,
-} from '../src/render/streaming/continuitySupport';
+} from '../src/render/continuity/continuitySupport';
 
 const full: SupportInput = {
   directSamples: SAMPLES_FOR_FULL_SUPPORT,
@@ -97,7 +97,7 @@ describe('naming', () => {
     // fileURLToPath, not URL.pathname: on Windows the latter yields `/D:/...`,
     // which Node then resolves against the current drive as `D:\\D:\\...`.
     const src = readFileSync(
-      fileURLToPath(new URL('../src/render/streaming/continuitySupport.ts', import.meta.url)),
+      fileURLToPath(new URL('../src/render/continuity/continuitySupport.ts', import.meta.url)),
       'utf8',
     );
     const code = src.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');

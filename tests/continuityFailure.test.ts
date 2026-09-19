@@ -4,8 +4,8 @@ import {
   runContinuityPass,
   sourceRenderingAvailable,
   type ContinuityFailure,
-} from '../src/render/streaming/continuityFailure';
-import { TIER_ORDER, type ContinuityTier } from '../src/render/streaming/continuityTier';
+} from '../src/render/continuity/continuityFailure';
+import { TIER_ORDER, type ContinuityTier } from '../src/render/continuity/continuityTier';
 
 const FAILURES: ContinuityFailure[] = [
   'CONTINUITY_RENDER_UNAVAILABLE',

@@ -3,7 +3,7 @@ import {
   mergeDecision,
   depthCompatible,
   DEFAULT_DEPTH_EPSILON,
-} from '../src/render/streaming/depthMerge';
+} from '../src/render/continuity/depthMerge';
 
 const EPS = DEFAULT_DEPTH_EPSILON;
 

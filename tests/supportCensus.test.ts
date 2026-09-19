@@ -6,8 +6,8 @@ import {
   reconstructedShare,
   withinReconstructionCeiling,
   RECONSTRUCTION_SHARE_CEILING,
-} from '../src/render/streaming/supportCensus';
-import type { SupportKind } from '../src/render/streaming/microGap';
+} from '../src/render/continuity/supportCensus';
+import type { SupportKind } from '../src/render/continuity/microGap';
 
 const run = (spec: Partial<Record<SupportKind, number>>): SupportKind[] => {
   const out: SupportKind[] = [];

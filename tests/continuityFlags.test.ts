@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseDevFlags, DEV_FLAG_DEFAULTS, type DevFlags } from '../src/perf/devFlags';
-import { TIER_ORDER, capabilitiesForTier } from '../src/render/streaming/continuityTier';
+import { TIER_ORDER, capabilitiesForTier } from '../src/render/continuity/continuityTier';
 import type { ContinuityCapabilities } from '../src/render/continuity/continuityField';
 
 const CONTINUITY_FLAGS = [

@@ -5,7 +5,7 @@ import {
   isUsableNormal,
   MAX_NORMAL_ANGLE_DEG,
   type Normal,
-} from '../src/render/streaming/normalAgreement';
+} from '../src/render/continuity/normalAgreement';
 
 const UP: Normal = { x: 0, y: 0, z: 1 };
 const DOWN: Normal = { x: 0, y: 0, z: -1 };

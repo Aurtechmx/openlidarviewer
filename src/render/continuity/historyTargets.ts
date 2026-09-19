@@ -34,7 +34,7 @@ import {
   historyBytes,
   historyFits,
   type HistoryLayout,
-} from '../streaming/historyBudget';
+} from './historyBudget';
 
 /** One allocated surface. The renderer's target type, narrowed to what is used. */
 export interface HistorySurface {

@@ -1652,3 +1652,57 @@ own lifecycle, it has to be proven against a device that can actually be lost,
 and a recovery path written against a device nobody dropped is a guess with a
 test around it.
 
+### L85 · FIXED · ARCHITECTURE
+
+The Viewer half of this was already right and is measurable: it is 6,215 lines,
+fewer than the 6,222 it carried when this work started, while fifteen continuity
+modules were written. Across the whole programme it gained one line to forward a
+size mode and two fields on its stats record, and accessor collapses paid for
+both. It orchestrates and implements none of the rules.
+
+The filing was wrong. Two modules sat in `render/continuity` and thirteen in
+`render/streaming`, which happened by habit rather than by decision: the first
+one belonged beside the fade dither it reuses, and the next twelve were filed
+next to it without the question being asked again. Someone looking for the
+subsystem found two files and had to already know where the rest were, which for
+modules nothing has wired yet is most of what they are worth.
+
+All fifteen are in `render/continuity` now, and the couplings that survive the
+move are the two that were real. `temporalPhase` reaches for the fade dither
+because reusing that hash rather than writing a second one was the point, and
+`continuityPressure` reaches for the streaming budget because the frame-time band
+has one definition and the scheduler owns it. Everything else imports only its
+neighbours or nothing at all, which is what made the move mechanical.
+
+Nothing else moved with them. The metrics and the acceptance rule stay under the
+test tree, because they are used by the cases that define them rather than
+waiting to be wired, and the register only describes what ships.
+
+267 cases across seventeen files pass, no path anywhere still names the old
+location, and the six architecture guards agree.
+
+### L86 · FIXED · PERFORMANCE
+
+The size graph already varies. Five folds enter it conditionally, for the class
+mask, the elevation and intensity filters, a node's dissolve dither and its
+coarse-LOD multiplier, and three size modes sit on top: ninety-six possible
+shapes. Six capabilities each adding a fold of their own would be six thousand.
+
+The obvious way to avoid that is to fold everything always and let an identity
+value make an inactive capability free. This renderer has already tried it. The
+note in `_applySizeMode` records what happened: an inactive filter still folded
+its mask into every carrier mesh, which compiled attribute reads for position
+and intensity into essentially every scan's vertex shader, and that was the
+regression behind scans opening with nothing rendered. Conditional folding is
+the fix that shipped, and it is why the shape count is what it is.
+
+So a capability rides an existing fold as a uniform and the condition deciding
+whether anything folds at all never learns about it. Coverage sizing is written
+that way already: the mode selects a uniform value, the test in `has` is the one
+it always was, and switching modes writes a number rather than building a
+pipeline. Letting the capability into that test fails two assertions, and a run
+of mode changes makes no new uniform.
+
+What this phase asks to measure, the compile and startup cost of the shapes that
+do exist, needs a device. Nothing here establishes it.
+

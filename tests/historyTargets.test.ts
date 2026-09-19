@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HistoryTargets, type HistorySurface } from '../src/render/continuity/historyTargets';
-import { FLOAT_LAYOUT, historyBytes } from '../src/render/streaming/historyBudget';
+import { FLOAT_LAYOUT, historyBytes } from '../src/render/continuity/historyBudget';
 
 /** A factory that records what was made and what was freed. */
 function tracker() {

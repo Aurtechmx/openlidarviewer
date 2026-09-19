@@ -4,7 +4,7 @@ import {
   type Cardinals,
   type Neighbour,
   type SupportKind,
-} from '../src/render/streaming/microGap';
+} from '../src/render/continuity/microGap';
 
 const at = (depth: number, support: SupportKind = 'direct'): Neighbour => ({ depth, support });
 const EMPTY: Neighbour = { depth: 0, support: 'none' };

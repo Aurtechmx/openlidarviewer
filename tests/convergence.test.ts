@@ -5,8 +5,8 @@ import {
   phaseToDraw,
   isConverged,
   type ConvergenceState,
-} from '../src/render/streaming/convergence';
-import type { PhaseCount } from '../src/render/streaming/temporalPhase';
+} from '../src/render/continuity/convergence';
+import type { PhaseCount } from '../src/render/continuity/temporalPhase';
 import { REFINEMENT_PHASE_ORDER, type RefinementPhase } from '../src/render/refinementPhase';
 
 const COUNTS: PhaseCount[] = [2, 4, 8];

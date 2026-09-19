@@ -24,7 +24,7 @@
  * Pure: no clock, no device queries, no three.js. The caller measures and asks.
  * Display only.
  */
-import { FPS_PRESSURE_HIGH_HOLD_MS, FPS_PRESSURE_LOW_HOLD_MS } from './streamingBudget';
+import { FPS_PRESSURE_HIGH_HOLD_MS, FPS_PRESSURE_LOW_HOLD_MS } from '../streaming/streamingBudget';
 import { TIER_ORDER, degrade, type ContinuityTier } from './continuityTier';
 
 /** How the recent frames have been going. */
