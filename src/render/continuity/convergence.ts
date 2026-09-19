@@ -14,6 +14,14 @@
  * is a property of the device, and a wall-clock figure written here would be a
  * claim about hardware this module never sees.
  *
+ * A progressive local decode needs nothing special here, and the reason is worth
+ * writing down where someone would look for it. Its chunks do not grow the
+ * cloud: they grow a separate preview layer that is disposed the moment the real
+ * cloud is added, so the dataset changes once rather than on every chunk.
+ * Accumulating over that preview would build a history for something about to be
+ * thrown away, and a deliberately reduced stand-in at that. A sweep belongs after
+ * the commit, when there is a dataset to sweep.
+ *
  * The last state matters as much as the schedule. Once every phase has
  * contributed there is nothing left to add, and a renderer that kept redrawing
  * would burn a GPU on an image that cannot change. `converged` is terminal for
