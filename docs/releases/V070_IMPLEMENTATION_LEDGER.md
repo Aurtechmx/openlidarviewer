@@ -2376,3 +2376,41 @@ hoist does not occur.
 
 All three builds ran in a throwaway worktree and the working tree was verified
 clean afterwards, so no probe reached a commit.
+
+### L107 · BUILT · ARCHITECTURE
+
+The Continuity Field gets no control of its own. It becomes one more field on
+the Speed to Quality dial, which already exists to be the single understandable
+display knob and already maps one position onto the streaming preset, the pixel
+ratio ceiling, Eye Dome Lighting and antialiasing. A second quality control
+beside it would be the knob pile this phase forbids, and the rung name carries
+a whole configuration, so a viewer never meets a phase count, a gap radius or a
+history epsilon.
+
+The table runs source, source, sizing, closure, full across the five stops.
+Everything up to the midpoint stays on a rung that invents no pixel, so the
+shipping default cannot put reconstruction on screen. The dial's existing
+monotonicity proof was extended to cover the rung, and swapping two stops now
+fails three assertions.
+
+What the dial resolves is a request, never a grant. The measured backend
+support and the touch-first ceiling both cap it and the viewer takes the lower,
+which is the arrangement the pixel-ratio ceiling already has with the device's
+own ratio. A phone reads the same rung as a desktop at the Quality end, and
+that is correct rather than a gap: the cap lives in `mobilePolicy`.
+
+Two things this cost, both recorded rather than absorbed.
+
+The register lost two entries. `qualityPolicy` takes `ContinuityTier` as a
+type-only import, and the reachability lint counts type edges on purpose,
+because it is a register of modules nothing in production refers to at all. So
+`continuityTier` and `continuityField` graduated honestly. Declaring the four
+names locally would have dodged it and duplicated a union, which this programme
+has refused elsewhere for the same reason. The runtime-only figure, which is
+what the scientific-regression argument rests on, is 142 unreachable against 52
+counting type edges, so the subsystem is still absent at runtime.
+
+The eager entry went from 805 to 806 KiB. The type import contributes nothing,
+being erased; the kilobyte is the five string literals, the rank table and the
+field itself, which are real data in a reachable module. Margin is now six
+kilobytes of the ceiling the base already sat near.
