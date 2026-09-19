@@ -1155,3 +1155,28 @@ context.
 A ratio change already invalidates, because the ratio is one of the display
 inputs and moving it opens an epoch.
 
+### L66 · PARTIAL · ARCHITECTURE
+
+Falling back has one rule worth enforcing: a lower rung may do less than the one
+above it, never something else. A ladder that swapped a capability as it
+descended would change what a viewer is looking at rather than simplify it, and
+two machines would then disagree about the picture for reasons neither could
+see. Each rung's capabilities are a subset of the rung above and a test walks
+the ladder to check it, so the property is held rather than described.
+
+The lens is not a rung. Reconstruction puts pixels on screen no point was
+recorded at, and the lens is the only way to see which, so it arrives with
+reconstruction and cannot be traded for performance. Dropping it from the
+closure rung, which is the obvious economy, fails an assertion. A tier that
+invented geometry and offered no way to check would be worse than the tier below
+it doing less.
+
+Culling and attribute packing appear on no rung. They change how much work is
+done rather than what is drawn, so they are gated on their own evidence instead
+of riding a visual ladder.
+
+What a backend supports is reported by whoever asked the device. The programme
+forbids brand lists, and a model string says nothing dependable about a driver.
+The bottom rung is the renderer as it ships, because none of this is worth
+failing a viewer over.
+

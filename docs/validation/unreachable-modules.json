@@ -140,6 +140,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/streaming/continuityTier.ts",
+      "status": "staged",
+      "why": "Chooses how far the field may go on a given backend and what it falls back to. Every capability is off, so no tier is ever selected.",
+      "graduation": "The renderer detects what a backend supports, asks for a tier and applies its capabilities, falling to source rendering rather than failing when none can be carried.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/convergence.ts",
       "status": "staged",
       "why": "Schedules which temporal phase a parked frame contributes and when the sweep is complete. No frame accumulates, so nothing asks it.",
