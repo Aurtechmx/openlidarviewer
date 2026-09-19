@@ -1876,9 +1876,7 @@ export class Viewer {
   }
 
   /** Whether a streaming COPC cloud is currently open. */
-  get hasStreamingCloud(): boolean {
-    return this._streaming !== null;
-  }
+  get hasStreamingCloud(): boolean { return this._streaming !== null; }
 
   /**
    * The open streaming cloud, or null. Widens this from the
@@ -2429,18 +2427,14 @@ export class Viewer {
   }
 
   /** Read the current percentile-trim setting. */
-  get heightPercentileTrim(): number {
-    return this._heightPercentileTrim;
-  }
+  get heightPercentileTrim(): number { return this._heightPercentileTrim; }
 
   // ── Project-shared elevation scale (math in projectElevationScale.ts) ──────
   // Off (default) = per-cloud percentile windows; on = every frame-sharing layer
   // colours elevation against one world-Z window.
   private _projectSharedElevation = false;
 
-  get projectSharedElevation(): boolean {
-    return this._projectSharedElevation;
-  }
+  get projectSharedElevation(): boolean { return this._projectSharedElevation; }
 
   /** World-Z union of the frame-sharing elevation clouds; null when < 2 share. */
   projectSharedElevationRange(): { min: number; max: number } | null {
@@ -3201,6 +3195,9 @@ export class Viewer {
   setPointSizeMode(mode: PointSizeMode): void {
     this._pointSizeMode = mode;
     if (mode === 'density') ensureDensitySizes(this._clouds.values());
+    // Static clouds size from their own points; a streamed node has none to
+    // count, so it sizes from the spacing its source recorded.
+    this._lodSize.setMode(mode);
     this._reapplyAllSizeModes();
   }
 
