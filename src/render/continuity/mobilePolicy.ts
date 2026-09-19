@@ -58,7 +58,8 @@ import {
   HISTORY_BYTES_CEILING,
   type HistoryLayout,
 } from './historyBudget';
-import { TIER_ORDER, type ContinuityTier } from './continuityTier';
+import { TIER_ORDER, capabilitiesForTier, type ContinuityTier } from './continuityTier';
+import type { ContinuityCapabilities } from './continuityField';
 
 /**
  * The pixel ratio the history is sized at.
@@ -181,4 +182,83 @@ export function tierUnderPolicy(
   ceiling: ContinuityTier,
 ): ContinuityTier {
   return lowerTier(backendTier, ceiling);
+}
+
+/**
+ * The capabilities a session has explicitly opted into.
+ *
+ * Taken as a fact rather than read from the flag store here, which keeps this
+ * module pure and keeps one place responsible for parsing a URL. The shape
+ * mirrors the display half of `ContinuityCapabilities`; loader capabilities are
+ * absent because they change how data is carried rather than how it looks, and
+ * they are gated on their own evidence.
+ */
+export interface CapabilityOptIn {
+  readonly coverageSizing: boolean;
+  readonly microGapFill: boolean;
+  readonly temporalAccumulation: boolean;
+  readonly evidenceLens: boolean;
+}
+
+/** Nothing opted into, which is what a session has until a flag says otherwise. */
+export const NO_OPT_IN: CapabilityOptIn = {
+  coverageSizing: false,
+  microGapFill: false,
+  temporalAccumulation: false,
+  evidenceLens: false,
+};
+
+/**
+ * The richest rung every one of whose capabilities has been opted into.
+ *
+ * Walks the ladder from the top and takes the first rung that asks for nothing
+ * unopted. A rung is all-or-nothing on purpose: granting the half of `full`
+ * that happens to be enabled would run a configuration nobody chose and nobody
+ * measured, which is worse than running the rung below it.
+ */
+export function tierPermittedBy(optIn: CapabilityOptIn): ContinuityTier {
+  for (const tier of TIER_ORDER) {
+    const wanted = capabilitiesForTier(tier);
+    if (
+      (!wanted.coverageSizing || optIn.coverageSizing)
+      && (!wanted.microGapFill || optIn.microGapFill)
+      && (!wanted.temporalAccumulation || optIn.temporalAccumulation)
+      && (!wanted.evidenceLens || optIn.evidenceLens)
+    ) {
+      return tier;
+    }
+  }
+  return 'source';
+}
+
+/**
+ * The rung a viewer actually runs, from all three things that can lower it.
+ *
+ * One call rather than three composed by each caller, because the failure this
+ * guards against is a caller applying two of the caps and forgetting the third.
+ * With nothing opted into, every input combination returns `source`, which is
+ * what keeps the Continuity Field off by default while its evidence is
+ * outstanding: the release decision is a flag, not a property of the device
+ * that happens to be running it.
+ */
+export function grantedTier(
+  requested: ContinuityTier,
+  backendTier: ContinuityTier,
+  ceiling: ContinuityTier,
+  optIn: CapabilityOptIn,
+): ContinuityTier {
+  return lowerTier(
+    lowerTier(requested, backendTier),
+    lowerTier(ceiling, tierPermittedBy(optIn)),
+  );
+}
+
+/** The capabilities a viewer actually runs with. */
+export function grantedCapabilities(
+  requested: ContinuityTier,
+  backendTier: ContinuityTier,
+  ceiling: ContinuityTier,
+  optIn: CapabilityOptIn,
+): ContinuityCapabilities {
+  return capabilitiesForTier(grantedTier(requested, backendTier, ceiling, optIn));
 }

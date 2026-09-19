@@ -2414,3 +2414,32 @@ The eager entry went from 805 to 806 KiB. The type import contributes nothing,
 being erased; the kilobyte is the five string literals, the rank table and the
 field itself, which are real data in a reachable module. Margin is now six
 kilobytes of the ceiling the base already sat near.
+
+### L108 · FIXED · SCIENTIFIC
+
+The previous entry introduced a latent default and this one closes it. Putting
+the rung on the quality dial gave a capable WebGPU desktop on Auto a resolved
+tier of `closure`, and closure asks for gap filling. Nothing consumed the field
+yet, so no frame changed, but the policy stated a default that this phase
+forbids and whoever wired it would have inherited it. That is how a default
+ships by accident.
+
+The five conditions are all outstanding. The browser matrix has not run, mobile
+is unbenchmarked, performance is unmeasured, edge leakage is controlled only
+against synthetic frames, and raw-point parity has no device evidence.
+
+The flag half was already in place: six continuity flags, every one opt-in and
+defaulting to false. What was missing was the composition, so nothing turned a
+request plus a capability plus a ceiling into one answer, and a caller applying
+two of the three caps and forgetting the third would have been correct-looking
+code. `grantedTier` takes all three and the opt-in, which is one call rather
+than three a caller has to remember.
+
+A rung is granted whole or not at all. Enabling the half of `full` that happens
+to be flagged on would run a configuration nobody chose and nobody measured,
+which is worse than running the rung below it.
+
+The proof enumerates rather than samples. Six devices by 101 positions by all
+eight backend support combinations, with nothing opted in, and every one
+returns `source`. Removing the opt-in cap fails it, and so does permitting a
+partly opted-in rung.
