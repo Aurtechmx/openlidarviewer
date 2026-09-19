@@ -23,11 +23,12 @@
  * decides what merging a phase means; this decides only whether to merge one and
  * which. Display only, and nothing here reaches measurement.
  */
+import type { RefinementPhase } from '../refinementPhase';
 import type { PhaseCount } from './temporalPhase';
 
 /** Where a parked camera is in its sweep. */
 export type ConvergenceState =
-  /** Not accumulating. The camera is moving, or nothing has been drawn yet. */
+  /** Not accumulating. The view is still refining, or nothing has been drawn. */
   | { readonly kind: 'idle' }
   /** Mid-sweep under `epoch`, with `contributed` phases already merged. */
   | {
@@ -43,8 +44,11 @@ export type ConvergenceState =
 export interface ConvergenceInput {
   /** The epoch in force this frame. */
   readonly epoch: number;
-  /** Is the camera moving this frame? */
-  readonly moving: boolean;
+  /**
+   * Where the renderer is in its own refinement, taken from the scheduler
+   * rather than decided again here.
+   */
+  readonly refinement: RefinementPhase;
   /** How many phases make up one sweep. */
   readonly phaseCount: PhaseCount;
 }
@@ -60,9 +64,17 @@ function epochOf(state: ConvergenceState): number | null {
 /**
  * The convergence state for this frame.
  *
- * A moving camera returns to idle, which discards the sweep rather than pausing
- * it: the frames contributed so far were drawn against a camera that has since
- * moved, so resuming would merge two different pictures.
+ * Anything short of a fully refined view returns to idle, which discards the
+ * sweep rather than pausing it: the frames contributed so far were drawn
+ * against a camera or a resident set that has since changed, so resuming would
+ * merge two different pictures.
+ *
+ * Waiting for the last phase rather than merely for a still camera is what
+ * makes this consume the streaming lifecycle instead of running beside it. The
+ * earlier phases are still admitting nodes, each arriving node changes the
+ * visible frontier, and the frontier is one of the display inputs, so a sweep
+ * begun then is restarted by its own epoch before it can finish. Starting early
+ * buys nothing and spends a GPU on frames that are always thrown away.
  *
  * An epoch that differs from the one being accumulated restarts the sweep at
  * phase 0 for the same reason, including when the camera is parked. Parking is
@@ -73,7 +85,7 @@ export function nextConvergence(
   current: ConvergenceState,
   input: ConvergenceInput,
 ): ConvergenceState {
-  if (input.moving) return IDLE;
+  if (input.refinement !== 'full-refine') return IDLE;
   if (epochOf(current) !== input.epoch) {
     return { kind: 'converging', epoch: input.epoch, nextPhase: 0, contributed: 0 };
   }

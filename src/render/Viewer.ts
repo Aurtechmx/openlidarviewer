@@ -438,6 +438,10 @@ export interface FrameStats {
   totalPoints: number;
   /** Rough GPU memory held by the visible clouds' instance attributes, in bytes. */
   gpuBytesEstimate: number;
+  /** Backing-store width in device pixels. */
+  bufferWidthPx: number;
+  /** Backing-store height in device pixels. */
+  bufferHeightPx: number;
 }
 
 /** A built (but not yet mounted) instanced-quad point mesh and its handles. */
@@ -1920,9 +1924,7 @@ export class Viewer {
    * full-cloud grade can re-decode a sampling plan through the same decoder the
    * scheduler drives (one worker pool, not two).
    */
-  get streamingDecoder(): ChunkDecoder | null {
-    return this._streaming?.decoder ?? null;
-  }
+  get streamingDecoder(): ChunkDecoder | null { return this._streaming?.decoder ?? null; }
 
   /** Switch the streaming cloud's colour mode. */
   setStreamingColorMode(mode: ColorMode): void {
@@ -2583,14 +2585,10 @@ export class Viewer {
   }
 
   /** The active RGB appearance bundle (deep copy). */
-  get rgbAppearance(): RgbAppearance {
-    return { ...this._rgbAppearance };
-  }
+  get rgbAppearance(): RgbAppearance { return { ...this._rgbAppearance }; }
 
   /** The active RGB appearance preset id, or `null` when custom. */
-  get rgbAppearancePresetId(): RgbAppearancePresetId | null {
-    return this._rgbAppearancePresetId;
-  }
+  get rgbAppearancePresetId(): RgbAppearancePresetId | null { return this._rgbAppearancePresetId; }
 
   /**
    * Apply a sky preset by id. Public surface of the existing private
@@ -2603,9 +2601,7 @@ export class Viewer {
   }
 
   /** The active sky preset id. */
-  get skyPresetId(): SkyPresetId {
-    return this._skyPresetId;
-  }
+  get skyPresetId(): SkyPresetId { return this._skyPresetId; }
 
   /**
    * Apply a named EDL preset bundle (Subtle / Balanced / Inspection)
@@ -2625,9 +2621,7 @@ export class Viewer {
   }
 
   /** The active EDL preset id, or `null` when EDL is off. */
-  get edlPresetId(): EdlPresetId | null {
-    return this._edlPresetId;
-  }
+  get edlPresetId(): EdlPresetId | null { return this._edlPresetId; }
 
   /**
    * Set the splat rendering mode.
@@ -2670,9 +2664,7 @@ export class Viewer {
   }
 
   /** The active splat mode. */
-  get splatMode(): SplatMode {
-    return this._splatMode;
-  }
+  get splatMode(): SplatMode { return this._splatMode; }
 
   /**
    * Walk every RGB-mode static cloud and re-upload its colour attribute
@@ -4439,6 +4431,11 @@ export class Viewer {
       displayedPoints,
       totalPoints,
       gpuBytesEstimate,
+      // Device pixels, so the continuity history can be costed against the
+      // store actually allocated rather than the CSS size, which understates a
+      // doubled ratio fourfold.
+      bufferWidthPx: this._renderer.domElement.width,
+      bufferHeightPx: this._renderer.domElement.height,
     };
   }
   /**

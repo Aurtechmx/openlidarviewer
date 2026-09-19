@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   continuitySupport,
   mayReconstruct,
@@ -93,8 +94,10 @@ describe('naming', () => {
   // This viewer already reports confidence about measured things. A display
   // quantity sharing that word would read as the same kind of claim.
   it('never calls this confidence', () => {
+    // fileURLToPath, not URL.pathname: on Windows the latter yields `/D:/...`,
+    // which Node then resolves against the current drive as `D:\\D:\\...`.
     const src = readFileSync(
-      new URL('../src/render/streaming/continuitySupport.ts', import.meta.url).pathname,
+      fileURLToPath(new URL('../src/render/streaming/continuitySupport.ts', import.meta.url)),
       'utf8',
     );
     const code = src.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');

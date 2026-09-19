@@ -164,7 +164,7 @@
       "path": "src/render/streaming/convergence.ts",
       "status": "staged",
       "why": "Schedules which temporal phase a parked frame contributes and when the sweep is complete. No frame accumulates, so nothing asks it.",
-      "graduation": "Accumulation turns on and the render loop drives the sweep from this state, stopping when it reports converged. The EDL repaint must move with it: edlMotionGate runs EDL once the moment motion stops, which is the first frame of the sweep, so it would shade an image that is one phase complete and never run again. It has to fire on converged instead of on parked.",
+      "graduation": "Accumulation turns on and the render loop drives the sweep from this state, feeding the scheduler's own refinement phase, stopping when it reports converged. The EDL repaint must move with it: edlMotionGate runs EDL once the moment motion stops, which is the first frame of the sweep, so it would shade an image that is one phase complete and never run again. It has to fire on converged instead of on parked.",
       "review": "2027-03-31"
     },
     {
@@ -179,13 +179,6 @@
       "status": "staged",
       "why": "Decides where the renderer stops substituting reconstruction and shows measured evidence. Nothing reconstructs, so there is nothing to reveal and no lens is opened.",
       "graduation": "Reconstruction runs and the lens suppresses it under the cursor, reachable from Inspect, Measure or Probe, with picking unchanged whether it is open or shut.",
-      "review": "2027-03-31"
-    },
-    {
-      "path": "src/render/streaming/historyBudget.ts",
-      "status": "staged",
-      "why": "Sizes the accumulation history and picks its texture formats. No history is allocated, so nothing asks what it would cost.",
-      "graduation": "The accumulation pass allocates history at these formats, declines above the ceiling and leaves source rendering in place, and releases the textures when the device pixel ratio changes rather than keeping an oversized one.",
       "review": "2027-03-31"
     },
     {

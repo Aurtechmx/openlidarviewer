@@ -77,7 +77,7 @@ cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,977 lines and `src/render/Viewer.ts` is 6,219, four below
+`src/main.ts` is 4,977 lines and `src/render/Viewer.ts` is 6,216, seven below
 v0.6.9 after five getters collapsed to make room for a memory accessor and a
 size-mode call. A shrink-only lint fails the build when either passes its
 recorded baseline, so a raise is a hand edit to

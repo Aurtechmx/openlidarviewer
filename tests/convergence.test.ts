@@ -7,9 +7,19 @@ import {
   type ConvergenceState,
 } from '../src/render/streaming/convergence';
 import type { PhaseCount } from '../src/render/streaming/temporalPhase';
+import { REFINEMENT_PHASE_ORDER, type RefinementPhase } from '../src/render/refinementPhase';
 
 const COUNTS: PhaseCount[] = [2, 4, 8];
-const parked = (epoch: number, phaseCount: PhaseCount) => ({ epoch, moving: false, phaseCount });
+const parked = (epoch: number, phaseCount: PhaseCount) => ({
+  epoch,
+  refinement: 'full-refine' as RefinementPhase,
+  phaseCount,
+});
+const refining = (epoch: number, phaseCount: PhaseCount, refinement: RefinementPhase) => ({
+  epoch,
+  refinement,
+  phaseCount,
+});
 
 /** Run `frames` parked frames at one epoch, from a starting state. */
 function park(from: ConvergenceState, epoch: number, k: PhaseCount, frames: number) {
@@ -43,14 +53,14 @@ describe('convergence', () => {
   it('drops the sweep when the camera moves, rather than pausing it', () => {
     const mid = park(IDLE, 1, 4, 2).state;
     expect(mid.kind).toBe('converging');
-    const moved = nextConvergence(mid, { epoch: 1, moving: true, phaseCount: 4 });
+    const moved = nextConvergence(mid, refining(1, 4, 'moving'));
     expect(moved).toEqual(IDLE);
     expect(phaseToDraw(moved)).toBeNull();
   });
 
   it('restarts from phase 0 after motion, not from where it stopped', () => {
     const mid = park(IDLE, 1, 4, 3).state;
-    const moved = nextConvergence(mid, { epoch: 1, moving: true, phaseCount: 4 });
+    const moved = nextConvergence(mid, refining(1, 4, 'moving'));
     const resumed = nextConvergence(moved, parked(2, 4));
     expect(phaseToDraw(resumed)).toBe(0);
   });
@@ -95,10 +105,34 @@ describe('convergence', () => {
   it('draws nothing while moving, however long the camera moves', () => {
     let s: ConvergenceState = IDLE;
     for (let i = 0; i < 20; i++) {
-      s = nextConvergence(s, { epoch: i, moving: true, phaseCount: 4 });
+      s = nextConvergence(s, refining(i, 4, 'moving'));
       expect(phaseToDraw(s)).toBeNull();
       expect(isConverged(s)).toBe(false);
     }
+  });
+
+  // Consuming the streaming lifecycle rather than running beside it. The three
+  // earlier phases are still admitting nodes, each arriving node changes the
+  // visible frontier, and the frontier is a display input, so a sweep begun
+  // then is restarted by its own epoch before it can finish.
+  it.each(REFINEMENT_PHASE_ORDER.filter((p) => p !== 'full-refine'))(
+    'does not begin a sweep while %s',
+    (phase) => {
+      const s = nextConvergence(IDLE, refining(1, 4, phase));
+      expect(s).toEqual(IDLE);
+      expect(phaseToDraw(s)).toBeNull();
+    },
+  );
+
+  it('begins only once the view is fully refined', () => {
+    expect(phaseToDraw(nextConvergence(IDLE, refining(1, 4, 'center-refine')))).toBeNull();
+    expect(phaseToDraw(nextConvergence(IDLE, refining(1, 4, 'full-refine')))).toBe(0);
+  });
+
+  it('abandons a sweep if refinement restarts', () => {
+    const mid = park(IDLE, 1, 4, 2).state;
+    expect(mid.kind).toBe('converging');
+    expect(nextConvergence(mid, refining(1, 4, 'coverage'))).toEqual(IDLE);
   });
 
   it('never names a phase outside the sweep', () => {
