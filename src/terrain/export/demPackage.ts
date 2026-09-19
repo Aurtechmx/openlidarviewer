@@ -19,6 +19,7 @@
  * a prominent PRELIMINARY caveat whenever the data is not full + ready.
  */
 
+import { dtmProductDigest } from '../../science/dtmProductDigest';
 import type { AnalysedBasis } from './analysedBasis';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import { epsgFromCrsLabel } from '../../export/crsIdentifier';
@@ -252,6 +253,26 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     analysedBasis: opts.analysedBasis ?? null,
   });
 
+  // Digest the surface as it ships: the emitted Z and coverage arrays, the grid
+  // geometry and the CRS codes. Bound to the method digest when the resolution
+  // supplied one, so the pair (surface, method) is what the value proves equal.
+  const surfaceDigest = dtmProductDigest(
+    {
+      z: dtm.z,
+      coverage: dtm.coverage,
+      cols: dtm.cols,
+      rows: dtm.rows,
+      cellSizeM: dtm.cellSizeM,
+      // The README prints these as the package's own bounds, so the digest is
+      // taken over the origin the deliverable declares.
+      originH1: opts.boundsMinX ?? 0,
+      originH2: opts.boundsMinY ?? 0,
+      horizontalEpsg: parseEpsg(p.horizontalCrs),
+      verticalEpsg: null,
+    },
+    p.scopedEvidence?.methodDigest ?? undefined,
+  );
+
   const cov = (() => {
     let measured = 0; let interp = 0; const total = dtm.coverage.length;
     for (const c of dtm.coverage) {
@@ -325,6 +346,13 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
     `  Elevation unit ${zUnit}`,
+    // The DERIVED-PRODUCT digest: a hash of the surface this package emits, not
+    // of the source file and not of the analysis inputs. Two packages carrying
+    // the same grid of heights and coverage states share this value; any cell,
+    // coverage state, grid geometry or CRS code that differs moves it. It is
+    // what lets a reader check that a DTM they hold is the one a report
+    // described, which the method digest cannot answer on its own.
+    `  Surface digest ${surfaceDigest}`,
     ``,
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,

@@ -318,3 +318,41 @@ describe('buildDemReadme — elevation unit on the live unresolved-frame path', 
     expect(txt).not.toMatch(/Elevation unit metres/);
   });
 });
+
+describe('the surface digest the package ships', () => {
+  // A DERIVED-PRODUCT digest: taken over the grid the deliverable emits, not
+  // over the source file and not over the analysis inputs. It answers a
+  // question the method digest cannot, namely whether two packages carry the
+  // same surface.
+
+  it('prints a digest for the emitted surface', () => {
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    expect(txt).toContain('Surface digest');
+    expect(txt).toMatch(/Surface digest\s+[0-9a-f]{64}/);
+  });
+
+  it('gives the same surface the same digest', () => {
+    const a = buildDemReadme({ result: readyResult(), ...OPTS });
+    const b = buildDemReadme({ result: readyResult(), ...OPTS });
+    const digest = (s: string) => /Surface digest\s+([0-9a-f]{64})/.exec(s)?.[1];
+    expect(digest(a)).toBe(digest(b));
+  });
+
+  it('moves the digest when a cell of the surface changes', () => {
+    // readyResult() returns a fresh object but shares the module-level Z array,
+    // so the digest has to be read before the surface is touched and the cell
+    // put back afterwards.
+    const digest = (): string | undefined =>
+      /Surface digest\s+([0-9a-f]{64})/.exec(buildDemReadme({ result: readyResult(), ...OPTS }))?.[1];
+
+    const before = digest();
+    const original = Z[0];
+    try {
+      Z[0] = original + 1;
+      expect(digest()).not.toBe(before);
+    } finally {
+      Z[0] = original;
+    }
+    expect(digest()).toBe(before);
+  });
+});
