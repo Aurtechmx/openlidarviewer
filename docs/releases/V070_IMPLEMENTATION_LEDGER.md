@@ -1706,3 +1706,44 @@ of mode changes makes no new uniform.
 What this phase asks to measure, the compile and startup cost of the shapes that
 do exist, needs a device. Nothing here establishes it.
 
+### L87 · FIXED · SCIENTIFIC
+
+Coverage sizing derives a number per point from a cloud's own positions and
+hands it to the GPU. It describes how the cloud is drawn rather than what was
+measured, and three things had to be true about it.
+
+All three already were, and each was checked rather than assumed. The estimator
+reads positions and writes only its own output array. The attribute appears in
+no session and no model. It exists in two places, written onto the geometry and
+read by the size node, and disposing the material on cloud removal is what
+invalidates it.
+
+What was missing is anything keeping it that way. A session that saved it, or an
+export that wrote it beside the returns, would put a presentation figure in a
+file a reader takes for data, and it would be indistinguishable from a
+measurement because it is a float per point. The surfaces that write a session
+or a point file now may not name a render-only attribute, and naming one there
+fails by file.
+
+The first probe of that guard passed when it should not have. It inserted the
+offending line at the first newline, which is inside the file's leading comment,
+and the guard strips comments before it looks. The guard was right and the probe
+was wrong, which is the more usual way round than it feels at the time.
+
+### L88 · NOT REPRODUCIBLE · PERFORMANCE
+
+History churning through a progressive decode does not arise, because the chunks
+do not grow the cloud. They grow a separate preview layer, which is disposed the
+moment the real cloud is added, so the dataset changes once at that commit
+rather than on every chunk. There is nothing to batch.
+
+Accumulating over the preview would be wrong for a second reason beyond the
+churn: it is a deliberately reduced stand-in, sized to what the device can draw
+rather than to what the file holds, and a history built over it would be a
+history of a placeholder. A sweep belongs after the commit, which is the same
+answer refinement got, for the same reason.
+
+Preview authority is independent of all of this and stays so. A figure caps at
+preview while the source is not proven complete, held by the guard that keeps
+the authority surface and the continuity modules from importing each other.
+
