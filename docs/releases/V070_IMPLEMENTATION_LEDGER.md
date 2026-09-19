@@ -57,16 +57,17 @@ of, so a finding can be traced to where it was first written down.
 | L30 | ARCHITECTURE | TEST | med | FIXED | new | Three version parsers could not read a prerelease, so the release machinery had never been exercised against one. |
 | L31 | SESSION | TEST | med | FIXED | new | A lazy chunk awaited after the restore was committed reported a restored session as a failed import. |
 | L32 | LIFECYCLE | READ | n/a | NOT REPRODUCIBLE | new | Ad hoc cancellation flags as a class. |
+| L33 | STANDARDS | TEST | high | FIXED | new | An unknown record format still asserted the extended reading for codes 13 to 22. |
 
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 5
+- FIXED: 6
 - NOT REPRODUCIBLE: 5
 - OPEN: 16
 - PARTIAL: 2
 - SUPERSEDED: 1
-- total: 32
+- total: 33
 
 ## Detail
 
@@ -298,3 +299,22 @@ an `AbortController`.
 
 The premise as stated is not reproduced, so no primitive was built. Section 57's
 cancellation-ownership question is separate and stays open.
+
+### L33 · FIXED · STANDARDS
+
+The first pass at unknown-format naming handled four codes, the ones where the
+two tables swap a name for a reservation. The tables disagree more widely than
+that: legacy reserves everything from 13 to 31, while the extended table names
+13 through 22. A source that declared no record format therefore read code 19
+as Overhead Structure, which asserts extended semantics the file had not
+declared.
+
+Ambiguity is now derived from the two tables rather than from a hand-written
+list, so a code either table names alone reports both readings. One case
+settles itself: the legacy classification field is five bits, so a code above 31
+cannot have come from a legacy record and the extended reading is the only one
+available.
+
+The export legend reads "Bridge Deck or reserved (17)" where it has no format
+to work from. Passing the format at that call site gives the exact name, and
+that wiring is open. Covered by `tests/lasClassificationSemantics.test.ts`.

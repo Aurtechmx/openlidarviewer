@@ -53,8 +53,8 @@ test('classificationLabel names class 12 by the format that carries it', () => {
 });
 
 test('classificationLabel reports both readings when the format is unknown', () => {
-  expect(classificationLabel(12)).toBe('Overlap or reserved (12)');
-  expect(classificationLabel(8)).toBe('Model Key-Point or reserved (8)');
+  expect(classificationLabel(12)).toBe('Overlap Points or reserved (12)');
+  expect(classificationLabel(8)).toBe('Model Key-Point (Mass Point) or reserved (8)');
   expect(classificationLabel(10)).toBe('Rail or reserved (10)');
   expect(classificationLabel(11)).toBe('Road Surface or reserved (11)');
 });

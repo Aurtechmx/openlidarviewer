@@ -481,7 +481,10 @@ test('asprsLabel returns the standard label for known codes', () => {
   expect(asprsLabel(5)).toBe('High Vegetation');
   expect(asprsLabel(6)).toBe('Building');
   expect(asprsLabel(9)).toBe('Water');
-  expect(asprsLabel(17)).toBe('Bridge Deck');
+  // Without a declared record format the legend cannot claim the extended
+  // reading: legacy reserves 13 to 31. Pass the format for the exact name.
+  expect(asprsLabel(17)).toBe('Bridge Deck or reserved (17)');
+  expect(asprsLabel(17, 6)).toBe('Bridge Deck');
 });
 
 test('asprsLabel separates the named, reserved and user-definable ranges', () => {
