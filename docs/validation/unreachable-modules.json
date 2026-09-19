@@ -161,13 +161,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/science/scientificArtifactPassport.ts",
-      "status": "staged",
-      "why": "A self-verifying provenance record binding source digest, methods and parameters, the analysis content, the evidence decision and the exported artifact bytes into one tamper-evident document (separate cryptographic fields beside the record's legacy FNV fingerprint). It reuses the existing synchronous SHA-256 and canonicalize; it introduces no second crypto and changes no numerical result. The export/validation path does not construct a passport yet, so only its own tests import it. Kept out of the eager graph because index.html's bundle has near-zero headroom.",
-      "graduation": "The export path (or a validation harness) builds a ScientificArtifactPassport for an emitted artifact and surfaces its scienceId / reproducibility line, at which point it is reached through src/lazyChunks.ts. canonicalize() now refuses non-finite numbers, so the remaining conditions are integration ones: an export path that emits the passport beside its artifact, the eager-shell bundle budget (the module must load lazily), and a release-validation record that cites its digests.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/terrain/contourStudio/contourAdaptiveGeneralize.ts",
       "status": "staged",
       "why": "The staged source-unit product pipeline for terrain-aware generalization. src/terrain/contour/terrainAwareTolerance.ts names it as exactly that and is the shared policy both readers use; the live honesty-gated styler is what v0.6.6 shipped.",

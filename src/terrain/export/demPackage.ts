@@ -19,12 +19,15 @@
  * a prominent PRELIMINARY caveat whenever the data is not full + ready.
  */
 
+import { buildScientificArtifactPassport } from '../../science/scientificArtifactPassport';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import type { AnalysedBasis } from './analysedBasis';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import { epsgFromCrsLabel } from '../../export/crsIdentifier';
 import {
   buildExportProvenance,
+  analysisRecordFromProvenance,
+  processingManifestFromProvenance,
   provenanceLines,
   dtmArtifactClaims,
   type ExportPermitStamp,
@@ -90,6 +93,12 @@ export interface DemPackageOptions {
    * local frame. CHM is a height DIFFERENCE (DSM−DTM) and is never shifted.
    */
   readonly worldOrigin?: { readonly x: number; readonly y: number; readonly z?: number } | null;
+  /**
+   * SHA-256 of the source file, when the loader verified one. Left unset where
+   * no digest was taken, and the passport records that as unavailable rather
+   * than as an absent field that might have held one.
+   */
+  readonly sourceSha256?: string | null;
   /** Base filename (no extension) for the entries. Default 'terrain'. */
   readonly basename?: string;
   /** Metres per source vertical unit, or null when the frame resolved none. */
@@ -514,6 +523,55 @@ export function buildDemPackage(
     name: `${basename}-README.txt`,
     bytes: new TextEncoder().encode(readme),
   });
+
+  // A passport for the bare-earth raster, beside the raster. The artifact is
+  // ONE file rather than the package: a passport digesting the ZIP it travels
+  // inside could never verify, because adding it changes what it measured.
+  //
+  // This is a tamper-evident provenance record, not a signature. It binds the
+  // source identity, the analysis record, the processing manifest, the methods,
+  // the evidence decision and the digest of the raster it names. A recipient
+  // who rehashes that raster and reads the record can tell whether the file
+  // they hold is the one this analysis produced; nothing here proves who
+  // produced it.
+  const dtmTif = entries.find((e) => e.name === `${basename}-dtm.tif`);
+  if (dtmTif) {
+    const passportProvenance = buildExportProvenance(result, {
+      verticalUnitToMetres: options.verticalUnitToMetres ?? null,
+      basename,
+      generatedAt: options.generationDateIso ?? new Date().toISOString(),
+      softwareVersion: options.softwareVersion ?? 'unknown',
+      metricVersion: options.metricVersion ?? 'unknown',
+      exportPermit: options.exportPermit ?? null,
+      evidenceClaimIds: dtmArtifactClaims(result),
+      analysedBasis: options.analysedBasis ?? null,
+    });
+    const passport = buildScientificArtifactPassport({
+      // The source digest is recorded when the loader verified one and left
+      // null when it did not. Null reads as unavailable rather than as a
+      // digest that happens to be missing.
+      source: { name: passportProvenance.source, sha256: options.sourceSha256 ?? null },
+      analysis: analysisRecordFromProvenance(passportProvenance),
+      processing: processingManifestFromProvenance(passportProvenance),
+      evidence: {
+        baseline: passportProvenance.scopedEvidence?.baselineEvidence ?? null,
+        effective: passportProvenance.scopedEvidence?.effectiveEvidence ?? null,
+        resolutionState: passportProvenance.scopedEvidence?.resolutionState ?? 'unresolved',
+        matchedStudy: passportProvenance.scopedEvidence?.matchedScopedStudy ?? null,
+        applicabilityVerdict:
+          passportProvenance.scopedEvidence?.applicabilityVerdict ?? 'no scoped study applies',
+      },
+      artifact: {
+        filename: dtmTif.name,
+        mediaType: 'image/tiff',
+        bytes: dtmTif.bytes,
+      },
+    });
+    entries.push({
+      name: `${basename}-dtm.tif.olv-passport.json`,
+      bytes: new TextEncoder().encode(`${JSON.stringify(passport, null, 2)}\n`),
+    });
+  }
 
   // Integrity manifest LAST: it hashes every file already assembled (README
   // included) so a recipient can verify the whole deliverable with a standard
