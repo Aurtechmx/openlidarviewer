@@ -703,8 +703,16 @@ at.
 
 `docs/validation/streaming-cull-baseline.json` measures what the current
 behaviour costs over four stored cameras: an overview draws all 84 resident
-nodes, a half-panned view 68, a corner view 24, a narrow view 12. So on the
-tighter views most resident nodes are submitted for nothing.
+nodes, a half-panned view 68, a corner view 24, a narrow view 12.
+
+The record states what those figures do not support, because a share of nodes
+reads like a share of work and is not the same quantity. A node costs what its
+points cost and these nodes carry none, so the drawn share is not a GPU saving.
+The scene is three uniform grids over one area held resident at once, where a
+scheduler would hold a level-of-detail selection, so a real drawn share is
+likely higher than this one. The stored views are axis-aligned boxes, which is
+an orthographic camera; a perspective frustum has slanted sides and would
+contain a different set.
 
 The renderer is not wired to it. That step changes what is drawn, and the
 evidence for it is GPU frame time on a real device, which this runtime cannot
