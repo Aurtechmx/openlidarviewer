@@ -2186,3 +2186,48 @@ An oriented disc remains the footprint of one sample. It interpolates nothing,
 infers no surface between points and leaves the sample count identical, so it is
 a display mode and the word reconstruction belongs nowhere near it, the evidence
 register included.
+
+### L102 · BUILT · SCIENTIFIC
+
+Of the twenty-one named tests, eighteen already existed under the behaviours
+they name, several from earlier phases of this programme and one,
+`streamingFrustumCulling`, under that exact filename since before it. Adding
+files to match names already covered would have inflated a count without
+covering anything, so three were written and one was refused.
+
+`renderAttributePacking` has nothing to test. `packedAttributes` appears four
+times in the tree, all of them a flag set to false; no packing exists, so a test
+would assert the absence of a feature rather than its behaviour.
+
+`coverageSizingOrthographic` was genuinely missing and turned out to be a
+property rather than a case. The scale takes no camera: it is a function of the
+resolution a node was recorded at relative to the root, and the renderer draws
+with size attenuation off, so the figure is in device pixels and acquires no
+projection dependency downstream. The test varies four camera states and pins
+one scale, which reads the independence off the signature instead of trusting
+it.
+
+`reconstructedPixelsNotPickable` was the important gap. Every module carries a
+sentence saying nothing derived from a reconstructed pixel may reach picking,
+measurement or evidence, and no test read that sentence. The structural fact
+behind it is that a fill decision carries a depth and a support kind and no
+identity at all, so there is nothing for a picker to resolve; the test reads the
+keys rather than trusting the comment.
+
+The third test was wrong before it was right, and the correction is the finding.
+It asserted that a wide hole does not creep shut across repeated passes, and it
+passed. Tracing the pass showed why: on a five-by-five hole the first pass fills
+zero pixels. A rim pixel has neighbours on one side only, so the opposite-pair
+rule refuses it as unsupported, and the fixed point is reached before creeping
+could begin. The assertions were true for a reason unrelated to what they
+claimed, which is the same failure mode as a gate that passes vacuously.
+
+Rewritten, they assert the behaviour that is actually there: nothing fills in a
+hole three or more pixels wide, every cell survives, and the refusal reason at
+the rim is unsupported rather than discontinuity. A one-pixel seam still closes,
+which is what the pass exists for. Weakening the opposite-pair rule to any two
+neighbours now fails two of them, where the original version noticed nothing.
+
+The rule that a reconstructed pixel is never evidence is a second line behind a
+first that already holds in this geometry, so it is asserted directly rather
+than through a hole that never reaches it.
