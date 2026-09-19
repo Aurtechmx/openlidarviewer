@@ -9,22 +9,25 @@ describe('moving subset', () => {
   // The renderer already drops resolution and halves the node budget while
   // moving. A third reduction on the same frames multiplies with those two and
   // has not been measured, so the shipped default draws everything.
-  it.each(REFINEMENT_PHASE_ORDER)('draws every phase by default while %s', (refinement) => {
-    for (const k of COUNTS) {
-      expect(activePhases(refinement, k)).toEqual(Array.from({ length: k }, (_, i) => i));
-      expect(PHASES_DRAWN_WHILE[refinement]).toBe('all');
-    }
+  it.each(COUNTS)('draws every phase by default at k=%i', (k) => {
+    expect(activePhases(k)).toEqual(Array.from({ length: k }, (_, i) => i));
+  });
+
+  // The record of the decision, which every refinement phase shares. The
+  // function cannot consult it, and no longer takes a phase implying it might.
+  it.each(REFINEMENT_PHASE_ORDER)('records that %s draws all of them', (refinement) => {
+    expect(PHASES_DRAWN_WHILE[refinement]).toBe('all');
   });
 
   it('is deterministic: the same request gives the same set', () => {
-    expect(activePhases('moving', 4, 2)).toEqual(activePhases('moving', 4, 2));
+    expect(activePhases(4, 2)).toEqual(activePhases(4, 2));
   });
 
   // A frame drawing no phase draws no points; one naming more phases than exist
   // names phases no point is assigned to.
   it.each(COUNTS)('clamps the drawn count into [1, k] for k=%i', (k) => {
     for (const asked of [-5, 0, 1, k, k + 3, Number.NaN]) {
-      const got = activePhases('moving', k, asked);
+      const got = activePhases(k, asked);
       expect(got.length).toBeGreaterThanOrEqual(1);
       expect(got.length).toBeLessThanOrEqual(k);
     }
@@ -33,7 +36,7 @@ describe('moving subset', () => {
   it('draws a prefix of the phase numbering, so every drawn phase exists', () => {
     for (const k of COUNTS) {
       for (let n = 1; n <= k; n++) {
-        const got = activePhases('moving', k, n);
+        const got = activePhases(k, n);
         expect(got).toEqual([...got].sort((a, b) => a - b));
         for (const p of got) expect(p).toBeLessThan(k);
       }
@@ -43,7 +46,7 @@ describe('moving subset', () => {
   // The subset has to select real points, not an empty slice of the cloud.
   it('selects a proportional share of points at k=4', () => {
     const n = 40000;
-    const drawn = new Set(activePhases('moving', 4, 1));
+    const drawn = new Set(activePhases(4, 1));
     let hit = 0;
     for (let i = 0; i < n; i++) if (drawn.has(temporalPhase(i, 0, 4))) hit++;
     expect(Math.abs(hit / n - 0.25)).toBeLessThan(0.01);

@@ -21,6 +21,7 @@
  * Display only. A subset decides which points a frame draws, never where a point
  * is or what it measures.
  */
+import { clamp01 } from '../../numeric';
 import type { RefinementPhase } from '../refinementPhase';
 import type { PhaseCount } from './temporalPhase';
 
@@ -31,6 +32,12 @@ import type { PhaseCount } from './temporalPhase';
  * measured and tuned; this one has not been, and a subset that looked acceptable
  * on a desktop with a dense scan can gut a sparse one. A value below the phase
  * count belongs here once a real device has been measured, not before.
+ *
+ * A record of that decision rather than a lookup anything performs. While every
+ * entry is the same, {@link activePhases} cannot depend on the refinement phase,
+ * and it does not take one: a parameter that is read and discarded promises a
+ * dependency the function does not have, which is worse than not offering it.
+ * A caller wanting fewer phases passes `activeCount`.
  */
 export const PHASES_DRAWN_WHILE: Readonly<Record<RefinementPhase, 'all'>> = {
   moving: 'all',
@@ -60,11 +67,9 @@ function drawnCount(activeCount: number, phaseCount: PhaseCount): number {
  * The phases a frame draws, in ascending order, for a refinement phase.
  */
 export function activePhases(
-  refinement: RefinementPhase,
   phaseCount: PhaseCount,
   activeCount: number = phaseCount,
 ): readonly number[] {
-  void PHASES_DRAWN_WHILE[refinement];
   const n = drawnCount(activeCount, phaseCount);
   return Array.from({ length: n }, (_, i) => i);
 }
@@ -91,6 +96,9 @@ export function footprintCompensation(
 ): number {
   const n = drawnCount(activeCount, phaseCount);
   const fraction = n / phaseCount;
-  const s = Number.isFinite(strength) ? Math.min(1, Math.max(0, strength)) : 0;
+  // The shared clamp, but not its NaN behaviour: `clamp01` propagates NaN and a
+  // strength nobody supplied has to mean no compensation rather than none of the
+  // arithmetic working.
+  const s = Number.isFinite(strength) ? clamp01(strength) : 0;
   return Math.pow(1 / fraction, 0.5 * s);
 }
