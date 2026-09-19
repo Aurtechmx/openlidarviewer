@@ -112,33 +112,35 @@ export function classificationName(code: number, pdrf: number): string {
   return `Reserved (${code})`;
 }
 
-/**
- * Codes whose meaning differs between the legacy and extended tables. A caller
- * that does not know the format cannot choose between them.
- */
-const FORMAT_DEPENDENT_CODES: Readonly<Record<number, string>> = {
-  8: 'Model Key-Point or reserved (8)',
-  10: 'Rail or reserved (10)',
-  11: 'Road Surface or reserved (11)',
-  12: 'Overlap or reserved (12)',
-};
+const LEGACY_RESERVED = 'Reserved for ASPRS Definition';
 
 /**
  * The name for a code when the point data record format is not known.
  *
- * Four codes mean different things in the two tables, and naming one of them
- * after a guess is how class 12 came to read "Overlap" on extended files. Those
- * four report both readings; every other code is named the same either way.
+ * The two tables disagree over more than a handful of codes. Legacy reserves
+ * everything from 13 to 31, while the extended table names 13 through 22, so
+ * reading code 19 as Overhead Structure asserts extended semantics that the
+ * source has not declared. Every code the tables disagree over reports both
+ * readings; the rest are named outright.
+ *
+ * A code above 31 is the one case that settles itself. The legacy
+ * classification field is five bits, so a value that large cannot have come
+ * from a legacy record and the extended reading is the only one available.
  */
 export function classificationNameUnknownFormat(code: number): string {
-  const ambiguous = FORMAT_DEPENDENT_CODES[code];
-  if (ambiguous !== undefined) return ambiguous;
   if (!Number.isInteger(code) || code < 0 || code > 255) return `Invalid (${code})`;
-  if (code >= FIRST_USER_DEFINABLE_CLASS) return `User Definable (${code})`;
-  const extended = EXTENDED_CLASS_NAMES[code];
-  if (extended !== undefined && extended !== 'Reserved') return extended;
+  if (code > LEGACY_MAX_CLASS) return classificationName(code, FIRST_EXTENDED_PDRF);
+
   const legacy = LEGACY_CLASS_NAMES[code];
-  if (legacy !== undefined && legacy !== 'Reserved') return legacy;
+  const extended = EXTENDED_CLASS_NAMES[code];
+  const legacyNamed = legacy !== undefined && legacy !== LEGACY_RESERVED;
+  const extendedNamed = extended !== undefined && extended !== 'Reserved';
+
+  if (legacyNamed && extendedNamed) {
+    return legacy === extended ? legacy : `${legacy} or ${extended} (${code})`;
+  }
+  if (legacyNamed) return `${legacy} or reserved (${code})`;
+  if (extendedNamed) return `${extended} or reserved (${code})`;
   return `Reserved (${code})`;
 }
 

@@ -16,6 +16,7 @@ import {
   isExtendedPdrf,
   isValidPdrf,
   isOverlapPoint,
+  classificationNameUnknownFormat,
   decodeLegacyClassificationByte,
   decodeExtendedClassificationFlags,
   encodeExtendedClassificationFlags,
@@ -113,6 +114,50 @@ describe('overlap reads beside the base class, not instead of it', () => {
 
   it('shows the base class alone when no flag is set', () => {
     expect(describeClassification(6, 6)).toBe('Building');
+  });
+});
+
+describe('an unknown profile never asserts one table over the other', () => {
+  // Legacy reserves 13 to 31; the extended table names 13 through 22. Reading
+  // code 19 as Overhead Structure claims extended semantics the source has not
+  // declared, which is the case this covers beyond the four codes that were
+  // handled first.
+  it.each([
+    [13, 'Wire - Guard (Shield)'],
+    [17, 'Bridge Deck'],
+    [19, 'Overhead Structure'],
+    [22, 'Temporal Exclusion'],
+  ])('reports both readings for code %i', (code, extendedName) => {
+    const shown = classificationNameUnknownFormat(code);
+    expect(shown).toContain(extendedName);
+    expect(shown).toContain('reserved');
+    expect(shown).toContain(String(code));
+  });
+
+  it('reports both readings for the four codes the tables swap', () => {
+    expect(classificationNameUnknownFormat(8)).toBe('Model Key-Point (Mass Point) or reserved (8)');
+    expect(classificationNameUnknownFormat(10)).toBe('Rail or reserved (10)');
+    expect(classificationNameUnknownFormat(11)).toBe('Road Surface or reserved (11)');
+    expect(classificationNameUnknownFormat(12)).toBe('Overlap Points or reserved (12)');
+  });
+
+  it('names a code both tables agree on', () => {
+    expect(classificationNameUnknownFormat(2)).toBe('Ground');
+    expect(classificationNameUnknownFormat(6)).toBe('Building');
+    expect(classificationNameUnknownFormat(9)).toBe('Water');
+  });
+
+  it('reports a code both tables reserve as reserved', () => {
+    expect(classificationNameUnknownFormat(23)).toBe('Reserved (23)');
+    expect(classificationNameUnknownFormat(31)).toBe('Reserved (31)');
+  });
+
+  it('settles a code above the legacy field, which proves extended semantics', () => {
+    // The legacy classification field is five bits, so 32 and above cannot
+    // have come from a legacy record.
+    expect(classificationNameUnknownFormat(40)).toBe('Reserved (40)');
+    expect(classificationNameUnknownFormat(64)).toBe('User Definable (64)');
+    expect(classificationNameUnknownFormat(200)).toBe('User Definable (200)');
   });
 });
 
