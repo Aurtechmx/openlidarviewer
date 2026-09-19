@@ -1996,3 +1996,49 @@ a GPU and the programme forbids brand lists.
 
 Staged. No capability can be switched on, so there is no history to size and no
 tier to cap.
+
+### L97 · BUILT · ARCHITECTURE
+
+The suggested degradation order drops micro-gap closure before accumulation.
+Under memory pressure that is the wrong way round, and the reason is checkable
+rather than a matter of taste. One thing in the subsystem holds memory between
+frames: the three history surfaces. Closing gaps reads neighbouring depths
+within a frame and allocates nothing that persists, so giving it up first leaves
+the pressure exactly where it was while the picture is already worse.
+
+Shortening the sweep frees nothing either. The history is one set of surfaces
+rather than one per phase, so the count changes how many frames a convergence
+takes and not how large anything is. Both steps reduce work, which makes them
+relief for a device that cannot hold a frame rate, so they lead the frame ladder
+in the suggested order while the memory ladder frees the surfaces first. Each
+step declares what it releases and a test reads the ordering off those
+declarations instead of off a literal.
+
+A rung can be spent rather than taken, which the tier ladder has no way to say.
+Lowering the history ratio is relief until the ratio reaches the legibility
+floor, and after that the request has to move to the next rung. Returning the
+same rung would hand a caller a step that changes nothing and invite a loop; the
+drain test asserts every step returns a different state and that both ladders
+terminate.
+
+`PhaseCount` is 2, 4 or 8 rather than any integer, so a step down halves. The
+first version subtracted one and a cast hid that seven is not a value the
+partition accepts. The powers of two are what make its arithmetic exact, and a
+relief step is not where to give that up.
+
+Dropping accumulation also returns the ratio and the count to their minima.
+Both describe a history that no longer exists, and leaving them where pressure
+had driven them would hand a later re-enable two numbers chosen under duress.
+
+The dataset cannot become a source of relief. Nothing in the state names a scan,
+a node or a buffer of coordinates: it holds display capabilities, a ratio and a
+count, and a test reads the keys rather than trusting the sentence. Node culling
+and packed attributes survive every drain for the same reason, since they
+describe how the data is carried rather than how it looks.
+
+Detection is taken as a fact. There is no portable pressure signal in a browser,
+`navigator.deviceMemory` is a static hint rather than a reading, and the one
+event this subsystem can trust is an allocation that did not succeed, which
+`continuityFailure` already names.
+
+Staged. No capability can be switched on, so there is no history to shrink.
