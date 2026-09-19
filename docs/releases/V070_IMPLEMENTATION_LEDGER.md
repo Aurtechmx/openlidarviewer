@@ -2480,3 +2480,36 @@ expectations. `r32float` renderable unconditionally on WebGPU and needing
 `EXT_color_buffer_float` on WebGL 2 was measured on both backends this
 programme, and the coverage-sizing render under WebGL 2 is listed as having no
 device evidence rather than as backend-neutral.
+
+### L110 · PARTIAL · SCIENTIFIC
+
+Sixteen measured fields were asked for and none exists. No runner here exposes
+a WebGPU adapter, there is no phone, tablet or WebKit device, and the field has
+never drawn a frame anywhere, so every field but the commit hash would have had
+to be invented. No record was written.
+
+What was written is the record's shape, a verifier for it, and the property
+that makes the shape worth having before there is a record. A benchmark of a
+display feature is trivially favourable when whoever runs it picks the scenes,
+and the scenes that flatter gap closure are the flat dense ones. So the corpus
+is the required set: `verify:renderer-benchmark` refuses a record that omits
+any scene, and vegetation, the silhouette edge, the roof ridge and the near or
+far range are named in that set rather than left to whoever writes the record.
+
+Four more checks are the kind a schema cannot express. A baseline that is not
+the source mode is not a baseline. Two sides both in source mode are the same
+run reported twice. A source render reconstructs nothing, so a source row
+claiming edge leakage is a mislabelled measurement. Continuity covering less
+than the baseline is not a continuity result. Each has a test that builds a
+record designed to break it.
+
+The scene list is duplicated in the verifier because a script that gates a
+release must not import a test fixture. The duplication is held closed by a
+test that reads both and compares them, which is the arrangement the
+`REQUIRED_SCENES` comment states.
+
+With no records present the verifier exits 0 and says why. An absent
+measurement is the state this programme is in rather than a validation
+failure, and a gate that went red for it would be disabled rather than
+satisfied. It is wired into the release chain now, so it is live on the day a
+record appears instead of being remembered then.
