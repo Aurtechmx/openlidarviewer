@@ -41,7 +41,7 @@ of, so a finding can be traced to where it was first written down.
 | L14 | ARCHITECTURE | DOC | low | OPEN | B14 | Far-apart mounts do not fold `renderOrigin` on the CPU per mesh. |
 | L15 | ARCHITECTURE | DOC | n/a | DEFERRED | B15 | The registration stack ships and no user path reaches it. |
 | L16 | EVIDENCE | TEST | n/a | FIXED | B16 | The passport shipped and nothing reached it. A DEM package now emits one beside its bare-earth raster. |
-| L17 | EVIDENCE | DOC | n/a | OPEN | B17 | `evidenceBoundaryInspector` ships and is unreachable. |
+| L17 | EVIDENCE | TEST | n/a | FIXED | B17 | The evidence inspector shipped and nothing reached it. The DEM README now explains the decision. |
 | L18 | EVIDENCE | TEST | n/a | FIXED | B18 | `dtmProductDigest` shipped and nothing reached it. The DEM package now records the surface it emits. |
 | L19 | SCIENTIFIC | DOC | known | DEFERRED | B19 | Ground filter near F1 0.5 on mountain scenes, 0.34 precision under dense canopy. |
 | L20 | SEMANTICS | DOC | known | DEFERRED | B20 | No cross-CRS reprojection; the viewer refuses rather than approximating. |
@@ -68,9 +68,9 @@ of, so a finding can be traced to where it was first written down.
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 13
+- FIXED: 14
 - NOT REPRODUCIBLE: 8
-- OPEN: 11
+- OPEN: 10
 - PARTIAL: 4
 - SUPERSEDED: 1
 - total: 39
@@ -543,3 +543,21 @@ raster can tell whether the file they hold is the one this analysis produced.
 Nothing here proves who produced it, and a test asserts the document claims no
 signature. The eager shell is unchanged at 805 KiB. Covered by
 `tests/demPackageReadme.test.ts`.
+
+### L17 · FIXED · EVIDENCE
+
+The evidence boundary inspector was implemented, tested and unreachable. Its
+register entry asked for a provenance or report surface that renders the
+field-by-field breakdown and calls it from the application graph.
+
+The DEM README now carries an evidence contract section: the claim the artifact
+belongs to, what that claim carries before any study is considered, what it
+resolved to here, the resolution state, the matched study or none, and the
+verdict. Where a scoped study matched, each envelope field it was checked
+against is listed with its status.
+
+Section 49's condition is that the view must not implement its own
+applicability logic, and it does not: `buildEvidenceContractView` resolves
+through `resolveEvidence`, the same resolver the provenance block is stamped
+from. A test asserts the two agree, so the section cannot contradict the
+decision it describes. Covered by `tests/demPackageReadme.test.ts`.

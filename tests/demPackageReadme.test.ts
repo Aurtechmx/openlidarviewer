@@ -379,3 +379,33 @@ describe('the passport that travels with the raster', () => {
     expect(text.toLowerCase()).not.toContain('notaris');
   });
 });
+
+describe('the evidence contract the README explains', () => {
+  // A read-only view over the one resolver. It says which claim the artifact
+  // belongs to, what that claim carries before any study is considered, what it
+  // resolved to here, and why. It holds no applicability rules of its own.
+
+  it('names the claim, both levels and the verdict', () => {
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    expect(txt).toContain('Evidence contract');
+    expect(txt).toContain('Claim');
+    expect(txt).toContain('Baseline');
+    expect(txt).toContain('Effective');
+    expect(txt).toContain('Verdict');
+  });
+
+  it('says plainly when no scoped study applies', () => {
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    expect(txt).toMatch(/Matched study\s+none applies/);
+  });
+
+  it('agrees with the provenance block beside it', async () => {
+    // Both read the same resolver, so the level the contract reports cannot
+    // contradict the one the provenance stamps.
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    const { buildEvidenceContractView } = await import('../src/validation/evidenceBoundaryInspector');
+    const { dtmArtifactClaims } = await import('../src/terrain/export/exportProvenance');
+    const view = buildEvidenceContractView(dtmArtifactClaims(readyResult())[0]);
+    expect(txt).toContain(view.applicabilityVerdict);
+  });
+});
