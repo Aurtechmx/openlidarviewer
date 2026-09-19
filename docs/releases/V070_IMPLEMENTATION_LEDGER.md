@@ -64,16 +64,19 @@ of, so a finding can be traced to where it was first written down.
 | L37 | SEMANTICS | TEST | high | FIXED | new | GPS time was exported under a time interpretation the source never declared. |
 | L38 | STANDARDS | TEST | med | FIXED | new | Nothing guarded the standards statements this release corrected. |
 | L39 | STANDARDS | READ | n/a | FIXED | new | No register recorded which standards the application reads or when its text was last checked. |
+| L40 | ARCHITECTURE | READ | n/a | DEFERRED | new | AnalysePanel mixes execution and presentation. Real, and larger than this cycle. |
+| L41 | ARCHITECTURE | READ | n/a | FIXED | new | Nineteen staged modules reviewed for graduation, staging or removal. |
+| L42 | UI | READ | n/a | DEFERRED | new | Browser matrix, mobile and responsive verification need real engines. |
 
 ## Totals
 
-- DEFERRED: 3
-- FIXED: 14
+- DEFERRED: 5
+- FIXED: 15
 - NOT REPRODUCIBLE: 8
 - OPEN: 10
 - PARTIAL: 4
 - SUPERSEDED: 1
-- total: 39
+- total: 42
 
 ## Detail
 
@@ -561,3 +564,37 @@ applicability logic, and it does not: `buildEvidenceContractView` resolves
 through `resolveEvidence`, the same resolver the provenance block is stamped
 from. A test asserts the two agree, so the section cannot contradict the
 decision it describes. Covered by `tests/demPackageReadme.test.ts`.
+
+### L40 · DEFERRED · ARCHITECTURE
+
+Section 58 asks that AnalysePanel separate running an analysis from presenting
+it. The premise holds: the module carries no coordinator and no presenter, and
+it is 2,911 lines with a fan-out of 23.
+
+It is deferred rather than attempted because section 97 sets the bar an
+extraction has to clear. A split that moves lines while the new module imports
+the same dependencies, owns the same state and cannot be tested on its own is
+not an improvement, and doing it properly is a piece of work in its own right.
+The sections that would have justified starting it here, the dataset
+transaction and the result commit seam, did not reproduce as defects.
+
+### L41 · FIXED · ARCHITECTURE
+
+Section 89 asks that every staged module be graduated, kept staged with a
+reason, or removed. Three graduated this cycle through the DEM export path: the
+DTM product digest, the artifact passport and the evidence boundary inspector.
+Each had a register entry naming integration conditions rather than missing
+behaviour, and each condition was met rather than waived.
+
+Nineteen remain staged. Six are the registration stack, which section 90 keeps
+whole: a half-wired alignment tool is worse than none, and the workflow it needs
+is not built. The rest carry their own graduation conditions in the register,
+and the register is enforced, so none of them is unclassified code.
+
+### L42 · DEFERRED · UI
+
+Section 70 forbids substituting mouse simulation for touch verification, and
+section 101 wants a recorded matrix of engine versions with pass, skip and fail
+counts. That evidence comes from running the suite on real engines, which the
+CI matrix does on push and a local session cannot. Recording a matrix from here
+would be inventing it.
