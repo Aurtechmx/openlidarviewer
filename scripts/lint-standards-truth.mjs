@@ -87,6 +87,9 @@ const RULES = [
   },
 ];
 
+/** Directory names never scanned, matched as whole path segments. */
+const SKIP_DIR_NAMES = new Set(['node_modules', '.git', 'dist']);
+
 const EXT = new Set(['.ts', '.md', '.mjs', '.yaml', '.yml']);
 const files = [];
 function walk(p) {
@@ -97,7 +100,15 @@ function walk(p) {
     return;
   }
   if (st.isDirectory()) {
-    if (/node_modules|\.git|dist|release$/.test(p)) return;
+    // Match whole path SEGMENTS. The earlier alternation was unanchored, so
+    // `dist` matched any path containing those four letters and `release$`
+    // matched `docs/release`, which excluded two documents from the scan
+    // without saying so. A check that silently stops reading files reports the
+    // same clean line as one that read them all.
+    const base = p.slice(p.lastIndexOf('/') + 1);
+    if (SKIP_DIR_NAMES.has(base)) return;
+    // The packaged output at the repository root, not `docs/release`.
+    if (relative(ROOT, p) === 'release') return;
     for (const e of readdirSync(p)) walk(join(p, e));
     return;
   }

@@ -69,16 +69,19 @@ of, so a finding can be traced to where it was first written down.
 | L42 | UI | READ | n/a | DEFERRED | new | Browser matrix, mobile and responsive verification need real engines. |
 | L43 | STATE | TEST | high | FIXED | new | The streaming tidy-up predicted the attach with a flag, so a throw from the heavy bridge still closed an unrelated scan. |
 | L44 | LIFECYCLE | TEST | med | FIXED | new | NavBar disposed its teardown group before clearing its timer, and the group rethrows. |
+| L45 | ARCHITECTURE | TEST | high | FIXED | new | The standards lint skipped any directory whose path contained 'dist' and all of `docs/release`. |
+| L46 | PERFORMANCE | READ | med | OPEN | new | Streaming node meshes disable frustum culling, so an off-screen resident node is still submitted. |
+| L47 | UI | READ | med | OPEN | new | Density point sizing keys a 2D grid on (x, y), so it is not orientation invariant. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 17
+- FIXED: 18
 - NOT REPRODUCIBLE: 9
-- OPEN: 10
+- OPEN: 12
 - PARTIAL: 4
 - SUPERSEDED: 1
-- total: 44
+- total: 47
 
 ## Detail
 
@@ -643,3 +646,41 @@ The timer is cleared first. The group's rethrow is the contract, not a defect:
 it reports a failure without stranding the teardowns that follow it, and an
 owner with its own cleanup orders around it. Covered by
 `tests/disposableGroup.test.ts`.
+
+### L45 · FIXED · ARCHITECTURE
+
+The directory skip in `lint-standards-truth.mjs` was an unanchored alternation,
+`node_modules|\.git|dist|release$`. Only the last branch was anchored, so `dist`
+matched any path containing those four letters and `release$` matched
+`docs/release`, whose two documents were never scanned. CodeQL reported it as a
+missing regular-expression anchor on the pull request.
+
+A lint that stops reading files prints the same clean line as one that read them
+all, which is the failure this repository's other guards are written to avoid.
+The skip matches whole path segments now, and the packaged output is excluded by
+its path from the repository root rather than by a substring. The scanned count
+moved from 925 to 927, which is the two documents. Covered by
+`tests/standardsTruthLint.test.ts`.
+
+### L46 · OPEN · PERFORMANCE
+
+`Viewer.buildPointMesh` sets `frustumCulled = false`, and `StreamingRenderer`
+builds every resident COPC node through that same function. A node held warm in
+the streaming cache is therefore submitted for drawing whether or not it is in
+front of the camera.
+
+Residency and visibility are separate decisions, and the streaming scheduler
+already knows each node's bounds. The change is bounded but not free: bounds
+have to be correct under render-origin shifts and large coordinates, and a false
+negative would hide visible data, so it needs the culling tests before the flag.
+
+### L47 · OPEN · UI
+
+`localDensitySize.ts` hashes points into a 2D voxel grid keyed by x and y. On a
+vertical facade or a terrestrial scan the points of one surface collapse into
+few cells, so the surface reads as dense and its points are sized down, which is
+the opposite of what the mode is for.
+
+Sizing from projected sample spacing rather than plan-view density would be
+orientation independent. It is a display attribute either way and touches no
+measurement.
