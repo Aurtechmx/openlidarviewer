@@ -570,9 +570,22 @@ export async function importSession(
     // still restores every measurement) — it only appends to the disclosure.
     // Lazily loaded so the hash-chain verifier (canonicalize + sha256) stays
     // out of the eager boot shell — session import is already an async action.
-    const { verifySessionManifest, sessionManifestNote } = await loadVerifySessionManifest();
-    const manifestNote = sessionManifestNote(verifySessionManifest(session.processingManifest));
-    const manifestSuffix = manifestNote ? ` ${manifestNote}` : '';
+    // The restore is already committed above: bookmarks, the view state and the
+    // measurements are in place. This await is a lazy chunk import, and a chunk
+    // that will not load (offline, evicted, blocked) rejects. Letting it reach
+    // the outer catch reported "Could not import the session" over a session
+    // that had in fact been restored, which is the one thing the comment above
+    // says this step must never do. A disclosure that cannot be computed is
+    // left off the line instead.
+    let manifestSuffix = '';
+    try {
+      const { verifySessionManifest, sessionManifestNote } = await loadVerifySessionManifest();
+      const manifestNote = sessionManifestNote(verifySessionManifest(session.processingManifest));
+      if (manifestNote) manifestSuffix = ` ${manifestNote}`;
+    } catch {
+      // Nothing to report: the disclosure is an addition to the toast, and the
+      // session it would have described is already restored.
+    }
     if (wantFile && !haveCloud) {
       deps.showToast((lead ?? `Session restored — drop “${wantFile}” to view its scan.`) + manifestSuffix,
         lead ? { label: 'Need the scan', onClick: () => deps.showToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
