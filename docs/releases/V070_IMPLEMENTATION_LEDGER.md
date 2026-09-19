@@ -2268,3 +2268,45 @@ slopes unequal, which is also what a roof is like, gives the scene a case where
 nearest and mean differ, and the substitution now fails two assertions. Three
 separate probes bite: widening the depth tolerance, averaging the fill depth,
 and letting disagreeing normals permit a fill.
+
+### L104 · MEASURED · SCIENTIFIC
+
+The expected answer was no scientific change. The measured answer is that four
+of the twelve categories moved, every one of them from a separately scoped bug
+fix, and none from the renderer work. The report is
+`docs/validation/v070-scientific-regression.md`.
+
+Running the suite at both ends would have compared pass counts. What was done
+instead compares values: of the test files present at the base, sixteen were
+modified by this programme and the rest were not, and every unmodified test
+passes at head. A test that pins a scientific value, was never edited and still
+passes is that value's own before-and-after, so the sixteen modified files are
+the entire surface where a number could have moved.
+
+The Continuity Field contributed nothing and could not have. Eighteen of the
+nineteen files under `src/render/continuity/` are unreachable from `main.ts`,
+which the unreachable-modules lint measures on every gate rather than taking on
+trust. The nineteenth is `historyBudget`, whose only reachable importer is the
+debug overlay, where it reports what a history would cost and nothing else.
+
+Classification moved because ASPRS redefines codes between the legacy point
+formats and the extended ones. Class 12 is Overlap Points in formats 0 to 5 and
+Reserved in 6 to 10; class 8 is Model Key-Point in the first and Reserved in the
+second. The label was unconditional before, so a file in an extended format was
+told its class 12 points were Overlap when the specification says otherwise.
+Capitalisation now follows the specification too, which is why an exported CSV
+reads High Vegetation. Profiles, the export legend, point info and the reports
+all inherit it.
+
+Terrain moved because the boundary share seeded a distance field at every
+non-measured cell. Those seeds are the survey edge on a full decode and mostly
+interior gaps on a grid thinned by a display stride, so the share climbed toward
+one for the same ground: 33 per cent full, 100 per cent strided. The terrain
+report quotes it in its verdict sentence.
+
+Source exports moved toward what the file said, with GPS time written under the
+type its source declared and classification flags surviving decode.
+
+Worth recording that one commit, `4793b246`, carried a renderer change and a
+package-date fix together. Both are correct and the mixture made this
+attribution harder than it needed to be.
