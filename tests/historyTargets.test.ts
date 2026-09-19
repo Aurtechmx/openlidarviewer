@@ -158,6 +158,43 @@ describe('history targets', () => {
     expect(t.made.length).toBe(t.freed.length);
   });
 
+  // The case a size check cannot see. A device lost and remade at the same
+  // window size leaves every surface belonging to something that no longer
+  // exists, and a no-op on size would keep them.
+  it('remakes everything when the device generation moves, at the same size', () => {
+    const t = tracker();
+    const h = new HistoryTargets(t.make);
+    h.resize(1920, 1080, 1);
+    const first = h.set;
+    h.resize(1920, 1080, 2);
+    expect(t.freed.length).toBe(3);
+    expect(t.live()).toBe(3);
+    expect(h.set).not.toBe(first);
+    expect(h.set?.deviceGeneration).toBe(2);
+    expect(h.allocationCount).toBe(2);
+  });
+
+  it('still no-ops when the size and the device both hold', () => {
+    const t = tracker();
+    const h = new HistoryTargets(t.make);
+    h.resize(1920, 1080, 7);
+    for (let i = 0; i < 5; i++) h.resize(1920, 1080, 7);
+    expect(h.allocationCount).toBe(1);
+    expect(t.freed).toEqual([]);
+  });
+
+  it('never keeps a surface from an earlier generation', () => {
+    const t = tracker();
+    const h = new HistoryTargets(t.make);
+    for (let gen = 1; gen <= 4; gen++) {
+      h.resize(1280, 720, gen);
+      expect(h.set?.deviceGeneration).toBe(gen);
+      expect(t.live()).toBe(3);
+    }
+    expect(t.made.length).toBe(12);
+    expect(t.freed.length).toBe(9);
+  });
+
   it('treats a degenerate size as no viewport rather than allocating', () => {
     const t = tracker();
     const h = new HistoryTargets(t.make);

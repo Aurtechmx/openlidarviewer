@@ -60,6 +60,8 @@ export interface HistorySet {
   readonly widthPx: number;
   readonly heightPx: number;
   readonly bytes: number;
+  /** The device generation these were made on. */
+  readonly deviceGeneration: number;
 }
 
 /** Why no history is allocated. */
@@ -104,17 +106,31 @@ export class HistoryTargets {
   }
 
   /**
-   * Make the history match a backing store.
+   * Make the history match a backing store on a given device.
    *
-   * A call at the size already allocated is a no-op, so a render loop may call
-   * this every frame. Any other size frees the old surfaces before making new
-   * ones, because holding both at once is the moment a device is most likely to
-   * refuse the second.
+   * A call at the size and generation already allocated is a no-op, so a render
+   * loop may call this every frame. Anything else frees the old surfaces before
+   * making new ones, because holding both at once is the moment a device is
+   * most likely to refuse the second.
+   *
+   * The generation is why the size alone cannot decide this. A device lost and
+   * remade at the same window size leaves every surface belonging to something
+   * that no longer exists, and a check on size would call that a no-op and keep
+   * them. Surfaces from a dead device are not a smaller problem than surfaces
+   * of the wrong shape; they are the one the caller cannot see.
    */
-  resize(widthPx: number, heightPx: number): void {
+  resize(widthPx: number, heightPx: number, deviceGeneration = 0): void {
     const w = Number.isFinite(widthPx) ? Math.max(0, Math.floor(widthPx)) : 0;
     const h = Number.isFinite(heightPx) ? Math.max(0, Math.floor(heightPx)) : 0;
-    if (this._set && this._set.widthPx === w && this._set.heightPx === h) return;
+    const gen = Number.isFinite(deviceGeneration) ? deviceGeneration : 0;
+    if (
+      this._set &&
+      this._set.widthPx === w &&
+      this._set.heightPx === h &&
+      this._set.deviceGeneration === gen
+    ) {
+      return;
+    }
     this.dispose();
     if (w === 0 || h === 0) {
       this._refusal = 'no-viewport';
@@ -131,6 +147,7 @@ export class HistoryTargets {
       widthPx: w,
       heightPx: h,
       bytes: historyBytes(w, h, this._layout),
+      deviceGeneration: gen,
     };
     this._refusal = null;
     this._allocations += 1;
