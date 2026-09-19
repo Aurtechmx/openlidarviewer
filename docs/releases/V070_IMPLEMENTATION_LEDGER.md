@@ -247,7 +247,14 @@ that never arrived.
 The tidy-up is now scoped to the open that was attaching a streaming scan. The
 static attach already refused to clear the scene for a candidate that had not
 parsed, and said so in its own comment; the error path did not follow the same
-rule. Covered by `tests/openScanAttachSequence.test.ts`.
+rule.
+
+A router test asserted the old behaviour while its comment described the new
+one: it read that a failed load "tidies any half-open stream", and the scenario
+it ran was a static file that opened no stream at all. That assertion is now
+the rule the comment states, with a second case covering a streaming open that
+does fail mid-flight. Covered by `tests/openScanAttachSequence.test.ts` and
+`tests/openScan.test.ts`.
 
 ### L30 · FIXED · ARCHITECTURE
 
