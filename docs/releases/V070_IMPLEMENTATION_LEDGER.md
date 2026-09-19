@@ -2042,3 +2042,39 @@ event this subsystem can trust is an allocation that did not succeed, which
 `continuityFailure` already names.
 
 Staged. No capability can be switched on, so there is no history to shrink.
+
+### L98 · REFUSED · ARCHITECTURE
+
+Two conditions gate this phase and neither is met. A benchmark of simple GPU
+phase rejection needs an adapter this runner does not have, so the cost of the
+thing being replaced has never been read. The phase also states its own test,
+that the work is worth doing only if vertex cost stays material after fragment
+savings, and that quantity is unmeasured too. No optimisation was built.
+
+The feasibility question is answerable without a device, and the answer changes
+what the eventual benchmark has to beat. It is written up in
+`docs/architecture/temporal-block-buffers.md`.
+
+Two findings carry it. A contiguous range cannot be taken as a phase: the phase
+is a hash of the point index and the hash exists to scatter, so reading blocks
+off the existing order makes a phase mean whatever the file's order is. Survey
+LAS is near acquisition order, so phase 0 becomes a swath rather than a sprinkle
+and an accumulation fills the image in as moving stripes, which is the pulsing
+the reduced-motion phase exists to prevent arriving through the layout instead of
+the schedule. A block layout therefore has to permute physically and keep the
+scatter.
+
+The second is the one that costs. `buildPointMesh` wraps the caller's positions
+array directly, with no copy, so the instance index and the source point index
+are the same number by construction, and inspect picking, `patchView` and the
+profile builder all read source arrays at that index. Permuting in place moves
+every one of those reads onto the wrong point. Colour, classification and
+intensity are already copied into fresh arrays at mesh build, so permuting those
+is free; positions and an inverse map are not, at twelve and four bytes a point.
+
+On the one streamed cloud measured here, 15.7 million points, that is
+251,200,000 bytes or about 240 MiB against a 256 MiB history ceiling. An
+optimisation aimed at vertex invocations would cost roughly what the whole
+accumulation history is allowed to hold, on a cloud where the history wants the
+same budget. That is the comparison the benchmark has to clear, and it was not
+visible until the shared and derived buffers were told apart.
