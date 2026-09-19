@@ -2586,3 +2586,38 @@ drop both, because it records what production refers to at all. What it could
 no longer convey is that neither contributes runtime code, so the register's
 purpose field now says that leaving the list does not imply runtime presence
 and points at the runtime-only figure printed beside the count.
+
+### L113 · MEASURED · SCIENTIFIC
+
+The final report is `docs/validation/v070-final-implementation-report.md`, and
+the verdict is that the Continuity Field is not ready for v0.7.
+
+No blocker was reproduced, and the instruction for the verdict is to list only
+reproduced ones, so that list is empty. Nothing was reproduced because nothing
+ran, and a feature that has never drawn a frame cannot be released as stable on
+the strength of its unit tests however many pass. The five conditions set for
+making it a default are the same five that are unmeasured, so the verdict
+follows from the programme's own gate rather than from an opinion about
+quality.
+
+Of the thirteen report sections, five carry measurements and eight say that a
+figure was not taken. Streaming culling, attribute packing, settle time, GPU
+cost, the browser matrix, mobile, every golden camera case: all absent, with
+each row saying so rather than carrying an estimate.
+
+One measured figure needed its caveat in the same paragraph rather than in a
+footnote. The corpus sparse plane turns 64 direct pixels into 176 drawn of 225,
+a reconstructed share of 63.6 per cent, which would fail the twenty per cent
+ceiling the census defines. The fixture samples every other pixel on both axes,
+far sparser than any real splat size, so the share describes the fixture rather
+than a scan, and quoting the coverage gain without it would have been the
+flattering half of a number.
+
+Scientific parity is the section that reads as expected: zero unintended
+changes, with four categories moved by separately scoped fixes.
+
+A third count was wrong in a first draft and corrected against the tree. The
+architecture table claimed 870 files under `src/` where the count is 867. That
+is the same error as the commit count in the previous entry, from the same
+cause, which is writing a number that looks right instead of running the
+command that settles it.
