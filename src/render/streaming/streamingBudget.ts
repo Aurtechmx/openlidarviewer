@@ -67,6 +67,28 @@ export const BYTES_PER_STREAMING_POINT = bytesPerPoint({
  */
 export const DECODED_BYTES_PER_POINT = 30;
 
+/**
+ * Frame-time pressure band, shared by everything that adapts to how the frames
+ * are going.
+ *
+ * Above the high threshold the renderer is slower than 45 frames a second and
+ * gives ground; below the low one it is faster than 55 and takes some back. The
+ * gap between them is the point: a single threshold would flip on every frame
+ * that straddled it.
+ *
+ * The holds are lopsided on purpose. Two seconds of slow frames is enough to
+ * concede, five seconds of fast ones to recover, so a device that cannot quite
+ * sustain a setting loses it rather than oscillating around it.
+ *
+ * Here rather than beside any one consumer, because a second controller reading
+ * the same frame time through its own numbers would back off twice for one
+ * stutter and then recover in step with the first.
+ */
+export const FPS_PRESSURE_HIGH_MS = 22.2;
+export const FPS_PRESSURE_LOW_MS = 18.2;
+export const FPS_PRESSURE_HIGH_HOLD_MS = 2_000;
+export const FPS_PRESSURE_LOW_HOLD_MS = 5_000;
+
 /** Which optional channels a decoded chunk carries, for a byte estimate. */
 export interface DecodedChannelPresence {
   readonly intensity?: boolean;
