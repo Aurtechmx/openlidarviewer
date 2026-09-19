@@ -29,7 +29,7 @@ of, so a finding can be traced to where it was first written down.
 | L02 | EXPORT | READ | med | OPEN | B02 | Scan angle rank written as constant zero. |
 | L03 | EXPORT | READ | med | OPEN | B03 | User data written as constant zero. |
 | L04 | STANDARDS | TEST | high | FIXED | B04 | ASPRS class names defined independently in eight modules, and they disagreed. |
-| L05 | SCIENTIFIC | DOC | high | OPEN | B05 | Canonical stockpile record not integrated: the toast and the exported record can disagree for one lasso. |
+| L05 | SCIENTIFIC | TEST | high | PARTIAL | B05 | One lasso, two estimators. The stored record now names which one made it; it does not yet carry the area-grid figure. |
 | L06 | SCIENTIFIC | READ | med | PARTIAL | B06 | Two density figures on different bases. Each states its basis; neither is the other's source. |
 | L07 | SCIENTIFIC | TEST | high | FIXED | B07 | The boundary share counted a sampling gap as a survey edge, so it rose with the thinning rather than with the geometry. |
 | L08 | SCIENTIFIC | READ | n/a | NOT REPRODUCIBLE | B08 | PCA extent presented as minimum physical dimensions. |
@@ -68,8 +68,8 @@ of, so a finding can be traced to where it was first written down.
 - DEFERRED: 3
 - FIXED: 9
 - NOT REPRODUCIBLE: 8
-- OPEN: 14
-- PARTIAL: 3
+- OPEN: 13
+- PARTIAL: 4
 - SUPERSEDED: 1
 - total: 37
 
@@ -441,3 +441,24 @@ the declared count over the display-sample footprint. The gap is that two
 surfaces compute the same quantity separately rather than presenting one record,
 which is architecture rather than a truth defect, and it is what a canonical
 density result would close.
+
+### L05 · PARTIAL · SCIENTIFIC
+
+One call site answers a lasso twice. `Viewer` builds the persisted
+`VolumeRecord` from the point-sample integration and, on the same line, calls
+`stockpileToastSuffix` for the area-weighted grid the toast shows. The two do
+not agree, and the stored record carried no method, so a session, a report or a
+CSV held a figure that could not say which estimator produced it. The registry
+already names both and states that a v1 figure does not carry the v2 meaning.
+
+The record names its estimator now, as `id@version`, and the tag survives a
+session round trip. A record written before the field carries none, and that
+absence is preserved rather than filled in: reading it as the current estimator
+would give a historical figure a meaning it was never computed under, which is
+what section 11.1 forbids.
+
+What remains is the rest of section 11: the stored record still holds the
+point-sample numbers. Moving it to the area-grid figure changes an exported
+value, so it needs the section 80 classification, the unit handling between the
+grid's metres and the record's native units, and the coverage verdict carried
+with it rather than dropped. Covered by `tests/stockpileMethodIdentity.test.ts`.

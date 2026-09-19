@@ -1482,6 +1482,11 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   if (isFiniteNum(v.skippedNonFinite) && v.skippedNonFinite > 0) {
     record.skippedNonFinite = v.skippedNonFinite;
   }
+  // The estimator that produced the figure. A file written before the field
+  // existed carries none, and none is left as none: reading it as the current
+  // method would give a historical figure a meaning it was never computed
+  // under.
+  if (typeof v.method === 'string' && v.method.length > 0) record.method = v.method;
   return record;
 }
 
