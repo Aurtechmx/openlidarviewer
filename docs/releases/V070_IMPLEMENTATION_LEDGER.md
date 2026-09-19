@@ -31,7 +31,7 @@ of, so a finding can be traced to where it was first written down.
 | L04 | STANDARDS | TEST | high | FIXED | B04 | ASPRS class names defined independently in eight modules, and they disagreed. |
 | L05 | SCIENTIFIC | DOC | high | OPEN | B05 | Canonical stockpile record not integrated: the toast and the exported record can disagree for one lasso. |
 | L06 | SCIENTIFIC | DOC | high | OPEN | B06 | Analyse ground density and the Scan Report disagree by roughly the stride factor. |
-| L07 | SCIENTIFIC | DOC | high | OPEN | B07 | Boundary share seeds from every non-measured cell, so stride gap reads as boundary. |
+| L07 | SCIENTIFIC | TEST | high | FIXED | B07 | The boundary share counted a sampling gap as a survey edge, so it rose with the thinning rather than with the geometry. |
 | L08 | SCIENTIFIC | DOC | med | OPEN | B08 | PCA oriented bounding box overstates length on an elongated footprint. |
 | L09 | LIFECYCLE | DOC | med | OPEN | B09 | `NavBar.dispose` has no caller. |
 | L10 | LIFECYCLE | DOC | med | OPEN | B10 | `ViewerRenderCore` has no dispose seam. |
@@ -66,9 +66,9 @@ of, so a finding can be traced to where it was first written down.
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 8
+- FIXED: 9
 - NOT REPRODUCIBLE: 7
-- OPEN: 16
+- OPEN: 15
 - PARTIAL: 2
 - SUPERSEDED: 1
 - total: 37
@@ -387,3 +387,27 @@ that is not LAS, keeps the writer's modern default rather than acquiring a claim
 it never made. The field is reserved before LAS 1.2, so a set bit there is
 reported as no declaration rather than as Adjusted Standard. Covered by
 `tests/lasGpsTimeType.test.ts`.
+
+### L07 · FIXED · SCIENTIFIC
+
+"Measured cells near the data boundary" is meant to say how much of the surface
+sits at the edge of what was surveyed. It seeded a distance field at every cell
+that was not measured and counted measured cells within a threshold of one.
+
+On a full decode those seeds are the survey edge. On a grid thinned by a display
+stride they are mostly interior gaps, so nearly every measured cell is beside
+one. Held to one geometry and varying only the thinning, the share read 33 per
+cent at full decode and 100 per cent strided: the number described the sampling,
+not the terrain. The report quotes this share in its verdict sentence.
+
+The coverage vocabulary already separated the two cases. A cell with no
+reachable data is outside the survey; an interpolated cell was filled from the
+measured cells around it and is inside it. The field now seeds only from cells
+with no data, and the distance travels through the surveyed region rather than
+through measured cells alone, so neither the seeds nor the distances depend on
+how densely the surface was sampled.
+
+Classified under section 80 as a bug fix rather than a scientific change: the
+metric now measures what its label says. No registered method computes it, and
+no frozen validation record pins it, so no evidence applicability moves.
+Covered by `tests/terrainBoundaryStrideInvariant.test.ts`.
