@@ -1254,3 +1254,42 @@ a surface that was never there, so it sits well above half. That figure and the
 sample count are starting values; what belongs there comes from real scenes at
 several densities.
 
+### L70 · DEFERRED · PERFORMANCE
+
+Re-measuring the point kernel waits on its own opening condition: it asks that
+the radius be re-benchmarked once continuity reconstruction exists, and nothing
+reconstructs. Its comparisons are also a device's to make. Cost on the GPU,
+silhouette sharpness, shimmer between frames and leakage at an edge are all
+properties of a rendered image, and none can be settled from arithmetic.
+
+### L71 · PARTIAL · CORRECTNESS
+
+Depth cannot tell a hole in the sampling from a fold in the surface. Two points
+either side of a roof ridge sit at almost the same distance from the camera and
+pass the depth test comfortably, so filling between them lays a flat patch
+across the ridge. Where normals exist they settle it, because the two sides face
+different ways.
+
+Normals only ever refuse. They cannot turn a refusal into a fill, so every fill
+still has to satisfy depth and support on its own and adding a normals channel
+to a dataset can only make the renderer more careful with it. A case walks a set
+of configurations and holds that property for each.
+
+Agreement is checked between every pair rather than along the sequence. Normals
+stepping from nought to fifty-eight degrees in two hops each agree with the next
+under a thirty degree threshold while the outer two are nearly sixty apart, a
+curve being walked across in steps, and comparing in order glues the whole fan
+together. Doing it that way fails an assertion.
+
+Opposite directions are not agreement. A flipped normal describes the surface
+seen from the other side, and welding those is the fold this exists to catch.
+
+A cloud with no normals is the ordinary case rather than a degraded one. Most
+survey formats carry none and the field has to work without them, so absence is
+silence: treating it as objection fails three assertions. A normal that is
+present and unusable refuses instead, because the channel claimed to know and
+did not, which is how a support score of NaN scores nothing.
+
+Nothing here computes a normal. Fitting one to a neighbourhood mid-frame would
+invent the quantity being used to check an invention.
+
