@@ -2,6 +2,27 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.7.0-alpha.1] - 2026-09-18
+
+A development cut on the way to v0.7.0. It carries no DOI, and its test figures
+are not release-authoritative.
+
+### Added
+
+- ASPRS class semantics come from one module rather than a table in each of eight places, and names are keyed by the point data record format. Class 12 is Overlap Points under formats 0 to 5 and reserved from format 6, where overlap is carried by a classification flag instead. Codes 19 to 22 are named, 23 to 63 are reserved, and only 64 and above are user definable. The tables were verified against the ASPRS LAS Specification 1.4 R15, Tables 8, 9, 16 and 17.
+- Classification flags survive a load. Synthetic, Key-Point, Withheld and Overlap are read from both record layouts, normalised to one representation, carried on the point model through the sanitizer, and written back by both LAS writers. Round-trip tests write, decode and compare, covering every extended flag combination.
+- `lint:disposal-registry` reads `docs/disposal-contracts.md` and refuses a resource documented with no owner or no disposal trigger.
+
+### Fixed
+
+- The LAS 1.2 write masked the classification byte with `0x1f`, which erased the Synthetic, Key-Point and Withheld flags held in bits 5 to 7 on every export.
+- The point inspector named class 12 Overlap for every format while the export legend named it Reserved (12), and the legend reported every code from 19 up as a user class.
+- Clipping dropped the classification flags it should have carried with the points it kept.
+
+### Changed
+
+- Class names follow the ASPRS spelling, which changes label text in the inspector, the legend, the profile views and the profile returns CSV.
+
 ## [0.6.9] - 2026-09-17
 
 ### Added
