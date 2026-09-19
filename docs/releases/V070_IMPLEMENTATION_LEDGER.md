@@ -2310,3 +2310,36 @@ type its source declared and classification flags surviving decode.
 Worth recording that one commit, `4793b246`, carried a renderer change and a
 package-date fix together. Both are correct and the mixture made this
 attribution harder than it needed to be.
+
+### L105 · MEASURED · ARCHITECTURE
+
+Seven metrics at both ends, in `docs/validation/v070-architecture-metrics.md`.
+The two the phase sets as conditions both hold: cycles stayed at zero, and no
+new renderer monolith appeared.
+
+The second is the one worth reading closely. The render subsystem gained 22
+files while `Viewer.ts` lost seven lines and gained no imports, so the work went
+into new modules instead of the existing one. A feature of this size usually
+does the opposite to a renderer. `Viewer.ts` is still at 6215 lines against a
+2000-line goal, and the shrink-only ratchet is what keeps that number from
+drifting back up.
+
+Zero cycles is a result rather than a formality here, because 19 files that
+import each other and reach upward into `adaptiveDpr` and `streamingLodSize` are
+exactly where one would appear.
+
+Twenty-five new modules cost two kilobytes of eager bundle, since 18 of the 19
+continuity files are unreachable and the bundler drops them. What did land is
+the coverage-sizing wiring and the class-semantics work, both reachable by
+design. The entry chunk was already at 803 of its 812 KiB ceiling at the base,
+warning since 700, so the pressure predates this programme and the margin is now
+seven kilobytes.
+
+A measurement trap is recorded with the numbers. `npm run build` and
+`npm run build:live` produce different bundles: on the same head tree the plain
+build reports a 355 KiB entry and the live build 805 KiB, and the budget is
+enforced against the live one. The first base measurement taken here was a plain
+build, which against a live head figure would have shown a 450 KiB regression
+that does not exist. The gate also runs a plain build after its live one, so the
+`dist/` left on disk afterwards is not the artifact the budget measured, and
+reading sizes from it gives the wrong pair.
