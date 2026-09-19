@@ -397,6 +397,13 @@
       "why": "Orders what the subsystem gives up under memory or frame pressure by what each step actually frees, and skips rungs with nothing left so a caller always makes progress. Nothing calls it because no capability can be switched on: there is no history to shrink and no sweep to shorten.",
       "graduation": "Reachable when temporalAccumulation or microGapFill graduates. The failure path in continuityFailure asks nextRelief with the pressure kind instead of walking the tier ladder a rung at a time, since a tier step cannot express a history ratio that still has room to fall.",
       "review": "2027-09-19"
+    },
+    {
+      "path": "src/render/streaming/coverageBudget.ts",
+      "status": "staged",
+      "why": "Turns a node's spacing, distance and current temporal support into a multiplier for its projected size, so the scheduler can prefer nodes that would close visible gaps over nodes that only add points. Nothing calls it because the scheduler's score is unchanged: wiring it would alter which nodes arrive first on every streamed scan, which is a behaviour change that wants a measurement rather than a merge.",
+      "graduation": "Reachable when a measurement shows the reordering improves time-to-usable-image on a real streamed scan. nodeScore multiplies its size term by nodeCoverageFactor the same way it already applies the focus bias, and the descriptor rides on the node beside its existing spacing.",
+      "review": "2027-09-19"
     }
   ]
 }

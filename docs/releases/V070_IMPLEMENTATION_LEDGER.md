@@ -2078,3 +2078,40 @@ optimisation aimed at vertex invocations would cost roughly what the whole
 accumulation history is allowed to hold, on a cloud where the history wants the
 same budget. That is the comparison the benchmark has to clear, and it was not
 visible until the shared and derived buffers were told apart.
+
+### L99 · BUILT · ARCHITECTURE
+
+Projected size answers how much of the screen a node occupies. The scheduler
+ranks on it, and it is not the same question as how much of the screen a node
+would improve: two nodes can subtend the same angle while one leaves visible
+holes between its samples and the other is already finer than a pixel, where a
+fetch, a decode and a buffer change nothing a viewer can see.
+
+Spacing separates them and COPC nodes already carry it, root spacing halved once
+per level. Projected through the camera it gives the distance between
+neighbouring samples in pixels, and one pixel is where a node stops adding
+anything visible. That bound is a property of the display rather than a tuning
+choice. The upper bound, four pixels for full need, is a starting value and says
+so in the same words the reconstruction ceiling uses.
+
+Two guarantees carry the design. The factor is strictly positive, so coverage
+reorders and never excludes: zero is the score that means not a candidate this
+tick, and a node that is never a candidate never arrives, which would make
+source completeness depend on where the camera was pointed. Everything that
+reads completeness, from the evidence lens to the export frontier, is entitled
+to the same answer whatever the renderer finds worth looking at.
+
+The second is that coverage multiplies the projected size rather than adding a
+term. The score is positional, depth in the upper digit and size in the lower,
+and that is what makes the scheduler coarse-first. Scaling the lower digit the
+way the focus bias already does keeps the two composable and leaves the deeper
+node behind the shallower one however much better its coverage, which a test
+checks at the extremes rather than at a typical pair.
+
+An unknown spacing counts as full need rather than none. A node whose spacing
+cannot be projected has not been shown to be redundant, and the other reading
+would quietly deprioritise every node of a source that does not report spacing.
+
+Staged. The scheduler's score is unchanged, because wiring this alters which
+nodes arrive first on every streamed scan, and that wants a measurement instead
+of a merge.
