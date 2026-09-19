@@ -125,6 +125,19 @@ export interface VolumeRecord {
    */
   confidence: 'high' | 'medium' | 'low';
   /**
+   * The estimator that produced these numbers, as `id@version`.
+   *
+   * Two estimators can answer for one lasso: the point-sample integration this
+   * record comes from, and the area-weighted grid the toast reports. They do
+   * not produce the same figure, so a stored record has to say which one it is
+   * rather than leaving a reader to assume the current default.
+   *
+   * Absent on a record written before the field existed. Absent means unknown,
+   * and specifically NOT the newer method: a historical figure keeps its own
+   * identity rather than acquiring a meaning it was never computed under.
+   */
+  method?: string;
+  /**
    * Points inside the footprint whose height was non-finite
    * (organized-cloud invalid points, loader sentinels) and was excluded
    * from the integration — see `VolumeResult.skippedNonFinite`. The

@@ -108,6 +108,7 @@ import {
 } from './splatShader';
 import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
+import { methodRef, methodTag } from '../science/methodRegistry';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
 import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions } from './measure/lassoVolumeCompute';
 import type { LassoCloudEntry, LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
@@ -1218,6 +1219,7 @@ export class Viewer {
           pointsInPolygon: result.pointsInPolygon,
           densityNative: result.densityNative,
           confidence,
+          method: methodTag(methodRef('olv.volume.stockpile')),
         };
         // Non-finite returns inside the footprint were excluded from the
         // integration — carry the count so the record discloses the
