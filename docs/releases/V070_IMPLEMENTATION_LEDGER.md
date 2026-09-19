@@ -940,3 +940,51 @@ one, because a comparison against NaN is false and both clamps passed it through
 That is a blank frame arriving by the route the clamp appeared to cover. It is
 caught before the clamp now, and removing the guard fails three assertions.
 
+### L57 · PARTIAL · ARCHITECTURE
+
+A parked camera contributes one temporal phase per frame until every phase has
+been drawn once, and then stops. The stopping is the part worth having: once
+every phase has contributed there is nothing left to add, and a renderer that
+kept issuing accumulation work would spend a GPU on an image that cannot change.
+
+Convergence is reported the frame after the last phase is drawn, which is not an
+off-by-one waiting to be tidied. On the final drawing frame a phase is still
+owed, so a schedule that called itself converged there would report nothing to
+draw and that phase would never reach the image. A test holds the machine
+unconverged for as long as a phase is outstanding, and a second one checks that
+the set of phases drawn before it reports converged is the whole set.
+
+Motion returns the sweep to idle rather than pausing it, because the frames
+already contributed were drawn against a camera that has since moved. An epoch
+change restarts it even with the camera still: a colour mode or a filter changes
+what a pixel means without anyone touching the camera.
+
+Counted in frames, not milliseconds. How long a sweep takes is a property of the
+device, and a wall-clock figure written here would describe hardware this module
+never sees.
+
+### L58 · PARTIAL · CORRECTNESS
+
+Accumulating a point cloud by colour alone would average a foreground sample
+with the background showing between its neighbours, inventing a surface in the
+gap. So the history carries depth, and a sample joins what is already at a pixel
+only when the two lie on the same surface. Otherwise the nearer one takes it.
+
+Depth is compared as a ratio rather than a difference. A tolerance in world
+units is far too loose beside the camera and far too tight across a valley, so
+one number cannot serve both ends of a scene. Comparing logarithms makes the
+tolerance proportional, which is what a cloud spanning metres to kilometres
+needs, and a test fixes the same fractional gap as compatible from five
+centimetres out to a million metres.
+
+Two guards earn their place. A depth of zero or less has no logarithm, and
+letting one reach `log2` yields a difference of infinity or NaN; since NaN fails
+every comparison the answer would come back "not the same surface" for a reason
+unrelated to the surfaces. And an empty pixel is decided by its weight, not its
+depth, so a buffer cleared to a stale depth cannot make the first sample lose to
+nothing.
+
+The tolerance is a starting value. The figure that survives near geometry and
+distant terrain has to come from a real scene, so nothing here claims it is
+measured.
+

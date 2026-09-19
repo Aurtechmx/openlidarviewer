@@ -140,6 +140,20 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/streaming/convergence.ts",
+      "status": "staged",
+      "why": "Schedules which temporal phase a parked frame contributes and when the sweep is complete. No frame accumulates, so nothing asks it.",
+      "graduation": "Accumulation turns on and the render loop drives the sweep from this state, stopping when it reports converged.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/streaming/depthMerge.ts",
+      "status": "staged",
+      "why": "Decides whether a new sample replaces, joins or loses to the accumulation history at a pixel. No history buffers exist, so no sample is ever tested against one.",
+      "graduation": "The accumulation pass keeps history colour, depth and support, and applies this decision per sample, with the depth tolerance measured against near geometry and distant terrain.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/movingSubset.ts",
       "status": "staged",
       "why": "Decides how many temporal phases a moving frame draws and how much wider each drawn point must be. No frame draws a subset today, so nothing asks.",
