@@ -140,6 +140,13 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/streaming/movingSubset.ts",
+      "status": "staged",
+      "why": "Decides how many temporal phases a moving frame draws and how much wider each drawn point must be. No frame draws a subset today, so nothing asks.",
+      "graduation": "A measurement on a real device shows a phase subset buys frame time that the existing motion reductions have not already taken, and the render loop draws that subset.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/nodeFrustumCulling.ts",
       "status": "staged",
       "why": "Decides whether a resident streaming node is in front of the camera, from the node's own bounds. Every point mesh, static or streamed, is built by the Viewer's shared builder, which sets frustumCulled = false; for a streamed node that means one held warm in the cache is submitted for drawing whether or not the camera contains it. The baseline in docs/validation/streaming-cull-baseline.json measures what that costs on stored cameras: a zoomed view draws 24 of 84 resident nodes and a narrow one 12 of 84. Pure arithmetic with no three.js, so the decision is testable without a renderer. Only its tests and that benchmark import it.",

@@ -910,3 +910,33 @@ folds the phase in as its own node. It cannot ride on the fade dither:
 `endNodeDissolve` drops that fold once a node settles, which is exactly when
 accumulation matters.
 
+### L56 · PARTIAL · PERFORMANCE
+
+Most of what this phase asks for is already running. The backing store drops to
+0.85 of full resolution while the camera moves, the streaming scheduler takes
+half its node budget, and the scheduler carries its own frame-time pressure
+term. History is already dropped on camera movement, because the camera is one
+of the display inputs and moving it opens a new epoch.
+
+That last point is also why the remaining idea does not pay what it appears to.
+Every frame of a movement is a new epoch, so drawing a subset of phases while
+moving accumulates nothing. It is decimation, and it costs coverage in the frame
+being looked at, on top of two reductions already applied to the same frames.
+The three multiply.
+
+So the shipped default draws every phase and changes nothing. A caller that
+wants to trade coverage for frame time asks for it, and a smaller default
+belongs here once a real device has been measured.
+
+The compensation for a subset is bounded rather than exact. Samples on a surface
+spread over two dimensions, so drawing a fraction of them widens their mean
+separation by the inverse square root of that fraction, and scaling the footprint
+by the same amount restores the area covered. That is the upper bound, not the
+default: a point wide enough to cover its neighbours' ground is wide enough to
+cover a real hole in the data.
+
+A count that was not a finite number produced an empty set rather than a clamped
+one, because a comparison against NaN is false and both clamps passed it through.
+That is a blank frame arriving by the route the clamp appeared to cover. It is
+caught before the clamp now, and removing the guard fails three assertions.
+
