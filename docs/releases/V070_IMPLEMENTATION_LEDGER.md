@@ -336,7 +336,14 @@ format and both lengths. A longer record stays legal and carries Extra Bytes.
 
 The minimums are the ASPRS LAS Specification 1.4 R15 figures for all eleven
 formats, read from Tables 7 and 10 to 21 rather than derived by adding field
-sizes. Covered by `tests/lasVersionPdrfMatrix.test.ts`.
+sizes.
+
+A test in `tests/benchmark/failureRecovery.test.ts` had pinned the weaker
+behaviour and named its cause exactly: the message described the symptom, an
+empty file, rather than the cause, because the record length was never validated
+in `parseLasHeader`, so a reader was told the file was empty when it was
+structurally corrupt. That pin now asserts the diagnosis it said was lost.
+Covered by `tests/lasVersionPdrfMatrix.test.ts` and that file.
 
 ### L35 · NOT REPRODUCIBLE · LOADER
 
