@@ -136,7 +136,7 @@
       "path": "src/render/continuity/historyTargets.ts",
       "status": "staged",
       "why": "Owns the accumulation history's render targets. No capability allocates a history, so nothing calls resize and no surface is ever made.",
-      "graduation": "Temporal accumulation turns on and the render loop resizes this with the backing store, clears it on a display-epoch change rather than reallocating, and leaves source rendering in place when it declines above the ceiling. Whether a backend accepts these formats is not established by anything here.",
+      "graduation": "Temporal accumulation turns on and the render loop resizes this with the backing store, clears it on a display-epoch change rather than reallocating, and leaves source rendering in place when it declines above the ceiling. Whether a backend accepts these formats is not established by anything here. The render loop must also pass the device generation, so a device lost and remade at the same window size rebuilds rather than keeping surfaces from the dead one. Nothing in the renderer detects device loss today, so that generation has no source yet.",
       "review": "2027-03-31"
     },
     {

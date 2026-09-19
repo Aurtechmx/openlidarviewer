@@ -1627,3 +1627,28 @@ and the measurement tools are out of reach of this subsystem entirely, held by
 the parity and authority guards, so a continuity failure cannot put a
 measurement wrong however it fails.
 
+### L84 · PARTIAL · CORRECTNESS
+
+The history surfaces would have survived the device they were made on.
+
+`resize` took a size and returned early when it matched, which is what lets a
+render loop call it every frame. A device lost and remade at the same window
+size gives the same size, so the call was a no-op and every surface stayed,
+belonging to something that no longer existed. Surfaces from a dead device are
+not a smaller problem than surfaces of the wrong shape. They are the one the
+caller cannot see, and the programme names this exact case.
+
+The call now takes the device generation too and remakes everything when it
+moves, whatever the size says. Deciding on size alone fails two assertions.
+
+The rest of this phase has no foundation to build on, and that is the finding
+rather than an excuse. Nothing in the renderer detects a lost device or a lost
+context: there is no handler, no generation counter, and no recovery for the
+field to participate in. The generation this now accepts has no source, so it is
+a parameter waiting for one.
+
+Building that handler is not a continuity change. It belongs to the renderer's
+own lifecycle, it has to be proven against a device that can actually be lost,
+and a recovery path written against a device nobody dropped is a guess with a
+test around it.
+
