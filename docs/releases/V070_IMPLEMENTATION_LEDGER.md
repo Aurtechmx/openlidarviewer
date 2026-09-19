@@ -791,3 +791,33 @@ said it used the streaming layout's own per-point cost. It reported a classified
 cloud carrying intensity at 24 bytes a point instead of 32. The channel set was
 already in scope a line above it.
 
+### L51 · FIXED · CORRECTNESS
+
+The `density` point-size mode hashed points into a grid keyed on x and y. A
+near-vertical surface has almost no extent on one of those two, so a facade
+collapsed into a sliver of cells and every point left the clamp at one end.
+
+Measured on a 20 m by 12 m wall sampled 300 by 300, sweeping how much depth the
+surface carries. The severe case is a cloud cropped to a flat surface, where the
+only depth is scanner range noise: at 5 to 10 mm of depth extent, which is a half
+millimetre to a millimetre of sigma across ninety thousand samples, every point
+sat on the 0.5 floor. A mathematically flat plane put every point on the 2.0 cap
+instead. Both draw the whole scan at one size, and the floor case renders the
+surface thinner than a fixed size would have.
+
+The error fades as the surface gains relief. Masonry roughness at 50 mm sized
+every point at 0.647, undersized but off the clamps, and a facade carrying window
+reveals or balconies, 0.3 m of depth and beyond, already sat within 5 percent of
+nominal. What this corrects is the cropped plane and the near-planar patch, not
+every terrestrial scan.
+
+The grid now keys on the cloud's widest two axes. The same sampled surface laid
+flat and stood upright now produces the same scale for every point to six
+decimal places, so a surface is sized by how it was sampled rather than by how it
+happens to be turned. Terrain still resolves to x and y: the existing assertions
+passed unedited, apart from one that compares the whole returned object, which
+now carries the axis pair.
+
+Density sizing stays a display multiplier on `aSize`. Its one caller builds that
+attribute, and no analytical density reads it.
+
