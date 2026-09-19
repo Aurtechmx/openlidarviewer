@@ -53,16 +53,17 @@ of, so a finding can be traced to where it was first written down.
 | L26 | SCIENTIFIC | READ | unmeasured | OPEN | B26 | Withheld points enter terrain, density and stockpile as ordinary returns. |
 | L27 | EVIDENCE | TEST | n/a | NOT REPRODUCIBLE | B27 | Scoping the evidence figure check to untagged versions. |
 | L28 | SEMANTICS | TEST | med | PARTIAL | B28 | Classification flags survived a load but not a derivation. |
+| L29 | STATE | TEST | high | FIXED | new | A failed candidate open closed a streaming scan that belonged to the project, not to the candidate. |
 
 ## Totals
 
 - DEFERRED: 3
-- FIXED: 2
+- FIXED: 3
 - NOT REPRODUCIBLE: 4
 - OPEN: 16
 - PARTIAL: 2
 - SUPERSEDED: 1
-- total: 28
+- total: 29
 
 ## Detail
 
@@ -233,3 +234,16 @@ The change made the release-doc path guard vacuous while the version stayed tagg
 Classification flags survived a load but not a derivation. Clipping carries them. Voxel downsampling does not.
 
 Downsampling takes the first point in a voxel for every attribute; applying that to a safety flag would let one withheld point among nine lose its marking. Left undecided rather than guessed. EPT and COPC produce no flags, which reads as absent rather than false zeros. Covered by `tests/clipCloudFlags.test.ts`.
+
+### L29 · FIXED · STATE
+
+The failure path in `openScan` tidied a streaming scan on every error, with a
+comment reading that a streaming open which failed mid-flight leaves no scan.
+That catch covers every open on the path, so dropping an unparseable LAS while a
+COPC or out-of-core scan was on screen closed the working scan for a candidate
+that never arrived.
+
+The tidy-up is now scoped to the open that was attaching a streaming scan. The
+static attach already refused to clear the scene for a candidate that had not
+parsed, and said so in its own comment; the error path did not follow the same
+rule. Covered by `tests/openScanAttachSequence.test.ts`.
