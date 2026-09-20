@@ -136,6 +136,15 @@ export interface ContinuityFrameInput {
    * cannot disagree about whether there is room.
    */
   readonly memoryPressure: boolean;
+  /**
+   * The graphics device is gone and no replacement has arrived.
+   *
+   * From `DeviceGeneration.lost`, which counts the era a resource belongs to
+   * and knows whether one can be made right now. Asking a dead device for
+   * three surfaces gets a refusal that looks like evidence about the hardware,
+   * so the question is not asked at all while this holds.
+   */
+  readonly deviceLost: boolean;
   /** The viewer asked for reduced motion. */
   readonly reducedMotion: boolean;
 }
@@ -243,7 +252,7 @@ export class ContinuityRuntime {
    * into, what a past failure left, and whether there is room. Every term can
    * only lower, so the answer is the strongest rung all of them allow.
    */
-  ceilingFor(requested: ContinuityTier, memoryPressure = false): ContinuityTier {
+  ceilingFor(requested: ContinuityTier, memoryPressure = false, deviceLost = false): ContinuityTier {
     const negotiated = lowerTier(
       grantedTier(requested, this._backendTier, this._policyCeiling, this._optIn),
       this._failureCeiling,
@@ -252,7 +261,12 @@ export class ContinuityRuntime {
     // Accumulation is the only capability that holds surfaces of its own
     // between frames; sizing and gap closure spend the frame they run in, so
     // dropping them would give up quality without giving back room.
-    return memoryPressure ? lowerTier(negotiated, MEMORY_PRESSURE_CEILING) : negotiated;
+    const underPressure = memoryPressure ? lowerTier(negotiated, MEMORY_PRESSURE_CEILING) : negotiated;
+    // A lost device draws nothing at all, so no rung means anything while one
+    // is gone. Handling it here rather than at the allocation is what keeps a
+    // dead device from being asked for surfaces and answering with a refusal
+    // that would read as evidence about the hardware.
+    return deviceLost ? 'source' : underPressure;
   }
 
   /**
@@ -266,7 +280,7 @@ export class ContinuityRuntime {
    * exposure is last, reading the convergence it describes.
    */
   prepareFrame(input: ContinuityFrameInput): ContinuityFramePlan {
-    const ceiling = this.ceilingFor(input.requestedTier, input.memoryPressure);
+    const ceiling = this.ceilingFor(input.requestedTier, input.memoryPressure, input.deviceLost);
     this._tier = nextTierUnderPressure(this._tier, ceiling, input.pressure);
     let capabilities = capabilitiesForTier(this._tier);
 

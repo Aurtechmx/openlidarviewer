@@ -3729,3 +3729,32 @@ Windows-path lint refused a test that derived a filesystem path from
 the evidence test made its point by editing the real defaults table while the
 rest of the suite was reading it; the lint now takes both of its inputs as
 arguments, so the test points at copies.
+
+### L140 · BUILT · ARCHITECTURE
+
+Phase D7. Five of the six triggers the phase names already lowered the rung,
+each through the part that owns it: an unsupported format and a backend with
+no room through `tierFor`, memory pressure and a past refusal through the
+ceiling, repeated slow frames through the pressure step. Device loss did not.
+
+It does now, and where it enters matters. A lost device would have been caught
+at the allocation, since asking one for three surfaces fails, but the answer
+would have been `allocation-failed`, which is evidence about the hardware and
+lowers a ceiling for the session. A device that came back would have paid a
+rung for having been away. So the loss is read at the ceiling instead: while
+one is gone the rung is `source`, no history is asked for, and nothing is
+recorded against the device. When it returns the ladder climbs again.
+
+A `device-lost` refusal was written first and removed, because it could not
+happen: the ceiling reaches `source` before the allocation is considered, so
+no history is ever wanted while a device is gone. Two mechanisms for one fact
+is the arrangement this programme keeps taking out, and a value that cannot be
+produced is worse than none, since a reader would look for the case that
+returns it.
+
+Tests now walk each trigger to the rung it lands on, and one drives twenty
+frames with slow frames, memory pressure and a device coming and going all
+interleaved, asserting every frame reports a rung of the ladder. The bottom is the renderer as it shipped:
+a runtime that has failed everything reports `source` with no capabilities and
+a direct exposure, which is the phase's rule that presentation enhancement
+being unavailable is not a fatal error.

@@ -57,6 +57,7 @@ function frame(over: Partial<ContinuityFrameInput> = {}): ContinuityFrameInput {
     viewport: { widthPx: 1280, heightPx: 720 },
     pressure: { aboveHighMs: 0, belowLowMs: 0 },
     memoryPressure: false,
+    deviceLost: false,
     reducedMotion: false,
     ...over,
   };
@@ -581,6 +582,138 @@ describe('when a sweep is allowed to run', () => {
       expect(plan.convergence.kind).toBe('converged');
       expect(plan.phase).toBe(null);
       expect(plan.accumulate).toBe(false);
+    }
+  });
+});
+
+describe('the fallback ladder', () => {
+  it('drops to source while the device is gone, and comes back', () => {
+    const { r } = withHistory();
+    expect(r.prepareFrame(frame()).tier).toBe('full');
+    const lost = r.prepareFrame(frame({ deviceLost: true }));
+    expect(lost.tier).toBe('source');
+    expect(lost.active).toBe(false);
+    // Nothing is refused because nothing was wanted: at source there is no
+    // history to allocate, so a dead device is never asked.
+    expect(lost.historyRefusal).toBe(null);
+    // A lost device is a passing condition, so it leaves no mark.
+    expect(r.ceilingFor('full')).toBe('full');
+    expect(settle(r)).toBe('full');
+  });
+
+  it('asks a dead device for nothing', () => {
+    const { r, f } = withHistory();
+    const asked = f.state.made.length;
+    r.prepareFrame(frame({ deviceLost: true, display: display({ camera: 'moved' }) }));
+    expect(f.state.made.length).toBe(asked);
+  });
+
+  it('never falls more than one rung per frame under pressure', () => {
+    const r = runtime();
+    settle(r);
+    const high = { aboveHighMs: 10_000, belowLowMs: 0 };
+    const seen = [
+      r.prepareFrame(frame({ pressure: high })).tier,
+      r.prepareFrame(frame({ pressure: high })).tier,
+      r.prepareFrame(frame({ pressure: high })).tier,
+      r.prepareFrame(frame({ pressure: high })).tier,
+    ];
+    expect(seen).toEqual(['closure', 'sizing', 'source', 'source']);
+  });
+
+  it('stops at source under every trigger at once', () => {
+    // The bottom of the ladder is the renderer as it shipped, and nothing
+    // below it exists to fall to.
+    const f = factory();
+    f.state.refuseFrom = 0;
+    const r = runtime({ surfaceFactory: f.make });
+    for (let i = 0; i < 12; i++) {
+      const plan = r.prepareFrame(frame({
+        pressure: { aboveHighMs: 10_000, belowLowMs: 0 },
+        memoryPressure: true,
+        deviceLost: i % 2 === 0,
+      }));
+      expect(plan.tier).toBeDefined();
+    }
+    expect(r.prepareFrame(frame()).tier).toBe('source');
+  });
+
+  it('never throws, whatever is failing', () => {
+    // Presentation enhancement being unavailable is not a fatal error.
+    const f = factory();
+    f.state.refuseFrom = 0;
+    const r = runtime({ surfaceFactory: f.make });
+    const inputs = [
+      frame({ deviceLost: true }),
+      frame({ memoryPressure: true }),
+      frame({ pressure: { aboveHighMs: 1e9, belowLowMs: 0 } }),
+      frame({ display: display({ widthPx: 0, heightPx: 0 }) }),
+      frame({ refinement: 'moving' }),
+    ];
+    for (const input of inputs) {
+      expect(() => r.prepareFrame(input)).not.toThrow();
+    }
+    r.invalidate('pass-threw');
+    expect(() => r.prepareFrame(frame())).not.toThrow();
+  });
+
+  it('leaves the renderer drawing at the bottom of the ladder', () => {
+    const r = runtime();
+    for (let i = 0; i < 6; i++) r.invalidate('pass-threw');
+    const plan = r.prepareFrame(frame());
+    expect(plan.tier).toBe('source');
+    expect(plan.active).toBe(false);
+    expect(Object.values(plan.capabilities).every((on) => on === false)).toBe(true);
+    expect(plan.exposure).toBe('direct');
+  });
+});
+
+describe('every trigger the phase names', () => {
+  const ladder = ['full', 'closure', 'sizing', 'source'];
+
+  it('an unsupported framebuffer format caps the ladder', () => {
+    const r = runtime({ support: { historyTextures: true, historyFits: true, depthNeighbourhood: false } });
+    expect(settle(r)).toBe('sizing');
+  });
+
+  it('a backend with no room for a history caps it one rung lower', () => {
+    const r = runtime({ support: { historyTextures: true, historyFits: false, depthNeighbourhood: true } });
+    expect(settle(r)).toBe('closure');
+  });
+
+  it('a history allocation failure costs a rung', () => {
+    const f = factory();
+    f.state.refuseFrom = 0;
+    const r = runtime({ surfaceFactory: f.make });
+    settle(r);
+    expect(r.ceilingFor('full')).toBe('closure');
+  });
+
+  it('memory pressure costs the rung that keeps a history', () => {
+    const { r } = withHistory();
+    expect(r.ceilingFor('full', true)).toBe('closure');
+  });
+
+  it('repeated slow frames walk it down', () => {
+    const { r } = withHistory();
+    const high = { aboveHighMs: 10_000, belowLowMs: 0 };
+    const tiers = [0, 1, 2].map(() => r.prepareFrame(frame({ pressure: high })).tier);
+    expect(tiers).toEqual(['closure', 'sizing', 'source']);
+  });
+
+  it('every trigger lands on a rung of the ladder and never below it', () => {
+    const f = factory();
+    f.state.refuseFrom = 1;
+    const r = runtime({ surfaceFactory: f.make });
+    for (let i = 0; i < 20; i++) {
+      const plan = r.prepareFrame(frame({
+        memoryPressure: i % 3 === 0,
+        deviceLost: i % 4 === 0,
+        pressure: i % 2 === 0
+          ? { aboveHighMs: 10_000, belowLowMs: 0 }
+          : { aboveHighMs: 0, belowLowMs: 10_000 },
+      }));
+      expect(ladder, `frame ${i}`).toContain(plan.tier);
     }
   });
 });
