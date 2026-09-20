@@ -399,6 +399,44 @@ describe('the evidence contract the README explains', () => {
     expect(txt).toMatch(/Matched study\s+none applies/);
   });
 
+  it('says none recorded rather than nothing when a level is absent', async () => {
+    // The fallback these lines exist for. A README that printed an empty
+    // field, or the word undefined, would read as a level that was recorded
+    // and happened to be blank.
+    const { renderEvidenceContract } = await import('../src/terrain/export/demPackage');
+    const lines = renderEvidenceContract({
+      claimId: 'olv.test.claim',
+      baselineEvidence: null,
+      effectiveEvidence: null,
+      resolutionState: 'unresolved',
+      matchedStudy: null,
+      applicabilityVerdict: 'no scoped study applies',
+      envelopeChecks: [],
+    });
+    const text = lines.join('\n');
+    expect(text).toMatch(/Baseline\s+none recorded/);
+    expect(text).toMatch(/Effective\s+none recorded/);
+    expect(text).toMatch(/Matched study\s+none applies/);
+    expect(text).not.toMatch(/undefined|null/);
+  });
+
+  it('lists each envelope field it was checked against when a study matched', async () => {
+    const { renderEvidenceContract } = await import('../src/terrain/export/demPackage');
+    const text = renderEvidenceContract({
+      claimId: 'olv.test.claim',
+      baselineEvidence: 'E3',
+      effectiveEvidence: 'E4',
+      resolutionState: 'resolved',
+      matchedStudy: 'a scoped study',
+      applicabilityVerdict: 'applies',
+      envelopeChecks: [{
+        field: 'pointDensity', expected: 10, observed: 10, status: 'match' as const,
+      }],
+    }).join('\n');
+    expect(text).toContain('Envelope');
+    expect(text).toMatch(/pointDensity\s+match/);
+  });
+
   it('agrees with the provenance block beside it', async () => {
     // Both read the same resolver, so the level the contract reports cannot
     // contradict the one the provenance stamps.

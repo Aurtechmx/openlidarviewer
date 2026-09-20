@@ -19,7 +19,10 @@
  * a prominent PRELIMINARY caveat whenever the data is not full + ready.
  */
 
-import { buildEvidenceContractView } from '../../validation/evidenceBoundaryInspector';
+import {
+  buildEvidenceContractView,
+  type EvidenceContractView,
+} from '../../validation/evidenceBoundaryInspector';
 import { buildScientificArtifactPassport } from '../../science/scientificArtifactPassport';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import type { AnalysedBasis } from './analysedBasis';
@@ -249,7 +252,19 @@ function coverageLabel(mode: string): string {
 function evidenceContractLines(result: AnalyseContoursResult): string[] {
   const claims = dtmArtifactClaims(result);
   if (claims.length === 0) return [];
-  const view = buildEvidenceContractView(claims[0]);
+  return renderEvidenceContract(buildEvidenceContractView(claims[0]));
+}
+
+/**
+ * The contract as lines, from a resolved view.
+ *
+ * Split from the resolving above so the absent-level wording can be read back
+ * without standing up an analysis to produce it. A level that was never
+ * recorded prints as `none recorded` rather than as an empty column: a blank
+ * field reads as a level that exists and happens to be empty, which is the
+ * opposite of what it means.
+ */
+export function renderEvidenceContract(view: EvidenceContractView): string[] {
   const lines = [
     `Evidence contract`,
     `  Claim          ${view.claimId}`,
