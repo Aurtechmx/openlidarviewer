@@ -390,6 +390,13 @@
       "why": "Resolves one frame's budget for optional work: backing-store pressure, the share of the GPU commit batch, streaming urgency, and whether lighting, continuity and detailed hover run. Nothing calls it because the render loop still resolves each of those separately, and wiring it is Phase B3, where a single request-driven loop becomes the one caller.",
       "graduation": "Reachable when the render loop calls frameBudgetPolicy once per frame and passes the result to the DPR driver, the GPU commit metering and the scheduler, carrying the previous policy for the hysteresis.",
       "review": "2027-09-19"
+    },
+    {
+      "path": "src/render/renderInvalidation.ts",
+      "status": "staged",
+      "why": "Holds the set of reasons currently asking for a frame, so a loop can say what is still asking rather than only that somebody wanted a frame. Nothing calls it because the loop still draws from RenderActivityGate's two untyped deadlines and a heartbeat, which is enough to draw and not enough to sleep.",
+      "graduation": "Reachable when the request-driven loop in B3 invalidates on input, tween, streaming readiness, fades and pending commits, asks needsFrame before scheduling, and reads cameraMoving in place of the second activity deadline.",
+      "review": "2027-09-19"
     }
   ]
 }

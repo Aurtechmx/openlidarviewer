@@ -3016,3 +3016,50 @@ a parked viewer that has finished refining has no visual work left.
 Nothing calls this yet, and it is registered as staged. The render loop gets
 one caller in B3, where the single request-driven loop is the thing that can
 carry the previous policy from frame to frame.
+
+### L124 · BUILT · ARCHITECTURE
+
+Phase B2. `RenderActivityGate` decides whether to draw from two untyped
+deadlines and a heartbeat, and a caller that reaches for `bump` or `bumpCamera`
+leaves its reason at the call site. The gate knows only that somebody wanted a
+frame. That is enough to draw and not enough to sleep: a loop that stops when
+nothing asks for a frame has to be able to say what is still asking.
+
+The split between those two deadlines is the same fact told badly. One is
+extended by camera motion and the other by anything, which is a property of the
+reason rather than of the caller, and picking the wrong method stands Eye Dome
+Lighting down over a scene that never moved. That is the bug the second
+deadline was added to fix. `src/render/renderInvalidation.ts` puts it in a
+table instead: `MOVES_CAMERA` holds the three camera reasons and nothing else,
+so a hover, a filter change and a resize each ask for a frame without claiming
+the camera moved.
+
+Reasons have one of three kinds. A `once` reason is a change that has already
+happened and needs one frame to become visible; it clears when a frame serves
+it and cannot be released, because forgetting it would leave the last frame
+showing the state before the change. A `holdover` reason is input, which
+arrives in a stream whose last member looks like a pause, so it keeps frames
+for `RENDER_HOLDOVER_MS` after the most recent one. That window is imported
+from the activity gate rather than restated, so the two cannot drift. A `while`
+reason is a condition still running, held until its owner releases it.
+
+The deadlock the phase brief names lives in that third kind. A metered GPU
+queue that drains only from rendered frames, filled while the loop is asleep,
+never drains. The rule is that the empty-to-non-empty transition invalidates
+and the opposite transition releases, and a test drives exactly that: three
+items queued while asleep, the loop wakes, drains one per frame, and sleeps
+again on the frame after the last one. A `while` reason that is never released
+leaves a loop that never sleeps, which is the safe direction of that mistake.
+
+It is not an event bus and could not become one. Nothing subscribes and no
+reason reaches anything but this module's own set. A general bus would let any
+part of the viewer listen for `filter`, and the invalidation vocabulary would
+become the application's event vocabulary with parts of the app coupled
+through it.
+
+The reasons are kebab-case rather than the upper-case shape the brief sketched,
+matching `WakeReason` in the scheduler cadence. Two reason vocabularies in one
+render loop should look like the same kind of thing.
+
+Staged. The loop still draws from the old deadlines; B3 is where the single
+request-driven loop becomes the caller.
