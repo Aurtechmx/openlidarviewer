@@ -1,0 +1,32 @@
+{
+  "record": "phase-a2-attempt",
+  "outcome": "blocked",
+  "note": "Phase A2 asks for a frame-time A/B between the immediate and metered GPU commit paths. It was attempted and could not be completed: the browser this project previews in reports the page as hidden, so requestAnimationFrame does not run and the renderer collects no frame samples. The production default is unchanged.",
+  "measuredAt": "2026-09-20",
+  "commit": "762f4aa0",
+  "host": "Apple M3 Max, Chromium 152, preview pane",
+  "whyBlocked": [
+    "document.hidden reports true even with the pane fronted, and a 2-second requestAnimationFrame probe recorded 0 frames.",
+    "The app's own PERF readout stays at '(collecting...)', so the renderer's frame-time aggregate never received a sample.",
+    "draw calls and shown-point counts were identical across a 3-second interval, which is a stalled render loop rather than a steady one.",
+    "Without frame samples there is no p50, p95, p99, max, or count of frames over 33 and 50 ms, and those are the metrics that decide this phase."
+  ],
+  "whatWasObservable": {
+    "note": "Streaming is driven by network and workers rather than by the frame loop, so these remained meaningful. They describe the immediate path on a warm cache and are not an A/B.",
+    "commitMode": "immediate (shipped default)",
+    "cache": "warm from earlier runs in the same session",
+    "timeToFirstResidentNodeMs": 6961,
+    "timeToStableResidentCountMs": 7271,
+    "residentNodes": 9,
+    "residentPoints": 2009048,
+    "compressedCacheMB": 12.3,
+    "decodedMB": 57.5,
+    "gpuEstimateMB": 61.3
+  },
+  "decision": "The metered commit path stays opt-in. The phase's own rule is that no aesthetic judgement is sufficient and the default moves only on measured evidence, so an unmeasurable environment leaves the default where it is.",
+  "whatWouldUnblock": [
+    "A browser window that is genuinely visible, driven by the user or by a Playwright run with a headed window, so requestAnimationFrame runs and the renderer's frame aggregate fills.",
+    "The same deterministic trace under both commit modes on a warm cache, then again cold.",
+    "A second device class, since the phase asks for a discrete GPU, an integrated one and a mobile class, and only one machine was available."
+  ]
+}

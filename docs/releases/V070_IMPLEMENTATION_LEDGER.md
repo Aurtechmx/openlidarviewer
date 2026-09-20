@@ -2774,3 +2774,33 @@ visible disappeared, and nothing did.
 Frame time was not measured. The residency observation already recorded that
 the win here is bounded by a small resident set, and nothing in this entry
 claims otherwise.
+
+### L118 · REFUSED · ARCHITECTURE
+
+Phase A2 asks for a frame-time comparison between the immediate and metered
+GPU commit paths, and it cannot be run here. The preview browser reports the
+page as hidden, so `requestAnimationFrame` does not fire: a two-second probe
+recorded zero frames, the renderer's own PERF readout stays at collecting, and
+the draw-call count sat unchanged across three seconds. Without frame samples
+there is no p50, p95, p99, hitch count or maximum, and those are the figures
+that decide the phase.
+
+So the metered path stays opt-in and the default is untouched. The phase's own
+rule is that no aesthetic judgement is sufficient, and an environment that
+cannot measure is not an argument for moving a default. The attempt is recorded
+in `validation/renderer-capability/streaming-commit-a2-20260920.json` with what
+would unblock it.
+
+What stayed observable is the streaming half, since it runs on the network and
+the workers rather than on the frame loop: a first resident node at 6,961 ms
+and a stable resident count at 7,271 ms on a warm cache, nine nodes and two
+million points resident, 61.3 MB of GPU estimate against 57.5 MB decoded. Those
+describe one path and are not a comparison.
+
+This also sharpens the previous entry, and the correction belongs here rather
+than left standing. A1 was reported as browser-verified, and it was, but by
+screenshots rather than by a running loop: a capture forces a paint, and each
+paint ran the cull and produced a complete scan with no holes. That is real
+evidence for the release blocker, which asks whether anything visible was
+wrongly dropped. It is not evidence about frame pacing, and the earlier entry
+should have said which of the two it had.
