@@ -57,9 +57,14 @@ Related notes, all engineering rather than release material:
 ## Benchmarks
 
 There is no benchmark report, and the gap is the point of this section rather
-than an omission from it. No runner in this project exposes a WebGPU adapter,
-and there is no phone, tablet or iPhone-class WebKit device, so frame time
-under the field has never been measured anywhere.
+than an omission from it. The field is not wired into the renderer, so no frame
+has ever been drawn through it and there is nothing whose time could be taken.
+
+A device probe has since been run and is recorded in
+`validation/renderer-capability/`. The browser this project previews in exposes
+a WebGPU adapter and a WebGL 2 context that accepts every history format, so
+the obstacle is the wiring rather than the hardware. One machine is not a
+browser matrix, and there is still no phone, tablet or WebKit device.
 
 Two things were measured and are worth separating from the rest:
 

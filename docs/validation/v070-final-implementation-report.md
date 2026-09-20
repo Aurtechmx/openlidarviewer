@@ -86,8 +86,12 @@ share is a property of the fixture rather than a result about scans.
 
 ## Browsers
 
-Not run. No matrix exists for Chromium, Firefox or WebKit, because no runner in
-this project exposes a WebGPU adapter.
+No matrix exists for Chromium, Firefox and WebKit. One Chromium instance was
+probed for capability and the result is in `validation/renderer-capability/`:
+on an Apple M3 Max it reports a WebGPU adapter, and a WebGL 2 context whose
+`EXT_color_buffer_float` is present and whose R32F framebuffer reports complete.
+Both reach the `full` rung on that machine. A capable laptop is the case the
+tier ladder is least needed for, so this narrows nothing about weak devices.
 
 One backend fact was measured on both: the history depth surface is renderable
 unconditionally as `r32float` on WebGPU and needs `EXT_color_buffer_float` on

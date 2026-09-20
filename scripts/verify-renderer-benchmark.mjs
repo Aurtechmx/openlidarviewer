@@ -14,6 +14,10 @@
  * and the near/far range are all in it.
  *
  * There is no record yet, and with none present this exits 0 while saying so.
+ * The reason is that the field is not wired into the renderer rather than that
+ * no GPU is reachable: the browser this project previews in does expose a
+ * WebGPU adapter, which a capability probe in validation/renderer-capability
+ * records. What is missing is a frame drawn through the field.
  * That is deliberate: the absence of a measurement is not a failure to
  * validate, it is the state the programme is in, and a gate that went red for
  * it would have to be disabled rather than satisfied.
@@ -179,7 +183,7 @@ if (problems.length > 0) {
 if (records.length === 0) {
   console.log(
     'verify:renderer-benchmark OK — schema present, 0 records. '
-    + 'No runner here exposes a WebGPU adapter, so the field has never drawn a frame.',
+    + 'The field is not wired into the renderer, so it has never drawn a frame to measure.',
   );
 } else {
   console.log(

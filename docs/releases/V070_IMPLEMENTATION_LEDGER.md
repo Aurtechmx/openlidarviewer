@@ -2621,3 +2621,42 @@ architecture table claimed 870 files under `src/` where the count is 867. That
 is the same error as the commit count in the previous entry, from the same
 cause, which is writing a number that looks right instead of running the
 command that settles it.
+
+### L114 · MEASURED · SCIENTIFIC
+
+The first real-device evidence in this programme, and it corrects a claim the
+programme had been repeating.
+
+`BackendSupport` has been the tier ladder's input since the ladder was written
+and nothing produced one. Every call site built the struct by hand, so the
+ladder had never been driven by a measurement, and the difference between the
+backends lived in a comment. `probeBackendSupport` is the producer, and it
+keeps the two conditions apart because collapsing them deletes the closure
+rung: a float colour attachment is what a persistent history needs, while
+reading neighbouring depths inside one frame needs only a depth texture, which
+is core in WebGL 2.
+
+A probe page then exercised both backends rather than querying them. On an
+Apple M3 Max under Chromium, WebGL 2 reports `EXT_color_buffer_float` present
+and an R32F framebuffer complete, and WebGPU created all three history surfaces
+as render attachments and destroyed them. Both reach the full rung. The byte
+figures, 27.0 MiB at the 2048 by 1536 backing store and 17.8 MiB at 1920 by
+1080, are the shipped formula's arithmetic cross-checked against
+`historyBudget.ts`. The record is in `validation/renderer-capability/`.
+
+The correction matters more than the result. This programme said repeatedly
+that no runner exposes a WebGPU adapter, which was true of the Node test runner
+and false of the browser the project previews in. Frame time is unmeasured
+because the field is not wired into the renderer, not because no GPU is
+reachable. Four documents and the benchmark verifier's own output said the
+wrong thing and now say the right one.
+
+What the probe does not narrow is the part the ladder exists for. One capable
+laptop having the extension says nothing about a low-end Android or an older
+integrated GPU, and Firefox and WebKit were not opened. The capability record
+carries those limits in its own file rather than in a reader's memory.
+
+The benchmark verifier rejected the capability record when it was first written
+into `validation/renderer-benchmark/`, correctly, because that directory holds
+baseline-versus-continuity comparisons and this is not one. The record moved
+rather than the verifier loosening.

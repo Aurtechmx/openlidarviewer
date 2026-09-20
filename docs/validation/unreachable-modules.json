@@ -390,6 +390,13 @@
       "why": "Turns a node's spacing, distance and current temporal support into a multiplier for its projected size, so the scheduler can prefer nodes that would close visible gaps over nodes that only add points. Nothing calls it because the scheduler's score is unchanged: wiring it would alter which nodes arrive first on every streamed scan, which is a behaviour change that wants a measurement rather than a merge.",
       "graduation": "Reachable when a measurement shows the reordering improves time-to-usable-image on a real streamed scan. nodeScore multiplies its size term by nodeCoverageFactor the same way it already applies the focus bias, and the descriptor rides on the node beside its existing spacing.",
       "review": "2027-09-19"
+    },
+    {
+      "path": "src/render/continuity/probeBackendSupport.ts",
+      "status": "staged",
+      "why": "Produces the BackendSupport the tier ladder takes as input, by exercising a real context rather than querying it. Nothing calls it because no capability can be switched on, so there is no rung to choose. It has been run against hardware out of tree: validation/renderer-capability/device-capability-20260920.json records an Apple M3 Max reaching the full rung on both backends.",
+      "graduation": "Reachable when any capability graduates. The Viewer builds a probe from its own renderer, calls probeBackendSupport once after context creation, and hands the result to tierUnderPolicy instead of a hand-written struct.",
+      "review": "2027-09-20"
     }
   ]
 }

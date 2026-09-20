@@ -1,0 +1,44 @@
+{
+  "record": "device-capability",
+  "note": "A capability probe, not a benchmark. It answers what a real device can carry, which the tier ladder has always taken as input and nothing had ever measured. It carries no frame times and is deliberately not in manifest.schema.json's shape, because that schema describes a baseline-versus-continuity comparison and no such comparison has been run.",
+  "measuredAt": "2026-09-20",
+  "commit": "6ce80c797d3adc87404067d074c3457d1f908086",
+  "method": "_private/device-probe/index.html served from the dev server and opened in the browser. Each capability is exercised rather than queried: the WebGL 2 row creates an R32F texture, attaches it to a framebuffer and reads checkFramebufferStatus; the WebGPU row creates all three history surfaces as render attachments and destroys them.",
+  "host": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.76 Safari/537.36",
+    "os": "macOS",
+    "devicePixelRatio": 2,
+    "viewportCssPx": { "width": 1024, "height": 768 }
+  },
+  "webgl2": {
+    "available": true,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Max, Unspecified Version)",
+    "drawingBufferPx": { "width": 2048, "height": 1536 },
+    "extColorBufferFloat": "present",
+    "r32floatFramebuffer": "complete",
+    "depthTexture": "ok",
+    "historyBytes": 28311552,
+    "historyMiB": 27.0,
+    "historyFitsCeiling": true,
+    "backendSupport": { "historyTextures": true, "historyFits": true, "depthNeighbourhood": true },
+    "tier": "full"
+  },
+  "webgpu": {
+    "adapter": "present",
+    "adapterInfo": "apple / metal-3",
+    "maxTextureDimension2D": 8192,
+    "surfacesCreated": { "rgba8unorm": true, "r32float": true, "r8unorm": true },
+    "probeSizePx": { "width": 1920, "height": 1080 },
+    "historyBytes": 18662400,
+    "historyMiB": 17.8,
+    "historyFitsCeiling": true,
+    "backendSupport": { "historyTextures": true, "historyFits": true, "depthNeighbourhood": true },
+    "tier": "full"
+  },
+  "limits": [
+    "One machine, an Apple M3 Max. EXT_color_buffer_float being present here says nothing about a low-end Android or an older integrated GPU, and the tier ladder exists for the devices where it is absent.",
+    "Chromium only. Firefox and WebKit were not opened.",
+    "Capability and allocation only. No frame was drawn through the Continuity Field, because it is not wired, so there is still no frame time, no settle time and no coverage measurement.",
+    "The byte figures are the shipped formula's arithmetic at the measured backing-store size, cross-checked against historyBudget.ts. They are not a measurement of GPU memory actually consumed."
+  ]
+}

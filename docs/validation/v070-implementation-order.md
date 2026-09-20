@@ -25,8 +25,10 @@ were written in costs nothing as long as that stays true.
 One thing the tables cannot show is why so many rows say the same words. A pure
 core with no caller is the furthest this programme could honestly go on the
 hardware available to it. Every capability here is gated on a measurement, the
-measurements need a WebGPU adapter or a phone, and neither exists on any runner
-this work had access to. Writing the core anyway was a choice about where to
+measurements need a frame drawn through the field, and nothing draws one. A
+device probe has since shown the preview browser does expose a WebGPU adapter,
+so the obstacle is the wiring rather than the hardware, and the phone half
+remains genuinely unavailable. Writing the core anyway was a choice about where to
 stop rather than an accident of scheduling, and the alternative was to wire
 something on a guess and find out later which guess was wrong. The register of
 unreachable modules records each one with what would make it reachable, so the
