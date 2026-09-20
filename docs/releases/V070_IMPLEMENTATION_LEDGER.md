@@ -2775,32 +2775,50 @@ Frame time was not measured. The residency observation already recorded that
 the win here is bounded by a small resident set, and nothing in this entry
 claims otherwise.
 
-### L118 · REFUSED · ARCHITECTURE
+### L118 · MEASURED · ARCHITECTURE
 
-Phase A2 asks for a frame-time comparison between the immediate and metered
-GPU commit paths, and it cannot be run here. The preview browser reports the
-page as hidden, so `requestAnimationFrame` does not fire: a two-second probe
-recorded zero frames, the renderer's own PERF readout stays at collecting, and
-the draw-call count sat unchanged across three seconds. Without frame samples
-there is no p50, p95, p99, hitch count or maximum, and those are the figures
-that decide the phase.
+Phase A2 ran. The production default stays immediate, because metered commit
+showed no measurable frame-time benefit on the one device available, and the
+phase moves a default only on measured improvement.
 
-So the metered path stays opt-in and the default is untouched. The phase's own
-rule is that no aesthetic judgement is sufficient, and an environment that
-cannot measure is not an argument for moving a default. The attempt is recorded
-in `validation/renderer-capability/streaming-commit-a2-20260920.json` with what
-would unblock it.
+The preview pane could not do it: it reports the page hidden, so
+`requestAnimationFrame` never fires and the renderer collects no frame
+samples. A headed Playwright Chromium does, and the numbers below come from
+there.
 
-What stayed observable is the streaming half, since it runs on the network and
-the workers rather than on the frame loop: a first resident node at 6,961 ms
-and a stable resident count at 7,271 ms on a warm cache, nine nodes and two
-million points resident, 61.3 MB of GPU estimate against 57.5 MB decoded. Those
-describe one path and are not a comparison.
+The first two runs were wrong and the way they were wrong is the finding. Both
+conditions shared one browser process, and whichever ran second was about 1.8
+times slower at p50, 9.2 against 16.6 in one order and 8.9 against 15.8 in the
+reverse. Reading either alone would have concluded that metered is worse, or
+that immediate is, depending on which had been run second. Reversing the order
+exposed it, and a fresh browser process per condition removed it.
 
-This also sharpens the previous entry, and the correction belongs here rather
-than left standing. A1 was reported as browser-verified, and it was, but by
+Isolated and repeated twice each, the modes are indistinguishable. Immediate
+reads p50 8.6 and 9.4, metered 8.4 and 8.4, so the gap between the condition
+means is smaller than the gap between the two immediate repetitions. p95 and
+p99 agree to within 0.4 ms. No frame passed 50 ms in any run and the single
+frame past 33 ms was under immediate.
+
+The interpretation is narrower than the numbers look. The baseline never
+hitched, and metering exists to spread uploads on a device that stalls on
+them, so the trace never exercised the condition the feature addresses. This
+says metering did not help here, not that metering does not help. A machine
+that hitches is the one that would settle it, and this is the class least
+likely to.
+
+Load timing was not usable: the first resident node arrived between 6,782 and
+11,546 ms across the four runs with no relation to the mode, which is network
+and cache noise at this sample size.
+
+The record is
+`validation/renderer-capability/streaming-commit-a2-20260920.json`, carrying
+the protocol, the discarded attempts and what stayed unmeasured.
+
+This also sharpens the A1 entry, and the correction belongs with it rather than
+left standing. A1 was reported as browser-verified, and it was, but by
 screenshots rather than by a running loop: a capture forces a paint, and each
 paint ran the cull and produced a complete scan with no holes. That is real
 evidence for the release blocker, which asks whether anything visible was
 wrongly dropped. It is not evidence about frame pacing, and the earlier entry
-should have said which of the two it had.
+should have said which of the two it had. The Playwright runs since have
+rendered thousands of real frames against the same build without a page error.

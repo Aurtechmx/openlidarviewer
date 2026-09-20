@@ -1,32 +1,41 @@
 {
-  "record": "phase-a2-attempt",
-  "outcome": "blocked",
-  "note": "Phase A2 asks for a frame-time A/B between the immediate and metered GPU commit paths. It was attempted and could not be completed: the browser this project previews in reports the page as hidden, so requestAnimationFrame does not run and the renderer collects no frame samples. The production default is unchanged.",
+  "record": "phase-a2-benchmark",
+  "outcome": "measured",
+  "decision": "The production default stays immediate. Metered commit showed no measurable frame-time benefit on this device, and the phase's rule is that the default moves only on measured improvement.",
   "measuredAt": "2026-09-20",
-  "commit": "762f4aa0",
-  "host": "Apple M3 Max, Chromium 152, preview pane",
-  "whyBlocked": [
-    "document.hidden reports true even with the pane fronted, and a 2-second requestAnimationFrame probe recorded 0 frames.",
-    "The app's own PERF readout stays at '(collecting...)', so the renderer's frame-time aggregate never received a sample.",
-    "draw calls and shown-point counts were identical across a 3-second interval, which is a stalled render loop rather than a steady one.",
-    "Without frame samples there is no p50, p95, p99, max, or count of frames over 33 and 50 ms, and those are the metrics that decide this phase."
-  ],
-  "whatWasObservable": {
-    "note": "Streaming is driven by network and workers rather than by the frame loop, so these remained meaningful. They describe the immediate path on a warm cache and are not an A/B.",
-    "commitMode": "immediate (shipped default)",
-    "cache": "warm from earlier runs in the same session",
-    "timeToFirstResidentNodeMs": 6961,
-    "timeToStableResidentCountMs": 7271,
-    "residentNodes": 9,
-    "residentPoints": 2009048,
-    "compressedCacheMB": 12.3,
-    "decodedMB": 57.5,
-    "gpuEstimateMB": 61.3
+  "commit": "3f7d7636",
+  "host": {
+    "machine": "Apple M3 Max",
+    "browser": "Playwright Chromium, headed",
+    "viewport": "1280 x 860",
+    "os": "macOS"
   },
-  "decision": "The metered commit path stays opt-in. The phase's own rule is that no aesthetic judgement is sufficient and the default moves only on measured evidence, so an unmeasurable environment leaves the default where it is.",
-  "whatWouldUnblock": [
-    "A browser window that is genuinely visible, driven by the user or by a Playwright run with a headed window, so requestAnimationFrame runs and the renderer's frame aggregate fills.",
-    "The same deterministic trace under both commit modes on a warm cache, then again cold.",
-    "A second device class, since the phase asks for a discrete GPU, an integrated one and a mobile class, and only one machine was available."
+  "dataset": { "name": "swisssurface3D 2022 sample", "file": "2485_1109.copc.laz", "knownNodes": 485, "sourcePoints": 15680312 },
+  "protocol": {
+    "runner": "_private/a2-bench/run.mjs",
+    "trace": "Launch the sample, poll residency for 20 s, then three scripted orbit legs of 24 pointer moves each with 4 s between them, then 3 s settle. Frame deltas are sampled by requestAnimationFrame and only the post-settle orbit window is aggregated.",
+    "isolation": "A fresh browser PROCESS per condition, which the first attempts did not have.",
+    "repetitions": "2 per condition, interleaved immediate, metered, metered, immediate.",
+    "flag": "?streamingCommitMode=metered against the shipped default"
+  },
+  "results": [
+    { "mode": "immediate", "p50": 8.6, "p95": 17.6, "p99": 25.0, "max": 26.0, "over33": 0, "over50": 0 },
+    { "mode": "metered",   "p50": 8.4, "p95": 17.2, "p99": 24.9, "max": 25.9, "over33": 0, "over50": 0 },
+    { "mode": "metered",   "p50": 8.4, "p95": 17.2, "p99": 24.9, "max": 25.8, "over33": 0, "over50": 0 },
+    { "mode": "immediate", "p50": 9.4, "p95": 17.6, "p99": 25.0, "max": 33.8, "over33": 1, "over50": 0 }
+  ],
+  "reading": [
+    "The two modes are indistinguishable. The 0.2 ms gap at p50 between the condition means is smaller than the 0.8 ms spread between the two immediate repetitions, and p95 and p99 agree to within 0.4 ms.",
+    "No frame exceeded 50 ms in any run, and the single frame over 33 ms occurred under immediate.",
+    "The interpretation that matters is that the baseline did not hitch. Metering exists to spread uploads on a device that stalls on them, and this device did not stall, so the trace never exercised the condition the feature addresses. The result says metering did not help here rather than that metering does not help."
+  ],
+  "discardedAttempts": [
+    "Two earlier runs shared one browser process and produced a large order effect: whichever condition ran second was about 1.8x slower at p50, 9.2 against 16.6 in one order and 8.9 against 15.8 in the other. Reading either run alone would have concluded that the mode ran second is worse. The reversal is what caught it, and the per-process isolation is what removed it.",
+    "An earlier attempt in the preview pane recorded zero frames, because that pane reports the page hidden and requestAnimationFrame does not fire there."
+  ],
+  "notMeasured": [
+    "Load timing. firstResidentNodeMs ranged 6782 to 11546 across the four runs with no relation to the mode, so network and cache noise dominates it at this sample size.",
+    "Pending nodes, pending bytes, GPU commit bytes per frame and commits per frame. The runner does not reach the commit queue's internals.",
+    "A second device class. The phase asks for a discrete GPU, an integrated one and a mobile class; one machine was available, and it is the class least likely to show a hitch."
   ]
 }
