@@ -73,8 +73,8 @@ import {
   type ElevLayer,
 } from './elevationWindowResolver';
 import {
-  DeviceGeneration, GpuErrorLedger, installGpuDeviceErrors, watchContextRestore,
-  wireRendererDeviceLoss, type RendererWithDeviceLoss,
+  DeviceGeneration, GpuErrorLedger, installGpuDeviceErrors, watchDeviceChanges,
+  type RendererWithDeviceLoss,
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { intensityFilterUniform } from './intensityFilterUniform';
@@ -1389,10 +1389,9 @@ export class Viewer {
         if (this._renderer !== undefined) this._startLoop();
       }
     };
-    // A restore is the one device event nothing else reports; the loss comes
-    // through the renderer's own hook, wired below.
-    this._detachContextLoss = watchContextRestore(canvas, this._devices);
-    wireRendererDeviceLoss(this._renderer as unknown as RendererWithDeviceLoss, this._devices);
+    // One detach for both: the renderer's hook outlives a dropped one.
+    const rendererLike = this._renderer as unknown as RendererWithDeviceLoss;
+    this._detachContextLoss = watchDeviceChanges(canvas, rendererLike, this._devices);
     canvas.addEventListener('dblclick', this._onCanvasDblClick);
     canvas.addEventListener('click', this._onCanvasClick);
     canvas.addEventListener('pointermove', this._onCanvasPointerMove);

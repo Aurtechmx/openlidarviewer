@@ -203,6 +203,7 @@ export function installGpuDeviceErrors(
 export {
   DeviceGeneration,
   watchContextRestore,
+  watchDeviceChanges,
   wireRendererDeviceLoss,
   type DeviceEvent,
   type DeviceLossReport,

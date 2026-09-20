@@ -209,3 +209,26 @@ export function watchContextRestore(
   canvas.addEventListener('webglcontextrestored', onRestored);
   return () => canvas.removeEventListener('webglcontextrestored', onRestored);
 }
+
+/**
+ * Watch both sources of device change and return one detach.
+ *
+ * The loss comes from the renderer's hook and the restore from the canvas, and
+ * a caller that wired them separately would hold two detaches and eventually
+ * call one. Dropping the loss detach is the worse half: the hook is a closure
+ * over the object that installed it, so a disposed viewer would stay reachable
+ * and keep advancing a counter nothing reads.
+ */
+export function watchDeviceChanges(
+  canvas: DeviceGenerationHost,
+  renderer: RendererWithDeviceLoss | null | undefined,
+  generation: DeviceGeneration,
+  onChange?: (event: DeviceEvent, generation: number) => void,
+): () => void {
+  const detachLoss = wireRendererDeviceLoss(renderer, generation, onChange);
+  const detachRestore = watchContextRestore(canvas, generation, onChange);
+  return () => {
+    detachLoss();
+    detachRestore();
+  };
+}

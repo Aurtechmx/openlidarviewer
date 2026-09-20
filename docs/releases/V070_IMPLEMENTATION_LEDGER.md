@@ -3565,9 +3565,9 @@ and a test fails on any line of it that runs naming one of those.
 
 ### L136 · FIXED · ARCHITECTURE
 
-Phase D3. Three things have to hold before a sweep runs: a still camera, a
-complete refinement, an epoch that did not move. Two were enforced and the
-third was not, and the missing one is the one that shows.
+Phase D3. A sweep may only run under a still camera, a complete refinement and
+an epoch that did not move. The first two were enforced. The third was not,
+and it is the one that shows.
 
 `nextConvergence` already refuses anything short of `full-refine` and restarts
 when the epoch differs from the one being accumulated. What it did not refuse
@@ -3598,3 +3598,53 @@ which is what keeps one frame of every sweep from being the slow one.
 A first version of the moving-camera test collided with the fixture's own
 camera value, so its first frame found the epoch unchanged and read the sweep
 the settle had left converged.
+
+### L137 · BUILT · ARCHITECTURE
+
+Phase D4, and two corrections from review.
+
+The merge rules existed per pixel and nothing walked a frame with them.
+`historyMergePass` does: an empty pixel takes the sample, a sample clearly in
+front replaces what was there, a sample on the same surface within the depth
+tolerance is added to it, and a sample clearly behind is dropped.
+
+The reason this is not ordinary temporal anti-aliasing is that nothing is
+reprojected. The usual approach transforms the previous frame through the new
+camera and blends, which is where ghosting comes from: a pixel that used to
+see a wall and now sees the floor behind it keeps some of the wall. Here the
+history is only merged into while the display epoch stands still, so every
+contribution was drawn through the same camera and a pixel's samples are all
+of one view. Camera motion moves the epoch, which clears the history rather
+than transforming it. A test fails on any line of the pass that runs naming a
+camera, a matrix, a motion vector or a reprojection.
+
+The pass refuses a frame whose epoch differs from the history's. The caller is
+expected to have cleared it already, and refusing here as well is the cheaper
+half of a rule whose other half somebody has to remember.
+
+Two tallies that would have read the same were separated. A pixel the frame
+drew nothing into is skipped; a pixel whose sample lost to what the history
+held is kept. Folding them together would report a frame that drew nothing as
+a frame whose every sample was occluded.
+
+A blend keeps the nearer of the two depths, for the reason the gap pass takes
+the nearest supporting neighbour: the two agree to within the tolerance, so
+the choice barely moves the value, and keeping the nearer one stops a merged
+pixel drifting behind the surface it belongs to.
+
+Review found two defects in earlier phases, both real.
+
+The gap pass read its normals straight out of the flat array at `i - 1` and
+`i + 1`, with no row-boundary check, while the depth and support lookups
+clamped through `at`. A pixel at x = 0 that is bracketed vertically is
+fillable, so its fill was being admitted or refused on the orientation of the
+previous row's last pixel. The normals are indexed through the same bounds
+now, and two tests pin the edge: one where only the wrapped pixel disagrees
+and the fill must stand, one where a real neighbour disagrees and it must not.
+
+The device-loss wiring returned a detach and the Viewer dropped it, keeping
+only the canvas one. The hook is a closure over the object that installed it,
+so a disposed viewer stayed reachable through `renderer.onDeviceLost` and went
+on advancing a counter nothing reads. Both sources now come from one call that
+returns one detach, which is a line shorter at the call site than the two it
+replaces.

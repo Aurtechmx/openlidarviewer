@@ -186,9 +186,15 @@ export function runMicroGapPass(
         continue;
       }
       if (options.normals) {
+        // Indexed through the same bounds `at` uses. Reading the flat array at
+        // `i - 1` would take the previous row's last pixel as the left
+        // neighbour of a pixel at x = 0, so a fill at the frame's edge would
+        // be admitted or refused on the orientation of an unrelated surface.
+        const normalAt = (nx: number, ny: number): Normal | null | undefined =>
+          (nx < 0 || ny < 0 || nx >= w || ny >= h ? null : options.normals?.[ny * w + nx]);
         const around = [
-          options.normals[i - 1], options.normals[i + 1],
-          options.normals[i - w], options.normals[i + w],
+          normalAt(x - 1, y), normalAt(x + 1, y),
+          normalAt(x, y - 1), normalAt(x, y + 1),
         ];
         if (!normalsAllowFill(around, options.maxNormalAngleDeg)) {
           refusedByNormals += 1;

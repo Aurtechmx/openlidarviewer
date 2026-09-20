@@ -304,3 +304,37 @@ describe('the evidence lens', () => {
     expect(total).toBe(input.widthPx * input.heightPx);
   });
 });
+
+describe('normals at the frame edge', () => {
+  it('does not read across a row boundary for a left or right neighbour', () => {
+    // A pixel at x = 0 bracketed vertically is fillable. Its left neighbour is
+    // off-frame, and reading the flat array at i-1 would take the previous
+    // row's last pixel instead, so an unrelated surface would decide the fill.
+    const input = raster([
+      '##',
+      '.#',
+      '##',
+    ]);
+    const flat = { x: 0, y: 0, z: 1 };
+    const wall = { x: 1, y: 0, z: 0 };
+    // Everything agrees except the pixel the wrapped index would have read:
+    // the last pixel of the row above the candidate.
+    const normals = [flat, wall, flat, flat, flat, flat];
+    const output = blank(input);
+    const result = runMicroGapPass(input, output, { normals });
+    expect(result.refusedByNormals).toBe(0);
+    expect(result.filled).toBe(1);
+  });
+
+  it('still refuses when a real neighbour disagrees at the edge', () => {
+    const input = raster(['##', '.#', '##']);
+    const flat = { x: 0, y: 0, z: 1 };
+    const wall = { x: 1, y: 0, z: 0 };
+    // Index 0 is the pixel directly above the candidate at (0,1).
+    const normals = [wall, flat, flat, flat, flat, flat];
+    const output = blank(input);
+    const result = runMicroGapPass(input, output, { normals });
+    expect(result.refusedByNormals).toBe(1);
+    expect(result.filled).toBe(0);
+  });
+});

@@ -4,6 +4,7 @@ import {
   DeviceGeneration,
   FIRST_GENERATION,
   watchContextRestore,
+  watchDeviceChanges,
   wireRendererDeviceLoss,
   type DeviceEvent,
   type DeviceLossReport,
@@ -254,5 +255,40 @@ describe('the history it invalidates', () => {
     targets.resize(320, 240, g.current);
     expect(targets.allocationCount).toBe(2);
     expect(made.length).toBe(6);
+  });
+});
+
+describe('both sources together', () => {
+  it('detaches the renderer hook as well as the canvas listener', () => {
+    // Dropping the loss detach is the worse half: the hook closes over the
+    // object that installed it, so a disposed viewer stays reachable and keeps
+    // advancing a counter nothing reads.
+    const canvas = fakeCanvas();
+    const original = (): void => {};
+    const renderer: { onDeviceLost?: (info: DeviceLossReport) => void } = {
+      onDeviceLost: original,
+    };
+    const g = new DeviceGeneration();
+    const detach = watchDeviceChanges(canvas, renderer, g);
+    renderer.onDeviceLost?.({ api: 'WebGL' });
+    canvas.raise('webglcontextrestored');
+    expect(g.current).toBe(FIRST_GENERATION + 2);
+
+    detach();
+    expect(renderer.onDeviceLost).toBe(original);
+    expect(canvas.count('webglcontextrestored')).toBe(0);
+
+    renderer.onDeviceLost?.({ api: 'WebGL' });
+    canvas.raise('webglcontextrestored');
+    expect(g.current).toBe(FIRST_GENERATION + 2);
+  });
+
+  it('works without a renderer', () => {
+    const canvas = fakeCanvas();
+    const g = new DeviceGeneration();
+    const detach = watchDeviceChanges(canvas, null, g);
+    canvas.raise('webglcontextrestored');
+    expect(g.current).toBe(FIRST_GENERATION + 1);
+    expect(() => detach()).not.toThrow();
   });
 });

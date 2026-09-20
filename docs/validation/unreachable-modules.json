@@ -418,6 +418,13 @@
       "why": "The two rules between the lens and the frame: which pixels the gap pass may substitute under it, and what a pixel that was already substituted shows as once the lens arrives. Nothing calls it because no pass writes a support raster and no lens is placed at runtime; the gap pass consults it through an option that nothing sets.",
       "graduation": "Reachable with the gap pass: the renderer passes the runtime's lens into runMicroGapPass, and the compositor reads shownSupportAt while blending with lensOpacity.",
       "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/continuity/historyMergePass.ts",
+      "status": "staged",
+      "why": "Applies the depth-locked merge rules across a frame and writes the provenance each outcome implies. Nothing calls it because no pass produces a sample raster: the rung that accumulates is off, and the history it would merge into is allocated only when a caller supplies a surface factory.",
+      "graduation": "Reachable when the renderer draws a phase into a sample raster and calls this with the epoch both were drawn under, taking the history from ContinuityRuntime.",
+      "review": "2027-09-20"
     }
   ]
 }
