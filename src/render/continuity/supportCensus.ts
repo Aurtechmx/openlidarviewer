@@ -22,6 +22,7 @@
  * reach picking, measurement, terrain, export or claim evidence.
  */
 import type { SupportKind } from './microGap';
+import { unpackSupportKind } from './supportProvenance';
 
 /** Pixel counts by where the colour came from. */
 export interface SupportCensus {
@@ -43,6 +44,22 @@ export const EMPTY_CENSUS: SupportCensus = {
 export function censusOf(pixels: Iterable<SupportKind>): SupportCensus {
   const out = { direct: 0, accumulated: 0, reconstructed: 0, none: 0 };
   for (const p of pixels) out[p] += 1;
+  return out;
+}
+
+/**
+ * Tally the support surface itself, as packed bytes.
+ *
+ * The bridge from the render target to the count: a caller reads back the one
+ * byte per pixel the history already allocates and gets the same census as if
+ * it had decoded each pixel by hand. It decodes through
+ * {@link unpackSupportKind} rather than comparing codes here, so the encoding
+ * has one owner and a byte that means nothing is counted as nothing drawn
+ * rather than crashing a diagnostics read.
+ */
+export function censusOfPacked(bytes: Iterable<number>): SupportCensus {
+  const out = { direct: 0, accumulated: 0, reconstructed: 0, none: 0 };
+  for (const byte of bytes) out[unpackSupportKind(byte)] += 1;
   return out;
 }
 

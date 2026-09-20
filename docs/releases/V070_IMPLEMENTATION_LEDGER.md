@@ -3344,3 +3344,50 @@ returns one, so a density cannot be assembled from what it offers. A test
 strips the comments from the source and fails on any executable line that
 names a count, an area or a density, and asserts the stripped source is still
 the module rather than an empty string.
+
+### L131 · BUILT · ARCHITECTURE
+
+Phase C6. The four states existed: `microGap` names them and `supportCensus`
+counts them. What nothing held was the part a renderer cannot be trusted to
+remember, which writes may move a pixel from one state to another.
+
+`supportProvenance` holds it. A source sample is authoritative and overwrites
+any state, including a pixel reconstructed a moment earlier, because a sample
+landing there is what the fill was standing in for. Accumulation carries
+forward only what came from samples. Reconstruction fills only a pixel with
+nothing in it, never over a sample and never over another fill, which is how a
+one-pixel seam would become a patch across a sweep.
+
+The transition that must not exist is reconstructed becoming direct or
+accumulated without a sample. That is the laundering step: once a filled pixel
+is indistinguishable from a measured one it becomes evidence for filling its
+neighbour, and the renderer walks a surface across ground nothing was recorded
+on. A refused write returns the state the pixel already had rather than
+throwing, because this runs per pixel in a pass that must not lose a frame.
+
+`microGap` already enforced the same rule from the other end, where it reads
+its cardinals. A test drives `shouldFill` with all four neighbour states and
+asserts it fills exactly when `maySupportReconstruction` says it may, so the
+two ends cannot drift apart without something failing.
+
+The representation adds nothing to the budget. Two bits of provenance and six
+bits of a saturating sample count fit in the `r8unorm` byte the history layout
+already allocates, with provenance in the low bits so a reader that wants only
+the state masks with three. The count saturates at 63, an order of magnitude
+past the four samples the support scalar reads as full.
+
+`r8unorm` means a shader reads 0 to 1 rather than 0 to 255, and a bit field
+only survives that trip if both ends agree on the scale and the rounding. Both
+directions live in the one module, and a test round-trips all 256 bytes
+through it.
+
+The name is display-support provenance. Not confidence, which would be a claim
+about how likely the picture is to be right, and not completeness, which would
+be a claim about how much of the scene was captured. This is neither: it says
+which pixels a sample was rasterised into and which the renderer filled, for
+one frame at one camera. A test strips the comments from the source and fails
+on either word appearing in a line that runs.
+
+`censusOfPacked` bridges the surface to the count, so a diagnostics read of the
+one byte per pixel produces the same census as decoding each pixel by hand, and
+the reconstruction-share ceiling is checked against the thing that was drawn.

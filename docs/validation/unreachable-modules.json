@@ -397,6 +397,13 @@
       "why": "Sizes a point from its sample spacing PROJECTED through the camera, which is the basis the programme names. The live coverage term sizes from relative node resolution instead, which is camera-independent: two nodes at the same depth take the same scale whether they are near or far. This is the better basis and it is not adopted, because adopting it replaces the basis of a behaviour that already ships and needs per-material distance uniforms written every frame plus browser evidence that the picture improves.",
       "graduation": "Reachable when CoarseLodSizeNodes sizes from projected spacing rather than relative resolution, with a per-material distance uniform updated from the cull pass, and a real-scene comparison showing the change. Until then the live term is the only coverage sizing, so that there is one answer in one picture.",
       "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/continuity/supportProvenance.ts",
+      "status": "staged",
+      "why": "The transitions a pixel's display-support provenance may take, and how the four states are stored: two bits beside a six-bit saturating sample count, in the one byte the history layout already allocates. Nothing calls it because no pass writes a support surface: the gap pass and the accumulation sweep that would are both staged.",
+      "graduation": "Reachable when a render pass writes the support surface: the rasterising pass calls nextSupport with 'sample', the sweep with 'accumulate', the gap pass with 'reconstruct', and a diagnostics read tallies the surface through censusOfPacked.",
+      "review": "2027-09-20"
     }
   ]
 }
