@@ -66,9 +66,10 @@ a WebGPU adapter and a WebGL 2 context that accepts every history format, so
 the obstacle is the wiring rather than the hardware. One machine is not a
 browser matrix, and there is still no phone, tablet or WebKit device.
 
-Two things were measured and are worth separating from the rest:
+Two measurements stand apart from the rest.
 
-Coverage sizing on a real streamed source, 15.7 million points over 485 nodes.
+Coverage sizing was measured on a real streamed source, 15.7 million points
+over 485 nodes.
 Mean frame energy rose from 69.75 to 82.08 when density sizing was selected and
 returned to exactly 69.75 on switching back. Before that cycle the selection
 changed nothing at all on a streamed scan, which is the first result. The exact

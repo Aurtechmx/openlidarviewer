@@ -1298,7 +1298,7 @@ invent the quantity being used to check an invention.
 Choosing density point sizing on a streamed scan did nothing. The chip lit, the
 mode was set, and the sizing stayed exactly what adaptive produced.
 
-Three things made that so. `setPointSizeMode` builds the per-point size
+`setPointSizeMode` builds the per-point size
 attribute for the static clouds only, a streamed material carries no such
 attribute so `pointSizeBaseNode` degrades it to the plain adaptive node, and the
 one spacing-aware term a streamed node does have is multiplied by a phase gain
@@ -1584,10 +1584,10 @@ doing is worse than either answer. The opt-in helper the other off-by-default
 flags use fixes it, and putting one flag back on the wrong helper fails two
 assertions.
 
-`coverageSizing` needs saying plainly: coverage sizing is live in the renderer
-and this flag does not gate it. What is live is reached by choosing density
+`coverageSizing` is the flag most likely to be misread. Coverage sizing is
+live in the renderer and this flag does not gate it. What is live is reached by choosing density
 point sizing. The flag stands for the capability record, which nothing consults
-yet, and the module says so where someone would look.
+yet, and the flag's own comment carries that.
 
 Two existing cases enumerate every flag and its default, so adding these made
 them fail until each new default was declared. That is the case working. One of
@@ -1710,9 +1710,10 @@ do exist, needs a device. Nothing here establishes it.
 
 Coverage sizing derives a number per point from a cloud's own positions and
 hands it to the GPU. It describes how the cloud is drawn rather than what was
-measured, and three things had to be true about it.
+measured.
 
-All three already were, and each was checked rather than assumed. The estimator
+Every condition it had to meet was already met, and each was checked rather
+than assumed. The estimator
 reads positions and writes only its own output array. The attribute appears in
 no session and no model. It exists in two places, written onto the geometry and
 read by the size node, and disposing the material on cloud removal is what
@@ -1922,10 +1923,10 @@ the state to idle, where the direct rendering is what is shown anyway. Reaching
 the swap twice quickly takes a viewer who parks, moves, then parks again, where
 the image changing is what they just asked for. One transition remains, and it
 is a surface becoming less grainy rather than anything that translates, scales
-or flashes. That is the limit of what the policy claims.
+or flashes, which is as far as the policy goes.
 
-The lens gap was not in its shape. `Lens` carries a position in device pixels
-and mentions no pointer. It is that a hovering mouse supplies a position every
+The lens gap was in what supplies a position, not in the shape of `Lens`, which
+carries one in device pixels and mentions no pointer. It is that a hovering mouse supplies a position every
 frame and nothing else does: a touch ends when the finger lifts, a keyboard has
 no position at all. So a source that reports continuously is tracked and a
 source that does not is pinned, and a release closes a pointer lens while
@@ -2103,7 +2104,7 @@ to the same answer whatever the renderer finds worth looking at.
 
 The second is that coverage multiplies the projected size rather than adding a
 term. The score is positional, depth in the upper digit and size in the lower,
-and that is what makes the scheduler coarse-first. Scaling the lower digit the
+which is why the scheduler is coarse-first. Scaling the lower digit the
 way the focus bias already does keeps the two composable and leaves the deeper
 node behind the shallower one however much better its coverage, which a test
 checks at the extremes rather than at a typical pair.
@@ -2124,8 +2125,8 @@ on a device to be stable or otherwise. The phase also calls itself optional and
 says not to delay the core set for it. Nothing was built. The reasoning is in
 `docs/architecture/edge-aware-kernel.md`.
 
-Two things are decidable without a device. The first is that the postprocess the
-phase asks about already ships: Eye Dome Lighting traces every depth
+The postprocess the phase asks about already ships, which is decidable
+without a device: Eye Dome Lighting traces every depth
 discontinuity in screen space by sampling neighbouring depths at a pixel radius,
 which is the quantity an edge-aware kernel wants. A per-point screen-space edge
 test would compute a second time what the renderer already produces each frame.
@@ -2399,7 +2400,7 @@ which is the arrangement the pixel-ratio ceiling already has with the device's
 own ratio. A phone reads the same rung as a desktop at the Quality end, and
 that is correct rather than a gap: the cap lives in `mobilePolicy`.
 
-Two things this cost, both recorded rather than absorbed.
+What it cost is recorded rather than absorbed.
 
 The register lost two entries. `qualityPolicy` takes `ContinuityTier` as a
 type-only import, and the reachability lint counts type edges on purpose,
@@ -2462,8 +2463,8 @@ a real red into a green by writing prose. The red stands.
 a limitation of something no shipped build runs, which reads as a feature
 users have and a caveat about it, and the doc exists for the opposite purpose.
 
-There is no benchmark report, and the note says so in the section where one
-would be rather than omitting the section. No runner here exposes a WebGPU
+There is no benchmark report. The note keeps the section it would appear in
+and records the absence there, rather than dropping the section. No runner here exposes a WebGPU
 adapter and there is no phone, tablet or WebKit device, so frame time under the
 field has never been measured anywhere. The two figures that do exist, the
 streamed coverage-sizing run and the bundle measurements, are quoted with the
@@ -2806,8 +2807,8 @@ says metering did not help here, not that metering does not help. A machine
 that hitches is the one that would settle it, and this is the class least
 likely to.
 
-Load timing was not usable: the first resident node arrived between 6,782 and
-11,546 ms across the four runs with no relation to the mode, which is network
+Load timing was not usable, because the first resident node arrived between
+6,782 and 11,546 ms across the four runs with no relation to the mode, which is network
 and cache noise at this sample size.
 
 The record is
@@ -2930,8 +2931,8 @@ The 200 ms heartbeat stays and is not a competing cadence. It exists for the
 periods when no frames are rendering at all, where the loop cannot pace
 anything, so removing it would stall a scan whenever the render loop idles.
 
-Verified in a real browser: the sample streams, resident nodes rise from two
-to five across an orbit, and there are no page errors.
+A real browser run has the sample streaming, resident nodes rising from two to
+five across an orbit, and no page errors.
 
 ### L122 · FIXED · ARCHITECTURE
 
@@ -3101,8 +3102,8 @@ scheduler now draws one frame every 250 ms while asleep, which states that
 same heartbeat in time where it was stated in frames. A missed wake then costs
 a quarter of a second rather than everything.
 
-Three things came out of the browser that the fakes could not have shown.
-three's WebGPU renderer starts an internal animation loop on init and
+The browser showed things the fakes could not. three's WebGPU renderer
+starts an internal animation loop on init and
 self-schedules at the panel rate whether anything is drawn or not, so the page
 still has a frame owner the viewer does not control. That one belongs to B4,
 and until it is dealt with a raw callback count cannot tell a sleeping viewer
@@ -3391,3 +3392,48 @@ on either word appearing in a line that runs.
 `censusOfPacked` bridges the surface to the count, so a diagnostics read of the
 one byte per pixel produces the same census as decoding each pixel by hand, and
 the reconstruction-share ceiling is checked against the thing that was drawn.
+
+### L132 · BUILT · ARCHITECTURE
+
+Phase C7. The per-pixel decision existed. `microGap` judges one background
+pixel against its four cardinals, `normalAgreement` adds the orientation test
+where a source carries normals, and `supportProvenance` says which writes are
+allowed. None of them walks a raster, and walking it is where the two rules
+that matter live.
+
+The first is how wide a gap may be. `runMicroGapPass` reads the four immediate
+cardinals and nothing further, so what it closes is a gap one pixel thick
+along at least one axis.
+
+One pixel thick is not one pixel in total, and assuming the stronger bound was
+wrong about the code rather than about the intent. A slit one pixel tall and
+twenty long fills, because every pixel in it is bracketed above and below by
+samples that agree on a depth, which is a row of sampling gaps rather than a
+hole. A region two pixels thick in both directions fills nothing at all: each
+of its pixels has background on two sides, so no opposite pair supports it and
+fewer than three cardinals do. The bound is on thickness, so no amount of
+length gets a surface across an area where the scan recorded nothing on both
+axes. Tests state both, including a five-pixel slit that fills and a three by
+three hole that does not, five passes running.
+
+The second rule is that a fill is never evidence. The pass reads one raster
+and writes another, so every decision is taken against the support the frame
+arrived with and a pixel filled early in the walk cannot support the pixel
+beside it later in the same walk. Writing in place would make that depend on
+iteration order, which is the kind of correctness nobody can see in a
+screenshot: a left-to-right walk would close a two-pixel gap one pixel at a
+time and call the result supported. `microGap` refuses reconstructed
+neighbours across frames; reading the input raster is what stops it within
+one.
+
+What the pass cannot touch is structural rather than trusted. Its signature
+carries support and depth, with normals optional, and a test fails on any line
+that runs naming a position, a point buffer, a pick target or a measurement.
+Reconstructed pixels stay unpickable because picking goes to the source points
+and never to this raster.
+
+The provenance rule has the last word: a centre the pass should not fill
+cannot be written even if the geometry rule said yes, because `nextSupport`
+refuses everything but `none`. That is redundant with `shouldFill`'s own first
+test, and deliberately so, since the two rules are owned by different modules
+and only one of them is about geometry.
