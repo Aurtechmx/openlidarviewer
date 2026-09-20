@@ -3758,3 +3758,49 @@ interleaved, asserting every frame reports a rung of the ladder. The bottom is t
 a runtime that has failed everything reports `source` with no capabilities and
 a direct exposure, which is the phase's rule that presentation enhancement
 being unavailable is not a fatal error.
+
+### L141 · BUILT · SCIENCE
+
+Phase E1. ASPRS gives the Withheld bit one meaning: the producer marked this
+point as one that should not be used. It does not say deleted and it does not
+say wrong, so the answer differs by what the points are being used for. A
+person inspecting the scan sees it, marked. An export writes it back with the
+bit intact. A computed product leaves it out, unless the caller asked for it.
+
+`withheldPolicy` is that, in one place. The include-anyway argument only
+reaches scientific processing: inspection and export preserve whatever is
+passed, because a flag that could delete points from an export would be a way
+to lose data by mistake.
+
+Overlap is never excluded, and the reason is worth keeping beside the code.
+Overlap marks the seam between two flight lines, which is a statement about
+coverage rather than about the point: the ground under an overlap was measured
+twice, not badly. A processor that dropped it globally would thin every seam
+in the survey, in exactly the strips where two passes agree. A test reads an
+overlap point in all three contexts and excludes it only when it is also
+withheld.
+
+No classification code is reinterpreted. The code and the flags are separate
+fields and stay separate, and a test fails on any line of the policy that runs
+naming a class at all. What the bits mean stays with `lasSemantics`, which
+this decodes through rather than testing a bit of its own, and a second test
+fails if a bare mask appears here.
+
+The audit is the substance of this entry. Nothing in the tree consults the
+Withheld bit. Terrain, density, the ground filter, stockpile volumes, contours
+and profiles read every point the cloud holds, and so do the classifier,
+registration, change detection and measurement. The bit survives the whole pipeline,
+from the decoder through `PointCloud.classificationFlags` to the LAS writer,
+so applying the policy is a matter of consulting something already there.
+
+A test walks the four scientific source directories and asserts that none of
+them reads the flags, which pins the audit rather than the intention. When a
+product starts applying the policy that test fails, and its message says what
+the failure means: record the before-and-after for that product, because its
+numbers moved.
+
+They will move. Every product listed changes on any scan that marks a single
+point, and several carry claims with recorded evidence, so the policy is
+written down here and applied product by product, each with its own comparison
+on real data. Applying all of them in the change that defines the rule would
+put a numerical shift into a release under the heading of a definition.
