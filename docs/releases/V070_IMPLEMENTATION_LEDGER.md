@@ -3804,3 +3804,40 @@ point, and several carry claims with recorded evidence, so the policy is
 written down here and applied product by product, each with its own comparison
 on real data. Applying all of them in the change that defines the rule would
 put a numerical shift into a release under the heading of a definition.
+
+### L142 · FIXED · ARCHITECTURE
+
+Phase E2, which asks for a common finalization to be extracted only if doing
+so reduces duplication without weakening what is already guaranteed. The
+answer to the passport half is no, and the reason is worth recording rather
+than leaving as a silence.
+
+`buildScientificArtifactPassport` has one caller. The DEM package assembles
+the source identity, the analysis record, the processing manifest, the
+evidence decision and the digest of the raster it names, in about forty lines
+in one place, through helpers that already exist. Extracting a finalization
+helper from a single implementation would produce an abstraction whose shape
+is decided by its only user, which is the thing that has to be rewritten when
+a second one arrives.
+
+What is already guaranteed is also already tested. The passport has thirteen
+tests and a tamper suite of its own, and the sidecar rule is pinned: the
+record digests one file rather than the archive it rides in, because a record
+digesting the archive that contains it could never verify. Rewriting that
+path could only lose ground.
+
+There is real duplication next to it, and that is fixed. Both deliverables
+write a `SHA256SUMS` manifest and each built it separately: the DEM package
+exported a helper and the contour package inlined the identical expression.
+The same format has to hold for both, because a recipient checks them the same
+way, and two copies of one format stay correct exactly until one is changed.
+The builder now lives beside the hash it calls, where the contour package
+reaches it without importing a DEM module, and the DEM package re-exports the
+name its callers knew. Every file in both deliverables is byte-identical:
+16,674 tests pass, including the byte-identity ones over those packages.
+
+The gap worth naming is not a refactor. The contour deliverable carries no
+passport at all, so a recipient cannot verify it the way a DEM recipient can.
+Adding one puts a file into a shipped archive and is a product decision with
+its own evidence, rather than something to fold into a change about
+duplication.

@@ -83,3 +83,26 @@ export function sha256Hex(bytes: Uint8Array): string {
   for (const b of d) s += b.toString(16).padStart(2, '0');
   return s;
 }
+
+/** One file of a deliverable, as the ZIP builders carry them. */
+export interface NamedBytes {
+  readonly name: string;
+  readonly bytes: Uint8Array;
+}
+
+/**
+ * A `SHA256SUMS` integrity manifest over `entries`, in the standard
+ * `sha256sum` format (`<lowercase-hex>\u2420\u2420<name>`, one per line).
+ *
+ * It covers every file in the deliverable except itself, per the `sha256sum`
+ * convention, so a recipient can run `sha256sum -c` and confirm nothing was
+ * truncated or altered in transit.
+ *
+ * Here rather than in a package module because both deliverables write one and
+ * a recipient checks them the same way. It lived in the DEM package and the
+ * contour package inlined the same expression, which is the kind of duplicate
+ * that stays correct right up until one of them is changed.
+ */
+export function buildSha256Manifest(entries: readonly NamedBytes[]): string {
+  return entries.map((e) => `${sha256Hex(e.bytes)}  ${e.name}`).join('\n') + '\n';
+}

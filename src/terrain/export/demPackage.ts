@@ -36,19 +36,13 @@ import {
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
-import { sha256Hex } from './sha256';
+import { buildSha256Manifest } from './sha256';
 import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 
-/**
- * Build a `SHA256SUMS` integrity manifest over `entries`, in the standard
- * `sha256sum` format (`<lowercase-hex>␠␠<name>`, one per line). The manifest
- * covers every file in the deliverable EXCEPT itself, so a recipient can run
- * `sha256sum -c SHA256SUMS.txt` to confirm nothing was truncated or altered in
- * transit — the deliverable now proves its own integrity, not just its provenance.
- */
-export function buildSha256Manifest(entries: ReadonlyArray<ZipEntry>): string {
-  return entries.map((e) => `${sha256Hex(e.bytes)}  ${e.name}`).join('\n') + '\n';
-}
+// The integrity manifest moved beside the hash it is built from, where the
+// contour package can reach it without importing a DEM module. Re-exported so
+// the callers that knew it here still do.
+export { buildSha256Manifest } from './sha256';
 
 /**
  * Resolved linear unit of a projected CRS — the SAME vocabulary the DXF

@@ -20,7 +20,7 @@
  */
 
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
-import { sha256Hex } from './sha256';
+import { buildSha256Manifest } from './sha256';
 import type { ContourPackageManifest, PackageRole } from '../contourStudio/contourPackageManifest';
 
 /**
@@ -67,8 +67,7 @@ export function assembleContourDeliverable(
   // in the standard `sha256sum` format, and never lists itself.
   const checksums = manifest.entries.find((e) => e.role === 'checksums' && e.status === 'included');
   if (checksums) {
-    const sums = entries.map((en) => `${sha256Hex(en.bytes)}  ${en.name}`).join('\n') + '\n';
-    entries.push({ name: checksums.filename, bytes: enc(sums) });
+    entries.push({ name: checksums.filename, bytes: enc(buildSha256Manifest(entries)) });
   }
 
   return buildZip(entries);
