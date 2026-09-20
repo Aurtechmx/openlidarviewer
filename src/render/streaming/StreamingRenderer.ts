@@ -432,7 +432,6 @@ export class StreamingRenderer {
         this._host.endNodeDissolve(fade.mat);
         this._host.removeStreamingMesh(existing.mesh);
         this._meshes.delete(node.record.id);
-      this._visibility.forget(node.record.id);
         this._visibility.forget(node.record.id);
       } else {
         return; // settled or fading in — already the current mesh

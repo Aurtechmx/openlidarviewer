@@ -2968,3 +2968,51 @@ What this does not gate is style. Whether prose reads as machine-written is a
 judgement about rhythm and vocabulary, and a hard gate on that fails ordinary
 technical writing; the private checker stays a manual tool. This catches only
 constructions that are hard to write by accident when describing software.
+
+### L123 · BUILT · ARCHITECTURE
+
+Phase B1. Three parts of the render loop decide independently what a slow
+frame means. The refinement phase shrinks the backing store, the scheduler
+cadence paces off the same phase, and GPU commits are metered on their own
+reading, so on a loaded machine the resolution can step down while a commit
+batch sized for a fast frame is still uploading, and the frame that was meant
+to get cheaper gets more expensive.
+
+`src/render/perf/frameBudgetGovernor.ts` answers it once. It takes the frame
+times the loop already measures and returns a bounded policy: pressure on the
+backing store, the share of the commit batch this frame may take and how
+urgently the scheduler should push, plus whether lighting, continuity and
+detailed hover run. Pure, and it
+decides nothing about what is drawn.
+
+The band comes from `bandFor`, the mapping the scheduler cadence already uses,
+so the governor and the scheduler cannot hold different opinions about whether
+the camera is moving. The phase brief named a fourth set of state names for
+the same four states; a fourth vocabulary is the disagreement the module
+exists to remove.
+
+Load is a fraction, zero at the target frame time and one at twice it. A
+single high frame counts at half the weight of the median, because one slow
+frame is usually a decode landing rather than a machine that cannot keep up.
+
+Every switch has a drop threshold above its restore threshold, and inside the
+gap the previous answer stands, so the caller passes the policy it applied
+last frame and the module keeps no state. A test drives four loads that
+straddle the midpoint of the gap and asserts the answer never changes across
+them; without the hysteresis it alternates on every frame. The continuous knob
+has the same problem in a different shape, so `dprPressure` is quantised onto
+a step rather than tracking a noisy median.
+
+Two floors are deliberate. The commit scale never reaches zero while anything
+is pending, for the reason `MIN_COVERAGE_FACTOR` is strictly positive: a scale
+of zero does not defer the upload, it stops it, and a scan that stops
+uploading under load never reaches the frame where the load falls. Streaming
+urgency ignores load entirely, because a hole on screen is a hole whatever the
+machine is doing.
+
+Continuity runs while refining and nowhere else. Idle is excluded on purpose:
+a parked viewer that has finished refining has no visual work left.
+
+Nothing calls this yet, and it is registered as staged. The render loop gets
+one caller in B3, where the single request-driven loop is the thing that can
+carry the previous policy from frame to frame.
