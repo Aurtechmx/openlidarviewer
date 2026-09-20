@@ -102,8 +102,17 @@ export function coarseLodScale(
  *
  *   `1 + (MAX_COVERAGE_SCALE − 1) × relativeResolution`
  *
- * Only in `density` mode; `adaptive` and `fixed` return exactly 1, so a mode the
- * user did not ask for is unaffected.
+ * Two ways in, matching {@link CoarseLodSizeNodes.setMode}, which sets the
+ * uniform this describes. Choosing `density` asks for coverage sizing by name;
+ * the continuity ladder's `sizing` rung grants the same thing without the
+ * viewer having to know which point-size mode implements it. `granted`
+ * defaults to false, so a caller that knows nothing about the ladder reads the
+ * mode rule it always read.
+ *
+ * The two arguments are deliberately not folded into one before they get here.
+ * This is the reference a test and a diagnostic read, and the uniform is what
+ * the shader reads: if they took different inputs, one of them would be
+ * describing a picture the other does not produce.
  *
  * Unlike {@link coarseLodScale} there is no phase term, and that is the whole
  * point. Compensation exists to carry a view while it refines and is gone when
@@ -119,8 +128,9 @@ export function nodeCoverageScale(
   nodeResolution: number,
   rootResolution: number,
   mode: PointSizeMode,
+  granted = false,
 ): number {
-  if (mode !== 'density') return 1;
+  if (mode !== 'density' && !granted) return 1;
   const rel = relativeNodeResolution(nodeResolution, rootResolution);
   const scale = 1 + (MAX_COVERAGE_SCALE - 1) * rel;
   if (!Number.isFinite(scale)) return 1;
@@ -220,6 +230,11 @@ export class CoarseLodSizeNodes {
     return this._gain.value;
   }
 
+  /** The coverage term currently in force: 1 when sizing for coverage, else 0. */
+  get coverageGain(): number {
+    return this._coverage.value;
+  }
+
   /**
    * Register a streaming material from the resolutions its builder recorded.
    * Returns true when the material was not registered before — the caller then
@@ -267,7 +282,10 @@ export class CoarseLodSizeNodes {
    * the regression `_applySizeMode` carries a note about.
    */
   setMode(mode: PointSizeMode): void {
-    this._coverage.value = mode === 'density' || this._granted ? 1 : 0;
+    // The same test `nodeCoverageScale` applies, with the grant this was built
+    // with. A uniform that said yes where the reference said no would put the
+    // shader and every figure computed from it in disagreement.
+    this._coverage.value = nodeCoverageScale(1, 1, mode, this._granted) > 1 ? 1 : 0;
   }
 
   /** Whether this material folds compensation under the given size mode. */

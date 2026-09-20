@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  CoarseLodSizeNodes,
   nodeCoverageScale,
   coarseLodScale,
   MAX_COVERAGE_SCALE,
@@ -80,5 +81,44 @@ describe('coverage sizing against refinement compensation', () => {
   it('holds its own bound', () => {
     expect(MAX_COVERAGE_SCALE).toBe(1.6);
     expect(nodeCoverageScale(1, 1, 'density')).toBeCloseTo(MAX_COVERAGE_SCALE, 12);
+  });
+});
+
+describe('the grant is the second way in', () => {
+  it('scales in any mode once the ladder granted coverage sizing', () => {
+    // The rung grants the behaviour without the viewer having to know which
+    // point-size mode implements it.
+    for (const mode of ['adaptive', 'fixed', 'density'] as const) {
+      expect(nodeCoverageScale(1, 1, mode, true), mode).toBeCloseTo(MAX_COVERAGE_SCALE, 12);
+    }
+  });
+
+  it('reads the mode rule when nothing was granted', () => {
+    expect(nodeCoverageScale(1, 1, 'adaptive', false)).toBe(1);
+    expect(nodeCoverageScale(1, 1, 'fixed')).toBe(1);
+    expect(nodeCoverageScale(1, 1, 'density', false)).toBeCloseTo(MAX_COVERAGE_SCALE, 12);
+  });
+
+  it('agrees with the uniform the shader reads, in every combination', () => {
+    // The defect this closes is in the reference rather than in the uniform:
+    // the shader scaled under a granted rung in any mode, and the function a
+    // test or a diagnostic reads said no scaling was in effect. Reverting the
+    // `granted` term here turns this red at `adaptive/true`.
+    const uniformFor = (mode: PointSizeMode, granted: boolean): number => {
+      const nodes = new CoarseLodSizeNodes(
+        (value: number) => ({ value }),
+        { mul: () => ({}) } as never,
+        {} as never,
+        granted,
+      );
+      nodes.setMode(mode);
+      return nodes.coverageGain;
+    };
+    for (const mode of ['adaptive', 'fixed', 'density'] as const) {
+      for (const granted of [true, false]) {
+        const scales = nodeCoverageScale(1, 1, mode, granted) > 1;
+        expect(uniformFor(mode, granted) === 1, `${mode}/${granted}`).toBe(scales);
+      }
+    }
   });
 });

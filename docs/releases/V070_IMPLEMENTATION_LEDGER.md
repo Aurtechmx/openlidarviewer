@@ -3920,3 +3920,34 @@ under the live transform in L138, so a mesh and a material do not fit. The
 wiring itself is small and the register entry says what it is: a layer module
 owning its object through `Viewer.derivedLayerHost()`, a show call wherever the pivot
 moves, and one render-loop host method to step it. What has to come first is room.
+
+### L145 · FIXED · ARCHITECTURE
+
+Two defects from review, both in work from earlier in this programme.
+
+The coverage-sizing grant left the shader and its own reference function
+disagreeing. `CoarseLodSizeNodes.setMode` sets the uniform whenever the rung
+was granted, in any point-size mode, which is what the grant is for.
+`nodeCoverageScale`, the function a test or a diagnostic reads to say what
+that uniform does, still decided on the mode alone: with `sizing` granted and
+the viewer in `adaptive`, the shader applied the coverage term while the
+reference said no coverage scaling was in effect.
+
+The fix is in the reference, which now takes the grant as the uniform does,
+defaulting to false so a caller that knows nothing about the ladder reads the
+rule it always read. `setMode` routes through it rather than repeating the
+test, which changes nothing today and stops the two drifting again.
+
+A test asserting the two agree in every combination of mode and grant passes
+against the defective version as well, because once the reference takes the
+grant the two expressions are the same boolean. What makes it worth keeping is
+the other direction: reverting the `granted` term in the reference turns it
+red at `adaptive/true`, which is the defect that was there. The comment now
+says that rather than claiming the test catches something it does not.
+
+The second was stale comments in the render loop. A member removed with the
+frame-count cadence left its description behind, where it sat above
+`tickStreaming` and described a frame counter that no longer exists, and the
+docblock for the removed `STREAMING_TICK_INTERVAL` stayed as a heading with
+nothing under it. The reasoning in that block is worth keeping and now sits
+with the call it describes, in the loop body.

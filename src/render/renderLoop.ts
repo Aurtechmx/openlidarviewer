@@ -27,18 +27,6 @@ import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
 /**
- * Run the streaming view-dependent scheduler on elapsed time, never every
- * frame and never on a frame count.
- *
- * It was every sixth frame, which is 100 ms at 60 Hz and 42 ms at 144 Hz, so
- * the scheduler ran nearly two and a half times as often on a faster panel
- * and loaded differently on the same scan. The band comes from the refinement
- * phase; `schedulerCadence` holds the policy and the reasoning.
- *
- * The commit pump still runs every iteration. Only the scheduler is paced.
- */
-
-/**
  * What the per-frame loop reads from the live scene. Accessors are functions,
  * not captured values, so every frame sees the CURRENT Viewer state — the
  * property the inline loop had by reading `this` per iteration. Commands wrap
@@ -117,8 +105,7 @@ export interface RenderLoopHost {
    * loop's clock and stop when it does.
    */
   stepStreamingFades(): void;
-  /** Advance the streaming frame counter and return its new value. */
-  /** Run the throttled streaming scheduler tick. */
+  /** Run the paced streaming scheduler tick. */
   tickStreaming(): void;
   /**
    * Whether the scheduler is due at this time, recording the tick if so.
@@ -235,8 +222,11 @@ export function runRenderFrame(host: RenderLoopHost): void {
     host.noteSkipped();
   }
 
-  // Streaming COPC — throttled scheduler tick (~10 Hz), never every frame. The
-  // commit pump and frame counter advance every frame.
+  // The scheduler runs on elapsed time, never on a frame count. It was every
+  // sixth frame, which is 100 ms at 60 Hz and 42 ms at 144 Hz, so it ran
+  // nearly two and a half times as often on a faster panel and loaded
+  // differently on the same scan; `schedulerCadence` holds the policy. The
+  // commit pump and the fade step run every iteration regardless.
   if (host.hasStreaming()) {
     host.pumpStreamingCommit();
     // Every iteration, drawn or not: a fade that only advanced on drawn
