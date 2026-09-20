@@ -350,13 +350,6 @@
       "review": "2027-08-27"
     },
     {
-      "path": "src/export/presentationMode.ts",
-      "status": "staged",
-      "why": "Decides what a captured figure may claim about its own pixels, and which exports must turn reconstruction off before capturing. Nothing calls it because the Continuity Field is not wired into the renderer: with no capability able to be on, every call would return 'as-is' and 'source', so wiring it now would add a branch to BaseExportMode that no input can vary.",
-      "graduation": "Reachable the moment the renderer can report live ContinuityCapabilities. BaseExportMode asks capturePolicyFor before capture, suspends micro-gap fill for the four geometry-bearing rasters, and stamps buildPresentationProvenance alongside the existing figure chunks.",
-      "review": "2027-09-19"
-    },
-    {
       "path": "src/render/continuity/convergenceExposure.ts",
       "status": "staged",
       "why": "Decides which image a reduced-motion viewer is shown while a parked camera accumulates: the direct rendering for the whole sweep, with the accumulated result replacing it once at convergence. Nothing calls it because temporal accumulation cannot be switched on, so there is no history to expose and every frame would answer 'direct'.",

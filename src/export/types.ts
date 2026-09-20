@@ -15,6 +15,7 @@
 
 import type * as THREE from 'three/webgpu';
 import type { ColorMode } from '../render/colorModes';
+import type { ContinuityCapabilities } from '../render/continuity/continuityField';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mode identifiers
@@ -285,6 +286,15 @@ export interface ExportContext {
    * to the pre-feature image.
    */
   readonly classScopeStamp?: string;
+  /**
+   * The Continuity Field capabilities in force when the capture was taken.
+   *
+   * Capabilities rather than a rung, so the export layer needs no runtime call
+   * into the renderer to turn one into the other. Absent means nothing was
+   * enabled, which is what every build with no capability on produces, and the
+   * export path then reaches the source answer without consulting anything.
+   */
+  readonly continuityCapabilities?: ContinuityCapabilities;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

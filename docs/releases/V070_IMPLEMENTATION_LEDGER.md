@@ -2660,3 +2660,41 @@ The benchmark verifier rejected the capability record when it was first written
 into `validation/renderer-benchmark/`, correctly, because that directory holds
 baseline-versus-continuity comparisons and this is not one. The record moved
 rather than the verifier loosening.
+
+### L115 · BUILT · SCIENTIFIC
+
+Export isolation is wired, which the wiring plan marks mandatory before
+default-on Continuity and which the blocker register named as the one open
+risk. It is wired now rather than later because the ordering is the whole
+point: every Studio exporter captures the live canvas, four raster modes encode
+geometry in their pixel values, and a guard that arrives after the first
+capability that can reconstruct leaves some number of height maps and depth
+maps carrying invented elevations in the interval.
+
+`ExportContext` gained the capabilities in force at capture. Every figure is
+now stamped with what it contains, geometry rasters suspend reconstruction, and
+the stamp describes the artefact rather than the live view, so a suspended
+capture is not labelled as though it reconstructed. Nothing changes a byte
+today, because absent capabilities are the source case.
+
+The context carries capabilities rather than a rung, and that is the
+module-graph ratchet's doing. The first version imported `capabilitiesForTier`
+into `BaseExportMode`, which grew export-to-render coupling from six runtime
+edges to seven, and the ratchet is shrink-only. Passing the capabilities
+removes the mapping call, and an absent value is answered without consulting
+anything, so the layer needs no runtime import into the renderer at all. The
+ratchet was right twice now: the same class of fix improved the layering both
+times.
+
+`presentationMode` graduated out of the unreachable register on a real runtime
+import, which is the first genuine graduation in this programme rather than the
+type-only ones the register also counts.
+
+The wiring baseline the plan asks for is
+`docs/validation/v070-wiring-baseline.md`. It verifies thirteen hypotheses
+against the tree and finds twelve holding, one half stale, and two numbers to
+correct: the plan cites `6502aad2` as the archive's evidence commit where the
+archive says `6ce80c79`, and the registered-unreachable count has moved. The
+archive digest matches exactly. The document is named for what it records
+because `.gitignore` excludes every `*audit*.md` as an internal class, and this
+one is measurement that belongs beside its siblings.
