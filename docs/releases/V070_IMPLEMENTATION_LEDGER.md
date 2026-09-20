@@ -3170,3 +3170,58 @@ went to zero in the same window while a 100 ms interval kept firing
 throughout. And the view cube did not mount on that scan at all, before the
 change as well as after, so the compass evidence above comes from the light
 fixture instead.
+
+### L127 · BUILT · ARCHITECTURE
+
+Phases C1 and C2. Nineteen modules under `render/continuity` each decide one
+question: which rung a backend carries, whether a touch device may have it,
+when history stops being reusable, where the lens is, what to give up under
+pressure, what to do when a pass throws. Every one is pure and tested, and
+none of them holds the answer from last frame.
+
+`ContinuityRuntime` holds it. One object, one call per frame, and an order
+that is the contract: the ceiling resolves first, because a rung the device
+cannot carry must not reach the capabilities; pressure then moves one rung
+inside that ceiling; the epoch advances next, since the convergence sweep is
+defined against the epoch in force and would otherwise contribute a phase to a
+picture that has already changed; the exposure reads the convergence it
+describes, so it is last.
+
+It owns presentation state only. No point, no cloud, no terrain product, no
+claim and no export record is held by it or reachable from it. GPU resources
+are named in the brief as its own and it holds none, because none exist yet:
+every capability that would allocate one is off, which is also why
+`historyTargets` still has no caller.
+
+Two decisions are the runtime's rather than any module's. A failure lowers a
+ceiling that nothing raises, so a device that refused a history is not
+promoted back into asking for one the moment its frame times recover; a
+refusal is evidence about the device, and evidence does not expire because the
+next few frames were quick. And it starts at `source` rather than at whatever
+the ceiling permits, so the first frame does not begin at the top and discover
+the device cannot hold it.
+
+With nothing opted into, `grantedTier` returns `source` for every input, the
+capabilities are all off and the plan reports `active: false`. A test asserts
+that on a backend measured to carry everything, which is the shipped
+configuration.
+
+C1 asked for a lazy seam and the seam is not here. The one-line export was
+written and the build refused it: this repository emits a code-split chunk
+only for a dynamic import that something reaches, so an export nobody imports
+is shaken out, and the chunk-emission guard then fails the build for a seam
+that emitted nothing. The guard derives its required list from
+`lazyChunks.ts`, which is what makes a seam with no caller a build error
+rather than a silent no-op. The seam is therefore one line in the change that
+adds the first caller, and the eager entry is unchanged at 807 KiB meanwhile.
+
+Registered as staged, with its dependencies. Adding the seam had graduated
+eight modules out of the register on the strength of an import nothing
+crosses, which would have recorded them as reached by production when nothing
+runs them.
+
+The sweep's cadence is worth stating, because it reads off by one. Two phases
+take three frames: the frame that opens a sweep draws phase 0 and merges
+nothing yet, and each later frame counts the one before it, so `contributed`
+always means phases already merged. The test asserts the drawn phases rather
+than the frame count, which is the thing a reader wants.

@@ -599,3 +599,4 @@ export const loadActionRegistry = () => import('./app/actionDefinitions');
  * scan has opened the left rail, so it stays out of the startup shell.
  */
 export const loadToolLauncher = () => import('./ui/toolLauncher');
+
