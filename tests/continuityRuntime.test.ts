@@ -261,13 +261,17 @@ describe('the convergence sweep', () => {
       r.prepareFrame(frame({ display: fresh })),
       r.prepareFrame(frame({ display: fresh })),
       r.prepareFrame(frame({ display: fresh })),
+      r.prepareFrame(frame({ display: fresh })),
     ];
-    // Two phases take three frames. The frame that opens the sweep draws
-    // phase 0 and merges nothing yet; each later frame counts the one before
-    // it, so `contributed` is always phases already merged.
-    expect(drawn.map((p) => p.phase)).toEqual([0, 1, null]);
-    expect(drawn.map((p) => p.convergence.kind)).toEqual(['converging', 'converging', 'converged']);
-    expect(drawn[2].accumulate).toBe(false);
+    // The frame that opens the epoch contributes nothing: it has just cleared
+    // the history, and a sweep begun there would be presented a quarter
+    // built. Two phases then take three more frames, the last of which has
+    // nothing left to draw.
+    expect(drawn.map((p) => p.phase)).toEqual([null, 0, 1, null]);
+    expect(drawn.map((p) => p.convergence.kind))
+      .toEqual(['idle', 'converging', 'converging', 'converged']);
+    expect(drawn[0].accumulate).toBe(false);
+    expect(drawn[3].accumulate).toBe(false);
   });
 
   it('restarts when the epoch moves, whatever the camera did', () => {
@@ -275,8 +279,9 @@ describe('the convergence sweep', () => {
     settle(r);
     r.prepareFrame(frame());
     r.prepareFrame(frame());
-    const after = r.prepareFrame(frame({ display: display({ colorMode: 'elevation' }) }));
-    expect(after.convergence.kind).toBe('converging');
+    const moved = display({ colorMode: 'elevation' });
+    expect(r.prepareFrame(frame({ display: moved })).convergence.kind).toBe('idle');
+    expect(r.prepareFrame(frame({ display: moved })).convergence.kind).toBe('converging');
   });
 });
 
@@ -495,5 +500,87 @@ describe('what a refusal may spend', () => {
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     expect(code).not.toMatch(/evict|cloud|store|octree|resident/i);
     expect(code).toMatch(/private _maintainHistory/);
+  });
+});
+
+describe('when a sweep is allowed to run', () => {
+  /** Frames at the top rung with a history behind them. */
+  function atFull(phaseCount: 2 | 4 | 8) {
+    const f = factory();
+    const r = runtime({ surfaceFactory: f.make, phaseCount });
+    settle(r);
+    return r;
+  }
+
+  it('needs the refinement to be complete, not merely a still camera', () => {
+    const r = atFull(4);
+    const still = display({ camera: 'parked' });
+    for (const refinement of ['moving', 'coverage', 'center-refine'] as const) {
+      const plan = r.prepareFrame(frame({ display: still, refinement }));
+      expect(plan.convergence.kind, refinement).toBe('idle');
+      expect(plan.accumulate, refinement).toBe(false);
+    }
+  });
+
+  it('never accumulates while the camera keeps moving', () => {
+    // Two mechanisms have to fail for this to slip: the refinement phase drops
+    // to moving, and the camera digest moves the epoch. Either one on its own
+    // restarts the sweep.
+    const r = atFull(2);
+    for (let i = 0; i < 10; i++) {
+      // Distinct from the fixture's own camera, or the first frame would find
+      // the epoch unchanged and keep the sweep the settle left converged.
+      const plan = r.prepareFrame(frame({ display: display({ camera: `moving-${i}` }) }));
+      expect(plan.accumulate).toBe(false);
+      expect(plan.convergence.kind).toBe('idle');
+      expect(plan.phase).toBe(null);
+      // And the viewer is shown the plain rendering rather than a fraction of
+      // one merged into a history that is about to be cleared again.
+      expect(plan.exposure).toBe('direct');
+    }
+  });
+
+  it('restarts when the epoch moves for a reason that is not the camera', () => {
+    const r = atFull(2);
+    const parked = display({ camera: 'parked' });
+    for (let i = 0; i < 4; i++) r.prepareFrame(frame({ display: parked }));
+    expect(r.prepareFrame(frame({ display: parked })).convergence.kind).toBe('converged');
+    const filtered = display({ camera: 'parked', classFilter: 'ground-only' });
+    expect(r.prepareFrame(frame({ display: filtered })).convergence.kind).toBe('idle');
+    expect(r.prepareFrame(frame({ display: filtered })).convergence.kind).toBe('converging');
+  });
+
+  it('converges in one frame more than there are phases, for every count', () => {
+    // Bounded and deterministic: the frame that opens a sweep draws phase 0
+    // and merges nothing yet, and each later frame counts the one before it.
+    for (const phaseCount of [2, 4, 8] as const) {
+      const r = atFull(phaseCount);
+      const parked = display({ camera: `parked-${phaseCount}` });
+      const kinds: string[] = [];
+      const phases: (number | null)[] = [];
+      for (let i = 0; i <= phaseCount + 1; i++) {
+        const plan = r.prepareFrame(frame({ display: parked }));
+        kinds.push(plan.convergence.kind);
+        phases.push(plan.phase);
+      }
+      expect(kinds[0], `${phaseCount} phases`).toBe('idle');
+      expect(kinds[kinds.length - 1], `${phaseCount} phases`).toBe('converged');
+      expect(kinds.slice(1, -1).every((k) => k === 'converging')).toBe(true);
+      // Nothing on the frame that opens the epoch, then phase 0 up to
+      // phaseCount-1, then nothing left to draw.
+      expect(phases).toEqual([null, ...Array.from({ length: phaseCount }, (_, i) => i), null]);
+    }
+  });
+
+  it('stops asking for frames once it has converged', () => {
+    const r = atFull(2);
+    const parked = display({ camera: 'parked-stop' });
+    for (let i = 0; i < 4; i++) r.prepareFrame(frame({ display: parked }));
+    for (let i = 0; i < 5; i++) {
+      const plan = r.prepareFrame(frame({ display: parked }));
+      expect(plan.convergence.kind).toBe('converged');
+      expect(plan.phase).toBe(null);
+      expect(plan.accumulate).toBe(false);
+    }
   });
 });

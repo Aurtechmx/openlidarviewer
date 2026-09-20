@@ -291,7 +291,18 @@ export class ContinuityRuntime {
     // again from the tier that survived it. Reporting the tier after and the
     // capabilities before would describe a configuration nobody chose.
     capabilities = capabilitiesForTier(this._tier);
-    const accumulating = capabilities.temporalAccumulation && historyRefusal === null;
+    // The conjunction the phase requires: a complete refinement, a history to
+    // merge into, and an epoch that did not move this frame.
+    //
+    // The third is the one that is easy to leave out, and leaving it out
+    // presents a quarter-built image. A frame that opens an epoch has just
+    // cleared the history, so contributing to it here would merge one phase
+    // and then show it, because a converging sweep is exposed as the
+    // accumulated image. While a camera moves, every frame opens an epoch, and
+    // the viewer would watch a quarter of the points rather than the scan.
+    const accumulating = capabilities.temporalAccumulation
+      && historyRefusal === null
+      && !epochChanged;
 
     this._convergence = accumulating
       ? nextConvergence(this._convergence, {

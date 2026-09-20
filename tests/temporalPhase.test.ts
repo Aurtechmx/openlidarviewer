@@ -76,3 +76,57 @@ describe('temporalPhase', () => {
     for (const k of COUNTS) expect(Number.isInteger(Math.log2(k))).toBe(true);
   });
 });
+
+describe('a sweep covers the image exactly once', () => {
+  it('draws every point in exactly one phase', () => {
+    // The property the accumulation rests on. A point in no phase is missing
+    // from the finished image; a point in two is drawn twice into a history
+    // that is meant to be the sum of one pass over the samples.
+    for (const phaseCount of COUNTS) {
+      for (const seed of [0, 7, 1234]) {
+        for (let i = 0; i < 4096; i++) {
+          let drawn = 0;
+          for (let phase = 0; phase < phaseCount; phase++) {
+            if (drawnThisPhase(i, seed, phase, phaseCount)) drawn += 1;
+          }
+          expect(drawn, `point ${i} at ${phaseCount} phases, seed ${seed}`).toBe(1);
+        }
+      }
+    }
+  });
+
+  it('never assigns a phase outside the range', () => {
+    for (const phaseCount of COUNTS) {
+      for (let i = 0; i < 4096; i++) {
+        const phase = temporalPhase(i, 11, phaseCount);
+        expect(Number.isInteger(phase)).toBe(true);
+        expect(phase).toBeGreaterThanOrEqual(0);
+        expect(phase).toBeLessThan(phaseCount);
+      }
+    }
+  });
+
+  it('splits the work evenly enough that no frame carries a spike', () => {
+    // The Weyl sequence is low-discrepancy, so each phase should take close to
+    // its share. A partition that did not would show as one slow frame in
+    // every sweep, which is the thing phases exist to avoid.
+    for (const phaseCount of COUNTS) {
+      const counts = new Array(phaseCount).fill(0);
+      const points = 8192;
+      for (let i = 0; i < points; i++) counts[temporalPhase(i, 5, phaseCount)] += 1;
+      const share = points / phaseCount;
+      for (const c of counts) expect(Math.abs(c - share) / share).toBeLessThan(0.01);
+      expect(counts.reduce((a, b) => a + b, 0)).toBe(points);
+    }
+  });
+
+  it('depends on the point and its node, and on nothing else', () => {
+    // No frame number and no clock: a partition that re-rolled per frame would
+    // move points between phases mid-sweep and the image would sparkle.
+    const first = Array.from({ length: 256 }, (_, i) => temporalPhase(i, 3, 4));
+    for (let repeat = 0; repeat < 5; repeat++) {
+      const again = Array.from({ length: 256 }, (_, i) => temporalPhase(i, 3, 4));
+      expect(again).toEqual(first);
+    }
+  });
+});

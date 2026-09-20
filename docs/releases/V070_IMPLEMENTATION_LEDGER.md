@@ -3562,3 +3562,39 @@ refused.
 Nothing a refusal does can reach the scan. The runtime holds no cloud, no
 store and no eviction path, so the only thing it can spend is display quality,
 and a test fails on any line of it that runs naming one of those.
+
+### L136 · FIXED · ARCHITECTURE
+
+Phase D3. Three things have to hold before a sweep runs: a still camera, a
+complete refinement, an epoch that did not move. Two were enforced and the
+third was not, and the missing one is the one that shows.
+
+`nextConvergence` already refuses anything short of `full-refine` and restarts
+when the epoch differs from the one being accumulated. What it did not refuse
+was the frame on which the epoch changed. That frame has just cleared the
+history, so contributing to it merges one phase into an empty set, and a
+converging sweep is presented as the accumulated image rather than the direct
+one. While a camera moves, every frame opens an epoch, so a viewer holding a
+drag would have been shown a quarter of the points instead of the scan.
+
+The conjunction is now written out where the plan is resolved, and the frame
+that opens an epoch contributes nothing and is exposed as `direct`. A sweep
+begins on the first frame where the picture has stopped changing, which costs
+one frame and is what the phase asks for.
+
+A test drives ten frames of a moving camera and asserts the sweep never leaves
+idle and the exposure never leaves direct. That test is what found this: it
+was written to confirm the rule and failed, because the rule was not there.
+
+The rest of D3 is the phase scheme, which was already deterministic and is now
+also shown to be complete. The partition is a function of a point's index and
+its node's seed with no frame number and no clock anywhere in it, so a sweep
+cannot move a point between phases while the image is being built. New tests
+assert that a sweep draws every one of four thousand points in exactly one
+phase, at each of the three phase counts across three seeds, that no phase falls
+outside its range, and that each carries its share to within one per cent,
+which is what keeps one frame of every sweep from being the slow one.
+
+A first version of the moving-camera test collided with the fixture's own
+camera value, so its first frame found the epoch unchanged and read the sweep
+the settle had left converged.
