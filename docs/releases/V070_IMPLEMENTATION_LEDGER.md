@@ -3437,3 +3437,43 @@ cannot be written even if the geometry rule said yes, because `nextSupport`
 refuses everything but `none`. That is redundant with `shouldFill`'s own first
 test, and deliberately so, since the two rules are owned by different modules
 and only one of them is about geometry.
+
+### L133 · BUILT · ARCHITECTURE
+
+Phase C8. The lens had its geometry and its placement and no connection to the
+pass that substitutes pixels. `evidenceLens` knew which positions it covered,
+`lensPlacement` knew where a pointer, a finger or a key put it, and the gap
+pass filled wherever the rules allowed regardless of either.
+
+`lensPresentation` connects them, and the connection is two rules rather than
+one. The gap pass now takes a lens and refuses every fill it covers. A pixel
+already filled before the lens moved over it shows as nothing, because the
+fill was covering a gap and the lens is the viewer asking to see the gap. That
+substitution is read-time and never a write: the support surface keeps the
+record that the pixel was reconstructed, because a lens is a way of looking
+rather than an edit.
+
+Accumulated pixels stay under the lens. They were built from source samples
+across a sweep, which is what the lens is for showing, and hiding them would
+leave it displaying less evidence than exists.
+
+The feather is the part most likely to go wrong, so it is separated by shape.
+The blend is a number between 0 and 1 and the admission is a boolean, and the
+boolean reads `insideLens`, which does not interpolate and whose reach
+includes the whole feather. A pixel four-tenths of the way through the fade is
+still one the viewer is looking through the lens at, and filling it
+four-tenths of the way would be a reconstruction the lens was supposed to have
+refused. A test drives the fade across five positions and asserts the blend
+takes several values while the decision takes one. Another reads the
+admission function's own body and fails if it ever mentions the blend.
+
+Placement stays with the reducer. A test drives a touch lens through the
+intent path, lifts the finger, and asserts the lens still refuses at its
+centre, which is the pinning rule `lensPlacement` exists for holding.
+
+Picking is absent and that is the answer rather than an omission. A click
+resolves against the source points, so a reconstructed pixel was never
+pickable and the lens does not have to make it so. A test fails if this module
+ever names a pick, a raycast or a hit test, because anything here that changed
+what a click hits would be a second picking path beside the one that already
+works.

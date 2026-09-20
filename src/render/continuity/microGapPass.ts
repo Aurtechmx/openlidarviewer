@@ -52,6 +52,8 @@
  * only, and nothing derived from a filled pixel may reach picking,
  * measurement, terrain, export or claim evidence.
  */
+import type { Lens } from './evidenceLens';
+import { mayReconstructAt } from './lensPresentation';
 import { shouldFill, type Cardinals, type Neighbour, type RefusedReason } from './microGap';
 import { normalsAllowFill, type Normal } from './normalAgreement';
 import { censusOfPacked, type SupportCensus } from './supportCensus';
@@ -91,6 +93,8 @@ export interface MicroGapPassResult {
   readonly refused: Readonly<Record<RefusedReason, number>>;
   /** Pixels refused because their neighbours' normals disagreed. */
   readonly refusedByNormals: number;
+  /** Pixels refused because the evidence lens was over them. */
+  readonly refusedByLens: number;
   /** The support census of the raster the pass produced. */
   readonly census: SupportCensus;
 }
@@ -108,6 +112,16 @@ export interface MicroGapPassOptions {
   readonly epsilon?: number;
   /** Maximum angle between neighbour normals, in degrees. */
   readonly maxNormalAngleDeg?: number;
+  /**
+   * The evidence lens, where one is open.
+   *
+   * Under it nothing is substituted, so the pass refuses every fill it covers.
+   * The whole feather counts, and the test is a boolean: a pixel part way
+   * through the fade is still one the viewer is looking through the lens at,
+   * and filling it four-tenths of the way would be a reconstruction the lens
+   * was supposed to have refused.
+   */
+  readonly lens?: Lens | null;
 }
 
 const OUT_OF_FRAME: Neighbour = { depth: 0, support: 'none' };
@@ -128,13 +142,16 @@ export function runMicroGapPass(
   const refused = { occupied: 0, unsupported: 0, discontinuity: 0 };
   let filled = 0;
   let refusedByNormals = 0;
+  let refusedByLens = 0;
 
   const sized = w > 0 && h > 0
     && output.widthPx === w && output.heightPx === h
     && input.support.length >= w * h && input.depth.length >= w * h
     && output.support.length >= w * h && output.depth.length >= w * h;
   if (!sized) {
-    return { filled: 0, refused, refusedByNormals: 0, census: censusOfPacked([]) };
+    return {
+      filled: 0, refused, refusedByNormals: 0, refusedByLens: 0, census: censusOfPacked([]),
+    };
   }
 
   // The output starts as the frame that arrived. Every decision below reads
@@ -164,6 +181,10 @@ export function runMicroGapPass(
         refused[decision.reason] += 1;
         continue;
       }
+      if (options.lens && !mayReconstructAt(x, y, options.lens)) {
+        refusedByLens += 1;
+        continue;
+      }
       if (options.normals) {
         const around = [
           options.normals[i - 1], options.normals[i + 1],
@@ -191,6 +212,7 @@ export function runMicroGapPass(
     filled,
     refused,
     refusedByNormals,
+    refusedByLens,
     census: censusOfPacked(output.support.subarray(0, w * h)),
   };
 }

@@ -258,3 +258,49 @@ describe('what it cannot reach', () => {
     expect(GAP_RADIUS_PX).toBe(1);
   });
 });
+
+describe('the evidence lens', () => {
+  it('refuses every fill it covers', () => {
+    const input = raster(['###', '#.#', '###']);
+    const output = blank(input);
+    const lens = { centreXPx: 1, centreYPx: 1, radiusPx: 2, featherPx: 1, enabled: true };
+    const result = runMicroGapPass(input, output, { lens });
+    expect(result.filled).toBe(0);
+    expect(result.refusedByLens).toBe(1);
+    expect(picture(output)[1]).toBe('#.#');
+  });
+
+  it('fills where the lens is not', () => {
+    const input = raster([
+      '#######',
+      '#.....#',
+      '#######',
+    ]);
+    const output = blank(input);
+    // Over the left end only.
+    const lens = { centreXPx: 1, centreYPx: 1, radiusPx: 1, featherPx: 0, enabled: true };
+    const result = runMicroGapPass(input, output, { lens });
+    expect(result.refusedByLens).toBeGreaterThan(0);
+    expect(result.filled).toBeGreaterThan(0);
+    expect(result.filled + result.refusedByLens).toBe(5);
+  });
+
+  it('fills as usual when no lens is open', () => {
+    const input = raster(['###', '#.#', '###']);
+    const output = blank(input);
+    const closed = { centreXPx: 1, centreYPx: 1, radiusPx: 0, featherPx: 0, enabled: false };
+    const result = runMicroGapPass(input, output, { lens: closed });
+    expect(result.filled).toBe(1);
+    expect(result.refusedByLens).toBe(0);
+  });
+
+  it('still counts every pixel exactly once', () => {
+    const input = raster(['###', '#.#', '###']);
+    const output = blank(input);
+    const lens = { centreXPx: 1, centreYPx: 1, radiusPx: 2, featherPx: 1, enabled: true };
+    const r = runMicroGapPass(input, output, { lens });
+    const total = r.filled + r.refusedByNormals + r.refusedByLens
+      + r.refused.occupied + r.refused.unsupported + r.refused.discontinuity;
+    expect(total).toBe(input.widthPx * input.heightPx);
+  });
+});
