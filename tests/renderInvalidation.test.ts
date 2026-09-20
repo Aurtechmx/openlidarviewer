@@ -212,3 +212,28 @@ describe('every reason behaves as its kind says', () => {
     }
   });
 });
+
+describe('consumeOnce', () => {
+  it('clears the once reasons and leaves the others, without a report', () => {
+    const inv = new RenderInvalidation();
+    inv.invalidate('style');
+    inv.invalidate('camera-tween');
+    inv.invalidate('camera-input', 0);
+    inv.consumeOnce();
+    expect(inv.holds('style', 0)).toBe(false);
+    expect(inv.holds('camera-tween', 0)).toBe(true);
+    expect(inv.holds('camera-input', 0)).toBe(true);
+  });
+
+  it('agrees with serve about what survives a frame', () => {
+    for (const reason of ALL_INVALIDATION_REASONS) {
+      const served = new RenderInvalidation();
+      const consumed = new RenderInvalidation();
+      served.invalidate(reason, 0);
+      consumed.invalidate(reason, 0);
+      served.serve(0);
+      consumed.consumeOnce();
+      expect(consumed.holds(reason, 0)).toBe(served.holds(reason, 0));
+    }
+  });
+});

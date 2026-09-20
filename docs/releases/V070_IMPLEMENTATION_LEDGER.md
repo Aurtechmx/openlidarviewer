@@ -3063,3 +3063,63 @@ render loop should look like the same kind of thing.
 
 Staged. The loop still draws from the old deadlines; B3 is where the single
 request-driven loop becomes the caller.
+
+### L125 · BUILT · ARCHITECTURE
+
+Phase B3. The loop scheduled itself: each iteration asked for the next, so
+requestAnimationFrame ran at the panel's rate from the moment the backend came
+up until the tab was hidden. Skipping the draw kept the GPU idle and left the
+callback, the CPU pipeline and the whole per-frame body running sixty times a
+second over a scene nobody was touching.
+
+It now runs because something asked. `FrameScheduler` owns the animation
+frame and `FrameDemand` owns the question of whether one is wanted, so the
+three parts that each answered a piece of it sit behind one object with four
+verbs: `input`, `cameraMoved`, `changed` and `needsFrame`. Every caller previously had to
+know which of the three to reach for, and getting it wrong is silent.
+
+Measured in a headed browser against the committed multi-chunk LAZ, counting
+every animation-frame callback the page runs that three's own vendor chunk did
+not schedule, over the same two-second idle window on the same machine:
+
+    before   240 frames
+    after      8 frames
+
+Eight is the idle heartbeat. A trace taken with the scheduler's own state
+reads `sleeping` with no reasons held while parked, `scheduled` on 22 of 22
+samples taken during a drag, and `sleeping` again afterwards. No console or
+page errors either side.
+
+The heartbeat is the correction to the first version of this, which slept and
+re-asked on a timer without drawing. That is tidier and it is wrong.
+`needsFrame` answers what has ASKED, so a scene change that never invalidated
+leaves it false forever and a poll re-asks a question whose answer never
+changes: the change would never appear. The render gate already had the
+answer, an idle heartbeat drawing once every six skipped frames, and it exists
+precisely because not everything that changes the scene announces it. The
+scheduler now draws one frame every 250 ms while asleep, which states that
+same heartbeat in time where it was stated in frames. A missed wake then costs
+a quarter of a second rather than everything.
+
+Three things came out of the browser that the fakes could not have shown.
+three's WebGPU renderer starts an internal animation loop on init and
+self-schedules at the panel rate whether anything is drawn or not, so the page
+still has a frame owner the viewer does not control. That one belongs to B4,
+and until it is dealt with a raw callback count cannot tell a sleeping viewer
+from a running one.
+The headless runner reports the page hidden, so the visibility handler stops
+the loop there and the before and after readings are identical: this property
+cannot be measured headless at all. And input dispatch on this fixture costs
+seconds per event under load, alike with the change and without it, which is
+why the evidence is a frame count rather than a latency.
+
+The ratchets took two passes. Viewer grew by 71 lines, which the shrink-only
+lint refused; moving the browser plumbing into the scheduler and lifting the
+demand cluster out left the file 32 lines SMALLER than its baseline, and the
+drop is banked. Then the module-graph counted a new edge, so the settle gate
+and the pose watch now reach Viewer through `frameDemand` rather than through
+a second import of their own, which is the arrangement `renderActivityGate`
+already had for the same reason.
+
+`_rafId` is gone. Stopping the scheduler cancels both the frame and the
+heartbeat, so the field had nothing left to hold.

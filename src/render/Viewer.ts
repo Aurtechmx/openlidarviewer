@@ -213,7 +213,7 @@ import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import { TouchTapGate } from './touchTapGate';
-import { RenderActivityGate, DampingSettleGate, CameraPoseWatch } from './renderActivityGate';
+import { CameraPoseWatch, DampingSettleGate, FrameDemand } from './frameDemand';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
@@ -609,7 +609,6 @@ export class Viewer {
   // tick stay consistent. We use the same single-delta-per-frame pattern, so
   // the behaviour is unchanged — only the warning goes away.
   private readonly _timer = new THREE.Timer();
-  private _rafId: number | null = null;
 
   // ── P5 adaptive DPR (program §P5) — drops backing-store resolution while the
   //    camera moves, driven by the P3 angular-velocity signal. Flag-gated. ──
@@ -634,7 +633,20 @@ export class Viewer {
    * rAF rate. Bumped on every user input via `_bumpRenderActivity`.
    * Past this point, the loop falls back to a heartbeat render.
    */
-  private readonly _renderGate = new RenderActivityGate();
+  /**
+   * One owner for whether the loop needs to run: the activity deadlines, the
+   * reasons a frame is wanted, and the animation-frame scheduler.
+   */
+  private readonly _demand = new FrameDemand({
+    nowMs: () => this._nowMs(),
+    tweening: () => this._nav.isTweening,
+    streamingBusy: () => {
+      if (!this._streaming) return false;
+      const stats = this._streaming.scheduler.stats();
+      return stats.loading > 0 || stats.queued > 0;
+    },
+    fading: () => this._streaming?.renderer.hasActiveFades() ?? false,
+  });
   private readonly _camPose = new CameraPoseWatch(); // walk / fly motion signal
   /** Damping-tail measure behind the OrbitControls 'change' activity bump. */
   private readonly _settleGate = new DampingSettleGate();
@@ -1365,19 +1377,17 @@ export class Viewer {
         // a setInterval / setTimeout continues in the background; the
         // node fetcher is already throttled to a memory cap so it
         // won't run away.
-        if (this._rafId !== null) {
-          cancelAnimationFrame(this._rafId);
-          this._rafId = null;
-        }
+        this._demand.stop();
       } else {
         // Tab is visible again. Reset the frame timer so the first
         // frame after resume doesn't see a giant delta (which would
         // otherwise look like a stutter to the camera intro / orbit
         // pivot lerp), then restart the loop.
         this._timer.update();
-        if (this._rafId === null && this._renderer !== undefined) {
-          this._startLoop();
-        }
+        // A stopped scheduler ignores wakes, so anything that asked for a
+        // frame while the tab was hidden is still recorded and the restart
+        // serves it.
+        if (this._renderer !== undefined) this._startLoop();
       }
     };
     canvas.addEventListener('dblclick', this._onCanvasDblClick);
@@ -4812,10 +4822,8 @@ export class Viewer {
    */
   dispose(): void {
     this._organized.dispose();
-    if (this._rafId !== null) {
-      cancelAnimationFrame(this._rafId);
-      this._rafId = null;
-    }
+    // Cancels the outstanding frame and the idle heartbeat.
+    this._demand.dispose();
     // Remove every listener the constructor registered. Each is a stored
     // bound reference so the symmetric `removeEventListener` call actually
     // matches — anonymous arrow functions would silently leak.
@@ -5962,25 +5970,14 @@ export class Viewer {
     return sum / this._frameCount;
   }
 
-  /**
-   * Bump the render-activity timestamp so the loop holds at full
-   * rAF rate for the next `RENDER_HOLDOVER_MS`. Called from pointer,
-   * keyboard, and OrbitControls 'change' listeners so any user input
-   * — including damping motion after the gesture ends — keeps the
-   * renderer responsive.
-   */
+  /** Any input: full-rate frames for the holdover window. */
   private _bumpRenderActivity(): void {
-    this._renderGate.bump(this._nowMs());
+    this._demand.input();
   }
 
-  /**
-   * The camera moved: hold full rate AND let the motion-gated effects stand
-   * down. Reached from the controls 'change' listener (behind the settle gate)
-   * and from the walk / fly pose comparison — never from hovering, a
-   * colour-mode switch or a resize, which would flash the scene.
-   */
+  /** The camera moved: full rate, and the motion-gated effects stand down. */
   private _bumpCameraActivity(): void {
-    this._renderGate.bumpCamera(this._nowMs());
+    this._demand.cameraMoved();
   }
 
   /** `performance.now()` where it exists, wall clock otherwise. */
@@ -5988,34 +5985,6 @@ export class Viewer {
     return (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-  }
-
-  /**
-   * Should the loop call `render()` on this iteration?
-   * Yes if any of:
-   *   - a tween is in progress (camera intro, preset transition);
-   *   - the activity timestamp hasn't expired (recent input);
-   *   - the streaming scheduler is actively loading nodes (so new
-   *     resident points reach the screen as soon as they decode);
-   *   - the heartbeat counter ticked, in which case we render once
-   *     to keep the scene fresh and reset the counter.
-   * Otherwise the frame is skipped — the GPU stays idle, the CPU
-   * paths above still run (OrbitControls damping, adaptive EDL,
-   * orbit-pivot maintenance) so resume-on-input is glitch-free.
-   */
-  private _shouldRenderFrame(): boolean {
-    const now = this._nowMs();
-    // Streaming counts as busy when the scheduler has in-flight or queued
-    // fetches, so freshly-decoded nodes reach the screen without latency.
-    let streamingBusy = false;
-    if (this._streaming) {
-      const stats = this._streaming.scheduler.stats();
-      streamingBusy = stats.loading > 0 || stats.queued > 0;
-    }
-    return this._renderGate.shouldRender(now, {
-      tweening: this._nav.isTweening,
-      streamingBusy,
-    });
   }
 
   /**
@@ -6073,16 +6042,15 @@ export class Viewer {
 
   private _startLoop(): void {
     // The per-frame body lives in `renderLoop.ts` behind a structural
-    // RenderLoopHost; this starter binds the Viewer's own state to it and owns
-    // the requestAnimationFrame scheduling (browser-only, e2e-covered). The
-    // host is built once — its accessors read `this` on every frame, so the
-    // loop always sees current state.
+    // RenderLoopHost; this binds the Viewer's own state to it. The host is
+    // built once — its accessors read `this` on every frame.
+    //
+    // Scheduling belongs to FrameDemand and is request-driven: a frame runs
+    // because something asked, and the loop stops when nothing is asking. The
+    // previous loop scheduled itself, so requestAnimationFrame ran at the
+    // panel's rate over an untouched scene until the tab was hidden.
     const host = this._buildRenderLoopHost();
-    const loop = (): void => {
-      this._rafId = requestAnimationFrame(loop);
-      runRenderFrame(host);
-    };
-    loop();
+    this._demand.start(() => runRenderFrame(host));
   }
 
   /** Bind the Viewer's live render state to the {@link RenderLoopHost} contract. */
@@ -6102,10 +6070,10 @@ export class Viewer {
       },
       maintainOrbitCenter: () => this._maintainOrbitCenter(),
       updateAdaptiveEdl: () => this._updateAdaptiveEdl(),
-      shouldRenderFrame: () => this._shouldRenderFrame(),
+      shouldRenderFrame: () => this._demand.shouldRender(),
       isTweening: () => this._nav.isTweening,
-      activityUntilMs: () => this._renderGate.activityUntilMs,
-      cameraActivityUntilMs: () => this._renderGate.cameraUntilMs,
+      activityUntilMs: () => this._demand.gate.activityUntilMs,
+      cameraActivityUntilMs: () => this._demand.gate.cameraUntilMs,
       edlEnabled: () => this._edlEnabled,
       applyAdaptiveDpr: (moving, delta, nowMs, rendered) => {
         this._updateRefinementAndDpr(moving, delta, nowMs, rendered);
@@ -6115,8 +6083,8 @@ export class Viewer {
         const p = this._refinementPhasesEnabled ? this._phases.phase : 'full-refine';
         this._lodSize.setPhase(p);
       },
-      noteRendered: () => this._renderGate.noteRendered(),
-      noteSkipped: () => this._renderGate.noteSkipped(),
+      noteRendered: () => this._demand.gate.noteRendered(),
+      noteSkipped: () => this._demand.gate.noteSkipped(),
       renderEdl: () => { this._syncActiveCamera(); this._post.render(); },
       renderScene: () => { this._syncActiveCamera(); this._renderer.render(this._scene, this._activeCamera()); },
       edlPaintedAtRest: () => this._edlPaintedAtRest,

@@ -1,0 +1,99 @@
+import { describe, expect, it } from 'vitest';
+
+import { FrameDemand, type FrameDemandSignals } from '../src/render/frameDemand';
+import { RENDER_HOLDOVER_MS } from '../src/render/renderActivityGate';
+
+function demand(over: Partial<FrameDemandSignals> = {}): { d: FrameDemand; now: { ms: number } } {
+  const now = { ms: 0 };
+  const d = new FrameDemand({
+    nowMs: () => now.ms,
+    tweening: () => false,
+    streamingBusy: () => false,
+    fading: () => false,
+    ...over,
+  });
+  return { d, now };
+}
+
+describe('needsFrame', () => {
+  it('is false when nothing asked and nothing is running', () => {
+    const { d } = demand();
+    expect(d.needsFrame(0)).toBe(false);
+  });
+
+  it('is true after any input, for the holdover window', () => {
+    const { d } = demand();
+    d.input();
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.needsFrame(RENDER_HOLDOVER_MS)).toBe(false);
+  });
+
+  it('is true while a tween, a streaming fetch or a fade runs', () => {
+    for (const key of ['tweening', 'streamingBusy', 'fading'] as const) {
+      const { d } = demand({ [key]: () => true });
+      expect(d.needsFrame(0), key).toBe(true);
+    }
+  });
+
+  it('holds a while-reason until it finishes', () => {
+    const { d } = demand();
+    d.changed('gpu-commit-pending');
+    expect(d.needsFrame(10_000)).toBe(true);
+    d.finished('gpu-commit-pending');
+    expect(d.needsFrame(10_000)).toBe(false);
+  });
+
+  it('keeps a once-reason until a frame runs, not merely until it is recorded', () => {
+    const { d } = demand();
+    d.changed('style');
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.needsFrame(60_000)).toBe(true);
+  });
+});
+
+describe('the two bumps', () => {
+  it('differ only in whether the camera is said to have moved', () => {
+    const { d: hover } = demand();
+    hover.input();
+    expect(hover.gate.activityUntilMs).toBe(RENDER_HOLDOVER_MS);
+    // A hover must not stand the motion-gated effects down.
+    expect(hover.gate.cameraUntilMs).toBe(0);
+
+    const { d: moved } = demand();
+    moved.cameraMoved();
+    expect(moved.gate.cameraUntilMs).toBe(RENDER_HOLDOVER_MS);
+  });
+
+  it('both keep the loop wanting frames', () => {
+    const { d: a } = demand();
+    a.input();
+    const { d: b } = demand();
+    b.cameraMoved();
+    expect(a.needsFrame(0)).toBe(true);
+    expect(b.needsFrame(0)).toBe(true);
+  });
+});
+
+describe('shouldRender', () => {
+  it('is the gate, which has an idle heartbeat needsFrame deliberately lacks', () => {
+    const { d } = demand();
+    // Nothing has asked, so the loop does not need a frame; the gate would
+    // still draw one on its heartbeat if a frame ran.
+    expect(d.needsFrame(0)).toBe(false);
+    expect(d.shouldRender()).toBe(true);
+  });
+});
+
+describe('scheduler state', () => {
+  it('reports stopped before the backend is up', () => {
+    const { d } = demand();
+    expect(d.schedulerState).toBe('stopped');
+  });
+
+  it('survives a stop without losing what asked', () => {
+    const { d } = demand();
+    d.changed('filter');
+    d.stop();
+    expect(d.needsFrame(0)).toBe(true);
+  });
+});

@@ -392,6 +392,17 @@ export class StreamingRenderer {
     );
   }
 
+  /**
+   * Is a node fade part way through?
+   *
+   * A fade changes what is on screen without anything asking the renderer for
+   * a frame, so a loop that sleeps when nothing asks would stop mid-dissolve
+   * and leave a node half drawn. The frame scheduler reads this.
+   */
+  hasActiveFades(): boolean {
+    return this._fades.size > 0;
+  }
+
   /** How many resident meshes the frustum is currently holding back. */
   frustumHiddenCount(): number {
     let n = 0;

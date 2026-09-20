@@ -227,6 +227,17 @@ export class RenderInvalidation {
   }
 
   /**
+   * Clear the `once` reasons without building the report.
+   *
+   * What the render loop calls: it runs every frame and does not read the
+   * reasons, and {@link serve} filters the whole table into a fresh array to
+   * produce them. The report is for a trace; this is for the hot path.
+   */
+  consumeOnce(): void {
+    this._once.clear();
+  }
+
+  /**
    * Drop everything.
    *
    * For a dataset swap or a teardown, where the reasons describe a scene that
