@@ -1209,10 +1209,10 @@ clamped whatever the frames are doing, and a device is never promoted into
 something its backend cannot run by going fast. Ground is given one rung at a
 time, so a single bad second does not cost every capability.
 
-A reading of the scheduler's pressure state looked at first like a swapped pair
-of timestamps. It is not: the fields are named for frames per second while the
-thresholds are frame times, so the slow branch measuring `_fpsLowSinceTs`
-against the back-off hold is correct.
+The scheduler's pressure state reads like a swapped pair of timestamps and is
+not one. The fields are named for frames per second while the thresholds are
+frame times, so the slow branch measuring `_fpsLowSinceTs` against the
+back-off hold is correct.
 
 ### L68 · DEFERRED · PERFORMANCE
 
@@ -2932,3 +2932,39 @@ anything, so removing it would stall a scan whenever the render loop idles.
 
 Verified in a real browser: the sample streams, resident nodes rise from two
 to five across an orbit, and there are no page errors.
+
+### L122 · FIXED · ARCHITECTURE
+
+Shipped documentation had no narration gate. `pr-hygiene` holds a pull-request
+body and every commit message to one rule, that a description says what the
+software does rather than how the change came about, and documentation is the
+surface that reaches the source archive. Nothing checked it. The only reason
+the tree stayed clean is that a tool outside the repository was run by hand
+each time, which is a habit rather than a gate.
+
+`lint:doc-narration` closes it by importing `NARRATION_PATTERNS` from
+`pr-hygiene` rather than restating them. A second vocabulary would be free to
+drift from the one a reviewer is held to, and the two should not be able to
+disagree. It is wired into the release chain.
+
+One ledger entry failed it and is corrected. A sentence had described a
+pressure-state reading as having looked a certain way before it was
+understood, which is an account of an attempt rather than of the software.
+The whole tree passes now, so the gate ships with no grandfathered list, and
+an exception list is the thing that would erode it.
+
+The gate itself was wrong twice before it was right, and both faults were the
+same kind. It swallowed read errors and would have reported success having
+inspected nothing, so a read that fails is now a failure and a run that lists
+documents while reading none exits non-zero. Then the pathspec `docs/**/*.md`
+turned out to match only files at least one directory deep: it skipped all 33
+documents sitting directly in `docs/`, among them one written this week,
+reported a confident 134 and passed a file that did contain narration. The
+count was plausible, which is what made it dangerous. It now lists the
+directory and reads 167, and the test asserts the number read rather than the
+number listed.
+
+What this does not gate is style. Whether prose reads as machine-written is a
+judgement about rhythm and vocabulary, and a hard gate on that fails ordinary
+technical writing; the private checker stays a manual tool. This catches only
+constructions that are hard to write by accident when describing software.
