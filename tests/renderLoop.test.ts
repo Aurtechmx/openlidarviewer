@@ -42,6 +42,7 @@ function makeHost(over: Partial<RenderLoopHost> = {}): RenderLoopHost {
     pumpStreamingCommit: vi.fn(),
     advanceStreamingFrame: () => 1,
     tickStreaming: vi.fn(),
+    cullStreamingToFrustum: vi.fn(),
     toolMode: () => 'none',
     measureDragging: () => false,
     pointerMoved: () => false,

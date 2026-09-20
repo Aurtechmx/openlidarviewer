@@ -196,13 +196,6 @@
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/streaming/nodeFrustumCulling.ts",
-      "status": "staged",
-      "why": "Decides whether a resident streaming node is in front of the camera, from the node's own bounds. Every point mesh, static or streamed, is built by the Viewer's shared builder, which sets frustumCulled = false; for a streamed node that means one held warm in the cache is submitted for drawing whether or not the camera contains it. The baseline in docs/validation/streaming-cull-baseline.json measures what that costs on stored cameras: a zoomed view draws 24 of 84 resident nodes and a narrow one 12 of 84. Pure arithmetic with no three.js, so the decision is testable without a renderer. Only its tests and that benchmark import it.",
-      "graduation": "The streaming renderer sets each node mesh's visibility from cullResidentNodes behind a development flag, and a run on a real device shows the submitted-node count falling with no popping and no node hidden while visible. The flag decides the default, not this module: the arithmetic is settled, the tradeoff is a measurement this runtime cannot take. Residency must stay independent, so a culled node is skipped by the draw and never evicted.",
-      "review": "2027-03-31"
-    },
-    {
       "path": "src/render/continuity/normalAgreement.ts",
       "status": "staged",
       "why": "Refuses a gap fill where the surrounding normals face different ways. Nothing fills a gap, so nothing asks, and most sources carry no normals at all.",

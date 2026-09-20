@@ -86,6 +86,14 @@ export interface RenderLoopHost {
   advanceStreamingFrame(): number;
   /** Run the throttled streaming scheduler tick. */
   tickStreaming(): void;
+  /**
+   * Update the streamed draw frustum from the camera about to be rendered.
+   *
+   * Every frame, before the draw. The scheduler tick runs at a sixth of this
+   * and would lag the camera; culling from it would hide a node the viewer is
+   * already looking at.
+   */
+  cullStreamingToFrustum(): void;
 
   /** The active tool mode. */
   toolMode(): ToolMode;
@@ -162,6 +170,11 @@ export function runRenderFrame(host: RenderLoopHost): void {
   const wantEdl = edlActiveThisFrame(host.edlEnabled(), moving);
   // Pick this frame's DPR before rendering so the render uses it.
   host.applyAdaptiveDpr(moving, delta, nowMs, rendered);
+
+  // Streamed draw culling, before the draw and at its cadence. A node outside
+  // the frustum keeps its mesh, its decoded chunk and its cache slot; only the
+  // submission is skipped, so turning back costs a draw rather than a stream.
+  if (rendered && host.hasStreaming()) host.cullStreamingToFrustum();
 
   if (rendered) {
     host.noteRendered();

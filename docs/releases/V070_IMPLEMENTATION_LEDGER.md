@@ -2729,3 +2729,48 @@ A1 stays the next step, on different grounds. It carries a correctness blocker,
 that no visible node may be falsely culled, and correctness needs no
 performance justification. The performance case is bounded and unmeasured, and
 the entry exists so nobody later quotes it as large.
+
+### L117 · BUILT · ARCHITECTURE
+
+Phase A1 is wired. Streamed nodes are culled against the drawn camera at render
+cadence, and the node that leaves the view keeps its mesh, its decoded chunk
+and its cache slot, so turning back costs a draw rather than a re-stream.
+
+The reducer was the necessary part. Two systems already wrote `mesh.visible`
+directly and a third was arriving, so whichever ran last won: a node the
+frustum hid would reappear when the replace frontier recomputed, and a parent
+the frontier withheld would return the moment the camera moved.
+`visibilityReasons` keeps the reasons apart and combines them in one place,
+which is now the only assignment to `mesh.visible` in the renderer.
+
+Two traps are guarded by tests that fail when the guard is removed. The planes
+come from the scheduler's own derivation rather than a second extraction,
+because two extractions let selection and draw disagree about where the camera
+is looking, and the node caught in that disagreement is one the viewer can see.
+The record type warns that bounds shifted twice by the render origin cull to
+nothing, so the shift happens once, inside the cull, and a test asserts the
+double-shift case culls everything so the failure has a named shape.
+
+Three ratchets pushed the design and each improved it. The monolith lint
+refused the Viewer method, so the pass moved onto the streaming renderer. The
+fan-out lint refused the Viewer's import of a new module, and its advice, to
+put the behaviour in the cluster that owns it, removed the module entirely: the
+renderer already holds the source, so it holds the render origin too, and a
+caller can no longer pass the wrong one. The Viewer ends five lines lighter
+than it started while the frame gained a decision.
+
+One real bug came out of the suite rather than review. Holding the render
+origin at construction assumed every source states one, and four wiring tests
+failed on a source that does not. A missing origin is the identity shift rather
+than an error, since such a source is drawn in world coordinates, and it is
+written that way with the reason.
+
+Verified in the browser on the 485-node sample: the scan renders, an orbit out
+and back leaves it complete with no holes, resident nodes grew from five to
+nine as the view changed, and there are no console errors. The release blocker
+for this phase is one-directional, so the check that matters is that nothing
+visible disappeared, and nothing did.
+
+Frame time was not measured. The residency observation already recorded that
+the win here is bounded by a small resident set, and nothing in this entry
+claims otherwise.

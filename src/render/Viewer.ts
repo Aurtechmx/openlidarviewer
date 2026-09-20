@@ -930,8 +930,7 @@ export class Viewer {
     firstStaticCloud: () => this._clouds.values().next().value?.cloud ?? null,
     streaming: () => this._streaming,
     heightPercentileTrim: () => this._heightPercentileTrim,
-    projectSharedElevationRange: () =>
-      this._projectSharedElevation ? this.projectSharedElevationRange() : null,
+    projectSharedElevationRange: () => (this._projectSharedElevation ? this.projectSharedElevationRange() : null),
     elevationUnitLabel: () => this._elevationUnitLabel,
     worldUpIsZ: () => this._worldUp.z === 1,
     residentIntensityBuffers: () => {
@@ -1024,12 +1023,7 @@ export class Viewer {
   constructor(canvas: HTMLCanvasElement, forceWebGL = false) {
     // The resolver closes over the cloud registry, which only the Viewer owns.
     this._elevGpu.setWindowResolver((material) =>
-      elevWindowForMaterial(
-        this._elevFilterWorld,
-        this._elevLayers(),
-        material,
-        this._primaryElevLayer(),
-      ),
+      elevWindowForMaterial(this._elevFilterWorld, this._elevLayers(), material, this._primaryElevLayer()),
     );
 
     // ── Renderer, scene, cameras, EDL pipeline ────────────────────────────
@@ -6140,6 +6134,7 @@ export class Viewer {
       },
       advanceStreamingFrame: () => ++this._streamingFrame,
       tickStreaming: () => this._tickStreaming(),
+    cullStreamingToFrustum: () => this._streaming?.renderer.cullToFrustum(this._activeCamera(), this._streamingViewProj),
       toolMode: () => this._toolMode,
       measureDragging: () => this._measure.dragging,
       pointerMoved: () => this._pointerMoved,

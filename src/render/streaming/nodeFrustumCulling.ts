@@ -115,3 +115,27 @@ export function cullResidentNodes(
   }
   return { drawn, residentNotDrawn };
 }
+
+/**
+ * Adapt the scheduler's frustum planes to this module's shape.
+ *
+ * `streamingScore` already derives the six planes from a view-projection by
+ * Gribb and Hartmann, and that derivation is tested. It represents a plane as
+ * a tuple and this module as an object, which is a difference in spelling
+ * rather than in mathematics, so the conversion happens here and the
+ * derivation stays in one place. Writing a second extraction would give the
+ * scheduler and the draw two chances to disagree about where the camera is
+ * looking.
+ *
+ * Both use the same convention: a point is inside when `ax + by + cz + d >= 0`.
+ * Neither normalises, which the intersection test does not need.
+ */
+export function planesFromTuples(
+  tuples: readonly (readonly [number, number, number, number])[],
+): FrustumPlanes {
+  if (tuples.length !== 6) {
+    throw new Error(`planesFromTuples: expected 6 planes, received ${tuples.length}`);
+  }
+  const p = tuples.map(([a, b, c, d]) => ({ a, b, c, d }));
+  return [p[0], p[1], p[2], p[3], p[4], p[5]] as FrustumPlanes;
+}

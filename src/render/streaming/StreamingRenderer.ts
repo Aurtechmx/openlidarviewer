@@ -31,6 +31,10 @@ import { computeElevationRange, computeScalarRange } from '../elevationRange';
 import type { StreamingColorRanges } from './streamingColors';
 import type { RgbAppearance } from '../rgbAppearance';
 import { markNodeResolution } from '../streamingLodSize';
+import { VisibilityReasonStore, isDrawn } from './visibilityReasons';
+import { cullResidentNodes, planesFromTuples, type FrustumPlanes } from './nodeFrustumCulling';
+import { frustumPlanesFromViewProjection } from './streamingScore';
+import type { Box6 } from '../../io/copc/copcTypes';
 
 /**
  * Node dissolve tunables. A freshly resident node materialises over `FADE_MS`
@@ -102,6 +106,15 @@ interface NodeMesh {
   mesh: THREE.Mesh;
   colorAttr: THREE.InstancedBufferAttribute;
   decoded: DecodedChunk;
+  /**
+   * The node's bounds in WORLD space, as the record states them.
+   *
+   * World rather than render frame on purpose. The record's own comment warns
+   * that a record built in an already-recentred frame is shifted twice and
+   * culls to nothing, so the shift happens once, at the moment of culling,
+   * from the origin the caller passes.
+   */
+  bounds: Box6;
 }
 
 /** Construction options for {@link StreamingRenderer}. */
@@ -146,6 +159,13 @@ export interface StreamingRendererHost {
 export class StreamingRenderer {
   private readonly _host: StreamingRendererHost;
   private readonly _meshes = new Map<string, NodeMesh>();
+  /**
+   * The one place that decides what draws. Each reason is set independently
+   * and combined here, so the replace frontier and the draw frustum stop
+   * overwriting one another's answer.
+   */
+  private readonly _visibility = new VisibilityReasonStore();
+  private readonly _renderOrigin: readonly [number, number, number];
   private _mode: ColorMode;
   private _ranges: StreamingColorRanges;
   /**
@@ -216,6 +236,14 @@ export class StreamingRenderer {
     this._fadeIn = options.fadeIn ?? false;
     this._now = options.now ?? nowMs;
     this._octree = cloud.octree;
+    // The frame streamed positions are drawn in. Held so the per-frame cull
+    // shifts world node bounds into it exactly once, from the same origin the
+    // scheduler localises with. A source that states no origin is drawn in
+    // world coordinates, so the identity shift is the right reading rather
+    // than a fallback: zero moves nothing, and the cull then compares world
+    // bounds against a world-frame camera.
+    const ro = cloud.renderOrigin as ArrayLike<number> | undefined;
+    this._renderOrigin = ro ? [ro[0] ?? 0, ro[1] ?? 0, ro[2] ?? 0] : [0, 0, 0];
     // Elevation range from the TIGHT data bounds, not the octree cube. A COPC
     // cube barely over-reports, but an EPT cube is cubic around a thin terrain
     // slab, so its Z can be tens of thousands of metres tall while the data
@@ -314,8 +342,75 @@ export class StreamingRenderer {
    */
   applyReplaceVisibility(hidden: ReadonlySet<string>): void {
     this._hiddenIds = hidden;
+    this._visibility.setFromHiddenSet(this._meshes.keys(), 'replaceHidden', hidden);
+    this._applyVisibility();
+  }
+
+  /**
+   * Update the draw-frustum reason from the camera actually being rendered.
+   *
+   * Called at RENDER cadence rather than on the scheduler tick, which runs at
+   * roughly a sixth of it: a cull that followed the scheduler would lag the
+   * camera by several frames and hide a node the viewer is already looking at.
+   *
+   * Residency is untouched. A node outside the frustum keeps its mesh, its
+   * decoded chunk and its place in the cache, so turning back costs a draw
+   * rather than a re-stream, and the tools that read chunks directly are
+   * unaffected because they never consulted `mesh.visible`.
+   *
+   * `renderOrigin` shifts the world bounds into the drawn frame exactly once.
+   * The records are in world space and the caller's origin is the same one the
+   * scheduler localises with; passing an already-recentred origin would shift
+   * twice and cull the whole scan away.
+   */
+  applyFrustumVisibility(
+    planes: FrustumPlanes,
+    renderOrigin: readonly [number, number, number],
+  ): void {
+    const nodes = [...this._meshes].map(([key, entry]) => ({ key, bounds: entry.bounds }));
+    const { residentNotDrawn } = cullResidentNodes(nodes, planes, renderOrigin);
+    const hidden = new Set(residentNotDrawn);
+    this._visibility.setFromHiddenSet(this._meshes.keys(), 'frustumHidden', hidden);
+    this._applyVisibility();
+  }
+
+  /**
+   * Cull to the camera about to be rendered, deriving the planes here.
+   *
+   * The renderer already holds the source, so the render origin comes from its
+   * own construction rather than from the caller. That keeps the Viewer's
+   * per-frame call to one expression and, more to the point, removes the
+   * chance of a caller passing an origin the bounds were already expressed
+   * relative to, which the record type warns culls the whole scan away.
+   */
+  cullToFrustum(camera: THREE.Camera, viewProj: THREE.Matrix4): void {
+    camera.updateMatrixWorld();
+    viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.applyFrustumVisibility(
+      planesFromTuples(frustumPlanesFromViewProjection(viewProj.elements)),
+      this._renderOrigin,
+    );
+  }
+
+  /** How many resident meshes the frustum is currently holding back. */
+  frustumHiddenCount(): number {
+    let n = 0;
+    for (const id of this._meshes.keys()) {
+      if (this._visibility.reasonsFor(id).frustumHidden === true) n += 1;
+    }
+    return n;
+  }
+
+  /**
+   * Write the combined answer to every mesh.
+   *
+   * The only assignment to `mesh.visible` in this class. Anything that wants to
+   * hide a node records a reason and comes through here, which is what stops
+   * two systems from overwriting each other.
+   */
+  private _applyVisibility(): void {
     for (const [id, entry] of this._meshes) {
-      entry.mesh.visible = !hidden.has(id);
+      entry.mesh.visible = isDrawn(this._visibility.reasonsFor(id));
     }
   }
 
@@ -337,6 +432,8 @@ export class StreamingRenderer {
         this._host.endNodeDissolve(fade.mat);
         this._host.removeStreamingMesh(existing.mesh);
         this._meshes.delete(node.record.id);
+      this._visibility.forget(node.record.id);
+        this._visibility.forget(node.record.id);
       } else {
         return; // settled or fading in — already the current mesh
       }
@@ -425,12 +522,19 @@ export class StreamingRenderer {
     // A node whose replace frontier said "withheld" before its mesh existed is
     // hidden on creation, so it does not flash for the frame before the next
     // tick re-applies the frontier. No-op for an additive source (empty set).
-    if (this._hiddenIds.has(node.record.id)) handle.mesh.visible = false;
     this._meshes.set(node.record.id, {
       mesh: handle.mesh,
       colorAttr: handle.colorAttr,
       decoded,
+      bounds: node.record.bounds,
     });
+    // A node whose replace frontier said "withheld" before its mesh existed is
+    // hidden on creation, so it does not flash for the frame before the next
+    // tick re-applies the frontier. Recorded as a reason rather than written
+    // to the mesh, so the next frustum pass composes with it instead of
+    // clearing it. No-op for an additive source (empty set).
+    this._visibility.set(node.record.id, 'replaceHidden', this._hiddenIds.has(node.record.id));
+    handle.mesh.visible = isDrawn(this._visibility.reasonsFor(node.record.id));
     // Opaque dissolve-in: the node starts fully dissolved (progress 0) and
     // materialises over FADE_MS as the fade tick advances (a setTimeout(16)
     // fallback covers a no-rAF environment). A settled node keeps the plain
@@ -628,7 +732,10 @@ export class StreamingRenderer {
           this._host.endNodeDissolve(state.mat);
           this._fades.delete(mesh);
           this._host.removeStreamingMesh(mesh);
-          if (state.nodeId) this._meshes.delete(state.nodeId);
+          if (state.nodeId) {
+            this._meshes.delete(state.nodeId);
+            this._visibility.forget(state.nodeId);
+          }
         }
       }
     }
