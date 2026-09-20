@@ -2857,3 +2857,37 @@ handle must not be able to do that, and a test now pins it.
 Verified in a real Chrome window at 1440 by 900: the gutter reads nine pixels,
 the handle moved from eight pixels clear of the card to one pixel overlapping
 it, which is the geometry the rule always described.
+
+### L120 · MEASURED · ARCHITECTURE
+
+Phase A3 ran as a two-by-two over the commit path and the stickiness flag,
+with a fresh browser process per cell after A2 showed a shared process puts a
+large order effect on frame time. Resident stickiness stays opt-in.
+
+Every cell recorded zero node evictions and zero thrash events, on both
+traces. Stickiness keeps a node resident that the budget would otherwise drop,
+so with nothing dropped it had nothing to do, and the spread in cache misses
+and uploads is a handful of nodes either way with no ordering by condition.
+
+The first trace orbited out and back three times and produced no pressure at
+all, so a second was written to descend the octree and then travel: twelve
+wheel steps in, then three pan sweeps across the extent, so that many distinct
+nodes compete for the budget. It produced no evictions either. The resident
+set sat between eight and eleven nodes against 485 known, because the point
+budget on this machine holds this scan's working set several times over.
+
+So the answer is a null result from absent pressure rather than evidence about
+stickiness. The phase graduates it only if it reduces churn, and there was no
+churn to reduce. Testing it needs a working set larger than the budget, which
+means a bigger source or a constrained budget such as the Speed end of the
+quality dial or a mobile device profile.
+
+Two of the phase's metrics were not instrumented and the record says so. Node
+swaps and re-decodes were not separated from uploads, which is defensible only
+because zero evictions makes a re-decode impossible. Visible refinement pulses
+would need frame capture and comparison rather than a counter.
+
+The pattern across A2 and A3 is worth naming: both features target a device
+under pressure, and the only device available is one that never reaches it.
+That is a property of the hardware rather than of the features, and it is the
+same gap the browser matrix and the mobile row have carried since the start.
