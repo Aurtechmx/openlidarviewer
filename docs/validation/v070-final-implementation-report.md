@@ -47,7 +47,7 @@ The one capability that ships wired.
 | Streaming strategy | Per-node scale from the resolution a node was recorded at, relative to the root |
 | Facade behaviour | Keying on the widest two axes rather than x and y. On a 20 m by 12 m facade the earlier x/y grid put every point on a clamp |
 | Terrain behaviour | Unchanged. Density values are not affected; only display size is |
-| Overdraw change | Not measured directly. Mean frame energy on a streamed source rose from 69.75 to 82.08 with density sizing selected, returning to exactly 69.75 on switching back |
+| Overdraw change | Not measured directly. Mean frame energy on a streamed source rose from 69.75 to 82.08 with density sizing selected, returning to exactly 69.75 on switching back. Read from a live session with no artifact retained, so not reproducible from this repository |
 
 ## Temporal accumulation
 

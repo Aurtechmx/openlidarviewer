@@ -45,7 +45,7 @@ stopping point is written down per module rather than implied by this summary.
 
 | Step | Status |
 | --- | --- |
-| 5. Coverage-aware point sizing | Shipped and wired. Measured on a streamed source: mean frame energy 69.75 to 82.08 on selecting density sizing, returning to exactly 69.75 on switching back |
+| 5. Coverage-aware point sizing | Shipped and wired. Measured on a streamed source: mean frame energy 69.75 to 82.08 on selecting density sizing, returning to exactly 69.75 on switching back. Read from a live session with no artifact retained, so not reproducible from this repository |
 | 6. Point-kernel re-benchmark | Not run. Needs a device |
 
 ## C. Continuity core

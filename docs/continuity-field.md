@@ -71,6 +71,12 @@ return is the second, because a switch that rebuilt the pipeline rather than
 writing a uniform would not land on the same number, and neither figure says
 anything about the field itself, which has never drawn a frame here.
 
+Those two numbers were read from a live browser session and no machine-readable
+artifact was kept, so they cannot be reproduced from this repository. They are
+reported because the measurement happened, and flagged because a reader cannot
+check them. The benchmark record schema added later exists so that the next
+measurement does not have this problem.
+
 Bundle cost, measured with live builds at both ends. The subsystem adds two
 kilobytes to the eager entry while unwired, and importing its four decision
 modules eagerly costs nine and breaks the ceiling, which is why the seam goes
