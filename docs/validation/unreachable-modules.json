@@ -357,13 +357,6 @@
       "review": "2027-09-19"
     },
     {
-      "path": "src/render/continuity/mobilePolicy.ts",
-      "status": "staged",
-      "why": "Caps the tier ladder on touch-first devices and sizes the accumulation history from the parked pixel ratio rather than the motion-reduced one, so a ratio change does not free and reallocate three surfaces on the frame a sweep begins. Nothing calls it because no continuity capability can be switched on: there is no history to size and no tier to cap.",
-      "graduation": "Reachable when any capability graduates. The Viewer asks tierUnderPolicy with its measured BackendSupport and isTouchFirstDevice, and HistoryTargets.resize takes allocatedHistoryDpr instead of the renderer's current pixel ratio.",
-      "review": "2027-09-19"
-    },
-    {
       "path": "src/render/continuity/pressureRelief.ts",
       "status": "staged",
       "why": "Orders what the subsystem gives up under memory or frame pressure by what each step actually frees, and skips rungs with nothing left so a caller always makes progress. Nothing calls it because no capability can be switched on: there is no history to shrink and no sweep to shorten.",
@@ -399,10 +392,10 @@
       "review": "2027-09-20"
     },
     {
-      "path": "src/render/continuity/continuityRequest.ts",
+      "path": "src/render/continuity/coverageSizing.ts",
       "status": "staged",
-      "why": "Turns the continuity flags into the one pair the runtime reads: the rung asked for and the capabilities opted into. Nothing calls it because ContinuityRuntime has no caller; devFlags parses continuityTier and the six switches already, and this is what reconciles them.",
-      "graduation": "Reachable with ContinuityRuntime: whoever builds the runtime passes continuityRequest(readDevFlags()) as its request.",
+      "why": "Sizes a point from its sample spacing PROJECTED through the camera, which is the basis the programme names. The live coverage term sizes from relative node resolution instead, which is camera-independent: two nodes at the same depth take the same scale whether they are near or far. This is the better basis and it is not adopted, because adopting it replaces the basis of a behaviour that already ships and needs per-material distance uniforms written every frame plus browser evidence that the picture improves.",
+      "graduation": "Reachable when CoarseLodSizeNodes sizes from projected spacing rather than relative resolution, with a per-material distance uniform updated from the cull pass, and a real-scene comparison showing the change. Until then the live term is the only coverage sizing, so that there is one answer in one picture.",
       "review": "2027-09-20"
     }
   ]

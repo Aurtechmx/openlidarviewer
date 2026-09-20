@@ -3293,3 +3293,54 @@ runtime and asserts each one advances the epoch and names itself as the
 change, which is the brief's requirement that validity depend on every
 presentation-relevant input, checked against the runtime rather than against
 the diff underneath it.
+
+### L130 · BUILT · ARCHITECTURE
+
+Phase C5. Coverage sizing was already live and had no way to be asked for.
+`CoarseLodSizeNodes` folds a coverage term into the size graph for streamed
+materials, driven by a uniform that reads 1 in `density` point-size mode, and
+`devFlags` said as much: the capability flag "is for the capability record,
+which nothing consults yet". So the behaviour shipped, reached only by
+choosing a point-size mode, and the ladder that names it could not turn it on.
+
+It can now. The uniform takes two ways in and stays one term: choosing
+`density` asks for coverage sizing by name, and the ladder's `sizing` rung
+grants the same thing without the viewer having to know which point-size mode
+implements it. A second coverage term would be a second answer to one
+question, visible as two sizes in one picture.
+
+The grant is answered once, at construction, because this capability needs
+nothing per-frame: no history, no epoch, no sweep. That is also why it does
+not go through `ContinuityRuntime.prepareFrame`, which exists for the rungs
+that do. `coverageSizingGranted` passes `sizing` as the backend term because
+`tierFor` never answers below it, so no probe could lower a request for this
+rung, and passing it caps the answer there.
+
+Measured in a headed browser on the 81 MB COPC, same view, panels identical,
+counting pixels above a fixed luminance over the whole 1000 by 700 frame:
+
+    default vs default   0.00 % of pixels differ, 52,157 lit both times
+    default vs sizing    1.35 % of pixels differ, 52,157 to 53,783 lit
+
+The control is what makes the second line evidence. Two default runs are
+pixel-identical, so the difference under the flag is the feature rather than
+streaming arriving differently between sessions.
+
+What was not adopted is the basis. The programme names projected spacing, and
+`coverageSizing.ts` implements it: sample spacing put through the camera, the
+same projection the scheduler uses to decide whether a node would add visible
+coverage, imported rather than restated. The live term sizes from relative
+node resolution instead, which is camera-independent, so two nodes at the same
+depth take the same scale whether they are near or far. Projected spacing is
+the better basis and swapping it in replaces the basis of a behaviour that
+already ships: it needs a per-material distance uniform written every frame
+and a real-scene comparison showing the picture improves. Until then the live
+term is the only coverage sizing, so that there is one answer in one picture,
+and the module is registered as staged with that as its graduation.
+
+The four spacings stay apart by construction rather than by comment. No
+function in `coverageSizing.ts` takes a point count or an area, and none
+returns one, so a density cannot be assembled from what it offers. A test
+strips the comments from the source and fails on any executable line that
+names a count, an area or a density, and asserts the stripped source is still
+the module rather than an empty string.

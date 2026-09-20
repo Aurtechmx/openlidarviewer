@@ -100,7 +100,7 @@ import type { RefinementReadiness } from './streaming/refinementReadiness';
 import { readDevFlags } from '../perf/devFlags';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
-import { buildAdaptiveSizeNode, CoarseLodSizeNodes, ensureDensitySizes, pointSizeBaseNode } from './densityPointSize';
+import { buildAdaptiveSizeNode, CoarseLodSizeNodes, coverageSizingGranted, ensureDensitySizes, pointSizeBaseNode } from './densityPointSize';
 import {
   splatRadiusMultiplier,
   splatForcesAlphaToCoverage,
@@ -823,7 +823,7 @@ export class Viewer {
   private readonly _lodSize = new CoarseLodSizeNodes(
     uniform,
     this._pointSizeUniform,
-    float(POINT_STYLE_DEFAULTS.minSizePx),
+    float(POINT_STYLE_DEFAULTS.minSizePx), coverageSizingGranted(readDevFlags(), this._isMobile()),
   );
 
   // ── Class visibility (GPU mask) ───────────────────────────────────────────

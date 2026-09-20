@@ -180,13 +180,29 @@ export class CoarseLodSizeNodes {
   private readonly _baseSize: SizeNode;
   private readonly _minSize: SizeNode;
   private readonly _rel = new WeakMap<LodMaterial, UniformLike>();
+  /**
+   * Whether the continuity ladder granted coverage sizing for this session.
+   *
+   * Taken at construction because the grant cannot change while a session
+   * runs: it comes from the flags and the device class. Held here so a session
+   * that was granted it is sized that way from the first frame, rather than
+   * from whenever the viewer next touches the point-size mode.
+   */
+  private readonly _granted: boolean;
 
-  constructor(uniform: (value: number) => UniformLike, baseSize: SizeNode, minSize: SizeNode) {
+  constructor(
+    uniform: (value: number) => UniformLike,
+    baseSize: SizeNode,
+    minSize: SizeNode,
+    coverageGranted = false,
+  ) {
     this._uniform = uniform;
     this._gain = uniform(PHASE_LOD_GAIN['full-refine']);
-    // 0 unless the user asks for density sizing, so the fold is identity for
-    // every other mode and nothing that renders today moves.
-    this._coverage = uniform(0);
+    this._granted = coverageGranted;
+    // 0 unless the viewer asks for density sizing or the ladder granted
+    // coverage sizing, so the fold is identity for every other session and
+    // nothing that renders today moves.
+    this._coverage = uniform(coverageGranted ? 1 : 0);
     this._baseSize = baseSize;
     this._minSize = minSize;
   }
@@ -226,9 +242,17 @@ export class CoarseLodSizeNodes {
   }
 
   /**
-   * Point the coverage uniform at a size mode. A value write only, like
-   * {@link setPhase}: the graph shape does not depend on the mode, so a switch
-   * rebuilds no pipeline.
+   * Point the coverage uniform at a size mode, or at a granted capability.
+   *
+   * Two ways in, one term. Choosing `density` asks for coverage sizing by
+   * name, and the continuity ladder's `sizing` rung grants the same thing
+   * without the viewer having to know which point-size mode implements it.
+   * They set the same uniform because they are the same behaviour: a second
+   * coverage term would be a second answer to one question, visible as two
+   * sizes in one picture.
+   *
+   * A value write only, like {@link setPhase}: the graph shape does not depend
+   * on the mode, so a switch rebuilds no pipeline.
    *
    * This is the shape every continuity capability has to take. The size graph
    * already varies with five conditional folds and three size modes, which is
@@ -243,7 +267,7 @@ export class CoarseLodSizeNodes {
    * the regression `_applySizeMode` carries a note about.
    */
   setMode(mode: PointSizeMode): void {
-    this._coverage.value = mode === 'density' ? 1 : 0;
+    this._coverage.value = mode === 'density' || this._granted ? 1 : 0;
   }
 
   /** Whether this material folds compensation under the given size mode. */

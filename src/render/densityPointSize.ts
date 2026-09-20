@@ -20,6 +20,9 @@ import { POINT_STYLE_DEFAULTS, type PointSizeMode } from './pointStyle';
 // The coarse-LOD display fold is part of the same size-graph wiring seam, so it
 // reaches the Viewer through this module rather than as a second direct import.
 export { CoarseLodSizeNodes } from './streamingLodSize';
+// And the grant that drives its coverage term, for the same reason: it is an
+// argument to that constructor and nothing else in the Viewer reads it.
+export { coverageSizingGranted } from './continuity/continuityRequest';
 
 // Broad TSL node type, matching how Viewer.ts bridges the three/tsl graph.
 type TslNode = any; // eslint-disable-line @typescript-eslint/no-explicit-any

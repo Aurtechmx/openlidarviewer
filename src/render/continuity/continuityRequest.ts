@@ -29,7 +29,32 @@ import {
   TIER_ORDER,
   type ContinuityTier,
 } from './continuityTier';
-import { tierPermittedBy, type CapabilityOptIn } from './mobilePolicy';
+import { grantedTier, tierCeilingFor, tierPermittedBy, type CapabilityOptIn } from './mobilePolicy';
+
+/**
+ * The continuity half of the dev flags as `devFlags` names them.
+ *
+ * Structural, so a caller passes the flag record it already read rather than
+ * transcribing six fields and possibly transcribing one wrongly.
+ */
+export interface ContinuityDevFlags {
+  readonly continuityTier: ContinuityTier;
+  readonly continuityCoverageSizing: boolean;
+  readonly continuityMicroGapFill: boolean;
+  readonly continuityTemporalAccumulation: boolean;
+  readonly continuityEvidenceLens: boolean;
+}
+
+/** The same flags under the names the rest of this directory uses. */
+export function continuityFlagsOf(dev: ContinuityDevFlags): ContinuityFlags {
+  return {
+    tier: dev.continuityTier,
+    coverageSizing: dev.continuityCoverageSizing,
+    microGapFill: dev.continuityMicroGapFill,
+    temporalAccumulation: dev.continuityTemporalAccumulation,
+    evidenceLens: dev.continuityEvidenceLens,
+  };
+}
 
 /** The continuity half of the dev flags, already parsed. */
 export interface ContinuityFlags {
@@ -92,4 +117,23 @@ export function continuityRequest(flags: ContinuityFlags): ContinuityRequest {
       evidenceLens: switches.evidenceLens || fromTier.evidenceLens,
     },
   };
+}
+
+/**
+ * Whether this session was granted coverage sizing.
+ *
+ * The one capability that needs nothing per-frame: no history, no epoch and no
+ * sweep, only a uniform that says the frontier should be sized for what it
+ * covers. So it is answered once, from the flags and the device class, rather
+ * than through the runtime's per-frame plan.
+ *
+ * The backend term is `sizing` because `tierFor` never answers below it: every
+ * backend can size points, so nothing a probe could report would lower a
+ * request for this rung. Passing it also caps the answer there, so this
+ * function cannot grant a capability from a richer rung by accident.
+ */
+export function coverageSizingGranted(dev: ContinuityDevFlags, touchFirst: boolean): boolean {
+  const { requested, optIn } = continuityRequest(continuityFlagsOf(dev));
+  const granted = grantedTier(requested, 'sizing', tierCeilingFor(touchFirst), optIn);
+  return capabilitiesForTier(granted).coverageSizing;
 }
