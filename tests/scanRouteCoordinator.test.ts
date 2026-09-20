@@ -54,12 +54,12 @@ interface Harness {
   verdict: { value: SpaceKind | null };
   detect: { value: SpaceKind | null; throws?: boolean };
   geometry: { resident: number; gathered: RouteGeometry | null };
-  frame: { unit: number; known: boolean };
+  frame: { unit: number; vert: number; known: boolean };
   scheduled: Array<() => void>;
   log: string[];
 }
 
-function harness(over: Partial<{ detect: SpaceKind | null; unit: number; known: boolean; residentOnly: boolean; log: boolean }> = {}): Harness {
+function harness(over: Partial<{ detect: SpaceKind | null; unit: number; vert: number; known: boolean; residentOnly: boolean; log: boolean }> = {}): Harness {
   const ctx = { scanRoute: { overridden: false, typeOverride: 'auto' } } as unknown as AppContext;
   const routing = createScanRouteService(ctx);
   const scheduled: Array<() => void> = [];
@@ -71,7 +71,7 @@ function harness(over: Partial<{ detect: SpaceKind | null; unit: number; known: 
     resident: 1000,
     gathered: { positions: box(), residentOnly: over.residentOnly ?? false, totalPoints: 1000 } as RouteGeometry | null,
   };
-  const frame = { unit: over.unit ?? 1, known: over.known ?? true };
+  const frame = { unit: over.unit ?? 1, vert: over.vert ?? over.unit ?? 1, known: over.known ?? true };
   const view = {
     setObjectScanType: vi.fn(), setAnalyseScanType: vi.fn(), showSpace: vi.fn(), showObject: vi.fn(),
     setObjectVisible: vi.fn(), setAnalyseVisible: vi.fn(), setDockAnalyse: vi.fn(), expandAnalyseAndRunTerrain: vi.fn(),
@@ -86,6 +86,7 @@ function harness(over: Partial<{ detect: SpaceKind | null; unit: number; known: 
     },
     frame: {
       linearUnitToMetres: () => frame.unit,
+      verticalUnitToMetres: () => frame.vert,
       linearUnitKnown: () => frame.known,
       exportTargetId: () => 'scan-1',
       crsRevision: () => 3,

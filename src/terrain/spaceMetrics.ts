@@ -177,6 +177,16 @@ export interface SpaceMetricsParams {
   /** Scale from source units to metres (default 1 — assume metres). */
   readonly unitToMetres?: number;
   /**
+   * Scale from source units to metres on the VERTICAL axis. A compound CRS
+   * states it separately from the horizontal one (a metre grid over
+   * US-survey-foot heights); applying the horizontal factor to the height
+   * reported a 3.00 m ceiling as 9.84 m, a 50 m² room as 492 m³ rather than
+   * 150, and made STOREY_SEP_M compare metres against feet so floors 0.67 m
+   * apart counted as separate storeys. Defaults to {@link unitToMetres},
+   * which is every single-unit scan, so those figures do not move.
+   */
+  readonly verticalUnitToMetres?: number;
+  /**
    * Whether the source linear unit is KNOWN — the CRS resolved a real linear
    * unit. When explicitly `false`, `unitToMetres` is an assume-metres
    * placeholder (an unknown-unit or CRS-less scan yields factor 1 for display),
@@ -321,6 +331,11 @@ export function spaceMetrics(
   const up = params.upAxis;
   const spaceKind = params.spaceKind;
   const u2m = params.unitToMetres && params.unitToMetres > 0 ? params.unitToMetres : 1;
+  // The vertical factor falls back to the horizontal one, so a caller that
+  // does not know about compound units keeps its previous behaviour exactly.
+  const v2m = params.verticalUnitToMetres && params.verticalUnitToMetres > 0
+    ? params.verticalUnitToMetres
+    : u2m;
   const hasRgb = params.hasRgb === true;
   const gridN = Math.max(8, Math.floor(params.gridN ?? 48));
   const maxSamples = Math.max(100, Math.floor(params.maxSamples ?? 60_000));
@@ -356,7 +371,7 @@ export function spaceMetrics(
   let H1: number[] = [], H2: number[] = [], V: number[] = [];
   for (let i = 0; i < n; i += stride) {
     const b = i * 3;
-    const h1 = positions[b + h1Off] * u2m, h2 = positions[b + h2Off] * u2m, vv = positions[b + vOff] * u2m;
+    const h1 = positions[b + h1Off] * u2m, h2 = positions[b + h2Off] * u2m, vv = positions[b + vOff] * v2m;
     if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(vv)) continue;
     H1.push(h1); H2.push(h2); V.push(vv);
   }

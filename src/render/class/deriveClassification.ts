@@ -64,11 +64,31 @@ export const DERIVED_UNCLASSIFIED = 1;
 export { classificationCoverage } from './classificationCoverage';
 import { V2_PARAMS, CURRENT_PARAMS } from './classifierFrame';
 import { morphOpen } from './gridMorphology';
+import { yUpToCanonicalZUp } from '../../terrain/canonicalFrame';
 export { classifierParamsForFrame } from './classifierFrame';
 export type { ClassifierFrame } from './classifierFrame';
 
 /** Tunable parameters; every field has a literature-anchored default. */
 export interface DeriveClassificationOptions {
+  /**
+   * Which component of each triple points UP in `positions`.
+   *
+   * Everything below reads index 2 as height and 0/1 as the horizontal pair,
+   * which is survey LiDAR's frame. Mesh and phone-scan sources (PLY, OBJ,
+   * GLB/glTF) are Y-up, and this module's stated target — "a raw
+   * photogrammetry export" — is exactly those. Run Z-up over a Y-up cloud and
+   * the grid minimum is taken over the X/height plane, so "ground" becomes the
+   * points with the smallest NORTHING: a vertical slab, not a surface.
+   *
+   * Rather than thread an axis through every read, a Y-up cloud is rotated
+   * into this module's own frame on entry, the way `gatherTerrainPositions`
+   * already does for the terrain pipeline. The rotation preserves point order,
+   * so the returned codes stay index-aligned with the caller's buffer, and the
+   * caller's buffer is never mutated.
+   *
+   * Defaults to `'z'`, which is every existing caller and every survey source.
+   */
+  readonly upAxis?: 'z' | 'y';
   /**
    * Ground grid cell size, in the cloud's linear units. When omitted it is
    * derived from the point spacing (~2.5× spacing, clamped) so the grid stays
@@ -661,6 +681,12 @@ export function deriveClassification(
 ): DeriveClassificationResult {
   const phase = (p: string): void => { try { onPhase?.(p); } catch { /* progress is best-effort */ } };
   const o = { ...DEFAULTS, ...options };
+  // A Y-up source is rotated into this module's Z-up frame first, on a COPY:
+  // the caller's buffer is the live cloud, and the codes below are returned
+  // by index, which the rotation preserves.
+  if (options.upAxis === 'y') {
+    positions = yUpToCanonicalZUp(positions.slice(0, count * 3));
+  }
   const b = computeBounds(positions, count);
 
   const emptyResult = (reason: string): DeriveClassificationResult => ({

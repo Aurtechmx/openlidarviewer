@@ -2373,7 +2373,7 @@ function newObjectPanel(
       // tracing (see FLOORPLAN_GATHER_POINTS).
       floorPlan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
         upAxis: ctx.upAxis,
-        unitToMetres: ctx.unitToMetres, unitKnown: ctx.unitKnown,
+        unitToMetres: ctx.unitToMetres, verticalUnitToMetres: ctx.verticalUnitToMetres, unitKnown: ctx.unitKnown,
         maxSamples: FLOORPLAN_GATHER_POINTS,
         ...FLOORPLAN_OPTIONS,
         // User-tunable wall-snapping + adaptive-band selections from the panel
@@ -2409,7 +2409,7 @@ function newObjectPanel(
     // tracing (see FLOORPLAN_GATHER_POINTS).
     const plan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
       upAxis: ctx.upAxis,
-      unitToMetres: ctx.unitToMetres, unitKnown: ctx.unitKnown,
+      unitToMetres: ctx.unitToMetres, verticalUnitToMetres: ctx.verticalUnitToMetres, unitKnown: ctx.unitKnown,
       maxSamples: FLOORPLAN_GATHER_POINTS,
       ...FLOORPLAN_OPTIONS,
       // User-tunable wall-snapping + adaptive-band selections from the panel
@@ -2855,9 +2855,9 @@ const routeCoordinator = createScanRouteCoordinator({
   },
   frame: {
     linearUnitToMetres: () => crsService.context().linearUnitToMetres,
+    verticalUnitToMetres: () => { const c = crsService.context(); return verticalMetresPerUnit(c, 'horizontal') ?? c.linearUnitToMetres; },
     linearUnitKnown: () => crsService.context().linearUnitKnown,
-    exportTargetId: () => scans.activeExportTargetId(),
-    crsRevision: () => crsService.crsRevision(),
+    exportTargetId: () => scans.activeExportTargetId(), crsRevision: () => crsService.crsRevision(),
     basename: () => lastCloudName,
   },
   verdict: {

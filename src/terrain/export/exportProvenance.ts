@@ -741,7 +741,15 @@ export function analysisRecordFromProvenance(p: ExportProvenance): ScientificAna
       verticalDatumKnown: p.datumKnown,
     },
     methodIds: terrainMethodIds(p),
-    evidenceExploratory: (p.evidenceResolution?.gate ?? exportGate('DTM')).exploratoryOnly,
+    // An artifact that resolved no evidence is exploratory BECAUSE it resolved
+    // none — not because some other claim happens to be exploratory today.
+    // Borrowing `exportGate('DTM')` here tied this answer to one registry row:
+    // promoting DTM to its required level, a one-line change in
+    // `claim-register.yaml` and the stated goal of the E5 programme, would
+    // have flipped every undeclared artifact to non-exploratory on the
+    // strength of a claim it does not contain. DTM is exploratory today, so
+    // this stamps exactly what it stamped before.
+    evidenceExploratory: p.evidenceResolution?.gate.exploratoryOnly ?? true,
     summary: {
       surfaceQuality: p.surfaceQuality,
       exportReadiness: p.exportReadiness,
