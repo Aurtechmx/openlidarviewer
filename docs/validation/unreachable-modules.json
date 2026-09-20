@@ -439,6 +439,13 @@
       "why": "Names what a viewer can do with a scan right now, derived from facts the application already holds rather than tracked. Nothing calls it because no surface displays an interaction stage: the drop zone reports the pipeline's stages and the empty state comes down on its own, so the rule this encodes is already held without anything consulting it.",
       "graduation": "Reachable when a status surface shows the interaction stage, or when a caller asks mayBlockWithOverlay before covering the canvas instead of relying on the empty state being hidden at the right moment.",
       "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/pivotMarker.ts",
+      "status": "staged",
+      "why": "How strongly to draw a brief mark at the camera's pivot, and the rule that it never appears in a capture. Nothing calls it because drawing it needs a three.js object in the Viewer chunk, which sits at 739 KiB against a 740 KiB ceiling: a six-line exported function measured 2 KiB in that chunk under the live transform, so a mesh and a material do not fit.",
+      "graduation": "Reachable when the Viewer chunk has room. The wiring is small: a layer module owning its object through Viewer.derivedLayerHost(), a show call at the double-click, focus and orbit-centre sites, and one render-loop host method to step it. The pick path needs no change, since it walks the cloud registry rather than the scene.",
+      "review": "2027-09-20"
     }
   ]
 }

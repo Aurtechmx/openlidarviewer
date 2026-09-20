@@ -3880,3 +3880,43 @@ second: the empty state comes down 470 ms in, and across the thirty-two
 samples after it the element at the centre of the canvas is the canvas. The
 rule the phase states as a threshold at `interactive` is met one stage earlier,
 at `preview`, because the empty state is hidden the moment a preview mounts.
+
+### L144 · BUILT · ARCHITECTURE
+
+Phase E4. Orbiting around a point nobody can see feels imprecise without being
+wrong: the camera does what it was told, and the viewer has no way to tell
+where the centre is until something moves. `pivotMarker` decides how strongly
+to draw a mark there for half a second.
+
+Three of the four rules the phase sets are structural rather than promised.
+
+It is never pickable because picking never reaches it. `Viewer` resolves a
+click by walking its own cloud registry and testing the ray against each
+cloud's points, and nothing in that path traverses the scene graph, so an
+object added to the scene cannot be hit however it is drawn. A test asserts
+that, and says what to do if it ever fails: the marker needs a layer mask
+rather than an argument.
+
+It is never captured. `visibleDuringCapture` takes nothing, because no
+argument could make the answer yes: a figure is a statement about what was
+observed and a mark at a pivot is a statement about where the camera is
+turning.
+
+It is never data. Nothing in the module produces a position, a coordinate or a
+measurement; the caller already has the pivot, and a module that returned one
+would be a second source for something the navigation controller owns. A test
+fails on any line that runs naming one.
+
+Reduced motion follows `ResultFocus`, which drops both ends of its animation
+rather than shortening them. The mark appears at full strength and is gone
+when its life runs out, with no growth and no fade, because a fade is still
+something changing on screen for a viewer who asked for less of that. A test samples four moments of
+its life under that preference and asserts every one is identical.
+
+It is not wired, and the reason is measured rather than preferred. Drawing it
+needs a three.js object in the Viewer chunk, which is at 739 KiB against a
+740 KiB ceiling. A six-line exported function measured 2 KiB in that chunk
+under the live transform in L138, so a mesh and a material do not fit. The
+wiring itself is small and the register entry says what it is: a layer module
+owning its object through `Viewer.derivedLayerHost()`, a show call wherever the pivot
+moves, and one render-loop host method to step it. What has to come first is room.
