@@ -44,6 +44,13 @@ export interface ReportProvenance {
   readonly classificationEpoch?: number;
   /** Producing app version (e.g. "0.5.2"); lets a reader spot a stale report. */
   readonly software?: string;
+  /** Statements qualifying every figure; see {@link reportNotes}. */
+  readonly notes?: readonly string[];
+}
+
+/** Match the 3-dp rounding `measurementMetrics` applies to every other value. */
+function roundTo3(v: number): number {
+  return Number.isFinite(v) ? Math.round(v * 1000) / 1000 : v;
 }
 
 /** The headline metric + unit for each measurement kind. */
@@ -115,7 +122,11 @@ export function measurementsToFindings(
       // Plain L³ applied the HORIZONTAL unit to the vertical axis, overstating
       // a metre/US-foot compound volume by 3.28×.
       const V = L * L * Vv; // native render units³ → m³
-      const net = m.volume.net * V;
+      // Rounded to the same 3 dp every other finding passes through in
+      // `measurementMetrics`. The raw product went out as a full float, so a
+      // point-sampled volume printed to ~1e-14 m³ beside a distance at 1 mm,
+      // implying a resolution its own coverage caveat denies.
+      const net = roundTo3(m.volume.net * V);
       const caveats = [
         `Cut ${(m.volume.cut * V).toFixed(2)} m³ / fill ${(m.volume.fill * V).toFixed(2)} m³ over ${(m.volume.footprintArea * L * L).toFixed(2)} m² footprint.`,
         'Point-sample integration assumes uniform coverage inside the polygon.',
@@ -187,6 +198,7 @@ export function integrityReportFile(
     generatedAt,
     classificationEpoch,
     software,
+    notes: reportNotes(unitsVerified, crsName),
   }, verticalToMetres);
   return {
     filename: `${datasetId}-report.json`,
@@ -224,6 +236,7 @@ export function findingsReportFile(
     software,
     classificationEpoch,
     findings: [...findings],
+    notes: reportNotes(unitsVerified, crsName),
   });
   return {
     filename: `${datasetId}-findings.json`,
@@ -232,6 +245,31 @@ export function findingsReportFile(
     evidenceStatus: evidenceStatus(claimId),
     exploratory: gate.exploratoryOnly,
   };
+}
+
+/**
+ * The statements that qualify every figure in a report file.
+ *
+ * Both report builders computed these into the returned `evidence` string,
+ * and the only caller downloads `text` and discards the rest — so an
+ * unknown-unit scan's report went out labelling nominal source units as
+ * metres with no caveat in the document at all, while the CSV and GeoJSON
+ * for the same scan renamed their columns and carried the note. These go
+ * INTO the manifest, where the digest covers them.
+ */
+function reportNotes(unitsVerified: boolean, crsName: string | undefined): string[] {
+  const notes: string[] = [];
+  const units = unverifiedUnitsCaveat(unitsVerified).trim();
+  if (units) notes.push(units);
+  // An absent `crs` key is indistinguishable from an older build that did not
+  // record one. Saying so is shorter than leaving the reader to guess.
+  if (!crsName) {
+    notes.push(
+      'No coordinate reference system was resolved for this scan, so the ' +
+      'coordinates are in the source file\'s own frame.',
+    );
+  }
+  return notes;
 }
 
 /** Build (and sign) a report manifest from the placed measurements. */
@@ -253,6 +291,7 @@ export function measurementsToReportManifest(
       generatedAt: provenance.generatedAt,
       software: provenance.software,
       classificationEpoch: provenance.classificationEpoch,
+      notes: provenance.notes,
       findings: measurementsToFindings(measurements, up, unitToMetres, verticalToMetres),
     },
     hashFn,

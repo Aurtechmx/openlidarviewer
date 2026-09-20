@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
+  findingsReportFile,
+  integrityReportFile,
   measurementsToFindings,
   measurementsToReportManifest,
 } from '../src/export/measurementReport';
@@ -106,5 +108,71 @@ describe('measurementReport — compound CRS vertical factor', () => {
       datasetId: 'd', generatedAt: '2026-01-01T00:00:00Z', classificationEpoch: 0,
     }, US_FOOT);
     expect(manifest.findings[0].value).toBeCloseTo(30.48, 2);
+  });
+});
+
+
+// The caveat that qualifies every figure was computed onto the returned
+// object's `evidence` field, and the only caller downloads `text`. So an
+// unknown-unit scan's integrity report went out labelling source units as
+// metres with nothing to the contrary anywhere in the document, while the
+// CSV and GeoJSON for the SAME scan renamed their columns and carried the
+// note. Moving it into the manifest also puts it under the digest.
+describe('a report carries its own qualifications', () => {
+  const args = (unitsVerified: boolean, crs: string | undefined) =>
+    [[distance('m1', 5)], up, 1, 1, 'site-a', crs, '2026-06-27T00:00:00Z', 1, '0.7.0', unitsVerified] as const;
+
+  test('an unverified unit scale is stated inside the downloaded file', () => {
+    const f = integrityReportFile(...args(false, 'EPSG:6433'));
+    const m = JSON.parse(f.text);
+    expect(m.notes.join(' ')).toMatch(/units unverified/i);
+    expect(m.notes.join(' ')).toMatch(/nominal/i);
+    // And it is sealed, not decoration.
+    expect(verifyReportManifest(m)).toBe(true);
+  });
+
+  test('a verified scale with a named CRS adds nothing', () => {
+    const m = JSON.parse(integrityReportFile(...args(true, 'EPSG:6433')).text);
+    expect(m.notes ?? []).toEqual([]);
+  });
+
+  test('an unresolved CRS says so rather than omitting the key', () => {
+    const m = JSON.parse(integrityReportFile(...args(true, undefined)).text);
+    expect(m.notes.join(' ')).toMatch(/no coordinate reference system/i);
+  });
+
+  test('stripping a note breaks the digest', () => {
+    const m = JSON.parse(integrityReportFile(...args(false, undefined)).text);
+    expect(verifyReportManifest({ ...m, notes: [] })).toBe(false);
+  });
+
+  test('the curated findings ledger carries them too', () => {
+    const findings = measurementsToFindings([distance('m1', 5)], up, 1, 1);
+    const m = JSON.parse(
+      findingsReportFile(findings, 'site-a', undefined, '2026-06-27T00:00:00Z', 1, '0.7.0', false).text,
+    );
+    expect(m.notes.join(' ')).toMatch(/units unverified/i);
+    expect(m.notes.join(' ')).toMatch(/no coordinate reference system/i);
+  });
+});
+
+// Every other finding value is rounded to 3 dp by `measurementMetrics`; the
+// volume branch multiplied the raw net by the cubic factor and pushed the
+// full float, so one figure in the document implied ~1e-14 m³ resolution
+// beside distances at 1 mm — on a number whose own caveat says the
+// integration assumes uniform coverage.
+describe('a volume finding is reported at the same precision as the rest', () => {
+  test('is rounded to three decimals like every sibling', () => {
+    // 1/3 m³ scaled by a foot factor: a value with no short decimal form.
+    const f = measurementsToFindings([volume('v1', 1 / 3)], up, 0.3048, 0.3048);
+    const v = f.find((x) => x.unit === 'm³');
+    expect(v).toBeDefined();
+    expect(String(v!.value)).toMatch(/^-?\d+(\.\d{1,3})?$/);
+  });
+
+  test('keeps the value it is rounding from', () => {
+    const f = measurementsToFindings([volume('v1', 1 / 3)], up, 0.3048, 0.3048);
+    const expected = (1 / 3) * 0.3048 * 0.3048 * 0.3048;
+    expect(f.find((x) => x.unit === 'm³')!.value).toBeCloseTo(expected, 3);
   });
 });

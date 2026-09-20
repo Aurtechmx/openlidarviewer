@@ -345,11 +345,21 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
 
   let cell = input.cellSizeM ?? deriveCellSize(polyAreaSrc, input.points.length, minCell, maxCell);
   const cellDerived = input.cellSizeM == null;
+  // A caller-supplied cell size of zero is not nullish, so it survived the
+  // `??` above and then made the coarsening loop below multiply zero by two
+  // forever. A size that is not a positive finite number describes no grid.
+  if (!(cell > 0) || !Number.isFinite(cell)) return emptyResult();
   // Coarsen deterministically if the grid would exceed the cell budget.
   const spanX = xmax - xmin;
   const spanY = ymax - ymin;
   const cellsAt = (c: number): number => (Math.ceil(spanX / c) + 1) * (Math.ceil(spanY / c) + 1);
-  while (cell < maxCell && cellsAt(cell) > maxCells) cell *= 2;
+  // The budget is a memory bound and `maxCell` is a resolution preference, so
+  // the budget wins. Guarding the loop with `cell < maxCell` defeated it in
+  // exactly the case it exists for: `deriveCellSize` already clamps to
+  // `maxCell`, so on a large footprint the loop never ran and the grid
+  // allocated the full `nx*ny` — 16 million cells on a 200 km square, on the
+  // main thread. Coarsening past the preferred maximum is the lesser answer.
+  while (cellsAt(cell) > maxCells) cell *= 2;
 
   const nx = Math.max(1, Math.ceil(spanX / cell));
   const ny = Math.max(1, Math.ceil(spanY / cell));

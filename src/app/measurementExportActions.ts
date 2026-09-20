@@ -110,7 +110,11 @@ export async function exportMeasurementIntegrityReport(
   const verticalUnitToMetres = measure.verticalUnitToMetres;
   const classificationEpoch = deps.activeClassificationEpoch();
   // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
-  const crsKnown = measure.crsKnown;
+  // A GEOGRAPHIC frame is unverified for a stronger reason than an unknown
+  // one: no scalar metres-per-degree exists, so there is nothing to convert
+  // by. The CSV/GeoJSON action next door has always read it this way; this
+  // path read the bare `crsKnown` and so called a lon/lat scan unit-verified.
+  const crsKnown = measure.crsKnown && !measure.geographicCrs;
   const { integrityReportFile } = await deps.loadMeasurementReport();
   const f = integrityReportFile(
     ms,
@@ -156,7 +160,8 @@ export async function exportFindingsReport(
   if (findings.length === 0) return;
   const geo = deps.geo();
   const classificationEpoch = deps.activeClassificationEpoch();
-  const crsKnown = deps.measure.crsKnown;
+  // Geographic reads as unverified here too — see `exportIntegrityReport`.
+  const crsKnown = deps.measure.crsKnown && !deps.measure.geographicCrs;
   const { findingsReportFile } = await deps.loadMeasurementReport();
   const f = findingsReportFile(
     findings,

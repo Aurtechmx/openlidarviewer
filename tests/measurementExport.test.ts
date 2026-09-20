@@ -319,3 +319,37 @@ describe('unverified units caveat (M1)', () => {
     expect(unverified).toMatch(/units-unverified/);
   });
 });
+
+// A CSV or GeoJSON holds mixed kinds, and one hardcoded `MEAS-DISTANCE`
+// stamped all of them: a profile row carried the distance claim's exploratory
+// verdict although MEAS-PROFILE meets its required level, and a volume row was
+// stamped with a claim that never evaluated a volume.
+describe('the evidence stamp names the claim behind each figure', () => {
+  const ctx = {
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    up: [0, 0, 1] as [number, number, number],
+    unitToMetres: 1,
+    verticalUnitToMetres: 1,
+    crsName: 'EPSG:26913',
+    geographic: false,
+    unitsVerified: true,
+  } as never;
+  const dist = { id: 'd', kind: 'distance', name: 'd', points: [[0, 0, 0], [3, 0, 0]] } as never;
+  const prof = { id: 'p', kind: 'profile', name: 'p', points: [[0, 0, 0], [3, 0, 1]] } as never;
+
+  it('gives a profile row a different verdict from a distance row', () => {
+    const csv = measurementsToCsv([dist, prof], ctx);
+    const [, dRow, pRow] = csv.split('\n');
+    expect(dRow).not.toBe(pRow);
+    // MEAS-PROFILE meets its required level; MEAS-DISTANCE does not.
+    expect(pRow).toMatch(/validated/i);
+    expect(dRow).toMatch(/exploratory/i);
+  });
+
+  it('names every claim a mixed collection draws on, once each', () => {
+    const note = JSON.parse(measurementsToGeoJSON([dist, prof, dist], ctx)).evidence as string;
+    expect(note).toContain('MEAS-DISTANCE');
+    expect(note).toContain('MEAS-PROFILE');
+    expect(note.match(/MEAS-DISTANCE/g)).toHaveLength(1);
+  });
+});

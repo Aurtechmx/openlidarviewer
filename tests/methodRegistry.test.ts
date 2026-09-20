@@ -111,3 +111,43 @@ describe('lookup + tag helpers', () => {
     );
   });
 });
+
+// A method record is provenance: a reader who resolves the stamped id must
+// learn what was done to the geometry. Both contour generalization entries
+// described a Douglas–Peucker pass and pointed at a module the export path
+// does not call, while the pass that runs also applies two iterations of
+// Chaikin corner-cutting — a displacement the record did not mention. The
+// version was NOT bumped, because the geometry never changed; only the
+// description of it was wrong, and a bump would have signalled that numbers
+// moved.
+describe('the contour generalization records describe the pass that runs', () => {
+  const styler = readFileSync(
+    new URL('../src/terrain/contour/contourShapeStyle.ts', import.meta.url),
+    'utf8',
+  );
+
+  it('the styler really does apply both steps', () => {
+    // If this stops being true the records below are the ones to correct.
+    expect(styler).toMatch(/chaikinSmooth\(\s*simplifyPolyline\(/);
+  });
+
+  it.each([
+    'olv.contour.generalize',
+    'olv.contour.generalize.terrain-adaptive',
+  ])('%s names the smoothing as well as the simplification', (id) => {
+    const entry = METHOD_REGISTRY[id];
+    expect(entry, id).toBeDefined();
+    expect(entry.summary).toMatch(/chaikin/i);
+    expect(entry.summary).toMatch(/douglas|simplif/i);
+  });
+
+  it.each([
+    'olv.contour.generalize',
+    'olv.contour.generalize.terrain-adaptive',
+  ])('%s points at a module that exists and runs the pass', (id) => {
+    for (const rel of METHOD_REGISTRY[id].implementation) {
+      const src = readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
+      expect(src, rel).toMatch(/chaikinSmooth/);
+    }
+  });
+});
