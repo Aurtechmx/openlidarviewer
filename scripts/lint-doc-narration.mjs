@@ -28,26 +28,44 @@
  *
  * Exit 0 = clean; exit 1 = a document narrates its own authoring.
  */
-import { readFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
-import { join } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NARRATION_PATTERNS } from './pr-hygiene.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /**
- * Every tracked Markdown file under docs/, at any depth.
+ * Every Markdown file under docs/, at any depth.
  *
- * The pathspec is the directory rather than `docs/**\/*.md`, because that glob
- * matches only files at least one directory deep: it silently skipped all 33
- * documents sitting directly in docs/, reported a confident 134, and passed a
- * file that did contain narration. The count looked plausible, which is what
- * made it dangerous.
+ * Walked from the filesystem rather than asked of git. Two reasons, and the
+ * second was found by the archive gate rather than by reasoning: a glob of
+ * `docs/**\/*.md` matches only files at least one directory deep, so it
+ * silently skipped the 33 documents sitting directly in docs/, reported a
+ * confident 134 and passed a file that did contain narration; and
+ * `git ls-files` works only in a checkout, so this stage died in the published
+ * source archive, which has the documents and no repository around them.
+ *
+ * A walk answers the same question in both trees, which is the only kind of
+ * answer a release gate can use.
  */
-function trackedDocs() {
-  const out = execSync('git ls-files -z -- docs/', { cwd: ROOT, encoding: 'utf8' });
-  return out.split('\0').map((s) => s.trim()).filter((s) => s.endsWith('.md'));
+function docsInTree() {
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch (err) {
+      throw new Error(`could not read ${dir}: ${err.message}`);
+    }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.md')) out.push(relative(ROOT, full));
+    }
+  };
+  walk(join(ROOT, 'docs'));
+  return out;
 }
 
 /** Narration hits in one document, with the line each sits on. */
@@ -64,7 +82,7 @@ export function narrationIn(text) {
   return found.sort((a, b) => a.line - b.line);
 }
 
-const files = trackedDocs();
+const files = docsInTree();
 const problems = [];
 // Counted rather than assumed. A read that silently failed would let this
 // gate pass by inspecting nothing, which is the failure a lint cannot have:
