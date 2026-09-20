@@ -44,6 +44,7 @@ export class FrameDemand {
   private readonly _invalidation = new RenderInvalidation();
   private readonly _signals: FrameDemandSignals;
   private _scheduler: FrameScheduler | null = null;
+  private readonly _drawn = new Set<() => void>();
 
   constructor(signals: FrameDemandSignals) {
     this._signals = signals;
@@ -111,6 +112,30 @@ export class FrameDemand {
     return this._signals.streamingBusy() || this._signals.fading();
   }
 
+  /**
+   * Run `listener` after every frame that drew. Returns the unsubscribe.
+   *
+   * For HUD elements that mirror the camera and have no state of their own:
+   * the view cube is the case this exists for. It polled the heading on an
+   * animation frame of its own, sixty times a second for as long as a scan
+   * was open, to read a number that cannot change without a frame. Reading it
+   * after the frame that could have changed it is the same picture for none
+   * of the cost.
+   *
+   * Deliberately narrow. This is not a frame event anything may subscribe to:
+   * a listener that needs to DRAW should ask for a frame through
+   * {@link changed} instead, or it will paint one frame behind.
+   */
+  onDrawnFrame(listener: () => void): () => void {
+    this._drawn.add(listener);
+    return () => this._drawn.delete(listener);
+  }
+
+  /** Tell the listeners a frame drew. */
+  frameDrawn(): void {
+    for (const listener of this._drawn) listener();
+  }
+
   /** Should this scheduled frame actually draw? */
   shouldRender(): boolean {
     return this._gate.shouldRender(this._signals.nowMs(), {
@@ -142,10 +167,11 @@ export class FrameDemand {
     this._scheduler?.stop();
   }
 
-  /** Stop and forget the scheduler, for teardown. */
+  /** Stop and forget the scheduler and its listeners, for teardown. */
   dispose(): void {
     this._scheduler?.stop();
     this._scheduler = null;
+    this._drawn.clear();
   }
 }
 

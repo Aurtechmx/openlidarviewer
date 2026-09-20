@@ -153,6 +153,16 @@ export interface StreamingRendererHost {
   beginNodeDissolve(material: THREE.PointsNodeMaterial, startProgress: number): number;
   setNodeDissolveProgress(material: THREE.PointsNodeMaterial, progress: number): void;
   endNodeDissolve(material: THREE.PointsNodeMaterial): void;
+  /**
+   * A fade started, so the render loop needs frames until it finishes.
+   *
+   * Fades used to drive an animation frame of their own, which competed with
+   * the render loop and kept running when it did not. They are stepped from
+   * the frame now, so the one thing a fade has to do off-frame is ask for one:
+   * a fade beginning while the loop sleeps would otherwise not move until the
+   * idle heartbeat, and a heartbeat is slower than the fade.
+   */
+  requestFrame(): void;
 }
 
 /** Manages the per-node meshes of a streaming COPC cloud. */
@@ -212,8 +222,6 @@ export class StreamingRenderer {
       fromProgress?: number;
     }
   >();
-  /** Pending requestAnimationFrame handle for the next fade tick, if any. */
-  private _fadeRafHandle: number | null = null;
   /** This source's octree — read once, lazily, for the root reference below. */
   private readonly _octree: StreamingSource['octree'];
   /**
@@ -546,9 +554,9 @@ export class StreamingRenderer {
     this._visibility.set(node.record.id, 'replaceHidden', this._hiddenIds.has(node.record.id));
     handle.mesh.visible = isDrawn(this._visibility.reasonsFor(node.record.id));
     // Opaque dissolve-in: the node starts fully dissolved (progress 0) and
-    // materialises over FADE_MS as the fade tick advances (a setTimeout(16)
-    // fallback covers a no-rAF environment). A settled node keeps the plain
-    // graph — the dither fold is dropped the moment it finishes.
+    // materialises over FADE_MS as the render loop steps it. A settled node
+    // keeps the plain graph — the dither fold is dropped the moment it
+    // finishes.
     if (this._fadeIn) this._startFade(handle.mesh);
   }
 
@@ -659,16 +667,8 @@ export class StreamingRenderer {
 
   /** Remove and dispose every resident mesh. */
   dispose(): void {
-    // Cancel any pending fade tick before disposing meshes so the rAF
-    // callback can't see freed materials.
-    if (this._fadeRafHandle !== null) {
-      if (typeof cancelAnimationFrame !== 'undefined') {
-        cancelAnimationFrame(this._fadeRafHandle);
-      } else {
-        clearTimeout(this._fadeRafHandle);
-      }
-      this._fadeRafHandle = null;
-    }
+    // Nothing to cancel: fades are stepped from the render loop, which stops
+    // asking for frames as soon as the map below is empty.
     this._fades.clear();
     for (const entry of this._meshes.values()) {
       this._host.removeStreamingMesh(entry.mesh);
@@ -687,7 +687,7 @@ export class StreamingRenderer {
     // against depthWrite and EDL/depth stay exact throughout the transition.
     this._host.beginNodeDissolve(mat, 0);
     this._fades.set(mesh, { start: this._now(), mat, direction: 'in' });
-    this._scheduleFadeTick();
+    this._host.requestFrame();
   }
 
   /**
@@ -702,22 +702,17 @@ export class StreamingRenderer {
     // got to (beginNodeDissolve returns that), never snapping to full density.
     const fromProgress = this._host.beginNodeDissolve(mat, 1);
     this._fades.set(mesh, { start: this._now(), mat, direction: 'out', nodeId, fromProgress });
-    this._scheduleFadeTick();
+    this._host.requestFrame();
   }
 
-  /** Coalesce all active fades into a single rAF (or setTimeout fallback). */
-  private _scheduleFadeTick(): void {
-    if (this._fadeRafHandle !== null) return;
-    const onTick = (): void => {
-      this._fadeRafHandle = null;
-      this._stepFades(this._now());
-      if (this._fades.size > 0) this._scheduleFadeTick();
-    };
-    if (typeof requestAnimationFrame !== 'undefined') {
-      this._fadeRafHandle = requestAnimationFrame(onTick);
-    } else {
-      this._fadeRafHandle = setTimeout(onTick, 16) as unknown as number;
-    }
+  /**
+   * Advance every active fade to the current time. Called once per frame by
+   * the render loop, whether or not that frame draws: a fade that only
+   * advanced on drawn frames would stall behind the idle throttle.
+   */
+  stepFades(): void {
+    if (this._fades.size === 0) return;
+    this._stepFades(this._now());
   }
 
   /** Advance every active fade to wall time `now` and finalise completed ones. */

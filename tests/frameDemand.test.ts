@@ -97,3 +97,36 @@ describe('scheduler state', () => {
     expect(d.needsFrame(0)).toBe(true);
   });
 });
+
+describe('drawn-frame listeners', () => {
+  it('runs each listener per drawn frame and stops on unsubscribe', () => {
+    const { d } = demand();
+    let a = 0;
+    let b = 0;
+    const offA = d.onDrawnFrame(() => { a += 1; });
+    d.onDrawnFrame(() => { b += 1; });
+    d.frameDrawn();
+    d.frameDrawn();
+    expect([a, b]).toEqual([2, 2]);
+    offA();
+    d.frameDrawn();
+    expect([a, b]).toEqual([2, 3]);
+  });
+
+  it('runs nothing of its own accord', () => {
+    const { d } = demand();
+    let runs = 0;
+    d.onDrawnFrame(() => { runs += 1; });
+    expect(d.needsFrame(0)).toBe(false);
+    expect(runs).toBe(0);
+  });
+
+  it('drops its listeners on dispose', () => {
+    const { d } = demand();
+    let runs = 0;
+    d.onDrawnFrame(() => { runs += 1; });
+    d.dispose();
+    d.frameDrawn();
+    expect(runs).toBe(0);
+  });
+});

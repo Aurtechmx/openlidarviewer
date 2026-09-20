@@ -1095,7 +1095,7 @@ export class Viewer {
         // The ONE camera-motion signal. Orbit, pan, dolly, the fly controller's
         // `controls.update()` and the damping tail all arrive here; nothing
         // else moves the camera except a tween, which the loop reads directly.
-        this._bumpCameraActivity();
+        this._demand.cameraMoved();
       }
     });
     this._controls.addEventListener('start', () => { this._userInteracting = true; });
@@ -1306,7 +1306,7 @@ export class Viewer {
       else if (this._toolMode === 'annotate') this._handleAnnotateClick(e, canvas);
     };
     this._onCanvasPointerMove = (e) => {
-      this._bumpRenderActivity();
+      this._demand.input();
       this._pointerNdcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
       this._pointerNdcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
       this._pointerClientX = e.clientX;
@@ -1335,7 +1335,7 @@ export class Viewer {
     // Mouse pointers stay with OrbitControls; a picking tool suspends it so a
     // 2-finger measurement drag isn't hijacked.
     this._onCanvasPointerDown = (e) => {
-      this._bumpRenderActivity();
+      this._demand.input();
       if (e.pointerType !== 'touch') return;
       if (this._toolMode !== 'none') return;
       this._touchTracker.down(e.pointerId, e.offsetX, e.offsetY);
@@ -1362,7 +1362,7 @@ export class Viewer {
     // A cancel is NOT an up: aliased above, it completed a tap never made.
     this._onCanvasPointerCancel = (e) => { if (endTouch(e)) this._tapGate.cancel(); };
     this._onWindowKeyDown = (e) => {
-      this._bumpRenderActivity();
+      this._demand.input();
       if (e.code === 'Escape' && this._toolMode !== 'none') this._setToolMode('none');
     };
     this._onVisibilityChange = () => {
@@ -1370,7 +1370,7 @@ export class Viewer {
       // Coming back from background — bump activity so the first few
       // post-resume frames render at full rate (avoids a stuttery
       // catch-up on the first input after the tab regains focus).
-      if (!document.hidden) this._bumpRenderActivity();
+      if (!document.hidden) this._demand.input();
       if (document.hidden) {
         // Tab is in background — stop the render loop. The next
         // visibility change resumes it. Streaming work that fires on
@@ -1429,7 +1429,7 @@ export class Viewer {
         // Force the first window of frames to render at full rate so
         // the empty state, hero animation, and any pending tween land
         // smoothly before the idle-render throttle kicks in.
-        this._bumpRenderActivity();
+        this._demand.input();
         this._startLoop();
       },
       (err: unknown) => {
@@ -2313,7 +2313,7 @@ export class Viewer {
     };
     for (const entry of this._clouds.values()) apply(entry.material);
     for (const m of this._streamingMaterials()) apply(m);
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /** The active clip box, or null when none is set. */
@@ -2379,7 +2379,7 @@ export class Viewer {
       writeFloatColorsInto(arr, raw);
       entry.colorAttr.needsUpdate = true;
     }
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /**
@@ -2769,7 +2769,7 @@ export class Viewer {
     entry.mode = mode;
     // Color buffer just changed — make sure the idle-render throttle
     // doesn't swallow the next frame so the user sees the new colours.
-    this._bumpRenderActivity();
+    this._demand.input();
     // The legend describes the active mode's ramp — refresh it.
     this._notifyColorContextChanged();
   }
@@ -2780,9 +2780,19 @@ export class Viewer {
    * application, theme swap, embed-bridge command, etc.). Bumps the
    * idle-render throttle so the next few frames render at full rate
    * without the caller having to know about the throttle.
+   *
+   * Also how the streaming renderer's fades reach the loop. They are stepped
+   * from the frame now rather than from an animation frame of their own, so a
+   * fade beginning while the loop sleeps has to ask for one; the holdover
+   * covers its first window and `FrameDemand`'s fade signal the rest.
    */
   requestFrame(): void {
-    this._bumpRenderActivity();
+    this._demand.input();
+  }
+
+  /** Run `listener` after every drawn frame; returns the unsubscribe. */
+  onDrawnFrame(listener: () => void): () => void {
+    return this._demand.onDrawnFrame(listener);
   }
 
   /**
@@ -3058,7 +3068,7 @@ export class Viewer {
     // colour mode only needs refreshing when class colours are already shown.
     if (entry.mode === 'classification') this._refreshClassificationColours(id);
     this._markClassificationEdited(id); // a derive replaces the classification
-    this._bumpRenderActivity();
+    this._demand.input();
     return true;
   }
 
@@ -3290,7 +3300,7 @@ export class Viewer {
     // shape, so rebuild the affected pipelines. Changing WHICH classes are hidden
     // while still filtered is a uniform-only change (the mask array re-uploads).
     if (wasFiltered !== anyHidden) this._reapplyAllSizeModes();
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /**
@@ -3308,7 +3318,7 @@ export class Viewer {
     // On/off changes the size graph's SHAPE, so rebuild pipelines on that
     // transition only; moving the window while active is a uniform-only change.
     if (wasActive !== (enabled !== 0)) this._reapplyAllSizeModes();
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /** ONE cloud's own origin + up-axis — the facts that decide its conversion. */
@@ -3363,7 +3373,7 @@ export class Viewer {
     // affected pipelines on that transition only. Narrowing an already-active
     // window is a uniform-only change.
     if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /**
@@ -4722,7 +4732,7 @@ export class Viewer {
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);
       // Repaint the live view at the restored size on the next frames.
-      this._bumpRenderActivity();
+      this._demand.input();
     }
   }
 
@@ -5970,16 +5980,6 @@ export class Viewer {
     return sum / this._frameCount;
   }
 
-  /** Any input: full-rate frames for the holdover window. */
-  private _bumpRenderActivity(): void {
-    this._demand.input();
-  }
-
-  /** The camera moved: full rate, and the motion-gated effects stand down. */
-  private _bumpCameraActivity(): void {
-    this._demand.cameraMoved();
-  }
-
   /** `performance.now()` where it exists, wall clock otherwise. */
   private _nowMs(): number {
     return (typeof performance !== 'undefined' && performance.now)
@@ -6066,7 +6066,7 @@ export class Viewer {
       // the verdict and the pose comparison stays quiet.
       updateNav: (delta) => {
         this._nav.update(delta);
-        if (this._camPose.movedOutsideControls(this._camera, this._nav.mode)) this._bumpCameraActivity();
+        if (this._camPose.movedOutsideControls(this._camera, this._nav.mode)) this._demand.cameraMoved();
       },
       maintainOrbitCenter: () => this._maintainOrbitCenter(),
       updateAdaptiveEdl: () => this._updateAdaptiveEdl(),
@@ -6088,13 +6088,10 @@ export class Viewer {
       renderEdl: () => { this._syncActiveCamera(); this._post.render(); },
       renderScene: () => { this._syncActiveCamera(); this._renderer.render(this._scene, this._activeCamera()); },
       edlPaintedAtRest: () => this._edlPaintedAtRest,
-      setEdlPaintedAtRest: (value) => {
-        this._edlPaintedAtRest = value;
-      },
+      setEdlPaintedAtRest: (value) => { this._edlPaintedAtRest = value; },
       hasStreaming: () => this._streaming !== null,
-      pumpStreamingCommit: () => {
-        this._streaming?.commit.pump(this._smoothedFrameMs());
-      },
+      pumpStreamingCommit: () => this._streaming?.commit.pump(this._smoothedFrameMs()),
+      stepStreamingFades: () => this._streaming?.renderer.stepFades(),
       streamingTickDue: (nowMs: number) => this._streaming?.scheduler.tickDue(nowMs, this._phases.phase) ?? false,
       tickStreaming: () => this._tickStreaming(),
     cullStreamingToFrustum: () => this._streaming?.renderer.cullToFrustum(this._activeCamera(), this._streamingViewProj),
@@ -6120,6 +6117,7 @@ export class Viewer {
       renderMeasureOverlay: () => this._measure.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
       renderInspectOverlay: () => this._inspect.render(),
       renderAnnotateOverlay: () => this._annotate.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
+      notifyFrameDrawn: () => this._demand.frameDrawn(),
     };
   }
 
@@ -6142,7 +6140,7 @@ export class Viewer {
     // A canvas resize invalidates the rendered frame, so make sure
     // the idle-render throttle holds at full rate for the resize
     // settle window.
-    this._bumpRenderActivity();
+    this._demand.input();
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return;

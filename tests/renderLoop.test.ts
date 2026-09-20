@@ -40,6 +40,8 @@ function makeHost(over: Partial<RenderLoopHost> = {}): RenderLoopHost {
     setEdlPaintedAtRest: vi.fn(),
     hasStreaming: () => false,
     pumpStreamingCommit: vi.fn(),
+    stepStreamingFades: vi.fn(),
+    notifyFrameDrawn: vi.fn(),
     tickStreaming: vi.fn(),
     streamingTickDue: () => true,
     cullStreamingToFrustum: vi.fn(),
@@ -174,6 +176,9 @@ describe('runRenderFrame — streaming cadence', () => {
 
     expect(host.pumpStreamingCommit).toHaveBeenCalledTimes(frames);
     expect(host.tickStreaming).toHaveBeenCalledTimes(3);
+    // Fades step on every iteration, not on the scheduler's cadence: a fade
+    // that advanced at 10 Hz would be visible as a stutter.
+    expect(host.stepStreamingFades).toHaveBeenCalledTimes(frames);
   });
 
   it('does not tick while the host says it is not due', () => {

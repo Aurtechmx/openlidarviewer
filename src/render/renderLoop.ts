@@ -82,11 +82,27 @@ export interface RenderLoopHost {
   edlPaintedAtRest(): boolean;
   /** Record whether this frame's at-rest paint used EDL. */
   setEdlPaintedAtRest(value: boolean): void;
+  /**
+   * A frame drew: let the camera-mirroring HUD elements read it back.
+   *
+   * The view cube used to poll the heading on an animation frame of its own.
+   * A heading cannot change without a frame, so the poll was a second loop
+   * asking a question only this one can answer.
+   */
+  notifyFrameDrawn(): void;
 
   /** Is a streaming (COPC/EPT) session attached? */
   hasStreaming(): boolean;
   /** Drain metered streaming commits (no-op in immediate mode). */
   pumpStreamingCommit(): void;
+  /**
+   * Advance any node fade that is part way through.
+   *
+   * Fades drove an animation frame of their own, which competed with this
+   * loop and kept running when it did not. Stepped here, they advance on the
+   * loop's clock and stop when it does.
+   */
+  stepStreamingFades(): void;
   /** Advance the streaming frame counter and return its new value. */
   /** Run the throttled streaming scheduler tick. */
   tickStreaming(): void;
@@ -207,6 +223,9 @@ export function runRenderFrame(host: RenderLoopHost): void {
   // commit pump and frame counter advance every frame.
   if (host.hasStreaming()) {
     host.pumpStreamingCommit();
+    // Every iteration, drawn or not: a fade that only advanced on drawn
+    // frames would stall behind the idle throttle part way through.
+    host.stepStreamingFades();
     if (host.streamingTickDue(nowMs)) host.tickStreaming();
   }
 
@@ -247,5 +266,6 @@ export function runRenderFrame(host: RenderLoopHost): void {
     host.renderMeasureOverlay();
     host.renderInspectOverlay();
     host.renderAnnotateOverlay();
+    host.notifyFrameDrawn();
   }
 }

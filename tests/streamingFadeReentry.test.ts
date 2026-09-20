@@ -65,6 +65,7 @@ function makeFakeViewer(rec: Recorder): { viewer: Viewer; meshes: () => FakeMesh
       return start;
     },
     setNodeDissolveProgress(): void {},
+    requestFrame(): void {},
     endNodeDissolve(mat: unknown): void {
       rec.end.push(mat as { id: number });
     },

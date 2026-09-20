@@ -2,13 +2,15 @@
  * compassController.test.ts
  *
  * Covers the compass life cycle that used to be four module-scope `let`s in
- * main.ts: the preference resolution, the "no scan, no compass" rule, the rAF
- * loop and its visibility pausing, and the open-then-close race the mount-time
+ * main.ts: the preference resolution, the "no scan, no compass" rule, the
+ * subscription to drawn frames, and the open-then-close race the mount-time
  * re-validation exists to stop.
  *
  * No DOM and no renderer: the controller takes its viewer, its ViewCube loader
- * and its platform (rAF / visibility / storage) as structural parameters, so
- * the fakes below are the whole environment.
+ * and its platform (storage) as structural parameters, so the fakes below are
+ * the whole environment. The rose used to spin on an animation frame of its
+ * own, paused by a visibility handler; it now updates after each frame the
+ * render loop draws, which already stops when the tab is hidden.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -18,67 +20,40 @@ import {
   type CompassViewer,
 } from '../src/ui/compassController';
 
-function fakeViewer(cloudCount = 1): CompassViewer & { count: number } {
+function fakeViewer(cloudCount = 1): CompassViewer & {
+  count: number;
+  /** Deliver one drawn frame to whatever is subscribed. */
+  draw(): void;
+  listeners(): number;
+} {
+  const subscribed = new Set<() => void>();
   const v = {
     count: cloudCount,
     clouds: () => ({ length: v.count }),
     cameraHeadingDeg: () => 42,
     setStandardView: () => undefined,
+    onDrawnFrame: (listener: () => void) => {
+      subscribed.add(listener);
+      return () => subscribed.delete(listener);
+    },
+    draw: () => { for (const l of [...subscribed]) l(); },
+    listeners: () => subscribed.size,
   };
   return v;
 }
 
 interface Harness {
   platform: CompassPlatform;
-  /** Run the next queued animation frame, if the loop is running. */
-  step(): boolean;
-  setHidden(hidden: boolean): void;
-  frames(): number;
-  visListeners(): number;
   stored(): string | null;
 }
 
 function harness(initialPref: string | null = null): Harness {
-  let pending: (() => void) | null = null;
-  let nextHandle = 1;
-  let live = 0;
-  let hidden = false;
   let pref = initialPref;
-  const listeners = new Set<() => void>();
   const platform: CompassPlatform = {
-    requestAnimationFrame(cb) {
-      pending = cb;
-      live += 1;
-      return nextHandle++;
-    },
-    cancelAnimationFrame() {
-      pending = null;
-      live -= 1;
-    },
-    isHidden: () => hidden,
-    onVisibilityChange: (fn) => void listeners.add(fn),
-    offVisibilityChange: (fn) => void listeners.delete(fn),
     readPref: () => pref,
     writePref: (value) => { pref = value; },
   };
-  return {
-    platform,
-    step() {
-      const cb = pending;
-      if (!cb) return false;
-      pending = null;
-      live -= 1;
-      cb();
-      return true;
-    },
-    setHidden(next) {
-      hidden = next;
-      for (const fn of [...listeners]) fn();
-    },
-    frames: () => live,
-    visListeners: () => listeners.size,
-    stored: () => pref,
-  };
+  return { platform, stored: () => pref };
 }
 
 /** A ViewCube stand-in whose load can be resolved by hand. */
@@ -147,13 +122,17 @@ describe('compass mounting', () => {
   });
 
   it('mounts once a scan is open and the preference is on', async () => {
-    const { c, cube, h } = build('on');
-    c.attachViewer(fakeViewer(1));
+    const { c, cube } = build('on');
+    const v = fakeViewer(1);
+    c.attachViewer(v);
     cube.state.resolve();
     await Promise.resolve();
     expect(cube.state.mounts).toBe(1);
-    expect(h.frames()).toBe(1);
-    expect(h.visListeners()).toBe(1);
+    expect(v.listeners()).toBe(1);
+    // Mounting updates once rather than waiting for a frame: on a parked
+    // camera the next drawn frame may be a heartbeat away, and the rose must
+    // not sit at north until then.
+    expect(cube.state.updates).toBe(1);
   });
 
   it('does not mount when the preference is off', async () => {
@@ -189,44 +168,40 @@ describe('compass mounting', () => {
   });
 });
 
-describe('compass frame loop', () => {
-  it('spins the rose and pauses while the tab is hidden', async () => {
-    const { c, cube, h } = build('on');
-    c.attachViewer(fakeViewer(1));
+describe('compass frame subscription', () => {
+  it('updates once per drawn frame and never between them', async () => {
+    const { c, cube } = build('on');
+    const v = fakeViewer(1);
+    c.attachViewer(v);
     cube.state.resolve();
     await Promise.resolve();
+    const atMount = cube.state.updates;
 
-    h.step();
-    h.step();
-    expect(cube.state.updates).toBe(2);
-    expect(h.frames()).toBe(1);
-
-    h.setHidden(true);
-    expect(h.frames()).toBe(0);
-    const updatesWhileHidden = cube.state.updates;
-    expect(h.step()).toBe(false);
-    expect(cube.state.updates).toBe(updatesWhileHidden);
-
-    h.setHidden(false);
-    expect(h.frames()).toBe(1);
-    h.step();
-    expect(cube.state.updates).toBe(updatesWhileHidden + 1);
+    v.draw();
+    v.draw();
+    expect(cube.state.updates).toBe(atMount + 2);
+    // Nothing runs on its own: no frames, no updates. The old loop kept
+    // spinning here whatever the renderer was doing.
+    expect(cube.state.updates).toBe(atMount + 2);
   });
 
-  it('tears down the frame, the listener and the widget when disabled', async () => {
-    const { c, cube, h } = build('on');
-    c.attachViewer(fakeViewer(1));
+  it('tears down the subscription and the widget when disabled', async () => {
+    const { c, cube } = build('on');
+    const v = fakeViewer(1);
+    c.attachViewer(v);
     cube.state.resolve();
     await Promise.resolve();
 
     c.setEnabled(false);
     expect(cube.state.disposes).toBe(1);
-    expect(h.frames()).toBe(0);
-    expect(h.visListeners()).toBe(0);
+    expect(v.listeners()).toBe(0);
+    const after = cube.state.updates;
+    v.draw();
+    expect(cube.state.updates).toBe(after);
   });
 
   it('tears down when the last cloud closes, and comes back when one opens', async () => {
-    const { c, cube, h } = build('on');
+    const { c, cube } = build('on');
     const v = fakeViewer(1);
     c.attachViewer(v);
     cube.state.resolve();
@@ -235,13 +210,13 @@ describe('compass frame loop', () => {
     v.count = 0;
     c.refresh();
     expect(cube.state.disposes).toBe(1);
-    expect(h.frames()).toBe(0);
+    expect(v.listeners()).toBe(0);
 
     v.count = 2;
     c.refresh();
     cube.state.resolve();
     await Promise.resolve();
     expect(cube.state.mounts).toBe(2);
-    expect(h.frames()).toBe(1);
+    expect(v.listeners()).toBe(1);
   });
 });

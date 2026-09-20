@@ -3123,3 +3123,50 @@ already had for the same reason.
 
 `_rafId` is gone. Stopping the scheduler cancels both the frame and the
 heartbeat, so the field had nothing left to hold.
+
+### L126 · FIXED · ARCHITECTURE
+
+Phase B4. With the render loop request-driven, every other animation frame on
+the page is a loop that does not know the renderer has learned to sleep. Two
+of them were the viewer's own.
+
+Node fades drove their own frame. A fade is a change to what is drawn, so it
+belongs to the render loop: `StreamingRenderer.stepFades` is called from the
+frame now, on every iteration rather than only on drawn ones, because a fade
+that advanced behind the idle throttle would stall part way through. Starting
+a fade asks for a frame through the host, which matters only in the one case
+the poll cannot cover: a fade beginning while the loop sleeps would otherwise
+not move until the heartbeat, and the heartbeat is slower than the fade.
+
+The view cube polled the camera heading sixty times a second for as long as a
+scan was open, to read a number that cannot change without a frame. It now
+updates after each frame that drew, through a narrow listener seam on
+`FrameDemand`. Its platform shed the animation frame and the visibility
+handler with it: the render loop already stops when the tab is hidden, so the
+compass had been re-deciding that for itself.
+
+Verified in a headed browser. The rose reads `rotate(-270deg)` before a drag
+and `rotate(-239.766deg)` after it, with no frame owner of its own.
+
+The rest of the audit found nothing to move. The relief tile and the profile
+section each coalesce their own repaints onto one frame and draw to their own
+2D canvas; they are request-driven already and route nothing through the
+scene. Frame telemetry samples on a loop only while a benchmark collects, and
+routing it through the scheduler would change what it measures. The boot tour
+and the workbench use a double frame to wait for layout, which is a one-shot.
+
+One owner is left and it is not ours. three's WebGPU renderer starts an
+internal animation loop when the backend initialises and self-schedules at the
+panel's rate whether or not anything is drawn, updating its node frame and
+resetting its counters. Stopping it means reaching into a private field, and
+the node frame it advances drives time-based material nodes, so it stays. It
+is the reason a raw animation-frame count cannot tell a sleeping viewer from a
+running one, and why the measurements in L125 separate the vendor chunk out.
+
+Two readings during this phase looked like regressions and were not. A drag on
+the 81 MB COPC produced zero frames for two seconds afterwards, which is the
+browser stopping animation frames for the whole page: the vendor loop's count
+went to zero in the same window while a 100 ms interval kept firing
+throughout. And the view cube did not mount on that scan at all, before the
+change as well as after, so the compass evidence above comes from the light
+fixture instead.

@@ -35,18 +35,27 @@ export interface CompassViewer {
   clouds(): { readonly length: number };
   /** Camera heading in degrees, read once per frame. */
   cameraHeadingDeg(): number;
+  /**
+   * Run a listener after every drawn frame; returns the unsubscribe.
+   *
+   * The compass used to poll the heading on an animation frame of its own,
+   * for as long as a scan was open. A heading cannot change without a frame,
+   * so that was a second loop asking a question the render loop answers, and
+   * it kept asking after the render loop learned to sleep.
+   */
+  onDrawnFrame(listener: () => void): () => void;
   /** Snap the camera to one of the gizmo's faces. */
   setStandardView(view: StandardView): unknown;
 }
 
-/** The browser services the compass needs, injectable for tests. */
+/**
+ * The browser services the compass needs, injectable for tests.
+ *
+ * No animation frame and no visibility handler any more: the compass updates
+ * from the render loop's drawn frames, which already stop when the tab is
+ * hidden and when nothing is happening.
+ */
 export interface CompassPlatform {
-  requestAnimationFrame(cb: () => void): number;
-  cancelAnimationFrame(handle: number): void;
-  /** True while the tab is hidden — the rose does not spin then. */
-  isHidden(): boolean;
-  onVisibilityChange(fn: () => void): void;
-  offVisibilityChange(fn: () => void): void;
   /** Persisted preference; null when unset or unreadable (private mode). */
   readPref(): string | null;
   writePref(value: string): void;
@@ -89,11 +98,6 @@ const COMPASS_PREF_KEY = 'olv.compass';
 /** The real browser services. Built on demand so importing this is DOM-free. */
 export function browserCompassPlatform(): CompassPlatform {
   return {
-    requestAnimationFrame: (cb) => window.requestAnimationFrame(cb),
-    cancelAnimationFrame: (handle) => window.cancelAnimationFrame(handle),
-    isHidden: () => document.hidden,
-    onVisibilityChange: (fn) => document.addEventListener('visibilitychange', fn),
-    offVisibilityChange: (fn) => document.removeEventListener('visibilitychange', fn),
     readPref: () => storageGet(COMPASS_PREF_KEY),
     writePref: (value) => storageSet(COMPASS_PREF_KEY, value),
   };
@@ -116,8 +120,7 @@ export function createCompassController(opts: CompassControllerOptions): Compass
   })();
   let viewer: CompassViewer | null = null;
   let handle: ViewCubeHandle | null = null;
-  let raf = 0;
-  let visHandler: (() => void) | null = null;
+  let unsubscribe: (() => void) | null = null;
 
   function start(): void {
     if (!enabled || handle || !viewer) return;
@@ -138,19 +141,10 @@ export function createCompassController(opts: CompassControllerOptions): Compass
         onView: (view) => void v.setStandardView(view),
       });
       handle = cube;
-      const tick = (): void => {
-        cube.update();
-        raf = platform.requestAnimationFrame(tick);
-      };
-      const resume = (): void => {
-        if (raf === 0 && !platform.isHidden()) raf = platform.requestAnimationFrame(tick);
-      };
-      const pause = (): void => {
-        if (raf !== 0) { platform.cancelAnimationFrame(raf); raf = 0; }
-      };
-      visHandler = (): void => (platform.isHidden() ? pause() : resume());
-      platform.onVisibilityChange(visHandler);
-      resume();
+      // One update straight away: the first drawn frame may be a while off on
+      // a parked camera, and the rose must not sit at north until then.
+      cube.update();
+      unsubscribe = v.onDrawnFrame(() => cube.update());
     })
       // Additive HUD: a chunk-load failure must not surface as an unhandled
       // rejection (the caller is synchronous and can't catch this promise).
@@ -158,8 +152,7 @@ export function createCompassController(opts: CompassControllerOptions): Compass
   }
 
   function stop(): void {
-    if (raf !== 0) { platform.cancelAnimationFrame(raf); raf = 0; }
-    if (visHandler) { platform.offVisibilityChange(visHandler); visHandler = null; }
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (handle) { handle.dispose(); handle = null; }
   }
 
