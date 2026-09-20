@@ -246,6 +246,14 @@ test('arrow keys orbit the camera in orbit mode', async ({
     browserName !== 'chromium',
     `${browserName} (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read`,
   );
+  // The same runner behaviour the E57 test above calls `test.slow()` for. This
+  // one drops a scan, waits out the framing tween and then makes two clipboard
+  // round trips through a tool button: locally it takes 12 to 21 seconds of the
+  // 30-second default, and on a loaded runner it took 34.6 and 35.4 across a
+  // run where every other job on the same commit passed. The assertions are
+  // unchanged; only the budget is.
+  test.slow();
+
   // The Share link encodes the camera pose; reading it before and after a
   // keyboard orbit proves the arrow keys actually moved the camera.
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
