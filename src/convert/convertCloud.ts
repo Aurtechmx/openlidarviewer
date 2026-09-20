@@ -254,6 +254,12 @@ export function convertCloud(
     const verticalUnitCode = sourceCrs
       ? unitToGeoTiff(srcCtx.verticalLinearUnit ?? srcCtx.linearUnit)
       : null;
+    // Global Encoding bit 0 on the source, when it declared one. undefined
+    // leaves the writer's modern default in place for a source that carries no
+    // such declaration at all.
+    const declaredGps = cloud.metadata?.gpsTimeType;
+    const gpsStandardFromSource =
+      declaredGps === undefined ? undefined : declaredGps === 'adjusted-standard';
     if (opts.format === 'las14') {
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
         log.push({
@@ -262,6 +268,7 @@ export function convertCloud(
         });
       }
       bytes = writeLas14(g, {
+        gpsStandardTime: gpsStandardFromSource,
         epsg: outEpsg ?? undefined,
         isGeographic: geo,
         linearUnitCode,
@@ -289,6 +296,11 @@ export function convertCloud(
         }
       }
       bytes = writeLas(g, {
+        // Declare the time the source declared. Adjusted Standard GPS Time and
+        // GPS Week Time are different quantities, so carrying the values across
+        // unchanged while relabelling them changes what they mean. A source
+        // that did not say keeps the modern default.
+        gpsStandardTime: gpsStandardFromSource,
         epsg: outEpsg ?? undefined,
         isGeographic: geo,
         linearUnitCode,

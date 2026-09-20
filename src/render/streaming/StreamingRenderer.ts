@@ -31,6 +31,10 @@ import { computeElevationRange, computeScalarRange } from '../elevationRange';
 import type { StreamingColorRanges } from './streamingColors';
 import type { RgbAppearance } from '../rgbAppearance';
 import { markNodeResolution } from '../streamingLodSize';
+import { VisibilityReasonStore, isDrawn } from './visibilityReasons';
+import { cullResidentNodes, planesFromTuples, type FrustumPlanes } from './nodeFrustumCulling';
+import { frustumPlanesFromViewProjection } from './streamingScore';
+import type { Box6 } from '../../io/copc/copcTypes';
 
 /**
  * Node dissolve tunables. A freshly resident node materialises over `FADE_MS`
@@ -102,6 +106,15 @@ interface NodeMesh {
   mesh: THREE.Mesh;
   colorAttr: THREE.InstancedBufferAttribute;
   decoded: DecodedChunk;
+  /**
+   * The node's bounds in WORLD space, as the record states them.
+   *
+   * World rather than render frame on purpose. The record's own comment warns
+   * that a record built in an already-recentred frame is shifted twice and
+   * culls to nothing, so the shift happens once, at the moment of culling,
+   * from the origin the caller passes.
+   */
+  bounds: Box6;
 }
 
 /** Construction options for {@link StreamingRenderer}. */
@@ -140,12 +153,29 @@ export interface StreamingRendererHost {
   beginNodeDissolve(material: THREE.PointsNodeMaterial, startProgress: number): number;
   setNodeDissolveProgress(material: THREE.PointsNodeMaterial, progress: number): void;
   endNodeDissolve(material: THREE.PointsNodeMaterial): void;
+  /**
+   * A fade started, so the render loop needs frames until it finishes.
+   *
+   * Fades used to drive an animation frame of their own, which competed with
+   * the render loop and kept running when it did not. They are stepped from
+   * the frame now, so the one thing a fade has to do off-frame is ask for one:
+   * a fade beginning while the loop sleeps would otherwise not move until the
+   * idle heartbeat, and a heartbeat is slower than the fade.
+   */
+  requestFrame(): void;
 }
 
 /** Manages the per-node meshes of a streaming COPC cloud. */
 export class StreamingRenderer {
   private readonly _host: StreamingRendererHost;
   private readonly _meshes = new Map<string, NodeMesh>();
+  /**
+   * The one place that decides what draws. Each reason is set independently
+   * and combined here, so the replace frontier and the draw frustum stop
+   * overwriting one another's answer.
+   */
+  private readonly _visibility = new VisibilityReasonStore();
+  private readonly _renderOrigin: readonly [number, number, number];
   private _mode: ColorMode;
   private _ranges: StreamingColorRanges;
   /**
@@ -192,8 +222,6 @@ export class StreamingRenderer {
       fromProgress?: number;
     }
   >();
-  /** Pending requestAnimationFrame handle for the next fade tick, if any. */
-  private _fadeRafHandle: number | null = null;
   /** This source's octree — read once, lazily, for the root reference below. */
   private readonly _octree: StreamingSource['octree'];
   /**
@@ -216,6 +244,14 @@ export class StreamingRenderer {
     this._fadeIn = options.fadeIn ?? false;
     this._now = options.now ?? nowMs;
     this._octree = cloud.octree;
+    // The frame streamed positions are drawn in. Held so the per-frame cull
+    // shifts world node bounds into it exactly once, from the same origin the
+    // scheduler localises with. A source that states no origin is drawn in
+    // world coordinates, so the identity shift is the right reading rather
+    // than a fallback: zero moves nothing, and the cull then compares world
+    // bounds against a world-frame camera.
+    const ro = cloud.renderOrigin as ArrayLike<number> | undefined;
+    this._renderOrigin = ro ? [ro[0] ?? 0, ro[1] ?? 0, ro[2] ?? 0] : [0, 0, 0];
     // Elevation range from the TIGHT data bounds, not the octree cube. A COPC
     // cube barely over-reports, but an EPT cube is cubic around a thin terrain
     // slab, so its Z can be tens of thousands of metres tall while the data
@@ -272,6 +308,31 @@ export class StreamingRenderer {
   }
 
   /**
+   * Which optional channels the resident meshes actually uploaded.
+   *
+   * The memory readout needs this because a point costs what its attributes
+   * cost: a classified node binds `aClass` and one carrying intensity binds
+   * `aIntensity`, four bytes each on top of position and colour. Reporting the
+   * position-and-colour floor for every cloud understated a classified one by a
+   * quarter.
+   *
+   * Reads the decoded chunks rather than a flag set at construction, so it
+   * cannot claim a channel the meshes do not carry. A channel counts as present
+   * when any resident node uploaded it, which is what the allocated buffers
+   * reflect.
+   */
+  get uploadedAttributes(): { classification: boolean; intensity: boolean } {
+    let classification = false;
+    let intensity = false;
+    for (const entry of this._meshes.values()) {
+      if (entry.decoded.classification !== undefined) classification = true;
+      if (entry.decoded.intensity !== undefined) intensity = true;
+      if (classification && intensity) break;
+    }
+    return { classification, intensity };
+  }
+
+  /**
    * Ids the replace frontier says must not draw this frame — a coarse parent a
    * REPLACE tileset has refined away, or a node withheld under an incomplete
    * replacement. Held so a mesh that arrives after the frontier was computed is
@@ -289,8 +350,86 @@ export class StreamingRenderer {
    */
   applyReplaceVisibility(hidden: ReadonlySet<string>): void {
     this._hiddenIds = hidden;
+    this._visibility.setFromHiddenSet(this._meshes.keys(), 'replaceHidden', hidden);
+    this._applyVisibility();
+  }
+
+  /**
+   * Update the draw-frustum reason from the camera actually being rendered.
+   *
+   * Called at RENDER cadence rather than on the scheduler tick, which runs at
+   * roughly a sixth of it: a cull that followed the scheduler would lag the
+   * camera by several frames and hide a node the viewer is already looking at.
+   *
+   * Residency is untouched. A node outside the frustum keeps its mesh, its
+   * decoded chunk and its place in the cache, so turning back costs a draw
+   * rather than a re-stream, and the tools that read chunks directly are
+   * unaffected because they never consulted `mesh.visible`.
+   *
+   * `renderOrigin` shifts the world bounds into the drawn frame exactly once.
+   * The records are in world space and the caller's origin is the same one the
+   * scheduler localises with; passing an already-recentred origin would shift
+   * twice and cull the whole scan away.
+   */
+  applyFrustumVisibility(
+    planes: FrustumPlanes,
+    renderOrigin: readonly [number, number, number],
+  ): void {
+    const nodes = [...this._meshes].map(([key, entry]) => ({ key, bounds: entry.bounds }));
+    const { residentNotDrawn } = cullResidentNodes(nodes, planes, renderOrigin);
+    const hidden = new Set(residentNotDrawn);
+    this._visibility.setFromHiddenSet(this._meshes.keys(), 'frustumHidden', hidden);
+    this._applyVisibility();
+  }
+
+  /**
+   * Cull to the camera about to be rendered, deriving the planes here.
+   *
+   * The renderer already holds the source, so the render origin comes from its
+   * own construction rather than from the caller. That keeps the Viewer's
+   * per-frame call to one expression and, more to the point, removes the
+   * chance of a caller passing an origin the bounds were already expressed
+   * relative to, which the record type warns culls the whole scan away.
+   */
+  cullToFrustum(camera: THREE.Camera, viewProj: THREE.Matrix4): void {
+    camera.updateMatrixWorld();
+    viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.applyFrustumVisibility(
+      planesFromTuples(frustumPlanesFromViewProjection(viewProj.elements)),
+      this._renderOrigin,
+    );
+  }
+
+  /**
+   * Is a node fade part way through?
+   *
+   * A fade changes what is on screen without anything asking the renderer for
+   * a frame, so a loop that sleeps when nothing asks would stop mid-dissolve
+   * and leave a node half drawn. The frame scheduler reads this.
+   */
+  hasActiveFades(): boolean {
+    return this._fades.size > 0;
+  }
+
+  /** How many resident meshes the frustum is currently holding back. */
+  frustumHiddenCount(): number {
+    let n = 0;
+    for (const id of this._meshes.keys()) {
+      if (this._visibility.reasonsFor(id).frustumHidden === true) n += 1;
+    }
+    return n;
+  }
+
+  /**
+   * Write the combined answer to every mesh.
+   *
+   * The only assignment to `mesh.visible` in this class. Anything that wants to
+   * hide a node records a reason and comes through here, which is what stops
+   * two systems from overwriting each other.
+   */
+  private _applyVisibility(): void {
     for (const [id, entry] of this._meshes) {
-      entry.mesh.visible = !hidden.has(id);
+      entry.mesh.visible = isDrawn(this._visibility.reasonsFor(id));
     }
   }
 
@@ -312,6 +451,7 @@ export class StreamingRenderer {
         this._host.endNodeDissolve(fade.mat);
         this._host.removeStreamingMesh(existing.mesh);
         this._meshes.delete(node.record.id);
+        this._visibility.forget(node.record.id);
       } else {
         return; // settled or fading in — already the current mesh
       }
@@ -400,16 +540,23 @@ export class StreamingRenderer {
     // A node whose replace frontier said "withheld" before its mesh existed is
     // hidden on creation, so it does not flash for the frame before the next
     // tick re-applies the frontier. No-op for an additive source (empty set).
-    if (this._hiddenIds.has(node.record.id)) handle.mesh.visible = false;
     this._meshes.set(node.record.id, {
       mesh: handle.mesh,
       colorAttr: handle.colorAttr,
       decoded,
+      bounds: node.record.bounds,
     });
+    // A node whose replace frontier said "withheld" before its mesh existed is
+    // hidden on creation, so it does not flash for the frame before the next
+    // tick re-applies the frontier. Recorded as a reason rather than written
+    // to the mesh, so the next frustum pass composes with it instead of
+    // clearing it. No-op for an additive source (empty set).
+    this._visibility.set(node.record.id, 'replaceHidden', this._hiddenIds.has(node.record.id));
+    handle.mesh.visible = isDrawn(this._visibility.reasonsFor(node.record.id));
     // Opaque dissolve-in: the node starts fully dissolved (progress 0) and
-    // materialises over FADE_MS as the fade tick advances (a setTimeout(16)
-    // fallback covers a no-rAF environment). A settled node keeps the plain
-    // graph — the dither fold is dropped the moment it finishes.
+    // materialises over FADE_MS as the render loop steps it. A settled node
+    // keeps the plain graph — the dither fold is dropped the moment it
+    // finishes.
     if (this._fadeIn) this._startFade(handle.mesh);
   }
 
@@ -520,16 +667,8 @@ export class StreamingRenderer {
 
   /** Remove and dispose every resident mesh. */
   dispose(): void {
-    // Cancel any pending fade tick before disposing meshes so the rAF
-    // callback can't see freed materials.
-    if (this._fadeRafHandle !== null) {
-      if (typeof cancelAnimationFrame !== 'undefined') {
-        cancelAnimationFrame(this._fadeRafHandle);
-      } else {
-        clearTimeout(this._fadeRafHandle);
-      }
-      this._fadeRafHandle = null;
-    }
+    // Nothing to cancel: fades are stepped from the render loop, which stops
+    // asking for frames as soon as the map below is empty.
     this._fades.clear();
     for (const entry of this._meshes.values()) {
       this._host.removeStreamingMesh(entry.mesh);
@@ -548,7 +687,7 @@ export class StreamingRenderer {
     // against depthWrite and EDL/depth stay exact throughout the transition.
     this._host.beginNodeDissolve(mat, 0);
     this._fades.set(mesh, { start: this._now(), mat, direction: 'in' });
-    this._scheduleFadeTick();
+    this._host.requestFrame();
   }
 
   /**
@@ -563,22 +702,17 @@ export class StreamingRenderer {
     // got to (beginNodeDissolve returns that), never snapping to full density.
     const fromProgress = this._host.beginNodeDissolve(mat, 1);
     this._fades.set(mesh, { start: this._now(), mat, direction: 'out', nodeId, fromProgress });
-    this._scheduleFadeTick();
+    this._host.requestFrame();
   }
 
-  /** Coalesce all active fades into a single rAF (or setTimeout fallback). */
-  private _scheduleFadeTick(): void {
-    if (this._fadeRafHandle !== null) return;
-    const onTick = (): void => {
-      this._fadeRafHandle = null;
-      this._stepFades(this._now());
-      if (this._fades.size > 0) this._scheduleFadeTick();
-    };
-    if (typeof requestAnimationFrame !== 'undefined') {
-      this._fadeRafHandle = requestAnimationFrame(onTick);
-    } else {
-      this._fadeRafHandle = setTimeout(onTick, 16) as unknown as number;
-    }
+  /**
+   * Advance every active fade to the current time. Called once per frame by
+   * the render loop, whether or not that frame draws: a fade that only
+   * advanced on drawn frames would stall behind the idle throttle.
+   */
+  stepFades(): void {
+    if (this._fades.size === 0) return;
+    this._stepFades(this._now());
   }
 
   /** Advance every active fade to wall time `now` and finalise completed ones. */
@@ -603,7 +737,10 @@ export class StreamingRenderer {
           this._host.endNodeDissolve(state.mat);
           this._fades.delete(mesh);
           this._host.removeStreamingMesh(mesh);
-          if (state.nodeId) this._meshes.delete(state.nodeId);
+          if (state.nodeId) {
+            this._meshes.delete(state.nodeId);
+            this._visibility.forget(state.nodeId);
+          }
         }
       }
     }

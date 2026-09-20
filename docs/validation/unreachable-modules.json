@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "purpose": "Every module under src/ that the running application does not reach, with the reason it does not and what would change that. scripts/lint-unreachable-modules.mjs fails when an unreachable module is ABSENT from this file. Unreachable is allowed here; unclassified is not. This register makes no claim that a listed module is right, only that its absence from the product is a decision somebody made and can be re-examined.",
+  "purpose": "Every module under src/ that the running application does not reach, with the reason it does not and what would change that. scripts/lint-unreachable-modules.mjs fails when an unreachable module is ABSENT from this file. Unreachable is allowed here; unclassified is not. This register makes no claim that a listed module is right, only that its absence from the product is a decision somebody made and can be re-examined. A module leaves this register the moment production refers to it AT ALL, including by an erased `import type`, so absence from the list does not mean a module contributes runtime code. src/render/continuity/continuityField.ts is the clearest case: every one of its four importers uses `import type`, so it emits nothing into any bundle and is still absent from the running application, yet it cannot be listed here. Where the question is what executes rather than what is referred to, read the runtime-edges-only figure the lint prints beside this count.",
   "whyThisExists": "docs/releases/RELEASE_NOTES_v0.6.6.md declares staged code publicly, under \"Foundations added for a later release, not reachable in v0.6.6\": implemented, tested, and not passed through by the running application, listed so the source is not mistaken for dead code. Nothing enforced that practice. A module staged deliberately in one release and forgotten in the next leave the same tree behind, and a superseded module is indistinguishable from one waiting to be wired. The register is where those cases are told apart.",
   "method": "Breadth-first closure from the module scripts index.html loads, over static value imports, static type-only imports, dynamic import() with a literal specifier, and new Worker(new URL(...)). Dynamic edges are counted, which is why src/lazyChunks.ts is not a leaf: it holds this repository's dynamic import() literals and most lazy features hang off it. Type-only edges are counted too, so a module reached only by an erased import is NOT listed here; that widening keeps the register about modules nothing in the product refers to at all. It is a file-level graph, so it cannot see an unused export, and reachable is not executed.",
   "measuredAt": {
@@ -21,20 +21,6 @@
   "reviewDates": "Reported by the lint when they pass, never enforced. A gate that turns red on a date with no change to the tree teaches people to edit the date rather than the code.",
   "modules": [
     {
-      "path": "src/science/scientificArtifactPassport.ts",
-      "status": "staged",
-      "why": "A self-verifying provenance record binding source digest, methods and parameters, the analysis content, the evidence decision and the exported artifact bytes into one tamper-evident document (separate cryptographic fields beside the record's legacy FNV fingerprint). It reuses the existing synchronous SHA-256 and canonicalize; it introduces no second crypto and changes no numerical result. The export/validation path does not construct a passport yet, so only its own tests import it. Kept out of the eager graph because index.html's bundle has near-zero headroom.",
-      "graduation": "The export path (or a validation harness) builds a ScientificArtifactPassport for an emitted artifact and surfaces its scienceId / reproducibility line, at which point it is reached through src/lazyChunks.ts. canonicalize() now refuses non-finite numbers, so the remaining conditions are integration ones: an export path that emits the passport beside its artifact, the eager-shell bundle budget (the module must load lazily), and a release-validation record that cites its digests.",
-      "review": "2027-02-28"
-    },
-    {
-      "path": "src/validation/evidenceBoundaryInspector.ts",
-      "status": "validation-only",
-      "why": "A read-only projection of one resolveEvidence() lookup: it copies the resolver's decision verbatim and adds a per-envelope-field breakdown so the scoped-evidence verdict is human-auditable. It holds no applicability logic and produces evidence ABOUT the resolver; only its own test imports it, and becoming reachable would give the running app a second place that describes the evidence boundary.",
-      "graduation": "A provenance or report surface renders the field-by-field envelope breakdown and calls buildEvidenceContractView from the application graph.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/classification/classificationEvidence.ts",
       "status": "staged",
       "why": "The per-point evidence record for a classification decision. The derived classifier that ships does not attach one, so no production module constructs or reads the record.",
@@ -50,18 +36,18 @@
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
     {
-      "path": "src/geo/tiePointRegister.ts",
-      "status": "staged",
-      "why": "Named in the v0.6.6 release notes as \"tie-point rigid registration with control-network validation\". Horn absolute orientation over labelled correspondences; no UI collects the correspondences.",
-      "graduation": "A tie-point capture surface exists and calls registerFromTiePoints.",
-      "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
-    },
-    {
       "path": "src/geo/tiePointGeometry.ts",
       "status": "staged",
       "why": "The control-network validation half of the same release-notes entry: it decides whether a correspondence set can determine a rigid transform at all. Its only non-test importer is tiePointRegister.ts, which is itself unreachable.",
       "graduation": "tiePointRegister graduates; this arrives with it.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+    },
+    {
+      "path": "src/geo/tiePointRegister.ts",
+      "status": "staged",
+      "why": "Named in the v0.6.6 release notes as \"tie-point rigid registration with control-network validation\". Horn absolute orientation over labelled correspondences; no UI collects the correspondences.",
+      "graduation": "A tie-point capture surface exists and calls registerFromTiePoints.",
       "review": "2027-02-28",
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
@@ -96,12 +82,11 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/registration/registrationModel.ts",
+      "path": "src/registration/generalIcp.ts",
       "status": "staged",
-      "why": "Named in the v0.6.6 release notes as the model that \"selects [a planar ICP solver] directly instead of refusing the planar case\". It chooses mount / planar ICP / general ICP / tie-point; no caller asks it to choose.",
-      "graduation": "The multi-layer mount or a registration surface asks chooseRegistrationModel before placing two clouds.",
-      "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "why": "Trimmed 6-DOF ICP, one of the models registrationModel selects. No caller reaches the selector, so no caller reaches the solver.",
+      "graduation": "registrationModel graduates and its general-ICP branch executes.",
+      "review": "2027-02-28"
     },
     {
       "path": "src/registration/planarIcp.ts",
@@ -112,11 +97,12 @@
       "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
     {
-      "path": "src/registration/generalIcp.ts",
+      "path": "src/registration/registrationModel.ts",
       "status": "staged",
-      "why": "Trimmed 6-DOF ICP, one of the models registrationModel selects. No caller reaches the selector, so no caller reaches the solver.",
-      "graduation": "registrationModel graduates and its general-ICP branch executes.",
-      "review": "2027-02-28"
+      "why": "Named in the v0.6.6 release notes as the model that \"selects [a planar ICP solver] directly instead of refusing the planar case\". It chooses mount / planar ICP / general ICP / tie-point; no caller asks it to choose.",
+      "graduation": "The multi-layer mount or a registration surface asks chooseRegistrationModel before placing two clouds.",
+      "review": "2027-02-28",
+      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/registration/rigidSolve.ts",
@@ -140,11 +126,81 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/continuity/historyTargets.ts",
+      "status": "staged",
+      "why": "Owns the accumulation history's render targets. No capability allocates a history, so nothing calls resize and no surface is ever made.",
+      "graduation": "Temporal accumulation turns on and the render loop resizes this with the backing store, clears it on a display-epoch change rather than reallocating, and leaves source rendering in place when it declines above the ceiling. Whether a backend accepts these formats is not established by anything here. The render loop must also pass the device generation, so a device lost and remade at the same window size rebuilds rather than keeping surfaces from the dead one. Nothing in the renderer detects device loss today, so that generation has no source yet.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/hillshadeColors.ts",
       "status": "staged",
       "why": "Sun-direction shading over the elevation ramp. src/render/inspectionPresets.ts states the matching fact from the other side: the preset it belongs to has \"no runtime setter behind\" it and \"there is no live hillshade renderer to switch\".",
       "graduation": "A hillshade colour mode exists in colorModes and the Viewer can switch it on.",
       "review": "2027-02-28"
+    },
+    {
+      "path": "src/render/continuity/continuityFailure.ts",
+      "status": "staged",
+      "why": "Decides what to run after a continuity pass fails, and wraps a pass so a throw cannot reach the render loop. No pass runs, so nothing fails and nothing is wrapped.",
+      "graduation": "The render loop runs each continuity pass through runContinuityPass and takes the tier from afterFailure, so a refused allocation or a thrown pass leaves a simpler picture rather than a broken frame.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/continuityPressure.ts",
+      "status": "staged",
+      "why": "Maps the renderer's existing frame-time pressure onto a continuity tier. No tier is selected and every capability is off, so nothing asks.",
+      "graduation": "The render loop holds a current tier and asks this each decision, feeding the same smoothed frame time the scheduler already reacts to rather than sampling its own.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/continuitySupport.ts",
+      "status": "staged",
+      "why": "Scores how well a pixel is backed by nearby samples and gates reconstruction on it. Nothing reconstructs, so no pixel is scored.",
+      "graduation": "The reconstruction pass scores each candidate pixel and fills only above the threshold, with that threshold and the sample count set from real scenes at several densities rather than the starting values here.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/convergence.ts",
+      "status": "staged",
+      "why": "Schedules which temporal phase a parked frame contributes and when the sweep is complete. No frame accumulates, so nothing asks it.",
+      "graduation": "Accumulation turns on and the render loop drives the sweep from this state, feeding the scheduler's own refinement phase, stopping when it reports converged. The EDL repaint must move with it: edlMotionGate runs EDL once the moment motion stops, which is the first frame of the sweep, so it would shade an image that is one phase complete and never run again. It has to fire on converged instead of on parked.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/depthMerge.ts",
+      "status": "staged",
+      "why": "Decides whether a new sample replaces, joins or loses to the accumulation history at a pixel. No history buffers exist, so no sample is ever tested against one.",
+      "graduation": "The accumulation pass keeps history colour, depth and support, and applies this decision per sample, with the depth tolerance measured against near geometry and distant terrain.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/evidenceLens.ts",
+      "status": "staged",
+      "why": "Decides where the renderer stops substituting reconstruction and shows measured evidence. Nothing reconstructs, so there is nothing to reveal and no lens is opened.",
+      "graduation": "Reconstruction runs and the lens suppresses it under the cursor, reachable from Inspect, Measure or Probe, with picking unchanged whether it is open or shut.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/microGap.ts",
+      "status": "staged",
+      "why": "Decides whether a background pixel may borrow a depth from its cardinal neighbours. No reconstruction pass runs, so no pixel is ever offered.",
+      "graduation": "The reconstruction pass runs over unsupported pixels and marks what it writes as reconstructed, with the evidence lens able to show those pixels apart from measured ones. Before it is enabled, the six raster exporters must be settled: BaseExportMode captures the live on-screen canvas, so a height, depth or normal raster would carry invented geometry with nothing in FigureStampContext recording it. Either the field is off for a capture, or the stamp declares reconstruction.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/movingSubset.ts",
+      "status": "staged",
+      "why": "Decides how many temporal phases a moving frame draws and how much wider each drawn point must be. No frame draws a subset today, so nothing asks.",
+      "graduation": "A measurement on a real device shows a phase subset buys frame time that the existing motion reductions have not already taken, and the render loop draws that subset.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/normalAgreement.ts",
+      "status": "staged",
+      "why": "Refuses a gap fill where the surrounding normals face different ways. Nothing fills a gap, so nothing asks, and most sources carry no normals at all.",
+      "graduation": "The reconstruction pass reads normals where a source provides them and refuses a fill they object to, with the angle set from real scans rather than the starting value here.",
+      "review": "2027-03-31"
     },
     {
       "path": "src/render/streaming/pipelineLimits.ts",
@@ -161,10 +217,31 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/render/continuity/supportCensus.ts",
+      "status": "staged",
+      "why": "Counts drawn pixels by whether they were measured, carried over or invented. No pass records support per pixel, so there is nothing to count.",
+      "graduation": "The renderer tracks support provenance per pixel and a regression test fails a frame whose reconstructed share passes the ceiling, with that ceiling set from real scenes at several densities.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/render/continuity/temporalPhase.ts",
+      "status": "staged",
+      "why": "Assigns each point a temporal phase for the accumulation capability. That capability is off, so no frame draws a subset and nothing asks a point which phase it is in.",
+      "graduation": "Temporal accumulation turns on and the size graph folds the phase in as its own node, independent of the fade dither, which endNodeDissolve drops once a node settles.",
+      "review": "2027-03-31"
+    },
+    {
       "path": "src/render/streaming/tierAdaptation.ts",
       "status": "staged",
       "why": "Runtime FPS-driven tier stepping with hysteresis, written to layer on top of streamingProfile. Nothing feeds it FPS samples.",
       "graduation": "The render loop feeds FPS samples in and applies the tier it returns.",
+      "review": "2027-02-28"
+    },
+    {
+      "path": "src/science/liveDtmDescriptor.ts",
+      "status": "validation-only",
+      "why": "The canonical descriptor of the delivered DTM method plus a SHA-256 method digest, for the external-validation and export-provenance paths: a stamped digest can be compared against a fresh resolve to prove the delivered method has not drifted. The scoped-evidence resolver and the E5 reduce path will read it, but neither construction is wired into the application graph yet, so only its test imports it.",
+      "graduation": "Export provenance stamps dtmMethodDigest into the DTM evidence context, or the E5 reduce path resolves the descriptor to verify the candidate method, at which point the application graph reaches it. Before this graduates, the method-identity contract must be settled: the header says per-dataset fields are context and do NOT feed dtmMethodDigest, while methodBehaviourFields includes horizontalUnitToMetres and verticalUnitToMetres and a test requires 1 -> 0.3048 to change the digest. Either the unit scales are run context and leave the digest, or the digest is a fully parameterised method identity and the header says so. A digest whose own module disagrees about what it identifies cannot support a published reproducibility claim.",
       "review": "2027-02-28"
     },
     {
@@ -175,6 +252,41 @@
       "review": "2027-02-28"
     },
     {
+      "path": "src/validation/accuracyEnvelope.ts",
+      "status": "validation-only",
+      "why": "Carries the validation envelope with an accuracy claim and refuses a scan outside it. Exercised by its own test.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/authorizationBenchmark.ts",
+      "status": "validation-only",
+      "why": "A frozen adversarial benchmark over the existing authorization machinery. It consumes the production decision and must never be part of it.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/checkpointAccuracy.ts",
+      "status": "validation-only",
+      "why": "Statistics over independent checkpoints, with the leakage refusal. Consumed by the field-study tests and scripts/verify-field-study.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/classificationAgreement.ts",
+      "status": "validation-only",
+      "why": "Label-agreement statistics for ground filtering, consumed by the classification and PDAL agreement tests and scripts/verify-ground-filter-metrics.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/classifierCorpus.ts",
+      "status": "validation-only",
+      "why": "The frozen synthetic corpus the derived classifier is measured on, plus its reducer. Consumed by three tests and scripts/verify-classifier-corpus.mjs.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
       "path": "src/validation/crossCheck.ts",
       "status": "validation-only",
       "why": "The cross-implementation agreement harness behind the E4 evidence grade. Fourteen tests and three gate scripts consume it; the viewer must not, because agreement is measured about the product, not inside it.",
@@ -182,9 +294,23 @@
       "review": "2027-08-27"
     },
     {
+      "path": "src/validation/evidenceMonotonicity.ts",
+      "status": "validation-only",
+      "why": "The authority-tier monotonicity invariant. Its own header says \"validation-only; imported by studies and tests, not by the viewer\".",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
       "path": "src/validation/gridAgreement.ts",
       "status": "validation-only",
       "why": "Cell-by-cell comparison of two rasters, used by the grid agreement and PDAL ground-filter tests.",
+      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-08-27"
+    },
+    {
+      "path": "src/validation/spatialBootstrap.ts",
+      "status": "validation-only",
+      "why": "Block resampling that respects spatial correlation, so an interval reflects independent places rather than cells.",
       "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
       "review": "2027-08-27"
     },
@@ -210,55 +336,6 @@
       "review": "2027-08-27"
     },
     {
-      "path": "src/validation/evidenceMonotonicity.ts",
-      "status": "validation-only",
-      "why": "The authority-tier monotonicity invariant. Its own header says \"validation-only; imported by studies and tests, not by the viewer\".",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/checkpointAccuracy.ts",
-      "status": "validation-only",
-      "why": "Statistics over independent checkpoints, with the leakage refusal. Consumed by the field-study tests and scripts/verify-field-study.mjs.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/accuracyEnvelope.ts",
-      "status": "validation-only",
-      "why": "Carries the validation envelope with an accuracy claim and refuses a scan outside it. Exercised by its own test.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/classificationAgreement.ts",
-      "status": "validation-only",
-      "why": "Label-agreement statistics for ground filtering, consumed by the classification and PDAL agreement tests and scripts/verify-ground-filter-metrics.mjs.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/classifierCorpus.ts",
-      "status": "validation-only",
-      "why": "The frozen synthetic corpus the derived classifier is measured on, plus its reducer. Consumed by three tests and scripts/verify-classifier-corpus.mjs.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/spatialBootstrap.ts",
-      "status": "validation-only",
-      "why": "Block resampling that respects spatial correlation, so an interval reflects independent places rather than cells.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
-      "path": "src/validation/authorizationBenchmark.ts",
-      "status": "validation-only",
-      "why": "A frozen adversarial benchmark over the existing authorization machinery. It consumes the production decision and must never be part of it.",
-      "graduation": "None. This module produces or checks evidence and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
-      "review": "2027-08-27"
-    },
-    {
       "path": "src/workers/workerRegistry.ts",
       "status": "reference-only",
       "why": "The single source of truth for every Web Worker the app ships, consumed at BUILD time by vite.config.ts (live-transform excludes and chunk-emission pins) and by scripts/lint-worker-registry.mjs. The application graph reaches the workers by new Worker(new URL(...)) from their clients, never through this file, so a walk from index.html cannot see it.",
@@ -266,18 +343,109 @@
       "review": "2027-08-27"
     },
     {
-      "path": "src/science/liveDtmDescriptor.ts",
-      "status": "validation-only",
-      "why": "The canonical descriptor of the delivered DTM method plus a SHA-256 method digest, for the external-validation and export-provenance paths: a stamped digest can be compared against a fresh resolve to prove the delivered method has not drifted. The scoped-evidence resolver and the E5 reduce path will read it, but neither construction is wired into the application graph yet, so only its test imports it.",
-      "graduation": "Export provenance stamps dtmMethodDigest into the DTM evidence context, or the E5 reduce path resolves the descriptor to verify the candidate method, at which point the application graph reaches it. Before this graduates, the method-identity contract must be settled: the header says per-dataset fields are context and do NOT feed dtmMethodDigest, while methodBehaviourFields includes horizontalUnitToMetres and verticalUnitToMetres and a test requires 1 -> 0.3048 to change the digest. Either the unit scales are run context and leave the digest, or the digest is a fully parameterised method identity and the header says so. A digest whose own module disagrees about what it identifies cannot support a published reproducibility claim.",
-      "review": "2027-02-28"
+      "path": "src/render/continuity/convergenceExposure.ts",
+      "status": "staged",
+      "why": "Decides which image a reduced-motion viewer is shown while a parked camera accumulates: the direct rendering for the whole sweep, with the accumulated result replacing it once at convergence. Nothing calls it because temporal accumulation cannot be switched on, so there is no history to expose and every frame would answer 'direct'.",
+      "graduation": "Reachable when temporalAccumulation graduates and the renderer holds a ConvergenceState per epoch. The render loop asks exposureFor before presenting and shouldAccumulate before contributing a phase.",
+      "review": "2027-09-19"
     },
     {
-      "path": "src/science/dtmProductDigest.ts",
-      "status": "validation-only",
-      "why": "A SHA-256 over the delivered DTM surface itself \u2014 grid geometry, CRS codes, the explicit little-endian Z bytes, the per-cell coverage bytes and an optional method digest \u2014 so two runs can be proven to have produced the SAME surface. It complements liveDtmDescriptor.dtmMethodDigest, which proves only that the same algorithm was configured, not that the heights match. It reuses the repository's byte-wise sha256Hex and canonicalize and changes no numerical result. No export or validation harness constructs a product digest yet, so only its own test imports it; kept out of the eager graph because index.html's bundle has near-zero headroom.",
-      "graduation": "Export provenance or a reproduction harness digests an emitted DTM surface and records the value beside the method digest, at which point the application graph reaches it through src/lazyChunks.ts. Before this graduates, canonicalize() must refuse non-finite numbers: JSON.stringify renders NaN, Infinity and -Infinity all as null, so distinct invalid states hash identically today. That is tolerable only while nothing reaches this module and no published claim cites its digests.",
-      "review": "2027-02-28"
+      "path": "src/render/continuity/lensPlacement.ts",
+      "status": "staged",
+      "why": "Places the evidence lens for sources that do not report a position continuously, so touch and keyboard viewers can hold it somewhere instead of only under a hovering mouse. Nothing calls it because the evidence lens capability cannot be switched on, so there is no lens for an intent to move.",
+      "graduation": "Reachable when evidenceLens graduates. The canvas input layer translates pointer, touch and key events into LensIntent values and keeps the Lens this reducer returns, rather than writing lens fields at each event site.",
+      "review": "2027-09-19"
+    },
+    {
+      "path": "src/render/continuity/pressureRelief.ts",
+      "status": "staged",
+      "why": "Orders what the subsystem gives up under memory or frame pressure by what each step actually frees, and skips rungs with nothing left so a caller always makes progress. Nothing calls it because no capability can be switched on: there is no history to shrink and no sweep to shorten.",
+      "graduation": "Reachable when temporalAccumulation or microGapFill graduates. The failure path in continuityFailure asks nextRelief with the pressure kind instead of walking the tier ladder a rung at a time, since a tier step cannot express a history ratio that still has room to fall.",
+      "review": "2027-09-19"
+    },
+    {
+      "path": "src/render/streaming/coverageBudget.ts",
+      "status": "staged",
+      "why": "Turns a node's spacing, distance and current temporal support into a multiplier for its projected size, so the scheduler can prefer nodes that would close visible gaps over nodes that only add points. Nothing calls it because the scheduler's score is unchanged: wiring it would alter which nodes arrive first on every streamed scan, which is a behaviour change that wants a measurement rather than a merge.",
+      "graduation": "Reachable when a measurement shows the reordering improves time-to-usable-image on a real streamed scan. nodeScore multiplies its size term by nodeCoverageFactor the same way it already applies the focus bias, and the descriptor rides on the node beside its existing spacing.",
+      "review": "2027-09-19"
+    },
+    {
+      "path": "src/render/continuity/probeBackendSupport.ts",
+      "status": "staged",
+      "why": "Produces the BackendSupport the tier ladder takes as input, by exercising a real context rather than querying it. Nothing calls it because no capability can be switched on, so there is no rung to choose. It has been run against hardware out of tree: validation/renderer-capability/device-capability-20260920.json records an Apple M3 Max reaching the full rung on both backends.",
+      "graduation": "Reachable when any capability graduates. The Viewer builds a probe from its own renderer, calls probeBackendSupport once after context creation, and hands the result to tierUnderPolicy instead of a hand-written struct.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/perf/frameBudgetGovernor.ts",
+      "status": "staged",
+      "why": "Resolves one frame's budget for optional work: backing-store pressure, the share of the GPU commit batch, streaming urgency, and whether lighting, continuity and detailed hover run. Nothing calls it because the render loop still resolves each of those separately, and wiring it is Phase B3, where a single request-driven loop becomes the one caller.",
+      "graduation": "Reachable when the render loop calls frameBudgetPolicy once per frame and passes the result to the DPR driver, the GPU commit metering and the scheduler, carrying the previous policy for the hysteresis.",
+      "review": "2027-09-19"
+    },
+    {
+      "path": "src/render/continuity/ContinuityRuntime.ts",
+      "status": "staged",
+      "why": "The one object that owns the Continuity Field: the tier in force, the capabilities it grants, the display epoch, the lens and the convergence sweep, behind one call per frame. Nothing calls it because no caller has been wired, and the lazy seam it will arrive through cannot be added before that caller exists: this build emits a code-split chunk only for a dynamic import something reaches, and the chunk-emission guard fails the build for a seam that emits nothing.",
+      "graduation": "Reachable when the render loop builds one behind loadContinuityRuntime and calls prepareFrame each frame, which is the phase that wires the first capability. The seam in lazyChunks.ts lands in the same change as its caller.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/continuity/coverageSizing.ts",
+      "status": "staged",
+      "why": "Sizes a point from its sample spacing PROJECTED through the camera, which is the basis the programme names. The live coverage term sizes from relative node resolution instead, which is camera-independent: two nodes at the same depth take the same scale whether they are near or far. This is the better basis and it is not adopted, because adopting it replaces the basis of a behaviour that already ships and needs per-material distance uniforms written every frame plus browser evidence that the picture improves.",
+      "graduation": "Reachable when CoarseLodSizeNodes sizes from projected spacing rather than relative resolution, with a per-material distance uniform updated from the cull pass, and a real-scene comparison showing the change. Until then the live term is the only coverage sizing, so that there is one answer in one picture.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/continuity/supportProvenance.ts",
+      "status": "staged",
+      "why": "The transitions a pixel's display-support provenance may take, and how the four states are stored: two bits beside a six-bit saturating sample count, in the one byte the history layout already allocates. Nothing calls it because no pass writes a support surface: the gap pass and the accumulation sweep that would are both staged.",
+      "graduation": "Reachable when a render pass writes the support surface: the rasterising pass calls nextSupport with 'sample', the sweep with 'accumulate', the gap pass with 'reconstruct', and a diagnostics read tallies the surface through censusOfPacked.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/continuity/microGapPass.ts",
+      "status": "staged",
+      "why": "Applies the per-pixel gap rules across a frame: the thickness bound and the double-buffered read that stops a fill becoming evidence for the pixel beside it. Nothing calls it because no pass writes a support raster yet, and the capability that would is off.",
+      "graduation": "Reachable when the renderer keeps a support and depth raster and runs this between the draw and the present, with the output raster composited and the census read by the diagnostics surface.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/continuity/lensPresentation.ts",
+      "status": "staged",
+      "why": "The two rules between the lens and the frame: which pixels the gap pass may substitute under it, and what a pixel that was already substituted shows as once the lens arrives. Nothing calls it because no pass writes a support raster and no lens is placed at runtime; the gap pass consults it through an option that nothing sets.",
+      "graduation": "Reachable with the gap pass: the renderer passes the runtime's lens into runMicroGapPass, and the compositor reads shownSupportAt while blending with lensOpacity.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/continuity/historyMergePass.ts",
+      "status": "staged",
+      "why": "Applies the depth-locked merge rules across a frame and writes the provenance each outcome implies. Nothing calls it because no pass produces a sample raster: the rung that accumulates is off, and the history it would merge into is allocated only when a caller supplies a surface factory.",
+      "graduation": "Reachable when the renderer draws a phase into a sample raster and calls this with the epoch both were drawn under, taking the history from ContinuityRuntime.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/science/withheldPolicy.ts",
+      "status": "staged",
+      "why": "The canonical answer to what a Withheld point is for in each of the three things this application does with points. Nothing calls it because no scientific path in the tree consults the bit: terrain, density, the ground filter, stockpile volumes, contours, profiles, the classifier, registration and change, and measurement all read every point the cloud holds. The bit itself survives from the decoder through PointCloud to the LAS writer.",
+      "graduation": "Reachable when a product consults it. Applying it moves measured numbers on any scan that marks a point, several of them under recorded claims, so each product graduates with its own before-and-after on real data rather than all of them at once.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/app/openStage.ts",
+      "status": "staged",
+      "why": "Names what a viewer can do with a scan right now, derived from facts the application already holds rather than tracked. Nothing calls it because no surface displays an interaction stage: the drop zone reports the pipeline's stages and the empty state comes down on its own, so the rule this encodes is already held without anything consulting it.",
+      "graduation": "Reachable when a status surface shows the interaction stage, or when a caller asks mayBlockWithOverlay before covering the canvas instead of relying on the empty state being hidden at the right moment.",
+      "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/pivotMarker.ts",
+      "status": "staged",
+      "why": "How strongly to draw a brief mark at the camera's pivot, and the rule that it never appears in a capture. Nothing calls it because drawing it needs a three.js object in the Viewer chunk, which sits at 739 KiB against a 740 KiB ceiling: a six-line exported function measured 2 KiB in that chunk under the live transform, so a mesh and a material do not fit.",
+      "graduation": "Reachable when the Viewer chunk has room. The wiring is small: a layer module owning its object through Viewer.derivedLayerHost(), a show call at the double-click, focus and orbit-centre sites, and one render-loop host method to step it. The pick path needs no change, since it walks the cloud registry rather than the scene.",
+      "review": "2027-09-20"
     }
   ]
 }

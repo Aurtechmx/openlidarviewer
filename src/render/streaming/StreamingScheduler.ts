@@ -23,13 +23,21 @@ import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { NodeDecodeMetadata } from './StreamingSource';
 import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
+import { shouldTick, type WakeReason } from './schedulerCadence';
 import {
   frustumPlanesFromViewProjection,
   boxInFrustum,
   nodeScore,
   depthCapForVelocity,
 } from './streamingScore';
-import { selectWithinBudget, firstAdmissionMaxPoints } from './streamingBudget';
+import {
+  selectWithinBudget,
+  firstAdmissionMaxPoints,
+  FPS_PRESSURE_HIGH_MS,
+  FPS_PRESSURE_LOW_MS,
+  FPS_PRESSURE_HIGH_HOLD_MS,
+  FPS_PRESSURE_LOW_HOLD_MS,
+} from './streamingBudget';
 import type { StreamingBudgets, ScoredCandidate } from './streamingBudget';
 import { CompressedChunkCache } from './StreamingCache';
 import {
@@ -208,10 +216,6 @@ const PRESSURE_DEPTH_REDUCTION = 1;
  * back-off — a stutter immediately backs off; smooth frames take longer
  * to fully restore — so the system doesn't oscillate around the threshold.
  */
-const FPS_PRESSURE_HIGH_MS = 22.2;       // ≈ 45 fps
-const FPS_PRESSURE_LOW_MS = 18.2;        // ≈ 55 fps
-const FPS_PRESSURE_HIGH_HOLD_MS = 2_000; // 2 s of < 45 fps before back-off
-const FPS_PRESSURE_LOW_HOLD_MS = 5_000;  // 5 s of > 55 fps before recovery
 const FPS_PRESSURE_STEP_DOWN = 0.15;     // -15 % budget per back-off step
 const FPS_PRESSURE_STEP_UP = 0.075;      // +7.5 % budget per recovery step
 const FPS_BUDGET_FLOOR = 0.5;            // never below half-budget
@@ -541,6 +545,8 @@ export class StreamingScheduler {
   private readonly _localBounds = new Map<string, Box6>();
   /** The cloud's render origin, captured once for lazy bounds computation. */
   private _renderOrigin: [number, number, number] = [0, 0, 0];
+  /** When this scheduler last ran, on the render loop's clock. */
+  private _lastTickAtMs = 0;
   private readonly _queue: StreamingNode[] = [];
   private readonly _inFlight = new Map<string, AbortController>();
   private readonly _cache: CompressedChunkCache;
@@ -815,6 +821,38 @@ export class StreamingScheduler {
   }
 
   /** Live counters for the diagnostics overlay. */
+  /**
+   * Whether the scheduler is due to run at this time, recording it if so.
+   *
+   * The cadence is elapsed time rather than a frame count, so a 144 Hz panel
+   * no longer runs the scheduler nearly two and a half times as often as a
+   * 60 Hz one on the same scan. `schedulerCadence` holds the bands and the
+   * reasoning; the state lives here because this is what is being paced.
+   */
+  tickDue(nowMs: number, phase: RefinementPhase, wake: WakeReason | null = null): boolean {
+    if (!shouldTick({ nowMs, lastTickMs: this._lastTickAtMs, phase, wake })) return false;
+    this._lastTickAtMs = nowMs;
+    return true;
+  }
+
+  /**
+   * Is the resident set over the point budget's pressure ratio?
+   *
+   * The eviction branch below asks this, and so does anything outside the
+   * scheduler that has to know the session is short of room. One expression
+   * rather than two: a second reader with its own comparison would eventually
+   * disagree with the one that actually evicts, and the disagreement would
+   * show as a subsystem standing down while the scheduler says there is room,
+   * or the reverse.
+   */
+  underMemoryPressure(): boolean {
+    const store = this._cloud.octree.store;
+    return (
+      store.residentPointCount + store.decodedPendingPointCount
+      > this._pointBudget * this._memoryPressureRatio
+    );
+  }
+
   stats(): SchedulerStats {
     // O(1) queued count from the store's maintained counter — no per-call
     // octree walk. `_shouldRenderFrame` polls this every animation frame
@@ -1370,10 +1408,7 @@ export class StreamingScheduler {
     // ranks last in the plan anyway, and one it no longer wants while the
     // level below is arriving ranks first, which is the case the split existed
     // to approximate.
-    if (
-      store.residentPointCount + store.decodedPendingPointCount >
-      this._pointBudget * this._memoryPressureRatio
-    ) {
+    if (this.underMemoryPressure()) {
       // The one input that costs a walk of the wanted set. Built here rather
       // than per tick, because this branch is the only reader and it is cold:
       // a settled camera inside the hysteresis band never pays for it.

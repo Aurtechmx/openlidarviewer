@@ -74,6 +74,9 @@ export interface CellMetricsParams {
 const MEASURED = 2;
 
 /** Compute per-cell metrics + a scene summary for a DtmGrid. */
+/** CellCoverage 0 — no reachable data, which is the edge of the survey. */
+const NO_COVERAGE = 0;
+
 export function computeCellMetrics(
   g: DtmGrid,
   params: CellMetricsParams = {},
@@ -146,12 +149,17 @@ export function computeCellMetrics(
     for (let c = 0; c < cols; c++) {
       const i = r * cols + c;
       if (measured[i]) {
-        // A measured cell on the grid border touches off-grid (non-measured).
+        // A measured cell on the grid border touches off-grid (no data).
         if (r === 0 || c === 0 || r === rows - 1 || c === cols - 1) {
           dist[i] = 1;
           queue.push(i);
         }
-      } else {
+      } else if (g.coverage[i] === NO_COVERAGE) {
+        // Only a cell with no reachable data marks the edge of the survey. An
+        // interpolated cell was filled from the measured cells around it, so it
+        // sits INSIDE the surveyed region: seeding from it made every gap the
+        // display stride left look like a survey edge, and the share rose with
+        // the thinning rather than with the geometry.
         dist[i] = 0;
         queue.push(i);
       }
@@ -171,7 +179,13 @@ export function computeCellMetrics(
     ];
     for (const j of nb) {
       if (j < 0) continue;
-      if (measured[j] && d < dist[j]) {
+      // Travel through every cell inside the survey, measured or interpolated,
+      // and record a distance for all of them. Propagating through measured
+      // cells alone tied the distance to how densely the surface happened to be
+      // sampled: on a thinned grid the measured cells are not adjacent, so no
+      // distance could travel and cells away from the edge were left unreached.
+      // Only measured cells are counted in the share below.
+      if (g.coverage[j] !== NO_COVERAGE && d < dist[j]) {
         dist[j] = d;
         queue.push(j);
       }

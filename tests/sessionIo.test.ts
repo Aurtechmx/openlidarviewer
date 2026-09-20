@@ -726,3 +726,30 @@ describe('importSession — persisted user CRS override round-trip (FIX 2)', () 
     expect(detected?.epsg).toBe(32614);
   });
 });
+
+describe('importSession — a committed restore survives a disclosure that cannot load', () => {
+  // The manifest disclosure is explicitly allowed to be absent: an absent,
+  // legacy or tampered manifest still restores every measurement. It is loaded
+  // from a lazy chunk AFTER the restore has been committed, so a chunk that
+  // will not load rejected into the outer catch and reported "Could not import
+  // the session" over a session that was already in place.
+
+  it('restores the session and reports no error when the chunk rejects', async () => {
+    const mod = await import('../src/lazyChunks');
+    const spy = vi
+      .spyOn(mod, 'loadVerifySessionManifest')
+      .mockRejectedValueOnce(new Error('Failed to fetch dynamically imported module'));
+    try {
+      const { deps, calls } = makeDeps();
+      const file = { size: 1024, text: async () => sessionJson() } as unknown as File;
+
+      await importSession(file, {}, deps);
+
+      expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+      expect(calls.setDropError).not.toHaveBeenCalled();
+      expect(calls.showToast).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

@@ -1,6 +1,6 @@
 {
   "name": "openlidarviewer",
-  "version": "0.6.9",
+  "version": "0.7.0-alpha.1",
   "description": "View supported LiDAR and point-cloud datasets locally in a browser. No installation or account required; local files are not uploaded.",
   "license": "AGPL-3.0-only",
   "author": "A. Urias",
@@ -127,7 +127,7 @@
     "validation:impact:summary": "node scripts/build-impact-summary.mjs",
     "validation:impact:summary:check": "node scripts/build-impact-summary.mjs --check",
     "package:source": "bash scripts/package.sh --source-only",
-    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:no-tracked-ignored && npm run lint:no-host-paths && npm run lint:no-source-control-chars && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:csp-html && npm run lint:html-assets && npm run lint:python-version && npm run lint:layer-boundaries && npm run lint:mono-usage && npm run lint:editorial-language && npm run lint:position-access && npm run lint:int-truncation && npm run lint:spatial-context && npm run lint:upload-queue-seam && npm run lint:monolith-size && npm run lint:palette-lightness && npm run lint:architecture-truth && npm run lint:module-graph && npm run lint:unreachable-modules && npm run lint:worker-registry && npm run lint:claim-register && npm run lint:method-literals && npm run lint:unit-factor-literals && npm run lint:canonical-urls && npm run lint:dataset-citations && npm run lint:terrain-field-ids && npm run lint:digest-manifests && npm run lint:oracle-registry && npm run lint:oracle-consensus && npm run validation:datasets:verify && npm run validation:field:verify && npm run validation:reproduction:verify && npm run validation:generalization:verify && npm run validation:impact:verify && npm run validation:impact:summary:check && npm run validation:freeze:verify && npm run validation:snapshot:verify && npm run lint:release-truth && npm run lint:license && npm run lint:claim-prose-sync && npm run lint:doc-links && npm run lint:claims-language && npm run lint:archive-vocab && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run benchmark:archive-portability && npm run test:unit && npm run test:export && npm run test:terrain && npm run validation:study:verify && npm run validation:ground-metrics:verify && npm run validation:classifier-corpus:verify && npm run validation:e5:manifests:verify && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile && npm run verify:reachability",
+    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:no-tracked-ignored && npm run lint:no-host-paths && npm run lint:no-source-control-chars && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:csp-html && npm run lint:html-assets && npm run lint:python-version && npm run lint:layer-boundaries && npm run lint:mono-usage && npm run lint:editorial-language && npm run lint:position-access && npm run lint:int-truncation && npm run lint:spatial-context && npm run lint:upload-queue-seam && npm run lint:monolith-size && npm run lint:palette-lightness && npm run lint:architecture-truth && npm run lint:standards-truth && npm run lint:disposal-registry && npm run lint:module-graph && npm run lint:unreachable-modules && npm run lint:worker-registry && npm run lint:claim-register && npm run lint:method-literals && npm run lint:unit-factor-literals && npm run lint:canonical-urls && npm run lint:dataset-citations && npm run lint:terrain-field-ids && npm run lint:digest-manifests && npm run lint:oracle-registry && npm run lint:oracle-consensus && npm run validation:datasets:verify && npm run validation:field:verify && npm run validation:reproduction:verify && npm run validation:generalization:verify && npm run validation:impact:verify && npm run validation:impact:summary:check && npm run validation:freeze:verify && npm run validation:snapshot:verify && npm run verify:renderer-benchmark && npm run lint:tier-evidence && npm run lint:release-truth && npm run lint:license && npm run lint:claim-prose-sync && npm run lint:doc-links && npm run lint:doc-narration && npm run lint:claims-language && npm run lint:archive-vocab && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run benchmark:archive-portability && npm run test:unit && npm run test:export && npm run test:terrain && npm run validation:study:verify && npm run validation:ground-metrics:verify && npm run validation:classifier-corpus:verify && npm run validation:e5:manifests:verify && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile && npm run verify:reachability",
     "test:release:tag": "npm run test:release && npm run test:e2e",
     "gate": "bash scripts/gate.sh",
     "lint:position-access": "node scripts/lint-position-access.mjs",
@@ -140,6 +140,7 @@
     "lint:unreachable-modules": "node scripts/lint-unreachable-modules.mjs",
     "lint:architecture-truth": "node scripts/lint-architecture-truth.mjs",
     "verify:archive-gate": "node scripts/verify-archive-gate.mjs",
+    "verify:renderer-benchmark": "node scripts/verify-renderer-benchmark.mjs",
     "lint:claims-language": "node scripts/lint-claims-language.mjs",
     "lint:archive-vocab": "node scripts/lint-archive-vocab.mjs",
     "lint:csp-html": "node scripts/lint-csp-html.mjs",
@@ -159,6 +160,7 @@
     "validation:e5:manifests:verify": "node scripts/e5/verify-input-manifest.mjs",
     "validation:matrix:update": "MATRIX_WRITE=1 vitest run tests/rasterAgreementMatrix.test.ts",
     "lint:doc-links": "node scripts/lint-doc-links.mjs",
+    "lint:doc-narration": "node scripts/lint-doc-narration.mjs",
     "lint:worker-registry": "node scripts/lint-worker-registry.mjs",
     "lint:claim-prose-sync": "node scripts/lint-claim-prose-sync.mjs",
     "lint:dataset-citations": "node scripts/lint-dataset-citations.mjs",
@@ -173,7 +175,10 @@
     "bench:ooc-reopen": "OOC_REOPEN_BENCH=1 playwright test --config playwright.oocReopen.config.ts",
     "lint:method-literals": "node scripts/lint-method-literals.mjs",
     "lint:unit-factor-literals": "node scripts/lint-unit-factor-literals.mjs",
-    "lint:canonical-urls": "node scripts/lint-canonical-urls.mjs"
+    "lint:canonical-urls": "node scripts/lint-canonical-urls.mjs",
+    "lint:disposal-registry": "node scripts/lint-disposal-registry.mjs",
+    "lint:standards-truth": "node scripts/lint-standards-truth.mjs",
+    "lint:tier-evidence": "node scripts/lint-tier-evidence.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

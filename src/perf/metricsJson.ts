@@ -106,7 +106,17 @@ export function buildMetricsDocument(input: MetricsJsonInput): Record<string, un
       refinementPhase: input.flags.refinementPhase,
       adaptiveDpr: input.flags.adaptiveDpr,
     },
-    stagedControllers: ['streamingScore', 'uploadQueue', 'angularPrediction'],
+    stagedControllers: [
+      'streamingScore',
+      'uploadQueue',
+      'angularPrediction',
+      'continuityNodeCulling',
+      'continuityPackedAttributes',
+      'continuityCoverageSizing',
+      'continuityMicroGapFill',
+      'continuityTemporalAccumulation',
+      'continuityEvidenceLens',
+    ],
     frameTiming: t
       ? {
           sampledForMs: ms(t.sampledForMs),

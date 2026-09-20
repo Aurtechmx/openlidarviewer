@@ -27,13 +27,6 @@ import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
 /**
- * Run the streaming view-dependent scheduler once every this-many frames
- * (~10 Hz at 60 fps), never every frame. The per-frame commit pump and frame
- * counter still advance every iteration; only the scheduler tick is throttled.
- */
-export const STREAMING_TICK_INTERVAL = 6;
-
-/**
  * What the per-frame loop reads from the live scene. Accessors are functions,
  * not captured values, so every frame sees the CURRENT Viewer state — the
  * property the inline loop had by reading `this` per iteration. Commands wrap
@@ -75,17 +68,60 @@ export interface RenderLoopHost {
   renderScene(): void;
   /** Was the last at-rest paint drawn with EDL on? */
   edlPaintedAtRest(): boolean;
+  /**
+   * Where the accumulation sweep is, or `none` when nothing is accumulating.
+   *
+   * The at-rest EDL repaint waits for it. Parking is the first frame of a
+   * sweep, so shading there would light an image one phase complete and never
+   * light it again: the flag the repaint sets says the at-rest paint is done.
+   * The viewer would be left looking at a quarter of the scan with depth cues
+   * drawn over it, which reads as a finished picture.
+   *
+   * `converged` and `none` behave alike, which is the point rather than a
+   * shortcut: with accumulation off a sweep never starts, so it is never part
+   * way through and the repaint happens exactly when it did before.
+   */
+  sweepState(): 'none' | 'converging' | 'converged';
   /** Record whether this frame's at-rest paint used EDL. */
   setEdlPaintedAtRest(value: boolean): void;
+  /**
+   * A frame drew: let the camera-mirroring HUD elements read it back.
+   *
+   * The view cube used to poll the heading on an animation frame of its own.
+   * A heading cannot change without a frame, so the poll was a second loop
+   * asking a question only this one can answer.
+   */
+  notifyFrameDrawn(): void;
 
   /** Is a streaming (COPC/EPT) session attached? */
   hasStreaming(): boolean;
   /** Drain metered streaming commits (no-op in immediate mode). */
   pumpStreamingCommit(): void;
-  /** Advance the streaming frame counter and return its new value. */
-  advanceStreamingFrame(): number;
-  /** Run the throttled streaming scheduler tick. */
+  /**
+   * Advance any node fade that is part way through.
+   *
+   * Fades drove an animation frame of their own, which competed with this
+   * loop and kept running when it did not. Stepped here, they advance on the
+   * loop's clock and stop when it does.
+   */
+  stepStreamingFades(): void;
+  /** Run the paced streaming scheduler tick. */
   tickStreaming(): void;
+  /**
+   * Whether the scheduler is due at this time, recording the tick if so.
+   *
+   * The pacing policy is `schedulerCadence`; the Viewer applies it because it
+   * owns both the last-tick time and the refinement phase the band comes from.
+   */
+  streamingTickDue(nowMs: number): boolean;
+  /**
+   * Update the streamed draw frustum from the camera about to be rendered.
+   *
+   * Every frame, before the draw. The scheduler tick runs at a sixth of this
+   * and would lag the camera; culling from it would hide a node the viewer is
+   * already looking at.
+   */
+  cullStreamingToFrustum(): void;
 
   /** The active tool mode. */
   toolMode(): ToolMode;
@@ -163,15 +199,22 @@ export function runRenderFrame(host: RenderLoopHost): void {
   // Pick this frame's DPR before rendering so the render uses it.
   host.applyAdaptiveDpr(moving, delta, nowMs, rendered);
 
+  // Streamed draw culling, before the draw and at its cadence. A node outside
+  // the frustum keeps its mesh, its decoded chunk and its cache slot; only the
+  // submission is skipped, so turning back costs a draw rather than a stream.
+  if (rendered && host.hasStreaming()) host.cullStreamingToFrustum();
+
   if (rendered) {
     host.noteRendered();
     // EDL when parked → post-processing pipeline; moving or EDL off → direct.
     if (wantEdl) host.renderEdl();
     else host.renderScene();
     host.setEdlPaintedAtRest(wantEdl);
-  } else if (wantEdl && !host.edlPaintedAtRest()) {
+  } else if (wantEdl && !host.edlPaintedAtRest() && host.sweepState() !== 'converging') {
     // Motion just settled and the last paint had EDL off — force one EDL
-    // repaint so the depth cue snaps back, then resume idle throttling.
+    // repaint so the depth cue snaps back, then resume idle throttling. A
+    // sweep that is still building defers it: the shading belongs after the
+    // last phase has merged, not over a quarter of one.
     host.noteRendered();
     host.renderEdl();
     host.setEdlPaintedAtRest(true);
@@ -179,13 +222,17 @@ export function runRenderFrame(host: RenderLoopHost): void {
     host.noteSkipped();
   }
 
-  // Streaming COPC — throttled scheduler tick (~10 Hz), never every frame. The
-  // commit pump and frame counter advance every frame.
+  // The scheduler runs on elapsed time, never on a frame count. It was every
+  // sixth frame, which is 100 ms at 60 Hz and 42 ms at 144 Hz, so it ran
+  // nearly two and a half times as often on a faster panel and loaded
+  // differently on the same scan; `schedulerCadence` holds the policy. The
+  // commit pump and the fade step run every iteration regardless.
   if (host.hasStreaming()) {
     host.pumpStreamingCommit();
-    if (host.advanceStreamingFrame() % STREAMING_TICK_INTERVAL === 0) {
-      host.tickStreaming();
-    }
+    // Every iteration, drawn or not: a fade that only advanced on drawn
+    // frames would stall behind the idle throttle part way through.
+    host.stepStreamingFades();
+    if (host.streamingTickDue(nowMs)) host.tickStreaming();
   }
 
   // After render, camera matrices are current — project the tool overlays.
@@ -225,5 +272,6 @@ export function runRenderFrame(host: RenderLoopHost): void {
     host.renderMeasureOverlay();
     host.renderInspectOverlay();
     host.renderAnnotateOverlay();
+    host.notifyFrameDrawn();
   }
 }

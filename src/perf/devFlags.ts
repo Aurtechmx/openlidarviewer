@@ -35,7 +35,20 @@
  *   - Staged: `streamingScore`, `uploadQueue`, and `angularPrediction` have
  *     tested cores but are not wired into the live render/stream path yet, so
  *     their flags are parse-only. The metrics export lists these under
- *     `stagedControllers`, never as active flags.
+ *     `stagedControllers`, never as active flags. The six continuity flags join
+ *     them: their cores are tested and nothing reads them, so setting one
+ *     changes no pixel.
+ *
+ * Six independent switches is sixty-four combinations, and claiming they all
+ * work would be a promise nobody has kept. The supported set is the continuity
+ * tier ladder, which is four configurations, each a subset of the one above.
+ * Everything else is a combination for bisecting a problem, not a way to run
+ * the viewer.
+ *
+ * `coverageSizing` needs a word of its own, because it is the flag most likely
+ * to be misread. Coverage sizing is live in the renderer, reached by choosing
+ * density point sizing, and this flag does not gate it. The flag is for the
+ * capability record, which nothing consults yet.
  * Defaults equal the new-behavior-ON path; `off` / `legacy` restores v0.5.4.
  * The one exception is the `decodePool` pair described above, which defaults to
  * the OLD path and must be opted into.
@@ -44,6 +57,8 @@
  * NOT part of the index chunk: only lazy modules may import it, and the
  * chunk-isolation guard keeps those importers out of the shell.
  */
+
+import { TIER_ORDER, type ContinuityTier } from '../render/continuity/continuityTier';
 
 /** Two-way implementation selector: the new default vs the v0.5.4 legacy. */
 export type ImplFlag = 'default' | 'legacy';
@@ -69,6 +84,30 @@ export interface DevFlags {
   refinementPhase: boolean;
   /** P5 adaptive DPR active. */
   adaptiveDpr: boolean;
+  /**
+   * Continuity: the rung asked for, and the supported way to ask.
+   *
+   * Six switches is sixty-four combinations and four were designed. This names
+   * one of the four. The switches below stay for bisecting a rung that
+   * misbehaves and can only add to it; `continuityRequest` turns both into the
+   * one pair the runtime reads.
+   */
+  continuityTier: ContinuityTier;
+  /** Continuity: skip streamed nodes outside the frustum. Staged. */
+  continuityNodeCulling: boolean;
+  /** Continuity: upload point attributes at their source widths. Staged. */
+  continuityPackedAttributes: boolean;
+  /**
+   * Continuity: the coverage-sizing capability record. Staged, and not the
+   * switch for the live behaviour, which the density point-size mode reaches.
+   */
+  continuityCoverageSizing: boolean;
+  /** Continuity: fill sub-pixel gaps that already have support. Staged. */
+  continuityMicroGapFill: boolean;
+  /** Continuity: reuse shaded samples across frames within an epoch. Staged. */
+  continuityTemporalAccumulation: boolean;
+  /** Continuity: reveal the raw samples under the cursor. Staged. */
+  continuityEvidenceLens: boolean;
   /**
    * P7 time-budgeted GPU upload queue active. Parsed and reported, never read
    * by a controller: the Viewer constructs no upload queue. Reading `true`
@@ -142,7 +181,28 @@ export const DEV_FLAG_DEFAULTS: Readonly<DevFlags> = Object.freeze({
   // is not observable from Node, so it stays opt-in until a browser run on a
   // real streamed cloud shows it settling the pulsing WITHOUT stalling refinement.
   residentStickiness: false,
+  // Every continuity capability is off, for the reason pooled decoding is: a
+  // default that has never been measured on a device is the mistake the
+  // multi-layer mount already made once.
+  continuityTier: 'source',
+  continuityNodeCulling: false,
+  continuityPackedAttributes: false,
+  continuityCoverageSizing: false,
+  continuityMicroGapFill: false,
+  continuityTemporalAccumulation: false,
+  continuityEvidenceLens: false,
 });
+
+/**
+ * A rung name, or `source` for anything else.
+ *
+ * An unreadable value takes the bottom rung rather than the top: a typo in a
+ * query string must not turn the whole ladder on.
+ */
+function parseContinuityTier(value: string | null): ContinuityTier {
+  const name = value === null ? '' : value.trim().toLowerCase();
+  return (TIER_ORDER as readonly string[]).includes(name) ? (name as ContinuityTier) : 'source';
+}
 
 /** `legacy` (any case) selects the legacy implementation; all else = default. */
 function parseImpl(value: string | null): ImplFlag {
@@ -229,6 +289,17 @@ export function parseDevFlags(search: string | URLSearchParams): DevFlags {
     handPan: parseOnOff(params.get('handPan')),
     refinementPhase: parseOnOff(params.get('refinementPhase')),
     adaptiveDpr: parseOnOff(params.get('adaptiveDpr')),
+    // parseOptIn, not parseOnOff: an absent flag means the new path is ON in
+    // this module's usual convention, and every continuity capability has to be
+    // asked for. parseOnOff here would have an empty query turn all six on
+    // while the defaults record says they are off.
+    continuityTier: parseContinuityTier(params.get('continuityTier')),
+    continuityNodeCulling: parseOptIn(params.get('continuityNodeCulling')),
+    continuityPackedAttributes: parseOptIn(params.get('continuityPackedAttributes')),
+    continuityCoverageSizing: parseOptIn(params.get('continuityCoverageSizing')),
+    continuityMicroGapFill: parseOptIn(params.get('continuityMicroGapFill')),
+    continuityTemporalAccumulation: parseOptIn(params.get('continuityTemporalAccumulation')),
+    continuityEvidenceLens: parseOptIn(params.get('continuityEvidenceLens')),
     uploadQueue: parseOnOff(params.get('uploadQueue')),
     angularPrediction: parseOnOff(params.get('angularPrediction')),
     streamingCommitMode: parseCommitMode(params.get('streamingCommitMode')),

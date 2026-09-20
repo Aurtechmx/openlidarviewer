@@ -42,6 +42,21 @@
  *   maxPixelRatio      1.00     1.25     1.50      1.50      2.00
  *   edlEnabled         off      off      off       on        on
  *   antialiasing       off      on       on        on        on
+ *   continuityTier     source   source   sizing    closure   full
+ *
+ * `continuityTier` is the Continuity Field's rung, and it is here rather than
+ * on a control of its own. The field is a display quality, this is the display
+ * quality dial, and a second one beside it would be the knob pile the design
+ * exists to avoid. It also means a viewer never meets a phase count, a gap
+ * radius or a history epsilon: the rung names a whole configuration and the
+ * capability table turns it into settings.
+ *
+ * The tier this resolves is a REQUEST, never a grant. What a device can
+ * actually carry is decided by `tierFor` from measured backend support and
+ * capped by `tierCeilingFor` on touch-first hardware, and `tierUnderPolicy`
+ * takes the lower of the two. Asking for `full` at the Quality end of the dial
+ * gets `closure` on a backend that cannot keep a history, which is the same
+ * arrangement the pixel-ratio ceiling already has with the device's own ratio.
  *
  * `streamingPointBudget` and `maxConcurrentDecodes` come from the existing
  * `streamingBudgets()` table, which is itself non-decreasing across
@@ -66,6 +81,7 @@ export const QUALITY_SCOPE_NOTE =
   + 'resident-point budget, so a resident-only measurement, analysis or export '
   + 'reads whatever is resident when it runs.';
 
+import type { ContinuityTier } from '../continuity/continuityTier';
 import type { DeviceTier } from '../deviceProfile';
 import { edlDefaultEnabled, type RenderBackend } from '../edl';
 import {
@@ -109,13 +125,20 @@ export interface QualitySettings {
   readonly edlEnabled: boolean;
   /** Point-edge antialiasing (alpha-to-coverage). */
   readonly antialiasing: boolean;
+  /**
+   * The Continuity Field rung this position asks for.
+   *
+   * A request rather than a grant: the backend's measured support and the
+   * touch-first ceiling both cap it, and the viewer takes the lower.
+   */
+  readonly continuityTier: ContinuityTier;
 }
 
 /** The fields an Advanced control may pin independently of the slider. */
 export type QualityOverrides = Partial<
   Pick<
     QualitySettings,
-    'streamingQuality' | 'maxPixelRatio' | 'edlEnabled' | 'antialiasing'
+    'streamingQuality' | 'maxPixelRatio' | 'edlEnabled' | 'antialiasing' | 'continuityTier'
   >
 >;
 
@@ -136,6 +159,7 @@ interface QualityStop {
   readonly maxPixelRatio: number;
   readonly edlEnabled: boolean;
   readonly antialiasing: boolean;
+  readonly continuityTier: ContinuityTier;
 }
 
 /**
@@ -149,11 +173,11 @@ interface QualityStop {
  * streaming preset, which had no low-tier handling before.
  */
 export const QUALITY_STOPS: readonly QualityStop[] = Object.freeze([
-  { label: 'Speed', streamingQuality: 'low', maxPixelRatio: 1, edlEnabled: false, antialiasing: false },
-  { label: 'Faster', streamingQuality: 'low', maxPixelRatio: 1.25, edlEnabled: false, antialiasing: true },
-  { label: 'Balanced', streamingQuality: 'balanced', maxPixelRatio: MAX_PIXEL_RATIO_DEFAULT, edlEnabled: false, antialiasing: true },
-  { label: 'Sharper', streamingQuality: 'balanced', maxPixelRatio: MAX_PIXEL_RATIO_DEFAULT, edlEnabled: true, antialiasing: true },
-  { label: 'Quality', streamingQuality: 'high', maxPixelRatio: 2, edlEnabled: true, antialiasing: true },
+  { label: 'Speed', streamingQuality: 'low', maxPixelRatio: 1, edlEnabled: false, antialiasing: false, continuityTier: 'source' },
+  { label: 'Faster', streamingQuality: 'low', maxPixelRatio: 1.25, edlEnabled: false, antialiasing: true, continuityTier: 'source' },
+  { label: 'Balanced', streamingQuality: 'balanced', maxPixelRatio: MAX_PIXEL_RATIO_DEFAULT, edlEnabled: false, antialiasing: true, continuityTier: 'sizing' },
+  { label: 'Sharper', streamingQuality: 'balanced', maxPixelRatio: MAX_PIXEL_RATIO_DEFAULT, edlEnabled: true, antialiasing: true, continuityTier: 'closure' },
+  { label: 'Quality', streamingQuality: 'high', maxPixelRatio: 2, edlEnabled: true, antialiasing: true, continuityTier: 'full' },
 ]);
 
 /** Width of one step on the `[0, 100]` scale. */
@@ -207,6 +231,7 @@ export function qualitySettingsFor(
     maxPixelRatio: stop.maxPixelRatio,
     edlEnabled: stop.edlEnabled,
     antialiasing: stop.antialiasing,
+    continuityTier: stop.continuityTier,
   };
 }
 
@@ -258,6 +283,7 @@ export function resolveQualitySettings(
         : clampPixelRatioCeiling(overrides.maxPixelRatio),
     edlEnabled: overrides.edlEnabled ?? base.edlEnabled,
     antialiasing: overrides.antialiasing ?? base.antialiasing,
+    continuityTier: overrides.continuityTier ?? base.continuityTier,
   };
 }
 
@@ -266,6 +292,24 @@ const STREAMING_RANK: Readonly<Record<StreamingQuality, number>> = Object.freeze
   low: 0,
   balanced: 1,
   high: 2,
+});
+
+/**
+ * Rank of a Continuity Field rung, richest last.
+ *
+ * Written out rather than derived from `TIER_ORDER`, which is richest FIRST and
+ * would have to be reversed here. Reading an index backwards to prove a
+ * direction is how a monotonicity check comes to assert the opposite of what it
+ * says, and the four names are not going to outgrow four lines. A value import
+ * of the ladder would also pull the continuity subsystem into the eager shell,
+ * which the bundle strategy measured at nine kilobytes against a seven kilobyte
+ * margin.
+ */
+const CONTINUITY_RANK: Readonly<Record<ContinuityTier, number>> = Object.freeze({
+  source: 0,
+  sizing: 1,
+  closure: 2,
+  full: 3,
 });
 
 /**
@@ -284,6 +328,9 @@ export function qualityPolicyIsMonotonic(device: QualityDevice): boolean {
       if (current.maxPixelRatio < previous.maxPixelRatio) return false;
       if (Number(current.edlEnabled) < Number(previous.edlEnabled)) return false;
       if (Number(current.antialiasing) < Number(previous.antialiasing)) return false;
+      if (CONTINUITY_RANK[current.continuityTier] < CONTINUITY_RANK[previous.continuityTier]) {
+        return false;
+      }
     }
     previous = current;
   }

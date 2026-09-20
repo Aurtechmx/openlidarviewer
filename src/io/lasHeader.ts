@@ -7,6 +7,7 @@
  * for the fields we touch).
  */
 
+import { isValidPdrf, recordLengthFitsFormat, minimumRecordLength } from '../lasSemantics';
 import type { PointAttributes } from './loadPlan';
 import { LoadError } from './loadErrors';
 import { parseCrsFromVlrs } from './crs';
@@ -41,6 +42,14 @@ export interface LasHeader {
   offsetToPointData: number;
   /** Length of one point record, in bytes. */
   pointDataRecordLength: number;
+  /**
+   * How the `gpsTime` field is to be read, from Global Encoding bit 0: set is
+   * Adjusted Standard GPS Time, clear is GPS Week Time. `null` where the file
+   * cannot say, which is any version before 1.2, since the field is reserved
+   * there. The two are not interchangeable, so a value carried from one file to
+   * another has to carry this with it.
+   */
+  gpsTimeType: 'adjusted-standard' | 'week' | null;
   /** System Identifier field — often the capture hardware. Trimmed; may be ''. */
   systemIdentifier: string;
   /** Generating Software field — the tool that wrote the file. Trimmed; may be ''. */
@@ -67,6 +76,12 @@ export interface LasHeader {
 const OFFSET_SIGNATURE = 0;
 /** Version minor — uint8. */
 const OFFSET_VERSION_MINOR = 25;
+/** Global Encoding bit field. Reserved before LAS 1.2, a bit field from 1.2. */
+const OFFSET_GLOBAL_ENCODING = 6;
+/** Global Encoding bit 0 — GPS Time Type. */
+const GLOBAL_ENCODING_GPS_STANDARD = 0x1;
+/** First version minor whose Global Encoding field carries the GPS Time Type. */
+const FIRST_GLOBAL_ENCODING_MINOR = 2;
 /** Offset to the first point record — uint32. */
 const OFFSET_TO_POINT_DATA = 96;
 /** Point data record format id — uint8 (the high bit flags LAZ compression). */
@@ -229,6 +244,24 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
   const pointFormat = view.getUint8(OFFSET_POINT_FORMAT) & 0x3f;
   const offsetToPointData = view.getUint32(OFFSET_TO_POINT_DATA, true);
   const pointDataRecordLength = view.getUint16(OFFSET_POINT_RECORD_LENGTH, true);
+  // A record shorter than its format requires is not a record missing a field
+  // at the end. Every field is addressed by a fixed offset from the record
+  // start, so the classification, returns and point source id would be read
+  // from inside the NEXT record and decode silently into plausible garbage.
+  // Refuse the file instead, before a point is decoded.
+  if (!isValidPdrf(pointFormat)) {
+    throw new LoadError(
+      'malformed-file',
+      `LAS point data record format ${pointFormat} is not one the specification defines (0 to 10).`,
+    );
+  }
+  if (!recordLengthFitsFormat(pointFormat, pointDataRecordLength)) {
+    throw new LoadError(
+      'malformed-file',
+      `LAS point data record length ${pointDataRecordLength} is shorter than the ` +
+        `${minimumRecordLength(pointFormat)} bytes point data record format ${pointFormat} requires.`,
+    );
+  }
 
   // CRS / linear-unit detection — walk the LASF_Projection VLRs starting at
   // the recorded header size. The buffer may be a head-slice that stopped
@@ -240,8 +273,17 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
     ? parseCrsFromVlrs(buffer, headerSize, numVlr)
     : null;
 
+  const globalEncoding = view.getUint16(OFFSET_GLOBAL_ENCODING, true);
+  const gpsTimeType =
+    versionMinor >= FIRST_GLOBAL_ENCODING_MINOR
+      ? ((globalEncoding & GLOBAL_ENCODING_GPS_STANDARD) !== 0
+          ? ('adjusted-standard' as const)
+          : ('week' as const))
+      : null;
+
   return {
     pointCount,
+    gpsTimeType,
     scale,
     offset,
     min,

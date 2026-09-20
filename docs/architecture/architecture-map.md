@@ -28,10 +28,10 @@ from the tree and fails when a cell drifts.
 | Geo | `src/geo` | ~5.2k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~46k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. **UI-free by lint.** |
 | I/O | `src/io` | ~35k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~64k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
-| Export / report | `src/export`, `src/report`, `src/convert` | ~12k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~16k | Composition root and the services that own shared state. |
-| UI | `src/ui` | ~31k | Panels, Inspector, Studio surfaces, onboarding. |
+| Render | `src/render` | ~70k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Export / report | `src/export`, `src/report`, `src/convert` | ~13k | Studio exporters, PDF/report builders, batch conversion. |
+| Application services | `src/app` | ~17k | Composition root and the services that own shared state. |
+| UI | `src/ui` | ~32k | Panels, Inspector, Studio surfaces, onboarding. |
 | Shell | `src/main.ts` | 4,977 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
@@ -247,7 +247,7 @@ that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,223)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,168)** — the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by

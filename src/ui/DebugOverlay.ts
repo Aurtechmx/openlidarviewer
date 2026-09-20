@@ -11,6 +11,8 @@
  * no reference to the Viewer itself, so it stays a pure DOM module.
  */
 
+import { attributeBreakdown, type UploadedAttributes } from '../render/pointAttributeLayout';
+import { historyBytes, historyFits } from '../render/continuity/historyBudget';
 import { el } from './dom';
 import { registerMetricsHook } from '../perf/metricsHook';
 import { formatByteSize as formatBytes, groupInt as formatInt } from '../io/formatByteSize';
@@ -43,6 +45,12 @@ export interface StreamingDebugStats {
   decodedBytes?: number;
   /** GPU upload-estimate bytes. */
   gpuBytes: number;
+  /**
+   * Which optional channels the resident meshes uploaded, so the estimate can
+   * show what it counted. A bare figure cannot be checked; a reader seeing
+   * `class` in the breakdown knows why the total is above the floor.
+   */
+  gpuAttributes?: UploadedAttributes;
   /** Most recent scheduler tick wall time, in milliseconds. */
   schedulerMs: number;
   /**
@@ -352,6 +360,12 @@ export class DebugOverlay {
         `points        ${formatInt(stats.displayedPoints)} shown` +
           ` / ${formatInt(stats.totalPoints)} total`,
         `gpu estimate  ${formatBytes(stats.gpuBytesEstimate)}`,
+        // What a continuity history would cost at the store actually allocated,
+        // and whether it would fit. Worth knowing before anything is switched
+        // on: the answer is a property of this device and this window, and on a
+        // high-ratio panel it is the figure that decides the feature.
+        `history est   ${formatBytes(historyBytes(stats.bufferWidthPx, stats.bufferHeightPx))}` +
+          `${historyFits(stats.bufferWidthPx, stats.bufferHeightPx) ? '' : ' (over ceiling)'}`,
         `terrain comp  ${formatTerrainCompute(terrainCompute)}`,
       ].join('\n');
     } else {
@@ -400,6 +414,11 @@ export class DebugOverlay {
         lines.push(`decoded       ${formatBytes(streaming.decodedBytes)}${events}`);
       }
       lines.push(`gpu estimate  ${formatBytes(streaming.gpuBytes)}`);
+      if (streaming.gpuAttributes !== undefined) {
+        for (const part of attributeBreakdown(streaming.displayedPoints, streaming.gpuAttributes)) {
+          lines.push(`  ${part.name.padEnd(12)}${formatBytes(part.bytes)}`);
+        }
+      }
       if (streaming.thrashEvents !== undefined) {
         lines.push(`thrash        ${streaming.thrashEvents} event(s)`);
       }

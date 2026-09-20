@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.invalid/schema/renderer-benchmark.schema.json",
+  "title": "Renderer benchmark record",
+  "description": "One record per benchmark run of the Continuity Field: one commit, one browser and backend, one machine, and every scene in the corpus measured in both the baseline and the continuity mode. No record exists yet, because no runner in this project exposes a WebGPU adapter and the field has never drawn a frame. The schema is here first so that the record, when there is one, is well formed and complete rather than whatever the first device happened to produce. Validated by scripts/verify-renderer-benchmark.mjs, which implements the subset of JSON Schema used here without a runtime dependency and adds the checks a schema cannot express, chiefly that every corpus scene is present. Writing a record does not move any claim's evidence level; promotion is a separate, human act recorded in docs/validation/claim-register.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "commit",
+    "environment",
+    "criteria",
+    "cases"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "The exact commit the build under test was produced from. Full hash, because an abbreviation is ambiguous across a repository's life."
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "browser",
+        "backend",
+        "gpu",
+        "os",
+        "devicePixelRatio",
+        "viewportPx"
+      ],
+      "properties": {
+        "browser": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name and version as the browser reports them."
+        },
+        "backend": {
+          "type": "string",
+          "enum": [
+            "webgpu",
+            "webgl2"
+          ]
+        },
+        "gpu": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The adapter as the browser reports it. Required: a frame time without the GPU that produced it says nothing that transfers to another machine."
+        },
+        "os": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Device and operating system. Required for the same reason as the adapter: a result is about a machine, and a machine is more than its GPU."
+        },
+        "devicePixelRatio": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "viewportPx": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "width",
+            "height"
+          ],
+          "properties": {
+            "width": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      }
+    },
+    "criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxEdgeLeakage",
+        "maxFrameTimeRatio",
+        "maxSettleMs"
+      ],
+      "description": "The pass/fail thresholds this run was judged against, recorded with the run so a later reading cannot apply different ones.",
+      "properties": {
+        "maxEdgeLeakage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxFrameTimeRatio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Continuity frame time over baseline frame time."
+        },
+        "maxSettleMs": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scene",
+          "dataset",
+          "pointCount",
+          "cameraCase",
+          "cameraPose",
+          "baseline",
+          "continuity",
+          "verdict"
+        ],
+        "properties": {
+          "scene": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A scene name from the corpus in tests/fixtures/continuityScenes.ts."
+          },
+          "dataset": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The source the scene was measured on, named so it can be obtained again."
+          },
+          "cameraCase": {
+            "type": "string",
+            "enum": [
+              "parked",
+              "orbit",
+              "dolly",
+              "pan"
+            ]
+          },
+          "baseline": {
+            "$ref": "#/$defs/modeMeasurement"
+          },
+          "continuity": {
+            "$ref": "#/$defs/modeMeasurement"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail"
+            ]
+          },
+          "verdictReason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pointCount": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "Points resident when the case was measured. A frame time is meaningless without the number of points it drew."
+          },
+          "cameraPose": {
+            "type": "object",
+            "description": "The pose the case was measured at, so it can be reproduced rather than described. `cameraCase` names the situation; this is the camera.",
+            "required": [
+              "position",
+              "target"
+            ],
+            "properties": {
+              "position": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "target": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "fovDeg": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "modeMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "gpuFrameTimeMs",
+        "cpuFrameTimeMs",
+        "gpuAttributeBytes",
+        "directCoverage",
+        "reconstructedCoverage",
+        "finalCoverage",
+        "edgeLeakage",
+        "temporalVariance",
+        "settleMs"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "source",
+            "sizing",
+            "closure",
+            "full"
+          ]
+        },
+        "gpuFrameTimeMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Null is not permitted. A platform that cannot time the GPU records no case rather than a zero."
+        },
+        "cpuFrameTimeMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gpuAttributeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "directCoverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Share of drawn pixels carrying a rasterised sample."
+        },
+        "finalCoverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Share of drawn pixels carrying anything once the passes have run."
+        },
+        "edgeLeakage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Share of reconstructed pixels whose supporting neighbours were not on one surface."
+        },
+        "temporalVariance": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Variance of per-pixel colour across the frames of one converged epoch. Zero at convergence is the intent."
+        },
+        "settleMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wall time from the camera parking to convergence."
+        },
+        "reconstructedCoverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Share of the frame whose colour came from a fill rather than a sample. Recorded rather than inferred from the other two: a reader should not have to subtract to learn how much was invented."
+        }
+      }
+    }
+  }
+}

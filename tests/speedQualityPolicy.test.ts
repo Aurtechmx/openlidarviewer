@@ -62,9 +62,13 @@ const WEAK: QualityDevice = { tier: 'low', isMobile: false, backend: 'webgpu' };
 
 const ALL_DEVICES: readonly QualityDevice[] = [DESKTOP, DESKTOP_GL, PHONE, WEAK];
 
+/** Richest last, mirroring the policy's own rank table. */
+const CONTINUITY_RANK: Record<string, number> = { source: 0, sizing: 1, closure: 2, full: 3 };
+
 /** Every field a resolved settings object is allowed to carry. */
 const SETTINGS_FIELDS = [
   'antialiasing',
+  'continuityTier',
   'edlEnabled',
   'maxConcurrentDecodes',
   'maxPixelRatio',
@@ -168,9 +172,59 @@ describe('quality policy — monotonicity', () => {
         expect(current.maxPixelRatio).toBeGreaterThanOrEqual(previous.maxPixelRatio);
         expect(Number(current.edlEnabled)).toBeGreaterThanOrEqual(Number(previous.edlEnabled));
         expect(Number(current.antialiasing)).toBeGreaterThanOrEqual(Number(previous.antialiasing));
+        expect(CONTINUITY_RANK[current.continuityTier]).toBeGreaterThanOrEqual(
+          CONTINUITY_RANK[previous.continuityTier],
+        );
         previous = current;
       }
     }
+  });
+});
+
+describe('quality policy — the Continuity Field rung', () => {
+  it('rides the one dial rather than a control of its own', () => {
+    expect(SETTINGS_FIELDS).toContain('continuityTier');
+  });
+
+  it('is off at the Speed end and whole at the Quality end', () => {
+    expect(qualitySettingsFor(QUALITY_MIN, DESKTOP).continuityTier).toBe('source');
+    expect(qualitySettingsFor(QUALITY_MAX, DESKTOP).continuityTier).toBe('full');
+  });
+
+  it('reconstructs nothing at or below the midpoint', () => {
+    // Everything up to Balanced stays on a rung that invents no pixel, so the
+    // shipping default cannot put reconstruction on screen.
+    for (let position = QUALITY_MIN; position <= midQualityPosition(); position += 1) {
+      const tier = qualitySettingsFor(position, DESKTOP).continuityTier;
+      expect(['source', 'sizing']).toContain(tier);
+    }
+  });
+
+  it('asks for the same rung on a phone, and is capped elsewhere', () => {
+    // The policy states a request. The touch-first cap lives in mobilePolicy,
+    // so the dial reading the same on both is correct rather than a gap.
+    expect(qualitySettingsFor(QUALITY_MAX, PHONE).continuityTier).toBe(
+      qualitySettingsFor(QUALITY_MAX, DESKTOP).continuityTier,
+    );
+  });
+
+  it('can be pinned from the Advanced disclosure like any other field', () => {
+    const pinned = resolveQualitySettings(
+      { auto: false, position: QUALITY_MIN, overrides: { continuityTier: 'closure' } },
+      DESKTOP,
+    );
+    expect(pinned.continuityTier).toBe('closure');
+    // Pinning one field moves no other.
+    expect(pinned.edlEnabled).toBe(qualitySettingsFor(QUALITY_MIN, DESKTOP).edlEnabled);
+  });
+
+  it('leaves the rung alone when nothing is pinned', () => {
+    const auto = resolveQualitySettings({ auto: true, position: QUALITY_MIN, overrides: {} }, WEAK);
+    expect(auto.continuityTier).toBe(qualitySettingsFor(autoQualityPosition(WEAK), WEAK).continuityTier);
+  });
+
+  it('gives a weak device the rung that adds nothing', () => {
+    expect(qualitySettingsFor(autoQualityPosition(WEAK), WEAK).continuityTier).toBe('source');
   });
 });
 

@@ -49,6 +49,7 @@ function makeHost(): { viewer: Viewer; materials: FakeMaterial[] } {
       return start;
     },
     setNodeDissolveProgress(): void {},
+    requestFrame(): void {},
     endNodeDissolve(): void {},
   };
   return { viewer: viewer as unknown as Viewer, materials };

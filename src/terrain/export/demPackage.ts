@@ -19,11 +19,19 @@
  * a prominent PRELIMINARY caveat whenever the data is not full + ready.
  */
 
+import {
+  buildEvidenceContractView,
+  type EvidenceContractView,
+} from '../../validation/evidenceBoundaryInspector';
+import { buildScientificArtifactPassport } from '../../science/scientificArtifactPassport';
+import { dtmProductDigest } from '../../science/dtmProductDigest';
 import type { AnalysedBasis } from './analysedBasis';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import { epsgFromCrsLabel } from '../../export/crsIdentifier';
 import {
   buildExportProvenance,
+  analysisRecordFromProvenance,
+  processingManifestFromProvenance,
   provenanceLines,
   dtmArtifactClaims,
   type ExportPermitStamp,
@@ -31,19 +39,13 @@ import {
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
-import { sha256Hex } from './sha256';
+import { buildSha256Manifest } from './sha256';
 import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 
-/**
- * Build a `SHA256SUMS` integrity manifest over `entries`, in the standard
- * `sha256sum` format (`<lowercase-hex>␠␠<name>`, one per line). The manifest
- * covers every file in the deliverable EXCEPT itself, so a recipient can run
- * `sha256sum -c SHA256SUMS.txt` to confirm nothing was truncated or altered in
- * transit — the deliverable now proves its own integrity, not just its provenance.
- */
-export function buildSha256Manifest(entries: ReadonlyArray<ZipEntry>): string {
-  return entries.map((e) => `${sha256Hex(e.bytes)}  ${e.name}`).join('\n') + '\n';
-}
+// The integrity manifest moved beside the hash it is built from, where the
+// contour package can reach it without importing a DEM module. Re-exported so
+// the callers that knew it here still do.
+export { buildSha256Manifest } from './sha256';
 
 /**
  * Resolved linear unit of a projected CRS — the SAME vocabulary the DXF
@@ -89,6 +91,12 @@ export interface DemPackageOptions {
    * local frame. CHM is a height DIFFERENCE (DSM−DTM) and is never shifted.
    */
   readonly worldOrigin?: { readonly x: number; readonly y: number; readonly z?: number } | null;
+  /**
+   * SHA-256 of the source file, when the loader verified one. Left unset where
+   * no digest was taken, and the passport records that as unavailable rather
+   * than as an absent field that might have held one.
+   */
+  readonly sourceSha256?: string | null;
   /** Base filename (no extension) for the entries. Default 'terrain'. */
   readonly basename?: string;
   /** Metres per source vertical unit, or null when the frame resolved none. */
@@ -229,6 +237,53 @@ function coverageLabel(mode: string): string {
  * version + metric version. Leads with a PRELIMINARY caveat when the data is
  * not full + ready, so a partial / preview export can never read as final.
  */
+/**
+ * The evidence decision for this artifact, field by field.
+ *
+ * Answers the questions a reader has about a level: which claim it belongs to,
+ * what the claim carries before any study is considered, what it resolved to
+ * here, and what the resolver said about applicability. Where a scoped study
+ * matched, each envelope field it was checked against is listed with its
+ * verdict.
+ *
+ * This renders `buildEvidenceContractView`, which resolves through the one
+ * evidence resolver. It holds no applicability rules of its own.
+ */
+function evidenceContractLines(result: AnalyseContoursResult): string[] {
+  const claims = dtmArtifactClaims(result);
+  if (claims.length === 0) return [];
+  return renderEvidenceContract(buildEvidenceContractView(claims[0]));
+}
+
+/**
+ * The contract as lines, from a resolved view.
+ *
+ * Split from the resolving above so the absent-level wording can be read back
+ * without standing up an analysis to produce it. A level that was never
+ * recorded prints as `none recorded` rather than as an empty column: a blank
+ * field reads as a level that exists and happens to be empty, which is the
+ * opposite of what it means.
+ */
+export function renderEvidenceContract(view: EvidenceContractView): string[] {
+  const lines = [
+    `Evidence contract`,
+    `  Claim          ${view.claimId}`,
+    `  Baseline       ${view.baselineEvidence ?? 'none recorded'}`,
+    `  Effective      ${view.effectiveEvidence ?? 'none recorded'}`,
+    `  Resolution     ${view.resolutionState}`,
+    `  Matched study  ${view.matchedStudy ?? 'none applies'}`,
+    `  Verdict        ${view.applicabilityVerdict}`,
+  ];
+  if (view.envelopeChecks.length > 0) {
+    lines.push(`  Envelope`);
+    for (const c of view.envelopeChecks) {
+      lines.push(`    ${c.field.padEnd(22)} ${c.status}`);
+    }
+  }
+  lines.push(``);
+  return lines;
+}
+
 export function buildDemReadme(opts: DemReadmeOptions): string {
   const { result, basename, isGeographic } = opts;
   const dtm = result.dtm;
@@ -251,6 +306,26 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     evidenceClaimIds: dtmArtifactClaims(result),
     analysedBasis: opts.analysedBasis ?? null,
   });
+
+  // Digest the surface as it ships: the emitted Z and coverage arrays, the grid
+  // geometry and the CRS codes. Bound to the method digest when the resolution
+  // supplied one, so the pair (surface, method) is what the value proves equal.
+  const surfaceDigest = dtmProductDigest(
+    {
+      z: dtm.z,
+      coverage: dtm.coverage,
+      cols: dtm.cols,
+      rows: dtm.rows,
+      cellSizeM: dtm.cellSizeM,
+      // The README prints these as the package's own bounds, so the digest is
+      // taken over the origin the deliverable declares.
+      originH1: opts.boundsMinX ?? 0,
+      originH2: opts.boundsMinY ?? 0,
+      horizontalEpsg: parseEpsg(p.horizontalCrs),
+      verticalEpsg: null,
+    },
+    p.scopedEvidence?.methodDigest ?? undefined,
+  );
 
   const cov = (() => {
     let measured = 0; let interp = 0; const total = dtm.coverage.length;
@@ -325,6 +400,13 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
     `  Elevation unit ${zUnit}`,
+    // The DERIVED-PRODUCT digest: a hash of the surface this package emits, not
+    // of the source file and not of the analysis inputs. Two packages carrying
+    // the same grid of heights and coverage states share this value; any cell,
+    // coverage state, grid geometry or CRS code that differs moves it. It is
+    // what lets a reader check that a DTM they hold is the one a report
+    // described, which the method digest cannot answer on its own.
+    `  Surface digest ${surfaceDigest}`,
     ``,
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
@@ -377,6 +459,11 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `Provenance`,
     ...provenanceLines(p).map((l) => `  ${l}`),
     ``,
+    // A read-only explanation of the evidence decision the resolver made:
+    // which claim, what it starts at, what it resolved to, and why. The view is
+    // built by the resolver itself rather than by a second reading of the same
+    // rules, so this section cannot disagree with the decision it describes.
+    ...evidenceContractLines(result),
     `The ASCII grids and GeoTIFFs describe the same surfaces; use whichever your`,
     `software prefers. Interpolated cells are real estimates between measured`,
     `ground; treat them with the coverage figure above in mind.`,
@@ -393,6 +480,11 @@ export function buildDemPackage(
 ): Uint8Array {
   const dtm = result.dtm;
   const basename = options.basename || 'terrain';
+  // Defaulted once for the whole package. Two clocks read a millisecond apart
+  // would stamp the README and the passport differently, so a rebuild from the
+  // same inputs would not produce the same bytes and neither file would be
+  // wrong enough to notice.
+  const generationDateIso = options.generationDateIso ?? new Date().toISOString();
   const ox = options.worldOrigin?.x ?? 0;
   const oy = options.worldOrigin?.y ?? 0;
   const xll = ox + dtm.originH1;
@@ -475,7 +567,7 @@ export function buildDemPackage(
     isGeographic,
     linearUnit: options.linearUnit,
     boundsMinX, boundsMinY, boundsMaxX, boundsMaxY,
-    generationDateIso: options.generationDateIso ?? new Date().toISOString(),
+    generationDateIso,
     softwareName: options.softwareName ?? 'OpenLiDARViewer',
     softwareVersion: options.softwareVersion ?? 'unknown',
     metricVersion: options.metricVersion ?? 'unknown',
@@ -486,6 +578,55 @@ export function buildDemPackage(
     name: `${basename}-README.txt`,
     bytes: new TextEncoder().encode(readme),
   });
+
+  // A passport for the bare-earth raster, beside the raster. The artifact is
+  // ONE file rather than the package: a passport digesting the ZIP it travels
+  // inside could never verify, because adding it changes what it measured.
+  //
+  // This is a tamper-evident provenance record, not a signature. It binds the
+  // source identity, the analysis record, the processing manifest, the methods,
+  // the evidence decision and the digest of the raster it names. A recipient
+  // who rehashes that raster and reads the record can tell whether the file
+  // they hold is the one this analysis produced; nothing here proves who
+  // produced it.
+  const dtmTif = entries.find((e) => e.name === `${basename}-dtm.tif`);
+  if (dtmTif) {
+    const passportProvenance = buildExportProvenance(result, {
+      verticalUnitToMetres: options.verticalUnitToMetres ?? null,
+      basename,
+      generatedAt: generationDateIso,
+      softwareVersion: options.softwareVersion ?? 'unknown',
+      metricVersion: options.metricVersion ?? 'unknown',
+      exportPermit: options.exportPermit ?? null,
+      evidenceClaimIds: dtmArtifactClaims(result),
+      analysedBasis: options.analysedBasis ?? null,
+    });
+    const passport = buildScientificArtifactPassport({
+      // The source digest is recorded when the loader verified one and left
+      // null when it did not. Null reads as unavailable rather than as a
+      // digest that happens to be missing.
+      source: { name: passportProvenance.source, sha256: options.sourceSha256 ?? null },
+      analysis: analysisRecordFromProvenance(passportProvenance),
+      processing: processingManifestFromProvenance(passportProvenance),
+      evidence: {
+        baseline: passportProvenance.scopedEvidence?.baselineEvidence ?? null,
+        effective: passportProvenance.scopedEvidence?.effectiveEvidence ?? null,
+        resolutionState: passportProvenance.scopedEvidence?.resolutionState ?? 'unresolved',
+        matchedStudy: passportProvenance.scopedEvidence?.matchedScopedStudy ?? null,
+        applicabilityVerdict:
+          passportProvenance.scopedEvidence?.applicabilityVerdict ?? 'no scoped study applies',
+      },
+      artifact: {
+        filename: dtmTif.name,
+        mediaType: 'image/tiff',
+        bytes: dtmTif.bytes,
+      },
+    });
+    entries.push({
+      name: `${basename}-dtm.tif.olv-passport.json`,
+      bytes: new TextEncoder().encode(`${JSON.stringify(passport, null, 2)}\n`),
+    });
+  }
 
   // Integrity manifest LAST: it hashes every file already assembled (README
   // included) so a recipient can verify the whole deliverable with a standard

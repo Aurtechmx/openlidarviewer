@@ -173,8 +173,37 @@ describe('CoarseLodSizeNodes', () => {
     expect(h.nodes.register(a)).toBe(false);
     const b = material(1, 4);
     expect(h.nodes.register(b)).toBe(true);
-    // one shared gain uniform + one per material
-    expect(h.made()).toBe(3);
+    // Two shared uniforms, the phase gain and the coverage switch, plus exactly
+    // one per material. The count matters because a per-frame or per-draw
+    // uniform here would rebuild the pipeline on every write.
+    expect(h.made()).toBe(4);
+    // A third material adds one more and no shared ones.
+    expect(h.nodes.register(material(2, 4))).toBe(true);
+    expect(h.made()).toBe(5);
+  });
+
+  // Ninety-six graph shapes exist today and six capabilities each adding a fold
+  // would be six thousand. A capability rides an existing fold as a uniform, so
+  // the test deciding whether anything is folded must not learn about it.
+  it('folds on the same condition whatever the coverage uniform says', () => {
+    const h = harness();
+    const m = material(4, 4);
+    h.nodes.register(m);
+    const before = h.nodes.has(m, 'adaptive');
+    h.nodes.setMode('density');
+    expect(h.nodes.has(m, 'adaptive')).toBe(before);
+    h.nodes.setMode('adaptive');
+    expect(h.nodes.has(m, 'adaptive')).toBe(before);
+    // And the one condition that does decide it is unchanged.
+    expect(h.nodes.has(m, 'fixed')).toBe(false);
+  });
+
+  it('writes a value rather than making a uniform when the mode changes', () => {
+    const h = harness();
+    h.nodes.register(material(4, 4));
+    const made = h.made();
+    for (const mode of ['density', 'adaptive', 'fixed', 'density'] as const) h.nodes.setMode(mode);
+    expect(h.made()).toBe(made);
   });
 
   it('does not fold on an unregistered material or in fixed mode', () => {

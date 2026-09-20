@@ -142,7 +142,11 @@ describe('localDensitySizes — pure data formula hardening', () => {
 
 describe('autoDensitySizeParams', () => {
   it('returns safe unit values for an empty cloud', () => {
-    expect(autoDensitySizeParams(new Float32Array(0))).toEqual({ cellSize: 1, referenceDensity: 1 });
+    expect(autoDensitySizeParams(new Float32Array(0))).toEqual({
+      cellSize: 1,
+      referenceDensity: 1,
+      axes: [0, 1],
+    });
   });
 
   it('sets the reference to the mean areal density and a positive cell size', () => {
@@ -180,3 +184,75 @@ describe('autoDensitySizeParams', () => {
     expect(mean).toBeLessThan(1.6);
   });
 });
+
+describe('orientation', () => {
+  // The same sampled surface, laid flat and stood upright. Density sizing is a
+  // display aid, so the two must read the same: a facade is not denser than a
+  // field because of how it is turned.
+  const surface = (upright: boolean, noise: number): Float32Array => {
+    const n = 120;
+    const out = new Float32Array(n * n * 3);
+    let k = 0;
+    let seed = 7;
+    const rnd = (): number => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const u = (i / n) * 20;
+        const v = (j / n) * 12;
+        const w = rnd() * noise;
+        if (upright) {
+          out[k++] = u;
+          out[k++] = w;
+          out[k++] = v;
+        } else {
+          out[k++] = u;
+          out[k++] = v;
+          out[k++] = w;
+        }
+      }
+    }
+    return out;
+  };
+
+  const scalesFor = (upright: boolean, noise: number): Float32Array => {
+    const positions = surface(upright, noise);
+    return localDensitySizes({ positions, ...autoDensitySizeParams(positions) });
+  };
+
+  // An isotropic cloud has no dominant plane to find, so it has to keep the
+  // axes it used before rather than quietly rebinning onto a different pair.
+  it('resolves a tie to x and y', () => {
+    const n = 12;
+    const cube = new Float32Array(n * n * n * 3);
+    let k = 0;
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < n; j++)
+        for (let m = 0; m < n; m++) {
+          cube[k++] = i;
+          cube[k++] = j;
+          cube[k++] = m;
+        }
+    expect(autoDensitySizeParams(cube).axes).toEqual([0, 1]);
+  });
+
+  it('keys on the widest two axes, so a vertical surface is not x/y', () => {
+    expect(autoDensitySizeParams(surface(false, 0.01)).axes).toEqual([0, 1]);
+    expect(autoDensitySizeParams(surface(true, 0.01)).axes).toEqual([0, 2]);
+  });
+
+  // Keying on x/y put every point of the upright case on a clamp: the 0.5 floor
+  // at millimetre surface noise, the 2.0 cap at none. Both are the whole scan at
+  // one size, which is the absence of density sizing rather than a version of it.
+  it.each([0, 0.001, 0.005, 0.01, 0.05])('matches flat and upright at %s m noise', (noise) => {
+    const flat = scalesFor(false, noise);
+    const upright = scalesFor(true, noise);
+    expect(upright.length).toBe(flat.length);
+    for (let i = 0; i < flat.length; i++) expect(upright[i]).toBeCloseTo(flat[i], 6);
+  });
+
+  it('leaves the upright case off both clamps', () => {
+    const upright = scalesFor(true, 0.005);
+    expect(upright.every((v) => v > 0.5 && v < 2)).toBe(true);
+  });
+});
+

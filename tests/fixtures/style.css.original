@@ -4146,9 +4146,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    point the way the rail will move. Solid-token fallbacks precede color-mix. */
 .olv-rail-tab {
   position: absolute; top: 50%; transform: translateY(-50%);
-  /* Flush to the rail edge (column: left 14px + its width), overlapping the
-     shared hairline by 1px so panel and handle read as one surface. */
-  left: calc(14px + var(--olv-rail-width) - 1px);
+  /* Flush to the panel's edge (column: left 14px + its width), overlapping the
+     shared hairline by 1px so panel and handle read as one surface.
+     `--olv-ws-gutter` is the scrollbar gutter the scrolling body reserves,
+     measured at mount because CSS cannot ask for it. It is zero where
+     scrollbars overlay and nine where they are classic, and subtracting it is
+     what keeps the handle against the CARD rather than against the rail box:
+     without it Chrome shows a strip of scene between a panel and its own
+     collapse control, and a machine with overlay scrollbars shows none. */
+  left: calc(14px + var(--olv-rail-width) - 1px - var(--olv-ws-gutter, 0px));
   display: flex; align-items: center; justify-content: center;
   width: 22px; height: 64px; padding: 0;
   color: var(--text-dim);

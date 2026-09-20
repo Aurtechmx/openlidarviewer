@@ -39,6 +39,16 @@ export const PHASE_LOD_GAIN: Readonly<Record<RefinementPhase, number>> = {
   'full-refine': 0,
 };
 
+/**
+ * The largest multiplier a fully coarse node may take from coverage sizing.
+ *
+ * Deliberately its own number rather than {@link MAX_LOD_SCALE}. That one
+ * compensates a view that is still refining and is gone once it settles; this
+ * one is the settled sizing. They happen to start equal, and tuning either for
+ * its own reason must not silently move the other.
+ */
+export const MAX_COVERAGE_SCALE = 1.6;
+
 /** userData keys carrying a streamed node's resolution and its source's root. */
 export const NODE_RESOLUTION_KEY = 'olvNodeResolution';
 export const ROOT_RESOLUTION_KEY = 'olvRootResolution';
@@ -85,6 +95,46 @@ export function coarseLodScale(
   const scale = 1 + phaseLodGain(phase) * (MAX_LOD_SCALE - 1) * rel;
   if (!Number.isFinite(scale)) return 1;
   return Math.min(MAX_LOD_SCALE, Math.max(1, scale));
+}
+
+/**
+ * The settled display multiplier for one streamed node under coverage sizing:
+ *
+ *   `1 + (MAX_COVERAGE_SCALE − 1) × relativeResolution`
+ *
+ * Two ways in, matching {@link CoarseLodSizeNodes.setMode}, which sets the
+ * uniform this describes. Choosing `density` asks for coverage sizing by name;
+ * the continuity ladder's `sizing` rung grants the same thing without the
+ * viewer having to know which point-size mode implements it. `granted`
+ * defaults to false, so a caller that knows nothing about the ladder reads the
+ * mode rule it always read.
+ *
+ * The two arguments are deliberately not folded into one before they get here.
+ * This is the reference a test and a diagnostic read, and the uniform is what
+ * the shader reads: if they took different inputs, one of them would be
+ * describing a picture the other does not produce.
+ *
+ * Unlike {@link coarseLodScale} there is no phase term, and that is the whole
+ * point. Compensation exists to carry a view while it refines and is gone when
+ * it settles. Coverage sizing is what a settled view should look like: a frontier
+ * mixes nodes from several depths, and without it the coarse ones read as
+ * speckle beside the fine ones however long the camera sits still.
+ *
+ * A node whose resolutions are unusable takes 1, because
+ * {@link relativeNodeResolution} answers 0 rather than guessing, and no sizing
+ * is better than sizing from a number that was not there.
+ */
+export function nodeCoverageScale(
+  nodeResolution: number,
+  rootResolution: number,
+  mode: PointSizeMode,
+  granted = false,
+): number {
+  if (mode !== 'density' && !granted) return 1;
+  const rel = relativeNodeResolution(nodeResolution, rootResolution);
+  const scale = 1 + (MAX_COVERAGE_SCALE - 1) * rel;
+  if (!Number.isFinite(scale)) return 1;
+  return Math.min(MAX_COVERAGE_SCALE, Math.max(1, scale));
 }
 
 /**
@@ -135,14 +185,34 @@ interface LodMaterial {
  */
 export class CoarseLodSizeNodes {
   private readonly _uniform: (value: number) => UniformLike;
+  private readonly _coverage: UniformLike;
   private readonly _gain: UniformLike;
   private readonly _baseSize: SizeNode;
   private readonly _minSize: SizeNode;
   private readonly _rel = new WeakMap<LodMaterial, UniformLike>();
+  /**
+   * Whether the continuity ladder granted coverage sizing for this session.
+   *
+   * Taken at construction because the grant cannot change while a session
+   * runs: it comes from the flags and the device class. Held here so a session
+   * that was granted it is sized that way from the first frame, rather than
+   * from whenever the viewer next touches the point-size mode.
+   */
+  private readonly _granted: boolean;
 
-  constructor(uniform: (value: number) => UniformLike, baseSize: SizeNode, minSize: SizeNode) {
+  constructor(
+    uniform: (value: number) => UniformLike,
+    baseSize: SizeNode,
+    minSize: SizeNode,
+    coverageGranted = false,
+  ) {
     this._uniform = uniform;
     this._gain = uniform(PHASE_LOD_GAIN['full-refine']);
+    this._granted = coverageGranted;
+    // 0 unless the viewer asks for density sizing or the ladder granted
+    // coverage sizing, so the fold is identity for every other session and
+    // nothing that renders today moves.
+    this._coverage = uniform(coverageGranted ? 1 : 0);
     this._baseSize = baseSize;
     this._minSize = minSize;
   }
@@ -158,6 +228,11 @@ export class CoarseLodSizeNodes {
   /** The gain currently driving every registered material. */
   get phaseGain(): number {
     return this._gain.value;
+  }
+
+  /** The coverage term currently in force: 1 when sizing for coverage, else 0. */
+  get coverageGain(): number {
+    return this._coverage.value;
   }
 
   /**
@@ -181,6 +256,38 @@ export class CoarseLodSizeNodes {
     return true;
   }
 
+  /**
+   * Point the coverage uniform at a size mode, or at a granted capability.
+   *
+   * Two ways in, one term. Choosing `density` asks for coverage sizing by
+   * name, and the continuity ladder's `sizing` rung grants the same thing
+   * without the viewer having to know which point-size mode implements it.
+   * They set the same uniform because they are the same behaviour: a second
+   * coverage term would be a second answer to one question, visible as two
+   * sizes in one picture.
+   *
+   * A value write only, like {@link setPhase}: the graph shape does not depend
+   * on the mode, so a switch rebuilds no pipeline.
+   *
+   * This is the shape every continuity capability has to take. The size graph
+   * already varies with five conditional folds and three size modes, which is
+   * ninety-six possible shapes; six capabilities each adding a fold of their own
+   * would be six thousand. Ride an existing fold as a uniform, and `has` stays
+   * the same test it was, so nothing new is compiled and no combination is added
+   * to the set a device might have to build.
+   *
+   * Folding unconditionally instead, and relying on an identity value to make an
+   * inactive capability free, is the mistake the filter masks already made: it
+   * compiled attribute reads into essentially every scan's vertex shader and is
+   * the regression `_applySizeMode` carries a note about.
+   */
+  setMode(mode: PointSizeMode): void {
+    // The same test `nodeCoverageScale` applies, with the grant this was built
+    // with. A uniform that said yes where the reference said no would put the
+    // shader and every figure computed from it in disagreement.
+    this._coverage.value = nodeCoverageScale(1, 1, mode, this._granted) > 1 ? 1 : 0;
+  }
+
   /** Whether this material folds compensation under the given size mode. */
   has(material: LodMaterial, mode: PointSizeMode): boolean {
     return mode !== 'fixed' && this._rel.has(material);
@@ -201,6 +308,11 @@ export class CoarseLodSizeNodes {
     const rel = this._rel.get(material);
     if (!rel) return node;
     const compensated = node.add(node.mul(this._gain).mul(rel).mul(MAX_LOD_SCALE - 1));
-    return compensated.clamp(this._minSize, this._baseSize.mul(MAX_COMPENSATED_SIZE_FACTOR));
+    // Mirrors `nodeCoverageScale`: a second, persistent term that survives the
+    // settle the phase gain is built to fade out of.
+    const covered = compensated.add(
+      compensated.mul(this._coverage).mul(rel).mul(MAX_COVERAGE_SCALE - 1),
+    );
+    return covered.clamp(this._minSize, this._baseSize.mul(MAX_COMPENSATED_SIZE_FACTOR));
   }
 }

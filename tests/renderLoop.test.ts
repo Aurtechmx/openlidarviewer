@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { runRenderFrame, STREAMING_TICK_INTERVAL } from '../src/render/renderLoop';
+import { runRenderFrame } from '../src/render/renderLoop';
 import type { RenderLoopHost } from '../src/render/renderLoop';
 import type { PointInfo } from '../src/render/pointInfo';
 
@@ -40,8 +40,12 @@ function makeHost(over: Partial<RenderLoopHost> = {}): RenderLoopHost {
     setEdlPaintedAtRest: vi.fn(),
     hasStreaming: () => false,
     pumpStreamingCommit: vi.fn(),
-    advanceStreamingFrame: () => 1,
+    stepStreamingFades: vi.fn(),
+    notifyFrameDrawn: vi.fn(),
+    sweepState: () => 'none' as const,
     tickStreaming: vi.fn(),
+    streamingTickDue: () => true,
+    cullStreamingToFrustum: vi.fn(),
     toolMode: () => 'none',
     measureDragging: () => false,
     pointerMoved: () => false,
@@ -127,6 +131,66 @@ describe('runRenderFrame — idle throttle and EDL snap-back', () => {
     expect(host.noteSkipped).not.toHaveBeenCalled();
   });
 
+  it('defers the repaint while an accumulation sweep is still building', () => {
+    // Parking is the first frame of a sweep. Shading there lights an image one
+    // phase complete and never lights it again, because the flag the repaint
+    // sets says the at-rest paint is done: the viewer is left looking at a
+    // quarter of the scan with depth cues drawn over it.
+    const host = makeHost({
+      shouldRenderFrame: () => false,
+      edlEnabled: () => true,
+      cameraActivityUntilMs: () => 0,
+      edlPaintedAtRest: () => false,
+      sweepState: () => 'converging' as const,
+    });
+    runRenderFrame(host);
+
+    expect(host.renderEdl).not.toHaveBeenCalled();
+    expect(host.setEdlPaintedAtRest).not.toHaveBeenCalled();
+    expect(host.noteSkipped).toHaveBeenCalledTimes(1);
+  });
+
+  it('repaints once the sweep has converged', () => {
+    const host = makeHost({
+      shouldRenderFrame: () => false,
+      edlEnabled: () => true,
+      cameraActivityUntilMs: () => 0,
+      edlPaintedAtRest: () => false,
+      sweepState: () => 'converged' as const,
+    });
+    runRenderFrame(host);
+
+    expect(host.renderEdl).toHaveBeenCalledTimes(1);
+    expect(host.setEdlPaintedAtRest).toHaveBeenCalledWith(true);
+  });
+
+  it('repaints as it always did when nothing is accumulating', () => {
+    // A sweep that never starts is never part way through, so a viewer with
+    // accumulation off sees exactly the behaviour that shipped.
+    const host = makeHost({
+      shouldRenderFrame: () => false,
+      edlEnabled: () => true,
+      cameraActivityUntilMs: () => 0,
+      edlPaintedAtRest: () => false,
+      sweepState: () => 'none' as const,
+    });
+    runRenderFrame(host);
+
+    expect(host.renderEdl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not repaint mid-sweep even once the camera has been parked a while', () => {
+    const host = makeHost({
+      shouldRenderFrame: () => false,
+      edlEnabled: () => true,
+      cameraActivityUntilMs: () => 0,
+      edlPaintedAtRest: () => false,
+      sweepState: () => 'converging' as const,
+    });
+    for (let i = 0; i < 5; i++) runRenderFrame(host);
+    expect(host.renderEdl).not.toHaveBeenCalled();
+  });
+
   it('skips the frame once the EDL snap-back has already been painted', () => {
     const host = makeHost({
       shouldRenderFrame: () => false,
@@ -160,31 +224,39 @@ describe('runRenderFrame — streaming cadence', () => {
     expect(host.tickStreaming).not.toHaveBeenCalled();
   });
 
-  it('pumps commits every frame but ticks the scheduler only on the interval', () => {
-    // Drive the frame counter 1..2*interval and count scheduler ticks.
-    let counter = 0;
+  it('pumps commits every frame but ticks the scheduler only when it is due', () => {
+    // The cadence is now elapsed time, so the loop asks the host rather than
+    // counting frames. Due on every third call here.
+    let calls = 0;
     const host = makeHost({
       hasStreaming: () => true,
-      advanceStreamingFrame: () => ++counter,
+      streamingTickDue: () => (++calls % 3 === 0),
     });
-    const frames = STREAMING_TICK_INTERVAL * 2;
+    const frames = 9;
     for (let i = 0; i < frames; i++) runRenderFrame(host);
 
     expect(host.pumpStreamingCommit).toHaveBeenCalledTimes(frames);
-    // Ticks land exactly on multiples of the interval → twice across 2×.
-    expect(host.tickStreaming).toHaveBeenCalledTimes(2);
+    expect(host.tickStreaming).toHaveBeenCalledTimes(3);
+    // Fades step on every iteration, not on the scheduler's cadence: a fade
+    // that advanced at 10 Hz would be visible as a stutter.
+    expect(host.stepStreamingFades).toHaveBeenCalledTimes(frames);
   });
 
-  it('ticks on the interval-th frame, not before', () => {
-    let counter = 0;
+  it('does not tick while the host says it is not due', () => {
+    const host = makeHost({ hasStreaming: () => true, streamingTickDue: () => false });
+    for (let i = 0; i < 20; i++) runRenderFrame(host);
+    expect(host.pumpStreamingCommit).toHaveBeenCalledTimes(20);
+    expect(host.tickStreaming).not.toHaveBeenCalled();
+  });
+
+  it('asks the host once per frame, so the cadence cannot double-count', () => {
+    let asked = 0;
     const host = makeHost({
       hasStreaming: () => true,
-      advanceStreamingFrame: () => ++counter,
+      streamingTickDue: () => { asked += 1; return false; },
     });
-    for (let i = 0; i < STREAMING_TICK_INTERVAL - 1; i++) runRenderFrame(host);
-    expect(host.tickStreaming).not.toHaveBeenCalled();
-    runRenderFrame(host); // the interval-th frame
-    expect(host.tickStreaming).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 5; i++) runRenderFrame(host);
+    expect(asked).toBe(5);
   });
 });
 

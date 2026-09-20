@@ -73,9 +73,8 @@ import {
   type ElevLayer,
 } from './elevationWindowResolver';
 import {
-  GpuErrorLedger,
-  wireGpuDeviceErrors,
-  type GpuDeviceLike,
+  DeviceGeneration, GpuErrorLedger, installGpuDeviceErrors, watchDeviceChanges,
+  type RendererWithDeviceLoss,
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { intensityFilterUniform } from './intensityFilterUniform';
@@ -100,7 +99,7 @@ import type { RefinementReadiness } from './streaming/refinementReadiness';
 import { readDevFlags } from '../perf/devFlags';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
-import { buildAdaptiveSizeNode, CoarseLodSizeNodes, ensureDensitySizes, pointSizeBaseNode } from './densityPointSize';
+import { buildAdaptiveSizeNode, CoarseLodSizeNodes, coverageSizingGranted, ensureDensitySizes, pointSizeBaseNode } from './densityPointSize';
 import {
   splatRadiusMultiplier,
   splatForcesAlphaToCoverage,
@@ -181,7 +180,7 @@ import {
   createProfileSectionSeam,
   type ProfileSectionSeam,
 } from './measure/profileSectionSeam';
-import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
+import { volumeCutFill, assembleVolumePositions, POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
   integrableClouds, isIntegrable, streamingMayCombine, sourceClassifiesGround,
   analysisClassification,
@@ -213,7 +212,7 @@ import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import { TouchTapGate } from './touchTapGate';
-import { RenderActivityGate, DampingSettleGate, CameraPoseWatch } from './renderActivityGate';
+import { CameraPoseWatch, DampingSettleGate, FrameDemand } from './frameDemand';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
@@ -438,6 +437,10 @@ export interface FrameStats {
   totalPoints: number;
   /** Rough GPU memory held by the visible clouds' instance attributes, in bytes. */
   gpuBytesEstimate: number;
+  /** Backing-store width in device pixels. */
+  bufferWidthPx: number;
+  /** Backing-store height in device pixels. */
+  bufferHeightPx: number;
 }
 
 /** A built (but not yet mounted) instanced-quad point mesh and its handles. */
@@ -605,7 +608,6 @@ export class Viewer {
   // tick stay consistent. We use the same single-delta-per-frame pattern, so
   // the behaviour is unchanged — only the warning goes away.
   private readonly _timer = new THREE.Timer();
-  private _rafId: number | null = null;
 
   // ── P5 adaptive DPR (program §P5) — drops backing-store resolution while the
   //    camera moves, driven by the P3 angular-velocity signal. Flag-gated. ──
@@ -630,7 +632,20 @@ export class Viewer {
    * rAF rate. Bumped on every user input via `_bumpRenderActivity`.
    * Past this point, the loop falls back to a heartbeat render.
    */
-  private readonly _renderGate = new RenderActivityGate();
+  /**
+   * One owner for whether the loop needs to run: the activity deadlines, the
+   * reasons a frame is wanted, and the animation-frame scheduler.
+   */
+  private readonly _demand = new FrameDemand({
+    nowMs: () => this._nowMs(),
+    tweening: () => this._nav.isTweening,
+    streamingBusy: () => {
+      if (!this._streaming) return false;
+      const stats = this._streaming.scheduler.stats();
+      return stats.loading > 0 || stats.queued > 0;
+    },
+    fading: () => this._streaming?.renderer.hasActiveFades() ?? false,
+  });
   private readonly _camPose = new CameraPoseWatch(); // walk / fly motion signal
   /** Damping-tail measure behind the OrbitControls 'change' activity bump. */
   private readonly _settleGate = new DampingSettleGate();
@@ -687,7 +702,6 @@ export class Viewer {
    */
   private _streamingHeartbeat: ReturnType<typeof setInterval> | null = null;
   /** Frames since the streaming scheduler last ran — for throttling. */
-  private _streamingFrame = 0;
   /**
    * Last-observed centre of the streaming cloud's bounds. The streaming
    * pipeline returns the COPC / EPT octree's *full* extent up front, so this
@@ -808,7 +822,7 @@ export class Viewer {
   private readonly _lodSize = new CoarseLodSizeNodes(
     uniform,
     this._pointSizeUniform,
-    float(POINT_STYLE_DEFAULTS.minSizePx),
+    float(POINT_STYLE_DEFAULTS.minSizePx), coverageSizingGranted(readDevFlags(), this._isMobile()),
   );
 
   // ── Class visibility (GPU mask) ───────────────────────────────────────────
@@ -825,10 +839,7 @@ export class Viewer {
    * texture-fetch LOD plumbing). 256 floats live well within the vertex
    * uniform budget on every WebGPU target and every practical WebGL2 device.
    */
-  private readonly _classMaskUniform = uniformArray(
-    new Array<number>(CLASS_COUNT).fill(1),
-    'float',
-  );
+  private readonly _classMaskUniform = uniformArray(new Array<number>(CLASS_COUNT).fill(1), 'float');
   /**
    * True when at least one class is currently hidden. Mirrors the mask written
    * by `applyClassVisibility` so the pick paths can decide — with a single
@@ -926,8 +937,7 @@ export class Viewer {
     firstStaticCloud: () => this._clouds.values().next().value?.cloud ?? null,
     streaming: () => this._streaming,
     heightPercentileTrim: () => this._heightPercentileTrim,
-    projectSharedElevationRange: () =>
-      this._projectSharedElevation ? this.projectSharedElevationRange() : null,
+    projectSharedElevationRange: () => (this._projectSharedElevation ? this.projectSharedElevationRange() : null),
     elevationUnitLabel: () => this._elevationUnitLabel,
     worldUpIsZ: () => this._worldUp.z === 1,
     residentIntensityBuffers: () => {
@@ -1020,12 +1030,7 @@ export class Viewer {
   constructor(canvas: HTMLCanvasElement, forceWebGL = false) {
     // The resolver closes over the cloud registry, which only the Viewer owns.
     this._elevGpu.setWindowResolver((material) =>
-      elevWindowForMaterial(
-        this._elevFilterWorld,
-        this._elevLayers(),
-        material,
-        this._primaryElevLayer(),
-      ),
+      elevWindowForMaterial(this._elevFilterWorld, this._elevLayers(), material, this._primaryElevLayer()),
     );
 
     // ── Renderer, scene, cameras, EDL pipeline ────────────────────────────
@@ -1089,7 +1094,7 @@ export class Viewer {
         // The ONE camera-motion signal. Orbit, pan, dolly, the fly controller's
         // `controls.update()` and the damping tail all arrive here; nothing
         // else moves the camera except a tween, which the loop reads directly.
-        this._bumpCameraActivity();
+        this._demand.cameraMoved();
       }
     });
     this._controls.addEventListener('start', () => { this._userInteracting = true; });
@@ -1217,7 +1222,7 @@ export class Viewer {
           footprintArea: result.footprintArea,
           pointsInPolygon: result.pointsInPolygon,
           densityNative: result.densityNative,
-          confidence,
+          confidence, method: POINT_SAMPLE_VOLUME_METHOD,
         };
         // Non-finite returns inside the footprint were excluded from the
         // integration — carry the count so the record discloses the
@@ -1300,7 +1305,7 @@ export class Viewer {
       else if (this._toolMode === 'annotate') this._handleAnnotateClick(e, canvas);
     };
     this._onCanvasPointerMove = (e) => {
-      this._bumpRenderActivity();
+      this._demand.input();
       this._pointerNdcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
       this._pointerNdcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
       this._pointerClientX = e.clientX;
@@ -1329,7 +1334,7 @@ export class Viewer {
     // Mouse pointers stay with OrbitControls; a picking tool suspends it so a
     // 2-finger measurement drag isn't hijacked.
     this._onCanvasPointerDown = (e) => {
-      this._bumpRenderActivity();
+      this._demand.input();
       if (e.pointerType !== 'touch') return;
       if (this._toolMode !== 'none') return;
       this._touchTracker.down(e.pointerId, e.offsetX, e.offsetY);
@@ -1356,7 +1361,7 @@ export class Viewer {
     // A cancel is NOT an up: aliased above, it completed a tap never made.
     this._onCanvasPointerCancel = (e) => { if (endTouch(e)) this._tapGate.cancel(); };
     this._onWindowKeyDown = (e) => {
-      this._bumpRenderActivity();
+      this._demand.input();
       if (e.code === 'Escape' && this._toolMode !== 'none') this._setToolMode('none');
     };
     this._onVisibilityChange = () => {
@@ -1364,28 +1369,29 @@ export class Viewer {
       // Coming back from background — bump activity so the first few
       // post-resume frames render at full rate (avoids a stuttery
       // catch-up on the first input after the tab regains focus).
-      if (!document.hidden) this._bumpRenderActivity();
+      if (!document.hidden) this._demand.input();
       if (document.hidden) {
         // Tab is in background — stop the render loop. The next
         // visibility change resumes it. Streaming work that fires on
         // a setInterval / setTimeout continues in the background; the
         // node fetcher is already throttled to a memory cap so it
         // won't run away.
-        if (this._rafId !== null) {
-          cancelAnimationFrame(this._rafId);
-          this._rafId = null;
-        }
+        this._demand.stop();
       } else {
         // Tab is visible again. Reset the frame timer so the first
         // frame after resume doesn't see a giant delta (which would
         // otherwise look like a stutter to the camera intro / orbit
         // pivot lerp), then restart the loop.
         this._timer.update();
-        if (this._rafId === null && this._renderer !== undefined) {
-          this._startLoop();
-        }
+        // A stopped scheduler ignores wakes, so anything that asked for a
+        // frame while the tab was hidden is still recorded and the restart
+        // serves it.
+        if (this._renderer !== undefined) this._startLoop();
       }
     };
+    // One detach for both: the renderer's hook outlives a dropped one.
+    const rendererLike = this._renderer as unknown as RendererWithDeviceLoss;
+    this._detachContextLoss = watchDeviceChanges(canvas, rendererLike, this._devices);
     canvas.addEventListener('dblclick', this._onCanvasDblClick);
     canvas.addEventListener('click', this._onCanvasClick);
     canvas.addEventListener('pointermove', this._onCanvasPointerMove);
@@ -1425,7 +1431,7 @@ export class Viewer {
         // Force the first window of frames to render at full rate so
         // the empty state, hero animation, and any pending tween land
         // smoothly before the idle-render throttle kicks in.
-        this._bumpRenderActivity();
+        this._demand.input();
         this._startLoop();
       },
       (err: unknown) => {
@@ -1725,7 +1731,6 @@ export class Viewer {
     // above then leaves the current scan on screen instead of a blank scene.
     this.detachStreamingCloud();
     this._streaming = session;
-    this._streamingFrame = 0;
     // Guaranteed scheduler cadence, render-loop-independent (see the field's
     // contract). 200 ms is comfortably above a tick's sub-millisecond cost and
     // close to the RAF path's every-6th-frame cadence; the RAF tick still runs
@@ -1876,9 +1881,7 @@ export class Viewer {
   }
 
   /** Whether a streaming COPC cloud is currently open. */
-  get hasStreamingCloud(): boolean {
-    return this._streaming !== null;
-  }
+  get hasStreamingCloud(): boolean { return this._streaming !== null; }
 
   /**
    * The open streaming cloud, or null. Widens this from the
@@ -1888,14 +1891,13 @@ export class Viewer {
    * regardless of whether COPC or EPT is open. Callers that need
    * COPC-specific shape can narrow with `cloud.kind === 'copc'`.
    */
-  get streamingCloud(): StreamingSource | null {
-    return this._streaming?.cloud ?? null;
-  }
+  get streamingCloud(): StreamingSource | null { return this._streaming?.cloud ?? null; }
+
+  /** Optional point channels the resident streaming meshes uploaded, so a memory readout prices a point by what it carries. */
+  get streamingUploadedAttributes(): { classification: boolean; intensity: boolean } { return this._streaming?.renderer.uploadedAttributes ?? { classification: false, intensity: false }; }
 
   /** The streaming scheduler, or null — for the streaming panel and diagnostics. */
-  get streamingScheduler(): StreamingScheduler | null {
-    return this._streaming?.scheduler ?? null;
-  }
+  get streamingScheduler(): StreamingScheduler | null { return this._streaming?.scheduler ?? null; }
 
   /**
    * Wanted-set refinement readiness for the active streaming session, or null
@@ -1923,9 +1925,7 @@ export class Viewer {
    * full-cloud grade can re-decode a sampling plan through the same decoder the
    * scheduler drives (one worker pool, not two).
    */
-  get streamingDecoder(): ChunkDecoder | null {
-    return this._streaming?.decoder ?? null;
-  }
+  get streamingDecoder(): ChunkDecoder | null { return this._streaming?.decoder ?? null; }
 
   /** Switch the streaming cloud's colour mode. */
   setStreamingColorMode(mode: ColorMode): void {
@@ -2315,7 +2315,7 @@ export class Viewer {
     };
     for (const entry of this._clouds.values()) apply(entry.material);
     for (const m of this._streamingMaterials()) apply(m);
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /** The active clip box, or null when none is set. */
@@ -2381,7 +2381,7 @@ export class Viewer {
       writeFloatColorsInto(arr, raw);
       entry.colorAttr.needsUpdate = true;
     }
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /**
@@ -2430,18 +2430,14 @@ export class Viewer {
   }
 
   /** Read the current percentile-trim setting. */
-  get heightPercentileTrim(): number {
-    return this._heightPercentileTrim;
-  }
+  get heightPercentileTrim(): number { return this._heightPercentileTrim; }
 
   // ── Project-shared elevation scale (math in projectElevationScale.ts) ──────
   // Off (default) = per-cloud percentile windows; on = every frame-sharing layer
   // colours elevation against one world-Z window.
   private _projectSharedElevation = false;
 
-  get projectSharedElevation(): boolean {
-    return this._projectSharedElevation;
-  }
+  get projectSharedElevation(): boolean { return this._projectSharedElevation; }
 
   /** World-Z union of the frame-sharing elevation clouds; null when < 2 share. */
   projectSharedElevationRange(): { min: number; max: number } | null {
@@ -2590,14 +2586,10 @@ export class Viewer {
   }
 
   /** The active RGB appearance bundle (deep copy). */
-  get rgbAppearance(): RgbAppearance {
-    return { ...this._rgbAppearance };
-  }
+  get rgbAppearance(): RgbAppearance { return { ...this._rgbAppearance }; }
 
   /** The active RGB appearance preset id, or `null` when custom. */
-  get rgbAppearancePresetId(): RgbAppearancePresetId | null {
-    return this._rgbAppearancePresetId;
-  }
+  get rgbAppearancePresetId(): RgbAppearancePresetId | null { return this._rgbAppearancePresetId; }
 
   /**
    * Apply a sky preset by id. Public surface of the existing private
@@ -2610,9 +2602,7 @@ export class Viewer {
   }
 
   /** The active sky preset id. */
-  get skyPresetId(): SkyPresetId {
-    return this._skyPresetId;
-  }
+  get skyPresetId(): SkyPresetId { return this._skyPresetId; }
 
   /**
    * Apply a named EDL preset bundle (Subtle / Balanced / Inspection)
@@ -2632,9 +2622,7 @@ export class Viewer {
   }
 
   /** The active EDL preset id, or `null` when EDL is off. */
-  get edlPresetId(): EdlPresetId | null {
-    return this._edlPresetId;
-  }
+  get edlPresetId(): EdlPresetId | null { return this._edlPresetId; }
 
   /**
    * Set the splat rendering mode.
@@ -2677,9 +2665,7 @@ export class Viewer {
   }
 
   /** The active splat mode. */
-  get splatMode(): SplatMode {
-    return this._splatMode;
-  }
+  get splatMode(): SplatMode { return this._splatMode; }
 
   /**
    * Walk every RGB-mode static cloud and re-upload its colour attribute
@@ -2785,7 +2771,7 @@ export class Viewer {
     entry.mode = mode;
     // Color buffer just changed — make sure the idle-render throttle
     // doesn't swallow the next frame so the user sees the new colours.
-    this._bumpRenderActivity();
+    this._demand.input();
     // The legend describes the active mode's ramp — refresh it.
     this._notifyColorContextChanged();
   }
@@ -2796,9 +2782,19 @@ export class Viewer {
    * application, theme swap, embed-bridge command, etc.). Bumps the
    * idle-render throttle so the next few frames render at full rate
    * without the caller having to know about the throttle.
+   *
+   * Also how the streaming renderer's fades reach the loop. They are stepped
+   * from the frame now rather than from an animation frame of their own, so a
+   * fade beginning while the loop sleeps has to ask for one; the holdover
+   * covers its first window and `FrameDemand`'s fade signal the rest.
    */
   requestFrame(): void {
-    this._bumpRenderActivity();
+    this._demand.input();
+  }
+
+  /** Run `listener` after every drawn frame; returns the unsubscribe. */
+  onDrawnFrame(listener: () => void): () => void {
+    return this._demand.onDrawnFrame(listener);
   }
 
   /**
@@ -3074,7 +3070,7 @@ export class Viewer {
     // colour mode only needs refreshing when class colours are already shown.
     if (entry.mode === 'classification') this._refreshClassificationColours(id);
     this._markClassificationEdited(id); // a derive replaces the classification
-    this._bumpRenderActivity();
+    this._demand.input();
     return true;
   }
 
@@ -3202,6 +3198,9 @@ export class Viewer {
   setPointSizeMode(mode: PointSizeMode): void {
     this._pointSizeMode = mode;
     if (mode === 'density') ensureDensitySizes(this._clouds.values());
+    // Static clouds size from their own points; a streamed node has none to
+    // count, so it sizes from the spacing its source recorded.
+    this._lodSize.setMode(mode);
     this._reapplyAllSizeModes();
   }
 
@@ -3283,6 +3282,12 @@ export class Viewer {
    * fallback (no device to wire).
    */
   private _detachGpuErrors: (() => void) | null = null;
+  /** Which era of the device GPU resources belong to. See deviceGeneration. */
+  private readonly _devices = new DeviceGeneration();
+  private _detachContextLoss: (() => void) | null = null;
+
+  /** The era GPU resources made now belong to, and whether one is usable. */
+  get deviceGeneration(): DeviceGeneration { return this._devices; }
 
   applyClassVisibility(v: ClassVisibility): void {
     const mask = v.toMaskArray();
@@ -3303,7 +3308,7 @@ export class Viewer {
     // shape, so rebuild the affected pipelines. Changing WHICH classes are hidden
     // while still filtered is a uniform-only change (the mask array re-uploads).
     if (wasFiltered !== anyHidden) this._reapplyAllSizeModes();
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /**
@@ -3321,7 +3326,7 @@ export class Viewer {
     // On/off changes the size graph's SHAPE, so rebuild pipelines on that
     // transition only; moving the window while active is a uniform-only change.
     if (wasActive !== (enabled !== 0)) this._reapplyAllSizeModes();
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /** ONE cloud's own origin + up-axis — the facts that decide its conversion. */
@@ -3376,7 +3381,7 @@ export class Viewer {
     // affected pipelines on that transition only. Narrowing an already-active
     // window is a uniform-only change.
     if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
-    this._bumpRenderActivity();
+    this._demand.input();
   }
 
   /**
@@ -4350,25 +4355,14 @@ export class Viewer {
    * because the backend's internal shape is not part of three's public API.
    */
   private _installGpuErrorListener(): void {
-    if (this.activeBackend() !== 'webgpu') return;
-    try {
-      const backend = (this._renderer as unknown as {
-        backend?: { device?: GpuDeviceLike };
-      }).backend;
-      // The wiring itself lives in the pure `gpuErrorLedger` module so a fake
-      // device can drive it in tests; here we only supply the real backend
-      // device and the two host callbacks. `device.lost` sets the ledger's
-      // suppression flag before surfacing the one actionable reload message.
-      this._detachGpuErrors = wireGpuDeviceErrors(backend?.device ?? null, {
-        onError: (message) => this._reportGpuError(message),
-        onDeviceLost: (message) => {
-          this._gpuErrorLedger.noteDeviceLost();
-          this._reportGpuError(message);
-        },
-      });
-    } catch {
-      // Never let error-plumbing setup break init — the viewer is still usable.
-    }
+    const webgpu = this.activeBackend() === 'webgpu';
+    this._detachGpuErrors = installGpuDeviceErrors(this._renderer, webgpu, {
+      onError: (message) => this._reportGpuError(message),
+      onDeviceLost: (message) => {
+        this._gpuErrorLedger.noteDeviceLost();
+        this._reportGpuError(message);
+      },
+    });
   }
 
   /**
@@ -4426,7 +4420,7 @@ export class Viewer {
       const resident = this._streaming.cloud.residentPointCount;
       displayedPoints += resident;
       totalPoints += this._streaming.cloud.sourcePointCount ?? resident;
-      gpuBytesEstimate += estimateGpuBytes(resident);
+      gpuBytesEstimate += estimateGpuBytes(resident, this._streaming.renderer.uploadedAttributes);
     }
 
     // three.js names this counter `drawCalls` on the WebGPU backend and
@@ -4443,6 +4437,11 @@ export class Viewer {
       displayedPoints,
       totalPoints,
       gpuBytesEstimate,
+      // Device pixels, so the continuity history can be costed against the
+      // store actually allocated rather than the CSS size, which understates a
+      // doubled ratio fourfold.
+      bufferWidthPx: this._renderer.domElement.width,
+      bufferHeightPx: this._renderer.domElement.height,
     };
   }
   /**
@@ -4730,7 +4729,7 @@ export class Viewer {
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);
       // Repaint the live view at the restored size on the next frames.
-      this._bumpRenderActivity();
+      this._demand.input();
     }
   }
 
@@ -4830,10 +4829,8 @@ export class Viewer {
    */
   dispose(): void {
     this._organized.dispose();
-    if (this._rafId !== null) {
-      cancelAnimationFrame(this._rafId);
-      this._rafId = null;
-    }
+    // Cancels the outstanding frame and the idle heartbeat.
+    this._demand.dispose();
     // Remove every listener the constructor registered. Each is a stored
     // bound reference so the symmetric `removeEventListener` call actually
     // matches — anonymous arrow functions would silently leak.
@@ -4856,6 +4853,7 @@ export class Viewer {
       this._detachGpuErrors();
       this._detachGpuErrors = null;
     }
+    this._detachContextLoss?.(); this._detachContextLoss = null;
     // Disconnect the ResizeObserver so the canvas can be garbage-collected
     // when the host eventually drops it.
     if (this._resizeObserver) {
@@ -5870,7 +5868,7 @@ export class Viewer {
     const normals = cloud.normals;
     return makePointInfo({
       geographicHorizontal: this._inspectGeographicHorizontal,
-      layer: cloud.name,
+      layer: cloud.name, pointFormat: cloud.metadata?.pointFormat,
       layerId: this._organized.layerIdOf(cloud),
       index,
       // `point` is the PLACED pick; for a non-anchor mounted layer it would
@@ -5980,60 +5978,11 @@ export class Viewer {
     return sum / this._frameCount;
   }
 
-  /**
-   * Bump the render-activity timestamp so the loop holds at full
-   * rAF rate for the next `RENDER_HOLDOVER_MS`. Called from pointer,
-   * keyboard, and OrbitControls 'change' listeners so any user input
-   * — including damping motion after the gesture ends — keeps the
-   * renderer responsive.
-   */
-  private _bumpRenderActivity(): void {
-    this._renderGate.bump(this._nowMs());
-  }
-
-  /**
-   * The camera moved: hold full rate AND let the motion-gated effects stand
-   * down. Reached from the controls 'change' listener (behind the settle gate)
-   * and from the walk / fly pose comparison — never from hovering, a
-   * colour-mode switch or a resize, which would flash the scene.
-   */
-  private _bumpCameraActivity(): void {
-    this._renderGate.bumpCamera(this._nowMs());
-  }
-
   /** `performance.now()` where it exists, wall clock otherwise. */
   private _nowMs(): number {
     return (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-  }
-
-  /**
-   * Should the loop call `render()` on this iteration?
-   * Yes if any of:
-   *   - a tween is in progress (camera intro, preset transition);
-   *   - the activity timestamp hasn't expired (recent input);
-   *   - the streaming scheduler is actively loading nodes (so new
-   *     resident points reach the screen as soon as they decode);
-   *   - the heartbeat counter ticked, in which case we render once
-   *     to keep the scene fresh and reset the counter.
-   * Otherwise the frame is skipped — the GPU stays idle, the CPU
-   * paths above still run (OrbitControls damping, adaptive EDL,
-   * orbit-pivot maintenance) so resume-on-input is glitch-free.
-   */
-  private _shouldRenderFrame(): boolean {
-    const now = this._nowMs();
-    // Streaming counts as busy when the scheduler has in-flight or queued
-    // fetches, so freshly-decoded nodes reach the screen without latency.
-    let streamingBusy = false;
-    if (this._streaming) {
-      const stats = this._streaming.scheduler.stats();
-      streamingBusy = stats.loading > 0 || stats.queued > 0;
-    }
-    return this._renderGate.shouldRender(now, {
-      tweening: this._nav.isTweening,
-      streamingBusy,
-    });
   }
 
   /**
@@ -6091,39 +6040,35 @@ export class Viewer {
 
   private _startLoop(): void {
     // The per-frame body lives in `renderLoop.ts` behind a structural
-    // RenderLoopHost; this starter binds the Viewer's own state to it and owns
-    // the requestAnimationFrame scheduling (browser-only, e2e-covered). The
-    // host is built once — its accessors read `this` on every frame, so the
-    // loop always sees current state.
+    // RenderLoopHost; this binds the Viewer's own state to it. The host is
+    // built once — its accessors read `this` on every frame.
+    //
+    // Scheduling belongs to FrameDemand and is request-driven: a frame runs
+    // because something asked, and the loop stops when nothing is asking. The
+    // previous loop scheduled itself, so requestAnimationFrame ran at the
+    // panel's rate over an untouched scene until the tab was hidden.
     const host = this._buildRenderLoopHost();
-    const loop = (): void => {
-      this._rafId = requestAnimationFrame(loop);
-      runRenderFrame(host);
-    };
-    loop();
+    this._demand.start(() => runRenderFrame(host));
   }
 
   /** Bind the Viewer's live render state to the {@link RenderLoopHost} contract. */
   private _buildRenderLoopHost(): RenderLoopHost {
     return {
-      advanceFrameClock: () => {
-        this._timer.update();
-        return this._timer.getDelta();
-      },
+      advanceFrameClock: () => { this._timer.update(); return this._timer.getDelta(); },
       recordFrame: (delta) => this._recordFrame(delta),
       // Walk / fly move the camera with OrbitControls disabled, so no 'change'
       // event carries their motion; under orbit and pan the settle gate owns
       // the verdict and the pose comparison stays quiet.
       updateNav: (delta) => {
         this._nav.update(delta);
-        if (this._camPose.movedOutsideControls(this._camera, this._nav.mode)) this._bumpCameraActivity();
+        if (this._camPose.movedOutsideControls(this._camera, this._nav.mode)) this._demand.cameraMoved();
       },
       maintainOrbitCenter: () => this._maintainOrbitCenter(),
       updateAdaptiveEdl: () => this._updateAdaptiveEdl(),
-      shouldRenderFrame: () => this._shouldRenderFrame(),
+      shouldRenderFrame: () => this._demand.shouldRender(),
       isTweening: () => this._nav.isTweening,
-      activityUntilMs: () => this._renderGate.activityUntilMs,
-      cameraActivityUntilMs: () => this._renderGate.cameraUntilMs,
+      activityUntilMs: () => this._demand.gate.activityUntilMs,
+      cameraActivityUntilMs: () => this._demand.gate.cameraUntilMs,
       edlEnabled: () => this._edlEnabled,
       applyAdaptiveDpr: (moving, delta, nowMs, rendered) => {
         this._updateRefinementAndDpr(moving, delta, nowMs, rendered);
@@ -6133,20 +6078,19 @@ export class Viewer {
         const p = this._refinementPhasesEnabled ? this._phases.phase : 'full-refine';
         this._lodSize.setPhase(p);
       },
-      noteRendered: () => this._renderGate.noteRendered(),
-      noteSkipped: () => this._renderGate.noteSkipped(),
+      noteRendered: () => this._demand.gate.noteRendered(),
+      noteSkipped: () => this._demand.gate.noteSkipped(),
       renderEdl: () => { this._syncActiveCamera(); this._post.render(); },
       renderScene: () => { this._syncActiveCamera(); this._renderer.render(this._scene, this._activeCamera()); },
       edlPaintedAtRest: () => this._edlPaintedAtRest,
-      setEdlPaintedAtRest: (value) => {
-        this._edlPaintedAtRest = value;
-      },
+      setEdlPaintedAtRest: (value) => { this._edlPaintedAtRest = value; },
+      sweepState: () => 'none', // nothing accumulates yet, so no sweep is part way through
       hasStreaming: () => this._streaming !== null,
-      pumpStreamingCommit: () => {
-        this._streaming?.commit.pump(this._smoothedFrameMs());
-      },
-      advanceStreamingFrame: () => ++this._streamingFrame,
+      pumpStreamingCommit: () => this._streaming?.commit.pump(this._smoothedFrameMs()),
+      stepStreamingFades: () => this._streaming?.renderer.stepFades(),
+      streamingTickDue: (nowMs: number) => this._streaming?.scheduler.tickDue(nowMs, this._phases.phase) ?? false,
       tickStreaming: () => this._tickStreaming(),
+    cullStreamingToFrustum: () => this._streaming?.renderer.cullToFrustum(this._activeCamera(), this._streamingViewProj),
       toolMode: () => this._toolMode,
       measureDragging: () => this._measure.dragging,
       pointerMoved: () => this._pointerMoved,
@@ -6169,6 +6113,7 @@ export class Viewer {
       renderMeasureOverlay: () => this._measure.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
       renderInspectOverlay: () => this._inspect.render(),
       renderAnnotateOverlay: () => this._annotate.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
+      notifyFrameDrawn: () => this._demand.frameDrawn(),
     };
   }
 
@@ -6191,7 +6136,7 @@ export class Viewer {
     // A canvas resize invalidates the rendered frame, so make sure
     // the idle-render throttle holds at full rate for the resize
     // settle window.
-    this._bumpRenderActivity();
+    this._demand.input();
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return;

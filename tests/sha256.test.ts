@@ -7,9 +7,13 @@
  * canonical known-answer vectors, not just self-consistency.
  */
 
+import { readFileSync } from 'node:fs';
+
 import { describe, it, expect } from 'vitest';
 import { sha256Hex, sha256Bytes } from '../src/terrain/export/sha256';
-import { buildSha256Manifest } from '../src/terrain/export/demPackage';
+// From its own home beside the hash, not through the DEM package that used to
+// define it. Both deliverables build their manifest with this one function.
+import { buildSha256Manifest } from '../src/terrain/export/sha256';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
@@ -69,5 +73,42 @@ describe('SHA256SUMS integrity manifest', () => {
       const [hex, name] = line.split('  ');
       expect(sha256Hex(byName.get(name)!)).toBe(hex);
     }
+  });
+});
+
+describe('one manifest builder for every deliverable', () => {
+  it('is the function both packages reach for', async () => {
+    // The contour package inlined the same expression, which is the kind of
+    // duplicate that stays correct right up until one of them is changed.
+    const dem = readFileSync(
+      new URL('../src/terrain/export/demPackage.ts', import.meta.url),
+      'utf8',
+    );
+    const contour = readFileSync(
+      new URL('../src/terrain/export/contourDeliverablePackage.ts', import.meta.url),
+      'utf8',
+    );
+    expect(contour).toContain('buildSha256Manifest');
+    expect(contour).not.toMatch(/sha256Hex\([^)]*\)\s*\}\s*\s*\$\{/);
+    // The DEM package keeps the name it exported, so its callers are unmoved.
+    expect(dem).toContain("export { buildSha256Manifest } from './sha256'");
+  });
+
+  it('lists a file per line and nothing else', () => {
+    const enc = new TextEncoder();
+    const entries = [
+      { name: 'a.tif', bytes: enc.encode('a') },
+      { name: 'README.md', bytes: enc.encode('b') },
+    ];
+    const lines = buildSha256Manifest(entries).trimEnd().split('\n');
+    expect(lines).toHaveLength(entries.length);
+    expect(buildSha256Manifest(entries).endsWith('\n')).toBe(true);
+  });
+
+  it('never lists itself, because the caller adds it afterwards', () => {
+    // The sha256sum convention, and the reason the manifest is built last.
+    const enc = new TextEncoder();
+    const entries = [{ name: 'a.tif', bytes: enc.encode('a') }];
+    expect(buildSha256Manifest(entries)).not.toContain('SHA256SUMS');
   });
 });

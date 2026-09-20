@@ -21,6 +21,7 @@
 import { buildIdentityProvenance } from '../build/buildIdentity';
 import { buildFigureProvenance } from './figureProvenance';
 import { encodePngTextChunks } from './pngTextChunks';
+import { buildPresentationProvenance, type PresentationMode } from './presentationMode';
 import type { FigureCameraPose, FigureClipSummary } from './types';
 
 /** The per-figure facts a caller supplies; build identity is filled here. */
@@ -30,6 +31,19 @@ export interface FigureStampContext {
   readonly palette?: string | null;
   readonly camera?: FigureCameraPose | null;
   readonly clip?: FigureClipSummary | null;
+  /**
+   * How the pixels in THIS capture were produced.
+   *
+   * The mode of the artefact rather than of the live view, so a capture that
+   * suspended reconstruction records what it contains. Absent means `source`,
+   * which is what every build with no capability enabled produces.
+   */
+  readonly presentation?: PresentationMode | null;
+  /**
+   * Share of drawn pixels this capture closed from neighbours, when a census
+   * counted them. Absent when nothing counted, which is not the same as zero.
+   */
+  readonly reconstructedShare?: number | null;
 }
 
 /**
@@ -53,6 +67,12 @@ export async function stampFigureProvenanceOntoBlob(
       camera: context.camera ?? null,
       clip: context.clip ?? null,
     });
+    entries.push(
+      ...buildPresentationProvenance(
+        context.presentation ?? 'source',
+        context.reconstructedShare ?? null,
+      ),
+    );
     const bytes = new Uint8Array(await png.arrayBuffer());
     const stamped = encodePngTextChunks(bytes, entries);
     return new Blob([stamped as unknown as BlobPart], { type: 'image/png' });

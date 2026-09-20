@@ -56,7 +56,19 @@ describe('buildMetricsDocument', () => {
       refinementPhase: true,
       adaptiveDpr: true,
     });
-    expect(doc.stagedControllers).toEqual(['streamingScore', 'uploadQueue', 'angularPrediction']);
+    // Every staged controller, so a flag with no consumer can never be read as
+    // active. Adding one here is the step that makes it visible as staged.
+    expect(doc.stagedControllers).toEqual([
+      'streamingScore',
+      'uploadQueue',
+      'angularPrediction',
+      'continuityNodeCulling',
+      'continuityPackedAttributes',
+      'continuityCoverageSizing',
+      'continuityMicroGapFill',
+      'continuityTemporalAccumulation',
+      'continuityEvidenceLens',
+    ]);
     expect(doc.frameTiming).toEqual({
       sampledForMs: 1234.568,
       frames: 100,

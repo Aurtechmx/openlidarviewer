@@ -1,0 +1,42 @@
+{
+  "record": "phase-a3-benchmark",
+  "outcome": "null-result",
+  "decision": "Resident stickiness stays opt-in. The phase graduates it only if it reduces churn, and no cell produced any churn to reduce.",
+  "measuredAt": "2026-09-20",
+  "commit": "8de23786",
+  "host": "Apple M3 Max, Playwright Chromium headed, 1280 x 860",
+  "dataset": { "name": "swisssurface3D 2022 sample", "knownNodes": 485, "sourcePoints": 15680312 },
+  "design": "2x2 over the commit path and the stickiness flag, one fresh browser process per cell, following A2 where a shared process put a 1.8x order effect on frame time.",
+  "traces": [
+    { "name": "orbit", "detail": "Three laps out and back, 30 pointer moves per leg." },
+    { "name": "zoom and pan", "detail": "Twelve wheel steps in, then three pan sweeps across the extent, to make many distinct nodes compete for the budget." }
+  ],
+  "results": {
+    "orbit": [
+      { "cell": "immediate + plain",  "evictions": 0, "thrash": 0, "cacheMisses": 8, "uploads": 6, "p50": 8.6, "peakGpuMB": 56.2 },
+      { "cell": "immediate + sticky", "evictions": 0, "thrash": 0, "cacheMisses": 5, "uploads": 7, "p50": 8.6, "peakGpuMB": 74.8 },
+      { "cell": "metered + plain",    "evictions": 0, "thrash": 0, "cacheMisses": 6, "uploads": 8, "p50": 9.2, "peakGpuMB": 67.6 },
+      { "cell": "metered + sticky",   "evictions": 0, "thrash": 0, "cacheMisses": 8, "uploads": 6, "p50": 8.4, "peakGpuMB": 56.2 }
+    ],
+    "zoomAndPan": [
+      { "cell": "immediate + plain",  "evictions": 0, "thrash": 0, "cacheMisses": 4, "uploads": 5, "residentNodes": 10, "peakGpuMB": 63.4 },
+      { "cell": "immediate + sticky", "evictions": 0, "thrash": 0, "cacheMisses": 9, "uploads": 7, "residentNodes": 10, "peakGpuMB": 63.4 },
+      { "cell": "metered + plain",    "evictions": 0, "thrash": 0, "cacheMisses": 5, "uploads": 8, "residentNodes": 8,  "peakGpuMB": 45.9 },
+      { "cell": "metered + sticky",   "evictions": 0, "thrash": 0, "cacheMisses": 9, "uploads": 9, "residentNodes": 11, "peakGpuMB": 69.5 }
+    ]
+  },
+  "reading": [
+    "Every cell of both traces recorded zero node evictions and zero thrash events. Stickiness keeps a node resident that the budget would otherwise drop, so with nothing dropped it has nothing to do, and the differences in cache misses and uploads across cells are a handful of nodes either way with no ordering by condition.",
+    "The resident set stayed between eight and eleven nodes throughout, against 485 known. The point budget on this machine comfortably holds the working set for this scan, which is why no pressure appeared even after descending the octree and travelling across the extent.",
+    "This is a null result from absent pressure rather than evidence that stickiness does not work. The condition it addresses was never created."
+  ],
+  "whatWouldTestIt": [
+    "A dataset whose working set exceeds the point budget, rather than one that fits inside it several times over.",
+    "A constrained budget: the Speed end of the quality dial, or a mobile-class device profile, both of which lower the resident point budget.",
+    "A trace that visits far more distinct regions than one scan's extent allows, which likely means a larger source."
+  ],
+  "notMeasured": [
+    "Re-decodes and node swaps as distinct counters. The overlay reports uploads and evictions, and with evictions at zero a re-decode cannot have occurred, so they were not separately instrumented.",
+    "Visible refinement pulses, which would need frame capture and comparison rather than a counter."
+  ]
+}

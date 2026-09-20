@@ -163,3 +163,49 @@ export function wireGpuDeviceErrors(
     }
   };
 }
+
+/** The part of a renderer this needs: its backend's device, if it has one. */
+export interface RendererWithBackend {
+  readonly backend?: { readonly device?: GpuDeviceLike };
+}
+
+/**
+ * Attach the error wiring to a live renderer, or to nothing.
+ *
+ * The extraction of what the Viewer used to do inline: reach for the backend
+ * device, wire it, and let nothing thrown by any of that reach the caller. A
+ * renderer with no device, a backend that is not WebGPU, or a property shape
+ * that has moved between three.js versions all end the same way, with a no-op
+ * detach and a viewer that still draws.
+ *
+ * Returns the detach, which is a no-op when there was nothing to attach.
+ */
+export function installGpuDeviceErrors(
+  renderer: unknown,
+  isWebGpu: boolean,
+  handlers: GpuDeviceErrorHandlers,
+): () => void {
+  if (!isWebGpu) return () => {};
+  try {
+    const device = (renderer as RendererWithBackend | null)?.backend?.device ?? null;
+    return wireGpuDeviceErrors(device, handlers) ?? (() => {});
+  } catch {
+    // Error plumbing must never be the thing that breaks init.
+    return () => {};
+  }
+}
+
+// The device generation travels with this module because it answers the other
+// half of the same question: this one says what the device reported, that one
+// says which era of the device a resource belongs to, and both are wired from
+// the same few lines of the Viewer's constructor. One import rather than two,
+// which is what the module-graph ratchet counts.
+export {
+  DeviceGeneration,
+  watchContextRestore,
+  watchDeviceChanges,
+  wireRendererDeviceLoss,
+  type DeviceEvent,
+  type DeviceLossReport,
+  type RendererWithDeviceLoss,
+} from './deviceGeneration';

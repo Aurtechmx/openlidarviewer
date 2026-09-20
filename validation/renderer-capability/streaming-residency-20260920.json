@@ -1,0 +1,28 @@
+{
+  "record": "streaming-residency-observation",
+  "note": "Taken to test the premise of the wiring plan's Phase A1, that leaving mesh.frustumCulled = false on streamed node meshes wastes material work. It measures how large the resident set actually is, which bounds that waste. It is an observation on one dataset at one viewport, not a benchmark.",
+  "measuredAt": "2026-09-20",
+  "commit": "f7322ee1",
+  "host": "Apple M3 Max, Chromium 152, devicePixelRatio 2, viewport 1024x768 CSS",
+  "dataset": {
+    "name": "swisssurface3D 2022 sample",
+    "file": "2485_1109.copc.laz",
+    "knownNodes": 485,
+    "sourcePoints": 15700000
+  },
+  "observations": [
+    { "when": "settled at default view", "residentNodes": 8, "nodesInFrustum": 303, "residentPoints": 1773990, "cacheBytes": 11000000 },
+    { "when": "during a large orbit drag", "residentNodes": 8, "nodesInFrustum": 102 },
+    { "when": "six seconds after the drag", "residentNodes": 8, "nodesInFrustum": 102 }
+  ],
+  "findings": [
+    "The resident set is 8 nodes of 485 known, held by the point budget rather than by the frustum, and it did not change across a camera move that cut in-frustum candidates from 303 to 102.",
+    "The scheduler already frustum-culls for SELECTION at StreamingScheduler.ts:1162, so resident nodes are chosen from in-frustum candidates. Draw-culling can only recover nodes that left the frustum after selection.",
+    "The upper bound on wasted work is therefore the resident set, 8 meshes and 1.77 million points, rather than anything proportional to the 485 known nodes."
+  ],
+  "notMeasured": [
+    "How many of the 8 resident nodes were outside the frustum at any instant. The debug overlay reports resident count and in-frustum count of the KNOWN hierarchy, and those are different populations, so the overlap was not observable without a scene handle.",
+    "Resident count under a higher streaming preset or a larger viewport, both of which raise the point budget and with it the bound above.",
+    "Any frame time. No before-and-after timing was taken."
+  ]
+}

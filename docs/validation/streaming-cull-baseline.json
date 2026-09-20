@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "label": "streaming-cull-baseline",
+  "revision": "40fb80ef",
+  "environment": {
+    "runtime": "node",
+    "os": "darwin",
+    "architecture": "arm64",
+    "nodeVersion": "v22.23.2",
+    "browser": null,
+    "backend": "none"
+  },
+  "workload": {
+    "sceneId": "synthetic-octree-400m",
+    "nodeCount": 84,
+    "depths": 3,
+    "cameras": 4
+  },
+  "cases": [
+    {
+      "camera": "overview",
+      "note": "whole tile in view",
+      "definition": {
+        "projection": "orthographic",
+        "halfExtentX": 400,
+        "halfExtentY": 400,
+        "nearZ": 60,
+        "farZ": 400
+      },
+      "residentNodes": 84,
+      "drawnNodes": 84,
+      "residentNotDrawn": 0,
+      "drawnFraction": 1
+    },
+    {
+      "camera": "half-tile",
+      "note": "panned so half the tile is off-screen",
+      "definition": {
+        "projection": "orthographic",
+        "halfExtentX": 100,
+        "halfExtentY": 400,
+        "nearZ": 60,
+        "farZ": 400
+      },
+      "residentNodes": 84,
+      "drawnNodes": 68,
+      "residentNotDrawn": 16,
+      "drawnFraction": 0.8095
+    },
+    {
+      "camera": "corner",
+      "note": "zoomed into one corner",
+      "definition": {
+        "projection": "orthographic",
+        "halfExtentX": 60,
+        "halfExtentY": 60,
+        "nearZ": 60,
+        "farZ": 400
+      },
+      "residentNodes": 84,
+      "drawnNodes": 24,
+      "residentNotDrawn": 60,
+      "drawnFraction": 0.2857
+    },
+    {
+      "camera": "narrow-far",
+      "note": "narrow view with a short far plane",
+      "definition": {
+        "projection": "orthographic",
+        "halfExtentX": 40,
+        "halfExtentY": 40,
+        "nearZ": 60,
+        "farZ": 120
+      },
+      "residentNodes": 84,
+      "drawnNodes": 12,
+      "residentNotDrawn": 72,
+      "drawnFraction": 0.1429
+    }
+  ],
+  "gpuFrameTimeMs": {
+    "status": "unavailable",
+    "reason": "no renderer or GPU in this runtime; frame time is captured on a real device and must not be recorded as zero"
+  },
+  "submittedPointCount": {
+    "status": "unavailable",
+    "reason": "point counts per node depend on a decoded source; this baseline measures node geometry only"
+  },
+  "interpretation": {
+    "measures": "the share of resident nodes a stored view contains, by bounds alone",
+    "doesNotMeasure": [
+      "GPU time saved: a node costs what its points cost, and these nodes carry no point counts, so a node share is not a work share",
+      "a real resident set: the scene is three uniform grids over one area, all resident at once, where a scheduler would hold a level-of-detail selection instead, so the drawn share here is likely lower than a real one",
+      "perspective behaviour: the stored views are axis-aligned boxes, which is an orthographic camera; a perspective frustum has slanted side planes and would contain a different set"
+    ]
+  }
+}
