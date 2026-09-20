@@ -2698,3 +2698,34 @@ archive says `6ce80c79`, and the registered-unreachable count has moved. The
 archive digest matches exactly. The document is named for what it records
 because `.gitignore` excludes every `*audit*.md` as an internal class, and this
 one is measurement that belongs beside its siblings.
+
+### L116 · MEASURED · ARCHITECTURE
+
+A claim of mine was tested and did not survive. Recommending Phase A1 over tier
+negotiation, this programme said frustum culling was "a materially bigger win",
+with no measurement behind it. That is the failure the wiring plan's own rule
+against aesthetic judgement names, and the one this programme has spent sixty
+phases refusing elsewhere.
+
+The premise holds at code level. `buildPointMesh` sets `frustumCulled = false`
+and streamed node meshes use it, so every resident node's points are submitted
+every frame whatever the camera is looking at.
+
+The magnitude does not hold. On the 485-node sample at a 1024 by 768 viewport
+the resident set is eight nodes and 1.77 million points, held there by the
+point budget, and it did not move across an orbit that cut in-frustum
+candidates from 303 to 102. The scheduler already frustum-culls for selection,
+so resident nodes are drawn from in-frustum candidates and draw-culling can
+only recover the ones that left afterwards. The bound on the waste is the
+resident set, not anything proportional to 485.
+
+What was not measured is the part that would size the win: how many of those
+eight were outside the frustum at any instant. The overlay reports resident
+count and the in-frustum count of the known hierarchy, which are different
+populations, and the overlap needs a scene handle the app does not expose. The
+record says so in its own file rather than leaving the gap to a reader.
+
+A1 stays the next step, on different grounds. It carries a correctness blocker,
+that no visible node may be falsely culled, and correctness needs no
+performance justification. The performance case is bounded and unmeasured, and
+the entry exists so nobody later quotes it as large.
