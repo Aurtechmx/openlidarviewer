@@ -3523,3 +3523,42 @@ A first measurement of this said `defaultPrevented` was false. The observer
 had been attached before the Viewer's own listener and read the flag before
 the cancelling handler had run, which is registration order rather than
 anything about the software.
+
+### L135 · BUILT · ARCHITECTURE
+
+Phase D2. `HistoryTargets` could allocate a set of surfaces, clear it and release it,
+and nothing decided when. The runtime now owns it, and only when a caller hands it a way
+to make surfaces: without a factory there is no history and every frame plans
+as though there never was, which is the shipped case.
+
+Everything the phase says should bound the history does. The viewport and the
+device pixel ratio decide its shape and reach it as a `reallocate` repair, and
+the device generation rides the same path, which is why a device remade at the
+same size still rebuilds. The memory ceiling is checked before anything is
+asked for, and the backend format is the layout's. Then there is the device
+itself, which can refuse.
+
+A refusal used to be a thrown frame. `resize` now catches it, releases what it
+had already made and records `allocation-failed`, which is
+deliberately a different refusal from `over-ceiling`: one is this code
+declining to ask and the other is the device declining to answer, and only the
+second says anything about the hardware. Releasing the partial set matters for
+the reason the three surfaces are allocated together, that a colour history
+with no depth beside it is the photographic accumulation this renderer must
+not do.
+
+Either refusal costs a rung, and the ceiling holds there. A device that cannot
+keep a history now will not be able to in a hundred frames, and asking again
+every frame is how a viewer spends a session allocating. A test drives twenty
+frames after a refusal and asserts the factory is never called again.
+
+The plan is resolved twice for the frame that refuses. The rung is given up
+inside `prepareFrame`, so the capabilities are recomputed from the tier that
+survived: reporting the tier after the degrade beside the capabilities from
+before it would describe a configuration nobody chose, and a caller reading
+`temporalAccumulation` would accumulate into a history that had just been
+refused.
+
+Nothing a refusal does can reach the scan. The runtime holds no cloud, no
+store and no eviction path, so the only thing it can spend is display quality,
+and a test fails on any line of it that runs naming one of those.

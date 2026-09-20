@@ -22,10 +22,27 @@
  * measurement, terrain, export or claim evidence. The field changes how the
  * scan is drawn and it may not change anything computed from it.
  *
- * GPU resources are named in the phase brief as this object's to own, and it
- * owns none, because none exist: every capability that would allocate one is
- * off, and `historyTargets` has no caller for the same reason. When a history
- * is first allocated it belongs here, and `dispose` is where it is released.
+ * ── THE HISTORY ─────────────────────────────────────────────────────────────
+ * The one GPU resource this owns, and only when a caller hands it a way to
+ * make surfaces. Without a factory there is no history and every frame plans
+ * as though there never was, which is the shipped case.
+ *
+ * Five things bound it and the runtime applies all five. The viewport and the
+ * device pixel ratio decide its shape, and both reach it through the display
+ * state as a `reallocate` repair. The device generation rides the same path,
+ * which is why a device remade at the same size still rebuilds. The memory
+ * ceiling is `historyBudget`'s and is checked before anything is asked for.
+ * The backend format is the layout's, and a device that refuses it refuses
+ * here rather than throwing.
+ *
+ * A refusal costs a rung. Whichever of the two kinds it is, the runtime drops
+ * to `closure` and holds the ceiling there, because a device that cannot keep
+ * a history now will not be able to in a hundred frames, and asking again
+ * every frame is how a viewer spends a session allocating.
+ *
+ * What it must never do is take room from the scan to keep a picture. Nothing
+ * here can: the runtime holds no cloud, no store and no eviction path, so the
+ * only thing a refusal can spend is display quality.
  *
  * ── ONE CALL PER FRAME ──────────────────────────────────────────────────────
  * `prepareFrame` takes what the renderer already knows and returns a plan. It
@@ -73,6 +90,7 @@ import {
   type CapabilityOptIn,
   type MobileFrameEvidence,
 } from './mobilePolicy';
+import { HistoryTargets, type HistoryRefusal, type SurfaceFactory } from './historyTargets';
 import type { PhaseCount } from './temporalPhase';
 
 /** What the runtime is told once, when it is built. */
@@ -89,6 +107,13 @@ export interface ContinuityRuntimeOptions {
   readonly phaseCount?: PhaseCount;
   /** How large the lens opens. */
   readonly lensSizing?: LensSizing;
+  /**
+   * How to make a history surface, where the caller can make one.
+   *
+   * Absent means no history at all, which is the shipped case: nothing
+   * allocates, and a plan that would have accumulated simply does not.
+   */
+  readonly surfaceFactory?: SurfaceFactory | null;
 }
 
 /** What the renderer knows at the start of a frame. */
@@ -147,6 +172,8 @@ export interface ContinuityFramePlan {
   readonly exposure: Exposure;
   /** The evidence lens, as placed. */
   readonly lens: Lens;
+  /** Why there is no history, or null when there is one or none was asked for. */
+  readonly historyRefusal: HistoryRefusal | null;
 }
 
 /**
@@ -185,12 +212,16 @@ export class ContinuityRuntime {
   private _epochsOpened = 0;
   private _lastFailure: ContinuityFailure | null = null;
   private _disposed = false;
+  private readonly _history: HistoryTargets | null;
 
   constructor(options: ContinuityRuntimeOptions) {
     this._options = options;
     this._optIn = options.optIn ?? NO_OPT_IN;
     this._phaseCount = options.phaseCount ?? DEFAULT_PHASE_COUNT;
     this._lensSizing = options.lensSizing ?? DEFAULT_LENS_SIZING;
+    this._history = options.surfaceFactory
+      ? new HistoryTargets(options.surfaceFactory)
+      : null;
     this._backendTier = tierFor(options.support);
     this._policyCeiling = tierCeilingFor(options.touchFirst, options.mobileEvidence ?? null);
     // Start at the bottom rather than at whatever the ceiling permits: the
@@ -237,7 +268,7 @@ export class ContinuityRuntime {
   prepareFrame(input: ContinuityFrameInput): ContinuityFramePlan {
     const ceiling = this.ceilingFor(input.requestedTier, input.memoryPressure);
     this._tier = nextTierUnderPressure(this._tier, ceiling, input.pressure);
-    const capabilities = capabilitiesForTier(this._tier);
+    let capabilities = capabilitiesForTier(this._tier);
 
     const previous = this._epoch;
     const epoch = previous === null ? openEpoch(input.display) : advanceEpoch(previous, input.display);
@@ -252,7 +283,17 @@ export class ContinuityRuntime {
     // Accumulation is the one capability the sweep exists for. Without it the
     // convergence state stays idle rather than advancing through phases
     // nothing will merge.
-    this._convergence = capabilities.temporalAccumulation
+    // The history is made to match before the sweep is asked to use it: a
+    // frame that accumulated into surfaces of the previous size would merge
+    // two different pictures.
+    const historyRefusal = this._maintainHistory(capabilities, epoch, epochChanged, input);
+    // A refusal gives up a rung inside this call, so the plan is resolved
+    // again from the tier that survived it. Reporting the tier after and the
+    // capabilities before would describe a configuration nobody chose.
+    capabilities = capabilitiesForTier(this._tier);
+    const accumulating = capabilities.temporalAccumulation && historyRefusal === null;
+
+    this._convergence = accumulating
       ? nextConvergence(this._convergence, {
         epoch: epoch.epoch,
         refinement: input.refinement,
@@ -276,7 +317,38 @@ export class ContinuityRuntime {
       accumulate: shouldAccumulate(this._convergence),
       exposure: exposureFor(this._convergence, input.reducedMotion),
       lens: capabilities.evidenceLens ? this._lens : LENS_CLOSED,
+      historyRefusal,
     };
+  }
+
+  /**
+   * Make the history match this frame, and report why there is none.
+   *
+   * Null when a history is in force, and null when none was ever asked for:
+   * a rung that does not accumulate is not being refused anything. A refusal
+   * that names the device rather than this code costs a rung, through the same
+   * path an exception from a pass would take.
+   */
+  private _maintainHistory(
+    capabilities: ContinuityCapabilities,
+    epoch: DisplayEpoch,
+    epochChanged: boolean,
+    input: ContinuityFrameInput,
+  ): HistoryRefusal | null {
+    if (!capabilities.temporalAccumulation) return null;
+    if (!this._history) return null;
+
+    const repair = epochChanged ? repairFor(epoch.changed) : 'none';
+    if (repair === 'reallocate' || this._history.set === null) {
+      this._history.resize(input.display.widthPx, input.display.heightPx, input.display.deviceGeneration);
+    } else if (repair === 'clear') {
+      this._history.clear();
+    }
+
+    const refusal = this._history.refusal;
+    if (refusal === 'over-ceiling') this.invalidate('history-over-ceiling');
+    else if (refusal === 'allocation-failed') this.invalidate('history-allocation-failed');
+    return refusal;
   }
 
   /**
@@ -342,6 +414,7 @@ export class ContinuityRuntime {
    */
   dispose(): void {
     this._disposed = true;
+    this._history?.dispose();
     this._tier = 'source';
     this._failureCeiling = 'source';
     this._convergence = IDLE;

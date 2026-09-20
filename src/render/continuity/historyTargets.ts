@@ -69,7 +69,16 @@ export type HistoryRefusal =
   /** The backing store is degenerate: nothing to allocate for. */
   | 'no-viewport'
   /** The set would exceed the ceiling, so source rendering stands. */
-  | 'over-ceiling';
+  | 'over-ceiling'
+  /**
+   * The device was asked and refused.
+   *
+   * Distinct from the ceiling on purpose. Over the ceiling is this code
+   * declining to ask; this is the device declining to answer, which is the
+   * only one of the two that says anything about the hardware, and the only
+   * one a caller should treat as evidence when it decides what to give up.
+   */
+  | 'allocation-failed';
 
 /** Owns the history surfaces for one renderer, across resizes and epochs. */
 export class HistoryTargets {
@@ -140,15 +149,40 @@ export class HistoryTargets {
       this._refusal = 'over-ceiling';
       return;
     }
-    this._set = {
-      colour: this._make('continuity-colour', w, h, this._layout.colour.bytesPerPixel),
-      depth: this._make('continuity-depth', w, h, this._layout.depth.bytesPerPixel),
-      support: this._make('continuity-support', w, h, this._layout.support.bytesPerPixel),
-      widthPx: w,
-      heightPx: h,
-      bytes: historyBytes(w, h, this._layout),
-      deviceGeneration: gen,
-    };
+    // The device can refuse, and a refusal must arrive as a smaller picture
+    // rather than as a thrown frame. A partial set is worse than none, so
+    // anything already made here is released before the refusal is recorded:
+    // a colour history with no depth beside it is the photographic
+    // accumulation this renderer must not do.
+    const made: HistorySurface[] = [];
+    try {
+      const surface = (label: string, bytesPerPixel: number): HistorySurface => {
+        const s = this._make(label, w, h, bytesPerPixel);
+        made.push(s);
+        return s;
+      };
+      this._set = {
+        colour: surface('continuity-colour', this._layout.colour.bytesPerPixel),
+        depth: surface('continuity-depth', this._layout.depth.bytesPerPixel),
+        support: surface('continuity-support', this._layout.support.bytesPerPixel),
+        widthPx: w,
+        heightPx: h,
+        bytes: historyBytes(w, h, this._layout),
+        deviceGeneration: gen,
+      };
+    } catch {
+      for (const s of made) {
+        try {
+          s.dispose();
+        } catch {
+          // A surface that cannot be released is not a reason to lose the
+          // frame that was trying to release it.
+        }
+      }
+      this._set = null;
+      this._refusal = 'allocation-failed';
+      return;
+    }
     this._refusal = null;
     this._allocations += 1;
   }

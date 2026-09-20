@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -368,5 +370,130 @@ describe('the repair the plan asks for', () => {
     r.prepareFrame(frame());
     const remade = display({ deviceGeneration: 2 });
     expect(r.prepareFrame(frame({ display: remade })).repair).toBe('reallocate');
+  });
+});
+
+/** A surface factory that records what it made and can be told to refuse. */
+function factory() {
+  const state = { made: [] as string[], disposed: 0, refuseFrom: Number.POSITIVE_INFINITY };
+  const make = (label: string, widthPx: number, heightPx: number) => {
+    if (state.made.length >= state.refuseFrom) throw new Error('device refused');
+    state.made.push(label);
+    return { label, widthPx, heightPx, dispose: () => { state.disposed += 1; } };
+  };
+  return { state, make };
+}
+
+/** A runtime at the top rung with a history behind it. */
+function withHistory(over: Partial<ContinuityRuntimeOptions> = {}) {
+  const f = factory();
+  const r = runtime({ surfaceFactory: f.make, ...over });
+  settle(r);
+  return { r, f };
+}
+
+describe('the history lifecycle', () => {
+  it('allocates once the rung that uses it is in force', () => {
+    const { r, f } = withHistory();
+    expect(f.state.made.length).toBe(3);
+    expect(r.prepareFrame(frame()).historyRefusal).toBe(null);
+  });
+
+  it('allocates nothing without a factory, and refuses nothing either', () => {
+    const r = runtime();
+    settle(r);
+    // A rung that cannot accumulate is not being refused anything.
+    expect(r.prepareFrame(frame()).historyRefusal).toBe(null);
+  });
+
+  it('clears for a camera move and rebuilds for a resize', () => {
+    const { r, f } = withHistory();
+    const madeAfterSettle = f.state.made.length;
+    r.prepareFrame(frame({ display: display({ camera: 'c1' }) }));
+    expect(f.state.made.length).toBe(madeAfterSettle);
+    r.prepareFrame(frame({ display: display({ camera: 'c1', widthPx: 640 }) }));
+    expect(f.state.made.length).toBe(madeAfterSettle + 3);
+  });
+
+  it('rebuilds when the device is remade at the same size', () => {
+    const { r, f } = withHistory();
+    const before = f.state.made.length;
+    r.prepareFrame(frame({ display: display({ deviceGeneration: 7 }) }));
+    expect(f.state.made.length).toBe(before + 3);
+  });
+
+  it('gives up a rung when the device refuses to allocate', () => {
+    const f = factory();
+    f.state.refuseFrom = 0;
+    const r = runtime({ surfaceFactory: f.make });
+    // The refusal is reported on the frame it happens, which is the first one
+    // that reaches the rung that asks for a history. By the next frame the
+    // runtime is already a rung lower and is asking for nothing.
+    const plans = [];
+    for (let i = 0; i < 6; i++) {
+      plans.push(r.prepareFrame(frame({ pressure: { aboveHighMs: 0, belowLowMs: 10_000 } })));
+    }
+    const refused = plans.filter((p) => p.historyRefusal === 'allocation-failed');
+    expect(refused.length).toBe(1);
+    // The rung is given up inside the same call, so the plan a caller acts on
+    // already says closure and already reports accumulation off.
+    expect(refused[0].tier).toBe('closure');
+    expect(refused[0].capabilities.temporalAccumulation).toBe(false);
+    expect(plans[plans.length - 1].capabilities.temporalAccumulation).toBe(false);
+    expect(r.lastFailure).toBe('history-allocation-failed');
+  });
+
+  it('holds the ceiling there rather than asking again every frame', () => {
+    const f = factory();
+    f.state.refuseFrom = 0;
+    const r = runtime({ surfaceFactory: f.make });
+    settle(r);
+    r.prepareFrame(frame());
+    const asked = f.state.made.length;
+    // A device that cannot keep a history now will not be able to in a
+    // hundred frames.
+    settle(r);
+    for (let i = 0; i < 20; i++) r.prepareFrame(frame());
+    expect(f.state.made.length).toBe(asked);
+    expect(r.ceilingFor('full')).toBe('closure');
+  });
+
+  it('releases a partial set rather than keeping half a history', () => {
+    // A colour history with no depth beside it is the photographic
+    // accumulation this renderer must not do.
+    const f = factory();
+    f.state.refuseFrom = 2;
+    const r = runtime({ surfaceFactory: f.make });
+    settle(r);
+    r.prepareFrame(frame());
+    expect(f.state.disposed).toBe(2);
+  });
+
+  it('stops accumulating while there is no history to accumulate into', () => {
+    const f = factory();
+    f.state.refuseFrom = 0;
+    const r = runtime({ surfaceFactory: f.make, phaseCount: 2 });
+    settle(r);
+    expect(r.prepareFrame(frame()).convergence.kind).toBe('idle');
+  });
+
+  it('releases the surfaces on dispose', () => {
+    const { r, f } = withHistory();
+    r.dispose();
+    expect(f.state.disposed).toBe(3);
+  });
+});
+
+describe('what a refusal may spend', () => {
+  it('has no way to reach the scan', () => {
+    // Display quality is the only thing a refusal costs: the runtime holds no
+    // cloud, no store and no eviction path.
+    const source = readFileSync(
+      new URL('../src/render/continuity/ContinuityRuntime.ts', import.meta.url),
+      'utf8',
+    );
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toMatch(/evict|cloud|store|octree|resident/i);
+    expect(code).toMatch(/private _maintainHistory/);
   });
 });
