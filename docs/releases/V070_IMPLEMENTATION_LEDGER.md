@@ -3688,3 +3688,44 @@ Three size measurements were wrong before they were right. `check:bundle`
 reads whatever `dist` holds, and a build that fails typecheck leaves the
 previous one there, so a stashed source tree with unstashed tests reported the
 size of the build before it.
+
+### L139 · BUILT · ARCHITECTURE
+
+Phase D6. The rule is short: no benchmark record, no production default above
+`source`. It was written down and nothing held it, which matters because
+turning a rung on is a one-word edit to a defaults table that no other check
+has an opinion about.
+
+`lint:tier-evidence` reads the defaults table and the record directory
+together. A default of `source` needs nothing. A default above it needs a
+record measuring that rung and every rung beneath it, because a default of
+`full` backed only by a `full` measurement skipped the two it is built on. A
+record the lint cannot parse counts as no evidence: a malformed file is the
+benchmark verifier's to report, and letting one authorise a default would be
+the worst of both.
+
+What it does not do is judge the numbers. Whether a measured rung was fast
+enough, or leaked too much at an edge, is a reading a person makes. This
+refuses the case where there is nothing to read. Tests drive it at each of the
+three rungs, at a tier name that is not a rung at all, and at a defaults table
+with the line removed, which it reports rather than passing an unread default.
+
+The record itself was short of what the phase lists. The adapter and the
+operating system were optional and are now required, because a frame time
+without the machine that produced it says nothing that transfers anywhere
+else. A case now carries the point count and the camera pose: `cameraCase`
+names a situation and a pose is what reproduces it. A measurement carries the
+reconstructed share explicitly rather than leaving a reader to subtract, and
+the verifier checks that the direct and reconstructed shares sum to what was
+drawn, since every pixel came from a sample or from a fill.
+
+The corpus requirement grew a dimension. It was every scene; it is now every
+scene at each of the three rungs, because a record covering ten scenes at one
+rung says nothing about whether the rung above it was worth its cost.
+
+Two of this repository's own guards caught mistakes in the work. The
+Windows-path lint refused a test that derived a filesystem path from
+`URL.pathname`, which yields `/C:/...` on Windows. And the first version of
+the evidence test made its point by editing the real defaults table while the
+rest of the suite was reading it; the lint now takes both of its inputs as
+arguments, so the test points at copies.

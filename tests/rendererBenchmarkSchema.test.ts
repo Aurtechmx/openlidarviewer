@@ -33,13 +33,18 @@ const measurement = (mode: string, over: Record<string, number> = {}) => ({
   gpuFrameTimeMs: 4,
   cpuFrameTimeMs: 3,
   gpuAttributeBytes: 1024,
-  directCoverage: 0.5,
+  directCoverage: mode === 'source' ? 0.6 : 0.5,
+  // A source render reconstructs nothing, so its parts are the whole.
+  reconstructedCoverage: mode === 'source' ? 0 : 0.1,
   finalCoverage: 0.6,
   edgeLeakage: mode === 'source' ? 0 : 0.01,
   temporalVariance: 0,
   settleMs: 40,
   ...over,
 });
+
+/** Every rung the verifier requires a record to measure. */
+const TIERS = ['sizing', 'closure', 'full'] as const;
 
 function record(scenes: readonly string[]) {
   return {
@@ -48,18 +53,24 @@ function record(scenes: readonly string[]) {
     environment: {
       browser: 'Test 1.0',
       backend: 'webgpu',
+      gpu: 'Test Adapter',
+      os: 'Test OS 1.0',
       devicePixelRatio: 2,
       viewportPx: { width: 1920, height: 1080 },
     },
     criteria: { maxEdgeLeakage: 0.05, maxFrameTimeRatio: 2, maxSettleMs: 200 },
-    cases: scenes.map((scene) => ({
+    // Each scene at each rung: a record covering every scene at one rung says
+    // nothing about whether the rung above it was worth the cost.
+    cases: scenes.flatMap((scene) => TIERS.map((tier) => ({
       scene,
       dataset: 'a named dataset',
+      pointCount: 1_000_000,
       cameraCase: 'parked',
+      cameraPose: { position: [0, 0, 10], target: [0, 0, 0], fovDeg: 60 },
       baseline: measurement('source'),
-      continuity: measurement('closure'),
+      continuity: measurement(tier),
       verdict: 'pass',
-    })),
+    }))),
   };
 }
 
@@ -199,5 +210,59 @@ describe('the verifier refuses a malformed record', () => {
     const { ok, out } = runVerifier([r]);
     expect(ok).toBe(false);
     expect(out).toContain('unexpected property');
+  });
+});
+
+describe('the record carries what the phase asks for', () => {
+  const withoutEnv = (key: string) => {
+    const r = record(ALL_SCENES) as unknown as { environment: Record<string, unknown> };
+    delete r.environment[key];
+    return r as unknown as Record<string, unknown>;
+  };
+
+  it.each(['gpu', 'os'])('fails without the %s', (key) => {
+    // A frame time without the machine that produced it says nothing that
+    // transfers anywhere else.
+    const { ok, out } = runVerifier([withoutEnv(key)]);
+    expect(ok).toBe(false);
+    expect(out).toContain(key);
+  });
+
+  it.each(['pointCount', 'cameraPose'])('fails without the %s', (key) => {
+    const r = record(ALL_SCENES) as unknown as { cases: Record<string, unknown>[] };
+    delete r.cases[0][key];
+    const { ok, out } = runVerifier([r as unknown as Record<string, unknown>]);
+    expect(ok).toBe(false);
+    expect(out).toContain(key);
+  });
+
+  it('fails without the reconstructed share', () => {
+    const r = record(ALL_SCENES) as unknown as { cases: Record<string, unknown>[] };
+    const c = r.cases[0].continuity as Record<string, unknown>;
+    delete c.reconstructedCoverage;
+    const { ok, out } = runVerifier([r as unknown as Record<string, unknown>]);
+    expect(ok).toBe(false);
+    expect(out).toContain('reconstructedCoverage');
+  });
+
+  it('fails when the shares do not add up to what was drawn', () => {
+    // Every pixel of the final coverage came from a sample or from a fill. A
+    // record where the parts miss the whole is describing pixels from
+    // somewhere else.
+    const r = record(ALL_SCENES) as unknown as { cases: Record<string, unknown>[] };
+    r.cases[0].continuity = measurement('sizing', { reconstructedCoverage: 0.3 });
+    const { ok, out } = runVerifier([r as unknown as Record<string, unknown>]);
+    expect(ok).toBe(false);
+    expect(out).toContain('sum to the final coverage');
+  });
+
+  it('fails when a rung was never measured', () => {
+    // A record covering every scene at one rung says nothing about whether the
+    // rung above it was worth the cost.
+    const r = record(ALL_SCENES) as unknown as { cases: Record<string, unknown>[] };
+    r.cases = r.cases.filter((c) => (c.continuity as { mode: string }).mode !== 'full');
+    const { ok, out } = runVerifier([r as unknown as Record<string, unknown>]);
+    expect(ok).toBe(false);
+    expect(out).toContain('no full case for the scene');
   });
 });

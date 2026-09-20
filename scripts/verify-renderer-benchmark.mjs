@@ -54,6 +54,16 @@ const REQUIRED_SCENES = [
   'classification boundary',
 ];
 
+/**
+ * Every rung a record must measure.
+ *
+ * The phase asks for a sizing, a closure and a full figure, so a record that
+ * measured one rung and left the others out cannot answer whether the ladder
+ * is worth climbing. Each scene has to appear once per rung, against its own
+ * source baseline.
+ */
+const REQUIRED_TIERS = ['sizing', 'closure', 'full'];
+
 const problems = [];
 const fail = (where, message) => problems.push(`${where}: ${message}`);
 
@@ -133,6 +143,18 @@ function crossCheck(record, where) {
   for (const scene of seen) {
     if (!REQUIRED_SCENES.includes(scene)) fail(where, `unknown scene "${scene}"`);
   }
+  // Each scene at each rung. A record covering every scene at one rung says
+  // nothing about whether the rung above it was worth the cost.
+  const measured = new Set(
+    (record.cases ?? []).map((c) => `${c.scene}\u0000${c.continuity?.mode}`),
+  );
+  for (const scene of REQUIRED_SCENES) {
+    for (const tier of REQUIRED_TIERS) {
+      if (!measured.has(`${scene}\u0000${tier}`)) {
+        fail(where, `no ${tier} case for the scene "${scene}"`);
+      }
+    }
+  }
   (record.cases ?? []).forEach((c, i) => {
     const at = `${where}.cases[${i}]`;
     if (c.baseline?.mode !== 'source') {
@@ -143,6 +165,20 @@ function crossCheck(record, where) {
     }
     if (c.baseline && c.baseline.edgeLeakage !== 0) {
       fail(at, 'a source render reconstructs nothing, so its edge leakage is 0');
+    }
+    if (c.baseline && c.baseline.reconstructedCoverage !== 0) {
+      fail(at, 'a source render reconstructs nothing, so its reconstructed share is 0');
+    }
+    for (const side of ['baseline', 'continuity']) {
+      const m = c[side];
+      if (!m) continue;
+      const parts = m.directCoverage + m.reconstructedCoverage;
+      // Final coverage is what the viewer sees, and every pixel of it came
+      // either from a sample or from a fill. A record where the two parts do
+      // not add up to the whole is describing pixels from somewhere else.
+      if (Math.abs(parts - m.finalCoverage) > 1e-6) {
+        fail(`${at}.${side}`, 'direct and reconstructed shares must sum to the final coverage');
+      }
     }
     if (c.continuity && c.baseline && c.continuity.finalCoverage < c.baseline.finalCoverage) {
       fail(at, 'continuity covered less than the baseline, which is not a continuity result');
