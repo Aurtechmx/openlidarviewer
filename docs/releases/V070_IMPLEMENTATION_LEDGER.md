@@ -2822,3 +2822,38 @@ evidence for the release blocker, which asks whether anything visible was
 wrongly dropped. It is not evidence about frame pacing, and the earlier entry
 should have said which of the two it had. The Playwright runs since have
 rendered thousands of real frames against the same build without a page error.
+
+### L119 · FIXED · ARCHITECTURE
+
+A strip of scene showed between the left panel and its own collapse handle.
+The handle is positioned against the rail's outer edge and is meant to overlap
+the panel's hairline by a pixel so the two read as one surface; measured in a
+real Chrome window it sat eight pixels clear of the card instead.
+
+The cause is a scrollbar gutter. `.olv-ws-body` scrolls with
+`scrollbar-gutter: stable`, so the card is laid out in a content box narrower
+than the rail, and the handle was hugging the rail rather than the card.
+
+The nine pixels are this application's own, which is the part worth recording.
+`.olv-ws-body::-webkit-scrollbar` sets that width, so the gutter is reserved
+even on a machine whose scrollbars overlay and would otherwise take none. The
+first fix measured a detached probe, which reports the PLATFORM default, got
+zero, and moved nothing. Probing with the real class is what made the number
+appear, and it is also why hard-coding nine would be wrong on Firefox, which
+takes `scrollbar-width: thin` and lands elsewhere.
+
+CSS cannot ask how wide a gutter is, so it is measured once and published as
+`--olv-ws-gutter` for the rule to subtract, with a zero fallback that restores
+the previous geometry wherever nothing publishes it. Two earlier attempts read
+the live rail and failed for the same reason in different clothes: the host
+appends it, and it stays hidden until a scan is open, so a bounded wait for a
+box expired against an element that had none.
+
+Thirteen existing workspace tests then failed, and they were right to. The
+property write sat outside the guard, so a document stub without a
+`documentElement` took the rail down with it. A cosmetic offset for a panel
+handle must not be able to do that, and a test now pins it.
+
+Verified in a real Chrome window at 1440 by 900: the gutter reads nine pixels,
+the handle moved from eight pixels clear of the card to one pixel overlapping
+it, which is the geometry the rule always described.

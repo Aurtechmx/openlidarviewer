@@ -29,6 +29,7 @@
  */
 
 import { el } from '../dom';
+import { publishGutterWidth } from './scrollbarGutter';
 
 /** The semantic workspace modes, in display order. */
 export type WorkspaceMode = 'data' | 'work' | 'analyse' | 'output';
@@ -159,6 +160,11 @@ export class DesktopWorkspace {
 
     // ── mode-host slots (one tabpanel per mode) ──────────────────────────────
     const body = el('div', { className: 'olv-ws-body' });
+    // This body reserves a scrollbar gutter, and how wide that is depends on
+    // the platform. Publish it so the rail handle can sit against the card's
+    // real edge instead of the rail's, which is what left a strip of scene
+    // between the panel and its own collapse control on Chrome.
+    publishGutterWidth();
     for (const { id } of MODES) {
       const host = el('div', { className: 'olv-ws-mode' });
       host.setAttribute('role', 'tabpanel');
