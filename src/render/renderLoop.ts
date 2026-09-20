@@ -80,6 +80,20 @@ export interface RenderLoopHost {
   renderScene(): void;
   /** Was the last at-rest paint drawn with EDL on? */
   edlPaintedAtRest(): boolean;
+  /**
+   * Where the accumulation sweep is, or `none` when nothing is accumulating.
+   *
+   * The at-rest EDL repaint waits for it. Parking is the first frame of a
+   * sweep, so shading there would light an image one phase complete and never
+   * light it again: the flag the repaint sets says the at-rest paint is done.
+   * The viewer would be left looking at a quarter of the scan with depth cues
+   * drawn over it, which reads as a finished picture.
+   *
+   * `converged` and `none` behave alike, which is the point rather than a
+   * shortcut: with accumulation off a sweep never starts, so it is never part
+   * way through and the repaint happens exactly when it did before.
+   */
+  sweepState(): 'none' | 'converging' | 'converged';
   /** Record whether this frame's at-rest paint used EDL. */
   setEdlPaintedAtRest(value: boolean): void;
   /**
@@ -209,9 +223,11 @@ export function runRenderFrame(host: RenderLoopHost): void {
     if (wantEdl) host.renderEdl();
     else host.renderScene();
     host.setEdlPaintedAtRest(wantEdl);
-  } else if (wantEdl && !host.edlPaintedAtRest()) {
+  } else if (wantEdl && !host.edlPaintedAtRest() && host.sweepState() !== 'converging') {
     // Motion just settled and the last paint had EDL off — force one EDL
-    // repaint so the depth cue snaps back, then resume idle throttling.
+    // repaint so the depth cue snaps back, then resume idle throttling. A
+    // sweep that is still building defers it: the shading belongs after the
+    // last phase has merged, not over a quarter of one.
     host.noteRendered();
     host.renderEdl();
     host.setEdlPaintedAtRest(true);

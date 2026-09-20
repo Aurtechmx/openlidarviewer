@@ -42,6 +42,7 @@ function makeHost(over: Partial<RenderLoopHost> = {}): RenderLoopHost {
     pumpStreamingCommit: vi.fn(),
     stepStreamingFades: vi.fn(),
     notifyFrameDrawn: vi.fn(),
+    sweepState: () => 'none' as const,
     tickStreaming: vi.fn(),
     streamingTickDue: () => true,
     cullStreamingToFrustum: vi.fn(),
@@ -128,6 +129,66 @@ describe('runRenderFrame — idle throttle and EDL snap-back', () => {
     expect(host.renderEdl).toHaveBeenCalledTimes(1);
     expect(host.setEdlPaintedAtRest).toHaveBeenCalledWith(true);
     expect(host.noteSkipped).not.toHaveBeenCalled();
+  });
+
+  it('defers the repaint while an accumulation sweep is still building', () => {
+    // Parking is the first frame of a sweep. Shading there lights an image one
+    // phase complete and never lights it again, because the flag the repaint
+    // sets says the at-rest paint is done: the viewer is left looking at a
+    // quarter of the scan with depth cues drawn over it.
+    const host = makeHost({
+      shouldRenderFrame: () => false,
+      edlEnabled: () => true,
+      cameraActivityUntilMs: () => 0,
+      edlPaintedAtRest: () => false,
+      sweepState: () => 'converging' as const,
+    });
+    runRenderFrame(host);
+
+    expect(host.renderEdl).not.toHaveBeenCalled();
+    expect(host.setEdlPaintedAtRest).not.toHaveBeenCalled();
+    expect(host.noteSkipped).toHaveBeenCalledTimes(1);
+  });
+
+  it('repaints once the sweep has converged', () => {
+    const host = makeHost({
+      shouldRenderFrame: () => false,
+      edlEnabled: () => true,
+      cameraActivityUntilMs: () => 0,
+      edlPaintedAtRest: () => false,
+      sweepState: () => 'converged' as const,
+    });
+    runRenderFrame(host);
+
+    expect(host.renderEdl).toHaveBeenCalledTimes(1);
+    expect(host.setEdlPaintedAtRest).toHaveBeenCalledWith(true);
+  });
+
+  it('repaints as it always did when nothing is accumulating', () => {
+    // A sweep that never starts is never part way through, so a viewer with
+    // accumulation off sees exactly the behaviour that shipped.
+    const host = makeHost({
+      shouldRenderFrame: () => false,
+      edlEnabled: () => true,
+      cameraActivityUntilMs: () => 0,
+      edlPaintedAtRest: () => false,
+      sweepState: () => 'none' as const,
+    });
+    runRenderFrame(host);
+
+    expect(host.renderEdl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not repaint mid-sweep even once the camera has been parked a while', () => {
+    const host = makeHost({
+      shouldRenderFrame: () => false,
+      edlEnabled: () => true,
+      cameraActivityUntilMs: () => 0,
+      edlPaintedAtRest: () => false,
+      sweepState: () => 'converging' as const,
+    });
+    for (let i = 0; i < 5; i++) runRenderFrame(host);
+    expect(host.renderEdl).not.toHaveBeenCalled();
   });
 
   it('skips the frame once the EDL snap-back has already been painted', () => {

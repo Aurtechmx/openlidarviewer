@@ -3648,3 +3648,43 @@ so a disposed viewer stayed reachable through `renderer.onDeviceLost` and went
 on advancing a counter nothing reads. Both sources now come from one call that
 returns one detach, which is a line shorter at the call site than the two it
 replaces.
+
+### L138 · FIXED · ARCHITECTURE
+
+Phase D5. The render loop shades once the moment the camera parks, which is
+right when nothing is accumulating and wrong the moment something is. Parking
+is the first frame of a sweep, so the repaint lights an image one phase
+complete and never lights it again: the flag it sets says the at-rest paint is
+done. The viewer would be left looking at a quarter of the scan with depth
+cues drawn over it, which reads as a finished picture rather than a partial
+one.
+
+The loop now defers it while a sweep is converging. The shading belongs after
+the last phase has merged and after any closure over the result, which is the
+order the phase sets out: phases, the accumulated history, gap closure, EDL,
+composite. `converged` and `none` behave alike, which is the point rather than
+a shortcut: with accumulation off a sweep never starts, so it is never part
+way through and the repaint happens exactly when it did before. Four tests
+pin that, including one that parks for five frames mid-sweep and asserts no
+shading at all.
+
+Where the rule lives was decided by the bundle rather than by taste, and the
+figure is worth recording. The rule was first written as an exported predicate
+beside `edlActiveThisFrame`, which is where the other pure gate decisions are.
+Six lines, never called, cost 2 KiB in the live Viewer chunk, taking it from
+739 KiB to 741 against a 740 KiB ceiling. The same condition written inline in
+the loop costs nothing measurable and leaves the chunk at 739.
+
+That is the obfuscating transform amplifying a new export rather than anything
+about the six lines, and the placement it forced is defensible on its own:
+`edlMotionGate` says in its own header that the loop owns the snap-back
+bookkeeping, and the sweep check is a condition on exactly that state. The
+loop is tested against a fake host, so nothing became less testable.
+
+The Viewer chunk has about a kilobyte of headroom, which is the constraint any
+further work in this cluster has to plan around.
+
+Three size measurements were wrong before they were right. `check:bundle`
+reads whatever `dist` holds, and a build that fails typecheck leaves the
+previous one there, so a stashed source tree with unstashed tests reported the
+size of the build before it.

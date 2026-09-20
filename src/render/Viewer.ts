@@ -6054,10 +6054,7 @@ export class Viewer {
   /** Bind the Viewer's live render state to the {@link RenderLoopHost} contract. */
   private _buildRenderLoopHost(): RenderLoopHost {
     return {
-      advanceFrameClock: () => {
-        this._timer.update();
-        return this._timer.getDelta();
-      },
+      advanceFrameClock: () => { this._timer.update(); return this._timer.getDelta(); },
       recordFrame: (delta) => this._recordFrame(delta),
       // Walk / fly move the camera with OrbitControls disabled, so no 'change'
       // event carries their motion; under orbit and pan the settle gate owns
@@ -6087,6 +6084,7 @@ export class Viewer {
       renderScene: () => { this._syncActiveCamera(); this._renderer.render(this._scene, this._activeCamera()); },
       edlPaintedAtRest: () => this._edlPaintedAtRest,
       setEdlPaintedAtRest: (value) => { this._edlPaintedAtRest = value; },
+      sweepState: () => 'none', // nothing accumulates yet, so no sweep is part way through
       hasStreaming: () => this._streaming !== null,
       pumpStreamingCommit: () => this._streaming?.commit.pump(this._smoothedFrameMs()),
       stepStreamingFades: () => this._streaming?.renderer.stepFades(),
