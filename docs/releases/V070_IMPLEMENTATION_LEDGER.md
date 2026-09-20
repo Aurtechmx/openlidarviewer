@@ -3262,3 +3262,34 @@ and gap closure spend the frame they run in, so dropping them would cost
 quality and free nothing. It is also the one term that lets go: being short of
 room is a passing condition, where a refusal is evidence about the device and
 holds its ceiling for the session.
+
+### L129 · BUILT · ARCHITECTURE
+
+Phase C4. The display-state vocabulary already carried every input the brief
+names and `advanceEpoch` already turned a change into a new epoch. What
+nothing did was say what a change costs.
+
+`historyTargets` had the distinction from its own side: contents that describe
+a different picture leave buffers of the right shape holding the wrong pixels,
+so clear them; a backing store of a different size, or a device remade, leaves
+buffers of the wrong shape or belonging to something that no longer exists, so
+free them and make new ones. Its `clear` and `resize` are both there. Nothing
+chose between them, and a caller that reached for `resize` on every epoch
+would rebuild three textures on every camera nudge, which costs more than the
+accumulation saves.
+
+`repairFor` chooses. Four of the seventeen inputs reallocate: the two
+dimensions, the device pixel ratio, and the device generation. The rest clear.
+A set of changes takes the most expensive repair any of them asks for.
+
+It is a `Record` over the whole field union rather than a list of the
+reshaping ones, so adding a field to `DisplayState` does not compile until
+somebody has said what it costs. That is the same rule the field list already
+followed, one step further on: the set of things that can throw away history
+was reviewable in one place, and now so is the price of each.
+
+The plan carries the repair. A test walks all seventeen inputs through the
+runtime and asserts each one advances the epoch and names itself as the
+change, which is the brief's requirement that validity depend on every
+presentation-relevant input, checked against the runtime rather than against
+the diff underneath it.

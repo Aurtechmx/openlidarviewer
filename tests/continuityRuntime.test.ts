@@ -189,6 +189,38 @@ describe('the display epoch', () => {
     expect(moved.changed).toEqual(['camera']);
   });
 
+  it('advances for every presentation input, and for nothing else', () => {
+    // The brief's list, checked against the runtime rather than against the
+    // diff: an input the epoch ignored would leave history describing a
+    // picture that is no longer on screen.
+    const base = display();
+    for (const [field, value] of Object.entries({
+      camera: 'moved',
+      projection: 'ortho',
+      widthPx: 640,
+      heightPx: 480,
+      dpr: 1,
+      renderOrigin: 'rebased',
+      dataset: 'other',
+      lodFrontier: 'deeper',
+      classFilter: 'ground-only',
+      scalarFilter: 'narrow',
+      clip: 'box',
+      colorMode: 'intensity',
+      rgbSettings: 'boosted',
+      pointSizeMode: 'density',
+      splatMode: 'soft',
+      edl: 'off',
+      deviceGeneration: 9,
+    })) {
+      const r = runtime();
+      r.prepareFrame(frame({ display: base }));
+      const moved = r.prepareFrame(frame({ display: display({ [field]: value }) }));
+      expect(moved.epochChanged, field).toBe(true);
+      expect(moved.changed, field).toEqual([field]);
+    }
+  });
+
   it('counts frames within an epoch and epochs across the session', () => {
     const r = runtime();
     r.prepareFrame(frame());
@@ -309,5 +341,32 @@ describe('memory pressure', () => {
   it('cannot raise a rung anything else lowered', () => {
     const phone = runtime({ touchFirst: true });
     expect(phone.ceilingFor('full', true)).toBe('sizing');
+  });
+});
+
+describe('the repair the plan asks for', () => {
+  it('is none while nothing moves', () => {
+    const r = runtime();
+    r.prepareFrame(frame());
+    expect(r.prepareFrame(frame()).repair).toBe('none');
+  });
+
+  it('is none on the first frame, which has no history to repair', () => {
+    expect(runtime().prepareFrame(frame()).repair).toBe('none');
+  });
+
+  it('clears for a camera move and reallocates for a resize', () => {
+    const r = runtime();
+    r.prepareFrame(frame());
+    expect(r.prepareFrame(frame({ display: display({ camera: 'c1' }) })).repair).toBe('clear');
+    expect(r.prepareFrame(frame({ display: display({ camera: 'c1', widthPx: 640 }) })).repair)
+      .toBe('reallocate');
+  });
+
+  it('reallocates when the device is remade at the same size', () => {
+    const r = runtime();
+    r.prepareFrame(frame());
+    const remade = display({ deviceGeneration: 2 });
+    expect(r.prepareFrame(frame({ display: remade })).repair).toBe('reallocate');
   });
 });

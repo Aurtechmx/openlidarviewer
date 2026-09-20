@@ -6,6 +6,7 @@ import {
   displayStateDiff,
   openEpoch,
   advanceEpoch,
+  repairFor,
   type DisplayState,
 } from '../src/render/continuity/continuityField';
 
@@ -161,5 +162,49 @@ describe('display state key', () => {
     const b: DisplayState = { ...BASE, camera: 'a', projection: 'b' };
     expect(displayStateKey(a)).not.toBe(displayStateKey(b));
     expect(displayStateDiff(a, b)).toEqual(['camera', 'projection']);
+  });
+});
+
+describe('repairFor', () => {
+  it('asks for nothing when nothing changed', () => {
+    expect(repairFor([])).toBe('none');
+  });
+
+  it('clears rather than reallocates for a camera nudge', () => {
+    // Reallocating here would rebuild three textures every time the view
+    // moves, which costs more than the accumulation saves.
+    expect(repairFor(['camera'])).toBe('clear');
+    expect(repairFor(displayStateDiff(BASE, { ...BASE, camera: 'cam-b' }))).toBe('clear');
+  });
+
+  it('reallocates for a backing store of a different shape', () => {
+    expect(repairFor(['widthPx'])).toBe('reallocate');
+    expect(repairFor(['heightPx'])).toBe('reallocate');
+    expect(repairFor(['dpr'])).toBe('reallocate');
+  });
+
+  it('reallocates for a device that was remade at the same size', () => {
+    // Surfaces from a dead device are the problem a size check cannot see.
+    const remade = displayStateDiff(BASE, { ...BASE, deviceGeneration: 1 });
+    expect(remade).toEqual(['deviceGeneration']);
+    expect(repairFor(remade)).toBe('reallocate');
+  });
+
+  it('takes the most expensive repair any changed field asks for', () => {
+    expect(repairFor(['camera', 'colorMode'])).toBe('clear');
+    expect(repairFor(['camera', 'widthPx', 'colorMode'])).toBe('reallocate');
+  });
+
+  it('classifies every display input, so none is silently free', () => {
+    for (const field of FIELDS) {
+      expect(['clear', 'reallocate'], field).toContain(repairFor([field]));
+    }
+  });
+
+  it('agrees with the epoch about what a change costs', () => {
+    const moved = advanceEpoch(openEpoch(BASE), { ...BASE, colorMode: 'intensity' });
+    expect(repairFor(moved.changed)).toBe('clear');
+    const resized = advanceEpoch(openEpoch(BASE), { ...BASE, widthPx: 1280 });
+    expect(repairFor(resized.changed)).toBe('reallocate');
   });
 });

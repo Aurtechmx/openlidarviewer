@@ -50,10 +50,12 @@ import {
   advanceEpoch,
   anyCapabilityEnabled,
   openEpoch,
+  repairFor,
   type ContinuityCapabilities,
   type ContinuityMetrics,
   type DisplayEpoch,
   type DisplayState,
+  type HistoryRepair,
 } from './continuityField';
 import { afterFailure, type ContinuityFailure } from './continuityFailure';
 import { nextTierUnderPressure, type PressureInput } from './continuityPressure';
@@ -127,6 +129,14 @@ export interface ContinuityFramePlan {
   readonly epochChanged: boolean;
   /** Which display inputs changed to open it. Empty when it did not advance. */
   readonly changed: readonly (keyof DisplayState)[];
+  /**
+   * What the history needs doing to it before this frame.
+   *
+   * `clear` for a picture that changed, `reallocate` only for a backing store
+   * that changed shape or a device that was remade. A caller that reallocated
+   * on every epoch would rebuild three textures on every camera nudge.
+   */
+  readonly repair: HistoryRepair;
   /** Where the accumulation sweep is. */
   readonly convergence: ConvergenceState;
   /** Which phase to draw, or null when there is nothing more to add. */
@@ -257,6 +267,10 @@ export class ContinuityRuntime {
       epoch: epoch.epoch,
       epochChanged,
       changed: epochChanged ? epoch.changed : [],
+      // The first epoch of a session has no previous state to diff, so nothing
+      // is listed as changed and the repair would read `none`. There is also
+      // no history yet, so `none` is the truthful answer rather than a gap.
+      repair: epochChanged ? repairFor(epoch.changed) : 'none',
       convergence: this._convergence,
       phase: phaseToDraw(this._convergence),
       accumulate: shouldAccumulate(this._convergence),

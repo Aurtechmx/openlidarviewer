@@ -181,6 +181,74 @@ export function displayStateDiff(
   return DISPLAY_STATE_FIELDS.filter((field) => String(a[field]) !== String(b[field]));
 }
 
+/**
+ * What a change to the history costs.
+ *
+ * Two different things invalidate a history and they are not the same repair,
+ * as `historyTargets` says from the other side. Contents that describe a
+ * different picture leave buffers of the right shape holding the wrong pixels:
+ * clear them. A backing store of a different size, or a device remade, leaves
+ * buffers of the wrong shape or belonging to something that no longer exists:
+ * free them and make new ones. Treating every epoch change as a resize would
+ * reallocate three textures on every camera nudge, which costs more than the
+ * accumulation saves.
+ */
+export type HistoryRepair =
+  /** Nothing moved. Keep accumulating. */
+  | 'none'
+  /** Right shape, wrong pixels. */
+  | 'clear'
+  /** Wrong shape, or from a device that is gone. */
+  | 'reallocate';
+
+/**
+ * Which repair each display input needs when it changes.
+ *
+ * A `Record` over the whole union rather than a list of the reshaping ones, so
+ * adding a field to {@link DisplayState} does not compile until somebody has
+ * said which repair it needs. The same reason the field list above is explicit:
+ * the set of things that can throw away history is reviewable in one place, and
+ * so is the price of each.
+ */
+const REPAIR_BY_FIELD: Readonly<Record<keyof DisplayState, HistoryRepair>> = Object.freeze({
+  camera: 'clear',
+  projection: 'clear',
+  // The three that change the shape of the backing store.
+  widthPx: 'reallocate',
+  heightPx: 'reallocate',
+  dpr: 'reallocate',
+  renderOrigin: 'clear',
+  dataset: 'clear',
+  lodFrontier: 'clear',
+  classFilter: 'clear',
+  scalarFilter: 'clear',
+  clip: 'clear',
+  colorMode: 'clear',
+  rgbSettings: 'clear',
+  pointSizeMode: 'clear',
+  splatMode: 'clear',
+  edl: 'clear',
+  // Surfaces from a dead device are not a smaller problem than surfaces of the
+  // wrong shape; they are the one the caller cannot see.
+  deviceGeneration: 'reallocate',
+});
+
+/**
+ * The repair a set of changed inputs needs: the most expensive one any of them
+ * asks for.
+ *
+ * An empty set is `none`, which is what an epoch that did not advance returns.
+ */
+export function repairFor(changed: readonly (keyof DisplayState)[]): HistoryRepair {
+  let repair: HistoryRepair = 'none';
+  for (const field of changed) {
+    const needed = REPAIR_BY_FIELD[field];
+    if (needed === 'reallocate') return 'reallocate';
+    if (needed === 'clear') repair = 'clear';
+  }
+  return repair;
+}
+
 /** One epoch: a number, the state that produced it, and why it last advanced. */
 export interface DisplayEpoch {
   /** Monotonic. Never reused, so a stale buffer tagged with an old one is detectable. */
