@@ -58,6 +58,8 @@
  * chunk-isolation guard keeps those importers out of the shell.
  */
 
+import { TIER_ORDER, type ContinuityTier } from '../render/continuity/continuityTier';
+
 /** Two-way implementation selector: the new default vs the v0.5.4 legacy. */
 export type ImplFlag = 'default' | 'legacy';
 
@@ -82,6 +84,15 @@ export interface DevFlags {
   refinementPhase: boolean;
   /** P5 adaptive DPR active. */
   adaptiveDpr: boolean;
+  /**
+   * Continuity: the rung asked for, and the supported way to ask.
+   *
+   * Six switches is sixty-four combinations and four were designed. This names
+   * one of the four. The switches below stay for bisecting a rung that
+   * misbehaves and can only add to it; `continuityRequest` turns both into the
+   * one pair the runtime reads.
+   */
+  continuityTier: ContinuityTier;
   /** Continuity: skip streamed nodes outside the frustum. Staged. */
   continuityNodeCulling: boolean;
   /** Continuity: upload point attributes at their source widths. Staged. */
@@ -173,6 +184,7 @@ export const DEV_FLAG_DEFAULTS: Readonly<DevFlags> = Object.freeze({
   // Every continuity capability is off, for the reason pooled decoding is: a
   // default that has never been measured on a device is the mistake the
   // multi-layer mount already made once.
+  continuityTier: 'source',
   continuityNodeCulling: false,
   continuityPackedAttributes: false,
   continuityCoverageSizing: false,
@@ -180,6 +192,17 @@ export const DEV_FLAG_DEFAULTS: Readonly<DevFlags> = Object.freeze({
   continuityTemporalAccumulation: false,
   continuityEvidenceLens: false,
 });
+
+/**
+ * A rung name, or `source` for anything else.
+ *
+ * An unreadable value takes the bottom rung rather than the top: a typo in a
+ * query string must not turn the whole ladder on.
+ */
+function parseContinuityTier(value: string | null): ContinuityTier {
+  const name = value === null ? '' : value.trim().toLowerCase();
+  return (TIER_ORDER as readonly string[]).includes(name) ? (name as ContinuityTier) : 'source';
+}
 
 /** `legacy` (any case) selects the legacy implementation; all else = default. */
 function parseImpl(value: string | null): ImplFlag {
@@ -270,6 +293,7 @@ export function parseDevFlags(search: string | URLSearchParams): DevFlags {
     // this module's usual convention, and every continuity capability has to be
     // asked for. parseOnOff here would have an empty query turn all six on
     // while the defaults record says they are off.
+    continuityTier: parseContinuityTier(params.get('continuityTier')),
     continuityNodeCulling: parseOptIn(params.get('continuityNodeCulling')),
     continuityPackedAttributes: parseOptIn(params.get('continuityPackedAttributes')),
     continuityCoverageSizing: parseOptIn(params.get('continuityCoverageSizing')),

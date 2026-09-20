@@ -54,6 +54,7 @@ function frame(over: Partial<ContinuityFrameInput> = {}): ContinuityFrameInput {
     refinement: 'full-refine',
     viewport: { widthPx: 1280, heightPx: 720 },
     pressure: { aboveHighMs: 0, belowLowMs: 0 },
+    memoryPressure: false,
     reducedMotion: false,
     ...over,
   };
@@ -279,5 +280,34 @@ describe('dispose', () => {
     // And it cannot climb again, so a frame arriving after teardown draws as
     // it did before the field existed.
     expect(settle(r)).toBe('source');
+  });
+});
+
+describe('memory pressure', () => {
+  it('takes the rung that keeps a history and leaves the rest', () => {
+    const r = runtime();
+    expect(settle(r)).toBe('full');
+    // Sizing and gap closure hold nothing between frames, so giving them up
+    // would cost quality and free nothing.
+    expect(r.ceilingFor('full', true)).toBe('closure');
+    const under = r.prepareFrame(frame({ memoryPressure: true }));
+    expect(under.tier).toBe('closure');
+    expect(under.capabilities.temporalAccumulation).toBe(false);
+    expect(under.capabilities.microGapFill).toBe(true);
+    expect(under.capabilities.coverageSizing).toBe(true);
+  });
+
+  it('lets the rung come back once there is room again', () => {
+    const r = runtime();
+    settle(r);
+    r.prepareFrame(frame({ memoryPressure: true }));
+    // Unlike a failure, being short of room is a passing condition rather
+    // than evidence about the device.
+    expect(settle(r)).toBe('full');
+  });
+
+  it('cannot raise a rung anything else lowered', () => {
+    const phone = runtime({ touchFirst: true });
+    expect(phone.ceilingFor('full', true)).toBe('sizing');
   });
 });

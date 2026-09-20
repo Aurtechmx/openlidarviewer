@@ -835,6 +835,24 @@ export class StreamingScheduler {
     return true;
   }
 
+  /**
+   * Is the resident set over the point budget's pressure ratio?
+   *
+   * The eviction branch below asks this, and so does anything outside the
+   * scheduler that has to know the session is short of room. One expression
+   * rather than two: a second reader with its own comparison would eventually
+   * disagree with the one that actually evicts, and the disagreement would
+   * show as a subsystem standing down while the scheduler says there is room,
+   * or the reverse.
+   */
+  underMemoryPressure(): boolean {
+    const store = this._cloud.octree.store;
+    return (
+      store.residentPointCount + store.decodedPendingPointCount
+      > this._pointBudget * this._memoryPressureRatio
+    );
+  }
+
   stats(): SchedulerStats {
     // O(1) queued count from the store's maintained counter — no per-call
     // octree walk. `_shouldRenderFrame` polls this every animation frame
@@ -1390,10 +1408,7 @@ export class StreamingScheduler {
     // ranks last in the plan anyway, and one it no longer wants while the
     // level below is arriving ranks first, which is the case the split existed
     // to approximate.
-    if (
-      store.residentPointCount + store.decodedPendingPointCount >
-      this._pointBudget * this._memoryPressureRatio
-    ) {
+    if (this.underMemoryPressure()) {
       // The one input that costs a walk of the wanted set. Built here rather
       // than per tick, because this branch is the only reader and it is cold:
       // a settled camera inside the hysteresis band never pays for it.

@@ -3225,3 +3225,40 @@ take three frames: the frame that opens a sweep draws phase 0 and merges
 nothing yet, and each later frame counts the one before it, so `contributed`
 always means phases already merged. The test asserts the drawn phases rather
 than the frame count, which is the thing a reader wants.
+
+### L128 · BUILT · ARCHITECTURE
+
+Phase C3. The tier ladder existed and there was no way to ask for a rung. Six
+independent switches is sixty-four combinations and four were designed, which
+`devFlags` said in a comment; the only way to run `closure` was to set three
+switches and know which three, and the way to run it wrongly was to set two.
+
+`?continuityTier=` names one of the four. The switches stay, because a switch
+is how a combination gets bisected when a rung misbehaves, and they can only
+add: a switch never takes a capability away from the rung that was asked for,
+so `?continuityTier=closure&continuityEvidenceLens=0` is still closure.
+Subtracting is what would put the sixty-four combinations back.
+
+`continuityRequest` reconciles the two surfaces in one place. The rung is the
+richer of what the dial says and what the switches imply, so a bisecting
+switch on its own still does something; the opt-in is the union, so a rung
+carries its own capabilities whether or not the matching switch was set. A
+tier name it cannot read takes the bottom rung, because a typo in a query
+string must not turn the ladder on.
+
+The brief's intersection was short one term. Requested, backend, device class
+and opt-in were all in the ceiling, and memory pressure was not.
+`ContinuityRuntime.ceilingFor` now takes it, and takes it from the streaming
+scheduler's own predicate rather than measuring the resident set again: the
+scheduler already compares resident plus decoded-pending points against the
+budget's pressure ratio before it evicts, and that expression is now a method
+both readers call. A second comparison would eventually disagree with the one
+that actually evicts, and the disagreement would show as the field standing
+down while the scheduler says there is room, or the reverse.
+
+Memory pressure takes the rung that keeps a history and nothing else.
+Accumulation is the only capability holding surfaces between frames; sizing
+and gap closure spend the frame they run in, so dropping them would cost
+quality and free nothing. It is also the one term that lets go: being short of
+room is a passing condition, where a refusal is evidence about the device and
+holds its ceiling for the session.

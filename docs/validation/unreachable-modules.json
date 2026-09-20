@@ -397,6 +397,13 @@
       "why": "The one object that owns the Continuity Field: the tier in force, the capabilities it grants, the display epoch, the lens and the convergence sweep, behind one call per frame. Nothing calls it because no caller has been wired, and the lazy seam it will arrive through cannot be added before that caller exists: this build emits a code-split chunk only for a dynamic import something reaches, and the chunk-emission guard fails the build for a seam that emits nothing.",
       "graduation": "Reachable when the render loop builds one behind loadContinuityRuntime and calls prepareFrame each frame, which is the phase that wires the first capability. The seam in lazyChunks.ts lands in the same change as its caller.",
       "review": "2027-09-20"
+    },
+    {
+      "path": "src/render/continuity/continuityRequest.ts",
+      "status": "staged",
+      "why": "Turns the continuity flags into the one pair the runtime reads: the rung asked for and the capabilities opted into. Nothing calls it because ContinuityRuntime has no caller; devFlags parses continuityTier and the six switches already, and this is what reconciles them.",
+      "graduation": "Reachable with ContinuityRuntime: whoever builds the runtime passes continuityRequest(readDevFlags()) as its request.",
+      "review": "2027-09-20"
     }
   ]
 }

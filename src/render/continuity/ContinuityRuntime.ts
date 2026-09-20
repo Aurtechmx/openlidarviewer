@@ -101,6 +101,14 @@ export interface ContinuityFrameInput {
   readonly viewport: Viewport;
   /** How the recent frames have been going. */
   readonly pressure: PressureInput;
+  /**
+   * The session is short of room for what it already holds.
+   *
+   * Taken from the streaming scheduler's own predicate rather than measured
+   * again here, so the subsystem that gives ground and the one that evicts
+   * cannot disagree about whether there is room.
+   */
+  readonly memoryPressure: boolean;
   /** The viewer asked for reduced motion. */
   readonly reducedMotion: boolean;
 }
@@ -130,6 +138,14 @@ export interface ContinuityFramePlan {
   /** The evidence lens, as placed. */
   readonly lens: Lens;
 }
+
+/**
+ * The richest rung a session short of room may run.
+ *
+ * `closure` rather than `source`: giving up gap closure and coverage sizing
+ * frees nothing, because neither holds anything between frames.
+ */
+export const MEMORY_PRESSURE_CEILING: ContinuityTier = 'closure';
 
 const DEFAULT_LENS_SIZING: LensSizing = { radiusPx: 96, featherPx: 24 };
 const DEFAULT_PHASE_COUNT: PhaseCount = 4;
@@ -178,12 +194,24 @@ export class ContinuityRuntime {
     return this._backendTier;
   }
 
-  /** The richest rung this session may reach, given a request of `requested`. */
-  ceilingFor(requested: ContinuityTier): ContinuityTier {
-    return lowerTier(
+  /**
+   * The richest rung this session may reach, given a request of `requested`.
+   *
+   * The intersection the phase brief names: what was asked for, what the
+   * backend carries, what the device class permits, what the session opted
+   * into, what a past failure left, and whether there is room. Every term can
+   * only lower, so the answer is the strongest rung all of them allow.
+   */
+  ceilingFor(requested: ContinuityTier, memoryPressure = false): ContinuityTier {
+    const negotiated = lowerTier(
       grantedTier(requested, this._backendTier, this._policyCeiling, this._optIn),
       this._failureCeiling,
     );
+    // Memory pressure takes the rung that keeps a history and nothing else.
+    // Accumulation is the only capability that holds surfaces of its own
+    // between frames; sizing and gap closure spend the frame they run in, so
+    // dropping them would give up quality without giving back room.
+    return memoryPressure ? lowerTier(negotiated, MEMORY_PRESSURE_CEILING) : negotiated;
   }
 
   /**
@@ -197,7 +225,7 @@ export class ContinuityRuntime {
    * exposure is last, reading the convergence it describes.
    */
   prepareFrame(input: ContinuityFrameInput): ContinuityFramePlan {
-    const ceiling = this.ceilingFor(input.requestedTier);
+    const ceiling = this.ceilingFor(input.requestedTier, input.memoryPressure);
     this._tier = nextTierUnderPressure(this._tier, ceiling, input.pressure);
     const capabilities = capabilitiesForTier(this._tier);
 

@@ -34,6 +34,7 @@ describe('parseDevFlags — defaults', () => {
       decodePoolOff: false,
       decodeWorkers: null,
       residentStickiness: false,
+      continuityTier: 'source',
       continuityNodeCulling: false,
       continuityPackedAttributes: false,
       continuityCoverageSizing: false,
@@ -92,6 +93,7 @@ describe('parseDevFlags — the program §P0 flag set', () => {
       decodePoolOff: false,
       decodeWorkers: null,
       residentStickiness: false,
+      continuityTier: 'source',
       continuityNodeCulling: false,
       continuityPackedAttributes: false,
       continuityCoverageSizing: false,
@@ -198,5 +200,21 @@ describe('primeDevFlags — a worker adopts the page query it was handed', () =>
     expect(readDevFlags().decodeWorkers).toBe(3);
     primeDevFlags('');
     expect(readDevFlags()).toEqual(DEV_FLAG_DEFAULTS);
+  });
+});
+
+describe('?continuityTier', () => {
+  it('names one of the four designed configurations', () => {
+    expect(parseDevFlags('?continuityTier=full').continuityTier).toBe('full');
+    expect(parseDevFlags('?continuityTier=closure').continuityTier).toBe('closure');
+    expect(parseDevFlags('?continuityTier=sizing').continuityTier).toBe('sizing');
+    expect(parseDevFlags('?continuityTier=SOURCE').continuityTier).toBe('source');
+  });
+
+  it('takes the bottom rung for anything it cannot read', () => {
+    // A typo in a query string must not turn the whole ladder on.
+    expect(parseDevFlags('?continuityTier=ful').continuityTier).toBe('source');
+    expect(parseDevFlags('?continuityTier=').continuityTier).toBe('source');
+    expect(parseDevFlags('').continuityTier).toBe('source');
   });
 });
