@@ -3841,3 +3841,42 @@ passport at all, so a recipient cannot verify it the way a DEM recipient can.
 Adding one puts a file into a shipped archive and is a product decision with
 its own evidence, rather than something to fold into a change about
 duplication.
+
+### L143 · BUILT · ARCHITECTURE
+
+Phase E3, which asks for honest open stages if they are not already present.
+Half of it was, and the half that was missing is the vocabulary rather than
+the behaviour.
+
+`loadProgress` names the seven stages a file passes through, from detecting
+its format to rendering it, and those describe what the pipeline is doing.
+Nothing named the other thing: whether the person in front of the screen can
+look around yet, and whether more is still arriving. Decoding says nothing
+about whether a camera responds, and a scan whose decode finished can still be
+streaming nodes in, so folding the two together would give one word two
+meanings and a surface reading it would pick the wrong one.
+
+`openStage` names the second. It tracks nothing: the stage is a function of
+facts the application already holds, whether a preview is mounted, whether the
+cloud is attached, whether the streamer has work outstanding, and where the
+refinement phase is. A tracked stage would be a second opinion about a load
+that already has one.
+
+A null refinement is read as not yet assessed rather than as motion. The two
+are different facts and confusing them would report a still scan as refining
+for as long as it is open.
+
+What these stages do not mean is written into the module and checked. `ready`
+means the picture has stopped changing, and nothing more: not that the source
+is complete, not that every point has arrived, not that a measurement would be
+sound. A test fails on any line of the module that runs, and on any label,
+naming completeness, validity or accuracy. A stage name implying those would
+be the most easily believed false claim in the application, because it appears
+while somebody is waiting and reads as permission to trust what is on screen.
+
+The overlay rule was already held, and reading the code is not how that was
+established. A run against the 81 MB COPC sampled the page four times a
+second: the empty state comes down 470 ms in, and across the thirty-two
+samples after it the element at the centre of the canvas is the canvas. The
+rule the phase states as a threshold at `interactive` is met one stage earlier,
+at `preview`, because the empty state is hidden the moment a preview mounts.

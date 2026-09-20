@@ -30,7 +30,7 @@ from the tree and fails when a cell drifts.
 | I/O | `src/io` | ~35k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~70k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~13k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~16k | Composition root and the services that own shared state. |
+| Application services | `src/app` | ~17k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~32k | Panels, Inspector, Studio surfaces, onboarding. |
 | Shell | `src/main.ts` | 4,977 | Wiring. **A monolith under decomposition.** |
 
