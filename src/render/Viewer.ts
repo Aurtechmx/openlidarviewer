@@ -73,9 +73,8 @@ import {
   type ElevLayer,
 } from './elevationWindowResolver';
 import {
-  GpuErrorLedger,
-  wireGpuDeviceErrors,
-  type GpuDeviceLike,
+  DeviceGeneration, GpuErrorLedger, installGpuDeviceErrors, watchContextRestore,
+  wireRendererDeviceLoss, type RendererWithDeviceLoss,
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { intensityFilterUniform } from './intensityFilterUniform';
@@ -1390,6 +1389,10 @@ export class Viewer {
         if (this._renderer !== undefined) this._startLoop();
       }
     };
+    // A restore is the one device event nothing else reports; the loss comes
+    // through the renderer's own hook, wired below.
+    this._detachContextLoss = watchContextRestore(canvas, this._devices);
+    wireRendererDeviceLoss(this._renderer as unknown as RendererWithDeviceLoss, this._devices);
     canvas.addEventListener('dblclick', this._onCanvasDblClick);
     canvas.addEventListener('click', this._onCanvasClick);
     canvas.addEventListener('pointermove', this._onCanvasPointerMove);
@@ -3280,6 +3283,12 @@ export class Viewer {
    * fallback (no device to wire).
    */
   private _detachGpuErrors: (() => void) | null = null;
+  /** Which era of the device GPU resources belong to. See deviceGeneration. */
+  private readonly _devices = new DeviceGeneration();
+  private _detachContextLoss: (() => void) | null = null;
+
+  /** The era GPU resources made now belong to, and whether one is usable. */
+  get deviceGeneration(): DeviceGeneration { return this._devices; }
 
   applyClassVisibility(v: ClassVisibility): void {
     const mask = v.toMaskArray();
@@ -4347,25 +4356,14 @@ export class Viewer {
    * because the backend's internal shape is not part of three's public API.
    */
   private _installGpuErrorListener(): void {
-    if (this.activeBackend() !== 'webgpu') return;
-    try {
-      const backend = (this._renderer as unknown as {
-        backend?: { device?: GpuDeviceLike };
-      }).backend;
-      // The wiring itself lives in the pure `gpuErrorLedger` module so a fake
-      // device can drive it in tests; here we only supply the real backend
-      // device and the two host callbacks. `device.lost` sets the ledger's
-      // suppression flag before surfacing the one actionable reload message.
-      this._detachGpuErrors = wireGpuDeviceErrors(backend?.device ?? null, {
-        onError: (message) => this._reportGpuError(message),
-        onDeviceLost: (message) => {
-          this._gpuErrorLedger.noteDeviceLost();
-          this._reportGpuError(message);
-        },
-      });
-    } catch {
-      // Never let error-plumbing setup break init — the viewer is still usable.
-    }
+    const webgpu = this.activeBackend() === 'webgpu';
+    this._detachGpuErrors = installGpuDeviceErrors(this._renderer, webgpu, {
+      onError: (message) => this._reportGpuError(message),
+      onDeviceLost: (message) => {
+        this._gpuErrorLedger.noteDeviceLost();
+        this._reportGpuError(message);
+      },
+    });
   }
 
   /**
@@ -4856,6 +4854,7 @@ export class Viewer {
       this._detachGpuErrors();
       this._detachGpuErrors = null;
     }
+    this._detachContextLoss?.(); this._detachContextLoss = null;
     // Disconnect the ResizeObserver so the canvas can be garbage-collected
     // when the host eventually drops it.
     if (this._resizeObserver) {

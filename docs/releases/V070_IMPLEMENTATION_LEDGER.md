@@ -3477,3 +3477,49 @@ pickable and the lens does not have to make it so. A test fails if this module
 ever names a pick, a raycast or a hit test, because anything here that changed
 what a click hits would be a second picking path beside the one that already
 works.
+
+### L134 · BUILT · ARCHITECTURE
+
+Phase D1. `DisplayState` carried `deviceGeneration` and `historyTargets`
+reallocated when it changed, and nothing produced the number. It now has a
+producer.
+
+The trap it exists for is worth naming. A surface allocated on a device that
+has since been lost is not a surface of the wrong size: it is the right size,
+still referenced, and every check comparing dimensions calls it current. Only
+the device it came from distinguishes it.
+
+Four events advance the counter, each on its own evidence, so a
+lost-then-restored cycle advances twice. A counter that advanced once per
+cycle would have to know, at the moment of the loss, whether a restore is
+coming, and a context can be lost and never restored. The number is compared
+for equality, so counting an era twice costs nothing while missing one shows
+pixels from a dead device. `lost` is a separate flag, because the generation
+says which era a resource belongs to and not whether anything can be allocated
+right now.
+
+The wiring changed once the browser was consulted, and the correction is the
+useful part of this entry. The first version listened on the canvas for both
+context events and cancelled the loss, on the reasoning that without
+`preventDefault` no restore follows. A forced context loss in a headed browser
+showed `defaultPrevented` true and a restore arriving on the unmodified build
+as well, and three's WebGL backend turned out to call `preventDefault` in its
+own listener before reporting through `renderer.onDeviceLost`. Cancelling
+again was a second opinion on a question that already had an owner.
+
+So the loss now arrives through that hook, which both backends call with the
+API named in the report, and the wiring chains rather than replaces it: three's
+own handler logs the message and sets its internal flag, and dropping it would
+trade a diagnostic for a counter. Only the restore is still watched on the
+canvas, because it is the one event with no owner at all: nothing in the
+renderer rebuilds on it.
+
+Measured against a real loss, with `WEBGL_lose_context` on the WebGL backend
+reached by hiding `navigator.gpu`: the context reports lost, the restore
+arrives, the context reports usable again, the interface is still there and no
+page error is raised either side.
+
+A first measurement of this said `defaultPrevented` was false. The observer
+had been attached before the Viewer's own listener and read the flag before
+the cancelling handler had run, which is registration order rather than
+anything about the software.
