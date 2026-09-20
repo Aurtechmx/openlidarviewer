@@ -2891,3 +2891,44 @@ The pattern across A2 and A3 is worth naming: both features target a device
 under pressure, and the only device available is one that never reaches it.
 That is a property of the hardware rather than of the features, and it is the
 same gap the browser matrix and the mobile row have carried since the start.
+
+### L121 · BUILT · ARCHITECTURE
+
+The streaming cadence is elapsed time. It was one tick every sixth frame,
+which reads as 100 ms on a 60 Hz panel and 42 ms on a 144 Hz one, so the
+scheduler ran nearly two and a half times as often on the faster display and
+made correspondingly different decisions about what to load. A monitor is not
+a policy input.
+
+The bands come from the existing refinement phase rather than a second state
+machine, because that phase already decides whether the camera is moving,
+settling or refining, and a scheduler deciding it again could disagree with
+the renderer about which one the viewer is in. The four intervals are
+prototypes from the brief and say so where they are defined.
+
+What elapsed time does not remove is quantisation, and the first version of
+the test asserted that it did. Polling once a frame means a deadline is served
+on the next frame boundary, so the achieved interval is the band rounded up to
+a whole frame: an 88 ms band runs at 100 ms on 60 Hz and 90 ms on 144 Hz. The
+test demanded equal tick counts, which no policy of this shape can give, and
+it failed by up to seven ticks. Rewritten, it asserts the gap between
+consecutive ticks is never early and never later than one frame, which is the
+property that actually holds, and a control confirms the frame count varied by
+more than a factor of two over the same span.
+
+Polling per frame is deliberate. A timer would be exactly refresh-independent
+and would fire between frames, handing the scheduler a camera the renderer has
+not drawn from yet, which trades a bounded timing error for a stale input.
+
+Both ratchets moved the design again and the fan-out one moved it twice. The
+decision started in the Viewer, which needed an import and grew the monolith;
+it now lives on the scheduler, which already owns what is being paced and
+reaches the policy from inside its own cluster. The Viewer ended five lines
+lighter with no new import, and one collapsed uniform paid for the rest.
+
+The 200 ms heartbeat stays and is not a competing cadence. It exists for the
+periods when no frames are rendering at all, where the loop cannot pace
+anything, so removing it would stall a scan whenever the render loop idles.
+
+Verified in a real browser: the sample streams, resident nodes rise from two
+to five across an orbit, and there are no page errors.

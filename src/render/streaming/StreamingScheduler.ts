@@ -23,6 +23,7 @@ import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { NodeDecodeMetadata } from './StreamingSource';
 import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
+import { shouldTick, type WakeReason } from './schedulerCadence';
 import {
   frustumPlanesFromViewProjection,
   boxInFrustum,
@@ -544,6 +545,8 @@ export class StreamingScheduler {
   private readonly _localBounds = new Map<string, Box6>();
   /** The cloud's render origin, captured once for lazy bounds computation. */
   private _renderOrigin: [number, number, number] = [0, 0, 0];
+  /** When this scheduler last ran, on the render loop's clock. */
+  private _lastTickAtMs = 0;
   private readonly _queue: StreamingNode[] = [];
   private readonly _inFlight = new Map<string, AbortController>();
   private readonly _cache: CompressedChunkCache;
@@ -818,6 +821,20 @@ export class StreamingScheduler {
   }
 
   /** Live counters for the diagnostics overlay. */
+  /**
+   * Whether the scheduler is due to run at this time, recording it if so.
+   *
+   * The cadence is elapsed time rather than a frame count, so a 144 Hz panel
+   * no longer runs the scheduler nearly two and a half times as often as a
+   * 60 Hz one on the same scan. `schedulerCadence` holds the bands and the
+   * reasoning; the state lives here because this is what is being paced.
+   */
+  tickDue(nowMs: number, phase: RefinementPhase, wake: WakeReason | null = null): boolean {
+    if (!shouldTick({ nowMs, lastTickMs: this._lastTickAtMs, phase, wake })) return false;
+    this._lastTickAtMs = nowMs;
+    return true;
+  }
+
   stats(): SchedulerStats {
     // O(1) queued count from the store's maintained counter — no per-call
     // octree walk. `_shouldRenderFrame` polls this every animation frame

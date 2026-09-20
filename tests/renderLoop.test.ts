@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { runRenderFrame, STREAMING_TICK_INTERVAL } from '../src/render/renderLoop';
+import { runRenderFrame } from '../src/render/renderLoop';
 import type { RenderLoopHost } from '../src/render/renderLoop';
 import type { PointInfo } from '../src/render/pointInfo';
 
@@ -40,8 +40,8 @@ function makeHost(over: Partial<RenderLoopHost> = {}): RenderLoopHost {
     setEdlPaintedAtRest: vi.fn(),
     hasStreaming: () => false,
     pumpStreamingCommit: vi.fn(),
-    advanceStreamingFrame: () => 1,
     tickStreaming: vi.fn(),
+    streamingTickDue: () => true,
     cullStreamingToFrustum: vi.fn(),
     toolMode: () => 'none',
     measureDragging: () => false,
@@ -161,31 +161,36 @@ describe('runRenderFrame — streaming cadence', () => {
     expect(host.tickStreaming).not.toHaveBeenCalled();
   });
 
-  it('pumps commits every frame but ticks the scheduler only on the interval', () => {
-    // Drive the frame counter 1..2*interval and count scheduler ticks.
-    let counter = 0;
+  it('pumps commits every frame but ticks the scheduler only when it is due', () => {
+    // The cadence is now elapsed time, so the loop asks the host rather than
+    // counting frames. Due on every third call here.
+    let calls = 0;
     const host = makeHost({
       hasStreaming: () => true,
-      advanceStreamingFrame: () => ++counter,
+      streamingTickDue: () => (++calls % 3 === 0),
     });
-    const frames = STREAMING_TICK_INTERVAL * 2;
+    const frames = 9;
     for (let i = 0; i < frames; i++) runRenderFrame(host);
 
     expect(host.pumpStreamingCommit).toHaveBeenCalledTimes(frames);
-    // Ticks land exactly on multiples of the interval → twice across 2×.
-    expect(host.tickStreaming).toHaveBeenCalledTimes(2);
+    expect(host.tickStreaming).toHaveBeenCalledTimes(3);
   });
 
-  it('ticks on the interval-th frame, not before', () => {
-    let counter = 0;
+  it('does not tick while the host says it is not due', () => {
+    const host = makeHost({ hasStreaming: () => true, streamingTickDue: () => false });
+    for (let i = 0; i < 20; i++) runRenderFrame(host);
+    expect(host.pumpStreamingCommit).toHaveBeenCalledTimes(20);
+    expect(host.tickStreaming).not.toHaveBeenCalled();
+  });
+
+  it('asks the host once per frame, so the cadence cannot double-count', () => {
+    let asked = 0;
     const host = makeHost({
       hasStreaming: () => true,
-      advanceStreamingFrame: () => ++counter,
+      streamingTickDue: () => { asked += 1; return false; },
     });
-    for (let i = 0; i < STREAMING_TICK_INTERVAL - 1; i++) runRenderFrame(host);
-    expect(host.tickStreaming).not.toHaveBeenCalled();
-    runRenderFrame(host); // the interval-th frame
-    expect(host.tickStreaming).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 5; i++) runRenderFrame(host);
+    expect(asked).toBe(5);
   });
 });
 

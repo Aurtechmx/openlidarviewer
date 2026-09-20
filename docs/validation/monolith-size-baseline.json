@@ -5,7 +5,7 @@
       "goal": 2500
     },
     "src/render/Viewer.ts": {
-      "lines": 6211,
+      "lines": 6206,
       "goal": 2000
     }
   },
@@ -26,7 +26,7 @@
       "lines": 1917
     },
     "src/render/streaming/StreamingScheduler.ts": {
-      "lines": 1835
+      "lines": 1852
     },
     "src/terrain/contour/analyseContours.ts": {
       "lines": 1681

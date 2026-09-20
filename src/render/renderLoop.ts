@@ -27,11 +27,16 @@ import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
 /**
- * Run the streaming view-dependent scheduler once every this-many frames
- * (~10 Hz at 60 fps), never every frame. The per-frame commit pump and frame
- * counter still advance every iteration; only the scheduler tick is throttled.
+ * Run the streaming view-dependent scheduler on elapsed time, never every
+ * frame and never on a frame count.
+ *
+ * It was every sixth frame, which is 100 ms at 60 Hz and 42 ms at 144 Hz, so
+ * the scheduler ran nearly two and a half times as often on a faster panel
+ * and loaded differently on the same scan. The band comes from the refinement
+ * phase; `schedulerCadence` holds the policy and the reasoning.
+ *
+ * The commit pump still runs every iteration. Only the scheduler is paced.
  */
-export const STREAMING_TICK_INTERVAL = 6;
 
 /**
  * What the per-frame loop reads from the live scene. Accessors are functions,
@@ -83,9 +88,15 @@ export interface RenderLoopHost {
   /** Drain metered streaming commits (no-op in immediate mode). */
   pumpStreamingCommit(): void;
   /** Advance the streaming frame counter and return its new value. */
-  advanceStreamingFrame(): number;
   /** Run the throttled streaming scheduler tick. */
   tickStreaming(): void;
+  /**
+   * Whether the scheduler is due at this time, recording the tick if so.
+   *
+   * The pacing policy is `schedulerCadence`; the Viewer applies it because it
+   * owns both the last-tick time and the refinement phase the band comes from.
+   */
+  streamingTickDue(nowMs: number): boolean;
   /**
    * Update the streamed draw frustum from the camera about to be rendered.
    *
@@ -196,9 +207,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
   // commit pump and frame counter advance every frame.
   if (host.hasStreaming()) {
     host.pumpStreamingCommit();
-    if (host.advanceStreamingFrame() % STREAMING_TICK_INTERVAL === 0) {
-      host.tickStreaming();
-    }
+    if (host.streamingTickDue(nowMs)) host.tickStreaming();
   }
 
   // After render, camera matrices are current — project the tool overlays.

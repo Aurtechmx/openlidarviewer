@@ -691,7 +691,6 @@ export class Viewer {
    */
   private _streamingHeartbeat: ReturnType<typeof setInterval> | null = null;
   /** Frames since the streaming scheduler last ran — for throttling. */
-  private _streamingFrame = 0;
   /**
    * Last-observed centre of the streaming cloud's bounds. The streaming
    * pipeline returns the COPC / EPT octree's *full* extent up front, so this
@@ -829,10 +828,7 @@ export class Viewer {
    * texture-fetch LOD plumbing). 256 floats live well within the vertex
    * uniform budget on every WebGPU target and every practical WebGL2 device.
    */
-  private readonly _classMaskUniform = uniformArray(
-    new Array<number>(CLASS_COUNT).fill(1),
-    'float',
-  );
+  private readonly _classMaskUniform = uniformArray(new Array<number>(CLASS_COUNT).fill(1), 'float');
   /**
    * True when at least one class is currently hidden. Mirrors the mask written
    * by `applyClassVisibility` so the pick paths can decide — with a single
@@ -1723,7 +1719,6 @@ export class Viewer {
     // above then leaves the current scan on screen instead of a blank scene.
     this.detachStreamingCloud();
     this._streaming = session;
-    this._streamingFrame = 0;
     // Guaranteed scheduler cadence, render-loop-independent (see the field's
     // contract). 200 ms is comfortably above a tick's sub-millisecond cost and
     // close to the RAF path's every-6th-frame cadence; the RAF tick still runs
@@ -6132,7 +6127,7 @@ export class Viewer {
       pumpStreamingCommit: () => {
         this._streaming?.commit.pump(this._smoothedFrameMs());
       },
-      advanceStreamingFrame: () => ++this._streamingFrame,
+      streamingTickDue: (nowMs: number) => this._streaming?.scheduler.tickDue(nowMs, this._phases.phase) ?? false,
       tickStreaming: () => this._tickStreaming(),
     cullStreamingToFrustum: () => this._streaming?.renderer.cullToFrustum(this._activeCamera(), this._streamingViewProj),
       toolMode: () => this._toolMode,
