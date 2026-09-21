@@ -353,3 +353,26 @@ describe('the evidence stamp names the claim behind each figure', () => {
     expect(note.match(/MEAS-DISTANCE/g)).toHaveLength(1);
   });
 });
+
+// Deriving the stamp from the kinds present meant an EMPTY collection produced
+// an empty string, where a reader expects a statement. A collection with
+// nothing in it makes no claim, so the member is absent rather than blank.
+describe('an empty collection carries no verdict', () => {
+  const emptyCtx = (unitsVerified: boolean): never => ({
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    up: [0, 0, 1] as [number, number, number],
+    unitToMetres: 1, verticalUnitToMetres: 1,
+    crsName: 'EPSG:26913', geographic: false, unitsVerified,
+  }) as never;
+
+  it('omits the evidence member rather than writing an empty one', () => {
+    const fc = JSON.parse(measurementsToGeoJSON([], emptyCtx(true)));
+    expect(fc.features).toHaveLength(0);
+    expect('evidence' in fc).toBe(false);
+  });
+
+  it('still carries the units caveat when there is one to carry', () => {
+    const fc = JSON.parse(measurementsToGeoJSON([], emptyCtx(false)));
+    expect(fc.evidence).toMatch(/units unverified/i);
+  });
+});

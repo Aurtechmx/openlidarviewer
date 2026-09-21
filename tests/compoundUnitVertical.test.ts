@@ -158,3 +158,22 @@ describe('a conductor sag is a vertical magnitude', () => {
     expect(c!.spanM).toBeCloseTo(40, 1);
   });
 });
+
+// Two regressions the review caught in the fix itself, pinned so they cannot
+// come back.
+describe('the anisotropic path does not break the degenerate inputs', () => {
+  const p = new Float32Array([1, 2, 3]);
+
+  it('does not throw when the horizontal factor is not a number', () => {
+    // NaN equals nothing, including itself, so `h === v` was false even with no
+    // vertical argument — and the anisotropic branch then read an axis off
+    // `undefined`. The answer is the same NaN-scaled copy it always was.
+    const out = positionsInMetres(p, { known: true, metresPerUnit: Number.NaN } as never);
+    expect([...(out as Float32Array)].every(Number.isNaN)).toBe(true);
+  });
+
+  it.each([0, -1, Number.POSITIVE_INFINITY])('is unchanged for metresPerUnit %p', (mpu) => {
+    const out = positionsInMetres(p, { known: true, metresPerUnit: mpu } as never) as Float32Array;
+    expect([...out]).toEqual([1 * mpu, 2 * mpu, 3 * mpu]);
+  });
+});

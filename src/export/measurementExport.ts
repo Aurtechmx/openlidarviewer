@@ -273,9 +273,13 @@ export function measurementsToGeoJSON(
   // Each kind present gets its own verdict; a mixed file carries them all
   // rather than one kind's answer standing in for the rest.
   const claims = claimsPresent(measurements);
-  fc.evidence =
+  const evidence =
     claims.map((c) => `${c}: ${evidenceNote(c)}`).join(' ')
     + unverifiedUnitsCaveat(ctx.unitsVerified ?? true);
+  // A collection with nothing in it makes no claim, so there is no verdict to
+  // carry — and an `evidence: ""` member would be a field that says nothing
+  // where a reader expects a statement. The key is omitted instead.
+  if (evidence) fc.evidence = evidence;
   return JSON.stringify(fc, null, 2);
 }
 

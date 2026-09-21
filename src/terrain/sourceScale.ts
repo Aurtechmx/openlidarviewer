@@ -52,8 +52,14 @@ export function positionsInMetres(
     ? vertical.metresPerUnit
     : h;
   if (h === 1 && v === 1) return positions;
-  if (h === v) return scalePositions(positions, h);
-  return scaleAxes(positions, h, v, vertical!.axis);
+  // `!vertical` matters as much as `h === v`: a corrupt horizontal factor makes
+  // `h === v` false even with no vertical argument at all, because NaN equals
+  // nothing including itself — and the anisotropic branch would then read an
+  // axis off `undefined`. Falling back to the single-scalar path keeps the
+  // previous answer for that input exactly (a NaN-scaled copy, which is
+  // visibly broken rather than silently assuming metres).
+  if (h === v || !vertical) return scalePositions(positions, h);
+  return scaleAxes(positions, h, v, vertical.axis);
 }
 
 /**
