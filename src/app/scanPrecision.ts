@@ -110,6 +110,14 @@ export interface ScanPrecisionInputs {
    * `REBASE_QUANTUM_BUDGET_M`, so the worst reachable case is that budget. It
    * is still the wrong number on a permit. Omitted or all-zero reproduces the
    * unplaced reading exactly, which is every unmounted scan.
+   *
+   * NOT YET SUPPLIED IN THE APP. Both production callers — the terrain
+   * runner's `framePrecision` and `streamingScanReport` — omit it, so the
+   * permit still describes the unplaced frame wherever a layer is mounted
+   * away from the project origin. Reaching a layer's offset needs an accessor
+   * the Viewer does not expose; until that lands this parameter is a tested
+   * capability rather than a fix in effect, and saying otherwise would be the
+   * same overclaim this field exists to correct.
    */
   readonly projectOffset?: readonly [number, number, number] | null;
 }

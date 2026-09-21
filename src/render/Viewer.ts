@@ -135,8 +135,10 @@ export interface LassoVolumeReturn {
    * serve a line that cannot appear until someone draws a lasso; the caller
    * loads it when it has a band to show (see `loadStockpilePresenter`).
    */
-  /** The estimator that produced {@link result}; named here so `main.ts` need not import the registry. */
+  /** The estimator behind {@link result}, named here so `main.ts` need not import the registry. */
   readonly volumeMethod: string;
+  /** Whether the clip box or a class filter held candidates back. */ readonly selectionRestrictedByVisibility: boolean;
+
   readonly stockpileInputs: StockpileBandInputs;
   /** Number of cloud points that fell inside the lasso. */
   readonly selectedCount: number;
@@ -3721,10 +3723,8 @@ export class Viewer {
   ): LassoVolumeReturn | null {
     const canvas = this._canvas;
     if (!canvas) return null;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === 0 || h === 0) return null;
-
     // The camera's matrices are the only three.js the walk needs, and the
     // projector takes them as plain arrays, so it is testable without WebGL.
     this._camera.updateMatrixWorld(true);
@@ -3737,7 +3737,6 @@ export class Viewer {
     );
 
     const integrable = integrableEntries(this._clouds);
-
     const out = computeLassoVolumeWalk({
       host: {
         project,
@@ -3763,6 +3762,7 @@ export class Viewer {
 
     return {
       result: out.result, volumeMethod: POINT_SAMPLE_VOLUME_METHOD,
+      selectionRestrictedByVisibility: out.selectionRestrictedByVisibility, lasso,
       stockpileInputs: {
         polygon: out.polygon3D, positions: out.selectedPositions, lin,
         options: {
@@ -3771,7 +3771,7 @@ export class Viewer {
           streamingCoverage: this._streamingCoverage(),
         },
       },
-      selectedCount: out.selectedCount, lasso,
+      selectedCount: out.selectedCount,
       selectionByCloudId: out.selectionByCloudId, budget: out.budget,
       polygon3D: out.polygon3D, referenceZ: out.referenceZ, selectionBasis: out.selectionBasis,
     };

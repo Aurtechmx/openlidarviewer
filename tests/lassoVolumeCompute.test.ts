@@ -16,6 +16,7 @@ import { computeLassoVolume, stridePositions } from '../src/render/measure/lasso
 import type { LassoVolumeHost } from '../src/render/measure/lassoVolumeCompute';
 import { PointCloud } from '../src/model/PointCloud';
 import { selectByLasso, volumeFromLassoWithFootprint } from '../src/render/measure/lassoVolume';
+import { readFileSync } from 'node:fs';
 
 /** Orthographic top-down projector: x,y pass through, z ignored. */
 const topDown = (x: number, y: number): { x: number; y: number } => ({ x, y });
@@ -467,5 +468,24 @@ describe('the footprint follows the up axis', () => {
     })!;
     expect(explicit.result.fill).toBe(implicit.result.fill);
     expect(explicit.referenceZ).toBe(implicit.referenceZ);
+  });
+});
+
+// The flag is only worth computing if a viewer can see it. It was returned by
+// the walk and dropped at the Viewer boundary, so hidden points were excluded
+// from the volume with nothing on screen saying so — the opposite of what the
+// field is for.
+describe('the restriction reaches the surface that shows it', () => {
+  const src = (p: string): string => readFileSync(new URL(p, import.meta.url), 'utf8');
+
+  it('the Viewer passes it out of the walk', () => {
+    expect(src('../src/render/Viewer.ts'))
+      .toMatch(/selectionRestrictedByVisibility:\s*out\.selectionRestrictedByVisibility/);
+  });
+
+  it('the toast says so when it is set', () => {
+    const main = src('../src/main.ts');
+    expect(main).toMatch(/out\.selectionRestrictedByVisibility\s*\?/);
+    expect(main).toMatch(/visible points only/);
   });
 });

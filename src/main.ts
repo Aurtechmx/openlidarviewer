@@ -576,9 +576,10 @@ let pendingLassoSave: {
 const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
   onCommit: async (lasso, basis) => {
     if (!viewer) return;
-    // The ONE await, before any state is staged, so the body below cannot be
-    // split by a second commit staging its own `pendingLassoSave` mid-flight.
-    const { stockpileToastSuffix } = await loadStockpilePresenter();
+    // The ONE await, before any state is staged, so a second commit cannot stage
+    // its own `pendingLassoSave` mid-flight. It cannot throw: `onCommit` is typed
+    // void, so a rejection would float and cost the measurement, not just the band.
+    const band = await loadStockpilePresenter().catch(() => null);
     // Native→metre factor for the source CRS (feet for a state-plane-feet
     // cloud), reused below for the m³/m² readout and the stockpile band.
     const ctx = crsService.context(), lin = ctx.linearUnitToMetres;
@@ -624,7 +625,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
             selectedCount: out.selectedCount,
           }
         : null;
-    const budgetCaption = out.budget.downsample ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%` : '';
+    const budgetCaption = (out.budget.downsample ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%` : '') + (out.selectionRestrictedByVisibility ? ' · visible points only' : '');
     // CRS gate — a geographic or unknown CRS makes a cubic-metre headline
     // misleading: replace the metrics line with the caveat and refuse a Save
     // button (project / confirm a CRS first). safe-explicit-local keeps the
@@ -645,8 +646,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // The ` · Stockpile: … ± … (±%) · confidence` band, re-graded over the same
     // sample against a "lowest ground" base plane. Empty when there is nothing
     // trustworthy to claim (too few points / degenerate footprint).
-    const b = out.stockpileInputs;
-    const stockpileSuffix = stockpileToastSuffix(b.polygon, b.positions, b.lin, b.options);
+    const b = out.stockpileInputs, stockpileSuffix = band ? band.stockpileToastSuffix(b.polygon, b.positions, b.lin, b.options) : '';
     showLassoToast(
       `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
         `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stockpileSuffix}`,

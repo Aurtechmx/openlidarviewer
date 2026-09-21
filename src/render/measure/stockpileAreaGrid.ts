@@ -429,10 +429,13 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
       // measurable". Such a cell takes that single z as its surface, claims
       // the whole cell's area at that height, and contributes exactly nothing
       // to the surface term — so one bird or powerline return can add real
-      // volume with no uncertainty attached to it at all. The volume is left
-      // as it was; what changes is that the area this applies to is counted
-      // and reported, and a footprint mostly made of such cells can no longer
-      // call itself `measured`.
+      // volume with no uncertainty attached to it at all. Nothing about the
+      // answer changes here: the volume, the support fraction and the coverage
+      // verdict are exactly what they were. What is added is the ACCOUNTING —
+      // how much of the supported area rests on one return each — so a caller
+      // can say it. Demoting such a footprint was tried and reverted: a
+      // thinly sampled half of a pile is the density gradient this method
+      // exists to be invariant to, and a test said so.
       if (hs.length < 2) singleReturnAreaSrc += areaSrc;
       // Surface-term variance: (A_c[m²]·σ_c[m])², σ_c = spread/√support (SEM).
       const aM2 = areaSrc * unit * unit;

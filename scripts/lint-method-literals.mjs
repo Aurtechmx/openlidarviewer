@@ -10,7 +10,7 @@
  * implementation returns.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, dirname, relative } from 'node:path';
+import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -28,6 +28,19 @@ const REGISTRY = join(SRC, 'science', 'methodRegistry.ts');
  * own docstring was written for.
  */
 const ROOTS = ['src', 'tests', 'scripts', 'docs'].map((d) => join(ROOT, d));
+/**
+ * Documents that are SHIPPED and must not be edited to satisfy a later bump.
+ *
+ * A published release note records what a release said at the time. Scanning
+ * it here made the next version bump of any method fail this lint, and the
+ * only way to clear it would be editing a document that has already gone out —
+ * which this project forbids. `RELEASE_NOTES_v0.6.6.md` carries two `@1` tags
+ * today and would have been the first casualty.
+ *
+ * The current release's own documents stay in scope: they describe a tree that
+ * has not shipped yet, so correcting them is the point.
+ */
+const SHIPPED_DOC = /docs\/releases\/(RELEASE_NOTES|KNOWN_LIMITATIONS|VALIDATION_REPORT|REPRODUCIBILITY)_v0\.(?!7\.0-alpha\.1)/;
 const SCANNED = new Set(['.ts', '.tsx', '.mjs', '.js', '.md', '.json']);
 
 /** id -> declared version, parsed from the registry source. */
@@ -61,6 +74,7 @@ for (const root of ROOTS) {
 }
 for (const file of files) {
   if (file === REGISTRY) continue;
+  if (SHIPPED_DOC.test(relative(ROOT, file).split(sep).join('/'))) continue;
   const lines = readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
     // An explicit, per-site exemption for a tag that is QUOTED rather than
