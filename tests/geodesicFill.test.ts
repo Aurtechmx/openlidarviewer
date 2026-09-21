@@ -233,6 +233,17 @@ describe('geodesicFill runtime backstop', () => {
   const uncapped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
     cellMetresX: 1, nodeBudget: 1e15,
   });
+  // Above the projection, below the real cost: the pass starts, and only the
+  // backstop can end it. Computed ONCE for the three tests that read it — the
+  // same call ran three times over a 200x200 grid, which is the whole cost of
+  // this file. Under coverage instrumentation it took 40s of a 60s per-test
+  // ceiling and tipped over on a slower CI runner.
+  const budget = Math.floor(
+    (uncapped.report.projectedNodes + uncapped.report.nodesExpanded) / 2,
+  );
+  const capped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
+    cellMetresX: 1, nodeBudget: budget,
+  });
 
   it('under-estimates on this fixture, which is what the backstop is for', () => {
     // If the projection ever became exact here the tests below would pass
@@ -241,28 +252,14 @@ describe('geodesicFill runtime backstop', () => {
   });
 
   it('stops at the ceiling when the projection said the pass would fit', () => {
-    // Above the projection, below the real cost: the pass starts, and only the
-    // backstop can end it.
-    const budget = Math.floor(
-      (uncapped.report.projectedNodes + uncapped.report.nodesExpanded) / 2,
-    );
     expect(budget).toBeGreaterThan(uncapped.report.projectedNodes);
     expect(budget).toBeLessThan(uncapped.report.nodesExpanded);
-    const capped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
-      cellMetresX: 1, nodeBudget: budget,
-    });
     expect(capped.report.abandoned).toBe(true);
     expect(capped.report.stoppedBy).toBe('ceiling');
     expect(capped.report.nodesExpanded).toBeLessThan(uncapped.report.nodesExpanded);
   });
 
   it('leaves the Euclidean prefill everywhere when it fires', () => {
-    const budget = Math.floor(
-      (uncapped.report.projectedNodes + uncapped.report.nodesExpanded) / 2,
-    );
-    const capped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
-      cellMetresX: 1, nodeBudget: budget,
-    });
     // Not a partly geodesic surface: the fallback covers every void, so the
     // grid is one interpolant and carries no seam.
     const euclidean = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
@@ -272,12 +269,6 @@ describe('geodesicFill runtime backstop', () => {
   });
 
   it('overshoots by at most one void search, not by the rest of the grid', () => {
-    const budget = Math.floor(
-      (uncapped.report.projectedNodes + uncapped.report.nodesExpanded) / 2,
-    );
-    const capped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
-      cellMetresX: 1, nodeBudget: budget,
-    });
     // The check runs between voids, so the search in flight is the overshoot.
     // One void expands at most its whole window, each cell pushed a bounded
     // number of times.
