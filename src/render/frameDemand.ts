@@ -81,11 +81,13 @@ export class FrameDemand {
    * fetch, commit and fade signals are all quiet and the loop would sleep on
    * a picture that is one node stale.
    *
-   * The edge is detected where the pump's effect is already visible, in
-   * {@link needsFrame}, which the scheduler asks after the frame body. It
-   * keeps the loop awake AND tells the gate to draw, and it clears in
-   * {@link frameDrawn} — when the paint it is owed has actually happened,
-   * not when a frame merely ran.
+   * Set from two places, because geometry reaches the screen from two:
+   * {@link needsFrame} detects the commit queue draining, where the pump's
+   * effect is already visible, and {@link geometryLanded} fires per node.
+   * Either way it keeps the loop awake AND tells the gate to draw.
+   *
+   * Cleared in {@link shouldRender}, which is deliberate and load-bearing —
+   * see the note there.
    */
   private _paintOwed = false;
 
@@ -229,19 +231,30 @@ export class FrameDemand {
 
   /** Tell the listeners a frame drew. */
   frameDrawn(): void {
-    this._paintOwed = false;
     for (const listener of this._drawn) listener();
   }
 
-  /** Should this scheduled frame actually draw? */
+  /**
+   * Should this scheduled frame actually draw?
+   *
+   * Also where an owed paint is discharged, and the timing is the point. The
+   * loop body renders, THEN pumps commits and ticks the scheduler, and both
+   * of those can put geometry on screen — in metered mode `onNodeReady` fires
+   * from inside the pump. A debt cleared at the end of the frame would be one
+   * incurred after the picture was taken, wiped by the very frame that failed
+   * to show it. Clearing here, before the body runs, leaves anything that
+   * lands later in the frame owed to the next one.
+   */
   shouldRender(): boolean {
-    return this._gate.shouldRender(this._signals.nowMs(), {
+    const draw = this._gate.shouldRender(this._signals.nowMs(), {
       tweening: this._signals.tweening(),
       streamingBusy: this._signals.streamingBusy(),
-      // Runs before the pump; `needsFrame` samples after it. See
+      // Sampled before the pump; `needsFrame` samples after it. See
       // {@link _sampleCommitWork} for why both ends are needed.
       commitWork: this._sampleCommitWork(),
     });
+    if (draw) this._paintOwed = false;
+    return draw;
   }
 
   /**

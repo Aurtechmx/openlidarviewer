@@ -164,7 +164,6 @@ describe('pending GPU commits keep the loop awake', () => {
     // stale. It sleeps once that paint has happened, not before.
     expect(d.needsFrame(now.ms)).toBe(true);
     expect(d.shouldRender()).toBe(true);
-    d.frameDrawn();
     expect(d.needsFrame(now.ms)).toBe(false);
   });
 
@@ -191,14 +190,14 @@ describe('pending GPU commits keep the loop awake', () => {
     expect(d.shouldRender()).toBe(true);
     pending = false;
     expect(d.needsFrame(0)).toBe(true);
-    d.frameDrawn();
+    expect(d.shouldRender()).toBe(true);
     expect(d.needsFrame(0)).toBe(false);
     // A fresh burst arms it again rather than finding the latch already spent.
     pending = true;
     expect(d.shouldRender()).toBe(true);
     pending = false;
     expect(d.needsFrame(0)).toBe(true);
-    d.frameDrawn();
+    expect(d.shouldRender()).toBe(true);
     expect(d.needsFrame(0)).toBe(false);
   });
 
@@ -212,7 +211,53 @@ describe('pending GPU commits keep the loop awake', () => {
     d.geometryLanded();
     expect(d.needsFrame(0)).toBe(true);
     expect(d.shouldRender()).toBe(true);
+    expect(d.needsFrame(0)).toBe(false);
+  });
+
+  it('keeps owing when geometry lands after the frame decided to draw', () => {
+    // The loop renders, THEN pumps and ticks, and in metered mode
+    // `onNodeReady` fires from inside the pump. So the sequence below is one
+    // frame: decide, draw, land, end-of-frame. Discharging the debt at the
+    // end would have this frame absolve itself of a node it never showed.
+    const { d } = demand({ commitPending: () => false });
+    d.gate.noteRendered();
+    d.geometryLanded();
+    expect(d.shouldRender()).toBe(true); // decided; debt discharged here
+    d.geometryLanded(); // lands mid-body, after the render
+    d.frameDrawn(); // end of the frame body
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
+    expect(d.needsFrame(0)).toBe(false);
+  });
+
+  it('never sleeps on geometry that landed after the frame decided to draw', () => {
+    // One call of `frame` is one loop iteration in the real order: the gate
+    // decides, the render happens, THEN the body pumps and ticks the
+    // scheduler — which is where `onNodeReady` fires in metered mode — and
+    // the scheduler asks last whether to go round again.
+    let busy = true;
+    const { d } = demand({ streamingBusy: () => busy });
+    d.gate.noteRendered();
+
+    // Frame 1 draws because fetches are outstanding. Then the body runs: a
+    // node reaches the scene, and the last fetch completes in the same body.
+    expect(d.shouldRender()).toBe(true);
+    d.gate.noteRendered();
+    d.geometryLanded();
+    busy = false;
     d.frameDrawn();
+    // The picture was taken before the node arrived, so it is still owed —
+    // and nothing else is asking now that the fetches are done.
+    expect(d.needsFrame(0)).toBe(true);
+
+    // Frame 2 pays it.
+    expect(d.shouldRender()).toBe(true);
+    d.gate.noteRendered();
+    d.frameDrawn();
+    expect(d.needsFrame(0)).toBe(false);
+
+    // And it stays settled rather than spinning on a flag nothing clears.
+    d.gate.noteSkipped();
     expect(d.needsFrame(0)).toBe(false);
   });
 
