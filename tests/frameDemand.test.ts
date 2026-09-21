@@ -208,7 +208,7 @@ describe('pending GPU commits keep the loop awake', () => {
     const { d } = demand({ commitPending: () => false });
     d.gate.noteRendered();
     expect(d.needsFrame(0)).toBe(false);
-    d.geometryLanded();
+    d.streamedGeometryChanged();
     expect(d.needsFrame(0)).toBe(true);
     expect(d.shouldRender()).toBe(true);
     expect(d.needsFrame(0)).toBe(false);
@@ -221,9 +221,9 @@ describe('pending GPU commits keep the loop awake', () => {
     // end would have this frame absolve itself of a node it never showed.
     const { d } = demand({ commitPending: () => false });
     d.gate.noteRendered();
-    d.geometryLanded();
+    d.streamedGeometryChanged();
     expect(d.shouldRender()).toBe(true); // decided; debt discharged here
-    d.geometryLanded(); // lands mid-body, after the render
+    d.streamedGeometryChanged(); // lands mid-body, after the render
     d.frameDrawn(); // end of the frame body
     expect(d.needsFrame(0)).toBe(true);
     expect(d.shouldRender()).toBe(true);
@@ -243,7 +243,7 @@ describe('pending GPU commits keep the loop awake', () => {
     // node reaches the scene, and the last fetch completes in the same body.
     expect(d.shouldRender()).toBe(true);
     d.gate.noteRendered();
-    d.geometryLanded();
+    d.streamedGeometryChanged();
     busy = false;
     d.frameDrawn();
     // The picture was taken before the node arrived, so it is still owed —

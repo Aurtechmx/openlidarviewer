@@ -86,7 +86,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => classesHook,
       nodeReadyHook: () => readyHook,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     });
     const d = decoded({ classification: new Uint8Array([1, 2, 3]) });
     cb.onNodeReady(node('0-0-0-0'), d);
@@ -108,12 +108,34 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => () => { order.push('classes'); throw new Error('legend'); },
       nodeReadyHook: () => () => { order.push('ready'); throw new Error('re-route'); },
-      geometryLanded: () => { order.push('landed'); },
+      geometryChanged: () => { order.push('changed'); },
     });
     cb.onNodeReady(node('0-0-0-0'), decoded({ classification: new Uint8Array([1]) }));
     cb.onNodeReady(node('1-0-0-0'), decoded({ classification: new Uint8Array([1]) }));
     // Both display hooks threw and neither cost a node its frame.
-    expect(order).toEqual(['landed', 'classes', 'ready', 'landed', 'classes', 'ready']);
+    expect(order).toEqual(['changed', 'classes', 'ready', 'changed', 'classes', 'ready']);
+  });
+
+  it('owes a paint when a node leaves or a frontier hides one, not only when one arrives', () => {
+    // Eviction and the REPLACE frontier change the screen exactly as much as
+    // a node arriving, and both run in the scheduler tick — after this
+    // frame's render. Wiring only onNodeReady would leave the loop asleep on
+    // a node it had already removed.
+    const renderer = fakeRenderer();
+    let owed = 0;
+    const cb = buildSchedulerCallbacks({
+      renderer,
+      benchmark: null,
+      nodeClassesHook: () => undefined,
+      nodeReadyHook: () => undefined,
+      geometryChanged: () => { owed += 1; },
+    });
+    cb.onNodeEvicted(node('0-0-0-0'));
+    expect(owed).toBe(1);
+    cb.onFrontierChanged?.(new Set(['0-0-0-0']));
+    expect(owed).toBe(2);
+    expect(renderer.onNodeEvicted).toHaveBeenCalledTimes(1);
+    expect(renderer.applyReplaceVisibility).toHaveBeenCalledTimes(1);
   });
 
   it('keys the class hook on the node CANONICAL record id, not on decode order', () => {
@@ -124,7 +146,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => classesHook,
       nodeReadyHook: () => undefined,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     });
     // The same node evicted and re-decoded arrives with a FRESH classification
     // array, later in the order, and still carries the same record id — which is
@@ -143,7 +165,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => undefined,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     });
     const hidden = new Set(['root.pnts']);
     cb.onFrontierChanged?.(hidden);
@@ -160,7 +182,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => readyHook,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     }).onNodeReady(node('a'), decoded());
     expect(readyHook).toHaveBeenCalledTimes(1);
 
@@ -171,7 +193,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => classesHook,
       nodeReadyHook: () => undefined,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     }).onNodeReady(node('b'), decoded({ classification: undefined }));
     expect(classesHook).not.toHaveBeenCalled();
   });
@@ -184,7 +206,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => liveReady,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     });
 
     cb.onNodeReady(node('a'), decoded()); // no hook installed yet
@@ -206,7 +228,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       nodeReadyHook: () => () => {
         throw new Error('reroute blew up');
       },
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     });
     const d = decoded({ posBytes: 48 });
     expect(() => cb.onNodeReady(node('n1'), d)).not.toThrow();
@@ -224,7 +246,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => undefined,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     });
     expect(() => cb.onNodeReady(node('n'), decoded())).not.toThrow();
   });
@@ -239,7 +261,7 @@ describe('buildSchedulerCallbacks — onNodeEvicted + onTick', () => {
       benchmark,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => undefined,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     });
     cb.onNodeEvicted(node('gone'));
     expect(renderer.onNodeEvicted).toHaveBeenCalledWith(node('gone'));
@@ -254,7 +276,7 @@ describe('buildSchedulerCallbacks — onNodeEvicted + onTick', () => {
         benchmark: null,
         nodeClassesHook: () => undefined,
         nodeReadyHook: () => undefined,
-        geometryLanded: () => {},
+        geometryChanged: () => {},
       }).onTick,
     ).toBeUndefined();
 
@@ -264,7 +286,7 @@ describe('buildSchedulerCallbacks — onNodeEvicted + onTick', () => {
       benchmark,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => undefined,
-      geometryLanded: () => {},
+      geometryChanged: () => {},
     });
     cb.onTick?.(7.5);
     expect(benchmark.recordSchedulerTick).toHaveBeenCalledWith(7.5);

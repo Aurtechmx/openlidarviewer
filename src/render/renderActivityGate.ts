@@ -44,11 +44,14 @@ export interface RenderActivitySignals {
    * saw only the fetch side and could idle-throttle those frames, leaving
    * geometry on the GPU undrawn until the heartbeat came round.
    *
-   * The window is narrow in practice. Driving a real COPC session, node-join
-   * to paint measured a 9-66 ms median with and without this signal, in both
-   * commit modes: the scheduler is still ticking whenever geometry lands, so
-   * something else was asking for the frame. This closes the case where
-   * nothing else does; it is not known to have been reachable.
+   * Driving a real COPC session, node-join to paint measured a 9-66 ms median
+   * with and without this signal, in both commit modes, so the stall was
+   * never caught happening — usually something else is asking for the frame
+   * while the scheduler ticks. That is a weak result rather than an all-clear:
+   * 34 node arrivals were observed in total, which bounds an occasional stall
+   * no tighter than "under roughly one arrival in eleven". The gap is closed
+   * by construction because measuring it away would take thousands of
+   * samples, not because it was shown to be rare.
    */
   readonly commitWork: boolean;
 }

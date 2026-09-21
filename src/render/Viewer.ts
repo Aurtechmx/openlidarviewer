@@ -1682,7 +1682,7 @@ export class Viewer {
     return { rendererHost: this,
       streamingNodeClassesHook: () => this.onStreamingNodeClasses,
       streamingNodeReadyHook: () => this.onStreamingNodeReady,
-      streamingGeometryLanded: () => this._demand.geometryLanded(),
+      streamingGeometryChanged: () => this._demand.streamedGeometryChanged(),
     };
   }
 

@@ -55,8 +55,9 @@ export interface FrameDemandSignals {
    * low-quality paths were exposed. The gate consults neither this signal nor
    * `fading`, so fades were never what stood between a commit and a paint.
    * What does is that the scheduler is usually still ticking when geometry
-   * lands, which is why the gap is hard to reach and was never observed in a
-   * real session. `commitWork` on the gate closes it by construction.
+   * lands, so the gap was never observed in a real session — on a sample of
+   * 34 node arrivals, which is nowhere near enough to call it rare.
+   * `commitWork` on the gate closes it by construction instead.
    */
   commitPending: () => boolean;
   /** A node fade is part way through. */
@@ -83,7 +84,7 @@ export class FrameDemand {
    *
    * Set from two places, because geometry reaches the screen from two:
    * {@link needsFrame} detects the commit queue draining, where the pump's
-   * effect is already visible, and {@link geometryLanded} fires per node.
+   * effect is already visible, and {@link streamedGeometryChanged} fires per node.
    * Either way it keeps the loop awake AND tells the gate to draw.
    *
    * Cleared in {@link shouldRender}, which is deliberate and load-bearing —
@@ -140,7 +141,7 @@ export class FrameDemand {
   }
 
   /**
-   * Streamed geometry just entered the scene. Owe it a paint.
+   * The streamed scene changed. Owe it a paint.
    *
    * {@link _sampleCommitWork} watches the metered commit queue, and the
    * shipped default is not metered: `streamingCommitMode` is `immediate`, so
@@ -148,19 +149,18 @@ export class FrameDemand {
    * `commitPending` is permanently false. The whole latch reads as "nothing
    * to draw for" on the path almost every session takes.
    *
-   * This is the mode-independent half. It fires from the scheduler's
-   * node-ready callback, after the renderer has put the node in the scene, in
-   * both modes — an event at the moment the picture changed rather than a
-   * level sampled around a pump that may not exist. Without it the last node
-   * of a burst could decode into a sleeping loop and wait for the 250 ms
-   * heartbeat to come round. Driving a real session never caught it doing so,
-   * because the scheduler is still ticking whenever a node lands; this makes
-   * the guarantee structural rather than a property of that timing.
+   * This is the mode-independent half, an event at the moment the picture
+   * changed rather than a level sampled around a pump that may not exist. It
+   * covers all three ways the scheduler moves streamed geometry: a node
+   * becoming ready, a node being evicted, and a REPLACE frontier hiding a
+   * coarse parent. Removing and hiding change the screen exactly as much as
+   * adding does, and all three run in the frame body AFTER the render, so any
+   * of them can leave the loop asleep on a stale picture.
    *
-   * Called once per node, so it stays cheap: the flag is already-set most of
-   * a burst, and `wake` is documented idempotent.
+   * Called once per node, so it stays cheap: the flag is already set for most
+   * of a burst, and `wake` is documented idempotent.
    */
-  geometryLanded(): void {
+  streamedGeometryChanged(): void {
     this._paintOwed = true;
     this._scheduler?.wake();
   }
