@@ -76,6 +76,12 @@ export interface StreamingBenchmarkResult {
    * it, and the two peaks bound the deepest backlog the queue carried.
    */
   uploadNodesCommitted: number;
+  /**
+   * Bytes those commits put on the GPU. The node count alone cannot say
+   * whether metering spread the LOAD: a frame that commits four small nodes
+   * and one that commits four large ones read the same.
+   */
+  uploadBytesCommitted: number;
   peakUploadPendingNodes: number;
   peakUploadPendingBytes: number;
   commitsPerFrame: AggregateStats;
@@ -190,6 +196,7 @@ export class StreamingBenchmark {
   // Metered-commit accounting. Stays at zero in immediate mode, where the
   // driver never calls recordCommitPass.
   private _uploadNodesCommitted = 0;
+  private _uploadBytesCommitted = 0;
   private _peakUploadPendingNodes = 0;
   private _peakUploadPendingBytes = 0;
   private _lastUploadPendingNodes = 0;
@@ -339,8 +346,13 @@ export class StreamingBenchmark {
     pendingNodes: number;
     pendingBytes: number;
     committed: number;
+    /** Bytes committed in this pass. Absent on a caller that cannot say. */
+    committedBytes?: number;
   }): void {
     if (pass.committed > 0) this._uploadNodesCommitted += pass.committed;
+    if (pass.committedBytes !== undefined && pass.committedBytes > 0) {
+      this._uploadBytesCommitted += pass.committedBytes;
+    }
     this._lastUploadPendingNodes = pass.pendingNodes;
     this._lastUploadPendingBytes = pass.pendingBytes;
     if (pass.pendingNodes > this._peakUploadPendingNodes) {
@@ -355,6 +367,7 @@ export class StreamingBenchmark {
   /** Live metered-commit counters — for the debug overlay. */
   uploadCounters(): {
     nodesCommitted: number;
+    bytesCommitted: number;
     pendingNodes: number;
     pendingBytes: number;
     peakPendingNodes: number;
@@ -363,6 +376,7 @@ export class StreamingBenchmark {
   } {
     return {
       nodesCommitted: this._uploadNodesCommitted,
+      bytesCommitted: this._uploadBytesCommitted,
       pendingNodes: this._lastUploadPendingNodes,
       pendingBytes: this._lastUploadPendingBytes,
       peakPendingNodes: this._peakUploadPendingNodes,
@@ -414,6 +428,7 @@ export class StreamingBenchmark {
       cacheEvictions: this._cacheEvictions,
       thrashEvents: this._thrashEvents,
       uploadNodesCommitted: this._uploadNodesCommitted,
+      uploadBytesCommitted: this._uploadBytesCommitted,
       peakUploadPendingNodes: this._peakUploadPendingNodes,
       peakUploadPendingBytes: this._peakUploadPendingBytes,
       commitsPerFrame: aggregate(this._commitSamples.toArray()),
@@ -470,7 +485,7 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
           ).toFixed(1)}%)`
         : ''),
     `  thrash events ${result.thrashEvents}`,
-    `  commits       ${result.uploadNodesCommitted} nodes,` +
+    `  commits       ${result.uploadNodesCommitted} nodes / ${mb(result.uploadBytesCommitted)},` +
       ` peak backlog ${result.peakUploadPendingNodes} nodes / ${mb(result.peakUploadPendingBytes)}`,
   );
   ag('commits/frame', result.commitsPerFrame);

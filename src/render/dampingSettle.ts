@@ -79,6 +79,39 @@ export interface SettleControls {
  * damping factor never decays, so the remainder is unbounded. A factor of 1 or
  * more zeroes the delta on the same tick, leaving nothing.
  */
+/**
+ * The refresh rate the tuned damping factors were chosen against.
+ *
+ * `DAMPING_FACTOR` (0.07) and `DAMPING_FACTOR_TOUCH` (0.18) were picked by
+ * feel on ordinary 60 Hz panels, and OrbitControls spends one of those
+ * multiplications per `update()` rather than per unit time.
+ */
+export const DAMPING_REFERENCE_HZ = 60;
+
+/**
+ * The damping factor that reproduces the reference glide over `dtSeconds`.
+ *
+ * The decay is geometric per call, so a fixed factor makes the tail a
+ * function of how many frames the panel happens to fit into it: the same
+ * flick that glides for a second at 60 Hz is spent in about 420 ms at 144 Hz,
+ * because the multiplication lands nearly two and a half times as often.
+ * Solving `1 - (1 - d)^(dt * 60)` keeps the wall-clock tail fixed and returns
+ * `d` unchanged at exactly 60 Hz, so the tuned feel is the one preserved
+ * rather than a new one introduced.
+ *
+ * `wheelDollyMath` already models its velocity against elapsed time for the
+ * same reason; this is the rotate and pan half of that argument.
+ *
+ * Degenerate inputs pass the base through: a non-positive or non-finite frame
+ * time is a clock that cannot be reasoned from, and a factor at or beyond the
+ * ends of (0, 1) has no glide to preserve.
+ */
+export function frameRateAdjustedDamping(base: number, dtSeconds: number): number {
+  if (!Number.isFinite(base) || base <= 0 || base >= 1) return base;
+  if (!Number.isFinite(dtSeconds) || dtSeconds <= 0) return base;
+  return 1 - Math.pow(1 - base, dtSeconds * DAMPING_REFERENCE_HZ);
+}
+
 export function decayRemaining(step: number, dampingFactor: number): number {
   if (!Number.isFinite(step) || step <= 0) return 0;
   if (!Number.isFinite(dampingFactor) || dampingFactor <= 0) return Number.POSITIVE_INFINITY;

@@ -28,6 +28,7 @@
  */
 
 import * as THREE from 'three/webgpu';
+import { frameRateAdjustedDamping } from './dampingSettle';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import {
@@ -177,6 +178,10 @@ export class NavController {
 
   // ── Camera tween ───────────────────────────────────────────────────────
   private _tween: Tween | null = null;
+  /** The tuned damping factor, before this frame's rate compensation. */
+  private _dampingBase = 0;
+  /** What we last wrote, so a write by anyone else reads as a new tuning. */
+  private _dampingWritten: number | null = null;
 
   // ── Hand tool (pan) — v0.5.5 P1 ────────────────────────────────────────
   /** `?handPan` dev flag, read once at construction (default true). */
@@ -584,6 +589,20 @@ export class NavController {
       // P2 — integrate any in-flight dolly velocity BEFORE `controls.update()`
       // re-reads the pose.
       this._stepWheelDolly(step);
+      // OrbitControls decays the pending delta once per `update()`, so the
+      // glide after a flick was as long as the panel's frame count made it.
+      // Re-solve the tuned factor for this frame's duration; at 60 Hz it is
+      // the same number, so the shipped feel is what gets preserved.
+      //
+      // The base is read back rather than stored at construction: anything
+      // that writes the factor after us is a new tuning and becomes the base,
+      // and `DampingSettleGate.arms` reads `dampingFactor` live, so the
+      // settle threshold follows the same value without being told.
+      if (this._dampingWritten === null || this._controls.dampingFactor !== this._dampingWritten) {
+        this._dampingBase = this._controls.dampingFactor;
+      }
+      this._dampingWritten = frameRateAdjustedDamping(this._dampingBase, step);
+      this._controls.dampingFactor = this._dampingWritten;
       this._controls.update();
       return;
     }

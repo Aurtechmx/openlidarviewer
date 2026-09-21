@@ -207,6 +207,7 @@ export function makeStreamingCommit(
         pendingNodes: queue.pendingCount,
         pendingBytes: queue.pendingBytes,
         committed: res.uploaded,
+        committedBytes: res.uploadedBytes,
       });
       return res;
     },
