@@ -111,13 +111,11 @@ export interface ScanPrecisionInputs {
    * is still the wrong number on a permit. Omitted or all-zero reproduces the
    * unplaced reading exactly, which is every unmounted scan.
    *
-   * NOT YET SUPPLIED IN THE APP. Both production callers — the terrain
-   * runner's `framePrecision` and `streamingScanReport` — omit it, so the
-   * permit still describes the unplaced frame wherever a layer is mounted
-   * away from the project origin. Reaching a layer's offset needs an accessor
-   * the Viewer does not expose; until that lands this parameter is a tested
-   * capability rather than a fix in effect, and saying otherwise would be the
-   * same overclaim this field exists to correct.
+   * Supplied by the terrain runner's `framePrecision` through
+   * `Viewer.layerProjectOffset`. `streamingScanReport` does not, and does not
+   * need to: a streaming scan's buffers are local to its own render origin,
+   * which that caller already passes as the frame origin, so there is no
+   * second placement folded in on top.
    */
   readonly projectOffset?: readonly [number, number, number] | null;
 }

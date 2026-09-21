@@ -216,7 +216,7 @@ describe('lasso end-to-end fold (computeLassoVolume)', () => {
 
   function host(over: Partial<LassoVolumeHost>): LassoVolumeHost {
     return {
-      project: topDown, integrable: [], streamingPositions: [],
+      project: topDown, integrable: [], streamingParts: [],
       wasReduced: () => false, visibilityFor: () => null, worldUp: [0, 0, 1], ...over,
     };
   }

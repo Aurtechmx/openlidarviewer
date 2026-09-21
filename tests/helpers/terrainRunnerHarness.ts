@@ -86,6 +86,8 @@ export function terrainRunnerHarness(opts: {
       sourceUpAxis: 'z' as const,
     }),
     getCloud: () => cloud,
+    // Unplaced: the permit then reads the layer's own frame, as it always did.
+    layerProjectOffset: () => null,
     streamingCloud: null,
     clouds: () => [cloud],
   } as unknown as Viewer;

@@ -9,6 +9,7 @@ function demand(over: Partial<FrameDemandSignals> = {}): { d: FrameDemand; now: 
     nowMs: () => now.ms,
     tweening: () => false,
     streamingBusy: () => false,
+    commitPending: () => false,
     fading: () => false,
     ...over,
   });
@@ -128,5 +129,44 @@ describe('drawn-frame listeners', () => {
     d.dispose();
     d.frameDrawn();
     expect(runs).toBe(0);
+  });
+});
+
+// A decoded node awaiting a metered GPU commit is pending visible work, and
+// the loop must not sleep on it. The scheduler's `queued` and `loading` counts
+// are both zero by then, so `streamingBusy` answers false; fades hid the gap,
+// because a fading node keeps the chain alive on its own. The mobile and
+// low-quality paths turn fades off, and the remaining commits would then drain
+// one pump per 250 ms safety heartbeat instead of one per frame.
+describe('pending GPU commits keep the loop awake', () => {
+  it('needs a frame with no fetch backlog, no fade, no tween and no input', () => {
+    const { d } = demand({ commitPending: () => true });
+    expect(d.needsFrame(0)).toBe(true);
+  });
+
+  it('keeps needing frames until the queue drains, not until a heartbeat', () => {
+    let pending = 3;
+    const { d, now } = demand({ commitPending: () => pending > 0 });
+    // Each frame pumps one entry. Well inside the 250 ms heartbeat, so nothing
+    // here is the heartbeat making progress.
+    for (let frame = 0; frame < 3; frame++) {
+      expect(d.needsFrame(now.ms), `frame ${frame}`).toBe(true);
+      pending--;
+      now.ms += 16;
+    }
+    expect(d.needsFrame(now.ms)).toBe(false);
+  });
+
+  it('is what keeps it awake, not the other signals', () => {
+    // All four false is the sleeping case; only commitPending is flipped.
+    expect(demand({}).d.needsFrame(0)).toBe(false);
+    expect(demand({ commitPending: () => true }).d.needsFrame(0)).toBe(true);
+  });
+
+  it('answers false on the shipped immediate mode, where nothing is ever pending', () => {
+    // `immediate` commits inside the decode, so the store's decoded set is
+    // empty and the loop sleeps exactly as it did before this signal existed.
+    const { d } = demand({ commitPending: () => false });
+    expect(d.needsFrame(0)).toBe(false);
   });
 });

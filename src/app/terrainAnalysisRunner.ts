@@ -587,6 +587,12 @@ export function createTerrainAnalysisRunner(
       cloud: id ? viewer.getCloud(id) : null,
       streaming: viewer.streamingCloud,
       crs: crsService.current(),
+      // The reach the ACCUMULATOR sees. The buffers every measurement reads are
+      // project-local, so a layer mounted away from the project origin
+      // quantises on a coarser grid than its own extent implies, and the permit
+      // described the unplaced frame. Null for an unplaced layer, which is the
+      // previous reading exactly.
+      projectOffset: id ? viewer.layerProjectOffset(id) : null,
     });
   };
 

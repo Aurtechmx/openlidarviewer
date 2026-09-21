@@ -34,6 +34,81 @@ import type {
   Vec2,
 } from './lassoVolume';
 import type { Vec3 } from '../navMath';
+/** A resident streaming node as the lasso walk needs to see it. */
+export interface StreamingLassoPart {
+  /** The node's decoded positions, render-local — which is world for a stream. */
+  readonly positions: Float32Array;
+  /**
+   * What this node currently SHOWS, for a given walk stride. Taken as a
+   * function of the stride because the walk chooses it from the point budget
+   * after the parts are assembled, and `acceptIndex` reads the node's own
+   * buffer rather than the strided copy.
+   */
+  filters(stride: number): SelectionVisibilityFilters | null;
+}
+
+/** A resident node as the parts builder needs to read it. */
+export interface StreamingChunkView {
+  readonly positions: Float32Array;
+  readonly classification?: Uint8Array;
+  readonly intensity?: Uint16Array;
+}
+
+/**
+ * Pair every resident node with the filters that decide what it shows.
+ *
+ * Built here rather than at the call site so the positions and the filters
+ * cannot drift apart: a node's `acceptIndex` reads that node's own
+ * classification, and indexing two lists separately is how one node's points
+ * end up judged by another node's attributes.
+ *
+ * `clipKeep` is applied to the node's RENDER-LOCAL coordinates unchanged. A
+ * streaming mesh sits at the scene origin, so those are the world coordinates
+ * three.js clips against, unlike a static layer, which is source-local plus its
+ * placement and needs the offset folded in first. It is a predicate or null
+ * rather than a box plus a flag, so there is no shape in which a clip is
+ * "enabled" and the test that implements it is missing.
+ */
+export function streamingLassoParts(
+  chunks: ReadonlyArray<StreamingChunkView>,
+  clipKeep: ((x: number, y: number, z: number) => boolean) | null,
+  acceptFor: (chunk: StreamingChunkView) => ((index: number) => boolean) | null,
+): StreamingLassoPart[] {
+  return chunks.map((chunk) => ({
+    positions: chunk.positions,
+    filters: (stride: number) => lassoVisibilityFilters(clipKeep, acceptFor(chunk), stride),
+  }));
+}
+
+/**
+ * Drop the points a layer is not currently showing, from a selection that
+ * carries its projection.
+ *
+ * All four arrays compact together: the depth test reads `indices`,
+ * `screenX`, `screenY` and `depth` by one running offset, so dropping a hidden
+ * point from one alone would pair the survivors with another point's screen
+ * position. In place, so the hot path allocates nothing.
+ */
+function applyVisibility(
+  raw: LassoSelectionWithDepth,
+  positions: Float32Array,
+  filters: SelectionVisibilityFilters | null,
+): LassoSelectionWithDepth {
+  const keep = filters?.keepPoint;
+  const accept = filters?.acceptIndex;
+  if (!keep && !accept) return raw;
+  const { indices, screenX, screenY, depth } = raw;
+  let w = 0;
+  for (let r = 0; r < raw.count; r++) {
+    const pi = indices[r];
+    if (keep && !keep(positions[pi * 3], positions[pi * 3 + 1], positions[pi * 3 + 2])) continue;
+    if (accept && !accept(pi)) continue;
+    indices[w] = pi; screenX[w] = screenX[r]; screenY[w] = screenY[r]; depth[w] = depth[r];
+    w++;
+  }
+  return { indices, screenX, screenY, depth, count: w };
+}
+
 import { describeLassoSelectionBasis, rejectOccluded } from './lassoOcclusion';
 import type { LassoSelectionBasis, OcclusionOutcome } from './lassoOcclusion';
 export type { LassoSelectionBasis } from './lassoOcclusion';
@@ -164,8 +239,21 @@ export interface LassoVolumeHost {
   readonly project: ScreenProjector;
   /** Layers eligible to contribute, already filtered for visibility and lock. */
   readonly integrable: ReadonlyArray<readonly [string, LassoCloudEntry]>;
-  /** Resident streaming node positions, or an empty array when nothing streams. */
-  readonly streamingPositions: ReadonlyArray<Float32Array>;
+  /**
+   * Resident streaming nodes, each paired with the filters that decide what it
+   * SHOWS, or an empty array when nothing streams.
+   *
+   * Positions and filters travel together rather than as two parallel lists,
+   * because the only thing keeping two lists aligned would be the order a map
+   * happened to iterate in.
+   *
+   * A node's positions are render-local, and a streaming mesh sits at the scene
+   * origin, so render-local IS the world frame the clipping planes are given to
+   * three.js in. No offset is re-applied — which is also why this is a separate
+   * entry from {@link visibilityFor}, whose static buffers are source-local
+   * plus placement.
+   */
+  readonly streamingParts: ReadonlyArray<StreamingLassoPart>;
   /** Whether this cloud was voxel-reduced to fit the device budget. */
   wasReduced(cloud: PointCloud): boolean;
   /**
@@ -268,7 +356,7 @@ export function computeLassoVolume(
   // can say "estimated (sampled — n%)".
   let candidatePointCount = 0;
   for (const [, entry] of host.integrable) candidatePointCount += entry.cloud.pointCount;
-  for (const positions of host.streamingPositions) candidatePointCount += positions.length / 3;
+  for (const part of host.streamingParts) candidatePointCount += part.positions.length / 3;
 
   const budget = decideVolumeBudget({
     candidatePointCount,
@@ -298,26 +386,7 @@ export function computeLassoVolume(
     if (raw.count === 0) continue;
     // Hidden points leave before anything is measured or pooled into the depth
     // buffer, so neither the volume nor the occlusion test can see them.
-    // Compacted in place, all four arrays together: the depth test reads
-    // `indices`, `screenX`, `screenY` and `depth` by one running offset, so
-    // dropping a hidden point from one alone would pair the survivors with
-    // another point's screen position.
-    const filters = host.visibilityFor(entry, stride);
-    let sel = raw;
-    if (filters?.keepPoint || filters?.acceptIndex) {
-      const { indices, screenX, screenY, depth } = raw;
-      const keep = filters.keepPoint;
-      const accept = filters.acceptIndex;
-      let w = 0;
-      for (let r = 0; r < raw.count; r++) {
-        const pi = indices[r];
-        if (keep && !keep(positions[pi * 3], positions[pi * 3 + 1], positions[pi * 3 + 2])) continue;
-        if (accept && !accept(pi)) continue;
-        indices[w] = pi; screenX[w] = screenX[r]; screenY[w] = screenY[r]; depth[w] = depth[r];
-        w++;
-      }
-      sel = { indices, screenX, screenY, depth, count: w };
-    }
+    const sel = applyVisibility(raw, positions, host.visibilityFor(entry, stride));
     if (sel.count === 0) continue;
     if (sel.count < raw.count) anyHidden = true;
     if (host.wasReduced(entry.cloud)) anySourceReduced = true;
@@ -328,10 +397,16 @@ export function computeLassoVolume(
   // Streaming clouds contribute to the volume but not to the highlight: the
   // streaming renderer owns its own colour buffers, so per-mesh indexing is a
   // separate piece of work.
-  for (const sourcePositions of host.streamingPositions) {
-    const positions = stride === 1 ? sourcePositions : stridePositions(sourcePositions, stride);
-    const sel = selectByLassoWithDepth({ positions, lasso, project: host.project });
+  for (const part of host.streamingParts) {
+    const positions = stride === 1 ? part.positions : stridePositions(part.positions, stride);
+    const raw = selectByLassoWithDepth({ positions, lasso, project: host.project });
+    if (raw.count === 0) continue;
+    // The same rule the static layers get: a clip box or a class filter that
+    // hides a point hides it from the measurement too. Leaving this out meant a
+    // clip bound the static layers and not a resident stream.
+    const sel = applyVisibility(raw, positions, part.filters(stride));
     if (sel.count === 0) continue;
+    if (sel.count < raw.count) anyHidden = true;
     parts.push({ id: null, positions, sel });
     candidateCount += sel.count;
   }

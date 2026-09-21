@@ -60,6 +60,8 @@ function makeRunner(
     // has no frame to read and the frame carries a null permit — which is what
     // "nothing loaded to measure" means, not "within budget".
     getCloud: () => null,
+    // Unplaced: the permit then reads the layer's own frame, as it always did.
+    layerProjectOffset: () => null,
     streamingCloud: null,
   } as unknown as Viewer;
   const fakePanel = {

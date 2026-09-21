@@ -17,6 +17,8 @@ import type { LassoVolumeHost } from '../src/render/measure/lassoVolumeCompute';
 import { PointCloud } from '../src/model/PointCloud';
 import { selectByLasso, volumeFromLassoWithFootprint } from '../src/render/measure/lassoVolume';
 import { readFileSync } from 'node:fs';
+import { streamingLassoParts } from '../src/render/measure/lassoVolumeCompute';
+import type { SelectionVisibilityFilters } from '../src/render/measure/lassoVolume';
 
 /** Orthographic top-down projector: x,y pass through, z ignored. */
 const topDown = (x: number, y: number): { x: number; y: number } => ({ x, y });
@@ -55,7 +57,7 @@ function host(over: Partial<LassoVolumeHost> = {}): LassoVolumeHost {
   return {
     project: topDown,
     integrable: [],
-    streamingPositions: [],
+    streamingParts: [],
     wasReduced: () => false,
     visibilityFor: () => null,
     worldUp: [0, 0, 1] as [number, number, number],
@@ -117,7 +119,7 @@ describe('computeLassoVolume', () => {
     // from the measurement.
     const h = host({
       integrable: [['layer-1', { cloud: cloud(grid(6, 10, 2)) }]],
-      streamingPositions: [grid(6, 10, 4)],
+      streamingParts: [{ positions: grid(6, 10, 4), filters: () => null }],
     });
     const out = computeLassoVolume({ host: h, lasso: fullBox(10), referencePercentile: 0.05 })!;
     expect(out.selectedCount).toBe(72);
@@ -139,7 +141,7 @@ describe('computeLassoVolume', () => {
     const away = new Float32Array([100, 100, 0, 101, 100, 0, 100, 101, 0]);
     const h = host({
       integrable: [['layer-1', { cloud: cloud(grid(6, 10, 2)) }]],
-      streamingPositions: [away],
+      streamingParts: [{ positions: away, filters: () => null }],
     });
     const out = computeLassoVolume({ host: h, lasso: fullBox(10), referencePercentile: 0.05 })!;
     expect(out.streamingContributed).toBe(false);
@@ -487,5 +489,87 @@ describe('the restriction reaches the surface that shows it', () => {
     const main = src('../src/main.ts');
     expect(main).toMatch(/out\.selectionRestrictedByVisibility\s*\?/);
     expect(main).toMatch(/visible points only/);
+  });
+});
+
+// A clip box bound the static layers and not a resident stream, so a lasso on
+// a streaming scan measured points the clip had removed from the screen.
+//
+// Streaming only joins a combined walk when there are no static clouds, and a
+// streaming mesh sits at the scene origin, so a node's render-local positions
+// ARE the world coordinates three.js clips against. The test asserts that
+// pairing directly: no offset, and the same rule the static side gets.
+describe('a clip binds a resident stream', () => {
+  // A pad at z = 10 with hidden low returns beneath it, as one resident node.
+  const node = (): Float32Array => {
+    const p: number[] = [];
+    for (let r = 0; r < 10; r++) {
+      for (let c = 0; c < 10; c++) { p.push(c, r, 10); p.push(c, r, -40); }
+    }
+    return new Float32Array(p);
+  };
+  const run = (filters: (stride: number) => SelectionVisibilityFilters | null) =>
+    computeLassoVolume({
+      host: host({ streamingParts: [{ positions: node(), filters }] }),
+      lasso: fullBox(9), referencePercentile: 0.05,
+    })!;
+
+  it('excludes the points the clip hides, so they cannot set the reference', () => {
+    const all = run(() => null);
+    const clipped = run(() => ({ keepPoint: (_x, _y, z) => z > -1 }));
+    expect(clipped.selectedCount).toBe(all.selectedCount / 2);
+    expect(all.referenceZ).toBeLessThan(0);
+    expect(clipped.referenceZ).toBeCloseTo(10, 6);
+  });
+
+  it('says the selection was restricted, as it does for a static layer', () => {
+    expect(run(() => ({ keepPoint: (_x, _y, z) => z > -1 })).selectionRestrictedByVisibility).toBe(true);
+    expect(run(() => null).selectionRestrictedByVisibility).toBe(false);
+  });
+
+  it('honours a class filter by the node\'s own index', () => {
+    const half = run(() => ({ acceptIndex: (i) => i % 2 === 0 }));
+    expect(half.selectedCount).toBe(100);
+    expect(half.referenceZ).toBeCloseTo(10, 6);
+  });
+
+  it('changes nothing when the node hides nothing', () => {
+    const plain = run(() => null);
+    const inert = run(() => ({ keepPoint: () => true, acceptIndex: () => true }));
+    expect(inert.selectedCount).toBe(plain.selectedCount);
+    expect(inert.result.fill).toBeCloseTo(plain.result.fill, 9);
+  });
+});
+
+// The builder pairs a node's points with that node's own attributes. Indexing
+// two lists apart is how one node's points get judged by another's classes.
+describe('streamingLassoParts keeps a node with its own filters', () => {
+  const chunkA = { positions: new Float32Array([0, 0, 0]), classification: Uint8Array.from([2]) };
+  const chunkB = { positions: new Float32Array([1, 1, 1]), classification: Uint8Array.from([6]) };
+
+  it('gives each part the accept built from its own chunk', () => {
+    const seen: Uint8Array[] = [];
+    const parts = streamingLassoParts([chunkA, chunkB], null, (c) => {
+      seen.push(c.classification!);
+      return () => true;
+    });
+    parts.forEach((p) => p.filters(1));
+    expect(parts[0].positions).toBe(chunkA.positions);
+    expect(parts[1].positions).toBe(chunkB.positions);
+    expect(seen).toEqual([chunkA.classification, chunkB.classification]);
+  });
+
+  it('passes the clip predicate through rather than a flag it might ignore', () => {
+    // The first shape of this took a box plus an "enabled" flag and defaulted
+    // the predicate to () => true, so the clip compiled and did nothing.
+    const parts = streamingLassoParts([chunkA], (_x, _y, z) => z > 5, () => null);
+    const f = parts[0].filters(1);
+    expect(f?.keepPoint).toBeDefined();
+    expect(f!.keepPoint!(0, 0, 0)).toBe(false);
+    expect(f!.keepPoint!(0, 0, 9)).toBe(true);
+  });
+
+  it('is null when nothing hides anything', () => {
+    expect(streamingLassoParts([chunkA], null, () => null)[0].filters(1)).toBeNull();
   });
 });
