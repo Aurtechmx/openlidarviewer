@@ -35,7 +35,44 @@ export function scalePositions(
 export function positionsInMetres(
   positions: Float32Array | ReadonlyArray<number>,
   scale: LinearUnitScale,
+  /**
+   * Metres per source unit on the VERTICAL axis, and which component that is.
+   *
+   * A compound CRS states the two separately (a metre grid over US-survey-foot
+   * heights), and one scalar across all three components put the height in the
+   * wrong unit: a 2.00 m object stored as 6.562 ft reported 6.56 m, and its
+   * envelope volume 3.281x over. Omitted, or equal to the horizontal factor,
+   * this behaves exactly as before, which is every single-unit scan.
+   */
+  vertical?: { readonly metresPerUnit: number; readonly axis: 0 | 1 | 2 },
 ): Float32Array | ReadonlyArray<number> {
-  if (!scale.known || scale.metresPerUnit === 1) return positions;
-  return scalePositions(positions, scale.metresPerUnit);
+  if (!scale.known) return positions;
+  const h = scale.metresPerUnit;
+  const v = vertical && Number.isFinite(vertical.metresPerUnit) && vertical.metresPerUnit > 0
+    ? vertical.metresPerUnit
+    : h;
+  if (h === 1 && v === 1) return positions;
+  // `!vertical` matters as much as `h === v`: a corrupt horizontal factor makes
+  // `h === v` false even with no vertical argument at all, because NaN equals
+  // nothing including itself — and the anisotropic branch would then read an
+  // axis off `undefined`. Falling back to the single-scalar path keeps the
+  // previous answer for that input exactly (a NaN-scaled copy, which is
+  // visibly broken rather than silently assuming metres).
+  if (h === v || !vertical) return scalePositions(positions, h);
+  return scaleAxes(positions, h, v, vertical.axis);
+}
+
+/**
+ * Copy `positions` with the two horizontal components scaled by `h` and the
+ * component at `upAxis` scaled by `v`.
+ */
+export function scaleAxes(
+  positions: Float32Array | ReadonlyArray<number>,
+  h: number,
+  v: number,
+  upAxis: 0 | 1 | 2,
+): Float32Array {
+  const out = new Float32Array(positions.length);
+  for (let i = 0; i < positions.length; i++) out[i] = positions[i] * (i % 3 === upAxis ? v : h);
+  return out;
 }

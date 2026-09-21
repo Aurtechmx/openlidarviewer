@@ -37,6 +37,8 @@
 import type { Measurement, MeasurementKind } from './types';
 import {
   angleAtVertex,
+  boxFromCorners,
+  boxMetrics,
   distance,
   polygonAreaPlanar,
   polylineLength,
@@ -177,20 +179,25 @@ export function valueForDimension(
         return m.volume.footprintArea;
       }
       if (m.kind === 'box' && p.length >= 2) {
-        // For a box, "area" is the horizontal footprint (width × depth).
-        const dx = Math.abs(p[1][0] - p[0][0]);
-        const dy = Math.abs(p[1][1] - p[0][1]);
-        return dx * dy;
+        // For a box, "area" is the horizontal footprint (width × depth), and
+        // which two edges those are depends on the scan's up-axis. Reading
+        // them off X and Y multiplied one horizontal extent by the HEIGHT on a
+        // Y-up frame, and `DIMENSION_H_POWER.area = 2` then scaled that height
+        // by the horizontal unit factor as well. `boxMetrics` already answers
+        // this correctly, so the chain asks it rather than keeping a second
+        // opinion about which axis points up.
+        const b = boxMetrics(boxFromCorners(p[0], p[1]), worldUp);
+        return b.width * b.depth;
       }
       return null;
 
     case 'volume-fill':
       if (m.kind === 'volume' && m.volume) return m.volume.fill;
       if (m.kind === 'box' && p.length >= 2) {
-        const dx = Math.abs(p[1][0] - p[0][0]);
-        const dy = Math.abs(p[1][1] - p[0][1]);
-        const dz = Math.abs(p[1][2] - p[0][2]);
-        return dx * dy * dz;
+        // The product of three edges does not depend on which one is vertical,
+        // but `k = fH²·fV` does, so this goes through the same up-aware
+        // answer the area branch and the box readout use.
+        return boxMetrics(boxFromCorners(p[0], p[1]), worldUp).volume;
       }
       return null;
 

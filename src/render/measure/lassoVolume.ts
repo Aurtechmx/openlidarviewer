@@ -29,7 +29,13 @@
  */
 
 import type { Vec3 } from '../navMath';
-import { pointInPolygon2D, polygonHorizontalArea, volumeCutFill } from './volume';
+import {
+  horizontalBasis,
+  horizontalProjection,
+  pointInPolygon2D,
+  polygonHorizontalArea,
+  volumeCutFill,
+} from './volume';
 import type { VolumeResult } from './volume';
 
 /** A 2D point in screen space (pixel coordinates). */
@@ -356,6 +362,7 @@ export interface LassoVolumeWithFootprint {
 export function volumeFromLassoWithFootprint(
   input: LassoVolumeInput,
 ): LassoVolumeWithFootprint {
+  const up = input.up ?? [0, 0, 1];
   const n = input.selected.length;
   // Degenerate selection — fewer than 3 points cannot form a footprint.
   if (n < 3) {
@@ -376,7 +383,27 @@ export function volumeFromLassoWithFootprint(
     };
   }
 
-  // Build the XY scatter + Z list from the selected indices.
+  // Build the horizontal scatter + height list from the selected indices.
+  //
+  // Which components those are is a property of the scan, not of the array
+  // order: `up` was declared here and forwarded only to `volumeCutFill`, so
+  // the footprint hull and the reference plane — the two things that DEFINE
+  // the measurement — were built on X/Y and index 2 regardless. On a Y-up
+  // scan that made the footprint a side elevation of the pile and the
+  // reference plane its 5th-percentile NORTHING.
+  // The SAME basis `volumeCutFill` projects the footprint into, so the hull,
+  // the reference plane and the integration all describe one plane. Picking
+  // axis indices by hand here instead put the hull in one pair of components
+  // and the integration's polygon test in another, and the fill came back 0.
+  const basis = horizontalBasis(up);
+  // `horizontalProjection` IS this projection — reimplementing it here would be
+  // a second opinion about which plane the footprint lives in, and the hull
+  // disagreeing with the integration by one component is what produced a zero
+  // fill the first time round.
+  const toPlane = (p: Vec3): Vec2 => horizontalProjection(p, up);
+  const heightOf = (p: Vec3): number => (basis.zAligned
+    ? p[2]
+    : p[0] * basis.u[0] + p[1] * basis.u[1] + p[2] * basis.u[2]);
   const xy: Vec2[] = new Array(n);
   const zs: number[] = new Array(n);
   const subsetPositions = new Float32Array(n * 3);
@@ -385,8 +412,9 @@ export function volumeFromLassoWithFootprint(
     const px = input.positions[idx * 3];
     const py = input.positions[idx * 3 + 1];
     const pz = input.positions[idx * 3 + 2];
-    xy[i] = { x: px, y: py };
-    zs[i] = pz;
+    const p: Vec3 = [px, py, pz];
+    xy[i] = toPlane(p);
+    zs[i] = heightOf(p);
     subsetPositions[i * 3] = px;
     subsetPositions[i * 3 + 1] = py;
     subsetPositions[i * 3 + 2] = pz;
@@ -454,12 +482,20 @@ export function volumeFromLassoWithFootprint(
   // polygon contract. The Z value of the polygon vertices is unused
   // by `volumeCutFill` (it projects to the horizontal plane), so any
   // value works — refZ is the cleanest.
-  const polygon: Vec3[] = hull2D.map((p) => [p.x, p.y, refZ] as Vec3);
+  // Lift back through the same basis. For Z-up this is exactly [x, y, refZ],
+  // byte-for-byte what it always was.
+  const polygon: Vec3[] = hull2D.map((p) => (basis.zAligned
+    ? ([p.x, p.y, refZ] as Vec3)
+    : ([
+      basis.east[0] * p.x + basis.north[0] * p.y + basis.u[0] * refZ,
+      basis.east[1] * p.x + basis.north[1] * p.y + basis.u[1] * refZ,
+      basis.east[2] * p.x + basis.north[2] * p.y + basis.u[2] * refZ,
+    ] as Vec3)));
 
   const result = volumeCutFill({
     polygon,
     referenceZ: refZ,
-    up: input.up ?? [0, 0, 1],
+    up,
     positions: subsetPositions,
   });
   return {

@@ -15,6 +15,8 @@
 import { describe, it, expect } from 'vitest';
 import { deriveVolumeRecord, horizontalSpanXY } from '../src/render/measure/measureDerivations';
 import type { VolumeResult } from '../src/render/measure/volume';
+import { POINT_SAMPLE_VOLUME_METHOD } from '../src/render/measure/volume';
+import { readFileSync } from 'node:fs';
 
 function result(over: Partial<VolumeResult> = {}): VolumeResult {
   return {
@@ -82,5 +84,54 @@ describe('horizontalSpanXY', () => {
   it('is zero when every point is non-finite', () => {
     const p = Float32Array.from([NaN, NaN, 0, Infinity, Infinity, 0]);
     expect(horizontalSpanXY(p)).toBe(0);
+  });
+});
+
+// `VolumeRecord.method` exists because two estimators can answer for one
+// lasso, and its contract says an absent method means UNKNOWN — specifically
+// not the newer area-grid one. The hand-drawn polygon path stamped it and the
+// lasso path did not, so a lasso volume was persisted, exported and reported
+// as an unknown-method figure when the method was never in doubt.
+//
+// The tag is passed IN rather than imported here: reading it from the method
+// registry at this module's top level pulled the whole registry into the eager
+// shell, 7 KiB into a bundle with 3 KiB of headroom. So the guard that matters
+// is not just "it stamps what it is given" but "the live path gives it".
+describe('a derived volume record names its estimator', () => {
+  const result = {
+    fill: 10, cut: 2, net: 8, footprintArea: 20,
+    pointsInPolygon: 500, densityNative: 25, sampleCount: 500,
+    medianAbsDelta: 0.1, validity: 'ok' as const,
+  };
+
+  it('stamps the estimator it is given', () => {
+    const r = deriveVolumeRecord(result as never, 3, POINT_SAMPLE_VOLUME_METHOD);
+    expect(r.method).toBe(POINT_SAMPLE_VOLUME_METHOD);
+    expect(r.method).toMatch(/^olv\.volume\.stockpile@\d+$/);
+  });
+
+  it('leaves the method absent when the caller cannot say', () => {
+    // Absent is the contract's "unknown", and deliberately not the newer
+    // estimator: a figure must not acquire a meaning it was never computed
+    // under.
+    expect(deriveVolumeRecord(result as never, 3).method).toBeUndefined();
+  });
+
+  it('carries the same figures either way', () => {
+    const bare = deriveVolumeRecord(result as never, 3);
+    const named = deriveVolumeRecord(result as never, 3, POINT_SAMPLE_VOLUME_METHOD);
+    expect([bare.fill, bare.cut, bare.net, bare.referenceZ]).toEqual([10, 2, 8, 3]);
+    expect(named.fill).toBe(bare.fill);
+    expect(named.net).toBe(bare.net);
+  });
+
+  it('the live lasso path supplies it', () => {
+    // The Viewer owns the estimator and declares its identity; main.ts passes
+    // that through. If either half is dropped the record silently goes back to
+    // unknown, which no unit test of this function alone would notice.
+    const viewer = readFileSync(new URL('../src/render/Viewer.ts', import.meta.url), 'utf8');
+    expect(viewer).toMatch(/volumeMethod:\s*POINT_SAMPLE_VOLUME_METHOD/);
+    const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+    expect(main).toMatch(/deriveVolumeRecord\([^)]*out\.volumeMethod\)/);
   });
 });

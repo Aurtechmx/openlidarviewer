@@ -27,7 +27,18 @@ import { exportDecision, type ExportDecision } from './evidenceLevel';
 import { EVIDENCE_REGISTRY } from './claimRegistry.generated';
 
 export { EVIDENCE_REGISTRY };
-export type { RegistryEntry } from './claimRegistry.generated';
+/**
+ * `ClaimId` is the generated union of every registered id. The claim lint
+ * matches one call shape — a gate call with a literal id — over `src/` only, so the ~35
+ * literals in export manifests, cross-check reference slots and module
+ * constants were invisible to it: a rename in `claim-register.yaml` would be
+ * caught at the gate calls and missed everywhere else. Typing those literals
+ * turns each into a compile error instead.
+ *
+ * `exportGate` deliberately still takes a plain `string`, because refusing an
+ * UNREGISTERED id is the behaviour it exists for.
+ */
+export type { ClaimId, RegistryEntry } from './claimRegistry.generated';
 
 /**
  * Resolve the export decision for a product by its claim id. An unknown id is

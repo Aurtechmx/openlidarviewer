@@ -60,6 +60,7 @@ function figureAdapter(opts: {
     hasIntensity: () => true,
     hasClassification: () => true,
     hasNormals: () => false,
+    worldUpAxis: () => 2 as const,
     localBoundsAabb: () => [0, 0, 0, 10, 10, 5],
     dataBoundsAabb: () => [0, 0, 0, 10, 10, 5],
     snapshot: async () => {

@@ -244,6 +244,7 @@ import {
   loadTilesetOpen,
   loadActionRegistry,
   loadToolLauncher,
+  loadStockpilePresenter,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -573,13 +574,15 @@ let pendingLassoSave: {
 } | null = null;
 
 const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
-  onCommit: (lasso, basis) => {
+  onCommit: async (lasso, basis) => {
     if (!viewer) return;
+    // The ONE await, before any state is staged, so a second commit cannot stage
+    // its own `pendingLassoSave` mid-flight. It cannot throw: `onCommit` is typed
+    // void, so a rejection would float and cost the measurement, not just the band.
+    const band = await loadStockpilePresenter().catch(() => null);
     // Native→metre factor for the source CRS (feet for a state-plane-feet
-    // cloud). Handed to computeLassoVolume so the stockpile band it returns is
-    // already converted to metres, and reused below for the m³/m² readout.
-    const ctx = crsService.context();
-    const lin = ctx.linearUnitToMetres;
+    // cloud), reused below for the m³/m² readout and the stockpile band.
+    const ctx = crsService.context(), lin = ctx.linearUnitToMetres;
     // Whether that factor is real or an assumed 1: an unknown CRS still yields
     // lin = 1 for display, but its points/m² density is then an assumption the
     // stockpile grade must not claim. One context answers both questions.
@@ -605,14 +608,12 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // same factor the measure tool uses. (The CRS gate below still blocks
     // geographic / unknown; this corrects the projected-feet case it lets
     // through.)
-    const lin2 = lin * lin;
     // Volume factor is linear²·vertical, matching the measure tool and the
     // exports. Plain lin³ applied the HORIZONTAL unit to the vertical axis.
-    const vol = lin2 * vert;
+    const lin2 = lin * lin, vol = lin2 * vert;
     const fillM3 = (out.result.fill * vol).toFixed(2);
     const cutM3 = (out.result.cut * vol).toFixed(2);
-    const netM3 = (out.result.net * vol).toFixed(2);
-    const areaM2 = (out.result.footprintArea * lin2).toFixed(1);
+    const netM3 = (out.result.net * vol).toFixed(2), areaM2 = (out.result.footprintArea * lin2).toFixed(1);
     // Stage the result for the toast's Save button. The polygon3D
     // is the convex-hull footprint at the integration reference
     // plane — saving promotes it to a regular Volume measurement.
@@ -620,13 +621,11 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       out.polygon3D.length >= 3
         ? {
             polygon: out.polygon3D,
-            volume: deriveVolumeRecord(out.result, out.referenceZ),
+            volume: deriveVolumeRecord(out.result, out.referenceZ, out.volumeMethod),
             selectedCount: out.selectedCount,
           }
         : null;
-    const budgetCaption = out.budget.downsample
-      ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%`
-      : '';
+    const budgetCaption = (out.budget.downsample ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%` : '') + (out.selectionRestrictedByVisibility ? ' · visible points only' : '');
     // CRS gate — a geographic or unknown CRS makes a cubic-metre headline
     // misleading: replace the metrics line with the caveat and refuse a Save
     // button (project / confirm a CRS first). safe-explicit-local keeps the
@@ -644,13 +643,13 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       crsVerdict.validity === 'safe-explicit-local'
         ? ' · units assumed metres'
         : '';
-    // `out.stockpileSuffix` is the ` · Stockpile: … ± … (±%) · confidence`
-    // band the Viewer computed over the same sample with a "lowest ground"
-    // base plane — the honest figure cloud viewers report without. Empty when
-    // there's nothing trustworthy to claim (too few points / degenerate).
+    // The ` · Stockpile: … ± … (±%) · confidence` band, re-graded over the same
+    // sample against a "lowest ground" base plane. Empty when there is nothing
+    // trustworthy to claim (too few points / degenerate footprint).
+    const b = out.stockpileInputs, stockpileSuffix = band ? band.stockpileToastSuffix(b.polygon, b.positions, b.lin, b.options) : '';
     showLassoToast(
       `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${out.stockpileSuffix}`,
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stockpileSuffix}`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,
@@ -2373,7 +2372,7 @@ function newObjectPanel(
       // tracing (see FLOORPLAN_GATHER_POINTS).
       floorPlan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
         upAxis: ctx.upAxis,
-        unitToMetres: ctx.unitToMetres, unitKnown: ctx.unitKnown,
+        unitToMetres: ctx.unitToMetres, verticalUnitToMetres: ctx.verticalUnitToMetres, unitKnown: ctx.unitKnown,
         maxSamples: FLOORPLAN_GATHER_POINTS,
         ...FLOORPLAN_OPTIONS,
         // User-tunable wall-snapping + adaptive-band selections from the panel
@@ -2409,7 +2408,7 @@ function newObjectPanel(
     // tracing (see FLOORPLAN_GATHER_POINTS).
     const plan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
       upAxis: ctx.upAxis,
-      unitToMetres: ctx.unitToMetres, unitKnown: ctx.unitKnown,
+      unitToMetres: ctx.unitToMetres, verticalUnitToMetres: ctx.verticalUnitToMetres, unitKnown: ctx.unitKnown,
       maxSamples: FLOORPLAN_GATHER_POINTS,
       ...FLOORPLAN_OPTIONS,
       // User-tunable wall-snapping + adaptive-band selections from the panel
@@ -2855,9 +2854,9 @@ const routeCoordinator = createScanRouteCoordinator({
   },
   frame: {
     linearUnitToMetres: () => crsService.context().linearUnitToMetres,
+    verticalUnitToMetres: () => { const c = crsService.context(); return verticalMetresPerUnit(c, 'horizontal') ?? c.linearUnitToMetres; },
     linearUnitKnown: () => crsService.context().linearUnitKnown,
-    exportTargetId: () => scans.activeExportTargetId(),
-    crsRevision: () => crsService.crsRevision(),
+    exportTargetId: () => scans.activeExportTargetId(), crsRevision: () => crsService.crsRevision(),
     basename: () => lastCloudName,
   },
   verdict: {

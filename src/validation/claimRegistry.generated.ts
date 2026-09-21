@@ -49,3 +49,49 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'ORG-PTX-SETUP-TOPOLOGY': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: false },
   'ORG-PCD-ORGANIZATION': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: false },
 };
+
+/**
+ * Every registered claim id, as a type.
+ *
+ * The ids were plain `string` everywhere, so the ~35 literals that do not sit
+ * inside an `exportGate(...)` call — export manifests, cross-check reference
+ * slots, module constants — were invisible to `lint:claim-register`, whose
+ * regex matches one call shape. A rename in the YAML would have been caught
+ * for the gate calls and missed for the rest. Typed, every one of them is a
+ * compile error instead.
+ */
+export type ClaimId =
+  | 'MEAS-DISTANCE'
+  | 'MEAS-AREA'
+  | 'E57-INGEST'
+  | 'MEAS-HEIGHT'
+  | 'MEAS-ANGLE'
+  | 'MEAS-PROFILE'
+  | 'CRS-UTM-PROJECTION'
+  | 'VOL-POINT-SAMPLE'
+  | 'VOL-STOCKPILE'
+  | 'GROUND-FILTER'
+  | 'DTM'
+  | 'DSM'
+  | 'CHM'
+  | 'CONTOURS'
+  | 'CONTOURS-CARTOGRAPHIC'
+  | 'SLOPE-RASTER'
+  | 'ASPECT-RASTER'
+  | 'HILLSHADE'
+  | 'TPI'
+  | 'VRM'
+  | 'HOLDOUT-RMSE'
+  | 'NVA-VVA'
+  | 'QUALITY-LEVEL'
+  | 'CONFIDENCE-OVERLAY'
+  | 'EPOCH-ALIGN'
+  | 'CHANGE-RASTER'
+  | 'CHANGE-VOLUME'
+  | 'UNCERTAINTY-BAND'
+  | 'REPORT-DIGEST'
+  | 'PROVENANCE-INFERENCE'
+  | 'ORG-TOPOLOGY-IDENTITY'
+  | 'ORG-RANGE-GEOMETRIC'
+  | 'ORG-PTX-SETUP-TOPOLOGY'
+  | 'ORG-PCD-ORGANIZATION';

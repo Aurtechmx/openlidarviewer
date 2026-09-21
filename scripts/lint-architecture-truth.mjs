@@ -24,6 +24,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCOPES, scanPositionReads } from './lib/positionReads.mjs';
+import { measureModuleGraph } from './lint-module-graph.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /**
@@ -316,6 +317,60 @@ const fact = (name, value) => {
         `${PLAN}: states ${statedFiles} files with direct .positions reads; the tree has `
         + `${files.size} in the plan's scope (${PLAN_SCOPE.label}).`,
       );
+    }
+  }
+}
+
+// ── Fact 9: module-graph facts a CURRENT release document states in prose ───
+// The release documents describe the architecture in sentences — "across 886
+// modules", "fan-out is 112 for the shell, 76 for the renderer" — and no lint
+// read those sentences. `lint:release-truth` checks the monolith LINE counts
+// and `lint:module-graph` checks the graph against its own baseline, so a
+// document could sit three numbers out of date with every check green. It did:
+// KNOWN_LIMITATIONS_v0.7.0-alpha.1 stated 843 modules against a tree of 886,
+// a renderer fan-out of 77 against 76, and an eager bundle of 805 KiB.
+//
+// Scope is deliberately the CURRENT alpha's documents only. A shipped v0.6.x
+// document describes the tree as it was and must not be "corrected" into
+// describing a tree it never saw.
+{
+  const CURRENT_DOCS = [
+    'docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md',
+    'docs/releases/RELEASE_NOTES_v0.7.0-alpha.1.md',
+    'docs/releases/VALIDATION_REPORT_v0.7.0-alpha.1.md',
+  ].filter((f) => existsSync(resolve(ROOT, f)));
+
+  const measurement = measureModuleGraph();
+  const modules = measurement.graph.size;
+  const fanOutOf = (f) => (measurement.fanOut.get(f) ?? measurement.watchFanOut.get(f))?.runtime ?? null;
+  const shell = fanOutOf('src/main.ts');
+  const renderer = fanOutOf('src/render/Viewer.ts');
+  fact('module-graph modules', modules);
+  fact('main.ts runtime fan-out', shell);
+  fact('Viewer.ts runtime fan-out', renderer);
+
+  for (const doc of CURRENT_DOCS) {
+    const text = read(doc).replace(/\s+/g, ' ');
+
+    const mods = text.match(/across\s+([\d,]+)\s+modules\b/i);
+    if (mods && Number(mods[1].replace(/,/g, '')) !== modules) {
+      problems.push(
+        `${doc}: states "across ${mods[1]} modules"; the module graph scans ${modules}. `
+        + 'Run "npm run lint:module-graph" for the live figure.',
+      );
+    }
+
+    // "Fan-out is 112 for the shell, 76 for the renderer" — both in one
+    // sentence, so one regex settles both and a half-corrected sentence
+    // cannot pass.
+    const fo = text.match(/fan-out\s+is\s+(\d+)\s+for\s+the\s+shell,\s+(\d+)\s+for\s+the\s+renderer/i);
+    if (fo) {
+      if (shell !== null && Number(fo[1]) !== shell) {
+        problems.push(`${doc}: states the shell's runtime fan-out as ${fo[1]}; the tree has ${shell}.`);
+      }
+      if (renderer !== null && Number(fo[2]) !== renderer) {
+        problems.push(`${doc}: states the renderer's runtime fan-out as ${fo[2]}; the tree has ${renderer}.`);
+      }
     }
   }
 }

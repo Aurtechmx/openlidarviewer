@@ -128,6 +128,17 @@ export interface StockpileAreaGridResult {
   /** supportedArea / polygonArea, 0..1. */
   readonly supportFraction: number;
   /**
+   * Supported area whose surface rests on a SINGLE return, m².
+   *
+   * Such a cell has no estimable spread — `nmad` answers 0 below two values,
+   * and that 0 means "not measurable", not "no scatter". It therefore adds
+   * area and volume while adding nothing to {@link surfaceTermM3}. Reported so
+   * a caller can say how much of the figure stands on one point each.
+   */
+  readonly singleReturnAreaM2: number;
+  /** singleReturnArea / supportedArea, 0..1. */
+  readonly singleReturnFraction: number;
+  /**
    * Coverage verdict from the support fraction:
    *   'measured'  — high coverage, the headline volume stands;
    *   'preview'   — moderate gaps, treat as low-confidence;
@@ -339,17 +350,28 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
     cellSizeM: input.cellSizeM ?? maxCell, cellSizeDerived: input.cellSizeM == null,
     polygonAreaM2: polyAreaSrc * unit * unit,
     supportedAreaM2: 0, unobservedAreaM2: polyAreaSrc * unit * unit, supportFraction: 0,
+    singleReturnAreaM2: 0, singleReturnFraction: 0,
     coverage: 'refused', uncertaintyModel: 'incomplete', surfaceTermM3: 0, cells: [],
   });
   if (!(polyAreaSrc > 0) || !Number.isFinite(xmin)) return emptyResult();
 
   let cell = input.cellSizeM ?? deriveCellSize(polyAreaSrc, input.points.length, minCell, maxCell);
   const cellDerived = input.cellSizeM == null;
+  // A caller-supplied cell size of zero is not nullish, so it survived the
+  // `??` above and then made the coarsening loop below multiply zero by two
+  // forever. A size that is not a positive finite number describes no grid.
+  if (!(cell > 0) || !Number.isFinite(cell)) return emptyResult();
   // Coarsen deterministically if the grid would exceed the cell budget.
   const spanX = xmax - xmin;
   const spanY = ymax - ymin;
   const cellsAt = (c: number): number => (Math.ceil(spanX / c) + 1) * (Math.ceil(spanY / c) + 1);
-  while (cell < maxCell && cellsAt(cell) > maxCells) cell *= 2;
+  // The budget is a memory bound and `maxCell` is a resolution preference, so
+  // the budget wins. Guarding the loop with `cell < maxCell` defeated it in
+  // exactly the case it exists for: `deriveCellSize` already clamps to
+  // `maxCell`, so on a large footprint the loop never ran and the grid
+  // allocated the full `nx*ny` — 16 million cells on a 200 km square, on the
+  // main thread. Coarsening past the preferred maximum is the lesser answer.
+  while (cellsAt(cell) > maxCells) cell *= 2;
 
   const nx = Math.max(1, Math.ceil(spanX / cell));
   const ny = Math.max(1, Math.ceil(spanY / cell));
@@ -372,6 +394,7 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
   let fillSrc = 0;
   let cutSrc = 0;
   let supportedAreaSrc = 0;
+  let singleReturnAreaSrc = 0;
   let surfaceVarM6 = 0; // Σ (A_c·σ_c)² in metre units, for the surface term.
 
   for (let iy = 0; iy < ny; iy++) {
@@ -401,6 +424,19 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
       if (dz >= 0) fillSrc += areaSrc * dz;
       else cutSrc += areaSrc * -dz;
       supportedAreaSrc += areaSrc;
+      // A cell holding ONE return has no spread to estimate: `nmad` answers 0
+      // for fewer than two values, and 0 is not "no scatter", it is "not
+      // measurable". Such a cell takes that single z as its surface, claims
+      // the whole cell's area at that height, and contributes exactly nothing
+      // to the surface term — so one bird or powerline return can add real
+      // volume with no uncertainty attached to it at all. Nothing about the
+      // answer changes here: the volume, the support fraction and the coverage
+      // verdict are exactly what they were. What is added is the ACCOUNTING —
+      // how much of the supported area rests on one return each — so a caller
+      // can say it. Demoting such a footprint was tried and reverted: a
+      // thinly sampled half of a pile is the density gradient this method
+      // exists to be invariant to, and a test said so.
+      if (hs.length < 2) singleReturnAreaSrc += areaSrc;
       // Surface-term variance: (A_c[m²]·σ_c[m])², σ_c = spread/√support (SEM).
       const aM2 = areaSrc * unit * unit;
       const sigmaM = (spread * unit) / Math.sqrt(hs.length);
@@ -411,7 +447,16 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
 
   const polygonAreaM2 = polyAreaSrc * unit * unit;
   const supportedAreaM2 = supportedAreaSrc * unit * unit;
+  const singleReturnAreaM2 = singleReturnAreaSrc * unit * unit;
+  const singleReturnFraction = supportedAreaM2 > 0 ? Math.min(1, singleReturnAreaM2 / supportedAreaM2) : 0;
   const supportFraction = polygonAreaM2 > 0 ? Math.min(1, supportedAreaM2 / polygonAreaM2) : 0;
+
+  // Coverage stays a statement about AREA OBSERVED, deliberately. Demoting a
+  // sparse-but-complete footprint would contradict the property this method
+  // exists for: a density gradient must not move the answer, and a thinly
+  // sampled half of a pile is exactly that gradient. What the single-return
+  // share affects is the UNCERTAINTY, which is reported separately and is
+  // already declared incomplete.
   const coverage: StockpileAreaGridResult['coverage'] =
     supportFraction >= MEASURED_MIN ? 'measured' : supportFraction >= PREVIEW_MIN ? 'preview' : 'refused';
   const unitVol = unit * unit * unit;
@@ -427,6 +472,8 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
     supportedAreaM2,
     unobservedAreaM2: Math.max(0, polygonAreaM2 - supportedAreaM2),
     supportFraction,
+    singleReturnAreaM2,
+    singleReturnFraction,
     coverage,
     uncertaintyModel: 'incomplete',
     surfaceTermM3: Math.sqrt(surfaceVarM6),

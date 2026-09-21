@@ -295,3 +295,56 @@ describe('convertCloud — mesh up-axis is DETECTED, then normalised', () => {
     expect(new TextDecoder().decode(out.file!.bytes).trim()).toBe('3.000 5.000 7.000');
   });
 });
+
+// The legacy encoding drops two different things, and only one of them said
+// so. A class above 31 wraps into another valid class, and that has been
+// warned about for a while. The extended overlap FLAG has nowhere to go in the
+// legacy byte either — `writeLas` composes only the synthetic, key-point and
+// withheld bits — and that loss went out silently. `lasSemantics` has
+// described it precisely since it was written (`inspectLegacyConversion` /
+// `describeLoss`) and had no caller anywhere in `src/`: the sentence existed
+// and never reached a user.
+describe('a legacy LAS write says what it drops', () => {
+  const flagged = (flags: number[]): PointCloud => new PointCloud({
+    positions: Float32Array.from([0, 0, 0, 10, 20, 1, 30, 40, 2]),
+    origin: [500000, 4000000, 100],
+    sourceFormat: 'las',
+    name: 'survey.las',
+    classification: Uint8Array.from([2, 2, 2]),
+    classificationFlags: Uint8Array.from(flags),
+  } as never);
+
+  const warnings = (c: PointCloud): string[] =>
+    convertCloud(c, { format: 'las' }).report.log
+      .filter((l) => l.level === 'warn')
+      .map((l) => l.message);
+
+  it('warns that the overlap flag cannot be recorded, and counts the points', () => {
+    // 0x8 is the extended overlap bit; two of the three carry it.
+    const w = warnings(flagged([0x8, 0x8, 0]));
+    const overlap = w.find((m) => /overlap/i.test(m));
+    expect(overlap, w.join(' | ')).toBeDefined();
+    expect(overlap).toMatch(/2 points/);
+    expect(overlap).toMatch(/no legacy representation/i);
+    expect(overlap).toMatch(/1\.4/);
+  });
+
+  it('says nothing when no point carries the flag', () => {
+    expect(warnings(flagged([0, 0, 0])).filter((m) => /overlap/i.test(m))).toHaveLength(0);
+  });
+
+  it('reports the class wrap and the flag loss independently', () => {
+    // Both losses at once: a class above 31 AND an overlap flag.
+    const both = new PointCloud({
+      positions: Float32Array.from([0, 0, 0, 10, 20, 1, 30, 40, 2]),
+      origin: [500000, 4000000, 100],
+      sourceFormat: 'las',
+      name: 'survey.las',
+      classification: Uint8Array.from([64, 2, 2]),
+      classificationFlags: Uint8Array.from([0, 0x8, 0]),
+    } as never);
+    const w = warnings(both);
+    expect(w.some((m) => /5-bit/.test(m))).toBe(true);
+    expect(w.some((m) => /overlap/i.test(m))).toBe(true);
+  });
+});

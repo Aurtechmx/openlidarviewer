@@ -78,6 +78,12 @@ export interface ExportAdapterHost {
   clouds(): ReadonlyMap<string, ExportAdapterCloud>;
   streaming(): ExportAdapterStreaming | null;
   /**
+   * Which component of the render frame points UP: 2 for survey sources, 1 for
+   * a Y-up mesh (PLY / OBJ / GLB). Omitted in the pure-adapter tests, where 2
+   * reproduces the previous behaviour exactly.
+   */
+  worldUpAxis?: () => 0 | 1 | 2;
+  /**
    * The RESOLVED CRS for a static cloud (CRS authority, override applied), or
    * omitted when the host wires no resolver — then the adapter falls back to the
    * cloud's declared metadata. Wiring this is what stops a rejected/local CRS
@@ -499,6 +505,9 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       const streaming = host.streaming();
       if (streaming) return streaming.cloud.dataBounds();
       return this.localBoundsAabb();
+    },
+    worldUpAxis(): 0 | 1 | 2 {
+      return host.worldUpAxis?.() ?? 2;
     },
     localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
       // Streaming first — it has authoritative bounds from the COPC header.

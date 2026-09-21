@@ -809,6 +809,11 @@ export class AnalysePanel {
           // The RESOLVED frame, so a user CRS correction reaches the metric
           // twins and the provenance label instead of the file's declaration.
           unitToMetres: fctx.resolvedUnitToMetres,
+          // A conductor's sag and fit residual are VERTICAL magnitudes. A
+          // compound CRS states the vertical unit separately, and scaling them
+          // by the horizontal factor printed a true 1.50 m sag as 4.92 m beside
+          // a span that was correct, which made the pair look self-consistent.
+          verticalUnitToMetres: fctx.verticalUnitToMetres ?? undefined,
           crsLabel: fctx.resolvedCrsLabel ?? null,
           // X/Y is the horizontal plane only in a Z-up frame; the extraction's
           // 2D coordinates go to a mapper with that contract.

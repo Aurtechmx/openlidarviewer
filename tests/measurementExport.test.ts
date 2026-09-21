@@ -319,3 +319,94 @@ describe('unverified units caveat (M1)', () => {
     expect(unverified).toMatch(/units-unverified/);
   });
 });
+
+// A CSV or GeoJSON holds mixed kinds, and one hardcoded `MEAS-DISTANCE`
+// stamped all of them: a profile row carried the distance claim's exploratory
+// verdict although MEAS-PROFILE meets its required level, and a volume row was
+// stamped with a claim that never evaluated a volume.
+describe('the evidence stamp names the claim behind each figure', () => {
+  const ctx = {
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    up: [0, 0, 1] as [number, number, number],
+    unitToMetres: 1,
+    verticalUnitToMetres: 1,
+    crsName: 'EPSG:26913',
+    geographic: false,
+    unitsVerified: true,
+  } as never;
+  const dist = { id: 'd', kind: 'distance', name: 'd', points: [[0, 0, 0], [3, 0, 0]] } as never;
+  const prof = { id: 'p', kind: 'profile', name: 'p', points: [[0, 0, 0], [3, 0, 1]] } as never;
+
+  it('gives a profile row a different verdict from a distance row', () => {
+    const csv = measurementsToCsv([dist, prof], ctx);
+    const [, dRow, pRow] = csv.split('\n');
+    expect(dRow).not.toBe(pRow);
+    // MEAS-PROFILE meets its required level; MEAS-DISTANCE does not.
+    expect(pRow).toMatch(/validated/i);
+    expect(dRow).toMatch(/exploratory/i);
+  });
+
+  it('names every claim a mixed collection draws on, once each', () => {
+    const note = JSON.parse(measurementsToGeoJSON([dist, prof, dist], ctx)).evidence as string;
+    expect(note).toContain('MEAS-DISTANCE');
+    expect(note).toContain('MEAS-PROFILE');
+    expect(note.match(/MEAS-DISTANCE/g)).toHaveLength(1);
+  });
+});
+
+// Deriving the stamp from the kinds present meant an EMPTY collection produced
+// an empty string, where a reader expects a statement. A collection with
+// nothing in it makes no claim, so the member is absent rather than blank.
+describe('an empty collection carries no verdict', () => {
+  const emptyCtx = (unitsVerified: boolean): never => ({
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    up: [0, 0, 1] as [number, number, number],
+    unitToMetres: 1, verticalUnitToMetres: 1,
+    crsName: 'EPSG:26913', geographic: false, unitsVerified,
+  }) as never;
+
+  it('omits the evidence member rather than writing an empty one', () => {
+    const fc = JSON.parse(measurementsToGeoJSON([], emptyCtx(true)));
+    expect(fc.features).toHaveLength(0);
+    expect('evidence' in fc).toBe(false);
+  });
+
+  it('still carries the units caveat when there is one to carry', () => {
+    const fc = JSON.parse(measurementsToGeoJSON([], emptyCtx(false)));
+    expect(fc.evidence).toMatch(/units unverified/i);
+  });
+});
+
+
+// The claim stamp's order is part of a provenance record, so it must be the
+// same on every machine. Sonar flags a bare `.sort()` and suggests
+// `localeCompare` — which would be the wrong fix here, because it is
+// locale-dependent and would let the same measurement set stamp differently
+// under a different locale.
+describe('the claim stamp orders the same way everywhere', () => {
+  const ctx = {
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    up: [0, 0, 1] as [number, number, number],
+    unitToMetres: 1, verticalUnitToMetres: 1,
+    crsName: 'EPSG:26913', geographic: false, unitsVerified: true,
+  } as never;
+  const m = (id: string, kind: string) =>
+    ({ id, kind, name: id, points: [[0, 0, 0], [1, 0, 0], [1, 1, 0]] }) as never;
+
+  it('does not depend on the order the measurements were placed in', () => {
+    const forward = [m('a', 'volume'), m('b', 'area'), m('c', 'distance'), m('d', 'profile')];
+    const reversed = [...forward].reverse();
+    const a = JSON.parse(measurementsToGeoJSON(forward, ctx)).evidence as string;
+    const b = JSON.parse(measurementsToGeoJSON(reversed, ctx)).evidence as string;
+    expect(b).toBe(a);
+  });
+
+  it('puts the ids in code-unit order, which no locale can change', () => {
+    const note = JSON.parse(
+      measurementsToGeoJSON([m('v', 'volume'), m('d', 'distance'), m('a', 'area')], ctx),
+    ).evidence as string;
+    const ids = [...note.matchAll(/\b([A-Z][A-Z0-9-]+):/g)].map((x) => x[1]);
+    expect(ids).toEqual([...ids].sort((x, y) => (x < y ? -1 : x > y ? 1 : 0)));
+    expect(ids).toEqual(['MEAS-AREA', 'MEAS-DISTANCE', 'VOL-POINT-SAMPLE']);
+  });
+});

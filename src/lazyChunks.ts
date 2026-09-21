@@ -542,6 +542,18 @@ export const loadRangeWorkbenchMount = () => import('./ui/rangeWorkbenchMount');
 /** The feature-candidate review surface (building footprints, conductor fits). */
 export const loadFeatureCandidatesMount = () => import('./ui/featureCandidatesMount');
 
+/**
+ * The stockpile estimator behind the lasso toast's ` · Stockpile: …` band.
+ *
+ * `Viewer.computeLassoVolume` used to produce that band itself, which put the
+ * area-grid integrator, the presenter and the uncertainty model in the
+ * eagerly-loaded Viewer chunk to serve a line that cannot appear until someone
+ * draws a lasso. The Viewer now returns the ingredients and the toast loads
+ * this when it has a band to show: 14 KiB off the Viewer chunk, fetched once,
+ * on the first lasso of a session.
+ */
+export const loadStockpilePresenter = () => import('./render/measure/stockpilePresenter');
+
 /** The findings-ledger panel + its session store, kept out of the index bundle. */
 export const loadFindingsPanel = () => import('./ui/findingsPanel');
 export const loadSessionFindings = () => import('./render/measure/sessionFindings');

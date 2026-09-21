@@ -16,6 +16,7 @@ import { computeLassoVolume, stridePositions } from '../src/render/measure/lasso
 import type { LassoVolumeHost } from '../src/render/measure/lassoVolumeCompute';
 import { PointCloud } from '../src/model/PointCloud';
 import { selectByLasso, volumeFromLassoWithFootprint } from '../src/render/measure/lassoVolume';
+import { readFileSync } from 'node:fs';
 
 /** Orthographic top-down projector: x,y pass through, z ignored. */
 const topDown = (x: number, y: number): { x: number; y: number } => ({ x, y });
@@ -56,6 +57,8 @@ function host(over: Partial<LassoVolumeHost> = {}): LassoVolumeHost {
     integrable: [],
     streamingPositions: [],
     wasReduced: () => false,
+    visibilityFor: () => null,
+    worldUp: [0, 0, 1] as [number, number, number],
     ...over,
   };
 }
@@ -147,6 +150,8 @@ describe('computeLassoVolume', () => {
     const h = host({
       integrable: [['layer-1', { cloud: reduced }]],
       wasReduced: (c) => c === reduced,
+      visibilityFor: () => null,
+      worldUp: [0, 0, 1] as [number, number, number],
     });
     const out = computeLassoVolume({ host: h, lasso: fullBox(10), referencePercentile: 0.05 })!;
     expect(out.anySourceReduced).toBe(true);
@@ -157,6 +162,8 @@ describe('computeLassoVolume', () => {
     const h = host({
       integrable: [['layer-1', { cloud: reduced }]],
       wasReduced: (c) => c === reduced,
+      visibilityFor: () => null,
+      worldUp: [0, 0, 1] as [number, number, number],
     });
     // Lasso well away from the grid: nothing selected, so no caveat to carry.
     const away = [
@@ -320,5 +327,165 @@ describe('computeLassoVolume — selection basis', () => {
     })!;
     expect(out.selectedCount).toBe(24 * 24 * 2);
     expect(out.selectionBasis.effective).toBe('through-surfaces');
+  });
+});
+
+// A measurement must not be taken over points the user cannot see. The
+// reclassify path has enforced this since the reclassify-invisible-points
+// finding, on the grounds that an EDIT must not rewrite invisible points; a
+// measurement is a claim about the scene on screen, so the case is stronger.
+describe('hidden points do not enter the measurement', () => {
+  // A flat pad at z = 10 with a deep pit of low returns beneath it. Clipping
+  // the pit away is the "isolate the pile from the road cut behind it" case.
+  function padOverPit(): Float32Array {
+    const p: number[] = [];
+    for (let r = 0; r < 20; r++) {
+      for (let c = 0; c < 20; c++) {
+        p.push(c, r, 10);       // the pad the viewer is looking at
+        p.push(c, r, -40);      // hidden low returns
+      }
+    }
+    return new Float32Array(p);
+  }
+  const pad = cloud(padOverPit());
+
+  it('excludes points the clip box hides, so they cannot set the reference', () => {
+    const all = computeLassoVolume({
+      host: host({ integrable: [['a', { cloud: pad }]] }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    const visibleOnly = computeLassoVolume({
+      host: host({
+        integrable: [['a', { cloud: pad }]],
+        visibilityFor: () => ({ keepPoint: (_x, _y, z) => z > -1 }),
+      }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    // The hidden returns halve the candidate count and drag the reference
+    // plane 50 units down, which is the inflation this closes.
+    expect(visibleOnly.selectedCount).toBe(all.selectedCount / 2);
+    expect(all.referenceZ).toBeLessThan(0);
+    expect(visibleOnly.referenceZ).toBeCloseTo(10, 6);
+    expect(visibleOnly.result.fill).toBeLessThan(all.result.fill);
+  });
+
+  it('excludes points a class filter hides, by the cloud index', () => {
+    const half = computeLassoVolume({
+      host: host({
+        integrable: [['a', { cloud: pad }]],
+        // Every other point, in the cloud's own index space.
+        visibilityFor: () => ({ acceptIndex: (i) => i % 2 === 0 }),
+      }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    expect(half.selectedCount).toBe(400);
+    expect(half.referenceZ).toBeCloseTo(10, 6);
+  });
+
+  it('says so when the selection was restricted', () => {
+    const restricted = computeLassoVolume({
+      host: host({
+        integrable: [['a', { cloud: pad }]],
+        visibilityFor: () => ({ keepPoint: (_x, _y, z) => z > -1 }),
+      }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    const unrestricted = computeLassoVolume({
+      host: host({ integrable: [['a', { cloud: pad }]] }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    expect(restricted.selectionRestrictedByVisibility).toBe(true);
+    expect(unrestricted.selectionRestrictedByVisibility).toBe(false);
+  });
+
+  it('a filter that hides nothing changes no figure', () => {
+    const plain = computeLassoVolume({
+      host: host({ integrable: [['a', { cloud: pad }]] }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    const filtered = computeLassoVolume({
+      host: host({
+        integrable: [['a', { cloud: pad }]],
+        visibilityFor: () => ({ keepPoint: () => true, acceptIndex: () => true }),
+      }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    expect(filtered.selectedCount).toBe(plain.selectedCount);
+    expect(filtered.result.fill).toBeCloseTo(plain.result.fill, 9);
+    expect(filtered.selectionRestrictedByVisibility).toBe(false);
+  });
+});
+
+// The footprint hull and the reference plane DEFINE the measurement, and both
+// were built on X/Y and index 2 whatever the scan's up axis was. `up` was
+// declared and forwarded only to the cut/fill integration.
+describe('the footprint follows the up axis', () => {
+  // A Y-up pile: 20x20 in x/z, height in y.
+  function yUpPile(): Float32Array {
+    const p: number[] = [];
+    for (let a = 0; a < 20; a++) {
+      for (let b = 0; b < 20; b++) {
+        const tall = Math.hypot(a - 10, b - 10) < 5;
+        p.push(a, tall ? 4 : 0, b);
+      }
+    }
+    return new Float32Array(p);
+  }
+  const pile = cloud(yUpPile());
+
+  it('reads the height off the up axis rather than off index 2', () => {
+    const yUp = computeLassoVolume({
+      host: host({ integrable: [['a', { cloud: pile }]], worldUp: [0, 1, 0] }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    // The reference plane is the 5th percentile of HEIGHT, which is the flat
+    // ground at 0 — not the 5th percentile of a horizontal coordinate.
+    expect(yUp.referenceZ).toBeCloseTo(0, 6);
+    expect(yUp.result.fill).toBeGreaterThan(0);
+  });
+
+  it('gets a different answer when told the wrong axis, so this is not decoration', () => {
+    const asIfZUp = computeLassoVolume({
+      host: host({ integrable: [['a', { cloud: pile }]] }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    const yUp = computeLassoVolume({
+      host: host({ integrable: [['a', { cloud: pile }]], worldUp: [0, 1, 0] }),
+      lasso: fullBox(19), referencePercentile: 0.05,
+    })!;
+    expect(asIfZUp.result.fill).not.toBeCloseTo(yUp.result.fill, 3);
+  });
+
+  it('is unchanged for a Z-up scan, which is every survey source', () => {
+    const z = cloud(grid(8, 10, 2));
+    const implicit = computeLassoVolume({
+      host: host({ integrable: [['a', { cloud: z }]] }),
+      lasso: fullBox(10), referencePercentile: 0.05,
+    })!;
+    const explicit = computeLassoVolume({
+      host: host({ integrable: [['a', { cloud: z }]], worldUp: [0, 0, 1] }),
+      lasso: fullBox(10), referencePercentile: 0.05,
+    })!;
+    expect(explicit.result.fill).toBe(implicit.result.fill);
+    expect(explicit.referenceZ).toBe(implicit.referenceZ);
+  });
+});
+
+// The flag is only worth computing if a viewer can see it. It was returned by
+// the walk and dropped at the Viewer boundary, so hidden points were excluded
+// from the volume with nothing on screen saying so — the opposite of what the
+// field is for.
+describe('the restriction reaches the surface that shows it', () => {
+  const src = (p: string): string => readFileSync(new URL(p, import.meta.url), 'utf8');
+
+  it('the Viewer passes it out of the walk', () => {
+    expect(src('../src/render/Viewer.ts'))
+      .toMatch(/selectionRestrictedByVisibility:\s*out\.selectionRestrictedByVisibility/);
+  });
+
+  it('the toast says so when it is set', () => {
+    const main = src('../src/main.ts');
+    expect(main).toMatch(/out\.selectionRestrictedByVisibility\s*\?/);
+    expect(main).toMatch(/visible points only/);
   });
 });

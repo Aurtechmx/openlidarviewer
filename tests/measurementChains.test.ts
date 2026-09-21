@@ -15,6 +15,8 @@ import {
   valueForDimension,
 } from '../src/render/measure/measurementChains';
 import type { Measurement, MeasurementKind } from '../src/render/measure/types';
+import { boxFromCorners, boxMetrics } from '../src/render/measure/geometry';
+import type { Vec3 } from '../src/render/navMath';
 
 let _id = 0;
 function freshId(): string {
@@ -358,5 +360,49 @@ describe('aggregate through the CRS unit factor (v0.4.5, B2)', () => {
   it('the factor defaults to 1 — pre-B2 call sites are unchanged', () => {
     const r = aggregate([distanceM([0, 0, 0], [10, 0, 0])], 'sum', 'length');
     expect(r.value).toBeCloseTo(10, 12);
+  });
+});
+
+// A box's footprint is the two edges that are not vertical, and which two
+// those are is a property of the scan rather than of the axis order. The
+// branch read X and Y whatever `worldUp` said, so a Y-up phone-scan mesh had
+// its HEIGHT multiplied into the footprint and then scaled by the horizontal
+// unit factor squared. `boxMetrics` had already been corrected for this class
+// and the chain kept a second opinion. Reverting either box branch to the
+// literal dx·dy turns the Y-up cases below red while leaving Z-up green,
+// which is exactly how the defect hid.
+describe('a box footprint follows the up-axis', () => {
+  const corners: [[number, number, number], [number, number, number]] =
+    [[0, 0, 0], [10, 2, 5]];
+  const box: Measurement = { id: 'bu', kind: 'box', name: 'b', points: corners };
+
+  it('multiplies the two horizontal edges, not whichever two come first', () => {
+    // Z-up: the 10 and the 2 are horizontal, the 5 is height.
+    expect(valueForDimension(box, 'area', [0, 0, 1])).toBeCloseTo(20, 9);
+    // Y-up: the 2 is the height now, so the footprint is 10 × 5.
+    expect(valueForDimension(box, 'area', [0, 1, 0])).toBeCloseTo(50, 9);
+    // X-up, for completeness: 2 × 5.
+    expect(valueForDimension(box, 'area', [1, 0, 0])).toBeCloseTo(10, 9);
+  });
+
+  it('agrees with the box readout the panel shows for the same corners', () => {
+    for (const up of [[0, 0, 1], [0, 1, 0], [1, 0, 0]] as Vec3[]) {
+      const b = boxMetrics(boxFromCorners(corners[0], corners[1]), up);
+      expect(valueForDimension(box, 'area', up), String(up)).toBeCloseTo(b.width * b.depth, 9);
+      expect(valueForDimension(box, 'volume-fill', up), String(up)).toBeCloseTo(b.volume, 9);
+    }
+  });
+
+  it('keeps the volume product invariant while its unit split follows up', () => {
+    // The three edges multiply to the same number whichever is vertical…
+    for (const up of [[0, 0, 1], [0, 1, 0], [1, 0, 0]] as Vec3[]) {
+      expect(valueForDimension(box, 'volume-fill', up), String(up)).toBeCloseTo(100, 9);
+    }
+    // …but a compound CRS applies the vertical factor to the vertical edge, so
+    // the two frames must not produce the same scaled volume.
+    const zUp = aggregate([box], 'sum', 'volume-fill', [0, 0, 1], 1, 0.3048);
+    const yUp = aggregate([box], 'sum', 'volume-fill', [0, 1, 0], 1, 0.3048);
+    expect(zUp.value).toBeCloseTo(100 * 0.3048, 9);
+    expect(yUp.value).toBeCloseTo(100 * 0.3048, 9);
   });
 });

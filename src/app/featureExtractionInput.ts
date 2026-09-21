@@ -40,6 +40,12 @@ export interface FeatureExtractionInput {
   readonly buildingGrid: FootprintGrid;
   readonly conductorPoints: readonly Vec3[];
   readonly unit: LinearUnitScale;
+  /**
+   * The VERTICAL axis's scale. Equal to {@link unit} on a single-unit CRS;
+   * on a compound one (metre grid, US-survey-foot heights) the conductor's
+   * sag and fit residual are vertical magnitudes and need this instead.
+   */
+  readonly verticalUnit: LinearUnitScale;
   /** The frame's vertical axis, for the conductor sag/span split. */
   readonly up: Vec3;
   /**
@@ -98,7 +104,16 @@ export function buildFeatureExtractionInput(
    * ABSENT keeps the legacy behaviour for callers with no resolved frame to
    * offer, which still fails closed to unknown when no CRS is declared.
    */
-  unitAuthority?: { readonly metresPerUnit: number | null },
+  unitAuthority?: {
+    readonly metresPerUnit: number | null;
+    /**
+     * The VERTICAL axis's scale, which a compound CRS states separately. Used
+     * for the conductor's sag and fit residual, which are vertical magnitudes;
+     * absent or null means the horizontal factor stands, as on every
+     * single-unit CRS.
+     */
+    readonly verticalMetresPerUnit?: number | null;
+  },
 ): FeatureExtractionInput | null {
   if (!cloud) return null;
   // A derived classification computed under a frame that has since changed is
@@ -114,6 +129,10 @@ export function buildFeatureExtractionInput(
       ? knownUnit(unitAuthority.metresPerUnit)
       : unknownUnit())
     : unitOf(cloud);
+  // Vertical falls back to horizontal, so a caller that knows nothing about
+  // compound units gets exactly the previous answer.
+  const vFactor = unitAuthority?.verticalMetresPerUnit;
+  const verticalUnit = vFactor != null && vFactor > 0 ? knownUnit(vFactor) : unit;
 
   const zUp = isZUpFormat(cloud.sourceFormat);
   // The second horizontal axis by up axis; the first is always x.
@@ -162,6 +181,7 @@ export function buildFeatureExtractionInput(
     buildingGrid,
     conductorPoints,
     unit,
+    verticalUnit,
     up: zUp ? [0, 0, 1] : [0, 1, 0],
     classificationIsDerived: cloud.classificationIsDerived,
   };

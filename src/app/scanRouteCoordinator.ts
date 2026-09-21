@@ -62,6 +62,15 @@ export interface ScanRouteGeometryPort {
 
 export interface ScanRouteFramePort {
   linearUnitToMetres(): number;
+  /**
+   * Metres per source unit on the VERTICAL axis, which a compound CRS states
+   * separately (a metre grid over US-survey-foot heights). Space and object
+   * metrics scaled every axis by the horizontal factor, so a 3.00 m ceiling
+   * stored as 9.843 ft was reported as 9.84 m and a 50 m² room as 492 m³.
+   * Equal to `linearUnitToMetres` on a single-unit CRS, which is every
+   * ordinary scan, so those figures are unchanged.
+   */
+  verticalUnitToMetres(): number;
   linearUnitKnown(): boolean;
   exportTargetId(): string | null;
   crsRevision(): number;
@@ -99,12 +108,17 @@ export interface ScanRouteViewPort {
  * The exact inputs behind the on-screen space or object report, so the panel's
  * export buttons build from the same positions, metrics and unit factor.
  */
+/** The component index each detected up-axis name refers to. */
+const UP_AXIS_INDEX: Readonly<Record<'x' | 'y' | 'z', 0 | 1 | 2>> = { x: 0, y: 1, z: 2 };
+
 export interface SpaceExportContext {
   readonly positions: Float32Array;
   readonly space: SpaceMetrics;
   readonly object: ObjectMetrics | null;
   readonly spaceKind: 'interior' | 'object';
   readonly unitToMetres: number;
+  /** Metres per source unit on the VERTICAL axis; see {@link ScanRouteFramePort}. */
+  readonly verticalUnitToMetres: number;
   readonly unitKnown: boolean;
   readonly targetId: string | null;
   readonly crsRevision: number;
@@ -252,12 +266,14 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
 
     if (plan.showObjectPanel && shape && gathered && routePositions) {
       const unitToMetres = frame.linearUnitToMetres();
+      const verticalUnitToMetres = frame.verticalUnitToMetres();
       const unitKnown = frame.linearUnitKnown();
       const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
       const space = spaceMetrics(routePositions, {
         upAxis: shape.up,
         spaceKind,
         unitToMetres,
+        verticalUnitToMetres,
         unitKnown,
         hasRgb: geometry.hasRgb(),
         sourcePointCount: gathered.totalPoints,
@@ -265,9 +281,13 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
       });
       const object =
         spaceKind === 'object'
-          ? objectMetrics(positionsInMetres(routePositions, resolveLinearUnitScale(unitToMetres, unitKnown)), {
-              sourcePointCount: gathered.totalPoints,
-            })
+          ? objectMetrics(
+              positionsInMetres(routePositions, resolveLinearUnitScale(unitToMetres, unitKnown), {
+                metresPerUnit: verticalUnitToMetres,
+                axis: UP_AXIS_INDEX[shape.up],
+              }),
+              { sourcePointCount: gathered.totalPoints },
+            )
           : null;
       if (spaceKind === 'interior') view.showSpace(space, shape);
       else view.showObject(object, space, shape);
@@ -280,6 +300,7 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
         targetId: frame.exportTargetId(),
         crsRevision: frame.crsRevision(),
         unitToMetres,
+        verticalUnitToMetres,
         unitKnown,
         upAxis: shape.up,
         basename: frame.basename() || 'scan',

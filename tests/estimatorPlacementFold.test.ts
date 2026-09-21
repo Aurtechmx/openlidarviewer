@@ -215,7 +215,10 @@ describe('lasso end-to-end fold (computeLassoVolume)', () => {
   }
 
   function host(over: Partial<LassoVolumeHost>): LassoVolumeHost {
-    return { project: topDown, integrable: [], streamingPositions: [], wasReduced: () => false, ...over };
+    return {
+      project: topDown, integrable: [], streamingPositions: [],
+      wasReduced: () => false, visibilityFor: () => null, worldUp: [0, 0, 1], ...over,
+    };
   }
 
   const box = (minX: number, minY: number, size: number) => [

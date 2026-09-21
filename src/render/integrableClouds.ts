@@ -172,3 +172,18 @@ export function analysisClassification(
   const cls = cloud.classification;
   return cls?.length === positionsLength / 3 ? cls : undefined;
 }
+
+/**
+ * The `[id, entry]` pairs a combined walk may take part in, in map order.
+ *
+ * Hidden and locked layers are skipped: the picker will not place a vertex on
+ * one, so a lasso must not select through it either. Lives here rather than at
+ * the call site so the rule and the predicate it applies stay together.
+ */
+export function integrableEntries<E extends IntegrableEntry>(
+  clouds: ReadonlyMap<string, E>,
+): Array<readonly [string, E]> {
+  const out: Array<readonly [string, E]> = [];
+  for (const [id, entry] of clouds) if (isIntegrable(entry)) out.push([id, entry]);
+  return out;
+}

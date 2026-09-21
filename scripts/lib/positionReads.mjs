@@ -64,6 +64,23 @@ export const SCOPES = {
 const POSITIONS_RE = /\.positions\b/g;
 
 /**
+ * A DESTRUCTURED read: `const { positions } = cloud`, `const { positions,
+ * colors } = cloud`, `const { positions: local } = tile`.
+ *
+ * The dotted pattern above cannot see these, and the gap was not theoretical —
+ * `src/io/loadPnts.ts` documents choosing the destructured spelling precisely
+ * because "the position-access gate counts direct `.positions` reads and is
+ * shrink-only". That reasoning is sound for a decoder's own array, but the
+ * mechanism generalises: a counter keyed on one spelling makes rewriting the
+ * spelling the cheapest way to add a read, and the whole of `src/io/exporters.ts`
+ * sat outside the gate on that technicality.
+ *
+ * The closing `}` must be followed by `=` so an object LITERAL being built
+ * (`{ positions, colors }` as a value) is not counted as a read of one.
+ */
+const DESTRUCTURED_RE = /\{[^{}]*\bpositions\b[^{}]*\}\s*=/g;
+
+/**
  * The direct `.positions` reads on one line.
  *
  * A comment mentioning the field is documentation, not a call site, and
@@ -75,7 +92,8 @@ export function readsOnLine(raw) {
   const line = raw.trim();
   if (line.startsWith('*') || line.startsWith('//') || line.startsWith('/*')) return 0;
   const stripped = raw.replace(/\/\/.*$/, '');
-  return (stripped.match(POSITIONS_RE) ?? []).length;
+  return (stripped.match(POSITIONS_RE) ?? []).length
+    + (stripped.match(DESTRUCTURED_RE) ?? []).length;
 }
 
 /** Total direct `.positions` reads in a file's text. */

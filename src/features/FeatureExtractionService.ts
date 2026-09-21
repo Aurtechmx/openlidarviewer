@@ -153,13 +153,24 @@ export function extractConductorCandidate(
   unit: LinearUnitScale,
   up: Vec3,
   minLinearity = 0.9,
+  /**
+   * The VERTICAL axis's scale, for the sag and the fit residual. Both are
+   * vertical magnitudes; the span is chainage and stays horizontal. Scaling
+   * all three by the horizontal factor printed a true 1.50 m sag as 4.92 m on
+   * a metre/US-survey-foot compound CRS, beside a correct span — which made
+   * the pair look self-consistent. Defaults to `unit`, i.e. every
+   * single-unit CRS is unchanged.
+   */
+  verticalUnit: LinearUnitScale = unit,
 ): ConductorCandidate | null {
   const fit = fitConductor(points, up, minLinearity);
   if (!fit.ok) return null;
-  const toM = (v: number): number | null => {
-    const m = toMetresIfKnown(sourceUnits(v), unit);
+  const inUnit = (v: number, u: LinearUnitScale): number | null => {
+    const m = toMetresIfKnown(sourceUnits(v), u);
     return m === null ? null : raw(m);
   };
+  const toM = (v: number): number | null => inUnit(v, unit);
+  const toVerticalM = (v: number): number | null => inUnit(v, verticalUnit);
   // Identity from the span's midpoint, quantised by a fraction of its own
   // length — scale-free, so it works for a 10 m span and a 400 m one alike.
   let cx = 0;
@@ -179,9 +190,9 @@ export function extractConductorCandidate(
     spanSource: fit.spanSource,
     spanM: toM(fit.spanSource),
     sagSource: fit.sagSource,
-    sagM: toM(fit.sagSource),
+    sagM: toVerticalM(fit.sagSource),
     residualRmsSource: fit.residualRmsSource,
-    residualRmsM: toM(fit.residualRmsSource),
+    residualRmsM: toVerticalM(fit.residualRmsSource),
     pointCount: fit.n,
   };
 }

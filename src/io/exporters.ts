@@ -48,6 +48,7 @@
  */
 
 import type { PointCloud, SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
+import { sourcePositions } from '../model/pointFrames';
 
 /** The export formats this module produces. */
 export type ExportFormat = 'xyz' | 'csv' | 'ply' | 'obj';
@@ -246,7 +247,12 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
   // sourceOrigin does not, so an export stays in the file's real-world frame
   // regardless of project membership. (Today the two coincide — mounting is
   // off — so this is a no-op that stays correct once mounting rebases layers.)
-  const { positions, colors } = cloud;
+  // Through the accessor, not a destructure: the position gate matches
+  // `.positions` and cannot see a destructured binding, so the whole of this
+  // file sat outside it. Finiteness does not depend on frame, but the read
+  // being declared does.
+  const positions = sourcePositions(cloud);
+  const { colors } = cloud;
   const n = cloud.pointCount;
   const omitted = n - finitePointCount(positions, n);
   const lines: string[] = [];
@@ -315,7 +321,12 @@ export function toPly(cloud: PointCloud, resolvedIsGeographic?: boolean): string
   // sourceOrigin does not, so an export stays in the file's real-world frame
   // regardless of project membership. (Today the two coincide — mounting is
   // off — so this is a no-op that stays correct once mounting rebases layers.)
-  const { positions, colors } = cloud;
+  // Through the accessor, not a destructure: the position gate matches
+  // `.positions` and cannot see a destructured binding, so the whole of this
+  // file sat outside it. Finiteness does not depend on frame, but the read
+  // being declared does.
+  const positions = sourcePositions(cloud);
+  const { colors } = cloud;
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
@@ -372,7 +383,12 @@ export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean): string
   // sourceOrigin does not, so an export stays in the file's real-world frame
   // regardless of project membership. (Today the two coincide — mounting is
   // off — so this is a no-op that stays correct once mounting rebases layers.)
-  const { positions, colors } = cloud;
+  // Through the accessor, not a destructure: the position gate matches
+  // `.positions` and cannot see a destructured binding, so the whole of this
+  // file sat outside it. Finiteness does not depend on frame, but the read
+  // being declared does.
+  const positions = sourcePositions(cloud);
+  const { colors } = cloud;
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;

@@ -328,3 +328,114 @@ describe('the stamped method comes from the registry, not a literal', () => {
     expect(expected).toBe(`olv.volume.stockpile-area-grid@${ref.version}`);
   });
 });
+
+// The cell budget is a memory bound, and it was unenforceable for the inputs
+// it names. `deriveCellSize` clamps its answer to `maxCell`, so the coarsening
+// loop's `cell < maxCell` guard was already false on any large footprint and
+// the grid allocated `nx*ny` in full. The toast path is synchronous, so that
+// is a main-thread freeze rather than a coarser answer.
+describe('the cell budget binds on a large footprint', () => {
+  const big = square(200_000); // 200 km on a side, well past DEFAULT_MAX_CELL
+  const pts: AreaGridPoint[] = [
+    { x: 10, y: 10, z: 1 },
+    { x: 100_000, y: 100_000, z: 2 },
+    { x: 199_000, y: 199_000, z: 1 },
+  ];
+
+  it('returns a grid no larger than the budget, rather than 16 million cells', () => {
+    const t0 = Date.now();
+    const r = stockpileAreaGrid({ polygon: big, points: pts, base: flatBase, maxCells: 10_000 });
+    expect(r.cells.length).toBeLessThanOrEqual(10_000);
+    // Not a benchmark, a liveness check: the unbudgeted path took seconds.
+    expect(Date.now() - t0).toBeLessThan(5_000);
+  });
+
+  it('coarsens past the preferred maximum when the budget demands it', () => {
+    const r = stockpileAreaGrid({ polygon: big, points: pts, base: flatBase, maxCells: 1_000 });
+    expect(r.cellSizeM).toBeGreaterThan(50); // DEFAULT_MAX_CELL
+    expect(r.cells.length).toBeLessThanOrEqual(1_000);
+  });
+
+  it('still honours the budget with the default ceiling', () => {
+    const r = stockpileAreaGrid({ polygon: big, points: pts, base: flatBase });
+    expect(r.cells.length).toBeLessThanOrEqual(1_000_000);
+  });
+});
+
+// A cell size of zero is not nullish, so it survived `??` and then drove
+// `cell *= 2` forever. A size that describes no grid is refused.
+describe('a cell size that describes no grid', () => {
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])('refuses %p', (cellSizeM) => {
+    const r = stockpileAreaGrid({ polygon: square(10), points: [{ x: 1, y: 1, z: 1 }], base: flatBase, cellSizeM });
+    expect(r.coverage).toBe('refused');
+    expect(r.fillM3).toBe(0);
+    expect(r.cells).toHaveLength(0);
+  });
+});
+
+// A cell holding ONE return has no spread to estimate. `nmad` answers 0 below
+// two values, and that 0 is "not measurable", not "no scatter" — so such a
+// cell claims its whole area at that one height and contributes exactly
+// nothing to the surface term. One bird or powerline return can therefore add
+// real volume with no uncertainty attached to it anywhere.
+//
+// The volume is deliberately unchanged: demoting a sparse-but-complete
+// footprint would contradict the density-gradient invariance this method
+// exists for. What changes is that the area it applies to is now counted, so
+// a caller can say how much of a figure stands on one point per cell.
+describe('single-return cells are counted, not silently trusted', () => {
+  const flat = (n: number, z: number): AreaGridPoint[] => {
+    const pts: AreaGridPoint[] = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) pts.push({ x: i + 0.5, y: j + 0.5, z });
+    }
+    return pts;
+  };
+
+  it('reports the area whose surface rests on one return', () => {
+    // One point per 1x1 cell over a 10x10 footprint: every cell is single.
+    const r = stockpileAreaGrid({
+      polygon: square(10), points: flat(10, 2), base: flatBase, cellSizeM: 1,
+    });
+    expect(r.supportFraction).toBeCloseTo(1, 6);
+    expect(r.singleReturnFraction).toBeCloseTo(1, 6);
+    expect(r.singleReturnAreaM2).toBeCloseTo(r.supportedAreaM2, 6);
+    // And the uncertainty this leaves unmeasured is visibly nothing.
+    expect(r.surfaceTermM3).toBe(0);
+  });
+
+  it('reports none when every cell holds several returns', () => {
+    const dense: AreaGridPoint[] = [];
+    for (let i = 0; i < 10; i++) {
+      for (let j = 0; j < 10; j++) {
+        for (let k = 0; k < 4; k++) {
+          dense.push({ x: i + 0.25 + (k % 2) * 0.4, y: j + 0.25 + Math.floor(k / 2) * 0.4, z: 2 + k * 0.01 });
+        }
+      }
+    }
+    const r = stockpileAreaGrid({
+      polygon: square(10), points: dense, base: flatBase, cellSizeM: 1,
+    });
+    expect(r.singleReturnFraction).toBe(0);
+    expect(r.singleReturnAreaM2).toBe(0);
+    expect(r.surfaceTermM3).toBeGreaterThan(0);
+  });
+
+  it('leaves the volume and the coverage verdict exactly where they were', () => {
+    // The density-gradient invariance the method exists for: a thinly sampled
+    // footprint is still measured, and still reports the same volume.
+    const r = stockpileAreaGrid({
+      polygon: square(10), points: flat(10, 2), base: flatBase, cellSizeM: 1,
+    });
+    expect(r.coverage).toBe('measured');
+    expect(r.fillM3).toBeCloseTo(100 * 2, 6);
+  });
+
+  it('counts nothing for a refused footprint', () => {
+    const r = stockpileAreaGrid({
+      polygon: square(10), points: [], base: flatBase, cellSizeM: 1,
+    });
+    expect(r.singleReturnAreaM2).toBe(0);
+    expect(r.singleReturnFraction).toBe(0);
+  });
+});

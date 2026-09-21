@@ -44,6 +44,7 @@ import {
 } from '../../terrain/contour/mapSheetLayout';
 import { evidenceNote, evidenceStatus } from '../../validation/exportEvidenceNote';
 import { winAnsiSafe } from '../../winAnsiText';
+import type { ClaimId } from '../../validation/evidenceRegistry';
 
 /**
  * The claim the map sheet stands on (§19). A printed contour map sheet is the
@@ -53,7 +54,7 @@ import { winAnsiSafe } from '../../winAnsiText';
  * deliverable carries the same honest status as the GeoJSON / DXF / DEM exports
  * of the same scan, never reading as a validated survey product.
  */
-export const MAP_SHEET_CLAIM = 'CONTOURS';
+export const MAP_SHEET_CLAIM: ClaimId = 'CONTOURS';
 
 /**
  * The evidence-gate note for the map sheet, DERIVED from the one gate (never

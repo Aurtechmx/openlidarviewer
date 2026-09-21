@@ -270,8 +270,59 @@ export function measurementsToGeoJSON(
   // their required evidence level, so the file carries the exploratory verdict
   // rather than leaving with no gate stamp at all. RFC 7946 permits foreign
   // members on a FeatureCollection, so a reader that ignores it is unaffected.
-  fc.evidence = evidenceNote('MEAS-DISTANCE') + unverifiedUnitsCaveat(ctx.unitsVerified ?? true);
+  // Each kind present gets its own verdict; a mixed file carries them all
+  // rather than one kind's answer standing in for the rest.
+  const claims = claimsPresent(measurements);
+  const evidence =
+    claims.map((c) => `${c}: ${evidenceNote(c)}`).join(' ')
+    + unverifiedUnitsCaveat(ctx.unitsVerified ?? true);
+  // A collection with nothing in it makes no claim, so there is no verdict to
+  // carry — and an `evidence: ""` member would be a field that says nothing
+  // where a reader expects a statement. The key is omitted instead.
+  if (evidence) fc.evidence = evidence;
   return JSON.stringify(fc, null, 2);
+}
+
+/**
+ * The registered claim each measurement kind's headline figure belongs to.
+ *
+ * One hardcoded `MEAS-DISTANCE` stamped every row and every collection, so a
+ * CSV of profiles carried the distance claim's exploratory verdict although
+ * `MEAS-PROFILE` meets its required level, and a CSV of volumes was stamped
+ * with a claim that never evaluated a volume. A record naming the wrong claim
+ * is the same defect as one naming the wrong method.
+ */
+const CLAIM_FOR_KIND: Readonly<Record<Measurement['kind'], string>> = {
+  distance: 'MEAS-DISTANCE',
+  polyline: 'MEAS-DISTANCE',
+  area: 'MEAS-AREA',
+  height: 'MEAS-HEIGHT',
+  angle: 'MEAS-ANGLE',
+  slope: 'MEAS-ANGLE',
+  profile: 'MEAS-PROFILE',
+  box: 'VOL-POINT-SAMPLE',
+  volume: 'VOL-POINT-SAMPLE',
+};
+
+/**
+ * The claims a mixed collection actually draws on, in a stable order so two
+ * exports of the same set produce the same stamp.
+ *
+ * The comparator is explicit, and it is deliberately NOT `localeCompare`.
+ * These ids are stamped into a provenance record, so the order has to be the
+ * same everywhere: `localeCompare` is locale-dependent, and would let the same
+ * measurement set produce a differently ordered stamp on a machine with a
+ * different locale — losing exactly the stability this function exists for.
+ * Code-unit order over an ASCII id set is total, deterministic and machine
+ * independent.
+ */
+function claimsPresent(measurements: readonly Measurement[]): string[] {
+  const seen = new Set<string>();
+  for (const m of measurements) {
+    const c = CLAIM_FOR_KIND[m.kind];
+    if (c) seen.add(c);
+  }
+  return [...seen].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 /**
@@ -352,9 +403,14 @@ export function measurementsToCsv(
   // The gate token, plus a units-unverified marker when the scan has no known
   // scale so a spreadsheet reader sees the same caveat the GeoJSON note carries
   // — the `_m` columns then read as nominal, not confirmed metres (M1).
-  const evidence = unitsKnown
-    ? evidenceStatus('MEAS-DISTANCE')
-    : `${evidenceStatus('MEAS-DISTANCE')}; units-unverified (source render units, not metres)`;
+  // Per ROW, because a CSV holds mixed kinds and one kind's verdict is not
+  // the others'. `MEAS-PROFILE` meets its required level where `MEAS-DISTANCE`
+  // does not, so stamping every row with the distance answer understated one
+  // and misnamed the claim behind the rest.
+  const evidenceFor = (m: Measurement): string => {
+    const status = evidenceStatus(CLAIM_FOR_KIND[m.kind] ?? 'MEAS-DISTANCE');
+    return unitsKnown ? status : `${status}; units-unverified (source render units, not metres)`;
+  };
   for (const m of measurements) {
     const raw = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
     const metrics = unitsKnown ? raw : inSourceUnits(raw);
@@ -364,7 +420,7 @@ export function measurementsToCsv(
       kind: m.kind,
       vertices: m.points.length,
       ...metrics,
-      evidence,
+      evidence: evidenceFor(m),
     };
     rows.push(columns.map((c) => (c in base ? csvCell(base[c]) : '')).join(','));
   }

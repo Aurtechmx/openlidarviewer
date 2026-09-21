@@ -9,6 +9,7 @@
  * out-of-scope resolution.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   resolveExportEvidence,
   type ScopedEvidenceRecord,
@@ -167,5 +168,47 @@ describe('resolveExportEvidence — the one authoritative export-evidence resolv
     );
     // The note must not assert the scoped level.
     expect(provenanceJson(p).evidence).not.toContain('E5');
+  });
+});
+
+// An artifact that resolved NO evidence used to take its exploratory flag from
+// `exportGate('DTM')` — a different claim's verdict standing in for an absent
+// one. DTM is exploratory today, so the stamp was right by luck; promoting it
+// to its required level, which is a one-line edit in `claim-register.yaml` and
+// the stated goal of the E5 programme, would have flipped every undeclared
+// artifact to "validated" on the strength of a claim it does not contain.
+describe('an absent evidence resolution is exploratory on its own terms', () => {
+  it('stamps exploratory when nothing was resolved', () => {
+    const rec = analysisRecordFromProvenance(
+      { evidenceResolution: undefined } as unknown as Parameters<typeof analysisRecordFromProvenance>[0],
+    );
+    expect(rec.evidenceExploratory).toBe(true);
+  });
+
+  it('does not consult the DTM registry row to decide it', () => {
+    // The guarantee, stated as a property of the source rather than of a run:
+    // the expression that produces `evidenceExploratory` no longer names a
+    // claim. If a future edit reintroduces `exportGate('<CLAIM>')` as the
+    // fallback there, the coupling is back and this fails.
+    const src = readFileSync(
+      new URL('../src/terrain/export/exportProvenance.ts', import.meta.url),
+      'utf8',
+    );
+    const line = src
+      .split('\n')
+      .find((l) => l.includes('evidenceExploratory:') && l.includes('evidenceResolution'));
+    expect(line, 'evidenceExploratory assignment not found').toBeDefined();
+    expect(line).not.toMatch(/exportGate\(/);
+    expect(line).toMatch(/\?\?\s*true/);
+  });
+
+  it('still uses a resolution that IS present, either way', () => {
+    for (const exploratoryOnly of [true, false]) {
+      const rec = analysisRecordFromProvenance(
+        { evidenceResolution: { gate: { exploratoryOnly } } } as unknown as
+          Parameters<typeof analysisRecordFromProvenance>[0],
+      );
+      expect(rec.evidenceExploratory).toBe(exploratoryOnly);
+    }
   });
 });

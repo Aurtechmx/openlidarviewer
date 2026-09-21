@@ -46,6 +46,16 @@ export interface WallSliceParams {
   readonly upAxis: Axis;
   /** Scale from source units to metres (default 1 — assume metres). */
   readonly unitToMetres?: number;
+  /**
+   * Scale from source units to metres on the VERTICAL axis. `bandLowM` and
+   * `bandHighM` are physical metres above the floor, so the height they are
+   * compared against must be in metres too. On a compound CRS (metre grid,
+   * US-survey-foot heights) the horizontal factor left the height in feet and
+   * the 0.7–1.8 m band actually sampled 0.21–0.55 m, tracing skirting instead
+   * of wall — and the unknown-unit refusal never fired, because such a CRS has
+   * a perfectly well-known HORIZONTAL unit. Defaults to {@link unitToMetres}.
+   */
+  readonly verticalUnitToMetres?: number;
   /** Max points to sample (uniform stride). Default 300 000. */
   readonly maxSamples?: number;
   /** Band bottom, metres above the detected floor. Default 0.7. */
@@ -406,6 +416,9 @@ export function wallSlice(
   params: WallSliceParams,
 ): WallSlice {
   const u2m = params.unitToMetres && params.unitToMetres > 0 ? params.unitToMetres : 1;
+  const v2m = params.verticalUnitToMetres && params.verticalUnitToMetres > 0
+    ? params.verticalUnitToMetres
+    : u2m;
   const maxSamples = Math.max(100, Math.floor(params.maxSamples ?? 300_000));
   const bandLow = params.bandLowM ?? 0.7;
   const bandHigh = Math.max(bandLow + 0.1, params.bandHighM ?? 1.8);
@@ -429,7 +442,7 @@ export function wallSlice(
     const b = i * 3;
     const h1 = positions[b + h1Off] * u2m;
     const h2 = positions[b + h2Off] * u2m;
-    const vv = positions[b + vOff] * u2m;
+    const vv = positions[b + vOff] * v2m;
     if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(vv)) continue;
     H1.push(h1); H2.push(h2); V.push(vv);
   }

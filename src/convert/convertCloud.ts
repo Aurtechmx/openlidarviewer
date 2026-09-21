@@ -15,6 +15,14 @@ import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
+import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
+
+/**
+ * The extended classification-flags bit that carries overlap (LAS 1.4 Table 8),
+ * and the legacy record format the loss sentence is phrased against.
+ */
+const EXT_OVERLAP_FLAG_BIT = 0x8;
+const LEGACY_PDRF_FOR_LOSS = 3;
 import { writeLas, writeLas14 } from './writeLas';
 import { spatialContextFrom } from '../geo/SpatialContext';
 import { writeXyz, writeAsc } from './writeAscii';
@@ -292,6 +300,28 @@ export function convertCloud(
           log.push({
             level: 'warn',
             message: `LAS 1.2 stores 5-bit classes — ${wrapped.toLocaleString()} points with classes > 31 wrap to their low 5 bits (class & 31), so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.`,
+          });
+        }
+      }
+      // The OTHER thing a legacy write drops, which went out silently. The
+      // extended encoding carries overlap as a flag bit beside a real base
+      // class; the legacy byte has nowhere to put it, so `writeLas` composes
+      // only the synthetic/key-point/withheld bits and the overlap mark
+      // disappears. `lasSemantics` has described this loss precisely since it
+      // was written — `inspectLegacyConversion` / `describeLoss` — and had no
+      // caller anywhere in `src/`, so the sentence existed and never reached a
+      // user. The class-wrap warning above is the same shape; this is its
+      // missing half.
+      if (g.classificationFlags) {
+        let overlapped = 0;
+        for (let i = 0; i < g.count; i++) {
+          if ((g.classificationFlags[i] & EXT_OVERLAP_FLAG_BIT) !== 0) overlapped++;
+        }
+        if (overlapped > 0) {
+          const loss = describeLoss(inspectLegacyConversion([], true), LEGACY_PDRF_FOR_LOSS);
+          log.push({
+            level: 'warn',
+            message: `LAS 1.2 cannot record the overlap flag — ${overlapped.toLocaleString()} points carry it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
           });
         }
       }

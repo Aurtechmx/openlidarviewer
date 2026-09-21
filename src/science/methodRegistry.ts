@@ -349,11 +349,14 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     name: 'Uniform contour generalization',
     summary:
       'Cartographic generalization at one uniform Douglas–Peucker tolerance across ' +
-      'every feature, run through the Douglas–Peucker primitive.',
+      'every feature, followed by two iterations of Chaikin corner-cutting. The ' +
+      'Chaikin pass moves vertices, so a generalized line is displaced from the ' +
+      'analytical isoline by both steps and not by simplification alone.',
     citation:
-      'Douglas & Peucker (1973), The Canadian Cartographer 10(2):112–122 (uniform-tolerance application)',
+      'Douglas & Peucker (1973), The Canadian Cartographer 10(2):112–122 (uniform-tolerance application); ' +
+      'Chaikin (1974), Computer Graphics and Image Processing 3(4):346–349 (corner cutting)',
     category: 'contour',
-    implementation: ['src/terrain/contourStudio/contourGeometryProduct.ts'],
+    implementation: ['src/terrain/contour/contourShapeStyle.ts'],
   },
   'olv.contour.generalize.terrain-adaptive': {
     id: 'olv.contour.generalize.terrain-adaptive',
@@ -362,11 +365,13 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     summary:
       'Cartographic generalization whose Douglas–Peucker tolerance is scaled per ' +
       'feature by measurement confidence and feature scale — smoothing measured, ' +
-      'long contours more and low-confidence or small closed features less.',
+      'long contours more and low-confidence or small closed features less — ' +
+      'followed by the same two iterations of Chaikin corner-cutting the uniform ' +
+      'variant applies.',
     citation:
-      'Internal composition (per-feature Douglas–Peucker tolerance scaled by terrain confidence and feature scale); no single source method.',
+      'Internal composition (per-feature Douglas–Peucker tolerance scaled by terrain confidence and feature scale, then Chaikin corner-cutting); no single source method.',
     category: 'contour',
-    implementation: ['src/terrain/contourStudio/contourAdaptiveGeneralize.ts'],
+    implementation: ['src/terrain/contour/contourShapeStyle.ts'],
   },
 };
 

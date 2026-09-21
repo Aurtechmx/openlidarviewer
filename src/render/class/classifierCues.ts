@@ -61,6 +61,13 @@ export function classifierOptions(
 ): DeriveClassificationOptions {
   return {
     ...classifierCues(cloud, opts),
+    // The derive reads index 2 as height. A Y-up source — which is exactly the
+    // raw photogrammetry this feature exists for — needs saying so, or the
+    // ground grid is built over the X/height plane and "ground" comes back as
+    // the lowest-northing slab. Only an axis the frame actually resolved is
+    // passed: 'unknown' leaves the Z-up default, which fails the same way the
+    // whole app does on an unresolved frame rather than guessing a rotation.
+    upAxis: ctx.upAxis === 'y' ? 'y' : 'z',
     ...classifierParamsForFrame({
       linearUnitToMetres: ctx.linearUnitToMetres,
       verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal') ?? ctx.linearUnitToMetres,

@@ -222,6 +222,12 @@ export interface FloorPlanParams {
   /** Scale from source units to metres (default 1 — assume metres). */
   readonly unitToMetres?: number;
   /**
+   * Metres per source unit on the VERTICAL axis; see {@link WallSliceParams}.
+   * The wall band is chosen in physical metres above the floor, so a compound
+   * CRS needs its own vertical factor or the band lands on the wrong slice.
+   */
+  readonly verticalUnitToMetres?: number;
+  /**
    * Whether that scale is CONFIRMED by the frame.
    *
    * `unitToMetres` is an inert 1 for a local or unknown-unit scan — which is the
@@ -516,6 +522,7 @@ export function extractFloorPlan(
   const slice = wallSlice(positions, {
     upAxis: params.upAxis,
     unitToMetres: params.unitToMetres,
+    verticalUnitToMetres: params.verticalUnitToMetres,
     maxSamples: params.maxSamples,
     bandLowM: params.bandLowM,
     bandHighM: params.bandHighM,

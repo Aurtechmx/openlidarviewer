@@ -27,9 +27,9 @@ the paper that specifies it.
 | `olv.terrain.vrm` | 1 | Vector Ruggedness Measure | Sappington et al. (2007) |
 | `olv.terrain.tpi` | 1 | Topographic Position Index | Weiss (2001) |
 | `olv.contour.analytical` | 1 | Analytical iso-contour geometry | internal (grid contour extraction) |
-| `olv.contour.generalize` | 1 | Uniform contour generalization | Douglas & Peucker (1973) |
+| `olv.contour.generalize` | 1 | Uniform contour generalization; the shipped pass is Douglas–Peucker followed by Chaikin corner-cutting, which also moves vertices (see `methodRegistry.ts`) | Douglas & Peucker (1973); Chaikin (1974) |
 | `olv.contour.generalize.dp` | 1 | Douglas–Peucker contour simplification | Douglas & Peucker (1973) |
-| `olv.contour.generalize.terrain-adaptive` | 1 | Terrain-adaptive contour generalization | internal (feature-scaled DP) |
+| `olv.contour.generalize.terrain-adaptive` | 1 | Terrain-adaptive contour generalization; feature-scaled Douglas–Peucker followed by the same Chaikin corner-cutting | internal (feature-scaled DP, then Chaikin) |
 | `olv.class.derived-heuristic` | 3 | Derived point classification (heuristic) | Zhang et al. (2003); internal composition |
 | `olv.topology.linkage-record` | 1 | Source acquisition topology linkage record | internal (provenance record) |
 | `olv.dtm.idw-fill` | 1 | DTM raster + void fill; the shipped fill is geodesic, an Euclidean IDW prefill only seeds it (see `methodRegistry.ts`) | internal |

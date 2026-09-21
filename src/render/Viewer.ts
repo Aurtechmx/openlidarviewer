@@ -107,10 +107,10 @@ import {
 } from './splatShader';
 import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
-import { stockpileToastSuffix } from './measure/stockpilePresenter';
-import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions } from './measure/lassoVolumeCompute';
-import type { LassoCloudEntry, LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
-import { makeLassoProjector } from './measure/lassoVolumeCompute';
+import type { StockpileBandInputs } from './measure/stockpileBandInputs';
+export type { StockpileBandInputs } from './measure/stockpileBandInputs';
+import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions } from './measure/lassoVolumeCompute';
+import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -130,13 +130,16 @@ export interface LassoVolumeReturn {
   /** Cut / fill / footprint computed against the selected 3D points. */
   readonly result: VolumeResult;
   /**
-   * The stockpile band suffix for the toast: ` · Stockpile: V ± σ (±%) ·
-   * confidence`, re-graded over the same selected sample with a "lowest
-   * ground" base plane and converted to metres via the `lin` factor passed to
-   * {@link Viewer.computeLassoVolume}. Empty when there's nothing trustworthy
-   * to claim (too few points / degenerate footprint).
+   * Everything the ` · Stockpile: V ± σ (±%)` band needs, WITHOUT computing it.
+   * Producing it here kept the whole estimator in the eager Viewer chunk to
+   * serve a line that cannot appear until someone draws a lasso; the caller
+   * loads it when it has a band to show (see `loadStockpilePresenter`).
    */
-  readonly stockpileSuffix: string;
+  /** The estimator behind {@link result}, named here so `main.ts` need not import the registry. */
+  readonly volumeMethod: string;
+  /** Whether the clip box or a class filter held candidates back. */ readonly selectionRestrictedByVisibility: boolean;
+
+  readonly stockpileInputs: StockpileBandInputs;
   /** Number of cloud points that fell inside the lasso. */
   readonly selectedCount: number;
   /** Which selection basis the figures were measured on, and what it cost. */
@@ -182,7 +185,7 @@ import {
 } from './measure/profileSectionSeam';
 import { volumeCutFill, assembleVolumePositions, POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
-  integrableClouds, isIntegrable, streamingMayCombine, sourceClassifiesGround,
+  integrableClouds, integrableEntries, streamingMayCombine, sourceClassifiesGround,
   analysisClassification,
 } from './integrableClouds';
 import type { LayerCompatibility } from '../model/layerCompatibility';
@@ -3720,10 +3723,8 @@ export class Viewer {
   ): LassoVolumeReturn | null {
     const canvas = this._canvas;
     if (!canvas) return null;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === 0 || h === 0) return null;
-
     // The camera's matrices are the only three.js the walk needs, and the
     // projector takes them as plain arrays, so it is testable without WebGL.
     this._camera.updateMatrixWorld(true);
@@ -3735,21 +3736,23 @@ export class Viewer {
       h,
     );
 
-    const integrable: Array<readonly [string, LassoCloudEntry]> = [];
-    for (const [id, entry] of this._clouds) {
-      // Hidden and locked layers are skipped: the picker won't place vertices
-      // on them, so the lasso must not select through them either.
-      if (isIntegrable(entry)) integrable.push([id, entry]);
-    }
-
+    const integrable = integrableEntries(this._clouds);
     const out = computeLassoVolumeWalk({
       host: {
         project,
         integrable,
-        streamingPositions: this._streaming
-          ? [...this._streaming.renderer.positionArrays()]
-          : [],
+        // Streaming joins only when the frame rule allows it — the same test
+        // every other combined estimator applies (`_streamingMayCombine`).
+        streamingPositions: this._streaming && this._streamingMayCombine(integrable.length)
+          ? [...this._streaming.renderer.positionArrays()] : [],
         wasReduced: (cloud) => this._cloudWasReduced(cloud),
+        worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+        visibilityFor: (entry, stride) => {
+          const clip = this._clip; const c = entry.cloud; return lassoVisibilityFilters(
+            clip?.enabled ? (x, y, z) => clipKeepsPoint(clip, [x, y, z]) : null,
+            this._pickAccept(sourcePositions(c), c.classification, c.intensity,
+              this._currentFilterWindow(this._elevLayerOf(c))) ?? null, stride);
+        },
       },
       lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
       referencePercentile: percentile,
@@ -3758,22 +3761,19 @@ export class Viewer {
     if (!out) return null;
 
     return {
-      result: out.result,
-      stockpileSuffix: stockpileToastSuffix(out.polygon3D, out.selectedPositions, lin, {
-        sourceReduced: out.anySourceReduced,
-        densityUnitKnown,
-        vert,
-        streamingContributed: out.streamingContributed,
-        streamingCoverage: this._streamingCoverage(),
-        walkSampled: out.budget.downsample,
-      }),
+      result: out.result, volumeMethod: POINT_SAMPLE_VOLUME_METHOD,
+      selectionRestrictedByVisibility: out.selectionRestrictedByVisibility, lasso,
+      stockpileInputs: {
+        polygon: out.polygon3D, positions: out.selectedPositions, lin,
+        options: {
+          sourceReduced: out.anySourceReduced, densityUnitKnown, vert,
+          streamingContributed: out.streamingContributed, walkSampled: out.budget.downsample,
+          streamingCoverage: this._streamingCoverage(),
+        },
+      },
       selectedCount: out.selectedCount,
-      lasso,
-      selectionByCloudId: out.selectionByCloudId,
-      budget: out.budget,
-      polygon3D: out.polygon3D,
-      referenceZ: out.referenceZ,
-      selectionBasis: out.selectionBasis,
+      selectionByCloudId: out.selectionByCloudId, budget: out.budget,
+      polygon3D: out.polygon3D, referenceZ: out.referenceZ, selectionBasis: out.selectionBasis,
     };
   }
 
@@ -4598,7 +4598,7 @@ export class Viewer {
         }
         return out;
       },
-      streaming: () => this._streaming,
+      streaming: () => this._streaming, worldUpAxis: () => (this._worldUp.y === 1 ? 1 : 2),
       setColorMode: (id, mode) => this.setColorMode(id, mode),
       setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),
       setVisible: (id, visible) => this.setCloudVisible(id, visible),

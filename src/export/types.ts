@@ -147,6 +147,13 @@ export interface ExportSceneAdapter {
    */
   localBoundsAabb(): readonly [number, number, number, number, number, number] | null;
   /**
+   * Which component of the AABB is the HEIGHT: 2 for survey sources, 1 for a
+   * Y-up mesh. The height map stamped `aabb[2]`/`aabb[5]` as "Min/Max Z" while
+   * the raster it captured was coloured on the real axis, so on a Y-up scan the
+   * card reported a horizontal extent as the elevation range the image spans.
+   */
+  worldUpAxis(): 0 | 1 | 2;
+  /**
    * The TIGHT data AABB for report metadata (extent / density rows). Same as
    * {@link localBoundsAabb} for static clouds, but for streaming it is the true
    * data extent rather than the octree root cube — which over-reports height

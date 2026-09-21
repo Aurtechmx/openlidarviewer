@@ -77,6 +77,18 @@ export interface ReportManifestInput {
   /** Every reported number, with its band and caveats. */
   readonly findings: readonly ReportFinding[];
   /**
+   * Statements that qualify EVERY figure in this report — an unverified unit
+   * scale, an unstated frame. They belong in the manifest rather than beside
+   * it: the caller downloads `text` and nothing else, so a caveat that lived
+   * only on the returned object never reached the reader, and the file went
+   * out asserting metres with nothing to the contrary anywhere in it.
+   *
+   * Optional and additive, like `software`: a manifest built without them
+   * still verifies against its own digest, and once present they are covered
+   * by it, so the qualification cannot be stripped without breaking the seal.
+   */
+  readonly notes?: readonly string[];
+  /**
    * The classification edit epoch the findings were computed at — provenance so
    * a later reader can tell whether the cloud was edited after this report.
    */

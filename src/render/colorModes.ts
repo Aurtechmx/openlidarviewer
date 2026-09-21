@@ -593,8 +593,11 @@ export function colorByCoverage(
   positions: Float32Array,
   count: number,
   grid: CoverageColorGrid,
+  upAxis: 0 | 1 | 2 = 2,
 ): Uint8Array {
-  return colorByGridConfidence(positions, count, grid, coverageColorForConfidence, COVERAGE_NONE);
+  return colorByGridConfidence(
+    positions, count, grid, coverageColorForConfidence, COVERAGE_NONE, upAxis,
+  );
 }
 
 /**
@@ -607,13 +610,10 @@ export function colorByConfidence(
   positions: Float32Array,
   count: number,
   grid: CoverageColorGrid,
+  upAxis: 0 | 1 | 2 = 2,
 ): Uint8Array {
   return colorByGridConfidence(
-    positions,
-    count,
-    grid,
-    confidenceColorForConfidence,
-    CONFIDENCE_NONE,
+    positions, count, grid, confidenceColorForConfidence, CONFIDENCE_NONE, upAxis,
   );
 }
 
@@ -628,13 +628,26 @@ function colorByGridConfidence(
   grid: CoverageColorGrid,
   colorFor: (confidence: number) => CoverageRgb,
   none: CoverageRgb,
+  /**
+   * The SCENE's up axis. The grid is built in the canonical Z-up frame the
+   * terrain gather rotates into, where H2 is the northing — and for a Y-up
+   * scene `yUpToCanonicalZUp` makes that `-z_scene`, not `y_scene`. Sampling
+   * it with raw scene components tinted by elevation instead of by the cell
+   * each point actually sits over. Defaults to 2, the survey case, where the
+   * canonical frame and the scene frame are the same and nothing moves.
+   */
+  upAxis: 0 | 1 | 2 = 2,
 ): Uint8Array {
   const out = new Uint8Array(count * 3);
   const { cols, rows, cellSizeM, originH1, originH2, confidence, coverage } = grid;
   const inv = cellSizeM > 0 ? 1 / cellSizeM : 0;
+  // Canonical northing, resolved ONCE: `yUpToCanonicalZUp` sets
+  // canonical.y = -scene.z, so a Y-up scene reads component 2 and negates it.
+  const nOff = upAxis === 1 ? 2 : 1;
+  const nSign = upAxis === 1 ? -1 : 1;
   for (let i = 0; i < count; i++) {
     const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
+    const y = nSign * positions[i * 3 + nOff];
     let col = -1;
     let row = -1;
     if (inv > 0 && Number.isFinite(x) && Number.isFinite(y)) {
@@ -905,9 +918,14 @@ export function colorForMode(
       // every cloud fell to the 1-unit default and a sparse airborne scan
       // rendered as per-point speckle instead of a density read.
       const positions = sourcePositions(cloud);
+      // Density is points per unit HORIZONTAL area, so the pair that is binned
+      // follows the scan's up axis; on a Y-up facade scan the old x/y grid
+      // collapsed every vertical column into one cell.
+      const dUp = opts?.upAxis ?? 2;
       return densityForChunk({
         positions,
-        cellSize: densityCellSizeFor(positions),
+        cellSize: densityCellSizeFor(positions, dUp),
+        upAxis: dUp,
       }).colors;
     }
 
@@ -926,7 +944,7 @@ export function colorForMode(
         }
         return out;
       }
-      return colorByCoverage(sourcePositions(cloud), n, opts.coverageGrid);
+      return colorByCoverage(sourcePositions(cloud), n, opts.coverageGrid, opts?.upAxis ?? 2);
     }
 
     // ── confidence (colourblind-safe trust overlay) ───────────────────────────
@@ -943,7 +961,7 @@ export function colorForMode(
         }
         return out;
       }
-      return colorByConfidence(sourcePositions(cloud), n, opts.coverageGrid);
+      return colorByConfidence(sourcePositions(cloud), n, opts.coverageGrid, opts?.upAxis ?? 2);
     }
   }
 }

@@ -72,6 +72,17 @@ export interface DensityInput {
    */
   cellSize: number;
   /**
+   * Which component is UP, so the two that are binned are the horizontal pair.
+   *
+   * Density here is "points per unit HORIZONTAL area", and the grid keyed on
+   * components 0 and 1 whatever the scan's frame was. On a Y-up phone scan of
+   * a facade that keys on (easting, height), so every point in a vertical
+   * column collapses into one cell: bright "very dense" stripes wherever the
+   * scan is tall, near-zero across the real ground extent. Defaults to 2,
+   * which is every survey source and the previous behaviour exactly.
+   */
+  upAxis?: 0 | 1 | 2;
+  /**
    * Min density (points / m²) anchoring the cold end of the ramp. Below
    * this → "no coverage" colour. Defaults to 0.
    */
@@ -128,7 +139,8 @@ export interface XyBounds {
  * spacing estimate and the local-density auto-parameters, which keep their own
  * downstream arithmetic so neither caller's numbers move.
  */
-export function xyBounds(positions: Float32Array): XyBounds | null {
+export function xyBounds(positions: Float32Array, upAxis: 0 | 1 | 2 = 2): XyBounds | null {
+  const [h1, h2] = horizontalPair(upAxis);
   const n = Math.floor(positions.length / 3);
   if (n === 0) return null;
   let minX = Infinity;
@@ -136,8 +148,8 @@ export function xyBounds(positions: Float32Array): XyBounds | null {
   let minY = Infinity;
   let maxY = -Infinity;
   for (let i = 0; i < n; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
+    const x = positions[i * 3 + h1];
+    const y = positions[i * 3 + h2];
     if (x < minX) minX = x;
     if (x > maxX) maxX = x;
     if (y < minY) minY = y;
@@ -146,10 +158,10 @@ export function xyBounds(positions: Float32Array): XyBounds | null {
   return { minX, maxX, minY, maxY };
 }
 
-export function estimatePlanimetricSpacing(positions: Float32Array): number {
+export function estimatePlanimetricSpacing(positions: Float32Array, upAxis: 0 | 1 | 2 = 2): number {
   const n = Math.floor(positions.length / 3);
   if (n < 2) return 0;
-  const b = xyBounds(positions);
+  const b = xyBounds(positions, upAxis);
   if (b === null) return 0;
   const area = (b.maxX - b.minX) * (b.maxY - b.minY);
   if (!Number.isFinite(area) || area <= 0) return 0;
@@ -162,12 +174,20 @@ export function estimatePlanimetricSpacing(positions: Float32Array): number {
  * calls, so a test can pin that the heatmap bins from measured spacing rather
  * than a constant.
  */
-export function densityCellSizeFor(positions: Float32Array): number {
-  return defaultCellSizeForSpacing(estimatePlanimetricSpacing(positions));
+export function densityCellSizeFor(positions: Float32Array, upAxis: 0 | 1 | 2 = 2): number {
+  return defaultCellSizeForSpacing(estimatePlanimetricSpacing(positions, upAxis));
+}
+
+/** The two components that are horizontal for a given up axis, ascending. */
+function horizontalPair(upAxis: 0 | 1 | 2): [number, number] {
+  if (upAxis === 0) return [1, 2];
+  if (upAxis === 1) return [0, 2];
+  return [0, 1];
 }
 
 export function densityForChunk(input: DensityInput): DensityColors {
   const positions = input.positions;
+  const [hx, hy] = horizontalPair(input.upAxis ?? 2);
   const cellSize = Math.max(1e-6, input.cellSize);
   const n = positions.length / 3;
   const colors = new Uint8Array(n * 3);
@@ -185,8 +205,8 @@ export function densityForChunk(input: DensityInput): DensityColors {
   const keys: string[] = new Array(n);
 
   for (let i = 0; i < n; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
+    const x = positions[i * 3 + hx];
+    const y = positions[i * 3 + hy];
     const ix = Math.floor(x / cellSize);
     const iy = Math.floor(y / cellSize);
     tmpKeyA[0] = ix;

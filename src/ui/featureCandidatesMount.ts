@@ -62,6 +62,11 @@ export interface MountFeatureCandidatesOptions {
    * spans in the rejected unit while the rest of the app used the correction.
    */
   readonly unitToMetres?: number;
+  /**
+   * Metres per source unit on the VERTICAL axis, for the conductor sag and fit
+   * residual. Defaults to {@link unitToMetres}, which is every single-unit CRS.
+   */
+  readonly verticalUnitToMetres?: number;
   /** The RESOLVED frame's label, for GeoJSON provenance. Never the declared one. */
   readonly crsLabel: string | null;
   /**
@@ -127,7 +132,10 @@ export function mountFeatureCandidates(
   // With no building- or wire-classified points there is nothing to propose,
   // so the launcher renders nothing. A later Classify run bumps the epoch the
   // host keys its remount on, and the card appears when it has something.
-  const input = buildFeatureExtractionInput(cloud, { metresPerUnit: opts.unitToMetres ?? null });
+  const input = buildFeatureExtractionInput(cloud, {
+    metresPerUnit: opts.unitToMetres ?? null,
+    verticalMetresPerUnit: opts.verticalUnitToMetres ?? null,
+  });
   if (!input) {
     launcherHost.replaceChildren();
     return {
@@ -196,7 +204,9 @@ function buildReview(
     input.buildingGrid,
     input.unit,
   );
-  const conductor = extractConductorCandidate(input.conductorPoints, input.unit, input.up);
+  const conductor = extractConductorCandidate(
+    input.conductorPoints, input.unit, input.up, undefined, input.verticalUnit,
+  );
   const conductors = conductor ? [conductor] : [];
 
   root.append(renderBuildingSection(buildings, review, crsLabel, toLonLat, axisRefusal));

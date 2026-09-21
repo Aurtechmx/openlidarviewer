@@ -22,7 +22,25 @@ const MEDIUM_CONFIDENCE_POINTS = 100;
  * A non-finite skip count is carried only when there was one, so a clean
  * result does not advertise an exclusion it did not make.
  */
-export function deriveVolumeRecord(result: VolumeResult, referenceZ: number): VolumeRecord {
+export function deriveVolumeRecord(
+  result: VolumeResult,
+  referenceZ: number,
+  /**
+   * The estimator that produced `result`, as `id@version`.
+   *
+   * Supplied by the caller rather than imported here on purpose. Reading the
+   * tag from the method registry at this module's top level pulled the whole
+   * registry — every summary, citation and implementation path — into the
+   * EAGER shell chunk, because this module is reached from `main.ts` while
+   * `volume.ts` lives in the lazy Viewer chunk. That cost 7 KiB of a bundle
+   * with 3 KiB of headroom, to name a constant the estimator's own owner
+   * already holds. The owner passes it down instead.
+   *
+   * Omitted leaves the record's `method` absent, which its contract defines
+   * as unknown — the honest answer for a caller that cannot say.
+   */
+  method?: string,
+): VolumeRecord {
   const inPoly = result.pointsInPolygon;
   let confidence: 'high' | 'medium' | 'low';
   if (inPoly >= HIGH_CONFIDENCE_POINTS) confidence = 'high';
@@ -38,6 +56,13 @@ export function deriveVolumeRecord(result: VolumeResult, referenceZ: number): Vo
     densityNative: result.densityNative,
     confidence,
   };
+  // Which estimator these numbers came from. `VolumeRecord.method` exists for
+  // exactly this: two estimators can answer for one lasso, and the toast shows
+  // the area-weighted grid beside this point-sample figure. The hand-drawn
+  // polygon path stamped it and the lasso path did not, so a lasso volume was
+  // persisted, exported and reported as an unknown-method figure when the
+  // method was never in doubt.
+  if (method) record.method = method;
   const skippedNonFinite = result.skippedNonFinite ?? 0;
   if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
   return record;
