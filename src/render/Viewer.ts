@@ -272,7 +272,7 @@ import { writeFloatColorsInto, toFloatColors } from './colorEncode';
 import type { StreamingScheduler } from './streaming/StreamingScheduler';
 import { buildResidentSnapshot } from './streaming/residentSnapshot';
 import type { StreamingSource, StreamingSourceKind } from './streaming/StreamingSource';
-import { streamingBudgets, estimateGpuBytes } from './streaming/streamingBudget';
+import { streamingBudgets, estimateGpuBytes, uploadedAttributesOf } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
 import type { StreamingBenchmark } from './streaming/streamingBenchmark';
 // The session assembly (renderer/scheduler/commit construction + callback
@@ -511,14 +511,6 @@ const GPU_HARD_POINT_CEILING = 8_000_000;
  * the reported rate still tracks a real change in load.
  */
 const FRAME_SAMPLE_COUNT = 60;
-
-/**
- * Rough GPU bytes held per displayed point: an instanced position (vec3 f32,
- * 12 B) and an instanced colour (vec3 f32, 12 B). Used only for the debug
- * overlay's memory estimate — an attribute-size figure, not a precise driver
- * allocation.
- */
-const BYTES_PER_GPU_POINT = 24;
 
 
 /*
@@ -4403,19 +4395,24 @@ export class Viewer {
 
     let displayedPoints = 0;
     let totalPoints = 0;
+    // Per cloud, from the attributes that cloud actually uploaded. A fixed
+    // 24 B covered a position and a colour only, so a classified cloud was
+    // reported at three quarters of what it held and one with intensity too
+    // at exactly three quarters — the bug `pointAttributeLayout` was written
+    // to end, fixed on the streaming half and left standing here.
+    let gpuBytesEstimate = 0;
     for (const { cloud, mesh } of this._clouds.values()) {
       totalPoints += cloud.pointCount;
-      if (mesh.visible) displayedPoints += cloud.pointCount;
+      if (!mesh.visible) continue;
+      displayedPoints += cloud.pointCount;
+      gpuBytesEstimate += estimateGpuBytes(cloud.pointCount, uploadedAttributesOf(mesh.geometry));
     }
-    // Static byte estimate first — the streaming layout differs per point.
-    let gpuBytesEstimate = displayedPoints * BYTES_PER_GPU_POINT;
 
     // A streaming cloud renders through its own node meshes, not
     // `this._clouds`, so without this fold the overlay reported 0 points
     // while a COPC/EPT scan was clearly on screen. Resident = uploaded to
     // the GPU right now; source = the whole remote file. The byte estimate
-    // uses the streaming layout's own per-point cost (estimateGpuBytes),
-    // which differs from the static BYTES_PER_GPU_POINT.
+    // uses the streaming layout's own per-point cost (estimateGpuBytes).
     if (this._streaming) {
       const resident = this._streaming.cloud.residentPointCount;
       displayedPoints += resident;
