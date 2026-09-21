@@ -135,6 +135,8 @@ export interface LassoVolumeReturn {
    * serve a line that cannot appear until someone draws a lasso; the caller
    * loads it when it has a band to show (see `loadStockpilePresenter`).
    */
+  /** The estimator that produced {@link result}; named here so `main.ts` need not import the registry. */
+  readonly volumeMethod: string;
   readonly stockpileInputs: StockpileBandInputs;
   /** Number of cloud points that fell inside the lasso. */
   readonly selectedCount: number;
@@ -3760,7 +3762,7 @@ export class Viewer {
     if (!out) return null;
 
     return {
-      result: out.result,
+      result: out.result, volumeMethod: POINT_SAMPLE_VOLUME_METHOD,
       stockpileInputs: {
         polygon: out.polygon3D, positions: out.selectedPositions, lin,
         options: {
@@ -3769,11 +3771,9 @@ export class Viewer {
           streamingCoverage: this._streamingCoverage(),
         },
       },
-      selectedCount: out.selectedCount,
-      lasso,
+      selectedCount: out.selectedCount, lasso,
       selectionByCloudId: out.selectionByCloudId, budget: out.budget,
-      polygon3D: out.polygon3D, referenceZ: out.referenceZ,
-      selectionBasis: out.selectionBasis,
+      polygon3D: out.polygon3D, referenceZ: out.referenceZ, selectionBasis: out.selectionBasis,
     };
   }
 

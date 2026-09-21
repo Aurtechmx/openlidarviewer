@@ -620,7 +620,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       out.polygon3D.length >= 3
         ? {
             polygon: out.polygon3D,
-            volume: deriveVolumeRecord(out.result, out.referenceZ),
+            volume: deriveVolumeRecord(out.result, out.referenceZ, out.volumeMethod),
             selectedCount: out.selectedCount,
           }
         : null;
