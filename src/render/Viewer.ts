@@ -107,7 +107,8 @@ import {
 } from './splatShader';
 import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
-import { stockpileToastSuffix } from './measure/stockpilePresenter';
+import type { StockpileBandInputs } from './measure/stockpileBandInputs';
+export type { StockpileBandInputs } from './measure/stockpileBandInputs';
 import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions } from './measure/lassoVolumeCompute';
 import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
 import {
@@ -129,13 +130,12 @@ export interface LassoVolumeReturn {
   /** Cut / fill / footprint computed against the selected 3D points. */
   readonly result: VolumeResult;
   /**
-   * The stockpile band suffix for the toast: ` · Stockpile: V ± σ (±%) ·
-   * confidence`, re-graded over the same selected sample with a "lowest
-   * ground" base plane and converted to metres via the `lin` factor passed to
-   * {@link Viewer.computeLassoVolume}. Empty when there's nothing trustworthy
-   * to claim (too few points / degenerate footprint).
+   * Everything the ` · Stockpile: V ± σ (±%)` band needs, WITHOUT computing it.
+   * Producing it here kept the whole estimator in the eager Viewer chunk to
+   * serve a line that cannot appear until someone draws a lasso; the caller
+   * loads it when it has a band to show (see `loadStockpilePresenter`).
    */
-  readonly stockpileSuffix: string;
+  readonly stockpileInputs: StockpileBandInputs;
   /** Number of cloud points that fell inside the lasso. */
   readonly selectedCount: number;
   /** Which selection basis the figures were measured on, and what it cost. */
@@ -3761,14 +3761,14 @@ export class Viewer {
 
     return {
       result: out.result,
-      stockpileSuffix: stockpileToastSuffix(out.polygon3D, out.selectedPositions, lin, {
-        sourceReduced: out.anySourceReduced,
-        densityUnitKnown,
-        vert,
-        streamingContributed: out.streamingContributed,
-        streamingCoverage: this._streamingCoverage(),
-        walkSampled: out.budget.downsample,
-      }),
+      stockpileInputs: {
+        polygon: out.polygon3D, positions: out.selectedPositions, lin,
+        options: {
+          sourceReduced: out.anySourceReduced, densityUnitKnown, vert,
+          streamingContributed: out.streamingContributed, walkSampled: out.budget.downsample,
+          streamingCoverage: this._streamingCoverage(),
+        },
+      },
       selectedCount: out.selectedCount,
       lasso,
       selectionByCloudId: out.selectionByCloudId, budget: out.budget,

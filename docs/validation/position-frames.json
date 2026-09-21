@@ -240,6 +240,13 @@
     },
     {
       "file": "src/main.ts",
+      "symbol": "onCommit",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "The lasso walk's selected sample, already placed by copyPlacedPositions; the stockpile band integrates it against a footprint hull built from that same buffer, so both sides are the project frame or neither is."
+    },
+    {
+      "file": "src/main.ts",
       "symbol": "revealAnalysePanel",
       "frame": "source-local",
       "reads": 1,

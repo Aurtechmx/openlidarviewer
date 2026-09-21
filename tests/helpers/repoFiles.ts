@@ -79,10 +79,25 @@ function walkFiles(): string[] {
 export function distributedFiles(): string[] {
   if (GIT === null) return walkFiles();
   try {
-    return execFileSync(GIT, ['ls-files'], { cwd: ROOT, encoding: 'utf8' })
+    const tracked = execFileSync(GIT, ['ls-files'], { cwd: ROOT, encoding: 'utf8' })
       .split('\n')
       .filter((f) => f !== '');
+    // An EMPTY answer is not a description of this repository, it is git
+    // failing to describe this directory — and it fails by succeeding, so the
+    // `catch` below never sees it.
+    //
+    // Stryker copies the tree into `.stryker-tmp/sandbox-*`, which is inside
+    // the work tree and `.gitignore`d, so `git ls-files` there exits 0 with no
+    // output. Every caller then scanned NOTHING: `treeText()` was the empty
+    // string and all twelve curated licence URLs "appeared nowhere else",
+    // which is what failed the mutation job's initial dry run. The files were
+    // present the whole time; only the enumeration was blind.
+    //
+    // A zero-file result therefore means the same thing as a throw, and gets
+    // the same answer — the walk that already exists for an extracted archive.
+    if (tracked.length > 0) return tracked;
   } catch {
-    return walkFiles();
+    // fall through to the walk
   }
+  return walkFiles();
 }

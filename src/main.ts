@@ -244,6 +244,7 @@ import {
   loadTilesetOpen,
   loadActionRegistry,
   loadToolLauncher,
+  loadStockpilePresenter,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -573,7 +574,7 @@ let pendingLassoSave: {
 } | null = null;
 
 const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
-  onCommit: (lasso, basis) => {
+  onCommit: async (lasso, basis) => { // async: the estimator is fetched on demand
     if (!viewer) return;
     // Native→metre factor for the source CRS (feet for a state-plane-feet
     // cloud). Handed to computeLassoVolume so the stockpile band it returns is
@@ -605,14 +606,12 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // same factor the measure tool uses. (The CRS gate below still blocks
     // geographic / unknown; this corrects the projected-feet case it lets
     // through.)
-    const lin2 = lin * lin;
     // Volume factor is linear²·vertical, matching the measure tool and the
     // exports. Plain lin³ applied the HORIZONTAL unit to the vertical axis.
-    const vol = lin2 * vert;
+    const lin2 = lin * lin, vol = lin2 * vert;
     const fillM3 = (out.result.fill * vol).toFixed(2);
     const cutM3 = (out.result.cut * vol).toFixed(2);
-    const netM3 = (out.result.net * vol).toFixed(2);
-    const areaM2 = (out.result.footprintArea * lin2).toFixed(1);
+    const netM3 = (out.result.net * vol).toFixed(2), areaM2 = (out.result.footprintArea * lin2).toFixed(1);
     // Stage the result for the toast's Save button. The polygon3D
     // is the convex-hull footprint at the integration reference
     // plane — saving promotes it to a regular Volume measurement.
@@ -624,9 +623,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
             selectedCount: out.selectedCount,
           }
         : null;
-    const budgetCaption = out.budget.downsample
-      ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%`
-      : '';
+    const budgetCaption = out.budget.downsample ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%` : '';
     // CRS gate — a geographic or unknown CRS makes a cubic-metre headline
     // misleading: replace the metrics line with the caveat and refuse a Save
     // button (project / confirm a CRS first). safe-explicit-local keeps the
@@ -648,9 +645,11 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // band the Viewer computed over the same sample with a "lowest ground"
     // base plane — the honest figure cloud viewers report without. Empty when
     // there's nothing trustworthy to claim (too few points / degenerate).
+    const b = out.stockpileInputs; // the estimator arrives with the lasso, not the app
+    const stockpileSuffix = (await loadStockpilePresenter()).stockpileToastSuffix(b.polygon, b.positions, b.lin, b.options);
     showLassoToast(
       `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${out.stockpileSuffix}`,
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stockpileSuffix}`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,
