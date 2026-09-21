@@ -228,6 +228,17 @@ export class StreamingNodeStore {
     return this._decodedPoints;
   }
 
+  /**
+   * How many nodes are decoded and waiting for the renderer, in O(1).
+   *
+   * The frame loop asks this every frame to decide whether it may sleep, so it
+   * must not allocate; {@link decodedPending} copies the set and is for callers
+   * that need the nodes themselves.
+   */
+  get decodedCount(): number {
+    return this._decoded.size;
+  }
+
   /** Every node decoded but not yet committed. */
   decodedPending(): StreamingNode[] {
     return [...this._decoded];

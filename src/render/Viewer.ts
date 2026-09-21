@@ -645,8 +645,8 @@ export class Viewer {
     streamingBusy: () => {
       if (!this._streaming) return false;
       const stats = this._streaming.scheduler.stats();
-      return stats.loading > 0 || stats.queued > 0;
-    },
+      return stats.loading > 0 || stats.queued > 0; },
+    commitPending: () => (this._streaming?.cloud.octree.store.decodedCount ?? 0) > 0,
     fading: () => this._streaming?.renderer.hasActiveFades() ?? false,
   });
   private readonly _camPose = new CameraPoseWatch(); // walk / fly motion signal

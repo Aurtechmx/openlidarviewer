@@ -35,6 +35,22 @@ export interface FrameDemandSignals {
   tweening: () => boolean;
   /** The streaming scheduler has in-flight or queued fetches. */
   streamingBusy: () => boolean;
+  /**
+   * Decoded streaming nodes are waiting for a metered GPU commit.
+   *
+   * Separate from {@link streamingBusy}, which answers about FETCHES: the
+   * scheduler's `queued` and `loading` counts both reach zero while nodes sit
+   * decoded-but-uncommitted, and the store's own comment says as much — a
+   * readiness verdict reading only those two "would fire too early".
+   *
+   * Without this the loop could sleep with points decoded and undrawn. Fades
+   * hid it, because a fading node keeps the chain alive on its own; turn fades
+   * off, as the mobile and low-quality paths do, and the remaining commits
+   * would drain one pump per 250 ms safety heartbeat instead of one per frame.
+   * On the shipped `immediate` commit mode nothing is ever pending here, so
+   * this reads false and the loop behaves exactly as before.
+   */
+  commitPending: () => boolean;
   /** A node fade is part way through. */
   fading: () => boolean;
 }
@@ -109,7 +125,7 @@ export class FrameDemand {
   needsFrame(nowMs: number): boolean {
     if (this._invalidation.needsFrame(nowMs)) return true;
     if (this._signals.tweening()) return true;
-    return this._signals.streamingBusy() || this._signals.fading();
+    return this._signals.streamingBusy() || this._signals.commitPending() || this._signals.fading();
   }
 
   /**
