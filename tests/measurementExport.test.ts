@@ -376,3 +376,37 @@ describe('an empty collection carries no verdict', () => {
     expect(fc.evidence).toMatch(/units unverified/i);
   });
 });
+
+
+// The claim stamp's order is part of a provenance record, so it must be the
+// same on every machine. Sonar flags a bare `.sort()` and suggests
+// `localeCompare` — which would be the wrong fix here, because it is
+// locale-dependent and would let the same measurement set stamp differently
+// under a different locale.
+describe('the claim stamp orders the same way everywhere', () => {
+  const ctx = {
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    up: [0, 0, 1] as [number, number, number],
+    unitToMetres: 1, verticalUnitToMetres: 1,
+    crsName: 'EPSG:26913', geographic: false, unitsVerified: true,
+  } as never;
+  const m = (id: string, kind: string) =>
+    ({ id, kind, name: id, points: [[0, 0, 0], [1, 0, 0], [1, 1, 0]] }) as never;
+
+  it('does not depend on the order the measurements were placed in', () => {
+    const forward = [m('a', 'volume'), m('b', 'area'), m('c', 'distance'), m('d', 'profile')];
+    const reversed = [...forward].reverse();
+    const a = JSON.parse(measurementsToGeoJSON(forward, ctx)).evidence as string;
+    const b = JSON.parse(measurementsToGeoJSON(reversed, ctx)).evidence as string;
+    expect(b).toBe(a);
+  });
+
+  it('puts the ids in code-unit order, which no locale can change', () => {
+    const note = JSON.parse(
+      measurementsToGeoJSON([m('v', 'volume'), m('d', 'distance'), m('a', 'area')], ctx),
+    ).evidence as string;
+    const ids = [...note.matchAll(/\b([A-Z][A-Z0-9-]+):/g)].map((x) => x[1]);
+    expect(ids).toEqual([...ids].sort((x, y) => (x < y ? -1 : x > y ? 1 : 0)));
+    expect(ids).toEqual(['MEAS-AREA', 'MEAS-DISTANCE', 'VOL-POINT-SAMPLE']);
+  });
+});

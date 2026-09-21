@@ -38,6 +38,9 @@ export const HEIGHT_MAP_RAMPS: readonly HeightMapRamp[] = [
   'topo',
 ];
 
+/** What to call each component in the card row, so "Min Y" says which it is. */
+const AXIS_NAME = ['X', 'Y', 'Z'] as const;
+
 /**
  * The scan's HEIGHT extent, read off the axis that actually points up.
  *
@@ -63,7 +66,7 @@ function heightExtent(context: ExportContext): {
   const axis = context.adapter.worldUpAxis();
   const min = aabb[axis];
   const max = aabb[axis + 3];
-  const name = axis === 0 ? 'X' : axis === 1 ? 'Y' : 'Z';
+  const name = AXIS_NAME[axis];
   return { min, max, range: max - min, label: (side) => `${side} ${name}` };
 }
 

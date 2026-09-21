@@ -307,6 +307,14 @@ const CLAIM_FOR_KIND: Readonly<Record<Measurement['kind'], string>> = {
 /**
  * The claims a mixed collection actually draws on, in a stable order so two
  * exports of the same set produce the same stamp.
+ *
+ * The comparator is explicit, and it is deliberately NOT `localeCompare`.
+ * These ids are stamped into a provenance record, so the order has to be the
+ * same everywhere: `localeCompare` is locale-dependent, and would let the same
+ * measurement set produce a differently ordered stamp on a machine with a
+ * different locale — losing exactly the stability this function exists for.
+ * Code-unit order over an ASCII id set is total, deterministic and machine
+ * independent.
  */
 function claimsPresent(measurements: readonly Measurement[]): string[] {
   const seen = new Set<string>();
@@ -314,7 +322,7 @@ function claimsPresent(measurements: readonly Measurement[]): string[] {
     const c = CLAIM_FOR_KIND[m.kind];
     if (c) seen.add(c);
   }
-  return [...seen].sort();
+  return [...seen].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 /**

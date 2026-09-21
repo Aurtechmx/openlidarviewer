@@ -108,6 +108,9 @@ export interface ScanRouteViewPort {
  * The exact inputs behind the on-screen space or object report, so the panel's
  * export buttons build from the same positions, metrics and unit factor.
  */
+/** The component index each detected up-axis name refers to. */
+const UP_AXIS_INDEX: Readonly<Record<'x' | 'y' | 'z', 0 | 1 | 2>> = { x: 0, y: 1, z: 2 };
+
 export interface SpaceExportContext {
   readonly positions: Float32Array;
   readonly space: SpaceMetrics;
@@ -281,7 +284,7 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
           ? objectMetrics(
               positionsInMetres(routePositions, resolveLinearUnitScale(unitToMetres, unitKnown), {
                 metresPerUnit: verticalUnitToMetres,
-                axis: shape.up === 'x' ? 0 : shape.up === 'y' ? 1 : 2,
+                axis: UP_AXIS_INDEX[shape.up],
               }),
               { sourcePointCount: gathered.totalPoints },
             )
