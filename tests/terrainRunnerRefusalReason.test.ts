@@ -20,6 +20,8 @@ function harness(cloudIds: string[]) {
     gatherTerrainPositions: () => null,
     clouds: () => cloudIds,
     getCloud: () => null,
+    // Unplaced: the permit then reads the layer's own frame, as it always did.
+    layerProjectOffset: () => null,
     streamingCloud: null,
   } as unknown as Viewer;
   const fakePanel = {

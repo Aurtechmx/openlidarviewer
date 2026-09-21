@@ -57,6 +57,8 @@ function runnerOver(span: number, onFrame: (f: Frame) => void) {
       totalPoints: plane().length / 3,
     }),
     getCloud: () => cloud,
+    // Unplaced: the permit then reads the layer's own frame, as it always did.
+    layerProjectOffset: () => null,
     streamingCloud: null,
   } as unknown as Viewer;
   const fakePanel = {

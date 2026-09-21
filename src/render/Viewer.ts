@@ -109,7 +109,7 @@ import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import type { StockpileBandInputs } from './measure/stockpileBandInputs';
 export type { StockpileBandInputs } from './measure/stockpileBandInputs';
-import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions } from './measure/lassoVolumeCompute';
+import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions, streamingLassoParts } from './measure/lassoVolumeCompute';
 import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
@@ -3637,9 +3637,14 @@ export class Viewer {
   }
 
   /** Look up a loaded cloud by id — used by the app to export it. */
-  getCloud(id: string): PointCloud | undefined {
-    return this._clouds.get(id)?.cloud;
-  }
+  getCloud(id: string): PointCloud | undefined { return this._clouds.get(id)?.cloud; }
+  /**
+   * A layer's offset into the shared project frame, or null when unplaced.
+   * `placeBufferInto` folds it into the Float32 buffer measurements read, so
+   * it sets the reach a precision permit describes.
+   */
+  layerProjectOffset(id: string): readonly [number, number, number] | null {
+    const p = this._clouds.get(id)?.placement; return p ? accumulatorOffset(p) : null; }
 
   /**
    * Every layer's point `index` in PROJECT-frame coordinates, through the
@@ -3667,9 +3672,7 @@ export class Viewer {
    * chip after `_ensureRgbColorMode` silently flips a cloud into RGB
    * mode from an RGB-only control.
    */
-  colorModeOf(id: string): ColorMode | undefined {
-    return this._clouds.get(id)?.mode;
-  }
+  colorModeOf(id: string): ColorMode | undefined { return this._clouds.get(id)?.mode; }
 
   /**
    * Whether a streaming cloud is currently attached. Used by main.ts
@@ -3678,9 +3681,7 @@ export class Viewer {
    * the streaming COPC pipeline; for local LAZ the RGB preset chips
    * already cover the use case and the sliders would be misleading.
    */
-  isStreamingActive(): boolean {
-    return this._streaming !== null;
-  }
+  isStreamingActive(): boolean { return this._streaming !== null; }
 
   /**
    * Run the 3D volumetric lasso pipeline against every loaded point
@@ -3741,18 +3742,17 @@ export class Viewer {
       host: {
         project,
         integrable,
-        // Streaming joins only when the frame rule allows it — the same test
-        // every other combined estimator applies (`_streamingMayCombine`).
-        streamingPositions: this._streaming && this._streamingMayCombine(integrable.length)
-          ? [...this._streaming.renderer.positionArrays()] : [],
-        wasReduced: (cloud) => this._cloudWasReduced(cloud),
-        worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
-        visibilityFor: (entry, stride) => {
-          const clip = this._clip; const c = entry.cloud; return lassoVisibilityFilters(
-            clip?.enabled ? (x, y, z) => clipKeepsPoint(clip, [x, y, z]) : null,
+        // Each node carries what it shows: a clip binds a stream as a layer.
+        streamingParts: this._streaming && this._streamingMayCombine(integrable.length)
+          ? streamingLassoParts(this._streaming.renderer.residentChunks(),
+            this._clip?.enabled ? (x, y, z) => clipKeepsPoint(this._clip!, [x, y, z]) : null,
+            (c) => this._pickAccept(c.positions, c.classification, c.intensity,
+              this._currentFilterWindow(this._primaryElevLayer())) ?? null) : [],
+        wasReduced: (cloud) => this._cloudWasReduced(cloud), worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+        visibilityFor: (entry, stride) => { const clip = this._clip; const c = entry.cloud;
+          return lassoVisibilityFilters(clip?.enabled ? (x, y, z) => clipKeepsPoint(clip, [x, y, z]) : null,
             this._pickAccept(sourcePositions(c), c.classification, c.intensity,
-              this._currentFilterWindow(this._elevLayerOf(c))) ?? null, stride);
-        },
+              this._currentFilterWindow(this._elevLayerOf(c))) ?? null, stride); },
       },
       lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
       referencePercentile: percentile,

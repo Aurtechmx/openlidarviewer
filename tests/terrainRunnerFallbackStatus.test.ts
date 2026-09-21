@@ -44,6 +44,8 @@ function harness(positions: Float32Array) {
     }),
     clouds: () => ['scan-1'],
     getCloud: () => null,
+    // Unplaced: the permit then reads the layer's own frame, as it always did.
+    layerProjectOffset: () => null,
     streamingCloud: null,
   } as unknown as Viewer;
   const fakePanel = {

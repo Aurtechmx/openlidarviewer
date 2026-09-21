@@ -420,8 +420,15 @@
       "file": "src/render/measure/lassoVolumeCompute.ts",
       "symbol": "computeLassoVolume",
       "frame": "project-local",
-      "reads": 1,
+      "reads": 4,
       "why": "Each part carries the placed copy `copyPlacedPositions` made, which is what lets one layer's points pool with another's in a single depth buffer."
+    },
+    {
+      "file": "src/render/measure/lassoVolumeCompute.ts",
+      "symbol": "streamingLassoParts",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "A resident streaming node's decoded chunk. A streaming mesh sits at the scene origin, so render-local is also the world frame the clipping planes are given to three.js in, and the clip predicate is applied to these coordinates with no offset folded in."
     },
     {
       "file": "src/render/measure/profileSampler.ts",
@@ -516,6 +523,13 @@
       "frame": "render-local",
       "reads": 2,
       "why": "Streaming nodes are picked in the streaming render frame, which is where their decoded buffers and the ray both already are."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.computeLassoVolume",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "The streaming chunk handed to the per-node accept, matching what the streaming picker already reads; the static half of the same host entry reads project-local through its own classified site."
     },
     {
       "file": "src/render/Viewer.ts",

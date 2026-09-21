@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { scanPrecision } from '../src/app/scanPrecision';
+import { readFileSync } from 'node:fs';
 
 
 // The permit measured the layer's OWN box, while the buffers the measurement
@@ -74,5 +75,23 @@ describe('the permit does not depend on where the scan sits in the world', () =>
     expect(b.reach).toBe(a.reach);
     // And the offset is what the accumulator actually holds: 8,000 + 500.
     expect(a.reach).toBeCloseTo(8500, 6);
+  });
+});
+
+// The parameter existed, was tested, and no production caller passed it — so
+// the permit went on describing the unplaced frame in the app while the tests
+// said the capability worked. The wiring is the thing worth pinning.
+describe('the production permit reads the placed frame', () => {
+  const src = (p: string): string => readFileSync(new URL(p, import.meta.url), 'utf8');
+
+  it('the terrain runner supplies the layer offset', () => {
+    expect(src('../src/app/terrainAnalysisRunner.ts'))
+      .toMatch(/projectOffset:\s*id\s*\?\s*viewer\.layerProjectOffset\(id\)/);
+  });
+
+  it('the Viewer exposes it from the layer placement', () => {
+    const viewer = src('../src/render/Viewer.ts');
+    expect(viewer).toMatch(/layerProjectOffset\(id: string\)/);
+    expect(viewer).toMatch(/accumulatorOffset\(p\)/);
   });
 });

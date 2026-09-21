@@ -62,6 +62,8 @@ function makeRunner(positions: Float32Array | null, onResult: () => void) {
       : null),
     clouds: () => (positions ? ['scan-1'] : []),
     getCloud: () => null,
+    // Unplaced: the permit then reads the layer's own frame, as it always did.
+    layerProjectOffset: () => null,
     streamingCloud: null,
   } as unknown as Viewer;
   return createTerrainAnalysisRunner({
