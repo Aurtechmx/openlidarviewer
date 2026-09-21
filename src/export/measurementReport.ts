@@ -25,6 +25,7 @@ import {
 import type { HashFn } from '../render/measure/auditLog';
 import { exportGate } from '../validation/evidenceRegistry';
 import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat, type EvidenceStatus } from '../validation/exportEvidenceNote';
+import type { ClaimId } from '../validation/evidenceRegistry';
 
 /**
  * The claim the integrity report stands on (§19). REPORT-DIGEST is the tamper-
@@ -33,7 +34,7 @@ import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat, type EvidenceStatu
  * than asserting that: if the register ever lowers the digest below its bar, or
  * disables it, this exporter's verdict flips automatically.
  */
-export const INTEGRITY_REPORT_CLAIM = 'REPORT-DIGEST';
+export const INTEGRITY_REPORT_CLAIM: ClaimId = 'REPORT-DIGEST';
 
 export interface ReportProvenance {
   readonly datasetId: string;

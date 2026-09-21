@@ -93,12 +93,19 @@ The gate's number is the larger one because it also counts the reads inside
 frame mistake there is wrong everywhere at once, so the gate has to see it. This
 plan's number is the migration surface, which is consumers only.
 
-Measured, `outside-model`: 135 direct `.positions` reads across 44 files. Both
+Measured, `outside-model`: 147 direct `.positions` reads across 51 files. Both
 numbers are regenerated from the tree rather than quoted from memory, because
 they drift as code moves — they rose to 162 across 43 files while the placement
-architecture was landing, and have since fallen as consumers moved onto the
-accessors. Run `npm run lint:positions-reads` for the live list with
-`file:line`.
+architecture was landing, and fell as consumers moved onto the accessors.
+
+The latest rise is a widening of what the counter can SEE, not a regression.
+The rule matched `.positions` and so was blind to a destructured binding
+(`const { positions } = cloud`), which `src/io/loadPnts.ts` documents choosing
+for exactly that reason. The whole of `src/io/exporters.ts` sat outside the
+gate on the same technicality. The detector now counts both spellings, every
+newly visible site has been classified by frame, and the shrink-only rule
+applies to the larger, truer number. Run `npm run lint:positions-reads` for the
+live list with `file:line`.
 
 Two categories are counted but are not consumer reads to migrate:
 

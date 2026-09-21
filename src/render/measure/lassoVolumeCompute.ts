@@ -27,11 +27,47 @@ import { accumulatorOffset } from '../layerPlacement';
 import type { VolumeBudgetDecision } from './volumeBudget';
 import { decideVolumeBudget } from './volumeBudget';
 import { selectByLassoWithDepth, volumeFromLassoWithFootprint } from './lassoVolume';
-import type { LassoSelectionWithDepth, ScreenProjector, Vec2 } from './lassoVolume';
+import type {
+  LassoSelectionWithDepth,
+  ScreenProjector,
+  SelectionVisibilityFilters,
+  Vec2,
+} from './lassoVolume';
+import type { Vec3 } from '../navMath';
 import { describeLassoSelectionBasis, rejectOccluded } from './lassoOcclusion';
 import type { LassoSelectionBasis, OcclusionOutcome } from './lassoOcclusion';
 export type { LassoSelectionBasis } from './lassoOcclusion';
 export { makeLassoProjector } from './lassoProjector';
+// Re-exported through this cluster so the Viewer keeps one import for the
+// whole lasso walk rather than gaining an edge per helper.
+export { sourcePositions } from '../../model/pointFrames';
+
+/**
+ * Pair a clip-box test with a per-point accept, or null when neither hides
+ * anything and the walk should skip the filter entirely.
+ *
+ * `clipKeep` is called with PROJECT-frame coordinates, because that is the
+ * frame the clip box is defined in and the frame the walk's placed copy is
+ * already in — no offset is re-applied.
+ *
+ * `accept` is called with an index into the cloud's OWN buffer. The walk's
+ * indices address its strided copy, so `stride` undoes that here rather than
+ * at each call site, where getting it wrong would accept the wrong points
+ * silently.
+ */
+export function lassoVisibilityFilters(
+  clipKeep: ((x: number, y: number, z: number) => boolean) | null,
+  accept: ((index: number) => boolean) | null,
+  stride: number,
+): SelectionVisibilityFilters | null {
+  if (!clipKeep && !accept) return null;
+  const step = Math.max(1, Math.floor(stride));
+  return {
+    keepPoint: clipKeep ?? undefined,
+    acceptIndex: accept ? (i) => accept(i * step) : undefined,
+  };
+}
+
 
 /**
  * A strided copy of an interleaved xyz buffer, keeping every `stride`-th
@@ -132,6 +168,25 @@ export interface LassoVolumeHost {
   readonly streamingPositions: ReadonlyArray<Float32Array>;
   /** Whether this cloud was voxel-reduced to fit the device budget. */
   wasReduced(cloud: PointCloud): boolean;
+  /**
+   * The clip box and class/elevation/intensity filters that decide what this
+   * layer currently SHOWS, or null when nothing is hiding anything.
+   *
+   * A MEASUREMENT must not be taken over points the user cannot see, for the
+   * same reason an edit must not rewrite them (reclassify-invisible-points,
+   * Critical) — and more so, because a measurement is a claim about the scene
+   * on screen. Clip a stockpile away from the road cut behind it, lasso the
+   * pile, and the clipped-away low returns still set the reference percentile
+   * and inflate the fill, with nothing in the result saying so.
+   *
+   * `positions` passed to `keepPoint` are in the PROJECT frame, already
+   * placed, which is the frame the clip box is defined in. The index handed to
+   * `acceptIndex` is the index into the cloud's OWN buffer, so the walk undoes
+   * its stride first.
+   */
+  visibilityFor(entry: LassoCloudEntry, stride: number): SelectionVisibilityFilters | null;
+  /** The scan's up axis, for the footprint hull and the reference plane. */
+  readonly worldUp: Vec3;
 }
 
 export interface LassoVolumeComputeInput {
@@ -183,6 +238,13 @@ export interface LassoVolumeComputeOutput {
    * the figure rests on one at all.
    */
   readonly streamingContributed: boolean;
+  /**
+   * Whether the clip box or a visibility filter held candidates back, so the
+   * figure describes the visible subset rather than everything inside the
+   * drawn shape. A viewer who clipped deliberately wants exactly that; one who
+   * forgot a class was hidden needs telling.
+   */
+  readonly selectionRestrictedByVisibility: boolean;
   readonly polygon3D: ReadonlyArray<[number, number, number]>;
   readonly referenceZ: number;
   readonly result: ReturnType<typeof volumeFromLassoWithFootprint>['result'];
@@ -219,6 +281,8 @@ export function computeLassoVolume(
 
   const selectionByCloudId = new Map<string, ReadonlyArray<number>>();
   let anySourceReduced = false;
+  /** Whether the clip box or a visibility filter held any candidate back. */
+  let anyHidden = false;
 
   // Every source's candidates are gathered BEFORE anything is rejected. The
   // depth buffer has to be one buffer over all of them: a building in one layer
@@ -230,8 +294,32 @@ export function computeLassoVolume(
   // the highlight pipeline.
   for (const [id, entry] of host.integrable) {
     const positions = copyPlacedPositions(entry.cloud, stride, entry.placement);
-    const sel = selectByLassoWithDepth({ positions, lasso, project: host.project });
+    const raw = selectByLassoWithDepth({ positions, lasso, project: host.project });
+    if (raw.count === 0) continue;
+    // Hidden points leave before anything is measured or pooled into the depth
+    // buffer, so neither the volume nor the occlusion test can see them.
+    // Compacted in place, all four arrays together: the depth test reads
+    // `indices`, `screenX`, `screenY` and `depth` by one running offset, so
+    // dropping a hidden point from one alone would pair the survivors with
+    // another point's screen position.
+    const filters = host.visibilityFor(entry, stride);
+    let sel = raw;
+    if (filters?.keepPoint || filters?.acceptIndex) {
+      const { indices, screenX, screenY, depth } = raw;
+      const keep = filters.keepPoint;
+      const accept = filters.acceptIndex;
+      let w = 0;
+      for (let r = 0; r < raw.count; r++) {
+        const pi = indices[r];
+        if (keep && !keep(positions[pi * 3], positions[pi * 3 + 1], positions[pi * 3 + 2])) continue;
+        if (accept && !accept(pi)) continue;
+        indices[w] = pi; screenX[w] = screenX[r]; screenY[w] = screenY[r]; depth[w] = depth[r];
+        w++;
+      }
+      sel = { indices, screenX, screenY, depth, count: w };
+    }
     if (sel.count === 0) continue;
+    if (sel.count < raw.count) anyHidden = true;
     if (host.wasReduced(entry.cloud)) anySourceReduced = true;
     parts.push({ id, positions, sel });
     candidateCount += sel.count;
@@ -338,6 +426,9 @@ export function computeLassoVolume(
     positions: selectedPositions,
     selected: allIndices,
     referencePercentile,
+    // The footprint hull and the reference plane are defined against this; a
+    // Y-up scan measured without it gets a side elevation for a plan area.
+    up: host.worldUp,
   });
 
   return {
@@ -347,6 +438,7 @@ export function computeLassoVolume(
     budget,
     anySourceReduced,
     streamingContributed,
+    selectionRestrictedByVisibility: anyHidden,
     polygon3D: lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
     referenceZ: lassoOut.referenceZ,
     result: lassoOut.result,

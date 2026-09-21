@@ -38,22 +38,48 @@ export const HEIGHT_MAP_RAMPS: readonly HeightMapRamp[] = [
   'topo',
 ];
 
+/**
+ * The scan's HEIGHT extent, read off the axis that actually points up.
+ *
+ * The raster this exporter captures is coloured by the runtime's `elevation`
+ * mode, which is axis-aware. The card beside it read `aabb[2]`/`aabb[5]`
+ * regardless, so on a Y-up mesh a 40 m wide, 6 m tall scan passed the
+ * availability gate on its horizontal span and printed "Min Z -20 / Max Z 20"
+ * against a ramp covering the true 0-6 m. The georeferenced top-down ortho
+ * path already declines on a Y-up frame for the same reason; this one drew
+ * the picture correctly and mislabelled it.
+ *
+ * The row label follows the axis too, so "Min Y" on a Y-up mesh says which
+ * number the reader is looking at rather than asserting a Z that is not one.
+ */
+function heightExtent(context: ExportContext): {
+  readonly min: number;
+  readonly max: number;
+  readonly range: number;
+  readonly label: (side: 'Min' | 'Max') => string;
+} | null {
+  const aabb = context.adapter.localBoundsAabb();
+  if (!aabb) return null;
+  const axis = context.adapter.worldUpAxis();
+  const min = aabb[axis];
+  const max = aabb[axis + 3];
+  const name = axis === 0 ? 'X' : axis === 1 ? 'Y' : 'Z';
+  return { min, max, range: max - min, label: (side) => `${side} ${name}` };
+}
+
 export const heightMapExporter: ExportFactory = {
   mode: 'height-map',
   label: 'Height Map',
 
   isAvailable(context: ExportContext): boolean {
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) return false;
-    return (aabb[5] - aabb[2]) > MIN_Z_EXTENT_M;
+    const h = heightExtent(context);
+    return h !== null && h.range > MIN_Z_EXTENT_M;
   },
 
   unavailableReason(context: ExportContext): string {
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) return 'No cloud is loaded.';
-    if (aabb[5] - aabb[2] <= MIN_Z_EXTENT_M) {
-      return 'Cloud has no measurable height range.';
-    }
+    const h = heightExtent(context);
+    if (h === null) return 'No cloud is loaded.';
+    if (h.range <= MIN_Z_EXTENT_M) return 'Cloud has no measurable height range.';
     return 'Height map is unavailable on this cloud.';
   },
 
@@ -61,8 +87,8 @@ export const heightMapExporter: ExportFactory = {
     context: ExportContext,
     options: HeightMapOptions,
   ): Promise<ExportResult> {
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) {
+    const h = heightExtent(context);
+    if (h === null) {
       throw new Error('HeightMap: no cloud loaded — cannot describe the export.');
     }
     // Native CRS units — Min/Max Z must carry the real unit (ft for foot CRSs).
@@ -85,12 +111,12 @@ export const heightMapExporter: ExportFactory = {
       'elevation',
       options,
       [
-        { label: 'Min Z', value: formatLinear(aabb[2], unit) },
-        { label: 'Max Z', value: formatLinear(aabb[5], unit) },
+        { label: h.label('Min'), value: formatLinear(h.min, unit) },
+        { label: h.label('Max'), value: formatLinear(h.max, unit) },
       ],
       {
-        minZ: aabb[2],
-        maxZ: aabb[5],
+        minZ: h.min,
+        maxZ: h.max,
       },
     );
   },

@@ -275,7 +275,7 @@ describe('the gate is not vacuous', () => {
   });
 
   it('refuses a record from another method, before any metric is read', () => {
-    const record = { ...passingRecord(), classifier: { ...FROZEN_CLASSIFIER, method: 'olv.class.derived-selective@4' } };
+    const record = { ...passingRecord(), classifier: { ...FROZEN_CLASSIFIER, method: 'olv.class.derived-selective@4' } }; // method-literal-ok: deliberately unregistered
     const { problems } = collectCorpusProblems(record);
     expect(problems.join(' ')).toMatch(/classifier method is olv\.class\.derived-selective@4/);
   });

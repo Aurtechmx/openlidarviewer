@@ -94,6 +94,24 @@ export interface ScanPrecisionInputs {
   readonly crs?: PrecisionCrsFacts | null;
   /** Override the refusal budget, in metres. Omit for the documented default. */
   readonly budgetMetres?: number;
+  /**
+   * The layer's offset into the shared PROJECT frame, when it is mounted.
+   *
+   * The permit measured the layer's own box, but the buffers the measurement
+   * pipeline consumes are project-local: `placeBufferInto` and
+   * `accumulatorOffset` fold this offset into a Float32Array before any
+   * volume, profile or terrain gather reads it. A 500 m tile mounted 8 km out
+   * has a Float32 step of 9.8e-4 m at the reach the accumulator actually sees,
+   * not the 3.1e-5 m its own extent implies — a 32x understatement on the
+   * document a deliverable cites for its precision.
+   *
+   * The understatement is bounded rather than open-ended: `mountPrecision`
+   * refuses to mount a layer whose PLACED step would exceed
+   * `REBASE_QUANTUM_BUDGET_M`, so the worst reachable case is that budget. It
+   * is still the wrong number on a permit. Omitted or all-zero reproduces the
+   * unplaced reading exactly, which is every unmounted scan.
+   */
+  readonly projectOffset?: readonly [number, number, number] | null;
 }
 
 /**
@@ -187,12 +205,20 @@ const frameOf = (origin: Vec3, b: Box6): FrameResolution => ({
 
 /** The origin and the LOCAL extent the loaded shape actually holds. */
 function resolveLocalFrame(inputs: ScanPrecisionInputs): FrameResolution {
+  // The reach the ACCUMULATOR sees, which is the layer's own extent plus
+  // however far it was placed from the project origin.
+  const off = inputs.projectOffset ?? null;
+  const shift = (v: Vec3): Vec3 => (off
+    ? [v[0] + off[0], v[1] + off[1], v[2] + off[2]]
+    : v);
   const cloud = inputs.cloud;
   if (cloud) {
     const b = cloud.bounds();
     const o = cloud.sourceOrigin;
     const origin: Vec3 = [o[0], o[1], o[2]];
-    const box: Box6 = [b.min[0], b.min[1], b.min[2], b.max[0], b.max[1], b.max[2]];
+    const lo = shift([b.min[0], b.min[1], b.min[2]]);
+    const hi = shift([b.max[0], b.max[1], b.max[2]]);
+    const box: Box6 = [lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]];
     // A static cloud's bounds are scanned off the decoded positions, so there
     // is no second box to fall back to: an unreadable one means the buffer
     // itself holds no extent.

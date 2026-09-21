@@ -43,6 +43,13 @@
       "why": "The spacing probe measures nearest-neighbour distance in the cloud's own source units (the QA signal converts to metres afterwards through the resolved CRS), and the buffer doubles as the memo key so a repaint never re-probes. Translation-invariant, so any frame gives the same figure; source-local is what the structural shell hands over."
     },
     {
+      "file": "src/app/scanRouteCoordinator.ts",
+      "symbol": "createScanRouteCoordinator.applyRoute",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The routing gather hands back one scan's own buffer; space and object metrics are scale-converted from it and never composed with another layer, so no placement is folded in."
+    },
+    {
       "file": "src/app/terrainAnalysisRunner.ts",
       "symbol": "createTerrainAnalysisRunner.buildResultForExport",
       "frame": "project-local",
@@ -134,6 +141,13 @@
       "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
     },
     {
+      "file": "src/io/loadFile.ts",
+      "symbol": "loadFile.worker.onmessage",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "A preview chunk straight off the parse worker, counted only for its length to report progress; it has not been recentred or placed and no coordinate is read."
+    },
+    {
       "file": "src/io/loadGltf.ts",
       "symbol": "loadGltf",
       "frame": "source-local",
@@ -169,6 +183,13 @@
       "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
     },
     {
+      "file": "src/io/loadPnts.ts",
+      "symbol": "loadPnts",
+      "frame": "render-local",
+      "reads": 2,
+      "why": "A 3D Tiles tile's own array, already through RTC_CENTER and the tile transform, then recentred on the chosen origin before it becomes a PointCloud. It is the decoder's buffer, not the model's."
+    },
+    {
       "file": "src/io/loadPts.ts",
       "symbol": "loadPts",
       "frame": "source-local",
@@ -195,6 +216,13 @@
       "frame": "source-local",
       "reads": 2,
       "why": "Worker transport: the freshly parsed buffer is transferred to the main thread in exactly the frame the loader wrote it, untouched. One payload builder serves the preview reply and the final reply."
+    },
+    {
+      "file": "src/io/parseWorker.ts",
+      "symbol": "ctx.onmessage.onPreviewChunk",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Read to transfer the buffer to the page, not to interpret it; the chunk leaves the worker in the frame the parser produced."
     },
     {
       "file": "src/io/tiles3d/pntsDecode.ts",
@@ -295,6 +323,13 @@
       "why": "The source-local accessor itself. This is the one place the label is attached to a cloud buffer."
     },
     {
+      "file": "src/render/class/deriveClassificationWorker.ts",
+      "symbol": "ctx.onmessage",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The classify job is posted one scan's buffer and returns codes by index; the derive builds its own ground grid over whatever frame it was handed and composes with nothing else."
+    },
+    {
       "file": "src/render/ContourOverlay.ts",
       "symbol": "ContourOverlay._upload",
       "frame": "project-local",
@@ -362,10 +397,24 @@
     },
     {
       "file": "src/render/measure/lassoVolume.ts",
+      "symbol": "selectByLassoWithDepth",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "The selection walks the caller's already-placed copy and projects it against the shared-frame camera, so the buffer must be in the frame that camera sees."
+    },
+    {
+      "file": "src/render/measure/lassoVolume.ts",
       "symbol": "volumeFromLassoWithFootprint",
       "frame": "project-local",
       "reads": 6,
       "why": "Receives the packed selection built from copyPlacedPositions, so the footprint and the reference plane are computed in the shared project frame."
+    },
+    {
+      "file": "src/render/measure/lassoVolumeCompute.ts",
+      "symbol": "computeLassoVolume",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "Each part carries the placed copy `copyPlacedPositions` made, which is what lets one layer's points pool with another's in a single depth buffer."
     },
     {
       "file": "src/render/measure/profileSampler.ts",
@@ -376,6 +425,13 @@
     },
     {
       "file": "src/render/measure/profileSectionSeam.ts",
+      "symbol": "createProfileSectionSeam.sampleSeries",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "`assembleProfileBuffers` folds each layer's Float64 placement in as it copies, so the assembled buffer is the project frame by construction."
+    },
+    {
+      "file": "src/render/measure/profileSectionSeam.ts",
       "symbol": "walkScene",
       "frame": [
         "source-local",
@@ -383,6 +439,20 @@
       ],
       "reads": 2,
       "why": "Reads each candidate buffer only to learn whether it holds points; a static layer's is source-local and a resident node's is render-local, and the project-frame lift happens per point inside the source view."
+    },
+    {
+      "file": "src/render/measure/snap.ts",
+      "symbol": "countPointsWithinRadius",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The snap index stores whatever buffer it was built from and answers in that same frame; the caller supplies a query point in the frame it indexed."
+    },
+    {
+      "file": "src/render/measure/snap.ts",
+      "symbol": "snapToNearestPoint",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Same index, same contract: the grid is frame-agnostic and the result is only meaningful against the frame the index was built in."
     },
     {
       "file": "src/render/measure/stockpileVolume.ts",
@@ -404,6 +474,13 @@
       "frame": "source-local",
       "reads": 9,
       "why": "The photometric witness patch is a neighbourhood of one picked point inside one layer, taken from that layer own buffer; a tangent basis over neighbours is translation-invariant anyway."
+    },
+    {
+      "file": "src/render/previewCloudLayer.ts",
+      "symbol": "PreviewCloudLayer.append",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "Preview chunks are appended straight into the layer's GPU buffer, so they arrive in the frame the renderer draws."
     },
     {
       "file": "src/render/recordSelection.ts",

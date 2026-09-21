@@ -65,6 +65,7 @@ function stubAdapter(opts: {
     hasClassification: () => opts.hasClassification ?? false,
     hasNormals: () => opts.hasNormals ?? false,
     colorProvenanceNote: (mode) => (isDerivedColorMode(mode) ? DERIVED_COLOR_NOTE : null),
+    worldUpAxis: () => 2 as const,
     localBoundsAabb: () => (opts.aabb === undefined ? [0, 0, 0, 10, 10, 5] : opts.aabb),
     dataBoundsAabb: () => (opts.aabb === undefined ? [0, 0, 0, 10, 10, 5] : opts.aabb),
     // v0.3.2-Studio additions — exporters now delegate the actual render +

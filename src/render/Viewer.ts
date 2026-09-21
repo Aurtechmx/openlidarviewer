@@ -108,9 +108,8 @@ import {
 import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
-import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions } from './measure/lassoVolumeCompute';
-import type { LassoCloudEntry, LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
-import { makeLassoProjector } from './measure/lassoVolumeCompute';
+import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions } from './measure/lassoVolumeCompute';
+import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -182,7 +181,7 @@ import {
 } from './measure/profileSectionSeam';
 import { volumeCutFill, assembleVolumePositions, POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
-  integrableClouds, isIntegrable, streamingMayCombine, sourceClassifiesGround,
+  integrableClouds, integrableEntries, streamingMayCombine, sourceClassifiesGround,
   analysisClassification,
 } from './integrableClouds';
 import type { LayerCompatibility } from '../model/layerCompatibility';
@@ -3735,21 +3734,24 @@ export class Viewer {
       h,
     );
 
-    const integrable: Array<readonly [string, LassoCloudEntry]> = [];
-    for (const [id, entry] of this._clouds) {
-      // Hidden and locked layers are skipped: the picker won't place vertices
-      // on them, so the lasso must not select through them either.
-      if (isIntegrable(entry)) integrable.push([id, entry]);
-    }
+    const integrable = integrableEntries(this._clouds);
 
     const out = computeLassoVolumeWalk({
       host: {
         project,
         integrable,
-        streamingPositions: this._streaming
-          ? [...this._streaming.renderer.positionArrays()]
-          : [],
+        // Streaming joins only when the frame rule allows it — the same test
+        // every other combined estimator applies (`_streamingMayCombine`).
+        streamingPositions: this._streaming && this._streamingMayCombine(integrable.length)
+          ? [...this._streaming.renderer.positionArrays()] : [],
         wasReduced: (cloud) => this._cloudWasReduced(cloud),
+        worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+        visibilityFor: (entry, stride) => {
+          const clip = this._clip; const c = entry.cloud; return lassoVisibilityFilters(
+            clip?.enabled ? (x, y, z) => clipKeepsPoint(clip, [x, y, z]) : null,
+            this._pickAccept(sourcePositions(c), c.classification, c.intensity,
+              this._currentFilterWindow(this._elevLayerOf(c))) ?? null, stride);
+        },
       },
       lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
       referencePercentile: percentile,
@@ -3769,10 +3771,8 @@ export class Viewer {
       }),
       selectedCount: out.selectedCount,
       lasso,
-      selectionByCloudId: out.selectionByCloudId,
-      budget: out.budget,
-      polygon3D: out.polygon3D,
-      referenceZ: out.referenceZ,
+      selectionByCloudId: out.selectionByCloudId, budget: out.budget,
+      polygon3D: out.polygon3D, referenceZ: out.referenceZ,
       selectionBasis: out.selectionBasis,
     };
   }
@@ -4598,7 +4598,7 @@ export class Viewer {
         }
         return out;
       },
-      streaming: () => this._streaming,
+      streaming: () => this._streaming, worldUpAxis: () => (this._worldUp.y === 1 ? 1 : 2),
       setColorMode: (id, mode) => this.setColorMode(id, mode),
       setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),
       setVisible: (id, visible) => this.setCloudVisible(id, visible),

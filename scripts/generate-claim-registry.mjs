@@ -47,6 +47,8 @@ const body = claims
   )
   .join('\n');
 
+const idUnion = claims.map((c) => `  | '${c.id}'`).join('\n');
+
 const out = `/**
  * claimRegistry.generated.ts — AUTO-GENERATED. DO NOT EDIT.
  *
@@ -65,6 +67,19 @@ export interface RegistryEntry {
 export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
 ${body}
 };
+
+/**
+ * Every registered claim id, as a type.
+ *
+ * The ids were plain \`string\` everywhere, so the ~35 literals that do not sit
+ * inside an \`exportGate(...)\` call — export manifests, cross-check reference
+ * slots, module constants — were invisible to \`lint:claim-register\`, whose
+ * regex matches one call shape. A rename in the YAML would have been caught
+ * for the gate calls and missed for the rest. Typed, every one of them is a
+ * compile error instead.
+ */
+export type ClaimId =
+${idUnion};
 `;
 
 writeFileSync(OUT, out);
