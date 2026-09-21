@@ -41,3 +41,38 @@ describe('the permit measures the frame the accumulator sees', () => {
     }
   });
 });
+
+// A review read `resolveLocalFrame` as mixing frames: it shifts the BOX by the
+// project offset and hands `frameOf` an unshifted `sourceOrigin`, which looks
+// like the offset being counted on top of an origin that already carries it.
+//
+// It is not, and the reason is worth pinning rather than remembering.
+// `precisionOfFrame` lifts the local box back by that same origin and then
+// passes the origin as a `shared-origin` strategy, so `reach` is
+// `max(|extent − origin|)` = `max(|local|)`. The absolute origin cancels; only
+// the local box and the offset survive. If that ever stops being true these go
+// red, and the permit starts depending on where in the world a scan sits.
+describe('the permit does not depend on where the scan sits in the world', () => {
+  const crs = { linearUnitToMetres: 1, linearUnitKnown: true } as never;
+  const at = (sourceOrigin: readonly [number, number, number]) => ({
+    bounds: () => ({ min: [0, 0, 0] as const, max: [500, 500, 50] as const }),
+    sourceOrigin,
+  });
+
+  it('reports the same step for the same shape at any source origin', () => {
+    const near = scanPrecision({ cloud: at([0, 0, 0]) as never, crs })!;
+    // A real UTM easting/northing, the case the concern was about.
+    const far = scanPrecision({ cloud: at([500_000, 4_000_000, 0]) as never, crs })!;
+    expect(far.reach).toBe(near.reach);
+    expect(far.worstCaseSpacing).toBe(near.worstCaseSpacing);
+  });
+
+  it('adds the project offset once, not once per origin', () => {
+    const offset = [0, 8000, 0] as const;
+    const a = scanPrecision({ cloud: at([0, 0, 0]) as never, crs, projectOffset: offset })!;
+    const b = scanPrecision({ cloud: at([500_000, 4_000_000, 0]) as never, crs, projectOffset: offset })!;
+    expect(b.reach).toBe(a.reach);
+    // And the offset is what the accumulator actually holds: 8,000 + 500.
+    expect(a.reach).toBeCloseTo(8500, 6);
+  });
+});

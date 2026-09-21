@@ -574,13 +574,14 @@ let pendingLassoSave: {
 } | null = null;
 
 const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
-  onCommit: async (lasso, basis) => { // async: the estimator is fetched on demand
+  onCommit: async (lasso, basis) => {
     if (!viewer) return;
+    // The ONE await, before any state is staged, so the body below cannot be
+    // split by a second commit staging its own `pendingLassoSave` mid-flight.
+    const { stockpileToastSuffix } = await loadStockpilePresenter();
     // Native→metre factor for the source CRS (feet for a state-plane-feet
-    // cloud). Handed to computeLassoVolume so the stockpile band it returns is
-    // already converted to metres, and reused below for the m³/m² readout.
-    const ctx = crsService.context();
-    const lin = ctx.linearUnitToMetres;
+    // cloud), reused below for the m³/m² readout and the stockpile band.
+    const ctx = crsService.context(), lin = ctx.linearUnitToMetres;
     // Whether that factor is real or an assumed 1: an unknown CRS still yields
     // lin = 1 for display, but its points/m² density is then an assumption the
     // stockpile grade must not claim. One context answers both questions.
@@ -641,12 +642,11 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       crsVerdict.validity === 'safe-explicit-local'
         ? ' · units assumed metres'
         : '';
-    // `out.stockpileSuffix` is the ` · Stockpile: … ± … (±%) · confidence`
-    // band the Viewer computed over the same sample with a "lowest ground"
-    // base plane — the honest figure cloud viewers report without. Empty when
-    // there's nothing trustworthy to claim (too few points / degenerate).
-    const b = out.stockpileInputs; // the estimator arrives with the lasso, not the app
-    const stockpileSuffix = (await loadStockpilePresenter()).stockpileToastSuffix(b.polygon, b.positions, b.lin, b.options);
+    // The ` · Stockpile: … ± … (±%) · confidence` band, re-graded over the same
+    // sample against a "lowest ground" base plane. Empty when there is nothing
+    // trustworthy to claim (too few points / degenerate footprint).
+    const b = out.stockpileInputs;
+    const stockpileSuffix = stockpileToastSuffix(b.polygon, b.positions, b.lin, b.options);
     showLassoToast(
       `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
         `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stockpileSuffix}`,
