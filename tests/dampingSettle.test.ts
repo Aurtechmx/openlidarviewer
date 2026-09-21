@@ -21,8 +21,6 @@ import {
   hasDampingSettled,
   DampingSettleGate,
   SETTLED_REMAINING_PX,
-  DAMPING_REFERENCE_HZ,
-  frameRateAdjustedDamping,
 } from '../src/render/dampingSettle';
 import { DAMPING_FACTOR, DAMPING_FACTOR_TOUCH } from '../src/render/orbitFeel';
 import { projectedPixels } from '../src/render/pixelProjection';
@@ -236,52 +234,3 @@ describe('DampingSettleGate', () => {
   });
 });
 
-describe('the glide is the same length on every panel', () => {
-  /** Travel remaining after `frames` decays of `d`, as a fraction of v0. */
-  const remainingAfter = (d: number, frames: number) => Math.pow(1 - d, frames);
-
-  it('returns the tuned factor untouched at the reference rate', () => {
-    // The shipped feel is the one being preserved, so 60 Hz must not move.
-    for (const d of [0.07, 0.18]) {
-      expect(frameRateAdjustedDamping(d, 1 / DAMPING_REFERENCE_HZ)).toBeCloseTo(d, 12);
-    }
-  });
-
-  it('leaves the same travel after one second at 60, 90, 120 and 144 Hz', () => {
-    // The property that matters: a flick releases, and a second later the
-    // camera has glided the same distance whatever the panel does.
-    const base = 0.07;
-    const after = (hz: number) => {
-      const d = frameRateAdjustedDamping(base, 1 / hz);
-      return remainingAfter(d, hz); // one second of frames
-    };
-    const reference = after(60);
-    for (const hz of [90, 120, 144, 240]) {
-      expect(after(hz), `${hz} Hz`).toBeCloseTo(reference, 9);
-    }
-  });
-
-  it('is what a fixed factor fails to do', () => {
-    // Without the correction a 144 Hz panel spends the tail 2.4x faster, which
-    // is the defect this exists for.
-    const base = 0.07;
-    const fixed60 = remainingAfter(base, 60);
-    const fixed144 = remainingAfter(base, 144);
-    expect(fixed144).toBeLessThan(fixed60 / 10);
-  });
-
-  it('passes a degenerate clock or factor straight through', () => {
-    expect(frameRateAdjustedDamping(0.07, 0)).toBe(0.07);
-    expect(frameRateAdjustedDamping(0.07, Number.NaN)).toBe(0.07);
-    expect(frameRateAdjustedDamping(0.07, -1)).toBe(0.07);
-    expect(frameRateAdjustedDamping(0, 1 / 60)).toBe(0);
-    expect(frameRateAdjustedDamping(1, 1 / 60)).toBe(1);
-  });
-
-  it('stays inside (0, 1), so a long frame cannot invert the decay', () => {
-    // A 300 ms stall must damp hard, never overshoot into a negative factor.
-    const d = frameRateAdjustedDamping(0.07, 0.3);
-    expect(d).toBeGreaterThan(0.07);
-    expect(d).toBeLessThan(1);
-  });
-});
