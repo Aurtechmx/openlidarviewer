@@ -29,12 +29,12 @@ function parked(): RenderActivityGate {
   return g;
 }
 
-const idle = { tweening: false, streamingBusy: false };
+const idle = { tweening: false, streamingBusy: false, commitWork: false };
 
 describe('RenderActivityGate', () => {
   it('renders while a tween is in progress, whatever else is true', () => {
     const g = parked();
-    expect(g.shouldRender(1_000_000, { tweening: true, streamingBusy: false })).toBe(true);
+    expect(g.shouldRender(1_000_000, { tweening: true, streamingBusy: false, commitWork: false })).toBe(true);
   });
 
   it('renders for the full holdover window after an input bump', () => {
@@ -55,8 +55,18 @@ describe('RenderActivityGate', () => {
 
   it('renders while streaming is loading, then stops when it goes quiet', () => {
     const g = parked();
-    expect(g.shouldRender(5000, { tweening: false, streamingBusy: true })).toBe(true);
-    expect(g.shouldRender(5000, { tweening: false, streamingBusy: false })).toBe(false);
+    expect(g.shouldRender(5000, { tweening: false, streamingBusy: true, commitWork: false })).toBe(true);
+    expect(g.shouldRender(5000, { tweening: false, streamingBusy: false, commitWork: false })).toBe(false);
+  });
+
+  it('draws for commit work, so uploaded geometry does not wait for a heartbeat', () => {
+    // The parked gate is the whole point: no tween, no input, no fetch
+    // backlog, heartbeat at zero. Before this signal the answer was false and
+    // a node that had reached the GPU sat undrawn until the counter came
+    // round.
+    const g = parked();
+    expect(g.shouldRender(9000, { ...idle, commitWork: true })).toBe(true);
+    expect(g.shouldRender(9000, idle)).toBe(false);
   });
 
   it('fires the heartbeat once enough idle frames have passed', () => {

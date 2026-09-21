@@ -86,6 +86,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => classesHook,
       nodeReadyHook: () => readyHook,
+      geometryLanded: () => {},
     });
     const d = decoded({ classification: new Uint8Array([1, 2, 3]) });
     cb.onNodeReady(node('0-0-0-0'), d);
@@ -93,6 +94,26 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
     expect(renderer.onNodeReady).toHaveBeenCalledWith(node('0-0-0-0'), d);
     expect(classesHook).toHaveBeenCalledWith('0-0-0-0', d.classification);
     expect(readyHook).toHaveBeenCalledTimes(1);
+  });
+
+  it('owes a paint for every node, and does so before the throwing hooks', () => {
+    // The shipped `immediate` commit mode never fills the decoded set, so the
+    // commit-queue signal reads false all session and this is the only thing
+    // telling the loop the picture changed. A node landing in a sleeping loop
+    // would otherwise wait for the heartbeat.
+    const renderer = fakeRenderer();
+    const order: string[] = [];
+    const cb = buildSchedulerCallbacks({
+      renderer,
+      benchmark: null,
+      nodeClassesHook: () => () => { order.push('classes'); throw new Error('legend'); },
+      nodeReadyHook: () => () => { order.push('ready'); throw new Error('re-route'); },
+      geometryLanded: () => { order.push('landed'); },
+    });
+    cb.onNodeReady(node('0-0-0-0'), decoded({ classification: new Uint8Array([1]) }));
+    cb.onNodeReady(node('1-0-0-0'), decoded({ classification: new Uint8Array([1]) }));
+    // Both display hooks threw and neither cost a node its frame.
+    expect(order).toEqual(['landed', 'classes', 'ready', 'landed', 'classes', 'ready']);
   });
 
   it('keys the class hook on the node CANONICAL record id, not on decode order', () => {
@@ -103,6 +124,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => classesHook,
       nodeReadyHook: () => undefined,
+      geometryLanded: () => {},
     });
     // The same node evicted and re-decoded arrives with a FRESH classification
     // array, later in the order, and still carries the same record id — which is
@@ -121,6 +143,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => undefined,
+      geometryLanded: () => {},
     });
     const hidden = new Set(['root.pnts']);
     cb.onFrontierChanged?.(hidden);
@@ -137,6 +160,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => readyHook,
+      geometryLanded: () => {},
     }).onNodeReady(node('a'), decoded());
     expect(readyHook).toHaveBeenCalledTimes(1);
 
@@ -147,6 +171,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => classesHook,
       nodeReadyHook: () => undefined,
+      geometryLanded: () => {},
     }).onNodeReady(node('b'), decoded({ classification: undefined }));
     expect(classesHook).not.toHaveBeenCalled();
   });
@@ -159,6 +184,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => liveReady,
+      geometryLanded: () => {},
     });
 
     cb.onNodeReady(node('a'), decoded()); // no hook installed yet
@@ -180,6 +206,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       nodeReadyHook: () => () => {
         throw new Error('reroute blew up');
       },
+      geometryLanded: () => {},
     });
     const d = decoded({ posBytes: 48 });
     expect(() => cb.onNodeReady(node('n1'), d)).not.toThrow();
@@ -197,6 +224,7 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
       benchmark: null,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => undefined,
+      geometryLanded: () => {},
     });
     expect(() => cb.onNodeReady(node('n'), decoded())).not.toThrow();
   });
@@ -211,6 +239,7 @@ describe('buildSchedulerCallbacks — onNodeEvicted + onTick', () => {
       benchmark,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => undefined,
+      geometryLanded: () => {},
     });
     cb.onNodeEvicted(node('gone'));
     expect(renderer.onNodeEvicted).toHaveBeenCalledWith(node('gone'));
@@ -225,6 +254,7 @@ describe('buildSchedulerCallbacks — onNodeEvicted + onTick', () => {
         benchmark: null,
         nodeClassesHook: () => undefined,
         nodeReadyHook: () => undefined,
+        geometryLanded: () => {},
       }).onTick,
     ).toBeUndefined();
 
@@ -234,6 +264,7 @@ describe('buildSchedulerCallbacks — onNodeEvicted + onTick', () => {
       benchmark,
       nodeClassesHook: () => undefined,
       nodeReadyHook: () => undefined,
+      geometryLanded: () => {},
     });
     cb.onTick?.(7.5);
     expect(benchmark.recordSchedulerTick).toHaveBeenCalledWith(7.5);

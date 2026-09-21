@@ -91,6 +91,15 @@ export interface StreamingHost {
    * host re-route the scan type as a sparse early cloud fills in.
    */
   streamingNodeReadyHook(): (() => void) | undefined;
+  /**
+   * A node's geometry is in the scene: the host owes the screen a paint.
+   *
+   * Not optional and not read fresh, unlike the two hooks above. Those are
+   * display extras a host may decline; this is the render loop being told the
+   * picture changed, and a host that could decline it would go back to
+   * sleeping on geometry it had not drawn.
+   */
+  streamingGeometryLanded(): void;
 }
 
 /**
@@ -124,11 +133,17 @@ export function buildSchedulerCallbacks(deps: {
   benchmark: StreamingBenchmark | null;
   nodeClassesHook(): ((nodeId: string, classes: Uint8Array) => void) | undefined;
   nodeReadyHook(): (() => void) | undefined;
+  geometryLanded(): void;
 }): SchedulerCallbacks {
-  const { renderer, benchmark, nodeClassesHook, nodeReadyHook } = deps;
+  const { renderer, benchmark, nodeClassesHook, nodeReadyHook, geometryLanded } = deps;
   return {
     onNodeReady: (node: StreamingNode, decoded: DecodedChunk): void => {
       renderer.onNodeReady(node, decoded);
+      // The scene changed on this line, so the paint is owed from here —
+      // before the display-only hooks below, which are guarded precisely
+      // because they may throw, and ahead of them so one that does cannot
+      // cost the node its frame.
+      geometryLanded();
       // DISPLAY-ONLY class legend hook — hand the host the node's CANONICAL id
       // and its decoded per-point classification so the legend can fold its
       // histogram in. The id is what makes the fold idempotent: a node evicted
@@ -230,6 +245,7 @@ export async function buildStreamingSession(
       benchmark,
       nodeClassesHook: () => host.streamingNodeClassesHook(),
       nodeReadyHook: () => host.streamingNodeReadyHook(),
+      geometryLanded: () => host.streamingGeometryLanded(),
     }),
     budgets,
     {

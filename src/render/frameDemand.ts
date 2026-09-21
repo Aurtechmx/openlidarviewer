@@ -43,12 +43,20 @@ export interface FrameDemandSignals {
    * decoded-but-uncommitted, and the store's own comment says as much — a
    * readiness verdict reading only those two "would fire too early".
    *
-   * Without this the loop could sleep with points decoded and undrawn. Fades
-   * hid it, because a fading node keeps the chain alive on its own; turn fades
-   * off, as the mobile and low-quality paths do, and the remaining commits
-   * would drain one pump per 250 ms safety heartbeat instead of one per frame.
-   * On the shipped `immediate` commit mode nothing is ever pending here, so
-   * this reads false and the loop behaves exactly as before.
+   * Without this the loop could sleep with points decoded and undrawn, and
+   * the remaining commits would drain one pump per 250 ms safety heartbeat
+   * instead of one per frame. On the shipped `immediate` commit mode nothing
+   * is ever pending here, so this reads false and the loop behaves exactly as
+   * before.
+   *
+   * Keeping the loop RUNNING is not the same as making it DRAW, and an
+   * earlier note here guessed that fades covered the difference — that a
+   * fading node keeps the chain alive, so only the fade-less mobile and
+   * low-quality paths were exposed. The gate consults neither this signal nor
+   * `fading`, so fades were never what stood between a commit and a paint.
+   * What does is that the scheduler is usually still ticking when geometry
+   * lands, which is why the gap is hard to reach and was never observed in a
+   * real session. `commitWork` on the gate closes it by construction.
    */
   commitPending: () => boolean;
   /** A node fade is part way through. */
@@ -61,6 +69,25 @@ export class FrameDemand {
   private readonly _signals: FrameDemandSignals;
   private _scheduler: FrameScheduler | null = null;
   private readonly _drawn = new Set<() => void>();
+  /** Was a commit outstanding when the scheduler last asked? */
+  private _commitWasPending = false;
+  /**
+   * A commit landed and the frame that will show it has not drawn yet.
+   *
+   * The loop body paints and THEN pumps, which is the right order — a drag
+   * gets its frame before mesh construction and upload compete for the same
+   * millisecond — but it means the last node of a burst is uploaded onto a
+   * scene that has already been drawn. Nothing is pending after it, so the
+   * fetch, commit and fade signals are all quiet and the loop would sleep on
+   * a picture that is one node stale.
+   *
+   * The edge is detected where the pump's effect is already visible, in
+   * {@link needsFrame}, which the scheduler asks after the frame body. It
+   * keeps the loop awake AND tells the gate to draw, and it clears in
+   * {@link frameDrawn} — when the paint it is owed has actually happened,
+   * not when a frame merely ran.
+   */
+  private _paintOwed = false;
 
   constructor(signals: FrameDemandSignals) {
     this._signals = signals;
@@ -111,6 +138,32 @@ export class FrameDemand {
   }
 
   /**
+   * Streamed geometry just entered the scene. Owe it a paint.
+   *
+   * {@link _sampleCommitWork} watches the metered commit queue, and the
+   * shipped default is not metered: `streamingCommitMode` is `immediate`, so
+   * `pump()` is inert, nodes never occupy the `decoded` state and
+   * `commitPending` is permanently false. The whole latch reads as "nothing
+   * to draw for" on the path almost every session takes.
+   *
+   * This is the mode-independent half. It fires from the scheduler's
+   * node-ready callback, after the renderer has put the node in the scene, in
+   * both modes — an event at the moment the picture changed rather than a
+   * level sampled around a pump that may not exist. Without it the last node
+   * of a burst could decode into a sleeping loop and wait for the 250 ms
+   * heartbeat to come round. Driving a real session never caught it doing so,
+   * because the scheduler is still ticking whenever a node lands; this makes
+   * the guarantee structural rather than a property of that timing.
+   *
+   * Called once per node, so it stays cheap: the flag is already-set most of
+   * a burst, and `wake` is documented idempotent.
+   */
+  geometryLanded(): void {
+    this._paintOwed = true;
+    this._scheduler?.wake();
+  }
+
+  /**
    * Does anything want a frame?
    *
    * The invalidation set answers for everything that asked. The three signals
@@ -122,10 +175,37 @@ export class FrameDemand {
    * Deliberately not the gate's `shouldRender`, whose idle heartbeat is always
    * eventually true: a loop that asked it would never sleep.
    */
+  /**
+   * Sample the commit queue and answer "is there commit work to draw for".
+   *
+   * An event is being inferred from a level, so WHERE it is sampled decides
+   * what it can see. Sampling only after the frame body would alias away any
+   * burst that both began and drained inside one frame: the level reads false
+   * on both sides and the falling edge is never observed, which is the very
+   * bug this exists to fix, surviving in a narrower window.
+   *
+   * Both callers sample, and between them sits the pump. `shouldRender` runs
+   * before the frame body, `needsFrame` after it, and `runRenderFrame` is
+   * synchronous, so no worker decode callback can land between the two. The
+   * pair therefore brackets the pump exactly rather than approximately.
+   */
+  private _sampleCommitWork(): boolean {
+    const pending = this._signals.commitPending();
+    if (pending) this._commitWasPending = true;
+    else if (this._commitWasPending) {
+      this._commitWasPending = false;
+      this._paintOwed = true;
+    }
+    return pending || this._paintOwed;
+  }
+
   needsFrame(nowMs: number): boolean {
+    // Asked once per iteration, after the frame body has pumped, so a falling
+    // edge seen here IS "the commit queue just drained".
+    const commitWork = this._sampleCommitWork();
     if (this._invalidation.needsFrame(nowMs)) return true;
     if (this._signals.tweening()) return true;
-    return this._signals.streamingBusy() || this._signals.commitPending() || this._signals.fading();
+    return commitWork || this._signals.streamingBusy() || this._signals.fading();
   }
 
   /**
@@ -149,6 +229,7 @@ export class FrameDemand {
 
   /** Tell the listeners a frame drew. */
   frameDrawn(): void {
+    this._paintOwed = false;
     for (const listener of this._drawn) listener();
   }
 
@@ -157,6 +238,9 @@ export class FrameDemand {
     return this._gate.shouldRender(this._signals.nowMs(), {
       tweening: this._signals.tweening(),
       streamingBusy: this._signals.streamingBusy(),
+      // Runs before the pump; `needsFrame` samples after it. See
+      // {@link _sampleCommitWork} for why both ends are needed.
+      commitWork: this._sampleCommitWork(),
     });
   }
 

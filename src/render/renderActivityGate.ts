@@ -31,6 +31,26 @@ export interface RenderActivitySignals {
   readonly tweening: boolean;
   /** The streaming scheduler has in-flight or queued node fetches. */
   readonly streamingBusy: boolean;
+  /**
+   * Decoded geometry is waiting to reach the GPU, or reached it on the frame
+   * just gone and has not been painted yet.
+   *
+   * Distinct from {@link streamingBusy}, which is the FETCH side: the
+   * scheduler's queue empties as soon as the last chunk decodes, while the
+   * metered commit pump is still spending its per-frame budget uploading what
+   * decoded. A tail of nodes therefore commits with nothing else asking for a
+   * frame, and the pump runs AFTER the paint in the loop body, so the last
+   * one lands on a scene that has already been drawn. Without this the gate
+   * saw only the fetch side and could idle-throttle those frames, leaving
+   * geometry on the GPU undrawn until the heartbeat came round.
+   *
+   * The window is narrow in practice. Driving a real COPC session, node-join
+   * to paint measured a 9-66 ms median with and without this signal, in both
+   * commit modes: the scheduler is still ticking whenever geometry lands, so
+   * something else was asking for the frame. This closes the case where
+   * nothing else does; it is not known to have been reachable.
+   */
+  readonly commitWork: boolean;
 }
 
 /**
@@ -141,14 +161,16 @@ export class RenderActivityGate {
    *
    * Priority, highest first: a tween always draws; recent input draws until
    * the holdover expires; active streaming draws so new nodes appear without
-   * latency; otherwise the heartbeat draws once the idle counter reaches the
-   * threshold. The boundary is `now < until`, so the expiry instant is already
-   * idle.
+   * latency; commit work draws so geometry that has reached the GPU is on the
+   * screen rather than waiting for a heartbeat; otherwise the heartbeat draws
+   * once the idle counter reaches the threshold. The boundary is
+   * `now < until`, so the expiry instant is already idle.
    */
   shouldRender(now: number, signals: RenderActivitySignals): boolean {
     if (signals.tweening) return true;
     if (now < this._activityUntilMs) return true;
     if (signals.streamingBusy) return true;
+    if (signals.commitWork) return true;
     return this._idleHeartbeat >= IDLE_HEARTBEAT_FRAMES;
   }
 

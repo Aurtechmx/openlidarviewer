@@ -1679,10 +1679,10 @@ export class Viewer {
    * time. Mirrors `_buildExportAdapter`.
    */
   private _buildStreamingHost(): StreamingHost {
-    return {
-      rendererHost: this,
+    return { rendererHost: this,
       streamingNodeClassesHook: () => this.onStreamingNodeClasses,
       streamingNodeReadyHook: () => this.onStreamingNodeReady,
+      streamingGeometryLanded: () => this._demand.geometryLanded(),
     };
   }
 
