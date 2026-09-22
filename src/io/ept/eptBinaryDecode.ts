@@ -407,11 +407,7 @@ export function decodeEptBinaryTile(
       classification[i] = readAttr(view, base + classAttr.offset, classAttr);
     }
     if (classificationFlags && classFlagsAttr) {
-      // The EPT "ClassFlags" attribute is already the extended-layout nibble
-      // (PDAL writes it straight from Table 16), so the "legacy" branch of
-      // the shared normaliser never applies here — pass `true` to reuse the
-      // same single unpacking function COPC and EPT laszip call, rather than
-      // re-deriving "the value is already normalised" as a one-off `& 0x0f`.
+      // ClassFlags is already the Table 16 nibble, so the extended branch applies.
       classificationFlags[i] = normalizeClassificationFlagsByte(
         readAttr(view, base + classFlagsAttr.offset, classFlagsAttr),
         true,

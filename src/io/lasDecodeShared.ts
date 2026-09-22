@@ -27,8 +27,6 @@ const RECORD_RETURN_BITS = 14;
 /** Classification byte offset for legacy / extended point formats. */
 const RECORD_CLASSIFICATION_LEGACY = 15;
 const RECORD_CLASSIFICATION_EXT = 16;
-/** Extended records keep the classification flags in their own byte (bits 0-3). */
-const RECORD_CLASSIFICATION_FLAGS_EXT = 15;
 /**
  * Byte offset of the classification-flags source byte. Coincidentally 15 in
  * both layouts: extended keeps a dedicated flags byte there, legacy packs the
@@ -159,9 +157,7 @@ export function decodeContext(
     origin,
     classificationOffset: classificationOffsetFor(header.pointFormat),
     classMask: classificationMaskFor(header.pointFormat),
-    classificationFlagsOffset: extended
-      ? RECORD_CLASSIFICATION_FLAGS_EXT
-      : RECORD_CLASSIFICATION_LEGACY,
+    classificationFlagsOffset: RECORD_CLASSIFICATION_FLAGS_OFFSET,
     extended,
     pointSourceIdOffset: extended
       ? RECORD_POINT_SOURCE_ID_EXT

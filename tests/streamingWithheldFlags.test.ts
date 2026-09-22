@@ -1,16 +1,17 @@
 /**
  * streamingWithheldFlags.test.ts
  *
- * T1: classification flags did not survive streaming (COPC / EPT) decode, so
- * a Withheld mark on a streamed point never reached the resident snapshot the
- * science policy reads. `withheldConsequence.test.ts` already proves the
- * static `.las` path carries the flags; this proves the streaming paths do
- * too, using the same `withheld-flags.las` fixture (PDRF 6, 12 points: 3
- * Withheld, 2 Overlap — one also Withheld, 1 Synthetic, 1 Key-point).
+ * Checks that classification flags survive the streaming (COPC and EPT)
+ * decode paths, using the `withheld-flags.las` fixture (PDRF 6, 12 points:
+ * 3 Withheld, 2 Overlap — one also Withheld, 1 Synthetic, 1 Key-point). The
+ * COPC and EPT laszip decoders are compared per-index against the static
+ * `.las` decode of the same fixture, not just by aggregate counts. The EPT
+ * binary decoder is checked against a hand-built schema, since it has no
+ * whole-file LAS/LAZ input to compare against.
  *
- * Also proves the negative: a format with no flags channel (a COPC/EPT chunk
- * built without one, and an EPT binary tile whose schema omits ClassFlags)
- * reports `classificationFlags` as `undefined`, never a zero-filled array —
+ * Also checks the negative: a source with no flags channel (an EPT binary
+ * schema that omits `ClassFlags`, or a resident chunk missing the field)
+ * leaves `classificationFlags` `undefined`, never a zero-filled array —
  * zero would falsely claim "no point is Withheld".
  */
 import { readFileSync } from 'node:fs';
@@ -26,6 +27,8 @@ import { decodeEptBinaryTile } from '../src/io/ept/eptBinaryDecode';
 import type { EptSchemaField } from '../src/io/ept/eptTypes';
 import { buildResidentSnapshot } from '../src/render/streaming/residentSnapshot';
 import { parseLasHeader } from '../src/io/lasHeader';
+import { normalizeClassificationFlagsByte } from '../src/io/lasDecodeShared';
+import { parseBuffer } from '../src/io/parseBuffer';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const FIXTURE_BYTES = readFileSync(join(FIXTURES, 'withheld-flags.las'));
@@ -52,8 +55,38 @@ function assertFixtureCounts(flags: Uint8Array): void {
   expect(keyPoint).toBe(1);
 }
 
+/** The fixture decoded through the real static-file reader — the reference. */
+async function staticFlags(): Promise<Uint8Array> {
+  const { cloud } = await parseBuffer(FIXTURE_BUF.slice(0), 'las', 'withheld-flags.las');
+  const flags = cloud.classificationFlags;
+  expect(flags, 'static .las decode produced no classification flags').toBeTruthy();
+  return flags as Uint8Array;
+}
+
+describe('normalizeClassificationFlagsByte', () => {
+  it('unpacks the legacy layout: Synthetic, Key-point and Withheld from bits 5-7, no Overlap flag', () => {
+    // 0xE0 = 0b1110_0000: bits 5, 6 and 7 set.
+    expect(normalizeClassificationFlagsByte(0xe0, false)).toBe(0x7);
+    // Legacy has no overlap flag bit — only class 12 means overlap, decoded
+    // elsewhere — so bit 3 of the normalised nibble is always 0 here.
+    expect(normalizeClassificationFlagsByte(0xe0, false) & 0x8).toBe(0);
+  });
+
+  it('ignores the low 5 class bits packed into the same legacy byte', () => {
+    // Class 31 (0x1f) in bits 0-4, no flags set in bits 5-7.
+    expect(normalizeClassificationFlagsByte(0x1f, false)).toBe(0);
+    // Class 31 plus all three legacy flags: the class bits contribute nothing.
+    expect(normalizeClassificationFlagsByte(0xff, false)).toBe(0x7);
+  });
+
+  it('reads the extended layout as the low nibble, unmasked by anything else', () => {
+    expect(normalizeClassificationFlagsByte(0x0f, true)).toBe(0xf);
+    expect(normalizeClassificationFlagsByte(0xf0, true)).toBe(0);
+  });
+});
+
 describe('COPC streaming: classification flags survive decodeRecords', () => {
-  it('carries the fixture Withheld/Overlap/Synthetic/Key-point counts', () => {
+  it('matches the static .las decode index-for-index, and the fixture counts', async () => {
     const header = parseLasHeader(FIXTURE_BUF);
     const raw = new Uint8Array(
       FIXTURE_BUF,
@@ -73,24 +106,19 @@ describe('COPC streaming: classification flags survive decodeRecords', () => {
     const flags = decoded.classificationFlags as Uint8Array;
     expect(flags.length).toBe(header.pointCount);
     assertFixtureCounts(flags);
-  });
-
-  it('leaves classificationFlags undefined for a chunk that never sets it', () => {
-    // A DecodedChunk assembled by hand (e.g. the tile store's decoder) with no
-    // flags channel — never a zero array.
-    const chunk: DecodedChunk = { pointCount: 2, positions: new Float32Array(6) };
-    expect(chunk.classificationFlags).toBeUndefined();
+    expect([...flags]).toEqual([...(await staticFlags())]);
   });
 });
 
 describe('EPT laszip streaming: classification flags survive decodeEptLaszipTile', () => {
-  it('carries the fixture counts through the whole-tile LAZ path', async () => {
+  it('matches the static .las decode index-for-index, and the fixture counts', async () => {
     const decoded = await decodeEptLaszipTile(FIXTURE_BUF, [0, 0, 0]);
     expect(decoded.pointCount).toBe(12);
     expect(decoded.classificationFlags, 'EPT laszip decode produced no classification flags').toBeTruthy();
     const flags = decoded.classificationFlags as Uint8Array;
     expect(flags.length).toBe(12);
     assertFixtureCounts(flags);
+    expect([...flags]).toEqual([...(await staticFlags())]);
   });
 });
 

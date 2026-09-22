@@ -45,14 +45,13 @@ export interface ResidentSnapshotOptions {
  * Concatenate the decoded resident chunks into one PointCloud, or return null
  * when nothing is resident yet.
  *
- * EVERY per-point channel is emitted only when EVERY chunk carries it, so a
- * partially-attributed set never produces a half-filled array the writers would
- * misread. That rule used to cover only RGB and point-source id; it now covers
- * intensity, classification, classification flags, returns and GPS time too,
- * because a chunk from a format that carries none of them (a `.pnts` tile, or
- * an EPT tile whose writer omitted the flags channel) would otherwise
- * contribute zeros an exported LAS would present as real classifications,
- * flags and readings.
+ * EVERY per-point channel — intensity, classification, classification flags,
+ * returns, GPS time, RGB and point-source id — is emitted only when EVERY
+ * chunk carries it, so a partially-attributed set never produces a
+ * half-filled array the writers would misread. A chunk from a format that
+ * carries none of a given channel (a `.pnts` tile, or an EPT tile whose
+ * writer omitted the flags channel) would otherwise contribute zeros an
+ * exported LAS would present as real classifications, flags and readings.
  * `PointCloud` already treats each of these as optional, so the writers omit
  * the field rather than write a fabricated one.
  */
