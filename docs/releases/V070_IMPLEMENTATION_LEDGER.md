@@ -4315,3 +4315,56 @@ because the base class written beside it stays correct. `writeLas.ts` keeps
 masking as its only job. Covered by `tests/las12ClassWrapRefusal.test.ts`,
 `tests/exportPanelLegacyClassWrap.test.ts`, and the LAS 1.2 case in
 `tests/e2e/batchConverter.spec.ts`.
+
+### L125 · FIXED · ARCHITECTURE
+
+Every Viewer mutation that changes what is drawn records a `once` reason, and
+`input()` is left to the gesture listeners.
+
+`input()` records `camera-input`, a holdover reason, and extends the 350 ms
+activity window. A frame the browser runs after that window finds nothing
+asking and skips the paint, and nothing raises the change again because it
+has already happened. The class and elevation filters owned reasons, as did
+the coverage grid and the clip. Eleven other sites used `input()`: the colour
+mode, intensity filter and derived classification setters, four streaming
+controls (colour, quality, resume, cache), the public `requestFrame`, the
+resize handler, the canvas restore after an export render, and the backend
+coming up.
+
+Each site was classified by what it changes and who calls it:
+
+| site | what changes | reason |
+|---|---|---|
+| `setColorMode`, `setStreamingColorMode` | colours | `style` |
+| `setIntensityFilter`, `applyDerivedClassification` | which points show | `filter` |
+| `setStreamingQuality`, `resumeStreaming` | what the next tick keeps resident | `streaming-schedule` |
+| `requestFrame` | overlays, preview layers, projection, placement, quality, fade starts | `redraw-request` |
+| `_onResize`, export restore, backend ready | the drawing surface | `viewport` |
+| `clearStreamingCache` | compressed bytes only, nothing drawn | none |
+| pointer move, pointer down, key, tab visible | input | `input()` |
+
+`streaming-schedule` and `redraw-request` are new `once` reasons. The
+scheduler ticks from the loop body, so a budget change or a resume acts only
+once a frame runs. Every caller of `requestFrame` changes something the
+Viewer cannot name, so its reason says only that a paint was asked for.
+
+Escape leaves a tool through `_setToolMode`, which clears the measurement
+draft and cursor that the overlay shows until a frame repaints. The key stays
+input and the tool switch records `tool-overlay`, which also covers the public
+tool toggles that pass through it.
+
+`tests/invalidationDrawsFrame.test.ts` reads each converted site's demand
+calls out of `Viewer.ts` and replays them against the real scheduler with the
+frame run 50 ms after the holdover expires. The ten that used `input()` fail
+with it and paint with their reason, and `_setToolMode` is replayed the same
+way. `tests/visualMutationOwnership.test.ts` accepts only a
+`once` reason as an owner, fails any public method that calls `input()`, and
+counts every `input()` in the file against the four gesture listeners.
+Reverting `setColorMode` to `input()` turns four cases red across the two
+files.
+
+What remains: a pointer move in the measure or probe tool picks inside the
+frame and repaints the overlay only on a drawn frame, so a hover whose frame
+arrives after the holdover shows its cursor at the next heartbeat. Lasso
+reclassify and classification undo and redo rewrite classification colours
+without recording any reason of their own.

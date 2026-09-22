@@ -61,7 +61,6 @@ export type RenderInvalidationReason =
   | 'camera-damping'
   /** A camera tween is animating. */
   | 'camera-tween'
-  /** A streamed node became a visible candidate. */
   /**
    * A layer entered or left the scene.
    *
@@ -70,12 +69,21 @@ export type RenderInvalidationReason =
    * served by the distinction than by one reason meaning both.
    */
   | 'scene-geometry'
+  /** A streamed node became a visible candidate. */
   | 'streaming-ready'
+  /**
+   * The streaming scheduler's budget or pause state changed.
+   *
+   * Nothing on screen has moved yet. The scheduler ticks from the loop body,
+   * so the new budget or the resume decides what is resident only once a
+   * frame runs, and a sleeping loop has to be asked for that frame.
+   */
+  | 'streaming-schedule'
   /** Decoded nodes are waiting on a metered GPU commit. */
   | 'gpu-commit-pending'
   /** A level-of-detail fade is part way through. */
   | 'lod-fade'
-  /** The canvas or device pixel ratio changed. */
+  /** The canvas, its drawing surface or the device pixel ratio changed. */
   | 'viewport'
   /** Colour mode, point size, lighting or another display setting changed. */
   | 'style'
@@ -85,6 +93,13 @@ export type RenderInvalidationReason =
   | 'clip'
   /** A measurement, annotation or other tool overlay changed. */
   | 'tool-overlay'
+  /**
+   * A caller outside the Viewer changed what is drawn and said so through
+   * `Viewer.requestFrame`: an overlay, a preview layer, a projection switch,
+   * a quality preset, a fade starting. The caller knows what changed and the
+   * Viewer does not, so the reason records only that a paint was asked for.
+   */
+  | 'redraw-request'
   /** The continuity field has a phase left to contribute. */
   | 'continuity-phase'
   /** The graphics device was lost and is being rebuilt. */
@@ -98,12 +113,13 @@ export type InvalidationKind = 'once' | 'holdover' | 'while';
 /**
  * The kind of each reason. This table is the whole policy.
  *
- * Six of the fifteen are raised by the running application: `camera-input`,
- * from `FrameDemand.input()` and `cameraMoved()`, plus `style`,
- * `scene-geometry`, `tool-overlay`, `filter` and `clip` from the visual
- * setters. The other nine are declared and never invalidated, and `finished()`
- * has no production caller at all. A declared reason reads exactly like a used
- * one, and two separate readers took this table for live wiring and proposed
+ * Nine of the seventeen are raised by the running application:
+ * `camera-input`, from `FrameDemand.input()` and `cameraMoved()`, plus
+ * `style`, `scene-geometry`, `tool-overlay`, `filter`, `clip`, `viewport`,
+ * `streaming-schedule` and `redraw-request` from the Viewer's mutations. The
+ * other eight are declared and never invalidated, and `finished()` has no
+ * production caller at all. A declared reason reads exactly like a used one,
+ * and two separate readers took this table for live wiring and proposed
  * building on it — `gpu-commit-pending` and `streaming-ready` in particular
  * look like the seam for streamed geometry, and are not.
  *
@@ -111,11 +127,12 @@ export type InvalidationKind = 'once' | 'holdover' | 'while';
  * makes a reason safer than `input()` for a discrete change. `input()` only
  * extends the 350 ms activity holdover; a frame the browser runs later than
  * that finds the window expired and skips the paint, and nothing raises the
- * change a second time because it has already happened. That cost the class,
- * elevation, coverage and clip setters their paint often enough to leave a
- * stale picture, which is why they own reasons now.
+ * change a second time because it has already happened. Measured on the class
+ * setter, a toggle on a settled scene drew on 2 of 8 attempts. Every mutation
+ * that changes what is drawn therefore owns a `once` reason, and `input()` is
+ * left to the gesture listeners, whose events arrive in a stream.
  *
- * `viewport` and `screenshot` are still unraised. Whoever wires a reason
+ * `screenshot` is still unraised. Whoever wires a reason
  * should note that a `while` reason acquired without its `finished()` keeps
  * `needsFrame` true forever. `tests/renderInvalidation.test.ts` scans the
  * source and fails when this paragraph stops being true — but it scans text,
@@ -128,6 +145,7 @@ export const KIND: Readonly<Record<RenderInvalidationReason, InvalidationKind>> 
   'camera-tween': 'while',
   'scene-geometry': 'once',
   'streaming-ready': 'once',
+  'streaming-schedule': 'once',
   'gpu-commit-pending': 'while',
   'lod-fade': 'while',
   viewport: 'once',
@@ -135,6 +153,7 @@ export const KIND: Readonly<Record<RenderInvalidationReason, InvalidationKind>> 
   filter: 'once',
   clip: 'once',
   'tool-overlay': 'once',
+  'redraw-request': 'once',
   'continuity-phase': 'while',
   'device-recovery': 'while',
   screenshot: 'once',
