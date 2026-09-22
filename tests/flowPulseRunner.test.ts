@@ -167,6 +167,32 @@ describe('an unresolved scale withholds metres and still routes', () => {
   });
 });
 
+describe('a geographic frame with no latitude is refused', () => {
+  const geographic: HorizontalScale = {
+    isGeographic: true, latitudeDeg: null, unitToMetres: 1, resolved: false,
+  };
+
+  it('refuses with UNITS_UNRESOLVED rather than routing over a guessed cell shape', () => {
+    const r = runFlowPulse(dtmOf([[3, 2, 1]]), geographic, params(), identity);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe('UNITS_UNRESOLVED');
+    expect(r.reason).toMatch(/latitude/i);
+  });
+
+  it('routes a geographic frame once its latitude is known', () => {
+    const r = runFlowPulse(
+      dtmOf([[3, 2, 1]]), { ...geographic, latitudeDeg: 40, resolved: true }, params(), identity,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it('still routes a projected frame whose unit is unresolved', () => {
+    const r = runFlowPulse(dtmOf([[3, 2, 1]]), { ...projected, resolved: false }, params(), identity);
+    expect(r.ok).toBe(true);
+  });
+});
+
 describe('conditioning is declared, and leaves the DTM alone', () => {
   it('raw mode keeps the pit and says so', () => {
     const dtm = notchedBowl();

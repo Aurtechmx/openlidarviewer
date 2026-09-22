@@ -27,6 +27,12 @@
  * would deny a reader a usable answer; reporting square metres anyway would
  * give them a fabricated one.
  *
+ * A geographic frame with no latitude is the exception, and it is refused.
+ * There the east–west length of a cell is the north–south length times cos φ,
+ * so without φ the ratio between the axes is itself unknown, and D8 compares
+ * diagonal and cardinal drops through exactly that ratio. The direction would
+ * be as invented as the area.
+ *
  * Pure: no DOM, no three.js, no I/O, no clock of its own.
  */
 
@@ -58,7 +64,9 @@ export type FlowRefusalCode =
   /** The grid holds no cell a model may read. */
   | 'NO_VALID_CELL'
   /** The grid exceeds the declared cell budget. */
-  | 'TOO_LARGE';
+  | 'TOO_LARGE'
+  /** A geographic frame with no latitude, so the cell's shape is unknown. */
+  | 'UNITS_UNRESOLVED';
 
 /** A run that did not happen, and the precondition that stopped it. */
 export interface FlowRefusal {
@@ -173,6 +181,14 @@ export function runFlowPulse(
     return {
       ok: false, code: 'NO_DTM',
       reason: 'No terrain surface is available. Run terrain analysis on a loaded scan first.',
+    };
+  }
+
+  if (scale.isGeographic && !Number.isFinite(scale.latitudeDeg ?? Number.NaN)) {
+    return {
+      ok: false, code: 'UNITS_UNRESOLVED',
+      reason: 'The terrain is in geographic degrees and its latitude is unknown, so the '
+        + 'east–west length of a cell cannot be derived. Assign a CRS that resolves the latitude.',
     };
   }
 
