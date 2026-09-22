@@ -189,6 +189,7 @@ jobs:
           name: ios-simulator-evidence
           path: |
             ios-screen.png
+            ios-after-pinch.png
             appium.log
             preview.log
             ios-touch-result.json
