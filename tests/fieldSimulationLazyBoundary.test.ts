@@ -82,12 +82,15 @@ describe('the field-simulation clusters stay off the entry chunk', () => {
     ).toEqual([]);
   });
 
-  it('states plainly that the directories are still empty', () => {
-    // Recorded so the next implementation can see what this did and did not
-    // prove. Once either directory has modules, the assertions above start
-    // carrying weight and this one is expected to change.
+  it('has modules to keep out, so the assertion above is no longer vacuous', () => {
+    // This replaces the note recording that both directories were empty. The
+    // flow-routing core now lives under `src/simulation/`, which is what makes
+    // the boundary assertion above a real check rather than a statement about
+    // an empty set: there is something that could leak onto the entry chunk,
+    // and it does not.
     const { graph } = measureModuleGraph();
     const present = [...graph.keys()].filter((f) => LAZY_ONLY.some((d) => f.startsWith(d)));
-    expect(present).toEqual([]);
+    expect(present.length).toBeGreaterThan(0);
+    expect(present.every((f) => !eager.has(f))).toBe(true);
   });
 });
