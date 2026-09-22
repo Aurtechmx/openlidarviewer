@@ -131,33 +131,37 @@ async function singleTap(page: Page, x: number, y: number): Promise<void> {
  *
  * A scan attaches with the camera top-down and still, and only then does
  * `openScan` start the tween to the opening view, just before it adds
- * `olv-has-scan` to the body. On a loaded CI runner that gap outlasts a
- * short stillness check, so the "before" pose was the still top-down one
- * and the flight read as the gesture's effect. Waiting for the class puts
- * the start of the flight behind us; three identical reads 250 ms apart
- * then mean it has ended.
+ * `olv-has-scan` to the body. Waiting for the class puts the start of the
+ * flight behind us.
+ *
+ * The end is counted in frames, not milliseconds. A tween advances once per
+ * rendered frame, and on the software-rendered WebKit CI job a frame takes
+ * over half a second, so a pose that looked still across 500 ms was only
+ * between two frames of a flight still in progress. A pose unchanged across
+ * three animation frames is a camera the loop has stopped moving.
+ *
+ * The page is brought forward first because the app stops its frame loop
+ * while the document is hidden, which would stop the flight with it.
  */
 async function settledPose(page: Page): Promise<string> {
   await expect(page.locator('body.olv-has-scan')).toHaveCount(1, { timeout: 30_000 });
-  // The app stops its frame loop while the page is hidden, and a camera
-  // flight halts with it. WebKit can report a page that is not in front as
-  // hidden, which froze the flight part-way until the gesture's input
-  // brought the page forward and let it finish. Bring it forward first, and
-  // fail on the visibility itself rather than on a pose that never settled.
   await page.bringToFront();
   await expect
     .poll(() => page.evaluate(() => document.visibilityState), { timeout: 10_000 })
     .toBe('visible');
+  const threeFrames = () => page.evaluate(() => new Promise<void>((resolve) => {
+    let n = 0;
+    const tick = (): void => { n += 1; if (n >= 3) resolve(); else requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }));
   let last = await readPose(page);
-  let same = 0;
-  for (let i = 0; i < 80 && same < 2; i++) {
-    await page.waitForTimeout(250);
+  for (let i = 0; i < 120; i++) {
+    await threeFrames();
     const next = await readPose(page);
-    same = next === last ? same + 1 : 0;
+    if (next === last) return next;
     last = next;
   }
-  expect(same, 'the camera never came to rest after the scan loaded').toBe(2);
-  return last;
+  throw new Error('the camera was still moving after 120 three-frame checks');
 }
 
 async function readPose(page: Page): Promise<string> {
