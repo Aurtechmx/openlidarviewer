@@ -272,18 +272,22 @@ describe('what production raises', () => {
     return { reasons, finishedCalls };
   };
 
-  it('raises four of the reasons it declares, and the rest stay a design note', () => {
+  it('raises six of the reasons it declares, and the rest stay a design note', () => {
     // It was one. `input()` and `cameraMoved()` recorded 'camera-input' and
     // every other reason was declared and never raised, which two separate
     // readers took for live wiring. Giving the visual setters reason ownership
     // added three: `style` for appearance, `scene-geometry` for a layer
     // entering or leaving, `tool-overlay` for the selection highlight.
     //
-    // The remainder are still unraised. `filter`, `clip`, `viewport` and
-    // `screenshot` belong to setters that call `input()`, which wakes the loop
-    // and arms the gate but does not say why; those are the next call sites to
-    // narrow. The `while` reasons are a separate matter, below.
-    expect([...scan().reasons].sort()).toEqual(['camera-input', 'scene-geometry', 'style', 'tool-overlay']);
+    // `filter` and `clip` joined them when the class-visibility, elevation,
+    // coverage and clip setters stopped relying on `input()`. That was a
+    // defect rather than a tidy-up: `input()` only extends the 350 ms activity
+    // holdover, so a frame the browser delayed past it skipped the paint and
+    // nothing raised the change again. Toggling a class left the picture stale.
+    //
+    // `viewport` and `screenshot` remain unraised. The `while` reasons are a
+    // separate matter, below.
+    expect([...scan().reasons].sort()).toEqual(['camera-input', 'clip', 'filter', 'scene-geometry', 'style', 'tool-overlay']);
   });
 
   it('never releases a while-reason, which is why none is ever acquired', () => {

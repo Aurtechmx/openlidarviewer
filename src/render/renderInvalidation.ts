@@ -98,25 +98,29 @@ export type InvalidationKind = 'once' | 'holdover' | 'while';
 /**
  * The kind of each reason. This table is the whole policy.
  *
- * Four of the fifteen are raised by the running application: `camera-input`,
+ * Six of the fifteen are raised by the running application: `camera-input`,
  * from `FrameDemand.input()` and `cameraMoved()`, plus `style`,
- * `scene-geometry` and `tool-overlay` from the visual setters. The other
- * eleven are declared and never invalidated, and `finished()` has no
- * production caller at all. A declared reason reads exactly like a used one,
- * and two separate readers took this table for live wiring and proposed
+ * `scene-geometry`, `tool-overlay`, `filter` and `clip` from the visual
+ * setters. The other nine are declared and never invalidated, and `finished()`
+ * has no production caller at all. A declared reason reads exactly like a used
+ * one, and two separate readers took this table for live wiring and proposed
  * building on it — `gpu-commit-pending` and `streaming-ready` in particular
  * look like the seam for streamed geometry, and are not.
  *
- * A served reason now reaches the activity gate as `invalidated`, so raising
- * one draws a frame rather than only arming the holdover. The remaining
- * setters (`setClip`, `setElevationFilter`, `applyClassVisibility`,
- * `setCoverageGrid`) call `input()`, which wakes the loop without saying why;
- * those are the next call sites to narrow. Whoever wires a reason properly
- * should also note that a `while` reason acquired without its `finished()`
- * keeps `needsFrame` true forever. `tests/renderInvalidation.test.ts` scans
- * the source and fails when this paragraph stops being true — but it scans
- * text, so a call it finds may still be unreachable; that gap is pinned
- * separately in `tests/visualMutationOwnership.test.ts`.
+ * A served reason reaches the activity gate as `invalidated`, and that is what
+ * makes a reason safer than `input()` for a discrete change. `input()` only
+ * extends the 350 ms activity holdover; a frame the browser runs later than
+ * that finds the window expired and skips the paint, and nothing raises the
+ * change a second time because it has already happened. That cost the class,
+ * elevation, coverage and clip setters their paint often enough to leave a
+ * stale picture, which is why they own reasons now.
+ *
+ * `viewport` and `screenshot` are still unraised. Whoever wires a reason
+ * should note that a `while` reason acquired without its `finished()` keeps
+ * `needsFrame` true forever. `tests/renderInvalidation.test.ts` scans the
+ * source and fails when this paragraph stops being true — but it scans text,
+ * so a call it finds may still be unreachable; that gap is pinned separately
+ * in `tests/visualMutationOwnership.test.ts`.
  */
 export const KIND: Readonly<Record<RenderInvalidationReason, InvalidationKind>> = Object.freeze({
   'camera-input': 'holdover',
