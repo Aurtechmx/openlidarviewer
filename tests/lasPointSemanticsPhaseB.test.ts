@@ -31,6 +31,7 @@ import {
   scanAngleToDegrees,
   extractBitFlag,
   extractScannerChannel,
+  rawPointsBytesPerPoint,
 } from '../src/io/lasDecodeShared';
 import type { LasHeader } from '../src/io/lasHeader';
 import { decodeRecords } from '../src/io/copc/copcChunkDecode';
@@ -565,6 +566,17 @@ describe('EPT laszip decodedBytesPerPoint honours pointSemantics for both legacy
       // byte sum, same as every other field.
       const actual = sumByteLength(decoded as unknown as Record<string, unknown>);
       expect(actual).toBe(eptLaszipDecodedBytesPerPoint(ctx, pointSemantics) * decoded.pointCount);
+    }
+  });
+
+  it('derives from rawPointsBytesPerPoint, both settings, including PDRF 7 (RGB)', () => {
+    for (const pdrf of [0, 1, 2, 3, 6, 7, 8]) {
+      for (const pointSemantics of [false, true]) {
+        const ctx = { pdrf } as ReturnType<typeof eptLaszipBuildContext>;
+        expect(eptLaszipDecodedBytesPerPoint(ctx, pointSemantics)).toBe(
+          rawPointsBytesPerPoint(pdrf, { pointSemantics }),
+        );
+      }
     }
   });
 });

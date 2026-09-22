@@ -51,11 +51,9 @@ export interface SlicedLasOptions {
   readonly origin?: [number, number, number];
   readonly signal?: AbortSignal;
   /**
-   * Decode scan angle, user data, scanner channel, scan direction and
-   * edge-of-flight-line. Default off — every current caller of
-   * `openSlicedLas` repacks into the out-of-core tile schema
-   * (`tileRecord.ts`), which carries none of these five, so nothing sets
-   * this yet.
+   * Default off; see AllocRawPointsOptions. Every caller of `openSlicedLas`
+   * repacks into the out-of-core tile schema (`tileRecord.ts`), which carries
+   * none of the five gated channels.
    */
   readonly pointSemantics?: boolean;
 }

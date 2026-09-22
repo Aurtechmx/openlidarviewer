@@ -36,8 +36,7 @@ interface DecodeMessage {
    *  undefined until the source has seen one — the decode then decides and
    *  reports back via `DecodedChunk.rgbEightBit`. */
   rgbEightBit?: boolean;
-  /** Decode scan angle / user data / scanner channel / scan direction /
-   *  edge-of-flight-line. Default off — no caller sets this yet. */
+  /** Default off; see AllocRawPointsOptions. */
   pointSemantics?: boolean;
 }
 interface CancelMessage {

@@ -99,14 +99,7 @@ export interface LoadOptions {
    * depend on who read them.
    */
   head?: ArrayBuffer;
-  /**
-   * Decode scan angle, user data, scanner channel, scan direction and
-   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
-   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) —
-   * no caller sets this yet. `undefined` on the loaded cloud then means
-   * either "not decoded" (this option was off) or "not present in the
-   * source"; a caller that needs to tell those apart must turn this on.
-   */
+  /** Default off; see AllocRawPointsOptions. */
   pointSemantics?: boolean;
 }
 

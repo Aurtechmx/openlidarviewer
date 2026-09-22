@@ -223,6 +223,9 @@ async function sampleLaz(
     // an unsupported format yields. readLazChunkTable already refuses such a
     // chunk, so a supported table should never reach here; this stays as the
     // sampler's own guard against decoding past budget.
+    // `pointSemantics` is omitted (defaults off) below: the sampler has no
+    // option of its own to see — it always decodes into the tile schema,
+    // which never carries those five channels.
     if (!withinDecodedByteBudget(c.pointCount, header.pointDataRecordLength, undefined, header.pointFormat)) {
       continue;
     }

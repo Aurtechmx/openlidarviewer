@@ -64,6 +64,7 @@ import {
   RECORD_POINT_SOURCE_ID_LEGACY,
   RECORD_POINT_SOURCE_ID_EXT,
   RECORD_GPS_TIME_EXT,
+  rawPointsBytesPerPoint,
   scanAngleToDegrees,
   extractBitFlag,
   extractScannerChannel,
@@ -116,39 +117,16 @@ export interface TileDecodeContext {
 /**
  * Peak decoded bytes ONE point of this tile stages at once, across every output
  * channel the decode allocates for the tile's format plus the raw-RGB staging
- * buffer that coexists with the narrowed one. Structural channels are always
- * present; the five `pointSemantics`-gated channels, GPS time and the two RGB
- * buffers are each gated exactly as the allocations below them are, so the
- * estimate tracks the real transient peak rather than a worst-case guess.
- *
- *   positions   Float32 × 3   12
- *   intensity   Uint16         2
- *   class       Uint8          1
- *   classFlags  Uint8          1
- *   returnNo    Uint8          1
- *   returnCnt   Uint8          1
- *   sourceId    Uint16         2   ── structural subtotal 20 (always allocated)
- *   scanAngle   Float32        4   (pointSemantics only)
- *   userData    Uint8          1   (pointSemantics only)
- *   scanDir     Uint8          1   (pointSemantics only)
- *   edgeOfLine  Uint8          1   (pointSemantics only)
- *   scannerChan Uint8          1   (pointSemantics AND an extended format)
- *   gpsTime     Float64        8   (PDRF 1/3/6-8 only)
- *   rgb         Uint8 × 3      3   (RGB formats only)
- *   rgb16       Uint16 × 3     6   (RGB staging, freed after narrowing)
+ * buffer that coexists with the narrowed one. Derived from
+ * {@link rawPointsBytesPerPoint} — the same per-format width formula the
+ * static LAS/LAZ decoder and the byte-budget guards use — since `ctx.pdrf`
+ * plus `pointSemantics` determine every channel this decoder allocates the
+ * same way that function's own GPS-time and RGB format rules do. RGB is
+ * charged at 9, not 3: the staged Uint16 rgb16 (3 · 2 = 6) and the narrowed
+ * Uint8 rgb (3) are both RESIDENT while the narrow loop runs.
  */
-const EPT_STRUCTURAL_BYTES_PER_POINT = 20;
-/** scanAngle (4) + userData (1) + scanDirection (1) + edgeOfFlightLine (1). */
-const EPT_POINT_SEMANTICS_BYTES_PER_POINT = 7;
-/** Exported for direct unit testing against the true decoded allocation. */
 export function decodedBytesPerPoint(ctx: TileDecodeContext, pointSemantics: boolean): number {
-  return (
-    EPT_STRUCTURAL_BYTES_PER_POINT +
-    (pointSemantics ? EPT_POINT_SEMANTICS_BYTES_PER_POINT : 0) +
-    (pointSemantics && ctx.extended ? 1 : 0) +
-    (ctx.gpsTimeOffset !== null ? 8 : 0) +
-    (ctx.hasRgb ? 3 + 6 : 0)
-  );
+  return rawPointsBytesPerPoint(ctx.pdrf, { pointSemantics });
 }
 
 /** Build the per-tile decode context from a parsed header. */
@@ -241,9 +219,7 @@ type LazPerfModule = Awaited<ReturnType<typeof import('laz-perf').createLazPerf>
  * value and reports the decision back on the returned chunk.
  *
  * `pointSemantics` decodes scan angle, user data, scanner channel, scan
- * direction and edge-of-flight-line. Default off, like every
- * `pointSemantics` switch in the decode stack (see `AllocRawPointsOptions`
- * in lasDecodeShared.ts) — no caller sets this yet.
+ * direction and edge-of-flight-line. Default off; see AllocRawPointsOptions.
  */
 export function decodeEptLaszipTileWith(
   lazPerf: LazPerfModule,

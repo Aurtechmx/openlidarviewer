@@ -129,7 +129,19 @@ export function decompressChunk(
   // Decoded-byte cap: refuse before sizing `pointCount * recordLength` output.
   // A node can pass the point cap yet still stage gigabytes when its record is
   // huge (Extra Bytes), so bound the actual decompressed size, not just the count.
-  if (!withinDecodedByteBudget(pointCount, meta.pointRecordLength, MAX_DECOMPRESSED_NODE_BYTES)) {
+  // Passing the PDRF and `pointSemantics` makes this at least as strict as the
+  // channel-array width `decodeRecords` will allocate next, so a node that
+  // would only overflow the wider RawPoints allocation (not the raw record
+  // buffer itself) is still refused here, before any allocation.
+  if (
+    !withinDecodedByteBudget(
+      pointCount,
+      meta.pointRecordLength,
+      MAX_DECOMPRESSED_NODE_BYTES,
+      meta.pointDataRecordFormat,
+      { pointSemantics: meta.pointSemantics },
+    )
+  ) {
     throw new LoadError(
       'malformed-file',
       `malformed COPC: node of ${pointCount.toLocaleString('en-US')} points × ` +

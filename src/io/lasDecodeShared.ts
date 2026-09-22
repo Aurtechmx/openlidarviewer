@@ -273,9 +273,9 @@ export function decodeRecord(
   // already read above, or the extended flags byte read above for the
   // classification flags.
   const directionSourceByte = ctx.extended ? flagByte : returnBits;
-  if (out.scanDirection !== null) out.scanDirection[i] = extractBitFlag(directionSourceByte, 6);
-  if (out.edgeOfFlightLine !== null) {
-    out.edgeOfFlightLine[i] = extractBitFlag(directionSourceByte, 7);
+  if (out.scanDirection !== null) {
+    out.scanDirection[i] = extractBitFlag(directionSourceByte, 6);
+    out.edgeOfFlightLine![i] = extractBitFlag(directionSourceByte, 7);
   }
   if (out.scannerChannel !== null) {
     out.scannerChannel[i] = extractScannerChannel(flagByte);
@@ -306,10 +306,9 @@ export function decodeRecord(
 /**
  * `pointSemantics` gates scan angle, user data, scanner channel, scan
  * direction and edge-of-flight-line — five channels every LAS record HAS,
- * but which cost real bytes and CPU to decode and which nothing in the
- * application reads yet. Default OFF everywhere: no caller opts in today, so
+ * but which cost real bytes and CPU to decode. Default OFF everywhere, so
  * `undefined` on a decoded cloud or chunk means either "not decoded" (the
- * common case, `pointSemantics` was off) or "not present in the source" — a
+ * common case, `pointSemantics` is off) or "not present in the source" — a
  * consumer that needs to tell those apart must itself request the channels
  * (`pointSemantics: true`) and only then does `undefined` mean the source
  * genuinely lacks them (true for `scannerChannel` on a legacy-format file).

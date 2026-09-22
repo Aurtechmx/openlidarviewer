@@ -278,12 +278,9 @@ export function eptBinaryPeakBytes(
  *                      returned chunk so the source can pin it.
  * @param pointSemantics Decode scan angle, user data, scanner channel, scan
  *                      direction and edge-of-flight-line WHEN the schema also
- *                      declares them. Default off, like every
- *                      `pointSemantics` switch in the decode stack (see
- *                      `AllocRawPointsOptions` in lasDecodeShared.ts) — no
- *                      caller sets this yet, so a schema that declares these
- *                      attributes still decodes none of them until a caller
- *                      opts in.
+ *                      declares them. Default off; see AllocRawPointsOptions —
+ *                      a schema that declares these attributes decodes none
+ *                      of them unless the caller opts in.
  */
 export function decodeEptBinaryTile(
   buffer: ArrayBuffer,

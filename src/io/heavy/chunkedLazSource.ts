@@ -302,6 +302,9 @@ function decodeChunkBatch(
   // records exceed the decoded-byte budget. readLazChunkTable already refuses
   // such a chunk, so a supported table cannot reach here over budget; this holds
   // even if a future caller hands in a chunk that skipped that gate.
+  // `pointSemantics` is omitted (defaults off) below, matching the decode two
+  // lines later: this path always repacks into the tile schema, which never
+  // carries those five channels.
   if (
     !withinDecodedByteBudget(
       c.pointCount,

@@ -23,6 +23,7 @@ import {
   RECORD_SCAN_ANGLE_EXT,
   RECORD_POINT_SOURCE_ID_EXT,
   RECORD_GPS_TIME_EXT,
+  rawPointsBytesPerPoint,
   scanAngleToDegrees,
   extractBitFlag,
   extractScannerChannel,
@@ -157,38 +158,23 @@ export interface ChunkDecoder<TMeta = ChunkDecodeMetadata> {
 
 /**
  * Peak decoded channel-array bytes per point for one PDRF 6/7/8 node, matching
- * exactly what {@link decodeRecords} allocates and holds LIVE at once.
- *
- * Every node fills thirteen base channels: positions (Float32 · 3 = 12), intensity
- * (Uint16 = 2), classification (Uint8 = 1), classification flags (Uint8 = 1),
- * return number (Uint8 = 1), return count (Uint8 = 1), scan angle (Float32 = 4),
- * point source id (Uint16 = 2) — 28 bytes a point. `pointSemantics: true` adds
- * scan angle (Float32 = 4), user data (Uint8 = 1), scanner channel (Uint8 = 1,
- * COPC is always an extended format so this is never absent when the option is
- * on), scan direction (Uint8 = 1) and edge-of-flight-line (Uint8 = 1) — 8 more
- * bytes, matching `AllocRawPointsOptions`'s default-off contract. PDRF 7 and 8
- * add colour, and both the staged Uint16 rgb16 (3 · 2 = 6) and the narrowed
- * Uint8 rgb (3) are RESIDENT together while the narrow loop runs, so colour
- * costs 9, not 3. PDRF 8's NIR is not decoded, so it is not charged. Returns
- * {@link Number.POSITIVE_INFINITY} for a non-usable count so a nonsense value
- * reads as over-budget rather than as zero.
+ * exactly what {@link decodeRecords} allocates and holds LIVE at once. Derived
+ * from {@link rawPointsBytesPerPoint} — the same per-format width formula the
+ * static LAS/LAZ decoder and the byte-budget guards use — so this cannot drift
+ * from what `decodeRecords` actually allocates for the same `pdrf` and
+ * `pointSemantics`. PDRF 7 and 8's colour is charged at 9, not 3: the staged
+ * Uint16 rgb16 (3 · 2 = 6) and the narrowed Uint8 rgb (3) are both RESIDENT
+ * while the narrow loop runs. PDRF 8's NIR is not decoded, so it is not
+ * charged. Returns {@link Number.POSITIVE_INFINITY} for a non-usable count so
+ * a nonsense value reads as over-budget rather than as zero.
  */
-export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 28;
-export const COPC_POINT_SEMANTICS_CHANNEL_BYTES_PER_POINT = 8;
-export const COPC_RGB_CHANNEL_BYTES_PER_POINT = 9;
-
 export function copcDecodedChannelBytes(
   pdrf: number,
   pointCount: number,
   pointSemantics = false,
 ): number {
   if (!Number.isFinite(pointCount) || pointCount < 0) return Number.POSITIVE_INFINITY;
-  const hasRgb = pdrf === 7 || pdrf === 8;
-  const perPoint =
-    COPC_BASE_CHANNEL_BYTES_PER_POINT +
-    (pointSemantics ? COPC_POINT_SEMANTICS_CHANNEL_BYTES_PER_POINT : 0) +
-    (hasRgb ? COPC_RGB_CHANNEL_BYTES_PER_POINT : 0);
-  return pointCount * perPoint;
+  return pointCount * rawPointsBytesPerPoint(pdrf, { pointSemantics });
 }
 
 /** RGB triple offset in PDRF 7 and 8. */
@@ -226,7 +212,6 @@ export function decodeRecords(
   // COPC is always an extended point format (PDRF 6/7/8), so the flags byte
   // is always unpacked as the extended layout — see
   // `RECORD_CLASSIFICATION_FLAGS_OFFSET` / `normalizeClassificationFlagsByte`.
-  // Unlike the five point-semantics channels below, this one is always on.
   const classificationFlags = new Uint8Array(n);
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);

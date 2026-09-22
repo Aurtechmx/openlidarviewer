@@ -52,12 +52,7 @@ interface ParseRequest {
    * decode hands back every record it places.
    */
   previewBudget?: number;
-  /**
-   * Decode scan angle, user data, scanner channel, scan direction and
-   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
-   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) —
-   * no caller sets this yet.
-   */
+  /** Default off; see AllocRawPointsOptions. */
   pointSemantics?: boolean;
 }
 

@@ -92,12 +92,7 @@ export interface LazChunkJob {
    * records the earlier chunks keep. Defaults to `firstPointIndex`.
    */
   readonly outIndex?: number;
-  /**
-   * Decode scan angle, user data, scanner channel, scan direction and
-   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
-   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) — no
-   * caller sets this yet.
-   */
+  /** Default off; see AllocRawPointsOptions. */
   readonly pointSemantics?: boolean;
 }
 
@@ -144,12 +139,11 @@ export function decodeLazChunkLocal(lazPerf: LazPerfModule, job: LazChunkJob): R
  * the chunk's own position buffer, which the whole-file output no longer needs
  * and a preview may take from here.
  *
- * Exported for direct unit testing: `classificationFlags` was once missing
- * from this copy (see tests/lasPointSemanticsPhaseB.test.ts), and the
- * committed multi-chunk LAZ fixture happens to carry all-zero flags, so an
- * end-to-end decode comparison cannot tell a present copy from a missing one
- * on that fixture. Testing this function directly, with synthetic non-zero
- * data, is the reliable way to pin the fix.
+ * Exported for direct unit testing (see tests/lasPointSemanticsPhaseB.test.ts):
+ * the committed multi-chunk LAZ fixture carries all-zero classification flags,
+ * so an end-to-end decode comparison on it cannot tell a present copy of a
+ * channel from a missing one. Testing this function directly, with synthetic
+ * non-zero data, is the reliable way to pin every field it copies.
  */
 export function placeChunk(out: RawPoints, local: RawPoints, at: number): Float32Array {
   const p = at;
@@ -258,12 +252,7 @@ export interface ChunkedDecodeOptions {
    */
   readonly stride?: number;
   readonly onProgress?: (u: ProgressUpdate) => void;
-  /**
-   * Decode scan angle, user data, scanner channel, scan direction and
-   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
-   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) — no
-   * caller sets this yet.
-   */
+  /** Default off; see AllocRawPointsOptions. */
   readonly pointSemantics?: boolean;
 }
 
@@ -282,7 +271,7 @@ async function planChunked(
   pointSemantics?: boolean,
 ): Promise<ChunkedPlan | null> {
   // The VLRs all precede the point data, so the prefix read stops there.
-  const table = await readLazChunkTable(source, signal, header.offsetToPointData);
+  const table = await readLazChunkTable(source, signal, header.offsetToPointData, pointSemantics);
   if (!table.supported) return null;
   if (!CHUNK_DECODE_FORMATS.has(header.pointFormat)) return null;
   const tableTotal = table.chunks.reduce((a, c) => a + c.pointCount, 0);

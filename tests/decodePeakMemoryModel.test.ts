@@ -24,6 +24,7 @@ import {
   estimateCopcPeakBytes,
 } from '../src/io/copc/copcChunkDecompress';
 import { copcDecodedChannelBytes, decodeRecords } from '../src/io/copc/copcChunkDecode';
+import { rawPointsBytesPerPoint } from '../src/io/lasDecodeShared';
 import type { ChunkDecodeMetadata, DecodedChunk } from '../src/io/copc/copcChunkDecode';
 import {
   MAX_DECODE_PEAK_BYTES,
@@ -103,6 +104,16 @@ describe('COPC estimateCopcPeakBytes — the second decode phase is bounded', ()
   test('pointSemantics adds 8 bytes/point (scanAngle 4 + userData 1 + scannerChannel 1 + scanDirection 1 + edgeOfFlightLine 1)', () => {
     expect(copcDecodedChannelBytes(6, 1, true)).toBe(36);
     expect(copcDecodedChannelBytes(7, 1, true)).toBe(45);
+  });
+
+  test('copcDecodedChannelBytes derives from rawPointsBytesPerPoint, both settings, PDRF 6/7/8', () => {
+    for (const pdrf of [6, 7, 8]) {
+      for (const pointSemantics of [false, true]) {
+        expect(copcDecodedChannelBytes(pdrf, 7, pointSemantics)).toBe(
+          7 * rawPointsBytesPerPoint(pdrf, { pointSemantics }),
+        );
+      }
+    }
   });
 
   test('copcDecodedChannelBytes(pdrf, n, true) equals the TRUE decodeRecords allocation, PDRF 6 (no RGB)', () => {

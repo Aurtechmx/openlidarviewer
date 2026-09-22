@@ -164,11 +164,7 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
  * @param stride       Decode every `stride`-th record (1 = every record).
  *                     Used by the fast-load path for huge clouds.
  * @param onProgress   Optional staged-progress callback for the decode loop.
- * @param pointSemantics Decode scan angle, user data, scanner channel, scan
- *                     direction and edge-of-flight-line. Default off, like
- *                     every `pointSemantics` switch in the decode stack (see
- *                     `AllocRawPointsOptions` in lasDecodeShared.ts) — no
- *                     caller sets this yet.
+ * @param pointSemantics Default off; see AllocRawPointsOptions.
  */
 export async function loadLas(
   buffer: ArrayBuffer,

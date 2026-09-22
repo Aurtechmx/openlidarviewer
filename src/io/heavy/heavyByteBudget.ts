@@ -111,14 +111,14 @@ export class HeavyByteBudgetError extends Error {
  * number. Infinity is deliberate: a nonsense record length must read as
  * over-budget, never as zero.
  *
- * The `RawPoints` allocation this budgets is now WIDER than the source record
- * for every point format — it carries the classification-flags and
+ * The `RawPoints` allocation this budgets is WIDER than the source record for
+ * every point format — it carries the classification-flags and
  * point-semantics channels the LAS record doesn't spell out per byte the same
  * way — so the estimate is `pointCount * max(recordLength,
  * rawPointsBytesPerPoint(pointFormat, options))`, never the record length
- * alone. `pointFormat` is optional so a caller that genuinely has only a
- * record length (no parsed header) still gets the old behaviour; every caller
- * that has a header should pass it, since omitting it can only UNDER-count.
+ * alone. `pointFormat` is optional so a caller with only a record length (no
+ * parsed header) can still call this; every caller that has a header should
+ * pass it, since omitting it can only UNDER-count.
  */
 export function decodedBytesFor(
   pointCount: number,
