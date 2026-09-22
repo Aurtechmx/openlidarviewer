@@ -137,6 +137,11 @@ async function main() {
     record('test seam armed', seam === true, String(seam));
     if (seam !== true) throw new Error('__OLV_TEST_API__ absent — was OLV_TEST_SEAM set at build time?');
 
+    // Safari's driver starts with an async-script timeout of a few
+    // milliseconds, so a script that awaits a fetch and a parse is abandoned
+    // before it can answer. Set it explicitly to cover loading the scan.
+    await wd('POST', `/session/${sid}/timeouts`, { script: 60000 });
+
     // A scan, loaded the only way a phone can: fetched and dropped, which is
     // the same path the desktop specs drive.
     const dropResult = await evaluateAsync(sid, `
