@@ -4076,3 +4076,14 @@ export is labelled as a reduced view.
 The consequence for L26 is that a Withheld filter cannot act on a cloud already
 reduced at load. The filter has to run before the reduction, which is where it
 is placed when it is applied.
+
+### L13 · OPEN · EVIDENCE
+No browser leg becomes a required check yet. Each has one green run on main,
+and the WebKit legs then failed on a test that read the camera before the
+load flight ended, which is a test defect and not a product one. A required
+leg that goes red on timing blocks merges without finding bugs.
+The bar for `webkit-smoke` is twenty consecutive green runs on main. The
+Firefox and WebKit suites in `browsers.yml` follow on the same bar. The iOS
+simulator leg stays advisory until it has passed once end to end.
+The smoke workflow was titled "blocking" while no ruleset required it. Its
+title and header state that it is advisory.
