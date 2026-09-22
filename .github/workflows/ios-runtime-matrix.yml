@@ -1,0 +1,156 @@
+# A search over hosted macOS images for one that renders WebGL in an iOS
+# simulator without the host crashing.
+#
+# `ios-simulator.yml` reaches Mobile Safari, navigation, the test seam, a
+# scan load and an iOS-dispatched pinch — every step short of drawing a
+# frame. Once the canvas actually renders, the runner's paravirtual GPU
+# driver dies (`SimMetalHost`, `AppleParavirtArgumentEncoder`), WebKit's GPU
+# process exits, and Mobile Safari goes with it. That is a property of the
+# runner image, not of OLV or of that leg's harness, so fixing it belongs
+# here: sweep the images and runtimes GitHub hosts for a public repository
+# and see whether any of them keep the paravirtual GPU alive through a
+# rendered frame. This workflow does not touch `ios-simulator.yml` — it is a
+# separate, advisory search, and stays that way until a survivor is found.
+#
+# TWO PAGES PER CELL. A bare WebGL triangle is the control: if it also dies,
+# the fault is the image's GPU translation and nothing OLV does could avoid
+# it. The OLV build is the actual target. A cell where the triangle survives
+# and OLV does not would say the crash is narrower than "any WebGL", which
+# would be worth chasing inside the app instead of on the runner fleet.
+#
+# RUNTIMES ARE DISCOVERED, NOT LISTED. Which iOS runtimes an image ships
+# changes every time GitHub rotates that image, so a hardcoded runtime
+# string would drift within weeks. Each job asks `xcrun simctl list
+# runtimes -j` for what its own image actually has and keeps three points
+# across it — oldest, middle, newest — in `scripts/ios-runtime-matrix/`.
+#
+# NO APPIUM. That stack (WebDriverAgent, a driver, a session) is what
+# `ios-simulator.yml` needs to dispatch a real gesture; this leg only needs
+# a page open and rendering, which `xcrun simctl openurl` does on its own.
+# Survival is read from the host and simulator logs and a process check, not
+# from a WebDriver session.
+#
+# GPU-MODE SWITCH: NONE FOUND. The brief asked to look for a documented way
+# to force software rendering or pick a GPU mode for the simulator. Neither
+# `xcrun simctl`'s own help nor the `com.apple.iphonesimulator` defaults
+# domain names one as of the Xcode versions these images ship; the discovery
+# step below still probes for one and prints what it finds, so a future
+# Xcode that adds one shows up in the log instead of needing this comment
+# updated by hand. No such dimension is in the matrix because none exists to
+# put there.
+name: iOS runtime matrix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/ios-runtime-matrix.yml'
+      - 'scripts/ios-runtime-matrix/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: ${{ matrix.image }}
+    runs-on: ${{ matrix.image }}
+    # A brand-new leg over runner images this repository has never asked
+    # anything of before; a red job here is a research result, not a
+    # regression, and nothing depends on this workflow to pass.
+    continue-on-error: true
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every macOS label GitHub currently hosts free for a public
+        # repository: the two Apple Silicon generations behind
+        # `macos-latest` (where the crash is reproduced), the current
+        # default, and the Intel counterpart of each — a different driver
+        # underneath the same paravirtual GPU scheme. `macos-13` closed down
+        # in December 2025 and is left out because it no longer boots.
+        image: [macos-14, macos-15, macos-15-intel, macos-26, macos-26-intel]
+    env:
+      OLV_MARKER_LOG: ${{ github.workspace }}/triangle-marker.log
+      OLV_EVIDENCE_DIR: ${{ github.workspace }}/evidence
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      - name: Record the toolchain
+        run: |
+          sw_vers
+          uname -m
+          xcode-select -p
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Look for a documented GPU-mode switch
+        run: |
+          echo "-- simctl help, filtered for gpu/metal/render --"
+          xcrun simctl --help 2>&1 | grep -i -E "gpu|metal|render" || echo "(none)"
+          echo "-- com.apple.iphonesimulator defaults, filtered the same way --"
+          defaults read com.apple.iphonesimulator 2>/dev/null | grep -i -E "gpu|metal|render" || echo "(none)"
+
+      - run: npm ci --ignore-scripts
+
+      - name: Build with the test seam
+        env:
+          OLV_TEST_SEAM: '1'
+        run: ./node_modules/.bin/vite build
+
+      # Same bind-to-127.0.0.1 reasoning as `ios-simulator.yml`: the
+      # simulator shares the host's network stack, and `vite preview`'s
+      # `localhost` default resolves to `::1` first on this runner.
+      - name: Serve the OLV build
+        run: |
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 --strictPort > preview.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:4173/" -o /dev/null; then
+              echo "serving on 127.0.0.1:4173"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::the preview server never answered on 127.0.0.1:4173"
+          cat preview.log
+          exit 1
+
+      - name: Serve the WebGL triangle page
+        run: |
+          node scripts/ios-runtime-matrix/marker-server.mjs > marker-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:4174/webgl-triangle.html" -o /dev/null; then
+              echo "serving on 127.0.0.1:4174"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::the triangle server never answered on 127.0.0.1:4174"
+          cat marker-server.log
+          exit 1
+
+      # This is the whole leg: for up to three runtimes on this image, boot
+      # a simulator, open the triangle then the OLV build in Mobile Safari,
+      # wait, and record whether Safari is still alive. Exits nonzero only
+      # if the script itself could not run a cell (no runtime discovered, or
+      # a simulator that refused to boot) — a crashed Safari is the finding,
+      # not a failure of this step.
+      - name: Sweep this image's runtimes
+        env:
+          OLV_IMAGE: ${{ matrix.image }}
+          OLV_BASE_URL: http://127.0.0.1:4173/?test=1
+          OLV_TRIANGLE_URL: http://127.0.0.1:4174/webgl-triangle.html
+        run: node scripts/ios-runtime-matrix/run-image-matrix.mjs
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-runtime-matrix-${{ matrix.image }}
+          path: |
+            evidence/
+            preview.log
+            marker-server.log
+            triangle-marker.log
+          retention-days: 7

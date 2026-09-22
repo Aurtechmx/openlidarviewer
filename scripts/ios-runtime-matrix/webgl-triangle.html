@@ -1,0 +1,95 @@
+<!doctype html>
+<!--
+  webgl-triangle.html — the smallest thing that can crash the way OLV does.
+
+  The known-facts brief is specific: the OLV build already reaches Safari,
+  navigation, and even a dispatched pinch on the crashing image, and only
+  dies once a frame is actually drawn. So the control for this matrix is not
+  "does OLV work" but "does drawing one triangle through WebGL survive on
+  this image/runtime", stripped of everything OLV also does — no bundle to
+  fetch, no worker, no point-cloud shader. If this page also dies, the fault
+  is the image's GPU translation, not anything in the app. If it does not,
+  the crash is narrower than "any WebGL" and worth chasing inside the app.
+
+  Runs 20 s of `requestAnimationFrame`, matching the wait the workflow gives
+  the OLV leg, so a crash mid-animation is caught the same way on both pages
+  rather than one page being judged on a single frame.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>pending</title>
+<style>html,body{margin:0;background:#111}canvas{display:block;width:100vw;height:100vh}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// A relative fetch, so this page reports success the same way whatever host
+// and port served it — the workflow does not have to tell the page its own
+// origin.
+function mark(ok, reason) {
+  document.title = ok ? 'OLV-WEBGL-OK' : 'OLV-WEBGL-FAIL';
+  fetch('/mark?ok=' + (ok ? '1' : '0') + '&reason=' + encodeURIComponent(reason || ''))
+    .catch(function () { /* the marker server is best-effort; the title already carries the result */ });
+}
+
+try {
+  var canvas = document.getElementById('c');
+  canvas.width = canvas.clientWidth || 320;
+  canvas.height = canvas.clientHeight || 480;
+  var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+  if (!gl) throw new Error('no WebGL context');
+
+  canvas.addEventListener('webglcontextlost', function (e) {
+    e.preventDefault();
+    mark(false, 'webglcontextlost');
+  });
+
+  var vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }');
+  gl.compileShader(vs);
+
+  var fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, 'precision mediump float; void main(){ gl_FragColor = vec4(0.2, 0.7, 0.9, 1.0); }');
+  gl.compileShader(fs);
+
+  var prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    throw new Error('link failed: ' + gl.getProgramInfoLog(prog));
+  }
+  gl.useProgram(prog);
+
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0.6, -0.6, -0.6, 0.6, -0.6]), gl.STATIC_DRAW);
+  var loc = gl.getAttribLocation(prog, 'p');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+  var start = performance.now();
+  var frames = 0;
+  function tick(now) {
+    frames++;
+    var hue = ((now - start) / 20) % 360;
+    gl.clearColor(
+      0.5 + 0.5 * Math.sin(hue * Math.PI / 180),
+      0.1, 0.3, 1
+    );
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (now - start < 20000) {
+      requestAnimationFrame(tick);
+    } else {
+      mark(true, 'frames=' + frames);
+    }
+  }
+  requestAnimationFrame(tick);
+} catch (err) {
+  mark(false, String(err && err.message || err));
+}
+</script>
+</body>
+</html>
