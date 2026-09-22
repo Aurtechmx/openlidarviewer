@@ -1,0 +1,1753 @@
+{
+  "meta": {
+    "gesture": "pinchOut",
+    "description": "two-finger pinch, fingers diverging (zoom out)",
+    "device": "iPhone 17e",
+    "udid": "B8094BA5-47C4-4A9C-B87E-C73669585F82",
+    "iosRuntime": "com.apple.CoreSimulator.SimRuntime.iOS-26-4",
+    "xcodeVersion": "Xcode 26.6",
+    "runnerImage": "macos26",
+    "runId": "35792497399",
+    "recordedAt": "2026-09-22T22:47:09.491Z",
+    "expectRecognizer": "pinch",
+    "expectSign": 1,
+    "expectDoubleTap": false
+  },
+  "canvasRect": {
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 699
+  },
+  "before": {
+    "visualViewportScale": 1,
+    "scrollX": 0,
+    "scrollY": 0
+  },
+  "after": {
+    "visualViewportScale": 1,
+    "scrollX": 0,
+    "scrollY": 0
+  },
+  "counts": {
+    "pointer": 46,
+    "touch": 22,
+    "gesture": 44,
+    "recognizer": 30,
+    "doubletap": 0
+  },
+  "touchcancel": 0,
+  "assertions": {
+    "noZoom": true,
+    "noScroll": true,
+    "noTouchCancel": true,
+    "recognizerAsIntended": true,
+    "doubleTapAsIntended": true
+  },
+  "events": [
+    {
+      "t": 14785.000000000002,
+      "kind": "pointer",
+      "type": "pointerdown",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 225,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 0
+    },
+    {
+      "t": 14785.000000000002,
+      "kind": "pointer",
+      "type": "pointerdown",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 165,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14785.000000000002,
+      "kind": "touch",
+      "type": "touchstart",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 225,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 22.788
+        },
+        {
+          "id": -1548191376,
+          "clientX": 165,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 22.788
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 14818,
+      "kind": "gesture",
+      "type": "gesturestart",
+      "scale": 1.0888888835906982,
+      "rotation": 0
+    },
+    {
+      "t": 14818,
+      "kind": "gesture",
+      "type": "gesturestart",
+      "scale": 1.0888888835906982,
+      "rotation": 0
+    },
+    {
+      "t": 14818,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.0888888835906982,
+      "rotation": 0
+    },
+    {
+      "t": 14818,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.0888888835906982,
+      "rotation": 0
+    },
+    {
+      "t": 14818,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 227.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14818,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.04347834199497629,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14818,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 162.33333333333331,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14818,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.04166674117246375,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14818,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 227.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 162.33333333333331,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 14818,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 227.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14818,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 162.33333333333331,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14835,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.288888931274414,
+      "rotation": 0
+    },
+    {
+      "t": 14835,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.288888931274414,
+      "rotation": 0
+    },
+    {
+      "t": 14835,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 233.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 14835,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.08780486497760084,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14835,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 156.33333333333331,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14835,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.08071747774304065,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14835,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 233.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 156.33333333333331,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 14868,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.399999976158142,
+      "rotation": 0
+    },
+    {
+      "t": 14868,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.399999976158142,
+      "rotation": 0
+    },
+    {
+      "t": 14868,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 237,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14868,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.04219402436905638,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14868,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 153,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14868,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.04048576693250627,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14868,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 237,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 153,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 14884,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.6333333253860474,
+      "rotation": 0
+    },
+    {
+      "t": 14885,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.6333333253860474,
+      "rotation": 0
+    },
+    {
+      "t": 14885,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 244,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 14885,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.08,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14885,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 146,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14885,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.07407407407407407,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14885,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 244,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 146,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 14918,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.7555556297302246,
+      "rotation": 0
+    },
+    {
+      "t": 14918,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.7555556297302246,
+      "rotation": 0
+    },
+    {
+      "t": 14918,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 247.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14918,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.03672792981161,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14918,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 142.33333333333331,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14918,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.03542677761009492,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14918,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 247.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 142.33333333333331,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 14934,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.888888955116272,
+      "rotation": 0
+    },
+    {
+      "t": 14934,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 1.888888955116272,
+      "rotation": 0
+    },
+    {
+      "t": 14934,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 251.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14934,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.03726707721335112,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14934,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 138.33333333333331,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14934,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.035928140429820864,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14934,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 251.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 138.33333333333331,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 14951,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.01111102104187,
+      "rotation": 0
+    },
+    {
+      "t": 14951,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.01111102104187,
+      "rotation": 0
+    },
+    {
+      "t": 14951,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 255.33333333333331,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14951,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.031837826328842835,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14951,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 134.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14951,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.030855455689309298,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14951,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 255.33333333333331,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 134.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 14968.000000000002,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.277777910232544,
+      "rotation": 0
+    },
+    {
+      "t": 14968.000000000002,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.277777910232544,
+      "rotation": 0
+    },
+    {
+      "t": 14968.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 263.3333333333333,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 14968.000000000002,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.0641712467004143,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14968.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 126.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 14968.000000000002,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.06030156099989496,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 14968.000000000002,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 263.3333333333333,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 126.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15001,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.4111111164093018,
+      "rotation": 0
+    },
+    {
+      "t": 15001,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.4111111164093018,
+      "rotation": 0
+    },
+    {
+      "t": 15001,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 267.3333333333333,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 122.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15002,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.05687203277370645,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15002,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 267.3333333333333,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 122.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15018,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.6666667461395264,
+      "rotation": 0
+    },
+    {
+      "t": 15018,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.6666667461395264,
+      "rotation": 0
+    },
+    {
+      "t": 15018,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 275,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 15018,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.051627313806434205,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15018,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 115,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15018,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.04909283283528532,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15018,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 275,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 115,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15051.000000000002,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.933333396911621,
+      "rotation": 0
+    },
+    {
+      "t": 15051.000000000002,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 2.933333396911621,
+      "rotation": 0
+    },
+    {
+      "t": 15051.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 283,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 15051.000000000002,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.04878048780487805,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15051.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 107,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15051.000000000002,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.046511627906976744,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15051.000000000002,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 283,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 107,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15069,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.066666603088379,
+      "rotation": 0
+    },
+    {
+      "t": 15069,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.066666603088379,
+      "rotation": 0
+    },
+    {
+      "t": 15069,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 287,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15069,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 103,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15069,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.044444444444444446,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15069,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 287,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 103,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15101,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.200000047683716,
+      "rotation": 0
+    },
+    {
+      "t": 15101,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.200000047683716,
+      "rotation": 0
+    },
+    {
+      "t": 15101,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 291,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15101,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 99,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15101,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.0425531914893617,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15101,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 291,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 99,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15118,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.3222222328186035,
+      "rotation": 0
+    },
+    {
+      "t": 15118,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.3222222328186035,
+      "rotation": 0
+    },
+    {
+      "t": 15118,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 294.66666666666663,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15118,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 95.33333333333333,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15118,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.037478641512565074,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15118,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 294.66666666666663,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 95.33333333333333,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15134,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.577777862548828,
+      "rotation": 0
+    },
+    {
+      "t": 15134,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.577777862548828,
+      "rotation": 0
+    },
+    {
+      "t": 15134,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 302.3333333333333,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 15134,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.03773594966867711,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15134,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 87.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15134,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.03636365873368896,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15134,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 302.3333333333333,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 87.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15168,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.8111112117767334,
+      "rotation": 0
+    },
+    {
+      "t": 15168,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 3.8111112117767334,
+      "rotation": 0
+    },
+    {
+      "t": 15168,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 309.3333333333333,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 15168,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.0320855596272468,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15168,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 80.66666666666666,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15168,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.031088081145941998,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15168,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 309.3333333333333,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 80.66666666666666,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15201,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 4.02222204208374,
+      "rotation": 0
+    },
+    {
+      "t": 15201,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 4.02222204208374,
+      "rotation": 0
+    },
+    {
+      "t": 15202.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 315.66666666666663,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 15202.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 74.33333333333333,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15202.000000000002,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.05390060100149601,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15202.000000000002,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 315.66666666666663,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 74.33333333333333,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15218.000000000002,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 4.122221946716309,
+      "rotation": 0
+    },
+    {
+      "t": 15218.000000000002,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 4.122221946716309,
+      "rotation": 0
+    },
+    {
+      "t": 15218.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 318.66666666666663,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15218.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 71.33333333333333,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15218.000000000002,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 318.66666666666663,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 71.33333333333333,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15253.000000000002,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 4.288888931274414,
+      "rotation": 0
+    },
+    {
+      "t": 15253.000000000002,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 4.288888931274414,
+      "rotation": 0
+    },
+    {
+      "t": 15253.000000000002,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 323.66666666666663,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 2
+    },
+    {
+      "t": 15254,
+      "kind": "recognizer",
+      "component": "pinch",
+      "dPinch": 0.044564485752869976,
+      "dTwist": 0,
+      "dPanX": 0,
+      "dPanY": 0
+    },
+    {
+      "t": 15254,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 66.33333333333333,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15254,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 323.66666666666663,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 66.33333333333333,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15286,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 4.333333492279053,
+      "rotation": 0
+    },
+    {
+      "t": 15286,
+      "kind": "gesture",
+      "type": "gesturechange",
+      "scale": 4.333333492279053,
+      "rotation": 0
+    },
+    {
+      "t": 15286,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 325,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15286,
+      "kind": "pointer",
+      "type": "pointermove",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 65,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15286,
+      "kind": "touch",
+      "type": "touchmove",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 325,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 65,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 2
+    },
+    {
+      "t": 15286,
+      "kind": "gesture",
+      "type": "gestureend",
+      "scale": 4.333333492279053,
+      "rotation": 0
+    },
+    {
+      "t": 15286,
+      "kind": "gesture",
+      "type": "gestureend",
+      "scale": 4.333333492279053,
+      "rotation": 0
+    },
+    {
+      "t": 15286,
+      "kind": "pointer",
+      "type": "pointerup",
+      "pointerId": -1548191377,
+      "pointerType": "touch",
+      "isPrimary": true,
+      "clientX": 325,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 0
+    },
+    {
+      "t": 15287,
+      "kind": "pointer",
+      "type": "pointerup",
+      "pointerId": -1548191376,
+      "pointerType": "touch",
+      "isPrimary": false,
+      "clientX": 65,
+      "clientY": 303,
+      "cancelable": true,
+      "defaultPrevented": false,
+      "coalesced": 1
+    },
+    {
+      "t": 15287,
+      "kind": "touch",
+      "type": "touchend",
+      "cancelable": true,
+      "defaultPrevented": false,
+      "changedTouches": [
+        {
+          "id": -1548191377,
+          "clientX": 325,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        },
+        {
+          "id": -1548191376,
+          "clientX": 65,
+          "clientY": 303,
+          "radiusX": 22.788,
+          "force": 0
+        }
+      ],
+      "targetTouches": 0
+    }
+  ]
+}

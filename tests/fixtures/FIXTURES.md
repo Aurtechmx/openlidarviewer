@@ -117,3 +117,11 @@ measure. LAS point format 6, version 1.4.
 - synthetic: 1
 - keyPoint: 1
 - ground returns: 8, so a DTM reads 5 under the policy and 8 without it
+
+## ios-traces/
+
+Seven real touch-event logs recorded on the iOS simulator by
+`scripts/ios-touch-trace.mjs`, one per gesture, plus the run's own
+`RESULT.json`. Consumed by `tests/e2e/touchGestureReplay.spec.ts`. See
+`ios-traces/README.md` for the recording device, iOS runtime, Xcode,
+runner image, run id, and what each gesture's log shows.

@@ -1,0 +1,66 @@
+{
+  "device": "iPhone 17e",
+  "env": {
+    "iosRuntime": "com.apple.CoreSimulator.SimRuntime.iOS-26-4",
+    "xcodeVersion": "Xcode 26.6",
+    "runnerImage": "macos26"
+  },
+  "runId": "35792497399",
+  "steps": [
+    {
+      "name": "session created",
+      "ok": true,
+      "detail": "device=iPhone 17e"
+    },
+    {
+      "name": "navigated",
+      "ok": true,
+      "detail": "http://127.0.0.1:4173/probe.html"
+    },
+    {
+      "name": "probe armed",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "pinchIn",
+      "ok": true,
+      "detail": "zoom=1 scroll=(0,0) touchcancel=0 recognizerEvents=36 pointerEvents=58"
+    },
+    {
+      "name": "pinchOut",
+      "ok": true,
+      "detail": "zoom=1 scroll=(0,0) touchcancel=0 recognizerEvents=30 pointerEvents=46"
+    },
+    {
+      "name": "twist",
+      "ok": true,
+      "detail": "zoom=1 scroll=(0,0) touchcancel=0 recognizerEvents=30 pointerEvents=54"
+    },
+    {
+      "name": "pan",
+      "ok": true,
+      "detail": "zoom=1 scroll=(0,0) touchcancel=0 recognizerEvents=48 pointerEvents=64"
+    },
+    {
+      "name": "oneFingerDrag",
+      "ok": true,
+      "detail": "zoom=1 scroll=(0,0) touchcancel=0 recognizerEvents=0 pointerEvents=24"
+    },
+    {
+      "name": "doubleTap",
+      "ok": false,
+      "detail": "zoom=1 scroll=(0,0) touchcancel=0 recognizerEvents=0 pointerEvents=15"
+    },
+    {
+      "name": "wobble",
+      "ok": true,
+      "detail": "zoom=1 scroll=(0,0) touchcancel=0 recognizerEvents=0 pointerEvents=20"
+    },
+    {
+      "name": "no uncaught page errors",
+      "ok": true,
+      "detail": "[]"
+    }
+  ]
+}
