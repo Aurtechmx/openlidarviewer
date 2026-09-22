@@ -133,7 +133,14 @@ async function main() {
 
     // The seam must be armed, or the pose oracle reads nothing and every
     // assertion below would be vacuous.
-    const seam = await evaluate(sid, 'return !!window.__OLV_TEST_API__;');
+    // Polled, because navigation returns once the document loads, and the
+    // app mounts the seam later, after its own modules run. A single read
+    // races that and reports the seam missing from a build that has it.
+    let seam = false;
+    for (let i = 0; i < 60 && seam !== true; i++) {
+      seam = await evaluate(sid, 'return !!window.__OLV_TEST_API__;');
+      if (seam !== true) await new Promise((r) => setTimeout(r, 500));
+    }
     record('test seam armed', seam === true, String(seam));
     if (seam !== true) throw new Error('__OLV_TEST_API__ absent — was OLV_TEST_SEAM set at build time?');
 
