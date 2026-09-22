@@ -82,6 +82,16 @@ export function createViewerRenderCore(canvas: HTMLCanvasElement, forceWebGL: bo
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Each object's model-view matrix is formed on the CPU in float64 and
+  // uploaded as one uniform, instead of multiplying the camera and model
+  // matrices in the vertex shader. A mounted layer carries its offset to the
+  // project frame in its mesh position, and on the GPU path both translations
+  // are rounded to float32 before they cancel, which displaces the far layer
+  // by millimetres at 20 km and decimetres at 1000 km. Every material here
+  // reaches view space through three's `modelViewMatrix` accessor, which this
+  // switches on the WebGPU backend and the WebGL 2 fallback alike. It must be
+  // set before the first render: the flag is read when a material compiles.
+  renderer.highPrecision = true;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SCENE_BACKGROUND);
