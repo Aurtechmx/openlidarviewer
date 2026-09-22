@@ -152,6 +152,8 @@
     "verify:scientific-records": "node scripts/verify-scientific-records.mjs",
     "validate:scientific": "npm run test:terrain && npm run verify:scientific-records",
     "validate:terrain": "node scripts/validate-terrain.mjs",
+    "validation:field-simulation:verify": "python3 validation/field-simulation/oracle/flow_oracle.py --check",
+    "validation:field-simulation:write": "python3 validation/field-simulation/oracle/flow_oracle.py --write",
     "validation:datasets:verify": "node scripts/verify-dataset-register.mjs",
     "validation:datasets:acquire": "node scripts/acquire-dataset.mjs",
     "validation:study:verify": "node scripts/verify-cross-implementation-study.mjs",
