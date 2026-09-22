@@ -99,6 +99,24 @@ async function replayTrace(
     async ([events, rect]) => {
       const canvas = document.querySelector('.olv-canvas') as HTMLElement | null;
       if (!canvas) throw new Error('no canvas');
+      // A page script's dispatchEvent(new PointerEvent(...)) never registers
+      // a browser-tracked "active pointer" the way a real touch does, so
+      // Element.setPointerCapture throws NotFoundError for every id this
+      // replay invents. OrbitControls calls it, uncaught, on its own
+      // pointerdown handler (three's OrbitControls.js) before it attaches
+      // the drag's pointermove/pointerup listeners, so without this, the
+      // single-finger orbit path this replay exists to exercise never even
+      // starts. Shimmed for the duration of this replay only: real touch
+      // input gets capture for free, and this stands in for that guarantee
+      // rather than loosening anything the app or the recognisers assert.
+      const proto = Element.prototype;
+      const realSet = proto.setPointerCapture;
+      const realRelease = proto.releasePointerCapture;
+      const realHas = proto.hasPointerCapture;
+      const captured = new Set<number>();
+      proto.setPointerCapture = function (id: number) { captured.add(id); };
+      proto.releasePointerCapture = function (id: number) { captured.delete(id); };
+      proto.hasPointerCapture = function (id: number) { return captured.has(id); };
       const fire = (type: string, id: number, isPrimary: boolean, x: number, y: number) => {
         const ev = new PointerEvent(type, {
           bubbles: true,
@@ -113,15 +131,29 @@ async function replayTrace(
         Object.defineProperty(ev, 'offsetY', { get: () => y });
         canvas.dispatchEvent(ev);
       };
-      let lastT = events.length > 0 ? events[0].t : 0;
-      for (const e of events) {
-        const wait = Math.max(0, Math.min(200, e.t - lastT));
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        lastT = e.t;
-        // e.clientX/Y are recorded relative to the PROBE's canvas rect
-        // (trace.canvasRect); rescale into a 0..1 fraction of it, then place
-        // that fraction on the LIVE canvas rect this replay actually has.
-        fire(e.type, e.pointerId, e.isPrimary, e.canvasFracX * rect.width, e.canvasFracY * rect.height);
+      try {
+        let lastT = events.length > 0 ? events[0].t : 0;
+        for (const e of events) {
+          // Clamped to 200ms so a trace with a genuine long pause (a stalled
+          // simulator, a slow CI host) cannot stall this test for that long.
+          // Measured against every fixture committed under
+          // tests/fixtures/ios-traces/: the largest real inter-event gap is
+          // 68ms (wobble.json, see its README), so nothing recorded there is
+          // compressed by this clamp today. Re-check this comment's number
+          // against tests/fixtures/ios-traces/README.md's own measurement
+          // whenever a fixture there is replaced.
+          const wait = Math.max(0, Math.min(200, e.t - lastT));
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+          lastT = e.t;
+          // e.clientX/Y are recorded relative to the PROBE's canvas rect
+          // (trace.canvasRect); rescale into a 0..1 fraction of it, then place
+          // that fraction on the LIVE canvas rect this replay actually has.
+          fire(e.type, e.pointerId, e.isPrimary, e.canvasFracX * rect.width, e.canvasFracY * rect.height);
+        }
+      } finally {
+        proto.setPointerCapture = realSet;
+        proto.releasePointerCapture = realRelease;
+        proto.hasPointerCapture = realHas;
       }
     },
     [
@@ -193,6 +225,15 @@ test.describe('iOS trace replay — real device input into the full app', () => 
         expectMotion === undefined,
         `no EXPECT_MOTION entry for gesture "${gesture}" — add one before trusting this replay`,
       );
+      // A real one-finger drag has genuine damped momentum (OrbitControls'
+      // enableDamping), which keeps rendering frames for a while after the
+      // last input event. On a runner with no GPU adapter for the browser
+      // (forcing the fully-software WebGL fallback) that tail was measured
+      // locally at 48s to 90s for oneFingerDrag across repeated runs, well
+      // past this file's default per-test budget and with enough variance
+      // to want headroom past the worse of the two. Widened here, not
+      // globally, so a fast GPU-backed runner just finishes early instead.
+      test.setTimeout(180_000);
 
       await page.goto('/?test=1');
       await dropTinyPly(page);

@@ -106,7 +106,16 @@ export default defineConfig({
         headless: process.platform !== 'linux',
       },
       grepInvert: /@gpu/,
-      testIgnore: /firefoxWebglPreflight/,
+      // touchGestureReplay.spec.ts (its own header says so) targets three
+      // engines: deterministic (Chromium), webkit and webkit-mobile. Firefox
+      // was never one of them, and running it there anyway is not just
+      // redundant coverage: the fixtures are real iOS/WebKit event streams
+      // (coalescing, gesture events, WebKit-shaped pointer ids), and Firefox
+      // already gets its own touch coverage from touchGesture.spec.ts's
+      // synthesized events, which are engine-neutral by construction. Ignored
+      // here rather than left to slip through the same catch-all every other
+      // spec in this project runs under.
+      testIgnore: /firefoxWebglPreflight|touchGestureReplay/,
     },
     { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu/, testIgnore: /firefoxWebglPreflight/ },
     // iPhone WebKit: the same engine family as Mobile Safari, with a phone
