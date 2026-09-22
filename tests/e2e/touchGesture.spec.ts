@@ -277,6 +277,25 @@ async function openRenderingSection(page: import('@playwright/test').Page): Prom
   const renderingDetails = page.locator('details.olv-section-collapsible', {
     has: page.locator('summary', { hasText: 'Rendering' }),
   });
+
+  // At phone width the panels live in a collapsed bottom sheet rather than an
+  // always-open side rail, so the summary exists in the DOM but has no layout
+  // box. Clicking it there times out on "element is not visible", which reads
+  // like the setting is unreachable on a touch device. It is not: the sheet
+  // opens and its View tab holds the Rendering section. Verified by hand at
+  // 375x812, where the chip is 44 px tall and carries `olv-chip-active`.
+  if (!(await renderingDetails.locator('summary').isVisible())) {
+    const viewTab = page.locator('.olv-msheet-tab', { hasText: 'View' });
+    if (await viewTab.count()) {
+      // The sheet starts collapsed; its handle is the chevron beside the tabs.
+      if (!(await viewTab.isVisible())) {
+        await page.locator('.olv-dock [aria-label*="xpand"], .olv-msheet-handle').first().click();
+      }
+      await viewTab.click();
+      await expect(renderingDetails.locator('summary')).toBeVisible({ timeout: 10_000 });
+    }
+  }
+
   const isOpen = await renderingDetails.evaluate((d) =>
     (d as HTMLDetailsElement).open,
   );

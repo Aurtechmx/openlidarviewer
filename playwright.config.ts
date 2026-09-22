@@ -133,7 +133,7 @@ export default defineConfig({
     {
       name: 'webkit-mobile',
       use: { ...devices['iPhone 15'] },
-      testMatch: /visualsStudioMobile|smoke\.spec/,
+      testMatch: /visualsStudioMobile|smoke\.spec|touchGesture/,
     },
     // The graphics preflight is its own project so it can be run before the
     // suite without joining any project's default set. `deterministic` is a
