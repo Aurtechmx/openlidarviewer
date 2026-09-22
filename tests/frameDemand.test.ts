@@ -284,3 +284,25 @@ describe('pending GPU commits keep the loop awake', () => {
     expect(d.needsFrame(0)).toBe(false);
   });
 });
+
+describe('an active fade both wakes the loop and draws', () => {
+  it('draws while the dissolve runs, not once per heartbeat', () => {
+    // `needsFrame` always saw the fade; the gate did not, so the loop spun at
+    // rAF and skipped almost every frame it woke for.
+    let fading = true;
+    const { d } = demand({ fading: () => fading });
+    d.gate.noteRendered();
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
+    // Still drawing several frames in, with the heartbeat freshly reset each
+    // time, which is what a smooth dissolve needs.
+    for (let f = 0; f < 5; f++) {
+      d.gate.noteRendered();
+      expect(d.shouldRender(), `frame ${f}`).toBe(true);
+    }
+    fading = false;
+    d.gate.noteRendered();
+    expect(d.shouldRender()).toBe(false);
+    expect(d.needsFrame(0)).toBe(false);
+  });
+});

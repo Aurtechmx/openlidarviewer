@@ -54,6 +54,28 @@ export interface RenderActivitySignals {
    * samples, not because it was shown to be rare.
    */
   readonly commitWork: boolean;
+  /**
+   * A node dissolve is part way through.
+   *
+   * The loop already stayed AWAKE for a fade, because `needsFrame` asks for
+   * one; the gate was never told, so the frames it woke for were idle-skipped
+   * and the fade advanced on the heartbeat. At `FADE_MS` of 220 that is about
+   * two paints where sixty-hertz would give thirteen, and a dissolve drawn in
+   * two steps is a pop with extra latency rather than a fade.
+   *
+   * Distinct from {@link tweening}, which is the camera moving. This is the
+   * scene changing under a still camera.
+   *
+   * The frames were already being paid for: `needsFrame` returns true for a
+   * fade, so the loop wakes and runs either way. All this decides is whether
+   * a woken frame acts. Driving a real session could not measure the
+   * difference, because the window is the fade tail after the fetch queue
+   * quiets and `streamingBusy` forces the draws before that, and the
+   * frame-count spread between runs of one build was wider than the spread
+   * between builds. It is kept because a loop that wakes and then declines to
+   * draw is a contradiction, not because a benefit was observed.
+   */
+  readonly fading: boolean;
 }
 
 /**
@@ -165,8 +187,9 @@ export class RenderActivityGate {
    * Priority, highest first: a tween always draws; recent input draws until
    * the holdover expires; active streaming draws so new nodes appear without
    * latency; commit work draws so geometry that has reached the GPU is on the
-   * screen rather than waiting for a heartbeat; otherwise the heartbeat draws
-   * once the idle counter reaches the threshold. The boundary is
+   * screen rather than waiting for a heartbeat; a dissolve draws so it is a
+   * fade rather than two steps; otherwise the heartbeat draws once the idle
+   * counter reaches the threshold. The boundary is
    * `now < until`, so the expiry instant is already idle.
    */
   shouldRender(now: number, signals: RenderActivitySignals): boolean {
@@ -174,6 +197,7 @@ export class RenderActivityGate {
     if (now < this._activityUntilMs) return true;
     if (signals.streamingBusy) return true;
     if (signals.commitWork) return true;
+    if (signals.fading) return true;
     return this._idleHeartbeat >= IDLE_HEARTBEAT_FRAMES;
   }
 

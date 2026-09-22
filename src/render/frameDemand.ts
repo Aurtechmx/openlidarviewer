@@ -252,6 +252,7 @@ export class FrameDemand {
       // Sampled before the pump; `needsFrame` samples after it. See
       // {@link _sampleCommitWork} for why both ends are needed.
       commitWork: this._sampleCommitWork(),
+      fading: this._signals.fading(),
     });
     if (draw) this._paintOwed = false;
     return draw;
