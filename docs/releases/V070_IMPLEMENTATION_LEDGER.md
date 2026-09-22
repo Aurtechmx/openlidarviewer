@@ -3991,3 +3991,38 @@ the five pass on Chromium, WebKit, Firefox and iPhone WebKit.
 
 Still synthesized `PointerEvent`s, which is what Playwright exposes on every
 engine. Real hardware multi-touch on a physical device remains unverified.
+
+### L47 · NOT REPRODUCIBLE · UI
+
+The entry describes a grid keyed by x and y. `localDensitySize.ts` keys on the
+cloud's two widest axes: `dominantPlane` measures all three extents, drops the
+narrowest, and returns the rest, so a facade bins across its own surface rather
+than edge-on. `localDensitySizes` reads those axes rather than assuming x and y.
+
+The orientation case the entry warns about is covered: a surface laid flat and
+the same surface upright produce identical scales, over five noise levels.
+
+What remains is narrower than the entry claims and is not the same defect. The
+plane is chosen once for the whole cloud from its overall bounding box, so in a
+scene mixing orientations the minority surface is still binned edge-on. No test
+covers a mixed-orientation cloud and the size of that residual is unmeasured.
+
+The value is a display attribute throughout. It reaches an instanced `aSize`
+attribute and the size graph, nothing else: no export, no report, no claim in
+the register. A lint already holds `aSize` inside render code.
+
+### L26 · PARTIAL · SCIENTIFIC
+
+Classification flags now survive a worker-decoded load. They were filled by the
+decoder, carried by `PointCloud` and read by the LAS writer, but omitted from
+the worker payload, so they arrived only on a direct parse and were absent on
+the path the application uses. Applying the Withheld policy would have been
+inert for a normally-opened scan.
+
+`tests/workerPayloadParity.test.ts` derives the expectation from
+`PointCloudOptions` rather than naming the field, so an attribute added there
+and forgotten in the payload fails at the boundary instead of years later.
+
+The policy still has no caller. What changed is that it now has something to
+read. Voxel downsampling still drops the flags (L28), which continues to bound
+what applying it can mean.

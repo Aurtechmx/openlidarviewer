@@ -9,18 +9,18 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 145. Revisited at least once: 9.
+Entries: 145. Revisited at least once: 11.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
 | FIXED | 44 |
-| PARTIAL | 31 |
+| PARTIAL | 32 |
 | BUILT | 27 |
 | MEASURED | 13 |
-| NOT REPRODUCIBLE | 10 |
-| OPEN | 10 |
+| NOT REPRODUCIBLE | 11 |
+| OPEN | 8 |
 | DEFERRED | 6 |
 | REFUSED | 3 |
 | SUPERSEDED | 1 |
@@ -54,7 +54,7 @@ Entries: 145. Revisited at least once: 9.
 | L23 | FIXED | SEMANTICS | 1 |
 | L24 | NOT REPRODUCIBLE | EXPORT | 1 |
 | L25 | SUPERSEDED | EVIDENCE | 1 |
-| L26 | OPEN | SCIENTIFIC | 1 |
+| L26 | PARTIAL | SCIENTIFIC | 2 |
 | L27 | NOT REPRODUCIBLE | EVIDENCE | 1 |
 | L28 | PARTIAL | SEMANTICS | 1 |
 | L29 | FIXED | STATE | 1 |
@@ -75,7 +75,7 @@ Entries: 145. Revisited at least once: 9.
 | L44 | FIXED | LIFECYCLE | 1 |
 | L45 | FIXED | ARCHITECTURE | 1 |
 | L46 | PARTIAL | PERFORMANCE | 2 |
-| L47 | OPEN | UI | 1 |
+| L47 | NOT REPRODUCIBLE | UI | 2 |
 | L48 | FIXED | PERFORMANCE | 1 |
 | L49 | MEASURED | PERFORMANCE | 1 |
 | L50 | FIXED | CORRECTNESS | 1 |

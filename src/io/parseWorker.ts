@@ -137,6 +137,11 @@ function cloudPayload(cloud: PointCloud): { payload: Record<string, unknown>; tr
   if (cloud.colors) transfer.push(cloud.colors.buffer as ArrayBuffer);
   if (cloud.intensity) transfer.push(cloud.intensity.buffer as ArrayBuffer);
   if (cloud.classification) transfer.push(cloud.classification.buffer as ArrayBuffer);
+  // Synthetic, Key-point, Withheld and Overlap. Decoded since the flag byte
+  // was wired up, and dropped here until now: the payload below reconstructs
+  // the cloud, so an attribute missing from it does not survive a worker
+  // decode. Nothing consumed the flags yet, which is why no test noticed.
+  if (cloud.classificationFlags) transfer.push(cloud.classificationFlags.buffer as ArrayBuffer);
   if (cloud.normals) transfer.push(cloud.normals.buffer as ArrayBuffer);
   if (cloud.returnNumber) transfer.push(cloud.returnNumber.buffer as ArrayBuffer);
   if (cloud.returnCount) transfer.push(cloud.returnCount.buffer as ArrayBuffer);
@@ -156,6 +161,7 @@ function cloudPayload(cloud: PointCloud): { payload: Record<string, unknown>; tr
     colors: cloud.colors,
     intensity: cloud.intensity,
     classification: cloud.classification,
+    classificationFlags: cloud.classificationFlags,
     normals: cloud.normals,
     returnNumber: cloud.returnNumber,
     returnCount: cloud.returnCount,
