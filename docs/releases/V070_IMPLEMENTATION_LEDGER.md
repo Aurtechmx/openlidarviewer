@@ -3952,6 +3952,24 @@ docblock for the removed `STREAMING_TICK_INTERVAL` stayed as a heading with
 nothing under it. The reasoning in that block is worth keeping and now sits
 with the call it describes, in the loop body.
 
+### L146 · FIXED · EVIDENCE
+
+`flow_oracle.py` is a second, independent implementation of the D8 flow
+direction and accumulation the field-simulation lab uses, checked with `npm
+run validation:field-simulation:verify` against five frozen fixtures. Nothing
+ran it: the script was absent from `test:release:execute` and from every
+workflow under `.github/workflows`, so a change to the oracle, a fixture, or a
+frozen record could drift from the TypeScript implementation with no gate
+noticing.
+
+`validation:field-simulation:verify` now sits in `test:release:execute` next
+to `validation:field:verify`, so `scripts/gate.sh` runs it on every release and
+`ci.yml`'s `verify` job runs it on every push and pull request, beside the
+Python version lint. Corrupting one `upstreamCells` value in
+`validation/field-simulation/expected/plane-east.json` fails the check with
+`upstreamCells differs from the frozen record`; restoring the file passes it
+again.
+
 ### L12 · FIXED · UI
 
 Pinch, rotate and two-finger gestures now run on Chromium, WebKit and Firefox.

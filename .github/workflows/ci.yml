@@ -104,6 +104,8 @@ jobs:
         run: npm run lint:html-assets
       - name: Python version lint (.python-version and sonar agree)
         run: npm run lint:python-version
+      - name: Flow-oracle agreement (D8 routing + accumulation vs. the frozen record)
+        run: npm run validation:field-simulation:verify
       - name: Upload-queue wiring lint (the streaming path still reaches the queue)
         run: npm run lint:upload-queue-seam
       - name: Claims-language lint (no comparative marketing claims in public docs)
