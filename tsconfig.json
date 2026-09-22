@@ -14,6 +14,7 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "allowUnreachableCode": false,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "erasableSyntaxOnly": true

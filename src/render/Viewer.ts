@@ -1485,8 +1485,8 @@ export class Viewer {
     // A first cloud can arrive already in a scalar default mode (elevation
     // on a colourless scan) without any setColorMode call — the legend must
     // appear for it too.
-    this._notifyColorContextChanged();
-    return id; this._demand.changed('scene-geometry');
+    this._notifyColorContextChanged(); this._demand.changed('scene-geometry');
+    return id;
   }
 
   /** A cloud's point mesh coloured by `mode`; the layer and the preview share it. */

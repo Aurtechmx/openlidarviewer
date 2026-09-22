@@ -309,10 +309,13 @@ export function cameraPresetPose(
       const position = add(target, scale(dir, dist));
       return { position, target };
     }
+    // The switch is exhaustive over the union, so this arm is unreachable by
+    // type. It stays as the runtime guard for a name arriving from outside
+    // the type system, and lives inside the switch rather than after it so
+    // `allowUnreachableCode` can keep proving the arms above are complete.
+    default:
+      throw new Error(`Unknown camera preset: ${String(name)}`);
   }
-  // Exhaustive switch above — this is unreachable, but TypeScript's
-  // narrowing can't always prove it through a Record-typed name.
-  throw new Error(`Unknown camera preset: ${String(name)}`);
 }
 
 // ── Six standard (axis-aligned) views ──────────────────────────────

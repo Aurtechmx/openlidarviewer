@@ -98,22 +98,25 @@ export type InvalidationKind = 'once' | 'holdover' | 'while';
 /**
  * The kind of each reason. This table is the whole policy.
  *
- * Only ONE of these is raised by the running application: `camera-input`,
- * from `FrameDemand.input()` and `cameraMoved()`. The other thirteen are
- * declared and never invalidated, and `finished()` has no production caller
- * at all. A declared reason reads exactly like a used one, and two separate
- * readers have now taken this table for live wiring and proposed building on
- * it — `gpu-commit-pending` and `streaming-ready` in particular look like the
- * seam for streamed geometry, and are not.
+ * Four of the fifteen are raised by the running application: `camera-input`,
+ * from `FrameDemand.input()` and `cameraMoved()`, plus `style`,
+ * `scene-geometry` and `tool-overlay` from the visual setters. The other
+ * eleven are declared and never invalidated, and `finished()` has no
+ * production caller at all. A declared reason reads exactly like a used one,
+ * and two separate readers took this table for live wiring and proposed
+ * building on it — `gpu-commit-pending` and `streaming-ready` in particular
+ * look like the seam for streamed geometry, and are not.
  *
- * That is a design note rather than a defect. The programmatic scene changes
- * (`setClip`, `setColorMode`, `setElevationFilter`, `applyClassVisibility`,
- * `applyDerivedClassification`, `setCoverageGrid`) all call `input()`, so the
- * loop does wake for them; what they do not do is say why, and nothing reads
- * the reason except `needsFrame`. Whoever wires a reason properly should also
- * note that a `while` reason acquired without its `finished()` keeps
- * `needsFrame` true forever. `tests/renderInvalidation.test.ts` scans the
- * source and fails when this paragraph stops being true.
+ * A served reason now reaches the activity gate as `invalidated`, so raising
+ * one draws a frame rather than only arming the holdover. The remaining
+ * setters (`setClip`, `setElevationFilter`, `applyClassVisibility`,
+ * `setCoverageGrid`) call `input()`, which wakes the loop without saying why;
+ * those are the next call sites to narrow. Whoever wires a reason properly
+ * should also note that a `while` reason acquired without its `finished()`
+ * keeps `needsFrame` true forever. `tests/renderInvalidation.test.ts` scans
+ * the source and fails when this paragraph stops being true — but it scans
+ * text, so a call it finds may still be unreachable; that gap is pinned
+ * separately in `tests/visualMutationOwnership.test.ts`.
  */
 export const KIND: Readonly<Record<RenderInvalidationReason, InvalidationKind>> = Object.freeze({
   'camera-input': 'holdover',

@@ -14,10 +14,12 @@
  * has to clear the gate, which takes six skips first. A colour change could
  * therefore sit unpainted for over a second.
  *
- * `input()` is used rather than `changed('style')` because the gate does not
- * read invalidation reasons yet: a reason wakes the scheduler, and the woken
- * frame can still be skipped. When the reason vocabulary becomes a draw
- * authority these are call sites to revisit.
+ * These call sites use `input()`, which both wakes the scheduler and arms the
+ * gate on its own. A reason raised through `changed()` now draws as well, but
+ * only once the loop serves it: `_served` is set inside the frame, so a demand
+ * that was never started reports no served reason and the gate sees nothing.
+ * That is why the assertions below pin the wake and leave the paint to
+ * `tests/invalidationDrawsFrame.test.ts`, which drives the real loop.
  *
  * This pins the WAKE, not the setter's own effect, and it reads the Viewer's
  * own source to do it. A double that mirrors the setter cannot notice the
@@ -58,14 +60,15 @@ describe('a settled viewer is asleep until something asks', () => {
     expect(d.shouldRender()).toBe(true);
   });
 
-  it('would not be armed by a reason alone, which is why input() is used', () => {
-    // `changed` records the reason and wakes the scheduler, but the gate does
-    // not consult reasons, so the frame it wakes is still skipped. This is the
-    // gap that makes `changed('style')` the wrong call today.
+  it('is woken by a reason too, whose paint the loop decides when it serves it', () => {
+    // `changed` records the reason and wakes the scheduler. The gate reads a
+    // SERVED reason, and serving happens inside the frame, so a demand that
+    // was never started has nothing to show the gate here. The draw itself is
+    // pinned against the real loop in `invalidationDrawsFrame.test.ts`; this
+    // asserts only the wake, which is what a policy call must not forget.
     const d = sleepingDemand();
     d.changed('style');
     expect(d.needsFrame(0)).toBe(true);
-    expect(d.shouldRender()).toBe(false);
   });
 });
 
