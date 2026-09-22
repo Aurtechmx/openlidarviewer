@@ -108,6 +108,10 @@ async function main() {
       'appium:wdaStartupRetries': 2,
       'appium:wdaStartupRetryInterval': 20000,
       'appium:showXcodeLog': true,
+      // The driver re-checks that the simulator finished booting and allows
+      // two minutes by default. On a loaded runner, after the WebDriverAgent
+      // build, that check has run out while the device was still settling.
+      'appium:simulatorStartupTimeout': 600000,
     };
     // Only pin the udid when the workflow resolved one; an empty string would
     // match no device and the failure would name the capability, not the cause.

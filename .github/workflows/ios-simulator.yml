@@ -149,6 +149,11 @@ jobs:
             GCC_TREAT_WARNINGS_AS_ERRORS=0 COMPILER_INDEX_STORE_ENABLE=NO \
             | tail -20
 
+      # The WebDriverAgent build keeps the runner busy for minutes. Confirm
+      # the device is still fully booted before the session asks for it.
+      - name: Confirm the simulator is booted
+        run: xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+
       - name: Drive the touch model in Mobile Safari
         env:
           OLV_SIM_UDID: ${{ steps.sim.outputs.udid }}
