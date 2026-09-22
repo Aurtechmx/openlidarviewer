@@ -206,6 +206,19 @@ async function main() {
     const cx = rect.x + Math.round(rect.w / 2);
     const cy = rect.y + Math.round(rect.h / 2);
 
+    // WebDriverAgent resolves the target app before it synthesises any touch,
+    // and by default does so by snapshotting Safari's whole accessibility
+    // tree, web content included. With the viewer's page loaded that snapshot
+    // never finished: the log showed one "Requesting snapshot of accessibility
+    // hierarchy" every five seconds for forty seconds, after which Safari was
+    // gone and the remote debugger lost it. Coordinate actions only need the
+    // application frame, so the snapshot is capped at the top of the tree and
+    // the idle waits, which spin on the same busy app, are switched off.
+    await wd('POST', `/session/${sid}/appium/settings`, {
+      settings: { snapshotMaxDepth: 1, waitForIdleTimeout: 0, animationCoolOffTimeout: 0 },
+    });
+
+    const pinchStart = Date.now();
     await wd('POST', `/session/${sid}/actions`, {
       actions: [
         {
@@ -230,7 +243,19 @@ async function main() {
         },
       ],
     });
-    record('two-finger pinch dispatched by iOS', true, `centre=${cx},${cy}`);
+    record('two-finger pinch dispatched by iOS', true, `centre=${cx},${cy} took=${Date.now() - pinchStart}ms`);
+
+    // If Safari does not survive the gesture, the next page call fails with a
+    // remote-debugger error that names neither the app state nor the screen.
+    // These two say which app is in front and what the device shows.
+    try {
+      const info = await wd('POST', `/session/${sid}/execute/sync`, { script: 'mobile: activeAppInfo', args: [] });
+      console.log(`active app after pinch: ${JSON.stringify(info)}`);
+    } catch (e) { console.log(`active app after pinch: unavailable (${e.message})`); }
+    try {
+      const png = await wd('GET', `/session/${sid}/screenshot`);
+      writeFileSync('ios-after-pinch.png', Buffer.from(png, 'base64'));
+    } catch (e) { console.log(`screenshot after pinch: unavailable (${e.message})`); }
 
     await new Promise((r) => setTimeout(r, 1200));
     const after = await evaluate(sid, POSE);
