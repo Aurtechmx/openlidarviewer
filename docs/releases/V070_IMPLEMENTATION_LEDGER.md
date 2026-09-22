@@ -4457,3 +4457,17 @@ percent NoData, the outlet reading reproduces the earlier seeding bit for bit,
 `cellsUnreachable` matches an independent breadth-first search from the
 boundary, and the wall leaves no sink or flat on any cell it reached. Every
 sink or flat that remains lies inside a counted unreachable region.
+
+### L148 · FIXED · SCIENTIFIC
+
+The entry above claims a run of "over 3,000 random grids" that was never
+committed: no property test, fuzz script, or random-grid fixture backed that
+sentence anywhere in the repository at the time it was written.
+
+`tests/priorityFloodRandomGrids.test.ts` runs it: 3,000 seeded random grids
+per property, each checked against a reimplementation independent of the
+code path it verifies. A standalone copy of the earlier seeding stands in
+for the outlet reading, a plain queue flood-fill stands in for
+`cellsUnreachable`, and D8 restricted to that flood-fill's reachable set
+stands in for the sink and flat claim. All three hold. Covered by
+`tests/priorityFloodRandomGrids.test.ts`.
