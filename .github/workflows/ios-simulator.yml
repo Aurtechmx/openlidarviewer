@@ -116,12 +116,26 @@ jobs:
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
 
+      # Majors pinned, and pinned as a pair. The XCUITest driver declares a
+      # peer of `^3.0.0-rc.2` on the server, so `appium@2` cannot carry it: the
+      # install refuses with a version complaint rather than failing later at a
+      # session. `appium@next` is 2.0.1, older than `latest`, so the tag is no
+      # guide either. A curl loop replaces `wait-on` to avoid fetching a
+      # package on the critical path just to poll a port.
       - name: Install Appium and the XCUITest driver
         run: |
-          npm i -g appium@2
-          appium driver install xcuitest
-          appium --log-timestamp --log-no-colors > appium.log 2>&1 &
-          npx wait-on http://127.0.0.1:4723/status --timeout 120000
+          npm i -g appium@3
+          appium driver install xcuitest@12
+          appium --port 4723 > appium.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4723/status -o /dev/null; then
+              echo "appium is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::appium never answered on 127.0.0.1:4723"
+          cat appium.log
+          exit 1
 
       - name: Drive the touch model in Mobile Safari
         env:
