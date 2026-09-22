@@ -11,10 +11,16 @@
  * "free" once it's computed once.
  *
  * Algorithm: hash points into a 2D voxel grid keyed by the cloud's two
- * widest axes (its dominant plane, not always x/y); count
- * per cell; each point's "local density" is `count / cellArea` in
- * points/m². Map that through a log-scaled curve to a per-point pixel
- * size multiplier in `[minScale, maxScale]`.
+ * widest axes (its dominant plane, not always x/y); count per cell;
+ * each point's "local density" is `count / cellArea` in points/m².
+ * Map that through a log-scaled curve to a per-point pixel size
+ * multiplier in `[minScale, maxScale]`. With `localPlanes`, a voxel
+ * whose own points spread on a different plane than that dominant one
+ * bins across its own face instead: a facade on a ground plane reads
+ * as a facade, not as the ground's edge-on sliver. That per-voxel plane
+ * only ever differs from the whole-cloud one where the cloud actually
+ * mixes orientations: a single planar orientation keeps one plane for
+ * every voxel and bins exactly as the whole-cloud grid alone would.
  */
 
 
@@ -42,7 +48,13 @@ export interface LocalDensitySizeInput {
    * grid across the other two, so a facade standing on a ground plane is binned
    * across its own face. A voxel with too few points, or no clearly thin axis,
    * keeps the `axes` plane, so a single-orientation cloud bins exactly as
-   * without this option.
+   * without this option. Two such voxels also carry the rounded position of
+   * their own points along that thin axis, so two parallel walls at different
+   * offsets bin apart instead of sharing one 2D cell; a voxel that keeps the
+   * `axes` plane carries none, so that case is unaffected. This only classes a
+   * voxel thin at all within about 26.6 degrees of an axis (spread ratio 0.5,
+   * `THIN_RATIO`); a facade closer to 45 degrees keeps the `axes` plane, same
+   * as before this option existed.
    */
   localPlanes?: boolean;
   /**
@@ -164,16 +176,27 @@ export function localDensitySizes(input: LocalDensitySizeInput): Float32Array {
   return out;
 }
 
-/** Points a voxel needs before its spread decides its plane. */
-const MIN_VOXEL_POINTS = 6;
-/** The thin axis must spread at most this fraction of the next one. */
+/**
+ * Points a voxel needs before its spread decides its plane. A uniform 3D
+ * scatter of exactly this many points still passes the min/max spread test
+ * by chance about 0.5% of the time (Monte Carlo, `THIN_RATIO` below), down
+ * from about 5.7% at the previous 6-point minimum, which read ground and
+ * vegetation scatter as a facade edge on 2% of a mixed scene's points.
+ */
+const MIN_VOXEL_POINTS = 10;
+/** The thin axis must spread at most this fraction of the next one. This
+ * also bounds which orientations count as thin at all: a plane closer than
+ * about 26.6 degrees to an axis (arctan of this ratio) passes, one further
+ * from it keeps the whole-cloud plane like any other off-axis surface. */
 const THIN_RATIO = 0.5;
 
 /**
  * One numeric 2D-cell key per point. The key carries the normal axis of the
- * plane it was binned in, so cells of differently oriented surfaces never merge.
- * Without `localPlanes`, or when the grid is too large to index exactly, every
- * point uses the `axes` plane.
+ * plane it was binned in, so cells of differently oriented surfaces never
+ * merge; a voxel with a local plane also carries the rounded voxel position
+ * along that plane's normal, so two parallel surfaces at different offsets
+ * do not merge either. Without `localPlanes`, or when the grid is too large
+ * to index exactly, every point uses the `axes` plane.
  */
 function binKeys(
   positions: Float32Array,
@@ -197,7 +220,6 @@ function binKeys(
   const keys = new Float64Array(n);
   const planeSize = Math.max(dim[0] * dim[1], dim[0] * dim[2], dim[1] * dim[2]);
   const exact = Number.isFinite(planeSize) && planeSize * 3 < Number.MAX_SAFE_INTEGER;
-  const normals = exact && localPlanes ? voxelNormals(positions, n, cellSize, lo, dim, defaultNormal) : null;
   if (!exact) {
     // Unindexable extent (non-finite or astronomically wide): hash by string.
     const ids = new Map<string, number>();
@@ -209,18 +231,39 @@ function binKeys(
     }
     return keys;
   }
+  const normals = localPlanes ? voxelNormals(positions, n, cellSize, lo, dim, defaultNormal) : null;
+  // A layered key needs (maxDim + 1) extra address spaces of 3 * planeSize each on
+  // top of the unlayered one; skip layering rather than risk two different voxels
+  // aliasing to the same key when that no longer fits a safe integer exactly.
+  const maxDim = Math.max(dim[0], dim[1], dim[2]);
+  const layersExact = Number.isFinite(maxDim) && (maxDim + 2) * 3 * planeSize < Number.MAX_SAFE_INTEGER;
   for (let i = 0; i < n; i++) {
-    const k = normals === null ? defaultNormal : normals[i];
+    const k = normals === null ? defaultNormal : normals.axis[i];
     const a = k === 0 ? 1 : 0;
     const b = k === 2 ? 1 : 2;
     const ca = Math.floor(positions[i * 3 + a] / cellSize) - lo[a];
     const cb = Math.floor(positions[i * 3 + b] / cellSize) - lo[b];
-    keys[i] = k * planeSize + ca + cb * dim[a];
+    const layer = normals !== null && layersExact ? normals.layer[i] : -1;
+    const slot = layer < 0 ? 0 : 1 + layer;
+    keys[i] = slot * 3 * planeSize + k * planeSize + ca + cb * dim[a];
   }
   return keys;
 }
 
-/** Per-point normal axis from the spread of the points sharing its voxel. */
+/**
+ * Per-point normal axis from the spread of the points sharing its voxel, and,
+ * for a voxel whose normal differs from `defaultNormal` (it keeps its own
+ * local plane rather than the whole-cloud one), that voxel's rounded position
+ * along the normal. Rounding rather than flooring keeps a surface that is not
+ * axis-aligned from being sliced into extra layers as its position along the
+ * normal drifts smoothly across a voxel boundary. Flooring a wall at 26
+ * degrees to an axis (near the edge of the band `THIN_RATIO` still classes as
+ * thin) read p90 1.47 of its alone size against 1.03 unlayered, a cost this
+ * option exists to avoid, not add. A voxel that keeps
+ * `defaultNormal` carries no layer (-1), so it takes the same key as before
+ * this existed and a single planar orientation bins exactly as it did without
+ * `localPlanes`.
+ */
 function voxelNormals(
   positions: Float32Array,
   n: number,
@@ -228,7 +271,7 @@ function voxelNormals(
   lo: number[],
   dim: number[],
   defaultNormal: number,
-): Uint8Array | null {
+): { axis: Uint8Array; layer: Int32Array } | null {
   const vol = dim[0] * dim[1] * dim[2];
   if (!(vol < Number.MAX_SAFE_INTEGER)) return null;
   const slotOf = new Map<number, number>();
@@ -269,6 +312,7 @@ function voxelNormals(
     if (z > stats[o + 6]) stats[o + 6] = z;
   }
   const slotNormal = new Uint8Array(slots);
+  const slotLayer = new Int32Array(slots).fill(-1);
   for (let s = 0; s < slots; s++) {
     const o = s * 7;
     slotNormal[s] = defaultNormal;
@@ -277,9 +321,17 @@ function voxelNormals(
     let thin = 0;
     for (let a = 1; a < 3; a++) if (spread[a] < spread[thin]) thin = a;
     const next = Math.min(...[0, 1, 2].filter((a) => a !== thin).map((a) => spread[a]));
-    if (spread[thin] <= THIN_RATIO * next) slotNormal[s] = thin;
+    if (spread[thin] > THIN_RATIO * next) continue;
+    slotNormal[s] = thin;
+    if (thin === defaultNormal) continue;
+    const mid = (stats[o + 1 + thin * 2] + stats[o + 2 + thin * 2]) / 2;
+    slotLayer[s] = Math.round(mid / cellSize) - lo[thin];
   }
-  const out = new Uint8Array(n);
-  for (let i = 0; i < n; i++) out[i] = slotNormal[pointSlot[i]];
-  return out;
+  const axis = new Uint8Array(n);
+  const layer = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    axis[i] = slotNormal[pointSlot[i]];
+    layer[i] = slotLayer[pointSlot[i]];
+  }
+  return { axis, layer };
 }

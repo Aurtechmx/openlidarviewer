@@ -4535,3 +4535,65 @@ repository persists one today. `schemaVersion` stays 1 on that evidence: there
 is nothing yet that would read an old record and misread the new
 `fieldDigest` field, and the check is worth repeating before any such path
 starts writing one.
+
+Rendering computed from float32 arithmetic on the app's live matrices; the
+bake residual is pinned by `tests/farMountFloat32Bake.test.ts`. The gate
+holds the analysis paths to 1 mm and is slightly optimistic for display at
+its edge. Relaxing it needs two changes: `highPrecision` on, verified on the
+WebGL2 fallback, and the six paths accumulating source-local values with the
+offset added in float64.
+
+### L47 · PARTIAL · UI
+
+A follow-up review of the per-voxel local-plane fix measured three gaps against
+the whole-cloud-plane baseline and the facade-alone reference.
+
+The orientation limit stands. `localPlanes` only classes a voxel thin within
+about 26.6 degrees of an axis (`THIN_RATIO` 0.5, the min/max spread test's
+own cutoff); a facade at 27 to 63 degrees keeps the whole-cloud plane exactly
+as before this option existed, pinned at 45 degrees (median 0.40). Loosening
+that cutoff would let more of a scattered cloud pass the same test by chance,
+which is the second gap below, so it stays.
+
+Parallel walls sharing a voxel's 2D cell is fixed. The bin key now also
+carries the voxel's rounded position along its own normal, so two walls at
+different offsets bin apart instead of merging their point counts: one 5%
+wall alone reads median 1.00 of its own size; two read 1.00 against the
+previous 0.71; four read 1.00 against 0.51. Rounding rather than flooring
+that position matters on its own: at 26 degrees to an axis, a single
+non-axis-aligned wall floored into layers as its position along the normal
+drifted across a voxel boundary, reading p90 1.47 of its alone size against
+1.03 unlayered and identical to the whole-cloud plane at every angle and at
+0, 0.25 and 0.5 cell offsets on the wall it was tested against.
+
+The 6-point minimum let scattered, non-planar voxels pass the same spread
+test by chance: a uniform 3D voxel of 6 points classes as thin 5.7% of the
+time (Monte Carlo), 1.7% at 8 points, 0.5% at 10, 0.2% at 12. Raising
+`MIN_VOXEL_POINTS` from 6 to 10 cuts a ground-plus-30%-vegetation scene's
+misclassified share from 2.0% to 0.3% of its points and a uniform random
+cube's from 2.6% to 0%, with no effect on any flat or single-orientation
+scene. The cost lands on the facade-edge minima the first L47 entry already
+flagged: more x-end and top-edge voxels of a 5% facade share now hold fewer
+than 10 points and fall back to the ground plane, so that mix's worst 10% of
+facade points reads 0.66 of its alone size where it read 0.99 before (min
+0.10 against 0.12); the 20% and 50% shares are unaffected (min 0.21 and
+0.77/0.51, both unchanged).
+
+The first entry attributed the low minima to the ground/facade seam. They are
+not only that: measured per region, the seam (the facade's own bottom row)
+accounts for some of them, but the facade's x-end and top-edge voxels, which
+see fewer points near their own boundary and fall back to the ground plane
+below `MIN_VOXEL_POINTS`, account for more.
+
+| Facade share | Noise | p10, min against its alone size |
+| --- | --- | --- |
+| 5% | 0 and 5 cm | 0.66, 0.10 |
+| 20% | 0 and 5 cm | 1.00, 0.21 |
+| 50% | 0 and 5 cm | 1.00, 0.77 / 0.51 |
+
+A 1,000,000-point ground-and-facade pass still runs 135 to 155 ms median,
+the same band as the first L47 entry measured; neither the layer term nor
+the higher point minimum moved it. Also fixed: the module header, which
+still described a single whole-cloud grid with no mention of `localPlanes`;
+and `binKeys`, which computed voxel normals ahead of the unindexable-extent
+early return rather than after it.

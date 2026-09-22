@@ -15,8 +15,8 @@ Entries: 149. Revisited at least once: 18.
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 51 |
-| PARTIAL | 32 |
+| FIXED | 50 |
+| PARTIAL | 33 |
 | BUILT | 26 |
 | MEASURED | 14 |
 | NOT REPRODUCIBLE | 10 |
@@ -75,7 +75,7 @@ Entries: 149. Revisited at least once: 18.
 | L44 | FIXED | LIFECYCLE | 1 |
 | L45 | FIXED | ARCHITECTURE | 1 |
 | L46 | PARTIAL | PERFORMANCE | 2 |
-| L47 | FIXED | UI | 2 |
+| L47 | PARTIAL | UI | 3 |
 | L48 | FIXED | PERFORMANCE | 1 |
 | L49 | MEASURED | PERFORMANCE | 1 |
 | L50 | FIXED | CORRECTNESS | 1 |

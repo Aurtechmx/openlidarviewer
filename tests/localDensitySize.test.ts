@@ -257,7 +257,6 @@ describe('orientation', () => {
   });
 });
 
-
 describe('mixed orientation', () => {
   // A 100 m x 100 m ground plane with a 40 m x 20 m facade standing on it. The
   // facade's reference is the same grid run on the facade alone, keyed across
@@ -283,15 +282,24 @@ describe('mixed orientation', () => {
     }
     return { p, ng, nf };
   };
-  const ratios = (frac: number, noise: number, localPlanes: boolean): number[] => {
+  // `ext` overrides the clamp so a ratio reflects the raw density formula rather than two
+  // independently-clamped scales landing on the same 0.5 floor. At a 50% facade share both
+  // sides sit on that floor under the default clamp regardless of how they were binned.
+  const ratios = (
+    frac: number,
+    noise: number,
+    localPlanes: boolean,
+    ext: { minScale?: number; maxScale?: number } = {},
+  ): number[] => {
     const { p, ng, nf } = scene(frac, noise);
     const prm = autoDensitySizeParams(p);
-    const s = localDensitySizes({ positions: p, ...prm, localPlanes });
+    const s = localDensitySizes({ positions: p, ...prm, localPlanes, ...ext });
     const ref = localDensitySizes({
       positions: p.subarray(ng * 3),
       cellSize: prm.cellSize,
       referenceDensity: prm.referenceDensity,
       axes: [0, 2],
+      ...ext,
     });
     const out: number[] = [];
     for (let j = 0; j < nf; j++) out.push(s[ng + j] / ref[j]);
@@ -303,18 +311,164 @@ describe('mixed orientation', () => {
     expect(q(ratios(0.05, 0, false), 0.5)).toBeLessThan(0.45);
   });
 
+  // Unclamped (minScale 0, maxScale 1e9): the default [0.5, 2] clamp used to hide that a 5%
+  // facade share puts its x-end and top-edge voxels below MIN_VOXEL_POINTS, where they fall
+  // back to the ground plane and read as small as 0.66 (p10) and 0.10 (min) of their alone
+  // size. Both bounds already sat at that floor before this test unclamped them, so the
+  // 20%/50% bounds below only had to widen enough to stop relying on it, not because binning
+  // changed for those shares. The 5% p10/min bounds are new: MIN_VOXEL_POINTS rising from 6
+  // to 10 (to stop scatter reading as flat, see the "misclassifies" test below) means more of
+  // that share's few-point edge voxels miss the threshold and inherit the ground plane.
   it.each([
-    [0.05, 0],
-    [0.2, 0],
-    [0.5, 0],
-    [0.05, 0.05],
-    [0.2, 0.05],
-    [0.5, 0.05],
-  ])('sizes a %s facade share at %s m noise as it would alone', (frac, noise) => {
-    const rat = ratios(frac, noise, true);
+    [0.05, 0, 0.6, 0.09],
+    [0.2, 0, 0.99, 0.18],
+    [0.5, 0, 0.99, 0.5],
+    [0.05, 0.05, 0.6, 0.09],
+    [0.2, 0.05, 0.99, 0.18],
+    [0.5, 0.05, 0.99, 0.35],
+  ])('sizes a %s facade share at %s m noise as it would alone', (frac, noise, p10Min, ratMin) => {
+    const rat = ratios(frac, noise, true, { minScale: 0, maxScale: 1e9 });
     expect(Math.abs(q(rat, 0.5) - 1)).toBeLessThan(0.01);
-    expect(q(rat, 0.1)).toBeGreaterThan(0.99);
+    expect(q(rat, 0.1)).toBeGreaterThan(p10Min);
     expect(q(rat, 0.9)).toBeLessThan(1.01);
-    expect(rat[0]).toBeGreaterThan(0.35);
+    expect(rat[0]).toBeGreaterThan(ratMin);
+  });
+});
+
+describe('orientation limit and parallel walls', () => {
+  const lcg = (seed0: number) => {
+    let seed = seed0;
+    return (): number => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  };
+  const q = (a: number[], f: number): number => a[Math.min(a.length - 1, Math.floor(f * a.length))];
+
+  // One 5% facade rotated `ang` from the x axis, referenced against the same facade alone,
+  // rotated back to axis-aligned. `localPlanes` only classes a voxel thin within about 26.6
+  // degrees of an axis (`THIN_RATIO` 0.5 in the source), so a 45-degree wall never qualifies.
+  const rotatedWallRatios = (angDeg: number, noise: number): number[] => {
+    const r = lcg(99);
+    const g = (): number => (r() + r() + r() - 1.5) * noise;
+    const total = 200_000;
+    const nf = Math.round(total * 0.05);
+    const ng = total - nf;
+    const p = new Float32Array(total * 3);
+    for (let i = 0; i < ng; i++) {
+      p[i * 3] = r() * 100;
+      p[i * 3 + 1] = r() * 100;
+      p[i * 3 + 2] = g();
+    }
+    const ang = (angDeg * Math.PI) / 180;
+    const c = Math.cos(ang);
+    const s = Math.sin(ang);
+    for (let j = 0; j < nf; j++) {
+      const i = ng + j;
+      const t = r() * 40;
+      const off = g();
+      p[i * 3] = 30 + t * c - off * s;
+      p[i * 3 + 1] = 30 + t * s + off * c;
+      p[i * 3 + 2] = r() * 20;
+    }
+    const prm = autoDensitySizeParams(p);
+    const sizes = localDensitySizes({ positions: p, ...prm });
+    const q2 = new Float32Array(nf * 3);
+    const c2 = Math.cos(-ang);
+    const s2 = Math.sin(-ang);
+    for (let j = 0; j < nf; j++) {
+      const i = ng + j;
+      const x = p[i * 3] - 30;
+      const y = p[i * 3 + 1] - 30;
+      q2[j * 3] = x * c2 - y * s2;
+      q2[j * 3 + 1] = x * s2 + y * c2;
+      q2[j * 3 + 2] = p[i * 3 + 2];
+    }
+    const ref = localDensitySizes({ positions: q2, cellSize: prm.cellSize, referenceDensity: prm.referenceDensity, axes: [0, 2] });
+    const out: number[] = [];
+    for (let j = 0; j < nf; j++) out.push(sizes[ng + j] / ref[j]);
+    return out.sort((a, b) => a - b);
+  };
+
+  it('leaves a 45-degree facade at its whole-cloud-plane size, same as before localPlanes existed', () => {
+    const rat = rotatedWallRatios(45, 0);
+    expect(q(rat, 0.5)).toBeGreaterThan(0.35);
+    expect(q(rat, 0.5)).toBeLessThan(0.45);
+  });
+
+  // Two and four 5% walls on the same ground, each referenced against itself alone. Before the
+  // bin key carried a voxel's position along its own normal, parallel walls at different offsets
+  // projected onto the same 2D cell and their counts merged, undersizing each one as though it
+  // were shared with the others: median 0.71 at two walls, 0.51 at four, against a whole-cloud
+  // plane's 0.40 either way. The key now separates them and both read as they would alone.
+  const wallRatios = (walls: number[], noise: number): number[] => {
+    const r = lcg(99);
+    const g = (): number => (r() + r() + r() - 1.5) * noise;
+    const total = 200_000;
+    const nEach = Math.round(total * 0.05);
+    const ng = total - nEach * walls.length;
+    const p = new Float32Array(total * 3);
+    for (let i = 0; i < ng; i++) {
+      p[i * 3] = r() * 100;
+      p[i * 3 + 1] = r() * 100;
+      p[i * 3 + 2] = g();
+    }
+    const starts: number[] = [];
+    let i = ng;
+    for (const y of walls) {
+      starts.push(i);
+      for (let j = 0; j < nEach; j++, i++) {
+        p[i * 3] = 30 + r() * 40;
+        p[i * 3 + 1] = y + g();
+        p[i * 3 + 2] = r() * 20;
+      }
+    }
+    const prm = autoDensitySizeParams(p);
+    const sizes = localDensitySizes({ positions: p, ...prm });
+    const out: number[] = [];
+    for (const start of starts) {
+      const ref = localDensitySizes({
+        positions: p.subarray(start * 3, (start + nEach) * 3),
+        cellSize: prm.cellSize,
+        referenceDensity: prm.referenceDensity,
+        axes: [0, 2],
+      });
+      for (let j = 0; j < nEach; j++) out.push(sizes[start + j] / ref[j]);
+    }
+    return out.sort((a, b) => a - b);
+  };
+
+  it.each([
+    [1, [50]],
+    [2, [40, 60]],
+    [4, [20, 40, 60, 80]],
+  ])('sizes %s parallel wall(s) as each would alone', (_count, walls) => {
+    const rat = wallRatios(walls as number[], 0);
+    expect(q(rat, 0.5)).toBeGreaterThan(0.98);
+    expect(q(rat, 0.9)).toBeLessThan(1.05);
+    expect(rat[0]).toBeGreaterThan(0.3);
+  });
+
+  // 100,000 points 30% vegetation scatter over a flat ground, no facade at all. A voxel of
+  // scattered points can still pass the min/max spread test by chance; at the previous 6-point
+  // minimum that misclassified about 2% of points as sitting on a false local plane. Raising
+  // MIN_VOXEL_POINTS to 10 (Monte Carlo: a uniform 3D voxel of 10 points passes about 0.5% of
+  // the time, against about 5.7% at 6) keeps this well under 1%.
+  it('misclassifies well under 1% of a ground-plus-scatter cloud as locally planar', () => {
+    const r = lcg(12345);
+    const g = (): number => r() + r() + r() - 1.5;
+    const n = 100_000;
+    const p = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const x = r() * 100;
+      const y = r() * 100;
+      const veg = r() < 0.3;
+      p[i * 3] = x;
+      p[i * 3 + 1] = y;
+      p[i * 3 + 2] = veg ? r() * 8 : g() * 0.05;
+    }
+    const prm = autoDensitySizeParams(p);
+    const on = localDensitySizes({ positions: p, ...prm });
+    const off = localDensitySizes({ positions: p, ...prm, localPlanes: false });
+    let changed = 0;
+    for (let i = 0; i < n; i++) if (on[i] !== off[i]) changed++;
+    expect(changed / n).toBeLessThan(0.01);
   });
 });
