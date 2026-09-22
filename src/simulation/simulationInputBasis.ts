@@ -49,9 +49,15 @@ export interface SimulationInputBasis {
    * figure quoted in square metres or metres per metre.
    */
   readonly horizontalScaleResolved: boolean;
-  /** Cells carrying an elevation. */
+  /** Cells carrying an elevation the model may read. */
   readonly measuredCells: number;
-  /** Cells in the grid, measured or not. */
+  /**
+   * Of those, cells whose elevation was interpolated rather than measured.
+   * Zero when the producer did not distinguish the two, which is not the same
+   * as none: `DemRaster` carries no such distinction, while `DtmGrid` does.
+   */
+  readonly interpolatedCells: number;
+  /** Cells in the grid, readable or not. */
   readonly totalCells: number;
 }
 
@@ -61,6 +67,7 @@ export function simulationInputBasis(input: {
   readonly withheldExcluded?: boolean | null;
   readonly horizontalScaleResolved: boolean;
   readonly measuredCells: number;
+  readonly interpolatedCells?: number;
   readonly totalCells: number;
 }): SimulationInputBasis {
   return {
@@ -69,6 +76,7 @@ export function simulationInputBasis(input: {
     withheldExcluded: input.withheldExcluded ?? null,
     horizontalScaleResolved: input.horizontalScaleResolved,
     measuredCells: input.measuredCells,
+    interpolatedCells: input.interpolatedCells ?? 0,
     totalCells: input.totalCells,
   };
 }
@@ -112,6 +120,14 @@ export function basisLimitations(basis: SimulationInputBasis): readonly string[]
     out.push(
       'The horizontal scale is unresolved, so areas and distances in metres are '
       + 'withheld. Cell counts remain available.',
+    );
+  }
+
+  if (basis.interpolatedCells > 0) {
+    out.push(
+      `${basis.interpolatedCells} of ${basis.measuredCells} readable cells hold an `
+      + 'interpolated elevation rather than a measured one. Flow routes over them, '
+      + 'so a path may cross ground no return landed on.',
     );
   }
 

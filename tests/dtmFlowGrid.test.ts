@@ -14,8 +14,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { CELL_NODATA, d8Flow } from '../src/simulation/flowPulse/d8Flow';
-import { dtmToFlowGrid, type HorizontalScale } from '../src/simulation/flowPulse/dtmFlowGrid';
+import {
+  dtmToFlowGrid, terrainDtmToFlowGrid, type HorizontalScale,
+} from '../src/simulation/flowPulse/dtmFlowGrid';
+import { basisLimitations } from '../src/simulation/simulationInputBasis';
 import type { DemRaster } from '../src/terrain/ground/rasterizeDtm';
+import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 
 /** A raster from a row-major elevation list; `null` becomes NaN, as the rasteriser writes it. */
 function demOf(
@@ -113,5 +117,68 @@ describe('the basis travels with the grid', () => {
     expect(basis.horizontalScaleResolved).toBe(false);
     // Direction is still computable: relative lengths are all routing needs.
     expect(d8Flow(grid).receiver[0]).toBe(1);
+  });
+});
+
+/** A filled DtmGrid: every cell carries a height, provenance lives in `coverage`. */
+function dtmOf(
+  rows: readonly (readonly (number | null)[])[],
+  interp: readonly (readonly boolean[])[] = [],
+  over: Partial<DtmGrid> = {},
+): DtmGrid {
+  const h = rows.length;
+  const w = rows[0].length;
+  const n = w * h;
+  const z = new Float32Array(n);
+  const coverage = new Uint8Array(n);
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      const v = rows[r][c];
+      const i = r * w + c;
+      if (v === null) { coverage[i] = 0; continue; }
+      // Filled even where interpolated: that is the point of the type.
+      z[i] = v;
+      coverage[i] = interp[r]?.[c] ? 1 : 2;
+    }
+  }
+  return {
+    z, coverage, confidence: new Float32Array(n), counts: new Uint32Array(n),
+    interpDistanceCells: new Float32Array(n), cols: w, rows: h, cellSizeM: 1,
+    originH1: 0, originH2: 0, crs: null, verticalDatum: null,
+    coverageMode: 'full', ...over,
+  } as DtmGrid;
+}
+
+describe('the analysed DTM reads its provenance, not NaN', () => {
+  it('treats a coverage-none cell as absent although it carries a height', () => {
+    // The trap: DtmGrid fills every cell, so a NaN test finds nothing absent.
+    const dtm = dtmOf([[5, null, 3]]);
+    expect(Number.isFinite(dtm.z[1])).toBe(true); // the height is there
+    const { grid, basis } = terrainDtmToFlowGrid(dtm, projected);
+    expect(grid.valid[1]).toBe(0); // and it is still not surface
+    expect(basis.measuredCells).toBe(2);
+  });
+
+  it('routes over interpolated cells by default and counts them', () => {
+    const dtm = dtmOf([[3, 2, 1]], [[false, true, false]]);
+    const { grid, basis } = terrainDtmToFlowGrid(dtm, projected);
+    expect(grid.valid[1]).toBe(1);
+    expect(basis.interpolatedCells).toBe(1);
+    expect(basisLimitations(basis).join(' ')).toMatch(/interpolated elevation/);
+  });
+
+  it('blocks them when the caller asks for measured ground only', () => {
+    const dtm = dtmOf([[3, 2, 1]], [[false, true, false]]);
+    const { grid, basis } = terrainDtmToFlowGrid(dtm, projected, { interpolated: 'block' });
+    expect(grid.valid[1]).toBe(0);
+    expect(basis.measuredCells).toBe(2);
+    expect(basis.interpolatedCells).toBe(0);
+  });
+
+  it('carries the analysis coverage mode rather than assuming a full walk', () => {
+    const dtm = dtmOf([[1, 2]], [], { coverageMode: 'resident-only' });
+    const { basis } = terrainDtmToFlowGrid(dtm, projected);
+    expect(basis.coverage).toBe('resident-only');
+    expect(basis.complete).toBe(false);
   });
 });
