@@ -139,7 +139,14 @@ jobs:
       - name: Sweep this image's runtimes
         env:
           OLV_IMAGE: ${{ matrix.image }}
-          OLV_BASE_URL: http://127.0.0.1:4173/?test=1
+          # `autoload=tiny.las` arms src/app/testAutoload.ts: the page fetches
+          # public/samples/tiny.las itself and reports its own post-load
+          # render, since this leg has no WebDriver session to load a file by
+          # hand (see that module's header for the whole path). `markerOrigin`
+          # tells it where to POST that report — the marker server below is a
+          # different origin from the preview server, so a bare `/mark` would
+          # ask the wrong one.
+          OLV_BASE_URL: http://127.0.0.1:4173/?test=1&autoload=tiny.las&markerOrigin=http://127.0.0.1:4174
           OLV_TRIANGLE_URL: http://127.0.0.1:4174/webgl-triangle.html
         run: node scripts/ios-runtime-matrix/run-image-matrix.mjs
 

@@ -25,6 +25,31 @@ import { resolve } from 'node:path';
 
 import { pickCells } from './discover-cells.mjs';
 
+/**
+ * Markers this leg has actually seen name a real crash: the paravirtual GPU
+ * driver dying, the WebKit GPU process going down with it, or the simulator
+ * itself reporting a terminated/crashed process. A loose `/error|fault/i`
+ * scan matched ordinary log noise too, so this list is deliberately closed
+ * rather than broadened; a marker not on it should be added here, not
+ * covered by loosening the pattern back out.
+ */
+const CRASH_MARKER_RE = /AppleParavirt|SIGABRT|Trace\/BPT|\bcrashed\b|\bCorpse\b|gpuProcessExited|XPC_ERROR_CONNECTION_INTERRUPTED|metal\(21\)/;
+
+/**
+ * Apple's unified-log text puts the level as the fourth whitespace-separated
+ * field (date, time, thread id, level, ...). The run this fix was written
+ * against showed why that field matters as much as the marker text: every
+ * "Default"-level line reading plain "Default" was the confirmed false
+ * positive named in the brief, and a routine MobileSafari XPC reconnect that
+ * happens to say `XPC_ERROR_CONNECTION_INTERRUPTED` while reporting its own
+ * success is a second one, on a marker this file names deliberately. Both
+ * are noise levels a real crash is not filed under.
+ */
+const NOISE_LEVELS = new Set(['Default', 'Info', 'Debug']);
+function isCrashLine(line) {
+  return CRASH_MARKER_RE.test(line) && !NOISE_LEVELS.has(line.trim().split(/\s+/)[3]);
+}
+
 const IMAGE = process.env.OLV_IMAGE ?? 'unknown-image';
 const OLV_URL = process.env.OLV_BASE_URL ?? 'http://127.0.0.1:4173/?test=1';
 const TRIANGLE_URL = process.env.OLV_TRIANGLE_URL ?? 'http://127.0.0.1:4174/webgl-triangle.html';
@@ -52,6 +77,19 @@ function slug(s) {
 }
 
 /**
+ * `log show`'s `--start`, five seconds before `sinceMs` as a pre-roll for
+ * flush latency. `--last 5m` used to stand in its place, and the run this
+ * fix was written against showed the cost of that: two cells run inside the
+ * same five minutes share a host-wide `log show`, so an error from one
+ * turned up, timestamp and all, in the other's evidence. Scoping the window
+ * to this phase's own run is what makes a crash signature belong to the
+ * cell it is filed under.
+ */
+function logStartArg(sinceMs) {
+  return new Date(sinceMs - 5000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/**
  * Drives one page on one already-booted simulator and grades what happened.
  * Every check below is optional evidence, not a precondition for the next
  * one — a dead Safari should still leave a screenshot and a log, not abort
@@ -59,25 +97,34 @@ function slug(s) {
  */
 async function runPhase(udid, cellSlug, phase, url, { expectMarker } = {}) {
   const markerLenBefore = readFileSync(MARKER_LOG, 'utf8').length;
+  const phaseStartMs = Date.now();
 
   const opened = sh('xcrun', ['simctl', 'openurl', udid, url]);
+  // The exact failure text, not just pass/fail: this is the only record of
+  // *why* `openurl` refused on a runtime like iOS 18.2, and the pass/fail
+  // boolean alone throws that reason away.
+  const openError = opened.ok ? null : ((opened.error || opened.out || 'openurl failed').trim());
   await sleep(WAIT_MS);
 
   const launchctl = sh('xcrun', ['simctl', 'spawn', udid, 'launchctl', 'list']);
   const safariAlive = launchctl.ok && /mobilesafari/i.test(launchctl.out);
 
-  const hostLog = sh('log', ['show', '--predicate', 'process == "SimMetalHost"', '--last', '5m']);
+  const since = logStartArg(phaseStartMs);
+  const hostLog = sh('log', ['show', '--start', since, '--predicate', 'process == "SimMetalHost"']);
   const hostLogPath = resolve(EVIDENCE_DIR, `${cellSlug}-${phase}-simmetalhost.log`);
   writeFileSync(hostLogPath, hostLog.out ?? '');
-  const crashSignature = (hostLog.out ?? '')
-    .split('\n')
-    .find((l) => /error|fault|crash|terminat/i.test(l)) ?? null;
 
   const simLog = sh('xcrun', [
-    'simctl', 'spawn', udid, 'log', 'show', '--last', '5m', '--predicate',
+    'simctl', 'spawn', udid, 'log', 'show', '--start', since, '--predicate',
     'process == "MobileSafari" OR process == "WebContent" OR processImagePath CONTAINS "WebKit"',
   ]);
   writeFileSync(resolve(EVIDENCE_DIR, `${cellSlug}-${phase}-simulator.log`), simLog.out ?? '');
+
+  // Checked across both logs: the host side names the paravirtual driver
+  // fault, the simulator side names WebKit's own response to it, and a
+  // signature from either is equally real evidence of a crash.
+  const crashSignature = [...(hostLog.out ?? '').split('\n'), ...(simLog.out ?? '').split('\n')]
+    .find(isCrashLine) ?? null;
 
   const screenshotPath = resolve(EVIDENCE_DIR, `${cellSlug}-${phase}.png`);
   sh('xcrun', ['simctl', 'io', udid, 'screenshot', screenshotPath]);
@@ -93,6 +140,7 @@ async function runPhase(udid, cellSlug, phase, url, { expectMarker } = {}) {
     phase,
     url,
     opened: opened.ok,
+    openError,
     safariAlive,
     markerSeen,
     crashSignature,
@@ -120,7 +168,11 @@ async function runCell(cell) {
   }
 
   const webgl = await runPhase(udid, cellSlug, 'webgl', TRIANGLE_URL, { expectMarker: true });
-  const olv = await runPhase(udid, cellSlug, 'olv', OLV_URL, {});
+  // OLV_URL carries `&autoload=tiny.las` (see the workflow): the page fetches
+  // that fixture, hands it to the same function a real drop calls, and pings
+  // this same marker log once Viewer.onDrawnFrame fires — a real post-load
+  // render, not the triangle's proxy for one.
+  const olv = await runPhase(udid, cellSlug, 'olv', OLV_URL, { expectMarker: true });
 
   sh('xcrun', ['simctl', 'shutdown', udid]);
   sh('xcrun', ['simctl', 'delete', udid]);
@@ -141,7 +193,8 @@ function summaryRow(result) {
   if (result.setupError) {
     return `| ${IMAGE} | ${cell.runtimeName} | ${cell.deviceTypeName} | setup error | setup error | ${result.setupError} |`;
   }
-  const sig = result.webgl.crashSignature || result.olv.crashSignature || '';
+  const openErrors = [result.webgl.openError, result.olv.openError].filter(Boolean).join(' / ');
+  const sig = openErrors || result.webgl.crashSignature || result.olv.crashSignature || '';
   return `| ${IMAGE} | ${cell.runtimeName} | ${cell.deviceTypeName} | ${verdict(result.webgl)} | ${verdict(result.olv)} | ${sig.slice(0, 140).replace(/\|/g, '/')} |`;
 }
 

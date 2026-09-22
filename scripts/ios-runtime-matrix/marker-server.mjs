@@ -13,6 +13,15 @@
  * `vite preview` already serves the OLV build; this exists only because that
  * build has nothing to do with a standalone triangle page, and adding a
  * route to it would mean shipping test-only code in the real app.
+ *
+ * `/mark` also takes the OLV build's own post-load render ping
+ * (`src/app/testAutoload.ts`), from a page `vite preview` serves on a
+ * different port — a cross-origin fetch, hence the CORS header below. The
+ * marker write it triggers is a server-side side effect of the request
+ * landing at all, so a browser that withheld the response from that page's
+ * JS (no preflight is needed for a header-less GET) would still have left
+ * the same line in the log; the header only lets the page's own `.catch()`
+ * see success too.
  */
 import { createServer } from 'node:http';
 import { readFileSync, appendFileSync, mkdirSync } from 'node:fs';
@@ -35,7 +44,7 @@ export function startMarkerServer({ port = PORT, markerLog = MARKER_LOG } = {}) 
       const ok = url.searchParams.get('ok');
       const reason = url.searchParams.get('reason') ?? '';
       appendFileSync(markerLog, `${new Date().toISOString()} ok=${ok} reason=${reason}\n`);
-      res.writeHead(204).end();
+      res.writeHead(204, { 'access-control-allow-origin': '*' }).end();
       return;
     }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(PAGE);

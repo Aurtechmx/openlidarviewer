@@ -243,6 +243,7 @@ import {
   loadActionRegistry,
   loadToolLauncher,
   loadStockpilePresenter,
+  loadTestAutoload,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -3221,10 +3222,9 @@ if (__OLV_TEST_SEAM__ && testApi) {
     // up in the console — discourages anyone from depending on it
     // outside the e2e suite.
     console.warn(
-      'OpenLiDARViewer: ?test=1 enabled — window.__OLV_TEST_API__ ' +
-        'is mounted. This is for Playwright only; do not ship URLs ' +
-        'with this flag to end users.',
+      'OpenLiDARViewer: ?test=1 enabled — window.__OLV_TEST_API__ is mounted. This is for Playwright only; do not ship URLs with this flag to end users.',
     );
+    void loadTestAutoload().then((m) => m.installTestAutoload({ handleFile, getViewer: () => v, params: urlParams }));
   });
 }
 

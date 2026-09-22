@@ -618,3 +618,11 @@ export const loadToolLauncher = () => import('./ui/toolLauncher');
  * Opened only from the command palette, so neither rides the startup shell.
  */
 export const loadFlowPulseLab = () => import('./ui/fieldSimulation/flowPulseLab');
+
+/**
+ * The `?autoload=` render-marker seam for `ios-runtime-matrix.yml` — a
+ * caller with no WebDriver session that still needs a scan loaded and a
+ * post-load frame reported. No ordinary session passes that flag, so it has
+ * no reason to sit in the eager index chunk.
+ */
+export const loadTestAutoload = () => import('./app/testAutoload');
