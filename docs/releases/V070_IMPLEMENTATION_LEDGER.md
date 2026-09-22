@@ -4471,3 +4471,47 @@ for the outlet reading, a plain queue flood-fill stands in for
 `cellsUnreachable`, and D8 restricted to that flood-fill's reachable set
 stands in for the sink and flat claim. All three hold. Covered by
 `tests/priorityFloodRandomGrids.test.ts`.
+
+### L149 · FIXED · SCIENTIFIC
+
+Flow Pulse's run record hashed the summary of a run, not the field. `result`
+held cell counts and a couple of maxima, and two receiver or accumulation
+arrays that differ everywhere can share every one of those figures. A square
+grid ramping east and the same grid turned to ramp south instead have
+identical cells, readable cells, sink count, flat count, outlet count and
+maximum upstream count, yet route to opposite edges of the grid. Both sealed
+to the same record digest.
+
+`result.fieldDigest` now covers the field itself: a SHA-256 over a documented,
+versioned byte encoding (`src/simulation/flowPulse/flowFieldDigest.ts`) of the
+receiver array, the direction and status arrays, the upstream count, and the
+conditioned elevations when conditioning ran, all row-major, hashed as bytes
+rather than JSON of the arrays. The comment that had claimed a digest over
+arrays "would change with any reordering of an array that carries the same
+field" is replaced. The arrays are fixed row-major and are never reordered,
+so that was never the risk; the risk was leaving them out of the digest
+altogether.
+
+`tests/flowPulseFieldDigest.test.ts` pins the encoding against an
+independently computed SHA-256 for a tiny fixture and checks that two
+synthetic fields sharing every summary figure (sink count, flat count,
+outlet count, maximum upstream count) still seal to different digests.
+`tests/flowPulseRunner.test.ts` reproduces the
+defect on a real run: reverting `result.fieldDigest` turns the east/south ramp
+test red with an identical record digest for two grids that route to opposite
+edges, and reapplying it turns the test green. A raw run and a conditioned run
+over the same terrain seal to different digests, and re-running one terrain
+reproduces its digest exactly.
+
+At 1,000,000 cells (1000x1000, five runs, median), routing (D8 plus
+accumulation) took 229.9 ms and hashing the routed field took 167.9 ms, about
+0.7 times the routing cost. `tests/flowPulseFieldDigestPerf.test.ts` records
+both.
+
+`FieldSimulationRunRecord` is produced by `runFlowPulse` and read only by
+`src/ui/fieldSimulation/flowPulseLab.ts`, which renders the summary in a modal
+and never serializes the record; no session save, export or report path in the
+repository persists one today. `schemaVersion` stays 1 on that evidence: there
+is nothing yet that would read an old record and misread the new
+`fieldDigest` field, and the check is worth repeating before any such path
+starts writing one.

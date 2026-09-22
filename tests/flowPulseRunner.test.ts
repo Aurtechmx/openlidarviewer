@@ -126,13 +126,14 @@ describe('a completed run', () => {
     expect(r.summary.maxUpstreamCells).toBe(4);
   });
 
-  it('seals a record whose digest covers the figures, not the arrays', () => {
+  it('seals a record whose digest covers the figures, and result carries a field digest too', () => {
     const r = runFlowPulse(dtmOf([[3, 2, 1]]), projected, params(), identity);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.record.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(r.record.kind).toBe('terrain-flow');
-    expect(r.record.result).toEqual({ ...r.summary });
+    expect(r.record.result).toEqual({ ...r.summary, fieldDigest: r.record.result.fieldDigest });
+    expect(r.record.result.fieldDigest).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('names every method it ran, conditioning included', () => {
@@ -144,6 +145,50 @@ describe('a completed run', () => {
       .toBe('olv.simulation.terrain-flow.priority-flood');
     expect(methodsFor(params({ conditioning: 'priority-flood', fillNoData: 'outlet' }))[0])
       .toBe('olv.simulation.terrain-flow.priority-flood.gap-outlet');
+  });
+});
+
+describe('the field digest binds the actual flow field, not only its summary', () => {
+  // A square ramp falling east and the same ramp turned to fall south instead.
+  // Both are monotonic in one direction: no sinks, no flats, one outlet edge,
+  // so cells, readableCells, sinkCount, flatCount, outletCount and
+  // maxUpstreamCells all come out identical. The receiver, direction and
+  // status arrays do not: the outlet cells sit on opposite edges of the grid.
+  const rampEast = () => dtmOf([[3, 2, 1], [3, 2, 1], [3, 2, 1]]);
+  const rampSouth = () => dtmOf([[3, 3, 3], [2, 2, 2], [1, 1, 1]]);
+
+  it('confirms the two terrains share one summary before comparing digests', () => {
+    const east = runFlowPulse(rampEast(), projected, params(), identity);
+    const south = runFlowPulse(rampSouth(), projected, params(), identity);
+    expect(east.ok && south.ok).toBe(true);
+    if (!east.ok || !south.ok) return;
+    expect(east.summary).toEqual(south.summary);
+  });
+
+  it('seals two summary-identical, field-different runs to different record digests', () => {
+    const east = runFlowPulse(rampEast(), projected, params(), identity);
+    const south = runFlowPulse(rampSouth(), projected, params(), identity);
+    expect(east.ok && south.ok).toBe(true);
+    if (!east.ok || !south.ok) return;
+    expect(east.record.result.fieldDigest).not.toBe(south.record.result.fieldDigest);
+    expect(east.record.digest).not.toBe(south.record.digest);
+  });
+
+  it('gives one terrain the same field digest on a re-run', () => {
+    const a = runFlowPulse(rampEast(), projected, params(), identity);
+    const b = runFlowPulse(rampEast(), projected, params(), identity);
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    expect(a.record.result.fieldDigest).toBe(b.record.result.fieldDigest);
+    expect(a.record.digest).toBe(b.record.digest);
+  });
+
+  it('gives a raw run and a conditioned run over the same terrain different field digests', () => {
+    const raw = runFlowPulse(notchedBowl(), projected, params({ conditioning: 'raw' }), identity);
+    const flooded = runFlowPulse(notchedBowl(), projected, params({ conditioning: 'priority-flood' }), identity);
+    expect(raw.ok && flooded.ok).toBe(true);
+    if (!raw.ok || !flooded.ok) return;
+    expect(raw.record.result.fieldDigest).not.toBe(flooded.record.result.fieldDigest);
   });
 });
 

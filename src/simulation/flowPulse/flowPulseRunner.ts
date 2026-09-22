@@ -49,6 +49,7 @@ import {
   type NoDataReading,
   type PriorityFloodResult,
 } from './priorityFlood';
+import { flowFieldDigest } from './flowFieldDigest';
 import { terrainDtmToFlowGrid, type HorizontalScale, type InterpolatedPolicy } from './dtmFlowGrid';
 import { basisLimitations, mayReportMetricArea } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
@@ -288,10 +289,13 @@ export function runFlowPulse(
       fillNoData: params.conditioning === 'priority-flood' ? params.fillNoData : null,
       maxCells: params.maxCells,
     },
-    // The summary, not the arrays: a digest over a million cells would change
-    // with any reordering of an array that carries the same field, and the
-    // figures below are what a reader compares between two runs.
-    result: { ...summary },
+    // The summary is the figures a reader compares between two runs; fieldDigest
+    // is what tells them two summaries that happen to agree describe the same
+    // field. Equal sink, flat and outlet counts and an equal maxUpstreamCells do
+    // not mean equal receivers, so a digest over the summary alone cannot rule
+    // out a grid that routed differently. fieldDigest hashes the routed arrays
+    // themselves, byte for byte, and only agrees when they do.
+    result: { ...summary, fieldDigest: flowFieldDigest(routingGrid, routed, accumulation, conditioned) },
     limitations,
     processingManifestHead: identity.processingManifestHead,
   });
