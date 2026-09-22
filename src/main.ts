@@ -107,7 +107,7 @@ import { MobileSheet } from './ui/MobileSheet';
 import { DesktopWorkspace, type WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
-import { ExportPanel } from './ui/ExportPanel';
+import { ExportPanel, exportClassFacts } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
 import { writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
@@ -2672,8 +2672,8 @@ const exportPanel = new ExportPanel({
   },
   // Allocation-free summary for the live panel — NEVER snapshots the streaming
   // resident set (that ~150 MB materialization is deferred to the Export click
-  // via getCloud below). Reads only scalar facts: resident count + colour/CRS
-  // capabilities the streaming source already knows.
+  // via getCloud below). Reads scalar facts (resident count, colour/CRS
+  // capabilities) plus a static cloud's class buffer by reference, never a copy.
   summaryInfo: () => {
     // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's
     // constructor calls this (via _renderSummary) during startup — before that.
@@ -2690,9 +2690,7 @@ const exportPanel = new ExportPanel({
         hasGpsTime: c.gpsTime != null,
         crsName: rc.name,
         hasWkt: rc.wkt != null,
-        classProvenance: c.classificationIsDerived
-          ? 'derived'
-          : c.classification != null ? 'source' : 'none',
+        ...exportClassFacts(c),
       };
     }
     const sc = viewer?.streamingCloud;

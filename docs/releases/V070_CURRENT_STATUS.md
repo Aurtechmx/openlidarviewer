@@ -9,14 +9,14 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 147. Revisited at least once: 15.
+Entries: 147. Revisited at least once: 16.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 46 |
-| PARTIAL | 33 |
+| FIXED | 47 |
+| PARTIAL | 32 |
 | BUILT | 27 |
 | MEASURED | 14 |
 | NOT REPRODUCIBLE | 11 |
@@ -29,7 +29,7 @@ Entries: 147. Revisited at least once: 15.
 
 | ID | Status | Area | Accounts |
 | --- | --- | --- | --- |
-| L01 | PARTIAL | EXPORT | 1 |
+| L01 | FIXED | EXPORT | 2 |
 | L02 | OPEN | EXPORT | 1 |
 | L03 | OPEN | EXPORT | 1 |
 | L04 | FIXED | STANDARDS | 1 |

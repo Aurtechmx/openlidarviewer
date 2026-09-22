@@ -322,6 +322,14 @@ export const loadBatchConverter = () => import('./ui/BatchConverter');
 export const loadConvertEngine = () => import('./convert/convertCloud');
 
 /**
+ * Load the LAS 1.2 class-wrap guard for the Export panel's live preview. It
+ * names classes from the LAS class tables, which stay out of the eager shell,
+ * so the panel fetches it the first time LAS 1.2 would write a resident
+ * classification rather than at startup.
+ */
+export const loadLegacyClassGuard = () => import('./convert/legacyClassGuard');
+
+/**
  * Load the streaming benchmark collector — used by both the overlay's live
  * readout and the `?benchmark=1` post-session report.
  */

@@ -118,7 +118,7 @@ there. The frame gained a decision while the file lost lines. A shrink-only lint
 recorded baseline, so a raise is a hand edit to
 `docs/validation/monolith-size-baseline.json` and always shows in the diff. It
 caught an added line twice during this cycle, and a banked drop once. Fan-out is 110 for the shell, 76 for
-the renderer and 23 for the Analyse panel, across 896 modules with no
+the renderer and 23 for the Analyse panel, across 897 modules with no
 dependency cycles.
 
 ## The shell has little headroom

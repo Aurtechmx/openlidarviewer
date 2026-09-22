@@ -4298,3 +4298,20 @@ unblocks it is a runner with a real Apple GPU: a self-hosted Apple Silicon
 runner, or a future GitHub-hosted image whose paravirtual driver handles this
 rendering path. Until one exists, the leg stops at the same point and stays
 advisory.
+
+### L01 · FIXED · EXPORT
+
+A LAS 1.2 write whose classes go above 31 is refused by default rather than
+warned about and written. `convertCloud.ts` counts the wrapping points and
+codes and, without `allowLegacyClassWrap`, returns a null file and an error
+naming both counts, the codes, and the two ways forward: LAS 1.4, which keeps
+the full byte, or the opt-in, which writes each class as its low 5 bits with a
+warning. `convert/legacyClassGuard.ts` holds the refusal and warning text so
+the write gate, the batch runner, and the Export panel's live preview all say
+the same thing, and `lasSemantics.ts` states which of the two legacy losses
+refuses and which only warns: a wrapped class refuses, because the file reads
+back as another valid class with no error; a dropped overlap flag warns,
+because the base class written beside it stays correct. `writeLas.ts` keeps
+masking as its only job. Covered by `tests/las12ClassWrapRefusal.test.ts`,
+`tests/exportPanelLegacyClassWrap.test.ts`, and the LAS 1.2 case in
+`tests/e2e/batchConverter.spec.ts`.

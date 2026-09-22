@@ -296,14 +296,13 @@ describe('convertCloud — mesh up-axis is DETECTED, then normalised', () => {
   });
 });
 
-// The legacy encoding drops two different things, and only one of them said
-// so. A class above 31 wraps into another valid class, and that has been
-// warned about for a while. The extended overlap FLAG has nowhere to go in the
-// legacy byte either — `writeLas` composes only the synthetic, key-point and
-// withheld bits — and that loss went out silently. `lasSemantics` has
-// described it precisely since it was written (`inspectLegacyConversion` /
-// `describeLoss`) and had no caller anywhere in `src/`: the sentence existed
-// and never reached a user.
+// The legacy encoding drops two different things. A class above 31 wraps into
+// another valid class, so that write is refused unless the request opts in
+// (tests/las12ClassWrapRefusal.test.ts). The extended overlap FLAG has nowhere
+// to go in the legacy byte either — `writeLas` composes only the synthetic,
+// key-point and withheld bits — but the base class beside it is still right,
+// so that loss is a warning rather than a refusal. `lasSemantics` words both
+// (`inspectLegacyConversion` / `describeLoss`).
 describe('a legacy LAS write says what it drops', () => {
   const flagged = (flags: number[]): PointCloud => new PointCloud({
     positions: Float32Array.from([0, 0, 0, 10, 20, 1, 30, 40, 2]),
@@ -314,8 +313,8 @@ describe('a legacy LAS write says what it drops', () => {
     classificationFlags: Uint8Array.from(flags),
   } as never);
 
-  const warnings = (c: PointCloud): string[] =>
-    convertCloud(c, { format: 'las' }).report.log
+  const warnings = (c: PointCloud, allowLegacyClassWrap = false): string[] =>
+    convertCloud(c, { format: 'las', allowLegacyClassWrap }).report.log
       .filter((l) => l.level === 'warn')
       .map((l) => l.message);
 
@@ -334,7 +333,8 @@ describe('a legacy LAS write says what it drops', () => {
   });
 
   it('reports the class wrap and the flag loss independently', () => {
-    // Both losses at once: a class above 31 AND an overlap flag.
+    // Both losses at once: a class above 31 AND an overlap flag. The wrap
+    // refuses by default, so the write is opted in to see both warnings.
     const both = new PointCloud({
       positions: Float32Array.from([0, 0, 0, 10, 20, 1, 30, 40, 2]),
       origin: [500000, 4000000, 100],
@@ -343,7 +343,7 @@ describe('a legacy LAS write says what it drops', () => {
       classification: Uint8Array.from([64, 2, 2]),
       classificationFlags: Uint8Array.from([0, 0x8, 0]),
     } as never);
-    const w = warnings(both);
+    const w = warnings(both, true);
     expect(w.some((m) => /5-bit/.test(m))).toBe(true);
     expect(w.some((m) => /overlap/i.test(m))).toBe(true);
   });

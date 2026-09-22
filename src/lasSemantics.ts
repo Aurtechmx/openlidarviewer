@@ -321,8 +321,15 @@ export function canRepresentInLegacy(code: number): boolean {
  *
  * A code above 31 does not merely fail to fit. Masked into five bits it lands
  * on another valid class, so Ignored Ground (20) stays 20 while a user class
- * at 64 reads as Created, Never Classified. The caller refuses by default and
- * reports this rather than writing a file that looks well formed.
+ * at 64 reads as Created, Never Classified. The two losses are treated
+ * differently by the LAS 1.2 write gate in `convert/convertCloud.ts`:
+ *
+ * - `wrappingCodes` REFUSE the write by default (`convert/legacyClassGuard.ts`
+ *   words the refusal), because the file would look well formed while its
+ *   classes are wrong. The request's `allowLegacyClassWrap` writes it anyway
+ *   and logs a warning.
+ * - `losesOverlapFlag` only WARNS. The overlap mark is dropped, but the base
+ *   class written beside it is still correct.
  */
 export function inspectLegacyConversion(
   codes: Iterable<number>,
@@ -346,8 +353,14 @@ export function isLossy(conversion: LossyConversion): boolean {
 export function describeLoss(conversion: LossyConversion, pdrf: number): string {
   const parts: string[] = [];
   if (conversion.wrappingCodes.length > 0) {
+    // A reserved or user-definable name already ends in its code, which the
+    // list states first, so the suffix is dropped rather than printed twice.
     const named = conversion.wrappingCodes
-      .map((c) => `${c} (${classificationName(c, pdrf)})`)
+      .map((c) => {
+        const name = classificationName(c, pdrf);
+        const suffix = ` (${c})`;
+        return `${c} (${name.endsWith(suffix) ? name.slice(0, -suffix.length) : name})`;
+      })
       .join(', ');
     parts.push(`classes ${named} do not fit the 5-bit legacy field and would read as another class`);
   }

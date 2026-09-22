@@ -196,7 +196,7 @@ describe('writeLas14 round-trip (write → read back with loadLas)', () => {
   });
 });
 
-describe('LAS 1.2 classification clamp warning (convertCloud)', () => {
+describe('LAS 1.2 classification wrap warning (convertCloud)', () => {
   function cloudWithHighClasses(): PointCloud {
     return new PointCloud({
       positions: Float32Array.from([0, 0, 0, 1, 1, 1, 2, 2, 2]),
@@ -207,8 +207,11 @@ describe('LAS 1.2 classification clamp warning (convertCloud)', () => {
     });
   }
 
-  it('warns per file that classes > 31 WRAP in the 1.2 writer, not clamp', () => {
-    const { report } = convertCloud(cloudWithHighClasses(), { format: 'las' });
+  it('refuses by default; opted in, warns per file that classes > 31 WRAP, not clamp', () => {
+    const refused = convertCloud(cloudWithHighClasses(), { format: 'las' });
+    expect(refused.file).toBeNull();
+    expect(refused.report.ok).toBe(false);
+    const { report } = convertCloud(cloudWithHighClasses(), { format: 'las', allowLegacyClassWrap: true });
     expect(report.ok).toBe(true);
     // 2 of the 3 points (classes 64 and 200) exceed the 5-bit field.
     expect(report.log).toContainEqual({
