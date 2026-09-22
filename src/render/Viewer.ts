@@ -193,6 +193,7 @@ import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
   type TerrainStreamBuffer,
+  type TerrainWithheldOutcome,
 } from './terrainStreamSample';
 import {
   applyClassSwap,
@@ -2108,8 +2109,8 @@ export class Viewer {
    * when nothing is loaded. v0.4.0.
    */
   gatherTerrainPositions(
-    maxPoints = 300_000, includeWithheld = false,
-  ): {
+    maxPoints = 300_000,
+  ): ({
     positions: Float32Array;
     classification?: Uint8Array;
     /**
@@ -2121,7 +2122,7 @@ export class Viewer {
      */
     groundIsDerived: boolean;
     residentOnly: boolean;
-    sampled: boolean; withheldExcluded: boolean | null; withheldExcludedCount: number;
+    sampled: boolean;
     totalPoints: number;
     /**
      * `'z'` when every contributing source is z-up BY SPEC (LAS/LAZ/XYZ/E57/…
@@ -2137,7 +2138,7 @@ export class Viewer {
      * would georeference a correctly-rotated surface to the wrong place.
      */
     sourceUpAxis?: 'z' | 'y';
-  } | null {
+  } & TerrainWithheldOutcome) | null {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
     // and buildings before contouring.
@@ -2202,7 +2203,7 @@ export class Viewer {
       streamingBuffers,
       totalPoints,
       maxPoints,
-      anyClass, { includeWithheld },
+      anyClass,
     );
     if (!sample) return null;
     // `residentOnly` means a PARTIAL stream — only some octree nodes are
@@ -2250,11 +2251,10 @@ export class Viewer {
     }
     if (sceneUp === 'y') yUpToCanonicalZUp(sample.positions);
     return {
-      positions: sample.positions,
-      classification: sample.classification,
+      // positions, classification, sampled and the Withheld outcome.
+      ...sample,
       groundIsDerived: !sourceGround,
       residentOnly,
-      sampled: sample.sampled, withheldExcluded: sample.withheldExcluded, withheldExcludedCount: sample.withheldExcludedCount,
       totalPoints,
       sourceUpAxis: sceneUp,
       // Always 'z': the buffer above is canonical now, so scan-shape detection

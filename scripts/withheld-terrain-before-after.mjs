@@ -121,13 +121,15 @@ async function measure(path, mods) {
   if (!on || !off) return { ...row, identical: on === off, before: null, after: null };
   const identical = sameBytes(on.positions, off.positions)
     && (!on.classification || sameBytes(on.classification, off.classification));
-  let extent = 0;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (let i = 0; i < off.positions.length; i += 3) {
     const x = off.positions[i], y = off.positions[i + 1];
-    if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
   }
-  extent = Math.max(maxX - minX, maxY - minY, 1);
+  const extent = Math.max(maxX - minX, maxY - minY, 1);
   const cellSizeM = Math.max(0.25, extent / 256);
   const coreOf = (s) => computeTerrainCore(s.positions, { cellSizeM, classification: s.classification });
   const before = summarise(coreOf(off));
@@ -166,7 +168,9 @@ async function main() {
         pair(b?.zMin, a?.zMin), pair(b?.zMax, a?.zMax), pair(b?.zMean, a?.zMean, 4),
         r.identical ? 'no (gather byte-identical)' : 'YES'].join(' | ')} |`);
     } catch (err) {
-      console.log(`| ${t.label} | error: ${err instanceof Error ? err.message : String(err)} |${' |'.repeat(head.length - 2)}`);
+      // Error text can carry the file's absolute path; only its name is printed.
+      const msg = (err instanceof Error ? err.message : String(err)).split(t.path).join(basename(t.path));
+      console.log(`| ${t.label} | error: ${msg} |${' |'.repeat(head.length - 2)}`);
     }
   }
 }

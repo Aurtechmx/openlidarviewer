@@ -15,7 +15,7 @@
 
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import { accumulatorOffset } from './layerPlacement';
-import { excludesWithheld, pointIsReadable } from '../science/withheldPolicy';
+import { excludesWithheld, isWithheld } from '../science/withheldPolicy';
 
 /** A cloud/node buffer contributing to the terrain subsample. */
 export interface TerrainStreamBuffer {
@@ -60,6 +60,9 @@ export interface StridedTerrainSample {
   /** Sampled candidates dropped as Withheld. */
   withheldExcludedCount: number;
 }
+
+/** The gather's declaration about Withheld points, carried by every consumer of the sample. */
+export type TerrainWithheldOutcome = Pick<StridedTerrainSample, 'withheldExcluded' | 'withheldExcludedCount'>;
 
 /** How the gather treats points the producer marked Withheld. */
 export interface TerrainSampleOptions {
@@ -136,7 +139,7 @@ export function sampleStridedTerrain(
       // Dropped after the stride test, so an excluded point still spends its
       // turn of the counter: the candidates sampled are the same with the
       // policy on or off, and the only difference is the Withheld ones.
-      if (excluding && flags && !pointIsReadable(flags[i], 'scientific-processing')) {
+      if (excluding && flags && isWithheld(flags[i])) {
         withheldExcludedCount++;
         continue;
       }

@@ -32,10 +32,11 @@
  * format whose flags move cannot leave two answers in the tree.
  *
  * ── THE STATE OF THE TREE ───────────────────────────────────────────────────
- * Terrain is the one caller. The terrain gather (`sampleStridedTerrain`)
- * drops Withheld points from the DTM's input and the DTM records that it did,
- * or that it could not know because the cloud carried no flags channel. The
- * other scientific paths (density, the ground filter outside terrain,
+ * The terrain gather (`sampleStridedTerrain`) is the one caller. It drops
+ * Withheld points from what it samples, and the DTM records that it did, or
+ * that it could not know because the cloud carried no flags channel. The
+ * floor-plan and routing paths read through the same gather, so they exclude
+ * Withheld points too. The other scientific paths (density, the ground filter outside terrain,
  * stockpile volumes, profiles, the classifier, registration and change, and
  * measurement) still read every point the cloud holds. Each carries recorded
  * evidence of its own, so each is applied as its own change with its own
