@@ -4220,3 +4220,54 @@ closes the display half of the question that docblock raised. The analysis
 paths that fold a placement into a Float32 buffer, and the terrain gather,
 still spend the budget the gate protects, and relaxing the 1 mm refusal needs
 both of those fixed first, on separate branches.
+
+### L147 · MEASURED · PERFORMANCE
+
+Flow Pulse Lab (`flowPulseLab.ts`) calls `runFlowPulse` synchronously on the UI
+thread, and `FLOW_PULSE_DEFAULTS.maxCells` admits a grid up to 4,000,000 cells.
+Whether that call belongs on the main thread or in a worker was a question for
+measurement, not judgment, so `tests/benchmark/flowPulseLabProfile.test.ts`
+(gated behind `FLOW_PULSE_LAB_BENCH=1`) drives the same functions
+`runFlowPulse` calls, in the same order, over synthetic DTMs, and times each
+stage on its own. Node, median of 5 runs with one warmup discarded per row:
+
+| cells | conditioning | digest | grid | priority-flood | D8 | accumulation | seal | total ms |
+|---|---|---|---|---|---|---|---|---|
+| 65,536 | raw | 5.4 | 0.3 | n/a | 14.9 | 2.0 | 5.9 | 28.5 |
+| 65,536 | priority-flood | 5.3 | 0.3 | 17.7 | 14.9 | 1.9 | 5.3 | 45.5 |
+| 250,000 | raw | 26.5 | 1.1 | n/a | 72.4 | 11.8 | 26.0 | 138.9 |
+| 250,000 | priority-flood | 8.1 | 5.0 | 118.9 | 70.6 | 10.7 | 9.1 | 214.1 |
+| 1,000,000 | raw | 26.6 | 2.7 | n/a | 223.4 | 35.7 | 25.7 | 313.7 |
+| 1,000,000 | priority-flood | 26.7 | 2.7 | 356.3 | 226.7 | 36.4 | 24.7 | 678.1 |
+| 1,999,396 | raw | 50.9 | 5.9 | n/a | 445.8 | 90.9 | 53.2 | 643.7 |
+| 1,999,396 | priority-flood | 47.3 | 6.8 | 696.8 | 424.7 | 81.9 | 48.4 | 1,307.1 |
+| 4,000,000 | raw | 110.1 | 12.3 | n/a | 925.3 | 166.6 | 96.5 | 1,315.8 |
+| 4,000,000 | priority-flood | 103.9 | 11.9 | 1,568.4 | 915.4 | 187.3 | 106.3 | 2,896.6 |
+
+These are Node numbers, and a floor rather than the browser figure: a real main
+thread shares time with layout and paint work, and with handling input, none
+of which a Node process carries, so a browser run is typically slower for the
+same JavaScript.
+
+The question that decides the outcome is which row the Lab can reach.
+`deriveCoreParams` in `terrainAnalysisRunner.ts` aims every analysis grid at
+256 cells across its longer axis (`cellSizeM = Math.max(0.25 / metresPerUnit,
+extent / 256)`), so the largest DTM the app produces is about 256 by 256, or
+65,536 cells. The Lab has exactly one caller, the `analyse.flowPulse` action in
+`analysisActions.ts`, which reads `panel.flowInput` from that same capped
+analysis result; no other module opens it. `FLOW_PULSE_DEFAULTS.conditioning`
+is `'raw'` and the Lab exposes no control to change it, so the run a user
+actually triggers is the 65,536-cell raw row: 28.5 ms median, on a runtime
+already slower than the one it stands in for.
+
+The 4,000,000-cell ceiling would cost close to 3 seconds under priority-flood
+conditioning (2,896.6 ms measured), long enough to freeze a real UI thread. But
+nothing in the app can hand the Lab a grid near that size: the only grid it
+ever sees is the analysis panel's own capped DTM, and `runFlowPulse` already
+refuses anything past `maxCells` with a named `TOO_LARGE` reason rather than
+running it. The ceiling is a defensive refusal bound, not a workload the Lab
+can reach, so the worker migration this investigation was scoped to justify is
+not built. The call stays synchronous. `build: buildIdentityProvenance()`
+replaced the bare `__APP_VERSION__` on the sealed run record in the same file,
+so a record names the exact build that produced it; `flowPulseLab.test.ts`
+checks the record's `build` field against `buildIdentityProvenance()`.
