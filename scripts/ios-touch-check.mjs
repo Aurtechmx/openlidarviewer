@@ -78,6 +78,17 @@ async function main() {
       // The simulator reaches the host's loopback directly, so no tunnel.
       'appium:safariInitialUrl': `${BASE}/?test=1`,
       'appium:webviewConnectTimeout': 60000,
+      // WebDriverAgent is compiled by xcodebuild on the first session, and a
+      // cold compile on a fresh runner takes minutes. Appium's default wait is
+      // 60 s, so the session failed on a refused connection to a WDA that was
+      // still building. The log could not say so, because xcodebuild output is
+      // suppressed unless it errors; showing it makes the next failure explain
+      // itself.
+      'appium:wdaLaunchTimeout': 360000,
+      'appium:wdaConnectionTimeout': 360000,
+      'appium:wdaStartupRetries': 2,
+      'appium:wdaStartupRetryInterval': 20000,
+      'appium:showXcodeLog': true,
     };
     // Only pin the udid when the workflow resolved one; an empty string would
     // match no device and the failure would name the capability, not the cause.

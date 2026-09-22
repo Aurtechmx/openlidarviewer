@@ -88,12 +88,6 @@ jobs:
 
       # Resolve the device rather than naming one. The runner image ships a
       # different iPhone generation every few months, so a hardcoded name is a
-      # leg that goes red on someone else's schedule. A requested name still
-      # wins when it is present; otherwise the newest available iPhone is used
-      # and the choice is printed, because a run should say which device the
-      # result came from.
-      # Resolve the device rather than naming one. The runner image ships a
-      # different iPhone generation every few months, so a hardcoded name is a
       # leg that goes red on someone else's schedule. A requested name wins
       # when it is present; otherwise the newest iPhone available is used, and
       # the choice is printed because a result should say which device it came

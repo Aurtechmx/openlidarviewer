@@ -23,6 +23,8 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
+import { isCliEntry } from './lib/isCliEntry.mjs';
+
 /** Trailing number in a device name, for ordering. `iPhone Air` has none. */
 export function generationOf(name) {
   const m = /iPhone\s+(\d+)/.exec(name);
@@ -68,4 +70,4 @@ function main() {
   process.stdout.write(`${hit.udid}|${hit.name}\n`);
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) main();
+if (isCliEntry(import.meta.url)) main();
