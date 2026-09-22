@@ -87,7 +87,11 @@ export function estimateCopcPeakBytes(
     Number.isFinite(pointCount) && pointCount >= 0 && meta.pointRecordLength > 0
       ? pointCount * meta.pointRecordLength
       : Number.POSITIVE_INFINITY;
-  const channelBytes = copcDecodedChannelBytes(meta.pointDataRecordFormat, pointCount);
+  const channelBytes = copcDecodedChannelBytes(
+    meta.pointDataRecordFormat,
+    pointCount,
+    meta.pointSemantics,
+  );
   const phase1 = 2 * bc + rawBytes;
   const phase2 = bc + rawBytes + channelBytes;
   return Math.max(phase1, phase2);

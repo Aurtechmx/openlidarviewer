@@ -23,8 +23,8 @@ import {
   decompressChunk,
   estimateCopcPeakBytes,
 } from '../src/io/copc/copcChunkDecompress';
-import { copcDecodedChannelBytes } from '../src/io/copc/copcChunkDecode';
-import type { ChunkDecodeMetadata } from '../src/io/copc/copcChunkDecode';
+import { copcDecodedChannelBytes, decodeRecords } from '../src/io/copc/copcChunkDecode';
+import type { ChunkDecodeMetadata, DecodedChunk } from '../src/io/copc/copcChunkDecode';
 import {
   MAX_DECODE_PEAK_BYTES,
   withinDecodePeakBudget,
@@ -40,6 +40,17 @@ import { BoundedReadError } from '../src/io/range/boundedRead';
 import { LoadError } from '../src/io/loadErrors';
 
 const MiB = 1024 * 1024;
+
+/** Sum of every present array's total byteLength on a DecodedChunk. */
+function sumChunkByteLength(chunk: DecodedChunk): number {
+  let total = 0;
+  for (const value of Object.values(chunk)) {
+    if (value && typeof value === 'object' && 'byteLength' in value) {
+      total += (value as { byteLength: number }).byteLength;
+    }
+  }
+  return total;
+}
 
 // ── BLOCKER 1 — COPC second decode phase ─────────────────────────────────────
 
@@ -92,6 +103,51 @@ describe('COPC estimateCopcPeakBytes — the second decode phase is bounded', ()
   test('pointSemantics adds 8 bytes/point (scanAngle 4 + userData 1 + scannerChannel 1 + scanDirection 1 + edgeOfFlightLine 1)', () => {
     expect(copcDecodedChannelBytes(6, 1, true)).toBe(36);
     expect(copcDecodedChannelBytes(7, 1, true)).toBe(45);
+  });
+
+  test('copcDecodedChannelBytes(pdrf, n, true) equals the TRUE decodeRecords allocation, PDRF 6 (no RGB)', () => {
+    // A spec review found estimateCopcPeakBytes did not forward
+    // meta.pointSemantics into copcDecodedChannelBytes, so the peak guard
+    // undercounted by 8 B/point whenever the option was on (PDRF 6: allocates
+    // 36, was charged 28). Pin the estimate against the REAL allocated bytes,
+    // with the option on. PDRF 6 (no RGB) is the format this compares
+    // exactly: PDRF 7/8's RGB charge (9 B) covers a TRANSIENT staging buffer
+    // freed before decodeRecords returns, so summing the returned chunk's
+    // bytes would undercount RGB regardless of pointSemantics — a different,
+    // already-covered concern (see `PDRF 7 channel bytes are 37/point`).
+    const n = 5;
+    const recordLength = 30;
+    const raw = new Uint8Array(n * recordLength); // all-zero records
+    const meta: ChunkDecodeMetadata = {
+      pointDataRecordFormat: 6,
+      pointRecordLength: recordLength,
+      pointCount: n,
+      scale: [1, 1, 1],
+      offset: [0, 0, 0],
+      renderOrigin: [0, 0, 0],
+      pointSemantics: true,
+    };
+    const decoded = decodeRecords(raw, meta);
+    const actualBytes = sumChunkByteLength(decoded);
+    expect(actualBytes).toBe(copcDecodedChannelBytes(6, n, true));
+  });
+
+  test('estimateCopcPeakBytes forwards meta.pointSemantics into the channel-bytes term', () => {
+    const meta: ChunkDecodeMetadata = {
+      pointDataRecordFormat: 6,
+      pointRecordLength: 30,
+      pointCount: 1000,
+      scale: [1, 1, 1],
+      offset: [0, 0, 0],
+      renderOrigin: [0, 0, 0],
+      pointSemantics: true,
+    };
+    const compressedBytes = 1000;
+    const withSemantics = estimateCopcPeakBytes(meta, compressedBytes, 1000);
+    const without = estimateCopcPeakBytes({ ...meta, pointSemantics: false }, compressedBytes, 1000);
+    // The 8 B/point pointSemantics adds is the whole difference — the peak
+    // guard would otherwise silently drop it, as the review found.
+    expect(withSemantics - without).toBe(8 * 1000);
   });
 
   test('decompressChunk refuses the node BEFORE any _malloc or decode', () => {

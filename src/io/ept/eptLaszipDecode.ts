@@ -56,9 +56,14 @@ import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFi
 import {
   normalizeClassificationFlagsByte,
   RECORD_CLASSIFICATION_FLAGS_OFFSET,
+  RECORD_CLASSIFICATION_LEGACY,
+  RECORD_CLASSIFICATION_EXT,
   RECORD_SCAN_ANGLE_LEGACY,
   RECORD_SCAN_ANGLE_EXT,
   RECORD_USER_DATA_OFFSET,
+  RECORD_POINT_SOURCE_ID_LEGACY,
+  RECORD_POINT_SOURCE_ID_EXT,
+  RECORD_GPS_TIME_EXT,
   scanAngleToDegrees,
   extractBitFlag,
   extractScannerChannel,
@@ -77,18 +82,8 @@ const RECORD_INTENSITY = 12;
 const RECORD_RETURN_BITS_LEGACY = 14;
 /** Byte offset of the return-bits byte in extended formats (6-10). */
 const RECORD_RETURN_BITS_EXT = 14;  // legacy convention; extended widens bits
-/** Byte offset of the classification field in legacy formats. */
-const RECORD_CLASSIFICATION_LEGACY = 15;
-/** Byte offset of the classification field in extended formats. */
-const RECORD_CLASSIFICATION_EXT = 16;
-/** Byte offset of point source ID in legacy formats. */
-const RECORD_POINT_SOURCE_LEGACY = 18;
-/** Byte offset of point source ID in extended formats. */
-const RECORD_POINT_SOURCE_EXT = 20;
 /** Byte offset of GPS time in legacy format 1/3. */
 const RECORD_GPS_TIME_LEGACY_1_3 = 20;
-/** Byte offset of GPS time in extended format 6-8. */
-const RECORD_GPS_TIME_EXT = 22;
 /** Byte offset of RGB triple in PDRF 2, 3, 5 (legacy). */
 const RECORD_RGB_LEGACY_2 = 20;     // PDRF 2 has no GPS time → RGB at 20
 const RECORD_RGB_LEGACY_3 = 28;     // PDRF 3 has GPS time at 20-27 → RGB at 28
@@ -102,7 +97,7 @@ const FIRST_EXTENDED_FORMAT = 6;
 // Per-tile decode context — precomputed once per tile.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface TileDecodeContext {
+export interface TileDecodeContext {
   readonly pdrf: number;
   readonly recordLength: number;
   readonly pointCount: number;
@@ -122,9 +117,9 @@ interface TileDecodeContext {
  * Peak decoded bytes ONE point of this tile stages at once, across every output
  * channel the decode allocates for the tile's format plus the raw-RGB staging
  * buffer that coexists with the narrowed one. Structural channels are always
- * present; GPS time and the two RGB buffers are gated exactly as the allocations
- * below them are, so the estimate tracks the real transient peak rather than a
- * worst-case guess.
+ * present; the five `pointSemantics`-gated channels, GPS time and the two RGB
+ * buffers are each gated exactly as the allocations below them are, so the
+ * estimate tracks the real transient peak rather than a worst-case guess.
  *
  *   positions   Float32 × 3   12
  *   intensity   Uint16         2
@@ -132,28 +127,32 @@ interface TileDecodeContext {
  *   classFlags  Uint8          1
  *   returnNo    Uint8          1
  *   returnCnt   Uint8          1
- *   scanAngle   Float32        4
- *   userData    Uint8          1
- *   scanDir     Uint8          1
- *   edgeOfLine  Uint8          1   ── structural subtotal 27
- *   sourceId    Uint16         2   ── structural subtotal 29
- *   scannerChan Uint8          1   (extended formats only)
+ *   sourceId    Uint16         2   ── structural subtotal 20 (always allocated)
+ *   scanAngle   Float32        4   (pointSemantics only)
+ *   userData    Uint8          1   (pointSemantics only)
+ *   scanDir     Uint8          1   (pointSemantics only)
+ *   edgeOfLine  Uint8          1   (pointSemantics only)
+ *   scannerChan Uint8          1   (pointSemantics AND an extended format)
  *   gpsTime     Float64        8   (PDRF 1/3/6-8 only)
  *   rgb         Uint8 × 3      3   (RGB formats only)
  *   rgb16       Uint16 × 3     6   (RGB staging, freed after narrowing)
  */
-const EPT_STRUCTURAL_BYTES_PER_POINT = 29;
-function decodedBytesPerPoint(ctx: TileDecodeContext): number {
+const EPT_STRUCTURAL_BYTES_PER_POINT = 20;
+/** scanAngle (4) + userData (1) + scanDirection (1) + edgeOfFlightLine (1). */
+const EPT_POINT_SEMANTICS_BYTES_PER_POINT = 7;
+/** Exported for direct unit testing against the true decoded allocation. */
+export function decodedBytesPerPoint(ctx: TileDecodeContext, pointSemantics: boolean): number {
   return (
     EPT_STRUCTURAL_BYTES_PER_POINT +
-    (ctx.extended ? 1 : 0) +
+    (pointSemantics ? EPT_POINT_SEMANTICS_BYTES_PER_POINT : 0) +
+    (pointSemantics && ctx.extended ? 1 : 0) +
     (ctx.gpsTimeOffset !== null ? 8 : 0) +
     (ctx.hasRgb ? 3 + 6 : 0)
   );
 }
 
 /** Build the per-tile decode context from a parsed header. */
-function buildContext(buffer: ArrayBuffer): TileDecodeContext {
+export function buildContext(buffer: ArrayBuffer): TileDecodeContext {
   const header = parseLasHeader(buffer);
   const pdrf = header.pointFormat;
   if (![0, 1, 2, 3, 6, 7, 8].includes(pdrf)) {
@@ -186,7 +185,7 @@ function buildContext(buffer: ArrayBuffer): TileDecodeContext {
     hasGpsTime,
     classificationOffset: extended ? RECORD_CLASSIFICATION_EXT : RECORD_CLASSIFICATION_LEGACY,
     scanAngleOffset: extended ? RECORD_SCAN_ANGLE_EXT : RECORD_SCAN_ANGLE_LEGACY,
-    pointSourceOffset: extended ? RECORD_POINT_SOURCE_EXT : RECORD_POINT_SOURCE_LEGACY,
+    pointSourceOffset: extended ? RECORD_POINT_SOURCE_ID_EXT : RECORD_POINT_SOURCE_ID_LEGACY,
     gpsTimeOffset,
     rgbOffset,
   };
@@ -276,7 +275,7 @@ export function decodeEptLaszipTileWith(
     !withinDecodePeakBudget(
       buffer.byteLength,
       n,
-      decodedBytesPerPoint(ctx),
+      decodedBytesPerPoint(ctx, pointSemantics),
       0,
       // laz-perf duplicates the whole compressed tile into its WASM heap
       // (`_malloc` + `HEAPU8.set(fileBytes, filePtr)` below), so the JS buffer and
@@ -288,7 +287,7 @@ export function decodeEptLaszipTileWith(
   ) {
     throw new HeavyByteBudgetError(
       `EPT laszip tile: ${n.toLocaleString('en-US')} points would stage ` +
-        `${(n * decodedBytesPerPoint(ctx)).toLocaleString('en-US')} decoded bytes ` +
+        `${(n * decodedBytesPerPoint(ctx, pointSemantics)).toLocaleString('en-US')} decoded bytes ` +
         `plus two ${buffer.byteLength.toLocaleString('en-US')}-byte compressed copies ` +
         `(JS buffer + laz-perf WASM heap), ` +
         `over the ${MAX_DECODE_PEAK_BYTES.toLocaleString('en-US')}-byte decode budget.`,

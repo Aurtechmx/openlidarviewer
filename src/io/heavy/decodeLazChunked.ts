@@ -143,8 +143,15 @@ export function decodeLazChunkLocal(lazPerf: LazPerfModule, job: LazChunkJob): R
  * Copy a chunk-local `RawPoints` into the whole-file `out` at `at`, and return
  * the chunk's own position buffer, which the whole-file output no longer needs
  * and a preview may take from here.
+ *
+ * Exported for direct unit testing: `classificationFlags` was once missing
+ * from this copy (see tests/lasPointSemanticsPhaseB.test.ts), and the
+ * committed multi-chunk LAZ fixture happens to carry all-zero flags, so an
+ * end-to-end decode comparison cannot tell a present copy from a missing one
+ * on that fixture. Testing this function directly, with synthetic non-zero
+ * data, is the reliable way to pin the fix.
  */
-function placeChunk(out: RawPoints, local: RawPoints, at: number): Float32Array {
+export function placeChunk(out: RawPoints, local: RawPoints, at: number): Float32Array {
   const p = at;
   const positions = local.positions;
   out.positions.set(positions, p * 3);

@@ -35,7 +35,11 @@ import {
 import type { LasHeader } from '../src/io/lasHeader';
 import { decodeRecords } from '../src/io/copc/copcChunkDecode';
 import type { ChunkDecodeMetadata, DecodedChunk } from '../src/io/copc/copcChunkDecode';
-import { decodeEptLaszipTile } from '../src/io/ept/eptLaszipDecode';
+import {
+  decodeEptLaszipTile,
+  decodedBytesPerPoint as eptLaszipDecodedBytesPerPoint,
+  buildContext as eptLaszipBuildContext,
+} from '../src/io/ept/eptLaszipDecode';
 import { decodeEptBinaryTile } from '../src/io/ept/eptBinaryDecode';
 import type { EptSchemaField } from '../src/io/ept/eptTypes';
 import { buildResidentSnapshot } from '../src/render/streaming/residentSnapshot';
@@ -43,6 +47,9 @@ import { parseLasHeader } from '../src/io/lasHeader';
 import { parseBuffer } from '../src/io/parseBuffer';
 import { loadLas } from '../src/io/loadLas';
 import { PointCloud } from '../src/model/PointCloud';
+import { computeOrigin } from '../src/io/coordinateBridge';
+import { decodeLaz } from '../src/io/lazDecode';
+import { decodeLazChunkedSequential, placeChunk } from '../src/io/heavy/decodeLazChunked';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const FIXTURE_BYTES = readFileSync(join(FIXTURES, 'withheld-flags.las'));
@@ -475,5 +482,89 @@ describe('worker payload: the five gated channels being undefined is fine end-to
     expect(cloud.scannerChannel).toBeUndefined();
     expect(cloud.scanDirection).toBeUndefined();
     expect(cloud.edgeOfFlightLine).toBeUndefined();
+  });
+});
+
+describe('chunked LAZ whole-file decode: placeChunk carries classificationFlags (and, with pointSemantics on, the five new channels)', () => {
+  // multichunk.laz is the committed multi-chunk LAZ fixture
+  // tests/decodeLazChunked.test.ts already uses to compare the chunked path
+  // against the legacy whole-file decoder; reused here because withheld-flags.las
+  // has no chunked (multi-chunk LAZ) counterpart, and this is the established
+  // way this repo tests the chunked path.
+  function loadFixture(name: string): ArrayBuffer {
+    const b = readFileSync(join(FIXTURES, name));
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  }
+
+  it('classificationFlags matches the legacy whole-file decode index-for-index', async () => {
+    const buf = loadFixture('multichunk.laz');
+    const header = parseLasHeader(buf);
+    const origin = computeOrigin(header.min);
+
+    const legacy = await decodeLaz(buf, header, origin, 1);
+    const chunked = await decodeLazChunkedSequential(buf, header, origin);
+    expect(chunked, 'chunked path supports this fixture').not.toBeNull();
+
+    expect(chunked!.classificationFlags.length).toBe(legacy.classificationFlags.length);
+    expect([...chunked!.classificationFlags]).toEqual([...legacy.classificationFlags]);
+  });
+
+  it('with pointSemantics on, all five new channels also match index-for-index', async () => {
+    const buf = loadFixture('multichunk.laz');
+    const header = parseLasHeader(buf);
+    const origin = computeOrigin(header.min);
+
+    const legacy = await decodeLaz(buf, header, origin, 1, undefined, true);
+    const chunked = await decodeLazChunkedSequential(buf, header, origin, { pointSemantics: true });
+    expect(chunked).not.toBeNull();
+
+    expect(legacy.scanAngle).toBeTruthy();
+    expect(chunked!.scanAngle).toBeTruthy();
+    expect([...(chunked!.scanAngle as Float32Array)]).toEqual([...(legacy.scanAngle as Float32Array)]);
+    expect([...(chunked!.userData as Uint8Array)]).toEqual([...(legacy.userData as Uint8Array)]);
+    expect([...(chunked!.scanDirection as Uint8Array)]).toEqual([...(legacy.scanDirection as Uint8Array)]);
+    expect([...(chunked!.edgeOfFlightLine as Uint8Array)]).toEqual([...(legacy.edgeOfFlightLine as Uint8Array)]);
+    if (legacy.scannerChannel) {
+      expect([...(chunked!.scannerChannel as Uint8Array)]).toEqual([...legacy.scannerChannel]);
+    }
+  });
+
+  it('placeChunk copies non-zero classificationFlags into the whole-file output (direct, fixture-independent)', () => {
+    const out = allocRawPoints(3, false, false, false);
+    const local = allocRawPoints(2, false, false, false);
+    local.classificationFlags.set([0x4, 0x8]); // Withheld, Overlap
+    placeChunk(out, local, 1);
+    expect([...out.classificationFlags]).toEqual([0, 0x4, 0x8]);
+  });
+});
+
+describe('EPT laszip decodedBytesPerPoint honours pointSemantics for both legacy and extended tiles', () => {
+  /** Sum of every present array's total byteLength on a DecodedChunk-shaped object. */
+  function sumByteLength(obj: Record<string, unknown>): number {
+    let total = 0;
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === 'object' && 'byteLength' in value) {
+        total += (value as { byteLength: number }).byteLength;
+      }
+    }
+    return total;
+  }
+
+  it.each([
+    ['legacy (tiny-pdrf1.laz, PDRF 1, GPS, no RGB)', 'tiny-pdrf1.laz'],
+    ['extended (withheld-flags.las, PDRF 6, GPS, no RGB)', 'withheld-flags.las'],
+  ] as const)('%s: estimate equals the true decoded allocation, both settings', async (_label, fixtureName) => {
+    const bytes = readFileSync(join(FIXTURES, fixtureName));
+    const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const ctx = eptLaszipBuildContext(buf);
+
+    for (const pointSemantics of [false, true]) {
+      const decoded = await decodeEptLaszipTile(buf, [0, 0, 0], undefined, pointSemantics);
+      // pointSourceId isn't on DecodedChunk's public type for every path but
+      // IS returned by this decoder — cast through unknown to read it for the
+      // byte sum, same as every other field.
+      const actual = sumByteLength(decoded as unknown as Record<string, unknown>);
+      expect(actual).toBe(eptLaszipDecodedBytesPerPoint(ctx, pointSemantics) * decoded.pointCount);
+    }
   });
 });
