@@ -71,6 +71,14 @@ jobs:
         # The binary `npm ci` installed from the lockfile, never an on-demand fetch.
         run: ./node_modules/.bin/vite build
 
+      # probe.html + its one small chunk, added to the SAME dist/ the step
+      # above just built (vite.probe.config.ts sets emptyOutDir: false). It
+      # carries no renderer — see scripts/ios-touch-trace.mjs's header — so
+      # this build has nothing to do with the test seam; run before "Serve
+      # the build" so both pages are already on disk when that server starts.
+      - name: Build the iOS touch-trace probe
+        run: ./node_modules/.bin/vite build --config vite.probe.config.ts
+
       # Bind 127.0.0.1 explicitly. `vite preview` defaults to `localhost`,
       # which macOS resolves to ::1 first, so a v4 probe and the simulator
       # both miss a server that is genuinely up. The simulator shares the
@@ -165,6 +173,21 @@ jobs:
           OLV_BASE_URL: http://127.0.0.1:4173
         run: node scripts/ios-touch-check.mjs
 
+      # Independent of the step above: it drives a page that never renders,
+      # so it has no reason to hit the GPU-driver crash L13 documents (see
+      # scripts/ios-touch-trace.mjs's header) and runs whether or not that
+      # step reached its own pose read. Same booted simulator and running
+      # Appium/WebDriverAgent, so this only costs a second session, not a
+      # second boot.
+      - name: Record iOS touch traces (no WebGL)
+        if: always()
+        env:
+          OLV_SIM_UDID: ${{ steps.sim.outputs.udid }}
+          OLV_SIM_DEVICE: ${{ steps.sim.outputs.name }}
+          OLV_BASE_URL: http://127.0.0.1:4173
+          OLV_RUN_ID: ${{ github.run_id }}
+        run: node scripts/ios-touch-trace.mjs
+
       - name: Capture the screen
         if: always()
         run: xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot ios-screen.png || true
@@ -209,5 +232,6 @@ jobs:
             appium.log
             preview.log
             ios-touch-result.json
+            ios-touch-traces/
             crash-reports/
           retention-days: 7

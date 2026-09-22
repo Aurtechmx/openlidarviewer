@@ -446,6 +446,13 @@
       "why": "How strongly to draw a brief mark at the camera's pivot, and the rule that it never appears in a capture. Nothing calls it because drawing it needs a three.js object in the Viewer chunk, which sits at 739 KiB against a 740 KiB ceiling: a six-line exported function measured 2 KiB in that chunk under the live transform, so a mesh and a material do not fit.",
       "graduation": "Reachable when the Viewer chunk has room. The wiring is small: a layer module owning its object through Viewer.derivedLayerHost(), a show call at the double-click, focus and orbit-centre sites, and one render-loop host method to step it. The pick path needs no change, since it walks the cloud registry rather than the scene.",
       "review": "2027-09-20"
+    },
+    {
+      "path": "src/probe/iosTouchProbe.ts",
+      "status": "validation-only",
+      "why": "Mounts OLV's real gesture recognisers (touchTracker.ts, touchGesture.ts, touchTapGate.ts) on OLV's real canvas markup and CSS, with no renderer, so the iOS simulator workflow can record what the platform delivers to a touch gesture without the WebGL crash the L13 ledger entry documents. Reached only through probe.html, built by vite.probe.config.ts (npm run build:probe), never by the production build; scripts/ios-touch-trace.mjs is its only caller.",
+      "graduation": "None. This module exists to produce evidence about the platform and must stay out of the application graph. If production ever reaches it, that is the defect, not the fix.",
+      "review": "2027-03-22"
     }
   ]
 }

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Same viewport meta as index.html (src/probe/iosTouchProbe.ts is the
+         one measuring whether a gesture moves visualViewport.scale, so the
+         probe has to start from the same viewport contract the real app
+         ships, not a laxer one). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>OLV touch probe</title>
+    <style>html, body { background: #0a0e1a; margin: 0; }</style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/probe/iosTouchProbe.ts"></script>
+  </body>
+</html>
