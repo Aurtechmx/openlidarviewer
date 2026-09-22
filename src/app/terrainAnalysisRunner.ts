@@ -171,12 +171,16 @@ export function deriveCoreParams(
   const extent = Math.max(maxX - minX, maxY - minY, 1 / metresPerUnit);
   const cellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
   // Grid-centre latitude for the pipeline's cos φ east–west corrections.
-  // Local render space subtracts the cloud's world origin, so add it back;
-  // an unknown origin treats local Y as absolute latitude (a geographic file
-  // small enough to skip recentring). Null for projected frames.
+  // Local render space subtracts the cloud's world origin, so add it back.
+  // Every loader recentres (a file that needed none carries a KNOWN [0,0,0]
+  // origin), so a missing origin means unknown, never zero: reading it as 0
+  // put a 45° scan at the equator. Null for projected frames and for an
+  // unknown origin; the core then warns and withholds metre geometry.
+  const originY = isGeographic ? getWorldOriginY?.() : null;
   const latitudeDeg =
-    isGeographic && Number.isFinite(minY) && Number.isFinite(maxY)
-      ? (getWorldOriginY?.() ?? 0) + (minY + maxY) / 2
+    isGeographic && originY != null && Number.isFinite(originY)
+      && Number.isFinite(minY) && Number.isFinite(maxY)
+      ? originY + (minY + maxY) / 2
       : null;
   const crsName = ctx.kind === 'projected' || ctx.kind === 'geographic' ? ctx.crsName : null;
   // Stride honesty: the gather caps huge clouds (≤ 300 k points), so per-cell

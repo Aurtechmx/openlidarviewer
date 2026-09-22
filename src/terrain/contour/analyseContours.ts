@@ -721,12 +721,15 @@ function gridGeometryInMetres(
   // The frame's statement wins over the factor test: the live runner passes the
   // placeholder 1 for an unresolved projected frame, which is finite and
   // positive, so the factor alone called every unreferenced scan resolved.
-  const horizResolved = geographic || (params.horizontalScaleKnown ?? horizOk);
+  // A geographic frame is metric only once its latitude is known: without it
+  // the east-west span is off by 1/cos φ (×2 at 60°), so it is withheld.
+  const lat = params.latitudeDeg;
+  const latKnown = typeof lat === 'number' && Number.isFinite(lat);
+  const horizResolved = geographic ? latKnown : (params.horizontalScaleKnown ?? horizOk);
   const horizToM = geographic ? METRES_PER_DEGREE : (horizOk ? horiz : 1);
   // A geographic frame's east-west extent shrinks by cos(latitude), the same
   // correction the density figure in this file already applies. Without it a
   // site at 60 degrees north reported twice its true width.
-  const lat = params.latitudeDeg;
   const ewScale =
     geographic && typeof lat === 'number' && Number.isFinite(lat)
       ? Math.max(Math.cos((lat * Math.PI) / 180), 1e-6)

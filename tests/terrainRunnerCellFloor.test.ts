@@ -84,9 +84,18 @@ describe('deriveCoreParams — grid-centre latitude for cos φ corrections', () 
     expect(p.latitudeDeg).toBeCloseTo(60.0, 6); // Float32 positions
   });
 
-  it('treats local Y as absolute latitude when the origin is unknown', () => {
-    const p = deriveCoreParams(square(0.4), undefined, fakeCrs(GEOGRAPHIC), undefined, false, () => null);
-    expect(p.latitudeDeg).toBeCloseTo(0.2, 6); // Float32 positions
+  it('reports latitude unknown when the origin is unknown, never local Y as latitude', () => {
+    // A recentred 45° scan with its origin lost (the active layer removed while
+    // another stays loaded) has local Y ≈ 0.2; reading that as latitude put it
+    // at the equator and dropped the cos φ correction.
+    expect(deriveCoreParams(square(0.4), undefined, fakeCrs(GEOGRAPHIC), undefined, false, () => null).latitudeDeg).toBeNull();
+    expect(deriveCoreParams(square(0.4), undefined, fakeCrs(GEOGRAPHIC), undefined, false).latitudeDeg).toBeNull();
+    expect(deriveCoreParams(square(0.4), undefined, fakeCrs(GEOGRAPHIC), undefined, false, () => NaN).latitudeDeg).toBeNull();
+  });
+
+  it('keeps a known zero origin (a file that needed no recentring)', () => {
+    const p = deriveCoreParams(square(0.4), undefined, fakeCrs(GEOGRAPHIC), undefined, false, () => 0);
+    expect(p.latitudeDeg).toBeCloseTo(0.2, 6);
   });
 
   it('never reads the origin for a projected frame (lazy thunk, latitude null)', () => {

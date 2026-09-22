@@ -229,6 +229,13 @@ describe('computeTerrainCore + contoursFromCore (pure split)', () => {
       expect(joined).toMatch(/approximate/i);
     });
 
+    it('withholds metre grid geometry until the latitude is known', () => {
+      expect(computeTerrainCore(pts, { cellSizeM: 2, isGeographic: true }).gridGeometry.unitResolved).toBe(false);
+      expect(
+        computeTerrainCore(pts, { cellSizeM: 2, isGeographic: true, latitudeDeg: 47.5 }).gridGeometry.unitResolved,
+      ).toBe(true);
+    });
+
     it('stays silent when a representative latitude IS known', () => {
       const core = computeTerrainCore(pts, {
         cellSizeM: 2,
