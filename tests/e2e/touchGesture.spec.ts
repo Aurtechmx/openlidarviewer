@@ -127,15 +127,18 @@ async function singleTap(page: Page, x: number, y: number): Promise<void> {
  * which is worse than not running the test at all.
  */
 /**
- * Wait until the camera stops moving, then return its pose.
+ * Wait until the opening flight has run, then return the pose it left.
  *
- * Loading a scan flies the camera from a top-down framing to the opening
- * view. A fixed wait covers that on a fast machine and not on a loaded CI
- * runner, where the "before" pose was read mid-flight and the flight itself
- * then read as the gesture's effect. Three identical reads 250 ms apart is
- * a camera at rest; no pose is accepted before that.
+ * A scan attaches with the camera top-down and still, and only then does
+ * `openScan` start the tween to the opening view, just before it adds
+ * `olv-has-scan` to the body. On a loaded CI runner that gap outlasts a
+ * short stillness check, so the "before" pose was the still top-down one
+ * and the flight read as the gesture's effect. Waiting for the class puts
+ * the start of the flight behind us; three identical reads 250 ms apart
+ * then mean it has ended.
  */
 async function settledPose(page: Page): Promise<string> {
+  await expect(page.locator('body.olv-has-scan')).toHaveCount(1, { timeout: 30_000 });
   let last = await readPose(page);
   let same = 0;
   for (let i = 0; i < 80 && same < 2; i++) {
