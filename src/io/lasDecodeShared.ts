@@ -29,6 +29,33 @@ const RECORD_CLASSIFICATION_LEGACY = 15;
 const RECORD_CLASSIFICATION_EXT = 16;
 /** Extended records keep the classification flags in their own byte (bits 0-3). */
 const RECORD_CLASSIFICATION_FLAGS_EXT = 15;
+/**
+ * Byte offset of the classification-flags source byte. Coincidentally 15 in
+ * both layouts: extended keeps a dedicated flags byte there, legacy packs the
+ * flags into bits 5-7 of the classification byte, which also sits at 15. Any
+ * decoder reading raw LAS/LAZ-family records (COPC, EPT laszip) reads this
+ * offset and passes the byte through {@link normalizeClassificationFlagsByte}
+ * — the single place that knows how to unpack either layout.
+ */
+export const RECORD_CLASSIFICATION_FLAGS_OFFSET = 15;
+
+/**
+ * Normalise a raw classification-flags source byte into the one nibble layout
+ * the rest of the app reads (bit0 Synthetic, bit1 Key-point, bit2 Withheld,
+ * bit3 Overlap — the extended Table 16 layout). Extended records keep the
+ * flags in the low nibble of their own byte; legacy records pack Synthetic,
+ * Key-Point and Withheld into bits 5, 6 and 7 of the classification byte
+ * (Overlap has no legacy flag — it is class 12 instead, decoded elsewhere).
+ *
+ * This is the ONE place that unpacks either layout: every decoder that reads
+ * raw LAS/LAZ-family records — static `.las`/`.laz`, COPC, EPT laszip — calls
+ * this rather than re-deriving the bit shifts, so a correction lands once.
+ */
+export function normalizeClassificationFlagsByte(byte: number, extended: boolean): number {
+  return extended
+    ? byte & 0x0f
+    : ((byte & 0x20) >> 5) | ((byte & 0x40) >> 5) | ((byte & 0x80) >> 5);
+}
 /** Point source ID — uint16 LE — byte 18 in legacy records, byte 20 in extended. */
 const RECORD_POINT_SOURCE_ID_LEGACY = 18;
 const RECORD_POINT_SOURCE_ID_EXT = 20;
@@ -169,12 +196,7 @@ export function decodeRecord(
   out.intensity[i] = view.getUint16(base + RECORD_INTENSITY, true);
   out.classification[i] = view.getUint8(base + ctx.classificationOffset) & ctx.classMask;
   const flagByte = view.getUint8(base + ctx.classificationFlagsOffset);
-  // Extended keeps the flags in the low nibble of their own byte. Legacy packs
-  // Synthetic, Key-Point and Withheld into bits 5, 6 and 7 of the class byte,
-  // which is why reading the class with `& 0x1f` alone discards them.
-  out.classificationFlags[i] = ctx.extended
-    ? flagByte & 0x0f
-    : ((flagByte & 0x20) >> 5) | ((flagByte & 0x40) >> 5) | ((flagByte & 0x80) >> 5);
+  out.classificationFlags[i] = normalizeClassificationFlagsByte(flagByte, ctx.extended);
   const returnBits = view.getUint8(base + RECORD_RETURN_BITS);
   if (ctx.extended) {
     out.returnNumber[i] = returnBits & 0x0f;

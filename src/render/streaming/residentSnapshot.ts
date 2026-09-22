@@ -48,9 +48,11 @@ export interface ResidentSnapshotOptions {
  * EVERY per-point channel is emitted only when EVERY chunk carries it, so a
  * partially-attributed set never produces a half-filled array the writers would
  * misread. That rule used to cover only RGB and point-source id; it now covers
- * intensity, classification, returns and GPS time too, because a chunk from a
- * format that carries none of them (a `.pnts` tile) would otherwise contribute
- * zeros an exported LAS would present as real classifications and readings.
+ * intensity, classification, classification flags, returns and GPS time too,
+ * because a chunk from a format that carries none of them (a `.pnts` tile, or
+ * an EPT tile whose writer omitted the flags channel) would otherwise
+ * contribute zeros an exported LAS would present as real classifications,
+ * flags and readings.
  * `PointCloud` already treats each of these as optional, so the writers omit
  * the field rather than write a fabricated one.
  */
@@ -72,6 +74,9 @@ export function buildResidentSnapshot(
 
   const intensity = everyChunkHas((c) => c.intensity, 1) ? new Uint16Array(total) : undefined;
   const classification = everyChunkHas((c) => c.classification, 1)
+    ? new Uint8Array(total)
+    : undefined;
+  const classificationFlags = everyChunkHas((c) => c.classificationFlags, 1)
     ? new Uint8Array(total)
     : undefined;
   const returnNumber = everyChunkHas((c) => c.returnNumber, 1)
@@ -96,6 +101,9 @@ export function buildResidentSnapshot(
     if (classification && c.classification) {
       classification.set(c.classification.subarray(0, n), p);
     }
+    if (classificationFlags && c.classificationFlags) {
+      classificationFlags.set(c.classificationFlags.subarray(0, n), p);
+    }
     if (returnNumber && c.returnNumber) returnNumber.set(c.returnNumber.subarray(0, n), p);
     if (returnCount && c.returnCount) returnCount.set(c.returnCount.subarray(0, n), p);
     if (gpsTime && c.gpsTime) gpsTime.set(c.gpsTime.subarray(0, n), p);
@@ -109,6 +117,7 @@ export function buildResidentSnapshot(
     positions,
     ...(intensity ? { intensity } : {}),
     ...(classification ? { classification } : {}),
+    ...(classificationFlags ? { classificationFlags } : {}),
     ...(returnNumber ? { returnNumber } : {}),
     ...(returnCount ? { returnCount } : {}),
     ...(gpsTime ? { gpsTime } : {}),

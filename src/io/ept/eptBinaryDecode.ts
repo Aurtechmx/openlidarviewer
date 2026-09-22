@@ -31,6 +31,7 @@ import type { DecodedChunk } from '../copc/copcChunkDecode';
 import { LoadError } from '../loadErrors';
 import { MAX_DECODE_PEAK_BYTES } from '../heavy/heavyByteBudget';
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
+import { normalizeClassificationFlagsByte } from '../lasDecodeShared';
 
 /**
  * Thrown when an EPT binary tile arrives shorter than the schema
@@ -151,6 +152,11 @@ const CHANNEL_WIDTHS: Readonly<
 > = {
   Intensity: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
   Classification: [{ type: 'unsigned', size: 1 }],
+  // PDAL/Entwine's EPT writer names the extended Classification Flags field
+  // "ClassFlags" — one byte, the same low-nibble layout Table 16 defines. A
+  // writer for a legacy-only source is free to omit the attribute entirely,
+  // which `findAttr` reads as "no flags channel" (see below).
+  ClassFlags: [{ type: 'unsigned', size: 1 }],
   ReturnNumber: [{ type: 'unsigned', size: 1 }],
   NumberOfReturns: [{ type: 'unsigned', size: 1 }],
   Red: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
@@ -192,6 +198,7 @@ const EPT_RGB16_STAGING_BYTES = 6; // Uint16 · 3, temporary for uniform 16-bit 
 export interface EptDecodedChannels {
   readonly intensity: boolean;
   readonly classification: boolean;
+  readonly classificationFlags: boolean;
   readonly returnNumber: boolean;
   readonly returnCount: boolean;
   readonly gpsTime: boolean;
@@ -218,6 +225,7 @@ export function eptBinaryPeakBytes(
   let perPoint = EPT_POSITION_DECODED_BYTES;
   if (channels.intensity) perPoint += EPT_INTENSITY_DECODED_BYTES;
   if (channels.classification) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.classificationFlags) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
   if (channels.returnNumber) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
   if (channels.returnCount) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
   if (channels.gpsTime) perPoint += EPT_GPS_DECODED_BYTES;
@@ -302,6 +310,7 @@ export function decodeEptBinaryTile(
   );
   const intensityAttr = findAttr(attrs, 'Intensity');
   const classAttr = findAttr(attrs, 'Classification');
+  const classFlagsAttr = findAttr(attrs, 'ClassFlags');
   const retNumAttr = findAttr(attrs, 'ReturnNumber');
   const retCntAttr = findAttr(attrs, 'NumberOfReturns');
   const gpsAttr = findAttr(attrs, 'GpsTime');
@@ -322,6 +331,7 @@ export function decodeEptBinaryTile(
   const peakBytes = eptBinaryPeakBytes(buffer.byteLength, pointCount, {
     intensity: intensityAttr !== undefined,
     classification: classAttr !== undefined,
+    classificationFlags: classFlagsAttr !== undefined,
     returnNumber: retNumAttr !== undefined,
     returnCount: retCntAttr !== undefined,
     gpsTime: gpsAttr !== undefined,
@@ -351,6 +361,7 @@ export function decodeEptBinaryTile(
   // omits a channel no chunk carries.
   const intensity = intensityAttr ? new Uint16Array(pointCount) : undefined;
   const classification = classAttr ? new Uint8Array(pointCount) : undefined;
+  const classificationFlags = classFlagsAttr ? new Uint8Array(pointCount) : undefined;
   const returnNumber = retNumAttr ? new Uint8Array(pointCount) : undefined;
   const returnCount = retCntAttr ? new Uint8Array(pointCount) : undefined;
   const gpsTime = gpsAttr ? new Float64Array(pointCount) : undefined;
@@ -394,6 +405,17 @@ export function decodeEptBinaryTile(
     }
     if (classification && classAttr) {
       classification[i] = readAttr(view, base + classAttr.offset, classAttr);
+    }
+    if (classificationFlags && classFlagsAttr) {
+      // The EPT "ClassFlags" attribute is already the extended-layout nibble
+      // (PDAL writes it straight from Table 16), so the "legacy" branch of
+      // the shared normaliser never applies here — pass `true` to reuse the
+      // same single unpacking function COPC and EPT laszip call, rather than
+      // re-deriving "the value is already normalised" as a one-off `& 0x0f`.
+      classificationFlags[i] = normalizeClassificationFlagsByte(
+        readAttr(view, base + classFlagsAttr.offset, classFlagsAttr),
+        true,
+      );
     }
     if (returnNumber && retNumAttr) {
       returnNumber[i] = readAttr(view, base + retNumAttr.offset, retNumAttr);
@@ -446,6 +468,7 @@ export function decodeEptBinaryTile(
     positions,
     intensity,
     classification,
+    classificationFlags,
     returnNumber,
     returnCount,
     gpsTime,

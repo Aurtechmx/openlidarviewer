@@ -53,6 +53,10 @@ import {
   withinDecodePeakBudget,
 } from '../heavy/heavyByteBudget';
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
+import {
+  normalizeClassificationFlagsByte,
+  RECORD_CLASSIFICATION_FLAGS_OFFSET,
+} from '../lasDecodeShared';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,14 +122,15 @@ interface TileDecodeContext {
  *   positions   Float32 × 3   12
  *   intensity   Uint16         2
  *   class       Uint8          1
+ *   classFlags  Uint8          1
  *   returnNo    Uint8          1
  *   returnCnt   Uint8          1
- *   sourceId    Uint16         2   ── structural subtotal 19
+ *   sourceId    Uint16         2   ── structural subtotal 20
  *   gpsTime     Float64        8   (PDRF 1/3/6-8 only)
  *   rgb         Uint8 × 3      3   (RGB formats only)
  *   rgb16       Uint16 × 3     6   (RGB staging, freed after narrowing)
  */
-const EPT_STRUCTURAL_BYTES_PER_POINT = 19;
+const EPT_STRUCTURAL_BYTES_PER_POINT = 20;
 function decodedBytesPerPoint(ctx: TileDecodeContext): number {
   return (
     EPT_STRUCTURAL_BYTES_PER_POINT +
@@ -280,6 +285,10 @@ export function decodeEptLaszipTileWith(
   const positions = new Float32Array(n * 3);
   const intensity = new Uint16Array(n);
   const classification = new Uint8Array(n);
+  // The flags source byte sits at offset 15 in both the legacy and extended
+  // record layouts; `normalizeClassificationFlagsByte` reads it per `ctx.extended`
+  // the same way the static LAS/LAZ decoder does — see `lasDecodeShared.ts`.
+  const classificationFlags = new Uint8Array(n);
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);
   const pointSourceId = new Uint16Array(n);
@@ -340,6 +349,10 @@ export function decodeEptLaszipTileWith(
       }
       classification[i] = heap.getUint8(pointPtr + ctx.classificationOffset)
         & (ctx.extended ? 0xff : 0x1f);
+      classificationFlags[i] = normalizeClassificationFlagsByte(
+        heap.getUint8(pointPtr + RECORD_CLASSIFICATION_FLAGS_OFFSET),
+        ctx.extended,
+      );
 
       pointSourceId[i] = heap.getUint16(pointPtr + ctx.pointSourceOffset, true);
 
@@ -386,6 +399,7 @@ export function decodeEptLaszipTileWith(
     positions,
     intensity,
     classification,
+    classificationFlags,
     returnNumber,
     returnCount,
     gpsTime,

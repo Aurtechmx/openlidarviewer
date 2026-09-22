@@ -170,9 +170,9 @@ test('chunkTransferables lists every backing buffer (and RGB only when present)'
     offset: [0, 0, 0],
     renderOrigin: [0, 0, 0],
   });
-  // positions, intensity, classification, returnNumber, returnCount, gpsTime,
-  // pointSourceId — seven buffers, no RGB for PDRF 6.
-  expect(chunkTransferables(d6)).toHaveLength(7);
+  // positions, intensity, classification, classificationFlags, returnNumber,
+  // returnCount, gpsTime, pointSourceId — eight buffers, no RGB for PDRF 6.
+  expect(chunkTransferables(d6)).toHaveLength(8);
 
   const raw7 = buildRecords(36, [
     { x: 0, y: 0, z: 0, intensity: 0, returnNum: 1, returnCount: 1, classification: 0, gps: 0, rgb: [1, 2, 3] },
@@ -185,8 +185,8 @@ test('chunkTransferables lists every backing buffer (and RGB only when present)'
     offset: [0, 0, 0],
     renderOrigin: [0, 0, 0],
   });
-  // The seven PDRF-6 buffers plus RGB.
-  expect(chunkTransferables(d7)).toHaveLength(8);
+  // The eight PDRF-6 buffers plus RGB.
+  expect(chunkTransferables(d7)).toHaveLength(9);
 });
 
 test('chunkTransferables lists only the buffers a positions-only chunk has', () => {

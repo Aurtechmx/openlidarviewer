@@ -16,6 +16,10 @@
  */
 
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
+import {
+  normalizeClassificationFlagsByte,
+  RECORD_CLASSIFICATION_FLAGS_OFFSET,
+} from '../lasDecodeShared';
 
 /** Per-chunk decode parameters. */
 export interface ChunkDecodeMetadata {
@@ -57,8 +61,9 @@ export interface ChunkDecodeMetadata {
  * cannot fill; the derived products (resident snapshot, profile section, point
  * inspector) report absence rather than substituting a default.
  *
- * The LAS-family decoders — COPC, EPT and the out-of-core tile store — fill all
- * five on every chunk and are unaffected by the optionality.
+ * The LAS-family decoders — COPC, EPT and the out-of-core tile store — fill
+ * most of these on every chunk and are unaffected by the optionality; only
+ * `classificationFlags` genuinely varies by source (see its own doc).
  */
 export interface DecodedChunk {
   /** Points actually decoded (≤ the requested count if the input was short). */
@@ -69,6 +74,15 @@ export interface DecodedChunk {
   intensity?: Uint16Array;
   /** Per-point classification — absent when the format carries none. */
   classification?: Uint8Array;
+  /**
+   * Per-point classification flags (bit0 Synthetic, bit1 Key-point, bit2
+   * Withheld, bit3 Overlap — the normalised nibble {@link
+   * normalizeClassificationFlagsByte} produces), one byte per point. Absent
+   * when the source genuinely carries no flags channel — never a zero array,
+   * since zero means "none of the flags are set" and absence means "not
+   * recorded."
+   */
+  classificationFlags?: Uint8Array;
   /** Per-point return number — absent when the format carries none. */
   returnNumber?: Uint8Array;
   /** Per-point total returns — absent when the format carries none. */
@@ -118,16 +132,17 @@ export interface ChunkDecoder<TMeta = ChunkDecodeMetadata> {
  * Peak decoded channel-array bytes per point for one PDRF 6/7/8 node, matching
  * exactly what {@link decodeRecords} allocates and holds LIVE at once.
  *
- * Every node fills seven base channels: positions (Float32 · 3 = 12), intensity
- * (Uint16 = 2), classification (Uint8 = 1), return number (Uint8 = 1), return
- * count (Uint8 = 1), GPS time (Float64 = 8), point source id (Uint16 = 2) — 27
- * bytes a point. PDRF 7 and 8 add colour, and both the staged Uint16 rgb16 (3 ·
- * 2 = 6) and the narrowed Uint8 rgb (3) are RESIDENT together while the narrow
- * loop runs, so colour costs 9, not 3. PDRF 8's NIR is not decoded, so it is not
- * charged. Returns {@link Number.POSITIVE_INFINITY} for a non-usable count so a
- * nonsense value reads as over-budget rather than as zero.
+ * Every node fills eight base channels: positions (Float32 · 3 = 12), intensity
+ * (Uint16 = 2), classification (Uint8 = 1), classification flags (Uint8 = 1),
+ * return number (Uint8 = 1), return count (Uint8 = 1), GPS time (Float64 = 8),
+ * point source id (Uint16 = 2) — 28 bytes a point. PDRF 7 and 8 add colour, and
+ * both the staged Uint16 rgb16 (3 · 2 = 6) and the narrowed Uint8 rgb (3) are
+ * RESIDENT together while the narrow loop runs, so colour costs 9, not 3. PDRF
+ * 8's NIR is not decoded, so it is not charged. Returns {@link
+ * Number.POSITIVE_INFINITY} for a non-usable count so a nonsense value reads
+ * as over-budget rather than as zero.
  */
-export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 27;
+export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 28;
 export const COPC_RGB_CHANNEL_BYTES_PER_POINT = 9;
 
 export function copcDecodedChannelBytes(pdrf: number, pointCount: number): number {
@@ -173,6 +188,10 @@ export function decodeRecords(
   const positions = new Float32Array(n * 3);
   const intensity = new Uint16Array(n);
   const classification = new Uint8Array(n);
+  // COPC is always an extended point format (PDRF 6/7/8), so the flags byte
+  // is always unpacked as the extended layout — see
+  // `RECORD_CLASSIFICATION_FLAGS_OFFSET` / `normalizeClassificationFlagsByte`.
+  const classificationFlags = new Uint8Array(n);
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);
   const gpsTime = new Float64Array(n);
@@ -192,6 +211,10 @@ export function decodeRecords(
     returnNumber[i] = returnByte & 0x0f;
     returnCount[i] = (returnByte >> 4) & 0x0f;
     classification[i] = view.getUint8(p + 16);
+    classificationFlags[i] = normalizeClassificationFlagsByte(
+      view.getUint8(p + RECORD_CLASSIFICATION_FLAGS_OFFSET),
+      true,
+    );
     pointSourceId[i] = view.getUint16(p + POINT_SOURCE_ID_OFFSET, true);
     gpsTime[i] = view.getFloat64(p + GPS_TIME_OFFSET, true);
 
@@ -231,6 +254,7 @@ export function decodeRecords(
     positions,
     intensity,
     classification,
+    classificationFlags,
     returnNumber,
     returnCount,
     gpsTime,
@@ -253,6 +277,7 @@ export function chunkTransferables(decoded: DecodedChunk): ArrayBuffer[] {
   // buffer that is not there.
   if (decoded.intensity) out.push(decoded.intensity.buffer as ArrayBuffer);
   if (decoded.classification) out.push(decoded.classification.buffer as ArrayBuffer);
+  if (decoded.classificationFlags) out.push(decoded.classificationFlags.buffer as ArrayBuffer);
   if (decoded.returnNumber) out.push(decoded.returnNumber.buffer as ArrayBuffer);
   if (decoded.returnCount) out.push(decoded.returnCount.buffer as ArrayBuffer);
   if (decoded.gpsTime) out.push(decoded.gpsTime.buffer as ArrayBuffer);
