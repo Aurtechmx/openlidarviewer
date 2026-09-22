@@ -391,16 +391,33 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/d8Flow.ts'],
   },
+  // v2 seeds at the grid boundary only. v1 also seeded every cell beside
+  // NoData, reading a survey hole as a drainage exit that D8 routes nothing
+  // into, so a v1 figure does not carry the v2 meaning. That reading is the
+  // declared `.gap-outlet` variant below.
   'olv.simulation.terrain-flow.priority-flood': {
     id: 'olv.simulation.terrain-flow.priority-flood',
-    version: 1,
+    version: 2,
     name: 'Priority-Flood depression conditioning',
     summary:
-      'Floods inward from the edge of the mapped surface, raising each cell reached '
-      + 'from below to its spill level, and returns a second surface rather than '
-      + 'modifying the DTM. An optional increment above the spill parent breaks the '
-      + 'resulting plateaux; increments lost to Float32 precision are counted and '
-      + 'reported rather than assumed to have applied.',
+      'Floods inward from the grid boundary, raising each cell reached from below '
+      + 'to its spill level, and returns a second surface rather than modifying the '
+      + 'DTM. NoData is a wall, as D8 reads it; cells NoData encloses are left as '
+      + 'they are and counted. An optional increment above the spill parent breaks '
+      + 'the resulting plateaux; increments lost to Float32 precision are counted '
+      + 'and reported rather than assumed to have applied.',
+    citation: 'Barnes, Lehman & Mulla (2014), doi:10.1016/j.cageo.2013.04.024',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/priorityFlood.ts'],
+  },
+  'olv.simulation.terrain-flow.priority-flood.gap-outlet': {
+    id: 'olv.simulation.terrain-flow.priority-flood.gap-outlet',
+    version: 1,
+    name: 'Priority-Flood conditioning with NoData gaps as exits',
+    summary:
+      'The same flood, also seeded at every cell beside NoData, so a gap drains '
+      + 'the ground around it rather than bounding it. A declared reading for gaps '
+      + 'that are open water; over a survey hole it invents an exit.',
     citation: 'Barnes, Lehman & Mulla (2014), doi:10.1016/j.cageo.2013.04.024',
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/priorityFlood.ts'],

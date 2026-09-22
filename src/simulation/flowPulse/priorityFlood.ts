@@ -29,6 +29,20 @@
  * was resolved. The arithmetic here runs in double and every absorbed
  * increment is counted, so the result can say plainly that part of the
  * surface could not be resolved at this epsilon.
+ *
+ * ── NODATA IS A WALL, AS ROUTING READS IT ───────────────────────────────────
+ * D8 routes nothing into an invalid cell, so the flood seeds only at the grid
+ * boundary. Seeding the rim of every gap as well would call a survey hole a
+ * drainage exit: a depression beside the hole would stay unfilled because it
+ * "spills" into it, and D8, which does not route into the hole, would then
+ * find a sink on the rim that conditioning reported as resolved. A region
+ * NoData encloses has no route to the boundary at all; it keeps its heights
+ * and is counted, so the result says how much of the surface conditioning did
+ * not reach rather than leaving a reader to take every sink in it for a pit.
+ *
+ * Reading a gap as an exit is right when the gap is open water, which a
+ * LiDAR survey often leaves empty. That reading is an option the caller
+ * names, never the default.
  */
 
 import { CELL_NODATA } from './flowTypes';
@@ -54,7 +68,22 @@ export interface PriorityFloodResult {
    * the surface is still flat after conditioning.
    */
   readonly epsilonAbsorbed: number;
+  /**
+   * Valid cells the flood never reached, because NoData encloses them and
+   * leaves no route to the grid boundary. They keep their elevations, so a
+   * pit among them is still a pit. Always zero when gaps are read as exits.
+   */
+  readonly cellsUnreachable: number;
 }
+
+/**
+ * How conditioning reads a cell with no elevation.
+ *
+ * `wall`: flow neither enters nor leaves it, which is how D8 reads it.
+ * `outlet`: a valid cell touching it is a place water leaves the surface, as
+ * at the grid boundary. Appropriate where gaps are water bodies.
+ */
+export type NoDataReading = 'wall' | 'outlet';
 
 /** Options for a conditioning pass. */
 export interface PriorityFloodOptions {
@@ -64,6 +93,8 @@ export interface PriorityFloodOptions {
    * the caller wants fill depths rather than a drainable surface.
    */
   readonly epsilon?: number;
+  /** How a NoData cell is read. Defaults to `wall`. */
+  readonly noData?: NoDataReading;
 }
 
 /**
@@ -136,12 +167,12 @@ class CellHeap {
 }
 
 /**
- * Condition `grid` so that every valid cell drains to the surface edge.
+ * Condition `grid` so that every valid cell drains to the grid boundary.
  *
- * Seeds are the valid cells on the grid boundary and the valid cells touching
- * a NoData cell: both are places water leaves the mapped surface. A region
- * with no seed at all cannot be conditioned, because there is nowhere for it
- * to drain to; those cells keep their elevations and stay sinks.
+ * Seeds are the valid cells on the grid boundary, and with `noData: 'outlet'`
+ * also the valid cells touching a NoData cell. A region with no seed cannot be
+ * conditioned, because there is nowhere for it to drain to; its cells keep
+ * their elevations and are counted in `cellsUnreachable`.
  */
 export function priorityFlood(
   grid: FlowGrid,
@@ -152,6 +183,11 @@ export function priorityFlood(
   if (!(Number.isFinite(epsilon) && epsilon >= 0)) {
     throw new RangeError(`priorityFlood: epsilon must be a finite non-negative rise; got ${epsilon}`);
   }
+  const noData = options.noData ?? 'wall';
+  if (noData !== 'wall' && noData !== 'outlet') {
+    throw new RangeError(`priorityFlood: noData must be 'wall' or 'outlet'; got ${String(noData)}`);
+  }
+  const gapsAreExits = noData === 'outlet';
 
   const { z: source, valid, cols, rows } = grid;
   const n = cols * rows;
@@ -161,11 +197,11 @@ export function priorityFlood(
 
   const isEdgeSeed = (col: number, row: number): boolean => {
     if (col === 0 || row === 0 || col === cols - 1 || row === rows - 1) return true;
+    if (!gapsAreExits) return false;
+    // An interior cell: every neighbour is on the grid, so only a gap makes
+    // it an exit.
     for (const [dx, dy] of D8_NEIGHBOURS) {
-      const nc = col + dx;
-      const nr = row + dy;
-      if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) return true;
-      if (valid[nr * cols + nc] !== 1) return true; // touches NoData
+      if (valid[(row + dy) * cols + col + dx] !== 1) return true;
     }
     return false;
   };
@@ -217,7 +253,12 @@ export function priorityFlood(
     }
   }
 
-  return { z, cellsRaised, maxFillDepth, fillDepthSum, epsilonAbsorbed };
+  let cellsUnreachable = 0;
+  for (let i = 0; i < n; i++) {
+    if (valid[i] === 1 && closed[i] !== 1) cellsUnreachable++;
+  }
+
+  return { z, cellsRaised, maxFillDepth, fillDepthSum, epsilonAbsorbed, cellsUnreachable };
 }
 
 /**

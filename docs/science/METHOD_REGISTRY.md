@@ -45,7 +45,8 @@ the paper that specifies it.
 | `olv.feature.building-footprint` | 1 | Building footprint candidate extraction | internal (connected-component + boundary trace) |
 | `olv.feature.conductor-fit` | 1 | Conductor centreline and sag fit | internal (parabolic small-sag approximation) |
 | `olv.simulation.terrain-flow.d8` | 1 | D8 single-flow-direction routing, by steepest descent per metre | O'Callaghan & Mark (1984) |
-| `olv.simulation.terrain-flow.priority-flood` | 1 | Priority-Flood depression conditioning onto a second surface | Barnes, Lehman & Mulla (2014) |
+| `olv.simulation.terrain-flow.priority-flood` | 2 | Priority-Flood depression conditioning onto a second surface, seeded at the grid boundary; NoData is a wall and cells it encloses are counted | Barnes, Lehman & Mulla (2014) |
+| `olv.simulation.terrain-flow.priority-flood.gap-outlet` | 1 | The same conditioning with NoData gaps read as drainage exits, declared for gaps that are open water | Barnes, Lehman & Mulla (2014) |
 | `olv.simulation.terrain-flow.accumulation` | 1 | Cells draining through each cell; metric area withheld when the scale is unresolved | internal (dependency-ordered pass over the D8 graph) |
 | `olv.simulation.terrain-flow.catchment` | 1 | Cells draining to a selected outlet | internal (reverse D8 traversal) |
 

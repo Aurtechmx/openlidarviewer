@@ -34,6 +34,10 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.simulation.terrain-flow.priority-flood': [
     'tests/priorityFlood.test.ts',
   ],
+  'olv.simulation.terrain-flow.priority-flood.gap-outlet': [
+    'tests/priorityFlood.test.ts',
+    'tests/flowPulseRunner.test.ts',
+  ],
   'olv.simulation.terrain-flow.accumulation': [
     'tests/flowAccumulation.test.ts',
     'tests/fieldSimulationOracleAgreement.test.ts',

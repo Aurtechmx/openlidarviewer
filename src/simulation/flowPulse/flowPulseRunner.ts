@@ -43,7 +43,12 @@ import {
   flowAccumulation,
   type AccumulationResult,
 } from './flowAccumulation';
-import { filledCells, priorityFlood, type PriorityFloodResult } from './priorityFlood';
+import {
+  filledCells,
+  priorityFlood,
+  type NoDataReading,
+  type PriorityFloodResult,
+} from './priorityFlood';
 import { terrainDtmToFlowGrid, type HorizontalScale, type InterpolatedPolicy } from './dtmFlowGrid';
 import { basisLimitations, mayReportMetricArea } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
@@ -114,6 +119,11 @@ export interface FlowSummary {
    * Non-zero means part of the surface is still flat after conditioning.
    */
   readonly epsilonAbsorbed: number | null;
+  /**
+   * Cells NoData enclosed, which conditioning could not reach and left as
+   * they are, or null in raw mode.
+   */
+  readonly cellsUnreachable: number | null;
 }
 
 /** What a run was asked to do. */
@@ -124,6 +134,11 @@ export interface FlowPulseParams {
   readonly interpolated: InterpolatedPolicy;
   /** Rise above the spill parent when conditioning, in the vertical unit. */
   readonly fillEpsilon: number;
+  /**
+   * How conditioning reads a NoData cell. Routing always treats one as a
+   * wall; `outlet` makes conditioning treat a gap as a drainage exit.
+   */
+  readonly fillNoData: NoDataReading;
   /** Refuse a grid larger than this. */
   readonly maxCells: number;
   /** The caller's declaration about Withheld points behind the DTM. */
@@ -136,6 +151,7 @@ export const FLOW_PULSE_DEFAULTS: FlowPulseParams = Object.freeze({
   routing: 'd8',
   interpolated: 'route',
   fillEpsilon: 0.001,
+  fillNoData: 'wall',
   maxCells: 4_000_000,
   withheldExcluded: null,
 });
@@ -144,7 +160,9 @@ export const FLOW_PULSE_DEFAULTS: FlowPulseParams = Object.freeze({
 export function methodsFor(params: FlowPulseParams): readonly string[] {
   const out: string[] = [];
   if (params.conditioning === 'priority-flood') {
-    out.push('olv.simulation.terrain-flow.priority-flood');
+    out.push(params.fillNoData === 'outlet'
+      ? 'olv.simulation.terrain-flow.priority-flood.gap-outlet'
+      : 'olv.simulation.terrain-flow.priority-flood');
   }
   out.push('olv.simulation.terrain-flow.d8', 'olv.simulation.terrain-flow.accumulation');
   return out;
@@ -217,7 +235,7 @@ export function runFlowPulse(
 
   // Conditioning first: routing reads whichever surface the caller declared.
   const conditioned = params.conditioning === 'priority-flood'
-    ? priorityFlood(grid, { epsilon: params.fillEpsilon })
+    ? priorityFlood(grid, { epsilon: params.fillEpsilon, noData: params.fillNoData })
     : null;
   const routingGrid: FlowGrid = conditioned ? { ...grid, z: conditioned.z } : grid;
   const filled = conditioned ? filledCells(grid, conditioned) : null;
@@ -242,6 +260,7 @@ export function runFlowPulse(
     cellsRaised: conditioned ? conditioned.cellsRaised : null,
     maxFillDepth: conditioned ? conditioned.maxFillDepth : null,
     epsilonAbsorbed: conditioned ? conditioned.epsilonAbsorbed : null,
+    cellsUnreachable: conditioned ? conditioned.cellsUnreachable : null,
   };
 
   const limitations = [...basisLimitations(basis), ...modelLimitations(params, summary)];
@@ -266,6 +285,7 @@ export function runFlowPulse(
       routing: params.routing,
       interpolated: params.interpolated,
       fillEpsilon: params.conditioning === 'priority-flood' ? params.fillEpsilon : null,
+      fillNoData: params.conditioning === 'priority-flood' ? params.fillNoData : null,
       maxCells: params.maxCells,
     },
     // The summary, not the arrays: a digest over a million cells would change
@@ -321,6 +341,21 @@ export function modelLimitations(
       out.push(
         `${summary.epsilonAbsorbed} filled cell(s) could not be raised above their `
         + 'spill level at this precision, so part of the surface is still flat.',
+      );
+    }
+    if (params.fillNoData === 'outlet') {
+      out.push(
+        'Conditioning read every NoData gap as a drainage exit, as for open water, '
+        + 'so a depression beside a gap drains into it rather than filling. Where '
+        + 'a gap is a survey hole this invents an exit. Routing still sends no flow '
+        + 'into NoData, so a cell on a gap\'s rim with no lower neighbour is a sink.',
+      );
+    }
+    if ((summary.cellsUnreachable ?? 0) > 0) {
+      out.push(
+        `${summary.cellsUnreachable} cell(s) are enclosed by NoData with no route `
+        + 'to the grid edge through cells with an elevation. Conditioning left them '
+        + 'as they are, so any depression among them is still a sink.',
       );
     }
   }

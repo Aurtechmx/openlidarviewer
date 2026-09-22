@@ -142,6 +142,8 @@ describe('a completed run', () => {
     ]);
     expect(methodsFor(params({ conditioning: 'priority-flood' }))[0])
       .toBe('olv.simulation.terrain-flow.priority-flood');
+    expect(methodsFor(params({ conditioning: 'priority-flood', fillNoData: 'outlet' }))[0])
+      .toBe('olv.simulation.terrain-flow.priority-flood.gap-outlet');
   });
 });
 
@@ -225,6 +227,84 @@ describe('conditioning is declared, and leaves the DTM alone', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.limitations.join(' ')).not.toMatch(/corrected terrain/i);
+  });
+});
+
+/** A surface falling east with a survey hole beside a two-cell depression. */
+const holeSlope = () => dtmOf([
+  [10, 9, 8, 7, 6, 5, 4],
+  [10, 9, 8, 7, 6, 5, 4],
+  [10, 4, 3, null, 6, 5, 4],
+  [10, 9, 8, 7, 6, 5, 4],
+  [10, 9, 8, 7, 6, 5, 4],
+]);
+
+/** Nine measured cells inside a closed ring of NoData. */
+const island = () => dtmOf([
+  [9, 9, 9, 9, 9, 9, 9],
+  [9, null, null, null, null, null, 9],
+  [9, null, 5, 5, 5, null, 9],
+  [9, null, 5, 1, 5, null, 9],
+  [9, null, 5, 5, 5, null, 9],
+  [9, null, null, null, null, null, 9],
+  [9, 9, 9, 9, 9, 9, 9],
+]);
+
+describe('conditioning reads NoData as routing does, unless told otherwise', () => {
+  const flood = (over: Partial<FlowPulseParams> = {}) => params({ conditioning: 'priority-flood', ...over });
+
+  it('defaults to the wall', () => {
+    expect(FLOW_PULSE_DEFAULTS.fillNoData).toBe('wall');
+  });
+
+  it('fills a depression beside a survey hole and routes it out past the hole', () => {
+    const r = runFlowPulse(holeSlope(), projected, flood(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.sinkCount).toBe(0);
+    expect(r.summary.cellsRaised).toBe(2);
+    expect(r.summary.cellsUnreachable).toBe(0);
+    expect(r.record.parameters.fillNoData).toBe('wall');
+    expect(r.record.methods[0]).toBe('olv.simulation.terrain-flow.priority-flood');
+  });
+
+  it('counts an enclosed island and says it was left as it is', () => {
+    const r = runFlowPulse(island(), projected, flood(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.cellsUnreachable).toBe(9);
+    expect(r.record.result.cellsUnreachable).toBe(9);
+    // The pit inside the island is still a sink, and the limitation says why.
+    expect(r.summary.sinkCount).toBe(1);
+    expect(r.limitations.join(' ')).toMatch(/9 cell\(s\) are enclosed by NoData/);
+  });
+
+  it('declares a gap read as a drainage exit in the parameters, methods and limitations', () => {
+    const r = runFlowPulse(holeSlope(), projected, flood({ fillNoData: 'outlet' }), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.cellsRaised).toBe(0);
+    expect(r.summary.sinkCount).toBe(1);
+    expect(r.record.parameters.fillNoData).toBe('outlet');
+    expect(r.record.methods[0]).toBe('olv.simulation.terrain-flow.priority-flood.gap-outlet');
+    expect(r.limitations.join(' ')).toMatch(/drainage exit/);
+  });
+
+  it('records two readings of one terrain as two computations', () => {
+    const wall = runFlowPulse(holeSlope(), projected, flood(), identity);
+    const outlet = runFlowPulse(holeSlope(), projected, flood({ fillNoData: 'outlet' }), identity);
+    expect(wall.ok && outlet.ok).toBe(true);
+    if (!wall.ok || !outlet.ok) return;
+    expect(wall.record.digest).not.toBe(outlet.record.digest);
+  });
+
+  it('leaves the reading out of a raw run, where nothing reads it', () => {
+    const r = runFlowPulse(holeSlope(), projected, params({ fillNoData: 'outlet' }), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.record.parameters.fillNoData).toBeNull();
+    expect(r.summary.cellsUnreachable).toBeNull();
+    expect(r.record.methods).not.toContain('olv.simulation.terrain-flow.priority-flood.gap-outlet');
   });
 });
 

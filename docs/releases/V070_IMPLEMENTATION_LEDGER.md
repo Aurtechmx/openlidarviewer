@@ -4405,3 +4405,55 @@ real scheduler with the frame run 50 ms after the holdover expires.
 `tests/visualMutationOwnership.test.ts` adds `reclassifyLasso`,
 `undoClassification` and `redoClassification` to the owner inventory, each
 against `filter`.
+
+### L148 · FIXED · SCIENTIFIC
+
+Priority-Flood conditioning and D8 routing disagreed about what NoData means.
+D8 treats a cell with no elevation as a wall: flow neither enters nor leaves
+it, and only the grid boundary is an outlet. The conditioning seeded its flood
+at the grid boundary and also at every valid cell touching NoData, so a survey
+hole became a drainage exit. A depression beside a hole stayed unfilled because
+it spilled into the hole, and D8 on the conditioned surface, which routes
+nothing into the hole, then found a sink on the rim that the conditioning had
+counted as resolved.
+
+The flood seeds at the grid boundary only. A region that NoData encloses has no
+route to the boundary, so it keeps its heights, is counted as
+`cellsUnreachable`, and the run states the count among its limitations. The
+other reading, a gap as a drainage exit, is right where gaps are open water. It
+is available as `fillNoData: 'outlet'` on the run and `noData` on
+`priorityFlood`, and a run that uses it records the parameter, names the method
+`olv.simulation.terrain-flow.priority-flood.gap-outlet` and states the reading
+among its limitations. The default method moves to version 2, since its figures
+change on any grid with an interior gap. The panel routes raw by default, so
+what it shows before a user chooses conditioning is unchanged.
+
+`tests/priorityFlood.test.ts` builds a surface falling east with a one-cell
+hole beside a two-cell depression. With the wall the depression fills to its
+spill level of 7, past the hole, and D8 on the conditioned surface routes every
+cell on the rim. Reverting the seeding turns seven tests red, that one among
+them: the depression stays at 3 and its lowest cell is a sink. An island inside
+a ring of NoData reports 9 unreachable cells. `tests/flowPulseRunner.test.ts`
+checks the parameter, the method id, the limitation and a distinct record
+digest for each reading.
+
+On the five oracle fixtures nothing changes. Every valid cell there reaches the
+boundary, so both readings return the surface the earlier seeding returned, and
+the raw D8 records under `validation/field-simulation/expected` are untouched.
+On the two new grids, with an epsilon of 0.001:
+
+| grid | reading | raised | max fill | sinks | flats | unreachable |
+|---|---|---|---|---|---|---|
+| hole beside depression | earlier seeding | 0 | 0 | 1 | 0 | not counted |
+| hole beside depression | wall | 2 | 4.001 | 0 | 0 | 0 |
+| hole beside depression | outlet | 0 | 0 | 1 | 0 | 0 |
+| island in NoData | earlier seeding | 1 | 4.001 | 0 | 8 | not counted |
+| island in NoData | wall | 0 | 0 | 1 | 0 | 9 |
+| island in NoData | outlet | 1 | 4.001 | 0 | 8 | 0 |
+
+In the island the earlier seeding filled the pit and left the eight cells
+around it flat, with no route out. Over 3,000 random grids with 30 to 75
+percent NoData, the outlet reading reproduces the earlier seeding bit for bit,
+`cellsUnreachable` matches an independent breadth-first search from the
+boundary, and the wall leaves no sink or flat on any cell it reached. Every
+sink or flat that remains lies inside a counted unreachable region.
