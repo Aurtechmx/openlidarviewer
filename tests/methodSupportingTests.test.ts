@@ -27,6 +27,20 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** methodId → the primary test(s) that validate it. Repo-relative paths. */
 const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
+  'olv.simulation.terrain-flow.d8': [
+    'tests/d8Flow.test.ts',
+    'tests/fieldSimulationOracleAgreement.test.ts',
+  ],
+  'olv.simulation.terrain-flow.priority-flood': [
+    'tests/priorityFlood.test.ts',
+  ],
+  'olv.simulation.terrain-flow.accumulation': [
+    'tests/flowAccumulation.test.ts',
+    'tests/fieldSimulationOracleAgreement.test.ts',
+  ],
+  'olv.simulation.terrain-flow.catchment': [
+    'tests/flowAccumulation.test.ts',
+  ],
   'olv.ground.smrf': [
     'tests/groundFilterValidation.test.ts',
     'tests/groundFilterPdalAgreement.test.ts',
