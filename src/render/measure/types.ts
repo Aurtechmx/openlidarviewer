@@ -93,12 +93,16 @@ export interface ProfileChartSample {
  * ft³. Storing native keeps one conversion seam at the boundary.
  */
 export interface VolumeRecord {
-  /** Fill above the reference plane, native render units³ (×unitToMetres³ → m³). */
-  fill: number;
-  /** Cut below the reference plane, native render units³ (×unitToMetres³ → m³). */
-  cut: number;
-  /** Net = fill − cut, native render units³ (×unitToMetres³ → m³). */
-  net: number;
+  /**
+   * Fill above the reference plane, native render units³ (×unitToMetres³ →
+   * m³). Absent exactly when `gridAuthority` is `'withheld'`: a withheld
+   * lasso (D2) carries no volume figure at all rather than a borrowed one.
+   */
+  fill?: number;
+  /** Cut below the reference plane; see `fill` for when this is absent. */
+  cut?: number;
+  /** Net = fill − cut; see `fill` for when this is absent. */
+  net?: number;
   /** Reference Z used (local render-space), native units. */
   referenceZ: number;
   /** Polygon footprint area on the horizontal plane, native units² (×unitToMetres² → m²). */
@@ -146,6 +150,37 @@ export interface VolumeRecord {
    * for fully-finite clouds and for records from older session files.
    */
   skippedNonFinite?: number;
+  /**
+   * Lasso only, present from the D2 switch onward, when `method` names the
+   * area-weighted grid: the coverage verdict `fill`/`cut`/`net` stand under.
+   * `'measured'` is a plain figure; `'preview'` is the same arithmetic under a
+   * scope the app cannot yet call complete (a streaming source short of full
+   * residency, a device-budget sample, a footprint short of the grid's
+   * support threshold); `'withheld'` means the grid could not support a
+   * figure at all, and `fill`/`cut`/`net` are then absent rather than holding
+   * a number under a verdict that refused one.
+   *
+   * Absent on the hand-drawn polygon Volume tool, which has no grid
+   * counterpart, and on a record saved before the switch.
+   */
+  gridAuthority?: 'measured' | 'preview' | 'withheld';
+  /** Why `gridAuthority` is not `'measured'` (`''` when it is). Present iff `gridAuthority` is. */
+  gridAuthorityReason?: string;
+  /**
+   * The point-sample cut/fill figure, kept as a labelled cross-check beside
+   * the grid once the grid became the canonical figure (D2 clause 5). Same
+   * unit contract as `fill`/`cut`/`net` (native render units³). Present only
+   * alongside `gridAuthority` — a record from before the switch, and the
+   * polygon tool's record, already have the point-sample number as their
+   * ONLY figure and carry no second copy of it.
+   */
+  crossCheck?: {
+    readonly fill: number;
+    readonly cut: number;
+    readonly net: number;
+    /** id@version of the cross-check estimator (the point-sample integration). */
+    readonly method: string;
+  };
 }
 
 /** A single placed measurement. */

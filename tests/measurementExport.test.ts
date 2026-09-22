@@ -111,6 +111,43 @@ describe('measurementMetrics', () => {
     expect(m.net_m3).toBe(90);
   });
 
+  // D2: a switched lasso record's fill/cut/net are the grid figure; the
+  // point-sample cross-check rides alongside under its own column names.
+  const GRID_VOLUME = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
+    volume: {
+      fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
+      pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
+      method: 'olv.volume.stockpile-area-grid@2', gridAuthority: 'measured', gridAuthorityReason: '',
+      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+    },
+  });
+
+  it('a switched record exports the grid figure under cut_m3/fill_m3/net_m3 and the cross-check separately', () => {
+    const m = measurementMetrics(GRID_VOLUME, UP, 1);
+    expect(m.fill_m3).toBe(100);
+    expect(m.cut_m3).toBe(5);
+    expect(m.net_m3).toBe(95);
+    expect(m.pointsample_fill_m3).toBe(120);
+    expect(m.pointsample_cut_m3).toBe(30);
+    expect(m.pointsample_net_m3).toBe(90);
+  });
+
+  it('a withheld grid record exports no cut_m3/fill_m3/net_m3, only the cross-check', () => {
+    const withheld = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
+      volume: {
+        referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
+        confidence: 'high', method: 'olv.volume.stockpile-area-grid@2',
+        gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
+        crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+      },
+    } as never);
+    const m = measurementMetrics(withheld, UP, 1);
+    expect(m.fill_m3).toBeUndefined();
+    expect(m.cut_m3).toBeUndefined();
+    expect(m.net_m3).toBeUndefined();
+    expect(m.pointsample_fill_m3).toBe(120);
+  });
+
   it('applies unitToMetres to lengths (×), areas (×²), and volumes (×³)', () => {
     expect(measurementMetrics(DISTANCE, UP, 0.3048).length_m).toBeCloseTo(5 * 0.3048, 3);
     // Export rounds to 3 decimals, so compare at that precision.
@@ -220,6 +257,48 @@ describe('measurementsToCsv', () => {
   it('escapes a name containing a comma', () => {
     const csv = measurementsToCsv([mk('distance', [[0, 0, 0], [1, 0, 0]], { name: 'A, B' })], CTX);
     expect(csv).toContain('"A, B"');
+  });
+});
+
+describe('measurementsToCsv — D2 grid-canonical lasso volumes', () => {
+  const gridVol = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
+    volume: {
+      fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
+      pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
+      method: 'olv.volume.stockpile-area-grid@2', gridAuthority: 'preview', gridAuthorityReason: 'display sample',
+      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+    },
+  });
+
+  it('carries grid_authority and the pointsample_* cross-check columns beside cut_m3/fill_m3/net_m3', () => {
+    const csv = measurementsToCsv([gridVol], CTX);
+    const header = csv.split('\n')[0].split(',');
+    const row = csv.split('\n')[1].split(',');
+    const cell = (col: string): string => row[header.indexOf(col)];
+    expect(header).toEqual(expect.arrayContaining([
+      'grid_authority', 'pointsample_cut_m3', 'pointsample_fill_m3', 'pointsample_net_m3',
+    ]));
+    expect(cell('fill_m3')).toBe('100');
+    expect(cell('grid_authority')).toBe('preview');
+    expect(cell('pointsample_fill_m3')).toBe('120');
+  });
+
+  it('a plain (non-grid) volume leaves grid_authority and the cross-check columns blank', () => {
+    const csv = measurementsToCsv([VOLUME], CTX);
+    const header = csv.split('\n')[0].split(',');
+    const row = csv.split('\n')[1].split(',');
+    const cell = (col: string): string => row[header.indexOf(col)];
+    expect(cell('grid_authority')).toBe('');
+    expect(cell('pointsample_fill_m3')).toBe('');
+  });
+
+  it('renames the cross-check columns to source units too when the scale is unverified', () => {
+    const csv = measurementsToCsv([gridVol], { ...CTX, unitsVerified: false });
+    const header = csv.split('\n')[0].split(',');
+    expect(header).toContain('pointsample_fill_source3');
+    for (const col of header) {
+      expect(col, `${col} asserts a metric unit on an unverified scale`).not.toMatch(/_m[23]?$/);
+    }
   });
 });
 
@@ -351,6 +430,37 @@ describe('the evidence stamp names the claim behind each figure', () => {
     expect(note).toContain('MEAS-DISTANCE');
     expect(note).toContain('MEAS-PROFILE');
     expect(note.match(/MEAS-DISTANCE/g)).toHaveLength(1);
+  });
+
+  // D2: a lasso volume whose record switched to the area-weighted grid draws
+  // on VOL-STOCKPILE, not VOL-POINT-SAMPLE — the same defect this describe
+  // block's own header names, one level down (a claim per INSTANCE, not kind).
+  const gridVol = {
+    id: 'g', kind: 'volume', name: 'g', points: [[0, 0, 0], [10, 0, 0], [10, 10, 0]],
+    volume: {
+      fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
+      pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
+      method: 'olv.volume.stockpile-area-grid@2', gridAuthority: 'measured', gridAuthorityReason: '',
+    },
+  } as never;
+  const psVol = {
+    id: 'v', kind: 'volume', name: 'v', points: [[0, 0, 0], [10, 0, 0], [10, 10, 0]],
+    volume: {
+      fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
+      pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
+    },
+  } as never;
+
+  it('a grid-canonical volume draws on VOL-STOCKPILE', () => {
+    const note = JSON.parse(measurementsToGeoJSON([gridVol], ctx)).evidence as string;
+    expect(note).toContain('VOL-STOCKPILE');
+    expect(note).not.toContain('VOL-POINT-SAMPLE');
+  });
+
+  it('an un-switched volume still draws on VOL-POINT-SAMPLE, and both appear when mixed', () => {
+    const note = JSON.parse(measurementsToGeoJSON([gridVol, psVol], ctx)).evidence as string;
+    expect(note).toContain('VOL-STOCKPILE');
+    expect(note).toContain('VOL-POINT-SAMPLE');
   });
 });
 

@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 import { methodRef, methodTag, method } from '../src/science/methodRegistry';
 import type { VolumeRecord } from '../src/render/measure/types';
 import { parseSession, serializeSession } from '../src/io/session';
+import { withStockpileGrid, type StockpileGridFigure } from '../src/render/measure/measureDerivations';
 
 const base: VolumeRecord = {
   fill: 120,
@@ -105,5 +106,111 @@ describe('a volume record through a session', () => {
     const back = roundTrip(base);
     expect(back?.method).toBeUndefined();
     expect(back?.net).toBe(116);
+  });
+});
+
+// ── D2: the area-weighted grid becomes the LASSO record's canonical figure ──
+
+const grid = (over: Partial<StockpileGridFigure> = {}): StockpileGridFigure => ({
+  method: 'olv.volume.stockpile-area-grid@2',
+  authority: 'measured',
+  reason: '',
+  fillNative: 90, cutNative: 3, netNative: 87,
+  ...over,
+});
+
+describe('withStockpileGrid — D2 clause 1 (scope)', () => {
+  it('passes the point-sample record through unchanged when there is no grid', () => {
+    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    expect(withStockpileGrid(rec, null)).toEqual(rec);
+  });
+
+  it('the polygon Volume tool never calls this, so its record never carries gridAuthority', () => {
+    // Scope is enforced by main.ts only calling withStockpileGrid on the lasso
+    // path (see measureDerivations.test.ts's grep on main.ts); this pins the
+    // function's OWN half of the contract — untouched input, untouched output.
+    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const out = withStockpileGrid(rec, null);
+    expect(out.gridAuthority).toBeUndefined();
+    expect(out.crossCheck).toBeUndefined();
+  });
+});
+
+describe('withStockpileGrid — D2 clause 2 (authority) and clause 3 (method version)', () => {
+  it('a measured grid becomes the canonical fill/cut/net, tagged with the grid method', () => {
+    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const out = withStockpileGrid(rec, grid());
+    expect(out.fill).toBe(90);
+    expect(out.cut).toBe(3);
+    expect(out.net).toBe(87);
+    expect(out.method).toBe('olv.volume.stockpile-area-grid@2');
+    expect(out.gridAuthority).toBe('measured');
+  });
+
+  it('a preview grid is stored and labelled preview, with a number', () => {
+    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const out = withStockpileGrid(rec, grid({ authority: 'preview', reason: 'display sample' }));
+    expect(out.gridAuthority).toBe('preview');
+    expect(out.gridAuthorityReason).toBe('display sample');
+    expect(out.fill).toBe(90);
+  });
+
+  it('a withheld grid carries no fill/cut/net at all — never the cross-check under the grid\'s name', () => {
+    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const out = withStockpileGrid(rec, grid({ authority: 'withheld', reason: 'insufficient observations' }));
+    expect(out.gridAuthority).toBe('withheld');
+    expect(out.fill).toBeUndefined();
+    expect(out.cut).toBeUndefined();
+    expect(out.net).toBeUndefined();
+    // The withheld grid's own (unreliable) numbers must not leak in either.
+    expect(out).not.toMatchObject({ fill: 90 });
+  });
+});
+
+describe('withStockpileGrid — D2 clause 5 (cut and fill cross-check)', () => {
+  it('keeps the point-sample figure as a labelled cross-check under its own tag', () => {
+    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const out = withStockpileGrid(rec, grid());
+    expect(out.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
+  });
+
+  it('the cross-check survives even when the grid is withheld — it is the only figure left', () => {
+    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const out = withStockpileGrid(rec, grid({ authority: 'withheld', reason: 'insufficient observations' }));
+    expect(out.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
+  });
+});
+
+describe('a session round trip carries an old record and a switched one unchanged', () => {
+  it('an old point-sample record and a new grid-canonical record each read back exactly as saved', () => {
+    const oldRecord: VolumeRecord = { ...base, method: 'olv.volume.stockpile@1' };
+    const newRecord = withStockpileGrid({ ...base, method: 'olv.volume.stockpile@1' }, grid());
+    const session = {
+      upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric', views: [], annotations: [],
+      measurements: [
+        { id: 'old', kind: 'volume', name: 'Old pile', points: [[0, 0, 0], [1, 0, 0], [1, 1, 0]], closed: true, volume: oldRecord },
+        { id: 'new', kind: 'volume', name: 'New pile', points: [[0, 0, 0], [1, 0, 0], [1, 1, 0]], closed: true, volume: newRecord },
+      ],
+    } as unknown as Parameters<typeof serializeSession>[0];
+    const back = parseSession(serializeSession(session)).measurements as unknown as Array<{ id: string; volume?: VolumeRecord }>;
+    const backOld = back.find((m) => m.id === 'old')!.volume!;
+    const backNew = back.find((m) => m.id === 'new')!.volume!;
+    expect(backOld).toEqual(oldRecord);
+    expect(backNew.method).toBe('olv.volume.stockpile-area-grid@2');
+    expect(backNew.gridAuthority).toBe('measured');
+    expect(backNew.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
+    expect(backNew.fill).toBe(90);
+  });
+
+  it('a withheld record round-trips with no fill/cut/net and the cross-check intact', () => {
+    const withheld = withStockpileGrid(
+      { ...base, method: 'olv.volume.stockpile@1' },
+      grid({ authority: 'withheld', reason: 'insufficient observations' }),
+    );
+    const back = roundTrip(withheld);
+    expect(back?.fill).toBeUndefined();
+    expect(back?.gridAuthority).toBe('withheld');
+    expect(back?.gridAuthorityReason).toBe('insufficient observations');
+    expect(back?.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
   });
 });

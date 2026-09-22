@@ -54,6 +54,19 @@ function roundTo3(v: number): number {
   return Number.isFinite(v) ? Math.round(v * 1000) / 1000 : v;
 }
 
+/**
+ * What the area-weighted grid measurement (L05) found the estimator does not
+ * handle: a sharp step inside one cell (the step fixture read about 15% low),
+ * clustered sparse data (reaches PREVIEW at best, never MEASURED), and two
+ * real-data comparisons against the point-sample cross-check that disagreed
+ * by 3.6% and 8.6% with no ground truth to say which was right.
+ */
+const GRID_KNOWN_LIMITATIONS =
+  'Known limits: a sharp step falling inside one grid cell reads low by ' +
+  'about 15%; clustered, sparse coverage reaches PREVIEW at best; two ' +
+  'real-data comparisons against the point-sample cross-check disagreed by ' +
+  '3.6% and 8.6% with no ground truth to settle either.';
+
 /** The headline metric + unit for each measurement kind. */
 const PRIMARY: Record<string, { readonly key: string; readonly unit: string }> = {
   distance: { key: 'length_m', unit: 'm' },
@@ -113,6 +126,7 @@ export function measurementsToFindings(
     // cut and fill components and any coverage caveat ride along so the report
     // shows the whole earthwork, not just the fill, and reads its own honesty.
     if (m.kind === 'volume' && m.volume) {
+      const vol = m.volume;
       const L = unitToMetres;
       // Guard the vertical factor exactly as `measurementExport` does; a zero,
       // NaN or negative value would otherwise make this report and the CSV
@@ -123,19 +137,51 @@ export function measurementsToFindings(
       // Plain L³ applied the HORIZONTAL unit to the vertical axis, overstating
       // a metre/US-foot compound volume by 3.28×.
       const V = L * L * Vv; // native render units³ → m³
+      const footprint = `${(vol.footprintArea * L * L).toFixed(2)} m²`;
+      const caveats: string[] = [];
+      // A switched (D2) lasso record's estimator is the area-weighted grid;
+      // an unswitched record (the polygon tool, or one saved before D2) keeps
+      // its point-sample cut/fill as the only figure and needs none of this.
+      if (vol.gridAuthority !== undefined) {
+        caveats.push(
+          vol.gridAuthority === 'withheld'
+            ? `Area-weighted grid volume withheld (${vol.gridAuthorityReason || 'insufficient observations'}).`
+            : `Area-weighted grid integration over the ${footprint} footprint${vol.gridAuthority === 'preview' ? ` (PREVIEW: ${vol.gridAuthorityReason})` : ''}. Cells with too little support reduce the reported footprint rather than reading as zero.`,
+        );
+        if (vol.crossCheck) {
+          caveats.push(
+            `Point-sample cross-check (${vol.crossCheck.method}): cut ${(vol.crossCheck.cut * V).toFixed(2)} m³ / fill ${(vol.crossCheck.fill * V).toFixed(2)} m³.`,
+          );
+        }
+        caveats.push(GRID_KNOWN_LIMITATIONS);
+      } else {
+        caveats.push(
+          `Cut ${((vol.cut ?? 0) * V).toFixed(2)} m³ / fill ${((vol.fill ?? 0) * V).toFixed(2)} m³ over ${footprint} footprint.`,
+          'Point-sample integration assumes uniform coverage inside the polygon.',
+        );
+      }
+      if (m.volumeResidentOnly) {
+        caveats.push('Sampled from streaming resident points only — may refine as more nodes load.');
+      }
       // Rounded to the same 3 dp every other finding passes through in
       // `measurementMetrics`. The raw product went out as a full float, so a
       // point-sampled volume printed to ~1e-14 m³ beside a distance at 1 mm,
       // implying a resolution its own coverage caveat denies.
-      const net = roundTo3(m.volume.net * V);
-      const caveats = [
-        `Cut ${(m.volume.cut * V).toFixed(2)} m³ / fill ${(m.volume.fill * V).toFixed(2)} m³ over ${(m.volume.footprintArea * L * L).toFixed(2)} m² footprint.`,
-        'Point-sample integration assumes uniform coverage inside the polygon.',
-      ];
-      if (m.volumeResidentOnly) {
-        caveats.push('Sampled from streaming resident points only — may refine as more nodes load.');
+      //
+      // A withheld grid carries no net of its own (D2 clause 2); the
+      // cross-check's net is reported instead, under a label that says so —
+      // never silently as the (absent) grid figure.
+      if (vol.net !== undefined) {
+        findings.push({ label, value: roundTo3(vol.net * V), unit: 'm³', confidence: vol.confidence, caveats });
+      } else if (vol.crossCheck) {
+        findings.push({
+          label: `${label} (point-sample cross-check — grid volume withheld)`,
+          value: roundTo3(vol.crossCheck.net * V),
+          unit: 'm³',
+          confidence: vol.confidence,
+          caveats,
+        });
       }
-      findings.push({ label, value: net, unit: 'm³', confidence: m.volume.confidence, caveats });
       return;
     }
     findings.push({ label, value, unit });

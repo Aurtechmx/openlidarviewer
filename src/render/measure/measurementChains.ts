@@ -192,7 +192,9 @@ export function valueForDimension(
       return null;
 
     case 'volume-fill':
-      if (m.kind === 'volume' && m.volume) return m.volume.fill;
+      // A withheld grid figure (D2) carries no fill/cut/net — it contributes
+      // nothing to a chain total rather than a borrowed cut-and-fill number.
+      if (m.kind === 'volume' && m.volume) return m.volume.fill ?? null;
       if (m.kind === 'box' && p.length >= 2) {
         // The product of three edges does not depend on which one is vertical,
         // but `k = fH²·fV` does, so this goes through the same up-aware
@@ -202,11 +204,11 @@ export function valueForDimension(
       return null;
 
     case 'volume-cut':
-      if (m.kind === 'volume' && m.volume) return m.volume.cut;
+      if (m.kind === 'volume' && m.volume) return m.volume.cut ?? null;
       return null;
 
     case 'volume-net':
-      if (m.kind === 'volume' && m.volume) return m.volume.net;
+      if (m.kind === 'volume' && m.volume) return m.volume.net ?? null;
       return null;
 
     case 'height':

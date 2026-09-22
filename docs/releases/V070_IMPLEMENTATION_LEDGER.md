@@ -6305,3 +6305,98 @@ caps it at PREVIEW ("source is streaming and not fully resident"), each
 ahead of that support fraction.
 
 Covered by `tests/stockpileDualAnswer.test.ts`.
+
+### L05 · FIXED · SCIENTIFIC
+
+D2 (`validation/protocols/v070-decision-rules.md`, amendment 1) decided the
+area grid for the lasso record. Read per run: cut and fill's median
+absolute error runs 6.71 to 10.27 percent across the measured groupings;
+the grid's runs 1.44 to 2.46 percent. Both pass the uniform worst case
+guard (31.9 percent against 18.3 percent). The switch is implemented.
+
+`deriveVolumeRecord` (`measureDerivations.ts`) is unchanged and still builds
+the point-sample figure alone. A new function beside it, `withStockpileGrid`,
+takes that record and the grid verdict `stockpileGridForLasso` already
+computed for the toast (`stockpilePresenter.ts`, a small refactor of
+`stockpileToastSuffix` that keeps the structured view instead of throwing it
+away) and, when a grid figure exists, replaces `fill`, `cut`, `net` and
+`method` with the grid's, moves the point-sample numbers to a new
+`crossCheck` field under their own tag, and carries the coverage verdict as
+`gridAuthority` and `gridAuthorityReason`. `main.ts` computes the verdict
+once, right after the walk resolves, and threads it through both the toast
+and the saved record so the two cannot disagree; net line count in `main.ts`
+is unchanged (seven lines added, seven removed). `Viewer.ts` is untouched.
+
+Scope (D2 clause 1): only the lasso path calls `withStockpileGrid`. The
+hand-drawn polygon Volume tool (`Viewer.ts:1198`) still calls `volumeCutFill`
+directly and never carries `gridAuthority` or `crossCheck`.
+
+Authority and withholding (D2 clause 2): `fill`, `cut` and `net` are now
+optional on `VolumeRecord`. A measured or preview grid stores its own figure
+under them; a withheld grid clears all three rather than falling back to the
+cross-check, and `session.ts`'s parser accepts that shape (a record missing
+the three numbers is otherwise rejected as malformed) while still requiring
+`gridAuthority`, `gridAuthorityReason` and the four cross-check fields to be
+individually well-formed. `MeasureController`'s headline and
+`measurementChains.ts`'s aggregator both read a withheld figure as absent,
+not zero.
+
+Method version (D2 clause 3): a switched record's `method` becomes
+`olv.volume.stockpile-area-grid@2`; an old record's `olv.volume.stockpile@1`
+(or no method at all) is read back unchanged, since `gridAuthority` is what
+now distinguishes a switched record from an unswitched one, not the method
+string alone. `tests/stockpileMethodIdentity.test.ts` adds a round trip that
+serialises one of each and confirms both come back byte for byte.
+
+Units (D2 clause 4): the app path already gave the same cubic metres from
+metres, US survey feet and a metre over foot compound representation before
+this change (`tests/stockpileDualAnswer.test.ts`); that is unaffected, since
+`withStockpileGrid` stores the grid's NATIVE figure (`StockpileAreaGridView`'s
+new `fillNative`/`cutNative`/`netNative`, the same pre-conversion numbers the
+existing `volumeM3` was already built from) rather than the metric one, so it
+scales at the export boundary exactly as the point-sample figure always did.
+The grid's own `linearUnitToMetres` option stays off this path; a new test in
+`stockpilePresenter.test.ts` pins that `presentStockpileAreaGrid` gives the
+same native figure regardless of `lin`.
+
+Cross-check (D2 clause 5): `measurementExport.ts` exports the switched
+record's grid figure under the existing `cut_m3`/`fill_m3`/`net_m3` columns
+and the point-sample cross-check under new `pointsample_cut_m3` /
+`pointsample_fill_m3` / `pointsample_net_m3` columns, plus a `grid_authority`
+column (CSV and GeoJSON); the withheld case leaves the first three blank.
+Each row's evidence claim is now read per measurement rather than per kind,
+since a `'volume'` row can now draw on `VOL-STOCKPILE` instead of the
+`VOL-POINT-SAMPLE` every volume row was stamped with before (the same class
+of defect the claim-stamp tests already guarded, one level down).
+`measurementReport.ts`'s findings carry the cross-check figure and the
+authority as caveats; a withheld finding reports the cross-check's net under
+a label that says the grid was withheld rather than presenting it as the
+canonical figure.
+
+Known limitations (item 6): the report's caveats for a switched record now
+state the step-fixture underestimate (about 15 percent when a sharp step
+falls inside one cell), that clustered sparse coverage reaches PREVIEW at
+best, and that the two real-data comparisons against the point-sample
+cross-check disagreed by 3.6 and 8.6 percent with no ground truth to settle
+either.
+
+Section 80: D2 clause 4 already classifies the switch as a method version
+change, not a bug fix, which is what the `method` retagging and the session
+migration rule above implement; no separate classification decision was
+needed.
+
+Recorded numbers: none. No file under `validation/`, `docs/validation/` or
+the claim register pins a lasso record's stored `fill`, `cut` or `net`
+value, and neither of the two claim register entries for the stockpile
+estimators (`VOL-STOCKPILE`, `VOL-POINT-SAMPLE`) names which one a lasso
+record stores by default, so neither needed a change. `VOL-STOCKPILE`'s
+`evidenceLevel` and `VOL-POINT-SAMPLE`'s are both `E3_SYNTHETICALLY_VALIDATED`
+already, so the claim-stamp fix in `measurementExport.ts` changes which id a
+switched row cites, not the exploratory verdict either one carries.
+`tests/stockpileDualAnswer.test.ts`'s pinned percentages are the evidence
+this decision was made from; they measure both estimators and are untouched.
+
+Covered by `tests/stockpileMethodIdentity.test.ts`,
+`tests/measureDerivations.test.ts`, `tests/stockpilePresenter.test.ts`,
+`tests/measurementExport.test.ts`, `tests/measurementReport.test.ts` and
+`tests/measurementChains.test.ts`.

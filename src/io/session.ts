@@ -1440,17 +1440,46 @@ function parseProvenanceUnits(v: unknown): ProfileUnitContext | undefined {
 }
 
 const VOLUME_CONFIDENCE: ReadonlySet<VolumeRecord['confidence']> = new Set(['high', 'medium', 'low']);
+const GRID_AUTHORITY: ReadonlySet<string> = new Set(['measured', 'preview', 'withheld']);
+
+/**
+ * Parse the point-sample cross-check a switched (D2) lasso record keeps
+ * beside its grid figure, or `undefined` when absent or malformed. All three
+ * numbers and the method tag are required — a partial cross-check would claim
+ * a figure for a component the source record never gave it.
+ */
+function parseVolumeCrossCheck(v: unknown): NonNullable<VolumeRecord['crossCheck']> | undefined {
+  if (!isRecord(v)) return undefined;
+  const ccNums = ['fill', 'cut', 'net'] as const;
+  for (const key of ccNums) if (!isFiniteNum(v[key])) return undefined;
+  if (typeof v.method !== 'string' || v.method.length === 0) return undefined;
+  return { fill: v.fill as number, cut: v.cut as number, net: v.net as number, method: v.method };
+}
 
 /**
  * Parse a persisted volume cut/fill record, or `undefined` when malformed. All
  * numeric fields must be finite; an unknown confidence band is dropped so the
  * record can't carry an invalid badge. Values are stored in native render
  * units³ (see the VolumeRecord unit contract) and are not converted here.
+ *
+ * `fill`/`cut`/`net` are required UNLESS `gridAuthority` reads `'withheld'`:
+ * D2 clause 2 saves a withheld lasso with no volume figure at all, so a
+ * session round trip must read that back as no figure, not reject the record
+ * or fabricate one.
  */
 function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   if (!isRecord(v)) return undefined;
-  const nums = ['fill', 'cut', 'net', 'referenceZ', 'footprintArea', 'pointsInPolygon'] as const;
-  for (const key of nums) if (!isFiniteNum(v[key])) return undefined;
+  const alwaysNums = ['referenceZ', 'footprintArea', 'pointsInPolygon'] as const;
+  for (const key of alwaysNums) if (!isFiniteNum(v[key])) return undefined;
+  let gridAuthority: VolumeRecord['gridAuthority'];
+  if (v.gridAuthority !== undefined) {
+    const ga = v.gridAuthority;
+    if (typeof ga !== 'string' || !GRID_AUTHORITY.has(ga)) return undefined;
+    gridAuthority = ga as VolumeRecord['gridAuthority'];
+  }
+  const volumeNums = ['fill', 'cut', 'net'] as const;
+  const hasVolumeNums = volumeNums.every((key) => isFiniteNum(v[key]));
+  if (!hasVolumeNums && gridAuthority !== 'withheld') return undefined;
   // The field was renamed `density` → `densityNative` to stop calling a native
   // horizontal-unit² figure "points/m²". Older files carry `density`, which held
   // exactly the same native value, so migrating it across is lossless.
@@ -1468,15 +1497,23 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
     return undefined;
   }
   const record: VolumeRecord = {
-    fill: v.fill as number,
-    cut: v.cut as number,
-    net: v.net as number,
     referenceZ: v.referenceZ as number,
     footprintArea: v.footprintArea as number,
     pointsInPolygon: v.pointsInPolygon as number,
     densityNative,
     confidence: v.confidence as VolumeRecord['confidence'],
   };
+  if (hasVolumeNums) {
+    record.fill = v.fill as number;
+    record.cut = v.cut as number;
+    record.net = v.net as number;
+  }
+  if (gridAuthority) {
+    record.gridAuthority = gridAuthority;
+    if (typeof v.gridAuthorityReason === 'string') record.gridAuthorityReason = v.gridAuthorityReason;
+    const crossCheck = parseVolumeCrossCheck(v.crossCheck);
+    if (crossCheck) record.crossCheck = crossCheck;
+  }
   // Optional partial-coverage disclosure (points inside the footprint the
   // integration had to skip). Round-trips when present; older files omit it.
   if (isFiniteNum(v.skippedNonFinite) && v.skippedNonFinite > 0) {
