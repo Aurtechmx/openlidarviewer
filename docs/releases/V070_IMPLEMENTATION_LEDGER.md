@@ -4606,3 +4606,40 @@ minimum moved it. Also fixed: the module header, which
 still described a single whole-cloud grid with no mention of `localPlanes`;
 and `binKeys`, which computed voxel normals ahead of the unindexable-extent
 early return rather than after it.
+
+### L47 · PARTIAL · UI
+
+The entry above puts the ground/facade seam's share of the 50% facade row at
+149 points. Measured the same way as the other two rows (the seam is the
+facade's bottom voxel layer, `Math.floor(z / cellSize) === 0`), the count is
+8864 for both noise levels, not 149. The corrected row reads 8864 against 0 or
+103 at 50%, alongside the unchanged 873 against 189 combined at 5% and 3542
+against 9 to 22 at 20%; the seam stays the dominant contributor by point count
+in every share, more so than the entry above stated.
+
+The entry above also gives 0.2% as the 12-point Monte Carlo misclassification
+rate. The same test (uniform 3D voxel, min/max spread, `THIN_RATIO` 0.5), run
+at 15,000,000 trials across three seeds, gives 0.14% to 0.15% at 12 points,
+which rounds to 0.1%; the 6-point and 8-point rates still match the entry's
+5.7% and 1.7%, and the 10-point rate still matches its 0.5%, so only the
+12-point figure was wrong.
+
+That Monte Carlo test measures an idealized uniform voxel, not the scenes
+`tests/localDensitySize.test.ts` uses for the 6-to-10 comparison, and a
+12-point minimum was never run against those scenes, so nothing backed the
+choice of 10 over 12. Run the same way: the ground-plus-30%-vegetation scene's
+misclassified share drops from 0.281% at 10 points to 0.151% at 12 (the
+uniform cube stays at 0% either way), and the facade-edge cost grows with it.
+The 5% facade share's worst 10% of points reads 0.63 of its alone size at 12
+points (min 0.09) against 10's 0.66 (min 0.10); the 50% share's unclamped
+minimum, unaffected going from 6 to 10, drops from 0.77 to 0.32 with no noise
+and from 0.51 to 0.23 at 5 cm noise; the 20% share is unaffected either way
+(1.00, min 0.21). Halving an already-small misclassified share does not offset
+more than doubling the facade-edge cost at the share most exposed to it, so
+`MIN_VOXEL_POINTS` stays at 10.
+
+| Facade share | Noise | p10, min at 10 points | p10, min at 12 points |
+| --- | --- | --- | --- |
+| 5% | 0 and 5 cm | 0.66, 0.10 | 0.63, 0.09 |
+| 20% | 0 and 5 cm | 1.00, 0.21 | 1.00, 0.21 |
+| 50% | 0 and 5 cm | 1.00, 0.77 / 0.51 | 1.00, 0.32 / 0.23 |
