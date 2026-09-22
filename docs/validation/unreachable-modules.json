@@ -488,6 +488,13 @@
       "why": "Priority-Flood depression conditioning, producing a second drainable surface from a DTM without modifying it. No production caller: the conditioning mode it serves has no UI.",
       "graduation": "The Field Simulation Lab offers raw and conditioned routing and reports what the fill raised.",
       "review": "2027-03-31"
+    },
+    {
+      "path": "src/simulation/simulationRunRecord.ts",
+      "status": "staged",
+      "why": "The canonical record a field-simulation run leaves behind, with a SHA-256 over the fields that reproduce it. Nothing constructs one, because no simulation runs from the UI yet.",
+      "graduation": "The Field Simulation Lab seals a record per run and the export writes it.",
+      "review": "2027-03-31"
     }
   ]
 }
