@@ -31,6 +31,7 @@ import type { DecodedChunk } from '../copc/copcChunkDecode';
 import { LoadError } from '../loadErrors';
 import { MAX_DECODE_PEAK_BYTES } from '../heavy/heavyByteBudget';
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
+import { normalizeClassificationFlagsByte, scanAngleToDegrees } from '../lasDecodeShared';
 
 /**
  * Thrown when an EPT binary tile arrives shorter than the schema
@@ -151,8 +152,28 @@ const CHANNEL_WIDTHS: Readonly<
 > = {
   Intensity: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
   Classification: [{ type: 'unsigned', size: 1 }],
+  // PDAL/Entwine's EPT writer names the extended Classification Flags field
+  // "ClassFlags" — one byte, the same low-nibble layout Table 16 defines. A
+  // writer for a legacy-only source is free to omit the attribute entirely,
+  // which `findAttr` reads as "no flags channel" (see below).
+  ClassFlags: [{ type: 'unsigned', size: 1 }],
   ReturnNumber: [{ type: 'unsigned', size: 1 }],
   NumberOfReturns: [{ type: 'unsigned', size: 1 }],
+  // PDAL's canonical dimension is "ScanAngleRank", written as an already-
+  // normalised degree value (matches the legacy field name and unit; PDAL
+  // converts an extended int16 source to this same representation on read),
+  // stored either as the legacy raw signed byte or as a float. "ScanAngle" is
+  // the bare LAS field name for the extended record's raw int16 in 0.006°
+  // units — supported separately so a writer that dumps the raw extended
+  // field verbatim is still read correctly, converted at decode time.
+  ScanAngleRank: [{ type: 'signed', size: 1 }, { type: 'float', size: 4 }],
+  ScanAngle: [{ type: 'signed', size: 2 }],
+  UserData: [{ type: 'unsigned', size: 1 }],
+  // PDAL's ScanChannel dimension holds the already-unpacked 0-3 value, not
+  // the raw flags byte, so no bit extraction is needed on this path.
+  ScanChannel: [{ type: 'unsigned', size: 1 }],
+  ScanDirectionFlag: [{ type: 'unsigned', size: 1 }],
+  EdgeOfFlightLine: [{ type: 'unsigned', size: 1 }],
   Red: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
   Green: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
   Blue: [{ type: 'unsigned', size: 1 }, { type: 'unsigned', size: 2 }],
@@ -184,6 +205,7 @@ function assertChannelWidthsFit(attrs: readonly AttrLayout[]): void {
 const EPT_POSITION_DECODED_BYTES = 12; // Float32 · 3
 const EPT_INTENSITY_DECODED_BYTES = 2; // Uint16
 const EPT_UINT8_CHANNEL_DECODED_BYTES = 1; // classification / returnNumber / returnCount
+const EPT_SCAN_ANGLE_DECODED_BYTES = 4; // Float32
 const EPT_GPS_DECODED_BYTES = 8; // Float64
 const EPT_RGB_DECODED_BYTES = 3; // Uint8 · 3
 const EPT_RGB16_STAGING_BYTES = 6; // Uint16 · 3, temporary for uniform 16-bit colour
@@ -192,8 +214,14 @@ const EPT_RGB16_STAGING_BYTES = 6; // Uint16 · 3, temporary for uniform 16-bit 
 export interface EptDecodedChannels {
   readonly intensity: boolean;
   readonly classification: boolean;
+  readonly classificationFlags: boolean;
   readonly returnNumber: boolean;
   readonly returnCount: boolean;
+  readonly scanAngle: boolean;
+  readonly userData: boolean;
+  readonly scannerChannel: boolean;
+  readonly scanDirection: boolean;
+  readonly edgeOfFlightLine: boolean;
   readonly gpsTime: boolean;
   readonly rgb: boolean;
   /** Uniform 16-bit RGB stages a temporary Uint16 buffer resident with the rest. */
@@ -218,8 +246,14 @@ export function eptBinaryPeakBytes(
   let perPoint = EPT_POSITION_DECODED_BYTES;
   if (channels.intensity) perPoint += EPT_INTENSITY_DECODED_BYTES;
   if (channels.classification) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.classificationFlags) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
   if (channels.returnNumber) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
   if (channels.returnCount) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.scanAngle) perPoint += EPT_SCAN_ANGLE_DECODED_BYTES;
+  if (channels.userData) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.scannerChannel) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.scanDirection) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
+  if (channels.edgeOfFlightLine) perPoint += EPT_UINT8_CHANNEL_DECODED_BYTES;
   if (channels.gpsTime) perPoint += EPT_GPS_DECODED_BYTES;
   if (channels.rgb) perPoint += EPT_RGB_DECODED_BYTES;
   if (channels.rgb16Staging) perPoint += EPT_RGB16_STAGING_BYTES;
@@ -242,6 +276,11 @@ export function eptBinaryPeakBytes(
  *                      first tile — this decode then decides from its own max
  *                      channel value and reports the decision back on the
  *                      returned chunk so the source can pin it.
+ * @param pointSemantics Decode scan angle, user data, scanner channel, scan
+ *                      direction and edge-of-flight-line WHEN the schema also
+ *                      declares them. Default off; see AllocRawPointsOptions —
+ *                      a schema that declares these attributes decodes none
+ *                      of them unless the caller opts in.
  */
 export function decodeEptBinaryTile(
   buffer: ArrayBuffer,
@@ -250,6 +289,7 @@ export function decodeEptBinaryTile(
   renderOrigin: readonly [number, number, number],
   rgbEightBit?: boolean,
   maxPeakBytes: number = MAX_DECODE_PEAK_BYTES,
+  pointSemantics = false,
 ): DecodedChunk {
   const { attrs, stride } = computeSchemaLayout(schema);
   // Every OLV channel this decoder materialises is narrower than some width the
@@ -302,8 +342,17 @@ export function decodeEptBinaryTile(
   );
   const intensityAttr = findAttr(attrs, 'Intensity');
   const classAttr = findAttr(attrs, 'Classification');
+  const classFlagsAttr = findAttr(attrs, 'ClassFlags');
   const retNumAttr = findAttr(attrs, 'ReturnNumber');
   const retCntAttr = findAttr(attrs, 'NumberOfReturns');
+  // Looked up only when the caller opted in: a schema is free to declare
+  // these attributes and still have them left undecoded until a caller asks.
+  const scanAngleRankAttr = pointSemantics ? findAttr(attrs, 'ScanAngleRank') : undefined;
+  const scanAngleAttr = pointSemantics ? findAttr(attrs, 'ScanAngle') : undefined;
+  const userDataAttr = pointSemantics ? findAttr(attrs, 'UserData') : undefined;
+  const scanChannelAttr = pointSemantics ? findAttr(attrs, 'ScanChannel') : undefined;
+  const scanDirectionAttr = pointSemantics ? findAttr(attrs, 'ScanDirectionFlag') : undefined;
+  const edgeOfFlightLineAttr = pointSemantics ? findAttr(attrs, 'EdgeOfFlightLine') : undefined;
   const gpsAttr = findAttr(attrs, 'GpsTime');
   const rAttr = findAttr(attrs, 'Red');
   const gAttr = findAttr(attrs, 'Green');
@@ -322,8 +371,14 @@ export function decodeEptBinaryTile(
   const peakBytes = eptBinaryPeakBytes(buffer.byteLength, pointCount, {
     intensity: intensityAttr !== undefined,
     classification: classAttr !== undefined,
+    classificationFlags: classFlagsAttr !== undefined,
     returnNumber: retNumAttr !== undefined,
     returnCount: retCntAttr !== undefined,
+    scanAngle: scanAngleRankAttr !== undefined || scanAngleAttr !== undefined,
+    userData: userDataAttr !== undefined,
+    scannerChannel: scanChannelAttr !== undefined,
+    scanDirection: scanDirectionAttr !== undefined,
+    edgeOfFlightLine: edgeOfFlightLineAttr !== undefined,
     gpsTime: gpsAttr !== undefined,
     rgb: hasRgb,
     rgb16Staging,
@@ -351,8 +406,15 @@ export function decodeEptBinaryTile(
   // omits a channel no chunk carries.
   const intensity = intensityAttr ? new Uint16Array(pointCount) : undefined;
   const classification = classAttr ? new Uint8Array(pointCount) : undefined;
+  const classificationFlags = classFlagsAttr ? new Uint8Array(pointCount) : undefined;
   const returnNumber = retNumAttr ? new Uint8Array(pointCount) : undefined;
   const returnCount = retCntAttr ? new Uint8Array(pointCount) : undefined;
+  const scanAngle =
+    scanAngleRankAttr || scanAngleAttr ? new Float32Array(pointCount) : undefined;
+  const userData = userDataAttr ? new Uint8Array(pointCount) : undefined;
+  const scannerChannel = scanChannelAttr ? new Uint8Array(pointCount) : undefined;
+  const scanDirection = scanDirectionAttr ? new Uint8Array(pointCount) : undefined;
+  const edgeOfFlightLine = edgeOfFlightLineAttr ? new Uint8Array(pointCount) : undefined;
   const gpsTime = gpsAttr ? new Float64Array(pointCount) : undefined;
   let rgb: Uint8Array | undefined;
   if (rAttr && gAttr && bAttr) rgb = new Uint8Array(pointCount * 3);
@@ -395,11 +457,46 @@ export function decodeEptBinaryTile(
     if (classification && classAttr) {
       classification[i] = readAttr(view, base + classAttr.offset, classAttr);
     }
+    if (classificationFlags && classFlagsAttr) {
+      // ClassFlags is already the Table 16 nibble, so the extended branch applies.
+      classificationFlags[i] = normalizeClassificationFlagsByte(
+        readAttr(view, base + classFlagsAttr.offset, classFlagsAttr),
+        true,
+      );
+    }
     if (returnNumber && retNumAttr) {
       returnNumber[i] = readAttr(view, base + retNumAttr.offset, retNumAttr);
     }
     if (returnCount && retCntAttr) {
       returnCount[i] = readAttr(view, base + retCntAttr.offset, retCntAttr);
+    }
+    if (scanAngle) {
+      if (scanAngleRankAttr) {
+        // Already a normalised degree value — no unit conversion.
+        scanAngle[i] = readAttr(view, base + scanAngleRankAttr.offset, scanAngleRankAttr);
+      } else if (scanAngleAttr) {
+        // The raw extended int16 field, in 0.006° units.
+        scanAngle[i] = scanAngleToDegrees(
+          readAttr(view, base + scanAngleAttr.offset, scanAngleAttr),
+          true,
+        );
+      }
+    }
+    if (userData && userDataAttr) {
+      userData[i] = readAttr(view, base + userDataAttr.offset, userDataAttr);
+    }
+    if (scannerChannel && scanChannelAttr) {
+      scannerChannel[i] = readAttr(view, base + scanChannelAttr.offset, scanChannelAttr);
+    }
+    if (scanDirection && scanDirectionAttr) {
+      scanDirection[i] = readAttr(view, base + scanDirectionAttr.offset, scanDirectionAttr);
+    }
+    if (edgeOfFlightLine && edgeOfFlightLineAttr) {
+      edgeOfFlightLine[i] = readAttr(
+        view,
+        base + edgeOfFlightLineAttr.offset,
+        edgeOfFlightLineAttr,
+      );
     }
     if (gpsTime && gpsAttr) {
       gpsTime[i] = readAttr(view, base + gpsAttr.offset, gpsAttr);
@@ -446,8 +543,14 @@ export function decodeEptBinaryTile(
     positions,
     intensity,
     classification,
+    classificationFlags,
     returnNumber,
     returnCount,
+    scanAngle,
+    userData,
+    scannerChannel,
+    scanDirection,
+    edgeOfFlightLine,
     gpsTime,
     rgb,
     rgbEightBit: usedEightBit,

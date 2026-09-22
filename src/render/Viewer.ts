@@ -193,6 +193,7 @@ import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
   type TerrainStreamBuffer,
+  type TerrainWithheldOutcome,
 } from './terrainStreamSample';
 import {
   applyClassSwap,
@@ -2109,7 +2110,7 @@ export class Viewer {
    */
   gatherTerrainPositions(
     maxPoints = 300_000,
-  ): {
+  ): ({
     positions: Float32Array;
     classification?: Uint8Array;
     /**
@@ -2137,7 +2138,7 @@ export class Viewer {
      * would georeference a correctly-rotated surface to the wrong place.
      */
     sourceUpAxis?: 'z' | 'y';
-  } | null {
+  } & TerrainWithheldOutcome) | null {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
     // and buildings before contouring.
@@ -2172,7 +2173,7 @@ export class Viewer {
             sourceGround = true;
           }
         }
-        staticBuffers.push({ pos: cloud.positions, cls, placement });
+        staticBuffers.push({ pos: cloud.positions, cls, flags: cloud.classificationFlags, placement });
         staticPoints += cloud.positions.length / 3;
         staticFormats.push(cloud.sourceFormat);
       }
@@ -2185,7 +2186,7 @@ export class Viewer {
       if (decoded.positions && decoded.positions.length > 0) {
         const cls = alignedClass(decoded.classification, decoded.positions);
         if (cls) anyClass = true;
-        streamingBuffers.push({ key, pos: decoded.positions, cls });
+        streamingBuffers.push({ key, pos: decoded.positions, cls, flags: decoded.classificationFlags });
         streamingPoints += decoded.positions.length / 3;
       }
     }
@@ -2250,11 +2251,10 @@ export class Viewer {
     }
     if (sceneUp === 'y') yUpToCanonicalZUp(sample.positions);
     return {
-      positions: sample.positions,
-      classification: sample.classification,
+      // positions, classification, sampled and the Withheld outcome.
+      ...sample,
       groundIsDerived: !sourceGround,
       residentOnly,
-      sampled: sample.sampled,
       totalPoints,
       sourceUpAxis: sceneUp,
       // Always 'z': the buffer above is canonical now, so scan-shape detection

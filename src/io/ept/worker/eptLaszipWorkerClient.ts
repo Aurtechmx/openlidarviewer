@@ -127,9 +127,10 @@ export class EptLaszipWorkerClient {
     renderOrigin: readonly [number, number, number],
     signal?: AbortSignal,
     rgbEightBit?: boolean,
+    pointSemantics?: boolean,
   ): Promise<DecodedChunk> {
     return this._pool.submit({
-      payload: { tile, renderOrigin: [...renderOrigin], rgbEightBit },
+      payload: { tile, renderOrigin: [...renderOrigin], rgbEightBit, pointSemantics },
       transfer: [tile],
       signal,
     });

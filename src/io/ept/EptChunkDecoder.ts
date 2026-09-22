@@ -62,7 +62,7 @@ export class EptChunkDecoder implements ChunkDecoder {
         // points and decoding is a few hundred microseconds. The dataset-
         // level RGB bit-depth rides `meta.rgbEightBit` (pinned by the source
         // from the first decoded RGB tile) so every tile narrows identically.
-        return this._cloud.decodeBinary(chunk, meta.pointCount, meta.rgbEightBit);
+        return this._cloud.decodeBinary(chunk, meta.pointCount, meta.rgbEightBit, meta.pointSemantics);
       case 'laszip':
         // Full-tile laz-perf decode. EPT laszip tiles are complete LAZ files
         // (each with its own LAS header); the decoder applies the per-tile
@@ -96,8 +96,9 @@ export class EptChunkDecoder implements ChunkDecoder {
           }
           const decoded = await (this._laszipWorker
             ? this._laszipWorker.decodeTile(
-                chunk, this._cloud.renderOrigin, signal, meta.rgbEightBit)
-            : decodeEptLaszipTile(chunk, this._cloud.renderOrigin, meta.rgbEightBit));
+                chunk, this._cloud.renderOrigin, signal, meta.rgbEightBit, meta.pointSemantics)
+            : decodeEptLaszipTile(
+                chunk, this._cloud.renderOrigin, meta.rgbEightBit, meta.pointSemantics));
           // The scheduler admitted this node — and reserved its memory — on the
           // HIERARCHY point count (`meta.pointCount`). But an EPT laszip tile is
           // a self-describing LAZ file whose own LAS header count drives the

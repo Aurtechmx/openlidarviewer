@@ -232,6 +232,14 @@ export interface TerrainCoreParams {
    */
   readonly residentOnly?: boolean;
   /**
+   * What the gather declared about Withheld points (see `DtmGrid`). The core
+   * never filters on it; it stamps it on the DTM so every product read from
+   * the surface can say which points it rests on.
+   */
+  readonly withheldExcluded?: boolean | null;
+  /** Sampled points the gather left out as Withheld. */
+  readonly withheldExcludedCount?: number;
+  /**
    * Per-cell aggregation for the LIVE DTM. Default `'median'` (see
    * {@link LIVE_DTM_AGGREGATION}): the 50th percentile is outlier-resistant, so
    * a single high (vegetation) or low (multipath) ground return in a cell no
@@ -1173,6 +1181,13 @@ export function computeTerrainCore(
   // override no longer applies and the real grade shows.)
   if (params.residentOnly && dtm.coverageMode === 'full') {
     dtm = { ...dtm, coverageMode: 'resident-only' };
+  }
+  if (params.withheldExcluded !== undefined) {
+    dtm = {
+      ...dtm,
+      withheldExcluded: params.withheldExcluded,
+      withheldExcludedCount: params.withheldExcludedCount ?? 0,
+    };
   }
   const confidenceCalibrationApplied = confidenceCalibration.assessable;
   const confidenceToleranceM = confidenceCalibration.assessable

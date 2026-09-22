@@ -72,6 +72,7 @@ import { verticalUnitLabel } from '../units/units';
 // The in-memory Float32 precision policy the Contour Studio deliverables gate on.
 import { scanPrecisionPermit } from './scanPrecision';
 import type { PrecisionPermit } from '../geo/inMemoryPrecision';
+import type { TerrainWithheldOutcome } from '../render/terrainStreamSample';
 
 /**
  * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
@@ -121,6 +122,7 @@ export function deriveCoreParams(
   totalPoints?: number,
   residentOnly = false,
   getWorldOriginY?: () => number | null,
+  withheld?: TerrainWithheldOutcome,
 ): TerrainCoreParams {
   const n = positions.length / 3;
   let minX = Infinity;
@@ -209,6 +211,14 @@ export function deriveCoreParams(
     classification,
     samplePointScale,
     residentOnly,
+    // What the gather did with Withheld points, stamped on the DTM by the core
+    // and keyed into the cache so a switched policy never reuses a stale core.
+    ...(withheld
+      ? {
+        withheldExcluded: withheld.withheldExcluded,
+        withheldExcludedCount: withheld.withheldExcludedCount,
+      }
+      : {}),
   };
 }
 
@@ -709,6 +719,7 @@ export function createTerrainAnalysisRunner(
         gathered.totalPoints,
         gathered.residentOnly,
         worldOriginY(gathered.sourceUpAxis),
+        gathered,
       );
       // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
       // miss the worker computes it off-thread (or the fallback does on-thread if
@@ -855,6 +866,7 @@ export function createTerrainAnalysisRunner(
       gathered.totalPoints,
       gathered.residentOnly,
       worldOriginY(gathered.sourceUpAxis),
+      gathered,
     );
     const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
       computeTerrainCoreAsync(

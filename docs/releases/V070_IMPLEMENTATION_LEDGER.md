@@ -4107,3 +4107,23 @@ lives seven seconds with a dismiss button, so the remaining overlap there is
 accepted. `hudCollision.spec.ts` asserts the card clears the rails wherever
 it fits in the band, and passes at every configured width. On phones the
 card keeps its viewport-centred placement.
+
+### L26 · PARTIAL · SCIENTIFIC
+The Withheld policy runs inside the terrain gather, so the DTM, and the
+floor-plan and routing paths that read the same gather, leave out points
+flagged Withheld. A Withheld point still advances the stride counter, so
+the sampled candidates are the same with the policy on or off. The DTM
+records the outcome: excluded, not recorded when a contributing cloud has no
+flags channel, or kept when the caller opts out.
+The policy reaches clouds that keep their flags: static clouds within the
+4M point budget, and streamed COPC or EPT data where every resident node
+carries the channel. A larger static file is voxel-downsampled at load, the
+flags do not survive the reduction (L28), and its DTM records the outcome as
+not recorded. Two local USGS tiles carry Withheld points, all class 1; a
+whole-file decode shows them moving measured DTM cells by about 3 percent,
+and no recorded number changes.
+Extending the policy to those files by dropping Withheld points before the
+reduction would also remove them from the displayed cloud, which the policy
+does not ask for. The route that would not is a Withheld-aware terrain gather
+over the full-resolution source. It waits on a dataset whose Withheld points
+are ground-class, or a DTM difference large enough to matter.

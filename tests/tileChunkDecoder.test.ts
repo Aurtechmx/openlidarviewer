@@ -42,7 +42,14 @@ function rawCloud(n: number, schema: TileSchema): RawPoints {
       colors[i * 3 + 2] = (i * 5) & 0xff;
     }
   }
-  return { positions, intensity, classification, classificationFlags: new Uint8Array(n), returnNumber, returnCount, pointSourceId, gpsTime, colors, colors16: null };
+  return {
+    positions, intensity, classification, classificationFlags: new Uint8Array(n),
+    returnNumber, returnCount,
+    scanAngle: new Float32Array(n), userData: new Uint8Array(n),
+    scannerChannel: new Uint8Array(n), scanDirection: new Uint8Array(n),
+    edgeOfFlightLine: new Uint8Array(n),
+    pointSourceId, gpsTime, colors, colors16: null,
+  };
 }
 
 function packTile(raw: RawPoints, n: number, schema: TileSchema): { bytes: Uint8Array; recordBytes: number } {

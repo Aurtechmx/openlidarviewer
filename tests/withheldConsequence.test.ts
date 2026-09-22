@@ -18,8 +18,8 @@
  * so the two arrive together and are easy to conflate. Excluding Overlap would
  * thin every seam in a survey, which is why the policy never touches it.
  */
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -157,15 +157,23 @@ describe('Overlap is not Withheld', () => {
   });
 });
 
-describe('nothing applies the policy yet', () => {
-  it('records that the exclusion is measured but not wired', () => {
-    // The honest state of L26. This test measures what the policy would do; it
-    // does not claim any product does it. When a processing path starts
-    // consulting `withheldPolicy`, this assertion is the one that should fail
-    // and be replaced by a measurement of the product's own numbers.
-    const src = readFileSync(
-      join(FIXTURES, '..', '..', 'src', 'science', 'withheldPolicy.ts'), 'utf8',
-    );
-    expect(src).toContain('Nothing calls this yet');
+describe('where the policy is applied', () => {
+  it('is imported under src/ by the terrain gather alone', () => {
+    // Floor-plan and routing read through that gather, so they inherit the
+    // exclusion without importing the policy. A second importer is a new
+    // product applying it, which needs its own before-and-after.
+    const SRC = join(FIXTURES, '..', '..', 'src');
+    const importers: string[] = [];
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.tsx?$/.test(e.name) && /from '[^']*science\/withheldPolicy'/.test(readFileSync(p, 'utf8'))) {
+          importers.push(relative(join(SRC, '..'), p).split(sep).join('/'));
+        }
+      }
+    };
+    walk(SRC);
+    expect(importers).toEqual(['src/render/terrainStreamSample.ts']);
   });
 });

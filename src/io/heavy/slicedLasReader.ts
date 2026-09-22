@@ -50,6 +50,12 @@ export interface SlicedLasOptions {
    */
   readonly origin?: [number, number, number];
   readonly signal?: AbortSignal;
+  /**
+   * Default off; see AllocRawPointsOptions. Every caller of `openSlicedLas`
+   * repacks into the out-of-core tile schema (`tileRecord.ts`), which carries
+   * none of the five gated channels.
+   */
+  readonly pointSemantics?: boolean;
 }
 
 const DEFAULT_BATCH_POINTS = 262_144;
@@ -132,7 +138,9 @@ export async function openSlicedLas(
     // would otherwise read a gigabyte in one shot. The batch is assembled from
     // bounded sub-ranges of at most MAX_BATCH_SOURCE_BYTES; the returned `count`
     // points are unchanged, and nothing beyond the returned batch is materialised.
-    const raw = allocRawPoints(count, hasGps, hasColor);
+    const raw = allocRawPoints(count, hasGps, hasColor, ctx.extended, {
+      pointSemantics: options.pointSemantics,
+    });
     const maxPerRead = maxPointsForRecordLength(recordLength, MAX_BATCH_SOURCE_BYTES);
     for (let done = 0; done < count; done += maxPerRead) {
       signal?.throwIfAborted();

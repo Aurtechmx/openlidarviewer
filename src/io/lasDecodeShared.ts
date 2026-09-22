@@ -25,16 +25,84 @@ const RECORD_INTENSITY = 12;
  */
 const RECORD_RETURN_BITS = 14;
 /** Classification byte offset for legacy / extended point formats. */
-const RECORD_CLASSIFICATION_LEGACY = 15;
-const RECORD_CLASSIFICATION_EXT = 16;
-/** Extended records keep the classification flags in their own byte (bits 0-3). */
-const RECORD_CLASSIFICATION_FLAGS_EXT = 15;
+export const RECORD_CLASSIFICATION_LEGACY = 15;
+export const RECORD_CLASSIFICATION_EXT = 16;
+/**
+ * Byte offset of the classification-flags source byte. Coincidentally 15 in
+ * both layouts: extended keeps a dedicated flags byte there, legacy packs the
+ * flags into bits 5-7 of the classification byte, which also sits at 15. Any
+ * decoder reading raw LAS/LAZ-family records (COPC, EPT laszip) reads this
+ * offset and passes the byte through {@link normalizeClassificationFlagsByte}
+ * — the single place that knows how to unpack either layout.
+ */
+export const RECORD_CLASSIFICATION_FLAGS_OFFSET = 15;
+
+/**
+ * Normalise a raw classification-flags source byte into the one nibble layout
+ * the rest of the app reads (bit0 Synthetic, bit1 Key-point, bit2 Withheld,
+ * bit3 Overlap — the extended Table 16 layout). Extended records keep the
+ * flags in the low nibble of their own byte; legacy records pack Synthetic,
+ * Key-Point and Withheld into bits 5, 6 and 7 of the classification byte
+ * (Overlap has no legacy flag — it is class 12 instead, decoded elsewhere).
+ *
+ * This is the ONE place that unpacks either layout: every decoder that reads
+ * raw LAS/LAZ-family records — static `.las`/`.laz`, COPC, EPT laszip — calls
+ * this rather than re-deriving the bit shifts, so a correction lands once.
+ */
+export function normalizeClassificationFlagsByte(byte: number, extended: boolean): number {
+  return extended
+    ? byte & 0x0f
+    : ((byte & 0x20) >> 5) | ((byte & 0x40) >> 5) | ((byte & 0x80) >> 5);
+}
+/**
+ * Scan angle source byte offset. Legacy records hold a signed int8 "scan
+ * angle rank" at byte 16, already whole degrees. Extended records hold a
+ * signed int16 "scan angle" at byte 18, in units of 0.006 degrees — Table 8 /
+ * Table 17 of the LAS 1.4 R15 spec (Table 8: legacy formats 0-5, byte offset
+ * 16, "Scan Angle Rank", signed char, -90 to +90; Table 17: extended formats
+ * 6-10, byte offset 18, "Scan Angle", signed short, unit 0.006°).
+ */
+export const RECORD_SCAN_ANGLE_LEGACY = 16;
+export const RECORD_SCAN_ANGLE_EXT = 18;
+/** Extended scan-angle LSB, in degrees (Table 17). */
+const SCAN_ANGLE_EXTENDED_UNIT_DEG = 0.006;
+/** User data — uint8 — byte 17 in both the legacy and extended layouts. */
+export const RECORD_USER_DATA_OFFSET = 17;
 /** Point source ID — uint16 LE — byte 18 in legacy records, byte 20 in extended. */
-const RECORD_POINT_SOURCE_ID_LEGACY = 18;
-const RECORD_POINT_SOURCE_ID_EXT = 20;
+export const RECORD_POINT_SOURCE_ID_LEGACY = 18;
+export const RECORD_POINT_SOURCE_ID_EXT = 20;
+
+/**
+ * Convert a raw scan-angle field to degrees. Legacy records already store
+ * whole degrees (the "rank"); extended records store a signed int16 in
+ * 0.006° steps, so a raw value of -15000 is -90°.
+ */
+export function scanAngleToDegrees(raw: number, extended: boolean): number {
+  return extended ? raw * SCAN_ANGLE_EXTENDED_UNIT_DEG : raw;
+}
+
+/**
+ * Extract one single-bit flag from a byte. Used for scan-direction and
+ * edge-of-flight-line, which share the same bit position (6 and 7
+ * respectively) whether they come from the legacy return-bits byte or the
+ * extended flags byte — only the SOURCE byte differs between layouts, not the
+ * bit position, so one helper serves both.
+ */
+export function extractBitFlag(byte: number, bit: number): number {
+  return (byte >> bit) & 1;
+}
+
+/**
+ * Scanner channel — extended records only (bits 4-5 of the flags byte at
+ * {@link RECORD_CLASSIFICATION_FLAGS_OFFSET}, Table 17). Legacy records have
+ * no scanner-channel concept, so callers gate this behind `ctx.extended`.
+ */
+export function extractScannerChannel(flagByte: number): number {
+  return (flagByte >> 4) & 0x03;
+}
 /** GPS time — float64 LE — byte 20 in legacy GPS records, byte 22 in extended. */
-const RECORD_GPS_TIME_LEGACY = 20;
-const RECORD_GPS_TIME_EXT = 22;
+export const RECORD_GPS_TIME_LEGACY = 20;
+export const RECORD_GPS_TIME_EXT = 22;
 /** First point format index that uses the extended record layout. */
 export const FIRST_EXTENDED_FORMAT = 6;
 /** Legacy point formats (0-5) that carry a GPS-time field. */
@@ -95,6 +163,26 @@ export interface RawPoints {
   classificationFlags: Uint8Array;
   returnNumber: Uint8Array;
   returnCount: Uint8Array;
+  /**
+   * Scan angle in degrees — see {@link scanAngleToDegrees}. Every LAS record
+   * has one, but a caller that will discard it (the out-of-core tile path,
+   * whose packed schema carries none of these five channels) can skip the
+   * allocation via `allocRawPoints`'s `pointSemantics` option — null there, never
+   * a wastefully-filled array nobody reads.
+   */
+  scanAngle: Float32Array | null;
+  /** User data — see {@link scanAngle} for when this is null. */
+  userData: Uint8Array | null;
+  /**
+   * Scanner channel (bits 4-5 of the extended flags byte). Null for a
+   * legacy-format file (Table 17 is extended-only) OR when `pointSemantics` is
+   * off — see {@link scanAngle}.
+   */
+  scannerChannel: Uint8Array | null;
+  /** Scan direction flag, 0 or 1 — see {@link scanAngle} for when this is null. */
+  scanDirection: Uint8Array | null;
+  /** Edge-of-flight-line flag, 0 or 1 — see {@link scanAngle} for when this is null. */
+  edgeOfFlightLine: Uint8Array | null;
   pointSourceId: Uint16Array;
   gpsTime: Float64Array | null;
   /** Interleaved rgb (0–255), or null when the point format carries no colour.
@@ -116,6 +204,8 @@ export interface DecodeContext {
   /** Byte holding the flags: its own byte when extended, the class byte when not. */
   classificationFlagsOffset: number;
   extended: boolean;
+  scanAngleOffset: number;
+  userDataOffset: number;
   pointSourceIdOffset: number;
   gpsTimeOffset: number | null;
   rgbOffset: number | null;
@@ -132,10 +222,10 @@ export function decodeContext(
     origin,
     classificationOffset: classificationOffsetFor(header.pointFormat),
     classMask: classificationMaskFor(header.pointFormat),
-    classificationFlagsOffset: extended
-      ? RECORD_CLASSIFICATION_FLAGS_EXT
-      : RECORD_CLASSIFICATION_LEGACY,
+    classificationFlagsOffset: RECORD_CLASSIFICATION_FLAGS_OFFSET,
     extended,
+    scanAngleOffset: extended ? RECORD_SCAN_ANGLE_EXT : RECORD_SCAN_ANGLE_LEGACY,
+    userDataOffset: RECORD_USER_DATA_OFFSET,
     pointSourceIdOffset: extended
       ? RECORD_POINT_SOURCE_ID_EXT
       : RECORD_POINT_SOURCE_ID_LEGACY,
@@ -169,12 +259,7 @@ export function decodeRecord(
   out.intensity[i] = view.getUint16(base + RECORD_INTENSITY, true);
   out.classification[i] = view.getUint8(base + ctx.classificationOffset) & ctx.classMask;
   const flagByte = view.getUint8(base + ctx.classificationFlagsOffset);
-  // Extended keeps the flags in the low nibble of their own byte. Legacy packs
-  // Synthetic, Key-Point and Withheld into bits 5, 6 and 7 of the class byte,
-  // which is why reading the class with `& 0x1f` alone discards them.
-  out.classificationFlags[i] = ctx.extended
-    ? flagByte & 0x0f
-    : ((flagByte & 0x20) >> 5) | ((flagByte & 0x40) >> 5) | ((flagByte & 0x80) >> 5);
+  out.classificationFlags[i] = normalizeClassificationFlagsByte(flagByte, ctx.extended);
   const returnBits = view.getUint8(base + RECORD_RETURN_BITS);
   if (ctx.extended) {
     out.returnNumber[i] = returnBits & 0x0f;
@@ -183,6 +268,25 @@ export function decodeRecord(
     out.returnNumber[i] = returnBits & 0x07;
     out.returnCount[i] = (returnBits >> 3) & 0x07;
   }
+  // Scan direction and edge-of-flight-line share bit 6 and bit 7 in both
+  // layouts, but the SOURCE byte differs: the legacy return-bits byte
+  // already read above, or the extended flags byte read above for the
+  // classification flags.
+  const directionSourceByte = ctx.extended ? flagByte : returnBits;
+  if (out.scanDirection !== null) {
+    out.scanDirection[i] = extractBitFlag(directionSourceByte, 6);
+    out.edgeOfFlightLine![i] = extractBitFlag(directionSourceByte, 7);
+  }
+  if (out.scannerChannel !== null) {
+    out.scannerChannel[i] = extractScannerChannel(flagByte);
+  }
+  if (out.scanAngle !== null) {
+    const scanAngleRaw = ctx.extended
+      ? view.getInt16(base + ctx.scanAngleOffset, true)
+      : view.getInt8(base + ctx.scanAngleOffset);
+    out.scanAngle[i] = scanAngleToDegrees(scanAngleRaw, ctx.extended);
+  }
+  if (out.userData !== null) out.userData[i] = view.getUint8(base + ctx.userDataOffset);
   out.pointSourceId[i] = view.getUint16(base + ctx.pointSourceIdOffset, true);
   if (ctx.gpsTimeOffset !== null && out.gpsTime !== null) {
     out.gpsTime[i] = view.getFloat64(base + ctx.gpsTimeOffset, true);
@@ -199,11 +303,30 @@ export function decodeRecord(
   }
 }
 
+/**
+ * `pointSemantics` gates scan angle, user data, scanner channel, scan
+ * direction and edge-of-flight-line — five channels every LAS record HAS,
+ * but which cost real bytes and CPU to decode. Default OFF everywhere, so
+ * `undefined` on a decoded cloud or chunk means either "not decoded" (the
+ * common case, `pointSemantics` is off) or "not present in the source" — a
+ * consumer that needs to tell those apart must itself request the channels
+ * (`pointSemantics: true`) and only then does `undefined` mean the source
+ * genuinely lacks them (true for `scannerChannel` on a legacy-format file).
+ * `classificationFlags` is NOT gated by this option — it stays always-on,
+ * one byte per point, because the Withheld policy reads it.
+ */
+export interface AllocRawPointsOptions {
+  pointSemantics?: boolean;
+}
+
 export function allocRawPoints(
   count: number,
   hasGpsTime: boolean,
   hasColor = false,
+  extended = false,
+  options: AllocRawPointsOptions = {},
 ): RawPoints {
+  const pointSemantics = options.pointSemantics ?? false;
   return {
     positions: new Float32Array(count * 3),
     intensity: new Uint16Array(count),
@@ -211,6 +334,14 @@ export function allocRawPoints(
     classificationFlags: new Uint8Array(count),
     returnNumber: new Uint8Array(count),
     returnCount: new Uint8Array(count),
+    scanAngle: pointSemantics ? new Float32Array(count) : null,
+    userData: pointSemantics ? new Uint8Array(count) : null,
+    // Scanner channel is a Table 17 extended-only field — legacy records
+    // have nothing to report, so the array itself is absent rather than
+    // zero-filled — same as when `pointSemantics` is off.
+    scannerChannel: pointSemantics && extended ? new Uint8Array(count) : null,
+    scanDirection: pointSemantics ? new Uint8Array(count) : null,
+    edgeOfFlightLine: pointSemantics ? new Uint8Array(count) : null,
     pointSourceId: new Uint16Array(count),
     gpsTime: hasGpsTime ? new Float64Array(count) : null,
     // Colour is staged as raw 16-bit and narrowed once in finalizeRawColors;
@@ -218,6 +349,57 @@ export function allocRawPoints(
     colors: null,
     colors16: hasColor ? new Uint16Array(count * 3) : null,
   };
+}
+
+/** Legacy point formats (0-5) whose record carries an RGB triple. */
+const LEGACY_RGB_FORMATS: ReadonlySet<number> = new Set([2, 3, 5]);
+/** Extended point formats (6-10) whose record carries an RGB triple. */
+const EXTENDED_RGB_FORMATS: ReadonlySet<number> = new Set([7, 8, 10]);
+
+/**
+ * The TRUE resident bytes one point costs in a `RawPoints` allocated by
+ * {@link allocRawPoints} for `pointFormat`, with the same `pointSemantics`
+ * choice (default off, matching `allocRawPoints`'s own default) — derived
+ * from the exact same field list (and the same GPS-time / RGB format rules
+ * {@link gpsTimeOffsetFor} / {@link rgbOffsetFor} use) so the two functions
+ * cannot drift apart. Colour is charged at its WORST-CASE transient cost: the
+ * 16-bit staging buffer (6 bytes) plus the narrowed 8-bit one (3 bytes) are
+ * resident together while `finalizeRawColors` runs, mirroring the
+ * `colors16`/`colors` pair `allocRawPoints` stages.
+ *
+ * Used to size a budget check against the allocation it actually protects,
+ * not against the source record length — `RawPoints` is wider than the LAS
+ * record for every point format, since it always carries the
+ * classification-flags channel and, when `pointSemantics` is on, the five
+ * point-semantics channels too — so a budget keyed on record length alone
+ * would pass a decode that allocates past it.
+ */
+export function rawPointsBytesPerPoint(
+  pointFormat: number,
+  options: AllocRawPointsOptions = {},
+): number {
+  const pointSemantics = options.pointSemantics ?? false;
+  const extended = pointFormat >= FIRST_EXTENDED_FORMAT;
+  const hasGpsTime = extended || LEGACY_GPS_FORMATS.has(pointFormat);
+  const hasColor = extended
+    ? EXTENDED_RGB_FORMATS.has(pointFormat)
+    : LEGACY_RGB_FORMATS.has(pointFormat);
+  let bytes =
+    12 /* positions: Float32 * 3 */ +
+    2 /* intensity: Uint16 */ +
+    1 /* classification: Uint8 */ +
+    1 /* classificationFlags: Uint8 */ +
+    1 /* returnNumber: Uint8 */ +
+    1 /* returnCount: Uint8 */ +
+    2 /* pointSourceId: Uint16 */;
+  if (pointSemantics) {
+    bytes += 4 /* scanAngle: Float32 */ + 1 /* userData: Uint8 */;
+    bytes += 1 /* scanDirection: Uint8 */ + 1 /* edgeOfFlightLine: Uint8 */;
+    if (extended) bytes += 1; /* scannerChannel: Uint8 */
+  }
+  if (hasGpsTime) bytes += 8; /* Float64 */
+  if (hasColor) bytes += 6 + 3; /* colors16 staging + narrowed colors, coexisting */
+  return bytes;
 }
 
 /**
@@ -268,6 +450,11 @@ export function rawPointsTransferables(raw: RawPoints): ArrayBuffer[] {
     raw.returnCount.buffer as ArrayBuffer,
     raw.pointSourceId.buffer as ArrayBuffer,
   ];
+  if (raw.scanAngle) buffers.push(raw.scanAngle.buffer as ArrayBuffer);
+  if (raw.userData) buffers.push(raw.userData.buffer as ArrayBuffer);
+  if (raw.scanDirection) buffers.push(raw.scanDirection.buffer as ArrayBuffer);
+  if (raw.edgeOfFlightLine) buffers.push(raw.edgeOfFlightLine.buffer as ArrayBuffer);
+  if (raw.scannerChannel) buffers.push(raw.scannerChannel.buffer as ArrayBuffer);
   if (raw.gpsTime) buffers.push(raw.gpsTime.buffer as ArrayBuffer);
   if (raw.colors16) buffers.push(raw.colors16.buffer as ArrayBuffer);
   return buffers;

@@ -67,9 +67,9 @@ export type InterpolatedPolicy =
  *
  * `withheldExcluded` is the caller's declaration about the points behind the
  * raster, and defaults to undeclared. It is a parameter rather than something
- * read from `dem` because `DemRaster` carries no such field: nothing in this
- * tree applies the Withheld policy yet, so any value inferred here would be
- * invented.
+ * read from `dem` because `DemRaster` carries no such field, so any value
+ * inferred here would be invented. The analysed `DtmGrid` does carry it; see
+ * {@link terrainDtmToFlowGrid}.
  */
 export function dtmToFlowGrid(
   dem: DemRaster,
@@ -133,6 +133,9 @@ export function dtmToFlowGrid(
  * routing over them is what a filled DTM is for. So `route` is the default and
  * the count reaches the basis, where it becomes a limitation the reader sees.
  * `block` is there for a caller that wants measured ground only.
+ *
+ * `withheldExcluded` defaults to what the terrain gather stamped on the DTM,
+ * so the basis reports the exclusion the surface was actually built under.
  */
 export function terrainDtmToFlowGrid(
   dtm: DtmGrid,
@@ -186,7 +189,8 @@ export function terrainDtmToFlowGrid(
       // belongs. Hardcoding 'full' would be worse still, since a DTM built
       // from a resident streamed subset would then claim the whole survey.
       coverage: dtm.coverageMode,
-      withheldExcluded: options.withheldExcluded ?? null,
+      // The caller's declaration first, then what the gather stamped on the DTM.
+      withheldExcluded: options.withheldExcluded ?? dtm.withheldExcluded ?? null,
       horizontalScaleResolved: scale.resolved,
       measuredCells: readable,
       interpolatedCells: interpolated,
