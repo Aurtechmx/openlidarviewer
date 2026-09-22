@@ -311,7 +311,12 @@ async function main() {
     await runGesture(
       'twist', 'two-finger 90° twist, distance unchanged',
       twoFingerActions({ x: cx - R, y: cy }, { x: cx + R, y: cy }, { x: cx, y: cy - R }, { x: cx, y: cy + R }),
-      { expectRecognizer: 'twist', expectSign: 1 },
+      // Left finger moves to the top, right finger to the bottom:
+      // decompose2Pointer's angleOf inverts Y (canvas Y grows downward), so
+      // this specific rotation reads as a NEGATIVE angle delta — verified
+      // against the real recogniser (touchTracker.ts) with this exact
+      // coordinate pair before trusting the sign here.
+      { expectRecognizer: 'twist', expectSign: -1 },
     );
     await runGesture(
       'pan', 'two fingers moving together, distance and angle unchanged',
