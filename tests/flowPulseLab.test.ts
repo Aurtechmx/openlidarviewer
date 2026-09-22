@@ -83,6 +83,20 @@ describe('a refusal is a plain message', () => {
   });
 });
 
+describe('a geographic frame with no world origin', () => {
+  it.each([null, undefined])('refuses with UNITS_UNRESOLVED when the origin is %s', (origin) => {
+    const outcome = runLabFlowPulse(input({ isGeographic: true, worldOriginY: origin as never }));
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.code).toBe('UNITS_UNRESOLVED');
+    expect(textOf(renderFlowPulseLab(outcome))).toContain(outcome.reason);
+  });
+
+  it('still runs a projected frame with no origin', () => {
+    expect(runLabFlowPulse(input({ worldOriginY: null })).ok).toBe(true);
+  });
+});
+
 describe('the frame the run reads', () => {
   it('takes latitude from the grid centre in world coordinates, as the analysis did', () => {
     const scale = flowScaleOf(input({ isGeographic: true, worldOriginY: 40 }));

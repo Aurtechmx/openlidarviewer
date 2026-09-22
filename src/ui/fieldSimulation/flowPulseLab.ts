@@ -34,7 +34,7 @@ import type { AnalyseContoursResult } from '../../terrain/contour/analyseContour
 export interface FlowPulseLabInput {
   readonly result: AnalyseContoursResult;
   readonly isGeographic: boolean;
-  /** World Y of the load-time recentring origin; null when there was none. */
+  /** World Y of the load-time recentring origin; null when the scene has no single one. */
   readonly worldOriginY: number | null;
   /** Metres per source unit from the resolved frame; null when unknown. */
   readonly resolvedUnitToMetres: number | null;
@@ -45,16 +45,18 @@ export interface FlowPulseLabInput {
 /**
  * The horizontal scale the DTM was built under.
  *
- * The latitude follows the terrain runner's own convention, the grid centre in
- * world coordinates with a missing origin read as zero, so the flow run sizes a
- * cell exactly as the analysis that produced the grid did. A second convention
- * here would route over cells of a different shape from the ones the DTM
- * describes.
+ * On a geographic frame the latitude is the grid centre in world coordinates,
+ * which needs the world origin. The map context leaves that origin undefined
+ * when the scene has more than one origin or a layer has been placed, and in
+ * that case the latitude is unknown: the scale reports null and the runner
+ * refuses. Reading a missing origin as zero would put a site at 60° N on the
+ * equator, route with cos φ ≈ 1 and roughly double every area. A projected
+ * frame needs no latitude and is unaffected.
  */
 export function flowScaleOf(input: FlowPulseLabInput): HorizontalScale {
   const dtm = input.result.dtm;
-  const latitudeDeg = input.isGeographic
-    ? (input.worldOriginY ?? 0) + dtm.originH2 + (dtm.rows / 2) * dtm.cellSizeM
+  const latitudeDeg = input.isGeographic && input.worldOriginY != null
+    ? input.worldOriginY + dtm.originH2 + (dtm.rows / 2) * dtm.cellSizeM
     : null;
   const latitudeKnown = latitudeDeg != null && Number.isFinite(latitudeDeg);
   return {
@@ -84,7 +86,9 @@ export function runLabFlowPulse(input: FlowPulseLabInput | null): FlowPulseResul
     layerId: input.layerId,
     filename: input.filename,
     sourceDigest: null,
-    analysisInputDigest: dtmProductDigest(dtm),
+    // A getter, because the runner reads the digest only when it seals a
+    // record. A refused run then never hashes the grid it declined to read.
+    get analysisInputDigest() { return dtmProductDigest(dtm); },
     build: __APP_VERSION__,
     id: globalThis.crypto?.randomUUID?.() ?? `flow-${Date.now()}`,
     generatedAt: new Date().toISOString(),
