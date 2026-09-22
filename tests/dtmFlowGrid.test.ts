@@ -182,3 +182,28 @@ describe('the analysed DTM reads its provenance, not NaN', () => {
     expect(basis.complete).toBe(false);
   });
 });
+
+describe('the counts a reader sees stay consistent', () => {
+  it('never reports more interpolated cells than readable ones', () => {
+    // An interpolated cell whose height is non-finite breaks the DtmGrid
+    // contract, but if it arrives the count must not climb above the number of
+    // cells actually read, or the limitation would say "3 of 2 readable cells".
+    const dtm = dtmOf([[3, 2, 1]], [[false, true, false]]);
+    (dtm.z as Float32Array)[1] = Number.NaN;
+    const { basis } = terrainDtmToFlowGrid(dtm, projected);
+    expect(basis.interpolatedCells).toBeLessThanOrEqual(basis.measuredCells);
+    expect(basis.interpolatedCells).toBe(0);
+  });
+
+  it('says a blocked cell was excluded, not that it had no elevation', () => {
+    // Under measured-only the interpolated cell still holds a height; the
+    // setting left it out. Telling the reader it "carries no elevation" would
+    // misdescribe the input.
+    const dtm = dtmOf([[3, 2, 1]], [[false, true, false]]);
+    const { basis } = terrainDtmToFlowGrid(dtm, projected, { interpolated: 'block' });
+    expect(basis.policyExcludedCells).toBe(1);
+    const text = basisLimitations(basis).join(' ');
+    expect(text).toMatch(/measured-only setting left out/);
+    expect(text).not.toMatch(/carry no elevation/);
+  });
+});

@@ -9,7 +9,7 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 145. Revisited at least once: 11.
+Entries: 145. Revisited at least once: 14.
 
 ## Totals
 
@@ -39,9 +39,9 @@ Entries: 145. Revisited at least once: 11.
 | L08 | NOT REPRODUCIBLE | SCIENTIFIC | 2 |
 | L09 | OPEN | LIFECYCLE | 1 |
 | L10 | OPEN | LIFECYCLE | 1 |
-| L11 | OPEN | UI | 1 |
+| L11 | OPEN | UI | 2 |
 | L12 | FIXED | UI | 3 |
-| L13 | OPEN | EVIDENCE | 1 |
+| L13 | OPEN | EVIDENCE | 2 |
 | L14 | OPEN | ARCHITECTURE | 1 |
 | L15 | DEFERRED | ARCHITECTURE | 1 |
 | L16 | FIXED | EVIDENCE | 2 |
@@ -56,7 +56,7 @@ Entries: 145. Revisited at least once: 11.
 | L25 | SUPERSEDED | EVIDENCE | 1 |
 | L26 | PARTIAL | SCIENTIFIC | 2 |
 | L27 | NOT REPRODUCIBLE | EVIDENCE | 1 |
-| L28 | PARTIAL | SEMANTICS | 1 |
+| L28 | PARTIAL | SEMANTICS | 2 |
 | L29 | FIXED | STATE | 1 |
 | L30 | FIXED | ARCHITECTURE | 1 |
 | L31 | FIXED | SESSION | 1 |

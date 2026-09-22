@@ -4026,3 +4026,53 @@ and forgotten in the payload fails at the boundary instead of years later.
 The policy still has no caller. What changed is that it now has something to
 read. Voxel downsampling still drops the flags (L28), which continues to bound
 what applying it can mean.
+
+### L11 · OPEN · UI
+
+The overlap is real over a narrower band than this entry first stated. The left
+rail is `clamp(285px, 21vw, 312px)`, the right `clamp(288px, 23vw, 340px)`, and
+the project card is 290 px wide and centred. The free band between the rails is
+`W − 14 − 288 − 299`, which reaches the card's width at about 891 px. Measured
+in Chromium: the card runs 60 px under the left rail and 63 px under the right
+at 768, and clears both at 900 and above.
+
+A test does cover the case, contrary to the earlier account.
+`tests/e2e/hudCollision.spec.ts` exempts it: when the band is narrower than the
+card it asserts only that the card stays on screen. That exemption is what
+would become strict once the layout is fixed.
+
+The CSS-only fix centres the card in the band and caps its width, which leaves
+about 155 px at 768. Whether that is readable has not been rendered, so the
+layout is unchanged pending that check.
+
+### L13 · OPEN · EVIDENCE
+
+The legs exist and run; none is required. The ruleset for `main` requires
+`ci-green` and `CodeQL`, and `ci-green` depends only on Chromium jobs. The full
+suites on Firefox and WebKit (`browsers.yml`) carry `continue-on-error: true`.
+The smoke workflow is titled "blocking" but is not a required check. Windows
+runs Chromium only.
+
+On the latest main run the Firefox, WebKit and iPhone-shaped WebKit legs pass,
+including the touch gestures. That is one run of each, not a stability record.
+The iOS simulator leg has not yet passed. Making any of these blocking is a
+release-policy decision and is not made here.
+
+### L28 · PARTIAL · SEMANTICS
+
+Voxel downsampling leaves classification flags undefined on the points it
+produces, and that is the chosen semantics rather than an omission. Each output
+point sits at the centroid of its voxel's members, so it is not a source point:
+a voxel mixing a Withheld return with an ordinary one has no single true
+Withheld state, and giving the centroid its first member's flags would assert
+one. The other per-record attributes keep first-member values by an older
+contract that this does not extend.
+
+The source-faithful export re-decodes the original file, so flags reach an
+exported LAS intact. A reduced-view export writes the downsampled cloud, and
+LAS has no value for an unknown flag, so its flag byte reads as zero. That
+export is labelled as a reduced view.
+
+The consequence for L26 is that a Withheld filter cannot act on a cloud already
+reduced at load. The filter has to run before the reduction, which is where it
+is placed when it is applied.

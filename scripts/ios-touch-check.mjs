@@ -120,7 +120,7 @@ async function main() {
 
     // A scan, loaded the only way a phone can: fetched and dropped, which is
     // the same path the desktop specs drive.
-    await evaluateAsync(sid, `
+    const dropResult = await evaluateAsync(sid, `
       const done = arguments[arguments.length - 1];
       (async () => {
         const r = await fetch('/samples/tiny.las');
@@ -135,11 +135,21 @@ async function main() {
     `);
     await new Promise((r) => setTimeout(r, 6000));
 
-    const loaded = await evaluate(sid, 'return !!document.querySelector("canvas");');
-    record('scan loaded', loaded === true, `canvas=${loaded}`);
+    // The canvas exists from boot, before any file, so its presence proves
+    // nothing about a load. What a load leaves behind is the drop resolving
+    // and the empty-state panel going away; a failed fetch returns 'ERR: …'.
+    const loaded = await evaluate(sid, `
+      const e = document.querySelector('.olv-empty');
+      return !e || e.offsetParent === null || getComputedStyle(e).display === 'none';
+    `);
+    record('scan loaded', dropResult === true && loaded === true,
+      `drop=${String(dropResult)} emptyStateHidden=${loaded}`);
+    if (dropResult !== true || loaded !== true) throw new Error('the scan did not load, so nothing below would test anything');
 
     const before = await evaluate(sid, POSE);
-    record('pose read before gesture', typeof before === 'string' && before.length > 2, before);
+    const poseOk = typeof before === 'string' && before.length > 2;
+    record('pose read before gesture', poseOk, before);
+    if (!poseOk) throw new Error('no pose to compare against');
 
     // The gesture, injected by iOS. Two pointers, moved apart: a pinch the
     // recogniser should read as zoom. Coordinates are viewport points taken
@@ -230,7 +240,10 @@ async function main() {
       api.setElevationFilter(null);
       return !!document.querySelector('canvas');
     `);
-    record('elevation filter applies and clears', filtered === true);
+    // No seam reports which points are visible, so this cannot claim the filter
+    // hid anything. It checks the narrower thing it can: both calls are
+    // accepted on this device and the page is still rendering afterwards.
+    record('elevation filter seam accepts a window and a clear', filtered === true);
 
     // Classification: seed a uniform class, read one back, then undo.
     const classed = await evaluate(sid, `

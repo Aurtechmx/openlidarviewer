@@ -57,6 +57,13 @@ export interface SimulationInputBasis {
    * as none: `DemRaster` carries no such distinction, while `DtmGrid` does.
    */
   readonly interpolatedCells: number;
+  /**
+   * Cells that hold an elevation but were left out by the caller's policy,
+   * such as interpolated cells under a measured-only setting. Kept apart from
+   * cells with no elevation, because the reader should be told the height was
+   * excluded rather than that there was none.
+   */
+  readonly policyExcludedCells: number;
   /** Cells in the grid, readable or not. */
   readonly totalCells: number;
 }
@@ -68,6 +75,7 @@ export function simulationInputBasis(input: {
   readonly horizontalScaleResolved: boolean;
   readonly measuredCells: number;
   readonly interpolatedCells?: number;
+  readonly policyExcludedCells?: number;
   readonly totalCells: number;
 }): SimulationInputBasis {
   return {
@@ -77,6 +85,7 @@ export function simulationInputBasis(input: {
     horizontalScaleResolved: input.horizontalScaleResolved,
     measuredCells: input.measuredCells,
     interpolatedCells: input.interpolatedCells ?? 0,
+    policyExcludedCells: input.policyExcludedCells ?? 0,
     totalCells: input.totalCells,
   };
 }
@@ -131,8 +140,16 @@ export function basisLimitations(basis: SimulationInputBasis): readonly string[]
     );
   }
 
-  if (basis.totalCells > 0 && basis.measuredCells < basis.totalCells) {
-    const gap = basis.totalCells - basis.measuredCells;
+  if (basis.policyExcludedCells > 0) {
+    out.push(
+      `${basis.policyExcludedCells} cells hold an interpolated elevation that the `
+      + 'measured-only setting left out, so routes stop at their edge.',
+    );
+  }
+
+  const absent = basis.totalCells - basis.measuredCells - basis.policyExcludedCells;
+  if (basis.totalCells > 0 && absent > 0) {
+    const gap = absent;
     out.push(
       `${gap} of ${basis.totalCells} cells carry no elevation. Flow neither `
       + 'enters nor leaves them, so routes stop at their edge.',

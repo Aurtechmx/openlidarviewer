@@ -19,11 +19,12 @@ on:
   # `workflow_dispatch` alone cannot be triggered from a branch: GitHub only
   # offers it once the file is on the default branch. The path filter is how
   # the leg can be exercised before then, and it is self-limiting — it fires
-  # only when the leg's own two files change, never on ordinary work.
+  # only when the leg's own files change, never on ordinary work.
   push:
     paths:
       - '.github/workflows/ios-simulator.yml'
       - 'scripts/ios-touch-check.mjs'
+      - 'scripts/pick-ios-simulator.mjs'
   workflow_dispatch:
     inputs:
       device:

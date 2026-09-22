@@ -149,17 +149,19 @@ export function terrainDtmToFlowGrid(
 
   let readable = 0;
   let interpolated = 0;
+  let policyExcluded = 0;
   for (let i = 0; i < n; i++) {
     const cover = dtm.coverage[i];
     if (cover === COVERAGE_NONE) continue;
-    if (cover === COVERAGE_INTERPOLATED) {
-      if (policy === 'block') continue;
-      interpolated++;
-    }
+    const isInterpolated = cover === COVERAGE_INTERPOLATED;
+    if (isInterpolated && policy === 'block') { policyExcluded++; continue; }
     const v = dtm.z[i];
     // A filled grid should carry no NaN, but a non-finite height here would
     // route as an elevation, so it is treated as absence rather than trusted.
+    // Counted after this check, so an interpolated cell that fails it is not
+    // reported as a readable interpolated cell.
     if (!Number.isFinite(v)) continue;
+    if (isInterpolated) interpolated++;
     z[i] = v;
     valid[i] = 1;
     readable++;
@@ -187,7 +189,8 @@ export function terrainDtmToFlowGrid(
       withheldExcluded: options.withheldExcluded ?? null,
       horizontalScaleResolved: scale.resolved,
       measuredCells: readable,
-      interpolatedCells: policy === 'block' ? 0 : interpolated,
+      interpolatedCells: interpolated,
+      policyExcludedCells: policyExcluded,
       totalCells: n,
     }),
   };
