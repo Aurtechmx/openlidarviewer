@@ -495,6 +495,13 @@
       "why": "The canonical record a field-simulation run leaves behind, with a SHA-256 over the fields that reproduce it. Nothing constructs one, because no simulation runs from the UI yet.",
       "graduation": "The Field Simulation Lab seals a record per run and the export writes it.",
       "review": "2027-03-31"
+    },
+    {
+      "path": "src/simulation/flowPulse/flowPulseRunner.ts",
+      "status": "staged",
+      "why": "One flow run from a terrain product to a sealed record: conditioning, routing, accumulation, the input basis and the typed refusals in one place. No production caller, because the Field Simulation Lab panel that would call it is not built.",
+      "graduation": "The Field Simulation Lab panel calls it and renders the result and its limitations.",
+      "review": "2027-03-31"
     }
   ]
 }

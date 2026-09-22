@@ -1,0 +1,244 @@
+/**
+ * flowPulseRunner.test.ts: a run either happens or says why it did not.
+ *
+ * The runner is the seam a panel calls, so the properties that matter are the
+ * ones a panel would otherwise have to get right by itself:
+ *
+ *   a precondition failure is a typed refusal, never a half-filled result;
+ *   an unresolved scale withholds metres instead of refusing or fabricating;
+ *   conditioning routes over a second surface and leaves the DTM alone;
+ *   the limitations a reader sees follow from the run, not from a fixed list.
+ *
+ * Each is checked against a terrain whose answer can be read by eye, so a
+ * wrong figure is visible rather than merely different from a recorded one.
+ */
+import { describe, expect, it } from 'vitest';
+
+import {
+  FLOW_PULSE_DEFAULTS,
+  catchmentFrom,
+  methodsFor,
+  pulseFrom,
+  runFlowPulse,
+  type FlowPulseParams,
+  type FlowRunIdentity,
+} from '../src/simulation/flowPulse/flowPulseRunner';
+import type { HorizontalScale } from '../src/simulation/flowPulse/dtmFlowGrid';
+import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
+
+const projected: HorizontalScale = {
+  isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true,
+};
+
+const identity: FlowRunIdentity = {
+  layerId: 'layer-a', filename: 'site.laz', sourceDigest: 'aaaa',
+  analysisInputDigest: 'bbbb', build: '0.7.0-alpha.1', id: 'run-1',
+  generatedAt: '2026-09-22T00:00:00.000Z', processingManifestHead: null,
+};
+
+/** A filled DtmGrid; `null` marks a cell with no reachable data. */
+function dtmOf(
+  rows: readonly (readonly (number | null)[])[],
+  over: Partial<DtmGrid> = {},
+): DtmGrid {
+  const h = rows.length, w = rows[0].length, n = w * h;
+  const z = new Float32Array(n);
+  const coverage = new Uint8Array(n);
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      const v = rows[r][c];
+      if (v === null) continue;
+      z[r * w + c] = v;
+      coverage[r * w + c] = 2; // measured
+    }
+  }
+  return {
+    z, coverage, confidence: new Float32Array(n), counts: new Uint32Array(n),
+    interpDistanceCells: new Float32Array(n), cols: w, rows: h, cellSizeM: 1,
+    originH1: 0, originH2: 0, crs: null, verticalDatum: null, coverageMode: 'full',
+    ...over,
+  } as DtmGrid;
+}
+
+const params = (over: Partial<FlowPulseParams> = {}): FlowPulseParams => ({
+  ...FLOW_PULSE_DEFAULTS, ...over,
+});
+
+/** A pit inside a rim with one notch, so the fill level is readable by eye. */
+const notchedBowl = () => dtmOf([
+  [5, 5, 3, 5, 5],
+  [5, 4, 4, 4, 5],
+  [5, 4, 0, 4, 5],
+  [5, 4, 4, 4, 5],
+  [5, 5, 5, 5, 5],
+]);
+
+describe('a precondition failure is a refusal, not a result', () => {
+  it('refuses with NO_DTM when no terrain was supplied', () => {
+    const r = runFlowPulse(null, projected, params(), identity);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe('NO_DTM');
+    expect(r.reason).toMatch(/terrain analysis/i);
+  });
+
+  it('refuses with TOO_LARGE rather than routing an unbudgeted grid', () => {
+    const r = runFlowPulse(dtmOf([[1, 2], [3, 4]]), projected, params({ maxCells: 3 }), identity);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe('TOO_LARGE');
+    // The reason names both numbers, so a reader knows how far over it is.
+    expect(r.reason).toMatch(/4 cells/);
+    expect(r.reason).toMatch(/3 this run allows/);
+  });
+
+  it('refuses with NO_VALID_CELL when nothing is readable', () => {
+    const r = runFlowPulse(dtmOf([[null, null]]), projected, params(), identity);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe('NO_VALID_CELL');
+  });
+
+  it('names the policy that emptied the grid when blocking did it', () => {
+    // Interpolated-only terrain with `block` has nothing measured left. The
+    // reason must point at the setting rather than blame the data.
+    const n = 2;
+    const dtm = dtmOf([[1, 2]]);
+    (dtm.coverage as Uint8Array).fill(1); // all interpolated
+    const r = runFlowPulse(dtm, projected, params({ interpolated: 'block' }), identity);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe('NO_VALID_CELL');
+    expect(r.reason).toMatch(/Allow interpolated cells/);
+    expect(n).toBe(2);
+  });
+});
+
+describe('a completed run', () => {
+  it('routes a plane and reports its outlets', () => {
+    const r = runFlowPulse(dtmOf([[3, 2, 1, 0], [3, 2, 1, 0]]), projected, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.cells).toBe(8);
+    expect(r.summary.readableCells).toBe(8);
+    expect(r.summary.sinkCount).toBe(0);
+    expect(r.summary.outletCount).toBe(2); // the east column leaves the grid
+    expect(r.summary.maxUpstreamCells).toBe(4);
+  });
+
+  it('seals a record whose digest covers the figures, not the arrays', () => {
+    const r = runFlowPulse(dtmOf([[3, 2, 1]]), projected, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.record.digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(r.record.kind).toBe('terrain-flow');
+    expect(r.record.result).toEqual({ ...r.summary });
+  });
+
+  it('names every method it ran, conditioning included', () => {
+    expect(methodsFor(params())).toEqual([
+      'olv.simulation.terrain-flow.d8',
+      'olv.simulation.terrain-flow.accumulation',
+    ]);
+    expect(methodsFor(params({ conditioning: 'priority-flood' }))[0])
+      .toBe('olv.simulation.terrain-flow.priority-flood');
+  });
+});
+
+describe('an unresolved scale withholds metres and still routes', () => {
+  const unresolved: HorizontalScale = { ...projected, resolved: false };
+
+  it('withholds contributing area rather than refusing', () => {
+    const r = runFlowPulse(dtmOf([[3, 2, 1]]), unresolved, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.contributingAreaM2).toBeNull();
+    expect(r.summary.maxContributingAreaM2).toBeNull();
+    // Direction survives: cell counts are still reported.
+    expect(r.summary.maxUpstreamCells).toBe(3);
+    expect(r.limitations.join(' ')).toMatch(/withheld/);
+  });
+
+  it('reports square metres once the scale is known', () => {
+    const r = runFlowPulse(dtmOf([[3, 2, 1]]), projected, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.maxContributingAreaM2).toBeCloseTo(3, 10);
+  });
+});
+
+describe('conditioning is declared, and leaves the DTM alone', () => {
+  it('raw mode keeps the pit and says so', () => {
+    const dtm = notchedBowl();
+    const before = Float32Array.from(dtm.z);
+    const r = runFlowPulse(dtm, projected, params({ conditioning: 'raw' }), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.sinkCount).toBe(1);
+    expect(r.summary.cellsRaised).toBeNull();
+    expect(r.limitations.join(' ')).toMatch(/leaves real depressions in place/);
+    expect([...dtm.z]).toEqual([...before]);
+  });
+
+  it('conditioned mode drains the pit and reports what it raised', () => {
+    const dtm = notchedBowl();
+    const before = Float32Array.from(dtm.z);
+    const r = runFlowPulse(dtm, projected, params({ conditioning: 'priority-flood' }), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.sinkCount).toBe(0);
+    expect(r.summary.cellsRaised).toBeGreaterThan(0);
+    expect(r.limitations.join(' ')).toMatch(/conditioned drainage surface/);
+    expect(r.limitations.join(' ')).toMatch(/canonical DTM is unchanged/);
+    // The claim in that sentence, checked rather than trusted.
+    expect([...dtm.z]).toEqual([...before]);
+  });
+
+  it('never calls the conditioned surface corrected terrain', () => {
+    const r = runFlowPulse(notchedBowl(), projected, params({ conditioning: 'priority-flood' }), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.limitations.join(' ')).not.toMatch(/corrected terrain/i);
+  });
+});
+
+describe('the limitations follow the run', () => {
+  it('always states that accumulation is not water', () => {
+    const r = runFlowPulse(dtmOf([[2, 1]]), projected, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const all = r.limitations.join(' ');
+    expect(all).toMatch(/not rainfall, runoff, infiltration or flood modelling/);
+    expect(all).toMatch(/counts cells/);
+  });
+
+  it('reports an undeclared Withheld handling, since nothing applies the policy', () => {
+    const r = runFlowPulse(dtmOf([[2, 1]]), projected, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.limitations.join(' ')).toMatch(/Withheld/);
+  });
+
+  it('says nothing about flats when the surface has none', () => {
+    const r = runFlowPulse(dtmOf([[3, 2, 1]]), projected, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.limitations.join(' ')).not.toMatch(/unresolved/);
+  });
+});
+
+describe('queries over a completed run', () => {
+  it('traces a pulse downstream to the outlet', () => {
+    const r = runFlowPulse(dtmOf([[4, 3, 2, 1]]), projected, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect([...pulseFrom(r, 0)]).toEqual([0, 1, 2, 3]);
+  });
+
+  it('collects the catchment of an outlet', () => {
+    const r = runFlowPulse(dtmOf([[4, 3, 2, 1]]), projected, params(), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect([...catchmentFrom(r, 3)].filter((v) => v === 1).length).toBe(4);
+  });
+});
