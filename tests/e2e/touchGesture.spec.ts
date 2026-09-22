@@ -139,6 +139,15 @@ async function singleTap(page: Page, x: number, y: number): Promise<void> {
  */
 async function settledPose(page: Page): Promise<string> {
   await expect(page.locator('body.olv-has-scan')).toHaveCount(1, { timeout: 30_000 });
+  // The app stops its frame loop while the page is hidden, and a camera
+  // flight halts with it. WebKit can report a page that is not in front as
+  // hidden, which froze the flight part-way until the gesture's input
+  // brought the page forward and let it finish. Bring it forward first, and
+  // fail on the visibility itself rather than on a pose that never settled.
+  await page.bringToFront();
+  await expect
+    .poll(() => page.evaluate(() => document.visibilityState), { timeout: 10_000 })
+    .toBe('visible');
   let last = await readPose(page);
   let same = 0;
   for (let i = 0; i < 80 && same < 2; i++) {
