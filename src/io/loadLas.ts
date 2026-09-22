@@ -68,6 +68,7 @@ function decodeLas(
   origin: [number, number, number],
   stride: number,
   onProgress?: (u: ProgressUpdate) => void,
+  pointSemantics?: boolean,
 ): RawPoints {
   const view = new DataView(buffer);
   const pointsOffset = header.offsetToPointData;
@@ -83,7 +84,9 @@ function decodeLas(
 
   const step = Math.max(1, Math.floor(stride));
   const total = Math.ceil(count / step);
-  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended);
+  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended, {
+    pointSemantics,
+  });
   const reportEvery = Math.max(1, Math.floor(total / 20));
   const rand = step > 1 ? makePrng(STRIDE_SAMPLE_SEED) : undefined;
   for (let b = 0; b < total; b++) {
@@ -161,6 +164,11 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
  * @param stride       Decode every `stride`-th record (1 = every record).
  *                     Used by the fast-load path for huge clouds.
  * @param onProgress   Optional staged-progress callback for the decode loop.
+ * @param pointSemantics Decode scan angle, user data, scanner channel, scan
+ *                     direction and edge-of-flight-line. Default off, like
+ *                     every `pointSemantics` switch in the decode stack (see
+ *                     `AllocRawPointsOptions` in lasDecodeShared.ts) — no
+ *                     caller sets this yet.
  */
 export async function loadLas(
   buffer: ArrayBuffer,
@@ -168,6 +176,7 @@ export async function loadLas(
   name = `cloud.${sourceFormat}`,
   stride = 1,
   onProgress?: (u: ProgressUpdate) => void,
+  pointSemantics?: boolean,
 ): Promise<PointCloud> {
   const header = parseLasHeader(buffer);
   // Origin from the floored header min — known before decoding, so records
@@ -191,10 +200,10 @@ export async function loadLas(
     // the fallback for all three.
     const pooled = await (
       await import('./heavy/worker/lazChunkWorkerClient')
-    ).decodeLazPooled(buffer, header, origin, { stride, onProgress });
-    raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress));
+    ).decodeLazPooled(buffer, header, origin, { stride, onProgress, pointSemantics });
+    raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress, pointSemantics));
   } else {
-    raw = decodeLas(buffer, header, origin, stride, onProgress);
+    raw = decodeLas(buffer, header, origin, stride, onProgress, pointSemantics);
   }
   return toCloud(raw);
 }
@@ -223,6 +232,7 @@ export async function loadLazFromFile(
   onStats?: (stats: LazLoadStats) => void,
   policy?: DecodePoolPolicy,
   previewBudget?: number,
+  pointSemantics?: boolean,
 ): Promise<PointCloud> {
   let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
   // The VLRs sit between the public header and the point data; a file whose
@@ -310,6 +320,7 @@ export async function loadLazFromFile(
     onFallback: (reason) => { stats.poolFallbackReason = reason; stats.decodePath = 'pool-fallback'; },
     onSkipped: (reason) => { stats.poolFallbackReason = reason; },
     policy,
+    pointSemantics,
   });
   if (pooled) {
     settleLedger();
@@ -324,7 +335,7 @@ export async function loadLazFromFile(
   stats.compressedBytesRead += buffer.byteLength;
   settleLedger();
   onStats?.(stats);
-  return toCloud(await decodeLaz(buffer, header, origin, stride, onProgress));
+  return toCloud(await decodeLaz(buffer, header, origin, stride, onProgress, pointSemantics));
 }
 
 /** Which file a LAZ load read, what it read of it, and which decoder produced it. */
@@ -427,11 +438,11 @@ function cloudFromRaw(
     classificationFlags: raw.classificationFlags,
     returnNumber: raw.returnNumber,
     returnCount: raw.returnCount,
-    scanAngle: raw.scanAngle,
-    userData: raw.userData,
+    scanAngle: raw.scanAngle ?? undefined,
+    userData: raw.userData ?? undefined,
     scannerChannel: raw.scannerChannel ?? undefined,
-    scanDirection: raw.scanDirection,
-    edgeOfFlightLine: raw.edgeOfFlightLine,
+    scanDirection: raw.scanDirection ?? undefined,
+    edgeOfFlightLine: raw.edgeOfFlightLine ?? undefined,
     pointSourceId: raw.pointSourceId,
     gpsTime: raw.gpsTime ?? undefined,
   });

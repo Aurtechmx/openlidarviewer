@@ -56,6 +56,9 @@ import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFi
 import {
   normalizeClassificationFlagsByte,
   RECORD_CLASSIFICATION_FLAGS_OFFSET,
+  RECORD_SCAN_ANGLE_LEGACY,
+  RECORD_SCAN_ANGLE_EXT,
+  RECORD_USER_DATA_OFFSET,
   scanAngleToDegrees,
   extractBitFlag,
   extractScannerChannel,
@@ -78,12 +81,6 @@ const RECORD_RETURN_BITS_EXT = 14;  // legacy convention; extended widens bits
 const RECORD_CLASSIFICATION_LEGACY = 15;
 /** Byte offset of the classification field in extended formats. */
 const RECORD_CLASSIFICATION_EXT = 16;
-/** Byte offset of the scan-angle field in legacy formats (int8 rank, whole degrees). */
-const RECORD_SCAN_ANGLE_LEGACY = 16;
-/** Byte offset of the user-data field — same in both layouts. */
-const RECORD_USER_DATA = 17;
-/** Byte offset of the scan-angle field in extended formats (int16, 0.006° units). */
-const RECORD_SCAN_ANGLE_EXT = 18;
 /** Byte offset of point source ID in legacy formats. */
 const RECORD_POINT_SOURCE_LEGACY = 18;
 /** Byte offset of point source ID in extended formats. */
@@ -220,9 +217,10 @@ export async function decodeEptLaszipTile(
   buffer: ArrayBuffer,
   renderOrigin: readonly [number, number, number],
   rgbEightBit?: boolean,
+  pointSemantics?: boolean,
 ): Promise<DecodedChunk> {
   const lazPerf = await getLazPerf();
-  return decodeEptLaszipTileWith(lazPerf, buffer, renderOrigin, rgbEightBit);
+  return decodeEptLaszipTileWith(lazPerf, buffer, renderOrigin, rgbEightBit, pointSemantics);
 }
 
 /** The instantiated laz-perf WASM module (type-only — no runtime import). */
@@ -242,12 +240,18 @@ type LazPerfModule = Awaited<ReturnType<typeof import('laz-perf').createLazPerf>
  * `ChunkDecodeMetadata.rgbEightBit` seam the COPC pipeline uses). Undefined
  * on the first tile — this decode then decides from its own max channel
  * value and reports the decision back on the returned chunk.
+ *
+ * `pointSemantics` decodes scan angle, user data, scanner channel, scan
+ * direction and edge-of-flight-line. Default off, like every
+ * `pointSemantics` switch in the decode stack (see `AllocRawPointsOptions`
+ * in lasDecodeShared.ts) — no caller sets this yet.
  */
 export function decodeEptLaszipTileWith(
   lazPerf: LazPerfModule,
   buffer: ArrayBuffer,
   renderOrigin: readonly [number, number, number],
   rgbEightBit?: boolean,
+  pointSemantics = false,
 ): DecodedChunk {
   const ctx = buildContext(buffer);
   // Bound the per-tile declared count by the tile's own bytes BEFORE the
@@ -308,13 +312,16 @@ export function decodeEptLaszipTileWith(
   const classificationFlags = new Uint8Array(n);
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);
-  const scanAngle = new Float32Array(n);
-  const userData = new Uint8Array(n);
-  // Scanner channel is a Table 17 extended-only field; a legacy tile (PDRF
-  // 0-3) leaves this absent rather than zero-filled.
-  const scannerChannel = ctx.extended ? new Uint8Array(n) : undefined;
-  const scanDirection = new Uint8Array(n);
-  const edgeOfFlightLine = new Uint8Array(n);
+  // Scan angle / user data / scanner channel / scan direction /
+  // edge-of-flight-line decode only when the caller opts in. Scanner channel
+  // is additionally a Table 17 extended-only field — a legacy tile (PDRF 0-3)
+  // leaves it absent even when `pointSemantics` is on, rather than
+  // zero-filled.
+  const scanAngle = pointSemantics ? new Float32Array(n) : undefined;
+  const userData = pointSemantics ? new Uint8Array(n) : undefined;
+  const scannerChannel = pointSemantics && ctx.extended ? new Uint8Array(n) : undefined;
+  const scanDirection = pointSemantics ? new Uint8Array(n) : undefined;
+  const edgeOfFlightLine = pointSemantics ? new Uint8Array(n) : undefined;
   const pointSourceId = new Uint16Array(n);
   // GPS time is the one measured channel a supported LAS record can genuinely
   // lack: PDRF 0 and 2 carry no GPS field, which is what a null `gpsTimeOffset`
@@ -376,19 +383,22 @@ export function decodeEptLaszipTileWith(
       const flagByte = heap.getUint8(pointPtr + RECORD_CLASSIFICATION_FLAGS_OFFSET);
       classificationFlags[i] = normalizeClassificationFlagsByte(flagByte, ctx.extended);
 
-      // Scan direction and edge-of-flight-line sit at bit 6/7 of the return
-      // byte in the legacy layout, or of the flags byte in the extended one —
-      // the same source byte the classification flags and returns come from.
-      const directionSourceByte = ctx.extended ? flagByte : returnBits;
-      scanDirection[i] = extractBitFlag(directionSourceByte, 6);
-      edgeOfFlightLine[i] = extractBitFlag(directionSourceByte, 7);
-      if (scannerChannel) scannerChannel[i] = extractScannerChannel(flagByte);
+      if (pointSemantics) {
+        // Scan direction and edge-of-flight-line sit at bit 6/7 of the return
+        // byte in the legacy layout, or of the flags byte in the extended
+        // one — the same source byte the classification flags and returns
+        // come from.
+        const directionSourceByte = ctx.extended ? flagByte : returnBits;
+        scanDirection![i] = extractBitFlag(directionSourceByte, 6);
+        edgeOfFlightLine![i] = extractBitFlag(directionSourceByte, 7);
+        if (scannerChannel) scannerChannel[i] = extractScannerChannel(flagByte);
 
-      const scanAngleRaw = ctx.extended
-        ? heap.getInt16(pointPtr + ctx.scanAngleOffset, true)
-        : heap.getInt8(pointPtr + ctx.scanAngleOffset);
-      scanAngle[i] = scanAngleToDegrees(scanAngleRaw, ctx.extended);
-      userData[i] = heap.getUint8(pointPtr + RECORD_USER_DATA);
+        const scanAngleRaw = ctx.extended
+          ? heap.getInt16(pointPtr + ctx.scanAngleOffset, true)
+          : heap.getInt8(pointPtr + ctx.scanAngleOffset);
+        scanAngle![i] = scanAngleToDegrees(scanAngleRaw, ctx.extended);
+        userData![i] = heap.getUint8(pointPtr + RECORD_USER_DATA_OFFSET);
+      }
 
       pointSourceId[i] = heap.getUint16(pointPtr + ctx.pointSourceOffset, true);
 

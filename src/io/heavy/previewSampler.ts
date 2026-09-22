@@ -223,9 +223,14 @@ async function sampleLaz(
     // an unsupported format yields. readLazChunkTable already refuses such a
     // chunk, so a supported table should never reach here; this stays as the
     // sampler's own guard against decoding past budget.
-    if (!withinDecodedByteBudget(c.pointCount, header.pointDataRecordLength)) continue;
+    if (!withinDecodedByteBudget(c.pointCount, header.pointDataRecordLength, undefined, header.pointFormat)) {
+      continue;
+    }
     // One bounded range read per chunk — never the whole file.
     const bytes = await range.readRange(c.byteOffset, c.byteLength, signal);
+    // `pointSemantics` is left at its default (off): the preview repacks into
+    // the same tile schema as the out-of-core path, which carries none of
+    // those five channels.
     const raw = decodeLazChunkLocal(lazPerf, {
       chunk: bytes,
       pointCount: c.pointCount,

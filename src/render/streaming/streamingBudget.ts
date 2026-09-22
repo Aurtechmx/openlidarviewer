@@ -55,17 +55,32 @@ export const BYTES_PER_STREAMING_POINT = bytesPerPoint({
 });
 
 /**
- * CPU-side worst-case bytes per decoded point — the widest shape a LAS-family
- * source produces before GPU upload. Summed: positions (3 × f32 = 12 B),
- * intensity (u16 = 2 B), classification (u8 = 1 B), returnNumber (u8 = 1 B),
- * returnCount (u8 = 1 B), gpsTime (f64 = 8 B), rgb (3 × u8 = 3 B),
- * pointSourceId (u16 = 2 B) → 30 B / point (PDRF 7/8). The earlier figure of 25
- * dropped rgb and pointSourceId and so undercounted a coloured point by 5 B.
+ * CPU-side worst-case bytes per decoded point for the channels every LAS-
+ * family source decodes BY DEFAULT — the widest shape before GPU upload.
+ * Derived from {@link decodedBytesPerPoint}, so it cannot drift from the
+ * per-channel figure below: positions (3 × f32 = 12 B), intensity (u16 =
+ * 2 B), classification (u8 = 1 B), classificationFlags (u8 = 1 B; always
+ * decoded — the Withheld policy reads it), returnNumber (u8 = 1 B),
+ * returnCount (u8 = 1 B), gpsTime (f64 = 8 B), rgb (3 B, narrowed),
+ * pointSourceId (u16 = 2 B) → 31 B / point. Scan angle, user data, scanner
+ * channel, scan direction and edge-of-flight-line are NOT included here:
+ * they decode only when a caller opts into `pointSemantics: true` (default
+ * off everywhere), so they do not inflate the default budget arithmetic — a
+ * caller that knows it turned that option on should size a known chunk with
+ * {@link decodedBytesPerPoint} instead, passing those five explicitly.
  * Used by the debug-overlay decoded-tier estimate and to convert the
- * first-admission byte ceiling into a point ceiling; a per-channel figure for a
- * known chunk is {@link decodedBytesPerPoint}.
+ * first-admission byte ceiling into a point ceiling.
  */
-export const DECODED_BYTES_PER_POINT = 30;
+export const DECODED_BYTES_PER_POINT = decodedBytesPerPoint({
+  intensity: true,
+  classification: true,
+  classificationFlags: true,
+  returnNumber: true,
+  returnCount: true,
+  gpsTime: true,
+  rgb: true,
+  pointSourceId: true,
+});
 
 /**
  * Frame-time pressure band, shared by everything that adapts to how the frames
@@ -93,8 +108,17 @@ export const FPS_PRESSURE_LOW_HOLD_MS = 5_000;
 export interface DecodedChannelPresence {
   readonly intensity?: boolean;
   readonly classification?: boolean;
+  /** Synthetic / Key-point / Withheld / Overlap, one normalised nibble per point. */
+  readonly classificationFlags?: boolean;
   readonly returnNumber?: boolean;
   readonly returnCount?: boolean;
+  /** Scan angle, in degrees (a Float32Array — see `lasDecodeShared.scanAngleToDegrees`). */
+  readonly scanAngle?: boolean;
+  readonly userData?: boolean;
+  /** Extended point formats only; COPC and EPT laszip node/tile decodes are always extended. */
+  readonly scannerChannel?: boolean;
+  readonly scanDirection?: boolean;
+  readonly edgeOfFlightLine?: boolean;
   readonly gpsTime?: boolean;
   readonly rgb?: boolean;
   readonly normals?: boolean;
@@ -103,17 +127,27 @@ export interface DecodedChannelPresence {
 
 /**
  * Decoded CPU bytes per point for a chunk carrying exactly `channels`.
- * Positions (3 × f32) are always present; every other channel is charged only
- * when present, so a positions-only `.pnts` tile is not billed for LAS
- * attributes it never carries. Pure — the schema-aware counterpart to the flat
- * {@link DECODED_BYTES_PER_POINT} worst case.
+ * Positions (3 × f32) are always present; every other channel — including the
+ * five `pointSemantics`-gated ones (scan angle, user data, scanner channel,
+ * scan direction, edge-of-flight-line), which decode only when a caller opts
+ * in — is charged only when present, so a positions-only `.pnts` tile is not
+ * billed for LAS attributes it never carries, and a default (`pointSemantics`
+ * off) decode is not billed for the five it left undecoded. Pure — the
+ * schema-aware counterpart to the flat {@link DECODED_BYTES_PER_POINT}
+ * default-channel worst case.
  */
 export function decodedBytesPerPoint(channels: DecodedChannelPresence = {}): number {
   let b = 3 * Float32Array.BYTES_PER_ELEMENT; // positions f32 × 3
   if (channels.intensity) b += Uint16Array.BYTES_PER_ELEMENT;
   if (channels.classification) b += Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.classificationFlags) b += Uint8Array.BYTES_PER_ELEMENT;
   if (channels.returnNumber) b += Uint8Array.BYTES_PER_ELEMENT;
   if (channels.returnCount) b += Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.scanAngle) b += Float32Array.BYTES_PER_ELEMENT;
+  if (channels.userData) b += Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.scannerChannel) b += Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.scanDirection) b += Uint8Array.BYTES_PER_ELEMENT;
+  if (channels.edgeOfFlightLine) b += Uint8Array.BYTES_PER_ELEMENT;
   if (channels.gpsTime) b += Float64Array.BYTES_PER_ELEMENT;
   if (channels.rgb) b += 3 * Uint8Array.BYTES_PER_ELEMENT;
   if (channels.normals) b += 3 * Float32Array.BYTES_PER_ELEMENT;

@@ -402,6 +402,7 @@ export class EptStreamingPointCloud implements StreamingSource {
     buffer: ArrayBuffer,
     pointCount: number,
     rgbEightBit?: boolean,
+    pointSemantics?: boolean,
   ): DecodedChunk {
     return decodeEptBinaryTile(
       buffer,
@@ -409,6 +410,8 @@ export class EptStreamingPointCloud implements StreamingSource {
       this.metadata.schema,
       this.renderOrigin,
       rgbEightBit,
+      undefined,
+      pointSemantics,
     );
   }
 

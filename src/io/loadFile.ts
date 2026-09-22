@@ -99,6 +99,15 @@ export interface LoadOptions {
    * depend on who read them.
    */
   head?: ArrayBuffer;
+  /**
+   * Decode scan angle, user data, scanner channel, scan direction and
+   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
+   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) —
+   * no caller sets this yet. `undefined` on the loaded cloud then means
+   * either "not decoded" (this option was off) or "not present in the
+   * source"; a caller that needs to tell those apart must turn this on.
+   */
+  pointSemantics?: boolean;
 }
 
 /** The cloud payload transferred back from the parse worker. */
@@ -756,6 +765,7 @@ export async function loadFile(
           // The preview sample is sized here, on the page: the worker cannot
           // read the render layer's ceiling and must not guess it.
           previewBudget: Math.max(1, Math.floor(options.previewBudget ?? budget)),
+          pointSemantics: options.pointSemantics,
         },
         buffer ? [buffer] : [],
       );

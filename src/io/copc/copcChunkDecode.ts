@@ -19,6 +19,10 @@ import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFi
 import {
   normalizeClassificationFlagsByte,
   RECORD_CLASSIFICATION_FLAGS_OFFSET,
+  RECORD_USER_DATA_OFFSET,
+  RECORD_SCAN_ANGLE_EXT,
+  RECORD_POINT_SOURCE_ID_EXT,
+  RECORD_GPS_TIME_EXT,
   scanAngleToDegrees,
   extractBitFlag,
   extractScannerChannel,
@@ -46,6 +50,13 @@ export interface ChunkDecodeMetadata {
    * chunk (see {@link DecodedChunk.rgbEightBit}) and feeds it back here.
    */
   rgbEightBit?: boolean;
+  /**
+   * Decode scan angle, user data, scanner channel, scan direction and
+   * edge-of-flight-line. Default off — see `lasDecodeShared.ts`'s
+   * `AllocRawPointsOptions` doc for what `undefined` means on the resulting
+   * chunk when this is left off vs turned on.
+   */
+  pointSemantics?: boolean;
 }
 
 /**
@@ -151,33 +162,35 @@ export interface ChunkDecoder<TMeta = ChunkDecodeMetadata> {
  * Every node fills thirteen base channels: positions (Float32 · 3 = 12), intensity
  * (Uint16 = 2), classification (Uint8 = 1), classification flags (Uint8 = 1),
  * return number (Uint8 = 1), return count (Uint8 = 1), scan angle (Float32 = 4),
- * user data (Uint8 = 1), scanner channel (Uint8 = 1), scan direction (Uint8 = 1),
- * edge of flight line (Uint8 = 1), GPS time (Float64 = 8), point source id
- * (Uint16 = 2) — 36 bytes a point. PDRF 7 and 8 add colour, and both the staged
- * Uint16 rgb16 (3 · 2 = 6) and the narrowed Uint8 rgb (3) are RESIDENT together
- * while the narrow loop runs, so colour costs 9, not 3. PDRF 8's NIR is not
- * decoded, so it is not charged. Returns {@link Number.POSITIVE_INFINITY} for a
- * non-usable count so a nonsense value reads as over-budget rather than as zero.
+ * point source id (Uint16 = 2) — 28 bytes a point. `pointSemantics: true` adds
+ * scan angle (Float32 = 4), user data (Uint8 = 1), scanner channel (Uint8 = 1,
+ * COPC is always an extended format so this is never absent when the option is
+ * on), scan direction (Uint8 = 1) and edge-of-flight-line (Uint8 = 1) — 8 more
+ * bytes, matching `AllocRawPointsOptions`'s default-off contract. PDRF 7 and 8
+ * add colour, and both the staged Uint16 rgb16 (3 · 2 = 6) and the narrowed
+ * Uint8 rgb (3) are RESIDENT together while the narrow loop runs, so colour
+ * costs 9, not 3. PDRF 8's NIR is not decoded, so it is not charged. Returns
+ * {@link Number.POSITIVE_INFINITY} for a non-usable count so a nonsense value
+ * reads as over-budget rather than as zero.
  */
-export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 36;
+export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 28;
+export const COPC_POINT_SEMANTICS_CHANNEL_BYTES_PER_POINT = 8;
 export const COPC_RGB_CHANNEL_BYTES_PER_POINT = 9;
 
-export function copcDecodedChannelBytes(pdrf: number, pointCount: number): number {
+export function copcDecodedChannelBytes(
+  pdrf: number,
+  pointCount: number,
+  pointSemantics = false,
+): number {
   if (!Number.isFinite(pointCount) || pointCount < 0) return Number.POSITIVE_INFINITY;
   const hasRgb = pdrf === 7 || pdrf === 8;
   const perPoint =
-    COPC_BASE_CHANNEL_BYTES_PER_POINT + (hasRgb ? COPC_RGB_CHANNEL_BYTES_PER_POINT : 0);
+    COPC_BASE_CHANNEL_BYTES_PER_POINT +
+    (pointSemantics ? COPC_POINT_SEMANTICS_CHANNEL_BYTES_PER_POINT : 0) +
+    (hasRgb ? COPC_RGB_CHANNEL_BYTES_PER_POINT : 0);
   return pointCount * perPoint;
 }
 
-/** User data offset — the same byte in every LAS point format. */
-const USER_DATA_OFFSET = 17;
-/** Scan angle offset (int16, 0.006° units) in PDRF 6, 7, and 8. */
-const SCAN_ANGLE_OFFSET = 18;
-/** Point source id offset in PDRF 6, 7, and 8. */
-const POINT_SOURCE_ID_OFFSET = 20;
-/** GPS time lives at the same offset in PDRF 6, 7, and 8. */
-const GPS_TIME_OFFSET = 22;
 /** RGB triple offset in PDRF 7 and 8. */
 const RGB_OFFSET = 30;
 
@@ -205,6 +218,7 @@ export function decodeRecords(
   const [ox, oy, oz] = meta.offset;
   const [rx, ry, rz] = meta.renderOrigin;
   const hasRgb = meta.pointDataRecordFormat === 7 || meta.pointDataRecordFormat === 8;
+  const pointSemantics = meta.pointSemantics ?? false;
 
   const positions = new Float32Array(n * 3);
   const intensity = new Uint16Array(n);
@@ -212,16 +226,22 @@ export function decodeRecords(
   // COPC is always an extended point format (PDRF 6/7/8), so the flags byte
   // is always unpacked as the extended layout — see
   // `RECORD_CLASSIFICATION_FLAGS_OFFSET` / `normalizeClassificationFlagsByte`.
+  // Unlike the five point-semantics channels below, this one is always on.
   const classificationFlags = new Uint8Array(n);
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);
-  const scanAngle = new Float32Array(n);
-  const userData = new Uint8Array(n);
+  // Scan angle / user data / scanner channel / scan direction /
+  // edge-of-flight-line decode only when the caller opts in — see
+  // `AllocRawPointsOptions` in lasDecodeShared.ts for what `undefined` on the
+  // resulting chunk means in each state.
+  const scanAngle = pointSemantics ? new Float32Array(n) : undefined;
+  const userData = pointSemantics ? new Uint8Array(n) : undefined;
   // COPC is always an extended point format, so scanner channel is always
-  // materialised — unlike EPT laszip, which also serves legacy PDRFs.
-  const scannerChannel = new Uint8Array(n);
-  const scanDirection = new Uint8Array(n);
-  const edgeOfFlightLine = new Uint8Array(n);
+  // materialised when `pointSemantics` is on — unlike EPT laszip, which also
+  // serves legacy PDRFs.
+  const scannerChannel = pointSemantics ? new Uint8Array(n) : undefined;
+  const scanDirection = pointSemantics ? new Uint8Array(n) : undefined;
+  const edgeOfFlightLine = pointSemantics ? new Uint8Array(n) : undefined;
   const gpsTime = new Float64Array(n);
   const pointSourceId = new Uint16Array(n);
   const rgb16 = hasRgb ? new Uint16Array(n * 3) : undefined;
@@ -241,15 +261,17 @@ export function decodeRecords(
     classification[i] = view.getUint8(p + 16);
     const flagByte = view.getUint8(p + RECORD_CLASSIFICATION_FLAGS_OFFSET);
     classificationFlags[i] = normalizeClassificationFlagsByte(flagByte, true);
-    // Scan direction and edge-of-flight-line live in bits 6/7 of the same
-    // extended flags byte the classification flags come from.
-    scanDirection[i] = extractBitFlag(flagByte, 6);
-    edgeOfFlightLine[i] = extractBitFlag(flagByte, 7);
-    scannerChannel[i] = extractScannerChannel(flagByte);
-    scanAngle[i] = scanAngleToDegrees(view.getInt16(p + SCAN_ANGLE_OFFSET, true), true);
-    userData[i] = view.getUint8(p + USER_DATA_OFFSET);
-    pointSourceId[i] = view.getUint16(p + POINT_SOURCE_ID_OFFSET, true);
-    gpsTime[i] = view.getFloat64(p + GPS_TIME_OFFSET, true);
+    if (pointSemantics) {
+      // Scan direction and edge-of-flight-line live in bits 6/7 of the same
+      // extended flags byte the classification flags come from.
+      scanDirection![i] = extractBitFlag(flagByte, 6);
+      edgeOfFlightLine![i] = extractBitFlag(flagByte, 7);
+      scannerChannel![i] = extractScannerChannel(flagByte);
+      scanAngle![i] = scanAngleToDegrees(view.getInt16(p + RECORD_SCAN_ANGLE_EXT, true), true);
+      userData![i] = view.getUint8(p + RECORD_USER_DATA_OFFSET);
+    }
+    pointSourceId[i] = view.getUint16(p + RECORD_POINT_SOURCE_ID_EXT, true);
+    gpsTime[i] = view.getFloat64(p + RECORD_GPS_TIME_EXT, true);
 
     if (rgb16) {
       const r = view.getUint16(p + RGB_OFFSET, true);

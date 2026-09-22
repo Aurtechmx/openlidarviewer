@@ -276,6 +276,14 @@ export function eptBinaryPeakBytes(
  *                      first tile — this decode then decides from its own max
  *                      channel value and reports the decision back on the
  *                      returned chunk so the source can pin it.
+ * @param pointSemantics Decode scan angle, user data, scanner channel, scan
+ *                      direction and edge-of-flight-line WHEN the schema also
+ *                      declares them. Default off, like every
+ *                      `pointSemantics` switch in the decode stack (see
+ *                      `AllocRawPointsOptions` in lasDecodeShared.ts) — no
+ *                      caller sets this yet, so a schema that declares these
+ *                      attributes still decodes none of them until a caller
+ *                      opts in.
  */
 export function decodeEptBinaryTile(
   buffer: ArrayBuffer,
@@ -284,6 +292,7 @@ export function decodeEptBinaryTile(
   renderOrigin: readonly [number, number, number],
   rgbEightBit?: boolean,
   maxPeakBytes: number = MAX_DECODE_PEAK_BYTES,
+  pointSemantics = false,
 ): DecodedChunk {
   const { attrs, stride } = computeSchemaLayout(schema);
   // Every OLV channel this decoder materialises is narrower than some width the
@@ -339,12 +348,14 @@ export function decodeEptBinaryTile(
   const classFlagsAttr = findAttr(attrs, 'ClassFlags');
   const retNumAttr = findAttr(attrs, 'ReturnNumber');
   const retCntAttr = findAttr(attrs, 'NumberOfReturns');
-  const scanAngleRankAttr = findAttr(attrs, 'ScanAngleRank');
-  const scanAngleAttr = findAttr(attrs, 'ScanAngle');
-  const userDataAttr = findAttr(attrs, 'UserData');
-  const scanChannelAttr = findAttr(attrs, 'ScanChannel');
-  const scanDirectionAttr = findAttr(attrs, 'ScanDirectionFlag');
-  const edgeOfFlightLineAttr = findAttr(attrs, 'EdgeOfFlightLine');
+  // Looked up only when the caller opted in: a schema is free to declare
+  // these attributes and still have them left undecoded until a caller asks.
+  const scanAngleRankAttr = pointSemantics ? findAttr(attrs, 'ScanAngleRank') : undefined;
+  const scanAngleAttr = pointSemantics ? findAttr(attrs, 'ScanAngle') : undefined;
+  const userDataAttr = pointSemantics ? findAttr(attrs, 'UserData') : undefined;
+  const scanChannelAttr = pointSemantics ? findAttr(attrs, 'ScanChannel') : undefined;
+  const scanDirectionAttr = pointSemantics ? findAttr(attrs, 'ScanDirectionFlag') : undefined;
+  const edgeOfFlightLineAttr = pointSemantics ? findAttr(attrs, 'EdgeOfFlightLine') : undefined;
   const gpsAttr = findAttr(attrs, 'GpsTime');
   const rAttr = findAttr(attrs, 'Red');
   const gAttr = findAttr(attrs, 'Green');

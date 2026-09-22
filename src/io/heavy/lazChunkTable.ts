@@ -316,7 +316,18 @@ export async function readLazChunkTable(
     // the byte cost is `pointCount * pointDataRecordLength` and LAS Extra Bytes
     // lets one record reach 65535 bytes. A modest-looking count over a huge
     // record still stages gigabytes, so refuse on the actual decoded size.
-    if (!withinDecodedByteBudget(pointCount, header.pointDataRecordLength)) {
+    // Both the whole-file decode (`semantics: true`) and the out-of-core tile
+    // path (`semantics: false`) validate their chunks through this one table
+    // parser, so the gate must not be looser than the more expensive of the
+    // two — the default `semantics: true` covers both.
+    if (
+      !withinDecodedByteBudget(
+        pointCount,
+        header.pointDataRecordLength,
+        MAX_DECODED_ALLOCATION_BYTES,
+        header.pointFormat,
+      )
+    ) {
       return unsupported(
         `chunk ${i} decodes to ${pointCount} points of ${header.pointDataRecordLength} bytes, ` +
           `over the ${MAX_DECODED_ALLOCATION_BYTES}-byte decode budget; convert it to COPC or EPT`,

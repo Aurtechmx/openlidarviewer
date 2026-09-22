@@ -41,6 +41,8 @@ import type { EptSchemaField } from '../src/io/ept/eptTypes';
 import { buildResidentSnapshot } from '../src/render/streaming/residentSnapshot';
 import { parseLasHeader } from '../src/io/lasHeader';
 import { parseBuffer } from '../src/io/parseBuffer';
+import { loadLas } from '../src/io/loadLas';
+import { PointCloud } from '../src/model/PointCloud';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const FIXTURE_BYTES = readFileSync(join(FIXTURES, 'withheld-flags.las'));
@@ -104,42 +106,61 @@ describe('extractBitFlag / extractScannerChannel', () => {
   });
 });
 
+describe('allocRawPoints: pointSemantics default off', () => {
+  it('leaves all five gated channels null when pointSemantics is not requested', () => {
+    const ctx = decodeContext(header(6), [0, 0, 0]);
+    const out = allocRawPoints(1, false, false, ctx.extended);
+    expect(out.scanAngle).toBeNull();
+    expect(out.userData).toBeNull();
+    expect(out.scannerChannel).toBeNull();
+    expect(out.scanDirection).toBeNull();
+    expect(out.edgeOfFlightLine).toBeNull();
+  });
+
+  it('decodeRecord leaves classificationFlags filled either way — that channel is not gated', () => {
+    const ctx = decodeContext(header(1), [0, 0, 0]);
+    const out = allocRawPoints(1, false, false, ctx.extended);
+    decodeRecord(record(15, 0x80), 0, 0, ctx, out);
+    expect(out.classificationFlags[0]).toBe(0x4); // Withheld, legacy bit 7
+  });
+});
+
 describe('decodeRecord: legacy layout (PDRF 0-5)', () => {
   it('reads the scan angle rank at byte 16 as whole degrees, negative included', () => {
     const ctx = decodeContext(header(1), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     const buf = new ArrayBuffer(64);
     new DataView(buf).setInt8(16, -90);
     decodeRecord(new DataView(buf), 0, 0, ctx, out);
-    expect(out.scanAngle[0]).toBe(-90);
+    expect((out.scanAngle as Float32Array)[0]).toBe(-90);
   });
 
   it('reads user data at byte 17', () => {
     const ctx = decodeContext(header(1), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     decodeRecord(record(17, 200), 0, 0, ctx, out);
-    expect(out.userData[0]).toBe(200);
+    expect((out.userData as Uint8Array)[0]).toBe(200);
   });
 
   it('reads scan direction from bit 6 and edge-of-flight-line from bit 7 of the return-bits byte', () => {
     const ctx = decodeContext(header(1), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     decodeRecord(record(14, 0b1100_0000), 0, 0, ctx, out);
-    expect(out.scanDirection[0]).toBe(1);
-    expect(out.edgeOfFlightLine[0]).toBe(1);
+    expect((out.scanDirection as Uint8Array)[0]).toBe(1);
+    expect((out.edgeOfFlightLine as Uint8Array)[0]).toBe(1);
   });
 
   it('reports no scan direction / edge flag when both bits are clear', () => {
     const ctx = decodeContext(header(1), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     decodeRecord(record(14, 0b0011_1111), 0, 0, ctx, out);
-    expect(out.scanDirection[0]).toBe(0);
-    expect(out.edgeOfFlightLine[0]).toBe(0);
+    expect((out.scanDirection as Uint8Array)[0]).toBe(0);
+    expect((out.edgeOfFlightLine as Uint8Array)[0]).toBe(0);
   });
 
-  it('has no scanner channel — legacy carries none', () => {
+  it('has no scanner channel — legacy carries none, even with pointSemantics on', () => {
     const ctx = decodeContext(header(1), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     expect(out.scannerChannel).toBeNull();
   });
 });
@@ -147,29 +168,29 @@ describe('decodeRecord: legacy layout (PDRF 0-5)', () => {
 describe('decodeRecord: extended layout (PDRF 6-10)', () => {
   it('reads the scan angle at byte 18 as an int16 in 0.006° units, negative included', () => {
     const ctx = decodeContext(header(6), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     decodeRecord(recordInt16(18, -15000), 0, 0, ctx, out);
-    expect(out.scanAngle[0]).toBeCloseTo(-90, 10);
+    expect((out.scanAngle as Float32Array)[0]).toBeCloseTo(-90, 10);
   });
 
   it('reads user data at byte 17', () => {
     const ctx = decodeContext(header(6), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     decodeRecord(record(17, 200), 0, 0, ctx, out);
-    expect(out.userData[0]).toBe(200);
+    expect((out.userData as Uint8Array)[0]).toBe(200);
   });
 
   it('reads scan direction from bit 6 and edge-of-flight-line from bit 7 of the flags byte', () => {
     const ctx = decodeContext(header(6), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     decodeRecord(record(15, 0b1100_0000), 0, 0, ctx, out);
-    expect(out.scanDirection[0]).toBe(1);
-    expect(out.edgeOfFlightLine[0]).toBe(1);
+    expect((out.scanDirection as Uint8Array)[0]).toBe(1);
+    expect((out.edgeOfFlightLine as Uint8Array)[0]).toBe(1);
   });
 
   it('reads scanner channel from bits 4-5 of the flags byte, independent of the classification-flag nibble', () => {
     const ctx = decodeContext(header(6), [0, 0, 0]);
-    const out = allocRawPoints(1, false, false, ctx.extended);
+    const out = allocRawPoints(1, false, false, ctx.extended, { pointSemantics: true });
     // Channel 2 (bit 5) plus every classification flag (bits 0-3) set.
     decodeRecord(record(15, 0b0010_1111), 0, 0, ctx, out);
     expect(out.scannerChannel).not.toBeNull();
@@ -186,7 +207,11 @@ describe('real fixture round trip: withheld-flags.las (PDRF 6), compared per ind
     scanDirection: Uint8Array;
     edgeOfFlightLine: Uint8Array;
   }> {
-    const { cloud } = await parseBuffer(FIXTURE_BUF.slice(0), 'las', 'withheld-flags.las');
+    // pointSemantics: true — the 6th positional parameter of loadLas. Going
+    // through loadLas directly (not parseBuffer's plan-less generic-loader
+    // path, which does not thread pointSemantics — only its LAS/LAZ
+    // preflight-plan fast path does).
+    const cloud = await loadLas(FIXTURE_BUF.slice(0), 'las', 'withheld-flags.las', 1, undefined, true);
     expect(cloud.scanAngle).toBeTruthy();
     expect(cloud.userData).toBeTruthy();
     expect(cloud.scanDirection).toBeTruthy();
@@ -214,6 +239,7 @@ describe('real fixture round trip: withheld-flags.las (PDRF 6), compared per ind
       scale: header0.scale,
       offset: header0.offset,
       renderOrigin: [0, 0, 0],
+      pointSemantics: true,
     };
     const decoded = decodeRecords(raw, meta);
     const expected = await staticAttrs();
@@ -231,8 +257,33 @@ describe('real fixture round trip: withheld-flags.las (PDRF 6), compared per ind
     expect([...(decoded.edgeOfFlightLine as Uint8Array)]).toEqual([...expected.edgeOfFlightLine]);
   });
 
+  it('COPC decodeRecords leaves all five undefined when pointSemantics is off (default)', () => {
+    const header0 = parseLasHeader(FIXTURE_BUF);
+    const raw = new Uint8Array(
+      FIXTURE_BUF,
+      header0.offsetToPointData,
+      header0.pointCount * header0.pointDataRecordLength,
+    );
+    const meta: ChunkDecodeMetadata = {
+      pointDataRecordFormat: header0.pointFormat,
+      pointRecordLength: header0.pointDataRecordLength,
+      pointCount: header0.pointCount,
+      scale: header0.scale,
+      offset: header0.offset,
+      renderOrigin: [0, 0, 0],
+    };
+    const decoded = decodeRecords(raw, meta);
+    expect(decoded.scanAngle).toBeUndefined();
+    expect(decoded.userData).toBeUndefined();
+    expect(decoded.scannerChannel).toBeUndefined();
+    expect(decoded.scanDirection).toBeUndefined();
+    expect(decoded.edgeOfFlightLine).toBeUndefined();
+    // classificationFlags is unaffected — always decoded.
+    expect(decoded.classificationFlags).toBeTruthy();
+  });
+
   it('EPT laszip decode matches the static decode index-for-index', async () => {
-    const decoded = await decodeEptLaszipTile(FIXTURE_BUF, [0, 0, 0]);
+    const decoded = await decodeEptLaszipTile(FIXTURE_BUF, [0, 0, 0], undefined, true);
     const expected = await staticAttrs();
 
     expect([...(decoded.scanAngle as Float32Array)]).toEqual([...expected.scanAngle]);
@@ -241,10 +292,19 @@ describe('real fixture round trip: withheld-flags.las (PDRF 6), compared per ind
     expect([...(decoded.scanDirection as Uint8Array)]).toEqual([...expected.scanDirection]);
     expect([...(decoded.edgeOfFlightLine as Uint8Array)]).toEqual([...expected.edgeOfFlightLine]);
   });
+
+  it('EPT laszip decode leaves all five undefined when pointSemantics is off (default)', async () => {
+    const decoded = await decodeEptLaszipTile(FIXTURE_BUF, [0, 0, 0]);
+    expect(decoded.scanAngle).toBeUndefined();
+    expect(decoded.userData).toBeUndefined();
+    expect(decoded.scannerChannel).toBeUndefined();
+    expect(decoded.scanDirection).toBeUndefined();
+    expect(decoded.edgeOfFlightLine).toBeUndefined();
+  });
 });
 
 describe('EPT laszip: scanner channel is undefined for a legacy-format tile', () => {
-  it('decodes a PDRF 1 tile with no scanner channel', async () => {
+  it('decodes a PDRF 1 tile with no scanner channel (pointSemantics on)', async () => {
     const legacyBytes = readFileSync(join(FIXTURES, 'tiny-pdrf1.laz'));
     // tiny-pdrf1.laz is compressed; the laszip decoder handles LAZ tiles the
     // same as LAS ones (it detects compression from the header), so feed it
@@ -253,7 +313,7 @@ describe('EPT laszip: scanner channel is undefined for a legacy-format tile', ()
       legacyBytes.byteOffset,
       legacyBytes.byteOffset + legacyBytes.byteLength,
     );
-    const decoded = await decodeEptLaszipTile(buf, [0, 0, 0]);
+    const decoded = await decodeEptLaszipTile(buf, [0, 0, 0], undefined, true);
     expect(decoded.scannerChannel).toBeUndefined();
     // The other four channels are structural in every supported format.
     expect(decoded.scanAngle).toBeTruthy();
@@ -298,13 +358,14 @@ describe('EPT binary: each new channel is undefined when the schema omits it', (
     return buffer;
   }
 
-  it('reads every channel the schema declares', () => {
+  it('reads every channel the schema declares, when pointSemantics is on', () => {
     const rows = [
       { scanAngle: -12.5, userData: 7, channel: 2, dir: 1, edge: 0 },
       { scanAngle: 30, userData: 9, channel: 0, dir: 0, edge: 1 },
     ];
     const buf = packFull(rows);
-    const decoded = decodeEptBinaryTile(buf, rows.length, SCHEMA_FULL, [0, 0, 0]);
+    // pointSemantics is the 7th positional parameter (after maxPeakBytes).
+    const decoded = decodeEptBinaryTile(buf, rows.length, SCHEMA_FULL, [0, 0, 0], undefined, undefined, true);
     expect([...(decoded.scanAngle as Float32Array)]).toEqual(rows.map((r) => r.scanAngle));
     expect([...(decoded.userData as Uint8Array)]).toEqual(rows.map((r) => r.userData));
     expect([...(decoded.scannerChannel as Uint8Array)]).toEqual(rows.map((r) => r.channel));
@@ -314,7 +375,21 @@ describe('EPT binary: each new channel is undefined when the schema omits it', (
 
   it('leaves every new channel undefined when the schema declares only X/Y/Z', () => {
     const buf = new ArrayBuffer(12 * 2);
-    const decoded = decodeEptBinaryTile(buf, 2, SCHEMA_XYZ_ONLY, [0, 0, 0]);
+    const decoded = decodeEptBinaryTile(buf, 2, SCHEMA_XYZ_ONLY, [0, 0, 0], undefined, undefined, true);
+    expect(decoded.scanAngle).toBeUndefined();
+    expect(decoded.userData).toBeUndefined();
+    expect(decoded.scannerChannel).toBeUndefined();
+    expect(decoded.scanDirection).toBeUndefined();
+    expect(decoded.edgeOfFlightLine).toBeUndefined();
+  });
+
+  it('leaves every new channel undefined when pointSemantics is off, even though the schema declares them all', () => {
+    const rows = [{ scanAngle: -12.5, userData: 7, channel: 2, dir: 1, edge: 0 }];
+    const buf = packFull(rows);
+    // pointSemantics omitted — default off, despite SCHEMA_FULL declaring
+    // every attribute. The source having the data and the caller asking for
+    // it are two different facts.
+    const decoded = decodeEptBinaryTile(buf, rows.length, SCHEMA_FULL, [0, 0, 0]);
     expect(decoded.scanAngle).toBeUndefined();
     expect(decoded.userData).toBeUndefined();
     expect(decoded.scannerChannel).toBeUndefined();
@@ -360,5 +435,45 @@ describe('resident snapshot: the new channels merge under the all-or-nothing rul
     const cloud = buildResidentSnapshot([withChannel, withoutChannel], OPTS);
     expect(cloud).not.toBeNull();
     expect(cloud!.scannerChannel).toBeUndefined();
+  });
+});
+
+describe('worker payload: the five gated channels being undefined is fine end-to-end', () => {
+  it('parseBuffer with pointSemantics off produces a cloud with all five undefined', async () => {
+    // pointSemantics omitted (8th positional parameter) — default off.
+    const { cloud } = await parseBuffer(FIXTURE_BUF.slice(0), 'las', 'withheld-flags.las');
+    expect(cloud.scanAngle).toBeUndefined();
+    expect(cloud.userData).toBeUndefined();
+    expect(cloud.scannerChannel).toBeUndefined();
+    expect(cloud.scanDirection).toBeUndefined();
+    expect(cloud.edgeOfFlightLine).toBeUndefined();
+    // classificationFlags is unaffected by the switch — still decoded.
+    expect(cloud.classificationFlags).toBeTruthy();
+  });
+
+  it('the worker payload/transfer-list fields (workerPayloadParity.test.ts) round-trip undefined cleanly', () => {
+    // `new PointCloud(payload)` — the same call the worker reply resolves
+    // through — must accept every one of the five fields as undefined
+    // without throwing, exactly like every other optional PointCloudOptions
+    // channel. This is the runtime half of what
+    // tests/workerPayloadParity.test.ts checks statically (that the field
+    // NAMES survive the worker boundary); this checks the VALUES survive a
+    // reconstruction when they are absent.
+    const cloud = new PointCloud({
+      positions: new Float32Array([0, 0, 0]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'x.las',
+      scanAngle: undefined,
+      userData: undefined,
+      scannerChannel: undefined,
+      scanDirection: undefined,
+      edgeOfFlightLine: undefined,
+    });
+    expect(cloud.scanAngle).toBeUndefined();
+    expect(cloud.userData).toBeUndefined();
+    expect(cloud.scannerChannel).toBeUndefined();
+    expect(cloud.scanDirection).toBeUndefined();
+    expect(cloud.edgeOfFlightLine).toBeUndefined();
   });
 });

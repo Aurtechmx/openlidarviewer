@@ -25,8 +25,8 @@ const RECORD_INTENSITY = 12;
  */
 const RECORD_RETURN_BITS = 14;
 /** Classification byte offset for legacy / extended point formats. */
-const RECORD_CLASSIFICATION_LEGACY = 15;
-const RECORD_CLASSIFICATION_EXT = 16;
+export const RECORD_CLASSIFICATION_LEGACY = 15;
+export const RECORD_CLASSIFICATION_EXT = 16;
 /**
  * Byte offset of the classification-flags source byte. Coincidentally 15 in
  * both layouts: extended keeps a dedicated flags byte there, legacy packs the
@@ -62,15 +62,15 @@ export function normalizeClassificationFlagsByte(byte: number, extended: boolean
  * 16, "Scan Angle Rank", signed char, -90 to +90; Table 17: extended formats
  * 6-10, byte offset 18, "Scan Angle", signed short, unit 0.006°).
  */
-const RECORD_SCAN_ANGLE_LEGACY = 16;
-const RECORD_SCAN_ANGLE_EXT = 18;
+export const RECORD_SCAN_ANGLE_LEGACY = 16;
+export const RECORD_SCAN_ANGLE_EXT = 18;
 /** Extended scan-angle LSB, in degrees (Table 17). */
 const SCAN_ANGLE_EXTENDED_UNIT_DEG = 0.006;
 /** User data — uint8 — byte 17 in both the legacy and extended layouts. */
-const RECORD_USER_DATA_OFFSET = 17;
+export const RECORD_USER_DATA_OFFSET = 17;
 /** Point source ID — uint16 LE — byte 18 in legacy records, byte 20 in extended. */
-const RECORD_POINT_SOURCE_ID_LEGACY = 18;
-const RECORD_POINT_SOURCE_ID_EXT = 20;
+export const RECORD_POINT_SOURCE_ID_LEGACY = 18;
+export const RECORD_POINT_SOURCE_ID_EXT = 20;
 
 /**
  * Convert a raw scan-angle field to degrees. Legacy records already store
@@ -101,8 +101,8 @@ export function extractScannerChannel(flagByte: number): number {
   return (flagByte >> 4) & 0x03;
 }
 /** GPS time — float64 LE — byte 20 in legacy GPS records, byte 22 in extended. */
-const RECORD_GPS_TIME_LEGACY = 20;
-const RECORD_GPS_TIME_EXT = 22;
+export const RECORD_GPS_TIME_LEGACY = 20;
+export const RECORD_GPS_TIME_EXT = 22;
 /** First point format index that uses the extended record layout. */
 export const FIRST_EXTENDED_FORMAT = 6;
 /** Legacy point formats (0-5) that carry a GPS-time field. */
@@ -163,19 +163,26 @@ export interface RawPoints {
   classificationFlags: Uint8Array;
   returnNumber: Uint8Array;
   returnCount: Uint8Array;
-  /** Scan angle in degrees — see {@link scanAngleToDegrees}. Every LAS record has one. */
-  scanAngle: Float32Array;
-  /** User data — every LAS record has one. */
-  userData: Uint8Array;
   /**
-   * Scanner channel (bits 4-5 of the extended flags byte). Only extended
-   * records (PDRF 6-10) carry this; null for a legacy-format file.
+   * Scan angle in degrees — see {@link scanAngleToDegrees}. Every LAS record
+   * has one, but a caller that will discard it (the out-of-core tile path,
+   * whose packed schema carries none of these five channels) can skip the
+   * allocation via `allocRawPoints`'s `pointSemantics` option — null there, never
+   * a wastefully-filled array nobody reads.
+   */
+  scanAngle: Float32Array | null;
+  /** User data — see {@link scanAngle} for when this is null. */
+  userData: Uint8Array | null;
+  /**
+   * Scanner channel (bits 4-5 of the extended flags byte). Null for a
+   * legacy-format file (Table 17 is extended-only) OR when `pointSemantics` is
+   * off — see {@link scanAngle}.
    */
   scannerChannel: Uint8Array | null;
-  /** Scan direction flag, 0 or 1 — every LAS record has one. */
-  scanDirection: Uint8Array;
-  /** Edge-of-flight-line flag, 0 or 1 — every LAS record has one. */
-  edgeOfFlightLine: Uint8Array;
+  /** Scan direction flag, 0 or 1 — see {@link scanAngle} for when this is null. */
+  scanDirection: Uint8Array | null;
+  /** Edge-of-flight-line flag, 0 or 1 — see {@link scanAngle} for when this is null. */
+  edgeOfFlightLine: Uint8Array | null;
   pointSourceId: Uint16Array;
   gpsTime: Float64Array | null;
   /** Interleaved rgb (0–255), or null when the point format carries no colour.
@@ -266,16 +273,20 @@ export function decodeRecord(
   // already read above, or the extended flags byte read above for the
   // classification flags.
   const directionSourceByte = ctx.extended ? flagByte : returnBits;
-  out.scanDirection[i] = extractBitFlag(directionSourceByte, 6);
-  out.edgeOfFlightLine[i] = extractBitFlag(directionSourceByte, 7);
+  if (out.scanDirection !== null) out.scanDirection[i] = extractBitFlag(directionSourceByte, 6);
+  if (out.edgeOfFlightLine !== null) {
+    out.edgeOfFlightLine[i] = extractBitFlag(directionSourceByte, 7);
+  }
   if (out.scannerChannel !== null) {
     out.scannerChannel[i] = extractScannerChannel(flagByte);
   }
-  const scanAngleRaw = ctx.extended
-    ? view.getInt16(base + ctx.scanAngleOffset, true)
-    : view.getInt8(base + ctx.scanAngleOffset);
-  out.scanAngle[i] = scanAngleToDegrees(scanAngleRaw, ctx.extended);
-  out.userData[i] = view.getUint8(base + ctx.userDataOffset);
+  if (out.scanAngle !== null) {
+    const scanAngleRaw = ctx.extended
+      ? view.getInt16(base + ctx.scanAngleOffset, true)
+      : view.getInt8(base + ctx.scanAngleOffset);
+    out.scanAngle[i] = scanAngleToDegrees(scanAngleRaw, ctx.extended);
+  }
+  if (out.userData !== null) out.userData[i] = view.getUint8(base + ctx.userDataOffset);
   out.pointSourceId[i] = view.getUint16(base + ctx.pointSourceIdOffset, true);
   if (ctx.gpsTimeOffset !== null && out.gpsTime !== null) {
     out.gpsTime[i] = view.getFloat64(base + ctx.gpsTimeOffset, true);
@@ -292,12 +303,31 @@ export function decodeRecord(
   }
 }
 
+/**
+ * `pointSemantics` gates scan angle, user data, scanner channel, scan
+ * direction and edge-of-flight-line — five channels every LAS record HAS,
+ * but which cost real bytes and CPU to decode and which nothing in the
+ * application reads yet. Default OFF everywhere: no caller opts in today, so
+ * `undefined` on a decoded cloud or chunk means either "not decoded" (the
+ * common case, `pointSemantics` was off) or "not present in the source" — a
+ * consumer that needs to tell those apart must itself request the channels
+ * (`pointSemantics: true`) and only then does `undefined` mean the source
+ * genuinely lacks them (true for `scannerChannel` on a legacy-format file).
+ * `classificationFlags` is NOT gated by this option — it stays always-on,
+ * one byte per point, because the Withheld policy reads it.
+ */
+export interface AllocRawPointsOptions {
+  pointSemantics?: boolean;
+}
+
 export function allocRawPoints(
   count: number,
   hasGpsTime: boolean,
   hasColor = false,
   extended = false,
+  options: AllocRawPointsOptions = {},
 ): RawPoints {
+  const pointSemantics = options.pointSemantics ?? false;
   return {
     positions: new Float32Array(count * 3),
     intensity: new Uint16Array(count),
@@ -305,14 +335,14 @@ export function allocRawPoints(
     classificationFlags: new Uint8Array(count),
     returnNumber: new Uint8Array(count),
     returnCount: new Uint8Array(count),
-    scanAngle: new Float32Array(count),
-    userData: new Uint8Array(count),
+    scanAngle: pointSemantics ? new Float32Array(count) : null,
+    userData: pointSemantics ? new Uint8Array(count) : null,
     // Scanner channel is a Table 17 extended-only field — legacy records
     // have nothing to report, so the array itself is absent rather than
-    // zero-filled.
-    scannerChannel: extended ? new Uint8Array(count) : null,
-    scanDirection: new Uint8Array(count),
-    edgeOfFlightLine: new Uint8Array(count),
+    // zero-filled — same as when `pointSemantics` is off.
+    scannerChannel: pointSemantics && extended ? new Uint8Array(count) : null,
+    scanDirection: pointSemantics ? new Uint8Array(count) : null,
+    edgeOfFlightLine: pointSemantics ? new Uint8Array(count) : null,
     pointSourceId: new Uint16Array(count),
     gpsTime: hasGpsTime ? new Float64Array(count) : null,
     // Colour is staged as raw 16-bit and narrowed once in finalizeRawColors;
@@ -320,6 +350,57 @@ export function allocRawPoints(
     colors: null,
     colors16: hasColor ? new Uint16Array(count * 3) : null,
   };
+}
+
+/** Legacy point formats (0-5) whose record carries an RGB triple. */
+const LEGACY_RGB_FORMATS: ReadonlySet<number> = new Set([2, 3, 5]);
+/** Extended point formats (6-10) whose record carries an RGB triple. */
+const EXTENDED_RGB_FORMATS: ReadonlySet<number> = new Set([7, 8, 10]);
+
+/**
+ * The TRUE resident bytes one point costs in a `RawPoints` allocated by
+ * {@link allocRawPoints} for `pointFormat`, with the same `pointSemantics`
+ * choice (default off, matching `allocRawPoints`'s own default) — derived
+ * from the exact same field list (and the same GPS-time / RGB format rules
+ * {@link gpsTimeOffsetFor} / {@link rgbOffsetFor} use) so the two functions
+ * cannot drift apart. Colour is charged at its WORST-CASE transient cost: the
+ * 16-bit staging buffer (6 bytes) plus the narrowed 8-bit one (3 bytes) are
+ * resident together while `finalizeRawColors` runs, mirroring the
+ * `colors16`/`colors` pair `allocRawPoints` stages.
+ *
+ * Used to size a budget check against the allocation it actually protects,
+ * not against the source record length — `RawPoints` is wider than the LAS
+ * record for every point format, since it always carries the
+ * classification-flags channel and, when `pointSemantics` is on, the five
+ * point-semantics channels too — so a budget keyed on record length alone
+ * would pass a decode that allocates past it.
+ */
+export function rawPointsBytesPerPoint(
+  pointFormat: number,
+  options: AllocRawPointsOptions = {},
+): number {
+  const pointSemantics = options.pointSemantics ?? false;
+  const extended = pointFormat >= FIRST_EXTENDED_FORMAT;
+  const hasGpsTime = extended || LEGACY_GPS_FORMATS.has(pointFormat);
+  const hasColor = extended
+    ? EXTENDED_RGB_FORMATS.has(pointFormat)
+    : LEGACY_RGB_FORMATS.has(pointFormat);
+  let bytes =
+    12 /* positions: Float32 * 3 */ +
+    2 /* intensity: Uint16 */ +
+    1 /* classification: Uint8 */ +
+    1 /* classificationFlags: Uint8 */ +
+    1 /* returnNumber: Uint8 */ +
+    1 /* returnCount: Uint8 */ +
+    2 /* pointSourceId: Uint16 */;
+  if (pointSemantics) {
+    bytes += 4 /* scanAngle: Float32 */ + 1 /* userData: Uint8 */;
+    bytes += 1 /* scanDirection: Uint8 */ + 1 /* edgeOfFlightLine: Uint8 */;
+    if (extended) bytes += 1; /* scannerChannel: Uint8 */
+  }
+  if (hasGpsTime) bytes += 8; /* Float64 */
+  if (hasColor) bytes += 6 + 3; /* colors16 staging + narrowed colors, coexisting */
+  return bytes;
 }
 
 /**
@@ -368,12 +449,12 @@ export function rawPointsTransferables(raw: RawPoints): ArrayBuffer[] {
     raw.classificationFlags.buffer as ArrayBuffer,
     raw.returnNumber.buffer as ArrayBuffer,
     raw.returnCount.buffer as ArrayBuffer,
-    raw.scanAngle.buffer as ArrayBuffer,
-    raw.userData.buffer as ArrayBuffer,
-    raw.scanDirection.buffer as ArrayBuffer,
-    raw.edgeOfFlightLine.buffer as ArrayBuffer,
     raw.pointSourceId.buffer as ArrayBuffer,
   ];
+  if (raw.scanAngle) buffers.push(raw.scanAngle.buffer as ArrayBuffer);
+  if (raw.userData) buffers.push(raw.userData.buffer as ArrayBuffer);
+  if (raw.scanDirection) buffers.push(raw.scanDirection.buffer as ArrayBuffer);
+  if (raw.edgeOfFlightLine) buffers.push(raw.edgeOfFlightLine.buffer as ArrayBuffer);
   if (raw.scannerChannel) buffers.push(raw.scannerChannel.buffer as ArrayBuffer);
   if (raw.gpsTime) buffers.push(raw.gpsTime.buffer as ArrayBuffer);
   if (raw.colors16) buffers.push(raw.colors16.buffer as ArrayBuffer);

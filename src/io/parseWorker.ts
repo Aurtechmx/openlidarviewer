@@ -52,13 +52,21 @@ interface ParseRequest {
    * decode hands back every record it places.
    */
   previewBudget?: number;
+  /**
+   * Decode scan angle, user data, scanner channel, scan direction and
+   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
+   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) —
+   * no caller sets this yet.
+   */
+  pointSemantics?: boolean;
 }
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent): void => {
-  const { buffer, file, format, name, budget, plan, e57Plan, search, device, previewBudget } =
-    event.data as ParseRequest;
+  const {
+    buffer, file, format, name, budget, plan, e57Plan, search, device, previewBudget, pointSemantics,
+  } = event.data as ParseRequest;
   if (typeof search === 'string') primeDevFlags(search);
   if (device) primeDecodePoolEnvironment({ isMobile: device.touchFirst });
   // The pool decides from this, handed down explicitly: a lazily loaded chunk
@@ -88,8 +96,11 @@ ctx.onmessage = (event: MessageEvent): void => {
       };
       let stats: LazLoadStats | undefined;
       const { cloud, originalPointCount, downsampled } = file
-        ? await parseFile(file, format, name, budget, plan, onProgress, e57Plan, onPreviewChunk, (s) => { stats = s; }, policy, previewBudget)
-        : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan);
+        ? await parseFile(
+            file, format, name, budget, plan, onProgress, e57Plan, onPreviewChunk,
+            (s) => { stats = s; }, policy, previewBudget, pointSemantics,
+          )
+        : await parseBuffer(buffer as ArrayBuffer, format, name, budget, plan, onProgress, e57Plan, pointSemantics);
 
       const endedAt = performance.now();
       const decodeAt = stageAt.get('decoding');

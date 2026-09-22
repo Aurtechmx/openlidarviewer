@@ -103,6 +103,13 @@ export function planChunkWindow(
   window: number,
   recordLength: number = 0,
   packedRecordBytes: number = 0,
+  // Threaded straight through to `decodedBytesFor`: the window this path
+  // decodes always feeds the packed tile schema (this module's only caller
+  // repacks every chunk it decodes into `tileRecord.ts` records, which carry
+  // none of the five `pointSemantics` channels), so `pointSemantics` is left
+  // at its default (off) — the same choice `decodeLazChunkLocal` is called
+  // with for this path.
+  pointFormat?: number,
 ): { end: number; spanStart: number; spanLength: number } {
   const spanStart = chunks[start].byteOffset;
   const cap = recordLength > 0 ? MAX_DECODED_ALLOCATION_BYTES : Number.POSITIVE_INFINITY;
@@ -110,7 +117,7 @@ export function planChunkWindow(
   const peakActive = recordLength > 0;
   let end = start + 1;
   let points = chunks[start].pointCount;
-  let decoded = decodedBytesFor(points, recordLength > 0 ? recordLength : 1);
+  let decoded = decodedBytesFor(points, recordLength > 0 ? recordLength : 1, pointFormat);
   // The largest single chunk in the window bounds laz-perf's WASM copy: chunks
   // decode one at a time, so only one chunk's compressed bytes are duplicated into
   // the WASM heap at any instant, on top of the whole resident span.
@@ -120,7 +127,8 @@ export function planChunkWindow(
     const nextSpan = next.byteOffset + next.byteLength - spanStart;
     if (nextSpan > MAX_LAZ_WINDOW_SPAN_BYTES) break;
     const nextPoints = points + next.pointCount;
-    const nextDecoded = decoded + decodedBytesFor(next.pointCount, recordLength > 0 ? recordLength : 1);
+    const nextDecoded =
+      decoded + decodedBytesFor(next.pointCount, recordLength > 0 ? recordLength : 1, pointFormat);
     if (nextDecoded > cap) break;
     const nextMaxChunk = Math.max(maxChunk, next.byteLength);
     if (
@@ -239,6 +247,7 @@ export async function openChunkedLazSource(
           window,
           header.pointDataRecordLength,
           recordBytes,
+          header.pointFormat,
         );
         // A window is always at least one chunk. When it shrank to a single chunk
         // whose own summed peak (its span + decoded + packed) is still over the
@@ -293,7 +302,14 @@ function decodeChunkBatch(
   // records exceed the decoded-byte budget. readLazChunkTable already refuses
   // such a chunk, so a supported table cannot reach here over budget; this holds
   // even if a future caller hands in a chunk that skipped that gate.
-  if (!withinDecodedByteBudget(c.pointCount, header.pointDataRecordLength)) {
+  if (
+    !withinDecodedByteBudget(
+      c.pointCount,
+      header.pointDataRecordLength,
+      MAX_DECODED_ALLOCATION_BYTES,
+      header.pointFormat,
+    )
+  ) {
     throw new ChunkedLazUnsupportedError(
       `chunked LAZ chunk decodes to ${c.pointCount} points of ${header.pointDataRecordLength} ` +
         'bytes, over the safe decode budget; convert it to COPC or EPT',
@@ -314,6 +330,9 @@ function decodeChunkBatch(
     scale: header.scale,
     offset: header.offset,
     ctx,
+    // `pointSemantics` left at its default (off): the packed tile schema
+    // below carries none of scan angle / user data / scanner channel / scan
+    // direction / edge-of-flight-line, so nothing here decodes them.
   };
   const raw = decodeLazChunkLocal(lazPerf, job);
   // Narrow colours per chunk, exactly as the LAS sliced reader finalizes per

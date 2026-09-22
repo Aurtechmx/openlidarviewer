@@ -92,6 +92,13 @@ export interface LazChunkJob {
    * records the earlier chunks keep. Defaults to `firstPointIndex`.
    */
   readonly outIndex?: number;
+  /**
+   * Decode scan angle, user data, scanner channel, scan direction and
+   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
+   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) — no
+   * caller sets this yet.
+   */
+  readonly pointSemantics?: boolean;
 }
 
 /**
@@ -118,7 +125,13 @@ export function decodeLazChunkLocal(lazPerf: LazPerfModule, job: LazChunkJob): R
   const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
   const keep = job.keep;
   const kept = keep ? keep.length : job.pointCount;
-  const local = allocRawPoints(kept, job.ctx.gpsTimeOffset !== null, job.ctx.rgbOffset !== null, job.ctx.extended);
+  const local = allocRawPoints(
+    kept,
+    job.ctx.gpsTimeOffset !== null,
+    job.ctx.rgbOffset !== null,
+    job.ctx.extended,
+    { pointSemantics: job.pointSemantics },
+  );
   for (let j = 0; j < kept; j++) {
     const record = keep ? keep[j] : j;
     decodeRecord(view, record * job.pointRecordLength, j, job.ctx, local);
@@ -137,8 +150,16 @@ function placeChunk(out: RawPoints, local: RawPoints, at: number): Float32Array 
   out.positions.set(positions, p * 3);
   out.intensity.set(local.intensity, p);
   out.classification.set(local.classification, p);
+  out.classificationFlags.set(local.classificationFlags, p);
   out.returnNumber.set(local.returnNumber, p);
   out.returnCount.set(local.returnCount, p);
+  if (out.scanAngle && local.scanAngle) out.scanAngle.set(local.scanAngle, p);
+  if (out.userData && local.userData) out.userData.set(local.userData, p);
+  if (out.scannerChannel && local.scannerChannel) out.scannerChannel.set(local.scannerChannel, p);
+  if (out.scanDirection && local.scanDirection) out.scanDirection.set(local.scanDirection, p);
+  if (out.edgeOfFlightLine && local.edgeOfFlightLine) {
+    out.edgeOfFlightLine.set(local.edgeOfFlightLine, p);
+  }
   out.pointSourceId.set(local.pointSourceId, p);
   if (out.gpsTime && local.gpsTime) out.gpsTime.set(local.gpsTime, p);
   if (out.colors16 && local.colors16) out.colors16.set(local.colors16, p * 3);
@@ -194,6 +215,7 @@ async function jobFor(
   ctx: DecodeContext,
   planned: PlannedChunk,
   signal?: AbortSignal,
+  pointSemantics?: boolean,
 ): Promise<LazChunkJob> {
   const c = planned.range;
   return {
@@ -207,6 +229,7 @@ async function jobFor(
     ctx,
     keep: planned.keep,
     outIndex: planned.outIndex,
+    pointSemantics,
   };
 }
 
@@ -228,6 +251,13 @@ export interface ChunkedDecodeOptions {
    */
   readonly stride?: number;
   readonly onProgress?: (u: ProgressUpdate) => void;
+  /**
+   * Decode scan angle, user data, scanner channel, scan direction and
+   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
+   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) — no
+   * caller sets this yet.
+   */
+  readonly pointSemantics?: boolean;
 }
 
 /**
@@ -242,6 +272,7 @@ async function planChunked(
   origin: [number, number, number],
   stride: number,
   signal?: AbortSignal,
+  pointSemantics?: boolean,
 ): Promise<ChunkedPlan | null> {
   // The VLRs all precede the point data, so the prefix read stops there.
   const table = await readLazChunkTable(source, signal, header.offsetToPointData);
@@ -259,7 +290,9 @@ async function planChunked(
   // Sized to what the decode KEEPS. At stride 10 on a 90 M-point file that is
   // the 9 M-record sample, not the file.
   const total = step > 1 ? Math.ceil(header.pointCount / step) : header.pointCount;
-  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended);
+  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended, {
+    pointSemantics,
+  });
   return { chunks, out, ctx, total };
 }
 
@@ -294,7 +327,7 @@ export async function decodeLazChunkedSequential(
 ): Promise<RawPoints | null> {
   const { signal } = options;
   const source = new ArrayBufferRangeSource(buffer);
-  const plan = await planChunked(source, header, origin, options.stride ?? 1, signal);
+  const plan = await planChunked(source, header, origin, options.stride ?? 1, signal, options.pointSemantics);
   if (plan === null) return null;
   const lazPerf = await getLazPerf();
   const report = progressReporter(plan.total, options.onProgress);
@@ -304,7 +337,7 @@ export async function decodeLazChunkedSequential(
     // A chunk the sample skips entirely holds no output record, so decompressing
     // it could not change one. Every other chunk is decoded in full.
     if (planned.keep && planned.keep.length === 0) continue;
-    const job = await jobFor(source, header, plan.ctx, planned, signal);
+    const job = await jobFor(source, header, plan.ctx, planned, signal, options.pointSemantics);
     placeChunk(plan.out, decodeLazChunkLocal(lazPerf, job), planned.outIndex);
     done += planned.keep ? planned.keep.length : planned.range.pointCount;
     report(done);
@@ -410,7 +443,7 @@ export async function decodeLazParallelFromSource(
   options: ParallelDecodeOptions = {},
 ): Promise<RawPoints | null> {
   const { signal, onPreviewChunk } = options;
-  const plan = await planChunked(source, header, origin, options.stride ?? 1, signal);
+  const plan = await planChunked(source, header, origin, options.stride ?? 1, signal, options.pointSemantics);
   if (plan === null) return null;
   const previewStride = previewStrideFor(plan.total, options.previewBudget);
 
@@ -433,7 +466,7 @@ export async function decodeLazParallelFromSource(
       const planned = chunks[i];
       // A chunk the sample skips entirely holds no output record.
       if (planned.keep?.length !== 0) {
-        const job = await jobFor(source, header, plan.ctx, planned, signal);
+        const job = await jobFor(source, header, plan.ctx, planned, signal, options.pointSemantics);
         const decoded = await decodeChunk(job, signal);
         const placed = placeChunk(plan.out, decoded, planned.outIndex);
         done += keptOf(planned);

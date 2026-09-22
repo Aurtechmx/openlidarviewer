@@ -182,6 +182,13 @@ export interface PooledDecodeOptions {
   readonly onSkipped?: (reason: string) => void;
   /** The flags and device answer to decide by; the scope's own when absent. */
   readonly policy?: DecodePoolPolicy;
+  /**
+   * Decode scan angle, user data, scanner channel, scan direction and
+   * edge-of-flight-line. Default off, like every `pointSemantics` switch in
+   * the decode stack (see `AllocRawPointsOptions` in lasDecodeShared.ts) —
+   * no caller sets this yet.
+   */
+  readonly pointSemantics?: boolean;
 }
 
 /**
@@ -234,6 +241,7 @@ export async function decodeLazPooledFromSource(
       onPreviewChunk: options.onPreviewChunk,
       previewBudget: options.previewBudget,
       onPlanned: options.onPlanned,
+      pointSemantics: options.pointSemantics,
     });
     if (out === null) {
       options.onSkipped?.('no usable chunk table for this file');

@@ -97,6 +97,7 @@ export async function decodeLaz(
   origin: [number, number, number],
   stride: number,
   onProgress?: (u: ProgressUpdate) => void,
+  pointSemantics?: boolean,
 ): Promise<RawPoints> {
   const ctx = decodeContext(header, origin);
   // Bound the declared count by the compressed payload BEFORE sizing the
@@ -124,7 +125,9 @@ export async function decodeLaz(
     const recordLength = reader.getPointLength();
     pointPtr = lazPerf._malloc(recordLength);
 
-    const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended);
+    const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended, {
+      pointSemantics,
+    });
     const reportEvery = Math.max(1, Math.floor(pointCount / 20));
 
     const rand = step > 1 ? makePrng(STRIDE_SAMPLE_SEED) : undefined;

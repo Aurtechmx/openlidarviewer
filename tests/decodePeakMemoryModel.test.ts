@@ -83,10 +83,15 @@ describe('COPC estimateCopcPeakBytes — the second decode phase is bounded', ()
     expect(peak).toBe(phase2);
   });
 
-  test('PDRF 7 channel bytes are 45/point (36 base + 9 for staged+narrowed RGB)', () => {
-    expect(copcDecodedChannelBytes(7, 1)).toBe(45);
-    expect(copcDecodedChannelBytes(6, 1)).toBe(36);
-    expect(copcDecodedChannelBytes(8, 1)).toBe(45);
+  test('PDRF 7 channel bytes are 37/point (28 base + 9 for staged+narrowed RGB)', () => {
+    expect(copcDecodedChannelBytes(7, 1)).toBe(37);
+    expect(copcDecodedChannelBytes(6, 1)).toBe(28);
+    expect(copcDecodedChannelBytes(8, 1)).toBe(37);
+  });
+
+  test('pointSemantics adds 8 bytes/point (scanAngle 4 + userData 1 + scannerChannel 1 + scanDirection 1 + edgeOfFlightLine 1)', () => {
+    expect(copcDecodedChannelBytes(6, 1, true)).toBe(36);
+    expect(copcDecodedChannelBytes(7, 1, true)).toBe(45);
   });
 
   test('decompressChunk refuses the node BEFORE any _malloc or decode', () => {
