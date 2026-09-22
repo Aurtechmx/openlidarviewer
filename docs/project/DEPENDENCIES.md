@@ -116,9 +116,14 @@ through `overrides` rather than waiting on the packages that depend on them:
 One further override is not an advisory. `rolldown` is pinned to 1.2.3, the
 bundler Vite builds with. Vite accepts any 1.2.x, and 1.2.7 emits an entry chunk
 14 KiB larger from identical source, which exceeds the 812 KiB ceiling in
-`scripts/check-bundle-budget.mjs`. The pin holds the measured 805 KiB until the
-entry chunk has headroom again; the lazy report seam that would provide it is
-recorded in that file as a refactor of its own.
+`scripts/check-bundle-budget.mjs`. The pin holds until the entry chunk has
+headroom again, and the lazy report seam that would provide it is recorded in
+that file as a refactor of its own.
+
+For the size itself, read `bundle.liveEntryKiB` in
+`docs/validation/test-evidence.json`, which the gate writes from the build it
+just measured. This paragraph used to carry the number instead and said
+805 KiB long after the shell had grown past it.
 
 The `vite` override is scoped to `vitepress` alone. The application builds on
 Vite 8.2.2 and is not affected by it. `npm run docs:build` passes on the
