@@ -112,6 +112,11 @@ interface CloudPayload {
   normals?: Float32Array;
   returnNumber?: Uint8Array;
   returnCount?: Uint8Array;
+  scanAngle?: Float32Array;
+  userData?: Uint8Array;
+  scannerChannel?: Uint8Array;
+  scanDirection?: Uint8Array;
+  edgeOfFlightLine?: Uint8Array;
   pointSourceId?: Uint16Array;
   gpsTime?: Float64Array;
   organizedRange?: OrganizedRangeSet;

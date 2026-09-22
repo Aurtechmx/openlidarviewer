@@ -83,10 +83,10 @@ describe('COPC estimateCopcPeakBytes — the second decode phase is bounded', ()
     expect(peak).toBe(phase2);
   });
 
-  test('PDRF 7 channel bytes are 37/point (28 base + 9 for staged+narrowed RGB)', () => {
-    expect(copcDecodedChannelBytes(7, 1)).toBe(37);
-    expect(copcDecodedChannelBytes(6, 1)).toBe(28);
-    expect(copcDecodedChannelBytes(8, 1)).toBe(37);
+  test('PDRF 7 channel bytes are 45/point (36 base + 9 for staged+narrowed RGB)', () => {
+    expect(copcDecodedChannelBytes(7, 1)).toBe(45);
+    expect(copcDecodedChannelBytes(6, 1)).toBe(36);
+    expect(copcDecodedChannelBytes(8, 1)).toBe(45);
   });
 
   test('decompressChunk refuses the node BEFORE any _malloc or decode', () => {
@@ -157,6 +157,11 @@ describe('EPT binary decode — the decoded arrays are bounded with the body', (
       classificationFlags: false,
       returnNumber: true,
       returnCount: true,
+      scanAngle: false,
+      userData: false,
+      scannerChannel: false,
+      scanDirection: false,
+      edgeOfFlightLine: false,
       gpsTime: true,
       rgb: true,
       rgb16Staging: true,

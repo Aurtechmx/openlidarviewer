@@ -118,7 +118,7 @@ export function decodeLazChunkLocal(lazPerf: LazPerfModule, job: LazChunkJob): R
   const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
   const keep = job.keep;
   const kept = keep ? keep.length : job.pointCount;
-  const local = allocRawPoints(kept, job.ctx.gpsTimeOffset !== null, job.ctx.rgbOffset !== null);
+  const local = allocRawPoints(kept, job.ctx.gpsTimeOffset !== null, job.ctx.rgbOffset !== null, job.ctx.extended);
   for (let j = 0; j < kept; j++) {
     const record = keep ? keep[j] : j;
     decodeRecord(view, record * job.pointRecordLength, j, job.ctx, local);
@@ -259,7 +259,7 @@ async function planChunked(
   // Sized to what the decode KEEPS. At stride 10 on a 90 M-point file that is
   // the 9 M-record sample, not the file.
   const total = step > 1 ? Math.ceil(header.pointCount / step) : header.pointCount;
-  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null);
+  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended);
   return { chunks, out, ctx, total };
 }
 

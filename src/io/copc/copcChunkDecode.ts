@@ -19,6 +19,9 @@ import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFi
 import {
   normalizeClassificationFlagsByte,
   RECORD_CLASSIFICATION_FLAGS_OFFSET,
+  scanAngleToDegrees,
+  extractBitFlag,
+  extractScannerChannel,
 } from '../lasDecodeShared';
 
 /** Per-chunk decode parameters. */
@@ -87,6 +90,19 @@ export interface DecodedChunk {
   returnNumber?: Uint8Array;
   /** Per-point total returns — absent when the format carries none. */
   returnCount?: Uint8Array;
+  /** Per-point scan angle, in degrees — absent when the format carries none. */
+  scanAngle?: Float32Array;
+  /** Per-point user data byte — absent when the format carries none. */
+  userData?: Uint8Array;
+  /**
+   * Per-point scanner channel — COPC nodes are always an extended point
+   * format (PDRF 6/7/8), so this is always present for a COPC chunk.
+   */
+  scannerChannel?: Uint8Array;
+  /** Per-point scan direction flag (0/1) — absent when the format carries none. */
+  scanDirection?: Uint8Array;
+  /** Per-point edge-of-flight-line flag (0/1) — absent when the format carries none. */
+  edgeOfFlightLine?: Uint8Array;
   /** Per-point GPS time — absent when the format carries none. */
   gpsTime?: Float64Array;
   /** Per-point point source id — produced by `decodeRecords`, absent on fakes. */
@@ -132,17 +148,18 @@ export interface ChunkDecoder<TMeta = ChunkDecodeMetadata> {
  * Peak decoded channel-array bytes per point for one PDRF 6/7/8 node, matching
  * exactly what {@link decodeRecords} allocates and holds LIVE at once.
  *
- * Every node fills eight base channels: positions (Float32 · 3 = 12), intensity
+ * Every node fills thirteen base channels: positions (Float32 · 3 = 12), intensity
  * (Uint16 = 2), classification (Uint8 = 1), classification flags (Uint8 = 1),
- * return number (Uint8 = 1), return count (Uint8 = 1), GPS time (Float64 = 8),
- * point source id (Uint16 = 2) — 28 bytes a point. PDRF 7 and 8 add colour, and
- * both the staged Uint16 rgb16 (3 · 2 = 6) and the narrowed Uint8 rgb (3) are
- * RESIDENT together while the narrow loop runs, so colour costs 9, not 3. PDRF
- * 8's NIR is not decoded, so it is not charged. Returns {@link
- * Number.POSITIVE_INFINITY} for a non-usable count so a nonsense value reads
- * as over-budget rather than as zero.
+ * return number (Uint8 = 1), return count (Uint8 = 1), scan angle (Float32 = 4),
+ * user data (Uint8 = 1), scanner channel (Uint8 = 1), scan direction (Uint8 = 1),
+ * edge of flight line (Uint8 = 1), GPS time (Float64 = 8), point source id
+ * (Uint16 = 2) — 36 bytes a point. PDRF 7 and 8 add colour, and both the staged
+ * Uint16 rgb16 (3 · 2 = 6) and the narrowed Uint8 rgb (3) are RESIDENT together
+ * while the narrow loop runs, so colour costs 9, not 3. PDRF 8's NIR is not
+ * decoded, so it is not charged. Returns {@link Number.POSITIVE_INFINITY} for a
+ * non-usable count so a nonsense value reads as over-budget rather than as zero.
  */
-export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 28;
+export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 36;
 export const COPC_RGB_CHANNEL_BYTES_PER_POINT = 9;
 
 export function copcDecodedChannelBytes(pdrf: number, pointCount: number): number {
@@ -153,6 +170,10 @@ export function copcDecodedChannelBytes(pdrf: number, pointCount: number): numbe
   return pointCount * perPoint;
 }
 
+/** User data offset — the same byte in every LAS point format. */
+const USER_DATA_OFFSET = 17;
+/** Scan angle offset (int16, 0.006° units) in PDRF 6, 7, and 8. */
+const SCAN_ANGLE_OFFSET = 18;
 /** Point source id offset in PDRF 6, 7, and 8. */
 const POINT_SOURCE_ID_OFFSET = 20;
 /** GPS time lives at the same offset in PDRF 6, 7, and 8. */
@@ -194,6 +215,13 @@ export function decodeRecords(
   const classificationFlags = new Uint8Array(n);
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);
+  const scanAngle = new Float32Array(n);
+  const userData = new Uint8Array(n);
+  // COPC is always an extended point format, so scanner channel is always
+  // materialised — unlike EPT laszip, which also serves legacy PDRFs.
+  const scannerChannel = new Uint8Array(n);
+  const scanDirection = new Uint8Array(n);
+  const edgeOfFlightLine = new Uint8Array(n);
   const gpsTime = new Float64Array(n);
   const pointSourceId = new Uint16Array(n);
   const rgb16 = hasRgb ? new Uint16Array(n * 3) : undefined;
@@ -211,10 +239,15 @@ export function decodeRecords(
     returnNumber[i] = returnByte & 0x0f;
     returnCount[i] = (returnByte >> 4) & 0x0f;
     classification[i] = view.getUint8(p + 16);
-    classificationFlags[i] = normalizeClassificationFlagsByte(
-      view.getUint8(p + RECORD_CLASSIFICATION_FLAGS_OFFSET),
-      true,
-    );
+    const flagByte = view.getUint8(p + RECORD_CLASSIFICATION_FLAGS_OFFSET);
+    classificationFlags[i] = normalizeClassificationFlagsByte(flagByte, true);
+    // Scan direction and edge-of-flight-line live in bits 6/7 of the same
+    // extended flags byte the classification flags come from.
+    scanDirection[i] = extractBitFlag(flagByte, 6);
+    edgeOfFlightLine[i] = extractBitFlag(flagByte, 7);
+    scannerChannel[i] = extractScannerChannel(flagByte);
+    scanAngle[i] = scanAngleToDegrees(view.getInt16(p + SCAN_ANGLE_OFFSET, true), true);
+    userData[i] = view.getUint8(p + USER_DATA_OFFSET);
     pointSourceId[i] = view.getUint16(p + POINT_SOURCE_ID_OFFSET, true);
     gpsTime[i] = view.getFloat64(p + GPS_TIME_OFFSET, true);
 
@@ -257,6 +290,11 @@ export function decodeRecords(
     classificationFlags,
     returnNumber,
     returnCount,
+    scanAngle,
+    userData,
+    scannerChannel,
+    scanDirection,
+    edgeOfFlightLine,
     gpsTime,
     pointSourceId,
     rgb,
@@ -280,6 +318,11 @@ export function chunkTransferables(decoded: DecodedChunk): ArrayBuffer[] {
   if (decoded.classificationFlags) out.push(decoded.classificationFlags.buffer as ArrayBuffer);
   if (decoded.returnNumber) out.push(decoded.returnNumber.buffer as ArrayBuffer);
   if (decoded.returnCount) out.push(decoded.returnCount.buffer as ArrayBuffer);
+  if (decoded.scanAngle) out.push(decoded.scanAngle.buffer as ArrayBuffer);
+  if (decoded.userData) out.push(decoded.userData.buffer as ArrayBuffer);
+  if (decoded.scannerChannel) out.push(decoded.scannerChannel.buffer as ArrayBuffer);
+  if (decoded.scanDirection) out.push(decoded.scanDirection.buffer as ArrayBuffer);
+  if (decoded.edgeOfFlightLine) out.push(decoded.edgeOfFlightLine.buffer as ArrayBuffer);
   if (decoded.gpsTime) out.push(decoded.gpsTime.buffer as ArrayBuffer);
   if (decoded.pointSourceId) out.push(decoded.pointSourceId.buffer as ArrayBuffer);
   if (decoded.rgb) out.push(decoded.rgb.buffer as ArrayBuffer);

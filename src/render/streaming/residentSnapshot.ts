@@ -82,6 +82,17 @@ export function buildResidentSnapshot(
     ? new Uint8Array(total)
     : undefined;
   const returnCount = everyChunkHas((c) => c.returnCount, 1) ? new Uint8Array(total) : undefined;
+  const scanAngle = everyChunkHas((c) => c.scanAngle, 1) ? new Float32Array(total) : undefined;
+  const userData = everyChunkHas((c) => c.userData, 1) ? new Uint8Array(total) : undefined;
+  const scannerChannel = everyChunkHas((c) => c.scannerChannel, 1)
+    ? new Uint8Array(total)
+    : undefined;
+  const scanDirection = everyChunkHas((c) => c.scanDirection, 1)
+    ? new Uint8Array(total)
+    : undefined;
+  const edgeOfFlightLine = everyChunkHas((c) => c.edgeOfFlightLine, 1)
+    ? new Uint8Array(total)
+    : undefined;
   const gpsTime = everyChunkHas((c) => c.gpsTime, 1) ? new Float64Array(total) : undefined;
   const colors = everyChunkHas((c) => c.rgb, 3) ? new Uint8Array(total * 3) : undefined;
   const pointSourceId = everyChunkHas((c) => c.pointSourceId, 1)
@@ -105,6 +116,15 @@ export function buildResidentSnapshot(
     }
     if (returnNumber && c.returnNumber) returnNumber.set(c.returnNumber.subarray(0, n), p);
     if (returnCount && c.returnCount) returnCount.set(c.returnCount.subarray(0, n), p);
+    if (scanAngle && c.scanAngle) scanAngle.set(c.scanAngle.subarray(0, n), p);
+    if (userData && c.userData) userData.set(c.userData.subarray(0, n), p);
+    if (scannerChannel && c.scannerChannel) {
+      scannerChannel.set(c.scannerChannel.subarray(0, n), p);
+    }
+    if (scanDirection && c.scanDirection) scanDirection.set(c.scanDirection.subarray(0, n), p);
+    if (edgeOfFlightLine && c.edgeOfFlightLine) {
+      edgeOfFlightLine.set(c.edgeOfFlightLine.subarray(0, n), p);
+    }
     if (gpsTime && c.gpsTime) gpsTime.set(c.gpsTime.subarray(0, n), p);
     if (colors && c.rgb) colors.set(c.rgb.subarray(0, n * 3), p * 3);
     if (pointSourceId && c.pointSourceId) pointSourceId.set(c.pointSourceId.subarray(0, n), p);
@@ -119,6 +139,11 @@ export function buildResidentSnapshot(
     ...(classificationFlags ? { classificationFlags } : {}),
     ...(returnNumber ? { returnNumber } : {}),
     ...(returnCount ? { returnCount } : {}),
+    ...(scanAngle ? { scanAngle } : {}),
+    ...(userData ? { userData } : {}),
+    ...(scannerChannel ? { scannerChannel } : {}),
+    ...(scanDirection ? { scanDirection } : {}),
+    ...(edgeOfFlightLine ? { edgeOfFlightLine } : {}),
     ...(gpsTime ? { gpsTime } : {}),
     ...(colors ? { colors } : {}),
     ...(pointSourceId ? { pointSourceId } : {}),

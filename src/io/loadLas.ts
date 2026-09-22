@@ -83,7 +83,7 @@ function decodeLas(
 
   const step = Math.max(1, Math.floor(stride));
   const total = Math.ceil(count / step);
-  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null);
+  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended);
   const reportEvery = Math.max(1, Math.floor(total / 20));
   const rand = step > 1 ? makePrng(STRIDE_SAMPLE_SEED) : undefined;
   for (let b = 0; b < total; b++) {
@@ -427,6 +427,11 @@ function cloudFromRaw(
     classificationFlags: raw.classificationFlags,
     returnNumber: raw.returnNumber,
     returnCount: raw.returnCount,
+    scanAngle: raw.scanAngle,
+    userData: raw.userData,
+    scannerChannel: raw.scannerChannel ?? undefined,
+    scanDirection: raw.scanDirection,
+    edgeOfFlightLine: raw.edgeOfFlightLine,
     pointSourceId: raw.pointSourceId,
     gpsTime: raw.gpsTime ?? undefined,
   });
@@ -439,6 +444,11 @@ function cloudFromRaw(
     classificationFlags: clean.attributes.classificationFlags,
     returnNumber: clean.attributes.returnNumber,
     returnCount: clean.attributes.returnCount,
+    scanAngle: clean.attributes.scanAngle,
+    userData: clean.attributes.userData,
+    scannerChannel: clean.attributes.scannerChannel,
+    scanDirection: clean.attributes.scanDirection,
+    edgeOfFlightLine: clean.attributes.edgeOfFlightLine,
     pointSourceId: clean.attributes.pointSourceId,
     gpsTime: clean.attributes.gpsTime,
     origin,

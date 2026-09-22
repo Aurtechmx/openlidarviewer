@@ -132,7 +132,7 @@ export async function openSlicedLas(
     // would otherwise read a gigabyte in one shot. The batch is assembled from
     // bounded sub-ranges of at most MAX_BATCH_SOURCE_BYTES; the returned `count`
     // points are unchanged, and nothing beyond the returned batch is materialised.
-    const raw = allocRawPoints(count, hasGps, hasColor);
+    const raw = allocRawPoints(count, hasGps, hasColor, ctx.extended);
     const maxPerRead = maxPointsForRecordLength(recordLength, MAX_BATCH_SOURCE_BYTES);
     for (let done = 0; done < count; done += maxPerRead) {
       signal?.throwIfAborted();

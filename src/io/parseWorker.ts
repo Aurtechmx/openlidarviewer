@@ -145,6 +145,11 @@ function cloudPayload(cloud: PointCloud): { payload: Record<string, unknown>; tr
   if (cloud.normals) transfer.push(cloud.normals.buffer as ArrayBuffer);
   if (cloud.returnNumber) transfer.push(cloud.returnNumber.buffer as ArrayBuffer);
   if (cloud.returnCount) transfer.push(cloud.returnCount.buffer as ArrayBuffer);
+  if (cloud.scanAngle) transfer.push(cloud.scanAngle.buffer as ArrayBuffer);
+  if (cloud.userData) transfer.push(cloud.userData.buffer as ArrayBuffer);
+  if (cloud.scannerChannel) transfer.push(cloud.scannerChannel.buffer as ArrayBuffer);
+  if (cloud.scanDirection) transfer.push(cloud.scanDirection.buffer as ArrayBuffer);
+  if (cloud.edgeOfFlightLine) transfer.push(cloud.edgeOfFlightLine.buffer as ArrayBuffer);
   if (cloud.pointSourceId) transfer.push(cloud.pointSourceId.buffer as ArrayBuffer);
   if (cloud.gpsTime) transfer.push(cloud.gpsTime.buffer as ArrayBuffer);
   // The organized-range sidecar is several typed arrays PER FRAME, so it is
@@ -165,6 +170,11 @@ function cloudPayload(cloud: PointCloud): { payload: Record<string, unknown>; tr
     normals: cloud.normals,
     returnNumber: cloud.returnNumber,
     returnCount: cloud.returnCount,
+    scanAngle: cloud.scanAngle,
+    userData: cloud.userData,
+    scannerChannel: cloud.scannerChannel,
+    scanDirection: cloud.scanDirection,
+    edgeOfFlightLine: cloud.edgeOfFlightLine,
     pointSourceId: cloud.pointSourceId,
     gpsTime: cloud.gpsTime,
     organizedRange: cloud.organizedRange,

@@ -156,6 +156,16 @@ export interface PointCloudOptions {
   returnNumber?: Uint8Array;
   /** Optional per-point LAS number of returns for the originating pulse. */
   returnCount?: Uint8Array;
+  /** Optional per-point LAS scan angle, in degrees. */
+  scanAngle?: Float32Array;
+  /** Optional per-point LAS user data byte. */
+  userData?: Uint8Array;
+  /** Optional per-point LAS scanner channel (extended point formats only). */
+  scannerChannel?: Uint8Array;
+  /** Optional per-point LAS scan direction flag (0 or 1). */
+  scanDirection?: Uint8Array;
+  /** Optional per-point LAS edge-of-flight-line flag (0 or 1). */
+  edgeOfFlightLine?: Uint8Array;
   /** Optional per-point LAS point source ID (the originating flight line). */
   pointSourceId?: Uint16Array;
   /** Optional per-point LAS GPS time, in the file's GPS-time encoding. */
@@ -226,6 +236,11 @@ export class PointCloud {
   readonly normals?: Float32Array;
   readonly returnNumber?: Uint8Array;
   readonly returnCount?: Uint8Array;
+  readonly scanAngle?: Float32Array;
+  readonly userData?: Uint8Array;
+  readonly scannerChannel?: Uint8Array;
+  readonly scanDirection?: Uint8Array;
+  readonly edgeOfFlightLine?: Uint8Array;
   readonly pointSourceId?: Uint16Array;
   readonly gpsTime?: Float64Array;
   /** Source acquisition topology. See {@link PointCloudOptions.organizedRange}. */
@@ -308,6 +323,11 @@ export class PointCloud {
     expectLength('classificationFlags', options.classificationFlags, count);
     expectLength('returnNumber', options.returnNumber, count);
     expectLength('returnCount', options.returnCount, count);
+    expectLength('scanAngle', options.scanAngle, count);
+    expectLength('userData', options.userData, count);
+    expectLength('scannerChannel', options.scannerChannel, count);
+    expectLength('scanDirection', options.scanDirection, count);
+    expectLength('edgeOfFlightLine', options.edgeOfFlightLine, count);
     expectLength('pointSourceId', options.pointSourceId, count);
     expectLength('gpsTime', options.gpsTime, count);
 
@@ -319,6 +339,11 @@ export class PointCloud {
     this.normals = options.normals;
     this.returnNumber = options.returnNumber;
     this.returnCount = options.returnCount;
+    this.scanAngle = options.scanAngle;
+    this.userData = options.userData;
+    this.scannerChannel = options.scannerChannel;
+    this.scanDirection = options.scanDirection;
+    this.edgeOfFlightLine = options.edgeOfFlightLine;
     this.pointSourceId = options.pointSourceId;
     this.gpsTime = options.gpsTime;
     this.organizedRange = options.organizedRange;

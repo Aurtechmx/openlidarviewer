@@ -54,9 +54,52 @@ export function normalizeClassificationFlagsByte(byte: number, extended: boolean
     ? byte & 0x0f
     : ((byte & 0x20) >> 5) | ((byte & 0x40) >> 5) | ((byte & 0x80) >> 5);
 }
+/**
+ * Scan angle source byte offset. Legacy records hold a signed int8 "scan
+ * angle rank" at byte 16, already whole degrees. Extended records hold a
+ * signed int16 "scan angle" at byte 18, in units of 0.006 degrees — Table 8 /
+ * Table 17 of the LAS 1.4 R15 spec (Table 8: legacy formats 0-5, byte offset
+ * 16, "Scan Angle Rank", signed char, -90 to +90; Table 17: extended formats
+ * 6-10, byte offset 18, "Scan Angle", signed short, unit 0.006°).
+ */
+const RECORD_SCAN_ANGLE_LEGACY = 16;
+const RECORD_SCAN_ANGLE_EXT = 18;
+/** Extended scan-angle LSB, in degrees (Table 17). */
+const SCAN_ANGLE_EXTENDED_UNIT_DEG = 0.006;
+/** User data — uint8 — byte 17 in both the legacy and extended layouts. */
+const RECORD_USER_DATA_OFFSET = 17;
 /** Point source ID — uint16 LE — byte 18 in legacy records, byte 20 in extended. */
 const RECORD_POINT_SOURCE_ID_LEGACY = 18;
 const RECORD_POINT_SOURCE_ID_EXT = 20;
+
+/**
+ * Convert a raw scan-angle field to degrees. Legacy records already store
+ * whole degrees (the "rank"); extended records store a signed int16 in
+ * 0.006° steps, so a raw value of -15000 is -90°.
+ */
+export function scanAngleToDegrees(raw: number, extended: boolean): number {
+  return extended ? raw * SCAN_ANGLE_EXTENDED_UNIT_DEG : raw;
+}
+
+/**
+ * Extract one single-bit flag from a byte. Used for scan-direction and
+ * edge-of-flight-line, which share the same bit position (6 and 7
+ * respectively) whether they come from the legacy return-bits byte or the
+ * extended flags byte — only the SOURCE byte differs between layouts, not the
+ * bit position, so one helper serves both.
+ */
+export function extractBitFlag(byte: number, bit: number): number {
+  return (byte >> bit) & 1;
+}
+
+/**
+ * Scanner channel — extended records only (bits 4-5 of the flags byte at
+ * {@link RECORD_CLASSIFICATION_FLAGS_OFFSET}, Table 17). Legacy records have
+ * no scanner-channel concept, so callers gate this behind `ctx.extended`.
+ */
+export function extractScannerChannel(flagByte: number): number {
+  return (flagByte >> 4) & 0x03;
+}
 /** GPS time — float64 LE — byte 20 in legacy GPS records, byte 22 in extended. */
 const RECORD_GPS_TIME_LEGACY = 20;
 const RECORD_GPS_TIME_EXT = 22;
@@ -120,6 +163,19 @@ export interface RawPoints {
   classificationFlags: Uint8Array;
   returnNumber: Uint8Array;
   returnCount: Uint8Array;
+  /** Scan angle in degrees — see {@link scanAngleToDegrees}. Every LAS record has one. */
+  scanAngle: Float32Array;
+  /** User data — every LAS record has one. */
+  userData: Uint8Array;
+  /**
+   * Scanner channel (bits 4-5 of the extended flags byte). Only extended
+   * records (PDRF 6-10) carry this; null for a legacy-format file.
+   */
+  scannerChannel: Uint8Array | null;
+  /** Scan direction flag, 0 or 1 — every LAS record has one. */
+  scanDirection: Uint8Array;
+  /** Edge-of-flight-line flag, 0 or 1 — every LAS record has one. */
+  edgeOfFlightLine: Uint8Array;
   pointSourceId: Uint16Array;
   gpsTime: Float64Array | null;
   /** Interleaved rgb (0–255), or null when the point format carries no colour.
@@ -141,6 +197,8 @@ export interface DecodeContext {
   /** Byte holding the flags: its own byte when extended, the class byte when not. */
   classificationFlagsOffset: number;
   extended: boolean;
+  scanAngleOffset: number;
+  userDataOffset: number;
   pointSourceIdOffset: number;
   gpsTimeOffset: number | null;
   rgbOffset: number | null;
@@ -159,6 +217,8 @@ export function decodeContext(
     classMask: classificationMaskFor(header.pointFormat),
     classificationFlagsOffset: RECORD_CLASSIFICATION_FLAGS_OFFSET,
     extended,
+    scanAngleOffset: extended ? RECORD_SCAN_ANGLE_EXT : RECORD_SCAN_ANGLE_LEGACY,
+    userDataOffset: RECORD_USER_DATA_OFFSET,
     pointSourceIdOffset: extended
       ? RECORD_POINT_SOURCE_ID_EXT
       : RECORD_POINT_SOURCE_ID_LEGACY,
@@ -201,6 +261,21 @@ export function decodeRecord(
     out.returnNumber[i] = returnBits & 0x07;
     out.returnCount[i] = (returnBits >> 3) & 0x07;
   }
+  // Scan direction and edge-of-flight-line share bit 6 and bit 7 in both
+  // layouts, but the SOURCE byte differs: the legacy return-bits byte
+  // already read above, or the extended flags byte read above for the
+  // classification flags.
+  const directionSourceByte = ctx.extended ? flagByte : returnBits;
+  out.scanDirection[i] = extractBitFlag(directionSourceByte, 6);
+  out.edgeOfFlightLine[i] = extractBitFlag(directionSourceByte, 7);
+  if (out.scannerChannel !== null) {
+    out.scannerChannel[i] = extractScannerChannel(flagByte);
+  }
+  const scanAngleRaw = ctx.extended
+    ? view.getInt16(base + ctx.scanAngleOffset, true)
+    : view.getInt8(base + ctx.scanAngleOffset);
+  out.scanAngle[i] = scanAngleToDegrees(scanAngleRaw, ctx.extended);
+  out.userData[i] = view.getUint8(base + ctx.userDataOffset);
   out.pointSourceId[i] = view.getUint16(base + ctx.pointSourceIdOffset, true);
   if (ctx.gpsTimeOffset !== null && out.gpsTime !== null) {
     out.gpsTime[i] = view.getFloat64(base + ctx.gpsTimeOffset, true);
@@ -221,6 +296,7 @@ export function allocRawPoints(
   count: number,
   hasGpsTime: boolean,
   hasColor = false,
+  extended = false,
 ): RawPoints {
   return {
     positions: new Float32Array(count * 3),
@@ -229,6 +305,14 @@ export function allocRawPoints(
     classificationFlags: new Uint8Array(count),
     returnNumber: new Uint8Array(count),
     returnCount: new Uint8Array(count),
+    scanAngle: new Float32Array(count),
+    userData: new Uint8Array(count),
+    // Scanner channel is a Table 17 extended-only field — legacy records
+    // have nothing to report, so the array itself is absent rather than
+    // zero-filled.
+    scannerChannel: extended ? new Uint8Array(count) : null,
+    scanDirection: new Uint8Array(count),
+    edgeOfFlightLine: new Uint8Array(count),
     pointSourceId: new Uint16Array(count),
     gpsTime: hasGpsTime ? new Float64Array(count) : null,
     // Colour is staged as raw 16-bit and narrowed once in finalizeRawColors;
@@ -284,8 +368,13 @@ export function rawPointsTransferables(raw: RawPoints): ArrayBuffer[] {
     raw.classificationFlags.buffer as ArrayBuffer,
     raw.returnNumber.buffer as ArrayBuffer,
     raw.returnCount.buffer as ArrayBuffer,
+    raw.scanAngle.buffer as ArrayBuffer,
+    raw.userData.buffer as ArrayBuffer,
+    raw.scanDirection.buffer as ArrayBuffer,
+    raw.edgeOfFlightLine.buffer as ArrayBuffer,
     raw.pointSourceId.buffer as ArrayBuffer,
   ];
+  if (raw.scannerChannel) buffers.push(raw.scannerChannel.buffer as ArrayBuffer);
   if (raw.gpsTime) buffers.push(raw.gpsTime.buffer as ArrayBuffer);
   if (raw.colors16) buffers.push(raw.colors16.buffer as ArrayBuffer);
   return buffers;
