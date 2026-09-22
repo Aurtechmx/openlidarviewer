@@ -98,3 +98,22 @@ Correct (per-cloud, Stage B): `gate2-axis-zup-survey` accepts [3, 4, 5, 6, 7, 8]
 Buggy (today, Stage A — one shared axis from whichever cloud loaded LAST, one shared origin from whichever loaded FIRST): with these two clouds the shared threshold always lands outside BOTH clouds' 0-9 attribute range, so the filter shows ZERO points on both layers no matter the load order — instead of 6 + 6 = 12 points total.
 - Load survey then scan (shared axis = Y, from the scan): `gate2-axis-zup-survey` accepts [], `gate2-axis-yup-scan` accepts [].
 - Load scan then survey (shared axis = Z, from the survey): `gate2-axis-zup-survey` accepts [], `gate2-axis-yup-scan` accepts [].
+
+## withheld-flags.las
+
+The only fixture that sets classification flags. Written by
+`scripts/make-withheld-fixture.py`, which is separate from `make-fixtures.py`
+because that script rewrites the files several tests assert byte identity
+against.
+
+Every other LAS fixture here leaves the flag byte at zero, so excluding
+Withheld points changed no number anywhere and ledger entry L26 could record
+the policy's consequence only as unmeasured. This file gives it something to
+measure. LAS point format 6, version 1.4.
+
+- pointCount: 12
+- withheld: 3 (all of them ground, class 2)
+- overlap: 2, one of which is also withheld
+- synthetic: 1
+- keyPoint: 1
+- ground returns: 8, so a DTM reads 5 under the policy and 8 without it
