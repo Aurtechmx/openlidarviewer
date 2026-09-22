@@ -141,7 +141,7 @@ The output directory is exactly the layout the viewer reads. Upload it to a CORS
 
 ### Browser recommendation for EPT
 
-For best EPT streaming, use a Chromium-based browser (Chrome or Edge) with WebGPU enabled and hardware acceleration on. WebGL 2.0 is the supported fallback (Safari, Firefox) and works for most datasets; performance varies with the dataset's hierarchy density and the device's GPU. See [`docs/performance.md`](performance.md) for general performance guidance.
+For best EPT streaming, use a Chromium-based browser (Chrome or Edge) with WebGPU enabled and hardware acceleration on. WebGL 2.0 is the supported fallback where WebGPU is unavailable and works for most datasets; performance varies with the dataset's hierarchy density and the device's GPU. See [`docs/performance.md`](performance.md) for general performance guidance.
 
 ### What the v0.3.4 EPT transport guarantees
 
