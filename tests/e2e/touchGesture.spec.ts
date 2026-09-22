@@ -126,6 +126,28 @@ async function singleTap(page: Page, x: number, y: number): Promise<void> {
  * value twice would make a "did not move" assertion pass for the wrong reason,
  * which is worse than not running the test at all.
  */
+/**
+ * Wait until the camera stops moving, then return its pose.
+ *
+ * Loading a scan flies the camera from a top-down framing to the opening
+ * view. A fixed wait covers that on a fast machine and not on a loaded CI
+ * runner, where the "before" pose was read mid-flight and the flight itself
+ * then read as the gesture's effect. Three identical reads 250 ms apart is
+ * a camera at rest; no pose is accepted before that.
+ */
+async function settledPose(page: Page): Promise<string> {
+  let last = await readPose(page);
+  let same = 0;
+  for (let i = 0; i < 80 && same < 2; i++) {
+    await page.waitForTimeout(250);
+    const next = await readPose(page);
+    same = next === last ? same + 1 : 0;
+    last = next;
+  }
+  expect(same, 'the camera never came to rest after the scan loaded').toBe(2);
+  return last;
+}
+
 async function readPose(page: Page): Promise<string> {
   const pose = await page.evaluate(() => {
     const api = (window as unknown as {
@@ -148,7 +170,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     await page.goto('/?test=1');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await settledPose(page);
 
     const before = await readPose(page);
 
@@ -176,7 +198,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     await page.goto('/?test=1');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await settledPose(page);
 
     const before = await readPose(page);
 
@@ -207,7 +229,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     await page.goto('/?test=1');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await settledPose(page);
 
     const before = await readPose(page);
 
