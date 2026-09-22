@@ -77,7 +77,7 @@ cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,976 lines and `src/render/Viewer.ts` is 6,165, fifty-eight below
+`src/main.ts` is 4,972 lines and `src/render/Viewer.ts` is 6,165, fifty-eight below
 v0.6.9. Five getters collapsed to make room for a memory accessor and a
 size-mode call, and the streamed draw cull then paid for its own wiring by
 moving the pass onto the streaming renderer and collapsing two more
@@ -87,8 +87,8 @@ together as one object, which is fewer lines here and one thing to reach for
 there. The frame gained a decision while the file lost lines. A shrink-only lint fails the build when either passes its
 recorded baseline, so a raise is a hand edit to
 `docs/validation/monolith-size-baseline.json` and always shows in the diff. It
-caught an added line twice during this cycle, and a banked drop once. Fan-out is 112 for the shell, 76 for
-the renderer and 23 for the Analyse panel, across 886 modules with no
+caught an added line twice during this cycle, and a banked drop once. Fan-out is 110 for the shell, 76 for
+the renderer and 23 for the Analyse panel, across 887 modules with no
 dependency cycles.
 
 ## The shell has little headroom
