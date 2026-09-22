@@ -4029,15 +4029,14 @@ what applying it can mean.
 
 ### L11 · OPEN · UI
 
-The overlap is real over a narrower band than this entry first stated. The left
+The overlap is real over a band from 768 px to about 891 px. The left
 rail is `clamp(285px, 21vw, 312px)`, the right `clamp(288px, 23vw, 340px)`, and
 the project card is 290 px wide and centred. The free band between the rails is
 `W − 14 − 288 − 299`, which reaches the card's width at about 891 px. Measured
 in Chromium: the card runs 60 px under the left rail and 63 px under the right
 at 768, and clears both at 900 and above.
 
-A test does cover the case, contrary to the earlier account.
-`tests/e2e/hudCollision.spec.ts` exempts it: when the band is narrower than the
+A test covers the case.`tests/e2e/hudCollision.spec.ts` exempts it: when the band is narrower than the
 card it asserts only that the card stays on screen. That exemption is what
 would become strict once the layout is fixed.
 
