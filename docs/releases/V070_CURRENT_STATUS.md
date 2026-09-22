@@ -9,19 +9,19 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 146. Revisited at least once: 14.
+Entries: 147. Revisited at least once: 15.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
 | FIXED | 46 |
-| PARTIAL | 32 |
+| PARTIAL | 33 |
 | BUILT | 27 |
-| MEASURED | 13 |
+| MEASURED | 14 |
 | NOT REPRODUCIBLE | 11 |
-| OPEN | 7 |
 | DEFERRED | 6 |
+| OPEN | 6 |
 | REFUSED | 3 |
 | SUPERSEDED | 1 |
 
@@ -42,7 +42,7 @@ Entries: 146. Revisited at least once: 14.
 | L11 | FIXED | UI | 3 |
 | L12 | FIXED | UI | 3 |
 | L13 | OPEN | EVIDENCE | 4 |
-| L14 | OPEN | ARCHITECTURE | 1 |
+| L14 | PARTIAL | ARCHITECTURE | 2 |
 | L15 | DEFERRED | ARCHITECTURE | 1 |
 | L16 | FIXED | EVIDENCE | 2 |
 | L17 | FIXED | EVIDENCE | 2 |
@@ -175,3 +175,4 @@ Entries: 146. Revisited at least once: 14.
 | L144 | BUILT | ARCHITECTURE | 1 |
 | L145 | FIXED | ARCHITECTURE | 1 |
 | L146 | FIXED | EVIDENCE | 1 |
+| L147 | MEASURED | PERFORMANCE | 1 |
