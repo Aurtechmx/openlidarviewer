@@ -47,7 +47,7 @@ import { filledCells, priorityFlood, type PriorityFloodResult } from './priority
 import { terrainDtmToFlowGrid, type HorizontalScale, type InterpolatedPolicy } from './dtmFlowGrid';
 import { basisLimitations, mayReportMetricArea } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
-import { CELL_FLAT, CELL_OUTLET, CELL_SINK, type FlowGrid } from './flowTypes';
+import type { FlowGrid } from './flowTypes';
 import type { SimulationInputBasis } from '../simulationInputBasis';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 
@@ -227,8 +227,8 @@ export function runFlowPulse(
   const area = contributingAreaM2(accumulation, routingGrid, mayReportMetricArea(basis));
 
   let maxUpstream = 0;
-  for (let i = 0; i < accumulation.upstreamCells.length; i++) {
-    if (accumulation.upstreamCells[i] > maxUpstream) maxUpstream = accumulation.upstreamCells[i];
+  for (const upstream of accumulation.upstreamCells) {
+    if (upstream > maxUpstream) maxUpstream = upstream;
   }
 
   const summary: FlowSummary = {
@@ -338,4 +338,4 @@ export function catchmentFrom(result: FlowPulseResult, outlet: number): Uint8Arr
   return catchmentOf(result.grid, result.routed, outlet);
 }
 
-export { CELL_FLAT, CELL_OUTLET, CELL_SINK };
+export { CELL_FLAT, CELL_OUTLET, CELL_SINK } from './flowTypes';

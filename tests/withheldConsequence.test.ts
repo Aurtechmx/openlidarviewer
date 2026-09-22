@@ -56,7 +56,7 @@ describe('the flags survive decoding', () => {
     const flags = cloud.classificationFlags;
     expect(flags, 'the decoder produced no classification flags').toBeTruthy();
     const f = flags as Uint8Array;
-    expect(f.length).toBe(cloud.pointCount);
+    expect(f).toHaveLength(cloud.pointCount);
 
     let withheld = 0, overlap = 0, synthetic = 0, key = 0;
     for (let i = 0; i < f.length; i++) {
@@ -125,7 +125,7 @@ describe('Overlap is not Withheld', () => {
       const d = decodeExtendedClassificationFlags(f[i]);
       if (d.overlap && !d.withheld) overlapOnly.push(i);
     }
-    expect(overlapOnly.length).toBe(1);
+    expect(overlapOnly).toHaveLength(1);
     for (const i of overlapOnly) {
       expect(pointIsReadable(f[i], 'scientific-processing')).toBe(true);
     }
@@ -139,7 +139,7 @@ describe('Overlap is not Withheld', () => {
       const d = decodeExtendedClassificationFlags(f[i]);
       if (d.overlap && d.withheld) both.push(i);
     }
-    expect(both.length).toBe(1);
+    expect(both).toHaveLength(1);
     for (const i of both) {
       expect(pointIsReadable(f[i], 'scientific-processing')).toBe(false);
     }

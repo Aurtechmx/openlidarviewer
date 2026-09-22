@@ -265,6 +265,6 @@ describe('queries over a completed run', () => {
     const r = runFlowPulse(dtmOf([[4, 3, 2, 1]]), projected, params(), identity);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect([...catchmentFrom(r, 3)].filter((v) => v === 1).length).toBe(4);
+    expect([...catchmentFrom(r, 3)].filter((v) => v === 1)).toHaveLength(4);
   });
 });
