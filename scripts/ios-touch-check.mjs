@@ -18,10 +18,17 @@
  * dispatched event, not a substitute for a device.
  *
  * Speaks the W3C WebDriver protocol over HTTP directly, with no client
- * library: one fetch per command is easier to read in a CI log than a
+ * library: one request per command is easier to read in a CI log than a
  * framework's abstraction, and adds no dependency to install.
+ *
+ * `node:http` rather than `fetch`. Node's `fetch` gives up on a response whose
+ * headers take longer than five minutes, and creating a session answers only
+ * once WebDriverAgent is running, which on a cold runner is longer than that.
+ * The request then fails as a bare "fetch failed" while Appium is still
+ * working normally.
  */
 import { writeFileSync } from 'node:fs';
+import { request } from 'node:http';
 
 const APPIUM = process.env.OLV_APPIUM ?? 'http://127.0.0.1:4723';
 const BASE = process.env.OLV_BASE_URL ?? 'http://127.0.0.1:4173';
@@ -39,17 +46,29 @@ const record = (name, ok, detail) => {
 
 /** One WebDriver command. Throws with the server's own message on failure. */
 async function wd(method, path, body) {
-  const res = await fetch(`${APPIUM}${path}`, {
-    method,
-    headers: { 'content-type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  const { status, text } = await new Promise((resolve, reject) => {
+    const req = request(`${APPIUM}${path}`, {
+      method,
+      headers: payload === undefined
+        ? {}
+        : { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) },
+    }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, text: data }));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    if (payload !== undefined) req.write(payload);
+    req.end();
   });
-  const text = await res.text();
   let json;
   try { json = JSON.parse(text); } catch { json = { raw: text }; }
-  if (!res.ok) {
-    const msg = json?.value?.message ?? json?.raw ?? res.statusText;
-    throw new Error(`${method} ${path} -> ${res.status}: ${msg}`);
+  if (status < 200 || status >= 300) {
+    const msg = json?.value?.message ?? json?.raw ?? `HTTP ${status}`;
+    throw new Error(`${method} ${path} -> ${status}: ${msg}`);
   }
   return json.value;
 }

@@ -132,6 +132,23 @@ jobs:
           cat appium.log
           exit 1
 
+      # Build WebDriverAgent before any session asks for it. Left to the
+      # session, the compile runs inside the create-session request and takes
+      # most of the time budget; built here, the session's own build step is
+      # incremental and the log separates a build failure from a test one.
+      - name: Build WebDriverAgent
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          set -o pipefail
+          WDA="$HOME/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent"
+          xcodebuild build-for-testing \
+            -project "$WDA/WebDriverAgent.xcodeproj" \
+            -scheme WebDriverAgentRunner \
+            -destination "id=$UDID" \
+            GCC_TREAT_WARNINGS_AS_ERRORS=0 COMPILER_INDEX_STORE_ENABLE=NO \
+            | tail -20
+
       - name: Drive the touch model in Mobile Safari
         env:
           OLV_SIM_UDID: ${{ steps.sim.outputs.udid }}
