@@ -3981,14 +3981,13 @@ Also running in the iPhone-shaped WebKit project, which CI already executes
 that project's `testMatch`; they are in it now, so the recogniser is exercised
 at 393x852 with `hasTouch` on every push rather than at desktop width only.
 
-Two of the five failed there at first, and not for the reason it looked like.
 The Rendering section holding the Touch-twist chip exists in the DOM but has no
-layout box at phone width, so clicking it timed out on "element is not
-visible", which reads as the setting being unreachable on a touch device. It is
+layout box at phone width, so a click on it reports "element is not visible",
+which reads as the setting being unreachable on a touch device. It is
 reachable: the panels move into a collapsed bottom sheet whose View tab holds
-the section. Confirmed by hand at 375x812, where the chip measures 44 px and
-carries `olv-chip-active`. The helper opens the sheet when the summary has no
-box, and the five pass on Chromium, WebKit, Firefox and iPhone WebKit.
+the section, and at 375x812 the chip measures 44 px and carries
+`olv-chip-active`. The helper opens the sheet when the summary has no box, and
+the five pass on Chromium, WebKit, Firefox and iPhone WebKit.
 
 Still synthesized `PointerEvent`s, which is what Playwright exposes on every
 engine. Real hardware multi-touch on a physical device remains unverified.
