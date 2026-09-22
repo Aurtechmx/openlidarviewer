@@ -26,8 +26,10 @@ export const CELL_NODATA = 3;
 /** Routed off the edge of the grid. */
 export const CELL_OUTLET = 4;
 
-/** The status values a routed grid reports, one per cell. */
-export type CellStatus =
+/** The status values a routed grid reports, one per cell. Distinct from
+ * `dtmCellStatus.CellStatus`, which describes how a DTM cell was derived
+ * rather than where its flow goes. */
+export type FlowCellStatus =
   | typeof CELL_ROUTED
   | typeof CELL_SINK
   | typeof CELL_FLAT

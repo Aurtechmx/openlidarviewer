@@ -467,6 +467,20 @@
       "why": "Upstream cell counts, contributing area and catchment extraction over a routed grid. No production caller: it is reached only from tests.",
       "graduation": "The Field Simulation Lab panel reports accumulation and catchment for a clicked cell.",
       "review": "2027-03-31"
+    },
+    {
+      "path": "src/simulation/simulationInputBasis.ts",
+      "status": "staged",
+      "why": "What a simulation was allowed to read: terrain coverage, whether Withheld points were excluded, and whether the horizontal scale is resolved. No production caller, because no simulation runs from the UI yet.",
+      "graduation": "The Field Simulation Lab panel builds a run record and shows the limitations this derives.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/simulation/flowPulse/dtmFlowGrid.ts",
+      "status": "staged",
+      "why": "The seam that turns a canonical DTM raster into a routing grid, mapping the rasteriser's NaN absence to an invalid cell and one cell size to two metric axis lengths. Reached only from tests.",
+      "graduation": "The Field Simulation Lab panel routes the active DTM.",
+      "review": "2027-03-31"
     }
   ]
 }

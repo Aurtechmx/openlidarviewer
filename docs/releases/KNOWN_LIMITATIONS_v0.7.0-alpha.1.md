@@ -88,12 +88,12 @@ there. The frame gained a decision while the file lost lines. A shrink-only lint
 recorded baseline, so a raise is a hand edit to
 `docs/validation/monolith-size-baseline.json` and always shows in the diff. It
 caught an added line twice during this cycle, and a banked drop once. Fan-out is 110 for the shell, 76 for
-the renderer and 23 for the Analyse panel, across 890 modules with no
+the renderer and 23 for the Analyse panel, across 892 modules with no
 dependency cycles.
 
 ## The shell has little headroom
 
-The eager bundle measures about 809 KiB against an 812 KiB ceiling. New work
+The eager bundle measures about 810 KiB against an 812 KiB ceiling. New work
 goes behind a lazy seam rather than being paid for by a raise.
 
 ## Multi-layer mounting is enabled, with a precision refinement outstanding

@@ -34,7 +34,7 @@ import {
   CELL_SINK,
   D8_NEIGHBOURS,
   assertFlowGrid,
-  type CellStatus,
+  type FlowCellStatus,
   type FlowGrid,
 } from './flowTypes';
 
@@ -44,7 +44,7 @@ export interface D8Result {
   readonly receiver: Int32Array;
   /** Which of {@link D8_NEIGHBOURS} was taken, or -1. */
   readonly direction: Int8Array;
-  /** Per-cell {@link CellStatus}. */
+  /** Per-cell {@link FlowCellStatus}. */
   readonly status: Uint8Array;
   readonly sinkCount: number;
   readonly flatCount: number;
@@ -157,4 +157,4 @@ export function traceDownstream(result: D8Result, start: number): Int32Array {
 }
 
 export { CELL_FLAT, CELL_NODATA, CELL_OUTLET, CELL_ROUTED, CELL_SINK };
-export type { CellStatus, FlowGrid };
+export type { FlowCellStatus, FlowGrid };
