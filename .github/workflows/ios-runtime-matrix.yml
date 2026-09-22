@@ -46,6 +46,31 @@ on:
       - '.github/workflows/ios-runtime-matrix.yml'
       - 'scripts/ios-runtime-matrix/**'
   workflow_dispatch:
+    inputs:
+      touch_check_image:
+        description: Runner image for the pinned touch check (blank skips the job)
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - macos-14
+          - macos-15
+          - macos-15-intel
+          - macos-26
+          - macos-26-intel
+      touch_check_runtime_id:
+        description: 'simctl runtime identifier, e.g. com.apple.CoreSimulator.SimRuntime.iOS-17-4'
+        required: false
+        default: ''
+      touch_check_device_type_id:
+        description: 'simctl device type identifier, e.g. com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro-Max'
+        required: false
+        default: ''
+      touch_check_device_name:
+        description: Device name to report to ios-touch-check.mjs (OLV_SIM_DEVICE)
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -160,4 +185,125 @@ jobs:
             preview.log
             marker-server.log
             triangle-marker.log
+          retention-days: 7
+
+  # ── Pinned-runtime touch check ──────────────────────────────────────────
+  # workflow_dispatch only, and only when a runtime was named: this answers a
+  # narrower question than `sweep` above. Given one image/runtime the sweep
+  # already found survives to a rendered frame, does OLV's full touch model
+  # (scripts/ios-touch-check.mjs, the same assertions ios-simulator.yml runs
+  # on macos-latest) also pass there? `simctl create` pins the exact runtime
+  # rather than trusting whatever `pick-ios-simulator.mjs` finds already
+  # booted, since the whole point is testing ONE named runtime.
+  touch-check:
+    name: Touch check on a picked runtime
+    if: github.event_name == 'workflow_dispatch' && inputs.touch_check_runtime_id != ''
+    runs-on: ${{ inputs.touch_check_image }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      - name: Record the toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - run: npm ci --ignore-scripts
+
+      - name: Build with the test seam
+        env:
+          OLV_TEST_SEAM: '1'
+        run: ./node_modules/.bin/vite build
+
+      - name: Serve the build
+        run: |
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 --strictPort > preview.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:4173/" -o /dev/null; then
+              echo "serving on 127.0.0.1:4173"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::the preview server never answered on 127.0.0.1:4173"
+          cat preview.log
+          exit 1
+
+      - name: Create and boot the picked simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl create olv-touch-check "${{ inputs.touch_check_device_type_id }}" "${{ inputs.touch_check_runtime_id }}")
+          echo "created $UDID (${{ inputs.touch_check_device_name }}, ${{ inputs.touch_check_runtime_id }})"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Install Appium and the XCUITest driver
+        run: |
+          npm i -g --ignore-scripts appium@3.7.0
+          appium driver install xcuitest@12.13.1
+          appium --port 4723 > appium.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4723/status -o /dev/null; then
+              echo "appium is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::appium never answered on 127.0.0.1:4723"
+          cat appium.log
+          exit 1
+
+      - name: Build WebDriverAgent
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          set -o pipefail
+          WDA="$HOME/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent"
+          xcodebuild build-for-testing \
+            -project "$WDA/WebDriverAgent.xcodeproj" \
+            -scheme WebDriverAgentRunner \
+            -destination "id=$UDID" \
+            GCC_TREAT_WARNINGS_AS_ERRORS=0 COMPILER_INDEX_STORE_ENABLE=NO \
+            | tail -20
+
+      - name: Confirm the simulator is booted
+        run: xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+
+      - name: Drive the touch model in Mobile Safari
+        env:
+          OLV_SIM_UDID: ${{ steps.sim.outputs.udid }}
+          OLV_SIM_DEVICE: ${{ inputs.touch_check_device_name }}
+          OLV_BASE_URL: http://127.0.0.1:4173
+        run: node scripts/ios-touch-check.mjs
+
+      - name: Capture the screen
+        if: always()
+        run: xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot ios-screen.png || true
+
+      - name: Collect crash reports
+        if: failure()
+        run: |
+          mkdir -p crash-reports
+          UDID="${{ steps.sim.outputs.udid }}"
+          find "$HOME/Library/Logs/DiagnosticReports" \
+            "$HOME/Library/Developer/CoreSimulator/Devices/$UDID/data/Library/Logs" \
+            -type f \( -iname '*safari*' -o -iname '*webcontent*' -o -iname '*.ips' \) \
+            -mmin -60 -exec cp {} crash-reports/ \; 2>/dev/null || true
+          ls -la crash-reports
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-touch-check-picked
+          path: |
+            ios-screen.png
+            appium.log
+            preview.log
+            ios-touch-result.json
+            crash-reports/
           retention-days: 7
