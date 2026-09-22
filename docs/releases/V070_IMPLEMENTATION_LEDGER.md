@@ -3951,3 +3951,25 @@ frame-count cadence left its description behind, where it sat above
 docblock for the removed `STREAMING_TICK_INTERVAL` stayed as a heading with
 nothing under it. The reasoning in that block is worth keeping and now sits
 with the call it describes, in the loop body.
+
+### L12 · FIXED · UI
+
+Pinch, rotate and two-finger gestures now run on Chromium, WebKit and Firefox.
+
+The blocker was never the gesture or the engine. The three pose tests read the
+camera through a share link on the clipboard, and only Chromium grants
+`clipboard-read` under Playwright. The address-bar fallback the spec relied on
+fires only when `clipboard.writeText` rejects; on WebKit that write resolves,
+so nothing reached the address bar either and the tests failed on the
+empty-oracle guard before reaching the recogniser.
+
+The pose now comes from `__OLV_TEST_API__`, which needs neither the clipboard
+nor the desktop dock. The recogniser is untouched; only how its result is read
+has moved. Five tests pass on each of the three engines. Freezing the oracle to
+a constant fails the two tests that assert the camera moved, so it observes the
+pose rather than reporting a fixed value.
+
+Section 70 forbids substituting mouse simulation for touch verification. These
+remain synthesized `PointerEvent`s with `pointerType: 'touch'`, which is what
+Playwright exposes; real hardware multi-touch on an iOS device is still
+unverified, and L13 still records the matrix as advisory.

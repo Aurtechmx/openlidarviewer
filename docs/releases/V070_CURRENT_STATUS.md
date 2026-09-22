@@ -9,18 +9,18 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 145. Revisited at least once: 8.
+Entries: 145. Revisited at least once: 9.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 43 |
+| FIXED | 44 |
 | PARTIAL | 31 |
 | BUILT | 27 |
 | MEASURED | 13 |
-| OPEN | 11 |
 | NOT REPRODUCIBLE | 10 |
+| OPEN | 10 |
 | DEFERRED | 6 |
 | REFUSED | 3 |
 | SUPERSEDED | 1 |
@@ -40,7 +40,7 @@ Entries: 145. Revisited at least once: 8.
 | L09 | OPEN | LIFECYCLE | 1 |
 | L10 | OPEN | LIFECYCLE | 1 |
 | L11 | OPEN | UI | 1 |
-| L12 | OPEN | UI | 1 |
+| L12 | FIXED | UI | 2 |
 | L13 | OPEN | EVIDENCE | 1 |
 | L14 | OPEN | ARCHITECTURE | 1 |
 | L15 | DEFERRED | ARCHITECTURE | 1 |

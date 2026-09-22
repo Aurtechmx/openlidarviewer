@@ -3165,7 +3165,7 @@ if (__OLV_TEST_SEAM__ && testApi) {
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
       getMeasurementCount: () => v.measure.getMeasurements().length,
-      layerProjectPoints: (i: number) => v.layerProjectPoints(i),
+      layerProjectPoints: (i: number) => v.layerProjectPoints(i), getCameraPose: () => v.getCameraPose(),
       // Elevation filter (v0.5.6) device-verify seam: pass a world-space
       // [min, max] window (or null to clear) and confirm points outside it hide.
       setElevationFilter: (range: [number, number] | null) =>
