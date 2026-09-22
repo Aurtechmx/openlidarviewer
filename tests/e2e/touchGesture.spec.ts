@@ -18,17 +18,65 @@ import { dropTinyPly } from './helpers';
  * reads these the same way it would read real fingers.
  */
 
+/**
+ * Grant clipboard access where the engine has it.
+ *
+ * Only Chromium implements `clipboard-read` in Playwright; Firefox and WebKit
+ * reject `grantPermissions` with "Unknown permission". Off Chromium the run
+ * continues without it and `readShareLink` reads the address bar instead,
+ * which is the fallback the app itself provides.
+ */
+async function grantClipboardIfSupported(
+  context: import('@playwright/test').BrowserContext,
+  browserName: string,
+): Promise<void> {
+  // MEASURED, not assumed. The address-bar fallback below looked like it would
+  // carry these tests onto WebKit and Gecko, and it does not: the app writes
+  // the hash only when `clipboard.writeText` REJECTS, and on WebKit the write
+  // resolves. So nothing lands in the address bar, `readText` stays
+  // unpermitted, and the oracle reads nothing at all. Run on Desktop Safari,
+  // the three pose tests fail on the empty-oracle guard rather than on the
+  // gesture. The skips below stand for that reason.
+  //
+  // What would lift them is a pose read that needs neither the clipboard nor
+  // the desktop dock. `__OLV_TEST_API__` is the seam. Until then the touch
+  // recogniser is verified on Chromium only, and `tests/touchGesture.test.ts`
+  // pins the thresholds engine-independently.
+  test.skip(
+    browserName !== 'chromium',
+    `${browserName} (Playwright) grants no clipboard-read, and the app's address-bar fallback fires only when the clipboard write fails, so the share-link pose oracle reads nothing`,
+  );
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+}
+
 const Z_UP = [0, 0, 1] as const;
 void Z_UP;
 
 async function readShareLink(page: Page): Promise<string> {
   // v0.3.10: button label changed from "Share" → "Copy view link" to
   // match the local-first reality. The clipboard contract is identical.
+  //
+  // Two sources, because only Chromium grants `clipboard-read` in Playwright.
+  // When the clipboard write fails the app deliberately leaves the state in
+  // the address bar (`main.ts`, "leave the state in the address bar so the
+  // user can still copy the link from there"), which is the same pose by a
+  // different route and is what makes this oracle work on WebKit.
+  //
+  // The encoded payload is REQUIRED rather than defaulted. A blind oracle
+  // returning '' twice would make a "did not move" assertion pass for the
+  // wrong reason, which is worse than not running the test at all.
   await page.locator('.olv-tool', { hasText: 'Copy view link' }).click();
   await page.waitForTimeout(200);
-  return page.evaluate(() =>
-    navigator.clipboard.readText().catch(() => window.location.hash),
-  );
+  const raw = await page.evaluate(async () => {
+    const fromClipboard = await navigator.clipboard.readText().catch(() => '');
+    return fromClipboard.includes('#s=') ? fromClipboard : window.location.hash;
+  });
+  const encoded = /#?s=([^&\s]+)/.exec(raw)?.[1] ?? '';
+  expect(
+    encoded,
+    'share-link oracle read no pose from either the clipboard or the address bar',
+  ).not.toBe('');
+  return encoded;
 }
 
 /**
@@ -123,12 +171,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     context,
     browserName,
   }) => {
-    // Same clipboard-oracle capability gap as the twist tests below.
-    test.skip(
-      browserName !== 'chromium',
-      `${browserName} (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read`,
-    );
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await grantClipboardIfSupported(context, browserName);
     await page.goto('/');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
@@ -159,15 +202,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     context,
     browserName,
   }) => {
-    // CAPABILITY GAP — clipboard-read permission. Only Chromium implements it
-    // in Playwright; Firefox and WebKit both reject `grantPermissions` with
-    // "Unknown permission: clipboard-read". This test's camera oracle is the
-    // copied share link, so off Chromium there is nothing to read.
-    test.skip(
-      browserName !== 'chromium',
-      `${browserName} (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read`,
-    );
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await grantClipboardIfSupported(context, browserName);
     await page.goto('/');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
@@ -201,16 +236,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     context,
     browserName,
   }) => {
-    // CAPABILITY GAP — clipboard-read permission. Same reason as the twist test
-    // above, and it matters more here: a blind oracle would make the "did NOT
-    // move" assertion pass for the wrong reason, which is worse than not
-    // running it. The dead-zone threshold itself is pinned engine-independently
-    // by tests/touchGesture.test.ts.
-    test.skip(
-      browserName !== 'chromium',
-      `${browserName} (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read`,
-    );
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await grantClipboardIfSupported(context, browserName);
     await page.goto('/');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });

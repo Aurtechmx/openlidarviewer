@@ -1,0 +1,7 @@
+{
+  "name": "plane-east",
+  "why": "A constant plane falling east. Every interior cell must route due east: the cardinal step is shorter than either diagonal for the same drop.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [[3, 2, 1, 0], [3, 2, 1, 0], [3, 2, 1, 0]]
+}

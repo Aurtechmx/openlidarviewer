@@ -181,8 +181,12 @@ function computeValue(
       const netSign = (mm.net_m3 ?? 0) < 0 ? 'cut' : 'fill';
       return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
     }
+    // Unreachable by type: the arms above cover the union. Kept as the
+    // runtime fallback for a kind arriving from outside the type system, and
+    // inside the switch so the compiler can still prove the arms complete.
+    default:
+      return '—';
   }
-  return '—';
 }
 
 /**

@@ -91,6 +91,15 @@ export interface StreamingHost {
    * host re-route the scan type as a sparse early cloud fills in.
    */
   streamingNodeReadyHook(): (() => void) | undefined;
+  /**
+   * Streamed geometry entered, left or was hidden: the host owes a paint.
+   *
+   * Not optional and not read fresh, unlike the two hooks above. Those are
+   * display extras a host may decline; this is the render loop being told the
+   * picture changed, and a host that could decline it would go back to
+   * sleeping on a scene it had not drawn.
+   */
+  streamingGeometryChanged(): void;
 }
 
 /**
@@ -124,11 +133,17 @@ export function buildSchedulerCallbacks(deps: {
   benchmark: StreamingBenchmark | null;
   nodeClassesHook(): ((nodeId: string, classes: Uint8Array) => void) | undefined;
   nodeReadyHook(): (() => void) | undefined;
+  geometryChanged(): void;
 }): SchedulerCallbacks {
-  const { renderer, benchmark, nodeClassesHook, nodeReadyHook } = deps;
+  const { renderer, benchmark, nodeClassesHook, nodeReadyHook, geometryChanged } = deps;
   return {
     onNodeReady: (node: StreamingNode, decoded: DecodedChunk): void => {
       renderer.onNodeReady(node, decoded);
+      // The scene changed on this line, so the paint is owed from here —
+      // before the display-only hooks below, which are guarded precisely
+      // because they may throw, and ahead of them so one that does cannot
+      // cost the node its frame.
+      geometryChanged();
       // DISPLAY-ONLY class legend hook — hand the host the node's CANONICAL id
       // and its decoded per-point classification so the legend can fold its
       // histogram in. The id is what makes the fold idempotent: a node evicted
@@ -157,7 +172,7 @@ export function buildSchedulerCallbacks(deps: {
         }
       }
       if (benchmark) {
-        benchmark.recordFirstPaint();
+        benchmark.recordFirstResidentMesh();
         benchmark.recordNodeReady(node.record.id);
         // Position bytes are a stable proxy for "decoded points" volume.
         benchmark.recordDecodedBytes(renderLocalPositions(decoded).byteLength);
@@ -165,6 +180,9 @@ export function buildSchedulerCallbacks(deps: {
     },
     onNodeEvicted: (node: StreamingNode): void => {
       renderer.onNodeEvicted(node);
+      // A node leaving is as much a change to the screen as one arriving, and
+      // eviction runs in the scheduler tick — after this frame's render.
+      geometryChanged();
       benchmark?.recordNodeEvicted(node.record.id);
     },
     onTick: benchmark ? (ms: number): void => benchmark.recordSchedulerTick(ms) : undefined,
@@ -174,6 +192,7 @@ export function buildSchedulerCallbacks(deps: {
     // reaches it and its meshes are left drawing as before.
     onFrontierChanged: (hidden: ReadonlySet<string>): void => {
       renderer.applyReplaceVisibility(hidden);
+      geometryChanged();
     },
   };
 }
@@ -230,6 +249,7 @@ export async function buildStreamingSession(
       benchmark,
       nodeClassesHook: () => host.streamingNodeClassesHook(),
       nodeReadyHook: () => host.streamingNodeReadyHook(),
+      geometryChanged: () => host.streamingGeometryChanged(),
     }),
     budgets,
     {

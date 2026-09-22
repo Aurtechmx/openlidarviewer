@@ -1,0 +1,7 @@
+{
+  "name": "valley-v",
+  "why": "A V-shaped valley draining south. Accumulation must converge on the axis rather than spreading evenly.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [[5, 4, 5], [4, 3, 4], [3, 2, 3], [2, 1, 2]]
+}

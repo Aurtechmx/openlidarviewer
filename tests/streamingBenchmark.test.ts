@@ -53,7 +53,7 @@ describe('StreamingBenchmark — time markers', () => {
     const clock = fakeClock();
     const b = new StreamingBenchmark(clock.now);
     const r = b.finalize();
-    expect(r.firstPaintMs).toBeUndefined();
+    expect(r.firstResidentMeshMs).toBeUndefined();
     expect(r.timeToCoarseStableMs).toBeUndefined();
     expect(r.timeToRefinedStableMs).toBeUndefined();
     expect(r.networkBytes).toBe(0);
@@ -67,13 +67,13 @@ describe('StreamingBenchmark — time markers', () => {
     const clock = fakeClock();
     const b = new StreamingBenchmark(clock.now);
     clock.set(120);
-    b.recordFirstPaint();
+    b.recordFirstResidentMesh();
     clock.set(200);
-    b.recordFirstPaint(); // second call must not move the marker
+    b.recordFirstResidentMesh(); // second call must not move the marker
     clock.set(300);
     b.recordCoarseStable();
     const r = b.finalize();
-    expect(r.firstPaintMs).toBeCloseTo(120, 6);
+    expect(r.firstResidentMeshMs).toBeCloseTo(120, 6);
     expect(r.timeToCoarseStableMs).toBeCloseTo(300, 6);
   });
 
@@ -208,7 +208,7 @@ describe('formatStreamingBenchmark', () => {
     const clock = fakeClock();
     const b = new StreamingBenchmark(clock.now);
     clock.set(120);
-    b.recordFirstPaint();
+    b.recordFirstResidentMesh();
     b.recordSchedulerTick(1.5);
     b.recordSchedulerTick(3.5);
     b.recordNetworkBytes(2 * 1024 * 1024);
@@ -216,7 +216,7 @@ describe('formatStreamingBenchmark', () => {
     clock.set(2000);
     const text = formatStreamingBenchmark(b.finalize());
     expect(text).toContain('streaming benchmark');
-    expect(text).toContain('first paint');
+    expect(text).toContain('first mesh');
     expect(text).toContain('scheduler');
     expect(text).toContain('network bytes');
     expect(text).toContain('thrash events');

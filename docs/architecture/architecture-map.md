@@ -32,7 +32,7 @@ from the tree and fails when a cell drifts.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~13k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~17k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~32k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,976 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 4,972 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (4,976)** — the largest blocks, which are the extraction
+**`src/main.ts` (4,972)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -247,7 +247,7 @@ that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,168)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,164)** — the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by

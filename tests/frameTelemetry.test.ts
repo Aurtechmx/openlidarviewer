@@ -253,3 +253,31 @@ describe('FrameTelemetry — sampling', () => {
     telemetry.stop();
   });
 });
+
+describe('the hitch bucket', () => {
+  it('separates a slow frame from one that reads as a stall', () => {
+    // 33.3 ms and 300 ms landed in the same bucket, and they are not the same
+    // experience: past roughly 50 ms a stutter stops reading as a slow frame
+    // and starts reading as the view catching on something.
+    const ring = new FrameTimeRing(16);
+    for (const ms of [8, 20, 40, 60, 120]) ring.push(ms);
+    expect(ring.framesOver16_7).toBe(4);
+    expect(ring.framesOver33_3).toBe(3);
+    expect(ring.framesOver50).toBe(2);
+  });
+
+  it('is exclusive at the boundary, like the two thresholds beside it', () => {
+    const ring = new FrameTimeRing(4);
+    ring.push(50);
+    expect(ring.framesOver50).toBe(0);
+    ring.push(50.1);
+    expect(ring.framesOver50).toBe(1);
+  });
+
+  it('clears with the others on reset', () => {
+    const ring = new FrameTimeRing(4);
+    ring.push(200);
+    ring.reset();
+    expect(ring.framesOver50).toBe(0);
+  });
+});

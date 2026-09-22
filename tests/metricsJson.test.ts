@@ -21,6 +21,7 @@ const telemetry: FrameTelemetrySnapshot = {
     maxMs: 50.05,
     over16_7: 7,
     over33_3: 2,
+    over50: 1,
   },
   longestTaskMs: 82.4,
   longTaskCount: 3,
@@ -78,7 +79,10 @@ describe('buildMetricsDocument', () => {
       p99Ms: 33.4,
       maxMs: 50.05,
       over16_7Ms: 7,
+      // Additive, so the schema stays at /2: a reader that does not know this
+      // key ignores it, and nothing in the tree validates the shape.
       over33_3Ms: 2,
+      over50Ms: 1,
       longestTaskMs: 82.4,
       longTaskCount: 3,
       effectiveDpr: 1.5,

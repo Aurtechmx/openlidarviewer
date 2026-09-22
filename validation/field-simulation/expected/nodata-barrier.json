@@ -1,0 +1,42 @@
+{
+  "fixture": "nodata-barrier.json",
+  "cols": 3,
+  "rows": 2,
+  "cellMetresX": 1.0,
+  "cellMetresY": 1.0,
+  "receiver": [
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1
+  ],
+  "direction": [
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1
+  ],
+  "status": [
+    4,
+    3,
+    4,
+    4,
+    3,
+    4
+  ],
+  "upstreamCells": [
+    1,
+    0,
+    1,
+    1,
+    0,
+    1
+  ],
+  "sinkCount": 0,
+  "flatCount": 0,
+  "outletCount": 4
+}

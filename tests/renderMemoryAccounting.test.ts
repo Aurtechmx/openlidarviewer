@@ -20,6 +20,7 @@ import {
   CLASS_ATTRIBUTE,
   INTENSITY_ATTRIBUTE,
   attributeBytesPerPoint,
+  uploadedAttributesOf,
 } from '../src/render/pointAttributeLayout';
 
 const NONE = { classification: false, intensity: false };
@@ -110,5 +111,48 @@ describe('the readout asks for the channels it has', () => {
     // Honest rather than optimistic: a caller that does not know what a cloud
     // carries reports the minimum it certainly has, not a guess at the rest.
     expect(estimateGpuBytes(1000)).toBe(estimateGpuBytes(1000, NONE));
+  });
+});
+
+// The static half of the same bug. `pointAttributeLayout` was written to end a
+// fixed 24-byte figure, and the streaming path was converted; the static path
+// kept multiplying displayed points by the constant, so the readout still
+// under-reported every classified cloud on screen.
+describe('the static cloud estimate reads the geometry it uploaded', () => {
+  /** A geometry that holds exactly the named attributes. */
+  const carrier = (...names: string[]) => ({
+    getAttribute: (name: string) => (names.includes(name) ? {} : undefined),
+  });
+
+  it('reports the channels a geometry actually carries', () => {
+    expect(uploadedAttributesOf(carrier('aPos', 'aColor'))).toEqual(NONE);
+    expect(uploadedAttributesOf(carrier('aPos', 'aColor', 'aClass', 'aIntensity'))).toEqual(BOTH);
+    expect(uploadedAttributesOf(carrier('aPos', 'aColor', 'aClass'))).toEqual({
+      classification: true,
+      intensity: false,
+    });
+  });
+
+  it('asks the geometry rather than trusting a remembered flag', () => {
+    // A derived classification adds `aClass` to a cloud whose source carried
+    // none. The geometry knows; a flag captured at load does not.
+    const before = carrier('aPos', 'aColor');
+    const after = carrier('aPos', 'aColor', 'aClass');
+    expect(uploadedAttributesOf(before).classification).toBe(false);
+    expect(uploadedAttributesOf(after).classification).toBe(true);
+  });
+
+  it('recovers the quarter the fixed constant dropped', () => {
+    const FIXED = 24; // position + colour only, the figure that shipped
+    const points = 1_000_000;
+    const both = uploadedAttributesOf(carrier('aPos', 'aColor', 'aClass', 'aIntensity'));
+    expect(gpuAttributeBytes(points, both)).toBe(points * 32);
+    // Exactly three quarters, which is what the readout used to show.
+    expect(points * FIXED).toBe(gpuAttributeBytes(points, both) * 0.75);
+  });
+
+  it('leaves a cloud with neither channel exactly where it was', () => {
+    // The unclassified case must not move: this is a correction, not a retune.
+    expect(gpuAttributeBytes(1000, uploadedAttributesOf(carrier('aPos', 'aColor')))).toBe(1000 * 24);
   });
 });

@@ -62,6 +62,14 @@ export type RenderInvalidationReason =
   /** A camera tween is animating. */
   | 'camera-tween'
   /** A streamed node became a visible candidate. */
+  /**
+   * A layer entered or left the scene.
+   *
+   * Deliberately not `style`: adding or removing a cloud changes what exists
+   * rather than how it looks, and a reader tracing why a frame drew is better
+   * served by the distinction than by one reason meaning both.
+   */
+  | 'scene-geometry'
   | 'streaming-ready'
   /** Decoded nodes are waiting on a metered GPU commit. */
   | 'gpu-commit-pending'
@@ -87,11 +95,34 @@ export type RenderInvalidationReason =
 /** How long a reason keeps asking for frames. */
 export type InvalidationKind = 'once' | 'holdover' | 'while';
 
-/** The kind of each reason. This table is the whole policy. */
+/**
+ * The kind of each reason. This table is the whole policy.
+ *
+ * Four of the fifteen are raised by the running application: `camera-input`,
+ * from `FrameDemand.input()` and `cameraMoved()`, plus `style`,
+ * `scene-geometry` and `tool-overlay` from the visual setters. The other
+ * eleven are declared and never invalidated, and `finished()` has no
+ * production caller at all. A declared reason reads exactly like a used one,
+ * and two separate readers took this table for live wiring and proposed
+ * building on it — `gpu-commit-pending` and `streaming-ready` in particular
+ * look like the seam for streamed geometry, and are not.
+ *
+ * A served reason now reaches the activity gate as `invalidated`, so raising
+ * one draws a frame rather than only arming the holdover. The remaining
+ * setters (`setClip`, `setElevationFilter`, `applyClassVisibility`,
+ * `setCoverageGrid`) call `input()`, which wakes the loop without saying why;
+ * those are the next call sites to narrow. Whoever wires a reason properly
+ * should also note that a `while` reason acquired without its `finished()`
+ * keeps `needsFrame` true forever. `tests/renderInvalidation.test.ts` scans
+ * the source and fails when this paragraph stops being true — but it scans
+ * text, so a call it finds may still be unreachable; that gap is pinned
+ * separately in `tests/visualMutationOwnership.test.ts`.
+ */
 export const KIND: Readonly<Record<RenderInvalidationReason, InvalidationKind>> = Object.freeze({
   'camera-input': 'holdover',
   'camera-damping': 'while',
   'camera-tween': 'while',
+  'scene-geometry': 'once',
   'streaming-ready': 'once',
   'gpu-commit-pending': 'while',
   'lod-fade': 'while',

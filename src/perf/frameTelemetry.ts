@@ -57,6 +57,7 @@ export class FrameTimeRing {
   private _count = 0;
   private _over16_7 = 0;
   private _over33_3 = 0;
+  private _over50 = 0;
   private _totalFrames = 0;
 
   constructor(capacity = 240) {
@@ -76,6 +77,10 @@ export class FrameTimeRing {
     this._totalFrames++;
     if (frameMs > 16.7) this._over16_7++;
     if (frameMs > 33.3) this._over33_3++;
+    // A third threshold, because 33.3 ms and 300 ms report the same here and
+    // are not the same experience: past about 50 ms a stutter stops reading as
+    // a slow frame and starts reading as the view having caught on something.
+    if (frameMs > 50) this._over50++;
   }
 
   /** Samples currently in the rolling window. */
@@ -96,6 +101,11 @@ export class FrameTimeRing {
   /** Cumulative frames over the 30 Hz budget (> 33.3 ms). */
   get framesOver33_3(): number {
     return this._over33_3;
+  }
+
+  /** Cumulative frames a viewer would read as a hitch (> 50 ms). */
+  get framesOver50(): number {
+    return this._over50;
   }
 
   /** p50/p95/p99/max over the current window. Sorts a preallocated scratch. */
@@ -120,6 +130,7 @@ export class FrameTimeRing {
     this._count = 0;
     this._over16_7 = 0;
     this._over33_3 = 0;
+    this._over50 = 0;
     this._totalFrames = 0;
   }
 }
@@ -137,9 +148,10 @@ export interface FrameTelemetrySnapshot {
     p95Ms: number;
     p99Ms: number;
     maxMs: number;
-    /** Cumulative frames over 16.7 ms / 33.3 ms since start. */
+    /** Cumulative frames over 16.7 ms / 33.3 ms / 50 ms since start. */
     over16_7: number;
     over33_3: number;
+    over50: number;
   };
   /**
    * Longest main-thread task (ms) observed via the `longtask`
@@ -292,6 +304,7 @@ export class FrameTelemetry {
         maxMs: p.max,
         over16_7: this._ring.framesOver16_7,
         over33_3: this._ring.framesOver33_3,
+        over50: this._ring.framesOver50,
       },
       longestTaskMs: this._longTaskAvailable ? this._longestTaskMs : null,
       longTaskCount: this._longTaskAvailable ? this._longTaskCount : null,

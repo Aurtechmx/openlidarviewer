@@ -1,0 +1,7 @@
+{
+  "name": "nodata-barrier",
+  "why": "A column with no elevation splits a surface falling east. Flow must not cross it, and no receiver may be an invalid cell.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [[3, null, 1], [3, null, 1]]
+}

@@ -233,3 +233,4 @@ describe('DampingSettleGate', () => {
     expect(short.arms(poseAtYaw(step, RADIUS), ORIGIN_CONTROLS, 270)).toBe(false);
   });
 });
+

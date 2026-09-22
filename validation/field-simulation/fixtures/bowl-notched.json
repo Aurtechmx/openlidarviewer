@@ -1,0 +1,7 @@
+{
+  "name": "bowl-notched",
+  "why": "A pit inside a rim with one notch. Raw routing must report the pit as a sink rather than draining it through the notch.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [[5, 5, 3, 5, 5], [5, 4, 4, 4, 5], [5, 4, 0, 4, 5], [5, 4, 4, 4, 5], [5, 5, 5, 5, 5]]
+}

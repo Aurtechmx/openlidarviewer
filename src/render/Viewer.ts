@@ -272,7 +272,7 @@ import { writeFloatColorsInto, toFloatColors } from './colorEncode';
 import type { StreamingScheduler } from './streaming/StreamingScheduler';
 import { buildResidentSnapshot } from './streaming/residentSnapshot';
 import type { StreamingSource, StreamingSourceKind } from './streaming/StreamingSource';
-import { streamingBudgets, estimateGpuBytes } from './streaming/streamingBudget';
+import { streamingBudgets, estimateGpuBytes, uploadedAttributesOf } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
 import type { StreamingBenchmark } from './streaming/streamingBenchmark';
 // The session assembly (renderer/scheduler/commit construction + callback
@@ -511,14 +511,6 @@ const GPU_HARD_POINT_CEILING = 8_000_000;
  * the reported rate still tracks a real change in load.
  */
 const FRAME_SAMPLE_COUNT = 60;
-
-/**
- * Rough GPU bytes held per displayed point: an instanced position (vec3 f32,
- * 12 B) and an instanced colour (vec3 f32, 12 B). Used only for the debug
- * overlay's memory estimate — an attribute-size figure, not a precise driver
- * allocation.
- */
-const BYTES_PER_GPU_POINT = 24;
 
 
 /*
@@ -1493,7 +1485,7 @@ export class Viewer {
     // A first cloud can arrive already in a scalar default mode (elevation
     // on a colourless scan) without any setColorMode call — the legend must
     // appear for it too.
-    this._notifyColorContextChanged();
+    this._notifyColorContextChanged(); this._demand.changed('scene-geometry');
     return id;
   }
 
@@ -1679,10 +1671,10 @@ export class Viewer {
    * time. Mirrors `_buildExportAdapter`.
    */
   private _buildStreamingHost(): StreamingHost {
-    return {
-      rendererHost: this,
+    return { rendererHost: this,
       streamingNodeClassesHook: () => this.onStreamingNodeClasses,
       streamingNodeReadyHook: () => this.onStreamingNodeReady,
+      streamingGeometryChanged: () => this._demand.streamedGeometryChanged(),
     };
   }
 
@@ -1934,13 +1926,13 @@ export class Viewer {
   setStreamingColorMode(mode: ColorMode): void {
     this._streaming?.renderer.setColorMode(mode);
     // The legend follows the streaming mode too (both colour paths must
-    // drive the same overlay — see onColorContextChanged).
-    if (this._streaming) this._notifyColorContextChanged();
+    // drive the same overlay). `input()` wakes what a panel click cannot.
+    if (this._streaming) { this._notifyColorContextChanged(); this._demand.input(); }
   }
 
   /** Apply a new streaming quality preset (point/concurrency budgets). */
   setStreamingQuality(quality: StreamingQuality, isMobile: boolean): void {
-    this._streaming?.scheduler.setBudgets(streamingBudgets(quality, isMobile));
+    if (this._streaming) { this._streaming.scheduler.setBudgets(streamingBudgets(quality, isMobile)); this._demand.input(); }
   }
 
   /** Pause streaming — no new nodes load. */
@@ -1950,12 +1942,12 @@ export class Viewer {
 
   /** Resume streaming. */
   resumeStreaming(): void {
-    this._streaming?.scheduler.resume();
+    if (this._streaming) { this._streaming.scheduler.resume(); this._demand.input(); }
   }
 
   /** Drop the streaming compressed-chunk cache. */
   clearStreamingCache(): void {
-    this._streaming?.scheduler.clearCache();
+    if (this._streaming) { this._streaming.scheduler.clearCache(); this._demand.input(); }
   }
 
   /** Configure navigation and clip planes for a streaming cloud's extent. */
@@ -2088,7 +2080,7 @@ export class Viewer {
     // A removed layer shrinks the shared elevation window when on.
     this.refreshProjectSharedElevation();
     // Removing the active cloud can hide (or re-target) the legend.
-    this._notifyColorContextChanged();
+    this._notifyColorContextChanged(); this._demand.changed('scene-geometry');
   }
 
   /** Return an array of all currently loaded cloud IDs. */
@@ -2287,7 +2279,7 @@ export class Viewer {
   /** Show or hide a cloud. */
   setCloudVisible(id: string, visible: boolean): void {
     const entry = this._clouds.get(id);
-    if (entry) entry.mesh.visible = visible;
+    if (entry) { entry.mesh.visible = visible; this._demand.changed('style'); }
   }
 
   /**
@@ -2429,7 +2421,7 @@ export class Viewer {
     const next = Math.max(0, Math.min(25, Math.round(trim)));
     if (next === this._heightPercentileTrim) return;
     this._heightPercentileTrim = next;
-    this._recolorElevation();
+    this._recolorElevation(); this._demand.changed('style');
   }
 
   /** Read the current percentile-trim setting. */
@@ -2450,7 +2442,7 @@ export class Viewer {
   setProjectSharedElevation(on: boolean): void {
     if (on === this._projectSharedElevation) return;
     this._projectSharedElevation = on;
-    this._recolorElevation();
+    this._recolorElevation(); this._demand.changed('style');
   }
 
   /** Re-apply the shared window after the cloud set changes while on. */
@@ -2542,7 +2534,7 @@ export class Viewer {
     // result — silently switch into RGB colour mode for any cloud
     // that can serve it.
     this._ensureRgbColorMode();
-    this._scheduleReapplyRgbAppearance();
+    this._scheduleReapplyRgbAppearance(); this._demand.changed('style');
   }
 
   /** Apply a named RGB appearance preset and keep the chip highlight in sync. */
@@ -2553,7 +2545,7 @@ export class Viewer {
     this._ensureRgbColorMode();
     // Preset clicks are infrequent — flush immediately so the user sees
     // the colour change without the throttle's trailing-edge delay.
-    this._flushReapplyRgbAppearance();
+    this._flushReapplyRgbAppearance(); this._demand.changed('style');
   }
 
   /**
@@ -2601,7 +2593,7 @@ export class Viewer {
    */
   setSky(preset: SkyPresetId): void {
     this._skyPresetId = preset;
-    this._applySkyPreset(preset);
+    this._applySkyPreset(preset); this._demand.changed('style');
   }
 
   /** The active sky preset id. */
@@ -2657,9 +2649,9 @@ export class Viewer {
     const targetAa = forceAa ? true : this._antialiasing;
     for (const { material } of this._clouds.values()) {
       if (material.alphaToCoverage === targetAa) continue;
-      material.alphaToCoverage = targetAa;
-      material.needsUpdate = true;
+      material.alphaToCoverage = targetAa; material.needsUpdate = true;
     }
+    this._demand.changed('style');
     for (const material of this._streamingMaterials()) {
       if (material.alphaToCoverage === targetAa) continue;
       material.alphaToCoverage = targetAa;
@@ -3150,9 +3142,8 @@ export class Viewer {
     for (const { material } of this._clouds.values()) {
       material.size = effective;
     }
-    for (const material of this._streamingMaterials()) {
-      material.size = effective;
-    }
+    for (const material of this._streamingMaterials()) material.size = effective;
+    this._demand.changed('style');
   }
 
   /** The point material of every resident streaming node mesh. */
@@ -3173,7 +3164,7 @@ export class Viewer {
 
   /** Enable or disable Eye Dome Lighting depth shading. */
   setEdlEnabled(on: boolean): void {
-    this._edlEnabled = on;
+    this._edlEnabled = on; this._demand.changed('style');
   }
 
   /** Whether Eye Dome Lighting is currently enabled. */
@@ -3189,7 +3180,7 @@ export class Viewer {
   setEdlStrength(strength: number): void {
     this._edlBaseStrength = Math.max(0, strength);
     // Immediate apply for the frame — adaptive update will refine next tick.
-    this._edlLiveStrength.value = this._edlBaseStrength;
+    this._edlLiveStrength.value = this._edlBaseStrength; this._demand.changed('style');
   }
 
   /** The base the user set, NOT live `_edlLiveStrength` — edlStrengthPersistence.test.ts. */
@@ -3204,7 +3195,7 @@ export class Viewer {
     // Static clouds size from their own points; a streamed node has none to
     // count, so it sizes from the spacing its source recorded.
     this._lodSize.setMode(mode);
-    this._reapplyAllSizeModes();
+    this._reapplyAllSizeModes(); this._demand.changed('style');
   }
 
   /**
@@ -3537,9 +3528,9 @@ export class Viewer {
     if (forcedOn) return;
     for (const { material } of this._clouds.values()) {
       if (material.alphaToCoverage === on) continue;
-      material.alphaToCoverage = on;
-      material.needsUpdate = true;
+      material.alphaToCoverage = on; material.needsUpdate = true;
     }
+    this._demand.changed('style');
     for (const material of this._streamingMaterials()) {
       if (material.alphaToCoverage === on) continue;
       material.alphaToCoverage = on;
@@ -3793,12 +3784,12 @@ export class Viewer {
     // Revert any prior highlight first so the user sees only the
     // latest selection.
     this.clearSelectionHighlight();
-    applySelectionHighlight(perCloud, this._highlightTarget, color, this._selectionSnapshots);
+    applySelectionHighlight(perCloud, this._highlightTarget, color, this._selectionSnapshots); this._demand.changed('tool-overlay');
   }
 
   /** Revert any active selection highlight back to the original colours. */
   clearSelectionHighlight(): void {
-    revertSelectionHighlight(this._highlightTarget, this._selectionSnapshots);
+    revertSelectionHighlight(this._highlightTarget, this._selectionSnapshots); this._demand.changed('tool-overlay');
   }
 
   /** A mounted layer's colour buffer, for the highlight helpers. */
@@ -4403,19 +4394,24 @@ export class Viewer {
 
     let displayedPoints = 0;
     let totalPoints = 0;
+    // Per cloud, from the attributes that cloud actually uploaded. A fixed
+    // 24 B covered a position and a colour only, so a classified cloud was
+    // reported at three quarters of what it held and one with intensity too
+    // at exactly three quarters — the bug `pointAttributeLayout` was written
+    // to end, fixed on the streaming half and left standing here.
+    let gpuBytesEstimate = 0;
     for (const { cloud, mesh } of this._clouds.values()) {
       totalPoints += cloud.pointCount;
-      if (mesh.visible) displayedPoints += cloud.pointCount;
+      if (!mesh.visible) continue;
+      displayedPoints += cloud.pointCount;
+      gpuBytesEstimate += estimateGpuBytes(cloud.pointCount, uploadedAttributesOf(mesh.geometry));
     }
-    // Static byte estimate first — the streaming layout differs per point.
-    let gpuBytesEstimate = displayedPoints * BYTES_PER_GPU_POINT;
 
     // A streaming cloud renders through its own node meshes, not
     // `this._clouds`, so without this fold the overlay reported 0 points
     // while a COPC/EPT scan was clearly on screen. Resident = uploaded to
     // the GPU right now; source = the whole remote file. The byte estimate
-    // uses the streaming layout's own per-point cost (estimateGpuBytes),
-    // which differs from the static BYTES_PER_GPU_POINT.
+    // uses the streaming layout's own per-point cost (estimateGpuBytes).
     if (this._streaming) {
       const resident = this._streaming.cloud.residentPointCount;
       displayedPoints += resident;

@@ -106,3 +106,25 @@ export function attributeBreakdown(
     note: a.note,
   }));
 }
+
+/**
+ * Anything that can be asked whether it holds a named vertex attribute.
+ *
+ * Structural rather than a three.js `BufferGeometry`, so this module stays
+ * free of the renderer and testable against a plain object. A geometry is the
+ * ground truth for what was uploaded: the mesh builder adds `aClass` and
+ * `aIntensity` only when the source carried those channels, and a derived
+ * classification can add one later, so asking the geometry cannot drift from
+ * what the GPU actually holds the way a remembered flag can.
+ */
+export interface AttributeCarrier {
+  getAttribute(name: string): unknown;
+}
+
+/** Which optional channels this geometry actually uploaded. */
+export function uploadedAttributesOf(geometry: AttributeCarrier): UploadedAttributes {
+  return {
+    classification: geometry.getAttribute(CLASS_ATTRIBUTE.name) != null,
+    intensity: geometry.getAttribute(INTENSITY_ATTRIBUTE.name) != null,
+  };
+}

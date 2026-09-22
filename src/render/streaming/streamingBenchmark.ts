@@ -31,8 +31,22 @@ export interface AggregateStats {
 
 /** A finished streaming-session benchmark result, suitable for diff across versions. */
 export interface StreamingBenchmarkResult {
-  /** ms from session start to the first rendered streaming node, when observed. */
-  firstPaintMs: number | undefined;
+  /**
+   * ms from session start to the first streaming node's mesh entering the
+   * scene, when observed.
+   *
+   * Named for the event that is actually recorded. The producer calls this
+   * from the scheduler's node-ready callback, straight after the renderer
+   * inserts the mesh, and a mesh in the scene is not a mesh on the screen: the
+   * frame carrying it has not necessarily been drawn, and under the
+   * request-driven loop may be a heartbeat away. It was called `firstPaintMs`,
+   * which claimed the stronger of the two.
+   *
+   * A true first-paint figure would have to come from a drawn-frame event with
+   * resident geometry, which means giving the benchmark a frame listener and a
+   * disposal owner. Until that exists this measures residency, and says so.
+   */
+  firstResidentMeshMs: number | undefined;
   /** ms from session start to the coarse view being resident, when observed. */
   timeToCoarseStableMs: number | undefined;
   /**
@@ -76,6 +90,12 @@ export interface StreamingBenchmarkResult {
    * it, and the two peaks bound the deepest backlog the queue carried.
    */
   uploadNodesCommitted: number;
+  /**
+   * Bytes those commits put on the GPU. The node count alone cannot say
+   * whether metering spread the LOAD: a frame that commits four small nodes
+   * and one that commits four large ones read the same.
+   */
+  uploadBytesCommitted: number;
   peakUploadPendingNodes: number;
   peakUploadPendingBytes: number;
   commitsPerFrame: AggregateStats;
@@ -157,7 +177,7 @@ export class StreamingBenchmark {
   private readonly _clock: Clock;
   private readonly _t0: number;
 
-  private _firstPaintMs: number | undefined;
+  private _firstResidentMeshMs: number | undefined;
   private _coarseStableMs: number | undefined;
   private _refinedStableMs: number | undefined;
 
@@ -190,6 +210,7 @@ export class StreamingBenchmark {
   // Metered-commit accounting. Stays at zero in immediate mode, where the
   // driver never calls recordCommitPass.
   private _uploadNodesCommitted = 0;
+  private _uploadBytesCommitted = 0;
   private _peakUploadPendingNodes = 0;
   private _peakUploadPendingBytes = 0;
   private _lastUploadPendingNodes = 0;
@@ -201,9 +222,9 @@ export class StreamingBenchmark {
     this._t0 = clock();
   }
 
-  /** Mark the first rendered streaming node — once per session. */
-  recordFirstPaint(): void {
-    this._firstPaintMs ??= this._elapsed();
+  /** Mark the first streaming node's mesh entering the scene, once per session. */
+  recordFirstResidentMesh(): void {
+    this._firstResidentMeshMs ??= this._elapsed();
   }
 
   /** Mark the moment the coarse view is fully resident — once per session. */
@@ -339,8 +360,13 @@ export class StreamingBenchmark {
     pendingNodes: number;
     pendingBytes: number;
     committed: number;
+    /** Bytes committed in this pass. Absent on a caller that cannot say. */
+    committedBytes?: number;
   }): void {
     if (pass.committed > 0) this._uploadNodesCommitted += pass.committed;
+    if (pass.committedBytes !== undefined && pass.committedBytes > 0) {
+      this._uploadBytesCommitted += pass.committedBytes;
+    }
     this._lastUploadPendingNodes = pass.pendingNodes;
     this._lastUploadPendingBytes = pass.pendingBytes;
     if (pass.pendingNodes > this._peakUploadPendingNodes) {
@@ -355,6 +381,7 @@ export class StreamingBenchmark {
   /** Live metered-commit counters — for the debug overlay. */
   uploadCounters(): {
     nodesCommitted: number;
+    bytesCommitted: number;
     pendingNodes: number;
     pendingBytes: number;
     peakPendingNodes: number;
@@ -363,6 +390,7 @@ export class StreamingBenchmark {
   } {
     return {
       nodesCommitted: this._uploadNodesCommitted,
+      bytesCommitted: this._uploadBytesCommitted,
       pendingNodes: this._lastUploadPendingNodes,
       pendingBytes: this._lastUploadPendingBytes,
       peakPendingNodes: this._peakUploadPendingNodes,
@@ -399,7 +427,7 @@ export class StreamingBenchmark {
   /** Build the final structured result. The collector remains usable afterwards. */
   finalize(): StreamingBenchmarkResult {
     return {
-      firstPaintMs: this._firstPaintMs,
+      firstResidentMeshMs: this._firstResidentMeshMs,
       timeToCoarseStableMs: this._coarseStableMs,
       timeToRefinedStableMs: this._refinedStableMs,
       networkBytes: this._networkBytes,
@@ -414,6 +442,7 @@ export class StreamingBenchmark {
       cacheEvictions: this._cacheEvictions,
       thrashEvents: this._thrashEvents,
       uploadNodesCommitted: this._uploadNodesCommitted,
+      uploadBytesCommitted: this._uploadBytesCommitted,
       peakUploadPendingNodes: this._peakUploadPendingNodes,
       peakUploadPendingBytes: this._peakUploadPendingBytes,
       commitsPerFrame: aggregate(this._commitSamples.toArray()),
@@ -449,7 +478,7 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
   };
   lines.push(
     'streaming benchmark',
-    `  first paint   ${ms(result.firstPaintMs)}`,
+    `  first mesh    ${ms(result.firstResidentMeshMs)}`,
     `  coarse stable ${ms(result.timeToCoarseStableMs)}`,
     `  refined stable${ms(result.timeToRefinedStableMs)}`,
     `  network bytes ${mb(result.networkBytes)}`,
@@ -470,7 +499,7 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
           ).toFixed(1)}%)`
         : ''),
     `  thrash events ${result.thrashEvents}`,
-    `  commits       ${result.uploadNodesCommitted} nodes,` +
+    `  commits       ${result.uploadNodesCommitted} nodes / ${mb(result.uploadBytesCommitted)},` +
       ` peak backlog ${result.peakUploadPendingNodes} nodes / ${mb(result.peakUploadPendingBytes)}`,
   );
   ag('commits/frame', result.commitsPerFrame);

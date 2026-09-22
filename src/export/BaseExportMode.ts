@@ -44,7 +44,7 @@ import {
 } from './ScanReportRenderer';
 import type { ScanReportData, ScanReportRow } from './ScanReportRenderer';
 import { stampFigureProvenanceOntoBlob } from './figureMetadata';
-import { capturePolicyFor, presentationOfCapture } from './presentationMode';
+import { presentationOfCapture } from './presentationMode';
 import { paletteLabelOfOptions } from './figureProvenance';
 
 /** Encode a canvas to a `Blob` of the given MIME type. */
@@ -437,21 +437,27 @@ export async function runStudioExport(
   // Export isolation. Every exporter here captures the live canvas, and four
   // of the raster modes encode geometry in their pixel values, so a
   // reconstructed pixel in one of them is an invented elevation in a file that
-  // is read back as data. `capturePolicyFor` names the modes that must not
-  // carry one; `presentationOfCapture` then describes the FIGURE rather than
-  // the live view, so a suspended capture is not labelled as though it
-  // reconstructed. With no capability enabled both answer the source case,
-  // which is why this wiring changes no byte today and has to exist before the
-  // first capability that can reconstruct rather than after it.
+  // is read back as data. `presentationOfCapture` describes the FIGURE rather
+  // than the live view, and it is given `as-is` because that is what this
+  // caller did.
+  //
+  // `presentationMode`'s contract puts the suspension on the caller, and this
+  // caller performs none: the renderer sits behind the export-to-render
+  // boundary the module-graph ratchet holds shrink-only. Passing
+  // `capturePolicyFor`'s verdict here would credit the figure with a
+  // stand-down nobody performed and stamp an invented elevation 'source'. The
+  // conservative label is the honest one, so a capture taken while
+  // reconstruction runs is described as reconstructed.
+  //
+  // `capturePolicyFor` therefore states an obligation no caller can discharge
+  // yet. It stays the right question; wiring it means first giving the export
+  // path a way to stand the renderer down, not passing its answer to a
+  // function that assumes someone already did.
+  //
   // Absent capabilities are the source case and are answered without asking,
-  // which keeps this layer free of a runtime import into the renderer: the
-  // module-graph ratchet holds export-to-render coupling shrink-only, and a
-  // mapping call would have grown it for a question that has a known answer.
+  // which keeps this layer free of a runtime import into the renderer.
   const capturedCaps = context.continuityCapabilities;
-  const capturePolicy = capturedCaps ? capturePolicyFor(mode, capturedCaps) : 'as-is';
-  const presentation = capturedCaps
-    ? presentationOfCapture(capturedCaps, capturePolicy)
-    : 'source';
+  const presentation = capturedCaps ? presentationOfCapture(capturedCaps, 'as-is') : 'source';
 
   const final = await stampFigureProvenanceOntoBlob(composed, {
     crs,

@@ -29,12 +29,12 @@ function parked(): RenderActivityGate {
   return g;
 }
 
-const idle = { tweening: false, streamingBusy: false };
+const idle = { tweening: false, streamingBusy: false, commitWork: false, fading: false, invalidated: false };
 
 describe('RenderActivityGate', () => {
   it('renders while a tween is in progress, whatever else is true', () => {
     const g = parked();
-    expect(g.shouldRender(1_000_000, { tweening: true, streamingBusy: false })).toBe(true);
+    expect(g.shouldRender(1_000_000, { ...idle, tweening: true })).toBe(true);
   });
 
   it('renders for the full holdover window after an input bump', () => {
@@ -55,8 +55,35 @@ describe('RenderActivityGate', () => {
 
   it('renders while streaming is loading, then stops when it goes quiet', () => {
     const g = parked();
-    expect(g.shouldRender(5000, { tweening: false, streamingBusy: true })).toBe(true);
-    expect(g.shouldRender(5000, { tweening: false, streamingBusy: false })).toBe(false);
+    expect(g.shouldRender(5000, { ...idle, streamingBusy: true })).toBe(true);
+    expect(g.shouldRender(5000, { ...idle })).toBe(false);
+  });
+
+  it('draws for commit work, so uploaded geometry does not wait for a heartbeat', () => {
+    // The parked gate is the whole point: no tween, no input, no fetch
+    // backlog, heartbeat at zero. Before this signal the answer was false and
+    // a node that had reached the GPU sat undrawn until the counter came
+    // round.
+    const g = parked();
+    expect(g.shouldRender(9000, { ...idle, commitWork: true })).toBe(true);
+    expect(g.shouldRender(9000, idle)).toBe(false);
+  });
+
+  it('draws a dissolve, so a fade is a fade and not two steps', () => {
+    // The loop already woke for the fade; only the gate was left out, so the
+    // frames it woke for were skipped and the dissolve advanced on the
+    // heartbeat. At FADE_MS 220 that is roughly two paints, not thirteen.
+    const g = parked();
+    expect(g.shouldRender(9000, { ...idle, fading: true })).toBe(true);
+    expect(g.shouldRender(9000, idle)).toBe(false);
+  });
+
+  it('draws a frame something asked for, rather than idle-skipping it', () => {
+    // A once-reason consumed without a paint is worse than one never raised:
+    // the change it describes has happened and nothing will ask again.
+    const g = parked();
+    expect(g.shouldRender(9000, { ...idle, invalidated: true })).toBe(true);
+    expect(g.shouldRender(9000, idle)).toBe(false);
   });
 
   it('fires the heartbeat once enough idle frames have passed', () => {

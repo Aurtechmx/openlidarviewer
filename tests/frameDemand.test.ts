@@ -134,10 +134,15 @@ describe('drawn-frame listeners', () => {
 
 // A decoded node awaiting a metered GPU commit is pending visible work, and
 // the loop must not sleep on it. The scheduler's `queued` and `loading` counts
-// are both zero by then, so `streamingBusy` answers false; fades hid the gap,
-// because a fading node keeps the chain alive on its own. The mobile and
-// low-quality paths turn fades off, and the remaining commits would then drain
-// one pump per 250 ms safety heartbeat instead of one per frame.
+// are both zero by then, so `streamingBusy` answers false, and the remaining
+// commits would drain one pump per 250 ms safety heartbeat instead of one per
+// frame.
+//
+// Staying awake is half of it. The gate decides whether an awake frame DRAWS,
+// and it read only the fetch side, so the tail of a burst could be uploaded
+// and then idle-throttled. Driving a real session never caught that happening
+// — the scheduler is still ticking whenever geometry lands — so `commitWork`
+// and the owed paint below make it structural rather than incidental.
 describe('pending GPU commits keep the loop awake', () => {
   it('needs a frame with no fetch backlog, no fade, no tween and no input', () => {
     const { d } = demand({ commitPending: () => true });
@@ -154,7 +159,116 @@ describe('pending GPU commits keep the loop awake', () => {
       pending--;
       now.ms += 16;
     }
+    // The queue is empty, and exactly one frame is still owed: the last entry
+    // was pumped AFTER that frame painted, so the scene on screen is one node
+    // stale. It sleeps once that paint has happened, not before.
+    expect(d.needsFrame(now.ms)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
     expect(d.needsFrame(now.ms)).toBe(false);
+  });
+
+  it('draws the frames a burst is still uploading on, not just the last', () => {
+    // The gate is parked and the heartbeat freshly reset, so every `true` here
+    // is `commitWork` and nothing else.
+    let pending = true;
+    const { d } = demand({ commitPending: () => pending });
+    d.frameDrawn();
+    expect(d.shouldRender()).toBe(true);
+    pending = false;
+    // Still not drawn: the falling edge is seen where the pump's effect is,
+    // in the scheduler's post-frame question.
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
+  });
+
+  it('owes exactly one paint, and a second drain does not double it', () => {
+    let pending = true;
+    const { d } = demand({ commitPending: () => pending });
+    // One frame with the commit outstanding, which is what arms the latch.
+    // The pump only ever runs inside a frame body whose `shouldRender` has
+    // already sampled, so a burst draining unobserved is unreachable.
+    expect(d.shouldRender()).toBe(true);
+    pending = false;
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
+    expect(d.needsFrame(0)).toBe(false);
+    // A fresh burst arms it again rather than finding the latch already spent.
+    pending = true;
+    expect(d.shouldRender()).toBe(true);
+    pending = false;
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
+    expect(d.needsFrame(0)).toBe(false);
+  });
+
+  it('owes a paint when geometry lands, with no commit queue involved at all', () => {
+    // The shipped path: `immediate` mode, so `commitPending` is false for the
+    // whole session and the queue-watching latch never arms. The node-ready
+    // event is what has to carry it.
+    const { d } = demand({ commitPending: () => false });
+    d.gate.noteRendered();
+    expect(d.needsFrame(0)).toBe(false);
+    d.streamedGeometryChanged();
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
+    expect(d.needsFrame(0)).toBe(false);
+  });
+
+  it('keeps owing when geometry lands after the frame decided to draw', () => {
+    // The loop renders, THEN pumps and ticks, and in metered mode
+    // `onNodeReady` fires from inside the pump. So the sequence below is one
+    // frame: decide, draw, land, end-of-frame. Discharging the debt at the
+    // end would have this frame absolve itself of a node it never showed.
+    const { d } = demand({ commitPending: () => false });
+    d.gate.noteRendered();
+    d.streamedGeometryChanged();
+    expect(d.shouldRender()).toBe(true); // decided; debt discharged here
+    d.streamedGeometryChanged(); // lands mid-body, after the render
+    d.frameDrawn(); // end of the frame body
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
+    expect(d.needsFrame(0)).toBe(false);
+  });
+
+  it('never sleeps on geometry that landed after the frame decided to draw', () => {
+    // One call of `frame` is one loop iteration in the real order: the gate
+    // decides, the render happens, THEN the body pumps and ticks the
+    // scheduler — which is where `onNodeReady` fires in metered mode — and
+    // the scheduler asks last whether to go round again.
+    let busy = true;
+    const { d } = demand({ streamingBusy: () => busy });
+    d.gate.noteRendered();
+
+    // Frame 1 draws because fetches are outstanding. Then the body runs: a
+    // node reaches the scene, and the last fetch completes in the same body.
+    expect(d.shouldRender()).toBe(true);
+    d.gate.noteRendered();
+    d.streamedGeometryChanged();
+    busy = false;
+    d.frameDrawn();
+    // The picture was taken before the node arrived, so it is still owed —
+    // and nothing else is asking now that the fetches are done.
+    expect(d.needsFrame(0)).toBe(true);
+
+    // Frame 2 pays it.
+    expect(d.shouldRender()).toBe(true);
+    d.gate.noteRendered();
+    d.frameDrawn();
+    expect(d.needsFrame(0)).toBe(false);
+
+    // And it stays settled rather than spinning on a flag nothing clears.
+    d.gate.noteSkipped();
+    expect(d.needsFrame(0)).toBe(false);
+  });
+
+  it('does not owe a paint when no commit was ever pending', () => {
+    // `immediate` mode never populates the decoded set, so there is no falling
+    // edge to detect and the loop must sleep exactly as it did before.
+    const { d } = demand({ commitPending: () => false });
+    d.gate.noteRendered(); // park the heartbeat; a fresh gate draws its first frame
+    expect(d.needsFrame(0)).toBe(false);
+    expect(d.needsFrame(16)).toBe(false);
+    expect(d.shouldRender()).toBe(false);
   });
 
   it('is what keeps it awake, not the other signals', () => {
@@ -167,6 +281,28 @@ describe('pending GPU commits keep the loop awake', () => {
     // `immediate` commits inside the decode, so the store's decoded set is
     // empty and the loop sleeps exactly as it did before this signal existed.
     const { d } = demand({ commitPending: () => false });
+    expect(d.needsFrame(0)).toBe(false);
+  });
+});
+
+describe('an active fade both wakes the loop and draws', () => {
+  it('draws while the dissolve runs, not once per heartbeat', () => {
+    // `needsFrame` always saw the fade; the gate did not, so the loop spun at
+    // rAF and skipped almost every frame it woke for.
+    let fading = true;
+    const { d } = demand({ fading: () => fading });
+    d.gate.noteRendered();
+    expect(d.needsFrame(0)).toBe(true);
+    expect(d.shouldRender()).toBe(true);
+    // Still drawing several frames in, with the heartbeat freshly reset each
+    // time, which is what a smooth dissolve needs.
+    for (let f = 0; f < 5; f++) {
+      d.gate.noteRendered();
+      expect(d.shouldRender(), `frame ${f}`).toBe(true);
+    }
+    fading = false;
+    d.gate.noteRendered();
+    expect(d.shouldRender()).toBe(false);
     expect(d.needsFrame(0)).toBe(false);
   });
 });

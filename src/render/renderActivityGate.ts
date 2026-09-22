@@ -31,6 +31,66 @@ export interface RenderActivitySignals {
   readonly tweening: boolean;
   /** The streaming scheduler has in-flight or queued node fetches. */
   readonly streamingBusy: boolean;
+  /**
+   * Decoded geometry is waiting to reach the GPU, or reached it on the frame
+   * just gone and has not been painted yet.
+   *
+   * Distinct from {@link streamingBusy}, which is the FETCH side: the
+   * scheduler's queue empties as soon as the last chunk decodes, while the
+   * metered commit pump is still spending its per-frame budget uploading what
+   * decoded. A tail of nodes therefore commits with nothing else asking for a
+   * frame, and the pump runs AFTER the paint in the loop body, so the last
+   * one lands on a scene that has already been drawn. Without this the gate
+   * saw only the fetch side and could idle-throttle those frames, leaving
+   * geometry on the GPU undrawn until the heartbeat came round.
+   *
+   * Driving a real COPC session, node-join to paint measured a 9-66 ms median
+   * with and without this signal, in both commit modes, so the stall was
+   * never caught happening — usually something else is asking for the frame
+   * while the scheduler ticks. That is a weak result rather than an all-clear:
+   * 34 node arrivals were observed in total, which bounds an occasional stall
+   * no tighter than "under roughly one arrival in eleven". The gap is closed
+   * by construction because measuring it away would take thousands of
+   * samples, not because it was shown to be rare.
+   */
+  readonly commitWork: boolean;
+  /**
+   * A node dissolve is part way through.
+   *
+   * The loop already stayed AWAKE for a fade, because `needsFrame` asks for
+   * one; the gate was never told, so the frames it woke for were idle-skipped
+   * and the fade advanced on the heartbeat. At `FADE_MS` of 220 that is about
+   * two paints where sixty-hertz would give thirteen, and a dissolve drawn in
+   * two steps is a pop with extra latency rather than a fade.
+   *
+   * Distinct from {@link tweening}, which is the camera moving. This is the
+   * scene changing under a still camera.
+   *
+   * The frames were already being paid for: `needsFrame` returns true for a
+   * fade, so the loop wakes and runs either way. All this decides is whether
+   * a woken frame acts. Driving a real session could not measure the
+   * difference, because the window is the fade tail after the fetch queue
+   * quiets and `streamingBusy` forces the draws before that, and the
+   * frame-count spread between runs of one build was wider than the spread
+   * between builds. It is kept because a loop that wakes and then declines to
+   * draw is a contradiction, not because a benefit was observed.
+   */
+  readonly fading: boolean;
+  /**
+   * Something served this frame asked for the picture to change.
+   *
+   * The reasons in `renderInvalidation` say WHY a frame was requested, and the
+   * loop used to throw them away before the body ran: `consumeOnce` cleared
+   * the once-reasons and reported nothing, so a `style` or `tool-overlay`
+   * invalidation could wake the loop and then be idle-skipped. A once-reason
+   * consumed without a paint is worse than one never raised, because the
+   * change it describes has already happened and nothing will ask again.
+   *
+   * The loop now serves the frame instead, and hands the verdict here. A
+   * `while` reason draws for as long as it is held, which is what separates it
+   * from a once-reason and also what makes an unreleased one a battery bug.
+   */
+  readonly invalidated: boolean;
 }
 
 /**
@@ -141,14 +201,20 @@ export class RenderActivityGate {
    *
    * Priority, highest first: a tween always draws; recent input draws until
    * the holdover expires; active streaming draws so new nodes appear without
-   * latency; otherwise the heartbeat draws once the idle counter reaches the
-   * threshold. The boundary is `now < until`, so the expiry instant is already
-   * idle.
+   * latency; commit work draws so geometry that has reached the GPU is on the
+   * screen rather than waiting for a heartbeat; a dissolve draws so it is a
+   * fade rather than two steps; a served invalidation draws because something
+   * asked for this frame on purpose; otherwise the heartbeat draws once the
+   * idle counter reaches the threshold. The boundary is
+   * `now < until`, so the expiry instant is already idle.
    */
   shouldRender(now: number, signals: RenderActivitySignals): boolean {
     if (signals.tweening) return true;
     if (now < this._activityUntilMs) return true;
     if (signals.streamingBusy) return true;
+    if (signals.commitWork) return true;
+    if (signals.fading) return true;
+    if (signals.invalidated) return true;
     return this._idleHeartbeat >= IDLE_HEARTBEAT_FRAMES;
   }
 

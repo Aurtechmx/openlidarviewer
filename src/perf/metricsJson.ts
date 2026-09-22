@@ -128,6 +128,7 @@ export function buildMetricsDocument(input: MetricsJsonInput): Record<string, un
           maxMs: ms(t.frame.maxMs),
           over16_7Ms: t.frame.over16_7,
           over33_3Ms: t.frame.over33_3,
+          over50Ms: t.frame.over50,
           longestTaskMs: t.longestTaskMs === null ? null : ms(t.longestTaskMs),
           longTaskCount: t.longTaskCount,
           effectiveDpr: t.effectiveDpr,

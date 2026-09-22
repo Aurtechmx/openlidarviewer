@@ -1,3 +1,7 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { RENDER_HOLDOVER_MS } from '../src/render/renderActivityGate';
@@ -8,6 +12,14 @@ import {
   RenderInvalidation,
   type RenderInvalidationReason,
 } from '../src/render/renderInvalidation';
+
+/**
+ * The application source, scanned for what actually raises a reason.
+ *
+ * `fileURLToPath`, never `URL.pathname`: the latter hands back `/C:/...` on
+ * Windows, which is what `noWindowsPathBug` guards against.
+ */
+const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
 
 describe('the reason table', () => {
   it('gives every reason exactly one kind', () => {
@@ -235,5 +247,53 @@ describe('consumeOnce', () => {
       consumed.consumeOnce();
       expect(consumed.holds(reason, 0)).toBe(served.holds(reason, 0));
     }
+  });
+});
+
+// Which of these reasons production actually raises, checked rather than
+// assumed. Two independent readers of this file — an outside audit and a
+// later pass over the render loop — both took the vocabulary below for live
+// wiring and proposed building on it, because a declared reason reads exactly
+// like a used one. The file-level unreachable register cannot help: this
+// module IS imported, and that register says plainly it "cannot see an unused
+// export". So the fact lives here, where wiring one makes the test say so.
+describe('what production raises', () => {
+  const scan = (): { reasons: Set<string>; finishedCalls: number } => {
+    const reasons = new Set<string>();
+    let finishedCalls = 0;
+    for (const file of readdirSync(SRC, { recursive: true, encoding: 'utf8' })) {
+      if (!file.endsWith('.ts')) continue;
+      const text = readFileSync(join(SRC, file), 'utf8');
+      for (const m of text.matchAll(/\.changed\(\s*'([a-z-]+)'/g)) reasons.add(m[1]);
+      // Counted on the call, not on a literal argument: `finished(reason)`
+      // with a variable is exactly the case that must not slip through.
+      finishedCalls += [...text.matchAll(/\.finished\(/g)].length;
+    }
+    return { reasons, finishedCalls };
+  };
+
+  it('raises four of the reasons it declares, and the rest stay a design note', () => {
+    // It was one. `input()` and `cameraMoved()` recorded 'camera-input' and
+    // every other reason was declared and never raised, which two separate
+    // readers took for live wiring. Giving the visual setters reason ownership
+    // added three: `style` for appearance, `scene-geometry` for a layer
+    // entering or leaving, `tool-overlay` for the selection highlight.
+    //
+    // The remainder are still unraised. `filter`, `clip`, `viewport` and
+    // `screenshot` belong to setters that call `input()`, which wakes the loop
+    // and arms the gate but does not say why; those are the next call sites to
+    // narrow. The `while` reasons are a separate matter, below.
+    expect([...scan().reasons].sort()).toEqual(['camera-input', 'scene-geometry', 'style', 'tool-overlay']);
+  });
+
+  it('never releases a while-reason, which is why none is ever acquired', () => {
+    // A `while` reason held without a matching `finished()` keeps `needsFrame`
+    // true forever and the loop never sleeps. No production code calls
+    // `finished()`, and no production code acquires a `while` reason either,
+    // so the pair is consistent today. Wiring the first `while` reason without
+    // its release is the battery bug this pins.
+    expect(scan().finishedCalls).toBe(0);
+    const whileReasons = ALL_INVALIDATION_REASONS.filter((r) => KIND[r] === 'while');
+    for (const r of whileReasons) expect(scan().reasons.has(r)).toBe(false);
   });
 });

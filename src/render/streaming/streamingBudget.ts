@@ -313,3 +313,12 @@ export function estimateGpuBytes(
 export function estimateDecodedBytes(residentPointCount: number): number {
   return residentPointCount * DECODED_BYTES_PER_POINT;
 }
+
+/**
+ * `uploadedAttributesOf` travels with this module because it answers the
+ * question `estimateGpuBytes` above is asked with: which optional channels a
+ * geometry actually uploaded. Viewer reaches both through the one import —
+ * the module-graph ratchet counts a second edge from Viewer to a module the
+ * byte-accounting cluster already owns, and the two are one concern.
+ */
+export { uploadedAttributesOf, type AttributeCarrier } from '../pointAttributeLayout';

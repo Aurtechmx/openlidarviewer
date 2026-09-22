@@ -177,10 +177,8 @@ import { createViewStateCoordinator } from './app/viewStateCoordinator';
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { makeNavPaletteActions } from './app/navPaletteActions';
-import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow, RunOptions } from './analysis/ModuleApi';
-import { healthCheck } from './analysis/modules/healthCheck';
-import { scanReport } from './analysis/modules/scanReport';
+import { createAnalysisModuleRegistry } from './app/analysisModuleRegistry';
 import {
   availableModes,
   defaultMode,
@@ -899,9 +897,7 @@ const deviceCapsValue = deviceCaps({
   isMobile: isTouchFirstDevice(),
 });
 
-const registry = new ModuleRegistry();
-registry.register(healthCheck);
-registry.register(scanReport);
+const registry = createAnalysisModuleRegistry();
 
 // The composition root owns the shared app state. v0.6 migrates main.ts's
 // module-level mutables onto it one cluster at a time: the layer/comparison

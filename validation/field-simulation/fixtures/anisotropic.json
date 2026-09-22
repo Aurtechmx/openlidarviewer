@@ -1,0 +1,7 @@
+{
+  "name": "anisotropic",
+  "why": "Ten metres east, one metre south. The larger raw drop is east; the steeper physical gradient is south. Index distance gets this wrong.",
+  "cellMetresX": 10,
+  "cellMetresY": 1,
+  "z": [[10, 8], [9, 8]]
+}

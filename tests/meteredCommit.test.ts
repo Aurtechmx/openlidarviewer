@@ -264,3 +264,18 @@ describe('per-frame limit policy (pure)', () => {
     expect(mobile.maxBytesPerFrame).toBeLessThan(desktop.maxBytesPerFrame);
   });
 });
+
+describe('the benchmark hears how many bytes were committed', () => {
+  it('forwards committed bytes, which the node count cannot stand in for', () => {
+    // Four small nodes and four large ones read identically as a node count,
+    // and metering exists to spread the LOAD rather than the tally.
+    const passes: Array<{ committed: number; committedBytes?: number }> = [];
+    const benchmark = {
+      recordCommitPass: (p: { committed: number; committedBytes?: number }) => { passes.push(p); },
+    } as unknown as Parameters<typeof makeStreamingCommit>[2];
+    const driver = makeStreamingCommit('metered', false, benchmark);
+    driver.pump(16);
+    expect(passes).toHaveLength(1);
+    expect(passes[0]).toHaveProperty('committedBytes');
+  });
+});

@@ -104,7 +104,7 @@ export async function runStressTier(tier: StressTier): Promise<{
     instantDecoder,
     {
       onNodeReady: (node) => {
-        benchmark.recordFirstPaint();
+        benchmark.recordFirstResidentMesh();
         benchmark.recordNodeReady(node.record.id);
       },
       onNodeEvicted: (node) => benchmark.recordNodeEvicted(node.record.id),
@@ -167,8 +167,8 @@ for (const tier of tiersFromEnv()) {
     const { result, budget, capBound } = await runStressTier(tier);
 
     // Benchmark shape — every benchmark field is observable.
-    expect(result.firstPaintMs).not.toBeUndefined();
-    expect((result.firstPaintMs ?? 0) >= 0).toBe(true);
+    expect(result.firstResidentMeshMs).not.toBeUndefined();
+    expect((result.firstResidentMeshMs ?? 0) >= 0).toBe(true);
     expect(result.peakResidentPoints).toBeGreaterThan(0);
     expect(result.schedulerTickMs.count).toBeGreaterThan(0);
     expect(result.sessionDurationMs).toBeGreaterThan(0);

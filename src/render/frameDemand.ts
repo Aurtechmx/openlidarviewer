@@ -24,8 +24,21 @@
  * so this tests in Node against a fake.
  */
 import { browserFrameScheduler, type FrameScheduler, type FrameSchedulerState } from './frameScheduler';
+
+/**
+ * How a scheduler is built. The default reaches for requestAnimationFrame, so
+ * a test that wants to drive real frames supplies its own clock and queue
+ * instead. Injected here rather than reached for inside {@link FrameDemand.start}
+ * because the loop's whole contract, wake through serve through draw through
+ * sleep, is only observable by running it.
+ */
+export type SchedulerFactory = (hooks: {
+  nowMs: () => number;
+  needsFrame: (nowMs: number) => boolean;
+  runFrame: () => void;
+}) => FrameScheduler;
 import { RenderActivityGate } from './renderActivityGate';
-import { RenderInvalidation, type RenderInvalidationReason } from './renderInvalidation';
+import { RenderInvalidation, type RenderInvalidationReason, type ServedFrame } from './renderInvalidation';
 
 /** The live signals that run without asking each frame. */
 export interface FrameDemandSignals {
@@ -43,12 +56,21 @@ export interface FrameDemandSignals {
    * decoded-but-uncommitted, and the store's own comment says as much — a
    * readiness verdict reading only those two "would fire too early".
    *
-   * Without this the loop could sleep with points decoded and undrawn. Fades
-   * hid it, because a fading node keeps the chain alive on its own; turn fades
-   * off, as the mobile and low-quality paths do, and the remaining commits
-   * would drain one pump per 250 ms safety heartbeat instead of one per frame.
-   * On the shipped `immediate` commit mode nothing is ever pending here, so
-   * this reads false and the loop behaves exactly as before.
+   * Without this the loop could sleep with points decoded and undrawn, and
+   * the remaining commits would drain one pump per 250 ms safety heartbeat
+   * instead of one per frame. On the shipped `immediate` commit mode nothing
+   * is ever pending here, so this reads false and the loop behaves exactly as
+   * before.
+   *
+   * Keeping the loop RUNNING is not the same as making it DRAW, and an
+   * earlier note here guessed that fades covered the difference — that a
+   * fading node keeps the chain alive, so only the fade-less mobile and
+   * low-quality paths were exposed. The gate consults neither this signal nor
+   * `fading`, so fades were never what stood between a commit and a paint.
+   * What does is that the scheduler is usually still ticking when geometry
+   * lands, so the gap was never observed in a real session — on a sample of
+   * 34 node arrivals, which is nowhere near enough to call it rare.
+   * `commitWork` on the gate closes it by construction instead.
    */
   commitPending: () => boolean;
   /** A node fade is part way through. */
@@ -61,9 +83,44 @@ export class FrameDemand {
   private readonly _signals: FrameDemandSignals;
   private _scheduler: FrameScheduler | null = null;
   private readonly _drawn = new Set<() => void>();
+  /**
+   * What asked for the frame currently running, or null between frames.
+   *
+   * Served at the top of the frame and cleared when the body returns, so the
+   * gate can be told that this frame was requested on purpose. It used to be
+   * `consumeOnce()`: the once-reasons were dropped before the body ran and
+   * nothing downstream knew they had existed, which let a `style` or
+   * `tool-overlay` invalidation wake the loop and then lose its frame to the
+   * idle throttle.
+   */
+  private _served: ServedFrame | null = null;
+  /** Was a commit outstanding when the scheduler last asked? */
+  private _commitWasPending = false;
+  /**
+   * A commit landed and the frame that will show it has not drawn yet.
+   *
+   * The loop body paints and THEN pumps, which is the right order — a drag
+   * gets its frame before mesh construction and upload compete for the same
+   * millisecond — but it means the last node of a burst is uploaded onto a
+   * scene that has already been drawn. Nothing is pending after it, so the
+   * fetch, commit and fade signals are all quiet and the loop would sleep on
+   * a picture that is one node stale.
+   *
+   * Set from two places, because geometry reaches the screen from two:
+   * {@link needsFrame} detects the commit queue draining, where the pump's
+   * effect is already visible, and {@link streamedGeometryChanged} fires per node.
+   * Either way it keeps the loop awake AND tells the gate to draw.
+   *
+   * Cleared in {@link shouldRender}, which is deliberate and load-bearing —
+   * see the note there.
+   */
+  private _paintOwed = false;
 
-  constructor(signals: FrameDemandSignals) {
+  private readonly _makeScheduler: SchedulerFactory;
+
+  constructor(signals: FrameDemandSignals, makeScheduler: SchedulerFactory = browserFrameScheduler) {
     this._signals = signals;
+    this._makeScheduler = makeScheduler;
   }
 
   /** The activity gate, for the render loop's own reads. */
@@ -111,6 +168,31 @@ export class FrameDemand {
   }
 
   /**
+   * The streamed scene changed. Owe it a paint.
+   *
+   * {@link _sampleCommitWork} watches the metered commit queue, and the
+   * shipped default is not metered: `streamingCommitMode` is `immediate`, so
+   * `pump()` is inert, nodes never occupy the `decoded` state and
+   * `commitPending` is permanently false. The whole latch reads as "nothing
+   * to draw for" on the path almost every session takes.
+   *
+   * This is the mode-independent half, an event at the moment the picture
+   * changed rather than a level sampled around a pump that may not exist. It
+   * covers all three ways the scheduler moves streamed geometry: a node
+   * becoming ready, a node being evicted, and a REPLACE frontier hiding a
+   * coarse parent. Removing and hiding change the screen exactly as much as
+   * adding does, and all three run in the frame body AFTER the render, so any
+   * of them can leave the loop asleep on a stale picture.
+   *
+   * Called once per node, so it stays cheap: the flag is already set for most
+   * of a burst, and `wake` is documented idempotent.
+   */
+  streamedGeometryChanged(): void {
+    this._paintOwed = true;
+    this._scheduler?.wake();
+  }
+
+  /**
    * Does anything want a frame?
    *
    * The invalidation set answers for everything that asked. The three signals
@@ -122,10 +204,37 @@ export class FrameDemand {
    * Deliberately not the gate's `shouldRender`, whose idle heartbeat is always
    * eventually true: a loop that asked it would never sleep.
    */
+  /**
+   * Sample the commit queue and answer "is there commit work to draw for".
+   *
+   * An event is being inferred from a level, so WHERE it is sampled decides
+   * what it can see. Sampling only after the frame body would alias away any
+   * burst that both began and drained inside one frame: the level reads false
+   * on both sides and the falling edge is never observed, which is the very
+   * bug this exists to fix, surviving in a narrower window.
+   *
+   * Both callers sample, and between them sits the pump. `shouldRender` runs
+   * before the frame body, `needsFrame` after it, and `runRenderFrame` is
+   * synchronous, so no worker decode callback can land between the two. The
+   * pair therefore brackets the pump exactly rather than approximately.
+   */
+  private _sampleCommitWork(): boolean {
+    const pending = this._signals.commitPending();
+    if (pending) this._commitWasPending = true;
+    else if (this._commitWasPending) {
+      this._commitWasPending = false;
+      this._paintOwed = true;
+    }
+    return pending || this._paintOwed;
+  }
+
   needsFrame(nowMs: number): boolean {
+    // Asked once per iteration, after the frame body has pumped, so a falling
+    // edge seen here IS "the commit queue just drained".
+    const commitWork = this._sampleCommitWork();
     if (this._invalidation.needsFrame(nowMs)) return true;
     if (this._signals.tweening()) return true;
-    return this._signals.streamingBusy() || this._signals.commitPending() || this._signals.fading();
+    return commitWork || this._signals.streamingBusy() || this._signals.fading();
   }
 
   /**
@@ -152,12 +261,29 @@ export class FrameDemand {
     for (const listener of this._drawn) listener();
   }
 
-  /** Should this scheduled frame actually draw? */
+  /**
+   * Should this scheduled frame actually draw?
+   *
+   * Also where an owed paint is discharged, and the timing is the point. The
+   * loop body renders, THEN pumps commits and ticks the scheduler, and both
+   * of those can put geometry on screen — in metered mode `onNodeReady` fires
+   * from inside the pump. A debt cleared at the end of the frame would be one
+   * incurred after the picture was taken, wiped by the very frame that failed
+   * to show it. Clearing here, before the body runs, leaves anything that
+   * lands later in the frame owed to the next one.
+   */
   shouldRender(): boolean {
-    return this._gate.shouldRender(this._signals.nowMs(), {
+    const draw = this._gate.shouldRender(this._signals.nowMs(), {
       tweening: this._signals.tweening(),
       streamingBusy: this._signals.streamingBusy(),
+      // Sampled before the pump; `needsFrame` samples after it. See
+      // {@link _sampleCommitWork} for why both ends are needed.
+      commitWork: this._sampleCommitWork(),
+      fading: this._signals.fading(),
+      invalidated: (this._served?.reasons.length ?? 0) > 0,
     });
+    if (draw) this._paintOwed = false;
+    return draw;
   }
 
   /**
@@ -167,12 +293,19 @@ export class FrameDemand {
    * restart after the tab comes back resumes the loop it already had.
    */
   start(frame: () => void): void {
-    this._scheduler ??= browserFrameScheduler({
+    this._scheduler ??= this._makeScheduler({
       nowMs: this._signals.nowMs,
       needsFrame: (nowMs) => this.needsFrame(nowMs),
       runFrame: () => {
-        this._invalidation.consumeOnce();
-        frame();
+        // Serve before the body so `shouldRender` can see the verdict, and
+        // clear after it in a `finally`: a throw from the frame must not leave
+        // a stale report standing for every frame that follows.
+        this._served = this._invalidation.serve(this._signals.nowMs());
+        try {
+          frame();
+        } finally {
+          this._served = null;
+        }
       },
     });
     this._scheduler.start();

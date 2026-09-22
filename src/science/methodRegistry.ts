@@ -30,7 +30,9 @@ export type MethodCategory =
   | 'change'
   | 'dtm'
   | 'feature'
-  | 'provenance';
+  | 'provenance'
+  /** A declared model applied to a measured product, producing a simulated result. */
+  | 'simulation';
 
 /** A lightweight reference to a registered method at its current version. */
 export interface MethodRef {
@@ -372,6 +374,64 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'Internal composition (per-feature Douglas–Peucker tolerance scaled by terrain confidence and feature scale, then Chaikin corner-cutting); no single source method.',
     category: 'contour',
     implementation: ['src/terrain/contour/contourShapeStyle.ts'],
+  },
+  'olv.simulation.terrain-flow.d8': {
+    id: 'olv.simulation.terrain-flow.d8',
+    version: 1,
+    name: 'D8 single-flow-direction routing',
+    summary:
+      'Routes each grid cell to whichever of its eight neighbours offers the steepest '
+      + 'descent per unit of horizontal distance, measured in metres per axis so an '
+      + 'anisotropic grid ranks diagonals correctly. Cells with no lower neighbour are '
+      + 'reported as pits, flats or outlets rather than drained; ties break on a fixed '
+      + 'neighbour order. A topographic routing graph, not a discharge field.',
+    citation:
+      "O'Callaghan & Mark (1984), Computer Vision, Graphics, and Image Processing 28(3), "
+      + '323-344.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/d8Flow.ts'],
+  },
+  'olv.simulation.terrain-flow.priority-flood': {
+    id: 'olv.simulation.terrain-flow.priority-flood',
+    version: 1,
+    name: 'Priority-Flood depression conditioning',
+    summary:
+      'Floods inward from the edge of the mapped surface, raising each cell reached '
+      + 'from below to its spill level, and returns a second surface rather than '
+      + 'modifying the DTM. An optional increment above the spill parent breaks the '
+      + 'resulting plateaux; increments lost to Float32 precision are counted and '
+      + 'reported rather than assumed to have applied.',
+    citation: 'Barnes, Lehman & Mulla (2014), doi:10.1016/j.cageo.2013.04.024',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/priorityFlood.ts'],
+  },
+  'olv.simulation.terrain-flow.accumulation': {
+    id: 'olv.simulation.terrain-flow.accumulation',
+    version: 1,
+    name: 'Flow accumulation over a D8 graph',
+    summary:
+      'Counts the cells draining through each cell, itself included, by draining cells '
+      + 'in dependency order. Contributing area in square metres is a separate step '
+      + 'that is withheld when the horizontal scale is unresolved. A cell count, not a '
+      + 'discharge: no rainfall, infiltration or time enters it.',
+    citation:
+      "Accumulation over the D8 graph of O'Callaghan & Mark (1984); internal "
+      + 'dependency-ordered implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/flowAccumulation.ts'],
+  },
+  'olv.simulation.terrain-flow.catchment': {
+    id: 'olv.simulation.terrain-flow.catchment',
+    version: 1,
+    name: 'Upstream catchment extraction',
+    summary:
+      'Every cell draining through a selected outlet, obtained by walking the D8 '
+      + 'receiver graph backwards from it over donor lists built once per query.',
+    citation:
+      "Reverse traversal of the D8 graph of O'Callaghan & Mark (1984); internal "
+      + 'implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/flowAccumulation.ts'],
   },
 };
 

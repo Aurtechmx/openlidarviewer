@@ -333,7 +333,7 @@ export class DebugOverlay {
       this._perf.textContent = [
         `frame time    p50=${f.p50Ms.toFixed(1)} p95=${f.p95Ms.toFixed(1)}` +
           ` p99=${f.p99Ms.toFixed(1)} max=${f.maxMs.toFixed(1)} ms  (n=${f.windowCount})`,
-        `over budget   >16.7ms: ${f.over16_7} · >33.3ms: ${f.over33_3}` +
+        `over budget   >16.7ms: ${f.over16_7} · >33.3ms: ${f.over33_3} · >50ms: ${f.over50}` +
           `  (of ${f.total})`,
         `longest task  ${
           perf.longestTaskMs === null
