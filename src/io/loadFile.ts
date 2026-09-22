@@ -107,6 +107,8 @@ interface CloudPayload {
   colors?: Uint8Array;
   intensity?: Uint16Array;
   classification?: Uint8Array;
+  /** Synthetic / Key-point / Withheld / Overlap, one normalised nibble per point. */
+  classificationFlags?: Uint8Array;
   normals?: Float32Array;
   returnNumber?: Uint8Array;
   returnCount?: Uint8Array;

@@ -1,15 +1,15 @@
-name: Cross-browser smoke (blocking)
+name: Cross-browser smoke
 
-# The MINIMAL mandatory cross-browser suite. The full deterministic set on
-# Firefox/WebKit is advisory (see browsers.yml) because a headless-GL hiccup
-# there should not block an unrelated PR. But "Firefox and Safari are supported"
-# in the README needs at least one leg that actually blocks, so this runs the
-# boot / empty-state / no-console-error smoke on both engines and DOES fail the
-# workflow. Keep it small on purpose — a defensible floor, not a full matrix.
+# The minimal cross-browser suite: boot, empty state and no console errors on
+# Firefox and WebKit, plus the iPhone-shaped WebKit project. The jobs fail
+# the workflow on a red result, but no ruleset requires them, so a failure
+# here does not block a merge. The full deterministic set on Firefox and
+# WebKit is in browsers.yml.
 #
 # To gate merges on it, add `firefox-smoke` and `webkit-smoke` to the branch
-# protection required checks (they are intentionally NOT folded into ci-green so
-# a maintainer opts in deliberately).
+# protection required checks. They are kept out of ci-green so that making
+# them blocking is a deliberate decision. The bar for that is a run of
+# consecutive green results on main, not a single pass.
 
 on:
   push:

@@ -26,7 +26,12 @@
 import { horizontalCellMetresXY } from '../../terrain/ground/horizontalScale';
 import { simulationInputBasis, type SimulationInputBasis } from '../simulationInputBasis';
 import type { DemRaster } from '../../terrain/ground/rasterizeDtm';
+import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 import type { FlowGrid } from './flowTypes';
+
+/** `CellCoverage` values, named so the comparison below reads as intent. */
+const COVERAGE_NONE = 0;
+const COVERAGE_INTERPOLATED = 1;
 
 /** How the source's horizontal coordinates relate to metres. */
 export interface HorizontalScale {
@@ -49,6 +54,13 @@ export interface DtmFlowGrid {
   readonly grid: FlowGrid;
   readonly basis: SimulationInputBasis;
 }
+
+/** What a routing pass does with a cell whose height was interpolated. */
+export type InterpolatedPolicy =
+  /** Route over it, and disclose how many there were. */
+  | 'route'
+  /** Treat it as absent, so only measured ground carries flow. */
+  | 'block';
 
 /**
  * Convert a DTM raster into a routing grid.
@@ -98,6 +110,87 @@ export function dtmToFlowGrid(
       withheldExcluded,
       horizontalScaleResolved: scale.resolved,
       measuredCells,
+      totalCells: n,
+    }),
+  };
+}
+
+/**
+ * Convert the analysed DTM into a routing grid.
+ *
+ * This is the adapter the application uses; `dtmToFlowGrid` above takes the
+ * rasteriser's raw output, which is an intermediate. The two differ in the one
+ * place that matters, and the difference is silent if it is missed.
+ *
+ * `DemRaster` leaves a cell with no ground return as NaN. `DtmGrid` fills every
+ * cell and records what the height came from in `coverage`: none, interpolated,
+ * or measured. Reading `DtmGrid` the way `DemRaster` is read would therefore
+ * find no absent cells at all, because none of them is NaN, and a hole filled
+ * from a distant neighbour would route flow as confidently as surveyed ground.
+ *
+ * Interpolated cells are a declared choice rather than a default. Blocking them
+ * fragments the surface and manufactures sinks at the edge of every gap;
+ * routing over them is what a filled DTM is for. So `route` is the default and
+ * the count reaches the basis, where it becomes a limitation the reader sees.
+ * `block` is there for a caller that wants measured ground only.
+ */
+export function terrainDtmToFlowGrid(
+  dtm: DtmGrid,
+  scale: HorizontalScale,
+  options: {
+    readonly interpolated?: InterpolatedPolicy;
+    readonly withheldExcluded?: boolean | null;
+  } = {},
+): DtmFlowGrid {
+  const policy = options.interpolated ?? 'route';
+  const n = dtm.cols * dtm.rows;
+  const z = new Float32Array(n);
+  const valid = new Uint8Array(n);
+
+  let readable = 0;
+  let interpolated = 0;
+  let policyExcluded = 0;
+  for (let i = 0; i < n; i++) {
+    const cover = dtm.coverage[i];
+    if (cover === COVERAGE_NONE) continue;
+    const isInterpolated = cover === COVERAGE_INTERPOLATED;
+    if (isInterpolated && policy === 'block') { policyExcluded++; continue; }
+    const v = dtm.z[i];
+    // A filled grid should carry no NaN, but a non-finite height here would
+    // route as an elevation, so it is treated as absence rather than trusted.
+    // Counted after this check, so an interpolated cell that fails it is not
+    // reported as a readable interpolated cell.
+    if (!Number.isFinite(v)) continue;
+    if (isInterpolated) interpolated++;
+    z[i] = v;
+    valid[i] = 1;
+    readable++;
+  }
+
+  const metres = horizontalCellMetresXY(
+    dtm.cellSizeM,
+    scale.isGeographic,
+    scale.latitudeDeg,
+    scale.unitToMetres,
+  );
+
+  return {
+    grid: {
+      z, valid, cols: dtm.cols, rows: dtm.rows,
+      cellMetresX: metres.x, cellMetresY: metres.y,
+    },
+    basis: simulationInputBasis({
+      // `DtmGrid.coverageMode` is how much of the source the analysis walked.
+      // Not `DtmGrid.coverage`, which is a per-cell provenance array under the
+      // same word; reading that one here would put a Uint8Array where a mode
+      // belongs. Hardcoding 'full' would be worse still, since a DTM built
+      // from a resident streamed subset would then claim the whole survey.
+      coverage: dtm.coverageMode,
+      withheldExcluded: options.withheldExcluded ?? null,
+      horizontalScaleResolved: scale.resolved,
+      measuredCells: readable,
+      interpolatedCells: interpolated,
+      policyExcludedCells: policyExcluded,
       totalCells: n,
     }),
   };

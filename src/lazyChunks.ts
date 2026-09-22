@@ -612,3 +612,9 @@ export const loadActionRegistry = () => import('./app/actionDefinitions');
  */
 export const loadToolLauncher = () => import('./ui/toolLauncher');
 
+
+/**
+ * The Field Simulation Lab's Flow Pulse view and the routing core behind it.
+ * Opened only from the command palette, so neither rides the startup shell.
+ */
+export const loadFlowPulseLab = () => import('./ui/fieldSimulation/flowPulseLab');

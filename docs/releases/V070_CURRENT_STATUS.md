@@ -9,18 +9,18 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 145. Revisited at least once: 8.
+Entries: 145. Revisited at least once: 14.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 43 |
-| PARTIAL | 31 |
+| FIXED | 45 |
+| PARTIAL | 32 |
 | BUILT | 27 |
 | MEASURED | 13 |
-| OPEN | 11 |
-| NOT REPRODUCIBLE | 10 |
+| NOT REPRODUCIBLE | 11 |
+| OPEN | 7 |
 | DEFERRED | 6 |
 | REFUSED | 3 |
 | SUPERSEDED | 1 |
@@ -39,9 +39,9 @@ Entries: 145. Revisited at least once: 8.
 | L08 | NOT REPRODUCIBLE | SCIENTIFIC | 2 |
 | L09 | OPEN | LIFECYCLE | 1 |
 | L10 | OPEN | LIFECYCLE | 1 |
-| L11 | OPEN | UI | 1 |
-| L12 | OPEN | UI | 1 |
-| L13 | OPEN | EVIDENCE | 1 |
+| L11 | FIXED | UI | 3 |
+| L12 | FIXED | UI | 3 |
+| L13 | OPEN | EVIDENCE | 3 |
 | L14 | OPEN | ARCHITECTURE | 1 |
 | L15 | DEFERRED | ARCHITECTURE | 1 |
 | L16 | FIXED | EVIDENCE | 2 |
@@ -54,9 +54,9 @@ Entries: 145. Revisited at least once: 8.
 | L23 | FIXED | SEMANTICS | 1 |
 | L24 | NOT REPRODUCIBLE | EXPORT | 1 |
 | L25 | SUPERSEDED | EVIDENCE | 1 |
-| L26 | OPEN | SCIENTIFIC | 1 |
+| L26 | PARTIAL | SCIENTIFIC | 2 |
 | L27 | NOT REPRODUCIBLE | EVIDENCE | 1 |
-| L28 | PARTIAL | SEMANTICS | 1 |
+| L28 | PARTIAL | SEMANTICS | 2 |
 | L29 | FIXED | STATE | 1 |
 | L30 | FIXED | ARCHITECTURE | 1 |
 | L31 | FIXED | SESSION | 1 |
@@ -75,7 +75,7 @@ Entries: 145. Revisited at least once: 8.
 | L44 | FIXED | LIFECYCLE | 1 |
 | L45 | FIXED | ARCHITECTURE | 1 |
 | L46 | PARTIAL | PERFORMANCE | 2 |
-| L47 | OPEN | UI | 1 |
+| L47 | NOT REPRODUCIBLE | UI | 2 |
 | L48 | FIXED | PERFORMANCE | 1 |
 | L49 | MEASURED | PERFORMANCE | 1 |
 | L50 | FIXED | CORRECTNESS | 1 |

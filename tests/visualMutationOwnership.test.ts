@@ -67,10 +67,10 @@ const OWNERS: ReadonlyArray<readonly [string, RenderInvalidationReason | 'input'
   // `input()` both wakes the loop and arms the gate; they are the call sites
   // to narrow next.
   ['setColorMode', 'input'],
-  ['applyClassVisibility', 'input'],
-  ['setElevationFilter', 'input'],
+  ['applyClassVisibility', 'filter'],
+  ['setElevationFilter', 'filter'],
   ['setIntensityFilter', 'input'],
-  ['setCoverageGrid', 'input'],
+  ['setCoverageGrid', 'style'],
   ['setStreamingColorMode', 'input'],
   ['setStreamingQuality', 'input'],
   ['resumeStreaming', 'input'],
@@ -78,7 +78,7 @@ const OWNERS: ReadonlyArray<readonly [string, RenderInvalidationReason | 'input'
   // Found by the derived check below rather than by reading the surface, which
   // is the point of deriving it: these three were absent from the inventory
   // this file started from.
-  ['setClip', 'input'],
+  ['setClip', 'clip'],
   ['applyDerivedClassification', 'input'],
   ['requestFrame', 'input'],
 ];

@@ -3951,3 +3951,159 @@ frame-count cadence left its description behind, where it sat above
 docblock for the removed `STREAMING_TICK_INTERVAL` stayed as a heading with
 nothing under it. The reasoning in that block is worth keeping and now sits
 with the call it describes, in the loop body.
+
+### L12 · FIXED · UI
+
+Pinch, rotate and two-finger gestures now run on Chromium, WebKit and Firefox.
+
+The blocker was never the gesture or the engine. The three pose tests read the
+camera through a share link on the clipboard, and only Chromium grants
+`clipboard-read` under Playwright. The address-bar fallback the spec relied on
+fires only when `clipboard.writeText` rejects; on WebKit that write resolves,
+so nothing reached the address bar either and the tests failed on the
+empty-oracle guard before reaching the recogniser.
+
+The pose now comes from `__OLV_TEST_API__`, which needs neither the clipboard
+nor the desktop dock. The recogniser is untouched; only how its result is read
+has moved. Five tests pass on each of the three engines. Freezing the oracle to
+a constant fails the two tests that assert the camera moved, so it observes the
+pose rather than reporting a fixed value.
+
+Section 70 forbids substituting mouse simulation for touch verification. These
+remain synthesized `PointerEvent`s with `pointerType: 'touch'`, which is what
+Playwright exposes; real hardware multi-touch on an iOS device is still
+unverified, and L13 still records the matrix as advisory.
+
+### L12 · FIXED · UI
+
+Also running in the iPhone-shaped WebKit project, which CI already executes
+(`browser-smoke.yml`, `--project=webkit-mobile`). The touch specs were outside
+that project's `testMatch`; they are in it now, so the recogniser is exercised
+at 393x852 with `hasTouch` on every push rather than at desktop width only.
+
+The Rendering section holding the Touch-twist chip exists in the DOM but has no
+layout box at phone width, so a click on it reports "element is not visible",
+which reads as the setting being unreachable on a touch device. It is
+reachable: the panels move into a collapsed bottom sheet whose View tab holds
+the section, and at 375x812 the chip measures 44 px and carries
+`olv-chip-active`. The helper opens the sheet when the summary has no box, and
+the five pass on Chromium, WebKit, Firefox and iPhone WebKit.
+
+Still synthesized `PointerEvent`s, which is what Playwright exposes on every
+engine. Real hardware multi-touch on a physical device remains unverified.
+
+### L47 · NOT REPRODUCIBLE · UI
+
+The entry describes a grid keyed by x and y. `localDensitySize.ts` keys on the
+cloud's two widest axes: `dominantPlane` measures all three extents, drops the
+narrowest, and returns the rest, so a facade bins across its own surface rather
+than edge-on. `localDensitySizes` reads those axes rather than assuming x and y.
+
+The orientation case the entry warns about is covered: a surface laid flat and
+the same surface upright produce identical scales, over five noise levels.
+
+What remains is narrower than the entry claims and is not the same defect. The
+plane is chosen once for the whole cloud from its overall bounding box, so in a
+scene mixing orientations the minority surface is still binned edge-on. No test
+covers a mixed-orientation cloud and the size of that residual is unmeasured.
+
+The value is a display attribute throughout. It reaches an instanced `aSize`
+attribute and the size graph, nothing else: no export, no report, no claim in
+the register. A lint already holds `aSize` inside render code.
+
+### L26 · PARTIAL · SCIENTIFIC
+
+Classification flags now survive a worker-decoded load. They were filled by the
+decoder, carried by `PointCloud` and read by the LAS writer, but omitted from
+the worker payload, so they arrived only on a direct parse and were absent on
+the path the application uses. Applying the Withheld policy would have been
+inert for a normally-opened scan.
+
+`tests/workerPayloadParity.test.ts` derives the expectation from
+`PointCloudOptions` rather than naming the field, so an attribute added there
+and forgotten in the payload fails at the boundary instead of years later.
+
+The policy still has no caller. What changed is that it now has something to
+read. Voxel downsampling still drops the flags (L28), which continues to bound
+what applying it can mean.
+
+### L11 · OPEN · UI
+
+The overlap is real over a band from 768 px to about 891 px. The left
+rail is `clamp(285px, 21vw, 312px)`, the right `clamp(288px, 23vw, 340px)`, and
+the project card is 290 px wide and centred. The free band between the rails is
+`W − 14 − 288 − 299`, which reaches the card's width at about 891 px. Measured
+in Chromium: the card runs 60 px under the left rail and 63 px under the right
+at 768, and clears both at 900 and above.
+
+A test covers the case. `tests/e2e/hudCollision.spec.ts`
+exempts it: when the band is narrower than the
+card it asserts only that the card stays on screen. That exemption is what
+would become strict once the layout is fixed.
+
+The CSS-only fix centres the card in the band and caps its width, which leaves
+about 155 px at 768. Whether that is readable has not been rendered, so the
+layout is unchanged pending that check.
+
+### L13 · OPEN · EVIDENCE
+
+The legs exist and run; none is required. The ruleset for `main` requires
+`ci-green` and `CodeQL`, and `ci-green` depends only on Chromium jobs. The full
+suites on Firefox and WebKit (`browsers.yml`) carry `continue-on-error: true`.
+The smoke workflow is titled "blocking" but is not a required check. Windows
+runs Chromium only.
+
+On the latest main run the Firefox, WebKit and iPhone-shaped WebKit legs pass,
+including the touch gestures. That is one run of each, not a stability record.
+The iOS simulator leg has not yet passed. Making any of these blocking is a
+release-policy decision and is not made here.
+
+### L28 · PARTIAL · SEMANTICS
+
+Voxel downsampling leaves classification flags undefined on the points it
+produces, and that is the chosen semantics rather than an omission. Each output
+point sits at the centroid of its voxel's members, so it is not a source point:
+a voxel mixing a Withheld return with an ordinary one has no single true
+Withheld state, and giving the centroid its first member's flags would assert
+one. The other per-record attributes keep first-member values by an older
+contract that this does not extend.
+
+The source-faithful export re-decodes the original file, so flags reach an
+exported LAS intact. A reduced-view export writes the downsampled cloud, and
+LAS has no value for an unknown flag, so its flag byte reads as zero. That
+export is labelled as a reduced view.
+
+The consequence for L26 is that a Withheld filter cannot act on a cloud already
+reduced at load. The filter has to run before the reduction, which is where it
+is placed when it is applied.
+
+### L13 · OPEN · EVIDENCE
+No browser leg becomes a required check yet. Each has one green run on main,
+and the WebKit legs then failed on a test that read the camera before the
+load flight ended, which is a test defect and not a product one. A required
+leg that goes red on timing blocks merges without finding bugs.
+The bar for `webkit-smoke` is twenty consecutive green runs on main. The
+Firefox and WebKit suites in `browsers.yml` follow on the same bar. The iOS
+simulator leg stays advisory until it has passed once end to end.
+The smoke workflow was titled "blocking" while no ruleset required it. Its
+title and header state that it is advisory.
+
+### L11 · FIXED · UI
+The "Project ready" card is centred in the band between the rails and
+narrows to it, with a 200 px floor. Below 200 px the Size and Attributes rows
+wrap to four lines; at 200 px they wrap to two. Measured in Chromium at a
+height of 900 with `multichunk.laz`:
+
+| width | card | clears the rails | longest row |
+|---|---|---|---|
+| 768 | 200 px | no, 16 to 17 px under each (was 60 to 63) | 2 lines |
+| 800 | 200 px | touches by 1 px | 2 lines |
+| 820 | 203 px | yes | 2 lines |
+| 891 | 274 px | yes | 1 line |
+| 1024 and up | 290 px | yes | 1 line |
+
+From 768 to about 800 px no readable width clears both rails, and the card
+lives seven seconds with a dismiss button, so the remaining overlap there is
+accepted. `hudCollision.spec.ts` asserts the card clears the rails wherever
+it fits in the band, and passes at every configured width. On phones the
+card keeps its viewport-centred placement.

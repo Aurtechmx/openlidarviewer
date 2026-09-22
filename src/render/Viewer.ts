@@ -2310,7 +2310,7 @@ export class Viewer {
     };
     for (const entry of this._clouds.values()) apply(entry.material);
     for (const m of this._streamingMaterials()) apply(m);
-    this._demand.input();
+    this._demand.changed('clip');
   }
 
   /** The active clip box, or null when none is set. */
@@ -2376,7 +2376,7 @@ export class Viewer {
       writeFloatColorsInto(arr, raw);
       entry.colorAttr.needsUpdate = true;
     }
-    this._demand.input();
+    this._demand.changed('style');
   }
 
   /**
@@ -3302,7 +3302,7 @@ export class Viewer {
     // shape, so rebuild the affected pipelines. Changing WHICH classes are hidden
     // while still filtered is a uniform-only change (the mask array re-uploads).
     if (wasFiltered !== anyHidden) this._reapplyAllSizeModes();
-    this._demand.input();
+    this._demand.changed('filter');
   }
 
   /**
@@ -3320,7 +3320,7 @@ export class Viewer {
     // On/off changes the size graph's SHAPE, so rebuild pipelines on that
     // transition only; moving the window while active is a uniform-only change.
     if (wasActive !== (enabled !== 0)) this._reapplyAllSizeModes();
-    this._demand.input();
+    this._demand.changed('filter');
   }
 
   /** ONE cloud's own origin + up-axis — the facts that decide its conversion. */

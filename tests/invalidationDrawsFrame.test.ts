@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { FrameDemand, type SchedulerFactory } from '../src/render/frameDemand';
+import { RENDER_HOLDOVER_MS } from '../src/render/renderActivityGate';
 import { FrameScheduler } from '../src/render/frameScheduler';
 import { ALL_INVALIDATION_REASONS, KIND } from '../src/render/renderInvalidation';
 
@@ -138,5 +139,48 @@ describe('the heartbeat is still the backstop', () => {
       while (crank.tick());
     }
     expect(draws.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The defect that sent the visual setters from `input()` to a reason.
+ *
+ * `input()` extends the activity holdover and records `camera-input`, a
+ * holdover reason. The gate's only check for it is `now < activityUntilMs`,
+ * 350 ms wide. A browser is free to run the woken frame later than that: a
+ * busy main thread, a throttled tab, a slow first frame after a panel
+ * re-render. When it does, the gate finds the window expired, skips the
+ * paint, and nothing raises the change again, because the mutation already
+ * happened. Toggling a class left the mask written and the picture stale.
+ *
+ * Measured in a browser before the fix: a class-visibility toggle drew on 2 of
+ * 8 attempts on a settled scene, with the frame arriving about a second after
+ * the click. A once-reason is held until a frame serves it, so the same delay
+ * costs a late paint rather than no paint.
+ */
+describe('a delayed frame still paints what asked for it', () => {
+  const LATE_MS = RENDER_HOLDOVER_MS + 50;
+
+  it('loses the paint when only the activity holdover asked', () => {
+    // Kept as the contrast: this is what the four setters used to do, and why
+    // the picture could stay stale. If this ever starts passing, the gate has
+    // gained another way through and the reason below is no longer load-bearing.
+    const { crank, draws, d } = driven();
+    while (crank.tick());
+    draws.length = 0;
+    d.input();
+    crank.now += LATE_MS;
+    crank.tick();
+    expect(draws).toHaveLength(0);
+  });
+
+  it.each(['filter', 'clip', 'style'] as const)('keeps the paint when %s asked', (reason) => {
+    const { crank, draws, d } = driven();
+    while (crank.tick());
+    draws.length = 0;
+    d.changed(reason);
+    crank.now += LATE_MS;
+    expect(crank.tick()).toBe(true);
+    expect(draws, `${reason} lost its paint to a late frame`).toHaveLength(1);
   });
 });

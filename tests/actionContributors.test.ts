@@ -71,7 +71,7 @@ describe('action contributors', () => {
 
   it('analysis and export contributors take two deps each', () => {
     const analysis = contributeAnalysisActions({ terrainAnalysisEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never });
-    expect(analysis.map((a) => a.id)).toEqual(['analyse.run', 'analyse.contours', 'story.dataset']);
+    expect(analysis.map((a) => a.id)).toEqual(['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'story.dataset']);
     const exp = contributeExportActions({ saveSnapshot: vi.fn(), copyShareLink: vi.fn(), buildCurrentStoryInputs: () => ({}) as never });
     expect(exp.map((a) => a.id)).toEqual(['tool.snapshot', 'tool.share', 'export.health', 'report.verify']);
   });

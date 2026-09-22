@@ -1647,7 +1647,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   copyShareLink,
   terrainAnalysisEntry: {
     showAnalyseMode: () => showWorkspaceMode?.('analyse'),
-    showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null }; }),
+    showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput() }; }),
     run: () => void terrainRunner.run(),
   },
   showTouchGestures: () => navBar.flashTouchHint(),
@@ -3165,7 +3165,7 @@ if (__OLV_TEST_SEAM__ && testApi) {
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
       getMeasurementCount: () => v.measure.getMeasurements().length,
-      layerProjectPoints: (i: number) => v.layerProjectPoints(i),
+      layerProjectPoints: (i: number) => v.layerProjectPoints(i), getCameraPose: () => v.getCameraPose(),
       // Elevation filter (v0.5.6) device-verify seam: pass a world-space
       // [min, max] window (or null to clear) and confirm points outside it hide.
       setElevationFilter: (range: [number, number] | null) =>

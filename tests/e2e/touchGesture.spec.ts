@@ -18,66 +18,6 @@ import { dropTinyPly } from './helpers';
  * reads these the same way it would read real fingers.
  */
 
-/**
- * Grant clipboard access where the engine has it.
- *
- * Only Chromium implements `clipboard-read` in Playwright; Firefox and WebKit
- * reject `grantPermissions` with "Unknown permission". Off Chromium the run
- * continues without it and `readShareLink` reads the address bar instead,
- * which is the fallback the app itself provides.
- */
-async function grantClipboardIfSupported(
-  context: import('@playwright/test').BrowserContext,
-  browserName: string,
-): Promise<void> {
-  // MEASURED, not assumed. The address-bar fallback below looked like it would
-  // carry these tests onto WebKit and Gecko, and it does not: the app writes
-  // the hash only when `clipboard.writeText` REJECTS, and on WebKit the write
-  // resolves. So nothing lands in the address bar, `readText` stays
-  // unpermitted, and the oracle reads nothing at all. Run on Desktop Safari,
-  // the three pose tests fail on the empty-oracle guard rather than on the
-  // gesture. The skips below stand for that reason.
-  //
-  // What would lift them is a pose read that needs neither the clipboard nor
-  // the desktop dock. `__OLV_TEST_API__` is the seam. Until then the touch
-  // recogniser is verified on Chromium only, and `tests/touchGesture.test.ts`
-  // pins the thresholds engine-independently.
-  test.skip(
-    browserName !== 'chromium',
-    `${browserName} (Playwright) grants no clipboard-read, and the app's address-bar fallback fires only when the clipboard write fails, so the share-link pose oracle reads nothing`,
-  );
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-}
-
-const Z_UP = [0, 0, 1] as const;
-void Z_UP;
-
-async function readShareLink(page: Page): Promise<string> {
-  // v0.3.10: button label changed from "Share" → "Copy view link" to
-  // match the local-first reality. The clipboard contract is identical.
-  //
-  // Two sources, because only Chromium grants `clipboard-read` in Playwright.
-  // When the clipboard write fails the app deliberately leaves the state in
-  // the address bar (`main.ts`, "leave the state in the address bar so the
-  // user can still copy the link from there"), which is the same pose by a
-  // different route and is what makes this oracle work on WebKit.
-  //
-  // The encoded payload is REQUIRED rather than defaulted. A blind oracle
-  // returning '' twice would make a "did not move" assertion pass for the
-  // wrong reason, which is worse than not running the test at all.
-  await page.locator('.olv-tool', { hasText: 'Copy view link' }).click();
-  await page.waitForTimeout(200);
-  const raw = await page.evaluate(async () => {
-    const fromClipboard = await navigator.clipboard.readText().catch(() => '');
-    return fromClipboard.includes('#s=') ? fromClipboard : window.location.hash;
-  });
-  const encoded = /#?s=([^&\s]+)/.exec(raw)?.[1] ?? '';
-  expect(
-    encoded,
-    'share-link oracle read no pose from either the clipboard or the address bar',
-  ).not.toBe('');
-  return encoded;
-}
 
 /**
  * Dispatch a synthesized two-finger gesture. `fromA, fromB` are the
@@ -165,19 +105,90 @@ async function singleTap(page: Page, x: number, y: number): Promise<void> {
   );
 }
 
+/**
+ * Read the camera pose through the test seam.
+ *
+ * This used to read a share link off the clipboard, which is why the three
+ * pose tests ran on Chromium alone. The reason was measured rather than
+ * assumed: only Chromium grants `clipboard-read` under Playwright, and the
+ * app's address-bar fallback fires only when `clipboard.writeText` REJECTS.
+ * On WebKit that write resolves, so nothing lands in the address bar either;
+ * the oracle read nothing and the tests failed on the empty-oracle guard,
+ * never reaching the gesture they exist to verify.
+ *
+ * `__OLV_TEST_API__` needs neither the clipboard nor the desktop dock, so the
+ * same pose is readable on every engine. The recogniser under test is
+ * unchanged; only how its result is observed has moved. The page must be on
+ * `?test=1` and the build must carry `OLV_TEST_SEAM`, which the Playwright
+ * webServer sets.
+ *
+ * The pose is REQUIRED, not defaulted. A blind oracle returning the same empty
+ * value twice would make a "did not move" assertion pass for the wrong reason,
+ * which is worse than not running the test at all.
+ */
+/**
+ * Wait until the opening flight has run, then return the pose it left.
+ *
+ * A scan attaches with the camera top-down and still, and only then does
+ * `openScan` start the tween to the opening view, just before it adds
+ * `olv-has-scan` to the body. Waiting for the class puts the start of the
+ * flight behind us.
+ *
+ * The end is counted in frames, not milliseconds. A tween advances once per
+ * rendered frame, and on the software-rendered WebKit CI job a frame takes
+ * over half a second, so a pose that looked still across 500 ms was only
+ * between two frames of a flight still in progress. A pose unchanged across
+ * three animation frames is a camera the loop has stopped moving.
+ *
+ * The page is brought forward first because the app stops its frame loop
+ * while the document is hidden, which would stop the flight with it.
+ */
+async function settledPose(page: Page): Promise<string> {
+  await expect(page.locator('body.olv-has-scan')).toHaveCount(1, { timeout: 30_000 });
+  await page.bringToFront();
+  await expect
+    .poll(() => page.evaluate(() => document.visibilityState), { timeout: 10_000 })
+    .toBe('visible');
+  const threeFrames = () => page.evaluate(() => new Promise<void>((resolve) => {
+    let n = 0;
+    const tick = (): void => { n += 1; if (n >= 3) resolve(); else requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }));
+  let last = await readPose(page);
+  for (let i = 0; i < 120; i++) {
+    await threeFrames();
+    const next = await readPose(page);
+    if (next === last) return next;
+    last = next;
+  }
+  throw new Error('the camera was still moving after 120 three-frame checks');
+}
+
+async function readPose(page: Page): Promise<string> {
+  const pose = await page.evaluate(() => {
+    const api = (window as unknown as {
+      __OLV_TEST_API__?: { getCameraPose?: () => { position: number[]; target: number[] } };
+    }).__OLV_TEST_API__;
+    const p = api?.getCameraPose?.();
+    return p ? JSON.stringify({ position: p.position, target: p.target }) : '';
+  });
+  expect(
+    pose,
+    'test-seam pose oracle read nothing - is the page on ?test=1 and the build carrying OLV_TEST_SEAM?',
+  ).not.toBe('');
+  return pose;
+}
+
 test.describe('mobile touch model — twist + pinch + pan decomposition', () => {
   test('a single-finger double-tap focuses the camera on a point (dblclick does not fire on touch)', async ({
     page,
-    context,
-    browserName,
   }) => {
-    await grantClipboardIfSupported(context, browserName);
-    await page.goto('/');
+    await page.goto('/?test=1');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await settledPose(page);
 
-    const before = await readShareLink(page);
+    const before = await readPose(page);
 
     // Two quick taps at the centre, where the dropped cloud sits — the touch
     // double-tap the platform's dblclick never delivers on a touch-action:none
@@ -191,7 +202,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     await singleTap(page, cx, cy);
     await page.waitForTimeout(600);
 
-    const after = await readShareLink(page);
+    const after = await readPose(page);
     expect(before).not.toBe('');
     expect(after).not.toBe(before);
   });
@@ -199,16 +210,13 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
 
   test('a 2-finger twist moves the camera (share-link pose changes)', async ({
     page,
-    context,
-    browserName,
   }) => {
-    await grantClipboardIfSupported(context, browserName);
-    await page.goto('/');
+    await page.goto('/?test=1');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await settledPose(page);
 
-    const before = await readShareLink(page);
+    const before = await readPose(page);
 
     // 90° twist around the centre of the canvas: fingers start on a
     // horizontal axis and finish on a vertical axis, distance unchanged.
@@ -226,23 +234,20 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     );
     await page.waitForTimeout(600);
 
-    const after = await readShareLink(page);
+    const after = await readPose(page);
     expect(before).not.toBe('');
     expect(after).not.toBe(before);
   });
 
   test('a sub-dead-zone wobble does NOT move the camera', async ({
     page,
-    context,
-    browserName,
   }) => {
-    await grantClipboardIfSupported(context, browserName);
-    await page.goto('/');
+    await page.goto('/?test=1');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await settledPose(page);
 
-    const before = await readShareLink(page);
+    const before = await readPose(page);
 
     // 1° twist, no pinch, no pan — every channel below its dead-zone.
     const canvasBox = await page.locator('.olv-canvas').boundingBox();
@@ -260,7 +265,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     );
     await page.waitForTimeout(400);
 
-    const after = await readShareLink(page);
+    const after = await readPose(page);
     expect(after).toBe(before);
   });
 
@@ -310,6 +315,25 @@ async function openRenderingSection(page: import('@playwright/test').Page): Prom
   const renderingDetails = page.locator('details.olv-section-collapsible', {
     has: page.locator('summary', { hasText: 'Rendering' }),
   });
+
+  // At phone width the panels live in a collapsed bottom sheet rather than an
+  // always-open side rail, so the summary exists in the DOM but has no layout
+  // box. Clicking it there times out on "element is not visible", which reads
+  // like the setting is unreachable on a touch device. It is not: the sheet
+  // opens and its View tab holds the Rendering section. Verified by hand at
+  // 375x812, where the chip is 44 px tall and carries `olv-chip-active`.
+  if (!(await renderingDetails.locator('summary').isVisible())) {
+    const viewTab = page.locator('.olv-msheet-tab', { hasText: 'View' });
+    if (await viewTab.count()) {
+      // The sheet starts collapsed; its handle is the chevron beside the tabs.
+      if (!(await viewTab.isVisible())) {
+        await page.locator('.olv-dock [aria-label*="xpand"], .olv-msheet-handle').first().click();
+      }
+      await viewTab.click();
+      await expect(renderingDetails.locator('summary')).toBeVisible({ timeout: 10_000 });
+    }
+  }
+
   const isOpen = await renderingDetails.evaluate((d) =>
     (d as HTMLDetailsElement).open,
   );
