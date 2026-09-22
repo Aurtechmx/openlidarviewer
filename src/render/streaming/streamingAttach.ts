@@ -172,7 +172,7 @@ export function buildSchedulerCallbacks(deps: {
         }
       }
       if (benchmark) {
-        benchmark.recordFirstPaint();
+        benchmark.recordFirstResidentMesh();
         benchmark.recordNodeReady(node.record.id);
         // Position bytes are a stable proxy for "decoded points" volume.
         benchmark.recordDecodedBytes(renderLocalPositions(decoded).byteLength);

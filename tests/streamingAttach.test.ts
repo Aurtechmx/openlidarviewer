@@ -52,7 +52,7 @@ function fakeRenderer(): Pick<
 
 function fakeBenchmark(): StreamingBenchmark {
   return {
-    recordFirstPaint: vi.fn(),
+    recordFirstResidentMesh: vi.fn(),
     recordNodeReady: vi.fn(),
     recordDecodedBytes: vi.fn(),
     recordNodeEvicted: vi.fn(),
@@ -232,9 +232,10 @@ describe('buildSchedulerCallbacks — onNodeReady', () => {
     });
     const d = decoded({ posBytes: 48 });
     expect(() => cb.onNodeReady(node('n1'), d)).not.toThrow();
-    // The paint and the benchmark recording still happened despite the throws.
+    // The mesh insertion and the benchmark recording still happened despite
+    // the throws.
     expect(renderer.onNodeReady).toHaveBeenCalledOnce();
-    expect(benchmark.recordFirstPaint).toHaveBeenCalledOnce();
+    expect(benchmark.recordFirstResidentMesh).toHaveBeenCalledOnce();
     expect(benchmark.recordNodeReady).toHaveBeenCalledWith('n1');
     expect(benchmark.recordDecodedBytes).toHaveBeenCalledWith(48);
   });
@@ -341,5 +342,31 @@ describe('disposeStreamingSession', () => {
       cloud: {},
     } as unknown as StreamingSession;
     expect(() => disposeStreamingSession(s)).not.toThrow();
+  });
+});
+
+// The metric is named for the event the producer actually reaches. Nothing
+// here can observe a frame, so nothing here may claim one.
+describe('the benchmark records residency, not a paint', () => {
+  it('stamps the mesh insertion, with no drawn frame in sight', () => {
+    const renderer = fakeRenderer();
+    const order: string[] = [];
+    const benchmark = {
+      recordFirstResidentMesh: () => { order.push('firstResidentMesh'); },
+      recordNodeReady: () => { order.push('nodeReady'); },
+      recordDecodedBytes: () => { order.push('decodedBytes'); },
+    } as unknown as Parameters<typeof buildSchedulerCallbacks>[0]['benchmark'];
+    const cb = buildSchedulerCallbacks({
+      renderer,
+      benchmark,
+      nodeClassesHook: () => undefined,
+      nodeReadyHook: () => undefined,
+      geometryChanged: () => {},
+    });
+    cb.onNodeReady(node('n1'), decoded({ posBytes: 48 }));
+    // Recorded from the node-ready callback, in the same turn as the mesh
+    // insertion. A paint, if one comes, is a later frame's business.
+    expect(renderer.onNodeReady).toHaveBeenCalledOnce();
+    expect(order).toContain('firstResidentMesh');
   });
 });
