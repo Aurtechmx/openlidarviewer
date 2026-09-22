@@ -27,6 +27,7 @@ import {
 } from '../../simulation/flowPulse/flowPulseRunner';
 import { mayReportMetricArea } from '../../simulation/simulationInputBasis';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
+import { buildIdentityProvenance } from '../../build/buildIdentity';
 import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
 
@@ -91,7 +92,10 @@ export function runLabFlowPulse(input: FlowPulseLabInput | null): FlowPulseResul
     // A getter, because the runner reads the digest only when it seals a
     // record. A refused run then never hashes the grid it declined to read.
     get analysisInputDigest() { return dtmProductDigest(dtm); },
-    build: __APP_VERSION__,
+    // The full build identity, not the bare version, so a record names the
+    // exact build that produced it, dirty working tree included: the same
+    // string export provenance already quotes verbatim.
+    build: buildIdentityProvenance(),
     id: globalThis.crypto?.randomUUID?.() ?? `flow-${Date.now()}`,
     generatedAt: new Date().toISOString(),
     processingManifestHead: null,
