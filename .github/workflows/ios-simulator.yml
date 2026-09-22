@@ -181,6 +181,13 @@ jobs:
             -type f \( -iname '*safari*' -o -iname '*webcontent*' -o -iname '*.ips' \) \
             -mmin -60 -exec cp {} crash-reports/ \; 2>/dev/null || true
           ls -la crash-reports
+          # A process killed by the system (watchdog, memory limit, a lost
+          # GPU context) leaves no crash report; the unified log records who
+          # ended it and why.
+          xcrun simctl spawn "$UDID" log show --last 15m --style compact \
+            --predicate 'process == "SpringBoard" OR process == "runningboardd" OR process == "MobileSafari" OR process CONTAINS "WebKit" OR eventMessage CONTAINS[c] "mobilesafari" OR eventMessage CONTAINS[c] "jetsam"' \
+            > crash-reports/sim-system.log 2>&1 || true
+          wc -l crash-reports/sim-system.log
 
       - name: Upload evidence
         if: always() && (inputs.keep-artifacts == 'true' || failure())
