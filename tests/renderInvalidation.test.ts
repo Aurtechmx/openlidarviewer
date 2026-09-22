@@ -272,14 +272,18 @@ describe('what production raises', () => {
     return { reasons, finishedCalls };
   };
 
-  it('raises exactly one reason, so the other thirteen are a design note', () => {
-    // `input()` and `cameraMoved()` record 'camera-input'; every other reason
-    // is declared and never raised. That is not a defect on its own — the
-    // programmatic scene changes (setClip, setColorMode, setElevationFilter,
-    // applyClassVisibility, applyDerivedClassification, setCoverageGrid) all
-    // call `input()`, so the loop does wake for them. What they do not do is
-    // say WHY, and nothing reads the reason except `needsFrame`.
-    expect([...scan().reasons].sort()).toEqual(['camera-input']);
+  it('raises four of the reasons it declares, and the rest stay a design note', () => {
+    // It was one. `input()` and `cameraMoved()` recorded 'camera-input' and
+    // every other reason was declared and never raised, which two separate
+    // readers took for live wiring. Giving the visual setters reason ownership
+    // added three: `style` for appearance, `scene-geometry` for a layer
+    // entering or leaving, `tool-overlay` for the selection highlight.
+    //
+    // The remainder are still unraised. `filter`, `clip`, `viewport` and
+    // `screenshot` belong to setters that call `input()`, which wakes the loop
+    // and arms the gate but does not say why; those are the next call sites to
+    // narrow. The `while` reasons are a separate matter, below.
+    expect([...scan().reasons].sort()).toEqual(['camera-input', 'scene-geometry', 'style', 'tool-overlay']);
   });
 
   it('never releases a while-reason, which is why none is ever acquired', () => {

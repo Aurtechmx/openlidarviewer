@@ -1486,7 +1486,7 @@ export class Viewer {
     // on a colourless scan) without any setColorMode call — the legend must
     // appear for it too.
     this._notifyColorContextChanged();
-    return id;
+    return id; this._demand.changed('scene-geometry');
   }
 
   /** A cloud's point mesh coloured by `mode`; the layer and the preview share it. */
@@ -2080,7 +2080,7 @@ export class Viewer {
     // A removed layer shrinks the shared elevation window when on.
     this.refreshProjectSharedElevation();
     // Removing the active cloud can hide (or re-target) the legend.
-    this._notifyColorContextChanged();
+    this._notifyColorContextChanged(); this._demand.changed('scene-geometry');
   }
 
   /** Return an array of all currently loaded cloud IDs. */
@@ -2279,7 +2279,7 @@ export class Viewer {
   /** Show or hide a cloud. */
   setCloudVisible(id: string, visible: boolean): void {
     const entry = this._clouds.get(id);
-    if (entry) entry.mesh.visible = visible;
+    if (entry) { entry.mesh.visible = visible; this._demand.changed('style'); }
   }
 
   /**
@@ -2421,7 +2421,7 @@ export class Viewer {
     const next = Math.max(0, Math.min(25, Math.round(trim)));
     if (next === this._heightPercentileTrim) return;
     this._heightPercentileTrim = next;
-    this._recolorElevation();
+    this._recolorElevation(); this._demand.changed('style');
   }
 
   /** Read the current percentile-trim setting. */
@@ -2442,7 +2442,7 @@ export class Viewer {
   setProjectSharedElevation(on: boolean): void {
     if (on === this._projectSharedElevation) return;
     this._projectSharedElevation = on;
-    this._recolorElevation();
+    this._recolorElevation(); this._demand.changed('style');
   }
 
   /** Re-apply the shared window after the cloud set changes while on. */
@@ -2534,7 +2534,7 @@ export class Viewer {
     // result — silently switch into RGB colour mode for any cloud
     // that can serve it.
     this._ensureRgbColorMode();
-    this._scheduleReapplyRgbAppearance();
+    this._scheduleReapplyRgbAppearance(); this._demand.changed('style');
   }
 
   /** Apply a named RGB appearance preset and keep the chip highlight in sync. */
@@ -2545,7 +2545,7 @@ export class Viewer {
     this._ensureRgbColorMode();
     // Preset clicks are infrequent — flush immediately so the user sees
     // the colour change without the throttle's trailing-edge delay.
-    this._flushReapplyRgbAppearance();
+    this._flushReapplyRgbAppearance(); this._demand.changed('style');
   }
 
   /**
@@ -2593,7 +2593,7 @@ export class Viewer {
    */
   setSky(preset: SkyPresetId): void {
     this._skyPresetId = preset;
-    this._applySkyPreset(preset);
+    this._applySkyPreset(preset); this._demand.changed('style');
   }
 
   /** The active sky preset id. */
@@ -2649,9 +2649,9 @@ export class Viewer {
     const targetAa = forceAa ? true : this._antialiasing;
     for (const { material } of this._clouds.values()) {
       if (material.alphaToCoverage === targetAa) continue;
-      material.alphaToCoverage = targetAa;
-      material.needsUpdate = true;
+      material.alphaToCoverage = targetAa; material.needsUpdate = true;
     }
+    this._demand.changed('style');
     for (const material of this._streamingMaterials()) {
       if (material.alphaToCoverage === targetAa) continue;
       material.alphaToCoverage = targetAa;
@@ -3142,9 +3142,8 @@ export class Viewer {
     for (const { material } of this._clouds.values()) {
       material.size = effective;
     }
-    for (const material of this._streamingMaterials()) {
-      material.size = effective;
-    }
+    for (const material of this._streamingMaterials()) material.size = effective;
+    this._demand.changed('style');
   }
 
   /** The point material of every resident streaming node mesh. */
@@ -3165,7 +3164,7 @@ export class Viewer {
 
   /** Enable or disable Eye Dome Lighting depth shading. */
   setEdlEnabled(on: boolean): void {
-    this._edlEnabled = on;
+    this._edlEnabled = on; this._demand.changed('style');
   }
 
   /** Whether Eye Dome Lighting is currently enabled. */
@@ -3181,7 +3180,7 @@ export class Viewer {
   setEdlStrength(strength: number): void {
     this._edlBaseStrength = Math.max(0, strength);
     // Immediate apply for the frame — adaptive update will refine next tick.
-    this._edlLiveStrength.value = this._edlBaseStrength;
+    this._edlLiveStrength.value = this._edlBaseStrength; this._demand.changed('style');
   }
 
   /** The base the user set, NOT live `_edlLiveStrength` — edlStrengthPersistence.test.ts. */
@@ -3196,7 +3195,7 @@ export class Viewer {
     // Static clouds size from their own points; a streamed node has none to
     // count, so it sizes from the spacing its source recorded.
     this._lodSize.setMode(mode);
-    this._reapplyAllSizeModes();
+    this._reapplyAllSizeModes(); this._demand.changed('style');
   }
 
   /**
@@ -3529,9 +3528,9 @@ export class Viewer {
     if (forcedOn) return;
     for (const { material } of this._clouds.values()) {
       if (material.alphaToCoverage === on) continue;
-      material.alphaToCoverage = on;
-      material.needsUpdate = true;
+      material.alphaToCoverage = on; material.needsUpdate = true;
     }
+    this._demand.changed('style');
     for (const material of this._streamingMaterials()) {
       if (material.alphaToCoverage === on) continue;
       material.alphaToCoverage = on;
@@ -3785,12 +3784,12 @@ export class Viewer {
     // Revert any prior highlight first so the user sees only the
     // latest selection.
     this.clearSelectionHighlight();
-    applySelectionHighlight(perCloud, this._highlightTarget, color, this._selectionSnapshots);
+    applySelectionHighlight(perCloud, this._highlightTarget, color, this._selectionSnapshots); this._demand.changed('tool-overlay');
   }
 
   /** Revert any active selection highlight back to the original colours. */
   clearSelectionHighlight(): void {
-    revertSelectionHighlight(this._highlightTarget, this._selectionSnapshots);
+    revertSelectionHighlight(this._highlightTarget, this._selectionSnapshots); this._demand.changed('tool-overlay');
   }
 
   /** A mounted layer's colour buffer, for the highlight helpers. */

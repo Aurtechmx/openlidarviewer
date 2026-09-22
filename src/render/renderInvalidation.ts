@@ -62,6 +62,14 @@ export type RenderInvalidationReason =
   /** A camera tween is animating. */
   | 'camera-tween'
   /** A streamed node became a visible candidate. */
+  /**
+   * A layer entered or left the scene.
+   *
+   * Deliberately not `style`: adding or removing a cloud changes what exists
+   * rather than how it looks, and a reader tracing why a frame drew is better
+   * served by the distinction than by one reason meaning both.
+   */
+  | 'scene-geometry'
   | 'streaming-ready'
   /** Decoded nodes are waiting on a metered GPU commit. */
   | 'gpu-commit-pending'
@@ -111,6 +119,7 @@ export const KIND: Readonly<Record<RenderInvalidationReason, InvalidationKind>> 
   'camera-input': 'holdover',
   'camera-damping': 'while',
   'camera-tween': 'while',
+  'scene-geometry': 'once',
   'streaming-ready': 'once',
   'gpu-commit-pending': 'while',
   'lod-fade': 'while',
