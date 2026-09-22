@@ -225,7 +225,7 @@ Format support varies with browser memory, GPU capacity, dataset size, preproces
 <details>
 <summary><b>System requirements</b></summary>
 
-OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web rendering. Performance varies with the dataset and the device. Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and hardware acceleration enabled. WebGPU is used automatically where it is available. Firefox and Safari run OLV through the WebGL 2 fallback: a boot-and-render smoke on both engines is a **mandatory** check (`.github/workflows/browser-smoke.yml`), and the full deterministic end-to-end suite runs on both as an advisory cross-browser matrix.
+OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web rendering. Performance varies with the dataset and the device. Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and hardware acceleration enabled. WebGPU is used automatically where it is available. Firefox and Safari run OLV through the WebGL 2 fallback: a boot-and-render smoke (`.github/workflows/browser-smoke.yml`) and the full deterministic end-to-end suite run on both engines as an advisory cross-browser matrix, which no merge rule requires.
 
 | Component | Minimum | Recommended |
 |---|---|---|
@@ -392,7 +392,7 @@ For reviewers, and anyone who wants to check the claims above rather than take t
 
 - [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md): install and run the offline test suite from a clean clone in about two minutes.
 - [VALIDATION_REPORT_v0.7.0-alpha.1.md](docs/releases/VALIDATION_REPORT_v0.7.0-alpha.1.md): what this release validates and what it does not. No product changed evidence level this cycle; the register holds 34 claims, 17 of them at E4 and none at E5. One measurement method changed: the interactive stockpile volume is integrated over an area grid, and VOL-STOCKPILE stays at E3.
-- [KNOWN_LIMITATIONS_v0.7.0-alpha.1.md](docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md): the documented limits of this release (no evidence promotion, a stockpile record that is not integrated beyond the toast, a registration stack that ships without a user path, touch verified on one engine in CI, three measurement figures with a known basis problem, no cross-CRS reprojection).
+- [KNOWN_LIMITATIONS_v0.7.0-alpha.1.md](docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md): the documented limits of this release (no evidence promotion, a stockpile record that is not integrated beyond the toast, a registration stack that ships without a user path, touch gestures run in CI as synthesized events with no real-device check, three measurement figures with a known basis problem, no cross-CRS reprojection).
 - [REPRODUCIBILITY.md](REPRODUCIBILITY.md): the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
 - [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md): how to evaluate the artifact without special hardware or private data.
 - [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md): where the test fixtures and streamed sample datasets come from, and how they are licensed.
