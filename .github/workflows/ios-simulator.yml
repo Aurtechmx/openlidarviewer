@@ -24,7 +24,11 @@ on:
     paths:
       - '.github/workflows/ios-simulator.yml'
       - 'scripts/ios-touch-check.mjs'
+      - 'scripts/ios-touch-trace.mjs'
       - 'scripts/pick-ios-simulator.mjs'
+      - 'probe.html'
+      - 'vite.probe.config.ts'
+      - 'src/probe/**'
   workflow_dispatch:
     inputs:
       device:
