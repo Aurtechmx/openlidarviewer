@@ -927,6 +927,33 @@ export class AnalysePanel {
     return this._freshnessBreach() === null ? this._result : null;
   }
 
+  /**
+   * The analysed DTM with the frame facts a flow run needs to size its cells,
+   * or null when no fresh result is on the panel. Read through the provenance
+   * accessor for the same reason an export is: a simulation record names its
+   * input, and a stale surface would be named as the current one.
+   */
+  flowPulseInput(): {
+    readonly result: AnalyseContoursResult;
+    readonly isGeographic: boolean;
+    readonly worldOriginY: number | null;
+    readonly resolvedUnitToMetres: number | null;
+    readonly layerId: string | null;
+    readonly filename: string | null;
+  } | null {
+    const result = this.currentResultForProvenance();
+    if (!result) return null;
+    const ctx = this._cb.getMapContext?.() ?? {};
+    return {
+      result,
+      isGeographic: ctx.isGeographic ?? false,
+      worldOriginY: ctx.worldOrigin?.y ?? null,
+      resolvedUnitToMetres: ctx.resolvedUnitToMetres ?? null,
+      layerId: this._resultScanId,
+      filename: this._cb.getExportBasename?.() ?? null,
+    };
+  }
+
   /** Re-render from a fresh analysis result (or clear when null). */
   update(
     result: AnalyseContoursResult | null,

@@ -1,14 +1,15 @@
 /**
  * analysisActions.ts
  *
- * Terrain analysis, Contour Studio and the Dataset Story. The analysis
- * entry and the story inputs are the whole surface.
+ * Terrain analysis, Contour Studio, the Flow Pulse lab and the Dataset
+ * Story. The analysis entry and the story inputs are the whole surface.
  */
 import type { Action } from '../../ui/actionRegistry';
 import { openTerrainAnalysis, type TerrainAnalysisEntryDeps } from '../openTerrainAnalysis';
 import { buildScanStory, type ScanStoryInputs } from '../../intelligence/scanStory';
 import { renderDatasetStoryCard } from '../../ui/scanStoryViews';
 import { openModal } from '../../ui/Modal';
+import { loadFlowPulseLab } from '../../lazyChunks';
 
 export interface AnalysisActionDeps {
   /** How to reach the Analyse panel and its run; see {@link openTerrainAnalysis}. */
@@ -37,6 +38,20 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
       keywords: ['contour', 'contours', 'isoline', 'create', 'deliverable', 'lines', 'terrain'],
       run: () => {
         void openTerrainAnalysis(deps.terrainAnalysisEntry, false);
+      },
+    },
+    {
+      id: 'analyse.flowPulse',
+      title: 'Flow Pulse (Field Simulation Lab)',
+      section: 'Analyse',
+      hint: 'Route flow over the analysed DTM with D8 and list what the run cannot claim.',
+      keywords: ['flow', 'drainage', 'd8', 'routing', 'accumulation', 'simulation', 'lab', 'pulse'],
+      run: () => {
+        // The Analyse panel holds the surface, so it is shown first; a scan with
+        // no analysis gets the runner's own refusal rather than a silent run.
+        deps.terrainAnalysisEntry.showAnalyseMode();
+        void Promise.all([deps.terrainAnalysisEntry.showPanel(), loadFlowPulseLab()])
+          .then(([panel, lab]) => lab.openFlowPulseLab(panel.flowInput ?? null));
       },
     },
     {

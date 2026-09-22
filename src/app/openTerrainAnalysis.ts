@@ -9,11 +9,17 @@
  * as two entries that both land somewhere useful from a cold start.
  */
 
+import type { FlowPulseLabInput } from '../ui/fieldSimulation/flowPulseLab';
+
 export interface TerrainAnalysisEntryDeps {
   /** Switch the workspace to its Analyse mode, when the shell has one. */
   readonly showAnalyseMode: () => void;
   /** Mount (or reuse) the Analyse panel and make it visible. */
-  readonly showPanel: () => Promise<{ hasResult: boolean }>;
+  readonly showPanel: () => Promise<{
+    hasResult: boolean;
+    /** The analysed surface a flow run reads; see `AnalysePanel.flowPulseInput`. */
+    flowInput?: FlowPulseLabInput | null;
+  }>;
   /** Run terrain analysis over the active scan. */
   readonly run: () => void;
 }

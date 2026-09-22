@@ -1647,7 +1647,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   copyShareLink,
   terrainAnalysisEntry: {
     showAnalyseMode: () => showWorkspaceMode?.('analyse'),
-    showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null }; }),
+    showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput() }; }),
     run: () => void terrainRunner.run(),
   },
   showTouchGestures: () => navBar.flashTouchHint(),

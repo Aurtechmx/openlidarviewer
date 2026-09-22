@@ -446,62 +446,6 @@
       "why": "How strongly to draw a brief mark at the camera's pivot, and the rule that it never appears in a capture. Nothing calls it because drawing it needs a three.js object in the Viewer chunk, which sits at 739 KiB against a 740 KiB ceiling: a six-line exported function measured 2 KiB in that chunk under the live transform, so a mesh and a material do not fit.",
       "graduation": "Reachable when the Viewer chunk has room. The wiring is small: a layer module owning its object through Viewer.derivedLayerHost(), a show call at the double-click, focus and orbit-centre sites, and one render-loop host method to step it. The pick path needs no change, since it walks the cloud registry rather than the scene.",
       "review": "2027-09-20"
-    },
-    {
-      "path": "src/simulation/flowPulse/flowTypes.ts",
-      "status": "staged",
-      "why": "The grid contract the flow-routing core reads: elevations, a validity mask and per-axis cell metres. Nothing in the shell constructs one yet, because no UI reaches the Flow Pulse tool.",
-      "graduation": "The Field Simulation Lab panel loads behind a lazy action and builds a FlowGrid from the canonical DTM.",
-      "review": "2027-03-31"
-    },
-    {
-      "path": "src/simulation/flowPulse/d8Flow.ts",
-      "status": "staged",
-      "why": "Single-flow-direction routing over an elevation grid. It is exercised only by its tests; the Flow Pulse panel that would call it is not implemented.",
-      "graduation": "The Field Simulation Lab panel routes a DTM and renders the flow field.",
-      "review": "2027-03-31"
-    },
-    {
-      "path": "src/simulation/flowPulse/flowAccumulation.ts",
-      "status": "staged",
-      "why": "Upstream cell counts, contributing area and catchment extraction over a routed grid. No production caller: it is reached only from tests.",
-      "graduation": "The Field Simulation Lab panel reports accumulation and catchment for a clicked cell.",
-      "review": "2027-03-31"
-    },
-    {
-      "path": "src/simulation/simulationInputBasis.ts",
-      "status": "staged",
-      "why": "What a simulation was allowed to read: terrain coverage, whether Withheld points were excluded, and whether the horizontal scale is resolved. No production caller, because no simulation runs from the UI yet.",
-      "graduation": "The Field Simulation Lab panel builds a run record and shows the limitations this derives.",
-      "review": "2027-03-31"
-    },
-    {
-      "path": "src/simulation/flowPulse/dtmFlowGrid.ts",
-      "status": "staged",
-      "why": "The seam that turns a canonical DTM raster into a routing grid, mapping the rasteriser's NaN absence to an invalid cell and one cell size to two metric axis lengths. Reached only from tests.",
-      "graduation": "The Field Simulation Lab panel routes the active DTM.",
-      "review": "2027-03-31"
-    },
-    {
-      "path": "src/simulation/flowPulse/priorityFlood.ts",
-      "status": "staged",
-      "why": "Priority-Flood depression conditioning, producing a second drainable surface from a DTM without modifying it. No production caller: the conditioning mode it serves has no UI.",
-      "graduation": "The Field Simulation Lab offers raw and conditioned routing and reports what the fill raised.",
-      "review": "2027-03-31"
-    },
-    {
-      "path": "src/simulation/simulationRunRecord.ts",
-      "status": "staged",
-      "why": "The canonical record a field-simulation run leaves behind, with a SHA-256 over the fields that reproduce it. Nothing constructs one, because no simulation runs from the UI yet.",
-      "graduation": "The Field Simulation Lab seals a record per run and the export writes it.",
-      "review": "2027-03-31"
-    },
-    {
-      "path": "src/simulation/flowPulse/flowPulseRunner.ts",
-      "status": "staged",
-      "why": "One flow run from a terrain product to a sealed record: conditioning, routing, accumulation, the input basis and the typed refusals in one place. No production caller, because the Field Simulation Lab panel that would call it is not built.",
-      "graduation": "The Field Simulation Lab panel calls it and renders the result and its limitations.",
-      "review": "2027-03-31"
     }
   ]
 }
