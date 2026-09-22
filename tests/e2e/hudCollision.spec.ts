@@ -15,12 +15,13 @@
  *   2. whichever one is up sits in the free band between the panel rails.
  *
  * The second claim is conditional on there BEING a free band: the two rails are
- * about 285px each, so from 768px (where the desktop layer starts) to a little
- * over 1000px they leave a gap narrower than the 290px card, and no placement
- * clears both. Measured rather than assumed (the gap is read from the rails'
- * own boxes), and where it is too narrow the surface must still fall inside the
- * viewport. Widening that band is a layout change this spec is here to size,
- * not to make.
+ * about 285px each and sit 14px in from each edge, so the gap between them is
+ * the viewport width less about 601px. The card narrows to that gap down to a
+ * 200px floor, so it clears both rails from about 800px up. From 768px (where
+ * the desktop layer starts) to there, no placement of a readable card clears
+ * both. Measured rather than assumed (the gap is read from the rails' own
+ * boxes), and where it is too narrow the surface must still fall inside the
+ * viewport.
  *
  * "On screen" here means laid out AND painted: the project card is always in
  * the DOM at opacity 0, which Playwright counts as visible, so the check reads

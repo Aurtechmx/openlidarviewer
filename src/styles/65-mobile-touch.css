@@ -290,7 +290,7 @@
      Every surface in the lane reads the token, so shifting the lane for the
      notch is one declaration rather than one per surface. */
   :root { --olv-lane-top: calc(58px + env(safe-area-inset-top)); }
-  .olv-project-card { width: min(290px, calc(100vw - 28px)); }
+  .olv-project-card { left: 50%; width: min(290px, calc(100vw - 28px)); }
   /* Keep the progress toast clear of a landscape side-notch — cap its width to
      the inset-free area. Centred, so this only ever shrinks, never shifts. */
   .olv-toast { max-width: min(360px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right))); }

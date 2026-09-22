@@ -4087,3 +4087,23 @@ Firefox and WebKit suites in `browsers.yml` follow on the same bar. The iOS
 simulator leg stays advisory until it has passed once end to end.
 The smoke workflow was titled "blocking" while no ruleset required it. Its
 title and header state that it is advisory.
+
+### L11 · FIXED · UI
+The "Project ready" card is centred in the band between the rails and
+narrows to it, with a 200 px floor. Below 200 px the Size and Attributes rows
+wrap to four lines; at 200 px they wrap to two. Measured in Chromium at a
+height of 900 with `multichunk.laz`:
+
+| width | card | clears the rails | longest row |
+|---|---|---|---|
+| 768 | 200 px | no, 16 to 17 px under each (was 60 to 63) | 2 lines |
+| 800 | 200 px | touches by 1 px | 2 lines |
+| 820 | 203 px | yes | 2 lines |
+| 891 | 274 px | yes | 1 line |
+| 1024 and up | 290 px | yes | 1 line |
+
+From 768 to about 800 px no readable width clears both rails, and the card
+lives seven seconds with a dismiss button, so the remaining overlap there is
+accepted. `hudCollision.spec.ts` asserts the card clears the rails wherever
+it fits in the band, and passes at every configured width. On phones the
+card keeps its viewport-centred placement.
