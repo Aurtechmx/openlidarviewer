@@ -272,6 +272,11 @@ export function paramsKey(params: TerrainCoreParams): string {
     `h2m=${params.horizontalUnitToMetres ?? ''}`,
     `trust=${flag(params.trustGroundClassification)}`,
     `res=${flag(params.residentOnly)}`,
+    // Appended only when declared, so a core computed without a gather keeps
+    // the key it had; a declared outcome changes the stamped DTM and must miss.
+    ...(params.withheldExcluded === undefined
+      ? []
+      : [`wh=${params.withheldExcluded}:${params.withheldExcludedCount ?? 0}`]),
   ].join('|');
 }
 

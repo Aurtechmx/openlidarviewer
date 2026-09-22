@@ -121,6 +121,7 @@ export function deriveCoreParams(
   totalPoints?: number,
   residentOnly = false,
   getWorldOriginY?: () => number | null,
+  withheld?: { readonly withheldExcluded: boolean | null; readonly withheldExcludedCount: number },
 ): TerrainCoreParams {
   const n = positions.length / 3;
   let minX = Infinity;
@@ -209,6 +210,11 @@ export function deriveCoreParams(
     classification,
     samplePointScale,
     residentOnly,
+    // What the gather did with Withheld points, stamped on the DTM by the core
+    // and keyed into the cache so a switched policy never reuses a stale core.
+    ...(withheld
+      ? { withheldExcluded: withheld.withheldExcluded, withheldExcludedCount: withheld.withheldExcludedCount }
+      : {}),
   };
 }
 
@@ -709,6 +715,7 @@ export function createTerrainAnalysisRunner(
         gathered.totalPoints,
         gathered.residentOnly,
         worldOriginY(gathered.sourceUpAxis),
+        gathered,
       );
       // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
       // miss the worker computes it off-thread (or the fallback does on-thread if
@@ -855,6 +862,7 @@ export function createTerrainAnalysisRunner(
       gathered.totalPoints,
       gathered.residentOnly,
       worldOriginY(gathered.sourceUpAxis),
+      gathered,
     );
     const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
       computeTerrainCoreAsync(

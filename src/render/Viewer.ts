@@ -2108,7 +2108,7 @@ export class Viewer {
    * when nothing is loaded. v0.4.0.
    */
   gatherTerrainPositions(
-    maxPoints = 300_000,
+    maxPoints = 300_000, includeWithheld = false,
   ): {
     positions: Float32Array;
     classification?: Uint8Array;
@@ -2121,7 +2121,7 @@ export class Viewer {
      */
     groundIsDerived: boolean;
     residentOnly: boolean;
-    sampled: boolean;
+    sampled: boolean; withheldExcluded: boolean | null; withheldExcludedCount: number;
     totalPoints: number;
     /**
      * `'z'` when every contributing source is z-up BY SPEC (LAS/LAZ/XYZ/E57/…
@@ -2172,7 +2172,7 @@ export class Viewer {
             sourceGround = true;
           }
         }
-        staticBuffers.push({ pos: cloud.positions, cls, placement });
+        staticBuffers.push({ pos: cloud.positions, cls, flags: cloud.classificationFlags, placement });
         staticPoints += cloud.positions.length / 3;
         staticFormats.push(cloud.sourceFormat);
       }
@@ -2185,7 +2185,7 @@ export class Viewer {
       if (decoded.positions && decoded.positions.length > 0) {
         const cls = alignedClass(decoded.classification, decoded.positions);
         if (cls) anyClass = true;
-        streamingBuffers.push({ key, pos: decoded.positions, cls });
+        streamingBuffers.push({ key, pos: decoded.positions, cls, flags: decoded.classificationFlags });
         streamingPoints += decoded.positions.length / 3;
       }
     }
@@ -2202,7 +2202,7 @@ export class Viewer {
       streamingBuffers,
       totalPoints,
       maxPoints,
-      anyClass,
+      anyClass, { includeWithheld },
     );
     if (!sample) return null;
     // `residentOnly` means a PARTIAL stream — only some octree nodes are
@@ -2254,7 +2254,7 @@ export class Viewer {
       classification: sample.classification,
       groundIsDerived: !sourceGround,
       residentOnly,
-      sampled: sample.sampled,
+      sampled: sample.sampled, withheldExcluded: sample.withheldExcluded, withheldExcludedCount: sample.withheldExcludedCount,
       totalPoints,
       sourceUpAxis: sceneUp,
       // Always 'z': the buffer above is canonical now, so scan-shape detection

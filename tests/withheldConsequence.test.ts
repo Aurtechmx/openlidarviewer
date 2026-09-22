@@ -157,15 +157,14 @@ describe('Overlap is not Withheld', () => {
   });
 });
 
-describe('nothing applies the policy yet', () => {
-  it('records that the exclusion is measured but not wired', () => {
-    // The honest state of L26. This test measures what the policy would do; it
-    // does not claim any product does it. When a processing path starts
-    // consulting `withheldPolicy`, this assertion is the one that should fail
-    // and be replaced by a measurement of the product's own numbers.
+describe('where the policy is applied', () => {
+  it('names terrain as the one caller', () => {
+    // The header is the register of which paths consult the policy. Terrain
+    // applies it (see withheldTerrainGather.test.ts); a second caller should
+    // update the header and this assertion together.
     const src = readFileSync(
       join(FIXTURES, '..', '..', 'src', 'science', 'withheldPolicy.ts'), 'utf8',
     );
-    expect(src).toContain('Nothing calls this yet');
+    expect(src).toContain('Terrain is the one caller');
   });
 });

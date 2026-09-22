@@ -32,18 +32,14 @@
  * format whose flags move cannot leave two answers in the tree.
  *
  * ── THE STATE OF THE TREE ───────────────────────────────────────────────────
- * Nothing calls this yet, and that is the audit rather than an omission. No
- * scientific path in this repository consults the Withheld bit: terrain,
- * density, the ground filter, stockpile volumes, contours, profiles, the
- * classifier, registration and change, and measurement all read every point
- * the cloud holds. The bit survives the whole pipeline, from the decoder
- * through `PointCloud.classificationFlags` to the LAS writer, so applying this
- * policy is a matter of consulting something already there.
- *
- * Applying it would move measured numbers. Every product listed above would
- * change on any scan that marks a single point, and several of them carry
- * claims with recorded evidence. So the policy is written down first and
- * applied as its own change, with its own before-and-after on real data.
+ * Terrain is the one caller. The terrain gather (`sampleStridedTerrain`)
+ * drops Withheld points from the DTM's input and the DTM records that it did,
+ * or that it could not know because the cloud carried no flags channel. The
+ * other scientific paths (density, the ground filter outside terrain,
+ * stockpile volumes, profiles, the classifier, registration and change, and
+ * measurement) still read every point the cloud holds. Each carries recorded
+ * evidence of its own, so each is applied as its own change with its own
+ * before-and-after on real data.
  *
  * Pure: no DOM, no GPU, no cloud. Flags in, decisions out.
  */
