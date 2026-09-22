@@ -1,0 +1,112 @@
+# Real Mobile Safari on an iOS simulator, driven through XCUITest.
+#
+# WHY THIS EXISTS, GIVEN THE WEBKIT JOBS ALREADY RUN
+# `browser-smoke.yml` runs Playwright's WebKit, including an iPhone-shaped
+# project with touch emulation. That covers the engine and the mobile layout.
+# What it cannot cover is iOS itself: Playwright synthesizes `PointerEvent`s
+# in every engine it drives, so a gesture never leaves the page. Here the
+# gesture is dispatched by the OS through XCUITest into real Mobile Safari,
+# which is the only thing that exercises the iOS touch stack.
+#
+# ADVISORY, AND MANUAL. This is `workflow_dispatch` only. It is a new leg with
+# moving parts outside this repository's control — an Appium driver, a
+# simulator runtime, a WebDriverAgent build — and a leg like that must earn
+# trust before it can block a merge. `L13` records the browser matrix as
+# advisory; this joins it on those terms rather than as a required check.
+name: iOS simulator
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: Simulator device name
+        required: false
+        default: iPhone 16
+      keep-artifacts:
+        description: Upload screenshots even on success
+        required: false
+        default: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-safari:
+    name: Mobile Safari on ${{ inputs.device || 'iPhone 16' }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      # Record what the runner actually offers before depending on it. A leg
+      # that fails three steps later on a missing runtime is a leg nobody can
+      # diagnose from the log.
+      - name: Record the toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+
+      - run: npm ci --ignore-scripts
+
+      # The test seam is a build-time constant; without it `?test=1` mounts
+      # nothing and the pose oracle has nothing to read.
+      - name: Build with the test seam
+        env:
+          OLV_TEST_SEAM: '1'
+        run: npx vite build
+
+      - name: Serve the build
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          npx wait-on http://127.0.0.1:4173 --timeout 60000
+
+      - name: Boot the simulator
+        id: sim
+        run: |
+          DEVICE="${{ inputs.device || 'iPhone 16' }}"
+          UDID=$(xcrun simctl list devices available -j \
+            | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];
+          print(next((x['udid'] for r in d for x in d[r] if x['name']=='$DEVICE'), ''))")
+          if [ -z "$UDID" ]; then
+            echo "::error::simulator '$DEVICE' is not available on this image"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Install Appium and the XCUITest driver
+        run: |
+          npm i -g appium@2
+          appium driver install xcuitest
+          appium --log-timestamp --log-no-colors > appium.log 2>&1 &
+          npx wait-on http://127.0.0.1:4723/status --timeout 120000
+
+      - name: Drive the touch model in Mobile Safari
+        env:
+          OLV_SIM_UDID: ${{ steps.sim.outputs.udid }}
+          OLV_SIM_DEVICE: ${{ inputs.device || 'iPhone 16' }}
+          OLV_BASE_URL: http://127.0.0.1:4173
+        run: node scripts/ios-touch-check.mjs
+
+      - name: Capture the screen
+        if: always()
+        run: xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot ios-screen.png || true
+
+      - name: Upload evidence
+        if: always() && (inputs.keep-artifacts == 'true' || failure())
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-simulator-evidence
+          path: |
+            ios-screen.png
+            appium.log
+            ios-touch-result.json
+          retention-days: 7
