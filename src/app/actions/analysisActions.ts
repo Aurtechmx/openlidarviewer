@@ -51,7 +51,8 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         // no analysis gets the runner's own refusal rather than a silent run.
         deps.terrainAnalysisEntry.showAnalyseMode();
         void Promise.all([deps.terrainAnalysisEntry.showPanel(), loadFlowPulseLab()])
-          .then(([panel, lab]) => lab.openFlowPulseLab(panel.flowInput ?? null));
+          .then(([panel, lab]) => lab.openFlowPulseLab(panel.flowInput ?? null))
+          .catch((err) => console.warn('[flow-pulse] lab chunk failed to load', err));
       },
     },
     {

@@ -6,12 +6,13 @@
  * rendered text against the runner's limitations rather than against copies
  * of them.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { installRecordingDom, type RecordingEl } from './helpers/recordingDom';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 
 beforeAll(installRecordingDom);
 
+const digestModule = await import('../src/science/dtmProductDigest');
 const { renderFlowPulseLab, runLabFlowPulse, flowScaleOf } = await import('../src/ui/fieldSimulation/flowPulseLab');
 type LabInput = Parameters<typeof runLabFlowPulse>[0] & object;
 
@@ -74,17 +75,10 @@ describe('a refusal is a plain message', () => {
     expect(text).toContain(outcome.reason);
   });
 
-  it('refuses a geographic frame whose latitude cannot be derived', () => {
-    const outcome = runLabFlowPulse(input({ isGeographic: true, worldOriginY: Number.NaN }));
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.code).toBe('UNITS_UNRESOLVED');
-    expect(textOf(renderFlowPulseLab(outcome))).toContain(outcome.reason);
-  });
 });
 
 describe('a geographic frame with no world origin', () => {
-  it.each([null, undefined])('refuses with UNITS_UNRESOLVED when the origin is %s', (origin) => {
+  it.each([null, undefined, Number.NaN])('refuses with UNITS_UNRESOLVED when the origin is %s', (origin) => {
     const outcome = runLabFlowPulse(input({ isGeographic: true, worldOriginY: origin as never }));
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -106,5 +100,16 @@ describe('the frame the run reads', () => {
 
   it('leaves a projected frame without a latitude', () => {
     expect(flowScaleOf(input()).latitudeDeg).toBeNull();
+  });
+});
+
+describe('the grid digest', () => {
+  it('is computed only for a run the runner accepts', () => {
+    const spy = vi.spyOn(digestModule, 'dtmProductDigest');
+    runLabFlowPulse(input({ isGeographic: true, worldOriginY: null }));
+    expect(spy).toHaveBeenCalledTimes(0);
+    runLabFlowPulse(input());
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });

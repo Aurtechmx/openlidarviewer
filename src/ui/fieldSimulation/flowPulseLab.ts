@@ -52,6 +52,8 @@ export interface FlowPulseLabInput {
  * refuses. Reading a missing origin as zero would put a site at 60° N on the
  * equator, route with cos φ ≈ 1 and roughly double every area. A projected
  * frame needs no latitude and is unaffected.
+ *
+ * `cellSizeM` is in source units despite its name: degrees on a geographic frame.
  */
 export function flowScaleOf(input: FlowPulseLabInput): HorizontalScale {
   const dtm = input.result.dtm;
@@ -128,9 +130,9 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
       metric ? `${s.maxContributingAreaM2!.toFixed(1)} m²` : 'Withheld: the horizontal scale is not resolved',
     ),
   );
-  const list = el('ul');
+  const list = el('ul', { className: 'olv-story-v' });
   for (const sentence of outcome.limitations) list.append(el('li', { text: sentence }));
-  card.append(row('Limitations', ''), list);
+  card.append(el('span', { className: 'olv-story-k', text: 'Limitations' }), list);
   return card;
 }
 
