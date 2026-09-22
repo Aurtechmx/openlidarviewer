@@ -4271,3 +4271,30 @@ not built. The call stays synchronous. `build: buildIdentityProvenance()`
 replaced the bare `__APP_VERSION__` on the sealed run record in the same file,
 so a record names the exact build that produced it; `flowPulseLab.test.ts`
 checks the record's `build` field against `buildIdentityProvenance()`.
+
+### L13 · OPEN · EVIDENCE
+
+The iOS simulator leg (`.github/workflows/ios-simulator.yml`) verifies a real
+XCUITest session through to an OS-dispatched gesture: it opens the app in
+Mobile Safari inside the simulator, navigates to the test seam, loads a scan,
+reads the camera pose, and dispatches a two-finger pinch. All of that passes.
+What it cannot verify on a GitHub-hosted macOS runner is the render the pinch
+is meant to resume: the WebGL frame never completes.
+
+The evidence is in run 35787354722. The host's SimMetalHost log records
+`-[AppleParavirtArgumentEncoder setBuffer:offset:atIndex:], line 392: error`,
+then a run of process crashes, `Corpse allowed 1 of 5` through
+`Too many corpses being created`. WebKit's GPU process exits,
+`GPUProcessProxy::gpuProcessExited: reason=Crash`, MobileSafari loses its
+Metal connection, `Connection to SimMetalHost ... XPC_ERROR_CONNECTION_INTERRUPTED`,
+and the run ends with metal(21) code 102. The failure sits in the runner VM's
+paravirtual GPU driver while it renders WebGL. It is not in the app, the test
+script, or the gesture: the pinch only asks the page to resume rendering, and
+rendering is the step the driver cannot complete.
+
+No script or workflow change avoids this short of turning off WebGL rendering
+for the run, and that would stop the leg from testing the app at all. What
+unblocks it is a runner with a real Apple GPU: a self-hosted Apple Silicon
+runner, or a future GitHub-hosted image whose paravirtual driver handles this
+rendering path. Until one exists, the leg stops at the same point and stays
+advisory.
