@@ -6224,3 +6224,56 @@ figures after this phase's new files.
 (O10, coverage gain and next-station scoring) is not implemented; the
 Planning section says so. `gen:v070-status` is regenerated after this
 entry.
+
+### L05 · PARTIAL · SCIENTIFIC
+
+`tests/stockpileDualAnswer.test.ts` runs both estimators on the same lasso the
+app takes: the point-sample integration (`volumeCutFill`, reached through
+`computeLassoVolume`) that becomes the saved `VolumeRecord` at
+`Viewer.ts:1198`, and the area-weighted grid (`stockpileAreaGrid`) that the
+toast prints beside it through `stockpilePresenter.ts`. Both read the same
+polygon, base height, up axis and native coordinates; the record's figure and
+the grid's `fillM3` are both native times horizontal squared times vertical,
+so the two compare directly with no unit correction on either side.
+
+Twenty-seven analytic cases (cone, truncated pyramid and flat-topped mound;
+independent uniform positions, a Thomas-clustered scanner pattern, and a 1/d²
+range gradient; densities of 1 pt/m², 10 pts/m² and 100 pts/m², each averaged
+over several seeds) put a number on where each estimator lands against the
+closed-form volume. Under uniform sampling both centre on the
+truth; the grid reads slightly low and scatters less. Under a range gradient
+the point sample reads 16 to 25% low at every density and more points do not
+close it; the grid reads 1 to 6% low at every density. Clustered at 1 pt/m²,
+neither is within 20% of the truth and the grid reports PREVIEW on every run.
+Clustered at 10 pts/m², the grid reports MEASURED on every run while reading 3
+to 4% low.
+
+Repository fixtures widen the same picture. Two uniformly sampled
+rasterisation surfaces read within 1.1% by both, the grid the nearer; a
+surface with a density hot spot reads 39% low by point sample and 7% low by
+grid; a sharp 1 m step reads exact by point sample and 15% low by grid,
+because the grid's cell crosses the step. A sparse-coverage case that leaves
+46% support withholds the grid figure outright while the saved record still
+carries `high` confidence on point count alone, over 70% low against the
+closed form. A notch cut into the lasso that adds hull area but no points
+inflates the point-sample figure by more than 10%; the grid, weighting area
+actually covered, moves under 2%. On real airborne returns and on a canopy
+fixture with no closed form, the two disagree by 3.6% and 8.6% with nothing to
+settle which is right. Metres, US survey feet and a metres-over-feet compound
+representation give the same m³ on the path the app takes; the grid's own
+`linearUnitToMetres` option, not on that path, overstates a compound
+representation by the ratio of the two factors, which is a caller error rather
+than an estimator one.
+
+No sampling regime makes one estimator strictly closer. The point sample is
+exact against a sharp discontinuity the grid's cell blurs, and reads low
+wherever density itself varies with position, whether by clustering or by
+range; the grid removes most of that bias by weighting area rather than
+points, at the cost of a support threshold before it reports at all and of
+losing height where a real step falls inside one cell. Carrying the grid's
+figure into the record, which is what remains of this entry's earlier
+account, means carrying its coverage verdict (measured, preview or withheld)
+rather than dropping it, and deciding what a withheld lasso saves; that
+classification is section 80's to make and is not made here.
+
+Covered by `tests/stockpileDualAnswer.test.ts`.
