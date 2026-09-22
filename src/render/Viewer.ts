@@ -1926,13 +1926,13 @@ export class Viewer {
   setStreamingColorMode(mode: ColorMode): void {
     this._streaming?.renderer.setColorMode(mode);
     // The legend follows the streaming mode too (both colour paths must
-    // drive the same overlay — see onColorContextChanged).
-    if (this._streaming) this._notifyColorContextChanged();
+    // drive the same overlay). `input()` wakes what a panel click cannot.
+    if (this._streaming) { this._notifyColorContextChanged(); this._demand.input(); }
   }
 
   /** Apply a new streaming quality preset (point/concurrency budgets). */
   setStreamingQuality(quality: StreamingQuality, isMobile: boolean): void {
-    this._streaming?.scheduler.setBudgets(streamingBudgets(quality, isMobile));
+    if (this._streaming) { this._streaming.scheduler.setBudgets(streamingBudgets(quality, isMobile)); this._demand.input(); }
   }
 
   /** Pause streaming — no new nodes load. */
@@ -1942,12 +1942,12 @@ export class Viewer {
 
   /** Resume streaming. */
   resumeStreaming(): void {
-    this._streaming?.scheduler.resume();
+    if (this._streaming) { this._streaming.scheduler.resume(); this._demand.input(); }
   }
 
   /** Drop the streaming compressed-chunk cache. */
   clearStreamingCache(): void {
-    this._streaming?.scheduler.clearCache();
+    if (this._streaming) { this._streaming.scheduler.clearCache(); this._demand.input(); }
   }
 
   /** Configure navigation and clip planes for a streaming cloud's extent. */
