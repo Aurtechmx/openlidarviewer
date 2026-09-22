@@ -1060,3 +1060,72 @@ describe('units', () => {
     }
   });
 });
+
+// ── authority on the sampled/streaming axis ─────────────────────────────────
+
+/**
+ * `stockpileAuthority` has two branches this file otherwise never reaches: an
+ * incomplete source and a voxel-reduced sample each cap a grid at PREVIEW
+ * ahead of its support fraction. `dualAnswer` derives `sampled` from
+ * `out.anySourceReduced || out.budget.downsample` and `streaming` from
+ * `out.streamingContributed`, and every case above walks an in-memory
+ * `PointCloud` with `streamingParts: []` and `wasReduced: () => false`, so
+ * both read false everywhere in this file: the support/coverage axis is the
+ * only one exercised above. This drives `stockpileToastSuffix`, the same call
+ * the toast makes, directly with the flags a voxel-reduced or a streaming
+ * source sets, on the identical fully-supported selection the baseline case
+ * reads MEASURED on, to confirm each still caps it at PREVIEW.
+ */
+function toastSuffixWithOverride(
+  positions: Float32Array,
+  lasso: ReadonlyArray<{ x: number; y: number }>,
+  overrides: { readonly sourceReduced?: boolean; readonly streamingContributed?: boolean },
+): string {
+  const cloud = new PointCloud({ positions, origin: [0, 0, 0], sourceFormat: 'las', name: 'pile.las' });
+  const host: LassoVolumeHost = {
+    project: (x, y) => ({ x, y }),
+    integrable: [['pile', { cloud }]],
+    streamingParts: [],
+    wasReduced: () => false,
+    visibilityFor: () => null,
+    worldUp: [0, 0, 1],
+  };
+  const out = computeLassoVolume({ host, lasso, referencePercentile: 0.05 });
+  if (!out) throw new Error('lasso selected nothing');
+  return stockpileToastSuffix(out.polygon3D, out.selectedPositions, 1, {
+    sourceReduced: overrides.sourceReduced ?? false,
+    densityUnitKnown: true,
+    vert: 1,
+    streamingContributed: overrides.streamingContributed ?? false,
+    // Unknown resident coverage on a streaming source: not evidence of
+    // completeness, so `sourceComplete` reads false the way the app's own
+    // `stockpileToastSuffix` caller does when a streamed node count is null.
+    streamingCoverage: null,
+    walkSampled: false,
+  });
+}
+
+describe('authority on the sampled/streaming axis, independent of support', () => {
+  // The cone at 10 pts/m² uniform under the full lasso: the same selection
+  // `sparseRows().get('full coverage')` builds, at 0.993 support, well clear
+  // of the grid's own coverage threshold.
+  const full = uniform(Math.round(10 * APRON_AREA), lcg(0x5a5e0001));
+  const positions = cloudOf(full, CONE.surface);
+
+  it('reads MEASURED at baseline, on the selection both override cases reuse', () => {
+    const suffix = toastSuffixWithOverride(positions, LASSO, {});
+    expect(suffix).toContain('MEASURED');
+  });
+
+  it('a voxel-reduced source caps the same well-supported grid at PREVIEW ("display sample")', () => {
+    const suffix = toastSuffixWithOverride(positions, LASSO, { sourceReduced: true });
+    expect(suffix).toContain('PREVIEW (display sample)');
+    expect(suffix).not.toContain('MEASURED');
+  });
+
+  it('a streaming source of unknown coverage caps the same well-supported grid at PREVIEW ("streaming and not fully resident")', () => {
+    const suffix = toastSuffixWithOverride(positions, LASSO, { streamingContributed: true });
+    expect(suffix).toContain('PREVIEW (source is streaming and not fully resident)');
+    expect(suffix).not.toContain('MEASURED');
+  });
+});

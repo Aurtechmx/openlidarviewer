@@ -6277,3 +6277,31 @@ rather than dropping it, and deciding what a withheld lasso saves; that
 classification is section 80's to make and is not made here.
 
 Covered by `tests/stockpileDualAnswer.test.ts`.
+
+### L05 · PARTIAL · SCIENTIFIC
+
+Two corrections to the account above. The saved Lasso `VolumeRecord` is built
+by `deriveVolumeRecord` at `main.ts:622`, fed through `computeLassoVolume`
+(`main.ts:589`) and `lassoVolume.ts`'s `volumeFromLassoWithFootprint`, which
+is the site `tests/stockpileDualAnswer.test.ts` reproduces. `Viewer.ts:1198`
+is a separate `volumeCutFill` call, inside `setVolumeSampler`'s callback and
+wired only to the point-and-click "Volume" polygon tool
+(`MeasureController.ts`, `kind === 'volume'`); it persists its own
+hand-rolled record with its own confidence tiers, is not reached through
+`computeLassoVolume`, has no stockpile-grid counterpart, and the harness does
+not touch it.
+
+`stockpileAuthority` also has two branches the harness's synthetic clouds
+never reached: an incomplete source and a voxel-reduced sample each cap the
+grid at PREVIEW ahead of its support fraction, and every case above walks an
+in-memory `PointCloud` with no streaming parts and no walk downsample, so
+`sourceComplete` read true and `sampled`/`streaming` read false throughout.
+The earlier account covered only the support/coverage axis of the verdict.
+Three added cases drive `stockpileToastSuffix` directly, on the same
+fully-supported cone selection the ladder's "full coverage" row reads
+MEASURED on at 99% support: a voxel-reduced source caps it at PREVIEW
+("display sample"), and a streaming source with an unknown resident count
+caps it at PREVIEW ("source is streaming and not fully resident"), each
+ahead of that support fraction.
+
+Covered by `tests/stockpileDualAnswer.test.ts`.
