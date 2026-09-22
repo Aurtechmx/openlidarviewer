@@ -4368,3 +4368,40 @@ frame and repaints the overlay only on a drawn frame, so a hover whose frame
 arrives after the holdover shows its cursor at the next heartbeat. Lasso
 reclassify and classification undo and redo rewrite classification colours
 without recording any reason of their own.
+
+### L125 · FIXED · ARCHITECTURE
+
+The two gaps the prior account left open are closed.
+
+`reclassifyLasso`, `undoClassification` and `redoClassification` rewrite the
+classification buffer and reupload its colours through
+`refreshClassificationColours`, and none of the three recorded a reason for
+it. The recolour is pulled out of `Viewer.ts` into `colorModes.ts`, which
+`Viewer.ts` already imports for `colorForMode`, as a plain function over the
+three fields it reads (`cloud`, `colorAttr` and `mode`) rather than a private
+method keyed by cloud id, since a private method cannot leave the class that
+owns the id-to-entry map and a new file would raise the fan-out baseline
+`lint:module-graph` holds on `Viewer.ts`. Each of the three callers then
+records `filter`,
+the reason the colour mode and intensity filter setters already own, so a
+late frame still shows the recoloured buffer rather than the one before the
+edit. `swapClassification` and `reclassifyInPolygon` rewrite the same buffer
+through the same helper but have no live caller yet, so they stay outside
+this fix and outside the owner inventory in
+`tests/visualMutationOwnership.test.ts`.
+
+The measure cursor's host callback, `setMeasureCursor`, records
+`tool-overlay` after it sets the cursor. The overlay only re-projects on a
+frame that draws, and a hover had no owner of its own: once the pointer
+stops moving, nothing asks for a frame again, and the position had already
+changed by the time the callback returned. The probe readout is plain DOM
+pushed straight from client coordinates rather than a re-projected overlay,
+so it carried no matching gap and needed no change.
+
+`tests/invalidationDrawsFrame.test.ts` replays the three classification
+callers and the cursor callback the same way it replays every other site in
+this entry: each site's demand calls, read out of `Viewer.ts`, against the
+real scheduler with the frame run 50 ms after the holdover expires.
+`tests/visualMutationOwnership.test.ts` adds `reclassifyLasso`,
+`undoClassification` and `redoClassification` to the owner inventory, each
+against `filter`.

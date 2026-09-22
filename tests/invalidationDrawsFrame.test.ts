@@ -220,6 +220,13 @@ describe('a late frame still paints every Viewer mutation that changed the pictu
     return source.slice(at, source.indexOf('this._startLoop();', at));
   };
 
+  /** The render-loop host's cursor callback, which fires on every hover. */
+  const measureCursorCallback = (): string => {
+    const at = source.indexOf('setMeasureCursor: (point) => {');
+    expect(at, 'the setMeasureCursor host callback moved').toBeGreaterThan(-1);
+    return source.slice(at, source.indexOf('},\n', at));
+  };
+
   const MUTATIONS: ReadonlyArray<readonly [string, () => string]> = [
     ['setColorMode', method('setColorMode')],
     ['setIntensityFilter', method('setIntensityFilter')],
@@ -228,10 +235,14 @@ describe('a late frame still paints every Viewer mutation that changed the pictu
     ['setStreamingQuality', method('setStreamingQuality')],
     ['resumeStreaming', method('resumeStreaming')],
     ['requestFrame', method('requestFrame')],
+    ['reclassifyLasso', method('reclassifyLasso')],
+    ['undoClassification', method('undoClassification')],
+    ['redoClassification', method('redoClassification')],
     ['_setToolMode', method('_setToolMode')],
     ['_onResize', method('_onResize')],
     ['_renderAtSize', method('_renderAtSize')],
     ['the backend-ready callback', backendReady],
+    ['the setMeasureCursor host callback', measureCursorCallback],
   ];
 
   it.each(MUTATIONS)('%s', (name, text) => {

@@ -98,6 +98,15 @@ const OWNERS: ReadonlyArray<readonly [string, RenderInvalidationReason]> = [
   ['setClip', 'clip'],
   ['applyDerivedClassification', 'filter'],
   ['requestFrame', 'redraw-request'],
+  // The classification editor's own recolour, found the same way as the
+  // three above: undo, redo and the lasso tool rewrite the buffer and
+  // reupload its colours through `refreshClassificationColours`, and none of
+  // them told the loop. `swapClassification` and `reclassifyInPolygon` do
+  // the same rewrite but have no live caller yet (see the latter's doc
+  // comment), so they are not part of this inventory.
+  ['reclassifyLasso', 'filter'],
+  ['undoClassification', 'filter'],
+  ['redoClassification', 'filter'],
 ];
 
 describe('every visual mutation has a redraw owner', () => {

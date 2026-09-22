@@ -82,7 +82,7 @@ import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
 import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
-import { colorForMode, defaultMode } from './colorModes';
+import { colorForMode, defaultMode, refreshClassificationColours } from './colorModes';
 import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
@@ -2883,7 +2883,7 @@ export class Viewer {
       result = applyClassSwap(buf, fromClass, toClass);
     });
     if (result.changedCount > 0) {
-      this._refreshClassificationColours(id);
+      refreshClassificationColours(entry);
       this._markClassificationEdited(id);
     }
     return result;
@@ -2931,7 +2931,7 @@ export class Viewer {
       });
     });
     if (result.changedCount > 0) {
-      this._refreshClassificationColours(id);
+      refreshClassificationColours(entry);
       this._markClassificationEdited(id);
     }
     return result;
@@ -2991,7 +2991,11 @@ export class Viewer {
       result = applyIndexReclassify(buf, indices, newClass);
     });
     if (result.changedCount > 0) {
-      this._refreshClassificationColours(id);
+      refreshClassificationColours(entry);
+      // A recolour is a `once` reason of its own: the edit already happened
+      // by the time this returns, so `input()`'s 350 ms holdover cannot be
+      // trusted to still be open when the next frame runs.
+      this._demand.changed('filter');
       this._markClassificationEdited(id);
     }
     return { ...result, hiddenByFilters: inside - indices.length, selectedCount: inside };
@@ -3007,7 +3011,8 @@ export class Viewer {
     const h = this._classHistory.get(id);
     if (!entry?.cloud.classification || !h?.canUndo) return false;
     h.undo(entry.cloud.classification);
-    this._refreshClassificationColours(id);
+    refreshClassificationColours(entry);
+    this._demand.changed('filter');
     this._markClassificationEdited(id);
     return true;
   }
@@ -3022,7 +3027,8 @@ export class Viewer {
     const h = this._classHistory.get(id);
     if (!entry?.cloud.classification || !h?.canRedo) return false;
     h.redo(entry.cloud.classification);
-    this._refreshClassificationColours(id);
+    refreshClassificationColours(entry);
+    this._demand.changed('filter');
     this._markClassificationEdited(id);
     return true;
   }
@@ -3059,9 +3065,9 @@ export class Viewer {
     // class-mask multiply folded into the size node. Without this the legend
     // could colour the derived classes but not hide them.
     this._attachClassAttribute(entry, codes);
-    // The class-filter wiring above hides classes without recolouring, so the
-    // colour mode only needs refreshing when class colours are already shown.
-    if (entry.mode === 'classification') this._refreshClassificationColours(id);
+    // The class-filter wiring above hides classes without recolouring; the
+    // recolour itself is a no-op unless class colours are already shown.
+    refreshClassificationColours(entry);
     this._markClassificationEdited(id); // a derive replaces the classification
     this._demand.changed('filter');
     return true;
@@ -3097,28 +3103,6 @@ export class Viewer {
     this._materialsWithClass.add(entry.material);
     this._applySizeMode(entry.material);
     entry.material.needsUpdate = true;
-  }
-
-  /**
-   * Recompute and re-upload the colour attribute for a cloud whose
-   * classification just changed. Cheap when the cloud isn't currently
-   * showing classification colours — `setColorMode` short-circuits when
-   * the mode is unchanged, so we force a recompute by toggling to the
-   * current mode after a no-op detour.
-   */
-  private _refreshClassificationColours(id: string): void {
-    const entry = this._clouds.get(id);
-    if (!entry) return;
-    // Only the classification mode reads from the mutated buffer; other
-    // modes don't need a refresh. The chassification mode itself does — so
-    // re-derive its colours and re-upload.
-    if (entry.mode === 'classification') {
-      const raw = colorForMode('classification', entry.cloud);
-      const arr = entry.colorAttr.array as Float32Array;
-      // sRGB → linear via the shared EOTF seam (see colorEncode.ts).
-      writeFloatColorsInto(arr, raw);
-      entry.colorAttr.needsUpdate = true;
-    }
   }
 
   /**
@@ -6096,7 +6080,12 @@ export class Viewer {
       pointerNdc: () => ({ x: this._pointerNdcX, y: this._pointerNdcY }),
       pointerClient: () => ({ x: this._pointerClientX, y: this._pointerClientY }),
       pickPoint: (ndcX, ndcY) => this._pickPoint(ndcX, ndcY),
-      setMeasureCursor: (point) => this._measure.setCursor(point),
+      setMeasureCursor: (point) => {
+        this._measure.setCursor(point);
+        // The overlay re-projects only on a frame that draws, and a hover has
+        // no other owner: nothing else asks again once this returns.
+        this._demand.changed('tool-overlay');
+      },
       userInteracting: () => this._userInteracting || this._nav.isDriving,
       probePickStatic: (ndcX, ndcY) => {
         const hit = this._pickDetailed(ndcX, ndcY);
