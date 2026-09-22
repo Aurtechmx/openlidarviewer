@@ -76,6 +76,21 @@ export interface RenderActivitySignals {
    * draw is a contradiction, not because a benefit was observed.
    */
   readonly fading: boolean;
+  /**
+   * Something served this frame asked for the picture to change.
+   *
+   * The reasons in `renderInvalidation` say WHY a frame was requested, and the
+   * loop used to throw them away before the body ran: `consumeOnce` cleared
+   * the once-reasons and reported nothing, so a `style` or `tool-overlay`
+   * invalidation could wake the loop and then be idle-skipped. A once-reason
+   * consumed without a paint is worse than one never raised, because the
+   * change it describes has already happened and nothing will ask again.
+   *
+   * The loop now serves the frame instead, and hands the verdict here. A
+   * `while` reason draws for as long as it is held, which is what separates it
+   * from a once-reason and also what makes an unreleased one a battery bug.
+   */
+  readonly invalidated: boolean;
 }
 
 /**
@@ -188,8 +203,9 @@ export class RenderActivityGate {
    * the holdover expires; active streaming draws so new nodes appear without
    * latency; commit work draws so geometry that has reached the GPU is on the
    * screen rather than waiting for a heartbeat; a dissolve draws so it is a
-   * fade rather than two steps; otherwise the heartbeat draws once the idle
-   * counter reaches the threshold. The boundary is
+   * fade rather than two steps; a served invalidation draws because something
+   * asked for this frame on purpose; otherwise the heartbeat draws once the
+   * idle counter reaches the threshold. The boundary is
    * `now < until`, so the expiry instant is already idle.
    */
   shouldRender(now: number, signals: RenderActivitySignals): boolean {
@@ -198,6 +214,7 @@ export class RenderActivityGate {
     if (signals.streamingBusy) return true;
     if (signals.commitWork) return true;
     if (signals.fading) return true;
+    if (signals.invalidated) return true;
     return this._idleHeartbeat >= IDLE_HEARTBEAT_FRAMES;
   }
 

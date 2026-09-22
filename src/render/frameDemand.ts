@@ -24,8 +24,21 @@
  * so this tests in Node against a fake.
  */
 import { browserFrameScheduler, type FrameScheduler, type FrameSchedulerState } from './frameScheduler';
+
+/**
+ * How a scheduler is built. The default reaches for requestAnimationFrame, so
+ * a test that wants to drive real frames supplies its own clock and queue
+ * instead. Injected here rather than reached for inside {@link FrameDemand.start}
+ * because the loop's whole contract, wake through serve through draw through
+ * sleep, is only observable by running it.
+ */
+export type SchedulerFactory = (hooks: {
+  nowMs: () => number;
+  needsFrame: (nowMs: number) => boolean;
+  runFrame: () => void;
+}) => FrameScheduler;
 import { RenderActivityGate } from './renderActivityGate';
-import { RenderInvalidation, type RenderInvalidationReason } from './renderInvalidation';
+import { RenderInvalidation, type RenderInvalidationReason, type ServedFrame } from './renderInvalidation';
 
 /** The live signals that run without asking each frame. */
 export interface FrameDemandSignals {
@@ -70,6 +83,17 @@ export class FrameDemand {
   private readonly _signals: FrameDemandSignals;
   private _scheduler: FrameScheduler | null = null;
   private readonly _drawn = new Set<() => void>();
+  /**
+   * What asked for the frame currently running, or null between frames.
+   *
+   * Served at the top of the frame and cleared when the body returns, so the
+   * gate can be told that this frame was requested on purpose. It used to be
+   * `consumeOnce()`: the once-reasons were dropped before the body ran and
+   * nothing downstream knew they had existed, which let a `style` or
+   * `tool-overlay` invalidation wake the loop and then lose its frame to the
+   * idle throttle.
+   */
+  private _served: ServedFrame | null = null;
   /** Was a commit outstanding when the scheduler last asked? */
   private _commitWasPending = false;
   /**
@@ -92,8 +116,11 @@ export class FrameDemand {
    */
   private _paintOwed = false;
 
-  constructor(signals: FrameDemandSignals) {
+  private readonly _makeScheduler: SchedulerFactory;
+
+  constructor(signals: FrameDemandSignals, makeScheduler: SchedulerFactory = browserFrameScheduler) {
     this._signals = signals;
+    this._makeScheduler = makeScheduler;
   }
 
   /** The activity gate, for the render loop's own reads. */
@@ -253,6 +280,7 @@ export class FrameDemand {
       // {@link _sampleCommitWork} for why both ends are needed.
       commitWork: this._sampleCommitWork(),
       fading: this._signals.fading(),
+      invalidated: (this._served?.reasons.length ?? 0) > 0,
     });
     if (draw) this._paintOwed = false;
     return draw;
@@ -265,12 +293,19 @@ export class FrameDemand {
    * restart after the tab comes back resumes the loop it already had.
    */
   start(frame: () => void): void {
-    this._scheduler ??= browserFrameScheduler({
+    this._scheduler ??= this._makeScheduler({
       nowMs: this._signals.nowMs,
       needsFrame: (nowMs) => this.needsFrame(nowMs),
       runFrame: () => {
-        this._invalidation.consumeOnce();
-        frame();
+        // Serve before the body so `shouldRender` can see the verdict, and
+        // clear after it in a `finally`: a throw from the frame must not leave
+        // a stale report standing for every frame that follows.
+        this._served = this._invalidation.serve(this._signals.nowMs());
+        try {
+          frame();
+        } finally {
+          this._served = null;
+        }
       },
     });
     this._scheduler.start();

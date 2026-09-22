@@ -29,7 +29,7 @@ function parked(): RenderActivityGate {
   return g;
 }
 
-const idle = { tweening: false, streamingBusy: false, commitWork: false, fading: false };
+const idle = { tweening: false, streamingBusy: false, commitWork: false, fading: false, invalidated: false };
 
 describe('RenderActivityGate', () => {
   it('renders while a tween is in progress, whatever else is true', () => {
@@ -75,6 +75,14 @@ describe('RenderActivityGate', () => {
     // heartbeat. At FADE_MS 220 that is roughly two paints, not thirteen.
     const g = parked();
     expect(g.shouldRender(9000, { ...idle, fading: true })).toBe(true);
+    expect(g.shouldRender(9000, idle)).toBe(false);
+  });
+
+  it('draws a frame something asked for, rather than idle-skipping it', () => {
+    // A once-reason consumed without a paint is worse than one never raised:
+    // the change it describes has happened and nothing will ask again.
+    const g = parked();
+    expect(g.shouldRender(9000, { ...idle, invalidated: true })).toBe(true);
     expect(g.shouldRender(9000, idle)).toBe(false);
   });
 
