@@ -1,0 +1,33 @@
+/**
+ * Types for the importable surface of `gen-v070-status.mjs`.
+ *
+ * The generator is plain ESM (it runs under bare `node` in the gate), but the
+ * parse and the render are pure functions tested against constructed ledgers
+ * rather than the real file, so their shapes are declared here. The CLI body
+ * is guarded behind `isCliEntry`, which is what keeps importing this module
+ * from rewriting the tracked document.
+ */
+
+/** One account of an entry: the verdict and the area it belongs to. */
+export interface LedgerAccount {
+  readonly status: string;
+  readonly category: string;
+}
+
+export interface CurrentStatus {
+  /** The last account of each entry, keyed by id. */
+  readonly latest: ReadonlyMap<string, LedgerAccount>;
+  /** How many accounts an entry has, for the entries that have more than one. */
+  readonly revisited: ReadonlyMap<string, number>;
+}
+
+/**
+ * Read every entry's latest account.
+ *
+ * Throws when a heading the ledger carries does not parse, rather than
+ * omitting it: a silently short index is the defect this guards.
+ */
+export function readCurrentStatus(text?: string): CurrentStatus;
+
+/** The status document, derived entirely from the parsed ledger. */
+export function renderStatus(status: CurrentStatus): string;
