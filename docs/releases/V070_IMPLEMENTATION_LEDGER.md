@@ -4569,21 +4569,29 @@ drifted across a voxel boundary, reading p90 1.47 of its alone size against
 The 6-point minimum let scattered, non-planar voxels pass the same spread
 test by chance: a uniform 3D voxel of 6 points classes as thin 5.7% of the
 time (Monte Carlo), 1.7% at 8 points, 0.5% at 10, 0.2% at 12. Raising
-`MIN_VOXEL_POINTS` from 6 to 10 cuts a ground-plus-30%-vegetation scene's
-misclassified share from 2.0% to 0.3% of its points and a uniform random
-cube's from 2.6% to 0%, with no effect on any flat or single-orientation
-scene. The cost lands on the facade-edge minima the first L47 entry already
+`MIN_VOXEL_POINTS` from 6 to 10 cuts the misclassified share of
+`tests/localDensitySize.test.ts`'s ground-plus-30%-vegetation scene (lcg seed
+12345, 100,000 points, vegetation at `r() * 8`, ground noise `g() * 0.05`)
+from 2.968% to 0.281% of its points, and a uniform random cube (50,000
+points on [0, 10]^3, lcg seed 12345) from 2.078% to 0%, with no effect on any
+flat or single-orientation scene. The cost lands on the facade-edge minima
+the first L47 entry already
 flagged: more x-end and top-edge voxels of a 5% facade share now hold fewer
 than 10 points and fall back to the ground plane, so that mix's worst 10% of
 facade points reads 0.66 of its alone size where it read 0.99 before (min
 0.10 against 0.12); the 20% and 50% shares are unaffected (min 0.21 and
 0.77/0.51, both unchanged).
 
-The first entry attributed the low minima to the ground/facade seam. They are
-not only that: measured per region, the seam (the facade's own bottom row)
-accounts for some of them, but the facade's x-end and top-edge voxels, which
-see fewer points near their own boundary and fall back to the ground plane
-below `MIN_VOXEL_POINTS`, account for more.
+The first entry attributed the low minima to the ground/facade seam. Measured
+per region, the seam (the facade's own bottom row) is the dominant
+contributor by point count in every share and noise combination: 873 seam
+points against 81 x-end plus 108 top at a 5% share, 3542 against 9 to 22 at
+20%, 149 against 0 or 103 at 50%. The facade's x-end and top-edge voxels,
+which see fewer points near their own boundary and fall back to the ground
+plane below `MIN_VOXEL_POINTS`, typically produce the single lowest ratio in
+a row instead of the seam (the table's 5%, 20% and 50%-with-noise minima all
+trace to an x-end voxel), though not always. The 50%-no-noise row's own
+minimum, 0.77, traces to the seam.
 
 | Facade share | Noise | p10, min against its alone size |
 | --- | --- | --- |
@@ -4591,9 +4599,10 @@ below `MIN_VOXEL_POINTS`, account for more.
 | 20% | 0 and 5 cm | 1.00, 0.21 |
 | 50% | 0 and 5 cm | 1.00, 0.77 / 0.51 |
 
-A 1,000,000-point ground-and-facade pass still runs 135 to 155 ms median,
-the same band as the first L47 entry measured; neither the layer term nor
-the higher point minimum moved it. Also fixed: the module header, which
+A 1,000,000-point ground-and-facade pass runs 150 to 155 ms median (ten
+warmed runs, repeated across separate process invocations), the same band
+the first L47 entry measured; neither the layer term nor the higher point
+minimum moved it. Also fixed: the module header, which
 still described a single whole-cloud grid with no mention of `localPlanes`;
 and `binKeys`, which computed voxel normals ahead of the unindexable-extent
 early return rather than after it.
