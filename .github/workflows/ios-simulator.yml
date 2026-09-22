@@ -69,10 +69,22 @@ jobs:
           OLV_TEST_SEAM: '1'
         run: npx vite build
 
+      # Bind 127.0.0.1 explicitly. `vite preview` defaults to `localhost`,
+      # which macOS resolves to ::1 first, so a v4 probe and the simulator
+      # both miss a server that is genuinely up. The simulator shares the
+      # host's network stack, so this address is what it reaches too.
       - name: Serve the build
         run: |
-          npx vite preview --port 4173 --strictPort &
-          npx wait-on http://127.0.0.1:4173 --timeout 60000
+          npx vite preview --host 127.0.0.1 --port 4173 --strictPort > preview.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:4173/" -o /dev/null; then
+              echo "serving on 127.0.0.1:4173"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::the preview server never answered on 127.0.0.1:4173"
+          cat preview.log
+          exit 1
 
       - name: Boot the simulator
         id: sim
@@ -116,5 +128,6 @@ jobs:
           path: |
             ios-screen.png
             appium.log
+            preview.log
             ios-touch-result.json
           retention-days: 7

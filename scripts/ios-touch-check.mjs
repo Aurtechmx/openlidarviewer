@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ios-touch-check.mjs — the touch model, exercised by iOS rather than by a page.
+ * ios-touch-check.mjs — OLV's surfaces, exercised by iOS rather than by a page.
  *
  * Every other touch check in this repository synthesizes `PointerEvent`s and
  * dispatches them at the canvas. That verifies the recogniser's arithmetic and
@@ -27,6 +27,9 @@ const APPIUM = process.env.OLV_APPIUM ?? 'http://127.0.0.1:4723';
 const BASE = process.env.OLV_BASE_URL ?? 'http://127.0.0.1:4173';
 const DEVICE = process.env.OLV_SIM_DEVICE ?? 'iPhone 16';
 const UDID = process.env.OLV_SIM_UDID ?? '';
+
+/** The pose read, as a string so two reads compare with `!==`. */
+const POSE = 'return JSON.stringify(window.__OLV_TEST_API__.getCameraPose());';
 
 const steps = [];
 const record = (name, ok, detail) => {
@@ -88,6 +91,16 @@ async function main() {
     await wd('POST', `/session/${sid}/url`, { url: `${BASE}/?test=1` });
     record('navigated', true, `${BASE}/?test=1`);
 
+    // Collect uncaught errors from here on. Installed before anything is
+    // driven, and read at the end: without this the error check would report
+    // an empty array whatever happened, which is worse than not checking.
+    await evaluate(sid, `
+      window.__olvErrors = [];
+      window.addEventListener('error', (e) => window.__olvErrors.push(String(e.message)));
+      window.addEventListener('unhandledrejection', (e) => window.__olvErrors.push('unhandled: ' + String(e.reason)));
+      return true;
+    `);
+
     // The seam must be armed, or the pose oracle reads nothing and every
     // assertion below would be vacuous.
     const seam = await evaluate(sid, 'return !!window.__OLV_TEST_API__;');
@@ -114,7 +127,7 @@ async function main() {
     const loaded = await evaluate(sid, 'return !!document.querySelector("canvas");');
     record('scan loaded', loaded === true, `canvas=${loaded}`);
 
-    const before = await evaluate(sid, 'return JSON.stringify(window.__OLV_TEST_API__.getCameraPose());');
+    const before = await evaluate(sid, POSE);
     record('pose read before gesture', typeof before === 'string' && before.length > 2, before);
 
     // The gesture, injected by iOS. Two pointers, moved apart: a pinch the
@@ -155,9 +168,82 @@ async function main() {
     record('two-finger pinch dispatched by iOS', true, `centre=${cx},${cy}`);
 
     await new Promise((r) => setTimeout(r, 1200));
-    const after = await evaluate(sid, 'return JSON.stringify(window.__OLV_TEST_API__.getCameraPose());');
+    const after = await evaluate(sid, POSE);
     const moved = before !== after;
     record('camera moved', moved, moved ? 'pose changed' : `unchanged: ${after}`);
+
+    // ── The rest of the application, on the same device ────────────────────
+    // A gesture proving the touch stack says nothing about whether the tools
+    // behind it work on a phone. Each check below drives one surface through
+    // the seam the desktop suites already use, so a failure here is the same
+    // failure they would report rather than a mobile-only assertion.
+
+    // Orbit: one finger, which is a different recogniser path from the pinch.
+    const beforeOrbit = await evaluate(sid, POSE);
+    await wd('POST', `/session/${sid}/actions`, {
+      actions: [{
+        type: 'pointer', id: 'finger1', parameters: { pointerType: 'touch' },
+        actions: [
+          { type: 'pointerMove', duration: 0, x: cx, y: cy },
+          { type: 'pointerDown', button: 0 },
+          { type: 'pause', duration: 60 },
+          { type: 'pointerMove', duration: 350, x: cx + 90, y: cy + 40 },
+          { type: 'pointerUp', button: 0 },
+        ],
+      }],
+    });
+    await new Promise((r) => setTimeout(r, 900));
+    record('single-finger orbit moves the camera', (await evaluate(sid, POSE)) !== beforeOrbit);
+
+    // Measurement: place two points and confirm the controller kept them.
+    const measured = await evaluate(sid, `
+      const api = window.__OLV_TEST_API__;
+      api.clearMeasurements();
+      api.setMeasureMode(true);
+      api.setMeasureKind('distance');
+      api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
+      api.placeMeasurementPoint({ x: 5, y: 0, z: 0 });
+      api.finishMeasurement();
+      const n = api.getMeasurementCount();
+      api.setMeasureMode(false);
+      return n;
+    `);
+    record('measurement records a distance', measured >= 1, `count=${measured}`);
+
+    // Elevation filter: a window, then cleared. The seam exists to confirm
+    // points outside it hide, so the check is that neither call throws and
+    // the app still renders afterwards.
+    const filtered = await evaluate(sid, `
+      const api = window.__OLV_TEST_API__;
+      api.setElevationFilter([0, 1]);
+      api.setElevationFilter(null);
+      return !!document.querySelector('canvas');
+    `);
+    record('elevation filter applies and clears', filtered === true);
+
+    // Classification: seed a uniform class, read one back, then undo.
+    const classed = await evaluate(sid, `
+      const api = window.__OLV_TEST_API__;
+      const n = api.seedUniformClass(2);
+      const at = api.classAt(0);
+      return JSON.stringify({ n, at });
+    `);
+    const classInfo = JSON.parse(classed);
+    record('classification seam answers', classInfo.n > 0 && classInfo.at === 2, classed);
+
+    // The mobile shell: the panels live in a bottom sheet at this width, and
+    // every tab must be reachable or the tools above cannot be driven by hand.
+    const sheet = await evaluate(sid, `
+      const tabs = [...document.querySelectorAll('.olv-msheet-tab')].map((t) => t.textContent.trim());
+      return JSON.stringify(tabs);
+    `);
+    const tabs = JSON.parse(sheet);
+    record('mobile sheet exposes its tabs', tabs.length >= 3, sheet);
+
+    // Nothing threw while all of that ran.
+    const errors = await evaluate(sid, 'return JSON.stringify(window.__olvErrors || []);');
+    const errorList = JSON.parse(errors);
+    record('no uncaught page errors', errorList.length === 0, errors);
 
     writeFileSync('ios-touch-result.json', `${JSON.stringify({ device: DEVICE, before, after, moved, steps }, null, 2)}\n`);
     if (!steps.every((s) => s.ok)) process.exitCode = 1;
