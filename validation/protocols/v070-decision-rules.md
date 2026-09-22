@@ -79,3 +79,27 @@ Creating the account and adding secrets is done by the maintainer.
 
 Release notes and the changelog for the Field Simulation Lab are held until
 the release is finalized.
+
+## Amendment 1 to D2, recorded after the measurement was read
+
+D2 names the primary outcome as the median absolute relative error but not
+how the error of one case is formed from its seeded runs. The two readings
+give opposite answers, and this amendment was written after both were seen.
+
+- Per run: the absolute error of each run, averaged within a case, then the
+  median over cases. On the 21 cases where every run is MEASURED, cut and
+  fill reads 6.71% and the grid 1.44%; with MEASURED runs from 24 cases,
+  7.57% and 1.82%; pooled over the 327 MEASURED runs, 10.27% and 2.46%.
+- Per case mean: the absolute value of the mean signed error, which lets
+  errors of opposite sign cancel across seeds. On the same 21 cases, cut and
+  fill reads 0.90% and the grid 1.40%.
+
+D2 applies the per run reading. A saved record holds one run's figure, so
+its error is one run's error; a user cannot average seeds. The per case
+mean measures estimator bias, which is reported beside it, not substituted
+for it. Both readings pass the uniform worst case guard: 18.3% for the grid
+against 31.9% for cut and fill.
+
+Outcome under D2 clause 1: the area grid becomes the canonical stored figure
+for the lasso record. The conclusion depends on the per run reading, and
+this amendment says so rather than presenting it as settled in advance.
