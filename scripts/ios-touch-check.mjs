@@ -149,8 +149,8 @@ async function main() {
     // before it can answer. Set it explicitly to cover loading the scan.
     await wd('POST', `/session/${sid}/timeouts`, { script: 60000 });
 
-    // A scan, loaded the only way a phone can: fetched and dropped, which is
-    // the same path the desktop specs drive.
+    // A scan, fetched and handed to the app's file input: the same path the
+    // desktop specs drive with setInputFiles.
     const dropResult = await evaluateAsync(sid, `
       const done = arguments[arguments.length - 1];
       (async () => {
@@ -158,21 +158,30 @@ async function main() {
         const buf = await r.arrayBuffer();
         const dt = new DataTransfer();
         dt.items.add(new File([buf], 'tiny.las', { type: 'application/octet-stream' }));
-        for (const t of ['dragenter', 'dragover', 'drop']) {
-          document.body.dispatchEvent(new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: dt }));
-        }
+        // Through the file input the desktop specs use. Safari's DragEvent
+        // constructor does not attach a scripted dataTransfer, so a synthetic
+        // drop there arrives with no files.
+        const input = document.querySelector('.olv-file-input');
+        if (!input) { done('ERR: no .olv-file-input'); return; }
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
         done(true);
       })().catch((e) => done('ERR: ' + e.message));
     `);
-    await new Promise((r) => setTimeout(r, 6000));
 
     // The canvas exists from boot, before any file, so its presence proves
     // nothing about a load. What a load leaves behind is the drop resolving
     // and the empty-state panel going away; a failed fetch returns 'ERR: …'.
-    const loaded = await evaluate(sid, `
-      const e = document.querySelector('.olv-empty');
-      return !e || e.offsetParent === null || getComputedStyle(e).display === 'none';
-    `);
+    // Polled: parsing runs in a worker, and a cold simulator takes longer
+    // than any fixed wait that would be comfortable on a desktop.
+    let loaded = false;
+    for (let i = 0; i < 120 && loaded !== true && dropResult === true; i++) {
+      loaded = await evaluate(sid, `
+        const e = document.querySelector('.olv-empty');
+        return !e || e.offsetParent === null || getComputedStyle(e).display === 'none';
+      `);
+      if (loaded !== true) await new Promise((r) => setTimeout(r, 500));
+    }
     record('scan loaded', dropResult === true && loaded === true,
       `drop=${String(dropResult)} emptyStateHidden=${loaded}`);
     if (dropResult !== true || loaded !== true) throw new Error('the scan did not load, so nothing below would test anything');
