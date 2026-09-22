@@ -481,6 +481,13 @@
       "why": "The seam that turns a canonical DTM raster into a routing grid, mapping the rasteriser's NaN absence to an invalid cell and one cell size to two metric axis lengths. Reached only from tests.",
       "graduation": "The Field Simulation Lab panel routes the active DTM.",
       "review": "2027-03-31"
+    },
+    {
+      "path": "src/simulation/flowPulse/priorityFlood.ts",
+      "status": "staged",
+      "why": "Priority-Flood depression conditioning, producing a second drainable surface from a DTM without modifying it. No production caller: the conditioning mode it serves has no UI.",
+      "graduation": "The Field Simulation Lab offers raw and conditioned routing and reports what the fill raised.",
+      "review": "2027-03-31"
     }
   ]
 }
