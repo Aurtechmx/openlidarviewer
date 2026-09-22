@@ -68,7 +68,8 @@ jobs:
       - name: Build with the test seam
         env:
           OLV_TEST_SEAM: '1'
-        run: npx vite build
+        # The binary `npm ci` installed from the lockfile, never an on-demand fetch.
+        run: ./node_modules/.bin/vite build
 
       # Bind 127.0.0.1 explicitly. `vite preview` defaults to `localhost`,
       # which macOS resolves to ::1 first, so a v4 probe and the simulator
@@ -76,7 +77,7 @@ jobs:
       # host's network stack, so this address is what it reaches too.
       - name: Serve the build
         run: |
-          npx vite preview --host 127.0.0.1 --port 4173 --strictPort > preview.log 2>&1 &
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 --strictPort > preview.log 2>&1 &
           for i in $(seq 1 60); do
             if curl -fsS "http://127.0.0.1:4173/" -o /dev/null; then
               echo "serving on 127.0.0.1:4173"; exit 0
@@ -111,7 +112,7 @@ jobs:
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
 
-      # Majors pinned, and pinned as a pair. The XCUITest driver declares a
+      # Pinned as a pair, to exact versions. The XCUITest driver declares a
       # peer of `^3.0.0-rc.2` on the server, so `appium@2` cannot carry it: the
       # install refuses with a version complaint rather than failing later at a
       # session. `appium@next` is 2.0.1, older than `latest`, so the tag is no
@@ -119,8 +120,11 @@ jobs:
       # package on the critical path just to poll a port.
       - name: Install Appium and the XCUITest driver
         run: |
-          npm i -g appium@3
-          appium driver install xcuitest@12
+          # Exact versions, and no lifecycle scripts: Appium's only one
+          # auto-installs drivers named in an environment variable, which this
+          # job does not set; the driver is installed explicitly below.
+          npm i -g --ignore-scripts appium@3.7.0
+          appium driver install xcuitest@12.13.1
           appium --port 4723 > appium.log 2>&1 &
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:4723/status -o /dev/null; then
@@ -165,6 +169,19 @@ jobs:
         if: always()
         run: xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot ios-screen.png || true
 
+      # When Safari exits mid-run, its crash report is the only record of why.
+      # Collected from the host and from inside the simulator's data volume.
+      - name: Collect crash reports
+        if: failure()
+        run: |
+          mkdir -p crash-reports
+          UDID="${{ steps.sim.outputs.udid }}"
+          find "$HOME/Library/Logs/DiagnosticReports" \
+            "$HOME/Library/Developer/CoreSimulator/Devices/$UDID/data/Library/Logs" \
+            -type f \( -iname '*safari*' -o -iname '*webcontent*' -o -iname '*.ips' \) \
+            -mmin -60 -exec cp {} crash-reports/ \; 2>/dev/null || true
+          ls -la crash-reports
+
       - name: Upload evidence
         if: always() && (inputs.keep-artifacts == 'true' || failure())
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -175,4 +192,5 @@ jobs:
             appium.log
             preview.log
             ios-touch-result.json
+            crash-reports/
           retention-days: 7
