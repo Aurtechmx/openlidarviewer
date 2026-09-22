@@ -18,8 +18,8 @@
  * `npm run build` / `build:live`. A production checkout that only ever runs
  * the real build never has probe.html or this module in its `dist/`; there is
  * no runtime flag to bypass here because there is no code path that reaches
- * it. scripts/ios-touch-check.mjs is the only caller, and it runs this build
- * as an explicit extra step in the advisory iOS workflow.
+ * it. scripts/ios-touch-trace.mjs is the only caller, and the iOS workflow
+ * runs the probe build as an explicit extra step before that script runs.
  *
  * Everything below is DIAGNOSTIC LOGGING plus the two recognisers OLV ships.
  * Nothing here decides how a gesture should be interpreted — that is still
