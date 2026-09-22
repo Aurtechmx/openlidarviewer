@@ -146,6 +146,7 @@ describe('autoDensitySizeParams', () => {
       cellSize: 1,
       referenceDensity: 1,
       axes: [0, 1],
+      localPlanes: true,
     });
   });
 
@@ -256,3 +257,64 @@ describe('orientation', () => {
   });
 });
 
+
+describe('mixed orientation', () => {
+  // A 100 m x 100 m ground plane with a 40 m x 20 m facade standing on it. The
+  // facade's reference is the same grid run on the facade alone, keyed across
+  // its own face, with the cloud's cell size and reference density.
+  const scene = (frac: number, noise: number) => {
+    let seed = 7;
+    const r = (): number => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const total = 200_000;
+    const nf = Math.round(total * frac);
+    const ng = total - nf;
+    const p = new Float32Array(total * 3);
+    const g = (): number => (r() + r() + r() - 1.5) * noise;
+    for (let i = 0; i < ng; i++) {
+      p[i * 3] = r() * 100;
+      p[i * 3 + 1] = r() * 100;
+      p[i * 3 + 2] = g();
+    }
+    for (let j = 0; j < nf; j++) {
+      const i = ng + j;
+      p[i * 3] = 30 + r() * 40;
+      p[i * 3 + 1] = 50 + g();
+      p[i * 3 + 2] = r() * 20;
+    }
+    return { p, ng, nf };
+  };
+  const ratios = (frac: number, noise: number, localPlanes: boolean): number[] => {
+    const { p, ng, nf } = scene(frac, noise);
+    const prm = autoDensitySizeParams(p);
+    const s = localDensitySizes({ positions: p, ...prm, localPlanes });
+    const ref = localDensitySizes({
+      positions: p.subarray(ng * 3),
+      cellSize: prm.cellSize,
+      referenceDensity: prm.referenceDensity,
+      axes: [0, 2],
+    });
+    const out: number[] = [];
+    for (let j = 0; j < nf; j++) out.push(s[ng + j] / ref[j]);
+    return out.sort((a, b) => a - b);
+  };
+  const q = (a: number[], f: number): number => a[Math.min(a.length - 1, Math.floor(f * a.length))];
+
+  it('shrinks a 5% facade to 0.4 of its own-plane size under the whole-cloud plane', () => {
+    expect(q(ratios(0.05, 0, false), 0.5)).toBeLessThan(0.45);
+  });
+
+  it.each([
+    [0.05, 0],
+    [0.2, 0],
+    [0.5, 0],
+    [0.05, 0.05],
+    [0.2, 0.05],
+    [0.5, 0.05],
+  ])('sizes a %s facade share at %s m noise as it would alone', (frac, noise) => {
+    const rat = ratios(frac, noise, true);
+    expect(Math.abs(q(rat, 0.5) - 1)).toBeLessThan(0.01);
+    expect(q(rat, 0.1)).toBeGreaterThan(0.99);
+    expect(q(rat, 0.9)).toBeLessThan(1.01);
+    expect(rat[0]).toBeGreaterThan(0.35);
+  });
+});

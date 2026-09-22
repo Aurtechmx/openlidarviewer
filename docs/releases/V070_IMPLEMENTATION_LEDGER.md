@@ -4010,7 +4010,7 @@ the five pass on Chromium, WebKit, Firefox and iPhone WebKit.
 Still synthesized `PointerEvent`s, which is what Playwright exposes on every
 engine. Real hardware multi-touch on a physical device remains unverified.
 
-### L47 · NOT REPRODUCIBLE · UI
+### L47 · FIXED · UI
 
 The entry describes a grid keyed by x and y. `localDensitySize.ts` keys on the
 cloud's two widest axes: `dominantPlane` measures all three extents, drops the
@@ -4020,10 +4020,30 @@ than edge-on. `localDensitySizes` reads those axes rather than assuming x and y.
 The orientation case the entry warns about is covered: a surface laid flat and
 the same surface upright produce identical scales, over five noise levels.
 
-What remains is narrower than the entry claims and is not the same defect. The
-plane is chosen once for the whole cloud from its overall bounding box, so in a
-scene mixing orientations the minority surface is still binned edge-on. No test
-covers a mixed-orientation cloud and the size of that residual is unmeasured.
+A narrower defect sat behind it. The plane was chosen once for the whole cloud
+from its overall bounding box, so in a scene mixing orientations the minority
+surface was binned edge-on. Measured on a 100 m x 100 m ground plane with a
+40 m x 20 m facade standing on it (200,000 points), each facade point's size
+divided by the size the same grid gives the facade alone, keyed across its own
+face with the same cell and reference density:
+
+| Facade share | Noise | Whole-cloud plane: median, p90 | Per-voxel plane: median, p90, min |
+| --- | --- | --- | --- |
+| 5% | 0 and 5 cm | 0.40, 0.43 | 1.00, 1.00, 0.38 |
+| 20% | 0 and 5 cm | 0.79, 0.83 | 1.00, 1.00, 0.41 |
+| 50% | 0 and 5 cm | 1.00, 1.00 | 1.00, 1.00, 0.51 |
+
+The 50% row reads 1.00 under the whole-cloud plane only because both sides sit
+on the 0.5 floor. With `localPlanes`, which `autoDensitySizeParams` turns on,
+each cubic voxel of the cell size is classed by the axis its points spread least
+along, and its points are counted across the other two. A voxel with fewer than
+6 points, or no axis at most half as wide as the next, keeps the whole-cloud
+plane, so a single-orientation cloud bins as before and the flat and upright
+cases stay identical. The remaining low ratios are points in voxels straddling
+the seam between ground and facade. Cell keys became numbers rather than
+strings, so on a 1,000,000-point ground and facade scene the pass takes 150 to
+160 ms against 210 to 225 ms for the previous code. A test pins the median and
+p90 within 1% of the facade-alone size for all six mixes.
 
 The value is a display attribute throughout. It reaches an instanced `aSize`
 attribute and the size graph, nothing else: no export, no report, no claim in
