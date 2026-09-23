@@ -113,15 +113,21 @@ export class AnnotationController {
     return this._selectedId;
   }
 
-  /** Enter or leave annotation mode. Markers stay drawn either way. */
+  /**
+   * Enter or leave annotation mode. Markers stay drawn either way.
+   *
+   * Leaving the tool abandons a draft in progress, unless it holds real
+   * unsaved work — see `_guardedClose`. The mode switch itself (`_active`,
+   * the hint) still happens on this same tick regardless; only whether the
+   * editor card closes with it is gated.
+   */
   setActive(on: boolean): void {
     this._active = on;
     this._hint.classList.toggle('olv-hidden', !on);
     if (on) {
       this._setHint('Click a point on the scan to annotate it');
     } else {
-      // Leaving the tool abandons any draft in progress — no stale annotation.
-      this._editor.close();
+      this._guardedClose();
     }
   }
 
@@ -288,6 +294,37 @@ export class AnnotationController {
     });
   }
 
+  /**
+   * Close the editor on leaving the tool, unless doing so would silently
+   * discard real, unsaved work. A closed or untouched card closes right
+   * away — exactly the prior behaviour. A dirty one is asked about first and,
+   * until answered, stays open: it has no backdrop (see AnnotationEditor's
+   * own doc comment) and does not block navigation or the rest of the page,
+   * so leaving it open with the tool now inactive costs nothing.
+   */
+  private _guardedClose(): void {
+    if (this._editor.reopenIfPossible()) return;
+    void this._editor.confirmDiscard();
+  }
+
+  /**
+   * Run an undo/redo step unless the open editor is holding unsaved work: a
+   * pristine or closed card is no loss, so `run` fires synchronously, exactly
+   * as undo/redo always have. A dirty one is asked about first, through the
+   * same confirm every reopen path uses, and `run` fires only if the user
+   * chooses to discard it — the history stacks are untouched until then, so a
+   * declined confirm leaves undo/redo exactly where they were.
+   */
+  private _guardedRestore(run: () => void): void {
+    if (this._editor.reopenIfPossible()) {
+      run();
+      return;
+    }
+    void this._editor.confirmDiscard().then((discard) => {
+      if (discard) run();
+    });
+  }
+
   /** Register a callback fired whenever the annotation list or selection changes. */
   setOnChange(cb: () => void): void {
     this._onChange = cb;
@@ -322,20 +359,30 @@ export class AnnotationController {
     return this._redoStack.length > 0;
   }
 
-  /** Step back to the previous annotation state. */
+  /**
+   * Step back to the previous annotation state.
+   *
+   * Deferred, rather than run in place, when the open editor holds real
+   * unsaved work — see `_guardedRestore`. A plain undo with nothing open (or
+   * an untouched card) still runs on the same tick as before.
+   */
   undo(): void {
-    const prev = this._undoStack.pop();
-    if (prev === undefined) return;
-    this._redoStack.push(this._annotations.slice());
-    this._restore(prev);
+    this._guardedRestore(() => {
+      const prev = this._undoStack.pop();
+      if (prev === undefined) return;
+      this._redoStack.push(this._annotations.slice());
+      this._restore(prev);
+    });
   }
 
-  /** Re-apply a state that was just undone. */
+  /** Re-apply a state that was just undone. See `undo`'s guarding note. */
   redo(): void {
-    const next = this._redoStack.pop();
-    if (next === undefined) return;
-    this._undoStack.push(this._annotations.slice());
-    this._restore(next);
+    this._guardedRestore(() => {
+      const next = this._redoStack.pop();
+      if (next === undefined) return;
+      this._undoStack.push(this._annotations.slice());
+      this._restore(next);
+    });
   }
 
   /** Compact per-annotation summaries for the Annotations panel. */

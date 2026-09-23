@@ -10,7 +10,8 @@ import { dropDenseGridPly, showWorkspaceMode } from './helpers';
  *   - a panel action (delete, resolve/reopen, activate) restores keyboard
  *     focus to the equivalent control instead of stranding it on <body>;
  *   - opening the editor over an unsaved, dirty draft asks before discarding
- *     it, rather than silently overwriting it;
+ *     it, rather than silently overwriting it — and so do leaving the tool
+ *     and undoing/redoing while a dirty draft is still open;
  *   - the editor carries real dialog semantics (role, aria-modal,
  *     aria-labelledby) and traps Tab, so a stray Tab-then-Escape can no
  *     longer exit the whole annotate tool;
@@ -236,6 +237,77 @@ test.describe('AnnotationController — reopening over an unsaved draft', () => 
     await rowFor(page, 'Saved two').locator('.olv-ap-edit').click();
     await expect(page.locator('.olv-modal[role="dialog"]')).toHaveCount(0);
     await expect(page.locator('.olv-anno-editor-title')).toHaveValue('Saved two');
+  });
+});
+
+test.describe('AnnotationController — leaving the tool over an unsaved draft', () => {
+  test('turning the tool off with a dirty draft open asks, and "Keep editing" leaves it open', async ({
+    page,
+  }) => {
+    await loadSampleAndAnnotate(page);
+    await openEditorNear(page, 0);
+    await page.locator('.olv-anno-editor-title').fill('UNSAVED ON TOOL OFF');
+
+    // Toggling the Annotate tool button off is what calls
+    // AnnotationController.setActive(false).
+    await page.locator('.olv-tool', { hasText: 'Annotate' }).click();
+
+    // Not silently dropped — the card is still open, behind a confirm.
+    const dialog = page.locator('.olv-modal[role="dialog"]');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('unsaved changes');
+    await expect(page.locator('.olv-anno-editor')).toBeVisible();
+
+    await page.locator('.olv-confirm-cancel').click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('.olv-anno-editor-title')).toHaveValue('UNSAVED ON TOOL OFF');
+  });
+
+  test('turning the tool off with a dirty draft open, and discarding, closes the card', async ({
+    page,
+  }) => {
+    await loadSampleAndAnnotate(page);
+    await openEditorNear(page, 0);
+    await page.locator('.olv-anno-editor-title').fill('DISCARD ON TOOL OFF');
+
+    await page.locator('.olv-tool', { hasText: 'Annotate' }).click();
+
+    const dialog = page.locator('.olv-modal[role="dialog"]');
+    await expect(dialog).toBeVisible();
+    await page.locator('.olv-confirm-ok').click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('.olv-anno-editor')).toBeHidden();
+  });
+});
+
+test.describe('AnnotationController — undo over an unsaved draft', () => {
+  test('undo with a dirty draft open asks before discarding it', async ({ page }) => {
+    await loadSampleAndAnnotate(page);
+    await placeAnnotation(page, { title: 'Undo target', offset: 0 });
+
+    await openEditorNear(page, 1);
+    await page.locator('.olv-anno-editor-title').fill('UNSAVED BEFORE UNDO');
+    // Move focus off the text field first — the global undo shortcut is
+    // suppressed while a text input holds focus (so a keystroke meant for
+    // the title is never read as a shortcut); clicking a type chip both
+    // moves focus to a button and further dirties the draft.
+    const chips = page.locator('.olv-anno-editor-types .olv-anno-chip');
+    await chips.filter({ hasText: 'Warning' }).click();
+
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+
+    const dialog = page.locator('.olv-modal[role="dialog"]');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('unsaved changes');
+    // Not silently dropped — the draft is still open, and the earlier
+    // annotation has not actually been undone yet.
+    await expect(page.locator('.olv-anno-editor')).toBeVisible();
+    await expect(rowFor(page, 'Undo target')).toHaveCount(1);
+
+    await page.locator('.olv-confirm-ok').click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('.olv-anno-editor')).toBeHidden();
+    await expect(rowFor(page, 'Undo target')).toHaveCount(0);
   });
 });
 
