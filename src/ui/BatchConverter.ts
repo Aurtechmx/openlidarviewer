@@ -14,6 +14,7 @@
  */
 
 import { el } from './dom';
+import { wireDialogA11y, focusableIn, type DialogA11yHandle } from './Modal';
 import { downloadBytes } from '../io/download';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { decodeFull } from '../convert/decodeFull';
@@ -45,6 +46,7 @@ function singleFileCeilingBytes(): number {
 export class BatchConverter {
   readonly element: HTMLElement;
   private readonly _dialog: HTMLElement;
+  private _a11y: DialogA11yHandle | null = null;
   private readonly _fileList: HTMLElement;
   private readonly _crsExtra: HTMLElement;
   private readonly _convertBtn: HTMLButtonElement;
@@ -88,15 +90,20 @@ export class BatchConverter {
     });
 
     this._dialog = el('div', { className: 'olv-bc-dialog' });
+    const titleEl = el('h2', { className: 'olv-bc-title', text: 'Batch convert' });
+    titleEl.id = 'olv-bc-title';
     const head = el('div', { className: 'olv-bc-head' });
     head.append(
-      el('h2', { className: 'olv-bc-title', text: 'Batch convert' }),
+      titleEl,
       (() => {
         const x = el('button', { className: 'olv-bc-close', text: '✕', ariaLabel: 'Close' });
         x.addEventListener('click', () => this.close());
         return x;
       })(),
     );
+    this._dialog.setAttribute('role', 'dialog');
+    this._dialog.setAttribute('aria-modal', 'true');
+    this._dialog.setAttribute('aria-labelledby', titleEl.id);
 
     this._fileList = el('div', { className: 'olv-bc-files' });
     this._formatRow = el('div', { className: 'olv-bc-pills' });
@@ -155,10 +162,16 @@ export class BatchConverter {
   }
 
   open(): void {
+    if (!this.element.classList.contains('olv-bc-hidden')) return;
     this.element.classList.remove('olv-bc-hidden');
+    this._a11y = wireDialogA11y(this._dialog, { onEscape: () => this.close() });
+    // Move focus into the dialog: the first field, else the dialog itself.
+    const initial = focusableIn(this._dialog)[0] ?? this._dialog;
+    initial.focus();
   }
 
   close(): void {
+    if (this.element.classList.contains('olv-bc-hidden')) return;
     // Cancel any batch still running so a dismissed modal doesn't keep decoding.
     this._abort?.abort();
     this.element.classList.add('olv-bc-hidden');
@@ -168,6 +181,9 @@ export class BatchConverter {
     // collected too. The queued source list is kept, so reopening can re-run.
     this._produced = [];
     this._results.replaceChildren();
+    // Restores focus to whatever triggered the dialog (Tab-trap teardown).
+    this._a11y?.teardown();
+    this._a11y = null;
   }
 
   // ── sections ────────────────────────────────────────────────────────────

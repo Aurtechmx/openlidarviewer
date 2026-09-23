@@ -136,3 +136,48 @@ test.describe('help overlay — focus containment', () => {
   });
 });
 
+test.describe('batch converter — focus containment', () => {
+  async function open(page: Page): Promise<void> {
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    await page.locator('.olv-convert-chip').click();
+    await expect(page.locator('.olv-bc-dialog')).toBeVisible();
+  }
+
+  test('carries dialog semantics and moves focus in on open', async ({ page }) => {
+    await open(page);
+    const dialog = page.locator('.olv-bc-dialog');
+    await expect(dialog).toHaveAttribute('role', 'dialog');
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const labelledby = await dialog.getAttribute('aria-labelledby');
+    expect(labelledby).toBeTruthy();
+    expect(await isInside(page, '.olv-bc-dialog')).toBe(true);
+  });
+
+  test('Escape closes the dialog (previously did nothing)', async ({ page }) => {
+    await open(page);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-bc-dialog')).toBeHidden();
+  });
+
+  test('Shift+Tab never escapes to the page behind the modal', async ({ page, browserName }) => {
+    // See the same skip in the help-overlay block above: this dialog's
+    // controls are almost entirely <button>s (format/CRS pills, convert,
+    // close), which WebKit's default keyboard mode does not Tab through.
+    test.skip(browserName === 'webkit', 'WebKit omits buttons from native Tab order by default');
+    await open(page);
+    for (let i = 0; i < 8; i++) await page.keyboard.press('Shift+Tab');
+    expect(await isInside(page, '.olv-bc-dialog')).toBe(true);
+  });
+
+  test('closing restores focus to the trigger that opened it', async ({ page, browserName }) => {
+    // WebKit's default mode also does not focus a plain <button> on click
+    // (the same "Full Keyboard Access" preference gates both); the trigger
+    // never became `restoreTo` there, so there is nothing to restore to.
+    test.skip(browserName === 'webkit', 'WebKit does not focus a clicked <button> by default');
+    await open(page);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-convert-chip')).toBeFocused();
+  });
+});
+
