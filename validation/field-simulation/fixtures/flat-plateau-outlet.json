@@ -1,0 +1,7 @@
+{
+  "name": "flat-plateau-outlet",
+  "why": "A flat interior at one elevation, ringed by higher ground with one lower notch. Raw routing must not invent a direction across the flat: only the plateau cells with a direct or diagonal line of sight to the notch may route, and the rest must report unresolved.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [[5, 5, 3, 5, 5], [5, 4, 4, 4, 5], [5, 4, 4, 4, 5], [5, 4, 4, 4, 5], [5, 5, 5, 5, 5]]
+}
