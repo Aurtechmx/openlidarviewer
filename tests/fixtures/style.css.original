@@ -9970,6 +9970,14 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   cursor: crosshair;
 }
 
+/* Keyboard-focus affordance for the canvas's tabIndex=0 cursor path (arrow
+   keys move a cell cursor, Enter samples it) — the canvas has no visible
+   affordance otherwise once focus leaves the pointer. */
+.olv-range-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 .olv-range-marker {
   position: absolute;
   width: 11px;
