@@ -6,7 +6,7 @@
  * default of NumPy, R and Excel's PERCENTILE.INC — so every reported
  * percentile is reproducible against standard tools.
  *
- * WHY one shared helper. The v0.4.3 audit found THREE percentile
+ * WHY one shared helper. The v0.5.3 audit found THREE percentile
  * conventions coexisting: nearest-rank (`ceil(q·n)−1`) in holdoutRmse /
  * buildDsm / hillshade vs type-7 in rasterizeDtm / lassoVolume /
  * profileSampler. The two disagree by up to one order-statistic gap — a
