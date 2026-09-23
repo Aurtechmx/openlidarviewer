@@ -56,6 +56,65 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+export interface IconButtonProps {
+  /** The button's CSS class(es). */
+  className: string;
+  /**
+   * Plain-text glyph/label (escaped via `textContent`). Give exactly one of
+   * `text` or `unsafeHtml` — never both.
+   */
+  text?: string;
+  /** Trusted raw markup (an inline SVG glyph, optionally with a label span);
+   *  same "static text only, never user-derived" rule as `el()`'s own. */
+  unsafeHtml?: string;
+  /** Native hover tooltip. Optional — a couple of existing icon buttons
+   *  (e.g. the group fold toggle) carry only an accessible name, no title. */
+  title?: string;
+  /** Accessible name — required, unlike `el()`'s optional `ariaLabel`: an
+   *  icon-only action button has no text content to fall back to. */
+  ariaLabel: string;
+  /**
+   * Pass a boolean when this button reflects a persistent ON/OFF state (lock,
+   * solo, mute) so `aria-pressed` announces it, not just the `.is-active`
+   * class. Omit for a one-shot action (remove, rename, fold) that has no
+   * pressed state to report.
+   */
+  ariaPressed?: boolean;
+  /** Wired with `addEventListener('click', ...)`. */
+  onClick: () => void;
+  /** Initially disabled. */
+  disabled?: boolean;
+}
+
+/**
+ * A small icon-action button — glyph (or label text) + title + ariaLabel +
+ * `type="button"` + a click handler — the shape Inspector.ts, LayerGroupsPanel
+ * and ClassLegendPanel each hand-rolled independently (solo / lock / remove /
+ * fold / rename / pick). One constructor keeps that wiring, including
+ * `aria-pressed` for the toggle ones, from having to be applied in N places
+ * by hand.
+ */
+export function iconButton(props: IconButtonProps): HTMLButtonElement {
+  const btn = el('button', {
+    className: props.className,
+    type: 'button',
+    title: props.title,
+    ariaLabel: props.ariaLabel,
+    text: props.text,
+  });
+  // Assigned directly (matching `el()`'s own funnel shape) rather than
+  // through `el()`'s `unsafeHtml` prop, so the unsafeHtml static-analysis
+  // guard (tests/unsafeHtmlGuard.test.ts) still sees exactly one call-site
+  // shape to review per caller, not a second one forwarded through here.
+  if (props.unsafeHtml !== undefined) btn.innerHTML = props.unsafeHtml;
+  if (props.ariaPressed !== undefined) {
+    btn.setAttribute('aria-pressed', String(props.ariaPressed));
+  }
+  if (props.disabled) btn.disabled = true;
+  btn.addEventListener('click', props.onClick);
+  return btn;
+}
+
 /** Format a point count compactly: 4_200_000 → "4.2M", 1_100 → "1.1K". */
 export function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;

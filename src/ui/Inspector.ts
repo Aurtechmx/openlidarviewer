@@ -1,4 +1,4 @@
-import { el, formatCount } from './dom';
+import { el, iconButton, formatCount } from './dom';
 import {
   renderStreamingDetail,
   clearStreamingDetail,
@@ -1404,66 +1404,67 @@ export class Inspector {
     });
 
     // Isolate (solo): show only this layer. A second click clears isolate.
-    const solo = el('button', {
+    const solo = iconButton({
       className: 'olv-layer-solo',
       text: '◉',
       title: `Isolate ${name} — hide the other layers`,
       ariaLabel: `Isolate ${name}`,
+      onClick: () => this._cb.onToggleSolo?.(id),
     });
-    solo.addEventListener('click', () => this._cb.onToggleSolo?.(id));
 
     // Lock: keep the layer drawn but exclude it from picking / measuring.
-    const lock = el('button', {
+    // aria-pressed mirrors the class so the locked state is announced, not
+    // just shown by the glyph/title flip — the same pattern the workflow
+    // preset and scanType chips already use elsewhere in this file.
+    let locked = false;
+    const lock = iconButton({
       className: 'olv-layer-lock',
       text: '○',
       title: `Lock ${name} out of picking and measuring`,
       ariaLabel: `Lock ${name} out of picking`,
-    });
-    // aria-pressed mirrors the class so the locked state is announced, not
-    // just shown by the glyph/title flip — the same pattern the workflow
-    // preset and scanType chips already use elsewhere in this file.
-    lock.setAttribute('aria-pressed', 'false');
-    let locked = false;
-    lock.addEventListener('click', () => {
-      locked = !locked;
-      lock.classList.toggle('is-active', locked);
-      lock.textContent = locked ? '●' : '○';
-      lock.title = locked
-        ? `${name} is locked — unlock to pick / measure it`
-        : `Lock ${name} out of picking and measuring`;
-      lock.setAttribute('aria-label', locked ? `${name} is locked — unlock to pick or measure it` : `Lock ${name} out of picking`);
-      lock.setAttribute('aria-pressed', String(locked));
-      this._cb.onToggleLock?.(id, locked);
+      ariaPressed: false,
+      onClick: () => {
+        locked = !locked;
+        lock.classList.toggle('is-active', locked);
+        lock.textContent = locked ? '●' : '○';
+        lock.title = locked
+          ? `${name} is locked — unlock to pick / measure it`
+          : `Lock ${name} out of picking and measuring`;
+        lock.setAttribute('aria-label', locked ? `${name} is locked — unlock to pick or measure it` : `Lock ${name} out of picking`);
+        lock.setAttribute('aria-pressed', String(locked));
+        this._cb.onToggleLock?.(id, locked);
+      },
     });
 
-    const remove = el('button', {
+    const remove = iconButton({
       className: 'olv-layer-x',
       text: '×',
       title: `Remove ${name} from the scene`,
       ariaLabel: `Remove ${name}`,
-    });
-    remove.addEventListener('click', () => {
-      // Removing the LAST layer does more than remove a layer: `removeCloud` in
-      // main.ts falls through to `resetToEmptyState`, which clears placed
-      // measurements, saved views and annotations. Measurements do not survive
-      // that — `MeasureController.clear()` takes no snapshot, so there is no
-      // undo, unlike the annotation clear beside it. The tooltip promises only
-      // a removal from the scene, so the confirm states the rest. A removal
-      // that leaves another layer behind is not destructive and stays one click.
-      if (!removalClosesScan(this._layerRows.size)) {
-        this._cb.onRemove(id);
-        return;
-      }
-      void openConfirm({
-        title: 'Close this scan?',
-        message:
-          `Removing ${name} closes the scan.\n` +
-          'Placed measurements, saved views and annotations are cleared. Measurements cannot be restored.',
-        confirmLabel: 'Remove and close',
-        returnFocusTo: remove,
-      }).then((ok) => {
-        if (ok) this._cb.onRemove(id);
-      });
+      onClick: () => {
+        // Removing the LAST layer does more than remove a layer: `removeCloud`
+        // in main.ts falls through to `resetToEmptyState`, which clears placed
+        // measurements, saved views and annotations. Measurements do not
+        // survive that — `MeasureController.clear()` takes no snapshot, so
+        // there is no undo, unlike the annotation clear beside it. The
+        // tooltip promises only a removal from the scene, so the confirm
+        // states the rest. A removal that leaves another layer behind is not
+        // destructive and stays one click.
+        if (!removalClosesScan(this._layerRows.size)) {
+          this._cb.onRemove(id);
+          return;
+        }
+        void openConfirm({
+          title: 'Close this scan?',
+          message:
+            `Removing ${name} closes the scan.\n` +
+            'Placed measurements, saved views and annotations are cleared. Measurements cannot be restored.',
+          confirmLabel: 'Remove and close',
+          returnFocusTo: remove,
+        }).then((ok) => {
+          if (ok) this._cb.onRemove(id);
+        });
+      },
     });
 
     const crs = el('span', {

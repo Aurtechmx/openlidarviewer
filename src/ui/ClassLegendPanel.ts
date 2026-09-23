@@ -21,7 +21,7 @@
  * `mount()/show()/hide()`.
  */
 
-import { el } from './dom';
+import { el, iconButton } from './dom';
 import { announcePolite } from './politeAnnounce';
 import { ClassVisibility } from '../render/class/classVisibility';
 
@@ -573,18 +573,18 @@ export class ClassLegendPanel {
 
     // Solo — isolate this one class. ClassVisibility.isolate hides every other
     // code, so any later-arriving class stays hidden until the user shows all.
-    const solo = el('button', {
+    const solo = iconButton({
       className: 'olv-cl-solo olv-cl-solo-ico',
       unsafeHtml: ICON_SOLO + '<span class="olv-cl-solo-label">Solo</span>',
       title: soloUseful ? `Show only ${name}` : 'Only one class — nothing to isolate from',
       ariaLabel: `Show only ${name}`,
-    }) as HTMLButtonElement;
-    solo.disabled = !soloUseful;
-    solo.addEventListener('click', () => {
-      solo.blur();
-      this._visibility.isolate(code);
-      this._render();
-      this._emit();
+      disabled: !soloUseful,
+      onClick: () => {
+        solo.blur();
+        this._visibility.isolate(code);
+        this._render();
+        this._emit();
+      },
     });
 
     const check = el('input', {
