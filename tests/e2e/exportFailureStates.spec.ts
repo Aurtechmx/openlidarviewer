@@ -6,6 +6,10 @@ import { dropDenseGridPly, showWorkspaceMode, suppressOnboardingTour } from './h
  *
  * Visible-state coverage for the "exports" lane audit findings.
  *
+ *  - OUTPUT-F5: a point-cloud format button must disable itself for the
+ *    duration of its own click, so a rapid double-click cannot fire a second,
+ *    concurrent export — and the button releases again afterwards.
+ *
  *  - ANALYSIS-F3 / OUTPUT-F2: a Contour Studio export (DEM ZIP) that fails
  *    (a lazy chunk that cannot load — the same class of failure a stale
  *    deploy or a flaky connection produces) must flash a visible "Export
@@ -21,6 +25,37 @@ async function openAnalyse(page: Page): Promise<void> {
     await panel.locator('.olv-panel-head').click();
   }
 }
+
+test('a point-cloud format button disables itself for its own export and releases afterwards (OUTPUT-F5)', async ({
+  page,
+}) => {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await showWorkspaceMode(page, 'output');
+
+  const panel = page.locator('.olv-export-panel');
+  await expect(panel).toBeVisible({ timeout: 20_000 });
+  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
+    await panel.locator('.olv-panel-head').click();
+  }
+
+  const xyz = panel.locator('.olv-export-btn', { hasText: /^XYZ$/ });
+  await expect(xyz).toBeVisible();
+  await expect(xyz).toBeEnabled();
+
+  const downloadPromise = page.waitForEvent('download');
+  await xyz.click();
+  // Guards the literal rapid-double-click: disabled for its own run rather
+  // than staying clickable throughout, as it did before the fix.
+  await expect(xyz).toBeDisabled();
+
+  // The export itself still completes normally (the guard does not break the
+  // happy path) and the button releases once it settles.
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.xyz$/);
+  await expect(xyz).toBeEnabled({ timeout: 5_000 });
+});
 
 test('a failed Contour Studio DEM export flashes "Export failed" on the pressed button, then restores it (ANALYSIS-F3 / OUTPUT-F2)', async ({
   page,
