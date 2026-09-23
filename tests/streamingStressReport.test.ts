@@ -42,7 +42,7 @@ function tiersFromEnv(): StressTier[] {
 }
 
 const fmt = (n: number, d = 2): string => n.toFixed(d);
-const mb = (b: number): string => `${(b / (1024 * 1024)).toFixed(1)} MB`;
+const mb = (b: number): string => `${(b / (1024 * 1024)).toFixed(1)} MiB`;
 const pts = (n: number): string => n.toLocaleString('en-US');
 
 const tiers = tiersFromEnv();
