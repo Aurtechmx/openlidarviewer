@@ -78,6 +78,7 @@ export class ClipPanel {
         text: label,
         title: mode === 'keep-inside' ? 'Show only points inside the box' : 'Hide points inside the box',
       }) as HTMLButtonElement;
+      btn.setAttribute('aria-pressed', this._mode === mode ? 'true' : 'false');
       btn.addEventListener('click', () => this._setMode(mode));
       this._modeBtns.set(mode, btn);
       modeRow.append(btn);
@@ -104,6 +105,8 @@ export class ClipPanel {
     fit.addEventListener('click', () => this._fit());
 
     this._readout = el('p', { className: 'olv-export-fullres-hint', text: '' });
+    this._readout.setAttribute('role', 'status');
+    this._readout.setAttribute('aria-live', 'polite');
 
     const body = el('div', { className: 'olv-clip-body' }, [
       enableLabel,
@@ -164,7 +167,10 @@ export class ClipPanel {
     this._enabled = clip.enabled;
     this._enableBox.checked = clip.enabled;
     this._mode = clip.mode;
-    for (const [m, btn] of this._modeBtns) btn.classList.toggle('is-active', m === clip.mode);
+    for (const [m, btn] of this._modeBtns) {
+      btn.classList.toggle('is-active', m === clip.mode);
+      btn.setAttribute('aria-pressed', m === clip.mode ? 'true' : 'false');
+    }
     this._min = [clip.box.min[0], clip.box.min[1], clip.box.min[2]];
     this._max = [clip.box.max[0], clip.box.max[1], clip.box.max[2]];
     for (const { axis } of AXES) {
@@ -194,7 +200,10 @@ export class ClipPanel {
 
   private _setMode(mode: ClipMode): void {
     this._mode = mode;
-    for (const [m, btn] of this._modeBtns) btn.classList.toggle('is-active', m === mode);
+    for (const [m, btn] of this._modeBtns) {
+      btn.classList.toggle('is-active', m === mode);
+      btn.setAttribute('aria-pressed', m === mode ? 'true' : 'false');
+    }
     this._apply();
   }
 
