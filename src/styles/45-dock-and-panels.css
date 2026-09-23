@@ -303,8 +303,15 @@
 }
 .olv-toast-row { display: flex; align-items: center; gap: var(--space-md); }
 .olv-toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
-/* `pre-line` lets the multi-line preload summary break on its newlines. */
-.olv-toast-text { font-size: var(--text-sm); color: var(--text); white-space: pre-line; line-height: 1.5; flex: 1; }
+/* `pre-line` lets the multi-line preload summary break on its newlines;
+ * `overflow-wrap: anywhere` + `min-width: 0` matches every other long
+ * user-supplied string surface in the app (inspector, terrain-verdict,
+ * dataset-intel) so an unbroken filename wraps inside the card instead of
+ * pushing Cancel out past the toast's own edge. */
+.olv-toast-text {
+  font-size: var(--text-sm); color: var(--text); white-space: pre-line; line-height: 1.5;
+  flex: 1; min-width: 0; overflow-wrap: anywhere;
+}
 .olv-toast-cancel {
   flex: none; font-size: var(--text-xs); color: var(--text); opacity: 0.7;
   background: transparent; border: 0.5px solid var(--hairline);

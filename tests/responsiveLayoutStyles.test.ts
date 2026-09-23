@@ -91,3 +91,12 @@ describe('SWEEP-F1 — dock width at 768px', () => {
     expect(block).toMatch(/\.olv-dock\.olv-dock-more-open \.olv-tool-command\s*\{\s*display:\s*inline-flex/);
   });
 });
+
+// OVERLAYS-TOAST-1 / INTAKE-F5: the DropZone toast text overflow.
+describe('OVERLAYS-TOAST-1 / INTAKE-F5 — toast text wraps instead of overflowing', () => {
+  it('.olv-toast-text wraps an unbroken long filename and can shrink below content width', () => {
+    const rule = css('45-dock-and-panels.css').match(/\.olv-toast-text\s*\{[^}]*\}/s)?.[0] ?? '';
+    expect(rule).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule).toMatch(/min-width:\s*0/);
+  });
+});
