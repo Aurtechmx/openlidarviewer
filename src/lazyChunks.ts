@@ -660,3 +660,12 @@ export const loadToolLauncher = () => import('./ui/toolLauncher');
  * Opened only from the command palette, so neither rides the startup shell.
  */
 export const loadFlowPulseLab = () => import('./ui/fieldSimulation/flowPulseLab');
+
+/**
+ * The Flow Pulse export package builder (ASCII Grid writers + ZIP store +
+ * passport/manifest assembly). Only reached from an export action on the
+ * Field Simulation Lab's Flow Pulse view, so it rides its own lazy chunk
+ * rather than the Lab's own — a session that opens Flow Pulse but never
+ * exports never downloads the raster/passport assembly code.
+ */
+export const loadFlowPulsePackage = () => import('./export/flowPulsePackage');
