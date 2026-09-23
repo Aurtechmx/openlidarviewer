@@ -209,15 +209,16 @@ Physical multi-layer mounting ships enabled, unchanged from v0.6.9. Two
 georeferenced layers declaring the same projected CRS mount into one shared
 project frame at their real separation, non-destructively, and each boundary
 recovers the world coordinate in the frame it names. One item remains a
-precision refinement rather than a correctness defect: for far-apart mounts the
-renderer does not fold `renderOrigin` out on the CPU per mesh, so the Float32
-residual on the GPU is larger than it needs to be. The mount-precision gate
-refuses a placement whose Float32 step would pass 1 mm, which on a metre grid
-is a placed reach of 16,384 m or more. The display is slightly worse than that
-bound at its edge: a layer placed just under 16.4 km out draws with a worst-case
-error of about 1.5 mm. Analysis paths that store placed coordinates in Float32
-stay under 1 mm inside the gate. Picking and distance are computed in Float64
-and are exact, as are exports.
+precision refinement rather than a correctness defect. The renderer forms each
+mesh's model-view matrix on the CPU in float64, so display precision does not
+depend on placement distance: the matrix the GPU receives stays within 4 µm of
+the exact product at every offset tested, from 0 to 1,000 km, in each browser
+engine. The analysis paths that store placed coordinates, and the terrain
+gather, carry the placement in Float32. The mount-precision gate therefore still
+refuses a placement whose Float32 step would pass 1 mm, which on a metre grid is
+a placed reach of 16,384 m or more, and those paths stay under 1 mm inside the
+gate. Picking and distance are computed in Float64 and are exact, as are
+exports.
 
 ## No cross-CRS reprojection
 

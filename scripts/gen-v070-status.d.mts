@@ -31,3 +31,18 @@ export function readCurrentStatus(text?: string): CurrentStatus;
 
 /** The status document, derived entirely from the parsed ledger. */
 export function renderStatus(status: CurrentStatus): string;
+
+/** A summary-table row whose Status column disagrees with the entry's latest account. */
+export interface StaleSummaryRow {
+  readonly id: string;
+  /** The status the summary table shows. */
+  readonly table: string;
+  /** The latest account's status, or null when the ledger has no account of the id. */
+  readonly latest: string | null;
+}
+
+/** Rows of the table above the first entry heading that disagree with `latest`. */
+export function staleSummaryRows(
+  text: string,
+  latest: ReadonlyMap<string, LedgerAccount>,
+): StaleSummaryRow[];

@@ -82,6 +82,31 @@ export function readCurrentStatus(text = readFileSync(LEDGER, 'utf8')) {
   return { latest, revisited };
 }
 
+/** A summary-table row: `| L14 | AREA | REPRO | SEV | STATUS | WAS | Finding |`. */
+const SUMMARY_ROW = /^\| (L\d{2,3}) \| [^|]+ \| [^|]+ \| [^|]+ \| ([A-Z][A-Z ]*[A-Z]) \| [^|]+ \| .* \|$/gm;
+
+/**
+ * Summary-table rows whose Status column disagrees with the entry's latest
+ * account.
+ *
+ * The table at the ledger's head is kept by hand, and nothing compared it with
+ * the headings below it: six of its 49 rows still read OPEN after later
+ * accounts had moved them to FIXED, PARTIAL, MEASURED or NOT REPRODUCIBLE. It
+ * is read before anything else in the file, so a stale row is the first thing
+ * a reader believes. Only the table above the first entry heading is read.
+ */
+export function staleSummaryRows(text, latest) {
+  const firstHeading = text.search(/^### L\d+\b/m);
+  const table = firstHeading === -1 ? text : text.slice(0, firstHeading);
+  const stale = [];
+  for (const m of table.matchAll(SUMMARY_ROW)) {
+    const [, id, status] = m;
+    const current = latest.get(id)?.status ?? null;
+    if (current !== status) stale.push({ id, table: status, latest: current });
+  }
+  return stale;
+}
+
 /** The document, derived entirely from the ledger. */
 export function renderStatus({ latest, revisited }) {
   const ids = [...latest.keys()].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
@@ -145,6 +170,19 @@ function main() {
       process.exit(1);
     }
     const { latest } = readCurrentStatus();
+    const stale = staleSummaryRows(readFileSync(LEDGER, 'utf8'), latest);
+    if (stale.length > 0) {
+      console.error('lint:v070-status FAILED');
+      console.error('');
+      for (const { id, table, latest: now } of stale) {
+        console.error(now === null
+          ? `  • ${id}: the ledger's summary table reads ${table}, and the ledger has no account of it.`
+          : `  • ${id}: the ledger's summary table reads ${table}; its latest account reads ${now}.`);
+      }
+      console.error('');
+      console.error('Update those rows in V070_IMPLEMENTATION_LEDGER.md to the latest account.');
+      process.exit(1);
+    }
     console.log(`lint:v070-status OK — ${latest.size} entries, current status derived from the ledger.`);
   } else {
     writeFileSync(OUT, wanted);
