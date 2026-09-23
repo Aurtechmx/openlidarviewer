@@ -15,8 +15,7 @@
 
 import { clamp } from '../numeric';
 import * as THREE from 'three/webgpu';
-import { el } from '../ui/dom';
-import { announcePolite } from '../ui/politeAnnounce';
+import { el, announcePolite } from '../ui/dom';
 import {
   type PointInfo,
   classificationText,

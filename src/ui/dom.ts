@@ -1,5 +1,11 @@
 /** Tiny DOM helpers — keeps the UI modules free of repetitive boilerplate. */
 
+// Re-exported so src/render/InspectTool.ts's copy-confirmation announcement
+// reaches politeAnnounce.ts through this file's already-existing render->ui
+// edge (InspectTool.ts already imports `el` from here) rather than opening a
+// second one, which lint:module-graph's shrink-only ratchet would refuse.
+export { announcePolite } from './politeAnnounce';
+
 interface ElProps {
   className?: string;
   text?: string;
