@@ -16,11 +16,26 @@
  * so the figure never implies a completeness it doesn't have.
  */
 
-import type { Viewer } from '../Viewer';
 import type { StreamingPanel } from '../../ui/StreamingPanel';
+import type { StreamingSource } from './StreamingSource';
+import type { ChunkDecoder } from '../../io/copc/copcChunkDecode';
 import { gradeFullCloud } from './fullCloudGradeAdapter';
 import { gradeSampleDensity, summarizeSampleGrade } from './sampleGrade';
 import { verticalMetresPerUnit, type SpatialContext } from '../../geo/SpatialContext';
+
+/**
+ * The narrow slice of the Viewer this action reads — the active streaming
+ * source and the chunk decoder driving it. Declared structurally, like
+ * `StreamingHost` (streamingAttach.ts) and `StreamingRendererHost`
+ * (StreamingRenderer.ts), so this module carries no dependency on the
+ * concrete `Viewer` class: the unit tests build it from a plain object, and
+ * `Viewer` satisfies it through its own `streamingCloud` / `streamingDecoder`
+ * getters without a cast.
+ */
+export interface GradeActionHost {
+  readonly streamingCloud: StreamingSource | null;
+  readonly streamingDecoder: ChunkDecoder | null;
+}
 
 /**
  * Decode + grade the active streaming cloud's full extent and render the result
@@ -28,7 +43,7 @@ import { verticalMetresPerUnit, type SpatialContext } from '../../geo/SpatialCon
  * surfaces any decode failure as a panel error rather than throwing.
  */
 export async function runFullCloudGrade(deps: {
-  readonly viewer: Viewer;
+  readonly viewer: GradeActionHost;
   readonly panel: StreamingPanel;
   readonly signal?: AbortSignal;
   readonly debug?: boolean;
