@@ -8724,6 +8724,11 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   color: var(--text-dim); background: rgba(255, 255, 255, 0.03);
   border: none; border-right: 0.5px solid var(--hairline);
   padding: var(--space-xs) var(--space-2xs); cursor: pointer; white-space: nowrap;
+  /* The composed "Auto (Interior)" label can exceed this segment's share of
+     the panel's fixed 232px width; clip with an ellipsis rather than a bare
+     mid-word cut, so a truncated label at least reads as truncated. The full
+     text stays reachable via the title tooltip set in scanTypeControl.ts. */
+  overflow: hidden; text-overflow: ellipsis;
   transition: color var(--dur-fast) var(--ease-standard),
     background var(--dur-fast) var(--ease-standard);
 }

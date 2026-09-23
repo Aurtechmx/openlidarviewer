@@ -100,3 +100,12 @@ describe('OVERLAYS-TOAST-1 / INTAKE-F5 — toast text wraps instead of overflowi
     expect(rule).toMatch(/min-width:\s*0/);
   });
 });
+
+// INSPECT-INSP-2: the auto-detected scan-type label mid-word clip.
+describe('INSPECT-INSP-2 — scan-type segment label truncation', () => {
+  it('.olv-scan-type-opt clips with an ellipsis rather than a bare mid-word cut', () => {
+    const rule = css('94-scan-type.css').match(/\.olv-scan-type-opt\s*\{[^}]*\}/s)?.[0] ?? '';
+    expect(rule).toMatch(/overflow:\s*hidden/);
+    expect(rule).toMatch(/text-overflow:\s*ellipsis/);
+  });
+});
