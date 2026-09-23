@@ -298,6 +298,7 @@
 .olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-inspector::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-ws-body::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar {
@@ -314,6 +315,7 @@
 .olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-track,
 .olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-track,
 .olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-ws-body::-webkit-scrollbar-track,
 .olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-track,
 .olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-track,
 .olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-track {
@@ -329,6 +331,7 @@
 .olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-thumb,
 .olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-thumb,
 .olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-ws-body::-webkit-scrollbar-thumb,
 .olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-thumb,
 .olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-thumb,
 .olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-thumb {
@@ -350,6 +353,7 @@
 .olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-thumb:hover,
 .olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-thumb:hover,
 .olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-ws-body::-webkit-scrollbar-thumb:hover,
 .olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-thumb:hover,
 .olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-thumb:hover,
 .olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-thumb:hover {
@@ -367,6 +371,7 @@
 .olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-corner,
 .olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-corner,
 .olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-ws-body::-webkit-scrollbar-corner,
 .olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-corner,
 .olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-corner,
 .olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-corner {

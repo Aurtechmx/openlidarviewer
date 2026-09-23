@@ -109,3 +109,14 @@ describe('INSPECT-INSP-2 — scan-type segment label truncation', () => {
     expect(rule).toMatch(/text-overflow:\s*ellipsis/);
   });
 });
+
+// SHELL-F6: the classic-scrollbar selector-list omission.
+describe('SHELL-F6 — .olv-ws-body joins the classic-scrollbar lists', () => {
+  it('appears in all five .olv-classic-scrollbars ...::-webkit-scrollbar* lists', () => {
+    const text = css('72-panel-rails.css');
+    for (const suffix of ['', '-track', '-thumb', '-thumb:hover', '-corner']) {
+      const needle = `.olv-classic-scrollbars .olv-ws-body::-webkit-scrollbar${suffix}`;
+      expect(text.includes(needle), `missing: ${needle}`).toBe(true);
+    }
+  });
+});
