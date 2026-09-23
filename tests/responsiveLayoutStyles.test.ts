@@ -54,3 +54,12 @@ describe('SHELL-F1 — Open-from-URL row at 320px', () => {
     expect(css('30-empty-state.css')).toMatch(/\.olv-empty\s*\{[^}]*overflow-x:\s*hidden/s);
   });
 });
+
+// SHELL-F2: the coordinate HUD painted over by the tool dock.
+describe('SHELL-F2 — coordinate HUD vs tool dock stacking', () => {
+  it('the HUD z-index sits above the dock, not below it', () => {
+    const rule = css('40-inspector.css').match(/\.olv-coordinate-hud\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(rule).toMatch(/z-index:\s*calc\(var\(--z-dock\)\s*\+\s*1\)/);
+    expect(rule).toMatch(/pointer-events:\s*none/);
+  });
+});

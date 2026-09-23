@@ -559,7 +559,11 @@
    the cursor while the probe is active. Fixed bottom-left, out of the panels. */
 .olv-coordinate-hud {
   position: absolute; left: var(--space-sm); bottom: var(--space-sm);
-  z-index: var(--z-hud-readout); pointer-events: none;
+  /* Shares the bottom-left corner with the tool dock (z-dock=20), which paints
+     over the readout's CRS/status footer at every desktop width. The HUD is
+     pointer-events:none, so sitting above the dock costs no clicks — the
+     dock's own buttons keep receiving them straight through it. */
+  z-index: calc(var(--z-dock) + 1); pointer-events: none;
   display: flex; flex-direction: column; gap: 2px;
   padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-xs); font-variant-numeric: tabular-nums;
