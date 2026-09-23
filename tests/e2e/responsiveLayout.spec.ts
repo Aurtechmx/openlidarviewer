@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { dropTinyLas } from './helpers';
 
 /**
@@ -154,5 +156,64 @@ test.describe('responsive layout — no overflow, no clipped controls', () => {
       await waitForLayoutStable(page);
       await assertNoOverflowOrClipping(page, `tour open @ ${width}px`);
     }
+  });
+});
+
+test.describe('responsive layout — findings the generic sweep cannot trigger', () => {
+  // OVERLAYS-TOAST-1 / INTAKE-F5: the DropZone toast's Cancel control ran
+  // past the card edge on an unbroken long filename. `dropTinyLas` (used by
+  // the sweep above) drops `tiny.las` — 8 characters, nowhere near the
+  // ~50-90+ char threshold that actually triggers the overflow — so this
+  // gets its own drop with a synthesised long name.
+  test('the DropZone toast wraps an unbroken long filename instead of pushing Cancel off the card', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: HEIGHT });
+    await page.goto('/');
+    await expect(page.locator('.olv-empty-title')).toBeVisible();
+
+    const bytes = readFileSync(
+      fileURLToPath(new URL('../../public/samples/tiny.las', import.meta.url)),
+    );
+    // 90 unbroken characters, no delimiters — matches the fix's own
+    // reproduction threshold.
+    const longName = `${'a'.repeat(90)}.las`;
+
+    // Drop and read the toast in ONE evaluate call: `DropZone.setOpening`
+    // runs synchronously, before openScan's first await, so reading in the
+    // same task as the dispatch guarantees nothing has superseded the
+    // "Opening <name>…" toast yet — no `waitForTimeout` race to get right.
+    const measured = await page.evaluate(
+      ({ bytes: raw, name }) => {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(new File([new Uint8Array(raw)], name));
+        document.body.dispatchEvent(
+          new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }),
+        );
+        const toast = document.querySelector('.olv-toast') as HTMLElement;
+        const text = document.querySelector('.olv-toast-text') as HTMLElement;
+        const cancel = document.querySelector('.olv-toast-cancel') as HTMLElement;
+        return {
+          toastText: text.textContent ?? '',
+          toastRight: toast.getBoundingClientRect().right,
+          textScrollWidth: text.scrollWidth,
+          textClientWidth: text.clientWidth,
+          cancelRight: cancel.getBoundingClientRect().right,
+        };
+      },
+      { bytes: [...bytes], name: longName },
+    );
+
+    expect(measured.toastText, 'the toast never showed the dropped filename').toContain(longName);
+    // Wrapping keeps the text's own scrollWidth at or below its clientWidth;
+    // an unbroken word that cannot wrap instead forces scrollWidth wider.
+    expect(
+      measured.textScrollWidth,
+      `the filename forced the text ${measured.textScrollWidth}px wide, wider than its ${measured.textClientWidth}px box, instead of wrapping`,
+    ).toBeLessThanOrEqual(measured.textClientWidth + 1);
+    expect(
+      measured.cancelRight,
+      `Cancel (right=${measured.cancelRight}) ran past the toast card (right=${measured.toastRight})`,
+    ).toBeLessThanOrEqual(measured.toastRight + 1);
   });
 });
