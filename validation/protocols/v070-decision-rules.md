@@ -103,3 +103,30 @@ against 31.9% for cut and fill.
 Outcome under D2 clause 1: the area grid becomes the canonical stored figure
 for the lasso record. The conclusion depends on the per run reading, and
 this amendment says so rather than presenting it as settled in advance.
+
+## Amendment 2 to D1, recorded after O2 was built
+
+D1's approval condition 1 asks that the sidecar be absent or empty for a
+single-station load. O2 records a one-entry sidecar when a file declares one
+station: a single PTX block, a single E57 scan, or an organized PCD file with a
+VIEWPOINT line. Sources with no declared station leave it absent: LAS, LAZ,
+unorganized PCD, and organized PCD without a VIEWPOINT.
+
+The clause conflicts with what the rest of D1 protects. Before O2, an E57
+scan's declared pose was applied to the points and then discarded: structured
+or not, nothing on the loaded cloud kept it. PTX blocks and organized PCD keep
+a pose on their organized frame. An absent sidecar would leave a single-scan
+E57 with no station pose, so the ray builder (OB-RAY-02) and the per-station
+rejection test (OB-LED-02) could not run on it, and both would need a
+per-format fallback for one station beside the sidecar for several.
+
+Condition 1 now reads: a single-station load keeps every existing
+`PointCloud` field and byte, allocates nothing per record, and may carry a
+one-entry sidecar holding the station's declared pose. The refusal clause is
+unchanged, and neither of its triggers fires: the existing fields are
+byte-identical against the pinned single-block and single-scan fixtures, and
+no per-record index exists for any source.
+
+This amendment was written after the implementation and its review had been
+read. It changes a pre-registered condition, and says so here rather than
+reading the original wording as having meant this.
