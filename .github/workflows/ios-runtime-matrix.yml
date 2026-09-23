@@ -71,6 +71,11 @@ on:
         description: Device name to report to ios-touch-check.mjs (OLV_SIM_DEVICE)
         required: false
         default: ''
+      skip_sweep:
+        description: Skip the render sweep job, for a touch-check-only dispatch
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -79,6 +84,9 @@ jobs:
   sweep:
     name: ${{ matrix.image }}
     runs-on: ${{ matrix.image }}
+    # Lets a dispatch that only wants `touch-check` skip the five-image sweep
+    # instead of paying for it on every run.
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_sweep) }}
     # A brand-new leg over runner images this repository has never asked
     # anything of before; a red job here is a research result, not a
     # regression, and nothing depends on this workflow to pass.
@@ -195,11 +203,34 @@ jobs:
   # on macos-latest) also pass there? `simctl create` pins the exact runtime
   # rather than trusting whatever `pick-ios-simulator.mjs` finds already
   # booted, since the whole point is testing ONE named runtime.
+  #
+  # PREBUILT WDA, PINNED TO A FIXED DERIVED DATA PATH. A first run of this job
+  # (macos-26-intel / iOS 26.5) built WebDriverAgent here with `xcodebuild
+  # build-for-testing` at its default (hashed) derived data path, same as
+  # `ios-simulator.yml`, then let Appium's own session start invoke
+  # `xcodebuild build-for-testing test-without-building` again with different
+  # command-line build settings (`IPHONEOS_DEPLOYMENT_TARGET`,
+  # `APPIUM_XCODEBUILD_WDA_MARKER`). That settings mismatch invalidated the
+  # cache and forced a real recompile (116 CompileC/CompileSwift lines in
+  # appium.log) inside the session itself, and after it finally printed
+  # `** TEST BUILD SUCCEEDED **` the launch that should follow produced no
+  # further output at all before the job's timeout killed everything —
+  # Appium's HTTP server included, which is why the script saw a bare "socket
+  # hang up" instead of a real error. Pinning `-derivedDataPath` here and
+  # passing `usePrebuiltWDA`/`derivedDataPath` to the session (below, via
+  # `OLV_WDA_DERIVED_DATA`) makes Appium reuse this build outright instead of
+  # re-invoking xcodebuild with different settings.
   touch-check:
     name: Touch check on a picked runtime
     if: github.event_name == 'workflow_dispatch' && inputs.touch_check_runtime_id != ''
     runs-on: ${{ inputs.touch_check_image }}
-    timeout-minutes: 45
+    # 45m was tight enough that the one run this had cost it a clean error:
+    # the WDA rebuild it triggered (see above) was still running when the job
+    # was killed. 60m gives a launch that is merely slow, rather than hung,
+    # room to finish and gives a stuck one room to report its own timeout.
+    timeout-minutes: 60
+    env:
+      OLV_WDA_DERIVED_DATA: ${{ github.workspace }}/wda-derived-data
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -212,6 +243,7 @@ jobs:
           xcode-select -p
           xcodebuild -version
           xcrun simctl list runtimes
+          xcrun simctl list devices available
 
       - run: npm ci --ignore-scripts
 
@@ -267,6 +299,7 @@ jobs:
             -project "$WDA/WebDriverAgent.xcodeproj" \
             -scheme WebDriverAgentRunner \
             -destination "id=$UDID" \
+            -derivedDataPath "$OLV_WDA_DERIVED_DATA" \
             GCC_TREAT_WARNINGS_AS_ERRORS=0 COMPILER_INDEX_STORE_ENABLE=NO \
             | tail -20
 
