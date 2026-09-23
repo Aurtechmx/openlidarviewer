@@ -83,6 +83,59 @@ export function trapTab(dialog: HTMLElement, e: KeyboardEvent): void {
   }
 }
 
+export interface DialogA11yOptions {
+  /** Called when Escape is pressed while the dialog is wired. */
+  readonly onEscape: () => void;
+  /** Element to restore focus to on teardown; defaults to the active element at wire time. */
+  readonly returnFocusTo?: HTMLElement | null;
+}
+
+export interface DialogA11yHandle {
+  /** The element focus will be restored to on teardown, if still in the document. */
+  readonly restoreTo: HTMLElement | null;
+  /** Stop listening for Escape/Tab and restore focus. Idempotent. */
+  teardown(): void;
+}
+
+/**
+ * Give a hand-rolled dialog (one that doesn't go through `openModal`) the same
+ * Escape-anywhere + Tab-trap + focus-restore behaviour as the modal primitive,
+ * without duplicating the wiring. Installs a window-level, capture-phase
+ * keydown listener so Escape and Tab work even once focus has left the
+ * dialog (the failure mode a per-element listener cannot catch), and records
+ * the previously-focused element to restore on `teardown()`.
+ *
+ * The caller still owns opening/closing and initial focus; call `teardown()`
+ * from the dialog's own `close()`.
+ */
+export function wireDialogA11y(dialog: HTMLElement, opts: DialogA11yOptions): DialogA11yHandle {
+  const restoreTo =
+    opts.returnFocusTo ??
+    (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+
+  let torn = false;
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      e.preventDefault();
+      opts.onEscape();
+      return;
+    }
+    trapTab(dialog, e);
+  };
+  window.addEventListener('keydown', onKeyDown, true);
+
+  return {
+    restoreTo,
+    teardown(): void {
+      if (torn) return;
+      torn = true;
+      window.removeEventListener('keydown', onKeyDown, true);
+      if (restoreTo && document.contains(restoreTo)) restoreTo.focus();
+    },
+  };
+}
+
 let modalSeq = 0;
 
 /**
