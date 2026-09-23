@@ -55,6 +55,13 @@ export class FakeEl {
     };
   }
 
+  /** DOM's `Node.contains`: true for itself or any descendant, recursively. */
+  contains(node: unknown): boolean {
+    if (node === this) return true;
+    for (const c of this.children) if (c.contains(node)) return true;
+    return false;
+  }
+
   get lastElementChild(): FakeEl | null {
     for (let i = this.children.length - 1; i >= 0; i--) {
       if (this.children[i].tagName !== '#text') return this.children[i];

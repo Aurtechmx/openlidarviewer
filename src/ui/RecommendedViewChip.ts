@@ -22,6 +22,12 @@ export class RecommendedViewChip {
   private readonly _label: HTMLElement;
   private _onApply: (() => void) | null = null;
   private _timer: number | null = null;
+  /** True while a hover or a focus inside the chip is suppressing the timer. */
+  private _suppressed = false;
+  /** The element focused right before `show()`, restored to on hide if the
+   *  chip held focus at that point — the same opener-restore idea Modal.ts's
+   *  `openModal` uses for dialogs, applied here without a focus trap. */
+  private _returnFocusTo: HTMLElement | null = null;
 
   constructor() {
     this._label = el('span', { className: 'olv-rvc-label' });
@@ -43,6 +49,24 @@ export class RecommendedViewChip {
 
     this.element = el('div', { className: 'olv-rvc olv-hidden' }, [apply, dismiss]);
     this.element.setAttribute('role', 'status');
+
+    // Pause the auto-hide timer while hovered or focused (WCAG 2.2.1
+    // timing-adjustable): a keyboard user reading the reason tooltip or just
+    // deciding must not have the chip vanish, and drop their focus, under
+    // them. `mouseenter`/`mouseleave` fire on the element they are bound to
+    // for the whole hit region including its children, so one listener each
+    // covers both buttons without needing per-button wiring; `focusin` /
+    // `focusout` bubble, so the same is true for keyboard focus.
+    this.element.addEventListener('mouseenter', () => this._pause());
+    this.element.addEventListener('mouseleave', () => this._resume());
+    this.element.addEventListener('focusin', () => this._pause());
+    this.element.addEventListener('focusout', (e) => {
+      const next = (e as FocusEvent).relatedTarget;
+      // Moving focus between the chip's own Apply/Dismiss buttons is not
+      // leaving the chip — only resume once focus is actually outside it.
+      if (next instanceof Node && this.element.contains(next)) return;
+      this._resume();
+    });
   }
 
   /** Show the chip for a recommendation; `onApply` fires when the user accepts. */
@@ -50,14 +74,28 @@ export class RecommendedViewChip {
     this._onApply = onApply;
     this._label.textContent = `Recommended: ${CAMERA_PRESET_LABEL[rec.preset]} view`;
     this.element.title = rec.reason;
+    this._returnFocusTo =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.element.classList.remove('olv-hidden');
     this._arm();
   }
 
-  /** Hide the chip and cancel the auto-hide timer. */
+  /**
+   * Hide the chip and cancel the auto-hide timer. If focus is currently
+   * inside the chip (its buttons are about to leave the accessibility tree),
+   * move it back to whatever held focus before the chip appeared rather than
+   * letting it silently fall to `<body>` with no relocation.
+   */
   hide(): void {
     this._clearTimer();
+    this._suppressed = false;
+    const hadFocus = this.element.contains(document.activeElement);
     this.element.classList.add('olv-hidden');
+    if (hadFocus) {
+      const target = this._returnFocusTo;
+      if (target && document.contains(target)) target.focus();
+    }
+    this._returnFocusTo = null;
   }
 
   private _apply(): void {
@@ -65,8 +103,22 @@ export class RecommendedViewChip {
     this.hide();
   }
 
+  /** Suppress the auto-hide timer — a hover or a focus is holding the chip up. */
+  private _pause(): void {
+    this._suppressed = true;
+    this._clearTimer();
+  }
+
+  /** Resume the auto-hide timer once nothing is hovering or focusing the chip. */
+  private _resume(): void {
+    this._suppressed = false;
+    if (this.element.classList.contains('olv-hidden')) return;
+    this._arm();
+  }
+
   private _arm(): void {
     this._clearTimer();
+    if (this._suppressed) return;
     this._timer = window.setTimeout(() => this.hide(), AUTO_HIDE_MS);
   }
 
