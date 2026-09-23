@@ -343,6 +343,13 @@ function chunkEmissionGuard() {
     'src/ui/MeasurePanel.ts',
     'src/render/measure/profileSummary.ts',
     'src/render/measure/profileSampler.ts',
+    // Session-restore orchestration (v0.7 shell headroom) — lazy-mounted on
+    // the first `.olvsession` file the shell actually sees, via
+    // `loadSessionIo()`. No scan needs any of it before a session file is
+    // offered. `scanFactsFromStatic`/`scanFactsFromStreaming` moved out to
+    // `src/app/scanFacts.ts` (deliberately eager: the hot scan-open path in
+    // `openScan.ts` calls `scanFactsFromStatic` synchronously on every load).
+    'src/app/sessionIo.ts',
   ];
 
   return {

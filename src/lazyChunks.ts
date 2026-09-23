@@ -438,6 +438,19 @@ export const loadFloorPlanConfidence = () =>
 export const loadFullCloudGradeAction = () =>
   import('./render/streaming/runFullCloudGradeAction');
 export const loadSession = () => import('./io/session');
+
+/**
+ * Load the session-restore orchestration (`importSession` — parse, verify,
+ * rebase, apply) on the first `.olvsession` file the shell actually sees
+ * (drop, Open picker, or "Apply anyway"), never in the initial shell (v0.7
+ * shell-headroom). The `ScanFacts` adapter it used to carry inline is now
+ * `./app/scanFacts`, imported eagerly by `openScan.ts`'s hot scan-open path;
+ * this module is everything else — the apply step and its own further-lazy
+ * chunks (`loadSessionOwnership`, `loadVerifySessionManifest`) — and no scan
+ * needs any of it before a session file is actually offered. `main.ts` binds
+ * its running state through `SessionIoDeps` once this resolves.
+ */
+export const loadSessionIo = () => import('./app/sessionIo');
 export const loadCompareEpochs = () => import('./terrain/change/compareEpochs');
 export const loadAlignEpochs = () => import('./terrain/change/alignEpochs');
 export const loadCompareDtms = () => import('./terrain/change/compareDtms');

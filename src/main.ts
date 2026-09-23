@@ -43,7 +43,7 @@ import type { TourHandle } from './ui/onboarding/bootTour';
 import { createTourLauncher } from './app/tourLauncher';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { toggleTool } from './app/toggleTool';
-import { importSession as runImportSession, type SessionIoDeps } from './app/sessionIo';
+import type { SessionIoDeps } from './app/sessionIo';
 import { openScan, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
@@ -242,7 +242,7 @@ import {
   loadTilesetOpen,
   loadActionRegistry,
   loadToolLauncher,
-  loadStockpilePresenter,
+  loadStockpilePresenter, loadSessionIo,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -4186,8 +4186,8 @@ const sessionIoDeps: SessionIoDeps = {
   setDropError: (message) => dropZone.setError(message),
 };
 
-function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Promise<void> {
-  return runImportSession(file, opts, sessionIoDeps);
+async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Promise<void> {
+  return (await loadSessionIo()).importSession(file, opts, sessionIoDeps);
 }
 
 /**

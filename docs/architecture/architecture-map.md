@@ -161,11 +161,14 @@ pre-warm on a capable connection and from every scan-open path, so the
 existing Save-Data guard on the pre-warm decides, and the key dispatcher's
 teardown is registered with the stage instead of discarded.
 
-Done: `importSession` (~208 lines) now lives in `src/app/sessionIo.ts`, called with a
-`SessionIoDeps` object of ~16 accessors the shell binds to its own state. The pure
-cloud→fingerprint adapter (`scanFactsFromStreaming` / `scanFactsFromStatic`) is
-exported and Node-tested, and the parse/verify/rebase halves it leans on already
-lived in `src/io/session.ts`; `main.ts` keeps a thin caller (`tests/sessionIo.test.ts`).
+Done: `importSession` (~208 lines) lives in `src/app/sessionIo.ts`, called with a
+`SessionIoDeps` object of ~16 accessors the shell binds to its own state, and
+lazy-loaded from `main.ts` on the first `.olvsession` file (v0.7 shell headroom).
+The pure cloud→fingerprint adapter (`scanFactsFromStreaming` / `scanFactsFromStatic`)
+moved to `src/app/scanFacts.ts` — re-exported unchanged off `sessionIo.ts` — because
+`openScan.ts` calls it synchronously on every scan load and must stay eager; the
+parse/verify/rebase halves it leans on already lived in `src/io/session.ts`
+(`tests/sessionIo.test.ts`).
 
 Done: `handleFile` (~336 lines) — the open/load pipeline — now lives in
 `src/app/openScan.ts` as `openScan(file, deps)`, driven through an `OpenScanDeps`
