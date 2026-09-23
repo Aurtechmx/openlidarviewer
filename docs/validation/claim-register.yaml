@@ -1130,7 +1130,7 @@ claims:
       unsupported:
         - "Any cross-implementation check. The value is an index into OLV's own record stream, which no other tool holds, so no second implementation can agree or disagree with it. This is a permanent ceiling and not a pending slot."
         - "The stride linkage state. `partial` with reason `stride` is defined in the model and exercised only through a hand-built frame; no decode path in the tree produces it today, so nothing here says how a strided decode would behave."
-        - "E57. The reader records what a structured scan declares and decodes no row or column column, so no E57 file produces a frame and no identity is claimed for one."
+        - "E57's structured grid beyond the synthetic pump-style fixtures in tests/e57StructuredRange.test.ts. It resolves the same identity model as PTX and PCD once decoded, but carries no cross-implementation check of its own."
         - "Real scanner files. Every fixture behind this claim is constructed in the test."
     scopeNote: "The rule under test is identity, not position: `recordForCell` answers with a record only when the loader recorded which record the cell produced, and answers with a reason in every other case, including a cell outside the grid, a cell in a non-valid state and a frame whose linkage is unavailable. `withLinkageUnavailable` overwrites the index arrays rather than leaving them for a direct reader, and the tests assert both the erasure and the survival of the topology beside it."
 
