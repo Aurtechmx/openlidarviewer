@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 const css = (name: string): string => readFileSync(`src/styles/${name}`, 'utf8');
+const src = (path: string): string => readFileSync(path, 'utf8');
 
 /**
  * The `@media (max-width: 480px) { ... }` block in 83-mobile-audit.css that
@@ -61,5 +62,22 @@ describe('SHELL-F2 — coordinate HUD vs tool dock stacking', () => {
     const rule = css('40-inspector.css').match(/\.olv-coordinate-hud\s*\{[^}]*\}/)?.[0] ?? '';
     expect(rule).toMatch(/z-index:\s*calc\(var\(--z-dock\)\s*\+\s*1\)/);
     expect(rule).toMatch(/pointer-events:\s*none/);
+  });
+});
+
+// OVERLAYS-TOUR-1: the onboarding tour card at 320-375px.
+describe('OVERLAYS-TOUR-1 — tour card width at phone widths', () => {
+  it('.olv-tour-card is responsive, not a fixed 360px', () => {
+    const rule = css('78-shortcuts-recorder-tour.css').match(/\.olv-tour-card\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(rule).toMatch(/width:\s*min\(360px,\s*calc\(100vw - 32px\)\)/);
+    expect(rule).not.toMatch(/width:\s*360px;/);
+  });
+  it('TourOverlay.ts computes cardW the same way, not a bare 360 literal', () => {
+    const text = src('src/ui/onboarding/TourOverlay.ts');
+    expect(text).toMatch(/const cardW = Math\.min\(360, vw - 32\)/);
+    // Both placement branches (no-target centring, and the target-relative
+    // clamp) must read the computed cardW, not a re-hardcoded 360.
+    expect(text).not.toMatch(/\(vw - 360\) \/ 2/);
+    expect(text).not.toMatch(/const cardW = 360;/);
   });
 });

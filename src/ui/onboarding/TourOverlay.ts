@@ -251,6 +251,10 @@ export class TourOverlay {
   private _positionSpotlightAndCard(step: TourStep): void {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    // Mirrors the CSS `width: min(360px, calc(100vw - 32px))` on
+    // .olv-tour-card, so the JS placement math never disagrees with the
+    // rendered width on a narrow (320-375px) phone viewport.
+    const cardW = Math.min(360, vw - 32);
     let target: DOMRect | null = null;
     if (step.target) {
       const node = document.querySelector<HTMLElement>(step.target);
@@ -270,7 +274,7 @@ export class TourOverlay {
       this._spotlight.setAttribute('y', '0');
       this._spotlight.setAttribute('width', '0');
       this._spotlight.setAttribute('height', '0');
-      this._card.style.left = `${Math.round((vw - 360) / 2)}px`;
+      this._card.style.left = `${Math.round((vw - cardW) / 2)}px`;
       this._card.style.top = `${Math.round((vh - 200) / 2)}px`;
       this._card.classList.remove('olv-hidden');
       return;
@@ -290,7 +294,6 @@ export class TourOverlay {
     // Card placement — keep it inside the viewport, prefer the
     // requested side, fall back to the opposite when there isn't
     // room.
-    const cardW = 360;
     const cardH = 200;
     const gap = 16;
     let cx = sx + sw / 2 - cardW / 2;
