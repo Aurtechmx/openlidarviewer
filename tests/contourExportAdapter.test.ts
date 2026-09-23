@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { ContourExportAdapter, type ContourExportHost } from '../src/ui/contourExportAdapter';
+import { POLITE_REGION_SELECTOR } from '../src/ui/politeAnnounce';
 import type { ContourExportIntent } from '../src/terrain/contourStudio/contourExportIntent';
 import type { ContourExportFrameFacts, ContourExportPermit } from '../src/export/contourExportPermit';
 
@@ -312,6 +313,47 @@ describe('ContourExportAdapter — gated dispatch', () => {
     vi.runAllTimers();
     expect(b.textContent).toBe('Export');
     expect(b.disabled).toBe(false);
+    vi.useRealTimers();
+    consoleErr.mockRestore();
+  });
+
+  it('announces the "Export failed" flash through the app\'s polite live region, not the button alone', async () => {
+    // A sighted user watching the button sees the flash; a screen-reader user
+    // whose focus is elsewhere (still reviewing the Studio's product picker,
+    // say) hears nothing from a plain textContent/disabled mutation. This
+    // proves the failure reaches the SAME region every other async failure in
+    // this app announces through (politeAnnounce.ts), not a bespoke node.
+    vi.useFakeTimers();
+    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { host } = fakeHost();
+    const region = { textContent: 'stale' };
+    const b = {
+      ...btn(),
+      ownerDocument: { querySelector: (s: string) => (s === POLITE_REGION_SELECTOR ? region : null) },
+    } as unknown as HTMLButtonElement;
+    const failing: ContourExportHost = { ...host, exportVector: async () => { throw new Error('chunk load failed'); } };
+    new ContourExportAdapter(failing).handle('geojson', b, intent(), okFrame);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(region.textContent).toBe('Contour export failed. Try again.');
+    vi.runAllTimers();
+    vi.useRealTimers();
+    consoleErr.mockRestore();
+  });
+
+  it('does not throw when the pressed button carries no ownerDocument (non-DOM host)', async () => {
+    // The four `btn()` fakes used throughout this file (and, historically, a
+    // production HTMLButtonElement stub in tests elsewhere) have no
+    // `ownerDocument`. The live-region lookup must degrade to a no-op rather
+    // than reaching for a bare `document` global this file's environment
+    // (vitest.config.ts `environment: 'node'`) never provides.
+    vi.useFakeTimers();
+    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { host } = fakeHost();
+    const b = btn();
+    const failing: ContourExportHost = { ...host, exportVector: async () => { throw new Error('chunk load failed'); } };
+    expect(() => new ContourExportAdapter(failing).handle('geojson', b, intent(), okFrame)).not.toThrow();
+    await expect(vi.advanceTimersByTimeAsync(0)).resolves.not.toThrow();
+    vi.runAllTimers();
     vi.useRealTimers();
     consoleErr.mockRestore();
   });
