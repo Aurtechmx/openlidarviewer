@@ -599,10 +599,22 @@ export class AnnotationPanel {
     cells.push(edit, del);
 
     const row = el('div', { className: 'olv-ap-row' }, cells);
+    row.dataset.id = s.id;
     if (s.selected) row.classList.add('olv-ap-row-selected');
     // Hovering a row highlights its marker in the scene, and vice-versa.
     row.addEventListener('mouseenter', () => this._cb.onHover(s.id));
     row.addEventListener('mouseleave', () => this._cb.onHover(null));
+    // A keyboard user tabbing through the row's buttons gets the same marker
+    // preview a mouse user gets from hovering — `focusin`/`focusout` bubble
+    // (unlike `focus`/`blur`), so one pair on the row covers every button in
+    // it. `relatedTarget` tells the two apart: moving focus from one button
+    // to the next inside the SAME row must not flicker the highlight off and
+    // back on between them.
+    row.addEventListener('focusin', () => this._cb.onHover(s.id));
+    row.addEventListener('focusout', (e) => {
+      if (e.relatedTarget instanceof Node && row.contains(e.relatedTarget)) return;
+      this._cb.onHover(null);
+    });
     return row;
   }
 

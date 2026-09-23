@@ -10,7 +10,8 @@ import { dropDenseGridPly, showWorkspaceMode } from './helpers';
  *   - a panel action (delete, resolve/reopen, activate) restores keyboard
  *     focus to the equivalent control instead of stranding it on <body>;
  *   - the panel's mobile collapse toggle announces its expanded state and
- *     swaps its label.
+ *     swaps its label;
+ *   - keyboard focus on a row highlights its marker, matching mouse hover.
  *
  * Placement goes through a real canvas click (no `?test=1` seam exists for
  * annotate — that flag only wires measurement placement). The dense-grid
@@ -171,5 +172,30 @@ test.describe('AnnotationPanel — mobile collapse toggle', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await expect(toggle).toHaveAttribute('aria-label', 'Collapse panel');
+  });
+});
+
+test.describe('AnnotationPanel — keyboard focus previews the marker like hover', () => {
+  test('Tabbing onto a row highlights its marker; tabbing off clears it', async ({ page }) => {
+    await loadSampleAndAnnotate(page);
+    await placeAnnotation(page, { title: 'Marker check', offset: 0 });
+
+    const row = rowFor(page, 'Marker check');
+    const id = await row.getAttribute('data-id');
+    expect(id).toBeTruthy();
+    const marker = page.locator(`.olv-anno-marker[data-aid="${id}"]`);
+    await expect(marker).not.toHaveClass(/olv-anno-hover/);
+
+    await row.locator('.olv-ap-name').focus();
+    await expect(marker).toHaveClass(/olv-anno-hover/);
+
+    // Moving focus within the SAME row (to Edit) must not flicker the
+    // highlight off and back on — it stays highlighted throughout.
+    await row.locator('.olv-ap-edit').focus();
+    await expect(marker).toHaveClass(/olv-anno-hover/);
+
+    // Tabbing out of the row clears it, just as mouseleave would.
+    await page.locator('.olv-ap-search').focus();
+    await expect(marker).not.toHaveClass(/olv-anno-hover/);
   });
 });
