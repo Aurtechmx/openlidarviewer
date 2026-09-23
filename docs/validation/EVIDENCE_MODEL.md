@@ -58,10 +58,14 @@ been exercised over, it can move a claim to E4 against an independent
 implementation, and it is how a weakness gets found. It sits at E4, and a
 register entry should say so.
 
-Of the 34 registered claims, 18 currently sit below their required level. Seventeen
-of those require E5. The eighteenth is CONTOURS-CARTOGRAPHIC, which requires only
-E4: a generalized contour needs the same independent check the analytical line
-already has, and does not have it. None of them is waiting on a download.
+Of the 36 registered claims, 20 currently sit below their required level. Seventeen
+of those require E5. Two require only E4: CONTOURS-CARTOGRAPHIC, where a
+generalized contour needs the same independent check the analytical line
+already has and does not have it, and TERRAIN-FLOW-PULSE, a new v0.7 field
+simulation whose second implementation (see below) was written inside this
+project rather than against an external tool. The last, TERRAIN-FLOW-DEPRESSION-INVENTORY,
+requires only E3: it is a new derived computation checked so far against one
+hand-derived analytic fixture. None of them is waiting on a download.
 
 ## Per-claim fields
 

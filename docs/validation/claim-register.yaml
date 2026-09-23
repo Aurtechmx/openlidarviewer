@@ -1225,3 +1225,63 @@ claims:
         - "Real sensor output. Every fixture is written by the test."
         - "Whether the VIEWPOINT is correct. It is carried as declared, with its w-first quaternion in named components, and no file here holds independent pose truth."
     scopeNote: "The refusal is the load-bearing half. A declared grid sizes an allocation of about nine bytes per cell, so the decoded record count is what bounds it, and a header reading 100000 by 1000 over a short body records no grid at all rather than allocating from the claim. The identity line follows the same rule one level down: ascii and 8-byte float binary bodies are re-read here in double precision, and returning that array is the only evidence in the module that OLV walked the stream itself, so it is exactly what gates the exact linkage."
+
+  # ── Field simulation ─────────────────────────────────────────────────────────
+  - claimId: TERRAIN-FLOW-PULSE
+    product: Terrain Flow Pulse (topographic flow routing)
+    algorithm: D8 single-flow-direction routing (O'Callaghan & Mark 1984) with dependency-ordered flow accumulation, over an optional Priority-Flood-conditioned surface (Barnes, Lehman & Mulla 2014)
+    methodId: olv.simulation.terrain-flow.d8
+    algorithmVersion: v0.7.0-alpha.1
+    claim: "Routes deterministic topographic surface flow over an OLV DTM using a registered D8 model, with explicit raw or conditioned-depression handling, and reports paths, contributing area, accumulation, sinks and outlets."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/d8Flow.test.ts, tests/flowAccumulation.test.ts, tests/priorityFlood.test.ts, tests/priorityFloodRandomGrids.test.ts, tests/dtmFlowGrid.test.ts, tests/flowPulseRunner.test.ts, tests/flowPulseFieldDigest.test.ts, tests/fieldSimulationOracleAgreement.test.ts, tests/flowPulseRealTerrainDigest.test.ts]
+    supportingDatasets: [hand-built analytic fixtures TF-1 through TF-7 (validation/field-simulation/fixtures/), sl-field-real-terrain (TF-8: a real 40x40 m crop of OLV's own DTM over the VT StREAM Lab survey, OpenTopography DOI 10.5069/G9NZ85W7)]
+    units: [dimensionless-cell-count, square-metres]
+    crsDatum: "Physical distance only, via per-axis metric cell size; refuses on a geographic frame with unresolved latitude; withholds square-metre area (cell counts remain) when the horizontal scale is unresolved."
+    assumptions: ["single-flow-direction only (no multi-flow or D-infinity)", "NoData is a routing wall, never crossed", "raw mode leaves depressions unfilled unless conditioning is explicitly selected", "a conditioned surface is a second, disposable copy; the canonical DTM is never mutated"]
+    failureModes: ["divergent hillslopes, which D8 cannot split across two receivers", "unresolved flats reported rather than resolved in raw mode", "anisotropic grids reversing a diagonal-vs-cardinal ranking if index distance were used instead of physical distance"]
+    exportAllowed: true
+    userLabel: "Topographic flow routing (simulated)"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: pending
+    approvedClaim: "Deterministic D8 flow routing and accumulation, cross-checked field by field against a second, independently written implementation on eight fixtures — seven hand-built analytic terrains and one real, licensed terrain crop — and against a hand-derived closed-form direction on several of them; not field-validated and not a hydraulic or hydrologic model."
+    prohibitedClaim: ["flood prediction", "runoff discharge", "water depth", "storm simulation", "field-validated drainage accuracy", "hydraulic or hydrologic model", "externally validated routing"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any hydraulic or hydrologic claim: rainfall-runoff, infiltration, channel hydraulics, flood depth or time-to-peak prediction. Accumulation counts cells, never water, and the pulse is a visual traversal of a routing graph, not a timed flow."
+        - "Field-validated drainage accuracy or external validation. The second implementation (validation/field-simulation/oracle/flow_oracle.py) was written inside this project, in Python rather than TypeScript, to catch transcription slips and axis-scaling mistakes a shared implementation could not — but it is cross-implementation WITHIN the project, not against an independent external tool, and a misreading of the published method shared by both would survive the comparison undetected. Synthetic validation is also not field validation, independent of that distinction."
+        - "Multi-flow-direction or D-infinity routing; only single-flow-direction D8 ships in this release."
+        - "A depression's measured extent, fill volume or outlet elevation as a physical quantity — see TERRAIN-FLOW-DEPRESSION-INVENTORY, a separate, more weakly evidenced claim."
+        - "Terrain built from a resident-only or sampled source, where the claim describes only the part of the source that was walked; the run's own limitations state which applied."
+
+  - claimId: TERRAIN-FLOW-DEPRESSION-INVENTORY
+    product: Terrain Flow Pulse depression inventory (§10.10)
+    algorithm: 8-connected component grouping of the cells Priority-Flood raised, each reported with cell count, area, deepest fill and rim (outlet) elevation; raw mode lists each D8 sink as a one-cell candidate instead
+    methodId: olv.simulation.terrain-flow.depression-inventory
+    algorithmVersion: v0.7.0-alpha.1
+    claim: "Catalogues individual sinks (raw mode) or filled depressions (conditioned mode) with cell count, area, maximum fill depth and outlet elevation, largest first and deterministically ordered."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidenceNote: "Capped below TERRAIN-FLOW-PULSE's own E4 target for now: this is a new derived computation over already-registered, already-validated arrays, and the honest next step is validating it across the full TF-1..TF-8 fixture set the routing claim already uses, not reaching past that to cross-implementation before the fixture-set validation exists."
+    supportingTests: [tests/depressionInventory.test.ts]
+    supportingDatasets: [notched-bowl fixture (validation/field-simulation/fixtures/bowl-notched.json), a two-depression composite grid constructed for the tie-break test]
+    units: [dimensionless-cell-count, square-metres]
+    crsDatum: "Area withheld when the horizontal scale is unresolved, the same gate TERRAIN-FLOW-PULSE uses."
+    assumptions: ["8-connected adjacency, matching the D8 neighbour set", "a filled cell is always interior; Priority-Flood never raises a boundary seed"]
+    failureModes: ["a depression fully enclosed by NoData has no cell Priority-Flood reaches, so it never appears as filled and is not catalogued as a depression (it remains a raw sink, already covered by the routing claim)"]
+    exportAllowed: true
+    userLabel: "Depression inventory (simulated)"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Depression grouping, cell count, area, fill depth and outlet elevation checked against hand-derived expected values on one analytic fixture (the notched bowl already used for TF-2) and against a constructed two-depression grid for the ordering rule; not yet exercised across the full fixture set and not field-validated."
+    prohibitedClaim: ["every single-cell sink is a natural pond", "validated depression extent on arbitrary terrain", "field-validated fill volume", "surveyed pond area"]
+    scope:
+      supported: []
+      unsupported:
+        - "Arbitrary terrain. Only one notched-bowl fixture and one constructed multi-depression grid have hand-derived expected values today; the TF-1..TF-8 fixture set this claim's parent routing claim already validates against has not yet been extended to depression figures."
+        - "A raw-mode single-cell sink read as a measured depression extent. Raw mode reports a candidate location only — see the module's own doc on why filling, not the raw pass, is what measures an extent."
+        - "Fill-volume accuracy. The reported area figure is `cells x cell area`, a proxy under the assumption each filled cell's rise is uniform across it, never a surveyed or integrated volume."
