@@ -439,13 +439,6 @@
       "why": "How strongly to draw a brief mark at the camera's pivot, and the rule that it never appears in a capture. Nothing calls it because drawing it needs a three.js object in the Viewer chunk, which sits at 739 KiB against a 740 KiB ceiling: a six-line exported function measured 2 KiB in that chunk under the live transform, so a mesh and a material do not fit.",
       "graduation": "Reachable when the Viewer chunk has room. The wiring is small: a layer module owning its object through Viewer.derivedLayerHost(), a show call at the double-click, focus and orbit-centre sites, and one render-loop host method to step it. The pick path needs no change, since it walks the cloud registry rather than the scene.",
       "review": "2027-09-20"
-    },
-    {
-      "path": "src/terrain/ground/withheldAwareTerrainGather.ts",
-      "status": "staged",
-      "why": "Recovers the Withheld outcome for a static file the display path voxel-downsampled at load: it re-decodes the original source at full resolution and hands the result to the canonical gather (sampleStridedTerrain), unmodified, so a DTM that could previously only declare the outcome 'not recorded' can declare 'excluded'. Nothing in the running application calls it yet — no caller resolves the original File/ArrayBuffer for an already-loaded static cloud and passes it here, which lives in src/app and src/ui and is a separate, UI-adjacent change. It is exercised directly by tests/withheldAwareTerrainGather.test.ts, which builds a synthetic LAS above the display budget with the repo's own writer and proves the recovered DTM's cells match an independent gather over the manually-filtered non-Withheld source points.",
-      "graduation": "Reachable when the terrain-analysis runner (or Flow Pulse's caller) detects a static cloud whose display gather reports withheldExcluded === null because the source was voxel-downsampled at load, resolves that cloud's original File, and calls gatherWithheldAwareTerrainCore with it before falling back to the display-derived DTM.",
-      "review": "2027-09-23"
     }
   ]
 }

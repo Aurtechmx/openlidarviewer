@@ -2478,7 +2478,7 @@ const terrainRunner = createTerrainAnalysisRunner({
   // fires only after the panel has mounted, so this always resolves non-null.
   getAnalysePanel: () => analysePanel,
   getActiveId: () => scans.activeExportTargetId(), // streaming leaves activeId null
-  crsService, buildStoryInputs: buildCurrentStoryInputs,
+  crsService, buildStoryInputs: buildCurrentStoryInputs, getRecoverySource: (id) => (reducedById.get(id) === true ? (sourceFileById.get(id) ?? null) : null),
   // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
   // so the 3D "Coverage" colour mode (and its colourblind-safe "Confidence"
   // twin) can tint the cloud by trust, and enable the (until-now disabled)

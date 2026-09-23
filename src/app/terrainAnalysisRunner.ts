@@ -46,8 +46,10 @@ import { verticalMetresPerUnit } from '../geo/SpatialContext';
 import { analysedBasisOf } from '../terrain/export/analysedBasis';
 import type {
   AnalyseContoursResult,
+  TerrainCore,
   TerrainCoreParams,
 } from '../terrain/contour/analyseContours';
+import type { TerrainCoreSource } from '../terrain/contour/terrainCoreCache';
 import type { ContourShapeStyle } from '../terrain/contour/contourShapeStyle';
 import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 // TYPE-ONLY: the service and the overlay it builds both load lazily, so
@@ -73,6 +75,7 @@ import { verticalUnitLabel } from '../units/units';
 import { scanPrecisionPermit } from './scanPrecision';
 import type { PrecisionPermit } from '../geo/inMemoryPrecision';
 import type { TerrainWithheldOutcome } from '../render/terrainStreamSample';
+import { gatherWithheldAwareTerrainCore } from '../terrain/ground/withheldAwareTerrainGather';
 
 /**
  * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
@@ -260,6 +263,18 @@ export interface TerrainAnalysisRunnerDeps {
    * builds or reinterprets an input: it passes what the host gathered.
    */
   buildStoryInputs?: () => ScanStoryInputs;
+  /**
+   * Resolve the original File behind a static cloud, when one is retained
+   * (openScan.ts keeps one per loaded local file so the Export panel can offer
+   * a full-resolution re-decode; a streamed/remote scan has none). Returning
+   * non-null is also the runner's signal that the cloud was reduced at load,
+   * since the host returns null for a cloud it never downsampled, so the runner
+   * never re-decodes a file that already gathers in full. Optional: a host
+   * that never wires this simply never attempts the recovery gather, and a
+   * cloud with withheldExcluded === null keeps reporting "not recorded" as it
+   * does today.
+   */
+  getRecoverySource?: (id: string) => File | null;
 }
 
 export interface TerrainAnalysisRunner {
@@ -320,6 +335,34 @@ export interface TerrainAnalysisRunner {
 }
 
 /**
+ * Attempt the Withheld-aware recovery gather (L26) over `file`: re-decode it
+ * at full resolution and rasterise the recovered sample into a `TerrainCore`,
+ * exactly as {@link gatherWithheldAwareTerrainCore} does. Returns `null` on
+ * any refusal, never throws: an unreadable File handle (revoked, or a
+ * transient read failure) is refused the same way an oversized or
+ * unparseable source already is, so the caller can fall back to the
+ * display-derived core with "not recorded" unchanged.
+ *
+ * `signal` is the run's OWN AbortController, the same one a superseded run or
+ * a closed scan already aborts. Passing it through is what lets the existing
+ * analysis-cancellation discipline reach the re-decode.
+ */
+async function recoverWithheldAwareCore(
+  file: File,
+  coreParams: TerrainCoreParams,
+  signal: AbortSignal,
+): Promise<TerrainCore | null> {
+  try {
+    const buffer = await file.arrayBuffer();
+    if (signal.aborted) return null;
+    const recovered = await gatherWithheldAwareTerrainCore(buffer, file.name, coreParams, { signal });
+    return recovered?.core ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Build the terrain-analysis runner. Behaviour — including ordering, the A-1
  * stale-result guard, the fingerprint cache, and the worker offload — is
  * identical to the original `runTerrainAnalysis` in main.ts; only the run-state
@@ -330,6 +373,7 @@ export function createTerrainAnalysisRunner(
 ): TerrainAnalysisRunner {
   const {
     getViewer, getAnalysePanel, getActiveId, crsService, onResult, getScanFacts, buildStoryInputs,
+    getRecoverySource,
   } = deps;
 
   /**
@@ -721,20 +765,46 @@ export function createTerrainAnalysisRunner(
         worldOriginY(gathered.sourceUpAxis),
         gathered,
       );
-      // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
-      // miss the worker computes it off-thread (or the fallback does on-thread if
-      // the worker can't load). The AbortSignal cancels a superseded run.
-      const core = await getOrComputeCoreAsync(pos, coreParams, (input, params) =>
-        computeTerrainCoreAsync(
-          input as Float32Array,
-          (input as Float32Array).length / 3,
-          params,
-          params.classification,
-          abort.signal,
-        ),
-      );
-      if (bail()) return;
-      const coreSource = lastTerrainCoreSource();
+      // Withheld-aware recovery (L26): the display gather above stamped
+      // withheldExcluded === null exactly when some contributing buffer
+      // carried no flags channel, which for a lone static cloud means it was
+      // voxel-downsampled at load and lost the channel the reduction cannot
+      // keep. When the host can resolve that cloud's original File, re-decode
+      // it at full resolution and rasterise over THAT instead. Snapshot
+      // (runDatasetId/runCrsRevision, captured above) → Await (the re-decode,
+      // cancelled by the same abort.signal a superseded run already aborts) →
+      // Revalidate (bail()) → Commit (used below only if it wins the race).
+      // Any refusal falls back to the display-derived core, unchanged.
+      let recoveredCore: TerrainCore | null = null;
+      if (coreParams.withheldExcluded === null) {
+        const recoveryFile = getRecoverySource?.(runDatasetId ?? '') ?? null;
+        if (recoveryFile) {
+          recoveredCore = await recoverWithheldAwareCore(recoveryFile, coreParams, abort.signal);
+          if (bail()) return;
+        }
+      }
+      let core: TerrainCore;
+      let coreSource: TerrainCoreSource | null = null;
+      let withheldRecovered = false;
+      if (recoveredCore) {
+        core = recoveredCore;
+        withheldRecovered = true;
+      } else {
+        // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
+        // miss the worker computes it off-thread (or the fallback does on-thread if
+        // the worker can't load). The AbortSignal cancels a superseded run.
+        core = await getOrComputeCoreAsync(pos, coreParams, (input, params) =>
+          computeTerrainCoreAsync(
+            input as Float32Array,
+            (input as Float32Array).length / 3,
+            params,
+            params.classification,
+            abort.signal,
+          ),
+        );
+        if (bail()) return;
+        coreSource = lastTerrainCoreSource();
+      }
       // Cheap interval-dependent stage: contours → stitch → style → labels.
       const result = contoursFromCore(core, { intervalM });
       // Final guard before touching the panel: a newer run, a swapped/closed
@@ -747,7 +817,15 @@ export function createTerrainAnalysisRunner(
       // current in the first place.
       analysePanel.update(result, { targetId: runDatasetId, crsRevision: runCrsRevision });
       refreshDatasetStory(analysePanel);
-      if (coreSource === 'restored') {
+      if (withheldRecovered) {
+        // getLastTerrainComputePath() is not checked here: the worker/fallback
+        // bridge never ran this turn, so it would report whatever the LAST
+        // computed core (a prior run, possibly a different scan) took.
+        analysePanel.setStatus(
+          'Points flagged Withheld were excluded from this surface. The display was reduced to fit the '
+          + 'point budget, so the surface was rebuilt from a full-resolution re-decode of the source file.',
+        );
+      } else if (coreSource === 'restored') {
         analysePanel.setStatus(
           'Terrain core restored from the on-device cache. The analysed points, the classification, the parameters and the method versions all matched.',
         );
