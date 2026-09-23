@@ -168,3 +168,15 @@ describe('CRITIC-GAP-1 — light-theme rating scale clears WCAG AA', () => {
     }
   });
 });
+
+// CRITIC-GAP-3: per-layer isolate/lock phone touch targets.
+describe('CRITIC-GAP-3 — isolate/lock 44px phone touch targets', () => {
+  it('.olv-layer-solo / .olv-layer-lock get the same 44px floor as .olv-layer-x', () => {
+    const text = css('65-mobile-touch.css');
+    const phoneBlockStart = text.indexOf('@media (max-width: 767px)');
+    const phoneBlock = text.slice(phoneBlockStart);
+    const rule = phoneBlock.match(/\.olv-layer-solo,\s*\.olv-layer-lock\s*\{[^}]*\}/s)?.[0] ?? '';
+    expect(rule).toMatch(/min-width:\s*44px/);
+    expect(rule).toMatch(/min-height:\s*44px/);
+  });
+});
