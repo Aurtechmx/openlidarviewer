@@ -853,6 +853,13 @@ body.olv-theme-light .olv-empty::before {
    * laptop screen reach the bottom of the empty state. */
   justify-content: safe center;
   overflow-y: auto;
+  /* The depth-wash pseudo-element above is deliberately wider than narrow
+   * viewports (140vw, so it fades out before its edge); without this the
+   * browser pairs overflow-x to auto because overflow-y is non-visible,
+   * turning that decorative bleed into a real horizontal scrollbar on
+   * phone widths. The wash is pointer-events:none and purely visual, so
+   * clipping it here costs nothing. */
+  overflow-x: hidden;
   /* v0.3.6 desktop-audit fix: tighter vertical rhythm so the title reads
    * as a direct caption to the hero, and the CTA sits as the obvious
    * answer to the question the title poses. */
@@ -6935,7 +6942,7 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   /* Nothing in the header may push past the viewport edge. */
   .olv-topbar { flex-wrap: nowrap; }
   .olv-topbar-right { gap: var(--space-md); min-width: 0; }
-  .olv-url-input { width: 100%; max-width: none; flex: 1 1 100%; }
+  .olv-url-input { width: 100%; max-width: none; flex: 0 0 auto; }
   .olv-url-btn { width: 100%; }
   .olv-url-controls { flex-direction: column; gap: var(--space-md); }
   .olv-url-rules { width: min(100%, 320px); }
