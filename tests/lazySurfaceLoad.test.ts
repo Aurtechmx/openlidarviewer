@@ -154,6 +154,30 @@ describe('createLazySingleton', () => {
     expect(singleton.current()).toEqual({ id: 2 });
     expect(build).toHaveBeenCalledTimes(2);
   });
+
+  it('replays a caller-supplied onReady on a later retry, even though the retry itself calls ensure() with no argument', async () => {
+    // Regression for the shortcut-sheet bug: `main.ts`'s ensureShortcutSheet()
+    // used to call `.ensure()` with no onReady at all, so a successful
+    // "Try again" (the baked-in `retry` below, which always calls `ensure()`
+    // bare) built and cached the value but never replayed the caller's
+    // intended action. The fix threads the caller's onReady through, relying
+    // on `pending` surviving the failed attempt to replay it here.
+    const toast = fakeToast();
+    let attempt = 0;
+    const build = vi.fn(() => {
+      attempt += 1;
+      return attempt === 1 ? Promise.reject(new Error('flaky')) : Promise.resolve({ id: 3 });
+    });
+    const singleton = createLazySingleton(build, 'shortcut sheet', toast);
+    const onReady = vi.fn();
+    const failed = await singleton.ensure(onReady);
+    expect(failed).toBeUndefined();
+    expect(onReady).not.toHaveBeenCalled();
+    toast.calls[0].action?.onClick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(onReady).toHaveBeenCalledWith({ id: 3 });
+  });
 });
 
 describe('buttonLazyTrigger', () => {

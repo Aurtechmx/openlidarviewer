@@ -1329,7 +1329,7 @@ stage.overlay.append(recommendedViewChip.element);
 // v0.3.9 — keyboard shortcut sheet (open via `?`). Reads the same
 // action registry as the palette so adding a new action makes it
 // discoverable in both surfaces without a second touch.
-// The shortcut sheet is only ever shown on a `?` press (or the "Show keyboard shortcuts" action), lazy-loaded on first use. Same lazy-singleton pattern as the command palette above; `ensureShortcutSheet` keeps its non-optional return type for `helpActions.ts`, so a failed load rejects (after already reporting via the toast) rather than resolving to nothing.
+// The shortcut sheet is only ever shown on a `?` press (or the "Show keyboard shortcuts" action), lazy-loaded on first use. Same lazy-singleton pattern as the command palette above; `ensureShortcutSheet` keeps its non-optional return type for `helpActions.ts`, so a failed load rejects (after already reporting via the toast) rather than resolving to nothing. `onReady` is threaded through to `.ensure()` so a successful "Try again" retry actually opens/toggles the sheet, not just pre-warms the cache.
 const shortcutSheetSingleton = createLazySingleton(async () => {
   const [{ ShortcutSheet }, actions] = await Promise.all([loadShortcutSheet(), ensureActionRegistry()]);
   const sheet = new ShortcutSheet();
@@ -1337,8 +1337,8 @@ const shortcutSheetSingleton = createLazySingleton(async () => {
   sheet.setActions(actions);
   return sheet;
 }, 'shortcut sheet', { show: showLassoToast });
-function ensureShortcutSheet(): Promise<ShortcutSheet> {
-  return shortcutSheetSingleton.ensure().then((sheet) => {
+function ensureShortcutSheet(onReady?: (sheet: ShortcutSheet) => void): Promise<ShortcutSheet> {
+  return shortcutSheetSingleton.ensure(onReady).then((sheet) => {
     if (sheet) return sheet;
     throw new Error('Could not load the shortcut sheet.');
   });
@@ -1640,7 +1640,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   startWorkflowRecording,
   dispatchWorkflowEvent,
   ensureWorkflowConfigPanel,
-  ensureShortcutSheet,
+  ensureShortcutSheet: () => ensureShortcutSheet((sheet) => sheet.open()), // wrapped so a "Try again" retry opens the sheet too
   hasScan,
   saveSnapshot,
   copyShareLink,
@@ -1742,7 +1742,7 @@ const keyBindingDeps: KeyBindingDeps = {
     setCameraPreset: (preset) => viewer?.setCameraPreset(preset),
     toast: (message) => showLassoToast(message),
     openCommandPalette: () => void openCommandPalette(),
-    toggleShortcutSheet: () => void ensureShortcutSheet().then((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
+    toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
     workflowRecorderEnabled: WORKFLOW_RECORDER_ENABLED,
     matchesWorkflowShortcut: (e) => matchesShortcut(e, workflowController.config.shortcut),
     toggleWorkflowRecord: () => toggleWorkflowRecord(),
