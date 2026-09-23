@@ -130,3 +130,22 @@ no per-record index exists for any source.
 This amendment was written after the implementation and its review had been
 read. It changes a pre-registered condition, and says so here rather than
 reading the original wording as having meant this.
+
+## Outcome of D3
+
+D3's second requirement is not met, so sign-up is not recommended. Both
+other routes verify iOS gestures:
+
+- Trace replay. Touch streams recorded by XCUITest on the iOS Simulator
+  (iPhone 17e, iOS 26.4) cover six of seven gesture families. Replayed into
+  the full application, they drive the camera on Chromium and WebKit. The
+  seventh, double tap, is refused because WebDriverAgent synthesizes
+  overlapping contacts.
+- A hosted runner that does not crash. On `macos-26-intel` with iOS 26.5
+  (iPhone 17e), `scripts/ios-touch-check.mjs` passed all 13 of its
+  assertions in mobile Safari, including a two-finger pinch dispatched by
+  iOS, in run 35823332517. That is one run. The iOS leg stays advisory until
+  it has passed 20 consecutive runs, as recorded against L13.
+
+Neither route exercises a physical device's digitizer, which stays
+unverified.
