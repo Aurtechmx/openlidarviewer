@@ -216,4 +216,35 @@ test.describe('responsive layout — findings the generic sweep cannot trigger',
       `Cancel (right=${measured.cancelRight}) ran past the toast card (right=${measured.toastRight})`,
     ).toBeLessThanOrEqual(measured.toastRight + 1);
   });
+
+  // CRITIC-GAP-3: the phone Inspector layer row's isolate/lock buttons had
+  // no explicit touch-target floor, rendering at their glyph's natural
+  // ~12-15px box instead of the 44px `.olv-layer-x` beside them already got.
+  test('the phone Layers sheet grows isolate/lock to a 44px touch target', async ({ page }) => {
+    test.slow();
+    await page.setViewportSize({ width: 375, height: HEIGHT });
+    await page.goto('/');
+    await dropTinyLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+    // The layer row lives in the phone "Layers" mobile sheet tab, not the
+    // Inspector's own "Scan Info" bottom sheet — the two are separate
+    // components (src/ui/Inspector.ts's addCloud rows render inside the
+    // Layers mobile sheet).
+    await page.locator('.olv-msheet-tab', { hasText: 'Layers' }).click();
+
+    const solo = page.locator('.olv-layer-solo').first();
+    const lock = page.locator('.olv-layer-lock').first();
+    await expect(solo).toBeVisible();
+    await expect(lock).toBeVisible();
+
+    const soloBox = await solo.boundingBox();
+    const lockBox = await lock.boundingBox();
+    expect(soloBox, 'isolate button has a layout box').not.toBeNull();
+    expect(lockBox, 'lock button has a layout box').not.toBeNull();
+    expect(soloBox!.width, 'isolate button width').toBeGreaterThanOrEqual(44);
+    expect(soloBox!.height, 'isolate button height').toBeGreaterThanOrEqual(44);
+    expect(lockBox!.width, 'lock button width').toBeGreaterThanOrEqual(44);
+    expect(lockBox!.height, 'lock button height').toBeGreaterThanOrEqual(44);
+  });
 });
