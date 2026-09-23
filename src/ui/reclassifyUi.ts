@@ -81,6 +81,11 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   };
   const armBtn = mkBtn('Reclassify (lasso)', 'reclass-arm', 'olv-reclass-go');
   armBtn.title = 'Draw around points to give them the class chosen above. The source file is not changed.';
+  armBtn.setAttribute('aria-pressed', 'false');
+  const setArmed = (armed: boolean): void => {
+    armBtn.classList.toggle('olv-mkind-active', armed);
+    armBtn.setAttribute('aria-pressed', armed ? 'true' : 'false');
+  };
   const undoBtn = mkBtn('Undo', 'reclass-undo');
   undoBtn.title = 'Take back the last class change.';
   const redoBtn = mkBtn('Redo', 'reclass-redo');
@@ -116,7 +121,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     onCommit: (lasso) => {
       // Single-shot: disarm so the user returns to navigation after one edit.
       tool.disable();
-      armBtn.classList.remove('olv-mkind-active');
+      setArmed(false);
       const v = opts.getViewer();
       const id = opts.getActiveId();
       if (!v || !id) return;
@@ -131,17 +136,17 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
       refresh();
     },
     onCancel: () => {
-      armBtn.classList.remove('olv-mkind-active');
+      setArmed(false);
     },
   });
 
   armBtn.addEventListener('click', () => {
     if (tool.enabled) {
       tool.disable();
-      armBtn.classList.remove('olv-mkind-active');
+      setArmed(false);
     } else {
       tool.enable();
-      armBtn.classList.add('olv-mkind-active');
+      setArmed(true);
     }
   });
   undoBtn.addEventListener('click', () => {
@@ -185,7 +190,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     disarm(): boolean {
       if (!tool.enabled) return false;
       tool.disable();
-      armBtn.classList.remove('olv-mkind-active');
+      setArmed(false);
       return true;
     },
     element,
