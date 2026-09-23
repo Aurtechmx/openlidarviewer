@@ -14,8 +14,11 @@
  *
  * `LocalFileSource` is the only implementation; `main.ts` is the sole caller
  * that constructs one. Referenced elsewhere by loadFile.ts and
- * preloadSummary.ts (the `SourceMetadata` type), and by embedConfig.ts and
- * range/RangeSource.ts, which contrast it with the streaming/range path.
+ * preloadSummary.ts (the `SourceMetadata` type), and by range/RangeSource.ts,
+ * which contrasts it with the streaming/range path. embedConfig.ts also
+ * references it, but that file's own `?copc=` comment is itself stale: COPC
+ * and EPT resolve through HttpRangeSource/StreamingSource in main.ts's
+ * handleRemoteUrl, never through this abstraction.
  *
  * Pure types — no DOM, no three.js.
  */
