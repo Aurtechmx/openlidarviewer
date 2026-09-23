@@ -83,6 +83,9 @@ export interface ContourExportHost {
 /** Milliseconds the "Blocked" flash sits on a button before restoring. */
 const BLOCKED_FLASH_MS = 1500;
 
+/** Milliseconds the "Export failed" flash sits on a button before restoring. */
+const EXPORT_FAILED_FLASH_MS = 1800;
+
 export class ContourExportAdapter {
   private readonly host: ContourExportHost;
 
@@ -177,17 +180,32 @@ export class ContourExportAdapter {
     );
   }
 
-  /** Toggle the clicked button's busy state around an async export. */
+  /**
+   * Toggle the clicked button's busy state around an async export. Every
+   * `ContourExportHost` method now rethrows after logging (R3 fix), so a
+   * chunk-load or write failure lands here instead of vanishing behind a
+   * silent revert: flash a visible "Export failed" state on the SAME button
+   * the user pressed, matching the "Blocked" flash below and the sibling
+   * export controls (ProfileWorkbench, MeasurePanel), then restore it.
+   */
   private async _busy(btn: HTMLButtonElement, run: () => Promise<void>): Promise<void> {
     const label = btn.textContent ?? '';
     btn.disabled = true;
     btn.textContent = '…';
     try {
       await run();
-    } finally {
-      btn.disabled = false;
-      btn.textContent = label;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('OpenLiDARViewer: contour export failed.', err);
+      btn.textContent = 'Export failed';
+      setTimeout(() => {
+        btn.textContent = label;
+        btn.disabled = false;
+      }, EXPORT_FAILED_FLASH_MS);
+      return;
     }
+    btn.disabled = false;
+    btn.textContent = label;
   }
 
   /**
