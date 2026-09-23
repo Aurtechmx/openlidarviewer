@@ -142,18 +142,27 @@ test.describe('AnnotationPanel — focus survives a row action', () => {
     expect(stillOnBody).toBe(false);
   });
 
-  test('activating (jumping to) a row keeps focus on its own title button', async ({ page }) => {
+  test('activating (jumping to) a row that is not already selected keeps focus on its own title button', async ({
+    page,
+  }) => {
     await loadSampleAndAnnotate(page);
-    await placeAnnotation(page, { title: 'Anchor point', offset: 0 });
+    await placeAnnotation(page, { title: 'First', offset: 0 });
+    await placeAnnotation(page, { title: 'Second', offset: 1 });
 
-    const row = rowFor(page, 'Anchor point');
+    // "Second" (placed last) is the current selection. Activating "First"
+    // here has to actually move the selection and rebuild the list — that
+    // rebuild is what exercises the focus capture/restore this test guards.
+    // Activating the row that is ALREADY selected is a same-id no-op inside
+    // AnnotationController.select (it early-returns before any rebuild), so
+    // it would pass here whether or not focus restoration actually works.
+    const row = rowFor(page, 'First');
     const title = row.locator('.olv-ap-name');
     await title.focus();
     await page.keyboard.press('Enter');
 
     // The row survives selection (it is not removed), so focus returns to
     // the SAME control rather than merely somewhere safe.
-    await expect(rowFor(page, 'Anchor point').locator('.olv-ap-name')).toBeFocused();
+    await expect(rowFor(page, 'First').locator('.olv-ap-name')).toBeFocused();
   });
 });
 
