@@ -1478,8 +1478,13 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
     gridAuthority = ga as VolumeRecord['gridAuthority'];
   }
   const volumeNums = ['fill', 'cut', 'net'] as const;
-  const hasVolumeNums = volumeNums.every((key) => isFiniteNum(v[key]));
-  if (!hasVolumeNums && gridAuthority !== 'withheld') return undefined;
+  const rawHasVolumeNums = volumeNums.every((key) => isFiniteNum(v[key]));
+  if (!rawHasVolumeNums && gridAuthority !== 'withheld') return undefined;
+  // A withheld record never carries fill/cut/net, no matter what the raw
+  // JSON supplies: withStockpileGrid deletes those fields before saving, and
+  // a hand-edited or corrupted file must not be able to smuggle a cut/fill
+  // figure back in under a verdict that refused one (D2 clause 2).
+  const hasVolumeNums = rawHasVolumeNums && gridAuthority !== 'withheld';
   // The field was renamed `density` → `densityNative` to stop calling a native
   // horizontal-unit² figure "points/m²". Older files carry `density`, which held
   // exactly the same native value, so migrating it across is lossless.

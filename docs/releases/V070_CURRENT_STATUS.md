@@ -33,7 +33,7 @@ Entries: 165. Revisited at least once: 19.
 | L02 | FIXED | EXPORT | 1 |
 | L03 | FIXED | EXPORT | 1 |
 | L04 | FIXED | STANDARDS | 1 |
-| L05 | FIXED | SCIENTIFIC | 5 |
+| L05 | FIXED | SCIENTIFIC | 6 |
 | L06 | PARTIAL | SCIENTIFIC | 2 |
 | L07 | FIXED | SCIENTIFIC | 2 |
 | L08 | NOT REPRODUCIBLE | SCIENTIFIC | 2 |

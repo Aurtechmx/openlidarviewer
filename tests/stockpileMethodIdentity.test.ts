@@ -213,4 +213,26 @@ describe('a session round trip carries an old record and a switched one unchange
     expect(back?.gridAuthorityReason).toBe('insufficient observations');
     expect(back?.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
   });
+
+  it('a withheld record never reads back a fill/cut/net, even if the raw file carries one', () => {
+    // withStockpileGrid deletes fill/cut/net before saving a withheld record,
+    // but a hand-edited, shared, or corrupted session file is not written by
+    // that function. The parser must refuse the numbers on the way in too,
+    // or a withheld verdict could still show a cut-and-fill figure under the
+    // grid's name.
+    const tampered: VolumeRecord = {
+      ...base,
+      method: 'olv.volume.stockpile@1',
+      gridAuthority: 'withheld',
+      gridAuthorityReason: 'insufficient observations',
+      fill: 999,
+      cut: 5,
+      net: 994,
+    };
+    const back = roundTrip(tampered);
+    expect(back?.gridAuthority).toBe('withheld');
+    expect(back?.fill).toBeUndefined();
+    expect(back?.cut).toBeUndefined();
+    expect(back?.net).toBeUndefined();
+  });
 });

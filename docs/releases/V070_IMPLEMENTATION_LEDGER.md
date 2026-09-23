@@ -6400,3 +6400,49 @@ Covered by `tests/stockpileMethodIdentity.test.ts`,
 `tests/measureDerivations.test.ts`, `tests/stockpilePresenter.test.ts`,
 `tests/measurementExport.test.ts`, `tests/measurementReport.test.ts` and
 `tests/measurementChains.test.ts`.
+
+### L05 · FIXED · SCIENTIFIC
+
+Verified this entry's own confirmation checklist against the switch as
+committed. Six of the seven items held as written: `Viewer.ts`'s polygon
+Volume tool (around line 1198) never calls `withStockpileGrid` and keeps
+`volumeCutFill` labelled with its own tag; a switched record's estimator tag
+reads `olv.volume.stockpile-area-grid@2` while an old record's
+`olv.volume.stockpile@1`, or no tag at all, reads back unchanged; the app
+path gives the same cubic metres in metres, US survey feet and a compound
+representation with the grid's `linearUnitToMetres` option off that path,
+pinned in `stockpilePresenter.test.ts`; the point-sample cut and fill stays
+beside the grid figure as a labelled cross-check in the record, the report
+findings and the CSV; the limitations text names the 15 percent step-in-cell
+reading, the clustered-sparse ceiling of PREVIEW and the 3.6 and 8.6 percent
+real-data disagreements with no ground truth; and no recorded or
+claim-register number needed a change, so item 7's before-and-after listing
+is empty. A repository-wide grep for "section 80" or the section sign, run
+outside this ledger, turned up nothing; D2 clause 4's own classification of
+the switch as a method version change already covers it, so no separate
+decision was needed.
+
+Item 2 did not hold on the read path. `withStockpileGrid` deletes `fill`,
+`cut` and `net` before saving a withheld record, but `session.ts`'s
+`parseVolumeRecord` computed `hasVolumeNums` from the raw JSON alone, so a
+hand-edited, shared or corrupted session file carrying `gridAuthority:
+'withheld'` together with finite `fill`, `cut` and `net` round-tripped with
+those numbers intact. That contradicts `VolumeRecord.fill`'s own doc comment
+and, downstream, put a cut-and-fill figure under the grid's own column names
+in `measurementsToCsv` and as the headline value in `measurementsToFindings`,
+next to a caveat stating the grid was withheld. `parseVolumeRecord` now
+requires `gridAuthority !== 'withheld'` in addition to the raw numbers being
+finite before it copies `fill`, `cut` and `net` onto the parsed record,
+mirroring the write side's own guarantee. A new test in
+`stockpileMethodIdentity.test.ts` hand-builds a withheld record carrying
+finite `fill`, `cut` and `net`, round-trips it through `serializeSession` and
+`parseSession`, and asserts all three come back undefined.
+
+Recorded numbers: none. The fix changes how a malformed input is read, not
+any measured or pinned figure; no file under `validation/`, `docs/validation/`
+or the claim register changed.
+
+Covered by `tests/stockpileMethodIdentity.test.ts`,
+`tests/stockpileDualAnswer.test.ts`, `tests/stockpilePresenter.test.ts`,
+`tests/measureDerivations.test.ts`, `tests/measurementChains.test.ts`,
+`tests/measurementExport.test.ts` and `tests/measurementReport.test.ts`.
