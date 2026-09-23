@@ -81,6 +81,30 @@ async function readClippedControls(page: Page, selector: string): Promise<Clippe
   }, selector);
 }
 
+/**
+ * Wait until a resize's layout has settled instead of sleeping a fixed
+ * duration: poll `document.documentElement.scrollWidth` until two
+ * consecutive animation frames read the same value. A literal timeout is a
+ * timing assumption a loaded CI runner or a slower engine (WebKit, Firefox)
+ * can miss; this instead waits for the actual condition the sweep needs —
+ * nothing still reflowing — however long that takes.
+ */
+async function waitForLayoutStable(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const before = document.documentElement.scrollWidth;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve(document.documentElement.scrollWidth === before);
+          });
+        });
+      }),
+    undefined,
+    { timeout: 5_000 },
+  );
+}
+
 /** Assert both invariants at the page's CURRENT viewport. */
 async function assertNoOverflowOrClipping(page: Page, when: string): Promise<void> {
   const { scrollWidth, clientWidth } = await readOverflow(page);
@@ -115,8 +139,7 @@ test.describe('responsive layout — no overflow, no clipped controls', () => {
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: HEIGHT });
-      // The dock's own fold/unfold reflow needs a beat after the resize.
-      await page.waitForTimeout(50);
+      await waitForLayoutStable(page);
       await assertNoOverflowOrClipping(page, `scan loaded @ ${width}px`);
     }
   });
@@ -128,7 +151,7 @@ test.describe('responsive layout — no overflow, no clipped controls', () => {
     await expect(page.locator('.olv-tour-card')).not.toHaveClass(/olv-hidden/, { timeout: 5_000 });
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: HEIGHT });
-      await page.waitForTimeout(50);
+      await waitForLayoutStable(page);
       await assertNoOverflowOrClipping(page, `tour open @ ${width}px`);
     }
   });
