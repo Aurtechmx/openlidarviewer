@@ -181,3 +181,51 @@ test.describe('batch converter — focus containment', () => {
   });
 });
 
+test.describe('workflow config panel — focus containment', () => {
+  async function openViaPalette(page: Page): Promise<void> {
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.locator('.olv-palette-input').fill('workflow recorder settings');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.olv-wfc')).toBeVisible();
+  }
+
+  test('carries dialog semantics and moves focus in on open', async ({ page }) => {
+    await openViaPalette(page);
+    const card = page.locator('.olv-wfc-card');
+    await expect(card).toHaveAttribute('role', 'dialog');
+    await expect(card).toHaveAttribute('aria-modal', 'true');
+    expect(await isInside(page, '.olv-wfc-card')).toBe(true);
+  });
+
+  test('Escape closes the panel even though the command palette already blurred its own trigger first', async ({ page }) => {
+    await openViaPalette(page);
+    // The palette closes (and blurs) before firing this action, so nothing
+    // inside .olv-wfc ever held focus at the moment Escape is pressed — the
+    // old per-element listener depended on that and silently did nothing.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-wfc')).toBeHidden();
+  });
+
+  test('Shift+Tab never escapes to the page behind the panel', async ({ page, browserName }) => {
+    // See the same skip on the help-overlay block above: enough of this
+    // panel's controls are <button>s (segmented rows, shortcut capture,
+    // reset) that WebKit's default keyboard mode runs out of native tab
+    // stops among the panel's few checkboxes before reaching the far side.
+    test.skip(browserName === 'webkit', 'WebKit omits buttons from native Tab order by default');
+    await openViaPalette(page);
+    for (let i = 0; i < 8; i++) await page.keyboard.press('Shift+Tab');
+    expect(await isInside(page, '.olv-wfc-card')).toBe(true);
+  });
+
+  test('Escape while capturing a shortcut cancels the capture, not the whole panel', async ({ page }) => {
+    await openViaPalette(page);
+    await page.locator('.olv-wfc-shortcut').click();
+    await expect(page.locator('.olv-wfc-shortcut')).toHaveClass(/is-capturing/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-wfc')).toBeVisible();
+    await expect(page.locator('.olv-wfc-shortcut')).not.toHaveClass(/is-capturing/);
+  });
+});
+
