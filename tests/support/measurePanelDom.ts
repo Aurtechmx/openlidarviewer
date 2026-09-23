@@ -75,6 +75,14 @@ export class FakeEl {
   append(...kids: unknown[]): void {
     for (const k of kids) this.children.push(this._adopt(k));
   }
+  /** DOM's `insertBefore`: `ref === null` inserts at the end, matching the spec. */
+  insertBefore(kid: unknown, ref: FakeEl | null): FakeEl {
+    const node = this._adopt(kid);
+    const at = ref ? this.children.indexOf(ref) : -1;
+    if (at === -1) this.children.push(node);
+    else this.children.splice(at, 0, node);
+    return node as unknown as FakeEl;
+  }
   replaceChildren(...kids: unknown[]): void {
     this.children.length = 0;
     for (const k of kids) this.children.push(this._adopt(k));

@@ -1365,6 +1365,10 @@ export class Inspector {
       title: `Lock ${name} out of picking and measuring`,
       ariaLabel: `Lock ${name} out of picking`,
     });
+    // aria-pressed mirrors the class so the locked state is announced, not
+    // just shown by the glyph/title flip — the same pattern the workflow
+    // preset and scanType chips already use elsewhere in this file.
+    lock.setAttribute('aria-pressed', 'false');
     let locked = false;
     lock.addEventListener('click', () => {
       locked = !locked;
@@ -1373,6 +1377,8 @@ export class Inspector {
       lock.title = locked
         ? `${name} is locked — unlock to pick / measure it`
         : `Lock ${name} out of picking and measuring`;
+      lock.setAttribute('aria-label', locked ? `${name} is locked — unlock to pick or measure it` : `Lock ${name} out of picking`);
+      lock.setAttribute('aria-pressed', String(locked));
       this._cb.onToggleLock?.(id, locked);
     });
 
