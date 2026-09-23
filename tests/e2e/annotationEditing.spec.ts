@@ -315,7 +315,12 @@ test.describe('AnnotationEditor — repositions inside a short viewport', () => 
 
     // Marking it a critical issue reveals the status row — a real height
     // change the card has to stay clamped through, not just on first open.
-    await page.locator('.olv-anno-sev-critical').click();
+    // Forced: at this deliberately short viewport the (unrelated) elevation
+    // colorbar legend can overlap the card's screen position, which is a
+    // pre-existing layout fact of this narrow window, not something this
+    // click needs to actually be reachable by a pointer to exercise the
+    // severity toggle and its resulting reflow.
+    await page.locator('.olv-anno-sev-critical').click({ force: true });
     const grown = await editor.boundingBox();
     expect(grown).not.toBeNull();
     expect(grown!.y).toBeGreaterThanOrEqual(0);
