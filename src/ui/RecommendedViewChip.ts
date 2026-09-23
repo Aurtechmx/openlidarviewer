@@ -22,8 +22,16 @@ export class RecommendedViewChip {
   private readonly _label: HTMLElement;
   private _onApply: (() => void) | null = null;
   private _timer: number | null = null;
-  /** True while a hover or a focus inside the chip is suppressing the timer. */
-  private _suppressed = false;
+  /**
+   * Tracked separately, not as one combined flag: a mouse hover and a
+   * keyboard focus can both be active on the chip at once (the user tabs to
+   * Apply, then also happens to move the mouse over it), and only the LAST
+   * one to end may resume the timer. A single flag cleared by either
+   * `mouseleave` or `focusout` would resume it while the other was still
+   * true — hiding the chip out from under a still-focused button.
+   */
+  private _hovered = false;
+  private _focusedInside = false;
   /** The element focused right before `show()`, restored to on hide if the
    *  chip held focus at that point — the same opener-restore idea Modal.ts's
    *  `openModal` uses for dialogs, applied here without a focus trap. */
@@ -57,15 +65,25 @@ export class RecommendedViewChip {
     // for the whole hit region including its children, so one listener each
     // covers both buttons without needing per-button wiring; `focusin` /
     // `focusout` bubble, so the same is true for keyboard focus.
-    this.element.addEventListener('mouseenter', () => this._pause());
-    this.element.addEventListener('mouseleave', () => this._resume());
-    this.element.addEventListener('focusin', () => this._pause());
+    this.element.addEventListener('mouseenter', () => {
+      this._hovered = true;
+      this._syncTimer();
+    });
+    this.element.addEventListener('mouseleave', () => {
+      this._hovered = false;
+      this._syncTimer();
+    });
+    this.element.addEventListener('focusin', () => {
+      this._focusedInside = true;
+      this._syncTimer();
+    });
     this.element.addEventListener('focusout', (e) => {
       const next = (e as FocusEvent).relatedTarget;
       // Moving focus between the chip's own Apply/Dismiss buttons is not
       // leaving the chip — only resume once focus is actually outside it.
       if (next instanceof Node && this.element.contains(next)) return;
-      this._resume();
+      this._focusedInside = false;
+      this._syncTimer();
     });
   }
 
@@ -88,7 +106,8 @@ export class RecommendedViewChip {
    */
   hide(): void {
     this._clearTimer();
-    this._suppressed = false;
+    this._hovered = false;
+    this._focusedInside = false;
     const hadFocus = this.element.contains(document.activeElement);
     this.element.classList.add('olv-hidden');
     if (hadFocus) {
@@ -103,22 +122,22 @@ export class RecommendedViewChip {
     this.hide();
   }
 
-  /** Suppress the auto-hide timer — a hover or a focus is holding the chip up. */
-  private _pause(): void {
-    this._suppressed = true;
-    this._clearTimer();
-  }
-
-  /** Resume the auto-hide timer once nothing is hovering or focusing the chip. */
-  private _resume(): void {
-    this._suppressed = false;
+  /**
+   * Re-decide the timer from the current hover/focus state: cleared while
+   * either holds it up, armed fresh once both are false (and the chip is
+   * still showing).
+   */
+  private _syncTimer(): void {
+    if (this._hovered || this._focusedInside) {
+      this._clearTimer();
+      return;
+    }
     if (this.element.classList.contains('olv-hidden')) return;
     this._arm();
   }
 
   private _arm(): void {
     this._clearTimer();
-    if (this._suppressed) return;
     this._timer = window.setTimeout(() => this.hide(), AUTO_HIDE_MS);
   }
 

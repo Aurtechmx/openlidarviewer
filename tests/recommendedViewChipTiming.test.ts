@@ -111,6 +111,18 @@ describe('RecommendedViewChip — auto-hide timing', () => {
     expect(el.classList.contains('olv-hidden')).toBe(false);
   });
 
+  it('stays paused on mouseleave while focus is still inside (hover and focus tracked independently)', () => {
+    const { chip, el } = makeChip();
+    chip.show(REC, vi.fn());
+    el.dispatchEvent({ type: 'focusin' }); // keyboard focus arrives first
+    el.dispatchEvent({ type: 'mouseenter' }); // the pointer also happens to be over it
+    el.dispatchEvent({ type: 'mouseleave' }); // pointer leaves — focus does not
+    // A single combined flag would have resumed the timer here even though
+    // the chip is still focused; independent tracking must not.
+    vi.advanceTimersByTime(20_000);
+    expect(el.classList.contains('olv-hidden')).toBe(false);
+  });
+
   it('resumes once focus actually leaves the chip for an outside element', () => {
     const { chip, el } = makeChip();
     chip.show(REC, vi.fn());
