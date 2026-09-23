@@ -1,16 +1,21 @@
 /**
  * PointCloudSource.ts
  *
- * The abstraction every point-cloud origin implements — a local file today,
- * and (in v0.3) a remote file, a COPC dataset, or a range-request stream.
+ * The abstraction `LocalFileSource` implements for a file the user picked or
+ * dropped locally. Streaming and heavy sources converge on `StreamingSource`
+ * instead (src/render/streaming/StreamingSource.ts): `StreamingPointCloud`
+ * for COPC, `EptStreamingPointCloud` for EPT, `TilesetStreamingSource` for
+ * 3D Tiles, and `OlvTileSource` / `PreviewCloudSource` for heavy loading.
  *
  * `metadata()` is the cheap preflight: enough to tell the user what the source
  * is and how it will load, with no body decode. `load()` runs the full decode.
  * Splitting the two is what lets the UI show a confident "PTX scan detected,
  * large-file optimization enabled" summary before committing to the load.
  *
- * ships exactly one implementation — `LocalFileSource`. The interface is
- * the seam for v0.3 streaming; no remote loading is implemented here.
+ * `LocalFileSource` is the only implementation; `main.ts` is the sole caller
+ * that constructs one. Referenced elsewhere by loadFile.ts and
+ * preloadSummary.ts (the `SourceMetadata` type), and by embedConfig.ts and
+ * range/RangeSource.ts, which contrast it with the streaming/range path.
  *
  * Pure types — no DOM, no three.js.
  */
