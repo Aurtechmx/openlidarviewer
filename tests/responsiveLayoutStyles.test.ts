@@ -120,3 +120,51 @@ describe('SHELL-F6 — .olv-ws-body joins the classic-scrollbar lists', () => {
     }
   });
 });
+
+// CRITIC-GAP-1: light-theme rating scale contrast.
+describe('CRITIC-GAP-1 — light-theme rating scale clears WCAG AA', () => {
+  function hexToRgb(hex: string): [number, number, number] {
+    const h = hex.replace('#', '');
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+  }
+  function relLum([r, g, b]: [number, number, number]): number {
+    const f = (c: number): number => {
+      const n = c / 255;
+      return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  }
+  function contrast(a: string, b: string): number {
+    const la = relLum(hexToRgb(a));
+    const lb = relLum(hexToRgb(b));
+    const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  const lightBlock = (() => {
+    const text = css('03-theme-rails.css');
+    const start = text.indexOf('body.olv-theme-light {');
+    const end = text.indexOf('\n}', start);
+    return text.slice(start, end);
+  })();
+
+  const tokens = ['--rating-excellent', '--rating-strong', '--rating-good', '--rating-moderate', '--rating-weak'];
+
+  it('every rating token is overridden in body.olv-theme-light (not inherited from the dark :root)', () => {
+    for (const t of tokens) {
+      expect(lightBlock, `${t} must be set in the light theme block`).toMatch(
+        new RegExp(`${t}:\\s*#[0-9a-fA-F]{6}`),
+      );
+    }
+  });
+
+  it('each overridden value clears 4.5:1 against both --bg (#f4f6fb) and --panel (#ffffff)', () => {
+    for (const t of tokens) {
+      const m = lightBlock.match(new RegExp(`${t}:\\s*(#[0-9a-fA-F]{6})`));
+      expect(m, `${t} value found`).not.toBeNull();
+      const hex = m![1];
+      expect(contrast(hex, '#f4f6fb'), `${t} ${hex} vs --bg`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(hex, '#ffffff'), `${t} ${hex} vs --panel`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});

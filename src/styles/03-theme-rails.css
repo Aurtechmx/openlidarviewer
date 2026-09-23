@@ -26,6 +26,16 @@ body.olv-theme-light {
   --accent-soft: rgba(0, 136, 200, 0.18);
   /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
   --rating-blocked: #7c3aed;
+  /* The rest of the readiness scale, darkened the same way as --rating-blocked
+   * above: the :root values are tuned for the near-black dark --bg and read
+   * 1.4:1-2.6:1 here, well under the 4.5:1 AA floor this rail otherwise holds.
+   * Hue order (green > green > amber > orange > red) is preserved; each value
+   * clears 4.5:1 on both --bg and --panel with headroom. */
+  --rating-excellent: #1a7856;
+  --rating-strong: #247b41;
+  --rating-good: #896303;
+  --rating-moderate: #ac4f04;
+  --rating-weak: #d50b0b;
   /*
    * v0.4.6 two-tier surfaces in Light. The default --panel is pure
    * white, so a RAISED surface must read by going *up* (it can't —
