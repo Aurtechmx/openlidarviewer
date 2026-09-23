@@ -82,6 +82,37 @@ describe('cartographicProduct', () => {
     expect(g.toleranceMetres).toBeCloseTo(2 * 0.3048, 9);
   });
 
+  it('p95DisplacementSource is the canonical type-7 quantile, not nearest rank', () => {
+    // Both feature sets collapse to a straight chord from the first to the last
+    // vertex under an oversized tolerance (max interior perpendicular distance
+    // is n - 2, well under toleranceSource: 1000), so each original vertex's
+    // recorded displacement is exactly its own y-offset from that chord — a
+    // fully known, independently-checkable set for every n.
+    for (const n of [10, 25]) {
+      const coords: Array<[number, number]> = [[0, 0]];
+      for (let i = 1; i <= n - 2; i++) coords.push([i, i]);
+      coords.push([n - 1, 0]);
+      const carto = cartographicProduct(analyticalProduct([feature(coords)]), {
+        toleranceSource: 1000,
+        horizontalUnit: knownUnit(1),
+      });
+      const displacements = [0, ...Array.from({ length: n - 2 }, (_, i) => i + 1), 0].sort((a, b) => a - b);
+      // Type-7 (linear interpolation between order statistics), computed here
+      // independently of src/terrain/quantile.ts, per NumPy/R/Excel PERCENTILE.INC.
+      const rank = 0.95 * (displacements.length - 1);
+      const lo = Math.floor(rank);
+      const hi = Math.ceil(rank);
+      const w = rank - lo;
+      const type7 = displacements[lo] * (1 - w) + displacements[hi] * w;
+      // Nearest rank (the pre-fix local convention), for contrast: at these n
+      // the two conventions disagree, so this pins the fix, not a coincidence.
+      const nearestRank = displacements[Math.min(displacements.length - 1, Math.ceil(0.95 * displacements.length) - 1)];
+      expect(type7).not.toBeCloseTo(nearestRank, 6);
+
+      expect(carto.generalization!.p95DisplacementSource).toBeCloseTo(type7, 9);
+    }
+  });
+
   it('reports null metre tolerance when the horizontal unit is unknown', () => {
     const carto = cartographicProduct(analytical, { toleranceSource: 2, horizontalUnit: unknownUnit() });
     expect(carto.generalization!.toleranceMetres).toBeNull();
