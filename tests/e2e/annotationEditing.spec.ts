@@ -9,8 +9,17 @@ import { dropDenseGridPly, showWorkspaceMode } from './helpers';
  *
  *   - a panel action (delete, resolve/reopen, activate) restores keyboard
  *     focus to the equivalent control instead of stranding it on <body>;
+ *   - opening the editor over an unsaved, dirty draft asks before discarding
+ *     it, rather than silently overwriting it;
+ *   - the editor carries real dialog semantics (role, aria-modal,
+ *     aria-labelledby) and traps Tab, so a stray Tab-then-Escape can no
+ *     longer exit the whole annotate tool;
+ *   - the type chips expose aria-pressed, matching the severity/status chips
+ *     beside them;
  *   - the panel's mobile collapse toggle announces its expanded state and
  *     swaps its label;
+ *   - the editor re-clamps itself inside a short viewport instead of
+ *     rendering off-screen with no scroll to recover it;
  *   - keyboard focus on a row highlights its marker, matching mouse hover.
  *
  * Placement goes through a real canvas click (no `?test=1` seam exists for
@@ -172,6 +181,145 @@ test.describe('AnnotationPanel — mobile collapse toggle', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await expect(toggle).toHaveAttribute('aria-label', 'Collapse panel');
+  });
+});
+
+test.describe('AnnotationController — reopening over an unsaved draft', () => {
+  test('editing another annotation over a dirty draft asks before discarding it', async ({
+    page,
+  }) => {
+    await loadSampleAndAnnotate(page);
+    await placeAnnotation(page, { title: 'Saved one', offset: 0 });
+
+    // Start a second, NEW draft and type into it without saving.
+    await openEditorNear(page, 1);
+    await page.locator('.olv-anno-editor-title').fill('UNSAVED DRAFT');
+
+    // Ask the panel to edit the already-saved annotation instead.
+    await rowFor(page, 'Saved one').locator('.olv-ap-edit').click();
+
+    // A confirm dialog interrupts instead of silently swapping the draft.
+    const dialog = page.locator('.olv-modal[role="dialog"]');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('unsaved changes');
+
+    // "Keep editing" leaves the dirty draft exactly as it was.
+    await page.locator('.olv-confirm-cancel').click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('.olv-anno-editor-title')).toHaveValue('UNSAVED DRAFT');
+
+    // Asking again and discarding this time really does switch to the edit.
+    await rowFor(page, 'Saved one').locator('.olv-ap-edit').click();
+    await expect(dialog).toBeVisible();
+    await page.locator('.olv-confirm-ok').click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('.olv-anno-editor-title')).toHaveValue('Saved one');
+  });
+
+  test('reopening a pristine (untouched) draft needs no confirmation', async ({ page }) => {
+    await loadSampleAndAnnotate(page);
+    await placeAnnotation(page, { title: 'Saved two', offset: 0 });
+
+    // Open a second draft but leave it exactly as it opened — nothing to lose.
+    await openEditorNear(page, 1);
+    await expect(page.locator('.olv-anno-editor')).toBeVisible();
+
+    await rowFor(page, 'Saved two').locator('.olv-ap-edit').click();
+    await expect(page.locator('.olv-modal[role="dialog"]')).toHaveCount(0);
+    await expect(page.locator('.olv-anno-editor-title')).toHaveValue('Saved two');
+  });
+});
+
+test.describe('AnnotationEditor — dialog semantics and focus trap', () => {
+  test('carries dialog role/aria-modal/aria-labelledby naming its heading', async ({ page }) => {
+    await loadSampleAndAnnotate(page);
+    await openEditorNear(page, 0);
+
+    const editor = page.locator('.olv-anno-editor');
+    await expect(editor).toHaveAttribute('role', 'dialog');
+    await expect(editor).toHaveAttribute('aria-modal', 'true');
+    const labelledBy = await editor.getAttribute('aria-labelledby');
+    expect(labelledBy).toBeTruthy();
+    const heading = page.locator(`#${labelledBy}`);
+    await expect(heading).toHaveText('New annotation');
+  });
+
+  test('Tab cannot leave the card, and Escape only closes the card, not the whole tool', async ({
+    page,
+  }) => {
+    await loadSampleAndAnnotate(page);
+    await openEditorNear(page, 0);
+
+    // Tab well past the last control (Save) — a real trap cycles back inside
+    // instead of handing focus to the rest of the page.
+    for (let i = 0; i < 14; i++) await page.keyboard.press('Tab');
+    const stillInside = await page.evaluate(() =>
+      document.querySelector('.olv-anno-editor')?.contains(document.activeElement) === true,
+    );
+    expect(stillInside).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-anno-editor')).toBeHidden();
+    // The whole tool is still active — its `aria-pressed` (the dock's own
+    // canonical toggle-state signal) survives, unlike the old bug where a
+    // stray Tab handed Escape to the window listener and exited annotate
+    // mode entirely.
+    await expect(page.locator('.olv-tool', { hasText: 'Annotate' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+});
+
+test.describe('AnnotationEditor — type chips expose aria-pressed', () => {
+  test('exactly one type chip is aria-pressed, and it follows the click', async ({ page }) => {
+    await loadSampleAndAnnotate(page);
+    await openEditorNear(page, 0);
+
+    const chips = page.locator('.olv-anno-editor-types .olv-anno-chip');
+    const noteChip = chips.filter({ hasText: 'Note' });
+    const warningChip = chips.filter({ hasText: 'Warning' });
+    await expect(noteChip).toHaveAttribute('aria-pressed', 'true');
+    await expect(warningChip).toHaveAttribute('aria-pressed', 'false');
+
+    await warningChip.click();
+    await expect(warningChip).toHaveAttribute('aria-pressed', 'true');
+    await expect(noteChip).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+test.describe('AnnotationEditor — repositions inside a short viewport', () => {
+  test('opening in a short window stays fully on-screen and re-fits as it grows', async ({
+    page,
+  }) => {
+    // Place the annotation at a normal, reliable viewport first (raycast
+    // placement, like every other test here) — the short-viewport clamp is
+    // exercised by REOPENING it afterward via the panel's own Edit button,
+    // which needs no raycast and so isn't sensitive to exactly where the
+    // dense grid lands on an oddly narrow-tall canvas.
+    await loadSampleAndAnnotate(page);
+    await placeAnnotation(page, { title: 'Short viewport check', offset: 0 });
+
+    // 390px tall is short enough that the OLD fixed CARD_H=420 guess always
+    // clamped `top` to a negative value here regardless of click position
+    // (390 - 420 - 8 = -38 < the 8px floor) — the real reproduction case.
+    await page.setViewportSize({ width: 844, height: 390 });
+    await rowFor(page, 'Short viewport check').locator('.olv-ap-edit').click();
+
+    const editor = page.locator('.olv-anno-editor');
+    await expect(editor).toBeVisible();
+    const box = await editor.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(390);
+
+    // Marking it a critical issue reveals the status row — a real height
+    // change the card has to stay clamped through, not just on first open.
+    await page.locator('.olv-anno-sev-critical').click();
+    const grown = await editor.boundingBox();
+    expect(grown).not.toBeNull();
+    expect(grown!.y).toBeGreaterThanOrEqual(0);
+    expect(grown!.y + grown!.height).toBeLessThanOrEqual(390);
   });
 });
 

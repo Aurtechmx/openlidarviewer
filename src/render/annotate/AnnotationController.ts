@@ -162,6 +162,18 @@ export class AnnotationController {
     cameraState?: SavedCameraState,
     georef?: AnnotationGeoref,
   ): void {
+    this._guardReopen(() =>
+      this._openDraftEditor(local, screenX, screenY, cameraState, georef),
+    );
+  }
+
+  private _openDraftEditor(
+    local: Vec3Object,
+    screenX: number,
+    screenY: number,
+    cameraState: SavedCameraState | undefined,
+    georef: AnnotationGeoref | undefined,
+  ): void {
     this._setHint('Fill in the annotation, then Save');
     this._editor.open({
       x: screenX,
@@ -220,6 +232,12 @@ export class AnnotationController {
   beginEdit(id: string, screenX: number, screenY: number): void {
     const a = this.get(id);
     if (!a) return;
+    this._guardReopen(() => this._openEditEditor(id, screenX, screenY));
+  }
+
+  private _openEditEditor(id: string, screenX: number, screenY: number): void {
+    const a = this.get(id);
+    if (!a) return;
     this._editor.open({
       x: screenX,
       y: screenY,
@@ -246,6 +264,27 @@ export class AnnotationController {
       onCancel: () => {
         /* editing cancelled — the annotation is left unchanged */
       },
+    });
+  }
+
+  /**
+   * Run `open` (a beginDraft/beginEdit body) directly, unless it would
+   * silently blow away real work already typed into an open editor.
+   *
+   * The common case — no editor open, or one open but untouched — resolves
+   * synchronously via `AnnotationEditor.reopenIfPossible`, so an ordinary
+   * `beginDraft`/`beginEdit` call still opens the card on the same tick it
+   * always has. Only a genuinely dirty draft falls through to the async
+   * confirm, which is unavoidable there: the app has to wait on the user's
+   * choice before deciding whether to discard real work.
+   */
+  private _guardReopen(open: () => void): void {
+    if (this._editor.reopenIfPossible()) {
+      open();
+      return;
+    }
+    void this._editor.confirmDiscard().then((discard) => {
+      if (discard) open();
     });
   }
 
