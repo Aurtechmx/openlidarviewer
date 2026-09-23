@@ -13,11 +13,48 @@ import { dropTinyLas } from './helpers';
  * tool dock clipping Close at 768px, the coordinate HUD under the dock at
  * every desktop width, the DropZone toast overflowing on a long filename,
  * and the scan-type segment clipping mid-word. Each got its own targeted
- * fix and CSS-source regression pin (tests/responsiveLayoutStyles.test.ts);
- * this spec is the standing width sweep those fixes came out of, run at
- * every width this project treats as load-bearing (320/375 phone, 768 the
- * desktop-layer edge, 1280 a full desktop) across the three states most
- * likely to expose a new one: the empty state, a loaded scan, and the tour.
+ * fix and CSS-source regression pin (tests/responsiveLayoutStyles.test.ts).
+ *
+ * Two kinds of live coverage live here. The width sweep below (the empty
+ * state, a loaded scan, and the tour, at 320/375/768/1280px) is a generic
+ * chrome-overflow check and genuinely exercises three of the six: SHELL-F1
+ * (Open-from-URL at 320px), OVERLAYS-TOUR-1 (the tour card), and SWEEP-F1
+ * (the dock at 768px) — all three break the sweep's own generic invariants
+ * (page scroll, a CHROME_SELECTOR control past the viewport edge). Two more
+ * findings get their own dedicated test below the sweep, because triggering
+ * them needs a specific action the generic sweep never takes: dropping a
+ * file with a long unbroken name (OVERLAYS-TOAST-1 / INTAKE-F5), and
+ * opening the phone Layers sheet (CRITIC-GAP-3's 44px isolate/lock touch
+ * target, folded in here rather than a seventh file since it shares this
+ * spec's drop-a-scan-and-measure shape).
+ *
+ * The remaining three — SHELL-F2 (the coordinate HUD's stacking),
+ * INSPECT-INSP-2 (the auto-detected "Auto (Interior)" label), and SHELL-F6
+ * (the classic-scrollbar selector list) — stay pinned only by
+ * responsiveLayoutStyles.test.ts's source-text regression tests, not by any
+ * live rendered assertion here or elsewhere. Each hits a real reachability
+ * wall, not an oversight:
+ *   - SHELL-F2: the HUD only mounts on the first probe-hover pick against a
+ *     real WebGL raycast (src/app/coordinateHudLazy.ts /
+ *     coordinateHudMount.ts, both outside this lane) — no test seam exists
+ *     for it, and this project already treats canvas-click → raycast as too
+ *     flaky for headless e2e (see measure.spec.ts's `?test=1` /
+ *     `__OLV_TEST_API__.placeMeasurementPoint` seam and its comment on why
+ *     the canvas-click path itself is still hand-tested per release).
+ *   - INSPECT-INSP-2: the long "Auto (Interior)" label only appears while
+ *     auto-detection is genuinely unsettled (src/terrain/scanShape.ts,
+ *     outside this lane) — reaching it needs a synthetic point cloud that
+ *     clears that module's floor/wall/ceiling coverage thresholds, which
+ *     are undocumented and owned elsewhere; a fixture tuned to them today
+ *     would silently stop proving anything the moment those thresholds move.
+ *   - SHELL-F6: `::-webkit-scrollbar` computed style is not something
+ *     `getComputedStyle` can read back reliably, so there is no live
+ *     assertion that would test more than "the selector list contains this
+ *     string" — which the vitest pin already asserts directly, and this
+ *     Mac's own scrollbars are the macOS overlay style regardless (an
+ *     interactive check here confirmed `.olv-classic-scrollbars` never
+ *     applies on this host), so a rendered check could pass for a reason
+ *     that has nothing to do with the fix.
  */
 
 const WIDTHS = [320, 375, 768, 1280] as const;
