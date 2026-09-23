@@ -4187,7 +4187,7 @@ const sessionIoDeps: SessionIoDeps = {
 };
 
 async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Promise<void> {
-  return (await loadSessionIo()).importSession(file, opts, sessionIoDeps);
+  return loadSessionIo().then((mod) => mod.importSession(file, opts, sessionIoDeps)).catch((err) => sessionIoDeps.setDropError(err instanceof Error ? err.message : 'Could not load the session importer.')); // chunk-load failure reports via setDropError, never an unhandled rejection
 }
 
 /**
