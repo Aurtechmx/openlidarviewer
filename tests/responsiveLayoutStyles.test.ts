@@ -81,3 +81,13 @@ describe('OVERLAYS-TOUR-1 — tour card width at phone widths', () => {
     expect(text).not.toMatch(/const cardW = 360;/);
   });
 });
+
+// SWEEP-F1: the dock overflowing at 768px with a scan loaded.
+describe('SWEEP-F1 — dock width at 768px', () => {
+  it('a fourth tool folds under More in the narrow low end of the laptop tier', () => {
+    const text = css('45-dock-and-panels.css');
+    const block = text.match(/@media \(max-width: 830px\) and \(min-width: 768px\) \{[^}]*\}[^}]*\}/s)?.[0] ?? '';
+    expect(block).toMatch(/\.olv-dock \.olv-tool-command\s*\{\s*display:\s*none/);
+    expect(block).toMatch(/\.olv-dock\.olv-dock-more-open \.olv-tool-command\s*\{\s*display:\s*inline-flex/);
+  });
+});
