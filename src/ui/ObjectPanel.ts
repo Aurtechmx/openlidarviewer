@@ -40,6 +40,7 @@ import {
   type ScanTypeControl,
   type ScanTypeDisabledReasons,
 } from './scanTypeControl';
+import { el } from './dom';
 
 /**
  * The user-tunable subset of the floor-plan extraction settings, surfaced as a
@@ -95,19 +96,6 @@ export interface ObjectPanelCallbacks {
    * interior scans (the button is rendered interior-only).
    */
   onExportFloorPlan?: () => Promise<void>;
-}
-
-function el(
-  tag: string,
-  opts: { className?: string; text?: string; title?: string } = {},
-  children: Node[] = [],
-): HTMLElement {
-  const node = document.createElement(tag);
-  if (opts.className) node.className = opts.className;
-  if (opts.text != null) node.textContent = opts.text;
-  if (opts.title) node.title = opts.title;
-  for (const c of children) node.append(c);
-  return node;
 }
 
 const m1 = (v: number): string => (Number.isFinite(v) ? v.toFixed(2) : '—');
