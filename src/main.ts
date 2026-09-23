@@ -134,7 +134,7 @@ import type { ClipBox } from './render/clip/clipBox';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
-import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader } from './app/helpOverlayLazy';
+import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger } from './app/helpOverlayLazy';
 import {
   buildViewerKeyBindings,
   installKeyDispatch,
@@ -1317,7 +1317,7 @@ const commandPaletteSingleton = createLazySingleton(async () => {
   stage.overlay.append(palette.element);
   palette.setActions(await ensureActionRegistry());
   return palette;
-}, 'command palette', { show: showLassoToast });
+}, 'command palette', { show: showLassoToast }, buttonLazyTrigger(() => dock.dock.querySelector<HTMLButtonElement>('.olv-tool-command')));
 function openCommandPalette(): void {
   void commandPaletteSingleton.ensure((p) => p.toggle());
 }
@@ -1753,7 +1753,7 @@ stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), key
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
 
 
-const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry(), toast: { show: showLassoToast } }); // lazy chunk, see helpOverlayLazy.ts
+const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry(), toast: { show: showLassoToast }, trigger: buttonLazyTrigger(() => dock.dock.querySelector<HTMLButtonElement>('.olv-tool-help')) }); // lazy chunk, see helpOverlayLazy.ts
 
 const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),

@@ -145,14 +145,22 @@ export function createLazySingleton<T>(
 /**
  * A trigger backed by a real `<button>`: `disabled` (most dock/panel
  * buttons already dim on `:disabled`) plus `aria-busy` for assistive tech.
- * `null` is accepted so a lookup that finds nothing is a harmless no-op.
+ *
+ * Accepts the element directly, or a getter for it — the getter form is for
+ * a button built later than the trigger (a dock assembled after this call),
+ * resolved fresh on every `setBusy`. Either form is a harmless no-op if the
+ * lookup finds nothing.
  */
-export function buttonLazyTrigger(button: HTMLButtonElement | null): LazyLoadTrigger {
+export function buttonLazyTrigger(
+  button: HTMLButtonElement | null | (() => HTMLButtonElement | null),
+): LazyLoadTrigger {
+  const resolve = (): HTMLButtonElement | null => (typeof button === 'function' ? button() : button);
   return {
     setBusy(busy) {
-      if (!button) return;
-      button.disabled = busy;
-      button.setAttribute('aria-busy', busy ? 'true' : 'false');
+      const el = resolve();
+      if (!el) return;
+      el.disabled = busy;
+      el.setAttribute('aria-busy', busy ? 'true' : 'false');
     },
   };
 }

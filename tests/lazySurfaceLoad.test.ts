@@ -172,4 +172,14 @@ describe('buttonLazyTrigger', () => {
     const trigger = buttonLazyTrigger(null);
     expect(() => { trigger.setBusy(true); trigger.setBusy(false); }).not.toThrow();
   });
+
+  it('resolves a getter fresh on every setBusy, for a button built after the trigger', () => {
+    let button: HTMLButtonElement | null = null;
+    const trigger = buttonLazyTrigger(() => button);
+    trigger.setBusy(true); // no button yet: a no-op, not a throw.
+    button = { disabled: false, setAttribute: vi.fn(), getAttribute: vi.fn() } as unknown as HTMLButtonElement;
+    trigger.setBusy(true);
+    expect(button.disabled).toBe(true);
+    expect(button.setAttribute).toHaveBeenCalledWith('aria-busy', 'true');
+  });
 });

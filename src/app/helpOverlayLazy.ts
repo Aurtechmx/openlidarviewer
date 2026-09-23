@@ -9,12 +9,12 @@
 
 import type { ActionDescriptor } from '../ui/actionRegistry';
 import { loadHelpOverlay } from '../lazyChunks';
-import { createLazySingleton, type LazyLoadToast } from './lazySurfaceLoad';
+import { createLazySingleton, type LazyLoadToast, type LazyLoadTrigger } from './lazySurfaceLoad';
 // Re-exported so `main.ts` reaches the lazy-load helpers through this
 // already-imported module rather than adding a second direct edge to
 // `lazySurfaceLoad.ts` (lint:module-graph's static fan-out on main.ts is
 // shrink-only and counts DIRECT imports only).
-export { createLazySingleton, createLazySurfaceLoader, type LazyLoadToast, type LazyLoadTrigger } from './lazySurfaceLoad';
+export { createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, type LazyLoadToast, type LazyLoadTrigger } from './lazySurfaceLoad';
 
 export interface HelpOverlayLazy {
   /** `false` before the first mount: the overlay cannot be open yet. */
@@ -38,6 +38,8 @@ export interface HelpOverlayLazyDeps {
    * session-restore chunk (LAZY-1).
    */
   toast: LazyLoadToast;
+  /** The Help button, so it disables and gets `aria-busy` while the chunk fetches (LOAD-1). Optional: a caller with no such button just skips the cue. */
+  trigger?: LazyLoadTrigger;
 }
 
 export function createHelpOverlayLazy(overlayHost: HTMLElement, deps: HelpOverlayLazyDeps): HelpOverlayLazy {
@@ -46,7 +48,7 @@ export function createHelpOverlayLazy(overlayHost: HTMLElement, deps: HelpOverla
     const created = new mod.HelpOverlay({ actions, shortcuts: mod.shortcutDescriptors() });
     overlayHost.append(created.element);
     return created;
-  }, 'help overlay', deps.toast);
+  }, 'help overlay', deps.toast, deps.trigger);
 
   // `ensure(onReady)` replays the requested action once the chunk resolves —
   // this attempt, or a LATER one from the toast's "Try again" (LAZY-1): a
