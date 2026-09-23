@@ -8390,6 +8390,10 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 @keyframes olv-xhair-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 /* Hover affordance: a faint ring signals the raster is interactive. */
 .olv-analyse-raster.is-samplable:hover { outline: 1px solid var(--accent-soft); outline-offset: -1px; }
+/* Keyboard-focus affordance: same ring the mouse hover gets, so the tile's
+   tabIndex=0 keyboard path (arrow keys move a cursor, Enter samples) is
+   visibly reachable and not just present in the accessibility tree. */
+.olv-analyse-raster.is-samplable:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 /* Disabled (multi-directional) sun row reads as intentionally off. */
 .olv-analyse-relief-slider.is-off { opacity: 0.55; }
 .olv-analyse-relief-slider.is-off .olv-analyse-relief-val { font-style: italic; }
