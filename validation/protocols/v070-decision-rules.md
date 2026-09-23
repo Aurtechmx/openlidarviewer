@@ -75,6 +75,40 @@ iOS runtime that renders WebGL without the Metal crash.
 
 Creating the account and adding secrets is done by the maintainer.
 
+## D4. Percentile convention in contourGeometryProduct (audit analysis-F1)
+
+Recorded before the consumer trace and the measurement were read.
+`contourGeometryProduct.ts` computes `p95DisplacementSource` by nearest rank;
+`terrain/quantile.ts` and the other percentiles in the application use type 7.
+
+1. If the value is used as a bound or an acceptance guarantee (a tolerance a
+   generalized contour must meet, or a statement that 95 per cent of
+   displacements are at most the value), nearest rank stays. It returns an
+   observed displacement and covers at least 95 per cent at every n, where
+   type 7 interpolates and covers 80 per cent at n = 5. The function then
+   documents why it differs from the canonical quantile.
+2. Otherwise, if the value decides nothing a user, export, persisted record,
+   digest or claim can see, it moves to the canonical type 7 through
+   `terrain/quantile.ts`.
+3. If it is not a bound but does reach one of those outputs, it moves to
+   type 7 as a recorded method version change, with the value before and
+   after on the repository's own fixtures.
+
+## D5. Double-precision PLY and PCD (audit io-F1)
+
+Recorded before the measurements were read. Two parts, decided separately.
+
+1. Precision. Double-typed coordinates are decoded as Float64 if the
+   measured world-coordinate error on the current path exceeds 1e-6 m for
+   coordinates at projected-CRS magnitudes (easting near 500 km, northing
+   near 4,000 km), and if float-typed files load byte-identically after the
+   change. Otherwise the documented limitation stays. PCD waits for the
+   Observatory branch that owns `loadPcd.ts` to merge.
+2. Memory ceiling. A per-format transient-memory ceiling like E57's is added
+   only if a measured peak for an ASCII body is at least 1.5 times the file
+   size on pure-ASCII content. Otherwise no file that loads today is newly
+   refused, and only the overstated cost in the code comments is corrected.
+
 ## Held
 
 Release notes and the changelog for the Field Simulation Lab are held until
