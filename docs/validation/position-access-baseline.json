@@ -1,5 +1,5 @@
 {
-  "total": 172,
+  "total": 174,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/featureExtractionInput.ts": 1,
@@ -53,6 +53,7 @@
     "src/render/recordSelection.ts": 4,
     "src/terrain/change/alignEpochs.ts": 3,
     "src/terrain/change/compareEpochs.ts": 3,
+    "src/terrain/ground/withheldAwareTerrainGather.ts": 2,
     "src/terrain/worker/terrainCoreWorker.ts": 1
   }
 }

@@ -162,12 +162,21 @@ describe('the audit this policy records', () => {
     return out;
   }
 
-  it('no scientific path consults the Withheld bit yet', () => {
+  it('no scientific path consults the Withheld bit yet, beyond the audited exception', () => {
     // This pins the audit rather than the intent. When a product starts
-    // applying the policy, this fails: update the count here and record the
+    // applying the policy, this fails: update the list here and record the
     // before-and-after for that product, because its numbers moved.
+    //
+    // `terrain/withheldAwareTerrainGather.ts` is the one exception, and it
+    // moves no product's numbers by existing: it re-decodes a source at full
+    // resolution and hands the result to `sampleStridedTerrain` — the SAME
+    // canonical gather this suite's other file (`withheldConsequence.test.ts`)
+    // confirms is the policy's one importer under `src/` — so the exclusion
+    // decision is still made in exactly one place. This file reads
+    // `classificationFlags` only to carry it to that gather unmodified, never
+    // to test a bit of its own.
     const reading = SCIENTIFIC_DIRS.flatMap(filesReadingFlags);
-    expect(reading).toEqual([]);
+    expect(reading).toEqual(['terrain/withheldAwareTerrainGather.ts']);
   });
 
   it('the bit survives the pipeline that carries it', () => {
