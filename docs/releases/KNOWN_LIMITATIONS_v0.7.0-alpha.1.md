@@ -107,19 +107,19 @@ themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,970 lines and `src/render/Viewer.ts` is 6,153, seventy below
-v0.6.9. Five getters collapsed to make room for a memory accessor and a
-size-mode call, and the streamed draw cull then paid for its own wiring by
-moving the pass onto the streaming renderer and collapsing two more
+`src/main.ts` is 4,970 lines and `src/render/Viewer.ts` is 6,153, seventy lines
+below its v0.6.9 count. Five getters collapsed to make room for a memory
+accessor and a size-mode call, and the streamed draw cull then paid for its own
+wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
 the activity deadlines, the reasons a frame is wanted and the scheduler left
 together as one object, which is fewer lines here and one thing to reach for
-there. The frame gained a decision while the file lost lines. A shrink-only lint fails the build when either passes its
-recorded baseline, so a raise is a hand edit to
-`docs/validation/monolith-size-baseline.json` and always shows in the diff. It
-caught an added line twice during this cycle, and a banked drop once. Fan-out is 109 for the shell, 76 for
-the renderer and 23 for the Analyse panel, across 899 modules with no
-dependency cycles.
+there. The frame gained a decision while the file lost lines. A shrink-only lint
+fails the build when either passes its recorded baseline, so a raise is a hand
+edit to `docs/validation/monolith-size-baseline.json` and always shows in the
+diff. It caught an added line twice during this cycle, and a banked drop once.
+Fan-out is 109 for the shell, 76 for the renderer and 23 for the Analyse panel,
+across 899 modules with no dependency cycles.
 
 ## The shell has little headroom
 

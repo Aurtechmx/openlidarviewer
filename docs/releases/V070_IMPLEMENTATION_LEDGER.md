@@ -4539,13 +4539,6 @@ is nothing yet that would read an old record and misread the new
 `fieldDigest` field, and the check is worth repeating before any such path
 starts writing one.
 
-Rendering computed from float32 arithmetic on the app's live matrices; the
-bake residual is pinned by `tests/farMountFloat32Bake.test.ts`. The gate
-holds the analysis paths to 1 mm and is slightly optimistic for display at
-its edge. Relaxing it needs two changes: `highPrecision` on, verified on the
-WebGL2 fallback, and the six paths accumulating source-local values with the
-offset added in float64.
-
 ### L47 · PARTIAL · UI
 
 A follow-up review of the per-voxel local-plane fix measured three gaps against
