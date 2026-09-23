@@ -171,10 +171,14 @@ test.describe('session import survives a failed chunk load', () => {
     // main.ts's `importSession` wrapper must catch this and report it through
     // the drop toast — the same contract every other failed load honours —
     // rather than leaving the toast stuck on "Opening…" or letting the
-    // rejection escape uncaught.
+    // rejection escape uncaught. The resolved-to-`undefined` module makes
+    // `mod.importSession` throw "Cannot read properties of undefined" if
+    // nothing catches it first; `loadSessionIo` (lazyChunks.ts) does, so the
+    // toast reads the same friendly sentence a network failure gets, not that
+    // internal TypeError.
     const toast = page.locator('.olv-toast');
     await expect(toast).toHaveClass(/olv-toast-error/, { timeout: 10_000 });
-    await expect(page.locator('.olv-toast-text')).not.toHaveText('');
+    await expect(page.locator('.olv-toast-text')).toHaveText('Could not load the session importer.');
 
     expect(
       failures,

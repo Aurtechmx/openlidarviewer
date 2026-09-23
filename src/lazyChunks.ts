@@ -449,8 +449,29 @@ export const loadSession = () => import('./io/session');
  * chunks (`loadSessionOwnership`, `loadVerifySessionManifest`) — and no scan
  * needs any of it before a session file is actually offered. `main.ts` binds
  * its running state through `SessionIoDeps` once this resolves.
+ *
+ * Wrapped rather than a bare re-export: Vite's `__vitePreload` swallows a
+ * preload failure that lands inside `installStaleChunkRecovery`'s cooldown
+ * (staleChunkReload.ts) and resolves to `undefined` instead of rejecting.
+ * Left bare, `main.ts`'s caller would then read `mod.importSession` off
+ * `undefined` and report the resulting TypeError verbatim — "Cannot read
+ * properties of undefined" — instead of the same honest chunk-load message a
+ * network failure already gets there.
+ *
+ * The `.then` guard has to live on a SEPARATE statement from the `import()`
+ * literal, not chained onto it directly: the live source transform wraps the
+ * whole `() => import(...)` expression it finds — including a `.then` chained
+ * straight onto that same import — inside `__vitePreload`, so a guard written
+ * that way runs only when the import itself fulfils. The swallow this guards
+ * against happens one layer further out, inside `__vitePreload`'s own catch,
+ * which a guard inside its wrapped loader can never see.
  */
-export const loadSessionIo = () => import('./app/sessionIo');
+const importSessionIoChunk = () => import('./app/sessionIo');
+export const loadSessionIo = () =>
+  importSessionIoChunk().then((mod) => {
+    if (!mod) throw new Error('Could not load the session importer.');
+    return mod;
+  });
 export const loadCompareEpochs = () => import('./terrain/change/compareEpochs');
 export const loadAlignEpochs = () => import('./terrain/change/alignEpochs');
 export const loadCompareDtms = () => import('./terrain/change/compareDtms');
