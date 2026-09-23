@@ -6446,3 +6446,33 @@ Covered by `tests/stockpileMethodIdentity.test.ts`,
 `tests/stockpileDualAnswer.test.ts`, `tests/stockpilePresenter.test.ts`,
 `tests/measureDerivations.test.ts`, `tests/measurementChains.test.ts`,
 `tests/measurementExport.test.ts` and `tests/measurementReport.test.ts`.
+
+### L05 · FIXED · SCIENTIFIC
+
+A second gap in item 2, this time in the evidence stamp rather than the
+figures themselves. `claimForMeasurement` in `measurementExport.ts` named
+`VOL-STOCKPILE` for any lasso record whose method started with the grid's id,
+without checking `gridAuthority`. A withheld record publishes no grid figure
+at all, so its evidence stamp named an estimator that contributed nothing,
+while the row's only actual numbers, the cross-check's `pointsample_cut_m3`,
+`pointsample_fill_m3` and `pointsample_net_m3`, belong to VOL-POINT-SAMPLE,
+which never appeared. That is the same defect this file's own docstring
+names one level up, a record naming the wrong claim, reproduced for the
+withheld sub-case the earlier tests never exercised.
+
+`claimForMeasurement` now also requires `gridAuthority !== 'withheld'` before
+naming the grid's claim, so a withheld record falls through to
+`CLAIM_FOR_KIND`'s `VOL-POINT-SAMPLE`, matching the estimator that produced
+the row's only published numbers. A measured or preview grid record is
+unaffected. A new test in `measurementExport.test.ts` exports a withheld grid
+record and asserts its evidence note contains VOL-POINT-SAMPLE and not
+VOL-STOCKPILE.
+
+Recorded numbers: none. This changes which claim id a withheld row's evidence
+text names, not any measured, exported or pinned figure. A repository-wide
+grep for "section 80" or the section sign again turned up nothing outside
+this ledger; the change is a bug fix to the claim-attribution logic the D2
+switch introduced, not a new scientific classification, so no separate
+decision was needed.
+
+Covered by `tests/measurementExport.test.ts`.

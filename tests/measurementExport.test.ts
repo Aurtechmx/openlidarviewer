@@ -462,6 +462,24 @@ describe('the evidence stamp names the claim behind each figure', () => {
     expect(note).toContain('VOL-STOCKPILE');
     expect(note).toContain('VOL-POINT-SAMPLE');
   });
+
+  // A withheld grid published no figure at all; the row's only numbers are
+  // the point-sample cross-check, so the claim it draws on must say so too.
+  const withheldGridVol = {
+    id: 'w', kind: 'volume', name: 'w', points: [[0, 0, 0], [10, 0, 0], [10, 10, 0]],
+    volume: {
+      referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
+      confidence: 'high', method: 'olv.volume.stockpile-area-grid@2',
+      gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
+      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+    },
+  } as never;
+
+  it('a withheld grid record draws on VOL-POINT-SAMPLE, not VOL-STOCKPILE', () => {
+    const note = JSON.parse(measurementsToGeoJSON([withheldGridVol], ctx)).evidence as string;
+    expect(note).toContain('VOL-POINT-SAMPLE');
+    expect(note).not.toContain('VOL-STOCKPILE');
+  });
 });
 
 // Deriving the stamp from the kinds present meant an EMPTY collection produced

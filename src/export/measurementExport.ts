@@ -331,9 +331,20 @@ const GRID_METHOD_ID = 'olv.volume.stockpile-area-grid';
  * decided this before D2: every `'volume'` measurement was stamped
  * `VOL-POINT-SAMPLE`, which is wrong for a lasso record the grid now owns —
  * the same defect `CLAIM_FOR_KIND`'s own docstring names, one level down.
+ *
+ * A withheld grid published no figure at all: `fill`/`cut`/`net` are absent
+ * (session.ts's parser and withStockpileGrid both refuse to smuggle numbers
+ * past a withheld verdict), and the row's only actual numbers are the
+ * `crossCheck`'s point-sample ones. Naming VOL-STOCKPILE there would stamp an
+ * estimator that contributed nothing, so a withheld record falls through to
+ * the point-sample claim that produced what the row actually shows.
  */
 function claimForMeasurement(m: Measurement): string | undefined {
-  if (m.kind === 'volume' && m.volume?.method?.startsWith(GRID_METHOD_ID)) return 'VOL-STOCKPILE';
+  if (
+    m.kind === 'volume'
+    && m.volume?.method?.startsWith(GRID_METHOD_ID)
+    && m.volume.gridAuthority !== 'withheld'
+  ) return 'VOL-STOCKPILE';
   return CLAIM_FOR_KIND[m.kind];
 }
 
