@@ -31,8 +31,8 @@ export const MAX_WORKFLOW_TEXT_BYTES = 32 * 1024 * 1024;
 export function assertWorkflowFileSize(sizeBytes: number): void {
   if (sizeBytes > MAX_WORKFLOW_TEXT_BYTES) {
     throw new Error(
-      `This workflow file is too large (${Math.round(sizeBytes / (1024 * 1024))} MB; ` +
-        `limit ${Math.round(MAX_WORKFLOW_TEXT_BYTES / (1024 * 1024))} MB).`,
+      `This workflow file is too large (${Math.round(sizeBytes / (1024 * 1024))} MiB; ` +
+        `limit ${Math.round(MAX_WORKFLOW_TEXT_BYTES / (1024 * 1024))} MiB).`,
     );
   }
 }

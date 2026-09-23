@@ -6,18 +6,22 @@
  * streaming cache readout) each grew their own copy with subtly different
  * bases (1000 vs 1024), precision, and small-value handling — so the same
  * file size could read "12 MB" in one place and "11.8 MB" in another. This is
- * the single source of truth: binary units (1024-based), one decimal from KB
+ * the single source of truth: binary units (1024-based), one decimal from KiB
  * up, whole bytes below, and a floor at zero so a negative never prints.
+ *
+ * The divisions are 1024-based, so the labels are the IEC binary ones —
+ * KiB/MiB/GiB, matching `zipStore.ts`'s existing GiB convention — rather than
+ * the decimal (1000-based) KB/MB/GB those letters denote by SI definition.
  *
  * Pure — no DOM, no three.js — unit-tested in Node.
  */
 
-/** Render a byte count compactly: 12_400_000 → "11.8 MB". */
+/** Render a byte count compactly: 12_400_000 → "11.8 MiB". */
 export function formatByteSize(bytes: number): string {
   const v = Math.max(0, bytes);
-  if (v >= 1024 ** 3) return `${(v / 1024 ** 3).toFixed(1)} GB`;
-  if (v >= 1024 ** 2) return `${(v / 1024 ** 2).toFixed(1)} MB`;
-  if (v >= 1024) return `${(v / 1024).toFixed(1)} KB`;
+  if (v >= 1024 ** 3) return `${(v / 1024 ** 3).toFixed(1)} GiB`;
+  if (v >= 1024 ** 2) return `${(v / 1024 ** 2).toFixed(1)} MiB`;
+  if (v >= 1024) return `${(v / 1024).toFixed(1)} KiB`;
   return `${Math.round(v)} B`;
 }
 

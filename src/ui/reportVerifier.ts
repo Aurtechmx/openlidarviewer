@@ -154,8 +154,8 @@ export function oversizeReportResult(sizeBytes: number): VerifyReportResult | un
     valid: false,
     reason:
       `This file is too large to be a report ` +
-      `(${Math.round(sizeBytes / (1024 * 1024))} MB; limit ` +
-      `${Math.round(MAX_REPORT_TEXT_BYTES / (1024 * 1024))} MB).`,
+      `(${Math.round(sizeBytes / (1024 * 1024))} MiB; limit ` +
+      `${Math.round(MAX_REPORT_TEXT_BYTES / (1024 * 1024))} MiB).`,
   };
 }
 

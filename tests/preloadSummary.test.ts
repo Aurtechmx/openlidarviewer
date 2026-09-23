@@ -1,11 +1,11 @@
 import { buildPreloadSummary, formatByteSize } from '../src/io/preloadSummary';
 import type { SourceMetadata } from '../src/io/PointCloudSource';
 
-test('formatByteSize renders compact units', () => {
+test('formatByteSize renders compact binary units', () => {
   expect(formatByteSize(512)).toBe('512 B');
-  expect(formatByteSize(2048)).toBe('2.0 KB');
-  expect(formatByteSize(5 * 1024 * 1024)).toBe('5.0 MB');
-  expect(formatByteSize(3 * 1024 ** 3)).toBe('3.0 GB');
+  expect(formatByteSize(2048)).toBe('2.0 KiB');
+  expect(formatByteSize(5 * 1024 * 1024)).toBe('5.0 MiB');
+  expect(formatByteSize(3 * 1024 ** 3)).toBe('3.0 GiB');
   expect(formatByteSize(-10)).toBe('0 B');
 });
 
@@ -15,7 +15,7 @@ test('a summary always carries the format label and the size', () => {
     label: 'PCD cloud',
     byteSize: 12 * 1024 * 1024,
   };
-  expect(buildPreloadSummary(meta)).toEqual(['PCD cloud detected', '12.0 MB']);
+  expect(buildPreloadSummary(meta)).toEqual(['PCD cloud detected', '12.0 MiB']);
 });
 
 test('a revealed point count and load mode are included when present', () => {
@@ -29,7 +29,7 @@ test('a revealed point count and load mode are included when present', () => {
   expect(buildPreloadSummary(meta)).toEqual([
     'LAS scan detected',
     '4.2M source points',
-    '48.0 MB',
+    '48.0 MiB',
     'Large-file optimization enabled',
   ]);
 });
@@ -44,6 +44,6 @@ test('a PTS header count appears even without a load mode', () => {
   expect(buildPreloadSummary(meta)).toEqual([
     'PTS scan detected',
     '15K source points',
-    '878.9 KB',
+    '878.9 KiB',
   ]);
 });

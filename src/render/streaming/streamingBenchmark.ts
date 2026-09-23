@@ -461,7 +461,7 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
   const lines: string[] = [];
   const ms = (v: number | undefined): string =>
     v === undefined ? '       —' : `${v.toFixed(1).padStart(8)} ms`;
-  const mb = (n: number): string => `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  const mb = (n: number): string => `${(n / (1024 * 1024)).toFixed(2)} MiB`;
   const ag = (label: string, a: AggregateStats): void => {
     if (a.count === 0) {
       lines.push(`  ${label.padEnd(14)}       —`);
