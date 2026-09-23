@@ -71,6 +71,10 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
   clearBtn.type = 'button';
   clearBtn.title = 'Empty the findings ledger for this session. Exported reports are unaffected.';
   const status = el('div', { className: 'olv-findings-status', text: '' });
+  // Every write below (add / nothing-to-add / remove / export / clear) lands
+  // here, so assistive tech needs one live-region wiring for all of them.
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
   actions.append(addBtn, exportBtn, clearBtn);
 
   const render = (): void => {
@@ -120,6 +124,11 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
         for (const f of toAdd) findings.add(f);
         status.textContent = `Added ${toAdd.length} measurement finding(s).`;
         render();
+      })
+      .catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error('OpenLiDARViewer: could not collect the current measurements.', err);
+        status.textContent = 'Could not read the current measurements. Try again.';
       })
       .finally(() => {
         addBtn.disabled = false;
