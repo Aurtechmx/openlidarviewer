@@ -331,3 +331,33 @@ describe('Stage full-screen comment', () => {
     expect(source).toMatch(/does not see F11/);
   });
 });
+
+describe('FullscreenToggle icon house style', () => {
+  // SHELL-F5: FullscreenToggle used to redeclare a private copy of dockIcons'
+  // exported `svg()` house-style wrapper with a drifted stroke-width (1.7 vs
+  // the documented 1.6), instead of importing the shared one.
+  const dockIconsSrc = readFileSync(new URL('../src/ui/dockIcons.ts', import.meta.url), 'utf8');
+  const fsToggleSrc = readFileSync(new URL('../src/ui/FullscreenToggle.ts', import.meta.url), 'utf8');
+  const savedDocument = globalThis.document;
+  const live: FullscreenToggle[] = [];
+
+  afterEach(() => {
+    while (live.length) live.pop()?.dispose();
+    globalThis.document = savedDocument;
+  });
+
+  it('imports the shared dockIcons svg() wrapper instead of redeclaring its own', () => {
+    expect(fsToggleSrc).toMatch(/import\s*\{[^}]*\bsvg\b[^}]*\}\s*from\s*['"]\.\/dockIcons['"]/);
+    expect(fsToggleSrc).not.toMatch(/function svg\(/);
+  });
+
+  it('renders its icon at the dockIcons house-style stroke width, not a private one', () => {
+    const houseStroke = /stroke-width="([\d.]+)"/.exec(dockIconsSrc)?.[1];
+    expect(houseStroke).toBeDefined();
+    globalThis.document = makeDoc(() => Promise.resolve()) as unknown as Document;
+    const toggle = new FullscreenToggle();
+    live.push(toggle);
+    const markup = (toggle.element as unknown as NodeStub).innerHTML;
+    expect(markup).toContain(`stroke-width="${houseStroke}"`);
+  });
+});

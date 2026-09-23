@@ -22,16 +22,7 @@
  */
 
 import { el } from './dom';
-
-function svg(inner: string): string {
-  return (
-    '<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" ' +
-    'fill="none" stroke="currentColor" stroke-width="1.7" ' +
-    'stroke-linecap="round" stroke-linejoin="round">' +
-    inner +
-    '</svg>'
-  );
-}
+import { svg } from './dockIcons';
 
 /** Enter — two diagonal arrows pushing out to opposite corners. */
 const ICON_ENTER = svg(
