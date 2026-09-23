@@ -315,6 +315,15 @@ export interface ToastHost {
  * One `role="status"` toast for the whole app, created on first use inside
  * `host()`. Every call rebuilds the content, so an info toast never leaves a
  * stale action button behind, and restarts the dismiss timer.
+ *
+ * DropZone.ts builds a second, separate `.olv-toast` for load progress and
+ * errors, with its own show/hide/timer scaffolding. Not a missed dedup: that
+ * toast hides via `display: none`, which would silence a live region baked
+ * into the visible node, so it announces instead through two permanently
+ * mounted, visually hidden status/alert regions (see the header comment on
+ * tests/e2e/a11yAnnouncements.spec.ts). The two surfaces stay separate
+ * implementations because they need different a11y shapes, not because
+ * nobody noticed the overlap.
  */
 export function createToastHost(host: () => HTMLElement = () => document.body): ToastHost {
   let root: HTMLElement | null = null;

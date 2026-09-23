@@ -6,6 +6,13 @@ import { clamp01 } from '../numeric';
  * toast reports load status — a preload summary, staged progress with an
  * optional progress bar, a Cancel control, or an error. No file ever leaves
  * the browser.
+ *
+ * A second toast (`createToastHost` in panelChrome.ts, `.olv-lasso-toast`)
+ * covers other transient status. The two are not merged: this one hides via
+ * `display: none`, so its live-region behaviour lives on two permanently
+ * mounted, visually hidden status/alert nodes instead of on the visible
+ * `.olv-toast` (see tests/e2e/a11yAnnouncements.spec.ts's header comment),
+ * which the single-region `.olv-lasso-toast` doesn't need.
  */
 export class DropZone {
   /** The toast element — mount it into the overlay. */
