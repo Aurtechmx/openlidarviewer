@@ -37,7 +37,6 @@ import {
   writePersistedTheme,
   type ThemeName,
 } from './ui/themes';
-import type { CommandPalette } from './ui/CommandPalette';
 import type { ShortcutSheet } from './ui/ShortcutSheet';
 import type { TourHandle } from './ui/onboarding/bootTour';
 import { createTourLauncher } from './app/tourLauncher';
@@ -135,7 +134,7 @@ import type { ClipBox } from './render/clip/clipBox';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
-import { createHelpOverlayLazy } from './app/helpOverlayLazy';
+import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader } from './app/helpOverlayLazy';
 import {
   buildViewerKeyBindings,
   installKeyDispatch,
@@ -767,7 +766,12 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   const v = viewer;
-  void loadContextMenu().then(({ showContextMenu }) => {
+  // Reading `.showContextMenu` off the awaited module (not passing
+  // `loadContextMenu` straight through) is what makes a stale-chunk resolve
+  // to `undefined` throw here and reach the toast, instead of silently
+  // succeeding with nothing to call.
+  void createLazySurfaceLoader({ show: showLassoToast })(async () => (await loadContextMenu()).showContextMenu, 'context menu').then((showContextMenu) => {
+    if (!showContextMenu) return; // already reported; right-click again to retry.
     showContextMenu(e.clientX, e.clientY, [
       {
         label: 'Focus here',
@@ -1306,16 +1310,16 @@ function toggleWorkflowRecord(): void {
 // registry so every action stays close to the handler that powers
 // the corresponding tool dock / Inspector / keyboard surface — no
 // duplicate truth.
-// The command palette opens on Cmd/Ctrl-K only: lazy, with the lazy registry it lists.
-let commandPalette: CommandPalette | null = null;
-async function openCommandPalette(): Promise<void> {
-  if (!commandPalette) {
-    const { CommandPalette } = await loadCommandPalette();
-    commandPalette = new CommandPalette();
-    stage.overlay.append(commandPalette.element);
-    commandPalette.setActions(await ensureActionRegistry());
-  }
-  commandPalette.toggle();
+// The command palette opens on Cmd/Ctrl-K only: lazy, with the lazy registry it lists; a chunk-load failure reports through the toast instead of an unhandled rejection (LAZY-1).
+const commandPaletteSingleton = createLazySingleton(async () => {
+  const { CommandPalette } = await loadCommandPalette();
+  const palette = new CommandPalette();
+  stage.overlay.append(palette.element);
+  palette.setActions(await ensureActionRegistry());
+  return palette;
+}, 'command palette', { show: showLassoToast });
+function openCommandPalette(): void {
+  void commandPaletteSingleton.ensure((p) => p.toggle());
 }
 
 // A dismissible "recommended view" chip surfaced after a scan loads.
@@ -1325,24 +1329,19 @@ stage.overlay.append(recommendedViewChip.element);
 // v0.3.9 — keyboard shortcut sheet (open via `?`). Reads the same
 // action registry as the palette so adding a new action makes it
 // discoverable in both surfaces without a second touch.
-// The shortcut sheet is only ever shown on a `?` press (or the "Show keyboard
-// shortcuts" action), so it is lazy-loaded on first use to keep its ~250 lines
-// out of the startup shell. Same direct-dynamic-import pattern as the command
-// palette below.
-let shortcutSheet: ShortcutSheet | null = null;
-let shortcutSheetLoading: Promise<ShortcutSheet> | null = null;
+// The shortcut sheet is only ever shown on a `?` press (or the "Show keyboard shortcuts" action), lazy-loaded on first use. Same lazy-singleton pattern as the command palette above; `ensureShortcutSheet` keeps its non-optional return type for `helpActions.ts`, so a failed load rejects (after already reporting via the toast) rather than resolving to nothing.
+const shortcutSheetSingleton = createLazySingleton(async () => {
+  const [{ ShortcutSheet }, actions] = await Promise.all([loadShortcutSheet(), ensureActionRegistry()]);
+  const sheet = new ShortcutSheet();
+  stage.overlay.append(sheet.element);
+  sheet.setActions(actions);
+  return sheet;
+}, 'shortcut sheet', { show: showLassoToast });
 function ensureShortcutSheet(): Promise<ShortcutSheet> {
-  if (shortcutSheet) return Promise.resolve(shortcutSheet);
-  if (!shortcutSheetLoading) {
-    shortcutSheetLoading = Promise.all([loadShortcutSheet(), ensureActionRegistry()]).then(([{ ShortcutSheet }, actions]) => {
-      const sheet = new ShortcutSheet();
-      stage.overlay.append(sheet.element);
-      sheet.setActions(actions);
-      shortcutSheet = sheet;
-      return sheet;
-    });
-  }
-  return shortcutSheetLoading;
+  return shortcutSheetSingleton.ensure().then((sheet) => {
+    if (sheet) return sheet;
+    throw new Error('Could not load the shortcut sheet.');
+  });
 }
 
 /**
@@ -1743,7 +1742,7 @@ const keyBindingDeps: KeyBindingDeps = {
     setCameraPreset: (preset) => viewer?.setCameraPreset(preset),
     toast: (message) => showLassoToast(message),
     openCommandPalette: () => void openCommandPalette(),
-    toggleShortcutSheet: () => void ensureShortcutSheet().then((sheet) => sheet.toggle()),
+    toggleShortcutSheet: () => void ensureShortcutSheet().then((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
     workflowRecorderEnabled: WORKFLOW_RECORDER_ENABLED,
     matchesWorkflowShortcut: (e) => matchesShortcut(e, workflowController.config.shortcut),
     toggleWorkflowRecord: () => toggleWorkflowRecord(),
@@ -1754,7 +1753,7 @@ stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), key
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
 
 
-const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry() }); // lazy chunk, see helpOverlayLazy.ts
+const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry(), toast: { show: showLassoToast } }); // lazy chunk, see helpOverlayLazy.ts
 
 const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
