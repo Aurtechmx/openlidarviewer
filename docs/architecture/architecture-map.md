@@ -165,7 +165,7 @@ Done: `importSession` (~208 lines) lives in `src/app/sessionIo.ts`, called with 
 `SessionIoDeps` object of ~16 accessors the shell binds to its own state, and
 lazy-loaded from `main.ts` on the first `.olvsession` file (v0.7 shell headroom).
 The pure cloud→fingerprint adapter (`scanFactsFromStreaming` / `scanFactsFromStatic`)
-moved to `src/app/scanFacts.ts` — re-exported unchanged off `sessionIo.ts` — because
+moved to `src/app/sessionScanFacts.ts` — re-exported unchanged off `sessionIo.ts` — because
 `openScan.ts` calls it synchronously on every scan load and must stay eager; the
 parse/verify/rebase halves it leans on already lived in `src/io/session.ts`
 (`tests/sessionIo.test.ts`).

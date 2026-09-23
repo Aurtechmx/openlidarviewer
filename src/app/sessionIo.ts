@@ -9,7 +9,7 @@
  * tested there; the apply step is parameterised through {@link SessionIoDeps}
  * so the whole restore drives from plain fakes. The `ScanFacts` adapter
  * (`scanFactsFromStreaming` / `scanFactsFromStatic`) that used to live here
- * moved to `./scanFacts` — `openScan.ts` calls it synchronously on every scan
+ * moved to `./sessionScanFacts` — `openScan.ts` calls it synchronously on every scan
  * load, so it stays eager, while this module (session-file import — a
  * deliberate, occasional user action) does not; both names are re-exported
  * here unchanged. `main.ts` calls in through `loadSessionIo()` (v0.7 shell
@@ -50,10 +50,10 @@ import {
   declaredSpatialFromStatic,
   type StreamingScanSource,
   type StaticScanCloud,
-} from './scanFacts';
+} from './sessionScanFacts';
 
 // Re-exported so `sessionIo`'s public API is unchanged — `openScan.ts` reads
-// `scanFactsFromStatic` off `./scanFacts` directly (the hot scan-open path
+// `scanFactsFromStatic` off `./sessionScanFacts` directly (the hot scan-open path
 // must not pull in the rest of this module), but existing importers of these
 // names off `sessionIo` (tests, `layerIdentityService`'s doc comment) keep
 // working exactly as before.

@@ -1,6 +1,9 @@
 /**
- * scanFacts.ts — the pure loaded-scan → fingerprint adapters split out of
- * `sessionIo.ts`.
+ * sessionScanFacts.ts — the pure loaded-scan → fingerprint adapters split out
+ * of `sessionIo.ts`. Named distinctly from the pre-existing, unrelated
+ * `src/process/scanFacts.ts` (that one derives capability facts for the
+ * processing pipeline; this one fingerprints a loaded scan for session
+ * identity) to avoid a basename collision between two "scan facts" modules.
  *
  * `scanFactsFromStatic` is called synchronously from the hot scan-open path
  * (`openScan.ts`, layer-identity binding) on every static load, so it must

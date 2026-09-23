@@ -347,7 +347,7 @@ function chunkEmissionGuard() {
     // the first `.olvsession` file the shell actually sees, via
     // `loadSessionIo()`. No scan needs any of it before a session file is
     // offered. `scanFactsFromStatic`/`scanFactsFromStreaming` moved out to
-    // `src/app/scanFacts.ts` (deliberately eager: the hot scan-open path in
+    // `src/app/sessionScanFacts.ts` (deliberately eager: the hot scan-open path in
     // `openScan.ts` calls `scanFactsFromStatic` synchronously on every load).
     'src/app/sessionIo.ts',
   ];

@@ -19,7 +19,7 @@
  */
 
 import { isSessionFile } from '../io/sessionFile';
-import { scanFactsFromStatic } from './scanFacts';
+import { scanFactsFromStatic } from './sessionScanFacts';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress } from '../io/loadProgress';
 import { describeLoadError } from '../io/loadErrors';

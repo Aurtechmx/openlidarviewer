@@ -444,7 +444,7 @@ export const loadSession = () => import('./io/session');
  * rebase, apply) on the first `.olvsession` file the shell actually sees
  * (drop, Open picker, or "Apply anyway"), never in the initial shell (v0.7
  * shell-headroom). The `ScanFacts` adapter it used to carry inline is now
- * `./app/scanFacts`, imported eagerly by `openScan.ts`'s hot scan-open path;
+ * `./app/sessionScanFacts`, imported eagerly by `openScan.ts`'s hot scan-open path;
  * this module is everything else — the apply step and its own further-lazy
  * chunks (`loadSessionOwnership`, `loadVerifySessionManifest`) — and no scan
  * needs any of it before a session file is actually offered. `main.ts` binds
