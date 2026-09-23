@@ -229,3 +229,53 @@ test.describe('workflow config panel — focus containment', () => {
   });
 });
 
+test.describe('canvas context menu — keyboard operability', () => {
+  async function loadScan(page: Page): Promise<void> {
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    await dropTinyPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await page.waitForTimeout(800);
+  }
+
+  test('Shift+F10 on the focused canvas opens the menu with the first row focused', async ({ page }) => {
+    await loadScan(page);
+    await page.locator('.olv-canvas').focus();
+    await page.keyboard.press('Shift+F10');
+    await expect(page.locator('.olv-ctxmenu')).toBeVisible();
+    await expect(page.locator('.olv-ctxmenu-item').first()).toBeFocused();
+  });
+
+  test('the ContextMenu key also opens it', async ({ page }) => {
+    await loadScan(page);
+    await page.locator('.olv-canvas').focus();
+    await page.keyboard.press('ContextMenu');
+    await expect(page.locator('.olv-ctxmenu')).toBeVisible();
+  });
+
+  test('ArrowDown / ArrowUp / Home / End rove focus between rows', async ({ page }) => {
+    await loadScan(page);
+    await page.locator('.olv-canvas').focus();
+    await page.keyboard.press('Shift+F10');
+    const rows = page.locator('.olv-ctxmenu-item');
+    await expect(rows.first()).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(rows.nth(1)).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(rows.last()).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(rows.first()).toBeFocused();
+    await page.keyboard.press('ArrowUp'); // wraps backward past the first row
+    await expect(rows.last()).toBeFocused();
+  });
+
+  test('Escape closes the menu and restores focus to the canvas', async ({ page }) => {
+    await loadScan(page);
+    await page.locator('.olv-canvas').focus();
+    await page.keyboard.press('Shift+F10');
+    await expect(page.locator('.olv-ctxmenu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-ctxmenu')).toBeHidden();
+    await expect(page.locator('.olv-canvas')).toBeFocused();
+  });
+});
