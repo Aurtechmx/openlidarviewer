@@ -15,11 +15,13 @@ open work.
 
 ## Flags do not survive every derivation
 
-Clipping carries them. Voxel downsampling does not: it takes the first point in
-each voxel for every attribute, and applying that to a safety flag would let one
-withheld point among nine ordinary ones lose its marking. That aggregation is
-left undecided rather than guessed. EPT and COPC decode on their own path and
-produce no flags, which reads as absent rather than as false zeros.
+Clipping carries them. Voxel downsampling leaves them undefined on the points it
+produces. Each output point sits at the centroid of its voxel's members, so a
+voxel mixing a Withheld return with an ordinary one has no single true Withheld
+state to give it. A reduced-view LAS export writes that flag byte as zero; the
+source-faithful export decodes the file again and keeps the flags. EPT and COPC
+decode on their own path and produce no flags, which reads as absent rather
+than as false zeros.
 
 ## Class names are exact only when the format is known
 
@@ -61,6 +63,31 @@ hides its basis: on a strided load the report says in the value itself that it
 is the declared count over the display-sample footprint. What is missing is one
 record rather than two computations.
 
+## Flow Pulse is topographic routing only
+
+Flow Pulse opens from the command palette and routes flow over the analysed DTM
+with D8. It builds a routing graph over that surface. It is not rainfall,
+runoff, infiltration or flood modelling, and accumulation counts cells rather
+than water.
+
+The lab runs raw routing. A cell with no lower neighbour keeps its flow as a
+sink, and a cell level with a neighbour is reported unresolved rather than given
+a direction. Priority-Flood depression filling is implemented, and the lab
+offers no control for it. Interpolated cells are routed over, so a path may
+cross ground no return landed on, and routes stop at cells with no elevation.
+
+Each run lists its limitations beside its figures. Whether Withheld points were
+excluded is not recorded for the terrain behind it, so no run can state it
+either way. A terrain built from a streamed subset or a sample is named as
+such. With the horizontal scale unresolved, contributing area in square metres
+is withheld and cell counts remain. A geographic frame whose latitude is
+unknown is refused, including a scene whose contributing layers do not share
+one origin, since the latitude is read from that origin. A grid above 4,000,000
+cells is refused.
+
+The result is a summary card. The flow field is not drawn on the scan, and the
+run record it seals is not written to any export.
+
 ## Registration is not exposed
 
 Six modules implement alignment. No user path reaches them.
@@ -70,10 +97,13 @@ is not built.
 
 ## The browser matrix is advisory
 
-Chromium blocks a release; Firefox, WebKit and Windows do not. Touch gestures
-run end to end on Chromium only, because the harness cannot grant the permission
-the others read their result through. No matrix is recorded for this development
-cut: that evidence comes from the engines themselves.
+Chromium blocks a release; Firefox, WebKit and Windows do not, and no ruleset
+requires the cross-browser smoke workflow. Touch gestures run end to end on all
+three engines, and in the iPhone-shaped WebKit project, as synthesized pointer
+events. Multi-touch on a real device is unverified. An advisory iOS simulator
+check drives real Mobile Safari and has not yet passed end to end. No matrix is
+recorded for this development cut: that evidence comes from the engines
+themselves.
 
 ## The two monoliths are still monoliths
 
@@ -105,8 +135,12 @@ recovers the world coordinate in the frame it names. One item remains a
 precision refinement rather than a correctness defect: for far-apart mounts the
 renderer does not fold `renderOrigin` out on the CPU per mesh, so the Float32
 residual on the GPU is larger than it needs to be. The mount-precision gate
-refuses a placement past 1 mm, so one that cannot hold a millimetre never
-mounts.
+refuses a placement whose Float32 step would pass 1 mm, which on a metre grid
+is a placed reach of 16,384 m or more. The display is slightly worse than that
+bound at its edge: a layer placed just under 16.4 km out draws with a worst-case
+error of about 1.5 mm. Analysis paths that store placed coordinates in Float32
+stay under 1 mm inside the gate. Picking and distance are computed in Float64
+and are exact, as are exports.
 
 ## No cross-CRS reprojection
 

@@ -53,6 +53,22 @@ import {
   withinDecodePeakBudget,
 } from '../heavy/heavyByteBudget';
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
+import {
+  normalizeClassificationFlagsByte,
+  RECORD_CLASSIFICATION_FLAGS_OFFSET,
+  RECORD_CLASSIFICATION_LEGACY,
+  RECORD_CLASSIFICATION_EXT,
+  RECORD_SCAN_ANGLE_LEGACY,
+  RECORD_SCAN_ANGLE_EXT,
+  RECORD_USER_DATA_OFFSET,
+  RECORD_POINT_SOURCE_ID_LEGACY,
+  RECORD_POINT_SOURCE_ID_EXT,
+  RECORD_GPS_TIME_EXT,
+  rawPointsBytesPerPoint,
+  scanAngleToDegrees,
+  extractBitFlag,
+  extractScannerChannel,
+} from '../lasDecodeShared';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,18 +83,8 @@ const RECORD_INTENSITY = 12;
 const RECORD_RETURN_BITS_LEGACY = 14;
 /** Byte offset of the return-bits byte in extended formats (6-10). */
 const RECORD_RETURN_BITS_EXT = 14;  // legacy convention; extended widens bits
-/** Byte offset of the classification field in legacy formats. */
-const RECORD_CLASSIFICATION_LEGACY = 15;
-/** Byte offset of the classification field in extended formats. */
-const RECORD_CLASSIFICATION_EXT = 16;
-/** Byte offset of point source ID in legacy formats. */
-const RECORD_POINT_SOURCE_LEGACY = 18;
-/** Byte offset of point source ID in extended formats. */
-const RECORD_POINT_SOURCE_EXT = 20;
 /** Byte offset of GPS time in legacy format 1/3. */
 const RECORD_GPS_TIME_LEGACY_1_3 = 20;
-/** Byte offset of GPS time in extended format 6-8. */
-const RECORD_GPS_TIME_EXT = 22;
 /** Byte offset of RGB triple in PDRF 2, 3, 5 (legacy). */
 const RECORD_RGB_LEGACY_2 = 20;     // PDRF 2 has no GPS time → RGB at 20
 const RECORD_RGB_LEGACY_3 = 28;     // PDRF 3 has GPS time at 20-27 → RGB at 28
@@ -92,7 +98,7 @@ const FIRST_EXTENDED_FORMAT = 6;
 // Per-tile decode context — precomputed once per tile.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface TileDecodeContext {
+export interface TileDecodeContext {
   readonly pdrf: number;
   readonly recordLength: number;
   readonly pointCount: number;
@@ -102,6 +108,7 @@ interface TileDecodeContext {
   readonly hasRgb: boolean;
   readonly hasGpsTime: boolean;
   readonly classificationOffset: number;
+  readonly scanAngleOffset: number;
   readonly pointSourceOffset: number;
   readonly gpsTimeOffset: number | null;
   readonly rgbOffset: number | null;
@@ -110,32 +117,20 @@ interface TileDecodeContext {
 /**
  * Peak decoded bytes ONE point of this tile stages at once, across every output
  * channel the decode allocates for the tile's format plus the raw-RGB staging
- * buffer that coexists with the narrowed one. Structural channels are always
- * present; GPS time and the two RGB buffers are gated exactly as the allocations
- * below them are, so the estimate tracks the real transient peak rather than a
- * worst-case guess.
- *
- *   positions   Float32 × 3   12
- *   intensity   Uint16         2
- *   class       Uint8          1
- *   returnNo    Uint8          1
- *   returnCnt   Uint8          1
- *   sourceId    Uint16         2   ── structural subtotal 19
- *   gpsTime     Float64        8   (PDRF 1/3/6-8 only)
- *   rgb         Uint8 × 3      3   (RGB formats only)
- *   rgb16       Uint16 × 3     6   (RGB staging, freed after narrowing)
+ * buffer that coexists with the narrowed one. Derived from
+ * {@link rawPointsBytesPerPoint} — the same per-format width formula the
+ * static LAS/LAZ decoder and the byte-budget guards use — since `ctx.pdrf`
+ * plus `pointSemantics` determine every channel this decoder allocates the
+ * same way that function's own GPS-time and RGB format rules do. RGB is
+ * charged at 9, not 3: the staged Uint16 rgb16 (3 · 2 = 6) and the narrowed
+ * Uint8 rgb (3) are both RESIDENT while the narrow loop runs.
  */
-const EPT_STRUCTURAL_BYTES_PER_POINT = 19;
-function decodedBytesPerPoint(ctx: TileDecodeContext): number {
-  return (
-    EPT_STRUCTURAL_BYTES_PER_POINT +
-    (ctx.gpsTimeOffset !== null ? 8 : 0) +
-    (ctx.hasRgb ? 3 + 6 : 0)
-  );
+export function decodedBytesPerPoint(ctx: TileDecodeContext, pointSemantics: boolean): number {
+  return rawPointsBytesPerPoint(ctx.pdrf, { pointSemantics });
 }
 
 /** Build the per-tile decode context from a parsed header. */
-function buildContext(buffer: ArrayBuffer): TileDecodeContext {
+export function buildContext(buffer: ArrayBuffer): TileDecodeContext {
   const header = parseLasHeader(buffer);
   const pdrf = header.pointFormat;
   if (![0, 1, 2, 3, 6, 7, 8].includes(pdrf)) {
@@ -167,7 +162,8 @@ function buildContext(buffer: ArrayBuffer): TileDecodeContext {
     hasRgb,
     hasGpsTime,
     classificationOffset: extended ? RECORD_CLASSIFICATION_EXT : RECORD_CLASSIFICATION_LEGACY,
-    pointSourceOffset: extended ? RECORD_POINT_SOURCE_EXT : RECORD_POINT_SOURCE_LEGACY,
+    scanAngleOffset: extended ? RECORD_SCAN_ANGLE_EXT : RECORD_SCAN_ANGLE_LEGACY,
+    pointSourceOffset: extended ? RECORD_POINT_SOURCE_ID_EXT : RECORD_POINT_SOURCE_ID_LEGACY,
     gpsTimeOffset,
     rgbOffset,
   };
@@ -198,9 +194,10 @@ export async function decodeEptLaszipTile(
   buffer: ArrayBuffer,
   renderOrigin: readonly [number, number, number],
   rgbEightBit?: boolean,
+  pointSemantics?: boolean,
 ): Promise<DecodedChunk> {
   const lazPerf = await getLazPerf();
-  return decodeEptLaszipTileWith(lazPerf, buffer, renderOrigin, rgbEightBit);
+  return decodeEptLaszipTileWith(lazPerf, buffer, renderOrigin, rgbEightBit, pointSemantics);
 }
 
 /** The instantiated laz-perf WASM module (type-only — no runtime import). */
@@ -220,12 +217,16 @@ type LazPerfModule = Awaited<ReturnType<typeof import('laz-perf').createLazPerf>
  * `ChunkDecodeMetadata.rgbEightBit` seam the COPC pipeline uses). Undefined
  * on the first tile — this decode then decides from its own max channel
  * value and reports the decision back on the returned chunk.
+ *
+ * `pointSemantics` decodes scan angle, user data, scanner channel, scan
+ * direction and edge-of-flight-line. Default off; see AllocRawPointsOptions.
  */
 export function decodeEptLaszipTileWith(
   lazPerf: LazPerfModule,
   buffer: ArrayBuffer,
   renderOrigin: readonly [number, number, number],
   rgbEightBit?: boolean,
+  pointSemantics = false,
 ): DecodedChunk {
   const ctx = buildContext(buffer);
   // Bound the per-tile declared count by the tile's own bytes BEFORE the
@@ -250,7 +251,7 @@ export function decodeEptLaszipTileWith(
     !withinDecodePeakBudget(
       buffer.byteLength,
       n,
-      decodedBytesPerPoint(ctx),
+      decodedBytesPerPoint(ctx, pointSemantics),
       0,
       // laz-perf duplicates the whole compressed tile into its WASM heap
       // (`_malloc` + `HEAPU8.set(fileBytes, filePtr)` below), so the JS buffer and
@@ -262,7 +263,7 @@ export function decodeEptLaszipTileWith(
   ) {
     throw new HeavyByteBudgetError(
       `EPT laszip tile: ${n.toLocaleString('en-US')} points would stage ` +
-        `${(n * decodedBytesPerPoint(ctx)).toLocaleString('en-US')} decoded bytes ` +
+        `${(n * decodedBytesPerPoint(ctx, pointSemantics)).toLocaleString('en-US')} decoded bytes ` +
         `plus two ${buffer.byteLength.toLocaleString('en-US')}-byte compressed copies ` +
         `(JS buffer + laz-perf WASM heap), ` +
         `over the ${MAX_DECODE_PEAK_BYTES.toLocaleString('en-US')}-byte decode budget.`,
@@ -280,8 +281,22 @@ export function decodeEptLaszipTileWith(
   const positions = new Float32Array(n * 3);
   const intensity = new Uint16Array(n);
   const classification = new Uint8Array(n);
+  // The flags source byte sits at offset 15 in both the legacy and extended
+  // record layouts; `normalizeClassificationFlagsByte` reads it per `ctx.extended`
+  // the same way the static LAS/LAZ decoder does — see `lasDecodeShared.ts`.
+  const classificationFlags = new Uint8Array(n);
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);
+  // Scan angle / user data / scanner channel / scan direction /
+  // edge-of-flight-line decode only when the caller opts in. Scanner channel
+  // is additionally a Table 17 extended-only field — a legacy tile (PDRF 0-3)
+  // leaves it absent even when `pointSemantics` is on, rather than
+  // zero-filled.
+  const scanAngle = pointSemantics ? new Float32Array(n) : undefined;
+  const userData = pointSemantics ? new Uint8Array(n) : undefined;
+  const scannerChannel = pointSemantics && ctx.extended ? new Uint8Array(n) : undefined;
+  const scanDirection = pointSemantics ? new Uint8Array(n) : undefined;
+  const edgeOfFlightLine = pointSemantics ? new Uint8Array(n) : undefined;
   const pointSourceId = new Uint16Array(n);
   // GPS time is the one measured channel a supported LAS record can genuinely
   // lack: PDRF 0 and 2 carry no GPS field, which is what a null `gpsTimeOffset`
@@ -340,6 +355,25 @@ export function decodeEptLaszipTileWith(
       }
       classification[i] = heap.getUint8(pointPtr + ctx.classificationOffset)
         & (ctx.extended ? 0xff : 0x1f);
+      const flagByte = heap.getUint8(pointPtr + RECORD_CLASSIFICATION_FLAGS_OFFSET);
+      classificationFlags[i] = normalizeClassificationFlagsByte(flagByte, ctx.extended);
+
+      if (pointSemantics) {
+        // Scan direction and edge-of-flight-line sit at bit 6/7 of the return
+        // byte in the legacy layout, or of the flags byte in the extended
+        // one — the same source byte the classification flags and returns
+        // come from.
+        const directionSourceByte = ctx.extended ? flagByte : returnBits;
+        scanDirection![i] = extractBitFlag(directionSourceByte, 6);
+        edgeOfFlightLine![i] = extractBitFlag(directionSourceByte, 7);
+        if (scannerChannel) scannerChannel[i] = extractScannerChannel(flagByte);
+
+        const scanAngleRaw = ctx.extended
+          ? heap.getInt16(pointPtr + ctx.scanAngleOffset, true)
+          : heap.getInt8(pointPtr + ctx.scanAngleOffset);
+        scanAngle![i] = scanAngleToDegrees(scanAngleRaw, ctx.extended);
+        userData![i] = heap.getUint8(pointPtr + RECORD_USER_DATA_OFFSET);
+      }
 
       pointSourceId[i] = heap.getUint16(pointPtr + ctx.pointSourceOffset, true);
 
@@ -386,8 +420,14 @@ export function decodeEptLaszipTileWith(
     positions,
     intensity,
     classification,
+    classificationFlags,
     returnNumber,
     returnCount,
+    scanAngle,
+    userData,
+    scannerChannel,
+    scanDirection,
+    edgeOfFlightLine,
     gpsTime,
     pointSourceId,
     rgb,

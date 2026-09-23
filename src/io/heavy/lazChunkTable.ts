@@ -184,6 +184,7 @@ export async function readLazChunkTable(
   range: RangeSource,
   signal?: AbortSignal,
   maxHeadBytes: number = MAX_HEAD_BYTES,
+  pointSemantics?: boolean,
 ): Promise<LazChunkTableResult> {
   const size = await range.size();
   const headCap = Math.min(MAX_HEAD_BYTES, Math.max(0, Math.floor(maxHeadBytes)));
@@ -316,7 +317,20 @@ export async function readLazChunkTable(
     // the byte cost is `pointCount * pointDataRecordLength` and LAS Extra Bytes
     // lets one record reach 65535 bytes. A modest-looking count over a huge
     // record still stages gigabytes, so refuse on the actual decoded size.
-    if (!withinDecodedByteBudget(pointCount, header.pointDataRecordLength)) {
+    // The whole-file decode and the out-of-core tile path both validate their
+    // chunks through this one table parser; `pointSemantics` reflects which
+    // one is calling (the whole-file caller passes its own choice, a tile-path
+    // caller leaves it at its default of undefined/off, since a tile decode
+    // never allocates those five channels).
+    if (
+      !withinDecodedByteBudget(
+        pointCount,
+        header.pointDataRecordLength,
+        MAX_DECODED_ALLOCATION_BYTES,
+        header.pointFormat,
+        { pointSemantics },
+      )
+    ) {
       return unsupported(
         `chunk ${i} decodes to ${pointCount} points of ${header.pointDataRecordLength} bytes, ` +
           `over the ${MAX_DECODED_ALLOCATION_BYTES}-byte decode budget; convert it to COPC or EPT`,

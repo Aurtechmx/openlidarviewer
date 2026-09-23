@@ -26,23 +26,41 @@ describe('decodedBytesPerPoint — schema-aware decoded byte estimate', () => {
   });
 
   it('charges each present channel at its element width', () => {
-    // Full LAS-family PDRF 7/8 shape: positions 12 + intensity 2 + class 1 +
+    // The default-decoded LAS-family PDRF 7/8 shape (pointSemantics off):
+    // positions 12 + intensity 2 + class 1 + classificationFlags 1 +
     // returnNumber 1 + returnCount 1 + gpsTime 8 + rgb 3 + pointSourceId 2.
     const full = decodedBytesPerPoint({
       intensity: true,
       classification: true,
+      classificationFlags: true,
       returnNumber: true,
       returnCount: true,
       gpsTime: true,
       rgb: true,
       pointSourceId: true,
     });
-    expect(full).toBe(30);
-    // The flat worst-case constant matches this widest LAS-family shape.
+    expect(full).toBe(31);
+    // The flat worst-case constant matches this widest default-decoded shape
+    // (scan angle / user data / scanner channel / scan direction /
+    // edge-of-flight-line are `pointSemantics`-gated and off by default, so
+    // they are NOT part of the flat worst case — see DECODED_BYTES_PER_POINT).
     expect(full).toBe(DECODED_BYTES_PER_POINT);
     // The earlier flat figure of 25 undercounted a coloured point by rgb (3) +
-    // pointSourceId (2) = 5 bytes.
+    // pointSourceId (2) = 5 bytes; classificationFlags added one more.
     expect(full).toBeGreaterThan(25);
+  });
+
+  it('charges the five pointSemantics channels only when present', () => {
+    const withSemantics = decodedBytesPerPoint({
+      scanAngle: true,
+      userData: true,
+      scannerChannel: true,
+      scanDirection: true,
+      edgeOfFlightLine: true,
+    });
+    // positions 12 + scanAngle 4 + userData 1 + scannerChannel 1 +
+    // scanDirection 1 + edgeOfFlightLine 1.
+    expect(withSemantics).toBe(20);
   });
 
   it('adds normals as three f32 when present', () => {
@@ -74,7 +92,7 @@ describe('first-admission ceiling — device aware', () => {
     expect(firstAdmissionMaxPoints(false)).toBe(
       Math.floor(firstAdmissionMaxDecodedBytes(false) / DECODED_BYTES_PER_POINT),
     );
-    expect(firstAdmissionMaxPoints(false)).toBe(17_895_697);
+    expect(firstAdmissionMaxPoints(false)).toBe(17_318_416);
     // A phone admits far fewer points than a desktop through the empty-viewer bypass.
     expect(firstAdmissionMaxPoints(true)).toBeLessThan(firstAdmissionMaxPoints(false));
   });

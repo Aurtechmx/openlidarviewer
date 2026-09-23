@@ -79,7 +79,7 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(new ArrayBuffer(16), META);
 
-    expect(decodeBinary).toHaveBeenCalledWith(expect.any(ArrayBuffer), 5, undefined);
+    expect(decodeBinary).toHaveBeenCalledWith(expect.any(ArrayBuffer), 5, undefined, undefined);
     expect(decodeTile).not.toHaveBeenCalled();
     expect(decodeEptLaszipTile).not.toHaveBeenCalled();
   });
@@ -90,7 +90,7 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(new ArrayBuffer(16), META_RGB);
 
-    expect(decodeBinary).toHaveBeenCalledWith(expect.any(ArrayBuffer), 5, true);
+    expect(decodeBinary).toHaveBeenCalledWith(expect.any(ArrayBuffer), 5, true, undefined);
   });
 
   test('laszip + worker routes to the worker, off the main thread', async () => {
@@ -101,7 +101,7 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(chunk, META, signal);
 
-    expect(decodeTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, signal, undefined);
+    expect(decodeTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, signal, undefined, undefined);
     expect(decodeEptLaszipTile).not.toHaveBeenCalled();
   });
 
@@ -112,7 +112,7 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(chunk, META_RGB);
 
-    expect(decodeTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, undefined, true);
+    expect(decodeTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, undefined, true, undefined);
   });
 
   test('laszip with no worker falls back to in-process decode', async () => {
@@ -121,7 +121,7 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(chunk, META);
 
-    expect(decodeEptLaszipTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, undefined);
+    expect(decodeEptLaszipTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, undefined, undefined);
   });
 
   test('laszip in-process fallback forwards the pinned dataset RGB bit-depth', async () => {
@@ -130,7 +130,7 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(chunk, META_RGB);
 
-    expect(decodeEptLaszipTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, true);
+    expect(decodeEptLaszipTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, true, undefined);
   });
 
   test('an already-aborted signal throws before any decode runs', async () => {

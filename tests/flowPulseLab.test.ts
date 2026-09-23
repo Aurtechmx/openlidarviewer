@@ -13,6 +13,7 @@ import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 beforeAll(installRecordingDom);
 
 const digestModule = await import('../src/science/dtmProductDigest');
+const { buildIdentityProvenance } = await import('../src/build/buildIdentity');
 const { renderFlowPulseLab, runLabFlowPulse, flowScaleOf } = await import('../src/ui/fieldSimulation/flowPulseLab');
 type LabInput = Parameters<typeof runLabFlowPulse>[0] & object;
 
@@ -100,6 +101,16 @@ describe('the frame the run reads', () => {
 
   it('leaves a projected frame without a latitude', () => {
     expect(flowScaleOf(input()).latitudeDeg).toBeNull();
+  });
+});
+
+describe('the record build field', () => {
+  it('names the canonical build identity, not the bare version', () => {
+    const outcome = runLabFlowPulse(input());
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.record.build).toBe(buildIdentityProvenance());
+    expect(outcome.record.build).toContain('·');
   });
 });
 

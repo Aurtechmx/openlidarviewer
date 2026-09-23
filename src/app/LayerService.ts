@@ -108,12 +108,12 @@ export const REBASE_QUANTUM_BUDGET_M = 0.001;
  * `tests/e2e/twoScanMount.spec.ts` (real separation, source untouched,
  * add/remove no-move).
  *
- * One item remains a precision refinement, not a correctness defect: for
- * far-apart mounts the renderer's mesh position should fold `− renderOrigin` on
- * the CPU per mesh to keep the Float32 GPU residual small. It is bounded and
- * refused past 1 mm by the `mountPrecision` gate below (`PointCloud.rebaseQuantum`;
- * geographic frames refused outright), so a placement that would lose a
- * millimetre never mounts.
+ * The display does not spend precision on a mount: the renderer forms each
+ * mesh's model-view matrix on the CPU in float64 (`viewerRenderBootstrap.ts`),
+ * so a far layer is drawn within micrometres of where it is at any offset. The
+ * `mountPrecision` gate below (`PointCloud.rebaseQuantum`; geographic frames
+ * refused outright) still refuses a placement past 1 mm, because the analysis
+ * paths that fold a placement into a Float32 buffer do spend it.
  *
  * An unaligned or foreign-CRS layer carries no placement and stays in its own
  * frame, so `mounted: false` still makes the combined estimators refuse rather

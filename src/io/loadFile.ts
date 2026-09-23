@@ -99,6 +99,8 @@ export interface LoadOptions {
    * depend on who read them.
    */
   head?: ArrayBuffer;
+  /** Default off; see AllocRawPointsOptions. */
+  pointSemantics?: boolean;
 }
 
 /** The cloud payload transferred back from the parse worker. */
@@ -112,6 +114,11 @@ interface CloudPayload {
   normals?: Float32Array;
   returnNumber?: Uint8Array;
   returnCount?: Uint8Array;
+  scanAngle?: Float32Array;
+  userData?: Uint8Array;
+  scannerChannel?: Uint8Array;
+  scanDirection?: Uint8Array;
+  edgeOfFlightLine?: Uint8Array;
   pointSourceId?: Uint16Array;
   gpsTime?: Float64Array;
   organizedRange?: OrganizedRangeSet;
@@ -751,6 +758,7 @@ export async function loadFile(
           // The preview sample is sized here, on the page: the worker cannot
           // read the render layer's ceiling and must not guess it.
           previewBudget: Math.max(1, Math.floor(options.previewBudget ?? budget)),
+          pointSemantics: options.pointSemantics,
         },
         buffer ? [buffer] : [],
       );

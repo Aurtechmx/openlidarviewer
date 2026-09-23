@@ -182,6 +182,8 @@ export interface PooledDecodeOptions {
   readonly onSkipped?: (reason: string) => void;
   /** The flags and device answer to decide by; the scope's own when absent. */
   readonly policy?: DecodePoolPolicy;
+  /** Default off; see AllocRawPointsOptions. */
+  readonly pointSemantics?: boolean;
 }
 
 /**
@@ -234,6 +236,7 @@ export async function decodeLazPooledFromSource(
       onPreviewChunk: options.onPreviewChunk,
       previewBudget: options.previewBudget,
       onPlanned: options.onPlanned,
+      pointSemantics: options.pointSemantics,
     });
     if (out === null) {
       options.onSkipped?.('no usable chunk table for this file');

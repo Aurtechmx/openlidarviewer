@@ -427,13 +427,6 @@
       "review": "2027-09-20"
     },
     {
-      "path": "src/science/withheldPolicy.ts",
-      "status": "staged",
-      "why": "The canonical answer to what a Withheld point is for in each of the three things this application does with points. Nothing calls it because no scientific path in the tree consults the bit: terrain, density, the ground filter, stockpile volumes, contours, profiles, the classifier, registration and change, and measurement all read every point the cloud holds. The bit itself survives from the decoder through PointCloud to the LAS writer.",
-      "graduation": "Reachable when a product consults it. Applying it moves measured numbers on any scan that marks a point, several of them under recorded claims, so each product graduates with its own before-and-after on real data rather than all of them at once.",
-      "review": "2027-09-20"
-    },
-    {
       "path": "src/app/openStage.ts",
       "status": "staged",
       "why": "Names what a viewer can do with a scan right now, derived from facts the application already holds rather than tracked. Nothing calls it because no surface displays an interaction stage: the drop zone reports the pipeline's stages and the empty state comes down on its own, so the rule this encodes is already held without anything consulting it.",

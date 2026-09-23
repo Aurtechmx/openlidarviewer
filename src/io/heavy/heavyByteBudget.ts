@@ -22,6 +22,8 @@
  * Pure — no Viewer, no three.js, no DOM. Node-testable.
  */
 
+import { rawPointsBytesPerPoint, type AllocRawPointsOptions } from '../lasDecodeShared';
+
 /**
  * The ceiling on ONE staged decode buffer, in bytes. A single chunk decoded
  * whole, a single COPC node's records, or a window of LAZ chunks held at once
@@ -104,12 +106,26 @@ export class HeavyByteBudgetError extends Error {
 }
 
 /**
- * Decoded bytes for `pointCount` records of `recordLength` bytes, or
+ * Decoded bytes for `pointCount` records of `recordLength` source bytes, or
  * {@link Number.POSITIVE_INFINITY} when either input is not a usable non-negative
  * number. Infinity is deliberate: a nonsense record length must read as
  * over-budget, never as zero.
+ *
+ * The `RawPoints` allocation this budgets is WIDER than the source record for
+ * every point format — it carries the classification-flags and
+ * point-semantics channels the LAS record doesn't spell out per byte the same
+ * way — so the estimate is `pointCount * max(recordLength,
+ * rawPointsBytesPerPoint(pointFormat, options))`, never the record length
+ * alone. `pointFormat` is optional so a caller with only a record length (no
+ * parsed header) can still call this; every caller that has a header should
+ * pass it, since omitting it can only UNDER-count.
  */
-export function decodedBytesFor(pointCount: number, recordLength: number): number {
+export function decodedBytesFor(
+  pointCount: number,
+  recordLength: number,
+  pointFormat?: number,
+  options?: AllocRawPointsOptions,
+): number {
   if (
     !Number.isFinite(pointCount) ||
     !Number.isFinite(recordLength) ||
@@ -118,16 +134,25 @@ export function decodedBytesFor(pointCount: number, recordLength: number): numbe
   ) {
     return Number.POSITIVE_INFINITY;
   }
-  return pointCount * recordLength;
+  const perPoint =
+    pointFormat === undefined
+      ? recordLength
+      : Math.max(recordLength, rawPointsBytesPerPoint(pointFormat, options));
+  return pointCount * perPoint;
 }
 
-/** Whether `pointCount * recordLength` stays within `ceiling` (default the global cap). */
+/**
+ * Whether `pointCount * max(recordLength, trueRawPointsBytes)` stays within
+ * `ceiling` (default the global cap). See {@link decodedBytesFor}.
+ */
 export function withinDecodedByteBudget(
   pointCount: number,
   recordLength: number,
   ceiling: number = MAX_DECODED_ALLOCATION_BYTES,
+  pointFormat?: number,
+  options?: AllocRawPointsOptions,
 ): boolean {
-  return decodedBytesFor(pointCount, recordLength) <= ceiling;
+  return decodedBytesFor(pointCount, recordLength, pointFormat, options) <= ceiling;
 }
 
 /**

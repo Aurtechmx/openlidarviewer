@@ -16,6 +16,18 @@
  */
 
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
+import {
+  normalizeClassificationFlagsByte,
+  RECORD_CLASSIFICATION_FLAGS_OFFSET,
+  RECORD_USER_DATA_OFFSET,
+  RECORD_SCAN_ANGLE_EXT,
+  RECORD_POINT_SOURCE_ID_EXT,
+  RECORD_GPS_TIME_EXT,
+  rawPointsBytesPerPoint,
+  scanAngleToDegrees,
+  extractBitFlag,
+  extractScannerChannel,
+} from '../lasDecodeShared';
 
 /** Per-chunk decode parameters. */
 export interface ChunkDecodeMetadata {
@@ -39,6 +51,13 @@ export interface ChunkDecodeMetadata {
    * chunk (see {@link DecodedChunk.rgbEightBit}) and feeds it back here.
    */
   rgbEightBit?: boolean;
+  /**
+   * Decode scan angle, user data, scanner channel, scan direction and
+   * edge-of-flight-line. Default off — see `lasDecodeShared.ts`'s
+   * `AllocRawPointsOptions` doc for what `undefined` means on the resulting
+   * chunk when this is left off vs turned on.
+   */
+  pointSemantics?: boolean;
 }
 
 /**
@@ -57,8 +76,9 @@ export interface ChunkDecodeMetadata {
  * cannot fill; the derived products (resident snapshot, profile section, point
  * inspector) report absence rather than substituting a default.
  *
- * The LAS-family decoders — COPC, EPT and the out-of-core tile store — fill all
- * five on every chunk and are unaffected by the optionality.
+ * The LAS-family decoders — COPC, EPT and the out-of-core tile store — fill
+ * most of these on every chunk and are unaffected by the optionality; only
+ * `classificationFlags` genuinely varies by source (see its own doc).
  */
 export interface DecodedChunk {
   /** Points actually decoded (≤ the requested count if the input was short). */
@@ -69,10 +89,32 @@ export interface DecodedChunk {
   intensity?: Uint16Array;
   /** Per-point classification — absent when the format carries none. */
   classification?: Uint8Array;
+  /**
+   * Per-point classification flags (bit0 Synthetic, bit1 Key-point, bit2
+   * Withheld, bit3 Overlap — the normalised nibble {@link
+   * normalizeClassificationFlagsByte} produces), one byte per point. Absent
+   * when the source genuinely carries no flags channel — never a zero array,
+   * since zero means "none of the flags are set" and absence means "not
+   * recorded."
+   */
+  classificationFlags?: Uint8Array;
   /** Per-point return number — absent when the format carries none. */
   returnNumber?: Uint8Array;
   /** Per-point total returns — absent when the format carries none. */
   returnCount?: Uint8Array;
+  /** Per-point scan angle, in degrees — absent when the format carries none. */
+  scanAngle?: Float32Array;
+  /** Per-point user data byte — absent when the format carries none. */
+  userData?: Uint8Array;
+  /**
+   * Per-point scanner channel — COPC nodes are always an extended point
+   * format (PDRF 6/7/8), so this is always present for a COPC chunk.
+   */
+  scannerChannel?: Uint8Array;
+  /** Per-point scan direction flag (0/1) — absent when the format carries none. */
+  scanDirection?: Uint8Array;
+  /** Per-point edge-of-flight-line flag (0/1) — absent when the format carries none. */
+  edgeOfFlightLine?: Uint8Array;
   /** Per-point GPS time — absent when the format carries none. */
   gpsTime?: Float64Array;
   /** Per-point point source id — produced by `decodeRecords`, absent on fakes. */
@@ -116,32 +158,25 @@ export interface ChunkDecoder<TMeta = ChunkDecodeMetadata> {
 
 /**
  * Peak decoded channel-array bytes per point for one PDRF 6/7/8 node, matching
- * exactly what {@link decodeRecords} allocates and holds LIVE at once.
- *
- * Every node fills seven base channels: positions (Float32 · 3 = 12), intensity
- * (Uint16 = 2), classification (Uint8 = 1), return number (Uint8 = 1), return
- * count (Uint8 = 1), GPS time (Float64 = 8), point source id (Uint16 = 2) — 27
- * bytes a point. PDRF 7 and 8 add colour, and both the staged Uint16 rgb16 (3 ·
- * 2 = 6) and the narrowed Uint8 rgb (3) are RESIDENT together while the narrow
- * loop runs, so colour costs 9, not 3. PDRF 8's NIR is not decoded, so it is not
- * charged. Returns {@link Number.POSITIVE_INFINITY} for a non-usable count so a
- * nonsense value reads as over-budget rather than as zero.
+ * exactly what {@link decodeRecords} allocates and holds LIVE at once. Derived
+ * from {@link rawPointsBytesPerPoint} — the same per-format width formula the
+ * static LAS/LAZ decoder and the byte-budget guards use — so this cannot drift
+ * from what `decodeRecords` actually allocates for the same `pdrf` and
+ * `pointSemantics`. PDRF 7 and 8's colour is charged at 9, not 3: the staged
+ * Uint16 rgb16 (3 · 2 = 6) and the narrowed Uint8 rgb (3) are both RESIDENT
+ * while the narrow loop runs. PDRF 8's NIR is not decoded, so it is not
+ * charged. Returns {@link Number.POSITIVE_INFINITY} for a non-usable count so
+ * a nonsense value reads as over-budget rather than as zero.
  */
-export const COPC_BASE_CHANNEL_BYTES_PER_POINT = 27;
-export const COPC_RGB_CHANNEL_BYTES_PER_POINT = 9;
-
-export function copcDecodedChannelBytes(pdrf: number, pointCount: number): number {
+export function copcDecodedChannelBytes(
+  pdrf: number,
+  pointCount: number,
+  pointSemantics = false,
+): number {
   if (!Number.isFinite(pointCount) || pointCount < 0) return Number.POSITIVE_INFINITY;
-  const hasRgb = pdrf === 7 || pdrf === 8;
-  const perPoint =
-    COPC_BASE_CHANNEL_BYTES_PER_POINT + (hasRgb ? COPC_RGB_CHANNEL_BYTES_PER_POINT : 0);
-  return pointCount * perPoint;
+  return pointCount * rawPointsBytesPerPoint(pdrf, { pointSemantics });
 }
 
-/** Point source id offset in PDRF 6, 7, and 8. */
-const POINT_SOURCE_ID_OFFSET = 20;
-/** GPS time lives at the same offset in PDRF 6, 7, and 8. */
-const GPS_TIME_OFFSET = 22;
 /** RGB triple offset in PDRF 7 and 8. */
 const RGB_OFFSET = 30;
 
@@ -169,12 +204,29 @@ export function decodeRecords(
   const [ox, oy, oz] = meta.offset;
   const [rx, ry, rz] = meta.renderOrigin;
   const hasRgb = meta.pointDataRecordFormat === 7 || meta.pointDataRecordFormat === 8;
+  const pointSemantics = meta.pointSemantics ?? false;
 
   const positions = new Float32Array(n * 3);
   const intensity = new Uint16Array(n);
   const classification = new Uint8Array(n);
+  // COPC is always an extended point format (PDRF 6/7/8), so the flags byte
+  // is always unpacked as the extended layout — see
+  // `RECORD_CLASSIFICATION_FLAGS_OFFSET` / `normalizeClassificationFlagsByte`.
+  const classificationFlags = new Uint8Array(n);
   const returnNumber = new Uint8Array(n);
   const returnCount = new Uint8Array(n);
+  // Scan angle / user data / scanner channel / scan direction /
+  // edge-of-flight-line decode only when the caller opts in — see
+  // `AllocRawPointsOptions` in lasDecodeShared.ts for what `undefined` on the
+  // resulting chunk means in each state.
+  const scanAngle = pointSemantics ? new Float32Array(n) : undefined;
+  const userData = pointSemantics ? new Uint8Array(n) : undefined;
+  // COPC is always an extended point format, so scanner channel is always
+  // materialised when `pointSemantics` is on — unlike EPT laszip, which also
+  // serves legacy PDRFs.
+  const scannerChannel = pointSemantics ? new Uint8Array(n) : undefined;
+  const scanDirection = pointSemantics ? new Uint8Array(n) : undefined;
+  const edgeOfFlightLine = pointSemantics ? new Uint8Array(n) : undefined;
   const gpsTime = new Float64Array(n);
   const pointSourceId = new Uint16Array(n);
   const rgb16 = hasRgb ? new Uint16Array(n * 3) : undefined;
@@ -192,8 +244,19 @@ export function decodeRecords(
     returnNumber[i] = returnByte & 0x0f;
     returnCount[i] = (returnByte >> 4) & 0x0f;
     classification[i] = view.getUint8(p + 16);
-    pointSourceId[i] = view.getUint16(p + POINT_SOURCE_ID_OFFSET, true);
-    gpsTime[i] = view.getFloat64(p + GPS_TIME_OFFSET, true);
+    const flagByte = view.getUint8(p + RECORD_CLASSIFICATION_FLAGS_OFFSET);
+    classificationFlags[i] = normalizeClassificationFlagsByte(flagByte, true);
+    if (pointSemantics) {
+      // Scan direction and edge-of-flight-line live in bits 6/7 of the same
+      // extended flags byte the classification flags come from.
+      scanDirection![i] = extractBitFlag(flagByte, 6);
+      edgeOfFlightLine![i] = extractBitFlag(flagByte, 7);
+      scannerChannel![i] = extractScannerChannel(flagByte);
+      scanAngle![i] = scanAngleToDegrees(view.getInt16(p + RECORD_SCAN_ANGLE_EXT, true), true);
+      userData![i] = view.getUint8(p + RECORD_USER_DATA_OFFSET);
+    }
+    pointSourceId[i] = view.getUint16(p + RECORD_POINT_SOURCE_ID_EXT, true);
+    gpsTime[i] = view.getFloat64(p + RECORD_GPS_TIME_EXT, true);
 
     if (rgb16) {
       const r = view.getUint16(p + RGB_OFFSET, true);
@@ -231,8 +294,14 @@ export function decodeRecords(
     positions,
     intensity,
     classification,
+    classificationFlags,
     returnNumber,
     returnCount,
+    scanAngle,
+    userData,
+    scannerChannel,
+    scanDirection,
+    edgeOfFlightLine,
     gpsTime,
     pointSourceId,
     rgb,
@@ -253,8 +322,14 @@ export function chunkTransferables(decoded: DecodedChunk): ArrayBuffer[] {
   // buffer that is not there.
   if (decoded.intensity) out.push(decoded.intensity.buffer as ArrayBuffer);
   if (decoded.classification) out.push(decoded.classification.buffer as ArrayBuffer);
+  if (decoded.classificationFlags) out.push(decoded.classificationFlags.buffer as ArrayBuffer);
   if (decoded.returnNumber) out.push(decoded.returnNumber.buffer as ArrayBuffer);
   if (decoded.returnCount) out.push(decoded.returnCount.buffer as ArrayBuffer);
+  if (decoded.scanAngle) out.push(decoded.scanAngle.buffer as ArrayBuffer);
+  if (decoded.userData) out.push(decoded.userData.buffer as ArrayBuffer);
+  if (decoded.scannerChannel) out.push(decoded.scannerChannel.buffer as ArrayBuffer);
+  if (decoded.scanDirection) out.push(decoded.scanDirection.buffer as ArrayBuffer);
+  if (decoded.edgeOfFlightLine) out.push(decoded.edgeOfFlightLine.buffer as ArrayBuffer);
   if (decoded.gpsTime) out.push(decoded.gpsTime.buffer as ArrayBuffer);
   if (decoded.pointSourceId) out.push(decoded.pointSourceId.buffer as ArrayBuffer);
   if (decoded.rgb) out.push(decoded.rgb.buffer as ArrayBuffer);

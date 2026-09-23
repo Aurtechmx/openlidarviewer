@@ -3952,6 +3952,24 @@ docblock for the removed `STREAMING_TICK_INTERVAL` stayed as a heading with
 nothing under it. The reasoning in that block is worth keeping and now sits
 with the call it describes, in the loop body.
 
+### L146 · FIXED · EVIDENCE
+
+`flow_oracle.py` is a second, independent implementation of the D8 flow
+direction and accumulation the field-simulation lab uses, checked with `npm
+run validation:field-simulation:verify` against five frozen fixtures. Nothing
+ran it: the script was absent from `test:release:execute` and from every
+workflow under `.github/workflows`, so a change to the oracle, a fixture, or a
+frozen record could drift from the TypeScript implementation with no gate
+noticing.
+
+`validation:field-simulation:verify` now sits in `test:release:execute` next
+to `validation:field:verify`, so `scripts/gate.sh` runs it on every release and
+`ci.yml`'s `verify` job runs it on every push and pull request, beside the
+Python version lint. Corrupting one `upstreamCells` value in
+`validation/field-simulation/expected/plane-east.json` fails the check with
+`upstreamCells differs from the frozen record`; restoring the file passes it
+again.
+
 ### L12 · FIXED · UI
 
 Pinch, rotate and two-finger gestures now run on Chromium, WebKit and Firefox.
@@ -4107,6 +4125,152 @@ lives seven seconds with a dismiss button, so the remaining overlap there is
 accepted. `hudCollision.spec.ts` asserts the card clears the rails wherever
 it fits in the band, and passes at every configured width. On phones the
 card keeps its viewport-centred placement.
+
+### L26 · PARTIAL · SCIENTIFIC
+The Withheld policy runs inside the terrain gather, so the DTM, and the
+floor-plan and routing paths that read the same gather, leave out points
+flagged Withheld. A Withheld point still advances the stride counter, so
+the sampled candidates are the same with the policy on or off. The DTM
+records the outcome: excluded, not recorded when a contributing cloud has no
+flags channel, or kept when the caller opts out.
+The policy reaches clouds that keep their flags: static clouds within the
+4M point budget, and streamed COPC or EPT data where every resident node
+carries the channel. A larger static file is voxel-downsampled at load, the
+flags do not survive the reduction (L28), and its DTM records the outcome as
+not recorded. Two local USGS tiles carry Withheld points, all class 1; a
+whole-file decode shows them moving measured DTM cells by about 3 percent,
+and no recorded number changes.
+Extending the policy to those files by dropping Withheld points before the
+reduction would also remove them from the displayed cloud, which the policy
+does not ask for. The route that would not is a Withheld-aware terrain gather
+over the full-resolution source. It waits on a dataset whose Withheld points
+are ground-class, or a DTM difference large enough to matter.
+
+### L14 · PARTIAL · ARCHITECTURE
+
+`viewerRenderBootstrap.ts` now sets `renderer.highPrecision = true` on the
+render core three's WebGPURenderer builds for both backends. The flag forms
+each object's model-view matrix on the CPU in float64
+(`camera.matrixWorldInverse.multiplyMatrices(object.matrixWorld)`, three's
+`ModelNode.js`) and uploads the float32 rounding of that product as one
+uniform, in place of multiplying the camera's view matrix by the object's
+world matrix in the vertex shader after both were separately rounded to
+float32. Every material in this tree reaches view space through three's
+`modelViewMatrix` accessor: `PointsNodeMaterial` (`Viewer.ts:1570`,
+`buildPointMesh`) and `LineBasicNodeMaterial` (`ContourOverlay.ts`) both
+resolve it through their inherited `setupPositionView`, and
+`densityPointSize.ts`'s `positionView` node, the eye-distance term behind
+adaptive point sizing, resolves through the same accessor by way of
+`PointsNodeMaterial.setupPositionView`. No custom node in `src/render`
+multiplies `cameraViewMatrix` directly or reads a view-space position any
+other way, so none needed a change.
+
+Measured with `gate2-origin-a.las` and `gate2-origin-b.las`, the second layer
+placed at increasing offsets, the worst displacement over 12 camera poses
+between the uploaded matrix and the float64-exact product:
+
+| offset | before (GPU path, float32 in shader) | after (CPU path, highPrecision) |
+|---|---|---|
+| 0 | 4.0e-6 m | 4.0e-6 m |
+| 16.4 km | 7.56e-4 m (0.76 mm) | 4.0e-6 m |
+| 20 km | 1.21e-3 m (1.2 mm) | 4.0e-6 m |
+| 100 km | 5.19e-3 m (5.2 mm) | 4.0e-6 m |
+| 1000 km | 6.47e-2 m (65 mm) | 4.0e-6 m |
+
+The before column grows with offset; the after column does not move outside
+its own float32 rounding noise, on Chromium (WebGL2), Firefox (WebGL2) and
+WebKit (WebGPU) alike, to six significant figures. A single unplaced layer
+renders identically before and after: the readback pixel hash and lit-pixel
+count match exactly on Chromium and Firefox, and WebKit's own residual figure
+matches to the last digit with identical dimensions and pixel ratio. On
+WebKit and Firefox the far layer's screen centroid is pixel-identical to the
+unplaced case at every offset up to 1000 km after the fix; before it, the
+centroid shifts by a growing amount as distance grows (Firefox: 0.12 px at
+20 km, 0.29 px at 100 km, 2.51 px at 1000 km). `tests/viewerRenderBootstrap.test.ts`
+holds the flag on, re-derives the worst-case displacement from the same
+matrix math with no browser, and pins the browser-measured numbers above as a
+permanent regression fixture; flipping the flag off fails five of its six
+assertions.
+
+Frame time, a 1,000,000-point cloud, median of repeated frames after warmup,
+one browser process per condition (two conditions sharing a process bias the
+second one slower, the effect the L118 entry recorded):
+
+| engine, backend | single mesh, before to after | split into 400 meshes, before to after |
+|---|---|---|
+| Chromium, WebGL2 software (SwiftShader) | 14.24 s to 14.01 s | 18.85 s to 19.00 s |
+| WebKit, WebGPU (Apple GPU) | 70.8 ms to 67.2 ms | 63.4 ms to 67.9 ms |
+| Firefox, WebGL2 (Apple M1) | 76.6 ms to 73.6 ms | 60.7 ms to 60.8 ms |
+
+Every wall-clock figure above stays within 8% of its pair except the WebKit
+split case, which reads 7.1% slower after; the same comparison run inside a
+shared process, where the earlier column always runs first, swung from 30%
+faster to 106% slower on repeated trials of the identical condition, so a
+single isolated sample at this magnitude is not distinguishable from that
+noise floor. The mechanism's own cost, read directly rather than through the
+wall clock, is the per-object CPU matrix multiply: 0.1 to 0.3 ms for the
+single mesh and 2.0 to 2.9 ms for the 400-mesh split, unchanged between
+before and after in every trial on every engine. Chromium's software
+rasterizer runs three orders of magnitude slower than the other two and is
+not representative of real hardware; kept for completeness.
+
+The `mountPrecision` gate below is unchanged: `REBASE_QUANTUM_BUDGET_M` stays
+0.001 and the function's logic was not touched, only its docblock. This
+closes the display half of the question that docblock raised. The analysis
+paths that fold a placement into a Float32 buffer, and the terrain gather,
+still spend the budget the gate protects, and relaxing the 1 mm refusal needs
+both of those fixed first, on separate branches.
+
+### L147 · MEASURED · PERFORMANCE
+
+Flow Pulse Lab (`flowPulseLab.ts`) calls `runFlowPulse` synchronously on the UI
+thread, and `FLOW_PULSE_DEFAULTS.maxCells` admits a grid up to 4,000,000 cells.
+Whether that call belongs on the main thread or in a worker was a question for
+measurement, not judgment, so `tests/benchmark/flowPulseLabProfile.test.ts`
+(gated behind `FLOW_PULSE_LAB_BENCH=1`) drives the same functions
+`runFlowPulse` calls, in the same order, over synthetic DTMs, and times each
+stage on its own. Node, median of 5 runs with one warmup discarded per row:
+
+| cells | conditioning | digest | grid | priority-flood | D8 | accumulation | seal | total ms |
+|---|---|---|---|---|---|---|---|---|
+| 65,536 | raw | 5.4 | 0.3 | n/a | 14.9 | 2.0 | 5.9 | 28.5 |
+| 65,536 | priority-flood | 5.3 | 0.3 | 17.7 | 14.9 | 1.9 | 5.3 | 45.5 |
+| 250,000 | raw | 26.5 | 1.1 | n/a | 72.4 | 11.8 | 26.0 | 138.9 |
+| 250,000 | priority-flood | 8.1 | 5.0 | 118.9 | 70.6 | 10.7 | 9.1 | 214.1 |
+| 1,000,000 | raw | 26.6 | 2.7 | n/a | 223.4 | 35.7 | 25.7 | 313.7 |
+| 1,000,000 | priority-flood | 26.7 | 2.7 | 356.3 | 226.7 | 36.4 | 24.7 | 678.1 |
+| 1,999,396 | raw | 50.9 | 5.9 | n/a | 445.8 | 90.9 | 53.2 | 643.7 |
+| 1,999,396 | priority-flood | 47.3 | 6.8 | 696.8 | 424.7 | 81.9 | 48.4 | 1,307.1 |
+| 4,000,000 | raw | 110.1 | 12.3 | n/a | 925.3 | 166.6 | 96.5 | 1,315.8 |
+| 4,000,000 | priority-flood | 103.9 | 11.9 | 1,568.4 | 915.4 | 187.3 | 106.3 | 2,896.6 |
+
+These are Node numbers, and a floor rather than the browser figure: a real main
+thread shares time with layout and paint work, and with handling input, none
+of which a Node process carries, so a browser run is typically slower for the
+same JavaScript.
+
+The question that decides the outcome is which row the Lab can reach.
+`deriveCoreParams` in `terrainAnalysisRunner.ts` aims every analysis grid at
+256 cells across its longer axis (`cellSizeM = Math.max(0.25 / metresPerUnit,
+extent / 256)`), so the largest DTM the app produces is about 256 by 256, or
+65,536 cells. The Lab has exactly one caller, the `analyse.flowPulse` action in
+`analysisActions.ts`, which reads `panel.flowInput` from that same capped
+analysis result; no other module opens it. `FLOW_PULSE_DEFAULTS.conditioning`
+is `'raw'` and the Lab exposes no control to change it, so the run a user
+actually triggers is the 65,536-cell raw row: 28.5 ms median, on a runtime
+already slower than the one it stands in for.
+
+The 4,000,000-cell ceiling would cost close to 3 seconds under priority-flood
+conditioning (2,896.6 ms measured), long enough to freeze a real UI thread. But
+nothing in the app can hand the Lab a grid near that size: the only grid it
+ever sees is the analysis panel's own capped DTM, and `runFlowPulse` already
+refuses anything past `maxCells` with a named `TOO_LARGE` reason rather than
+running it. The ceiling is a defensive refusal bound, not a workload the Lab
+can reach, so the worker migration this investigation was scoped to justify is
+not built. The call stays synchronous. `build: buildIdentityProvenance()`
+replaced the bare `__APP_VERSION__` on the sealed run record in the same file,
+so a record names the exact build that produced it; `flowPulseLab.test.ts`
+checks the record's `build` field against `buildIdentityProvenance()`.
 
 ### L13 · OPEN · EVIDENCE
 

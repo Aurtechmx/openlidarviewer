@@ -36,6 +36,8 @@ interface DecodeMessage {
    *  undefined until the source has seen one — the decode then decides and
    *  reports back via `DecodedChunk.rgbEightBit`. */
   rgbEightBit?: boolean;
+  /** Default off; see AllocRawPointsOptions. */
+  pointSemantics?: boolean;
 }
 interface CancelMessage {
   type: 'cancel';
@@ -89,7 +91,7 @@ ctx.onmessage = (event: MessageEvent<InMessage>): void => {
   }
   if (msg.type !== 'decode') return;
 
-  const { requestId, tile, renderOrigin, rgbEightBit } = msg;
+  const { requestId, tile, renderOrigin, rgbEightBit, pointSemantics } = msg;
   // Every accepted request must post exactly ONE terminal reply. A silent return
   // on a consumed cancel leaves the pool's slot held forever (its job is only
   // cleared by a reply), so a cancel-consume return posts `cancelled` first.
@@ -105,7 +107,7 @@ ctx.onmessage = (event: MessageEvent<InMessage>): void => {
         ctx.postMessage({ type: 'cancelled', requestId });
         return;
       }
-      const decoded = decodeEptLaszipTileWith(lazPerf, tile, renderOrigin, rgbEightBit);
+      const decoded = decodeEptLaszipTileWith(lazPerf, tile, renderOrigin, rgbEightBit, pointSemantics);
       ctx.postMessage(
         { type: 'decoded', requestId, decoded },
         chunkTransferables(decoded),

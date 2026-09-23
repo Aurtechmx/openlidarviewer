@@ -15,6 +15,7 @@
 
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import { accumulatorOffset } from './layerPlacement';
+import { excludesWithheld, isWithheld } from '../science/withheldPolicy';
 
 /** A cloud/node buffer contributing to the terrain subsample. */
 export interface TerrainStreamBuffer {
@@ -22,6 +23,12 @@ export interface TerrainStreamBuffer {
   pos: Float32Array;
   /** Optional index-aligned classification channel. */
   cls?: ArrayLike<number>;
+  /**
+   * Optional index-aligned classification-flag channel (the normalised nibble
+   * the decoders produce). Absent means the flags were never decoded, which is
+   * not the same as a file with no Withheld points.
+   */
+  flags?: ArrayLike<number>;
   /**
    * The layer's Float64 placement into the shared project frame, folded into
    * every point as it is copied. Null/absent reads as identity, so a lone layer
@@ -43,6 +50,24 @@ export interface StridedTerrainSample {
   classification?: Uint8Array;
   /** True when a stride > 1 was applied (a representative subsample, not all points). */
   sampled: boolean;
+  /**
+   * Whether Withheld points were left out. `true` only when the policy ran and
+   * every contributing buffer carried a flags channel; `null` when any buffer
+   * had none, since exclusion cannot be claimed over flags nobody read; `false`
+   * only when the caller asked for Withheld points to be kept.
+   */
+  withheldExcluded: boolean | null;
+  /** Sampled candidates dropped as Withheld. */
+  withheldExcludedCount: number;
+}
+
+/** The gather's declaration about Withheld points, carried by every consumer of the sample. */
+export type TerrainWithheldOutcome = Pick<StridedTerrainSample, 'withheldExcluded' | 'withheldExcludedCount'>;
+
+/** How the gather treats points the producer marked Withheld. */
+export interface TerrainSampleOptions {
+  /** Keep Withheld points. Default false: scientific processing excludes them. */
+  readonly includeWithheld?: boolean;
 }
 
 /**
@@ -61,6 +86,7 @@ export function sampleStridedTerrain(
   totalPoints: number,
   maxPoints: number,
   anyClass: boolean,
+  options: TerrainSampleOptions = {},
 ): StridedTerrainSample | null {
   // A budget or total we can't read can't be honoured. A negative `maxPoints`
   // in particular makes the stride collapse to 1 and would allocate the FULL
@@ -91,17 +117,32 @@ export function sampleStridedTerrain(
   const positions = new Float32Array(cap * 3);
   // 255 = "no class channel" sentinel; terrain treats it as "keep".
   const classification = anyClass ? new Uint8Array(cap).fill(255) : undefined;
+  const includeWithheld = options.includeWithheld ?? false;
+  const excluding = excludesWithheld('scientific-processing', includeWithheld);
+  let withheldExcludedCount = 0;
+  let everyBufferFlagged = true;
   let gi = 0;
   let oi = 0;
-  for (const { pos, cls, placement } of buffers) {
+  for (const { pos, cls, flags: rawFlags, placement } of buffers) {
     // Fold the layer's placement once per buffer, then add three scalars per
     // point. Identity placement is [0, 0, 0], so `x + 0` is the same finite
     // value written before the fold — the walk stays byte-identical while
     // mounting is off.
     const [dx, dy, dz] = accumulatorOffset(placement);
     const pts = (pos.length / 3) | 0;
+    // A flags array that does not line up with the positions describes some
+    // other set of points, so it is treated as absent rather than misread.
+    const flags = rawFlags?.length === pts ? rawFlags : undefined;
+    if (!flags) everyBufferFlagged = false;
     for (let i = 0; i < pts; i++, gi++) {
       if (gi % stride !== 0 || oi >= cap) continue;
+      // Dropped after the stride test, so an excluded point still spends its
+      // turn of the counter: the candidates sampled are the same with the
+      // policy on or off, and the only difference is the Withheld ones.
+      if (excluding && flags && isWithheld(flags[i])) {
+        withheldExcludedCount++;
+        continue;
+      }
       const s = i * 3;
       const x = pos[s];
       const y = pos[s + 1];
@@ -131,5 +172,13 @@ export function sampleStridedTerrain(
     positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
     classification: sampledClassification,
     sampled: stride > 1,
+    withheldExcluded: withheldOutcome(excluding, everyBufferFlagged),
+    withheldExcludedCount,
   };
+}
+
+/** The declaration a gather makes about Withheld points; see {@link StridedTerrainSample.withheldExcluded}. */
+function withheldOutcome(excluding: boolean, everyBufferFlagged: boolean): boolean | null {
+  if (!excluding) return false;
+  return everyBufferFlagged ? true : null;
 }

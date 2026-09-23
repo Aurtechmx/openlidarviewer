@@ -120,6 +120,14 @@ export interface DtmGrid {
   readonly coverageMode: TerrainCoverageMode;
   readonly sourcePointCount: number;
   readonly analyzedPointCount: number;
+  /**
+   * Whether points the producer marked Withheld were left out of the gather
+   * this surface was fitted through: `null` when that could not be known.
+   * Absent on a grid built outside the application's gather.
+   */
+  readonly withheldExcluded?: boolean | null;
+  /** Sampled points left out as Withheld; absent with the field above. */
+  readonly withheldExcludedCount?: number;
   /** Mean confidence over cells that carry a height (coverage>0). */
   readonly meanConfidence: number;
   readonly warnings: string[];
