@@ -47,6 +47,14 @@ import type { MountedFindingsPanel } from './findingsPanel';
 const NO_MEASUREMENTS_HINT = 'Place measurements, then export them as open vector formats.';
 
 /**
+ * Shown once, in place of the LAS 1.2 class-wrap preview, when the chunk that
+ * carries it fails to load. Exported so the unit test can assert the exact
+ * wording rather than a substring.
+ */
+export const WRAP_PREVIEW_LOAD_FAILED =
+  'Couldn’t load the class-wrap preview — retrying. Export still checks your classes either way.';
+
+/**
  * Lightweight, allocation-free description of the exportable cloud, used to
  * render the live summary/enablement WITHOUT materializing the point buffers.
  * For a streaming scan, building the actual export cloud snapshots every
@@ -269,6 +277,8 @@ export class ExportPanel {
    */
   private _wrapPreview: ((c: Uint8Array | null | undefined) => LegacyClassWrapNote | null) | null = null;
   private _wrapPreviewRequested = false;
+  /** The last fetch attempt failed — surfaced once, then cleared on retry. */
+  private _wrapPreviewFailed = false;
   private _busy = false;
   /**
    * Whether the active scan carries a real-world CRS (projected / geographic).
@@ -590,6 +600,11 @@ export class ExportPanel {
     const legacyClasses =
       info != null && this._format === 'las' && this._includeClass && info.classProvenance !== 'none';
     this._wrapRow.classList.toggle('olv-hidden', !legacyClasses);
+    // Snapshot BEFORE `_legacyClassWrap` runs below: a fresh attempt clears
+    // this flag as part of starting itself, so reading it afterwards would
+    // only ever see that fresh (unset) state, never the failure that made
+    // THIS render happen.
+    const wrapPreviewLoadFailed = legacyClasses && this._wrapPreviewFailed;
     if (!info) {
       this._summary.textContent = '';
       this._summaryNote.textContent = '';
@@ -615,10 +630,11 @@ export class ExportPanel {
       allowLegacyClassWrap: this._allowClassWrap,
     };
     const s = buildExportSummary(input);
-    const note =
-      s.warnings.find((w) => w.level === 'error') ??
-      s.warnings.find((w) => w.level === 'warn') ??
-      s.warnings.find((w) => w.level === 'info');
+    const note = wrapPreviewLoadFailed
+      ? { level: 'warn' as const, message: WRAP_PREVIEW_LOAD_FAILED }
+      : s.warnings.find((w) => w.level === 'error') ??
+        s.warnings.find((w) => w.level === 'warn') ??
+        s.warnings.find((w) => w.level === 'info');
     this._summary.textContent = s.line;
     this._summary.className = 'olv-export-summary';
     this._summaryNote.textContent = note ? note.message : '';
@@ -632,18 +648,30 @@ export class ExportPanel {
    * call fetches the guard and renders again once it arrives; until then, and
    * for a scan whose classes are not resident, the preview says nothing and
    * the write gate still decides.
+   *
+   * A failed fetch re-renders too, showing the honest "could not load" state
+   * `_renderSummary` reads from `_wrapPreviewFailed` (snapshotted there before
+   * this method runs). The request flag stays SET through that one render —
+   * the render this method's own catch triggers — and is only cleared once it
+   * returns, so a chunk that keeps failing cannot retry itself in a tight
+   * synchronous loop; a LATER, separately-triggered render is what retries.
    */
   private _legacyClassWrap(classification: Uint8Array | null | undefined): LegacyClassWrapNote | null {
     if (!classification) return null;
     if (this._wrapPreview) return this._wrapPreview(classification);
     if (!this._wrapPreviewRequested) {
       this._wrapPreviewRequested = true;
+      this._wrapPreviewFailed = false;
       loadLegacyClassGuard()
         .then((m) => {
           this._wrapPreview = m.previewLegacyClassWrap;
           this._renderSummary();
         })
-        .catch(() => { this._wrapPreviewRequested = false; });
+        .catch(() => {
+          this._wrapPreviewFailed = true;
+          this._renderSummary();
+          this._wrapPreviewRequested = false;
+        });
     }
     return null;
   }
