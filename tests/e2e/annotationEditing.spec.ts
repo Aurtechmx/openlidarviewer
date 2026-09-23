@@ -12,9 +12,11 @@ import { dropDenseGridPly, showWorkspaceMode } from './helpers';
  *   - opening the editor over an unsaved, dirty draft asks before discarding
  *     it, rather than silently overwriting it — and so do leaving the tool
  *     and undoing/redoing while a dirty draft is still open;
- *   - the editor carries real dialog semantics (role, aria-modal,
- *     aria-labelledby) and traps Tab, so a stray Tab-then-Escape can no
- *     longer exit the whole annotate tool;
+ *   - the editor carries real dialog semantics (role, aria-labelledby) and
+ *     traps Tab, so a stray Tab-then-Escape can no longer exit the whole
+ *     annotate tool; it does NOT claim aria-modal, since unlike every other
+ *     dialog in the app it has no backdrop and does not block the rest of
+ *     the page;
  *   - the type chips expose aria-pressed, matching the severity/status chips
  *     beside them;
  *   - the panel's mobile collapse toggle announces its expanded state and
@@ -312,13 +314,18 @@ test.describe('AnnotationController — undo over an unsaved draft', () => {
 });
 
 test.describe('AnnotationEditor — dialog semantics and focus trap', () => {
-  test('carries dialog role/aria-modal/aria-labelledby naming its heading', async ({ page }) => {
+  test('carries dialog role/aria-labelledby naming its heading, and no false aria-modal', async ({
+    page,
+  }) => {
     await loadSampleAndAnnotate(page);
     await openEditorNear(page, 0);
 
     const editor = page.locator('.olv-anno-editor');
     await expect(editor).toHaveAttribute('role', 'dialog');
-    await expect(editor).toHaveAttribute('aria-modal', 'true');
+    // No backdrop blocks the rest of the page, so this card must not claim
+    // aria-modal — that would tell assistive tech the background is inert
+    // when it is not.
+    expect(await editor.getAttribute('aria-modal')).toBeNull();
     const labelledBy = await editor.getAttribute('aria-labelledby');
     expect(labelledBy).toBeTruthy();
     const heading = page.locator(`#${labelledBy}`);

@@ -280,10 +280,15 @@ export class AnnotationEditor {
       el('div', { className: 'olv-anno-editor-actions' }, [cancelBtn, this._saveBtn]),
     ]);
     // A hand-rolled dialog: no backdrop (it floats beside the click that
-    // opened it), but it carries the same dialog semantics and keyboard
-    // contract Modal.ts's `openModal` gives every other dialog in this app.
+    // opened it) and, unlike every dialog built through Modal.ts's
+    // `openModal`, it does not block pointer interaction with the rest of
+    // the page. `aria-modal="true"` would tell assistive tech the background
+    // is inert when it functionally is not, so this card carries `role` and
+    // `aria-labelledby` — the same naming contract every other dialog in this
+    // app gives — but deliberately no `aria-modal`; the ARIA default
+    // (absent = not modal) is the honest one here. Tab/Escape still route
+    // through the same keyboard contract via `trapTab` below.
     this.element.setAttribute('role', 'dialog');
-    this.element.setAttribute('aria-modal', 'true');
     this.element.setAttribute('aria-labelledby', this._heading.id);
 
     // Escape cancels the editor (not the whole tool — the propagation stops
