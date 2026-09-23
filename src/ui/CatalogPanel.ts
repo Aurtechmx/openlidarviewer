@@ -343,6 +343,8 @@ export class CatalogPanel {
     }
 
     const status = el('div', { className: 'olv-catalog-status' });
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
     const results = el('div', { className: 'olv-catalog-results' });
 
     const form = el('form', { className: 'olv-catalog-form' }, [
