@@ -10,11 +10,20 @@ import { buildScanStory, type ScanStoryInputs } from '../../intelligence/scanSto
 import { renderDatasetStoryCard } from '../../ui/scanStoryViews';
 import { openModal } from '../../ui/Modal';
 import { loadFlowPulseLab } from '../../lazyChunks';
+import { createLazySurfaceLoader, type LazyLoadToast } from '../lazySurfaceLoad';
 
 export interface AnalysisActionDeps {
   /** How to reach the Analyse panel and its run; see {@link openTerrainAnalysis}. */
   terrainAnalysisEntry: TerrainAnalysisEntryDeps;
   buildCurrentStoryInputs: () => ScanStoryInputs;
+  /**
+   * Where a Flow Pulse Lab chunk-load failure is reported, with a "Try
+   * again" action (F7). Optional only because the current caller
+   * (`src/app/actionDefinitions.ts`) does not thread `showLassoToast`
+   * through to this contributor yet — until it does, a failure falls back
+   * to `console.warn`, exactly as before.
+   */
+  showLassoToast?: LazyLoadToast;
 }
 
 export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
@@ -50,9 +59,18 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         // The Analyse panel holds the surface, so it is shown first; a scan with
         // no analysis gets the runner's own refusal rather than a silent run.
         deps.terrainAnalysisEntry.showAnalyseMode();
-        void Promise.all([deps.terrainAnalysisEntry.showPanel(), loadFlowPulseLab()])
-          .then(([panel, lab]) => lab.openFlowPulseLab(panel.flowInput ?? null))
-          .catch((err) => console.warn('[flow-pulse] lab chunk failed to load', err));
+        const load = () => Promise.all([deps.terrainAnalysisEntry.showPanel(), loadFlowPulseLab()])
+          .then(([panel, lab]) => lab.openFlowPulseLab(panel.flowInput ?? null));
+        const toast = deps.showLassoToast;
+        if (toast) {
+          // Named so a successful "Try again" re-runs the WHOLE attempt
+          // (panel + chunk), not just the raw loader — otherwise a retry
+          // that succeeds would refetch bytes nothing then opens the lab with.
+          const attempt = (): void => { void createLazySurfaceLoader(toast)(load, 'Flow Pulse Lab', { retry: attempt }); };
+          attempt();
+        } else {
+          void load().catch((err) => console.warn('[flow-pulse] lab chunk failed to load', err));
+        }
       },
     },
     {
