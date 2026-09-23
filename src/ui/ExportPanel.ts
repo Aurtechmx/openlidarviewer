@@ -949,6 +949,7 @@ export class ExportPanel {
         text: spec.label,
         type: 'button',
       }) as HTMLButtonElement;
+      pill.setAttribute('aria-pressed', String(this._format === fmt));
       if (!spec.available) {
         pill.disabled = true;
         pill.title = 'In-browser LAZ compression isn’t available yet — choose LAS for an uncompressed file.';
@@ -977,6 +978,7 @@ export class ExportPanel {
         text: label,
         type: 'button',
       });
+      pill.setAttribute('aria-pressed', String(this._crsMode === mode));
       pill.addEventListener('click', () => {
         this._crsMode = mode;
         this._renderCrsPills();
