@@ -1,0 +1,18 @@
+{
+  "fixture": "TA-1-flat-plane.json",
+  "cols": 7,
+  "rows": 7,
+  "outcome": "FOUND",
+  "path": [
+    0,
+    8,
+    16,
+    24,
+    32,
+    40,
+    48
+  ],
+  "cost": 8.485281374,
+  "eligibleCount": 49,
+  "blockedReasonCounts": {}
+}

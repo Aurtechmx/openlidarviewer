@@ -1,0 +1,29 @@
+{
+  "name": "TA-8-ruggedness",
+  "why": "A single sharp spike (and a few smaller, asymmetric perturbations around it) sits directly on the straight row-3 route between start and end, producing strongly divergent unit normals near it (high VRM) while the surrounding rows stay comparatively flat. A strict maxRuggedness excludes the rough band from the eligible network, forcing a detour; an unset one (null) does not.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0.7, 1.0, -0.3, 0, 0],
+    [0, 0, -1.0, 4.0, 0.5, 0, 0],
+    [0, 0, 0.9, -1.5, -0.7, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0]
+  ],
+  "profile": {
+    "name": "ruggedness-strict",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": 0.02,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [3, 0],
+  "end": [3, 6]
+}

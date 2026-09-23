@@ -1,0 +1,29 @@
+{
+  "name": "TA-2-tilted-plane-directional",
+  "why": "A uniform slope tilted so downslope is due east (z = -col). A tight cross-slope limit with a generous longitudinal limit accepts the straight-east (downslope) heading but must reject any heading that leaves the middle row, pinning that cross slope is evaluated per heading rather than against total slope.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, -1, -2, -3, -4, -5, -6],
+    [0, -1, -2, -3, -4, -5, -6],
+    [0, -1, -2, -3, -4, -5, -6],
+    [0, -1, -2, -3, -4, -5, -6],
+    [0, -1, -2, -3, -4, -5, -6],
+    [0, -1, -2, -3, -4, -5, -6],
+    [0, -1, -2, -3, -4, -5, -6]
+  ],
+  "profile": {
+    "name": "cross-slope-strict",
+    "maxLongitudinalGrade": 2,
+    "maxCrossSlope": 0.05,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [3, 0],
+  "end": [3, 6]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "TA-8-ruggedness-unset",
+  "why": "The same rough spike as TA-8-ruggedness, but maxRuggedness is null (unconstrained): every cell stays eligible and the shortest route runs straight through the spike, contrasting directly with the forced detour when a limit is declared.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0.7, 1.0, -0.3, 0, 0],
+    [0, 0, -1.0, 4.0, 0.5, 0, 0],
+    [0, 0, 0.9, -1.5, -0.7, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0]
+  ],
+  "profile": {
+    "name": "ruggedness-unset",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [3, 0],
+  "end": [3, 6]
+}

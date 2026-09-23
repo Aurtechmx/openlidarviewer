@@ -1,0 +1,27 @@
+{
+  "name": "TA-4-step-barrier",
+  "why": "A 1 m step blocks the direct corridor at column 2, row 2 (every edge touching it exceeds maxStepHeight). Row 1's detour is closed by NoData at (1,2), leaving row 3 as the only single-row detour, so the shortest route is unique.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0],
+    [0, 0, null, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ],
+  "profile": {
+    "name": "step-strict",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 0.2,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [2, 0],
+  "end": [2, 4]
+}

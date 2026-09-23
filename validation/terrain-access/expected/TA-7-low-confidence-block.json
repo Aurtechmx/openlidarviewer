@@ -1,0 +1,19 @@
+{
+  "fixture": "TA-7-low-confidence-block.json",
+  "cols": 5,
+  "rows": 5,
+  "outcome": "FOUND",
+  "path": [
+    0,
+    1,
+    7,
+    13,
+    18,
+    24
+  ],
+  "cost": 6.242640687,
+  "eligibleCount": 24,
+  "blockedReasonCounts": {
+    "low-confidence": 1
+  }
+}

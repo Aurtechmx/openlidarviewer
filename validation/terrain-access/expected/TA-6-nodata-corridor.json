@@ -1,0 +1,12 @@
+{
+  "fixture": "TA-6-nodata-corridor.json",
+  "cols": 5,
+  "rows": 3,
+  "outcome": "NO_ROUTE",
+  "path": [],
+  "cost": null,
+  "eligibleCount": 10,
+  "blockedReasonCounts": {
+    "no-data": 5
+  }
+}

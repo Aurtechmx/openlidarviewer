@@ -1,0 +1,25 @@
+{
+  "name": "TA-6-nodata-corridor",
+  "why": "A full-width NoData row with no gap at all. Under the default (block) unknown policy there is no way around it within the grid, so the outcome must be NO_ROUTE rather than a route that crosses NoData.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0],
+    [null, null, null, null, null],
+    [0, 0, 0, 0, 0]
+  ],
+  "profile": {
+    "name": "default-unknown-block",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [0, 2],
+  "end": [2, 2]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "TA-7-low-confidence-block",
+  "why": "A single low-confidence cell sits on the otherwise-shortest diagonal route. Under unknownPolicy block it must be excluded, forcing a longer route around it.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ],
+  "confidence": [
+    [100, 100, 100, 100, 100],
+    [100, 100, 100, 100, 100],
+    [100, 100, 5, 100, 100],
+    [100, 100, 100, 100, 100],
+    [100, 100, 100, 100, 100]
+  ],
+  "profile": {
+    "name": "unknown-block",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 50,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [0, 0],
+  "end": [4, 4]
+}

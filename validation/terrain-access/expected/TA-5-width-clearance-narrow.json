@@ -1,0 +1,19 @@
+{
+  "fixture": "TA-5-width-clearance-narrow.json",
+  "cols": 6,
+  "rows": 3,
+  "outcome": "FOUND",
+  "path": [
+    0,
+    1,
+    8,
+    9,
+    10,
+    5
+  ],
+  "cost": 5.828427125,
+  "eligibleCount": 16,
+  "blockedReasonCounts": {
+    "outside-roi": 2
+  }
+}
