@@ -109,6 +109,37 @@ Recorded before the measurements were read. Two parts, decided separately.
    size on pure-ASCII content. Otherwise no file that loads today is newly
    refused, and only the overstated cost in the code comments is corrected.
 
+## Outcome of D4
+
+Clause 2 decides it. `cartographicProduct`, which computes
+`p95DisplacementSource`, has no caller in `src/`: no export, manifest,
+report, claim or tolerance reads the value, and no test pins it beyond a
+non-negativity check. It is not used as a bound, so clause 1 does not apply.
+The value moves to the canonical type 7 through `terrain/quantile.ts`. On a
+1,618-vertex contour set the two conventions differ by 0.056 per cent; below
+20 displacements nearest rank returns the maximum.
+
+## Outcome of D5
+
+Part 1 applies to both formats, with different reach. The PLY decoder wraps
+every coordinate in a Float32Array before the cloud is recentred, whatever
+the declared type, so a binary double at projected-CRS magnitudes loses up
+to 0.125 m, and 0.25 m at a northing of 6.3 million. An ASCII double lands
+within 7.6e-6 m, which is the single-precision local storage the viewer
+uses after recentring, not the decoder. For PCD, ASCII and plain binary
+doubles already read in Float64; `binary_compressed` doubles lose the same
+0.125 m. Double-typed coordinates are decoded in Float64 on those two
+paths, and float-typed files must load byte-identically. PCD waits for the
+Observatory branch.
+
+Part 2 applies. Measured transient memory over the file size, as the
+before-and-after delta of one load in one process: ASCII PLY 3.75 times,
+binary PLY 4.0 times, pure-ASCII PCD 5.9 times, and 8 times once a single
+code point above U+00FF appears. Each exceeds 1.5 times, so PLY and PCD get
+an itemized transient-memory estimate like E57's, sized from these ratios.
+The ratios come from Node rather than a browser tab, which the estimate
+states.
+
 ## Held
 
 Release notes and the changelog for the Field Simulation Lab are held until
