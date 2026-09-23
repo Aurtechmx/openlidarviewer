@@ -1380,6 +1380,13 @@ export class MeasurePanel {
         title: expandTitle,
         ariaLabel: expandName,
       });
+      // Not a second tab stop: chartWrap already carries this exact action as
+      // role="button" + tabIndex=0, so a focusable child button with the same
+      // accessible name would give keyboard/screen-reader users two consecutive
+      // stops for one action. It stays a real, mouse-clickable button — only
+      // pulled out of the accessibility tree and the tab order.
+      chartExpand.tabIndex = -1;
+      chartExpand.setAttribute('aria-hidden', 'true');
       chartExpand.addEventListener('click', (e) => {
         e.stopPropagation();
         this._openProfileFocus(s, chartExpand);
