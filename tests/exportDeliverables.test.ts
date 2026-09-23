@@ -97,4 +97,46 @@ describe('buildExportDeliverables — duplicate-click guard (OUTPUT-F5)', () => 
     expect(select.disabled).toBe(false);
     vi.useRealTimers();
   });
+
+  it('does not protect a void callback whose real async work outlives the fixed window', () => {
+    // Reproduces main.ts's actual onExportReport shape: a void arrow function
+    // that starts the real async work with `void ....then(...)` (main.ts:2651)
+    // and returns nothing for guardDuplicateClicks to await, so the button
+    // only ever guards for the fixed DUPLICATE_CLICK_GUARD_MS window, whatever
+    // the real work's own duration turns out to be. A cold pdf-lib chunk load
+    // plus multi-page render can outlast that window; this proves a click
+    // after the window re-enables, but before the real work resolves, starts
+    // a second, concurrent, genuine run.
+    vi.useFakeTimers();
+    let realRuns = 0;
+    const startReal = (): void => {
+      realRuns++;
+      // Never resolves within this test — stands in for a report generation
+      // still in flight when the fixed window elapses.
+      void new Promise<void>(() => {}).then(() => {});
+    };
+    const { element, setImageExportEnabled } = buildExportDeliverables({
+      onExport: noop,
+      onExportImage: noop,
+      onExportReport: () => { startReal(); }, // void: nothing returned
+    });
+    setImageExportEnabled(true);
+    const select = q(element, '.olv-report-select');
+    select.value = DEFAULT_TEMPLATE_ID;
+    const reportBtn = qAll(element, '.olv-export-btn').find((b) => b.textContent === 'Report PDF');
+
+    reportBtn.click();
+    expect(realRuns).toBe(1);
+    expect(reportBtn.disabled).toBe(true);
+
+    vi.runAllTimers(); // the fixed window elapses; the real work is still running
+    expect(reportBtn.disabled, 'the guard releases on its timer regardless of the real work').toBe(false);
+
+    reportBtn.click(); // a second, genuine click while report #1 is still in flight
+    expect(
+      realRuns,
+      'a void callback whose real work outlives the fixed window gets no duplicate-click protection once the window elapses',
+    ).toBe(2);
+    vi.useRealTimers();
+  });
 });

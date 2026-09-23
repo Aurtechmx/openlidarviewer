@@ -40,10 +40,23 @@ const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
 const DUPLICATE_CLICK_GUARD_MS = 1500;
 
 /**
- * Disable `controls` for the duration of `run`'s own promise (or, when it
- * returns nothing to await, for a fixed guard window) so a second click on an
- * in-flight export is dropped instead of firing a duplicate, concurrent
- * export. A click while already disabled is a no-op.
+ * Disable `controls` for the duration of `run`'s own promise, when `run`
+ * hands one back, so a second click on an in-flight export is dropped
+ * instead of firing a duplicate, concurrent export. A click while already
+ * disabled is a no-op.
+ *
+ * Today, `run` never hands one back: `cb.onExport`/`cb.onExportReport` are
+ * void arrow functions in main.ts that start their async work with `void
+ * ....then(...)` / call `.then().catch()` without a `return`, so `run()`
+ * always evaluates to `undefined` here and this always falls through to the
+ * fixed {@link DUPLICATE_CLICK_GUARD_MS} window below, whatever the real
+ * work's own duration turns out to be — the promise branch is reachable code
+ * with no current production caller. That is a real gap for the report
+ * button specifically: a cold-chunk pdf-lib load plus multi-page render can
+ * outlast the window, so a second click after it re-enables can start a
+ * genuine concurrent report build. Closing it needs main.ts's two callbacks
+ * to `return` their promise chains instead of discarding them; this module
+ * cannot make that change on its own.
  */
 function guardDuplicateClicks(
   controls: ReadonlyArray<HTMLButtonElement | HTMLSelectElement>,
