@@ -144,6 +144,24 @@ describe('a completed run', () => {
     expect(r.record.result.fieldDigest).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('records the terrain-core identity when the caller supplies it, null otherwise', () => {
+    const withCore = runFlowPulse(dtmOf([[3, 2, 1]]), projected, params(), {
+      ...identity, terrainCoreDigest: 'core-digest-1',
+    });
+    expect(withCore.ok).toBe(true);
+    if (!withCore.ok) return;
+    expect(withCore.record.source.terrainCoreDigest).toBe('core-digest-1');
+
+    const withoutCore = runFlowPulse(dtmOf([[3, 2, 1]]), projected, params(), identity);
+    expect(withoutCore.ok).toBe(true);
+    if (!withoutCore.ok) return;
+    expect(withoutCore.record.source.terrainCoreDigest).toBeNull();
+
+    // §18: two runs over the same DTM whose only difference is which
+    // terrain-core version built it must not look identical.
+    expect(withCore.record.digest).not.toBe(withoutCore.record.digest);
+  });
+
   it('names every method it ran, conditioning included', () => {
     expect(methodsFor(params())).toEqual([
       'olv.simulation.terrain-flow.d8',

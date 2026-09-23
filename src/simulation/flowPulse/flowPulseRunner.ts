@@ -183,6 +183,14 @@ export interface FlowRunIdentity {
   readonly sourceDigest: string | null;
   /** Digest of the exact terrain product read. */
   readonly analysisInputDigest: string;
+  /**
+   * Digest of the terrain-core METHOD that built the DTM (algorithm and
+   * version), see {@link SimulationSource.terrainCoreDigest}. Optional and
+   * defaults to null: a caller that has not resolved one (e.g. it holds only
+   * the DTM product, not the descriptor that built it) still produces a
+   * valid, honestly-incomplete record rather than being forced to invent one.
+   */
+  readonly terrainCoreDigest?: string | null;
   readonly build: string;
   readonly id: string;
   readonly generatedAt: string;
@@ -289,6 +297,7 @@ export function runFlowPulse(
       filename: identity.filename,
       sourceDigest: identity.sourceDigest,
       analysisInputDigest: identity.analysisInputDigest,
+      terrainCoreDigest: identity.terrainCoreDigest ?? null,
       basis,
     },
     model: { id: 'olv.simulation.terrain-flow.d8', version: 1 },
