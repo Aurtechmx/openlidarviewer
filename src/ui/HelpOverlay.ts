@@ -14,6 +14,7 @@
  */
 
 import { el } from './dom';
+import { wireDialogA11y, type DialogA11yHandle } from './Modal';
 import type { ActionDescriptor } from './actionRegistry';
 import type { ShortcutDescriptor } from './keyBindings';
 import { formatShortcutKeys } from './ShortcutSheet';
@@ -29,7 +30,8 @@ export class HelpOverlay {
   readonly element: HTMLElement;
 
   private _open = false;
-  private readonly _onKeyDown: (e: KeyboardEvent) => void;
+  private readonly _card: HTMLElement;
+  private _a11y: DialogA11yHandle | null = null;
   private readonly _search: HTMLInputElement;
   private readonly _nav: HTMLElement;
   private readonly _body: HTMLElement;
@@ -49,25 +51,21 @@ export class HelpOverlay {
     this._nav = el('nav', { className: 'olv-help-nav', ariaLabel: 'Help topics' });
     this._body = el('div', { className: 'olv-help-body' });
 
-    const card = el('div', { className: 'olv-help-card' }, [
-      el('div', { className: 'olv-help-head' }, [
-        el('span', { className: 'olv-help-title', text: 'OpenLiDARViewer Help' }),
-        closeBtn,
-      ]),
+    const titleEl = el('span', { className: 'olv-help-title', text: 'OpenLiDARViewer Help' });
+    titleEl.id = 'olv-help-title';
+    this._card = el('div', { className: 'olv-help-card' }, [
+      el('div', { className: 'olv-help-head' }, [titleEl, closeBtn]),
       this._search,
       this._nav,
       this._body,
     ]);
-    this.element = el('div', { className: 'olv-help-backdrop olv-hidden' }, [card]);
+    this._card.setAttribute('role', 'dialog');
+    this._card.setAttribute('aria-modal', 'true');
+    this._card.setAttribute('aria-labelledby', titleEl.id);
+    this.element = el('div', { className: 'olv-help-backdrop olv-hidden' }, [this._card]);
     this.element.addEventListener('click', (e) => {
       if (e.target === this.element) this.close();
     });
-    this._onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        this.close();
-      }
-    };
     this._render('');
   }
 
@@ -133,7 +131,10 @@ export class HelpOverlay {
     if (this._open) return;
     this._open = true;
     this.element.classList.remove('olv-hidden');
-    window.addEventListener('keydown', this._onKeyDown, true);
+    // Wired before the focus move below, so it captures the trigger (not the
+    // search input) as the element to restore focus to on close.
+    this._a11y = wireDialogA11y(this._card, { onEscape: () => this.close() });
+    this._search.focus();
   }
 
   /** Open on one topic: clears the search and scrolls the topic into view. */
@@ -156,7 +157,9 @@ export class HelpOverlay {
     if (!this._open) return;
     this._open = false;
     this.element.classList.add('olv-hidden');
-    window.removeEventListener('keydown', this._onKeyDown, true);
+    // Restores focus to whatever triggered the overlay (Tab-trap teardown).
+    this._a11y?.teardown();
+    this._a11y = null;
   }
 
   /** Toggle the overlay open or closed. */
@@ -167,7 +170,8 @@ export class HelpOverlay {
 
   /** Free DOM references and any live listener. */
   dispose(): void {
-    window.removeEventListener('keydown', this._onKeyDown, true);
+    this._a11y?.teardown();
+    this._a11y = null;
     this.element.remove();
   }
 }
