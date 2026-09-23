@@ -49,6 +49,7 @@ the paper that specifies it.
 | `olv.simulation.terrain-flow.priority-flood.gap-outlet` | 1 | The same conditioning with NoData gaps read as drainage exits, declared for gaps that are open water | Barnes, Lehman & Mulla (2014) |
 | `olv.simulation.terrain-flow.accumulation` | 1 | Cells draining through each cell; metric area withheld when the scale is unresolved | internal (dependency-ordered pass over the D8 graph) |
 | `olv.simulation.terrain-flow.catchment` | 1 | Cells draining to a selected outlet | internal (reverse D8 traversal) |
+| `olv.simulation.terrain-flow.depression-inventory` | 1 | Groups raised cells into 8-connected depressions with cell count, area, deepest fill and outlet elevation; raw mode lists sink candidates instead | internal (connected-component grouping over Priority-Flood's output) |
 
 ## Honesty boundary
 

@@ -450,6 +450,23 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/flowAccumulation.ts'],
   },
+  'olv.simulation.terrain-flow.depression-inventory': {
+    id: 'olv.simulation.terrain-flow.depression-inventory',
+    version: 1,
+    name: 'Depression inventory',
+    summary:
+      'Groups the cells Priority-Flood raised into 8-connected depressions and reports '
+      + 'each one\'s cell count, area, deepest fill and rim (outlet) elevation, largest '
+      + 'first. Without conditioning, lists each raw D8 sink as its own one-cell '
+      + 'candidate rather than claiming an extent nothing measured. Sink count always '
+      + 'describes the unconditioned surface, in both modes.',
+    citation:
+      'Internal composition (connected-component grouping over the cells registered by '
+      + 'olv.simulation.terrain-flow.priority-flood, compared against the raw surface); '
+      + 'no single published method.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/depressionInventory.ts'],
+  },
 };
 
 /**

@@ -132,7 +132,15 @@ describe('a completed run', () => {
     if (!r.ok) return;
     expect(r.record.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(r.record.kind).toBe('terrain-flow');
-    expect(r.record.result).toEqual({ ...r.summary, fieldDigest: r.record.result.fieldDigest });
+    expect(r.record.result).toEqual({
+      ...r.summary,
+      fieldDigest: r.record.result.fieldDigest,
+      depressionCount: r.depressions.depressions.length,
+      largestDepressionCells: r.depressions.largestCells,
+      largestDepressionAreaM2: r.depressions.largestAreaM2,
+      largestDepressionMaxFillDepth: r.depressions.largestMaxFillDepth,
+      largestDepressionOutletElevation: r.depressions.largestOutletElevation,
+    });
     expect(r.record.result.fieldDigest).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -140,6 +148,7 @@ describe('a completed run', () => {
     expect(methodsFor(params())).toEqual([
       'olv.simulation.terrain-flow.d8',
       'olv.simulation.terrain-flow.accumulation',
+      'olv.simulation.terrain-flow.depression-inventory',
     ]);
     expect(methodsFor(params({ conditioning: 'priority-flood' }))[0])
       .toBe('olv.simulation.terrain-flow.priority-flood');
