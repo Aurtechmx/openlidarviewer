@@ -127,9 +127,18 @@ class FakeEl {
   removeEventListener(): void {
     /* not exercised */
   }
-  /** Fire a listener the view registered — how these tests click. */
+  /** Fire a listener the view registered — how these tests click. Carries
+   * no-op stopPropagation/preventDefault so a handler that calls either (the
+   * collapse toggle does) does not throw against this stub. */
   click(): void {
-    for (const fn of this.handlers.get('click') ?? []) fn({ type: 'click', clientX: 0, clientY: 0 });
+    for (const fn of this.handlers.get('click') ?? [])
+      fn({
+        type: 'click',
+        clientX: 0,
+        clientY: 0,
+        stopPropagation: () => {},
+        preventDefault: () => {},
+      });
   }
   focus(): void {}
   blur(): void {}
@@ -503,5 +512,65 @@ describe('the controller routes issue writes through the model', () => {
     expect(a.issue).toBeUndefined();
     h.c.setIssueStatus(a.id, 'resolved');
     expect(h.c.getAnnotations()[0]).toBe(a);
+  });
+});
+
+describe('AnnotationEditor.reopenIfPossible() resolves synchronously unless real work would be lost', () => {
+  it('needs no confirmation when the card is already closed', async () => {
+    const e = await editor();
+    expect(e.card.reopenIfPossible()).toBe(true);
+  });
+
+  it('cancels and reopens synchronously when the open card is untouched', async () => {
+    const e = await editor();
+    const onCancel = vi.fn();
+    e.card.open({ x: 0, y: 0, onSave: e.onSave, onCancel });
+    expect(e.card.isOpen).toBe(true);
+    expect(e.card.reopenIfPossible()).toBe(true);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(e.card.isOpen).toBe(false);
+  });
+
+  it('reports it cannot reopen, without touching the card, once real work is typed', async () => {
+    const e = await editor();
+    const onCancel = vi.fn();
+    e.card.open({ x: 0, y: 0, onSave: e.onSave, onCancel });
+    // A real click (not a programmatic field write) is what the card treats
+    // as work worth protecting — see the type-chip click handler.
+    e.pick('.olv-anno-chip-warning');
+    expect(e.card.reopenIfPossible()).toBe(false);
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(e.card.isOpen).toBe(true);
+  });
+});
+
+describe('the editor exposes aria-pressed on its type chips', () => {
+  it('marks exactly the active type chip pressed, and follows a click', async () => {
+    const e = await editor();
+    e.card.open({ x: 0, y: 0, onSave: e.onSave, onCancel: () => {} });
+    const note = e.el.querySelectorAll('.olv-anno-chip-note')[0];
+    const warning = e.el.querySelectorAll('.olv-anno-chip-warning')[0];
+    expect(note.getAttribute('aria-pressed')).toBe('true');
+    expect(warning.getAttribute('aria-pressed')).toBe('false');
+    warning.click();
+    expect(warning.getAttribute('aria-pressed')).toBe('true');
+    expect(note.getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
+describe("the panel's mobile collapse toggle announces its expanded state", () => {
+  it('flips aria-expanded and the label with the collapsed state', async () => {
+    const panel = await mount([summary('a')]);
+    const toggle = panel.el.querySelectorAll('.olv-collapse-toggle')[0];
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Collapse panel');
+
+    toggle.click();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Expand panel');
+
+    toggle.click();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Collapse panel');
   });
 });
