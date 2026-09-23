@@ -34,6 +34,13 @@ const APPIUM = process.env.OLV_APPIUM ?? 'http://127.0.0.1:4723';
 const BASE = process.env.OLV_BASE_URL ?? 'http://127.0.0.1:4173';
 const DEVICE = process.env.OLV_SIM_DEVICE ?? 'iPhone 16';
 const UDID = process.env.OLV_SIM_UDID ?? '';
+// Set only by a job that builds WebDriverAgent itself before this script
+// runs (ios-simulator.yml's own WDA build step, or the runtime-matrix
+// touch-check job). When present, Appium reuses that build instead of
+// invoking xcodebuild again with its own settings — see the build step's
+// comment for why the second invocation matters. A run that leaves this
+// unset keeps building WDA the way it already did.
+const WDA_DERIVED_DATA = process.env.OLV_WDA_DERIVED_DATA ?? '';
 
 /** The pose read, as a string so two reads compare with `!==`. */
 const POSE = 'return JSON.stringify(window.__OLV_TEST_API__.getCameraPose());';
@@ -116,6 +123,10 @@ async function main() {
     // Only pin the udid when the workflow resolved one; an empty string would
     // match no device and the failure would name the capability, not the cause.
     if (UDID) alwaysMatch['appium:udid'] = UDID;
+    if (WDA_DERIVED_DATA) {
+      alwaysMatch['appium:usePrebuiltWDA'] = true;
+      alwaysMatch['appium:derivedDataPath'] = WDA_DERIVED_DATA;
+    }
 
     const created = await wd('POST', '/session', { capabilities: { alwaysMatch } });
     sid = created.sessionId;

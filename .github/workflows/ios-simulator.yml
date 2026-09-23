@@ -13,6 +13,16 @@
 # simulator runtime, a WebDriverAgent build — and a leg like that must earn
 # trust before it can block a merge. `L13` records the browser matrix as
 # advisory; this joins it on those terms rather than as a required check.
+#
+# PINNED TO macos-26-intel / iOS 26.5 / iPhone 17e. L13 traces the crash on
+# other images and runtimes to the host's paravirtual GPU (SimMetalHost)
+# dying when Safari draws WebGL; this is the one pairing run 35823332517
+# verified survives to a rendered frame and passes all 13 assertions of
+# scripts/ios-touch-check.mjs. scripts/pin-ios-simulator.mjs resolves it by
+# exact name against what the image reports and refuses to fall back to
+# another runtime or device — see that script's header for why. The leg
+# stays advisory, off ci.yml's `ci-green` needs, until this exact pairing has
+# run 20 consecutive passes.
 name: iOS simulator
 
 on:
@@ -25,16 +35,12 @@ on:
       - '.github/workflows/ios-simulator.yml'
       - 'scripts/ios-touch-check.mjs'
       - 'scripts/ios-touch-trace.mjs'
-      - 'scripts/pick-ios-simulator.mjs'
+      - 'scripts/pin-ios-simulator.mjs'
       - 'probe.html'
       - 'vite.probe.config.ts'
       - 'src/probe/**'
   workflow_dispatch:
     inputs:
-      device:
-        description: Simulator device name, or blank for the first iPhone available
-        required: false
-        default: ''
       keep-artifacts:
         description: Upload screenshots even on success
         required: false
@@ -46,8 +52,10 @@ permissions:
 jobs:
   mobile-safari:
     name: Mobile Safari on an iOS simulator
-    runs-on: macos-latest
+    runs-on: macos-26-intel
     timeout-minutes: 45
+    env:
+      OLV_WDA_DERIVED_DATA: ${{ github.workspace }}/wda-derived-data
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -100,22 +108,20 @@ jobs:
           cat preview.log
           exit 1
 
-      # Resolve the device rather than naming one. The runner image ships a
-      # different iPhone generation every few months, so a hardcoded name is a
-      # leg that goes red on someone else's schedule. A requested name wins
-      # when it is present; otherwise the newest iPhone available is used, and
-      # the choice is printed because a result should say which device it came
-      # from.
-      - name: Boot the simulator
+      # Resolve the ONE pairing this leg is pinned to (see the header comment)
+      # rather than whatever this image defaults to. pin-ios-simulator.mjs
+      # matches iOS 26.5 / iPhone 17e by exact name and refuses to fall back
+      # to another runtime or device; a mismatch fails here, naming what was
+      # wanted and what the image has, instead of three steps later as an
+      # unexplained WebDriver error.
+      - name: Resolve the pinned simulator
         id: sim
-        env:
-          WANT: ${{ inputs.device }}
         run: |
-          RESOLVED=$(node scripts/pick-ios-simulator.mjs) || {
-            echo "::error::no iPhone simulator is available on this image"
-            xcrun simctl list devices available
+          set -o pipefail
+          if ! RESOLVED=$(node scripts/pin-ios-simulator.mjs 2> pin-error.log); then
+            echo "::error::$(cat pin-error.log)"
             exit 1
-          }
+          fi
           UDID="${RESOLVED%%|*}"
           NAME="${RESOLVED#*|}"
           echo "using $NAME ($UDID)"
@@ -152,6 +158,14 @@ jobs:
       # session, the compile runs inside the create-session request and takes
       # most of the time budget; built here, the session's own build step is
       # incremental and the log separates a build failure from a test one.
+      #
+      # -derivedDataPath IS PINNED, to OLV_WDA_DERIVED_DATA (job-level env).
+      # Without it Appium's own session start invokes xcodebuild again with
+      # different command-line build settings, which invalidates this build's
+      # cache and forces a real recompile inside the session — see 2dbcae27
+      # for the run that traced a socket-hang-up failure to exactly that.
+      # ios-touch-check.mjs passes usePrebuiltWDA/derivedDataPath to the
+      # session when this variable is set, so Appium reuses this build.
       - name: Build WebDriverAgent
         env:
           UDID: ${{ steps.sim.outputs.udid }}
@@ -162,6 +176,7 @@ jobs:
             -project "$WDA/WebDriverAgent.xcodeproj" \
             -scheme WebDriverAgentRunner \
             -destination "id=$UDID" \
+            -derivedDataPath "$OLV_WDA_DERIVED_DATA" \
             GCC_TREAT_WARNINGS_AS_ERRORS=0 COMPILER_INDEX_STORE_ENABLE=NO \
             | tail -20
 
