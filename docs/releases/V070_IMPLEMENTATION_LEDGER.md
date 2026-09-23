@@ -19,7 +19,10 @@ An item reads FIXED only where a test or another reproducible proof exists, and
 the test is named. Code changing is not sufficient.
 
 Entries keep their original identifier from the register this ledger grew out
-of, so a finding can be traced to where it was first written down.
+of, so a finding can be traced to where it was first written down. L148 and
+L149 were recorded as L146 and L147 on the branch that wrote them; both
+numbers collided with an L146 and an L147 assigned independently on main, so
+the two entries were renumbered when the branches were integrated.
 
 ## Ledger
 
