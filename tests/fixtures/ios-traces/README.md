@@ -30,24 +30,34 @@ no uncaught error. Running the same seven gestures through a page that
 never asks WebGL for a context, this gives no reason to doubt the L13
 GPU-driver theory.
 
-## What did not: `doubleTap`
+## What did not: `doubleTap` (not verified on iOS by this instrument)
 
-`doubleTap.json` is committed with its real `doubleTapAsIntended: false`
-result, not patched to pass. Two single-finger taps were sent as one W3C
-Actions pointer stream (down, up, pause 120 ms, down, up). What iOS
-actually delivered was three overlapping touch identifiers, not two clean
-ones. A first touch stayed down and drifted off-canvas over 134 ms. A
-second touch landed at the same point and released 2 ms later while the
-first was still down (`targetTouches: 2` at that instant, and a genuine
-WebKit `gesturestart`/`gestureend` pair from the platform seeing two
-simultaneous contacts). Only then came a third, clean, 3 ms tap, once the
-first finger finally lifted. `TouchTapGate` reasonably refuses to call a
-70+ ms two-finger overlap plus an off-canvas drift a "tap", so no
-double-tap focus event ever fires. This reads as a WebDriverAgent
-action-synthesis artifact for a fast down/up/pause/down/up on a single
-pointer id, not a product bug: a real fingertip cannot occupy the same
-touch stream twice at once. Recorded as-is, because it is what the
-platform did.
+`doubleTap.json` is committed with its real result, not patched to pass.
+Two single-finger taps were sent as one W3C Actions pointer stream (down,
+up, pause 120 ms, down, up). What iOS actually delivered was three
+overlapping touch identifiers, not two clean ones. A first touch stayed
+down and drifted off-canvas over 134 ms. A second touch landed at the same
+point and released 2 ms later while the first was still down
+(`targetTouches: 2` at that instant, and a genuine WebKit
+`gesturestart`/`gestureend` pair from the platform seeing two simultaneous
+contacts). Only then came a third, clean, 3 ms tap, once the first finger
+finally lifted. `TouchTapGate` reasonably refuses to call a 70+ ms
+two-finger overlap plus an off-canvas drift a "tap", so no double-tap focus
+event ever fires. This reads as a WebDriverAgent action-synthesis artifact
+for a fast down/up/pause/down/up on a single pointer id, not a product bug:
+a real fingertip cannot occupy the same touch stream twice at once.
+Recorded as-is, because it is what the platform did.
+
+`scripts/lib/doubleTapClassifier.mjs` checks this trace's event log for
+exactly that artifact (a pointerdown for a second pointer id while the
+first is still down, within the first tap) rather than trusting a plain
+pass/fail: `doubleTap.json` classifies as `instrument-limitation`. The step
+records `unverified: instrument limitation` (never `ok:true`, never counted
+as a pass) and does not fail the leg. `RESULT.json`'s `doubleTapClassification`
+field carries that verdict. If a future recording's log shows a genuine
+`doubletap` event, the classifier calls that `unexpectedly-passing` and
+fails the step on purpose, because the artifact this file documents would
+be gone and this note would need rewriting against a fresh recording.
 
 ## What Playwright's synthesized events do not carry
 

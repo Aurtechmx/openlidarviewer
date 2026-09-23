@@ -22,6 +22,17 @@
  * produce. If Safari still went down here, that would say the GPU-driver
  * theory in L13 was wrong — nothing below touches a renderer.
  *
+ * DOUBLE-TAP IS NOT VERIFIED ON iOS BY THIS INSTRUMENT. WebDriverAgent
+ * delivers a fast down/up/pause/down/up on one pointer id as two overlapping
+ * touch identifiers plus a drift off the original point, not two clean taps
+ * — see scripts/lib/doubleTapClassifier.mjs's header and
+ * tests/fixtures/ios-traces/README.md. `runGesture`'s doubleTap call routes
+ * through that classifier rather than a plain pass/fail: the characterised
+ * artifact reads as `unverified: instrument limitation`, never a pass and
+ * never a step failure; a genuine `doubletap` event now firing fails the
+ * step loudly, because it would mean the artifact this module documents is
+ * gone and the classification needs revisiting.
+ *
  * A sibling of ios-touch-check.mjs rather than an extension of it: the two
  * scripts drive different pages for different reasons, and duplicating the
  * ~40-line WebDriver transport here keeps this file safe to change without
@@ -30,6 +41,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
+import { classifyDoubleTap } from './lib/doubleTapClassifier.mjs';
 
 const APPIUM = process.env.OLV_APPIUM ?? 'http://127.0.0.1:4723';
 const BASE = process.env.OLV_BASE_URL ?? 'http://127.0.0.1:4173';
@@ -41,9 +53,18 @@ const OUT_DIR = 'ios-touch-traces';
 mkdirSync(OUT_DIR, { recursive: true });
 
 const steps = [];
-const record = (name, ok, detail) => {
-  steps.push({ name, ok, detail });
-  console.log(`${ok ? 'ok  ' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
+let doubleTapClassification = null;
+
+/**
+ * `status` defaults from `ok` (`'pass'` / `'fail'`) but can be overridden to
+ * `'unverified'` — the doubleTap instrument-limitation case: never `ok:true`,
+ * never counted as a pass, but also not counted as a step failure. Only
+ * `status === 'fail'` can flip the run's exit code; see the bottom of `main`.
+ */
+const record = (name, ok, detail, status = ok ? 'pass' : 'fail') => {
+  steps.push({ name, ok, status, detail });
+  const label = status === 'unverified' ? 'SKIP' : ok ? 'ok  ' : 'FAIL';
+  console.log(`${label}  ${name}${detail ? ` — ${detail}` : ''}`);
 };
 
 /** One WebDriver command. Throws with the server's own message on failure. */
@@ -231,10 +252,12 @@ async function main() {
      * gesture should fire, with `expectSign` its expected direction; `null`
      * means the gesture should fire NOTHING (a single finger never reaches
      * the two-pointer recogniser at all, and a sub-dead-zone wobble should
-     * cross no threshold). `expectDoubleTap` is checked separately, since a
-     * double-tap is TouchTapGate's decision, not TouchTracker's.
+     * cross no threshold). `classifyAsDoubleTap` routes the step through
+     * scripts/lib/doubleTapClassifier.mjs instead of a plain pass/fail, since
+     * whether this instrument can even DELIVER a double-tap is a separate
+     * question from whether TouchTracker's two-pointer recogniser behaved.
      */
-    async function runGesture(name, description, actions, { expectRecognizer = null, expectSign = 0, expectDoubleTap = false } = {}) {
+    async function runGesture(name, description, actions, { expectRecognizer = null, expectSign = 0, classifyAsDoubleTap = false } = {}) {
       await evaluate(sid, 'window.__OLV_PROBE__.reset(); return true;');
       const dispatchedAt = Date.now();
       await wd('POST', `/session/${sid}/actions`, { actions });
@@ -261,15 +284,21 @@ async function main() {
           return expectSign === 0 ? v !== 0 : Math.sign(v) === expectSign;
         });
       }
-      const doubleTapAsIntended = !expectDoubleTap || events.some((e) => e.kind === 'doubletap');
 
-      const ok = noZoom && noScroll && noTouchCancel && recognizerAsIntended && doubleTapAsIntended;
-      record(
-        name,
-        ok,
-        `zoom=${summary.after.visualViewportScale} scroll=(${summary.after.scrollX},${summary.after.scrollY}) ` +
-          `touchcancel=${summary.touchcancel} recognizerEvents=${recognizerEvents.length} pointerEvents=${summary.counts.pointer}`,
-      );
+      const baseDetail = `zoom=${summary.after.visualViewportScale} scroll=(${summary.after.scrollX},${summary.after.scrollY}) ` +
+        `touchcancel=${summary.touchcancel} recognizerEvents=${recognizerEvents.length} pointerEvents=${summary.counts.pointer}`;
+
+      let ok;
+      let doubleTap = null;
+      if (classifyAsDoubleTap) {
+        doubleTap = classifyDoubleTap(events, { noZoom, noScroll, noTouchCancel, recognizerAsIntended });
+        doubleTapClassification = doubleTap;
+        ok = doubleTap.ok; // always false — see doubleTapClassifier.mjs
+        record(name, ok, `${baseDetail} classification=${doubleTap.classification} — ${doubleTap.detail}`, doubleTap.failStep ? 'fail' : 'unverified');
+      } else {
+        ok = noZoom && noScroll && noTouchCancel && recognizerAsIntended;
+        record(name, ok, baseDetail);
+      }
 
       const trace = {
         meta: {
@@ -284,14 +313,14 @@ async function main() {
           recordedAt: new Date(dispatchedAt).toISOString(),
           expectRecognizer,
           expectSign,
-          expectDoubleTap,
         },
         canvasRect: rect,
         before: summary.before,
         after: summary.after,
         counts: summary.counts,
         touchcancel: summary.touchcancel,
-        assertions: { noZoom, noScroll, noTouchCancel, recognizerAsIntended, doubleTapAsIntended },
+        assertions: { noZoom, noScroll, noTouchCancel, recognizerAsIntended },
+        ...(doubleTap ? { doubleTap: { classification: doubleTap.classification, detail: doubleTap.detail } } : {}),
         events,
       };
       writeFileSync(`${OUT_DIR}/${name}.json`, `${JSON.stringify(trace, null, 2)}\n`);
@@ -329,9 +358,9 @@ async function main() {
       { expectRecognizer: null },
     );
     await runGesture(
-      'doubleTap', 'two clean single-finger taps at the same point, within the double-tap window',
+      'doubleTap', 'two single-finger taps at the same point, within the double-tap window',
       doubleTapActions({ x: cx, y: cy }),
-      { expectRecognizer: null, expectDoubleTap: true },
+      { expectRecognizer: null, classifyAsDoubleTap: true },
     );
     const wobbleAngle = (1 * Math.PI) / 180;
     await runGesture(
@@ -350,12 +379,18 @@ async function main() {
 
     writeFileSync(
       `${OUT_DIR}/RESULT.json`,
-      `${JSON.stringify({ device: DEVICE, env, runId: RUN_ID, steps }, null, 2)}\n`,
+      `${JSON.stringify({ device: DEVICE, env, runId: RUN_ID, steps, doubleTapClassification }, null, 2)}\n`,
     );
-    if (!steps.every((s) => s.ok)) process.exitCode = 1;
+    // A step's own `ok` is never true for the doubleTap instrument-limitation
+    // case (see doubleTapClassifier.mjs) — `status` is what decides the run's
+    // exit code, so that case cannot fail the run and cannot look like a pass.
+    if (steps.some((s) => s.status === 'fail')) process.exitCode = 1;
   } catch (err) {
     record('run', false, err instanceof Error ? err.message : String(err));
-    writeFileSync(`${OUT_DIR}/RESULT.json`, `${JSON.stringify({ device: DEVICE, steps }, null, 2)}\n`);
+    writeFileSync(
+      `${OUT_DIR}/RESULT.json`,
+      `${JSON.stringify({ device: DEVICE, steps, doubleTapClassification }, null, 2)}\n`,
+    );
     process.exitCode = 1;
   } finally {
     if (sid) await wd('DELETE', `/session/${sid}`).catch(() => {});

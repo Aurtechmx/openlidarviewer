@@ -23,6 +23,15 @@
 # another runtime or device — see that script's header for why. The leg
 # stays advisory, off ci.yml's `ci-green` needs, until this exact pairing has
 # run 20 consecutive passes.
+#
+# DOUBLE-TAP IS NOT VERIFIED ON iOS BY THIS INSTRUMENT. The "Record iOS touch
+# traces" step's doubleTap gesture classifies through
+# scripts/lib/doubleTapClassifier.mjs rather than a plain pass/fail:
+# WebDriverAgent delivers a fast tap/tap as two overlapping touch identifiers
+# plus a drift, which TouchTapGate correctly refuses to call a double-tap, so
+# no `doubletap` event ever fires — see tests/fixtures/ios-traces/README.md.
+# That classifies as `unverified: instrument limitation`, never a pass and
+# never a step failure, so it cannot redden this leg on its own.
 name: iOS simulator
 
 on:
