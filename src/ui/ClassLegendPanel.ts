@@ -22,7 +22,20 @@
  */
 
 import { el } from './dom';
+import { announcePolite } from './politeAnnounce';
 import { ClassVisibility } from '../render/class/classVisibility';
+
+/**
+ * Route a message to the app's single polite live region (see
+ * politeAnnounce.ts). A no-op where `document.querySelector` doesn't exist —
+ * the unit-test DOM stubs this panel is built against cover only the element
+ * surface the panel itself touches, not a full document.
+ */
+function announce(message: string): void {
+  if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+    announcePolite(message);
+  }
+}
 
 /**
  * "Solo" / isolate glyph — three stacked layers with the top one solid and the
@@ -117,6 +130,10 @@ export class ClassLegendPanel {
 
   private _pointFormat?: number;
 
+  /** Last banner text announced, so an unrelated re-render (palette toggle,
+   *  a late-merged class) doesn't repeat an announcement nothing changed. */
+  private _bannerAnnounced: string | null = null;
+
   constructor() {
     // Collapsible head — same pattern as the Measurements / Analyse panels.
     const title = el('div', {
@@ -181,13 +198,16 @@ export class ClassLegendPanel {
     // fact about the scan the user must still be able to read a minute later,
     // so it lives here rather than only in a toast that fades. Shares the
     // caption CSS, with its own class so tests and styling can target it.
+    // Visual captions only — NOT live regions. Both toggle via the
+    // `olv-hidden` (display:none) class, and a role="status"/aria-live on a
+    // node that is display:none in the same tick it gains its text does not
+    // announce reliably (the same shape of bug the DropZone toast was
+    // rebuilt to avoid — see politeAnnounce.ts). Their text changes are
+    // announced through the app's one shared live region instead, via
+    // `announce()` below.
     this._unavailableNote = el('div', { className: 'olv-cl-unavailable olv-hidden' });
-    this._unavailableNote.setAttribute('role', 'status');
-    this._unavailableNote.setAttribute('aria-live', 'polite');
 
     this._banner = el('div', { className: 'olv-cl-banner olv-hidden' });
-    this._banner.setAttribute('role', 'status');
-    this._banner.setAttribute('aria-live', 'polite');
 
     this._list = el('div', { className: 'olv-cl-list' });
 
@@ -389,6 +409,9 @@ export class ClassLegendPanel {
   setUnavailableNotice(message: string | null): void {
     this._unavailableNote.textContent = message ?? '';
     this._unavailableNote.classList.toggle('olv-hidden', !message);
+    // Repeated on purpose: a refused request repeated is exactly the case a
+    // user needs told twice (see politeAnnounce.ts).
+    if (message) announce(message);
   }
 
   setStreamingMode(on: boolean): void {
@@ -516,10 +539,16 @@ export class ClassLegendPanel {
     // Persistent banner — only while a filter is active.
     if (this._visibility.isFiltered()) {
       const shown = codes.filter((c) => this._visibility.isVisible(c)).length;
-      this._banner.textContent = `Filtered — showing ${shown} of ${codes.length} classes`;
+      const text = `Filtered — showing ${shown} of ${codes.length} classes`;
+      this._banner.textContent = text;
       this._banner.classList.remove('olv-hidden');
+      if (text !== this._bannerAnnounced) {
+        announce(text);
+        this._bannerAnnounced = text;
+      }
     } else {
       this._banner.classList.add('olv-hidden');
+      this._bannerAnnounced = null;
     }
 
     this._showAllBtn.disabled = !this._visibility.isFiltered();
