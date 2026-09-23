@@ -347,6 +347,7 @@ export class StreamingPanel {
         text: quality[0].toUpperCase() + quality.slice(1),
         title: 'How many points to keep on screen while you move. Higher looks better and loads more.',
       });
+      chip.setAttribute('aria-pressed', 'false');
       chip.addEventListener('click', () => {
         this._selectQuality(quality);
         this._callbacks.onQuality(quality);
@@ -392,6 +393,12 @@ export class StreamingPanel {
     });
     this._gradeResult = el('div', { className: 'olv-streaming-grade-result' });
     this._gradeResult.style.display = 'none';
+    // The grade result/error replaces its content asynchronously, often after
+    // the user has looked away (StreamingPanel.spec's "grade full cloud" flow
+    // can run for seconds) — a live region is the only way that outcome
+    // reaches a screen-reader user who isn't focused on this node.
+    this._gradeResult.setAttribute('role', 'status');
+    this._gradeResult.setAttribute('aria-live', 'polite');
 
     // The title's text is rebuilt from setSummary's `format` field so it
     // tracks the actual streaming source rather than the initial hardcoded
@@ -409,13 +416,16 @@ export class StreamingPanel {
       ariaLabel: 'Collapse panel',
       title: 'Collapse this panel',
     });
+    collapseBtn.setAttribute('aria-expanded', 'true');
     collapseBtn.append(el('span', { className: 'olv-chevron', text: '▾' }));
     const head = el('div', { className: 'olv-panel-head' }, [
       this._title,
       collapseBtn,
     ]);
     const toggleCollapsed = () => {
-      this.element.classList.toggle('olv-collapsed');
+      const collapsed = this.element.classList.toggle('olv-collapsed');
+      collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      collapseBtn.setAttribute('aria-label', collapsed ? 'Expand panel' : 'Collapse panel');
     };
     collapseBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -628,6 +638,7 @@ export class StreamingPanel {
     this._modeButtons = new Map();
     for (const mode of modes) {
       const chip = el('button', { className: 'olv-chip', text: MODE_LABEL[mode] });
+      chip.setAttribute('aria-pressed', 'false');
       chip.addEventListener('click', () => {
         this._selectMode(mode);
         this._callbacks.onColorMode(mode);
@@ -751,14 +762,18 @@ export class StreamingPanel {
     // for, so `activeColorMode()` and the highlighted chip cannot disagree.
     this._activeMode = this._modeButtons.has(mode) ? mode : null;
     for (const [m, chip] of this._modeButtons) {
-      chip.classList.toggle('olv-chip-active', m === mode);
+      const active = m === mode;
+      chip.classList.toggle('olv-chip-active', active);
+      chip.setAttribute('aria-pressed', String(active));
     }
   }
 
   private _selectQuality(quality: StreamingQuality): void {
     const chips = [...this._qualityRow.children] as HTMLButtonElement[];
     chips.forEach((chip, i) => {
-      chip.classList.toggle('olv-chip-active', QUALITIES[i] === quality);
+      const active = QUALITIES[i] === quality;
+      chip.classList.toggle('olv-chip-active', active);
+      chip.setAttribute('aria-pressed', String(active));
     });
   }
 }
