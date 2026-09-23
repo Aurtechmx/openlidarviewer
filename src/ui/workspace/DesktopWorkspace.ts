@@ -29,6 +29,7 @@
  */
 
 import { el } from '../dom';
+import { buildTablist, type Tablist } from '../tablist';
 import { publishGutterWidth } from './scrollbarGutter';
 
 /** The semantic workspace modes, in display order. */
@@ -129,7 +130,7 @@ export class DesktopWorkspace {
   /** The rail root — the host appends this to the overlay (`.olv-left-panels`). */
   readonly element: HTMLElement;
 
-  private readonly _tabs = new Map<WorkspaceMode, HTMLButtonElement>();
+  private readonly _tablist: Tablist<WorkspaceMode>;
   private readonly _hosts = new Map<WorkspaceMode, HTMLElement>();
   private readonly _onModeChange?: (mode: WorkspaceMode) => void;
   private readonly _storage: WorkspaceStorage | null;
@@ -143,20 +144,16 @@ export class DesktopWorkspace {
     this._mode = this._initialMode(opts.initialMode ?? 'data');
 
     // ── tablist (the segmented mode selector) ────────────────────────────────
-    const tablist = el('div', { className: 'olv-ws-tabs' });
-    tablist.setAttribute('role', 'tablist');
-    tablist.setAttribute('aria-label', 'Workspace');
-    for (const { id, label, title } of MODES) {
-      const tab = el('button', { className: 'olv-ws-tab', text: label, type: 'button', title });
-      tab.setAttribute('role', 'tab');
-      tab.dataset.mode = id;
-      tab.id = `olv-ws-tab-${id}`;
-      tab.setAttribute('aria-controls', `olv-ws-mode-${id}`);
-      tab.addEventListener('click', () => this.setMode(id));
-      tab.addEventListener('keydown', (ev) => this._onTabKey(ev as KeyboardEvent, id));
-      this._tabs.set(id, tab);
-      tablist.append(tab);
-    }
+    this._tablist = buildTablist<WorkspaceMode>({
+      items: MODES,
+      tablistClassName: 'olv-ws-tabs',
+      tablistLabel: 'Workspace',
+      tabClassName: 'olv-ws-tab',
+      tabId: (id) => `olv-ws-tab-${id}`,
+      panelId: (id) => `olv-ws-mode-${id}`,
+      setDataset: (tab, id) => { tab.dataset.mode = id; },
+      activate: (id) => this.setMode(id),
+    });
 
     // ── mode-host slots (one tabpanel per mode) ──────────────────────────────
     const body = el('div', { className: 'olv-ws-body' });
@@ -177,7 +174,7 @@ export class DesktopWorkspace {
 
     // Root keeps the legacy class + id so rail-collapse chrome, clearance
     // custom properties, and wheel containment target it unchanged.
-    this.element = el('div', { className: 'olv-left-panels' }, [tablist, body]);
+    this.element = el('div', { className: 'olv-left-panels' }, [this._tablist.element, body]);
     this.element.id = 'olv-left-panels';
 
     this._syncTabs();
@@ -283,35 +280,15 @@ export class DesktopWorkspace {
     }
   }
 
-  private _onTabKey(ev: KeyboardEvent, id: WorkspaceMode): void {
-    const idx = MODES.findIndex((m) => m.id === id);
-    let next = -1;
-    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') next = (idx + 1) % MODES.length;
-    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') next = (idx - 1 + MODES.length) % MODES.length;
-    else if (ev.key === 'Home') next = 0;
-    else if (ev.key === 'End') next = MODES.length - 1;
-    if (next < 0) return;
-    ev.preventDefault();
-    const target = MODES[next].id;
-    this.setMode(target);
-    this._tabs.get(target)?.focus();
-  }
-
   /**
    * Reflect the active mode onto tabs and hosts. Active state is carried by
    * BOTH `aria-selected`/`is-active` and the always-visible text label, so it
    * is never signalled by colour alone (forced-colors safe).
    */
   private _syncTabs(): void {
+    this._tablist.sync(this._mode);
     for (const { id } of MODES) {
-      const active = id === this._mode;
-      const tab = this._tabs.get(id);
-      if (tab) {
-        tab.setAttribute('aria-selected', active ? 'true' : 'false');
-        tab.setAttribute('tabindex', active ? '0' : '-1'); // roving tabindex
-        tab.classList.toggle('is-active', active);
-      }
-      this._hosts.get(id)?.classList.toggle('is-active', active);
+      this._hosts.get(id)?.classList.toggle('is-active', id === this._mode);
     }
   }
 }
