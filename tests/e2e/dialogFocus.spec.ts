@@ -54,3 +54,38 @@ test.describe('command palette — focus containment', () => {
   });
 });
 
+test.describe('shortcut sheet — focus containment', () => {
+  async function open(page: Page): Promise<void> {
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    await page.keyboard.press('Shift+Slash'); // '?'
+    await expect(page.locator('.olv-shortcuts')).toBeVisible();
+  }
+
+  test('carries dialog semantics labelled by its own title', async ({ page }) => {
+    await open(page);
+    const card = page.locator('.olv-shortcuts-card');
+    await expect(card).toHaveAttribute('role', 'dialog');
+    await expect(card).toHaveAttribute('aria-modal', 'true');
+    const labelledby = await card.getAttribute('aria-labelledby');
+    expect(labelledby).toBeTruthy();
+    await expect(page.locator(`#${labelledby}`)).toHaveText('Keyboard shortcuts');
+  });
+
+  test('Shift+Tab twice never escapes to a background control, and Escape still closes it', async ({ page }) => {
+    await open(page);
+    for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+Tab');
+    expect(await isInside(page, '.olv-shortcuts-card')).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-shortcuts')).toBeHidden();
+  });
+
+  test('the no-match empty state offers a next action', async ({ page }) => {
+    await open(page);
+    await page.locator('.olv-shortcuts-input').fill('zzqqxx-never-match');
+    const empty = page.locator('.olv-shortcuts-empty');
+    await expect(empty).toBeVisible();
+    await expect(empty).toContainText(/try a shorter search/i);
+  });
+});
+

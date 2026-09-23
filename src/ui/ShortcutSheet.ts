@@ -28,6 +28,7 @@
  */
 
 import { el } from './dom';
+import { wireDialogA11y, type DialogA11yHandle } from './Modal';
 import { groupBySection, rankActions, type Action } from './actionRegistry';
 
 /**
@@ -78,6 +79,8 @@ export class ShortcutSheet {
   private _actions: readonly Action[] = [];
   /** Whether the sheet is open. */
   private _open = false;
+  /** Escape-anywhere + Tab-trap + focus-restore, wired for the life of one open(). */
+  private _a11y: DialogA11yHandle | null = null;
 
   constructor() {
     this._input = el('input', {
@@ -92,7 +95,7 @@ export class ShortcutSheet {
     this._list = el('div', { className: 'olv-shortcuts-list' });
     this._empty = el('div', {
       className: 'olv-shortcuts-empty olv-hidden',
-      text: 'No matching shortcuts.',
+      text: 'No matching shortcuts. Try a shorter search, or press Cmd/Ctrl-K to search the command palette.',
     });
 
     const hint = el('div', { className: 'olv-shortcuts-hint' }, [
@@ -113,8 +116,10 @@ export class ShortcutSheet {
       ariaLabel: 'Close shortcuts',
     });
     dismiss.addEventListener('click', () => this.close());
+    const titleEl = el('div', { className: 'olv-shortcuts-title', text: 'Keyboard shortcuts' });
+    titleEl.id = 'olv-shortcuts-title';
     const headerTitles = el('div', { className: 'olv-shortcuts-header-titles' }, [
-      el('div', { className: 'olv-shortcuts-title', text: 'Keyboard shortcuts' }),
+      titleEl,
       el('div', {
         className: 'olv-shortcuts-subtitle',
         text: 'Every action — search by name, section, or key.',
@@ -132,6 +137,9 @@ export class ShortcutSheet {
       this._empty,
       hint,
     ]);
+    this._card.setAttribute('role', 'dialog');
+    this._card.setAttribute('aria-modal', 'true');
+    this._card.setAttribute('aria-labelledby', titleEl.id);
     this._backdrop = el('div', { className: 'olv-shortcuts-backdrop' });
     this.element = el('div', { className: 'olv-shortcuts olv-hidden' }, [
       this._backdrop,
@@ -141,15 +149,6 @@ export class ShortcutSheet {
     this._input.addEventListener('input', () => this._refresh());
     this._backdrop.addEventListener('click', () => this.close());
     this._card.addEventListener('click', (e) => e.stopPropagation());
-    // The input field's Esc closes here rather than bubbling to the host
-    // — otherwise a host Esc handler that expects "no overlay was open"
-    // might also fire.
-    this._input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        this.close();
-      }
-    });
   }
 
   /** Replace the action registry. Safe to call while closed. */
@@ -170,6 +169,9 @@ export class ShortcutSheet {
     this.element.classList.remove('olv-hidden');
     this._input.value = '';
     this._refresh();
+    // Wired before the deferred focus below, so it captures the trigger
+    // (not the filter input) as the element to restore focus to on close.
+    this._a11y = wireDialogA11y(this._card, { onEscape: () => this.close() });
     queueMicrotask(() => this._input.focus());
   }
 
@@ -178,7 +180,9 @@ export class ShortcutSheet {
     if (!this._open) return;
     this._open = false;
     this.element.classList.add('olv-hidden');
-    this._input.blur();
+    // Restores focus to whatever triggered the sheet (Tab-trap teardown).
+    this._a11y?.teardown();
+    this._a11y = null;
   }
 
   /** Open if closed; close if open. */
