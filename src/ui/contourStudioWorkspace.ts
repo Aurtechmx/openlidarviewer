@@ -27,16 +27,7 @@ import {
   PURPOSE_META,
   type PurposeMeta,
 } from '../terrain/contourStudio/contourStudioPurpose';
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  opts: { className?: string; text?: string } = {},
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (opts.className) node.className = opts.className;
-  if (opts.text) node.textContent = opts.text;
-  return node;
-}
+import { el } from './dom';
 
 /**
  * The export products Contour Studio can offer. Defined here (the lower module)
@@ -144,15 +135,15 @@ function renderPurposeCards(
     const meta: PurposeMeta = PURPOSE_META[id];
     const card = el('button', {
       className: `olv-cs-purpose-card${id === current ? ' is-selected' : ''}`,
+      // The summary moves to hover (native tooltip) + the a11y label, matching
+      // the review bar's title-attribute pattern. Keeps each card a compact
+      // pill so the purpose picker stops crowding the panel.
+      title: meta.summary,
+      ariaLabel: `${meta.label}. ${meta.summary}`,
     });
     card.type = 'button';
     card.setAttribute('aria-pressed', id === current ? 'true' : 'false');
     card.append(el('span', { className: 'olv-cs-purpose-label', text: meta.label }));
-    // The summary moves to hover (native tooltip) + the a11y label, matching the
-    // review bar's title-attribute pattern. Keeps each card a compact pill so the
-    // purpose picker stops crowding the panel.
-    card.title = meta.summary;
-    card.setAttribute('aria-label', `${meta.label}. ${meta.summary}`);
     card.addEventListener('click', () => onPick(id));
     grid.append(card);
   }
@@ -189,11 +180,11 @@ function renderGeneralizeMode(
     const on = state.surface.generalizeMode === m.id;
     const card = el('button', {
       className: `olv-cs-genmode-card${on ? ' is-active' : ''}`,
+      title: m.desc,
+      ariaLabel: `${m.label}. ${m.desc}`,
     });
     card.type = 'button';
     card.setAttribute('aria-pressed', on ? 'true' : 'false');
-    card.title = m.desc;
-    card.setAttribute('aria-label', `${m.label}. ${m.desc}`);
     card.append(el('span', { className: 'olv-cs-genmode-label', text: m.label }));
     card.addEventListener('click', () => onPick(m.id));
     grid.append(card);
