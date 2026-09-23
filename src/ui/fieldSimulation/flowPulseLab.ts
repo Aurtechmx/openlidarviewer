@@ -15,6 +15,18 @@
  * leaves the area null in that case; the view checks `mayReportMetricArea` as
  * well, so a future change to the summary cannot put a metric figure on screen
  * behind a basis that forbids one.
+ *
+ * ── WHAT THIS MODULE ADDS ON TOP OF THE STATIC CARD ─────────────────────────
+ * A CONDITIONING control (raw / conditioned) that re-runs the model; a
+ * keyboard- and pointer-accessible 2D result grid standing in for a click on
+ * the live scan (`Viewer.ts` has no picking seam this feature can reach
+ * without growing the monolith — see `flowResultGrid.ts`); a downstream-path
+ * trace and an upstream-catchment trace, drawn on the grid and, when the
+ * caller supplies scene membership, in the 3D scene through `FlowOverlay`; and
+ * a flow-accumulation overlay, log-scaled, that counts cells rather than
+ * water. None of it enters `SimulationRunRecord` — presentation state (which
+ * overlay is on, which cell is selected) is not a scientific parameter, and
+ * `FlowPulseParams` carries none of it.
  */
 
 import { el } from '../dom';
@@ -22,12 +34,25 @@ import { openModal, type ModalHandle } from '../Modal';
 import {
   FLOW_PULSE_DEFAULTS,
   runFlowPulse,
+  type FlowConditioning,
+  type FlowPulseParams,
   type FlowPulseResult,
   type FlowRefusal,
 } from '../../simulation/flowPulse/flowPulseRunner';
+import { catchmentClick, traceClick, type FlowCatchmentTrace, type FlowClickRefusal, type FlowPathTrace } from '../../simulation/flowPulse/flowClickGuard';
+import { cellAnnouncement, statusLabel, type GridCell } from '../../simulation/flowPulse/flowGridCursor';
 import { mayReportMetricArea } from '../../simulation/simulationInputBasis';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
+import { FlowResultGrid, maskFromIndices } from './flowResultGrid';
+import {
+  buildFlowAccumulationBuffers,
+  buildFlowCatchmentBuffers,
+  buildFlowPathBuffers,
+  flowOverlayFrame,
+  type FlowOverlayFrame,
+} from '../../render/flowOverlayGeometry';
+import { FlowOverlay, type FlowOverlayHost } from '../../render/FlowOverlay';
 import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
 
@@ -41,6 +66,26 @@ export interface FlowPulseLabInput {
   readonly resolvedUnitToMetres: number | null;
   readonly layerId: string | null;
   readonly filename: string | null;
+  /**
+   * The scan's raw scene up-axis ('z' for the survey formats, 'y' for a Y-up
+   * mesh) — the same fact `getMapContext().sceneUpAxis` already carries for
+   * the map sheet. Absent/null defaults to 'z', correct for every
+   * georeferenced case. Only used to place the optional 3D overlay.
+   */
+  readonly sceneUpAxis?: 'z' | 'y' | null;
+  /**
+   * Scene membership for the 3D flow overlay — `Viewer.derivedLayerHost()`
+   * shaped. Absent/null: the accumulation overlay, the drawn path and the
+   * drawn catchment are simply not offered in 3D; the 2D result grid still
+   * carries every interaction.
+   */
+  readonly overlayHost?: FlowOverlayHost | null;
+  /**
+   * Whether the terrain behind this input has changed since it was captured —
+   * evaluated fresh at the moment of each click, not cached. Absent means the
+   * caller does not track this and a click is never refused as stale.
+   */
+  readonly isStale?: () => boolean;
 }
 
 /**
@@ -79,13 +124,21 @@ const NO_IDENTITY = {
   build: '', id: '', generatedAt: '', processingManifestHead: null,
 } as const;
 
-/** Run Flow Pulse on the analysed surface, or report that there is none. */
-export function runLabFlowPulse(input: FlowPulseLabInput | null): FlowPulseResult | FlowRefusal {
+/**
+ * Run Flow Pulse on the analysed surface, or report that there is none.
+ * `conditioning` defaults to {@link FLOW_PULSE_DEFAULTS}'s (raw), so an
+ * existing single-argument call keeps its prior behaviour exactly.
+ */
+export function runLabFlowPulse(
+  input: FlowPulseLabInput | null,
+  conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning,
+): FlowPulseResult | FlowRefusal {
+  const params: FlowPulseParams = { ...FLOW_PULSE_DEFAULTS, conditioning };
   if (!input) {
-    return runFlowPulse(null, NO_FRAME, FLOW_PULSE_DEFAULTS, NO_IDENTITY);
+    return runFlowPulse(null, NO_FRAME, params, NO_IDENTITY);
   }
   const dtm = input.result.dtm;
-  return runFlowPulse(dtm, flowScaleOf(input), FLOW_PULSE_DEFAULTS, {
+  return runFlowPulse(dtm, flowScaleOf(input), params, {
     layerId: input.layerId,
     filename: input.filename,
     sourceDigest: null,
@@ -124,6 +177,7 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   const metric = mayReportMetricArea(outcome.basis) && s.maxContributingAreaM2 != null;
   card.append(
     el('div', { className: 'olv-story-headline', text: 'D8 flow routing over the analysed DTM' }),
+    row('Method', outcome.record.methods.join(' → ')),
     row('Cells routed', `${s.readableCells} of ${s.cells}`),
     row('Outlets', String(s.outletCount)),
     row('Sinks', String(s.sinkCount)),
@@ -140,7 +194,324 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   return card;
 }
 
+// ── interactive layer ───────────────────────────────────────────────────────
+
+type ClickMode = 'pulse' | 'catchment';
+
+function button(text: string, className: string): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = className;
+  b.textContent = text;
+  return b;
+}
+
+function makeRetryButton(onRetry: () => void): HTMLButtonElement {
+  const b = button('Retry', 'olv-flow-retry');
+  b.addEventListener('click', onRetry);
+  return b;
+}
+
+/** A `role="group"` of `aria-pressed` toggle buttons, single-choice. */
+function segmentedControl<T extends string>(
+  ariaLabel: string,
+  groupClassName: string,
+  btnClassName: string,
+  options: ReadonlyArray<{ value: T; label: string }>,
+  current: () => T,
+  onSelect: (value: T) => void,
+): { element: HTMLElement; sync: () => void } {
+  const group = el('div', { className: groupClassName, ariaLabel });
+  group.setAttribute('role', 'group');
+  const buttons = options.map((opt) => {
+    const b = button(opt.label, btnClassName);
+    b.dataset.value = opt.value;
+    b.addEventListener('click', () => onSelect(opt.value));
+    return b;
+  });
+  group.append(...buttons);
+  const sync = (): void => {
+    const cur = current();
+    for (const b of buttons) b.setAttribute('aria-pressed', b.dataset.value === cur ? 'true' : 'false');
+  };
+  sync();
+  return { element: group, sync };
+}
+
+function liveRegion(): HTMLElement {
+  // `olv-visually-hidden` (shared utility): visible to a screen reader, not
+  // to the eye. A live region silenced by `display:none` never announces, so
+  // this is the clip-based hide pattern rather than that one.
+  const node = el('div', { className: 'olv-flow-live olv-visually-hidden' });
+  node.setAttribute('role', 'status');
+  node.setAttribute('aria-live', 'polite');
+  return node;
+}
+
+/** One sentence describing a click/outlet refusal, for the selection panel and the live region. */
+function refusalSentence(kind: 'path' | 'catchment', refusal: FlowClickRefusal): string {
+  const noun = kind === 'path' ? 'Trace' : 'Catchment';
+  return `${noun} not drawn — ${refusal.reason}`;
+}
+
+/**
+ * The interactive Flow Pulse view: the static summary card plus every control
+ * that reads or re-runs it. Owns one `FlowResultGrid` and one (optional)
+ * `FlowOverlay` for the whole modal lifetime; `dispose()` releases the
+ * overlay's GPU resources, called when the modal closes so a Flow Pulse run
+ * never leaves scene objects behind it.
+ */
+function mountFlowPulseInteractive(
+  input: FlowPulseLabInput,
+  initialOutcome: FlowPulseResult | FlowRefusal,
+): { element: HTMLElement; dispose: () => void } {
+  const root = el('div', { className: 'olv-flow-lab' });
+  const live = liveRegion();
+  const body = el('div', { className: 'olv-flow-body' });
+  root.append(live, body);
+  const announce = (msg: string): void => { live.textContent = msg; };
+
+  let conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning;
+  let outcome = initialOutcome;
+  let mode: ClickMode = 'pulse';
+  let overlayOn = false;
+  let busy = false;
+  let overlayFrame: FlowOverlayFrame | null = null;
+  let lastTrace: FlowPathTrace | FlowClickRefusal | null = null;
+  let lastCatchment: FlowCatchmentTrace | FlowClickRefusal | null = null;
+
+  const overlayHost = input.overlayHost ?? null;
+  const flowOverlay = overlayHost ? new FlowOverlay(overlayHost) : null;
+
+  const grid = new FlowResultGrid({
+    ariaLabel: 'Routed terrain grid — arrow keys move, Enter or Space acts on the selected cell',
+    onMove: (_cell: GridCell, report) => announce(cellAnnouncement(report)),
+    onActivate: (cell: GridCell) => handleActivate(cell),
+  });
+
+  const conditioningCtl = segmentedControl<FlowConditioning>(
+    'Terrain conditioning',
+    'olv-flow-cond',
+    'olv-flow-cond-btn',
+    [
+      { value: 'raw', label: 'Raw terrain' },
+      { value: 'priority-flood', label: 'Priority-Flood conditioned' },
+    ],
+    () => conditioning,
+    (value) => { if (value !== conditioning && !busy) void rerun(value); },
+  );
+
+  const modeCtl = segmentedControl<ClickMode>(
+    'What a selected cell does',
+    'olv-flow-mode',
+    'olv-flow-mode-btn',
+    [
+      { value: 'pulse', label: 'Trace downstream path' },
+      { value: 'catchment', label: 'Set catchment outlet' },
+    ],
+    () => mode,
+    (value) => { mode = value; modeCtl.sync(); renderSelection(); },
+  );
+
+  const overlayToggle = button('Show flow accumulation', 'olv-flow-overlay-toggle');
+  overlayToggle.setAttribute('aria-pressed', 'false');
+  overlayToggle.addEventListener('click', () => {
+    overlayOn = !overlayOn;
+    overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
+    applyOverlayVisibility();
+    announce(overlayOn ? 'Flow accumulation overlay on.' : 'Flow accumulation overlay off.');
+  });
+  const overlayLegend = el('div', {
+    className: 'olv-flow-overlay-legend',
+    text: 'Log-scaled: brighter means more cells drain through that point. It counts cells, not water.',
+  });
+  const overlayUnavailable = el('div', {
+    className: 'olv-flow-overlay-unavailable',
+    text: 'The 3D accumulation overlay is not available in this view; the result grid below still traces paths and catchments.',
+  });
+
+  const selectionPanel = el('div', { className: 'olv-flow-selection' });
+
+  function applyOverlayVisibility(): void {
+    if (!flowOverlay) return;
+    if (overlayOn && outcome.ok && overlayFrame) {
+      flowOverlay.setAccumulation(
+        buildFlowAccumulationBuffers(outcome.grid, outcome.routed, outcome.accumulation, overlayFrame),
+      );
+      flowOverlay.setAccumulationVisible(true);
+    } else {
+      flowOverlay.setAccumulationVisible(false);
+    }
+  }
+
+  function clearSelectionDrawing(): void {
+    grid.setPathMask(null);
+    grid.setCatchmentMask(null);
+    flowOverlay?.clearPath();
+    flowOverlay?.clearCatchment();
+  }
+
+  function renderSelection(): void {
+    selectionPanel.replaceChildren();
+    if (!outcome.ok) return;
+    const current = mode === 'pulse' ? lastTrace : lastCatchment;
+    if (!current) {
+      selectionPanel.append(el('div', {
+        className: 'olv-flow-selection-empty',
+        text: mode === 'pulse'
+          ? 'Click a cell, or move the cursor and press Enter, to trace its downstream path.'
+          : 'Click a cell, or move the cursor and press Enter, to set it as a catchment outlet.',
+      }));
+      return;
+    }
+    if (!current.ok) {
+      selectionPanel.append(el('div', {
+        className: 'olv-flow-selection-error',
+        text: refusalSentence(mode === 'pulse' ? 'path' : 'catchment', current),
+      }));
+      return;
+    }
+    if (mode === 'pulse') {
+      const t = current as FlowPathTrace;
+      selectionPanel.append(
+        row('Path cells', String(t.path.length)),
+        row('Ends at', statusLabel(t.endStatus)),
+      );
+    } else {
+      const c = current as FlowCatchmentTrace;
+      const areaKnown = mayReportMetricArea(outcome.basis);
+      const areaM2 = areaKnown ? c.cells * outcome.grid.cellMetresX * outcome.grid.cellMetresY : null;
+      selectionPanel.append(
+        row('Contributing cells', String(c.cells)),
+        row(
+          'Contributing area',
+          areaM2 != null ? `${areaM2.toFixed(1)} m²` : 'Withheld: the horizontal scale is not resolved',
+        ),
+      );
+    }
+  }
+
+  function handleActivate(cell: GridCell): void {
+    if (!outcome.ok || busy) return;
+    try {
+      const stale = input.isStale?.() ?? false;
+      if (mode === 'pulse') {
+        const trace = traceClick(outcome, cell, stale);
+        lastTrace = trace;
+        if (trace.ok) {
+          grid.setPathMask(maskFromIndices(outcome.grid.cols * outcome.grid.rows, trace.path));
+          if (flowOverlay && overlayFrame) {
+            flowOverlay.setPath(buildFlowPathBuffers(outcome.grid, trace.path, overlayFrame));
+          }
+          announce(`Path traced: ${trace.path.length} cell(s).`);
+        } else {
+          grid.setPathMask(null);
+          flowOverlay?.clearPath();
+          announce(refusalSentence('path', trace));
+        }
+      } else {
+        const trace = catchmentClick(outcome, cell, stale);
+        lastCatchment = trace;
+        if (trace.ok) {
+          grid.setCatchmentMask(trace.mask);
+          if (flowOverlay && overlayFrame) {
+            flowOverlay.setCatchment(buildFlowCatchmentBuffers(outcome.grid, trace.mask, overlayFrame));
+          }
+          announce(`Catchment traced: ${trace.cells} cell(s).`);
+        } else {
+          grid.setCatchmentMask(null);
+          flowOverlay?.clearCatchment();
+          announce(refusalSentence('catchment', trace));
+        }
+      }
+      renderSelection();
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  function showError(err: unknown): void {
+    const msg = err instanceof Error ? err.message : String(err);
+    const panel = el('div', { className: 'olv-flow-error' }, [
+      el('div', { className: 'olv-flow-error-text', text: `Something went wrong: ${msg}` }),
+      makeRetryButton(() => void rerun(conditioning)),
+    ]);
+    body.replaceChildren(panel);
+    announce(`Something went wrong: ${msg}`);
+  }
+
+  function renderReady(): void {
+    const staticCard = renderFlowPulseLab(outcome);
+    if (!outcome.ok) {
+      body.replaceChildren(staticCard, makeRetryButton(() => void rerun(conditioning)));
+      return;
+    }
+
+    const dtm = input.result.dtm;
+    overlayFrame = flowOverlayFrame(input.sceneUpAxis, dtm.originH1, dtm.originH2, dtm.cellSizeM);
+    grid.load(outcome.grid, outcome.routed, outcome.accumulation, outcome.contributingAreaM2);
+    lastTrace = null;
+    lastCatchment = null;
+    clearSelectionDrawing();
+    renderSelection();
+    applyOverlayVisibility();
+
+    const overlaySection = el('div', { className: 'olv-flow-overlay-section' }, [
+      overlayHost ? overlayToggle : overlayUnavailable,
+      overlayLegend,
+    ]);
+
+    body.replaceChildren(
+      staticCard,
+      conditioningCtl.element,
+      modeCtl.element,
+      grid.element,
+      selectionPanel,
+      overlaySection,
+    );
+  }
+
+  async function rerun(next: FlowConditioning): Promise<void> {
+    conditioning = next;
+    conditioningCtl.sync();
+    busy = true;
+    body.replaceChildren(el('div', { className: 'olv-flow-busy', text: 'Running Flow Pulse…' }));
+    announce('Running Flow Pulse…');
+    // One frame so the busy state actually paints before the (synchronous)
+    // run computes — matters most on the largest grids this feature allows.
+    await new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+      else setTimeout(resolve, 0);
+    });
+    try {
+      outcome = runLabFlowPulse(input, conditioning);
+      busy = false;
+      renderReady();
+      announce(outcome.ok ? 'Flow Pulse run complete.' : `Flow Pulse did not run: ${outcome.reason}`);
+    } catch (err) {
+      busy = false;
+      showError(err);
+    }
+  }
+
+  renderReady();
+
+  return {
+    element: root,
+    dispose: () => { flowOverlay?.dispose(); },
+  };
+}
+
 /** Run and show Flow Pulse in a dialog. */
 export function openFlowPulseLab(input: FlowPulseLabInput | null): ModalHandle {
-  return openModal({ title: 'Field Simulation Lab: Flow Pulse', body: renderFlowPulseLab(runLabFlowPulse(input)) });
+  if (!input) {
+    const body = el('div', { className: 'olv-flow-lab' }, [renderFlowPulseLab(runLabFlowPulse(null))]);
+    return openModal({ title: 'Field Simulation Lab: Flow Pulse', body });
+  }
+  const interactive = mountFlowPulseInteractive(input, runLabFlowPulse(input));
+  return openModal({
+    title: 'Field Simulation Lab: Flow Pulse',
+    body: interactive.element,
+    onClose: () => interactive.dispose(),
+  });
 }

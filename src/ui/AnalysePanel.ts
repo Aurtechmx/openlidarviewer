@@ -29,6 +29,10 @@
 
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import { SurfaceTiles } from './analyseSurfaceTiles';
+// TYPE-ONLY: `SceneOverlayHost` names only `THREE.Object3D`-shaped methods, so
+// importing it as a type never pulls three.js into this panel's own chunk —
+// the same discipline `contourLayerService.ts` uses for `ContourOverlay`.
+import type { SceneOverlayHost } from '../render/sceneLineOverlay';
 
 /**
  * What the panel needs to drive the contours derived layer. Every handler
@@ -249,6 +253,14 @@ export interface AnalysePanelCallbacks {
    * is drawn.
    */
   getAnnotations?: () => ReadonlyArray<Annotation>;
+  /**
+   * Scene membership for a DERIVED LAYER overlay — `viewer.derivedLayerHost()`
+   * verbatim. Read once by {@link AnalysePanel.flowPulseInput} so the Flow
+   * Pulse Lab can draw its 3D accumulation/path/catchment overlay through the
+   * same seam contours use. Omitted ⇒ that overlay is simply not offered; the
+   * Lab's own 2D result grid still carries every interaction.
+   */
+  getDerivedLayerHost?: () => SceneOverlayHost | null;
   /** Context for the printable map sheet (world origin, title block fields). */
   getMapContext?: () => {
     /**
@@ -940,17 +952,28 @@ export class AnalysePanel {
     readonly resolvedUnitToMetres: number | null;
     readonly layerId: string | null;
     readonly filename: string | null;
+    readonly sceneUpAxis: 'z' | 'y' | null;
+    readonly overlayHost: SceneOverlayHost | null;
+    readonly isStale: () => boolean;
   } | null {
     const result = this.currentResultForProvenance();
     if (!result) return null;
     const ctx = this._cb.getMapContext?.() ?? {};
+    // The SAME freshness question `currentResultForProvenance` already answers
+    // for `result` itself — re-asked live, at the moment of a click, rather
+    // than cached at open time, so a path or a catchment traced from a stale
+    // field is refused instead of drawn as current (§18).
+    const scanId = this._resultScanId;
     return {
       result,
       isGeographic: ctx.isGeographic ?? false,
       worldOriginY: ctx.worldOrigin?.y ?? null,
       resolvedUnitToMetres: ctx.resolvedUnitToMetres ?? null,
-      layerId: this._resultScanId,
+      layerId: scanId,
       filename: this._cb.getExportBasename?.() ?? null,
+      sceneUpAxis: ctx.sceneUpAxis ?? null,
+      overlayHost: this._cb.getDerivedLayerHost?.() ?? null,
+      isStale: () => this._freshnessBreach() !== null || this._resultScanId !== scanId,
     };
   }
 

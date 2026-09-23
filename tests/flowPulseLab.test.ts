@@ -124,3 +124,34 @@ describe('the grid digest', () => {
     spy.mockRestore();
   });
 });
+
+describe('the conditioning control', () => {
+  it('defaults to raw — an unspecified second argument matches the prior single-argument call', () => {
+    const withDefault = runLabFlowPulse(input());
+    const explicitRaw = runLabFlowPulse(input(), 'raw');
+    expect(withDefault.ok).toBe(true);
+    expect(explicitRaw.ok).toBe(true);
+    if (!withDefault.ok || !explicitRaw.ok) return;
+    expect(withDefault.record.parameters.conditioning).toBe('raw');
+    expect(withDefault.record.digest).toBe(explicitRaw.record.digest);
+  });
+
+  it('names the method actually used: raw omits Priority-Flood, conditioned includes it', () => {
+    const raw = runLabFlowPulse(input(), 'raw');
+    const conditioned = runLabFlowPulse(input(), 'priority-flood');
+    expect(raw.ok).toBe(true);
+    expect(conditioned.ok).toBe(true);
+    if (!raw.ok || !conditioned.ok) return;
+    expect(raw.record.methods.some((m) => m.includes('priority-flood'))).toBe(false);
+    expect(conditioned.record.methods.some((m) => m.includes('priority-flood'))).toBe(true);
+    expect(conditioned.record.parameters.conditioning).toBe('priority-flood');
+  });
+
+  it('shows the run record\'s own methods in the rendered card', () => {
+    const outcome = runLabFlowPulse(input(), 'priority-flood');
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    const text = textOf(renderFlowPulseLab(outcome));
+    for (const method of outcome.record.methods) expect(text).toContain(method);
+  });
+});
