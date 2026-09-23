@@ -28,6 +28,7 @@ import {
   type QualitySettings,
 } from '../render/quality/qualityPolicy';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
+import { createLazySurfaceLoader, buttonLazyTrigger, type LazyLoadToast } from '../app/lazySurfaceLoad';
 
 /** Gauge glyph: a dial arc with a needle. Static markup, no interpolation. */
 const ICON_QUALITY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -58,6 +59,14 @@ export interface QualityControlOptions {
    * different preset from the one in force.
    */
   liveStreamingQuality?(): StreamingQuality;
+  /**
+   * Where a chunk-load failure is reported, with a "Try again" action.
+   * Optional because the current caller (`headerControls.ts`) does not
+   * thread a toast through yet; without one, a failure falls back to
+   * `console.error` — still no unhandled rejection, just not user-visible
+   * until that wiring lands.
+   */
+  toast?: LazyLoadToast;
 }
 
 export class QualityControl {
@@ -69,7 +78,8 @@ export class QualityControl {
   private _panel: QualityPanel | null = null;
   private _open = false;
   /** In-flight lazy import, so a double click loads the chunk once. */
-  private _loading: Promise<QualityPanel> | null = null;
+  private _loading: Promise<QualityPanel | undefined> | null = null;
+  private readonly _toast: LazyLoadToast;
 
   private readonly _options: QualityControlOptions;
   private readonly _button: HTMLButtonElement;
@@ -80,6 +90,7 @@ export class QualityControl {
     this._options = options;
     this._device = options.device;
     this._preference = options.preference;
+    this._toast = options.toast ?? { show: (message) => console.error(`[quality] ${message}`) };
 
     this._button = el('button', {
       className: 'olv-quality-button',
@@ -145,6 +156,7 @@ export class QualityControl {
   /** Show the panel, loading its chunk on first use. */
   async open(): Promise<void> {
     const panel = await this._ensurePanel();
+    if (!panel) return; // load failed; already reported through `_toast`.
     // Adopt a preset chosen in the Streaming panel since the last look, so the
     // Advanced chips never contradict what is actually in force. Silent: the
     // user did choose it, just not here, and it is already applied.
@@ -178,21 +190,36 @@ export class QualityControl {
     document.removeEventListener('keydown', this._onDocumentKeyDown);
   }
 
-  /** Build the panel on first open; later opens reuse it. */
-  private async _ensurePanel(): Promise<QualityPanel> {
+  /** Build the panel on first open; later opens reuse it. Busy + failure
+   *  states are the shared contract every lazy overlay entry point uses
+   *  (LAZY-1 / LOAD-1) — a disabled, `aria-busy` button while the chunk
+   *  fetches, and a toast with a "Try again" action if it fails, instead of
+   *  a silent unhandled rejection. */
+  private async _ensurePanel(): Promise<QualityPanel | undefined> {
     if (this._panel) return this._panel;
-    if (!this._loading) {
-      this._loading = loadQualityPanel().then((module) => {
-        const panel = new module.QualityPanel({
-          onPreference: (patch) => this._update(patch),
-          onPin: (field) => this._update({ overrides: { ...this._preference.overrides, ...field } }),
-        });
-        panel.element.hidden = true;
-        this.element.append(panel.element);
-        this._panel = panel;
-        return panel;
+    // Accessing `.QualityPanel` off the awaited module (rather than passing
+    // `loadQualityPanel` straight through) is what makes the stale-chunk
+    // "resolves to undefined" case (staleChunkReload.ts's cooldown branch)
+    // throw here and reach the toast below, instead of silently succeeding
+    // with an undefined constructor.
+    this._loading ??= createLazySurfaceLoader(this._toast)(async () => (await loadQualityPanel()).QualityPanel, 'performance panel', {
+      trigger: buttonLazyTrigger(this._button),
+      // A successful retry must actually SHOW the panel, not just refetch
+      // bytes nothing then consumes, so this re-enters the whole `open()`
+      // flow rather than `_ensurePanel()` alone.
+      retry: () => { this._loading = null; void this.open(); },
+    }).then((QualityPanelCtor) => {
+      this._loading = null;
+      if (!QualityPanelCtor) return undefined;
+      const panel = new QualityPanelCtor({
+        onPreference: (patch) => this._update(patch),
+        onPin: (field) => this._update({ overrides: { ...this._preference.overrides, ...field } }),
       });
-    }
+      panel.element.hidden = true;
+      this.element.append(panel.element);
+      this._panel = panel;
+      return panel;
+    });
     return this._loading;
   }
 

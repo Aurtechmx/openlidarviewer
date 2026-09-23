@@ -749,6 +749,8 @@ button:disabled { cursor: not-allowed; }
 .olv-quality-button svg { width: 18px; height: 18px; }
 .olv-quality-button:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 .olv-quality-button-open { color: var(--accent); background: var(--accent-soft); }
+/* Pending cue while the panel chunk fetches (LOAD-1) — same convention as `.olv-quality-follow:disabled` above. */
+.olv-quality-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .olv-quality-pop {
   position: absolute; top: calc(100% + var(--space-md)); right: 0;
   z-index: var(--z-popover);
