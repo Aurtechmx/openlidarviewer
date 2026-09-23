@@ -160,6 +160,23 @@ describe('windowExtreme: linear-time rewrite matches the direct-scan oracle bit 
     expect(cases).toBe(shapes.length * nanRates.length * radii.length * modes.length);
   });
 
+  it('drops +Infinity and -Infinity cells the way the direct scan does', () => {
+    // The direct scan skips every non-finite value, so an infinite cell is
+    // absent rather than the window's extremum.
+    const rng = mulberry32(0x1f_1f_1f);
+    for (const [cols, rows] of shapes) {
+      const g = randomGrid(cols, rows, rng, 0.05);
+      for (let i = 0; i < g.length; i++) {
+        const u = rng();
+        if (u < 0.05) g[i] = Number.POSITIVE_INFINITY;
+        else if (u < 0.1) g[i] = Number.NEGATIVE_INFINITY;
+      }
+      for (const b of [1, 3, 8, 48]) {
+        for (const mode of modes) assertMatch(cols, rows, g, b, mode, 'infinite cells');
+      }
+    }
+  });
+
   it('a window of all-NaN cells stays NaN in both implementations', () => {
     const cols = 6, rows = 6;
     const g = new Float32Array(cols * rows).fill(Number.NaN);
