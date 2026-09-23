@@ -27,8 +27,6 @@ export interface LayerHealthSection {
   readonly rows: readonly LayerHealthRow[];
 }
 
-const EMPTY_TEXT = 'Layer health unavailable — no layers loaded.';
-
 /**
  * Construct once at Inspector build time; call `update()` on every
  * layer-set change (the same cadence as `setLayerCrsFlags`); `clear()`
@@ -42,7 +40,6 @@ export class LayerHealthCard {
   private readonly _report: HTMLElement;
   private readonly _reportLines: HTMLElement;
   private readonly _verdict: HTMLElement;
-  private readonly _empty: HTMLElement;
 
   constructor() {
     this._layers = el('div', { className: 'olv-layerhealth-layers' });
@@ -53,9 +50,6 @@ export class LayerHealthCard {
       this._reportLines,
       this._verdict,
     ]);
-    // Kept in the tree for assistive callers, hidden alongside the card —
-    // the card collapses entirely rather than showing a placeholder block.
-    this._empty = el('div', { className: 'olv-layerhealth-empty olv-hidden', text: EMPTY_TEXT });
 
     this.root = el(
       'section',
@@ -64,7 +58,6 @@ export class LayerHealthCard {
         el('div', { className: 'olv-panel-title olv-layerhealth-title', text: 'Layer Health' }),
         this._layers,
         this._report,
-        this._empty,
       ],
     );
   }
