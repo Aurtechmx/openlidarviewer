@@ -101,73 +101,35 @@ describe('findUnexplainedButtons', () => {
     expect(findUnexplainedButtons(src)).toEqual([]);
   });
 
-  // ── link-styled buttons: ariaLabel alone is not enough ──────────────────
-
-  it('flags a `-link`-styled button relying on ariaLabel alone', () => {
-    const src = "const b = el('button', { className: 'olv-di-story-link', text: 'Overview', ariaLabel: 'Open Story' });";
-    expect(findUnexplainedButtons(src)).toEqual([1]);
+  // Link-styled buttons, role="button" panel heads, and bare
+  // document.createElement('button') sites: each source is one control.
+  const flagged: [string, string[]][] = [
+    ['a `-link`-styled button relying on ariaLabel alone',
+      ["const b = el('button', { className: 'olv-di-story-link', text: 'Overview', ariaLabel: 'Open Story' });"]],
+    ['a role="button" div with no explanation',
+      ["const head = el('div', { className: 'olv-panel-head' });", "head.setAttribute('role', 'button');"]],
+    ['a bare document.createElement("button") with no follow-up',
+      ["const b = document.createElement('button');", "b.textContent = 'Close';"]],
+  ];
+  it.each(flagged)('flags %s', (_name, lines) => {
+    expect(findUnexplainedButtons(lines.join('\n'))).toEqual([1]);
   });
 
-  it('accepts a `-link`-styled button once it also carries a tip', () => {
-    const src = "const b = el('button', { className: 'olv-di-story-link', text: 'Overview', tip: 'Open the story.' });";
-    expect(findUnexplainedButtons(src)).toEqual([]);
-  });
-
-  // ── panel head builders: role="button" on a non-button tag ──────────────
-
-  it('flags a role="button" div with no explanation', () => {
-    const src = [
-      "const head = el('div', { className: 'olv-panel-head' });",
-      "head.setAttribute('role', 'button');",
-    ].join('\n');
-    expect(findUnexplainedButtons(src)).toEqual([1]);
-  });
-
-  it('accepts a role="button" div with an inline tip', () => {
-    const src = [
-      "const head = el('div', { className: 'olv-panel-head', tip: 'Expand or collapse.' });",
-      "head.setAttribute('role', 'button');",
-    ].join('\n');
-    expect(findUnexplainedButtons(src)).toEqual([]);
-  });
-
-  it('accepts a role="button" div with a deferred title', () => {
-    const src = [
-      "const head = el('div', { className: 'olv-panel-head' });",
-      "head.setAttribute('role', 'button');",
-      "head.title = 'Expand or collapse.';",
-    ].join('\n');
-    expect(findUnexplainedButtons(src)).toEqual([]);
-  });
-
-  it('ignores a non-button tag never given role="button"', () => {
-    const src = "const wrap = el('div', { className: 'olv-panel-head' });";
-    expect(findUnexplainedButtons(src)).toEqual([]);
-  });
-
-  // ── bare document.createElement('button') ───────────────────────────────
-
-  it('flags a bare document.createElement("button") with no follow-up', () => {
-    const src = [
-      "const b = document.createElement('button');",
-      "b.textContent = 'Close';",
-    ].join('\n');
-    expect(findUnexplainedButtons(src)).toEqual([1]);
-  });
-
-  it('accepts document.createElement("button") with a deferred title', () => {
-    const src = [
-      "const b = document.createElement('button');",
-      "b.title = 'Close this dialog.';",
-    ].join('\n');
-    expect(findUnexplainedButtons(src)).toEqual([]);
-  });
-
-  it('accepts document.createElement("button") with a deferred dataset.tip', () => {
-    const src = [
-      "const b = document.createElement('button');",
-      "b.dataset.tip = 'Close this dialog.';",
-    ].join('\n');
-    expect(findUnexplainedButtons(src)).toEqual([]);
+  const accepted: [string, string[]][] = [
+    ['a `-link`-styled button once it also carries a tip',
+      ["const b = el('button', { className: 'olv-di-story-link', text: 'Overview', tip: 'Open the story.' });"]],
+    ['a role="button" div with an inline tip',
+      ["const head = el('div', { className: 'olv-panel-head', tip: 'Expand or collapse.' });", "head.setAttribute('role', 'button');"]],
+    ['a role="button" div with a deferred title',
+      ["const head = el('div', { className: 'olv-panel-head' });", "head.setAttribute('role', 'button');", "head.title = 'Expand or collapse.';"]],
+    ['a non-button tag never given role="button"',
+      ["const wrap = el('div', { className: 'olv-panel-head' });"]],
+    ['document.createElement("button") with a deferred title',
+      ["const b = document.createElement('button');", "b.title = 'Close this dialog.';"]],
+    ['document.createElement("button") with a deferred dataset.tip',
+      ["const b = document.createElement('button');", "b.dataset.tip = 'Close this dialog.';"]],
+  ];
+  it.each(accepted)('accepts %s', (_name, lines) => {
+    expect(findUnexplainedButtons(lines.join('\n'))).toEqual([]);
   });
 });

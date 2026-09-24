@@ -324,19 +324,11 @@ describe('installTipLayer', () => {
     expect(layer.hasClass('olv-tip-layer--visible')).toBe(false);
   });
 
-  it('hides on window scroll', () => {
+  it.each(['scroll', 'resize'])('hides on window %s', (event) => {
     const anchor = anchorWithTip('x');
     env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
     const layer = env.layer();
-    env.fireWin('scroll');
-    expect(layer.hasClass('olv-tip-layer--visible')).toBe(false);
-  });
-
-  it('hides on window resize', () => {
-    const anchor = anchorWithTip('x');
-    env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
-    const layer = env.layer();
-    env.fireWin('resize');
+    env.fireWin(event);
     expect(layer.hasClass('olv-tip-layer--visible')).toBe(false);
   });
 

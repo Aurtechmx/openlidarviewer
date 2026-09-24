@@ -40,29 +40,49 @@ interface ElProps {
   ariaLabel?: string;
 }
 
-let tipIdCounter = 0;
+/** One hidden description per distinct tip text, shared by every control. */
+const tipDescIds = new Map<string, string>();
 
 /**
- * Wire a `data-tip` explanation onto a node: the visible glass tooltip
- * (CSS, `[data-tip]::after`) plus a hidden description node the control
- * points to via `aria-describedby`, so assistive tech gets the same text a
- * sighted hovering/keyboard user sees. Icon-only controls (no visible text,
- * no explicit aria-label) also get the tip as their accessible name.
+ * The id of the hidden description node for `tip`. The nodes live in one
+ * `hidden` host on `document.body`, outside the controls, so a control's own
+ * text stays exactly what it shows; `aria-describedby` resolves across the
+ * document and may point at hidden content.
+ */
+function tipDescriptionId(tip: string): string | null {
+  const existing = tipDescIds.get(tip);
+  if (existing) return existing;
+  const body = typeof document === 'undefined' ? null : document.body;
+  if (!body || typeof body.append !== 'function') return null; // minimal test DOM shim
+  let host = document.getElementById('olv-tip-descriptions');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'olv-tip-descriptions';
+    host.hidden = true;
+    body.append(host);
+  }
+  const id = `olv-tip-${tipDescIds.size + 1}`;
+  const desc = document.createElement('span');
+  desc.id = id;
+  desc.textContent = tip;
+  host.append(desc);
+  tipDescIds.set(tip, id);
+  return id;
+}
+
+/**
+ * Wire a `data-tip` explanation onto a node: the shared tip layer shows it on
+ * hover and focus, and `aria-describedby` gives assistive tech the same text.
+ * Icon-only controls (no visible text, no explicit aria-label) also get the
+ * tip as their accessible name.
  */
 function wireTip(node: HTMLElement, tip: string, hasVisibleLabel: boolean): void {
   node.dataset.tip = tip;
-  // The visible label already says exactly this — appending a duplicate
-  // hidden description would double the announced (and `textContent`-read)
-  // text for no accessibility gain.
-  if (hasVisibleLabel && (node.textContent ?? '').trim() === tip.trim()) return;
-  const descId = `olv-tip-${++tipIdCounter}`;
-  const desc = document.createElement('span');
-  desc.id = descId;
-  desc.className = 'olv-visually-hidden';
-  desc.textContent = tip;
-  node.append(desc);
-  node.setAttribute('aria-describedby', descId);
   if (!hasVisibleLabel && !node.getAttribute('aria-label')) node.setAttribute('aria-label', tip);
+  // The visible label already says exactly this; a description would repeat it.
+  if (hasVisibleLabel && (node.textContent ?? '').trim() === tip.trim()) return;
+  const descId = tipDescriptionId(tip);
+  if (descId) node.setAttribute('aria-describedby', descId);
 }
 
 /** Create an element with optional props and children. */

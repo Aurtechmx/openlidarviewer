@@ -12,20 +12,39 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { installLiveFakeDom, FakeEl } from './helpers/liveFakeDom';
 
-beforeAll(() => installLiveFakeDom());
+const body = () => (globalThis as unknown as { document: { body: FakeEl } }).document.body;
+
+beforeAll(() => {
+  installLiveFakeDom();
+  // A body plus getElementById, so the shared description host can attach.
+  const doc = (globalThis as unknown as { document: Record<string, unknown> }).document;
+  doc.body = new FakeEl('body');
+  doc.getElementById = (id: string) => body().find((n) => n.id === id) ?? null;
+});
 
 describe('el({ tip })', () => {
   beforeEach(() => vi.useRealTimers());
 
-  it('wires data-tip plus an aria-describedby text node', async () => {
+  it('wires data-tip plus an aria-describedby node outside the control', async () => {
     const { el } = await import('../src/ui/dom');
     const btn = el('button', { text: 'Export', tip: 'Download the flow rasters as a ZIP.' }) as unknown as FakeEl;
     expect(btn.dataset.tip).toBe('Download the flow rasters as a ZIP.');
+    // The control's own text is only its label.
+    expect(btn.textContent).toBe('Export');
     const descId = btn.getAttribute('aria-describedby');
     expect(descId).toBeTruthy();
-    const desc = btn.find((n) => n.id === descId);
+    expect(btn.find((n) => n.id === descId)).toBeUndefined();
+    const desc = body().find((n) => n.id === descId);
     expect(desc?.ownText).toBe('Download the flow rasters as a ZIP.');
-    expect(desc?.hasClass('olv-visually-hidden')).toBe(true);
+  });
+
+  it('shares one description node between controls with the same tip', async () => {
+    const { el } = await import('../src/ui/dom');
+    const tip = 'Measure a straight-line distance.';
+    const a = el('button', { text: 'Distance', tip }) as unknown as FakeEl;
+    const b = el('button', { text: 'Distance', tip }) as unknown as FakeEl;
+    expect(a.getAttribute('aria-describedby')).toBe(b.getAttribute('aria-describedby'));
+    expect(body().findAll((n) => n.ownText === tip)).toHaveLength(1);
   });
 
   it('gives an icon-only control (no visible text) the tip as its accessible name', async () => {
