@@ -27,6 +27,8 @@ import {
   type GridCell,
   type TerrainAccessCellReport,
 } from '../../simulation/terrainAccess/terrainAccessGridCursor';
+import { buildResultGridDom } from './resultGridDom';
+import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
 import type { TraversabilityMapCell } from '../../simulation/terrainAccess/traversabilityCost';
 import type { TerrainAccessGrid } from '../../simulation/terrainAccess/terrainAccessTypes';
 
@@ -76,21 +78,17 @@ export class TerrainAccessResultGrid {
     this._onMove = opts.onMove;
     this._elevationRef = opts.elevationRef ?? null;
 
-    this._canvas = document.createElement('canvas');
-    this._canvas.className = 'olv-ta-grid-canvas';
-    this._canvas.tabIndex = 0;
-    this._canvas.setAttribute('role', 'application');
-    this._canvas.setAttribute('aria-label', opts.ariaLabel);
-
-    this._status = document.createElement('div');
-    this._status.className = 'olv-ta-grid-status';
-
-    this.element = document.createElement('div');
-    this.element.className = 'olv-ta-grid';
-    this.element.append(this._canvas, this._status);
-
-    this._canvas.addEventListener('click', (e) => this._handleClick(e));
-    this._canvas.addEventListener('keydown', (e) => this._handleKey(e));
+    const dom = buildResultGridDom({
+      ariaLabel: opts.ariaLabel,
+      wrapClassName: 'olv-ta-grid',
+      canvasClassName: 'olv-ta-grid-canvas',
+      statusClassName: 'olv-ta-grid-status',
+      onClick: (e) => this._handleClick(e),
+      onKeyDown: (e) => this._handleKey(e),
+    });
+    this.element = dom.element;
+    this._canvas = dom.canvas;
+    this._status = dom.status;
   }
 
   focus(): void {
@@ -227,13 +225,6 @@ export class TerrainAccessResultGrid {
 }
 
 /** Build a 1-bit mask from a cell-index array, for {@link TerrainAccessResultGrid.setRouteMask}. */
-export function maskFromIndices(n: number, indices: ArrayLike<number>): Uint8Array {
-  const mask = new Uint8Array(n);
-  for (let k = 0; k < indices.length; k++) {
-    const i = indices[k];
-    if (i >= 0 && i < n) mask[i] = 1;
-  }
-  return mask;
-}
+export const maskFromIndices = sharedMaskFromIndices;
 
 export { cellIndex };

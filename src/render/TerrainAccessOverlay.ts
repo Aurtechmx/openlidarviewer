@@ -6,83 +6,25 @@
  *
  * Reuses the same split `FlowOverlay.ts` makes: geometry decisions live in
  * `terrainAccessOverlayGeometry.ts`, pure and unit-tested; this file is
- * upload, material state and lifecycle only. `QuadLayer` is deliberately
- * copied rather than imported from `FlowOverlay.ts` — a private class, not a
- * shared export — but is otherwise identical, so the two overlays cannot
- * silently diverge in how a quad mesh is attached, toggled or disposed.
+ * upload, material state and lifecycle only. `QuadLayer` (`QuadLayer.ts`) is
+ * the same shared class `FlowOverlay.ts` uses for its own filled layers, so
+ * the two overlays cannot silently diverge in how a quad mesh is attached,
+ * toggled or disposed.
  *
  * PRESENTATION, NOT SCIENCE. Toggling this overlay on screen cannot change a
  * run's `resultDigest`; it only uploads buffers a pure builder already
  * computed.
  */
 
-import * as THREE from 'three/webgpu';
 import { SceneLineOverlay, type SceneOverlayHost } from './sceneLineOverlay';
+import { QuadLayer } from './QuadLayer';
+import * as THREE from 'three/webgpu';
 import type { TerrainAccessOverlayLineBuffers, TerrainAccessOverlayMeshBuffers } from './terrainAccessOverlayGeometry';
 
 export type TerrainAccessOverlayHost = SceneOverlayHost;
 
 const MAP_OPACITY = 0.65;
 const ROUTE_COLOR = 0xfaf359;
-
-class QuadLayer {
-  private readonly _host: SceneOverlayHost;
-  private readonly _opacity: number;
-  private _mesh: THREE.Mesh | null = null;
-  private _geometry: THREE.BufferGeometry | null = null;
-  private _material: THREE.MeshBasicMaterial | null = null;
-  private _attached = false;
-
-  constructor(host: SceneOverlayHost, opacity: number) {
-    this._host = host;
-    this._opacity = opacity;
-  }
-
-  get cellCount(): number {
-    return (this._geometry?.getAttribute('position')?.count ?? 0) / 6;
-  }
-
-  set(buffers: TerrainAccessOverlayMeshBuffers): void {
-    if (!this._material) {
-      const material = new THREE.MeshBasicMaterial();
-      material.vertexColors = true;
-      material.transparent = true;
-      material.opacity = this._opacity;
-      material.depthWrite = false;
-      material.side = THREE.DoubleSide;
-      this._material = material;
-    }
-    if (!this._geometry) this._geometry = new THREE.BufferGeometry();
-    this._geometry.setAttribute('position', new THREE.BufferAttribute(buffers.verts, 3));
-    this._geometry.setAttribute('color', new THREE.BufferAttribute(buffers.colors, 3));
-    if (!this._mesh) {
-      this._mesh = new THREE.Mesh(this._geometry, this._material);
-      this._mesh.frustumCulled = false;
-      this._mesh.renderOrder = 1;
-    }
-    if (!this._attached) {
-      this._host.add(this._mesh);
-      this._attached = true;
-    }
-    this._host.requestFrame();
-  }
-
-  setVisible(visible: boolean): void {
-    if (this._mesh) this._mesh.visible = visible;
-    this._host.requestFrame();
-  }
-
-  clear(): void {
-    if (this._attached && this._mesh) this._host.remove(this._mesh);
-    this._attached = false;
-    this._geometry?.dispose();
-    this._material?.dispose();
-    this._mesh = null;
-    this._geometry = null;
-    this._material = null;
-    this._host.requestFrame();
-  }
-}
 
 /** The found route: one flat-coloured line strip. */
 class RouteLayer extends SceneLineOverlay {

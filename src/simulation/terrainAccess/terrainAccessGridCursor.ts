@@ -12,7 +12,7 @@
  * Pure: no DOM, no three.js.
  */
 
-import { cellIndex, type ElevationReference, type GridCell } from '../flowPulse/flowGridCursor';
+import { cellIndex, resolveElevation, type ElevationReference, type GridCell } from '../flowPulse/flowGridCursor';
 import { whyNotEligible, type TerrainAccessFeatures, type NodeEligibility, type TraversabilityMapCell } from './traversabilityCost';
 import type { TerrainAccessGrid, TerrainAccessProfile } from './terrainAccessTypes';
 
@@ -67,20 +67,7 @@ export function describeTerrainAccessCell(
   const i = cellIndex(grid.cols, cell);
   const readable = grid.valid[i] === 1;
   const cellMap = map[i];
-  const originZ = elevationRef?.originZ ?? null;
-  const unitLabel = elevationRef?.unitLabel ?? 'units';
-  const resolved = readable && originZ != null && unitLabel !== 'units';
-
-  let elevation: number | null = null;
-  let elevationUnit: 'm' | 'ft' | 'unknown' | null = null;
-  if (readable) {
-    if (resolved) {
-      elevation = grid.z[i] + originZ!;
-      elevationUnit = unitLabel as 'm' | 'ft';
-    } else {
-      elevationUnit = 'unknown';
-    }
-  }
+  const { elevation, elevationUnit } = resolveElevation(readable, grid.z[i], elevationRef);
 
   return {
     col: cell.col,
