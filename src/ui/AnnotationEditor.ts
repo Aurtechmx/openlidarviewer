@@ -132,6 +132,22 @@ export class AnnotationEditor {
   /** The element to restore focus to on close — the trigger, or whatever was
    * focused when `open()` ran. */
   private _returnFocusTo: HTMLElement | null = null;
+  /** The observer that keeps the card clamped in-viewport as its content
+   * grows/shrinks — stored so `dispose()` can disconnect it; see the
+   * constructor and the `dispose()` doc comment below. */
+  private _resizeObserver: ResizeObserver | null = null;
+  /** The most recently focused element inside the card, so a "Keep editing"
+   * answer from `confirmDiscard` can send focus back into the draft rather
+   * than wherever the interrupting action's confirm happened to open from. */
+  private _lastFocusedInCard: HTMLElement | null = null;
+  /**
+   * The in-flight discard confirm, if one is open. Reused by a second
+   * `confirmDiscard()` call that arrives before the first resolves, so a
+   * reopen/close/undo call racing an already-open confirm never stacks a
+   * second dialog on top of it. See `AnnotationController`'s guarded methods,
+   * which also check this via `isConfirmPending` before calling in at all.
+   */
+  private _discardPromise: Promise<boolean> | null = null;
 
   constructor() {
     this._heading = el('span', {
@@ -310,12 +326,17 @@ export class AnnotationEditor {
       trapTab(this.element, e);
     });
 
+    this.element.addEventListener('focusin', (e) => {
+      if (e.target instanceof HTMLElement) this._lastFocusedInCard = e.target;
+    });
+
     if (typeof ResizeObserver !== 'undefined') {
       try {
         const ro = new ResizeObserver(() => {
           if (this.isOpen) this._reposition();
         });
         ro.observe(this.element);
+        this._resizeObserver = ro;
       } catch {
         /* Static single clamp on open only — ancient engines. */
       }
@@ -327,9 +348,30 @@ export class AnnotationEditor {
     return !this.element.classList.contains('olv-hidden');
   }
 
+  /** Whether a discard confirm raised by {@link confirmDiscard} is still
+   * awaiting an answer. Callers that guard a reopen/close/undo against a
+   * dirty draft check this first, so a second guarded call arriving while
+   * the user is still looking at the first confirm is a no-op rather than
+   * stacking a second dialog or re-running the deferred action twice. */
+  get isConfirmPending(): boolean {
+    return this._discardPromise !== null;
+  }
+
+  /**
+   * Free DOM references and the resize observer — call once the editor (and
+   * its owning controller) is going away for good, not on every close.
+   */
+  dispose(): void {
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = null;
+    this.close();
+    this.element.remove();
+  }
+
   /** Open the editor near a screen point, with optional pre-filled values. */
   open(opts: AnnotationEditorOpen): void {
     this._dirty = false;
+    this._lastFocusedInCard = null;
     // `typeof` (not a bare `instanceof HTMLElement`) because `beginDraft`
     // runs against this class through a DOM-free unit stub with no
     // `HTMLElement` global at all (tests/annotationIssuePanel.test.ts) as
@@ -462,16 +504,31 @@ export class AnnotationEditor {
    * cancels the card here) on "discard changes"; false (leaving it open,
    * untouched) on "keep editing" or any other dismissal.
    */
-  async confirmDiscard(): Promise<boolean> {
-    const discard = await openConfirm({
-      title: 'Discard unsaved annotation?',
-      message:
-        'The annotation you were editing has unsaved changes. Opening another one discards them.',
-      confirmLabel: 'Discard changes',
-      cancelLabel: 'Keep editing',
+  confirmDiscard(): Promise<boolean> {
+    // Reuse the in-flight confirm rather than opening a second one — see
+    // `isConfirmPending`'s doc comment.
+    if (this._discardPromise) return this._discardPromise;
+    const p = (async () => {
+      const discard = await openConfirm({
+        title: 'Discard unsaved annotation?',
+        message:
+          'The annotation you were editing has unsaved changes. Opening another one discards them.',
+        confirmLabel: 'Discard changes',
+        cancelLabel: 'Keep editing',
+        // "Keep editing" (or Escape / backdrop dismiss) should land the user
+        // back in the still-open draft, not on whatever triggered the
+        // interrupted reopen — that control may belong to a different row
+        // entirely.
+        returnFocusTo: this._lastFocusedInCard ?? this._title,
+      });
+      if (discard) this._cancel();
+      return discard;
+    })();
+    this._discardPromise = p;
+    void p.finally(() => {
+      this._discardPromise = null;
     });
-    if (discard) this._cancel();
-    return discard;
+    return p;
   }
 
   private _setType(t: AnnotationType): void {

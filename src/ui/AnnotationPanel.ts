@@ -170,6 +170,13 @@ export class AnnotationPanel {
         title: view === 'all' ? 'Show every annotation' : 'Show the tracked issues',
       });
       btn.type = 'button';
+      // WebKit/Safari's default "Full Keyboard Access" leaves plain buttons
+      // out of the native Tab order (see AnnotationEditor.ts's chip loop for
+      // the same fix applied there) — this panel's row buttons rely on Tab
+      // reachability for the focus-restore and hover-highlight behaviour
+      // below, so every interactive button here gets the same explicit
+      // tabindex.
+      btn.tabIndex = 0;
       btn.addEventListener('click', () => {
         this._view = view;
         this._render();
@@ -200,6 +207,8 @@ export class AnnotationPanel {
       text: 'Clear all',
       title: 'Delete every annotation',
     });
+    this._clearBtn.type = 'button';
+    this._clearBtn.tabIndex = 0; // see the view-button loop above for why
     this._clearBtn.addEventListener('click', () => this._handleClear());
 
     // v0.3.6 mobile collapse — chevron toggle inside the existing head.
@@ -211,6 +220,7 @@ export class AnnotationPanel {
       ariaLabel: 'Collapse panel',
       title: 'Collapse this panel',
     });
+    collapseBtn.tabIndex = 0; // see the view-button loop above for why
     collapseBtn.setAttribute('aria-expanded', 'true');
     collapseBtn.append(el('span', { className: 'olv-chevron', text: '▾' }));
     const title = el('span', { className: 'olv-ap-title', text: 'Annotations' });
@@ -451,6 +461,7 @@ export class AnnotationPanel {
       title: RESOLVED_TIP,
     });
     btn.type = 'button';
+    btn.tabIndex = 0; // see the view-button loop above for why
     btn.dataset.focusKey = 'resolved-toggle';
     btn.setAttribute('aria-expanded', String(this._showResolved));
     btn.addEventListener('click', () => {
@@ -547,6 +558,8 @@ export class AnnotationPanel {
       text: s.title,
       title: s.note ? s.note : 'Jump to this annotation',
     });
+    title.type = 'button';
+    title.tabIndex = 0; // see the view-button loop above for why
     title.dataset.focusKey = `row:${s.id}:activate`;
     title.addEventListener('click', () => this._cb.onActivate(s.id));
 
@@ -558,6 +571,8 @@ export class AnnotationPanel {
       title: `Edit ${s.title}`,
       ariaLabel: `Edit ${s.title}`,
     });
+    edit.type = 'button';
+    edit.tabIndex = 0; // see the view-button loop above for why
     edit.dataset.focusKey = `row:${s.id}:edit`;
     edit.addEventListener('click', (e) => this._cb.onEdit(s.id, e.clientX, e.clientY));
 
@@ -567,6 +582,8 @@ export class AnnotationPanel {
       title: `Delete ${s.title}`,
       ariaLabel: `Delete ${s.title}`,
     });
+    del.type = 'button';
+    del.tabIndex = 0; // see the view-button loop above for why
     del.dataset.focusKey = `row:${s.id}:delete`;
     del.addEventListener('click', () => this._cb.onDelete(s.id));
 
@@ -637,6 +654,7 @@ export class AnnotationPanel {
       ariaLabel: open ? `Mark ${title} resolved` : `Reopen ${title}`,
     });
     btn.type = 'button';
+    btn.tabIndex = 0; // see the view-button loop above for why
     btn.dataset.focusKey = `row:${id}:status`;
     btn.addEventListener('click', () => {
       this._cb.onSetIssueStatus(id, next);
