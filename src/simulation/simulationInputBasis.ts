@@ -97,8 +97,18 @@ export function simulationInputBasis(input: {
  * and written into the export README, and a code would have to be translated
  * in both places. An empty array means the basis imposes none, which is not
  * the same as the result being validated.
+ *
+ * `tool` names the simulation reading this basis: `'flow'` (the default,
+ * preserving Flow Pulse's own wording byte-for-byte) or `'terrain-access'`.
+ * Two sentences below name the tool by what it does with an interpolated or
+ * absent cell ("Flow routes over them" / "Flow neither enters nor leaves
+ * them"); a second caller of this shared function must not inherit a
+ * sentence that names the wrong tool.
  */
-export function basisLimitations(basis: SimulationInputBasis): readonly string[] {
+export function basisLimitations(
+  basis: SimulationInputBasis,
+  tool: 'flow' | 'terrain-access' = 'flow',
+): readonly string[] {
   const out: string[] = [];
 
   if (basis.coverage === 'resident-only') {
@@ -133,10 +143,12 @@ export function basisLimitations(basis: SimulationInputBasis): readonly string[]
   }
 
   if (basis.interpolatedCells > 0) {
+    const crossing = tool === 'flow'
+      ? 'Flow routes over them, so a path may cross ground no return landed on.'
+      : 'A route may cross them, so it may cross ground no return landed on.';
     out.push(
       `${basis.interpolatedCells} of ${basis.measuredCells} readable cells hold an `
-      + 'interpolated elevation rather than a measured one. Flow routes over them, '
-      + 'so a path may cross ground no return landed on.',
+      + `interpolated elevation rather than a measured one. ${crossing}`,
     );
   }
 
@@ -150,10 +162,10 @@ export function basisLimitations(basis: SimulationInputBasis): readonly string[]
   const absent = basis.totalCells - basis.measuredCells - basis.policyExcludedCells;
   if (basis.totalCells > 0 && absent > 0) {
     const gap = absent;
-    out.push(
-      `${gap} of ${basis.totalCells} cells carry no elevation. Flow neither `
-      + 'enters nor leaves them, so routes stop at their edge.',
-    );
+    const cannotReach = tool === 'flow'
+      ? 'Flow neither enters nor leaves them, so routes stop at their edge.'
+      : 'A route can neither enter nor leave them, so routes stop at their edge.';
+    out.push(`${gap} of ${basis.totalCells} cells carry no elevation. ${cannotReach}`);
   }
 
   return out;

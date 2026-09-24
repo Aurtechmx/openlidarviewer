@@ -156,6 +156,6 @@ export function prepareTerrainAccessPreview(
     eligibility,
     map,
     basis,
-    limitations: [...basisLimitations(basis), ...gridWarnings],
+    limitations: [...basisLimitations(basis, 'terrain-access'), ...gridWarnings],
   };
 }
