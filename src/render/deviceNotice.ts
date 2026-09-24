@@ -17,7 +17,7 @@ import { recordError } from '../app/diagnostics/errorLedger';
 export const DEVICE_NOTICE_EVENT = 'olv-device-notice';
 
 export const CONTEXT_LOST_NOTICE =
-  'Graphics context lost. Your project is unchanged; the view will redraw when the browser restores it.';
+  'Graphics context lost. Your project is unchanged. Save the session, then reload the page to see the scan again.';
 /**
  * The restore notice does not promise a redraw. A frame is requested, but the
  * renderer keeps its lost-device state and GPU resources from the old context,

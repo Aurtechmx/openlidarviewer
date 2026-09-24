@@ -55,7 +55,7 @@ describe('device notices', () => {
   });
 
   it('both notices say the project is unchanged, and the restore one does not promise a redraw', () => {
-    expect(CONTEXT_LOST_NOTICE).toBe('Graphics context lost. Your project is unchanged; the view will redraw when the browser restores it.');
+    expect(CONTEXT_LOST_NOTICE).toBe('Graphics context lost. Your project is unchanged. Save the session, then reload the page to see the scan again.');
     expect(CONTEXT_RESTORED_NOTICE).toContain('Your project is unchanged');
     expect(CONTEXT_RESTORED_NOTICE).toContain('reload the page');
   });

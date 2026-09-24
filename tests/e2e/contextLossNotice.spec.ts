@@ -30,7 +30,7 @@ test('a lost WebGL context shows a notice, and its restore shows another', async
   });
   const toast = page.locator('.olv-toast-text');
   await expect(toast).toHaveText(
-    'Graphics context lost. Your project is unchanged; the view will redraw when the browser restores it.',
+    'Graphics context lost. Your project is unchanged. Save the session, then reload the page to see the scan again.',
     { timeout: 5_000 },
   );
 
