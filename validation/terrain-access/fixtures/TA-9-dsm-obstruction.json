@@ -1,0 +1,34 @@
+{
+  "name": "TA-9-dsm-obstruction",
+  "why": "A flat, fully-supported terrain with an above-ground DSM return (heightAboveGround) over two cells of column 2, at rows 1 and 2, both exceeding the declared obstacleHeightThreshold, forcing a detour into row 3 — pinning that obstruction blocking (not step height or NoData) is what closes these two cells. Unlike TA-4's single-row detour, the flat terrain gives the bypass a genuine 4-way tie (enumerated by brute force over the whole grid): dropping into row 3 either diagonally or straight down at column 1, and climbing back out of row 3 either diagonally or straight across at column 3, are all equal-cost combinations, so this fixture is compared on cost/length/eligibility rather than an exact path.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ],
+  "heightAboveGround": [
+    [0, 0, 0, 0, 0],
+    [0, 0, 5, 0, 0],
+    [0, 0, 5, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ],
+  "profile": {
+    "name": "obstruction-strict",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": 2
+  },
+  "start": [2, 0],
+  "end": [2, 4]
+}

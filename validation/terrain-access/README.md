@@ -69,6 +69,9 @@ lowest-cost route, where exact-path comparison is meaningful.
 | `TA-6-nodata-corridor` | A full-width NoData wall with no gap: NO_ROUTE, not a route that crosses it. |
 | `TA-7-low-confidence-block` / `-penalize` | The same weak-evidence cell is hard-excluded under `unknownPolicy: 'block'` and cost-penalized instead (and so eligible again) under `'penalize'`. |
 | `TA-8-ruggedness` / `-unset` | A rough spike forces a detour once `maxRuggedness` is declared, and does not when it is left `null`. |
+| `TA-3-cross-slope-trap` | A uniform plane whose direct row is closed by a single NoData cell; every detour requires a north/south move, and a tight `maxCrossSlope` rejects all of them even though the plane's total slope would pass either limit read as one scalar, so the outcome is `NO_ROUTE`. |
+| `TA-9-dsm-obstruction` | Above-ground DSM evidence (`heightAboveGround`), not terrain geometry, closes two cells and forces the same kind of detour TA-4 forces with a step. |
+| `TA-10-anisotropic-grid` | `cellMetresX` and `cellMetresY` differ, as an unequal-metre geographic grid would; the route cost and the diagonal heading it depends on must reflect the true physical distances, not the raster index. |
 
 ## Running it
 

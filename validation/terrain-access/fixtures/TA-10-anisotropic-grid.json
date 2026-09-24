@@ -1,0 +1,26 @@
+{
+  "name": "TA-10-anisotropic-grid",
+  "why": "cellMetresX (3 m) and cellMetresY (1 m) differ, as a geographic grid at high latitude would (unequal east/west vs. north/south metres per cell, e.g. cos(60°N)). The plane tilts along the physically-longer X axis (tangent 1 in physical metres east), so an isotropic (bug) implementation that mistook a raster diagonal offset for a 45° physical heading, or ignored cellMetresX in the gradient scale, would compute a different longitudinal/cross-slope split and a different route cost than one that scales correctly. Both implementations share one raster-to-metres convention, and this pins that they agree on it.",
+  "cellMetresX": 3,
+  "cellMetresY": 1,
+  "z": [
+    [0, -3, -6, -9],
+    [0, -3, -6, -9],
+    [0, -3, -6, -9],
+    [0, -3, -6, -9]
+  ],
+  "profile": {
+    "name": "anisotropic-permissive",
+    "maxLongitudinalGrade": 1.5,
+    "maxCrossSlope": 1.5,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [0, 0],
+  "end": [3, 3]
+}

@@ -64,6 +64,7 @@ interface Fixture {
   readonly z: readonly (readonly (number | null)[])[];
   readonly confidence?: readonly (readonly number[])[];
   readonly allowed?: readonly (readonly number[])[];
+  readonly heightAboveGround?: readonly (readonly number[])[];
   readonly profile: TerrainAccessProfile;
   readonly start: readonly [number, number];
   readonly end: readonly [number, number];
@@ -101,8 +102,13 @@ function gridOf(f: Fixture): TerrainAccessGrid {
     allowed = new Uint8Array(n);
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) allowed[r * cols + c] = f.allowed[r][c];
   }
+  let heightAboveGround: Float32Array | null = null;
+  if (f.heightAboveGround) {
+    heightAboveGround = new Float32Array(n);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) heightAboveGround[r * cols + c] = f.heightAboveGround[r][c];
+  }
   return {
-    z, valid, confidence, coverage: null, heightAboveGround: null, allowed,
+    z, valid, confidence, coverage: null, heightAboveGround, allowed,
     cols, rows, cellMetresX: f.cellMetresX, cellMetresY: f.cellMetresY,
   };
 }
@@ -117,16 +123,21 @@ const names = readdirSync(FIXTURES).filter((f) => f.endsWith('.json')).sort();
 const TIE_FREE = new Set([
   'TA-1-flat-plane.json',
   'TA-2-tilted-plane-directional.json',
+  'TA-3-cross-slope-trap.json', // NO_ROUTE either way; path is trivially []
   'TA-4-step-barrier.json',
   'TA-5-width-clearance-wide.json', // NO_ROUTE either way; path is trivially []
   'TA-6-nodata-corridor.json', // NO_ROUTE either way; path is trivially []
   'TA-8-ruggedness.json',
   'TA-8-ruggedness-unset.json',
+  // TA-10: brute-forced over every monotone lattice path from start to end
+  // (E/S/SE steps). The anisotropic tilt makes the diagonal route strictly
+  // cheaper than every alternative, not tied with one.
+  'TA-10-anisotropic-grid.json',
 ]);
 
 describe('the fixture set is present', () => {
   it('has fixtures to compare, so the agreement below is not vacuous', () => {
-    expect(names.length).toBeGreaterThanOrEqual(8);
+    expect(names.length).toBeGreaterThanOrEqual(10);
   });
 
   it('has a frozen expectation for every fixture', () => {

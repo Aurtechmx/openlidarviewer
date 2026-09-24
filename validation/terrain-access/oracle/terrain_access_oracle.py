@@ -227,6 +227,25 @@ def directional_slope(grad_e, grad_n, h_e, h_n):
     return abs(longitudinal), abs(cross)
 
 
+# ── above-ground obstruction evidence (§12.4) ───────────────────────────────
+
+def classify_obstruction(valid, height_above_ground, threshold, n):
+    """'obstructed' / 'clear' / 'not-evaluated', matching obstacleEvidence.ts:
+    no threshold or no DSM layer at all means nothing was evaluated, distinct
+    from a cell that was checked and found clear."""
+    out = ["not-evaluated"] * n
+    if threshold is None or height_above_ground is None:
+        return out
+    for i in range(n):
+        if valid[i] == 0:
+            continue
+        h = height_above_ground[i]
+        if not is_finite(h):
+            continue
+        out[i] = "obstructed" if h > threshold else "clear"
+    return out
+
+
 # ── hard eligibility + cost (§12.6, §12.7) ──────────────────────────────────
 
 DEFAULT_WEIGHTS = {"longitudinal": 1.0, "cross": 1.0, "ruggedness": 0.5, "step": 1.0, "support": 1.0}
@@ -421,11 +440,13 @@ def load_fixture(path):
         flat_conf = [100.0] * (cols * rows)
     allowed = spec.get("allowed")
     flat_allowed = [int(v) for row in allowed for v in row] if allowed is not None else None
-    return spec, z, valid, flat_conf, flat_allowed, cols, rows
+    hag = spec.get("heightAboveGround")
+    flat_hag = [float(v) for row in hag for v in row] if hag is not None else None
+    return spec, z, valid, flat_conf, flat_allowed, flat_hag, cols, rows
 
 
 def compute(path):
-    spec, z, valid, confidence, allowed, cols, rows = load_fixture(path)
+    spec, z, valid, confidence, allowed, height_above_ground, cols, rows = load_fixture(path)
     mx = float(spec.get("cellMetresX", 1))
     my = float(spec.get("cellMetresY", 1))
     profile = spec["profile"]
@@ -438,7 +459,8 @@ def compute(path):
     for i in range(cols * rows):
         grad_e[i], grad_n[i] = gradient_at(slope[i], aspect[i])
 
-    blocked, reason = node_eligibility(valid, confidence, allowed, vrm, None, cols, rows, profile)
+    obstruction = classify_obstruction(valid, height_above_ground, profile.get("obstacleHeightThreshold"), cols * rows)
+    blocked, reason = node_eligibility(valid, confidence, allowed, vrm, obstruction, cols, rows, profile)
     dilated = dilate_blocked(blocked, cols, rows, mx, my, profile["vehicleWidth"])
     # A cell the ORIGINAL pass left eligible but dilation newly excludes is
     # not blocked for any of the declared node reasons — it is too close to
