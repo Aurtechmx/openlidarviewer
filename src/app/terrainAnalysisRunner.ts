@@ -65,6 +65,7 @@ import {
   loadDerivedLayer,
   loadDerivedLayersList,
   loadDerivedLayerReceipt,
+  loadWithheldAwareTerrainGather,
 } from '../lazyChunks';
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
@@ -75,7 +76,6 @@ import { verticalUnitLabel } from '../units/units';
 import { scanPrecisionPermit } from './scanPrecision';
 import type { PrecisionPermit } from '../geo/inMemoryPrecision';
 import type { TerrainWithheldOutcome } from '../render/terrainStreamSample';
-import { gatherWithheldAwareTerrainCore } from '../terrain/ground/withheldAwareTerrainGather';
 
 /**
  * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
@@ -354,6 +354,8 @@ async function recoverWithheldAwareCore(
 ): Promise<TerrainCore | null> {
   try {
     const buffer = await file.arrayBuffer();
+    if (signal.aborted) return null;
+    const { gatherWithheldAwareTerrainCore } = await loadWithheldAwareTerrainGather();
     if (signal.aborted) return null;
     const recovered = await gatherWithheldAwareTerrainCore(buffer, file.name, coreParams, { signal });
     return recovered?.core ?? null;

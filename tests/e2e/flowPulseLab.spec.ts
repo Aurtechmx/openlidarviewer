@@ -112,6 +112,15 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
   await expect(modal.locator('.olv-flow-selection')).toContainText('Contributing cells', { timeout: 5_000 });
 
+  // EXPORT: the package button downloads a ZIP built from the current run,
+  // including the path just traced above.
+  const exportBtn = modal.locator('.olv-flow-export');
+  await expect(exportBtn).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await exportBtn.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/-flow-pulse\.zip$/);
+
   // ACCUMULATION OVERLAY: offered (the Analyse panel wired real scene
   // membership through to the Lab), toggles, and states its own honesty
   // limit rather than implying discharge.

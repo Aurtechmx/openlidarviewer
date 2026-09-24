@@ -4639,3 +4639,63 @@ more than doubling the facade-edge cost at the share most exposed to it, so
 | 5% | 0 and 5 cm | 0.66, 0.10 | 0.63, 0.09 |
 | 20% | 0 and 5 cm | 1.00, 0.21 | 1.00, 0.21 |
 | 50% | 0 and 5 cm | 1.00, 0.77 / 0.51 | 1.00, 0.32 / 0.23 |
+
+### L150 · BUILT · SCIENTIFIC
+
+Terrain Flow Pulse is integrated on `integrate/flow-pulse-v070`, merging three
+branches.
+
+`fix/sim-phase0-v070` adds `withheldAwareTerrainGather.ts`: a second,
+full-resolution re-decode of the source that answers the Withheld question for
+a static file the display path voxel-downsampled at load, feeding the terrain
+analysis runner's export and report paths. `FlowRunIdentity` and
+`SimulationSource` gain `terrainCoreDigest`, a digest of the terrain-core
+method that built the DTM, so a sealed run record binds the method as well as
+the exact grid it read. Covered by `tests/withheldAwareTerrainGather.test.ts`,
+`tests/terrainRunnerWithheldRecovery.test.ts`,
+`tests/terrainRunnerExportRecoveryConsistency.test.ts` and
+`tests/flowPulseContinuityIsolation.test.ts`.
+
+`feat/flow-outputs-v070` adds the depression inventory
+(`depressionInventory.ts`), the TF-1..TF-8 claims and the `TERRAIN-FLOW-PULSE`
+and `TERRAIN-FLOW-DEPRESSION-INVENTORY` claim-register entries, and
+`src/export/flowPulsePackage.ts`, the ZIP deliverable (rasters, depression
+table, sealed run record, reproducible config, processing manifest, README,
+artifact passport). Documented in `docs/terrain-flow-pulse.md`. Covered by
+`tests/depressionInventory.test.ts` and `tests/flowPulsePackage.test.ts`.
+
+`feat/flow-lab-v070` adds the Lab's conditioning control (raw / Priority-Flood)
+and the keyboard- and pointer-accessible 2D result grid standing in for a
+click on the live scan, with click-to-pulse and click-to-catchment tracing.
+It also adds the log-scaled flow-accumulation overlay (`FlowOverlay.ts`),
+drawn on the grid and, where scene membership is supplied, in the 3D scene.
+Covered by
+`tests/flowClickGuard.test.ts`, `tests/flowGridCursor.test.ts`,
+`tests/flowOverlay.test.ts`, `tests/flowOverlayGeometry.test.ts` and
+`tests/e2e/flowPulseLab.spec.ts`.
+
+On top of the merge, the Lab gained an Export action
+(`buildFlowPulseExport` in `src/ui/fieldSimulation/flowPulseLab.ts`) that
+builds the ZIP package from the current, non-stale result, including the
+traced path and catchment when present, with loading and error-with-retry
+states; it refuses on a stale result before the lazy package-builder chunk
+even loads. `runLabFlowPulse`'s identity now populates `terrainCoreDigest`
+from the active analysis's live DTM method digest
+(`resolveLiveDtmDescriptor`/`dtmMethodDigest` in `src/science/liveDtmDescriptor.ts`),
+which is also why that module is no longer registered unreachable: the export
+path now reaches it. Covered by `tests/flowPulseLabExport.test.ts` and the
+extended `tests/e2e/flowPulseLab.spec.ts`.
+
+### L26 · BUILT · SCIENTIFIC
+
+The Withheld-aware terrain gather (L150 above) closes the gap the earlier L26
+entries left open: a static file voxel-downsampled at load, whose reduced
+cloud can no longer say "excluded" or "kept", now gets its Withheld answer
+from a second, full-resolution re-decode rather than "not recorded". The
+canonical gather (`sampleStridedTerrain`) is unchanged and still makes the
+exclusion decision; this only supplies it a buffer with flags intact, for the
+terrain analysis runner's export and report paths and for Flow Pulse, which
+reads the same terrain core. Voxel downsampling at load still drops the flags
+for display (L28, unchanged); the re-decode never touches the displayed
+cloud. Covered by `tests/withheldAwareTerrainGather.test.ts` and
+`tests/terrainRunnerWithheldRecovery.test.ts`.

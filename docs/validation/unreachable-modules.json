@@ -238,13 +238,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/science/liveDtmDescriptor.ts",
-      "status": "validation-only",
-      "why": "The canonical descriptor of the delivered DTM method plus a SHA-256 method digest, for the external-validation and export-provenance paths: a stamped digest can be compared against a fresh resolve to prove the delivered method has not drifted. The scoped-evidence resolver and the E5 reduce path will read it, but neither construction is wired into the application graph yet, so only its test imports it.",
-      "graduation": "Export provenance stamps dtmMethodDigest into the DTM evidence context, or the E5 reduce path resolves the descriptor to verify the candidate method, at which point the application graph reaches it. Before this graduates, the method-identity contract must be settled: the header says per-dataset fields are context and do NOT feed dtmMethodDigest, while methodBehaviourFields includes horizontalUnitToMetres and verticalUnitToMetres and a test requires 1 -> 0.3048 to change the digest. Either the unit scales are run context and leave the digest, or the digest is a fully parameterised method identity and the header says so. A digest whose own module disagrees about what it identifies cannot support a published reproducibility claim.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/terrain/contourStudio/contourAdaptiveGeneralize.ts",
       "status": "staged",
       "why": "The staged source-unit product pipeline for terrain-aware generalization. src/terrain/contour/terrainAwareTolerance.ts names it as exactly that and is the shared policy both readers use; the live honesty-gated styler is what v0.6.6 shipped.",

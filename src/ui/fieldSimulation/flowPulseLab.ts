@@ -43,6 +43,7 @@ import { catchmentClick, traceClick, type FlowCatchmentTrace, type FlowClickRefu
 import { cellAnnouncement, statusLabel, type GridCell } from '../../simulation/flowPulse/flowGridCursor';
 import { mayReportMetricArea } from '../../simulation/simulationInputBasis';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
+import { dtmMethodDigest, resolveLiveDtmDescriptor } from '../../science/liveDtmDescriptor';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { FlowResultGrid, maskFromIndices } from './flowResultGrid';
 import {
@@ -55,6 +56,9 @@ import {
 import { FlowOverlay, type FlowOverlayHost } from '../../render/FlowOverlay';
 import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
+import { loadFlowPulsePackage } from '../../lazyChunks';
+import { downloadBytes } from '../../io/download';
+import type { buildFlowPulsePackage } from '../../export/flowPulsePackage';
 
 /** The analysed surface and the frame facts the Analyse panel holds for it. */
 export interface FlowPulseLabInput {
@@ -145,6 +149,9 @@ export function runLabFlowPulse(
     // A getter, because the runner reads the digest only when it seals a
     // record. A refused run then never hashes the grid it declined to read.
     get analysisInputDigest() { return dtmProductDigest(dtm); },
+    // Digest of the terrain-core method that built this DTM, so the run
+    // record binds the method as well as the exact grid it read.
+    get terrainCoreDigest() { return dtmMethodDigest(resolveLiveDtmDescriptor()); },
     // The full build identity, not the bare version, so a record names the
     // exact build that produced it, dirty working tree included: the same
     // string export provenance already quotes verbatim.
@@ -153,6 +160,42 @@ export function runLabFlowPulse(
     generatedAt: new Date().toISOString(),
     processingManifestHead: null,
   });
+}
+
+/** Result of {@link buildFlowPulseExport}: the bytes and filename to download, or a refusal reason. */
+export type FlowPulseExportOutcome =
+  | { readonly ok: true; readonly bytes: Uint8Array; readonly filename: string }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * Build the export package from the CURRENT run, refusing on a stale result
+ * or a run that never completed. Pure and DOM-free so it is unit-testable
+ * without loading the (lazy) package-builder chunk it is handed by the
+ * caller — `buildFlowPulsePackage` is passed in rather than imported here,
+ * which keeps this module out of the eager chunk graph.
+ */
+export function buildFlowPulseExport(
+  outcome: FlowPulseResult | FlowRefusal,
+  stale: boolean,
+  path: FlowPathTrace | FlowClickRefusal | null,
+  catchment: FlowCatchmentTrace | FlowClickRefusal | null,
+  filename: string | null,
+  layerId: string | null,
+  build: typeof buildFlowPulsePackage,
+): FlowPulseExportOutcome {
+  if (!outcome.ok) {
+    return { ok: false, reason: 'Flow Pulse has not produced a run to export.' };
+  }
+  if (stale) {
+    return { ok: false, reason: 'the result is stale; rerun Flow Pulse before exporting.' };
+  }
+  const pathInput = path && path.ok ? { cells: path.path } : null;
+  const catchmentInput = catchment && catchment.ok
+    ? { mask: catchment.mask, outletCell: catchment.cell.row * outcome.grid.cols + catchment.cell.col }
+    : null;
+  const basename = filename ?? layerId ?? 'flow-pulse';
+  const bytes = build(outcome, { basename, path: pathInput, catchment: catchmentInput });
+  return { ok: true, bytes, filename: `${basename}-flow-pulse.zip` };
 }
 
 function row(label: string, value: string): HTMLElement {
@@ -430,6 +473,53 @@ function mountFlowPulseInteractive(
     }
   }
 
+  const exportButton = button('Export package (ZIP)', 'olv-flow-export');
+  let exportBusy = false;
+
+  async function handleExport(): Promise<void> {
+    if (!outcome.ok || busy || exportBusy) return;
+    const exportLabel = exportButton.textContent ?? 'Export package (ZIP)';
+    exportBusy = true;
+    exportButton.disabled = true;
+    exportButton.textContent = 'Building…';
+    try {
+      const { buildFlowPulsePackage } = await loadFlowPulsePackage();
+      const built = buildFlowPulseExport(
+        outcome,
+        input.isStale?.() ?? false,
+        lastTrace,
+        lastCatchment,
+        input.filename,
+        input.layerId,
+        buildFlowPulsePackage,
+      );
+      if (!built.ok) {
+        announce(`Export refused — ${built.reason}`);
+        return;
+      }
+      downloadBytes(built.filename, built.bytes, 'application/zip');
+      announce('Flow Pulse package downloaded.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      exportButton.replaceWith(
+        (() => {
+          const panel = el('div', { className: 'olv-flow-export-error' }, [
+            el('span', { className: 'olv-flow-export-error-text', text: `Export failed: ${msg}` }),
+            makeRetryButton(() => { panel.replaceWith(exportButton); void handleExport(); }),
+          ]);
+          return panel;
+        })(),
+      );
+      announce(`Export failed: ${msg}`);
+    } finally {
+      exportBusy = false;
+      exportButton.disabled = false;
+      exportButton.textContent = exportLabel;
+    }
+  }
+
+  exportButton.addEventListener('click', () => void handleExport());
+
   function showError(err: unknown): void {
     const msg = err instanceof Error ? err.message : String(err);
     const panel = el('div', { className: 'olv-flow-error' }, [
@@ -468,6 +558,7 @@ function mountFlowPulseInteractive(
       grid.element,
       selectionPanel,
       overlaySection,
+      exportButton,
     );
   }
 
