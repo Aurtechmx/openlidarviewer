@@ -55,6 +55,13 @@ export interface TerrainAccessPackageOptions {
   readonly worldOrigin?: { readonly x: number; readonly y: number } | null;
   /** A CRS name for the README/passport, when the caller can supply one. Never invented here. */
   readonly crsName?: string | null;
+  /**
+   * CRS WKT for a `.prj` sidecar, when the caller can resolve one — same
+   * seam `demPackage.ts`/`flowPulsePackage.ts` read for their own `.prj`.
+   * Omitted or null writes no `.prj` at all, rather than one with an empty
+   * or guessed CRS.
+   */
+  readonly wkt?: string | null;
   /** SHA-256 of the source scan, when the loader verified one. */
   readonly sourceSha256?: string | null;
   readonly build?: BuildIdentity;
@@ -139,11 +146,12 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly generationDateIso: string;
   readonly build: BuildIdentity;
   readonly crsName: string | null;
+  readonly hasWkt: boolean;
 }): string {
   const r = result.record;
   const d = result.diagnostics;
   const grid = result.grid;
-  const lines: string[] = [
+  const lines: (string | null)[] = [
     'OpenLiDARViewer — Terrain Access export',
     '',
     'A geometry-based traversability screening over the declared terrain and mobility',
@@ -155,6 +163,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     'Files',
     `  ${opts.basename}-route.geojson              Found route (local planar coordinates)`,
     `  ${opts.basename}-traversability.asc         Traversability-map bucket per cell (Esri ASCII Grid)`,
+    opts.hasWkt ? `  ${opts.basename}.prj                    Coordinate reference system (WKT)` : null,
     `  ${opts.basename}-diagnostics.csv            Route diagnostics (worst conditions along the route)`,
     `  ${opts.basename}-simulation-run.json        The sealed run record`,
     `  ${opts.basename}.olv-field-sim.json         Reproducible config: re-run it, get the same resultDigest`,
@@ -224,7 +233,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     '  declared limits, never a passability guarantee.',
     '',
   ];
-  return lines.join('\n');
+  return lines.filter((l): l is string => l !== null).join('\n');
 }
 
 /** Build the Terrain Access ZIP package from a completed run. */
@@ -304,12 +313,16 @@ export function buildTerrainAccessPackage(
   });
 
   const readme = buildTerrainAccessReadme(result, {
-    basename, generationDateIso, build, crsName: options.crsName ?? null,
+    basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: !!options.wkt,
   });
   entries.push({
     name: `${basename}-README.txt`,
     bytes: new TextEncoder().encode(readme),
   });
+
+  if (options.wkt) {
+    entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
+  }
 
   // The passport binds to the traversability raster: the one file in this
   // package most likely to be handed on its own.

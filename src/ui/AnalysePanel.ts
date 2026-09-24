@@ -998,6 +998,12 @@ export class AnalysePanel {
   terrainAccessInput(): {
     readonly dtm: AnalyseContoursResult['dtm'];
     readonly scale: { readonly isGeographic: boolean; readonly latitudeDeg: number | null; readonly unitToMetres: number; readonly resolved: boolean };
+    readonly verticalScaleResolved: boolean;
+    readonly worldOriginX: number | null;
+    readonly worldOriginY: number | null;
+    readonly worldOriginZ: number | null;
+    readonly wkt: string | null;
+    readonly crsName: string | null;
     readonly layerId: string | null;
     readonly filename: string | null;
     readonly sceneUpAxis: 'z' | 'y' | null;
@@ -1023,6 +1029,15 @@ export class AnalysePanel {
         unitToMetres: ctx.resolvedUnitToMetres ?? 1,
         resolved: result.horizontalScaleResolved && (!isGeographic || latitudeKnown),
       },
+      verticalScaleResolved: result.verticalScaleResolved,
+      // Same load-time recentring origin the DEM package and Flow Pulse's
+      // result grid already read, for the elevation readout's real z and the
+      // export package's real corner.
+      worldOriginX: ctx.worldOrigin?.x ?? null,
+      worldOriginY,
+      worldOriginZ: ctx.worldOrigin?.z ?? null,
+      wkt: ctx.wkt ?? null,
+      crsName: ctx.resolvedCrsLabel ?? null,
       layerId: scanId,
       filename: this._cb.getExportBasename?.() ?? null,
       sceneUpAxis: ctx.sceneUpAxis ?? null,

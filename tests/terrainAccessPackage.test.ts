@@ -214,3 +214,51 @@ describe('the README never crosses into §22 forbidden language', () => {
     }
   });
 });
+
+// The route GeoJSON and the traversability raster must carry the REAL
+// world coordinates in the dataset CRS, not a fixed local (0, 0) — and a
+// `.prj` sidecar when the CRS resolves. Origin picked in the ~400000,
+// 3600000 range to match a real far-mount UTM placement, so a truncation
+// bug would show up as metres of drift rather than being masked by a
+// small/zero origin.
+describe('georeferenced export', () => {
+  it('writes the real lower-left corner on the raster when a world origin is supplied', () => {
+    const zip = buildTerrainAccessPackage(runOf(), {
+      basename: 'ta',
+      worldOrigin: { x: 400123.5, y: 3600456.25 },
+    });
+    const asc = textOf(zip, 'ta-traversability.asc');
+    expect(asc).toMatch(/xllcorner 400123\.5/);
+    expect(asc).toMatch(/yllcorner 3600456\.25/);
+  });
+
+  it('offsets the route GeoJSON coordinates by the same world origin', () => {
+    const zip = buildTerrainAccessPackage(runOf(), {
+      basename: 'ta',
+      worldOrigin: { x: 400123.5, y: 3600456.25 },
+    });
+    const geojson = jsonOf<{ features: { geometry: { coordinates: [number, number][] } }[] }>(zip, 'ta-route.geojson');
+    const [x0, y0] = geojson.features[0].geometry.coordinates[0];
+    expect(x0).toBeCloseTo(400123.5, 6);
+    expect(y0).toBeCloseTo(3600456.25, 6);
+  });
+
+  it('writes a local (0, 0) origin and no .prj when no world origin/CRS is supplied', () => {
+    const zip = buildTerrainAccessPackage(runOf(), { basename: 'ta' });
+    const asc = textOf(zip, 'ta-traversability.asc');
+    expect(asc).toMatch(/xllcorner 0\n/);
+    expect(asc).toMatch(/yllcorner 0\n/);
+    expect(() => extractEntry(zip, 'ta.prj')).toThrow();
+  });
+
+  it('writes a .prj sidecar with the supplied WKT when the CRS resolves', () => {
+    const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
+    const zip = buildTerrainAccessPackage(runOf(), {
+      basename: 'ta',
+      worldOrigin: { x: 400123.5, y: 3600456.25 },
+      wkt,
+    });
+    expect(textOf(zip, 'ta.prj')).toBe(wkt);
+    expect(textOf(zip, 'ta-README.txt')).toContain('ta.prj');
+  });
+});

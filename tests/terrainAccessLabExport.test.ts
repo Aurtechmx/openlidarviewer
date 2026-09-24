@@ -124,4 +124,22 @@ describe('a fresh, non-stale result', () => {
     if (!out.ok) return;
     expect(out.filename).toBe('layer-a-terrain-access.zip');
   });
+
+  // The Lab must actually thread a supplied georef through to the package
+  // builder — passing none silently defaulted the raster/GeoJSON to a local
+  // (0, 0) origin with no .prj, the same gap Flow Pulse's export had.
+  it('threads a supplied georef through to the package (real corner, .prj)', () => {
+    const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
+    const out = buildTerrainAccessExport(runOf(), false, 'site', 'layer-a', buildTerrainAccessPackage, {
+      worldOrigin: { x: 400123.5, y: 3600456.25 },
+      crsName: 'UTM zone 13N',
+      wkt,
+    });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const asc = new TextDecoder().decode(extractEntry(out.bytes, 'site-traversability.asc')!);
+    expect(asc).toMatch(/xllcorner 400123\.5/);
+    expect(asc).toMatch(/yllcorner 3600456\.25/);
+    expect(new TextDecoder().decode(extractEntry(out.bytes, 'site.prj')!)).toBe(wkt);
+  });
 });
