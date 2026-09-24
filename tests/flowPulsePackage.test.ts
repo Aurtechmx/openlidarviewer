@@ -166,6 +166,22 @@ describe('the package carries every required file', () => {
     expect(textOf(zip, 'flow-README.txt')).toContain('flow.prj');
   });
 
+  // ── Defect B: every fill-depth/elevation figure in the summary/depression
+  // CSVs is a raw number with no unit; the README must state which unit
+  // applies, failing closed when the caller has not resolved one.
+  it('states the vertical unit is unresolved, fail-closed, with no caller-supplied unit', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow' }), 'flow-README.txt');
+    expect(readme).toMatch(/Vertical unit\s+unresolved.*source units/);
+  });
+
+  it('states the resolved vertical unit when the caller supplies one', () => {
+    const readme = textOf(
+      buildFlowPulsePackage(runOf(), { basename: 'flow', verticalUnitLabel: 'm' }),
+      'flow-README.txt',
+    );
+    expect(readme).toMatch(/Vertical unit\s+m\n/);
+  });
+
   it('every listed file hashes to what SHA256SUMS.txt records', () => {
     const zip = buildFlowPulsePackage(runOf(), { basename: 'flow' });
     const manifest = textOf(zip, 'SHA256SUMS.txt');

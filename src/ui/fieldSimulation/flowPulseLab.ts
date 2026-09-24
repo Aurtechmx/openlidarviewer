@@ -192,7 +192,7 @@ export function runLabFlowPulse(
     id: globalThis.crypto?.randomUUID?.() ?? `flow-${Date.now()}`,
     generatedAt: new Date().toISOString(),
     processingManifestHead: null,
-  });
+  }, flowElevationReference(input).unitLabel);
 }
 
 /** Result of {@link buildFlowPulseExport}: the bytes and filename to download, or a refusal reason. */
@@ -211,6 +211,8 @@ export interface FlowPulseGeoref {
   readonly worldOrigin: { readonly x: number; readonly y: number } | null;
   readonly crsName: string | null;
   readonly wkt: string | null;
+  /** See {@link runFlowPulse}'s parameter of the same name (§ defect B). Defaults to `'units'`. */
+  readonly verticalUnitLabel?: 'm' | 'ft' | 'units';
 }
 
 /**
@@ -248,6 +250,7 @@ export function buildFlowPulseExport(
     worldOrigin: georef?.worldOrigin ?? null,
     crsName: georef?.crsName ?? null,
     wkt: georef?.wkt ?? null,
+    verticalUnitLabel: georef?.verticalUnitLabel ?? 'units',
   });
   return { ok: true, bytes, filename: `${basename}-flow-pulse.zip` };
 }
@@ -553,6 +556,7 @@ function mountFlowPulseInteractive(
             : null,
           crsName: input.crsName ?? null,
           wkt: input.wkt ?? null,
+          verticalUnitLabel: flowElevationReference(input).unitLabel,
         },
       );
       if (!built.ok) {

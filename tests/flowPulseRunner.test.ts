@@ -294,6 +294,25 @@ describe('conditioning is declared, and leaves the DTM alone', () => {
     expect([...dtm.z]).toEqual([...before]);
   });
 
+  // ── Defect B: "N cell(s) were raised, the deepest by 1.240." has no unit —
+  // fail closed to "in source units" when the vertical scale is unresolved,
+  // and use the resolved unit label when the caller supplies one.
+  it('fails closed to "in source units" when no vertical unit is supplied', () => {
+    const r = runFlowPulse(notchedBowl(), projected, params({ conditioning: 'priority-flood' }), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.limitations.join(' ')).toMatch(/deepest by [\d.]+ \(in source units\)/);
+  });
+
+  it('states the resolved vertical unit when the caller supplies one', () => {
+    const r = runFlowPulse(
+      notchedBowl(), projected, params({ conditioning: 'priority-flood' }), identity, 'm',
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.limitations.join(' ')).toMatch(/deepest by [\d.]+ m\b/);
+  });
+
   it('never calls the conditioned surface corrected terrain', () => {
     const r = runFlowPulse(notchedBowl(), projected, params({ conditioning: 'priority-flood' }), identity);
     expect(r.ok).toBe(true);
