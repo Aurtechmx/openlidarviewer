@@ -209,4 +209,33 @@ describe('createContourLayerService — scan lifetime', () => {
     service.dispose();
     expect(made).toHaveLength(0);
   });
+
+  it('clearAll drops the drawn layer without knowing its scan id, and stops drawing it', () => {
+    // Regression: nothing outside this file used to call clearForScan/dispose
+    // on scan close, a new scan loading, a CRS change, or a classification
+    // edit, so the contour LineSegments and its store record survived every
+    // one of those events. clearAll() is the caller-agnostic teardown for
+    // exactly that set of events.
+    const { service, store, made } = setup();
+    service.show(input({ scanId: 'scan-a' }));
+    service.clearAll();
+    expect(store.list()).toHaveLength(0);
+    expect(service.layerFor('scan-a')).toBeUndefined();
+    expect(made[0].state.disposed).toBe(1);
+  });
+
+  it('clearAll is a no-op before anything is shown', () => {
+    const { service, made } = setup();
+    expect(() => service.clearAll()).not.toThrow();
+    expect(made).toHaveLength(0);
+  });
+
+  it('a scan re-shown after clearAll gets a FRESH overlay and generation 1', () => {
+    const { service, made } = setup();
+    service.show(input({ scanId: 'scan-a' }));
+    service.clearAll();
+    const layer = service.show(input({ scanId: 'scan-b' }));
+    expect(layer.generation).toBe(1);
+    expect(made).toHaveLength(2); // the disposed overlay is not reused
+  });
 });

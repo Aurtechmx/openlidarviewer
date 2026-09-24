@@ -1037,6 +1037,23 @@ export function createTerrainAnalysisRunner(
     // also invalidate the Flow Pulse Lab's persisted 3D overlay, if one is
     // showing — a no-op when the Lab's chunk was never loaded this session.
     invalidateFlowOverlay();
+    // Same set of events end the relevance of any on-screen contour layer:
+    // its scan closed, another scan took the viewer, its CRS changed, or its
+    // classification was edited. `contourLayers` lives in this closure (it is
+    // only built lazily, on the first Analyse run), so the cleanup is a
+    // direct call rather than a cross-module registry — a no-op before the
+    // first contour layer is ever drawn.
+    //
+    // The panel's own "Contours in 3D" toggle row (visible/opacity/index
+    // emphasis) is separate DOM from the generic derived-layers list and is
+    // not reached by clearAll() — it referenced a layer that no longer
+    // exists, so it is cleared too. That row exists only once a contour
+    // layer was built, and the Analyse panel mounts lazily, so a scan closed
+    // before any contour was drawn has neither to clear.
+    if (contourLayers) {
+      contourLayers.clearAll();
+      getAnalysePanel()?.setContourLayerControls(null);
+    }
   }
 
   function getLastSourceUpAxis(): 'z' | 'y' {
