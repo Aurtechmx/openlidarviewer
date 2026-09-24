@@ -1043,13 +1043,17 @@ export function createTerrainAnalysisRunner(
     // only built lazily, on the first Analyse run), so the cleanup is a
     // direct call rather than a cross-module registry — a no-op before the
     // first contour layer is ever drawn.
-    contourLayers?.clearAll();
+    //
     // The panel's own "Contours in 3D" toggle row (visible/opacity/index
     // emphasis) is separate DOM from the generic derived-layers list and is
-    // not reached by clearAll() above — it referenced a layer that no longer
-    // exists, so it must be cleared here too, or the controls keep acting on
-    // a scan that is gone.
-    getAnalysePanel().setContourLayerControls(null);
+    // not reached by clearAll() — it referenced a layer that no longer
+    // exists, so it is cleared too. That row exists only once a contour
+    // layer was built, and the Analyse panel mounts lazily, so a scan closed
+    // before any contour was drawn has neither to clear.
+    if (contourLayers) {
+      contourLayers.clearAll();
+      getAnalysePanel()?.setContourLayerControls(null);
+    }
   }
 
   function getLastSourceUpAxis(): 'z' | 'y' {
