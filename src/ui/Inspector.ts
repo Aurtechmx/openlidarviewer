@@ -15,15 +15,20 @@ import {
 import { openConfirm } from './Modal';
 import { announcePolite } from './politeAnnounce';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
-import { loadLayerHealthCard, loadLayerGroupsPanel } from '../lazyChunks';
+import {
+  loadLayerHealthCard,
+  loadLayerGroupsPanel,
+  loadRenderCrs,
+  loadRenderProvenance,
+  loadRenderReport,
+} from '../lazyChunks';
 import type { LayerHealthCard } from './LayerHealthCard';
 import type {
   DatasetIntelligence,
   DatasetIntelligenceInput,
 } from '../terrain/datasetIntelligence';
 import type { AnalysisRow } from '../analysis/ModuleApi';
-import { scopeStamp } from '../render/class/classScope';
-import { classificationLabel } from '../render/pointInfo';
+import type { CrsOverride } from './inspector/renderCrs';
 import type { ProvenanceCardModel } from '../render/scanCapability';
 import type { ColorMode } from '../render/colorModes';
 import {
@@ -50,7 +55,6 @@ import {
 } from '../diagnostics/usageCounters';
 import type { ProvenanceFingerprint, CaptureType } from '../diagnostics/provenance';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
-import { listCrsEntriesByRegion, getCrsEntry } from '../geo/CrsRegistry';
 // Workflow presets (v0.4.5) — pure table; the rail renders it, main.ts
 // applies it through the Viewer's existing setters.
 import {
@@ -632,16 +636,42 @@ export class Inspector {
    * scan with a recognised display profile or an olv: provenance block loads.
    */
   private readonly _declaredProvenanceBody: HTMLElement;
-  /** Last fingerprint surfaced; lets the user override drop in cleanly. */
-  private _currentProvenance: ProvenanceFingerprint | null = null;
   /** Caller registers this to be told when the user overrides the type. */
   private _onProvenanceOverride: ((type: CaptureType) => void) | null = null;
+  /**
+   * The lazy `renderProvenance` chunk, once loaded (module functions carry no
+   * state, so this is cached across every `setProvenance()` call — the
+   * dynamic import only ever runs once).
+   */
+  private _renderProvenanceFn:
+    | ((body: HTMLElement, f: ProvenanceFingerprint, onOverride: (type: CaptureType) => void) => void)
+    | null = null;
+  /** In-flight import of the Provenance chunk, so a fast double scan-open dedupes. */
+  private _provenanceChunkPromise: Promise<typeof this._renderProvenanceFn> | null = null;
   /** CRS section body — populated by setCrs(). */
   private readonly _crsBody: HTMLElement;
   /** The whole Coordinate-system collapsible — hidden for local-frame profiles. */
   private readonly _crsSection: HTMLElement | null = null;
   /** Caller registers this to react to user CRS overrides. */
-  private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' | 'detected' }) => void) | null = null;
+  private _onCrsOverride: ((override: CrsOverride) => void) | null = null;
+  /** The lazy `renderCrs` chunk, once loaded — see `_renderProvenanceFn`. */
+  private _renderCrsFn:
+    | ((body: HTMLElement, c: ResolvedCrs, onOverride: (override: CrsOverride) => void) => void)
+    | null = null;
+  /** In-flight import of the CRS chunk. */
+  private _crsChunkPromise: Promise<typeof this._renderCrsFn> | null = null;
+  /** The last CRS handed to setCrs(), for latest-wins and for the retry caption. */
+  private _pendingCrs: ResolvedCrs | null = null;
+  /** Set by focusCrsOverride() when the override control isn't rendered yet. */
+  private _focusCrsOverrideOnHydrate = false;
+  /** The last fingerprint handed to setProvenance(), for latest-wins and retry. */
+  private _pendingProvenanceForChunk: ProvenanceFingerprint | null = null;
+  /** The lazy `renderReport` chunk, once loaded. */
+  private _renderReportFn: ((container: HTMLElement, rows: AnalysisRow[]) => void) | null = null;
+  /** In-flight import of the Report chunk. */
+  private _reportChunkPromise: Promise<typeof this._renderReportFn> | null = null;
+  /** The last rows handed to setReport(), for latest-wins and retry. */
+  private _pendingReportRows: AnalysisRow[] | null = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
   /** Per-layer facts the group panel reads: display name and stable identity. */
   private readonly _layerFacts = new Map<string, { name: string; stableId: string | null }>();
@@ -1743,9 +1773,29 @@ export class Inspector {
    *
    * Returns false when the section is unavailable (it is hidden while a
    * streaming scan is mounted), so a caller can tell "done" from "nothing here".
+   *
+   * The override `<select>` lives behind the lazy `renderCrs` chunk: if the
+   * chunk is still loading (or hasn't been requested — a rare race right
+   * after scan-open), the reveal finds no control to focus yet. In that
+   * case focus is deferred and delivered once `setCrs()`'s render actually
+   * lands, rather than silently dropping to `<body>`.
    */
   focusCrsOverride(): boolean {
-    return this._revealSection(this._crsSection, '.olv-crs-select');
+    const revealed = this._revealSection(this._crsSection, '.olv-crs-select');
+    if (revealed && !this._crsBody.querySelector('.olv-crs-select')) {
+      this._focusCrsOverrideOnHydrate = true;
+    }
+    return revealed;
+  }
+
+  /** Focus the CRS override `<select>` if `focusCrsOverride()` asked for it while loading. */
+  private _deliverDeferredCrsFocus(): void {
+    if (!this._focusCrsOverrideOnHydrate) return;
+    this._focusCrsOverrideOnHydrate = false;
+    const control = this._crsBody.querySelector('.olv-crs-select');
+    if (control && typeof (control as HTMLElement).focus === 'function') {
+      (control as HTMLElement).focus();
+    }
   }
 
   /**
@@ -2051,104 +2101,64 @@ export class Inspector {
   }
 
   /**
-   * Render the report rows. Headline metrics show directly; rows marked
-   * `advanced` (the health diagnostics) are tucked into a collapsible
-   * "Advanced report" so the default view stays clean.
+   * Render the report rows via the lazy `renderReport` chunk (`ui/inspector/
+   * renderReport.ts`). Shows a loading placeholder synchronously, then swaps
+   * in the real rows once the chunk resolves. Latest-wins: if a second
+   * `setReport()` arrives before the chunk loads, only the newest rows are
+   * painted.
    */
   setReport(rows: AnalysisRow[]): void {
-    this._report.replaceChildren();
-    const advanced: AnalysisRow[] = [];
-    const sourceStd: AnalysisRow[] = [];
-    const sourceExt: AnalysisRow[] = [];
-    for (const row of rows) {
-      if (row.group === 'src-std') sourceStd.push(row);
-      else if (row.group === 'src-ext') sourceExt.push(row);
-      else if (row.advanced) advanced.push(row);
-      else this._report.append(this._reportRow(row));
+    this._pendingReportRows = rows;
+    if (this._renderReportFn) {
+      this._renderReportFn(this._report, rows);
+      return;
     }
-    // Shared collapsible builder for the Advanced report and the declared
-    // Source metadata sections.
-    const fold = (title: string, children: (HTMLElement | string)[]): void => {
-      this._report.append(
-        el('details', { className: 'olv-advanced' }, [
-          el('summary', { className: 'olv-advanced-summary', text: title }),
-          el('div', { className: 'olv-advanced-body' }, children),
-        ]),
-      );
-    };
-    if (advanced.length > 0) {
-      fold('Advanced report', advanced.map((row) => this._reportRow(row)));
-    }
-    // Declared source metadata — rendered only when the file declared
-    // something. Values are verbatim declarations; the disclosure line keeps
-    // the honesty boundary explicit ("declared, not verified").
-    if (sourceStd.length > 0 || sourceExt.length > 0) {
-      const children: HTMLElement[] = [
-        el('div', {
-          className: 'olv-report-empty',
-          text: 'Declared by the file, not verified by OpenLiDARViewer.',
-        }),
-        ...sourceStd.map((row) => this._reportRow(row, true)),
-      ];
-      if (sourceExt.length > 0) {
-        children.push(
-          el('div', {
-            className: 'olv-advanced-summary',
-            text: 'Extended metadata (file-declared)',
-          }),
-          ...sourceExt.map((row) => this._reportRow(row, true)),
-        );
+    this._report.replaceChildren(
+      el('div', { className: 'olv-report-empty', text: 'Loading scan report…' }),
+    );
+    void this._ensureReportChunk().then((renderReport) => {
+      if (this._pendingReportRows !== rows) return; // a later call already won
+      if (!renderReport) {
+        this._showReportLoadError();
+        return;
       }
-      fold('Source metadata', children);
-    }
+      renderReport(this._report, rows);
+    });
   }
 
-  /**
-   * Build a single status / label / value report row. `truncate` clips long
-   * declared-metadata values for display, keeping the verbatim value one
-   * hover away in the tooltip.
-   */
-  private _reportRow(row: AnalysisRow, truncate = false): HTMLElement {
-    // Honesty stamp — when a metric was computed under a class filter (subset)
-    // or is a header figure that can't be class-scoped (notScoped sentinel),
-    // append the scope provenance after the value so no filtered readout is
-    // shown unqualified. A full / absent scope yields an empty stamp and the
-    // row renders exactly as it did before class scoping existed.
-    const stamp = row.scope ? scopeStamp(row.scope, classificationLabel) : '';
-    // Truncated declared values keep the verbatim text in the tooltip.
-    const valueProps: Parameters<typeof el>[1] = { className: 'olv-report-value' };
-    let shown = row.value;
-    if (truncate && shown.length > 96) {
-      valueProps.title = shown;
-      shown = `${shown.slice(0, 96)}…`;
-    }
-    const valueChildren: (HTMLElement | string)[] = [shown];
-    if (stamp) {
-      valueChildren.push(
-        el('span', {
-          className: 'olv-report-scope',
-          text: ` · ${stamp}`,
-          title: 'Class scope this metric was computed under',
-        }),
-      );
-    }
-    return el('div', { className: 'olv-report-row' }, [
-      el('span', {
-        className: `olv-status olv-status-${row.status}`,
-        // Accessibility: status is encoded by colour only — add a
-        // textual label so screen readers and assistive tech announce
-        // pass / info / warn / fail. Visual redundancy (a glyph inside
-        // the dot) is a follow-up.
-        ariaLabel: ({
-          pass: 'Pass',
-          info: 'Info',
-          warn: 'Warning',
-          fail: 'Fail',
-        } as const)[row.status],
-      }),
-      el('span', { className: 'olv-report-label', text: row.label }),
-      el('span', valueProps, valueChildren),
-    ]);
+  /** Load (and cache) the `renderReport` chunk. Dedupes concurrent calls. */
+  private _ensureReportChunk(): Promise<typeof this._renderReportFn> {
+    if (this._renderReportFn) return Promise.resolve(this._renderReportFn);
+    if (this._reportChunkPromise) return this._reportChunkPromise;
+    this._reportChunkPromise = loadRenderReport()
+      .then(({ renderReport }) => {
+        this._renderReportFn = renderReport;
+        return renderReport;
+      })
+      .catch((err) => {
+        console.warn('[inspector] scan-report chunk failed to load', err);
+        return null;
+      })
+      .finally(() => {
+        this._reportChunkPromise = null;
+      });
+    return this._reportChunkPromise;
+  }
+
+  private _showReportLoadError(): void {
+    const retry = el('button', {
+      className: 'olv-inline-retry',
+      type: 'button',
+      text: 'Try again',
+    }) as HTMLButtonElement;
+    retry.addEventListener('click', () => {
+      if (this._pendingReportRows) this.setReport(this._pendingReportRows);
+    });
+    this._report.replaceChildren(
+      el('div', { className: 'olv-report-empty', text: 'Could not load the scan report.' }),
+      retry,
+    );
+    announce('Could not load the scan report.');
   }
 
   /**
@@ -2240,15 +2250,72 @@ export class Inspector {
 
   // ── Provenance fingerprint ────────────────────────────────────────────────
 
-  /** Surface the classifier's verdict for the loaded scan. */
+  /**
+   * Surface the classifier's verdict for the loaded scan, via the lazy
+   * `renderProvenance` chunk. Shows a loading placeholder synchronously;
+   * latest-wins if a second call arrives before the chunk resolves.
+   */
   setProvenance(fingerprint: ProvenanceFingerprint): void {
-    this._currentProvenance = fingerprint;
-    this._renderProvenance(fingerprint);
+    this._pendingProvenanceForChunk = fingerprint;
+    if (this._renderProvenanceFn) {
+      this._renderProvenanceFn(this._provenanceBody, fingerprint, (type) => {
+        this._onProvenanceOverride?.(type);
+      });
+      return;
+    }
+    this._provenanceBody.replaceChildren(
+      el('div', { className: 'olv-report-empty', text: 'Loading provenance…' }),
+    );
+    void this._ensureProvenanceChunk().then((renderProvenance) => {
+      if (this._pendingProvenanceForChunk !== fingerprint) return;
+      if (!renderProvenance) {
+        this._showProvenanceLoadError();
+        return;
+      }
+      renderProvenance(this._provenanceBody, fingerprint, (type) => {
+        this._onProvenanceOverride?.(type);
+      });
+    });
+  }
+
+  /** Load (and cache) the `renderProvenance` chunk. Dedupes concurrent calls. */
+  private _ensureProvenanceChunk(): Promise<typeof this._renderProvenanceFn> {
+    if (this._renderProvenanceFn) return Promise.resolve(this._renderProvenanceFn);
+    if (this._provenanceChunkPromise) return this._provenanceChunkPromise;
+    this._provenanceChunkPromise = loadRenderProvenance()
+      .then(({ renderProvenance }) => {
+        this._renderProvenanceFn = renderProvenance;
+        return renderProvenance;
+      })
+      .catch((err) => {
+        console.warn('[inspector] provenance chunk failed to load', err);
+        return null;
+      })
+      .finally(() => {
+        this._provenanceChunkPromise = null;
+      });
+    return this._provenanceChunkPromise;
+  }
+
+  private _showProvenanceLoadError(): void {
+    const retry = el('button', {
+      className: 'olv-inline-retry',
+      type: 'button',
+      text: 'Try again',
+    }) as HTMLButtonElement;
+    retry.addEventListener('click', () => {
+      if (this._pendingProvenanceForChunk) this.setProvenance(this._pendingProvenanceForChunk);
+    });
+    this._provenanceBody.replaceChildren(
+      el('div', { className: 'olv-report-empty', text: 'Could not load provenance.' }),
+      retry,
+    );
+    announce('Could not load provenance.');
   }
 
   /** Restore the placeholder when the active scan closes. */
   clearProvenance(): void {
-    this._currentProvenance = null;
+    this._pendingProvenanceForChunk = null;
     this._showProvenancePlaceholder();
     this.setDeclaredProvenance(null);
   }
@@ -2342,13 +2409,72 @@ export class Inspector {
     this._onProvenanceOverride = cb;
   }
 
-  /** Surface the detected (or overridden) CRS for the loaded scan. */
+  /**
+   * Surface the detected (or overridden) CRS for the loaded scan, via the
+   * lazy `renderCrs` chunk (which also carries the CRS-catalog table the
+   * override picker is built from). Shows a loading placeholder
+   * synchronously; latest-wins if a second call arrives before the chunk
+   * resolves.
+   */
   setCrs(resolved: ResolvedCrs): void {
-    this._renderCrs(resolved);
+    this._pendingCrs = resolved;
+    if (this._renderCrsFn) {
+      this._renderCrsFn(this._crsBody, resolved, (o) => this._onCrsOverride?.(o));
+      this._deliverDeferredCrsFocus();
+      return;
+    }
+    this._crsBody.replaceChildren(
+      el('div', { className: 'olv-report-empty', text: 'Loading coordinate system…' }),
+    );
+    void this._ensureCrsChunk().then((renderCrs) => {
+      if (this._pendingCrs !== resolved) return;
+      if (!renderCrs) {
+        this._showCrsLoadError();
+        return;
+      }
+      renderCrs(this._crsBody, resolved, (o) => this._onCrsOverride?.(o));
+      this._deliverDeferredCrsFocus();
+    });
+  }
+
+  /** Load (and cache) the `renderCrs` chunk. Dedupes concurrent calls. */
+  private _ensureCrsChunk(): Promise<typeof this._renderCrsFn> {
+    if (this._renderCrsFn) return Promise.resolve(this._renderCrsFn);
+    if (this._crsChunkPromise) return this._crsChunkPromise;
+    this._crsChunkPromise = loadRenderCrs()
+      .then(({ renderCrs }) => {
+        this._renderCrsFn = renderCrs;
+        return renderCrs;
+      })
+      .catch((err) => {
+        console.warn('[inspector] coordinate-system chunk failed to load', err);
+        return null;
+      })
+      .finally(() => {
+        this._crsChunkPromise = null;
+      });
+    return this._crsChunkPromise;
+  }
+
+  private _showCrsLoadError(): void {
+    const retry = el('button', {
+      className: 'olv-inline-retry',
+      type: 'button',
+      text: 'Try again',
+    }) as HTMLButtonElement;
+    retry.addEventListener('click', () => {
+      if (this._pendingCrs) this.setCrs(this._pendingCrs);
+    });
+    this._crsBody.replaceChildren(
+      el('div', { className: 'olv-report-empty', text: 'Could not load the coordinate system.' }),
+      retry,
+    );
+    announce('Could not load the coordinate system.');
   }
 
   /** Restore the CRS placeholder when the active scan closes. */
   clearCrs(): void {
+    this._pendingCrs = null;
     this._showCrsPlaceholder();
   }
 
@@ -2358,9 +2484,7 @@ export class Inspector {
    * override (via `CrsOverrideStore.setOverride`) and re-resolving the
    * effective CRS, then feeding the result back through `setCrs`.
    */
-  setOnCrsOverride(
-    cb: (override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' | 'detected' }) => void,
-  ): void {
+  setOnCrsOverride(cb: (override: CrsOverride) => void): void {
     this._onCrsOverride = cb;
   }
 
@@ -2380,218 +2504,6 @@ export class Inspector {
         text: 'Load a scan to see its coordinate reference system.',
       }),
     );
-  }
-
-  private _renderCrs(c: ResolvedCrs): void {
-    this._crsBody.replaceChildren();
-
-    // ── Detected / active CRS summary ──────────────────────────────────────
-    const headerRow = el('div', { className: 'olv-crs-summary' }, [
-      el('span', { className: 'olv-crs-name', text: c.name }),
-    ]);
-    if (typeof c.epsg === 'number') {
-      headerRow.append(el('span', { className: 'olv-crs-epsg', text: `EPSG:${c.epsg}` }));
-    }
-    this._crsBody.append(headerRow);
-
-    // Confidence + source row.
-    const confidenceLabel: Record<typeof c.confidence, string> = {
-      high: 'High',
-      medium: 'Medium',
-      low: 'Low',
-      none: 'None',
-    };
-    const sourceLabel: Record<typeof c.source, string> = {
-      'las-vlr': 'LAS / LAZ georeference VLR',
-      'copc-meta': 'COPC metadata',
-      'ept-srs': 'EPT srs.wkt',
-      'tileset-region': '3D Tiles region bounding volume',
-      'catalog-tile': 'Public-catalog tile',
-      'user-override': 'User override',
-      'default-assumption': 'No metadata',
-    };
-    this._crsBody.append(
-      el('div', { className: 'olv-crs-meta' }, [
-        el('span', { className: 'olv-crs-meta-row', text: `Confidence: ${confidenceLabel[c.confidence]}` }),
-        el('span', { className: 'olv-crs-meta-row', text: `Source: ${sourceLabel[c.source]}` }),
-      ]),
-    );
-
-    // ── Safety warnings (kind-specific) ────────────────────────────────────
-    if (c.kind === 'unknown') {
-      this._crsBody.append(
-        el('div', {
-          className: 'olv-crs-warning',
-          text: 'CRS unknown. Coordinates are shown in source units only.',
-        }),
-      );
-    } else if (c.kind === 'geographic') {
-      this._crsBody.append(
-        el('div', {
-          className: 'olv-crs-warning',
-          text: 'Dataset coordinates are geographic degrees. Metric distances may require projection.',
-        }),
-      );
-    } else if (c.confidence === 'low') {
-      this._crsBody.append(
-        el('div', {
-          className: 'olv-crs-warning',
-          text: 'Low-confidence detection. Confirm before using converted coordinates.',
-        }),
-      );
-    }
-    if (c.userConfirmed && c.source === 'user-override') {
-      this._crsBody.append(
-        el('div', {
-          className: 'olv-crs-warning-soft',
-          text: 'CRS override active. Coordinate conversion uses your selection.',
-        }),
-      );
-    }
-
-    // ── Override picker ────────────────────────────────────────────────────
-    const select = el('select', {
-      className: 'olv-crs-select',
-      ariaLabel: 'Coordinate reference system',
-    }) as HTMLSelectElement;
-    const optDetected = document.createElement('option');
-    optDetected.value = '__detected__';
-    optDetected.textContent =
-      c.source === 'user-override' ? 'Reset to detected' : 'Use detected';
-    select.append(optDetected);
-    const optLocal = document.createElement('option');
-    optLocal.value = '__local__';
-    optLocal.textContent = 'Local coordinates (no CRS)';
-    select.append(optLocal);
-    for (const group of listCrsEntriesByRegion()) {
-      const og = document.createElement('optgroup');
-      og.label = ({
-        global: 'Global',
-        'united-states': 'United States',
-        mexico: 'Mexico',
-        europe: 'Europe',
-        other: 'Other',
-      } as const)[group.region];
-      for (const entry of group.entries) {
-        const opt = document.createElement('option');
-        opt.value = String(entry.epsg);
-        opt.textContent = `${entry.label} (EPSG:${entry.epsg})`;
-        opt.title = entry.note;
-        // Preselect the currently active EPSG when it matches.
-        if (typeof c.epsg === 'number' && entry.epsg === c.epsg) {
-          opt.selected = true;
-        }
-        og.append(opt);
-      }
-      select.append(og);
-    }
-    select.addEventListener('change', () => {
-      if (!this._onCrsOverride) return;
-      const v = select.value;
-      if (v === '__detected__') {
-        // "Use detected" — clear any override and re-run detection. Distinct
-        // from "Local coordinates" below: both used to send the same
-        // { epsg: null, kind: 'local' }, so choosing local silently reverted to
-        // the detected CRS and a genuine local override could never persist (C3).
-        this._onCrsOverride({ epsg: null, kind: 'detected' });
-        return;
-      }
-      if (v === '__local__') {
-        // Pin genuine local coordinates (no CRS) — persisted, not cleared.
-        this._onCrsOverride({ epsg: null, kind: 'local' });
-        return;
-      }
-      const epsg = Number.parseInt(v, 10);
-      if (!Number.isFinite(epsg)) return;
-      const entry = getCrsEntry(epsg);
-      if (!entry) return;
-      this._onCrsOverride({ epsg, kind: entry.kind });
-    });
-    this._crsBody.append(
-      el('label', { className: 'olv-crs-picker-label', text: 'Override' }),
-      select,
-    );
-  }
-
-  private _renderProvenance(f: ProvenanceFingerprint): void {
-    this._provenanceBody.replaceChildren();
-
-    // Headline — capture type + confidence badge.
-    const headline = el('div', { className: 'olv-prov-headline' }, [
-      el('span', { className: 'olv-prov-label', text: f.label }),
-      el('span', {
-        className: `olv-prov-confidence olv-prov-confidence-${f.confidence}`,
-        text: `${f.confidence} confidence`,
-      }),
-    ]);
-    this._provenanceBody.append(headline);
-
-    // Signals — what made the classifier pick this.
-    if (f.signals.length > 0) {
-      const signals = el('div', { className: 'olv-prov-signals' });
-      for (const s of f.signals) {
-        signals.append(el('div', { className: 'olv-prov-signal', text: `· ${s}` }));
-      }
-      this._provenanceBody.append(signals);
-    }
-
-    // Literature ribbon — every bound carries its source.
-    if (f.bounds.length > 0) {
-      const ribbon = el('div', { className: 'olv-prov-ribbon' });
-      ribbon.append(
-        el('div', {
-          className: 'olv-prov-ribbon-title',
-          text: 'Expected accuracy ranges',
-        }),
-      );
-      for (const b of f.bounds) {
-        ribbon.append(
-          el('div', { className: 'olv-prov-bound' }, [
-            el('div', { className: 'olv-prov-bound-label', text: b.label }),
-            el('div', { className: 'olv-prov-bound-value', text: b.value }),
-            el('div', { className: 'olv-prov-bound-source', text: b.source }),
-          ]),
-        );
-      }
-      this._provenanceBody.append(ribbon);
-    }
-
-    // Disclaimer — always present, deliberately verbose.
-    this._provenanceBody.append(
-      el('div', { className: 'olv-prov-disclaimer', text: f.disclaimer }),
-    );
-
-    // User override — a small dropdown the user can use when the classifier
-    // got it wrong. Caller is wired via setOnProvenanceOverride.
-    const overrideRow = el('div', { className: 'olv-prov-override-row' });
-    overrideRow.append(
-      el('span', { className: 'olv-prov-override-label', text: 'Override:' }),
-    );
-
-    const select = el('select', { className: 'olv-prov-override-select' });
-    const options: Array<[CaptureType, string]> = [
-      ['iphone-lidar', 'iPhone / handheld'],
-      ['drone-lidar', 'Drone / UAV ALS'],
-      ['terrestrial', 'Terrestrial laser scan'],
-      ['mobile-slam', 'Mobile SLAM'],
-      ['aerial-als', 'Aerial / airborne ALS'],
-      ['spaceborne', 'Spaceborne'],
-      ['unknown', 'Unknown'],
-    ];
-    for (const [type, label] of options) {
-      const option = el('option', { text: label }) as HTMLOptionElement;
-      option.value = type;
-      if (type === f.captureType) option.selected = true;
-      select.append(option);
-    }
-    select.addEventListener('change', () => {
-      const next = (select.value as CaptureType);
-      if (this._onProvenanceOverride && next !== this._currentProvenance?.captureType) {
-        this._onProvenanceOverride(next);
-      }
-    });
-    overrideRow.append(select);
-    this._provenanceBody.append(overrideRow);
   }
 
   // ── Session stats ─────────────────────────────────────────────────────────

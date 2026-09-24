@@ -93,6 +93,30 @@ export const loadLayerHealthCard = () => import('./ui/LayerHealthCard');
 export const loadLayerGroupsPanel = () => import('./ui/LayerGroupsPanel');
 
 /**
+ * Load the Inspector's "Coordinate system" section body, with the CRS-catalog
+ * table (`listCrsEntriesByRegion`/`getCrsEntry`) it populates the override
+ * picker from. `setCrs()` fires once per scan-open, before the user has
+ * necessarily expanded the section — this keeps the catalog out of the
+ * startup shell until then.
+ */
+export const loadRenderCrs = () => import('./ui/inspector/renderCrs');
+
+/**
+ * Load the Inspector's "Provenance" fingerprint body. Self-contained
+ * (headline, signals, literature ribbon, disclaimer, capture-type override);
+ * fires once per scan-open, same boundary reasoning as `loadRenderCrs`.
+ */
+export const loadRenderProvenance = () => import('./ui/inspector/renderProvenance');
+
+/**
+ * Load the Inspector's "Scan report" row renderer. Fires on every scan-open
+ * across 5 call sites even though the section is collapsed by default —
+ * this keeps the row-building code (and `scopeStamp`/`classificationLabel`)
+ * out of the startup shell until the first report actually arrives.
+ */
+export const loadRenderReport = () => import('./ui/inspector/renderReport');
+
+/**
  * Load the Speed ↔ Quality panel — the popover markup behind the header's
  * performance button — on the first click, never in the startup shell.
  *
