@@ -11,6 +11,7 @@
 
 export class FakeEl {
   className = '';
+  readonly dataset: Record<string, string> = {};
   title = '';
   type = '';
   href = '';
@@ -56,6 +57,9 @@ export class FakeEl {
   }
   setAttribute(k: string, v: string): void {
     this.attrs[k] = v;
+  }
+  getAttribute(k: string): string | null {
+    return this.attrs[k] ?? null;
   }
   append(...kids: FakeEl[]): void {
     this.children.push(...kids);
