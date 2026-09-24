@@ -23,5 +23,7 @@ export async function decodeFull(
   name: string,
   signal?: AbortSignal,
 ): Promise<PointCloud> {
-  return decodeFullViaWorker(buffer, name, signal);
+  // Point semantics on: the LAS writers carry scan angle, user data, scanner
+  // channel, scan direction and edge-of-flight-line through to the output.
+  return decodeFullViaWorker(buffer, name, signal, true);
 }

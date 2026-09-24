@@ -803,6 +803,7 @@ export async function decodeFullViaWorker(
   buffer: ArrayBuffer,
   name: string,
   signal?: AbortSignal,
+  pointSemantics?: boolean,
 ): Promise<PointCloud> {
   if (signal?.aborted) throw new LoadCancelledError();
   const format = sniffFormat(buffer, name);
@@ -814,7 +815,9 @@ export async function decodeFullViaWorker(
   // decode inline. The browser always has `Worker`, so production always routes
   // off-thread; this fallback only runs where a worker is genuinely unavailable.
   if (parseWorkerFactory === defaultParseWorkerFactory && typeof Worker === 'undefined') {
-    const { cloud } = await parseBuffer(buffer, format, name, Number.MAX_SAFE_INTEGER);
+    const { cloud } = await parseBuffer(
+      buffer, format, name, Number.MAX_SAFE_INTEGER, undefined, undefined, undefined, pointSemantics,
+    );
     return cloud;
   }
 
@@ -878,7 +881,7 @@ export async function decodeFullViaWorker(
       // (not copied) into the worker.
       try {
         worker.postMessage(
-          { buffer, format, name, budget: Number.MAX_SAFE_INTEGER, search: pageSearch() },
+          { buffer, format, name, budget: Number.MAX_SAFE_INTEGER, search: pageSearch(), pointSemantics },
           [buffer],
         );
       } catch (err) {

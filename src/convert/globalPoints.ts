@@ -30,6 +30,15 @@ export interface GlobalPoints {
   readonly returnCount?: Uint8Array;
   readonly pointSourceId?: Uint16Array;
   readonly gpsTime?: Float64Array;
+  /** Scan angle in degrees (as decoded by lasDecodeShared's scanAngleToDegrees). */
+  readonly scanAngle?: Float32Array;
+  readonly userData?: Uint8Array;
+  /** Scanner channel 0–3 (extended formats only). */
+  readonly scannerChannel?: Uint8Array;
+  /** Scan direction flag, 0 or 1. */
+  readonly scanDirection?: Uint8Array;
+  /** Edge-of-flight-line flag, 0 or 1. */
+  readonly edgeOfFlightLine?: Uint8Array;
 }
 
 /**
@@ -64,6 +73,11 @@ export function cloudToGlobal(cloud: PointCloud): GlobalPoints {
     returnCount: cloud.returnCount,
     pointSourceId: cloud.pointSourceId,
     gpsTime: cloud.gpsTime,
+    scanAngle: cloud.scanAngle,
+    userData: cloud.userData,
+    scannerChannel: cloud.scannerChannel,
+    scanDirection: cloud.scanDirection,
+    edgeOfFlightLine: cloud.edgeOfFlightLine,
   };
 }
 

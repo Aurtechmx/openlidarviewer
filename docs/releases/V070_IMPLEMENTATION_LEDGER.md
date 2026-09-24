@@ -29,8 +29,8 @@ the two entries were renumbered when the branches were integrated.
 | ID | Category | Repro | Sev | Status | Was | Finding |
 |---|---|---|---|---|---|---|
 | L01 | EXPORT | READ | med | PARTIAL | B01 | LAS 1.2 write masks classification with 0x1f, so a class above 31 wraps to another valid class. |
-| L02 | EXPORT | READ | med | OPEN | B02 | Scan angle rank written as constant zero. |
-| L03 | EXPORT | READ | med | OPEN | B03 | User data written as constant zero. |
+| L02 | EXPORT | TEST | med | FIXED | B02 | Scan angle rank written as constant zero. |
+| L03 | EXPORT | TEST | med | FIXED | B03 | User data written as constant zero. |
 | L04 | STANDARDS | TEST | high | FIXED | B04 | ASPRS class names defined independently in eight modules, and they disagreed. |
 | L05 | SCIENTIFIC | TEST | high | PARTIAL | B05 | One lasso, two estimators. The stored record now names which one made it; it does not yet carry the area-grid figure. |
 | L06 | SCIENTIFIC | READ | med | PARTIAL | B06 | Two density figures on different bases. Each states its basis; neither is the other's source. |
@@ -96,17 +96,17 @@ LAS 1.2 write masks classification with 0x1f, so a class above 31 wraps to anoth
 
 Section 17 asks for refusal by default on semantic conflict, not only a warning. The flags half is fixed; the class-wrap half is not. Covered by `tests/lasLossyConversion.test.ts`.
 
-### L02 · OPEN · EXPORT
+### L02 · FIXED · EXPORT
 
-Scan angle rank written as constant zero. `GlobalPoints` has no scan angle field, so the writer has nothing to write.
+Scan angle rank written as constant zero. `GlobalPoints` had no scan angle field, so the writer had nothing to write.
 
-Model gap, not a writer defect. Section 18 lists it for preservation. No test covers it yet.
+The full-resolution export decode now keeps scan angle, user data, scanner channel, scan direction and edge-of-flight-line, `GlobalPoints` carries them, and both writers pack them: whole degrees clamped to ±90 in formats 0 to 3, 0.006° steps in formats 6 and 7. A source without them still writes 0. Covered by `tests/lasAcquisitionFields.test.ts`.
 
-### L03 · OPEN · EXPORT
+### L03 · FIXED · EXPORT
 
-User data written as constant zero. Same cause as L02.
+User data written as constant zero. Same cause and fix as L02.
 
-Model gap. Section 28 requires an honest attribute table either way. No test covers it yet.
+Covered by `tests/lasAcquisitionFields.test.ts`.
 
 ### L04 · FIXED · STANDARDS
 

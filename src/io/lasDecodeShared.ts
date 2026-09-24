@@ -65,7 +65,7 @@ export function normalizeClassificationFlagsByte(byte: number, extended: boolean
 export const RECORD_SCAN_ANGLE_LEGACY = 16;
 export const RECORD_SCAN_ANGLE_EXT = 18;
 /** Extended scan-angle LSB, in degrees (Table 17). */
-const SCAN_ANGLE_EXTENDED_UNIT_DEG = 0.006;
+export const SCAN_ANGLE_EXTENDED_UNIT_DEG = 0.006;
 /** User data — uint8 — byte 17 in both the legacy and extended layouts. */
 export const RECORD_USER_DATA_OFFSET = 17;
 /** Point source ID — uint16 LE — byte 18 in legacy records, byte 20 in extended. */
