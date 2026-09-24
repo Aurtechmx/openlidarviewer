@@ -1491,6 +1491,49 @@ export function computeTerrainCore(
 }
 
 /**
+ * The `AnalyseContoursResult` fields `contoursFromCore` reports identically
+ * whether or not an interval was chosen — the core/quality/gate facts, none
+ * of which depend on the contour products below them. Factored out so the
+ * no-interval early return and the normal return cannot drift apart.
+ */
+function coreResultFields(
+  dtm: TerrainCore['dtm'],
+  core: TerrainCore,
+  gridRecommendation: GridRecommendation | null,
+  gate: IntervalGateResult,
+): Pick<
+  AnalyseContoursResult,
+  | 'dtm' | 'validation' | 'reliabilitySplit' | 'blockedAccuracy' | 'verticalScaleResolved'
+  | 'horizontalScaleResolved' | 'confidenceOrdering' | 'confidenceCalibrationApplied'
+  | 'confidenceToleranceM' | 'quality' | 'qualityScore' | 'cellMetrics' | 'surface'
+  | 'unclassifiedFraction' | 'excludedByClassification' | 'accuracyStandards'
+  | 'cellStatusTally' | 'complexity' | 'gridRecommendation' | 'gate'
+> {
+  return {
+    dtm,
+    validation: core.validation,
+    reliabilitySplit: core.reliabilitySplit,
+    blockedAccuracy: core.blockedAccuracy,
+    verticalScaleResolved: core.verticalScaleResolved,
+    horizontalScaleResolved: core.gridGeometry.unitResolved,
+    confidenceOrdering: core.confidenceOrdering,
+    confidenceCalibrationApplied: core.confidenceCalibrationApplied,
+    confidenceToleranceM: core.confidenceToleranceM,
+    quality: core.quality,
+    qualityScore: core.qualityScore,
+    cellMetrics: core.cellMetrics,
+    surface: core.surface,
+    unclassifiedFraction: core.unclassifiedFraction,
+    excludedByClassification: core.excludedByClassification,
+    accuracyStandards: core.accuracyStandards,
+    cellStatusTally: core.cellStatusTally,
+    complexity: core.complexity,
+    gridRecommendation,
+    gate,
+  };
+}
+
+/**
  * Run the interval-DEPENDENT half of the pipeline against a precomputed
  * {@link TerrainCore}: choose the interval, then contours → stitch → style →
  * smooth → feature model → tally → labels, plus the requested-interval-aware
@@ -1572,26 +1615,7 @@ export function contoursFromCore(
       warnings: ['no interval chosen'],
     };
     return {
-      dtm,
-      validation: core.validation,
-      reliabilitySplit: core.reliabilitySplit,
-      blockedAccuracy: core.blockedAccuracy,
-      verticalScaleResolved: core.verticalScaleResolved,
-      horizontalScaleResolved: core.gridGeometry.unitResolved,
-      confidenceOrdering: core.confidenceOrdering,
-      confidenceCalibrationApplied: core.confidenceCalibrationApplied,
-      confidenceToleranceM: core.confidenceToleranceM,
-      quality: core.quality,
-      qualityScore: core.qualityScore,
-      cellMetrics: core.cellMetrics,
-      surface: core.surface,
-      unclassifiedFraction: core.unclassifiedFraction,
-      excludedByClassification: core.excludedByClassification,
-      accuracyStandards: core.accuracyStandards,
-      cellStatusTally: core.cellStatusTally,
-      complexity: core.complexity,
-      gridRecommendation,
-      gate,
+      ...coreResultFields(dtm, core, gridRecommendation, gate),
       intervalM: null,
       requestedIntervalM: null,
       contours: emptyContours,
@@ -1668,26 +1692,7 @@ export function contoursFromCore(
   });
 
   return {
-    dtm,
-    validation: core.validation,
-    reliabilitySplit: core.reliabilitySplit,
-    blockedAccuracy: core.blockedAccuracy,
-    verticalScaleResolved: core.verticalScaleResolved,
-    horizontalScaleResolved: core.gridGeometry.unitResolved,
-    confidenceOrdering: core.confidenceOrdering,
-    confidenceCalibrationApplied: core.confidenceCalibrationApplied,
-    confidenceToleranceM: core.confidenceToleranceM,
-    quality: core.quality,
-    qualityScore: core.qualityScore,
-    cellMetrics: core.cellMetrics,
-    surface: core.surface,
-    unclassifiedFraction: core.unclassifiedFraction,
-    excludedByClassification: core.excludedByClassification,
-    accuracyStandards: core.accuracyStandards,
-    cellStatusTally: core.cellStatusTally,
-    complexity: core.complexity,
-    gridRecommendation,
-    gate,
+    ...coreResultFields(dtm, core, gridRecommendation, gate),
     intervalM: emittedIntervalM,
     requestedIntervalM: intervalM,
     contours,
