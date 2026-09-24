@@ -112,6 +112,36 @@ function expectBlockedFlash(
   vi.useRealTimers();
 }
 
+/**
+ * Drive `handle()` for `product` against a host whose writer for it rejects,
+ * and assert the common failure shape: the button flashes "Export failed"
+ * (never a silent revert), then its own timer restores it. `withFailingHost`
+ * supplies the one rejecting override; `expectConsoleError` covers the
+ * vector export test, the only one that also pins the failure reaching
+ * `console.error`.
+ */
+async function expectExportFailureFlash(
+  product: ContourStudioExportProduct,
+  withFailingHost: (host: ContourExportHost) => ContourExportHost,
+  options: { expectConsoleError?: boolean } = {},
+): Promise<void> {
+  vi.useFakeTimers();
+  const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { host } = fakeHost();
+  const b = btn();
+  new ContourExportAdapter(withFailingHost(host)).handle(product, b, intent(), okFrame);
+  // Let the rejected microtask land before asserting the flash.
+  await vi.advanceTimersByTimeAsync(0);
+  expect(b.textContent, 'a silent revert leaves the user with no signal the export failed').toBe('Export failed');
+  expect(b.disabled).toBe(true);
+  if (options.expectConsoleError) expect(consoleErr).toHaveBeenCalled();
+  vi.runAllTimers();
+  expect(b.textContent).toBe('Export');
+  expect(b.disabled).toBe(false);
+  vi.useRealTimers();
+  consoleErr.mockRestore();
+}
+
 describe('ContourExportAdapter — gated dispatch', () => {
   it('routes a granted analytical GeoJSON through the permit to the vector exporter', () => {
     const { host, calls } = fakeHost();
@@ -220,73 +250,32 @@ describe('ContourExportAdapter — gated dispatch', () => {
   });
 
   it('flashes "Export failed" and restores the button when the host rejects a vector export (ANALYSIS-F3 / OUTPUT-F2)', async () => {
-    vi.useFakeTimers();
-    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { host } = fakeHost();
-    const b = btn();
-    const failing: ContourExportHost = { ...host, exportVector: async () => { throw new Error('chunk load failed'); } };
-    new ContourExportAdapter(failing).handle('geojson', b, intent(), okFrame);
-    // Let the rejected microtask land before asserting the flash.
-    await vi.advanceTimersByTimeAsync(0);
-    expect(b.textContent, 'a silent revert leaves the user with no signal the export failed').toBe('Export failed');
-    expect(b.disabled).toBe(true);
-    expect(consoleErr).toHaveBeenCalled();
-    vi.runAllTimers();
-    expect(b.textContent).toBe('Export');
-    expect(b.disabled).toBe(false);
-    vi.useRealTimers();
-    consoleErr.mockRestore();
+    await expectExportFailureFlash(
+      'geojson',
+      (host) => ({ ...host, exportVector: async () => { throw new Error('chunk load failed'); } }),
+      { expectConsoleError: true },
+    );
   });
 
   it('flashes "Export failed" and restores the button when the host rejects the DEM package', async () => {
-    vi.useFakeTimers();
-    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { host } = fakeHost();
-    const b = btn();
-    const failing: ContourExportHost = { ...host, exportDemPackage: async () => { throw new Error('chunk load failed'); } };
-    new ContourExportAdapter(failing).handle('package', b, intent(), okFrame);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(b.textContent).toBe('Export failed');
-    expect(b.disabled).toBe(true);
-    vi.runAllTimers();
-    expect(b.textContent).toBe('Export');
-    expect(b.disabled).toBe(false);
-    vi.useRealTimers();
-    consoleErr.mockRestore();
+    await expectExportFailureFlash('package', (host) => ({
+      ...host,
+      exportDemPackage: async () => { throw new Error('chunk load failed'); },
+    }));
   });
 
   it('flashes "Export failed" and restores the button when the host rejects the complete deliverable', async () => {
-    vi.useFakeTimers();
-    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { host } = fakeHost();
-    const b = btn();
-    const failing: ContourExportHost = { ...host, exportCompletePackage: async () => { throw new Error('write failed'); } };
-    new ContourExportAdapter(failing).handle('deliverable', b, intent(), okFrame);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(b.textContent).toBe('Export failed');
-    expect(b.disabled).toBe(true);
-    vi.runAllTimers();
-    expect(b.textContent).toBe('Export');
-    expect(b.disabled).toBe(false);
-    vi.useRealTimers();
-    consoleErr.mockRestore();
+    await expectExportFailureFlash('deliverable', (host) => ({
+      ...host,
+      exportCompletePackage: async () => { throw new Error('write failed'); },
+    }));
   });
 
   it('flashes "Export failed" and restores the button when the host rejects the terrain report', async () => {
-    vi.useFakeTimers();
-    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { host } = fakeHost();
-    const b = btn();
-    const failing: ContourExportHost = { ...host, exportTerrainReport: async () => { throw new Error('chunk load failed'); } };
-    new ContourExportAdapter(failing).handle('report', b, intent(), okFrame);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(b.textContent).toBe('Export failed');
-    expect(b.disabled).toBe(true);
-    vi.runAllTimers();
-    expect(b.textContent).toBe('Export');
-    expect(b.disabled).toBe(false);
-    vi.useRealTimers();
-    consoleErr.mockRestore();
+    await expectExportFailureFlash('report', (host) => ({
+      ...host,
+      exportTerrainReport: async () => { throw new Error('chunk load failed'); },
+    }));
   });
 
   it('announces the "Export failed" flash through the app\'s polite live region, not the button alone', async () => {

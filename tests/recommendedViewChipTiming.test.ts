@@ -70,12 +70,19 @@ describe('RecommendedViewChip — auto-hide timing', () => {
     expect(el.classList.contains('olv-hidden')).toBe(true);
   });
 
-  it('pauses the timer while hovered, and does not hide at 9s', () => {
+  /** Dispatching `eventType` (hover-in or focus-in) suspends the auto-hide
+   * timer indefinitely — the shape shared by the mouseenter and focusin
+   * pause tests, which differ only in which event holds it up. */
+  function assertPausesTimer(eventType: string): void {
     const { chip, el } = makeChip();
     chip.show(REC, vi.fn());
-    el.dispatchEvent({ type: 'mouseenter' });
+    el.dispatchEvent({ type: eventType });
     vi.advanceTimersByTime(20_000);
     expect(el.classList.contains('olv-hidden')).toBe(false);
+  }
+
+  it('pauses the timer while hovered, and does not hide at 9s', () => {
+    assertPausesTimer('mouseenter');
   });
 
   it('resumes the timer once the pointer leaves, from a fresh 9s', () => {
@@ -91,11 +98,7 @@ describe('RecommendedViewChip — auto-hide timing', () => {
   });
 
   it('pauses the timer while a button inside it is focused', () => {
-    const { chip, el } = makeChip();
-    chip.show(REC, vi.fn());
-    el.dispatchEvent({ type: 'focusin' });
-    vi.advanceTimersByTime(20_000);
-    expect(el.classList.contains('olv-hidden')).toBe(false);
+    assertPausesTimer('focusin');
   });
 
   it('moving focus between the two buttons inside the chip does not resume the timer', () => {

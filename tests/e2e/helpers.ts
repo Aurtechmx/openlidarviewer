@@ -304,3 +304,42 @@ export async function activate(locator: Locator): Promise<void> {
   }
   await locator.click();
 }
+
+/** The `?test=1` seam (`window.__OLV_TEST_API__`) profile placement drives,
+ * shared by profileWorkbench.spec.ts and keyboardInspection.spec.ts. */
+export interface MeasureTestApi {
+  setMeasureKind: (k: string) => void;
+  placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
+  finishMeasurement?: () => void;
+}
+
+/** Wide enough that the docked workbench (not the narrow focus view) opens. */
+export const WORKBENCH_WIDE = { width: 1440, height: 900 };
+
+/**
+ * Load the dense fixture, arm Measure, and place one profile across it via
+ * `__OLV_TEST_API__` — placement this way does not depend on a raycast
+ * landing on a particular pixel. The dense grid fixture spans about
+ * [-5, +5] on each axis, so a run along X sits inside it with points either
+ * side of the corridor.
+ */
+export async function placeProfile(page: Page): Promise<void> {
+  await page.setViewportSize(WORKBENCH_WIDE);
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await page.waitForTimeout(500); // the test API mounts on viewerLoaded
+  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await expect(page.locator('.olv-measure-bar')).toBeVisible();
+
+  await page.evaluate(() => {
+    const api = (window as unknown as { __OLV_TEST_API__?: MeasureTestApi }).__OLV_TEST_API__;
+    if (!api) throw new Error('__OLV_TEST_API__ not mounted — was ?test=1 set?');
+    api.setMeasureKind('profile');
+    api.placeMeasurementPoint({ x: -4, y: 0, z: 0 });
+    api.placeMeasurementPoint({ x: 4, y: 0, z: 0 });
+    api.finishMeasurement?.();
+  });
+
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+}

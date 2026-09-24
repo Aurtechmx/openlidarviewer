@@ -77,23 +77,34 @@ describe('buildTablist', () => {
     expect(seen).toEqual(['c']);
   });
 
+  /** Fire `key` on tab `from` and assert the activation order seen so far,
+   * plus (when given) which tab took focus — the shape shared by the
+   * forward (Right/Down) and backward (Left/Up) roving-focus tests below. */
+  function pressAndExpect(
+    tl: Awaited<ReturnType<typeof make>>,
+    seen: Id[],
+    from: Id,
+    key: string,
+    expectSeen: Id[],
+    focused?: Id,
+  ): void {
+    (tl.tabs.get(from) as unknown as FakeEl).fire('keydown', { key, preventDefault: () => {} });
+    expect(seen).toEqual(expectSeen);
+    if (focused) expect((tl.tabs.get(focused) as unknown as FakeEl).focused).toBe(true);
+  }
+
   it('ArrowRight/ArrowDown activates and focuses the next tab, wrapping past the last', async () => {
     const seen: Id[] = [];
     const tl = await make((id) => seen.push(id));
-    (tl.tabs.get('a') as unknown as FakeEl).fire('keydown', { key: 'ArrowRight', preventDefault: () => {} });
-    expect(seen).toEqual(['b']);
-    expect((tl.tabs.get('b') as unknown as FakeEl).focused).toBe(true);
-    (tl.tabs.get('c') as unknown as FakeEl).fire('keydown', { key: 'ArrowDown', preventDefault: () => {} });
-    expect(seen).toEqual(['b', 'a']); // wraps from the last tab back to the first
+    pressAndExpect(tl, seen, 'a', 'ArrowRight', ['b'], 'b');
+    pressAndExpect(tl, seen, 'c', 'ArrowDown', ['b', 'a']); // wraps from the last tab back to the first
   });
 
   it('ArrowLeft/ArrowUp activates and focuses the previous tab, wrapping before the first', async () => {
     const seen: Id[] = [];
     const tl = await make((id) => seen.push(id));
-    (tl.tabs.get('a') as unknown as FakeEl).fire('keydown', { key: 'ArrowLeft', preventDefault: () => {} });
-    expect(seen).toEqual(['c']); // wraps from the first tab to the last
-    (tl.tabs.get('b') as unknown as FakeEl).fire('keydown', { key: 'ArrowUp', preventDefault: () => {} });
-    expect(seen).toEqual(['c', 'a']);
+    pressAndExpect(tl, seen, 'a', 'ArrowLeft', ['c']); // wraps from the first tab to the last
+    pressAndExpect(tl, seen, 'b', 'ArrowUp', ['c', 'a']);
   });
 
   it('Home and End jump to the first and last tab', async () => {

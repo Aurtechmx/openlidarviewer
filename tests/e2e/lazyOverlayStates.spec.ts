@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { suppressOnboardingTour, dropTinyPly } from './helpers';
+import { isBenignPageError } from './pageErrors';
 
 /**
  * lazyOverlayStates.spec.ts
@@ -220,7 +221,9 @@ test.describe('shortcut sheet — command palette entry point', () => {
     await gotoWithScan(page);
     await page.route('**/ShortcutSheet-*.js', (route) => route.abort());
     const pageErrors: string[] = [];
-    page.on('pageerror', (err) => pageErrors.push(String(err)));
+    page.on('pageerror', (err) => {
+      if (!isBenignPageError(String(err))) pageErrors.push(String(err));
+    });
     await page.keyboard.press('ControlOrMeta+KeyK');
     await page.locator('.olv-palette-input').fill('keyboard shortcuts');
     await page.locator('.olv-palette-row', { hasText: 'Show keyboard shortcuts' }).click();

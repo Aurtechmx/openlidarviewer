@@ -13,23 +13,10 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { FakeEl } from './support/measurePanelDom';
 import { withLiveRegion } from './helpers/politeLiveRegion';
+import { installManualTimerDom } from './helpers/manualTimerDom';
 
-const pending = new Map<number, () => void>();
-let nextTimer = 1;
-
-beforeAll(() => {
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.document = { createElement: (tag: string) => new FakeEl(tag) };
-  g.HTMLInputElement = class {};
-  g.HTMLAnchorElement = class {};
-  g.window = {
-    setTimeout: (fn: () => void) => { pending.set(nextTimer, fn); return nextTimer++; },
-    clearTimeout: (id: number) => { pending.delete(id); },
-  };
-  g.clearTimeout = (id: number) => { pending.delete(id); };
-});
+beforeAll(installManualTimerDom);
 
 const INFO = {
   name: 'campus.laz',

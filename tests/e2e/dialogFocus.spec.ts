@@ -32,6 +32,27 @@ async function assertShiftTabContained(page: Page, cardSel: string, dialogSel: s
   await expect(page.locator(dialogSel)).toBeHidden();
 }
 
+/** A search string that matches nothing offers a next action rather than a
+ * dead-end label — the shape shared by the palette's and the shortcut
+ * sheet's empty-state test. */
+async function assertNoMatchOffersNextAction(page: Page, inputSel: string, emptySel: string): Promise<void> {
+  await page.locator(inputSel).fill('zzqqxx-never-match');
+  const empty = page.locator(emptySel);
+  await expect(empty).toBeVisible();
+  await expect(empty).toContainText(/try a shorter search/i);
+}
+
+/** `role="dialog"` + `aria-modal="true"` on the dialog's own card — the
+ * baseline every hand-rolled dialog in this file must carry. Returns the
+ * card locator so a caller with more to check (e.g. `aria-labelledby`) can
+ * keep going against it. */
+async function assertCarriesDialogRole(page: Page, cardSel: string) {
+  const card = page.locator(cardSel);
+  await expect(card).toHaveAttribute('role', 'dialog');
+  await expect(card).toHaveAttribute('aria-modal', 'true');
+  return card;
+}
+
 test.describe('command palette — focus containment', () => {
   async function open(page: Page): Promise<void> {
     await suppressOnboardingTour(page);
@@ -42,9 +63,7 @@ test.describe('command palette — focus containment', () => {
 
   test('carries dialog semantics', async ({ page }) => {
     await open(page);
-    const card = page.locator('.olv-palette-card');
-    await expect(card).toHaveAttribute('role', 'dialog');
-    await expect(card).toHaveAttribute('aria-modal', 'true');
+    await assertCarriesDialogRole(page, '.olv-palette-card');
   });
 
   test('Shift+Tab never escapes to a background control, and Escape still closes it', async ({ page }) => {
@@ -54,10 +73,7 @@ test.describe('command palette — focus containment', () => {
 
   test('the no-match empty state offers a next action, not just a dead-end label', async ({ page }) => {
     await open(page);
-    await page.locator('.olv-palette-input').fill('zzqqxx-never-match');
-    const empty = page.locator('.olv-palette-empty');
-    await expect(empty).toBeVisible();
-    await expect(empty).toContainText(/try a shorter search/i);
+    await assertNoMatchOffersNextAction(page, '.olv-palette-input', '.olv-palette-empty');
   });
 });
 
@@ -71,9 +87,7 @@ test.describe('shortcut sheet — focus containment', () => {
 
   test('carries dialog semantics labelled by its own title', async ({ page }) => {
     await open(page);
-    const card = page.locator('.olv-shortcuts-card');
-    await expect(card).toHaveAttribute('role', 'dialog');
-    await expect(card).toHaveAttribute('aria-modal', 'true');
+    const card = await assertCarriesDialogRole(page, '.olv-shortcuts-card');
     const labelledby = await card.getAttribute('aria-labelledby');
     expect(labelledby).toBeTruthy();
     await expect(page.locator(`#${labelledby}`)).toHaveText('Keyboard shortcuts');
@@ -86,10 +100,7 @@ test.describe('shortcut sheet — focus containment', () => {
 
   test('the no-match empty state offers a next action', async ({ page }) => {
     await open(page);
-    await page.locator('.olv-shortcuts-input').fill('zzqqxx-never-match');
-    const empty = page.locator('.olv-shortcuts-empty');
-    await expect(empty).toBeVisible();
-    await expect(empty).toContainText(/try a shorter search/i);
+    await assertNoMatchOffersNextAction(page, '.olv-shortcuts-input', '.olv-shortcuts-empty');
   });
 });
 
@@ -107,9 +118,7 @@ test.describe('help overlay — focus containment', () => {
 
   test('carries dialog semantics and moves focus into the search field on open', async ({ page }) => {
     await open(page);
-    const card = page.locator('.olv-help-card');
-    await expect(card).toHaveAttribute('role', 'dialog');
-    await expect(card).toHaveAttribute('aria-modal', 'true');
+    const card = await assertCarriesDialogRole(page, '.olv-help-card');
     const labelledby = await card.getAttribute('aria-labelledby');
     expect(labelledby).toBeTruthy();
     await expect(page.locator('.olv-help-search')).toBeFocused();
@@ -150,9 +159,7 @@ test.describe('batch converter — focus containment', () => {
 
   test('carries dialog semantics and moves focus in on open', async ({ page }) => {
     await open(page);
-    const dialog = page.locator('.olv-bc-dialog');
-    await expect(dialog).toHaveAttribute('role', 'dialog');
-    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const dialog = await assertCarriesDialogRole(page, '.olv-bc-dialog');
     const labelledby = await dialog.getAttribute('aria-labelledby');
     expect(labelledby).toBeTruthy();
     expect(await isInside(page, '.olv-bc-dialog')).toBe(true);
@@ -197,9 +204,7 @@ test.describe('workflow config panel — focus containment', () => {
 
   test('carries dialog semantics and moves focus in on open', async ({ page }) => {
     await openViaPalette(page);
-    const card = page.locator('.olv-wfc-card');
-    await expect(card).toHaveAttribute('role', 'dialog');
-    await expect(card).toHaveAttribute('aria-modal', 'true');
+    await assertCarriesDialogRole(page, '.olv-wfc-card');
     expect(await isInside(page, '.olv-wfc-card')).toBe(true);
   });
 

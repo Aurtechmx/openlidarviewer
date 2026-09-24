@@ -4,6 +4,7 @@ import {
   dropDenseGridPly,
   dropTinyPtx,
   expectHittable,
+  placeProfile,
   railChromeSettled,
   showWorkspaceMode,
 } from './helpers';
@@ -34,6 +35,16 @@ import {
  * reaches the same outcome a real click does.
  */
 
+/** Drop the PTX fixture and reach the Range Frame Workbench's acquisition
+ * grid — the shared setup for every cell-inspection test below. */
+async function openRangeWorkbenchGrid(page: Page): Promise<void> {
+  await page.goto('/?test=1');
+  await dropTinyPtx(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await railChromeSettled(page);
+  await openRangeWorkbench(page);
+}
+
 async function openRangeWorkbench(page: Page): Promise<void> {
   await showWorkspaceMode(page, 'analyse');
   const panel = page.locator('.olv-analyse-panel');
@@ -51,11 +62,7 @@ async function openRangeWorkbench(page: Page): Promise<void> {
 
 test.describe('Range Frame Workbench — keyboard cell inspection', () => {
   test('the acquisition-grid canvas is a focusable, labelled widget', async ({ page }) => {
-    await page.goto('/?test=1');
-    await dropTinyPtx(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await railChromeSettled(page);
-    await openRangeWorkbench(page);
+    await openRangeWorkbenchGrid(page);
 
     const canvas = page.locator('.olv-range-canvas');
     await expect(canvas).toHaveAttribute('tabindex', '0');
@@ -64,11 +71,7 @@ test.describe('Range Frame Workbench — keyboard cell inspection', () => {
   });
 
   test('arrow keys move a visible cursor; Enter samples it, same as a click', async ({ page }) => {
-    await page.goto('/?test=1');
-    await dropTinyPtx(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await railChromeSettled(page);
-    await openRangeWorkbench(page);
+    await openRangeWorkbenchGrid(page);
 
     const canvas = page.locator('.olv-range-canvas');
     const marker = page.locator('.olv-range-marker');
@@ -91,11 +94,7 @@ test.describe('Range Frame Workbench — keyboard cell inspection', () => {
   });
 
   test('mouse click-to-inspect still works unmodified', async ({ page }) => {
-    await page.goto('/?test=1');
-    await dropTinyPtx(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await railChromeSettled(page);
-    await openRangeWorkbench(page);
+    await openRangeWorkbenchGrid(page);
 
     const canvas = page.locator('.olv-range-canvas');
     const readout = page.locator('.olv-range-readout-head');
@@ -103,6 +102,16 @@ test.describe('Range Frame Workbench — keyboard cell inspection', () => {
     await expect(readout).not.toHaveText('Select a cell');
   });
 });
+
+/** Drop the dense fixture and reach the Analyse panel's expanded raster
+ * detail — the shared setup for every raster-sampling test below. */
+async function openSampledRasterTile(page: Page): Promise<void> {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toBeVisible({ timeout: 20_000 });
+  await openAnalyseDetails(page);
+}
 
 async function openAnalyseDetails(page: Page): Promise<void> {
   await showWorkspaceMode(page, 'analyse');
@@ -127,11 +136,7 @@ function chmTile(page: Page) {
 
 test.describe('Analyse panel — keyboard raster sampling', () => {
   test('a sampled raster tile is a focusable, labelled widget', async ({ page }) => {
-    await page.goto('/?test=1');
-    await dropDenseGridPly(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toBeVisible({ timeout: 20_000 });
-    await openAnalyseDetails(page);
+    await openSampledRasterTile(page);
 
     const canvas = chmTile(page).locator('canvas.olv-analyse-raster');
     await expect(canvas).toBeVisible();
@@ -141,11 +146,7 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
   });
 
   test('arrow keys move a visible crosshair without sampling; Enter samples it', async ({ page }) => {
-    await page.goto('/?test=1');
-    await dropDenseGridPly(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toBeVisible({ timeout: 20_000 });
-    await openAnalyseDetails(page);
+    await openSampledRasterTile(page);
 
     const tile = chmTile(page);
     const canvas = tile.locator('canvas.olv-analyse-raster');
@@ -168,11 +169,7 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
   });
 
   test('mouse click-to-sample still works unmodified', async ({ page }) => {
-    await page.goto('/?test=1');
-    await dropDenseGridPly(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toBeVisible({ timeout: 20_000 });
-    await openAnalyseDetails(page);
+    await openSampledRasterTile(page);
 
     const tile = chmTile(page);
     const canvas = tile.locator('canvas.olv-analyse-raster');
@@ -184,36 +181,6 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
     await expect(readout).toContainText('Sample ·');
   });
 });
-
-interface TestApi {
-  setMeasureKind: (k: string) => void;
-  placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
-  finishMeasurement?: () => void;
-}
-
-/** Wide enough that the docked workbench (not the narrow focus view) opens. */
-const WIDE = { width: 1440, height: 900 };
-
-async function placeProfile(page: Page): Promise<void> {
-  await page.setViewportSize(WIDE);
-  await page.goto('/?test=1');
-  await dropDenseGridPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(500); // the test API mounts on viewerLoaded
-  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
-  await expect(page.locator('.olv-measure-bar')).toBeVisible();
-
-  await page.evaluate(() => {
-    const api = (window as unknown as { __OLV_TEST_API__?: TestApi }).__OLV_TEST_API__;
-    if (!api) throw new Error('__OLV_TEST_API__ not mounted — was ?test=1 set?');
-    api.setMeasureKind('profile');
-    api.placeMeasurementPoint({ x: -4, y: 0, z: 0 });
-    api.placeMeasurementPoint({ x: 4, y: 0, z: 0 });
-    api.finishMeasurement?.();
-  });
-
-  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
-}
 
 test.describe('Measurements panel — profile chart expander tab order', () => {
   test('the corner Expand button is out of the tab order and the accessibility tree', async ({ page }) => {

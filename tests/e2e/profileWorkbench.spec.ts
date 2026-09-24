@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly } from './helpers';
+import { placeProfile } from './helpers';
 
 /**
  * Profile workbench acceptance flows.
@@ -35,36 +35,7 @@ import { dropDenseGridPly } from './helpers';
  * not let a reader assume the whole list ran.
  */
 
-/** Wide enough that the docked workbench is chosen over the focus view. */
-const WIDE = { width: 1440, height: 900 };
 
-interface TestApi {
-  setMeasureKind: (k: string) => void;
-  placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
-  finishMeasurement?: () => void;
-}
-
-/** Load the dense fixture, arm Measure, and place one profile across it. */
-async function placeProfile(page: Page): Promise<void> {
-  await page.setViewportSize(WIDE);
-  await page.goto('/?test=1');
-  await dropDenseGridPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(500); // the test API mounts on viewerLoaded
-  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
-  await expect(page.locator('.olv-measure-bar')).toBeVisible();
-
-  await page.evaluate(() => {
-    const api = (window as unknown as { __OLV_TEST_API__?: TestApi }).__OLV_TEST_API__;
-    if (!api) throw new Error('__OLV_TEST_API__ not mounted — was ?test=1 set?');
-    api.setMeasureKind('profile');
-    api.placeMeasurementPoint({ x: -4, y: 0, z: 0 });
-    api.placeMeasurementPoint({ x: 4, y: 0, z: 0 });
-    api.finishMeasurement?.();
-  });
-
-  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
-}
 
 /** Open the workbench from the profile row's expand affordance. */
 async function openWorkbench(page: Page): Promise<void> {
