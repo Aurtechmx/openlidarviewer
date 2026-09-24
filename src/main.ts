@@ -1643,7 +1643,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   copyShareLink,
   terrainAnalysisEntry: {
     showAnalyseMode: () => showWorkspaceMode?.('analyse'),
-    showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput() }; }),
+    showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput(), terrainAccessInput: p.terrainAccessInput() }; }),
     run: () => void terrainRunner.run(),
   },
   showTouchGestures: () => navBar.flashTouchHint(),

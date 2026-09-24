@@ -9,7 +9,7 @@ import { openTerrainAnalysis, type TerrainAnalysisEntryDeps } from '../openTerra
 import { buildScanStory, type ScanStoryInputs } from '../../intelligence/scanStory';
 import { renderDatasetStoryCard } from '../../ui/scanStoryViews';
 import { openModal } from '../../ui/Modal';
-import { loadFlowPulseLab } from '../../lazyChunks';
+import { loadFlowPulseLab, loadTerrainAccessLab } from '../../lazyChunks';
 import { createLazySurfaceLoader, type LazyLoadToast } from '../lazySurfaceLoad';
 
 export interface AnalysisActionDeps {
@@ -71,6 +71,21 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         } else {
           void load().catch((err) => console.warn('[flow-pulse] lab chunk failed to load', err));
         }
+      },
+    },
+    {
+      id: 'analyse.terrainAccess',
+      title: 'Terrain Access (Field Simulation Lab)',
+      section: 'Analyse',
+      hint: 'Screen a route over the analysed DTM against a declared mobility profile. Never a safety or passability guarantee.',
+      keywords: ['terrain', 'access', 'route', 'mobility', 'traversability', 'astar', 'a*', 'simulation', 'lab'],
+      run: () => {
+        // The Analyse panel holds the surface, so it is shown first; a scan with
+        // no analysis gets the runner's own refusal rather than a silent run.
+        deps.terrainAnalysisEntry.showAnalyseMode();
+        void Promise.all([deps.terrainAnalysisEntry.showPanel(), loadTerrainAccessLab()])
+          .then(([panel, lab]) => lab.openTerrainAccessLab(panel.terrainAccessInput ?? null))
+          .catch((err) => console.warn('[terrain-access] lab chunk failed to load', err));
       },
     },
     {

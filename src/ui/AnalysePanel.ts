@@ -988,6 +988,49 @@ export class AnalysePanel {
     };
   }
 
+  /**
+   * The analysed DTM and its horizontal scale for a Terrain Access run, or
+   * null when no fresh result is on the panel. Mirrors {@link flowPulseInput}
+   * exactly — the same provenance accessor, the same live staleness check,
+   * the same geographic-latitude derivation — because both simulations read
+   * the identical analysed surface and must agree about what is fresh.
+   */
+  terrainAccessInput(): {
+    readonly dtm: AnalyseContoursResult['dtm'];
+    readonly scale: { readonly isGeographic: boolean; readonly latitudeDeg: number | null; readonly unitToMetres: number; readonly resolved: boolean };
+    readonly layerId: string | null;
+    readonly filename: string | null;
+    readonly sceneUpAxis: 'z' | 'y' | null;
+    readonly overlayHost: SceneOverlayHost | null;
+    readonly isStale: () => boolean;
+  } | null {
+    const result = this.currentResultForProvenance();
+    if (!result) return null;
+    const ctx = this._cb.getMapContext?.() ?? {};
+    const scanId = this._resultScanId;
+    const dtm = result.dtm;
+    const isGeographic = ctx.isGeographic ?? false;
+    const worldOriginY = ctx.worldOrigin?.y ?? null;
+    const latitudeDeg = isGeographic && worldOriginY != null
+      ? worldOriginY + dtm.originH2 + (dtm.rows / 2) * dtm.cellSizeM
+      : null;
+    const latitudeKnown = latitudeDeg != null && Number.isFinite(latitudeDeg);
+    return {
+      dtm,
+      scale: {
+        isGeographic,
+        latitudeDeg: latitudeKnown ? latitudeDeg : null,
+        unitToMetres: ctx.resolvedUnitToMetres ?? 1,
+        resolved: result.horizontalScaleResolved && (!isGeographic || latitudeKnown),
+      },
+      layerId: scanId,
+      filename: this._cb.getExportBasename?.() ?? null,
+      sceneUpAxis: ctx.sceneUpAxis ?? null,
+      overlayHost: this._cb.getDerivedLayerHost?.() ?? null,
+      isStale: () => this._freshnessBreach() !== null || this._resultScanId !== scanId,
+    };
+  }
+
   /** Re-render from a fresh analysis result (or clear when null). */
   update(
     result: AnalyseContoursResult | null,

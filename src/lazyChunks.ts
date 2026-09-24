@@ -722,6 +722,21 @@ export function invalidateFlowOverlay(): void {
 export const loadFlowPulsePackage = () => import('./export/flowPulsePackage');
 
 /**
+ * The Field Simulation Lab's Terrain Access view and the routing core behind
+ * it. Opened only from the command palette, so neither rides the startup shell.
+ */
+export const loadTerrainAccessLab = () => import('./ui/fieldSimulation/terrainAccessLab');
+
+/**
+ * The Terrain Access export package builder (ASCII Grid writer + ZIP store +
+ * passport/manifest assembly). Only reached from an export action on the
+ * Field Simulation Lab's Terrain Access view, mirroring `loadFlowPulsePackage`
+ * above: a session that opens Terrain Access but never exports never
+ * downloads the raster/passport assembly code.
+ */
+export const loadTerrainAccessPackage = () => import('./export/terrainAccessPackage');
+
+/**
  * The Withheld-aware terrain recovery gather: a full-resolution re-decode
  * (through the shared parse worker) of a static file the display path
  * voxel-downsampled at load, rasterised into a fresh `TerrainCore`. Only

@@ -10,6 +10,7 @@
  */
 
 import type { FlowPulseLabInput } from '../ui/fieldSimulation/flowPulseLab';
+import type { TerrainAccessLabInput } from '../ui/fieldSimulation/terrainAccessLab';
 
 export interface TerrainAnalysisEntryDeps {
   /** Switch the workspace to its Analyse mode, when the shell has one. */
@@ -19,6 +20,8 @@ export interface TerrainAnalysisEntryDeps {
     hasResult: boolean;
     /** The analysed surface a flow run reads; see `AnalysePanel.flowPulseInput`. */
     flowInput?: FlowPulseLabInput | null;
+    /** The analysed surface a Terrain Access run reads; see `AnalysePanel.terrainAccessInput`. */
+    terrainAccessInput?: TerrainAccessLabInput | null;
   }>;
   /** Run terrain analysis over the active scan. */
   readonly run: () => void;
