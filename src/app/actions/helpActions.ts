@@ -31,7 +31,10 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
       keys: keyDisplayFor('shortcut-sheet'),
       hint: 'Every action and key, grouped by section.',
       keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
-      run: () => void deps.ensureShortcutSheet().then((sheet) => sheet.open()),
+      // Failure is already reported through the shared toast/retry path inside
+      // ensureShortcutSheet(); the .catch here only stops that rejection from
+      // surfacing as an unhandled promise rejection.
+      run: () => void deps.ensureShortcutSheet().then((sheet) => sheet.open()).catch(() => {}),
     },
   );
   return actions;
