@@ -73,7 +73,7 @@ export function dilateBlocked(
 
   for (const seed of seeds) {
     out[seed] = 1;
-    const sr = (seed / cols) | 0;
+    const sr = Math.floor(seed / cols);
     const sc = seed - sr * cols;
     for (let dr = -radiusCellsY; dr <= radiusCellsY; dr++) {
       const r = sr + dr;

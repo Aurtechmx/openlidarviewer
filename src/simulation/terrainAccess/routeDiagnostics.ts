@@ -105,9 +105,9 @@ export function computeRouteDiagnostics(
 
     if (k === 0) continue;
     const prev = path[k - 1];
-    const prevRow = (prev / grid.cols) | 0;
+    const prevRow = Math.floor(prev / grid.cols);
     const prevCol = prev - prevRow * grid.cols;
-    const row = (i / grid.cols) | 0;
+    const row = Math.floor(i / grid.cols);
     const col = i - row * grid.cols;
     const dx = col - prevCol;
     const dy = row - prevRow;

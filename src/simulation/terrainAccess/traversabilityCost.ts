@@ -357,7 +357,7 @@ export function whyNotEligible(
     return { eligible: false, category, reasons: [{ reason: nodeReason, detail: nodeDetail(grid, features, profile, index, nodeReason) }] };
   }
 
-  const row = (index / grid.cols) | 0;
+  const row = Math.floor(index / grid.cols);
   const col = index - row * grid.cols;
   let anyViable = false;
   let closestMiss: WhyNotReason | null = null;

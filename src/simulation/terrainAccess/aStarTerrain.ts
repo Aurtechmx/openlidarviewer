@@ -117,9 +117,9 @@ class OpenHeap {
 /** Planimetric straight-line distance between two cells, in metres. */
 function heuristic(grid: TerrainAccessGrid, from: number, to: number): number {
   const cols = grid.cols;
-  const fr = (from / cols) | 0;
+  const fr = Math.floor(from / cols);
   const fc = from - fr * cols;
-  const tr = (to / cols) | 0;
+  const tr = Math.floor(to / cols);
   const tc = to - tr * cols;
   return Math.hypot((tc - fc) * grid.cellMetresX, (tr - fr) * grid.cellMetresY);
 }
@@ -174,7 +174,7 @@ export function aStarTerrain(
       return { outcome: 'FOUND', path, cost: gScore[endIndex], explored };
     }
 
-    const row = (i / grid.cols) | 0;
+    const row = Math.floor(i / grid.cols);
     const col = i - row * grid.cols;
     for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
       const c = col + dx;
