@@ -200,6 +200,43 @@ describe('Flow Pulse reads the recovered outcome as excluded, not not-recorded',
   });
 });
 
+// When the re-decode strides the source down (`maxPoints` below the
+// source's point count), the recovered DTM must state `coverageMode:
+// 'sampled'`, not the `rasterizeDtm` default of `'full'` — the exact
+// disagreement a real run showed between the run record (`coverage: 'full',
+// complete: true`) and the Analyse/Contour Studio panel's own "only a sample
+// was read" disclosure for the identical gather.
+describe('a strided re-decode states the true coverage, agreeing with the rest of the app', () => {
+  it('stamps coverageMode "sampled" when the re-decode strides the source down', async () => {
+    // maxPoints below the 20-point source forces `sampleStridedTerrain` to
+    // stride, so `sample.sampled` is true.
+    const recovered = await gatherWithheldAwareTerrainCore(
+      fresh(), NAME, { cellSizeM: 1 }, { maxPoints: 8 },
+    );
+    expect(recovered).not.toBeNull();
+    expect(recovered!.sample.sampled).toBe(true);
+    expect(recovered!.core.dtm.coverageMode).toBe('sampled');
+
+    const outcome = runFlowPulse(recovered!.core.dtm, scale, FLOW_PULSE_DEFAULTS, identity('strided'));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    // The run record must therefore agree: NOT `coverage: 'full', complete: true`.
+    expect(outcome.record.source.basis.coverage).toBe('sampled');
+    expect(outcome.record.source.basis.complete).toBe(false);
+    expect(outcome.limitations.some((s) => /sample of the source/i.test(s))).toBe(true);
+  });
+
+  it('keeps coverageMode "full" when the re-decode reads every point (no stride)', async () => {
+    // maxPoints above the source's point count: stride collapses to 1.
+    const recovered = await gatherWithheldAwareTerrainCore(
+      fresh(), NAME, { cellSizeM: 1 }, { maxPoints: 1_000_000 },
+    );
+    expect(recovered).not.toBeNull();
+    expect(recovered!.sample.sampled).toBe(false);
+    expect(recovered!.core.dtm.coverageMode).toBe('full');
+  });
+});
+
 describe('refusals stay honest: "not recorded" rather than a crash or a false "excluded"', () => {
   it('refuses a source over the byte ceiling without attempting a decode', async () => {
     const result = await gatherWithheldAwareTerrainSource(fresh(), NAME, { maxSourceBytes: 4 });

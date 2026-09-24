@@ -662,6 +662,33 @@ export const loadToolLauncher = () => import('./ui/toolLauncher');
 export const loadFlowPulseLab = () => import('./ui/fieldSimulation/flowPulseLab');
 
 /**
+ * The Flow Pulse Lab keeps its 3D accumulation overlay attached to the scene
+ * after the Lab modal closes, so a user who left it on can still see it.
+ * That overlay must be torn down the moment the terrain/CRS it was built
+ * from goes stale (a different scan loads, the scan closes, the CRS
+ * changes, or a classification edit invalidates the terrain core), the
+ * same events that already clear the cached terrain core in
+ * `terrainAnalysisRunner.ts`'s `abortAndClearCache()`. That module cannot
+ * import the Lab (a lazy chunk) to reach it directly, and the Lab's chunk
+ * should not be force-loaded just to tear down an overlay that, most of the
+ * time, was never created. This is the eager, near-zero-cost seam between
+ * the two: the Lab registers its own disposer here the one time its chunk
+ * actually loads, and `invalidateFlowOverlay()` is a no-op call in every
+ * session that never opened the Lab.
+ */
+let flowOverlayInvalidator: (() => void) | null = null;
+
+/** Called by the Flow Pulse Lab chunk itself, once, when it first loads. */
+export function registerFlowOverlayInvalidator(fn: (() => void) | null): void {
+  flowOverlayInvalidator = fn;
+}
+
+/** Tear down the Lab's persisted overlay, if the chunk ever loaded one. */
+export function invalidateFlowOverlay(): void {
+  flowOverlayInvalidator?.();
+}
+
+/**
  * The Flow Pulse export package builder (ASCII Grid writers + ZIP store +
  * passport/manifest assembly). Only reached from an export action on the
  * Field Simulation Lab's Flow Pulse view, so it rides its own lazy chunk

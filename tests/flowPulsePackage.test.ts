@@ -21,42 +21,16 @@ import {
   runFlowPulse,
   type FlowPulseParams,
   type FlowPulseResult,
-  type FlowRunIdentity,
 } from '../src/simulation/flowPulse/flowPulseRunner';
 import { verifyScientificArtifactPassport } from '../src/science/scientificArtifactPassport';
 import { verifyProcessingManifest } from '../src/science/processingManifest';
 import { sha256Hex } from '../src/terrain/export/sha256';
-import type { HorizontalScale } from '../src/simulation/flowPulse/dtmFlowGrid';
-import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
-
-const projected: HorizontalScale = {
-  isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true,
-};
-
-const identity: FlowRunIdentity = {
-  layerId: 'layer-a', filename: 'site.laz', sourceDigest: 'aaaa',
-  analysisInputDigest: 'bbbb', build: '0.7.0-alpha.1', id: 'run-1',
-  generatedAt: '2026-09-22T00:00:00.000Z', processingManifestHead: null,
-};
-
-function dtmOf(rows: readonly (readonly (number | null)[])[]): DtmGrid {
-  const h = rows.length, w = rows[0].length, n = w * h;
-  const z = new Float32Array(n);
-  const coverage = new Uint8Array(n);
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const v = rows[r][c];
-      if (v === null) continue;
-      z[r * w + c] = v;
-      coverage[r * w + c] = 2;
-    }
-  }
-  return {
-    z, coverage, confidence: new Float32Array(n), counts: new Uint32Array(n),
-    interpDistanceCells: new Float32Array(n), cols: w, rows: h, cellSizeM: 1,
-    originH1: 0, originH2: 0, crs: null, verticalDatum: null, coverageMode: 'full',
-  } as DtmGrid;
-}
+import {
+  FLOW_PROJECTED_SCALE as projected,
+  FLOW_TEST_IDENTITY as identity,
+  flowDtmOf as dtmOf,
+} from './helpers/flowFixtures';
+import { extractEntry, textOf, jsonOf } from './helpers/zipReader';
 
 const params = (over: Partial<FlowPulseParams> = {}): FlowPulseParams => ({ ...FLOW_PULSE_DEFAULTS, ...over });
 
@@ -75,33 +49,6 @@ function runOf(over: Partial<FlowPulseParams> = {}): FlowPulseResult {
   if (!r.ok) throw new Error(`fixture run refused: ${r.code}`);
   return r;
 }
-
-/** Extract a stored (uncompressed) entry's bytes from a store-only ZIP. */
-function extractEntry(zip: Uint8Array, name: string): Uint8Array | null {
-  const dv = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
-  const wantName = new TextEncoder().encode(name);
-  let p = 0;
-  while (p + 30 <= zip.length && dv.getUint32(p, true) === 0x04034b50) {
-    const compSize = dv.getUint32(p + 18, true);
-    const nameLen = dv.getUint16(p + 26, true);
-    const extraLen = dv.getUint16(p + 28, true);
-    const nameBytes = zip.subarray(p + 30, p + 30 + nameLen);
-    const dataStart = p + 30 + nameLen + extraLen;
-    let match = nameBytes.length === wantName.length;
-    for (let j = 0; match && j < wantName.length; j++) {
-      if (nameBytes[j] !== wantName[j]) match = false;
-    }
-    if (match) return zip.subarray(dataStart, dataStart + compSize);
-    p = dataStart + compSize;
-  }
-  return null;
-}
-const textOf = (zip: Uint8Array, name: string): string => {
-  const bytes = extractEntry(zip, name);
-  if (!bytes) throw new Error(`entry not found: ${name}`);
-  return new TextDecoder().decode(bytes);
-};
-const jsonOf = <T,>(zip: Uint8Array, name: string): T => JSON.parse(textOf(zip, name)) as T;
 
 describe('the package carries every required file', () => {
   it('ships the raw-mode core set', () => {
@@ -133,6 +80,55 @@ describe('the package carries every required file', () => {
     expect(geojson.features).toHaveLength(1);
   });
 
+  // The ASCII rasters must carry the REAL lower-left corner in the dataset
+  // CRS, not a fixed (0, 0), and a `.prj` sidecar when the CRS resolves.
+  // Origin picked in the ~400000, 3600000 range to match a real
+  // far-mount UTM placement (see tests/contourWorldOrigin.test.ts).
+  it('writes the real lower-left corner when a world origin is supplied', () => {
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow',
+      worldOrigin: { x: 400123.5, y: 3600456.25 },
+    });
+    const asc = textOf(zip, 'flow-accumulation.asc');
+    expect(asc).toMatch(/xllcorner 400123\.5/);
+    expect(asc).toMatch(/yllcorner 3600456\.25/);
+  });
+
+  it('writes a local (0, 0) origin and no .prj when no world origin/CRS is supplied', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow' });
+    const asc = textOf(zip, 'flow-accumulation.asc');
+    expect(asc).toMatch(/xllcorner 0\n/);
+    expect(asc).toMatch(/yllcorner 0\n/);
+    expect(extractEntry(zip, 'flow.prj')).toBeNull();
+  });
+
+  it('writes a .prj sidecar with the supplied WKT when the CRS resolves', () => {
+    const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow',
+      worldOrigin: { x: 400123.5, y: 3600456.25 },
+      wkt,
+    });
+    expect(textOf(zip, 'flow.prj')).toBe(wkt);
+    expect(textOf(zip, 'flow-README.txt')).toContain('flow.prj');
+  });
+
+  // Every fill-depth/elevation figure in the summary/depression CSVs is a
+  // raw number with no unit; the README must state which unit applies,
+  // failing closed when the caller has not resolved one.
+  it('states the vertical unit is unresolved, fail-closed, with no caller-supplied unit', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow' }), 'flow-README.txt');
+    expect(readme).toMatch(/Vertical unit\s+unresolved.*source units/);
+  });
+
+  it('states the resolved vertical unit when the caller supplies one', () => {
+    const readme = textOf(
+      buildFlowPulsePackage(runOf(), { basename: 'flow', verticalUnitLabel: 'm' }),
+      'flow-README.txt',
+    );
+    expect(readme).toMatch(/Vertical unit\s+m\n/);
+  });
+
   it('every listed file hashes to what SHA256SUMS.txt records', () => {
     const zip = buildFlowPulsePackage(runOf(), { basename: 'flow' });
     const manifest = textOf(zip, 'SHA256SUMS.txt');
@@ -161,6 +157,19 @@ describe('the package carries every required file', () => {
   });
 });
 
+/** Re-run `bowlDtm()` under a `.olv-field-sim.json` config's own parameters. */
+function reRunFromConfig(config: Record<string, unknown>, withheldExcluded: boolean | null) {
+  return runFlowPulse(bowlDtm(), projected, {
+    conditioning: config.conditioning as FlowPulseParams['conditioning'],
+    routing: config.routing as FlowPulseParams['routing'],
+    interpolated: config.interpolated as FlowPulseParams['interpolated'],
+    fillEpsilon: config.fillEpsilon as number,
+    fillNoData: config.fillNoData as FlowPulseParams['fillNoData'],
+    maxCells: config.maxCells as number,
+    withheldExcluded,
+  }, identity);
+}
+
 describe('the config reproduces the field digest', () => {
   it('re-running the exported config over the same terrain gives the same fieldDigest (raw)', () => {
     const original = runOf({ conditioning: 'raw' });
@@ -168,15 +177,7 @@ describe('the config reproduces the field digest', () => {
     const config = jsonOf<Record<string, unknown>>(zip, 'flow.olv-field-sim.json');
 
     expect(config.kind).toBe('terrain-flow');
-    const reRun = runFlowPulse(bowlDtm(), projected, {
-      conditioning: config.conditioning as FlowPulseParams['conditioning'],
-      routing: config.routing as FlowPulseParams['routing'],
-      interpolated: config.interpolated as FlowPulseParams['interpolated'],
-      fillEpsilon: config.fillEpsilon as number,
-      fillNoData: config.fillNoData as FlowPulseParams['fillNoData'],
-      maxCells: config.maxCells as number,
-      withheldExcluded: original.basis.withheldExcluded,
-    }, identity);
+    const reRun = reRunFromConfig(config, original.basis.withheldExcluded);
     expect(reRun.ok).toBe(true);
     if (!reRun.ok) return;
     expect(reRun.record.result.fieldDigest).toBe(original.record.result.fieldDigest);
@@ -185,15 +186,7 @@ describe('the config reproduces the field digest', () => {
   it('reproduces the field digest for a conditioned run too', () => {
     const original = runOf({ conditioning: 'priority-flood', fillEpsilon: 0.01 });
     const config = buildFlowPulseConfig(original);
-    const reRun = runFlowPulse(bowlDtm(), projected, {
-      conditioning: config.conditioning as FlowPulseParams['conditioning'],
-      routing: config.routing as FlowPulseParams['routing'],
-      interpolated: config.interpolated as FlowPulseParams['interpolated'],
-      fillEpsilon: config.fillEpsilon as number,
-      fillNoData: config.fillNoData as FlowPulseParams['fillNoData'],
-      maxCells: config.maxCells as number,
-      withheldExcluded: original.basis.withheldExcluded,
-    }, identity);
+    const reRun = reRunFromConfig(config, original.basis.withheldExcluded);
     expect(reRun.ok).toBe(true);
     if (!reRun.ok) return;
     expect(reRun.record.result.fieldDigest).toBe(original.record.result.fieldDigest);

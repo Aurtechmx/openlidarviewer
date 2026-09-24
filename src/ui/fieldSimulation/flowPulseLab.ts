@@ -40,7 +40,13 @@ import {
   type FlowRefusal,
 } from '../../simulation/flowPulse/flowPulseRunner';
 import { catchmentClick, traceClick, type FlowCatchmentTrace, type FlowClickRefusal, type FlowPathTrace } from '../../simulation/flowPulse/flowClickGuard';
-import { cellAnnouncement, statusLabel, type GridCell } from '../../simulation/flowPulse/flowGridCursor';
+import {
+  cellAnnouncement,
+  statusLabel,
+  type ElevationReference,
+  type GridCell,
+} from '../../simulation/flowPulse/flowGridCursor';
+import { verticalUnitLabel } from '../../units/units';
 import { mayReportMetricArea } from '../../simulation/simulationInputBasis';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { dtmMethodDigest, resolveLiveDtmDescriptor } from '../../science/liveDtmDescriptor';
@@ -56,7 +62,7 @@ import {
 import { FlowOverlay, type FlowOverlayHost } from '../../render/FlowOverlay';
 import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
-import { loadFlowPulsePackage } from '../../lazyChunks';
+import { loadFlowPulsePackage, registerFlowOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
 import type { buildFlowPulsePackage } from '../../export/flowPulsePackage';
 
@@ -66,6 +72,17 @@ export interface FlowPulseLabInput {
   readonly isGeographic: boolean;
   /** World Y of the load-time recentring origin; null when the scene has no single one. */
   readonly worldOriginY: number | null;
+  /**
+   * World X and Z of the same load-time recentring origin, for the export
+   * package's real corner and the result grid's real elevation readout.
+   * Null under the same conditions `worldOriginY` is.
+   */
+  readonly worldOriginX?: number | null;
+  readonly worldOriginZ?: number | null;
+  /** The active CRS's WKT, for the export package's .prj sidecar; null when unresolved. */
+  readonly wkt?: string | null;
+  /** A human-readable CRS label for the export README/passport; null when unresolved. */
+  readonly crsName?: string | null;
   /** Metres per source unit from the resolved frame; null when unknown. */
   readonly resolvedUnitToMetres: number | null;
   readonly layerId: string | null;
@@ -119,6 +136,22 @@ export function flowScaleOf(input: FlowPulseLabInput): HorizontalScale {
   };
 }
 
+/**
+ * How to recover a real elevation from the routed grid's local z, the same
+ * rule `demPackage.ts` uses for the DTM/DSM rasters: the DTM's own claimed
+ * vertical factor, gated on the result's own statement that the vertical
+ * scale actually resolved — never the geometry placeholder a CRS-less scan
+ * pins to 1, which would print "metres" for a frame whose own provenance
+ * says the vertical unit is unverified.
+ */
+export function flowElevationReference(input: FlowPulseLabInput): ElevationReference {
+  const zFactor = input.result.verticalScaleResolved === false
+    ? null
+    : (input.result.dtm.verticalUnitToMetres ?? null);
+  const unitLabel = zFactor == null ? 'units' : verticalUnitLabel(zFactor);
+  return { originZ: input.worldOriginZ ?? null, unitLabel };
+}
+
 /** Stand-ins for a run that refuses before it reads a frame or an identity. */
 const NO_FRAME: HorizontalScale = {
   isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: false,
@@ -159,13 +192,28 @@ export function runLabFlowPulse(
     id: globalThis.crypto?.randomUUID?.() ?? `flow-${Date.now()}`,
     generatedAt: new Date().toISOString(),
     processingManifestHead: null,
-  });
+  }, flowElevationReference(input).unitLabel);
 }
 
 /** Result of {@link buildFlowPulseExport}: the bytes and filename to download, or a refusal reason. */
 export type FlowPulseExportOutcome =
   | { readonly ok: true; readonly bytes: Uint8Array; readonly filename: string }
   | { readonly ok: false; readonly reason: string };
+
+/**
+ * The real-world placement facts the export package needs to georeference
+ * its rasters — the same `worldOrigin`/`wkt`/`crsName` the DEM package
+ * already reads off `getMapContext()`. All null when the scene has no
+ * single resolved origin or CRS, in which case the package writes a local
+ * (0, 0) origin and no .prj, and says so in its README.
+ */
+export interface FlowPulseGeoref {
+  readonly worldOrigin: { readonly x: number; readonly y: number } | null;
+  readonly crsName: string | null;
+  readonly wkt: string | null;
+  /** See {@link runFlowPulse}'s parameter of the same name. Defaults to `'units'`. */
+  readonly verticalUnitLabel?: 'm' | 'ft' | 'units';
+}
 
 /**
  * Build the export package from the CURRENT run, refusing on a stale result
@@ -182,6 +230,7 @@ export function buildFlowPulseExport(
   filename: string | null,
   layerId: string | null,
   build: typeof buildFlowPulsePackage,
+  georef: FlowPulseGeoref | null = null,
 ): FlowPulseExportOutcome {
   if (!outcome.ok) {
     return { ok: false, reason: 'Flow Pulse has not produced a run to export.' };
@@ -194,7 +243,15 @@ export function buildFlowPulseExport(
     ? { mask: catchment.mask, outletCell: catchment.cell.row * outcome.grid.cols + catchment.cell.col }
     : null;
   const basename = filename ?? layerId ?? 'flow-pulse';
-  const bytes = build(outcome, { basename, path: pathInput, catchment: catchmentInput });
+  const bytes = build(outcome, {
+    basename,
+    path: pathInput,
+    catchment: catchmentInput,
+    worldOrigin: georef?.worldOrigin ?? null,
+    crsName: georef?.crsName ?? null,
+    wkt: georef?.wkt ?? null,
+    verticalUnitLabel: georef?.verticalUnitLabel ?? 'units',
+  });
   return { ok: true, bytes, filename: `${basename}-flow-pulse.zip` };
 }
 
@@ -298,11 +355,80 @@ function refusalSentence(kind: 'path' | 'catchment', refusal: FlowClickRefusal):
 }
 
 /**
+ * The 3D accumulation overlay (and the traced path/catchment beside it)
+ * outlives the modal that built it: the Lab's own scene layer is the only
+ * place a user can SEE flow accumulation, and disposing it the instant the
+ * modal — which covers the scene — closes meant nobody ever saw it.
+ * `derivedLayerHost()` returns a fresh object literal on every call
+ * (it closes over the one Viewer scene, not a per-call state), so identity
+ * cannot key this; the one Viewer in this application has exactly one
+ * scene, so a single module-level session — kept until the user turns the
+ * overlay off, or the terrain/CRS it was built from goes stale — is the
+ * smallest correct home for it, matching the "one Lab, one scan" scope
+ * `§17`'s fieldDigest isolation already assumes.
+ */
+let persistentFlowOverlay: {
+  readonly overlay: FlowOverlay;
+  /** Re-pointed to the CURRENT mount's staleness check on every open. */
+  isStale: (() => boolean) | null;
+  overlayOn: boolean;
+} | null = null;
+
+/**
+ * The overlay for this mount: the persisted one, when it exists and its
+ * terrain/CRS have not gone stale, else a fresh one. A stale persisted
+ * overlay is disposed here rather than left attached to a scene whose
+ * frame it no longer describes.
+ */
+export function acquireFlowOverlay(
+  host: FlowOverlayHost | null,
+  isStale: (() => boolean) | null,
+): FlowOverlay | null {
+  if (!host) return null;
+  if (persistentFlowOverlay && persistentFlowOverlay.isStale?.() === true) {
+    persistentFlowOverlay.overlay.dispose();
+    persistentFlowOverlay = null;
+  }
+  if (!persistentFlowOverlay) {
+    persistentFlowOverlay = { overlay: new FlowOverlay(host), isStale, overlayOn: false };
+  } else {
+    persistentFlowOverlay.isStale = isStale;
+  }
+  return persistentFlowOverlay.overlay;
+}
+
+/**
+ * Unconditionally dispose the persisted overlay, when one exists. Exported
+ * so `registerFlowOverlayInvalidator` (see `lazyChunks.ts`) can hand this to
+ * every eager caller that clears the cached terrain core — a scan closing,
+ * a different scan loading, a CRS change, or a classification edit — none
+ * of which reopens the Lab to trigger the `isStale()` check `acquireFlowOverlay`
+ * makes on its own. The event itself IS the staleness signal here, so no
+ * predicate is re-checked; the caller already knows the terrain core it was
+ * drawn from is gone. Idempotent: a second call with nothing to dispose is a
+ * no-op.
+ */
+export function disposePersistentFlowOverlay(): void {
+  if (!persistentFlowOverlay) return;
+  persistentFlowOverlay.overlay.dispose();
+  persistentFlowOverlay = null;
+}
+
+// Registered once, at module load (i.e. the first time this chunk actually
+// loads — opening the Lab, or its export action). `registerFlowOverlayInvalidator`
+// stores this closure in the tiny eager module `lazyChunks.ts`, which
+// `terrainAnalysisRunner.ts` already calls on every terrain-cache-clearing
+// event, without importing this (lazy) module itself.
+registerFlowOverlayInvalidator(disposePersistentFlowOverlay);
+
+/**
  * The interactive Flow Pulse view: the static summary card plus every control
- * that reads or re-runs it. Owns one `FlowResultGrid` and one (optional)
- * `FlowOverlay` for the whole modal lifetime; `dispose()` releases the
- * overlay's GPU resources, called when the modal closes so a Flow Pulse run
- * never leaves scene objects behind it.
+ * that reads or re-runs it. Owns one `FlowResultGrid` for the modal's own
+ * lifetime and shares the persisted `FlowOverlay` (see {@link acquireFlowOverlay}).
+ * `dispose()` releases the grid's resources unconditionally, and the overlay's
+ * only when the user left it OFF — an overlay the user turned on stays drawn
+ * on the scan after the modal closes, with the toggle itself the visible way
+ * to turn it back off (reopening the Lab shows it already pressed).
  */
 function mountFlowPulseInteractive(
   input: FlowPulseLabInput,
@@ -317,19 +443,23 @@ function mountFlowPulseInteractive(
   let conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning;
   let outcome = initialOutcome;
   let mode: ClickMode = 'pulse';
-  let overlayOn = false;
   let busy = false;
   let overlayFrame: FlowOverlayFrame | null = null;
   let lastTrace: FlowPathTrace | FlowClickRefusal | null = null;
   let lastCatchment: FlowCatchmentTrace | FlowClickRefusal | null = null;
 
   const overlayHost = input.overlayHost ?? null;
-  const flowOverlay = overlayHost ? new FlowOverlay(overlayHost) : null;
+  const flowOverlay = acquireFlowOverlay(overlayHost, input.isStale ?? null);
+  // Reflects whatever the persisted overlay is already showing: reopening
+  // the Lab after leaving the overlay on picks the toggle back up in the
+  // "on" state rather than forgetting it was ever shown.
+  let overlayOn = persistentFlowOverlay?.overlayOn ?? false;
 
   const grid = new FlowResultGrid({
     ariaLabel: 'Routed terrain grid — arrow keys move, Enter or Space acts on the selected cell',
     onMove: (_cell: GridCell, report) => announce(cellAnnouncement(report)),
     onActivate: (cell: GridCell) => handleActivate(cell),
+    elevationRef: flowElevationReference(input),
   });
 
   const conditioningCtl = segmentedControl<FlowConditioning>(
@@ -357,9 +487,10 @@ function mountFlowPulseInteractive(
   );
 
   const overlayToggle = button('Show flow accumulation', 'olv-flow-overlay-toggle');
-  overlayToggle.setAttribute('aria-pressed', 'false');
+  overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
   overlayToggle.addEventListener('click', () => {
     overlayOn = !overlayOn;
+    if (persistentFlowOverlay) persistentFlowOverlay.overlayOn = overlayOn;
     overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
     applyOverlayVisibility();
     announce(overlayOn ? 'Flow accumulation overlay on.' : 'Flow accumulation overlay off.');
@@ -492,6 +623,14 @@ function mountFlowPulseInteractive(
         input.filename,
         input.layerId,
         buildFlowPulsePackage,
+        {
+          worldOrigin: input.worldOriginX != null && input.worldOriginY != null
+            ? { x: input.worldOriginX, y: input.worldOriginY }
+            : null,
+          crsName: input.crsName ?? null,
+          wkt: input.wkt ?? null,
+          verticalUnitLabel: flowElevationReference(input).unitLabel,
+        },
       );
       if (!built.ok) {
         announce(`Export refused — ${built.reason}`);
@@ -589,7 +728,19 @@ function mountFlowPulseInteractive(
 
   return {
     element: root,
-    dispose: () => { flowOverlay?.dispose(); },
+    // An overlay the user left ON stays attached to the scene — only an
+    // overlay left OFF (nothing visible to keep) is torn down here,
+    // matching the disposal-registry contract for the "off" case exactly as
+    // before. `persistentFlowOverlay` itself is not cleared in the "on"
+    // case: the next Lab open reclaims the SAME instance via
+    // `acquireFlowOverlay`, rather than constructing a second one that would
+    // leave the first orphaned in the scene.
+    dispose: () => {
+      if (!overlayOn && persistentFlowOverlay) {
+        persistentFlowOverlay.overlay.dispose();
+        persistentFlowOverlay = null;
+      }
+    },
   };
 }
 

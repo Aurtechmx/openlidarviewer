@@ -232,6 +232,21 @@ export interface TerrainCoreParams {
    */
   readonly residentOnly?: boolean;
   /**
+   * True when the points handed to this core are a strided subsample of a
+   * larger static source (`StridedTerrainSample.sampled`), not the resident
+   * subset of a stream. Same override as `residentOnly` above, for a
+   * different cause: a static file whose points were strided down (by the
+   * display budget, or by `gatherWithheldAwareTerrainCore`'s own re-decode)
+   * is a sample of the WHOLE dataset, not a partial view of a live stream, so
+   * it stamps `'sampled'` rather than `'resident-only'`. Without this, a DTM
+   * built from a strided re-decode reads `coverageMode: 'full'` from
+   * `rasterizeDtm` (which has no notion of stride) and disagrees with every
+   * other surface (Contour Studio, the classification/surface capability
+   * checks) that already reads the true stride off the same gather. Default
+   * false.
+   */
+  readonly sampled?: boolean;
+  /**
    * What the gather declared about Withheld points (see `DtmGrid`). The core
    * never filters on it; it stamps it on the DTM so every product read from
    * the surface can say which points it rests on.
@@ -1182,6 +1197,16 @@ export function computeTerrainCore(
   if (params.residentOnly && dtm.coverageMode === 'full') {
     dtm = { ...dtm, coverageMode: 'resident-only' };
   }
+  // A static source strided down before it reached this core (the display
+  // budget, or `gatherWithheldAwareTerrainCore`'s own full-resolution
+  // re-decode) is a sample of the WHOLE dataset — `rasterizeDtm` has no
+  // notion of stride and always reports 'full', so that fact is stamped here
+  // instead, once, before every reader of `dtm.coverageMode`. Without this,
+  // the sealed run record could claim `coverage: 'full'`, `complete: true`
+  // for the exact gather Contour Studio already read as a sample.
+  if (params.sampled && dtm.coverageMode === 'full') {
+    dtm = { ...dtm, coverageMode: 'sampled' };
+  }
   if (params.withheldExcluded !== undefined) {
     dtm = {
       ...dtm,
@@ -1466,6 +1491,49 @@ export function computeTerrainCore(
 }
 
 /**
+ * The `AnalyseContoursResult` fields `contoursFromCore` reports identically
+ * whether or not an interval was chosen — the core/quality/gate facts, none
+ * of which depend on the contour products below them. Factored out so the
+ * no-interval early return and the normal return cannot drift apart.
+ */
+function coreResultFields(
+  dtm: TerrainCore['dtm'],
+  core: TerrainCore,
+  gridRecommendation: GridRecommendation | null,
+  gate: IntervalGateResult,
+): Pick<
+  AnalyseContoursResult,
+  | 'dtm' | 'validation' | 'reliabilitySplit' | 'blockedAccuracy' | 'verticalScaleResolved'
+  | 'horizontalScaleResolved' | 'confidenceOrdering' | 'confidenceCalibrationApplied'
+  | 'confidenceToleranceM' | 'quality' | 'qualityScore' | 'cellMetrics' | 'surface'
+  | 'unclassifiedFraction' | 'excludedByClassification' | 'accuracyStandards'
+  | 'cellStatusTally' | 'complexity' | 'gridRecommendation' | 'gate'
+> {
+  return {
+    dtm,
+    validation: core.validation,
+    reliabilitySplit: core.reliabilitySplit,
+    blockedAccuracy: core.blockedAccuracy,
+    verticalScaleResolved: core.verticalScaleResolved,
+    horizontalScaleResolved: core.gridGeometry.unitResolved,
+    confidenceOrdering: core.confidenceOrdering,
+    confidenceCalibrationApplied: core.confidenceCalibrationApplied,
+    confidenceToleranceM: core.confidenceToleranceM,
+    quality: core.quality,
+    qualityScore: core.qualityScore,
+    cellMetrics: core.cellMetrics,
+    surface: core.surface,
+    unclassifiedFraction: core.unclassifiedFraction,
+    excludedByClassification: core.excludedByClassification,
+    accuracyStandards: core.accuracyStandards,
+    cellStatusTally: core.cellStatusTally,
+    complexity: core.complexity,
+    gridRecommendation,
+    gate,
+  };
+}
+
+/**
  * Run the interval-DEPENDENT half of the pipeline against a precomputed
  * {@link TerrainCore}: choose the interval, then contours → stitch → style →
  * smooth → feature model → tally → labels, plus the requested-interval-aware
@@ -1547,26 +1615,7 @@ export function contoursFromCore(
       warnings: ['no interval chosen'],
     };
     return {
-      dtm,
-      validation: core.validation,
-      reliabilitySplit: core.reliabilitySplit,
-      blockedAccuracy: core.blockedAccuracy,
-      verticalScaleResolved: core.verticalScaleResolved,
-      horizontalScaleResolved: core.gridGeometry.unitResolved,
-      confidenceOrdering: core.confidenceOrdering,
-      confidenceCalibrationApplied: core.confidenceCalibrationApplied,
-      confidenceToleranceM: core.confidenceToleranceM,
-      quality: core.quality,
-      qualityScore: core.qualityScore,
-      cellMetrics: core.cellMetrics,
-      surface: core.surface,
-      unclassifiedFraction: core.unclassifiedFraction,
-      excludedByClassification: core.excludedByClassification,
-      accuracyStandards: core.accuracyStandards,
-      cellStatusTally: core.cellStatusTally,
-      complexity: core.complexity,
-      gridRecommendation,
-      gate,
+      ...coreResultFields(dtm, core, gridRecommendation, gate),
       intervalM: null,
       requestedIntervalM: null,
       contours: emptyContours,
@@ -1643,26 +1692,7 @@ export function contoursFromCore(
   });
 
   return {
-    dtm,
-    validation: core.validation,
-    reliabilitySplit: core.reliabilitySplit,
-    blockedAccuracy: core.blockedAccuracy,
-    verticalScaleResolved: core.verticalScaleResolved,
-    horizontalScaleResolved: core.gridGeometry.unitResolved,
-    confidenceOrdering: core.confidenceOrdering,
-    confidenceCalibrationApplied: core.confidenceCalibrationApplied,
-    confidenceToleranceM: core.confidenceToleranceM,
-    quality: core.quality,
-    qualityScore: core.qualityScore,
-    cellMetrics: core.cellMetrics,
-    surface: core.surface,
-    unclassifiedFraction: core.unclassifiedFraction,
-    excludedByClassification: core.excludedByClassification,
-    accuracyStandards: core.accuracyStandards,
-    cellStatusTally: core.cellStatusTally,
-    complexity: core.complexity,
-    gridRecommendation,
-    gate,
+    ...coreResultFields(dtm, core, gridRecommendation, gate),
     intervalM: emittedIntervalM,
     requestedIntervalM: intervalM,
     contours,

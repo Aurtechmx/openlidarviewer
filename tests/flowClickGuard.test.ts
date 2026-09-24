@@ -10,40 +10,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { catchmentClick, traceClick } from '../src/simulation/flowPulse/flowClickGuard';
-import { FLOW_PULSE_DEFAULTS, runFlowPulse, type FlowRunIdentity } from '../src/simulation/flowPulse/flowPulseRunner';
+import { FLOW_PULSE_DEFAULTS, runFlowPulse } from '../src/simulation/flowPulse/flowPulseRunner';
 import { CELL_OUTLET } from '../src/simulation/flowPulse/flowTypes';
-import type { HorizontalScale } from '../src/simulation/flowPulse/dtmFlowGrid';
-import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 import type { FlowPulseResult } from '../src/simulation/flowPulse/flowPulseRunner';
-
-const projected: HorizontalScale = {
-  isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true,
-};
-const identity: FlowRunIdentity = {
-  layerId: 'layer-a', filename: 'site.laz', sourceDigest: 'aaaa',
-  analysisInputDigest: 'bbbb', build: '0.7.0-alpha.1', id: 'run-1',
-  generatedAt: '2026-09-22T00:00:00.000Z', processingManifestHead: null,
-};
-
-/** A filled DtmGrid; `null` marks a cell with no reachable data. */
-function dtmOf(rows: readonly (readonly (number | null)[])[]): DtmGrid {
-  const h = rows.length, w = rows[0].length, n = w * h;
-  const z = new Float32Array(n);
-  const coverage = new Uint8Array(n);
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const v = rows[r][c];
-      if (v === null) continue;
-      z[r * w + c] = v;
-      coverage[r * w + c] = 2; // measured
-    }
-  }
-  return {
-    z, coverage, confidence: new Float32Array(n), counts: new Uint32Array(n),
-    interpDistanceCells: new Float32Array(n), cols: w, rows: h, cellSizeM: 1,
-    originH1: 0, originH2: 0, crs: null, verticalDatum: null, coverageMode: 'full',
-  } as DtmGrid;
-}
+import {
+  FLOW_PROJECTED_SCALE as projected,
+  FLOW_TEST_IDENTITY as identity,
+  flowDtmOf as dtmOf,
+} from './helpers/flowFixtures';
 
 /**
  * A 3x3 ridge sloping east, one NoData cell at (2,1): every cell in a row

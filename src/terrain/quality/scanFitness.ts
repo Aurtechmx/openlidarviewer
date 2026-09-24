@@ -490,10 +490,18 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     // A 'Good' gate with a soft caveat on one axis — positive, but honest.
     verdict = `Usable, with caveats${limiterClause}.`;
   }
-  // A provisional grade (partial / streaming cloud) must never read as settled —
-  // prepend a "still streaming" lead so the user re-runs on the full cloud.
+  // A provisional grade (partial coverage) must never read as settled — but
+  // "provisional" has two different causes with two different remedies, and
+  // conflating them told a user reading a STATIC file's DTM (built by the
+  // Withheld-aware strided re-decode, coverageMode 'sampled') to wait for a
+  // stream that does not exist. `resident-only` really is a live stream still
+  // filling in; `sampled` is a one-shot budget decision over a file that
+  // finished loading. Each gets its own lead, naming its own remedy.
   if (provisional && inp.status !== 'Blocked') {
-    verdict = `Still streaming — ${verdict.charAt(0).toLowerCase()}${verdict.slice(1)}`;
+    const lead = inp.coverageMode === 'resident-only'
+      ? 'Still streaming'
+      : 'Terrain was built from a sample of the points, not every point';
+    verdict = `${lead} — ${verdict.charAt(0).toLowerCase()}${verdict.slice(1)}`;
   }
 
   // A density-reference badge is shown only when density AND accuracy both pass,

@@ -210,6 +210,13 @@ export function runFlowPulse(
   scale: HorizontalScale,
   params: FlowPulseParams,
   identity: FlowRunIdentity,
+  /**
+   * The resolved vertical unit for the fill-depth figures conditioning
+   * reports in {@link modelLimitations}. Defaults to `'units'` — fail
+   * closed to "in source units" rather than assume metres — so an existing
+   * caller that has not resolved one still gets an honest sentence.
+   */
+  verticalUnitLabel: 'm' | 'ft' | 'units' = 'units',
 ): FlowPulseResult | FlowRefusal {
   if (!dtm) {
     return {
@@ -284,7 +291,7 @@ export function runFlowPulse(
     cellsUnreachable: conditioned ? conditioned.cellsUnreachable : null,
   };
 
-  const limitations = [...basisLimitations(basis), ...modelLimitations(params, summary)];
+  const limitations = [...basisLimitations(basis), ...modelLimitations(params, summary, verticalUnitLabel)];
 
   const record = sealRunRecord({
     schemaVersion: 1,
@@ -350,7 +357,10 @@ export function runFlowPulse(
 export function modelLimitations(
   params: FlowPulseParams,
   summary: FlowSummary,
+  /** See {@link runFlowPulse}'s parameter of the same name. Fails closed to `'units'`. */
+  verticalUnitLabel: 'm' | 'ft' | 'units' = 'units',
 ): readonly string[] {
+  const unitSuffix = verticalUnitLabel === 'units' ? ' (in source units)' : ` ${verticalUnitLabel}`;
   const out: string[] = [
     'A topographic routing graph over the declared surface. It is not rainfall, '
     + 'runoff, infiltration or flood modelling, and accumulation counts cells '
@@ -374,7 +384,7 @@ export function modelLimitations(
     out.push(
       `Routed over a conditioned drainage surface, not the terrain: `
       + `${summary.cellsRaised ?? 0} cell(s) were raised, the deepest by `
-      + `${(summary.maxFillDepth ?? 0).toFixed(3)}. The canonical DTM is unchanged.`,
+      + `${(summary.maxFillDepth ?? 0).toFixed(3)}${unitSuffix}. The canonical DTM is unchanged.`,
     );
     if ((summary.epsilonAbsorbed ?? 0) > 0) {
       out.push(

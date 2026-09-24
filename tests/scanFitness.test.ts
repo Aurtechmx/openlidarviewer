@@ -99,6 +99,23 @@ describe('buildScanFitness — provisional (streaming / partial) state', () => {
     expect(f.provisional).toBe(false);
     expect(f.tierBadge).toBe('≥ QL1 density reference');
   });
+
+  // A static file downsampled at load, its DTM built by a strided re-decode
+  // (coverageMode 'sampled'), is provisional too — but nothing is streaming.
+  // "Still streaming" on a static scan is a false claim; the prefix must
+  // name the real cause.
+  it('a sampled (static, strided) coverage is provisional but never says streaming', () => {
+    const f = buildScanFitness(base({ coverageMode: 'sampled' }));
+    expect(f.provisional).toBe(true);
+    expect(f.verdict).not.toMatch(/streaming/i);
+    expect(f.verdict).toMatch(/^terrain was built from a sample of the points, not every point/i);
+    expect(f.tierBadge).toBeNull();
+  });
+
+  it('resident-only (real streaming) still says "still streaming"', () => {
+    const f = buildScanFitness(base({ coverageMode: 'resident-only' }));
+    expect(f.verdict).toMatch(/^still streaming/i);
+  });
 });
 
 describe('buildScanFitness — verdict leads with the most use-limiting axis (not array order)', () => {

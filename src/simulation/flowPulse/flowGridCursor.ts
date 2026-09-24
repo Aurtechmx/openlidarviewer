@@ -94,32 +94,75 @@ export function statusLabel(status: number): string {
   }
 }
 
+/**
+ * How to turn a cell's grid-local `z` into a real-world elevation, the same
+ * way `demPackage.ts` recovers one for the DTM/DSM rasters: add back the
+ * dropped vertical origin, and label the unit only when the frame's vertical
+ * scale actually resolved. `originZ: null` or `unitLabel: 'units'` both mean
+ * the real elevation cannot be honestly stated.
+ */
+export interface ElevationReference {
+  /** World Z of the load-time recentring origin; null when unknown/mixed. */
+  readonly originZ: number | null;
+  /** The resolved vertical unit, or 'units' when the vertical scale is unresolved. */
+  readonly unitLabel: 'm' | 'ft' | 'units';
+}
+
 /** A readable summary of one cell, for the live region and the status row. */
 export interface CellReport {
   readonly col: number;
   readonly row: number;
   readonly readable: boolean;
+  /**
+   * Real-world elevation in the resolved vertical unit — NOT the grid-local
+   * z — or null when not readable, or the origin/unit did not resolve.
+   */
   readonly elevation: number | null;
+  /** 'm' / 'ft' when {@link elevation} is a real reading, 'unknown' otherwise; null when not readable. */
+  readonly elevationUnit: 'm' | 'ft' | 'unknown' | null;
   readonly status: string;
   readonly upstreamCells: number | null;
   readonly contributingAreaM2: number | null;
 }
 
-/** Describe the cell at `cell` from an already-routed grid. */
+/**
+ * Describe the cell at `cell` from an already-routed grid.
+ *
+ * `elevationRef` is optional so a caller with no resolved origin/vertical
+ * unit still gets a report — with an honest 'unknown' elevation rather than
+ * the grid's local-frame z passed off as a real height.
+ */
 export function describeCell(
   grid: FlowGrid,
   routed: D8Result,
   accumulation: AccumulationResult,
   areaM2: Float64Array | null,
   cell: GridCell,
+  elevationRef: ElevationReference | null = null,
 ): CellReport {
   const i = cellIndex(grid.cols, cell);
   const readable = grid.valid[i] === 1;
+  const originZ = elevationRef?.originZ ?? null;
+  const unitLabel = elevationRef?.unitLabel ?? 'units';
+  const resolved = readable && originZ != null && unitLabel !== 'units';
+
+  let elevation: number | null = null;
+  let elevationUnit: 'm' | 'ft' | 'unknown' | null = null;
+  if (readable) {
+    if (resolved) {
+      elevation = grid.z[i] + originZ!;
+      elevationUnit = unitLabel as 'm' | 'ft';
+    } else {
+      elevationUnit = 'unknown';
+    }
+  }
+
   return {
     col: cell.col,
     row: cell.row,
     readable,
-    elevation: readable ? grid.z[i] : null,
+    elevation,
+    elevationUnit,
     status: statusLabel(routed.status[i]),
     upstreamCells: readable ? accumulation.upstreamCells[i] : null,
     contributingAreaM2: readable && areaM2 ? areaM2[i] : null,
@@ -132,6 +175,9 @@ export function cellAnnouncement(report: CellReport): string {
   const area = report.contributingAreaM2 != null
     ? `, ${report.contributingAreaM2.toFixed(1)} square metres contributing`
     : '';
-  return `Column ${report.col}, row ${report.row}, elevation ${report.elevation!.toFixed(2)}, `
+  const elevationText = report.elevation != null
+    ? `elevation ${report.elevation.toFixed(2)} ${report.elevationUnit}`
+    : 'elevation unknown';
+  return `Column ${report.col}, row ${report.row}, ${elevationText}, `
     + `${report.status}, ${report.upstreamCells} cell(s) upstream${area}.`;
 }

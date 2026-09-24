@@ -19,37 +19,20 @@ import {
   CATCHMENT_RGB,
 } from '../src/render/flowOverlayGeometry';
 import { flowFieldDigest } from '../src/simulation/flowPulse/flowFieldDigest';
-import { FLOW_PULSE_DEFAULTS, runFlowPulse, type FlowRunIdentity } from '../src/simulation/flowPulse/flowPulseRunner';
+import { FLOW_PULSE_DEFAULTS, runFlowPulse } from '../src/simulation/flowPulse/flowPulseRunner';
 import { catchmentClick, traceClick } from '../src/simulation/flowPulse/flowClickGuard';
-import type { HorizontalScale } from '../src/simulation/flowPulse/dtmFlowGrid';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
+import {
+  FLOW_PROJECTED_SCALE as projected,
+  FLOW_TEST_IDENTITY as identity,
+  flowDtmOf,
+} from './helpers/flowFixtures';
 
-const projected: HorizontalScale = {
-  isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true,
-};
-const identity: FlowRunIdentity = {
-  layerId: 'layer-a', filename: 'site.laz', sourceDigest: 'aaaa',
-  analysisInputDigest: 'bbbb', build: '0.7.0-alpha.1', id: 'run-1',
-  generatedAt: '2026-09-22T00:00:00.000Z', processingManifestHead: null,
-};
-
+// This suite's cell size and origin are deliberately non-trivial (unlike the
+// shared fixture's 1 / (0, 0) default), to prove the frame placement reads
+// the DTM's own values rather than an assumed unit grid.
 function dtmOf(rows: readonly (readonly (number | null)[])[]): DtmGrid {
-  const h = rows.length, w = rows[0].length, n = w * h;
-  const z = new Float32Array(n);
-  const coverage = new Uint8Array(n);
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const v = rows[r][c];
-      if (v === null) continue;
-      z[r * w + c] = v;
-      coverage[r * w + c] = 2;
-    }
-  }
-  return {
-    z, coverage, confidence: new Float32Array(n), counts: new Uint32Array(n),
-    interpDistanceCells: new Float32Array(n), cols: w, rows: h, cellSizeM: 2,
-    originH1: 100, originH2: 200, crs: null, verticalDatum: null, coverageMode: 'full',
-  } as DtmGrid;
+  return flowDtmOf(rows, { cellSizeM: 2, originH1: 100, originH2: 200 });
 }
 
 describe('flowOverlayFrame', () => {

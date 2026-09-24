@@ -81,6 +81,20 @@ export interface FlowPulsePackageOptions {
   readonly worldOrigin?: { readonly x: number; readonly y: number } | null;
   /** A CRS name for the README/passport, when the caller can supply one. Never invented here. */
   readonly crsName?: string | null;
+  /**
+   * CRS WKT for a `.prj` sidecar, when the caller can resolve one — same
+   * seam `demPackage.ts` reads for its own `.prj`. Omitted or null writes no
+   * `.prj` at all, rather than one with an empty or guessed CRS.
+   */
+  readonly wkt?: string | null;
+  /**
+   * The resolved vertical unit every fill-depth/elevation figure in this
+   * package (the summary and depression CSVs, and the Lab's own limitation
+   * text) is stated in. Defaults to `'units'` — fail closed to "in source
+   * units" rather than assume metres — so an unresolved frame never has a
+   * false metre stamped on it.
+   */
+  readonly verticalUnitLabel?: 'm' | 'ft' | 'units';
   /** SHA-256 of the source scan, when the loader verified one. */
   readonly sourceSha256?: string | null;
   /** Build identity. Default the stamped {@link BUILD_IDENTITY}. */
@@ -203,6 +217,8 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly softwareVersion: string;
   readonly build: BuildIdentity;
   readonly crsName: string | null;
+  readonly hasWkt: boolean;
+  readonly verticalUnitLabel: 'm' | 'ft' | 'units';
   readonly hasPath: boolean;
   readonly hasCatchment: boolean;
 }): string {
@@ -221,6 +237,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  ${opts.basename}-sinks-depressions.csv   Depression inventory (§10.10), largest first`,
     opts.hasPath ? `  ${opts.basename}-flow-path.geojson   Downstream path from a click-to-pulse` : null,
     opts.hasCatchment ? `  ${opts.basename}-catchment.asc      Upstream catchment mask (1 = contributing)` : null,
+    opts.hasWkt ? `  ${opts.basename}.prj                 Coordinate reference system (WKT)` : null,
     `  ${opts.basename}-summary.csv         The figures above, flat`,
     `  ${opts.basename}-simulation-run.json The sealed run record`,
     `  ${opts.basename}.olv-field-sim.json  Reproducible config: re-run it, get the same fieldDigest`,
@@ -239,6 +256,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
     `  Withheld excluded   ${r.source.basis.withheldExcluded === null ? 'not recorded' : String(r.source.basis.withheldExcluded)}`,
     `  CRS            ${opts.crsName ?? 'not georeferenced — rasters use a local (0, 0) origin'}`,
+    `  Vertical unit  ${opts.verticalUnitLabel === 'units' ? 'unresolved — every fill-depth/elevation figure below is in source units' : opts.verticalUnitLabel}`,
     '',
     'Grid',
     `  Size           ${grid.cols} x ${grid.rows} cells`,
@@ -420,9 +438,14 @@ export function buildFlowPulsePackage(
     bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`),
   });
 
+  if (options.wkt) {
+    entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
+  }
+
   const readme = buildFlowReadme(result, {
     basename, generationDateIso, softwareName, softwareVersion, build,
-    crsName: options.crsName ?? null, hasPath, hasCatchment,
+    crsName: options.crsName ?? null, hasWkt: !!options.wkt,
+    verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment,
   });
   entries.push({
     name: `${basename}-README.txt`,

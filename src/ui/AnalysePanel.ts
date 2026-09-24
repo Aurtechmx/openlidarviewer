@@ -949,6 +949,10 @@ export class AnalysePanel {
     readonly result: AnalyseContoursResult;
     readonly isGeographic: boolean;
     readonly worldOriginY: number | null;
+    readonly worldOriginX: number | null;
+    readonly worldOriginZ: number | null;
+    readonly wkt: string | null;
+    readonly crsName: string | null;
     readonly resolvedUnitToMetres: number | null;
     readonly layerId: string | null;
     readonly filename: string | null;
@@ -968,6 +972,13 @@ export class AnalysePanel {
       result,
       isGeographic: ctx.isGeographic ?? false,
       worldOriginY: ctx.worldOrigin?.y ?? null,
+      // Same `worldOrigin` the DEM package and map sheet already use — the X
+      // and Z components the export's real corner and the result grid's real
+      // elevation readout need.
+      worldOriginX: ctx.worldOrigin?.x ?? null,
+      worldOriginZ: ctx.worldOrigin?.z ?? null,
+      wkt: ctx.wkt ?? null,
+      crsName: ctx.resolvedCrsLabel ?? null,
       resolvedUnitToMetres: ctx.resolvedUnitToMetres ?? null,
       layerId: scanId,
       filename: this._cb.getExportBasename?.() ?? null,

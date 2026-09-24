@@ -21,44 +21,13 @@ import {
   pulseFrom,
   runFlowPulse,
   type FlowPulseParams,
-  type FlowRunIdentity,
 } from '../src/simulation/flowPulse/flowPulseRunner';
 import type { HorizontalScale } from '../src/simulation/flowPulse/dtmFlowGrid';
-import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
-
-const projected: HorizontalScale = {
-  isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true,
-};
-
-const identity: FlowRunIdentity = {
-  layerId: 'layer-a', filename: 'site.laz', sourceDigest: 'aaaa',
-  analysisInputDigest: 'bbbb', build: '0.7.0-alpha.1', id: 'run-1',
-  generatedAt: '2026-09-22T00:00:00.000Z', processingManifestHead: null,
-};
-
-/** A filled DtmGrid; `null` marks a cell with no reachable data. */
-function dtmOf(
-  rows: readonly (readonly (number | null)[])[],
-  over: Partial<DtmGrid> = {},
-): DtmGrid {
-  const h = rows.length, w = rows[0].length, n = w * h;
-  const z = new Float32Array(n);
-  const coverage = new Uint8Array(n);
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const v = rows[r][c];
-      if (v === null) continue;
-      z[r * w + c] = v;
-      coverage[r * w + c] = 2; // measured
-    }
-  }
-  return {
-    z, coverage, confidence: new Float32Array(n), counts: new Uint32Array(n),
-    interpDistanceCells: new Float32Array(n), cols: w, rows: h, cellSizeM: 1,
-    originH1: 0, originH2: 0, crs: null, verticalDatum: null, coverageMode: 'full',
-    ...over,
-  } as DtmGrid;
-}
+import {
+  FLOW_PROJECTED_SCALE as projected,
+  FLOW_TEST_IDENTITY as identity,
+  flowDtmOf as dtmOf,
+} from './helpers/flowFixtures';
 
 const params = (over: Partial<FlowPulseParams> = {}): FlowPulseParams => ({
   ...FLOW_PULSE_DEFAULTS, ...over,
@@ -292,6 +261,25 @@ describe('conditioning is declared, and leaves the DTM alone', () => {
     expect(r.limitations.join(' ')).toMatch(/canonical DTM is unchanged/);
     // The claim in that sentence, checked rather than trusted.
     expect([...dtm.z]).toEqual([...before]);
+  });
+
+  // "N cell(s) were raised, the deepest by 1.240." must carry a unit: fail
+  // closed to "in source units" when the vertical scale is unresolved, and
+  // use the resolved unit label when the caller supplies one.
+  it('fails closed to "in source units" when no vertical unit is supplied', () => {
+    const r = runFlowPulse(notchedBowl(), projected, params({ conditioning: 'priority-flood' }), identity);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.limitations.join(' ')).toMatch(/deepest by [\d.]+ \(in source units\)/);
+  });
+
+  it('states the resolved vertical unit when the caller supplies one', () => {
+    const r = runFlowPulse(
+      notchedBowl(), projected, params({ conditioning: 'priority-flood' }), identity, 'm',
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.limitations.join(' ')).toMatch(/deepest by [\d.]+ m\b/);
   });
 
   it('never calls the conditioned surface corrected terrain', () => {
