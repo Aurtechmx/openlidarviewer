@@ -1388,6 +1388,43 @@ let classifyRunning = false;
 /** Confidence (0..1) of the most recent derive, for the Dataset Story / Export
  *  Health synthesis. Null when the active scan carries no derived classification. */
 let lastDerivedConfidence: number | null = null;
+/**
+ * Shared inner loop for {@link runDeriveClassification} and
+ * {@link runFillUnclassified}: run the (possibly off-thread) derive, bail if
+ * the active scan/frame changed underneath it, then apply the result and
+ * refresh the classes legend. Callers stay responsible for their own
+ * before/after toast copy and post-apply refreshes, since those differ.
+ */
+async function performClassificationDerive(
+  cloud: NonNullable<ReturnType<typeof viewer.getCloud>>,
+  activeId: string,
+  deriveOptions: DeriveClassificationOptions,
+  label: string,
+): Promise<{ result: Awaited<ReturnType<typeof deriveClassificationAsync>>; confPct: number | null } | null> {
+  const deriveCrsRevision = crsService.crsRevision();
+  const result = await deriveClassificationAsync(
+    cloud.positions,
+    cloud.pointCount,
+    deriveOptions,
+    undefined,
+    undefined,
+    // Live phase in the toast so a multi-second derive reads as progress,
+    // not a hang. (Off-thread, so the UI repaints between phases.)
+    (phase) => showLassoToast(`${label} · ${phase}…`),
+  );
+  if (activeId !== scans.activeId || viewer.getCloud(activeId) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return null;
+  viewer.applyDerivedClassification(activeId, result.codes);
+  noteEdit('classification');
+  lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
+  classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
+  // Surface the run's honest confidence + caveats in the legend caption, not
+  // just a flat "derived" tag — so the user sees WHEN to trust it.
+  const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
+  classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
+  classLegendPanel.show();
+  return { result, confPct };
+}
+
 async function runDeriveClassification(): Promise<void> {
   if (classifyRunning) return;
   if (!scans.activeId) {
@@ -1417,38 +1454,14 @@ async function runDeriveClassification(): Promise<void> {
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
   const deriveOptions = classifierOptions(cloud, crsService.context());
-    // The frame is baked into these thresholds (physical metres → source units).
-    const deriveCrsRevision = crsService.crsRevision();
 
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
   try {
     const id = scans.activeId;
-    const result = await deriveClassificationAsync(
-      cloud.positions,
-      cloud.pointCount,
-      deriveOptions,
-      undefined,
-      undefined,
-      // Live phase in the toast so a multi-second derive reads as progress,
-      // not a hang. (Off-thread, so the UI repaints between phases.)
-      (phase) => showLassoToast(`Classify · ${phase}…`),
-    );
-    if (id !== scans.activeId || viewer.getCloud(id) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return;
-    viewer.applyDerivedClassification(id, result.codes);
-    noteEdit('classification');
-    lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
-    // Surface the run's honest confidence + caveats in the legend caption, not
-    // just a flat "derived" tag — so the user sees WHEN to trust it.
-    const confPct = Number.isFinite(result.confidence)
-      ? Math.round(result.confidence * 100)
-      : null;
-    classLegendPanel.setDerivedProvenance(true, {
-      confidencePct: confPct,
-      warnings: result.warnings,
-    });
-    classLegendPanel.show();
+    const outcome = await performClassificationDerive(cloud, id, deriveOptions, 'Classify');
+    if (!outcome) return;
+    const { result, confPct } = outcome;
     processStudio.refresh(); // new classes change what's producible — re-evaluate the plan
     void showReclassifyUi();
     // Honest one-line breakdown of the top classes derived.
@@ -1505,29 +1518,13 @@ async function runFillUnclassified(): Promise<void> {
     existingClassification: cloud.classification,
     ...classifierOptions(cloud, crsService.context()),
   };
-  // See the Classify path: the frame is baked into these thresholds.
-  const deriveCrsRevision = crsService.crsRevision();
-
   classifyRunning = true;
   showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
   try {
     const id = scans.activeId;
-    const result = await deriveClassificationAsync(
-      cloud.positions,
-      cloud.pointCount,
-      deriveOptions,
-      undefined,
-      undefined,
-      (phase) => showLassoToast(`Fill unclassified · ${phase}…`),
-    );
-    if (id !== scans.activeId || viewer.getCloud(id) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return;
-    viewer.applyDerivedClassification(id, result.codes);
-    noteEdit('classification');
-    lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
-    const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
-    classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
-    classLegendPanel.show();
+    const outcome = await performClassificationDerive(cloud, id, deriveOptions, 'Fill unclassified');
+    if (!outcome) return;
+    const { confPct } = outcome;
     processStudio.refresh(); // filled classes can enable ground/building products
     void showReclassifyUi();
     const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';

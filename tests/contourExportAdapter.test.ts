@@ -16,6 +16,7 @@ import { ContourExportAdapter, type ContourExportHost } from '../src/ui/contourE
 import { POLITE_REGION_SELECTOR } from '../src/ui/politeAnnounce';
 import type { ContourExportIntent } from '../src/terrain/contourStudio/contourExportIntent';
 import type { ContourExportFrameFacts, ContourExportPermit } from '../src/export/contourExportPermit';
+import type { ContourStudioExportProduct } from '../src/ui/contourStudioMount';
 
 /** A recording host — every call is captured for assertion. */
 function fakeHost() {
@@ -80,6 +81,37 @@ const okFrame: ContourExportFrameFacts = {
   precision: null,
 };
 
+/**
+ * Drive `handle()` for `product` with a blocked launch state and assert the
+ * common refusal shape — nothing is written, the button flashes "Blocked",
+ * then the flash's own timer restores it. `assertNoCalls` adds the
+ * product-specific "nothing else fired" checks.
+ */
+function expectBlockedFlash(
+  product: ContourStudioExportProduct,
+  blockedReasons: string[],
+  assertNoCalls: (calls: ReturnType<typeof fakeHost>['calls']) => void,
+): void {
+  vi.useFakeTimers();
+  const { host, calls } = fakeHost();
+  const b = btn();
+  new ContourExportAdapter(host).handle(product, b, intent(), {
+    launchStatus: 'unavailable',
+    verticalUnitsKnown: true,
+    crsProjected: true,
+    precision: null,
+    blockedReasons,
+  });
+  assertNoCalls(calls);
+  expect(b.textContent).toBe('Blocked');
+  expect(b.disabled).toBe(true);
+  // The flash restores the button once the timer elapses (no open handle left).
+  vi.runAllTimers();
+  expect(b.textContent).toBe('Export');
+  expect(b.disabled).toBe(false);
+  vi.useRealTimers();
+}
+
 describe('ContourExportAdapter — gated dispatch', () => {
   it('routes a granted analytical GeoJSON through the permit to the vector exporter', () => {
     const { host, calls } = fakeHost();
@@ -119,25 +151,10 @@ describe('ContourExportAdapter — gated dispatch', () => {
   });
 
   it('writes NOTHING and flashes the button when the launch state is blocked', () => {
-    vi.useFakeTimers();
-    const { host, calls } = fakeHost();
-    const b = btn();
-    new ContourExportAdapter(host).handle('geojson', b, intent(), {
-      launchStatus: 'unavailable',
-      verticalUnitsKnown: true,
-      crsProjected: true,
-      precision: null,
-      blockedReasons: ['No usable ground points.'],
+    expectBlockedFlash('geojson', ['No usable ground points.'], (calls) => {
+      expect(calls.vector).toHaveLength(0);
+      expect(calls.mapPdf).toHaveLength(0);
     });
-    expect(calls.vector).toHaveLength(0);
-    expect(calls.mapPdf).toHaveLength(0);
-    expect(b.textContent).toBe('Blocked');
-    expect(b.disabled).toBe(true);
-    // The flash restores the button once the timer elapses (no open handle left).
-    vi.runAllTimers();
-    expect(b.textContent).toBe('Export');
-    expect(b.disabled).toBe(false);
-    vi.useRealTimers();
   });
 
   it('routes the DEM package through the resolver (DTM claim) and stamps the permit', () => {
@@ -151,24 +168,9 @@ describe('ContourExportAdapter — gated dispatch', () => {
   });
 
   it('refuses the DEM package (writes nothing) when the launch state is blocked', () => {
-    vi.useFakeTimers();
-    const { host, calls } = fakeHost();
-    const b = btn();
-    new ContourExportAdapter(host).handle('package', b, intent(), {
-      launchStatus: 'unavailable',
-      verticalUnitsKnown: true,
-      crsProjected: true,
-      precision: null,
-      blockedReasons: ['No terrain surface has been computed.'],
+    expectBlockedFlash('package', ['No terrain surface has been computed.'], (calls) => {
+      expect(calls.dem).toHaveLength(0);
     });
-    expect(calls.dem).toHaveLength(0);
-    expect(b.textContent).toBe('Blocked');
-    expect(b.disabled).toBe(true);
-    // The flash restores the button once the timer elapses (no open handle left).
-    vi.runAllTimers();
-    expect(b.textContent).toBe('Export');
-    expect(b.disabled).toBe(false);
-    vi.useRealTimers();
   });
 
   it('routes the complete deliverable through the resolver with a granted permit', () => {
@@ -182,24 +184,9 @@ describe('ContourExportAdapter — gated dispatch', () => {
   });
 
   it('refuses the complete deliverable (writes nothing) when the launch state is blocked', () => {
-    vi.useFakeTimers();
-    const { host, calls } = fakeHost();
-    const b = btn();
-    new ContourExportAdapter(host).handle('deliverable', b, intent(), {
-      launchStatus: 'unavailable',
-      verticalUnitsKnown: true,
-      crsProjected: true,
-      precision: null,
-      blockedReasons: ['No terrain surface has been computed.'],
+    expectBlockedFlash('deliverable', ['No terrain surface has been computed.'], (calls) => {
+      expect(calls.complete).toHaveLength(0);
     });
-    expect(calls.complete).toHaveLength(0);
-    expect(b.textContent).toBe('Blocked');
-    expect(b.disabled).toBe(true);
-    // The flash restores the button once the timer elapses (no open handle left).
-    vi.runAllTimers();
-    expect(b.textContent).toBe('Export');
-    expect(b.disabled).toBe(false);
-    vi.useRealTimers();
   });
 
   it('routes the terrain report through the resolver and stamps the permit', () => {
@@ -227,24 +214,9 @@ describe('ContourExportAdapter — gated dispatch', () => {
   });
 
   it('refuses the terrain report (never calls the writer) when the launch state is blocked', () => {
-    vi.useFakeTimers();
-    const { host, calls } = fakeHost();
-    const b = btn();
-    new ContourExportAdapter(host).handle('report', b, intent(), {
-      launchStatus: 'unavailable',
-      verticalUnitsKnown: true,
-      crsProjected: true,
-      precision: null,
-      blockedReasons: ['No terrain surface has been computed.'],
+    expectBlockedFlash('report', ['No terrain surface has been computed.'], (calls) => {
+      expect(calls.report).toHaveLength(0);
     });
-    expect(calls.report).toHaveLength(0);
-    expect(b.textContent).toBe('Blocked');
-    expect(b.disabled).toBe(true);
-    // The flash restores the button once the timer elapses (no open handle left).
-    vi.runAllTimers();
-    expect(b.textContent).toBe('Export');
-    expect(b.disabled).toBe(false);
-    vi.useRealTimers();
   });
 
   it('flashes "Export failed" and restores the button when the host rejects a vector export (ANALYSIS-F3 / OUTPUT-F2)', async () => {

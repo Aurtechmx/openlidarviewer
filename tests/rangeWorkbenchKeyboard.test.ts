@@ -26,84 +26,17 @@ import {
   cellIndexOf,
   tallyCellStates,
 } from '../src/model/OrganizedRange';
-
-type Handler = (e: unknown) => void;
-
-class FakeEl {
-  tagName: string;
-  className = '';
-  title = '';
-  tabIndex = -1;
-  width = 0;
-  height = 0;
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
-  private readonly attrs = new Map<string, string>();
-  private readonly handlers = new Map<string, Handler[]>();
-  private _classes = new Set<string>();
-
-  constructor(tag: string) {
-    this.tagName = tag;
-  }
-  get classList() {
-    const classes = this._classes;
-    return {
-      add: (c: string): void => void classes.add(c),
-      remove: (c: string): void => void classes.delete(c),
-      contains: (c: string): boolean => classes.has(c),
-      toggle: (c: string, force?: boolean): boolean => {
-        const want = force === undefined ? !classes.has(c) : force;
-        if (want) classes.add(c);
-        else classes.delete(c);
-        return want;
-      },
-    };
-  }
-  set textContent(v: string) {
-    this._text = v;
-  }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void {
-    this.children.push(...kids);
-  }
-  replaceChildren(...kids: FakeEl[]): void {
-    this.children.length = 0;
-    this.children.push(...kids);
-  }
-  setAttribute(n: string, v: string): void {
-    this.attrs.set(n, v);
-  }
-  getAttribute(n: string): string | null {
-    return this.attrs.get(n) ?? null;
-  }
-  removeAttribute(n: string): void {
-    this.attrs.delete(n);
-  }
-  addEventListener(type: string, fn: Handler): void {
-    const a = this.handlers.get(type) ?? [];
-    a.push(fn);
-    this.handlers.set(type, a);
-  }
-  dispatchEvent(evt: { type: string }): boolean {
-    for (const fn of this.handlers.get(evt.type) ?? []) fn(evt);
-    return true;
-  }
-  /** Canvas 2D context is unavailable in the stub; RangeWorkbench guards every use. */
-  getContext(): null {
-    return null;
-  }
-  getBoundingClientRect(): { width: number; height: number; left: number; top: number } {
-    return { width: 4, height: 2, left: 0, top: 0 };
-  }
-}
+import { FakeEl } from './helpers/canvasKeyboardDomFake';
 
 beforeAll(() => {
   (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
+    // Fixed 4x2 rect — the acquisition grid this suite builds is always that
+    // shape, so every element (in practice, just the canvas) reports it.
+    createElement: (tag: string) => {
+      const el = new FakeEl(tag);
+      el.boundingRect = { width: 4, height: 2 };
+      return el;
+    },
   };
 });
 

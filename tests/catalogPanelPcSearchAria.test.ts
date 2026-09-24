@@ -16,6 +16,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { makeFakeClassList } from './helpers/fakeClassList';
 
 type Listener = (event: unknown) => void;
 
@@ -34,17 +35,7 @@ class FakeEl {
   private _text = '';
   private readonly _listeners = new Map<string, Listener[]>();
   readonly tagName: string;
-  readonly classList = {
-    _set: new Set<string>(),
-    add: (c: string): void => { this.classList._set.add(c); },
-    remove: (c: string): void => { this.classList._set.delete(c); },
-    toggle: (c: string, force?: boolean): void => {
-      const on = force ?? !this.classList._set.has(c);
-      if (on) this.classList._set.add(c);
-      else this.classList._set.delete(c);
-    },
-    contains: (c: string): boolean => this.classList._set.has(c),
-  };
+  readonly classList = makeFakeClassList();
 
   constructor(tagName: string) { this.tagName = tagName; }
 

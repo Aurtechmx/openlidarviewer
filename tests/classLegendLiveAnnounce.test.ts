@@ -17,36 +17,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { ClassLegendPanel } from '../src/ui/ClassLegendPanel';
 import { FakeEl, installFakeDom, byClass } from './support/measurePanelDom';
+import { withLiveRegion } from './helpers/politeLiveRegion';
 
 beforeAll(() => {
   installFakeDom();
   const g = globalThis as unknown as { document: Record<string, unknown> };
   g.document.createDocumentFragment = (): FakeEl => new FakeEl('#fragment');
 });
-
-/**
- * A fake polite live region plus a document stub that resolves to it.
- * `announcePolite` clears the region (writes '') before setting the real
- * text, so `history` records only the non-empty writes — the announcements
- * a screen reader would actually hear.
- */
-function withLiveRegion(): { textOf: () => string; history: string[] } {
-  const history: string[] = [];
-  let current = '';
-  const region = {
-    get textContent(): string {
-      return current;
-    },
-    set textContent(v: string) {
-      current = v;
-      if (v !== '') history.push(v);
-    },
-  };
-  const g = globalThis as unknown as { document: Record<string, unknown> };
-  g.document.querySelector = (sel: string): unknown =>
-    sel === '.olv-visually-hidden[role="status"]' ? region : null;
-  return { textOf: () => region.textContent, history };
-}
 
 const COUNTS = new Map<number, number>([
   [1, 100],

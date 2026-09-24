@@ -14,6 +14,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { FakeEl } from './support/measurePanelDom';
+import { withLiveRegion } from './helpers/politeLiveRegion';
 
 const pending = new Map<number, () => void>();
 let nextTimer = 1;
@@ -29,19 +30,6 @@ beforeAll(() => {
   };
   g.clearTimeout = (id: number) => { pending.delete(id); };
 });
-
-/** A fake polite live region plus a document.querySelector that resolves it. */
-function withLiveRegion(): { textOf: () => string } {
-  let current = '';
-  const region = {
-    get textContent(): string { return current; },
-    set textContent(v: string) { current = v; },
-  };
-  const g = globalThis as unknown as { document: Record<string, unknown> };
-  g.document.querySelector = (sel: string): unknown =>
-    sel === '.olv-visually-hidden[role="status"]' ? region : null;
-  return { textOf: () => current };
-}
 
 const INFO = {
   name: 'campus.laz',

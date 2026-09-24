@@ -16,6 +16,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { makeFakeClassList } from './helpers/fakeClassList';
 
 class FakeEl {
   className = '';
@@ -29,17 +30,7 @@ class FakeEl {
   readonly attrs: Record<string, string> = {};
   private _text = '';
   private readonly _listeners: Record<string, (() => void)[]> = {};
-  readonly classList = {
-    _set: new Set<string>(),
-    add(c: string): void { this._set.add(c); },
-    remove(c: string): void { this._set.delete(c); },
-    toggle(c: string, on?: boolean): boolean {
-      const want = on ?? !this._set.has(c);
-      if (want) this._set.add(c); else this._set.delete(c);
-      return want;
-    },
-    contains(c: string): boolean { return this._set.has(c); },
-  };
+  readonly classList = makeFakeClassList();
   readonly tagName: string;
   constructor(tagName: string) { this.tagName = tagName; }
   setAttribute(k: string, v: string): void { this.attrs[k] = v; }

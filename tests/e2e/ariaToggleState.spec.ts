@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
-import { dropDenseGridPly, showWorkspaceMode, railChromeSettled, expectHittable } from './helpers';
+import { dropDenseGridPly, openExpandedPanel, railChromeSettled, expectHittable } from './helpers';
 
 /**
  * v0.7 accessibility-audit fixes (fe/aria lane): keyboard/focus/visible-state
@@ -21,16 +21,7 @@ const hasAutzenFixture = fs.existsSync(COPC_FILE);
 
 test.describe('ClipPanel — Inside/Outside mode + readout a11y state', () => {
   test('mode buttons carry aria-pressed and the readout is a live region', async ({ page }) => {
-    await page.goto('/?test=1');
-    await dropDenseGridPly(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await showWorkspaceMode(page, 'work');
-
-    const panel = page.locator('.olv-clip-panel');
-    await expect(panel).toBeVisible({ timeout: 20_000 });
-    if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-      await panel.locator('.olv-panel-head').click();
-    }
+    const panel = await openExpandedPanel(page, 'work', '.olv-clip-panel');
 
     const inside = panel.locator('.olv-bc-pill', { hasText: 'Inside' });
     const outside = panel.locator('.olv-bc-pill', { hasText: 'Outside' });
@@ -53,16 +44,7 @@ test.describe('ClipPanel — Inside/Outside mode + readout a11y state', () => {
 
 test.describe('ExportPanel — format pills a11y state', () => {
   test('the format row exposes aria-pressed and flips it on click', async ({ page }) => {
-    await page.goto('/?test=1');
-    await dropDenseGridPly(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await showWorkspaceMode(page, 'output');
-
-    const panel = page.locator('.olv-export-panel');
-    await expect(panel).toBeVisible({ timeout: 20_000 });
-    if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-      await panel.locator('.olv-panel-head').click();
-    }
+    const panel = await openExpandedPanel(page, 'output', '.olv-export-panel');
 
     const las14 = panel.locator('.olv-bc-pill', { hasText: 'LAS 1.4' });
     const xyz = panel.locator('.olv-bc-pill', { hasText: 'XYZ' });

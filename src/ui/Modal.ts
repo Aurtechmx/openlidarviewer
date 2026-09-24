@@ -98,6 +98,18 @@ export interface DialogA11yHandle {
 }
 
 /**
+ * Wire the standard backdrop-dismiss behaviour for a hand-rolled dialog: a
+ * click on the backdrop closes it, while a click inside the card does not
+ * bubble to the backdrop (so selecting text or clicking a control never
+ * closes the dialog by accident). Shared by CommandPalette and ShortcutSheet,
+ * which both stack a `card` over a `backdrop` outside `openModal`.
+ */
+export function wireBackdropDismiss(backdrop: HTMLElement, card: HTMLElement, close: () => void): void {
+  backdrop.addEventListener('click', () => close());
+  card.addEventListener('click', (e) => e.stopPropagation());
+}
+
+/**
  * Give a hand-rolled dialog (one that doesn't go through `openModal`) the same
  * Escape-anywhere + Tab-trap + focus-restore behaviour as the modal primitive,
  * without duplicating the wiring. Installs a window-level, capture-phase

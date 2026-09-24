@@ -28,7 +28,7 @@
  */
 
 import { el } from './dom';
-import { wireDialogA11y, type DialogA11yHandle } from './Modal';
+import { wireDialogA11y, wireBackdropDismiss, type DialogA11yHandle } from './Modal';
 import { groupBySection, rankActions, type Action } from './actionRegistry';
 
 /**
@@ -147,8 +147,7 @@ export class ShortcutSheet {
     ]);
 
     this._input.addEventListener('input', () => this._refresh());
-    this._backdrop.addEventListener('click', () => this.close());
-    this._card.addEventListener('click', (e) => e.stopPropagation());
+    wireBackdropDismiss(this._backdrop, this._card, () => this.close());
   }
 
   /** Replace the action registry. Safe to call while closed. */

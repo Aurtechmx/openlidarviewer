@@ -43,6 +43,31 @@ export async function showWorkspaceMode(
   if (await tab.count()) await tab.click();
 }
 
+/**
+ * Drop the dense-grid fixture, switch to `mode`, and return `selector`'s
+ * panel expanded — clicking its header if it opened collapsed. The setup
+ * several a11y specs need before asserting on a panel's controls (ARIA
+ * toggle state, keyboard focus order, …), so one change to how a panel
+ * shows/collapses doesn't need to ripple through each of them.
+ */
+export async function openExpandedPanel(
+  page: Page,
+  mode: 'data' | 'work' | 'analyse' | 'output',
+  selector: string,
+): Promise<Locator> {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await showWorkspaceMode(page, mode);
+
+  const panel = page.locator(selector);
+  await expect(panel).toBeVisible({ timeout: 20_000 });
+  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
+    await panel.locator('.olv-panel-head').click();
+  }
+  return panel;
+}
+
 export async function suppressOnboardingTour(page: Page): Promise<void> {
   await page.addInitScript(() => {
     try {

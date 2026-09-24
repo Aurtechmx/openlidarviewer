@@ -16,6 +16,7 @@ import * as THREE from 'three/webgpu';
 import { InspectTool } from '../src/render/InspectTool';
 import { makePointInfo } from '../src/render/pointInfo';
 import { FakeEl, installFakeDom } from './support/measurePanelDom';
+import { withLiveRegion } from './helpers/politeLiveRegion';
 
 beforeAll(() => {
   installFakeDom();
@@ -37,19 +38,6 @@ afterEach(() => {
   delete g.document.querySelector;
   delete g.document.body;
 });
-
-/** A fake polite live region plus a document stub that resolves to it. */
-function withLiveRegion(): { textOf: () => string } {
-  let current = '';
-  const region = {
-    get textContent(): string { return current; },
-    set textContent(v: string) { current = v; },
-  };
-  const g = globalThis as unknown as { document: Record<string, unknown> };
-  g.document.querySelector = (sel: string): unknown =>
-    sel === '.olv-visually-hidden[role="status"]' ? region : null;
-  return { textOf: () => current };
-}
 
 function makeToolWithSelection(): InstanceType<typeof InspectTool> {
   const camera = {} as unknown as THREE.PerspectiveCamera;
