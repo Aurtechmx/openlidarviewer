@@ -3054,7 +3054,7 @@ void viewerLoaded.then(() => {
   });
   // Persist the unit choice whenever it changes.
   viewer.measure.setOnUnitChange(persistPrefs);
-  viewer.annotate.setOnChange(() => {
+  viewer.annotate.setEditSuppressor(withSuppressed); viewer.annotate.setOnChange(() => {
     refreshAnnotationPanel();
     // Mark the annotation stack as most-recently-edited so a global Undo
     // targets it (suppressed while the router itself replays an undo/redo).
