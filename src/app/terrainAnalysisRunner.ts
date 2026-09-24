@@ -403,6 +403,16 @@ export function createTerrainAnalysisRunner(
   // pulling the heavy analysis chunk. Null until the first analysis happens —
   // before that there is nothing cached to clear anyway.
   let clearTerrainCoreCacheFn: (() => void) | null = null;
+  // The core the last WINNING run() committed to the panel, and the identity
+  // it was committed for. An export/report build reuses it verbatim when the
+  // identity still matches, rather than re-deriving a core through the
+  // fingerprint cache, which, keyed on the DISPLAY-gather's params, can never
+  // hit a recovered core (its params carry a different withheldExcluded/
+  // classification/points). Without this, an export after a recovered run
+  // would silently rebuild from the display sample and disagree with what the
+  // user just saw. Cleared by abortAndClearCache, so a classification edit
+  // (which calls it) can never leave a stale core behind here either.
+  let lastCommittedCore: { core: TerrainCore; datasetId: string | null; crsRevision: number } | null = null;
   // The persistent tier is armed once per session; a platform without OPFS
   // arms a tier whose every lookup misses.
   let persistenceArmed: Promise<void> | null = null;
@@ -650,6 +660,30 @@ export function createTerrainAnalysisRunner(
     });
   };
 
+  /**
+   * Resolve the interval-independent core for `coreParams`: the Withheld-
+   * aware recovery first when the display gather could not say "excluded",
+   * falling back to `computeFallback` (the cached/computed core over the
+   * display sample) on any refusal. Shared by run() and buildResultForExport
+   * so an export can never disagree with the analysis the user saw about
+   * which points a DTM rests on.
+   */
+  async function resolveTerrainCore(
+    coreParams: TerrainCoreParams,
+    datasetId: string | null,
+    signal: AbortSignal,
+    computeFallback: () => Promise<TerrainCore>,
+  ): Promise<{ core: TerrainCore; recovered: boolean }> {
+    if (coreParams.withheldExcluded === null) {
+      const recoveryFile = getRecoverySource?.(datasetId ?? '') ?? null;
+      if (recoveryFile) {
+        const recoveredCore = await recoverWithheldAwareCore(recoveryFile, coreParams, signal);
+        if (recoveredCore) return { core: recoveredCore, recovered: true };
+      }
+    }
+    return { core: await computeFallback(), recovered: false };
+  }
+
   async function run(intervalM?: number): Promise<void> {
     const viewer = getViewer();
     // The panel is lazy-mounted; every run() caller fires post-mount, so this
@@ -769,31 +803,17 @@ export function createTerrainAnalysisRunner(
       // withheldExcluded === null exactly when some contributing buffer
       // carried no flags channel, which for a lone static cloud means it was
       // voxel-downsampled at load and lost the channel the reduction cannot
-      // keep. When the host can resolve that cloud's original File, re-decode
-      // it at full resolution and rasterise over THAT instead. Snapshot
+      // keep. resolveTerrainCore re-decodes that cloud's original File and
+      // rasterises over THAT instead, when the host can resolve one. Snapshot
       // (runDatasetId/runCrsRevision, captured above) → Await (the re-decode,
       // cancelled by the same abort.signal a superseded run already aborts) →
-      // Revalidate (bail()) → Commit (used below only if it wins the race).
-      // Any refusal falls back to the display-derived core, unchanged.
-      let recoveredCore: TerrainCore | null = null;
-      if (coreParams.withheldExcluded === null) {
-        const recoveryFile = getRecoverySource?.(runDatasetId ?? '') ?? null;
-        if (recoveryFile) {
-          recoveredCore = await recoverWithheldAwareCore(recoveryFile, coreParams, abort.signal);
-          if (bail()) return;
-        }
-      }
-      let core: TerrainCore;
-      let coreSource: TerrainCoreSource | null = null;
-      let withheldRecovered = false;
-      if (recoveredCore) {
-        core = recoveredCore;
-        withheldRecovered = true;
-      } else {
-        // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
-        // miss the worker computes it off-thread (or the fallback does on-thread if
-        // the worker can't load). The AbortSignal cancels a superseded run.
-        core = await getOrComputeCoreAsync(pos, coreParams, (input, params) =>
+      // Revalidate (bail(), right below) → Commit (used below only if it wins
+      // the race). Any refusal falls back to the display-derived core.
+      const { core, recovered: withheldRecovered } = await resolveTerrainCore(
+        coreParams,
+        runDatasetId,
+        abort.signal,
+        () => getOrComputeCoreAsync(pos, coreParams, (input, params) =>
           computeTerrainCoreAsync(
             input as Float32Array,
             (input as Float32Array).length / 3,
@@ -801,10 +821,10 @@ export function createTerrainAnalysisRunner(
             params.classification,
             abort.signal,
           ),
-        );
-        if (bail()) return;
-        coreSource = lastTerrainCoreSource();
-      }
+        ),
+      );
+      if (bail()) return;
+      const coreSource: TerrainCoreSource | null = withheldRecovered ? null : lastTerrainCoreSource();
       // Cheap interval-dependent stage: contours → stitch → style → labels.
       const result = contoursFromCore(core, { intervalM });
       // Final guard before touching the panel: a newer run, a swapped/closed
@@ -816,6 +836,11 @@ export function createTerrainAnalysisRunner(
       // whatever was live at land time is how a superseded frame got recorded as
       // current in the first place.
       analysePanel.update(result, { targetId: runDatasetId, crsRevision: runCrsRevision });
+      // Remembered so an export/report build for this SAME dataset+CRS reuses
+      // this exact core (recovered or not) instead of re-deriving one through
+      // the fingerprint cache, which is keyed on the display gather's params
+      // and can never hit a recovered core's different ones.
+      lastCommittedCore = { core, datasetId: runDatasetId, crsRevision: runCrsRevision };
       refreshDatasetStory(analysePanel);
       if (withheldRecovered) {
         // getLastTerrainComputePath() is not checked here: the worker/fallback
@@ -946,17 +971,35 @@ export function createTerrainAnalysisRunner(
       worldOriginY(gathered.sourceUpAxis),
       gathered,
     );
-    const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
-      computeTerrainCoreAsync(
-        input as Float32Array,
-        (input as Float32Array).length / 3,
-        params,
-        params.classification,
+    const activeId = getActiveId();
+    const crsRev = crsService.crsRevision();
+    // Reuse the core the last winning run() committed for this EXACT dataset
+    // and CRS, whole: the fingerprint cache below is keyed on the display
+    // gather's params and can never hit a recovered core's different ones
+    // (different withheldExcluded/classification/points), so without this an
+    // export built right after a recovered run would silently disagree with
+    // the analysis the user just saw. A classification edit invalidates
+    // lastCommittedCore (abortAndClearCache), so it can never go stale here.
+    const core = lastCommittedCore
+      && lastCommittedCore.datasetId === activeId
+      && lastCommittedCore.crsRevision === crsRev
+      ? lastCommittedCore.core
+      : (await resolveTerrainCore(
+        coreParams,
+        activeId,
         // No abort here: a cache miss (scan analysed under a different fingerprint)
         // computes once; the export awaits it. There is no superseding run to cancel.
         new AbortController().signal,
-      ),
-    );
+        () => getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
+          computeTerrainCoreAsync(
+            input as Float32Array,
+            (input as Float32Array).length / 3,
+            params,
+            params.classification,
+            new AbortController().signal,
+          ),
+        ),
+      )).core;
     return contoursFromCore(core, {
       intervalM: opts.intervalM,
       shapeStyle: opts.shapeStyle,
@@ -981,6 +1024,11 @@ export function createTerrainAnalysisRunner(
     // loaded after the first run, and before that there is nothing to clear —
     // so this never eagerly pulls the heavy analysis chunk.
     clearTerrainCoreCacheFn?.();
+    // A classification edit calls this without changing dataset id or CRS
+    // revision, the two fields buildResultForExport checks, so the
+    // remembered core must be dropped explicitly, or an export after the
+    // edit would reuse a core built from the pre-edit classes.
+    lastCommittedCore = null;
   }
 
   function getLastSourceUpAxis(): 'z' | 'y' {
