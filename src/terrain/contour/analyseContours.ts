@@ -232,6 +232,21 @@ export interface TerrainCoreParams {
    */
   readonly residentOnly?: boolean;
   /**
+   * True when the points handed to this core are a strided subsample of a
+   * larger static source (`StridedTerrainSample.sampled`), not the resident
+   * subset of a stream. Same override as `residentOnly` above, for a
+   * different cause: a static file whose points were strided down (by the
+   * display budget, or by `gatherWithheldAwareTerrainCore`'s own re-decode)
+   * is a sample of the WHOLE dataset, not a partial view of a live stream, so
+   * it stamps `'sampled'` rather than `'resident-only'`. Without this, a DTM
+   * built from a strided re-decode reads `coverageMode: 'full'` from
+   * `rasterizeDtm` (which has no notion of stride) and disagrees with every
+   * other surface (Contour Studio, the classification/surface capability
+   * checks) that already reads the true stride off the same gather. Default
+   * false.
+   */
+  readonly sampled?: boolean;
+  /**
    * What the gather declared about Withheld points (see `DtmGrid`). The core
    * never filters on it; it stamps it on the DTM so every product read from
    * the surface can say which points it rests on.
@@ -1181,6 +1196,17 @@ export function computeTerrainCore(
   // override no longer applies and the real grade shows.)
   if (params.residentOnly && dtm.coverageMode === 'full') {
     dtm = { ...dtm, coverageMode: 'resident-only' };
+  }
+  // A static source strided down before it reached this core (the display
+  // budget, or `gatherWithheldAwareTerrainCore`'s own full-resolution
+  // re-decode) is a sample of the WHOLE dataset — `rasterizeDtm` has no
+  // notion of stride and always reports 'full', so that fact is stamped here
+  // instead, once, before every reader of `dtm.coverageMode` (§ defect E:
+  // this is what let the sealed run record claim `coverage: 'full'`,
+  // `complete: true` for the exact gather Contour Studio already read as a
+  // sample).
+  if (params.sampled && dtm.coverageMode === 'full') {
+    dtm = { ...dtm, coverageMode: 'sampled' };
   }
   if (params.withheldExcluded !== undefined) {
     dtm = {
