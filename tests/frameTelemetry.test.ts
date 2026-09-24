@@ -264,6 +264,7 @@ describe('the hitch bucket', () => {
     expect(ring.framesOver16_7).toBe(4);
     expect(ring.framesOver33_3).toBe(3);
     expect(ring.framesOver50).toBe(2);
+    expect(ring.framesOver100).toBe(1);
   });
 
   it('is exclusive at the boundary, like the two thresholds beside it', () => {
@@ -272,6 +273,10 @@ describe('the hitch bucket', () => {
     expect(ring.framesOver50).toBe(0);
     ring.push(50.1);
     expect(ring.framesOver50).toBe(1);
+    ring.push(100);
+    expect(ring.framesOver100).toBe(0);
+    ring.push(100.1);
+    expect(ring.framesOver100).toBe(1);
   });
 
   it('clears with the others on reset', () => {
@@ -279,5 +284,6 @@ describe('the hitch bucket', () => {
     ring.push(200);
     ring.reset();
     expect(ring.framesOver50).toBe(0);
+    expect(ring.framesOver100).toBe(0);
   });
 });
