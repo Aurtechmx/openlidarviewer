@@ -6,29 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { computeLocalStep, edgeStep } from '../src/simulation/terrainAccess/localStep';
-import type { TerrainAccessGrid } from '../src/simulation/terrainAccess/terrainAccessTypes';
-
-/** A grid from a row-major elevation list; `null` marks NoData. */
-function gridOf(rows: readonly (readonly (number | null)[])[]): TerrainAccessGrid {
-  const h = rows.length;
-  const w = rows[0].length;
-  const z = new Float32Array(w * h).fill(Number.NaN);
-  const valid = new Uint8Array(w * h);
-  const confidence = new Float32Array(w * h);
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const v = rows[r][c];
-      if (v === null) continue;
-      z[r * w + c] = v;
-      valid[r * w + c] = 1;
-      confidence[r * w + c] = 100;
-    }
-  }
-  return {
-    z, valid, confidence, coverage: null, heightAboveGround: null, allowed: null,
-    cols: w, rows: h, cellMetresX: 1, cellMetresY: 1,
-  };
-}
+import { gridOf } from './helpers/terrainAccessFixtures';
 
 describe('computeLocalStep', () => {
   it('is the worst discontinuity in the 3×3 footprint, not the average', () => {

@@ -10,43 +10,7 @@ import {
   DEFAULT_COST_WEIGHTS, applyWidthClearance, nodeEligibility, prepareTerrainAccessFeatures,
 } from '../src/simulation/terrainAccess/traversabilityCost';
 import type { TerrainAccessGrid, TerrainAccessProfile } from '../src/simulation/terrainAccess/terrainAccessTypes';
-
-function gridOf(
-  rows: readonly (readonly (number | null)[])[],
-  over: Partial<TerrainAccessGrid> = {},
-): TerrainAccessGrid {
-  const h = rows.length;
-  const w = rows[0].length;
-  const z = new Float32Array(w * h).fill(Number.NaN);
-  const valid = new Uint8Array(w * h);
-  const confidence = new Float32Array(w * h).fill(100);
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const v = rows[r][c];
-      if (v === null) { confidence[r * w + c] = 0; continue; }
-      z[r * w + c] = v;
-      valid[r * w + c] = 1;
-    }
-  }
-  return {
-    z, valid, confidence, coverage: null, heightAboveGround: null, allowed: null,
-    cols: w, rows: h, cellMetresX: 1, cellMetresY: 1,
-    ...over,
-  };
-}
-
-const PERMISSIVE: TerrainAccessProfile = Object.freeze({
-  name: 'test',
-  maxLongitudinalGrade: 10,
-  maxCrossSlope: 10,
-  maxStepHeight: 10,
-  maxRuggedness: null,
-  vehicleWidth: 0,
-  vehicleLength: null,
-  minimumTerrainConfidence: 0,
-  unknownPolicy: 'block',
-  obstacleHeightThreshold: null,
-});
+import { gridOf, PERMISSIVE } from './helpers/terrainAccessFixtures';
 
 /** Build eligibility + features for a grid/profile in one call, for brevity. */
 function setup(grid: TerrainAccessGrid, profile: TerrainAccessProfile) {

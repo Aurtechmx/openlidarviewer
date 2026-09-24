@@ -18,45 +18,8 @@ import {
 import { computeRouteDiagnostics } from '../src/simulation/terrainAccess/routeDiagnostics';
 import { runTerrainAccess, TERRAIN_ACCESS_DEFAULTS } from '../src/simulation/terrainAccess/terrainAccessRunner';
 import type { HorizontalScale } from '../src/simulation/terrainAccess/dtmTerrainAccessGrid';
-import type { TerrainAccessGrid, TerrainAccessProfile } from '../src/simulation/terrainAccess/terrainAccessTypes';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
-
-function gridOf(
-  rows: readonly (readonly (number | null)[])[],
-  over: Partial<TerrainAccessGrid> = {},
-): TerrainAccessGrid {
-  const h = rows.length;
-  const w = rows[0].length;
-  const z = new Float32Array(w * h).fill(Number.NaN);
-  const valid = new Uint8Array(w * h);
-  const confidence = new Float32Array(w * h).fill(100);
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      const v = rows[r][c];
-      if (v === null) continue;
-      z[r * w + c] = v;
-      valid[r * w + c] = 1;
-    }
-  }
-  return {
-    z, valid, confidence, coverage: null, heightAboveGround: null, allowed: null,
-    cols: w, rows: h, cellMetresX: 1, cellMetresY: 1,
-    ...over,
-  };
-}
-
-const PERMISSIVE: TerrainAccessProfile = Object.freeze({
-  name: 'test',
-  maxLongitudinalGrade: 10,
-  maxCrossSlope: 10,
-  maxStepHeight: 10,
-  maxRuggedness: null,
-  vehicleWidth: 0,
-  vehicleLength: null,
-  minimumTerrainConfidence: 0,
-  unknownPolicy: 'block',
-  obstacleHeightThreshold: null,
-});
+import { gridOf, PERMISSIVE } from './helpers/terrainAccessFixtures';
 
 describe('adversarial: NoData must not be treated as elevation', () => {
   it('a NoData cell does not pollute a valid neighbour\'s Horn slope with a fabricated 0 m elevation', () => {

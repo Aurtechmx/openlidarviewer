@@ -11,29 +11,14 @@
  * change or a classification edit while the Lab stayed closed either.
  */
 import { describe, expect, it } from 'vitest';
-import * as THREE from 'three/webgpu';
-
 import { acquireTerrainAccessOverlay, disposePersistentTerrainAccessOverlay } from '../src/ui/fieldSimulation/terrainAccessLab';
 import { invalidateTerrainAccessOverlay } from '../src/lazyChunks';
 import { buildTerrainAccessMapBuffers, terrainAccessOverlayFrame } from '../src/render/terrainAccessOverlayGeometry';
 import { prepareTerrainAccessPreview } from '../src/simulation/terrainAccess/terrainAccessPreview';
+import { fakeHost } from './helpers/sceneOverlayHost';
 import type { HorizontalScale } from '../src/simulation/terrainAccess/dtmTerrainAccessGrid';
 import type { TerrainAccessProfile } from '../src/simulation/terrainAccess/terrainAccessTypes';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
-
-/** A host that records what the overlay attaches and detaches. */
-function fakeHost() {
-  const objects: THREE.Object3D[] = [];
-  return {
-    add: (o: THREE.Object3D) => { objects.push(o); },
-    remove: (o: THREE.Object3D) => {
-      const i = objects.indexOf(o);
-      if (i >= 0) objects.splice(i, 1);
-    },
-    requestFrame: () => {},
-    objects,
-  };
-}
 
 const projected: HorizontalScale = { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true };
 
