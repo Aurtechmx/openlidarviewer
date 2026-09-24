@@ -48,7 +48,8 @@ import { describe, expect, it } from 'vitest';
 
 import { aStarTerrain } from '../src/simulation/terrainAccess/aStarTerrain';
 import {
-  DEFAULT_COST_WEIGHTS, applyWidthClearance, nodeEligibility, prepareTerrainAccessFeatures,
+  DEFAULT_COST_WEIGHTS, applyWidthClearance, evaluateEdge, nodeEligibility, prepareTerrainAccessFeatures,
+  whyNotEligible,
 } from '../src/simulation/terrainAccess/traversabilityCost';
 import type { TerrainAccessGrid, TerrainAccessProfile } from '../src/simulation/terrainAccess/terrainAccessTypes';
 
@@ -129,6 +130,10 @@ const TIE_FREE = new Set([
   'TA-6-nodata-corridor.json', // NO_ROUTE either way; path is trivially []
   'TA-8-ruggedness.json',
   'TA-8-ruggedness-unset.json',
+  // TA-9-dsm-disabled-*: with obstruction inactive, flat terrain, straight
+  // line is the unique shortest path; no detour candidate exists to tie with.
+  'TA-9-dsm-disabled-threshold.json',
+  'TA-9-dsm-disabled-nolayer.json',
   // TA-10: brute-forced over every monotone lattice path from start to end
   // (E/S/SE steps). The anisotropic tilt makes the diagonal route strictly
   // cheaper than every alternative, not tied with one.
@@ -137,7 +142,7 @@ const TIE_FREE = new Set([
 
 describe('the fixture set is present', () => {
   it('has fixtures to compare, so the agreement below is not vacuous', () => {
-    expect(names.length).toBeGreaterThanOrEqual(10);
+    expect(names.length).toBeGreaterThanOrEqual(13);
   });
 
   it('has a frozen expectation for every fixture', () => {
@@ -193,4 +198,60 @@ describe.each(names)('%s', (name) => {
   it('never crosses a cell the oracle also found ineligible', () => {
     for (const cell of result.path) expect(eligibility.blocked[cell]).toBe(0);
   });
+
+  if (name === 'TA-3-cross-slope-trap.json') {
+    it('§13 wording, checked directly: the same move is acceptable by total slope alone, but blocked specifically by cross slope', () => {
+      // The move at the start cell, due north (see aStarTerrain/evaluateEdge's
+      // convention, matching the TA-3 unit test in
+      // terrainAccessTraversabilityCost.test.ts), is nowhere near the NoData
+      // gap, so this pins the per-edge evaluation itself, not the detour.
+      const to = startIndex + grid.cols;
+      const evalr = evaluateEdge(grid, features, fixture.profile, startIndex, to, 0, 1);
+      const totalSlope = Math.hypot(evalr.longitudinalGrade, evalr.crossSlope);
+      // "Acceptable by total slope alone": read against the plane's own
+      // maxLongitudinalGrade, the move's total slope is within the declared
+      // limit, so a hard block here cannot be blamed on the slope being too
+      // steep in general.
+      expect(totalSlope).toBeLessThanOrEqual(fixture.profile.maxLongitudinalGrade);
+      // And yet it is blocked, specifically by the directional cross slope
+      // exceeding its own, tighter limit.
+      expect(evalr.blocked).toBe(true);
+      expect(evalr.reason).toBe('cross-slope');
+      expect(evalr.crossSlope).toBeGreaterThan(fixture.profile.maxCrossSlope);
+    });
+  }
+
+  if (name === 'TA-3-cross-slope-control.json') {
+    it('control: with maxCrossSlope loosened, the same terrain and gap route around it using a north/south move', () => {
+      expect(result.outcome).toBe('FOUND');
+      // Every neighbouring offset in TERRAIN_ACCESS_NEIGHBOURS with a nonzero
+      // dy is a north/south component; the path must use at least one to get
+      // around the NoData cell at (2, 2), since every same-row cell at column
+      // 2 is NoData and there is no other way to change column at row 2.
+      let usedVerticalMove = false;
+      for (let i = 1; i < result.path.length; i++) {
+        const rowDelta = Math.trunc(result.path[i] / grid.cols) - Math.trunc(result.path[i - 1] / grid.cols);
+        if (rowDelta !== 0) { usedVerticalMove = true; break; }
+      }
+      expect(usedVerticalMove).toBe(true);
+    });
+  }
+
+  if (name === 'TA-9-dsm-disabled-threshold.json' || name === 'TA-9-dsm-disabled-nolayer.json') {
+    it('control: with obstruction inactive, the route passes straight through the cell TA-9 detours around', () => {
+      expect(result.outcome).toBe('FOUND');
+      // (row 2, col 2): on TA-9's straight-line corridor and one of the two
+      // cells TA-9's obstruction closes; (row 1, col 2), TA-9's other closed
+      // cell, is off this corridor and so not expected on the shortest path.
+      expect([...result.path]).toContain(2 * grid.cols + 2);
+    });
+
+    it('§13 wording, checked directly: the why-not inspector reports not-evaluated, not clear, at those cells', () => {
+      const cellIndex = 1 * grid.cols + 2;
+      const why = whyNotEligible(grid, features, eligibility, fixture.profile, cellIndex);
+      expect(why.eligible).toBe(true); // never blocked in the first place
+      const obstructionState = features.obstruction[cellIndex];
+      expect(obstructionState).toBe('not-evaluated');
+    });
+  }
 });

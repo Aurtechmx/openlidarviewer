@@ -1,0 +1,18 @@
+{
+  "fixture": "TA-3-cross-slope-control.json",
+  "cols": 5,
+  "rows": 5,
+  "outcome": "FOUND",
+  "path": [
+    10,
+    11,
+    17,
+    13,
+    14
+  ],
+  "cost": 7.819603171,
+  "eligibleCount": 24,
+  "blockedReasonCounts": {
+    "no-data": 1
+  }
+}

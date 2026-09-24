@@ -70,7 +70,9 @@ lowest-cost route, where exact-path comparison is meaningful.
 | `TA-7-low-confidence-block` / `-penalize` | The same weak-evidence cell is hard-excluded under `unknownPolicy: 'block'` and cost-penalized instead (and so eligible again) under `'penalize'`. |
 | `TA-8-ruggedness` / `-unset` | A rough spike forces a detour once `maxRuggedness` is declared, and does not when it is left `null`. |
 | `TA-3-cross-slope-trap` | A uniform plane whose direct row is closed by a single NoData cell; every detour requires a north/south move, and a tight `maxCrossSlope` rejects all of them even though the plane's total slope would pass either limit read as one scalar, so the outcome is `NO_ROUTE`. |
+| `TA-3-cross-slope-control` | The trap's control: same terrain and gap, `maxCrossSlope` loosened. FOUND, using a north/south move, so the trap's NO_ROUTE is shown to come from that one limit and nothing else. |
 | `TA-9-dsm-obstruction` | Above-ground DSM evidence (`heightAboveGround`), not terrain geometry, closes two cells and forces the same kind of detour TA-4 forces with a step. |
+| `TA-9-dsm-disabled-threshold` / `-nolayer` | The obstruction's two controls: the same DSM evidence with no threshold declared, and the same threshold with no DSM layer at all. Either way obstruction stays `not-evaluated` and the route runs straight through the cells TA-9 closes. |
 | `TA-10-anisotropic-grid` | `cellMetresX` and `cellMetresY` differ, as an unequal-metre geographic grid would; the route cost and the diagonal heading it depends on must reflect the true physical distances, not the raster index. |
 
 ## Running it

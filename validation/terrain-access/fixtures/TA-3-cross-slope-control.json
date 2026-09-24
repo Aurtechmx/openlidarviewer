@@ -1,0 +1,27 @@
+{
+  "name": "TA-3-cross-slope-control",
+  "why": "The control for TA-3: the identical tilted plane and the identical NoData gap at (2,2), but maxCrossSlope loosened from 0.5 to 10 (effectively unconstrained), maxLongitudinalGrade unchanged at 1.5. If TA-3's NO_ROUTE actually came from the NoData cell, the vehicle width, or some other constraint rather than the directional cross-slope limit, this fixture would ALSO be NO_ROUTE. It must instead be FOUND, using a north/south move to detour around the gap — proving the only thing that changed between the two fixtures (maxCrossSlope) is what was rejecting every detour.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, -1, -2, -3, -4],
+    [0, -1, -2, -3, -4],
+    [0, -1, null, -3, -4],
+    [0, -1, -2, -3, -4],
+    [0, -1, -2, -3, -4]
+  ],
+  "profile": {
+    "name": "cross-slope-control",
+    "maxLongitudinalGrade": 1.5,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [2, 0],
+  "end": [2, 4]
+}
