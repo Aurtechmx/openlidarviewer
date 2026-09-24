@@ -192,4 +192,39 @@ test.describe('shortcut sheet — failure state', () => {
     await expect(page.locator(TOAST_ACTION)).toHaveText('Try again');
     await expect(page.locator('.olv-shortcuts')).toBeHidden();
   });
+
+  // Firefox re-fetches a specifier that already failed once (see the file
+  // header); Chromium/WebKit cache the failure and never reach the network
+  // on retry, so only this leg can exercise a real fail-then-succeed round
+  // trip through main.ts's actual ensureShortcutSheet wiring — the one
+  // integration point that pins onReady surviving to a later retry, as
+  // opposed to lazySurfaceLoad.test.ts's mocked-loader version of the same
+  // mechanism.
+  test('firefox: Try again after a failed load still opens the sheet', async ({ page, browserName }) => {
+    test.skip(browserName !== 'firefox', 'Chromium/WebKit cannot re-fetch a failed specifier without a full navigation.');
+    await seedStaleReloadCooldown(page);
+    await goto(page);
+    let attempts = 0;
+    await page.route('**/ShortcutSheet-*.js', (route) => (++attempts === 1 ? route.abort() : route.continue()));
+    await page.keyboard.press('Shift+Slash');
+    await expect(page.locator(TOAST_ACTION)).toHaveText('Try again', { timeout: 10_000 });
+    await page.locator(TOAST_ACTION).click();
+    await expect(page.locator('.olv-shortcuts')).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+test.describe('shortcut sheet — command palette entry point', () => {
+  test('a failed "Show keyboard shortcuts" chunk never surfaces as an unhandled rejection', async ({ page }) => {
+    await seedStaleReloadCooldown(page);
+    await gotoWithScan(page);
+    await page.route('**/ShortcutSheet-*.js', (route) => route.abort());
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(String(err)));
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.locator('.olv-palette-input').fill('keyboard shortcuts');
+    await page.locator('.olv-palette-row', { hasText: 'Show keyboard shortcuts' }).click();
+    await expect(page.locator(TOAST_ACTION)).toHaveText('Try again', { timeout: 10_000 });
+    await page.waitForTimeout(300);
+    expect(pageErrors).toEqual([]);
+  });
 });

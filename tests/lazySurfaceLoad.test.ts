@@ -156,12 +156,13 @@ describe('createLazySingleton', () => {
   });
 
   it('replays a caller-supplied onReady on a later retry, even though the retry itself calls ensure() with no argument', async () => {
-    // Regression for the shortcut-sheet bug: `main.ts`'s ensureShortcutSheet()
-    // used to call `.ensure()` with no onReady at all, so a successful
-    // "Try again" (the baked-in `retry` below, which always calls `ensure()`
-    // bare) built and cached the value but never replayed the caller's
-    // intended action. The fix threads the caller's onReady through, relying
-    // on `pending` surviving the failed attempt to replay it here.
+    // Pins createLazySingleton's own replay mechanism in isolation — `pending`
+    // survives a failed attempt and fires on whatever later call actually
+    // succeeds, even the bare `ensure()` the baked-in `retry` below always
+    // makes. This is the primitive `main.ts`'s ensureShortcutSheet() relies on
+    // for its onReady-on-retry wiring; that wiring itself (main.ts is not
+    // unit-testable — no exports) is pinned end to end by the Firefox-only
+    // e2e case in lazyOverlayStates.spec.ts, not here.
     const toast = fakeToast();
     let attempt = 0;
     const build = vi.fn(() => {
