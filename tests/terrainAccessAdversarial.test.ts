@@ -191,6 +191,36 @@ describe('adversarial: a route is never called safe', () => {
   });
 });
 
+describe('adversarial: Terrain Access never borrows Flow Pulse\'s wording', () => {
+  it('a run with interpolated and no-elevation cells never says "Flow" anywhere in its limitations', () => {
+    const n = 9;
+    const dtm: DtmGrid = {
+      z: new Float32Array(n),
+      // Cell 4 interpolated (coverage 1), cell 8 absent (coverage 0, no elevation).
+      coverage: Uint8Array.from([2, 2, 2, 2, 1, 2, 2, 2, 0]),
+      confidence: new Float32Array(n).fill(100),
+      counts: new Uint32Array(n).fill(1),
+      interpDistanceCells: new Float32Array(n),
+      cols: 3, rows: 3, cellSizeM: 1, originH1: 0, originH2: 0,
+      crs: 'EPSG:32610', horizontalEpsg: 32610, verticalDatum: null, verticalEpsg: null,
+      verticalUnitToMetres: 1, coverageMode: 'full', sourcePointCount: n, analyzedPointCount: n,
+      withheldExcluded: true, meanConfidence: 100, warnings: [],
+    };
+    const scale: HorizontalScale = { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true };
+    const identity = {
+      layerId: null, filename: null, sourceDigest: null, analysisInputDigest: 'd',
+      build: 'b', id: 'i', generatedAt: '2026-01-01T00:00:00.000Z', processingManifestHead: null,
+    };
+    const result = runTerrainAccess(dtm, scale, PERMISSIVE, 0, 3, TERRAIN_ACCESS_DEFAULTS, identity);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Sanity: the interpolated/absent-cell sentences actually fired.
+    expect(result.limitations.some((l) => /interpolated elevation/.test(l))).toBe(true);
+    expect(result.limitations.some((l) => /carry no elevation/.test(l))).toBe(true);
+    for (const l of result.limitations) expect(l).not.toMatch(/\bFlow\b/);
+  });
+});
+
 describe('adversarial: an invalid normal / Horn window is not treated as fully reliable', () => {
   it('a cell whose centre elevation is missing carries slope 0 and is excluded from eligibility, never averaged in as a real value', () => {
     const z = new Float32Array(9).fill(Number.NaN);
@@ -203,5 +233,31 @@ describe('adversarial: an invalid normal / Horn window is not treated as fully r
       cols: 3, rows: 3, cellMetresX: 1, cellMetresY: 1,
     });
     expect(Number.isNaN(step[4])).toBe(true); // "no neighbours to compare" is NOT the same as "step 0"
+  });
+});
+
+describe('adversarial: the reported route step is the one the limit actually applies to', () => {
+  it('reports max edge step <= the limit when only the windowed footprint relief exceeds it', () => {
+    // Middle row is flat (the route); one cell just off the route, but
+    // inside the 3x3 footprint window of a route cell, carries a large
+    // elevation jump. Eligibility (traversabilityCost.ts) gates a move on
+    // `edgeStep` (the adjacent-cell jump actually crossed); this proves the
+    // diagnostic must agree with that gate rather than with
+    // `features.localStep` (footprint relief), which a route can be near
+    // without ever crossing.
+    const grid = gridOf([
+      [10, 0, 0],
+      [0, 0, 0],
+      [0, 0, 0],
+    ]);
+    const profile = { ...PERMISSIVE, maxStepHeight: 0.3 };
+    const features = prepareTerrainAccessFeatures(grid, profile);
+    // Route along the middle row: (1,0) -> (1,1) -> (1,2), indices 3, 4, 5.
+    // Every edge step along it is 0 m; only cell 4's 3x3 window (which
+    // includes cell 0's z=10) carries a large windowed relief.
+    expect(features.localStep[4]).toBeGreaterThan(profile.maxStepHeight);
+    const diagnostics = computeRouteDiagnostics(grid, features, [3, 4, 5], DEFAULT_COST_WEIGHTS, profile);
+    expect(diagnostics.maxEdgeStepM).toBeLessThanOrEqual(profile.maxStepHeight);
+    expect(diagnostics.maxEdgeStepM).toBeCloseTo(0, 6);
   });
 });

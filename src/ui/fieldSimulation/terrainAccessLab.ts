@@ -279,7 +279,8 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
     row('Ascent / descent', `${d.totalAscentM.toFixed(1)} m / ${d.totalDescentM.toFixed(1)} m`),
     row('Max longitudinal grade', `${d.maxLongitudinalGrade.toFixed(3)} (tangent)`),
     row('Max cross slope', `${d.maxCrossSlope.toFixed(3)} (tangent)`),
-    row('Max local step', `${d.maxLocalStepM.toFixed(3)} m`),
+    row('Max step (limit applies here)', `${d.maxEdgeStepM.toFixed(3)} m`),
+    row('Terrain relief within the footprint window', `${d.maxLocalReliefM.toFixed(3)} m`),
     row('Min terrain confidence', Number.isFinite(d.minTerrainConfidence) ? d.minTerrainConfidence.toFixed(0) : 'n/a'),
   );
   const list = el('ul', { className: 'olv-story-v' });

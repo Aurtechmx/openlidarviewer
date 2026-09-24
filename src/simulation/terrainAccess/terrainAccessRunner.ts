@@ -253,7 +253,7 @@ export function runTerrainAccess(
   const resultDigest = terrainAccessResultDigest(grid.cols, grid.rows, eligibility.blocked, search.path, search.cost);
 
   const limitations = [
-    ...basisLimitations(basis),
+    ...basisLimitations(basis, 'terrain-access'),
     ...gridWarnings,
     ...modelLimitations(profile, diagnostics),
   ];
@@ -290,7 +290,8 @@ export function runTerrainAccess(
       totalDescentM: diagnostics.totalDescentM,
       maxLongitudinalGrade: diagnostics.maxLongitudinalGrade,
       maxCrossSlope: diagnostics.maxCrossSlope,
-      maxLocalStepM: diagnostics.maxLocalStepM,
+      maxEdgeStepM: diagnostics.maxEdgeStepM,
+      maxLocalReliefM: diagnostics.maxLocalReliefM,
       maxVrm: diagnostics.maxVrm,
       minTerrainConfidence: diagnostics.minTerrainConfidence,
       cost: search.cost,

@@ -47,7 +47,22 @@ export interface RouteDiagnostics {
   readonly p95LongitudinalGrade: number;
   readonly maxCrossSlope: number;
   readonly p95CrossSlope: number;
-  readonly maxLocalStepM: number;
+  /**
+   * The largest adjacent-cell elevation jump actually crossed along the
+   * route (`edgeStep`/`evalr.stepM` in `traversabilityCost.ts`) — the exact
+   * quantity `maxStepHeight` gates a move against. This is the figure a
+   * reader should compare to their declared step limit.
+   */
+  readonly maxEdgeStepM: number;
+  /**
+   * The largest windowed-footprint relief (`features.localStep`, the worst
+   * discontinuity in a route cell's whole 3x3 neighbourhood, whether or not
+   * the route crosses it) touched by the route. NOT the quantity the step
+   * limit applies to — a route can pass near a discontinuity it never
+   * crosses — so this is reported separately and never compared to
+   * `maxStepHeight` by name.
+   */
+  readonly maxLocalReliefM: number;
   readonly maxVrm: number;
   readonly minTerrainConfidence: number;
   /** Null when `grid.coverage` was not supplied. */
@@ -77,7 +92,7 @@ export function computeRouteDiagnostics(
     return {
       cellCount: 0, horizontalLengthM: 0, length3dM: 0, totalAscentM: 0, totalDescentM: 0,
       maxLongitudinalGrade: 0, p95LongitudinalGrade: 0, maxCrossSlope: 0, p95CrossSlope: 0,
-      maxLocalStepM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
+      maxEdgeStepM: 0, maxLocalReliefM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
       fractionMeasured: null, fractionInterpolated: null, fractionLowConfidenceOrEdgeRisk: null,
       dominantCostContributors: [],
     };
@@ -89,7 +104,8 @@ export function computeRouteDiagnostics(
   let totalDescentM = 0;
   const longitudinalGrades: number[] = [];
   const crossSlopes: number[] = [];
-  let maxLocalStepM = 0;
+  let maxEdgeStepM = 0;
+  let maxLocalReliefM = 0;
   let minTerrainConfidence = Number.POSITIVE_INFINITY;
   let maxVrm = 0;
 
@@ -98,8 +114,8 @@ export function computeRouteDiagnostics(
   for (let k = 0; k < path.length; k++) {
     const i = path[k];
     if (grid.confidence[i] < minTerrainConfidence) minTerrainConfidence = grid.confidence[i];
-    const step = features.localStep[i];
-    if (Number.isFinite(step) && step > maxLocalStepM) maxLocalStepM = step;
+    const relief = features.localStep[i];
+    if (Number.isFinite(relief) && relief > maxLocalReliefM) maxLocalReliefM = relief;
     const vrm = features.vrm[i];
     if (Number.isFinite(vrm) && vrm > maxVrm) maxVrm = vrm;
 
@@ -113,6 +129,7 @@ export function computeRouteDiagnostics(
     const dy = row - prevRow;
 
     const evalr = edgeGeometry(grid, features, prev, i, dx, dy);
+    if (Number.isFinite(evalr.stepM) && evalr.stepM > maxEdgeStepM) maxEdgeStepM = evalr.stepM;
     horizontalLengthM += evalr.distanceM;
     const rise = grid.z[i] - grid.z[prev];
     length3dM += Math.hypot(evalr.distanceM, rise);
@@ -159,7 +176,7 @@ export function computeRouteDiagnostics(
     p95LongitudinalGrade: quantile(longitudinalGrades, 0.95),
     maxCrossSlope: crossSlopes.length ? Math.max(...crossSlopes) : 0,
     p95CrossSlope: quantile(crossSlopes, 0.95),
-    maxLocalStepM,
+    maxEdgeStepM, maxLocalReliefM,
     maxVrm,
     minTerrainConfidence: Number.isFinite(minTerrainConfidence) ? minTerrainConfidence : Number.NaN,
     fractionMeasured: coverageKnown ? measured / path.length : null,
