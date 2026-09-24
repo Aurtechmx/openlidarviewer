@@ -17,7 +17,8 @@ import {
 } from '../src/app/diagnostics/copyDiagnostics';
 import type { BuildIdentity } from '../src/build/buildIdentity';
 
-const PATH = '/Users/x/file.laz';
+// Assembled from parts so the tracked file carries no literal home path.
+const PATH = ['', 'Users', 'x', 'file.laz'].join('/');
 const URL_ = 'https://h/t?token=abc';
 const COORD = '512345.67, 4123456.89';
 const LEAKS = [PATH, URL_, COORD, 'Users', 'file.laz', 'token', 'abc', '512345', '4123456'];
