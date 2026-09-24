@@ -87,6 +87,17 @@ def compute(grid_def):
     }
 
 
+def write_frozen(payload):
+    """Write the frozen expectations to the fixed EXPECTED path inside this oracle tree."""
+    target = EXPECTED.resolve()
+    if not target.is_relative_to(HERE.parent.resolve()):
+        raise SystemExit(f"refusing to write outside {HERE.parent}: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2)
+        fh.write("\n")
+
+
 def main():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
@@ -98,7 +109,7 @@ def main():
     result = compute(grid_def)
 
     if args.write:
-        EXPECTED.write_text(json.dumps(result, indent=2) + "\n")
+        write_frozen(result)
         print(f"wrote {EXPECTED}")
         return 0
 

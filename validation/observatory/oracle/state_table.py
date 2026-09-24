@@ -186,6 +186,17 @@ def self_check_invariants(rows, config):
     return problems
 
 
+def write_frozen(payload):
+    """Write the frozen expectations to the fixed EXPECTED path inside this oracle tree."""
+    target = EXPECTED.resolve()
+    if not target.is_relative_to(HERE.parent.resolve()):
+        raise SystemExit(f"refusing to write outside {HERE.parent}: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2)
+        fh.write("\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
@@ -197,8 +208,7 @@ def main():
     rows = enumerate_rows(config)
 
     if args.write:
-        EXPECTED.parent.mkdir(parents=True, exist_ok=True)
-        EXPECTED.write_text(json.dumps({"schemaVersion": 1, "rowCount": len(rows), "rows": rows}, indent=2) + "\n")
+        write_frozen({"schemaVersion": 1, "rowCount": len(rows), "rows": rows})
         print(f"state_table.py --write: wrote {len(rows)} row(s) to {EXPECTED.relative_to(HERE.parent.parent.parent)}")
         return 0
 
