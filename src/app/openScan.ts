@@ -54,6 +54,7 @@ import { loadPreviewCloud, loadLoadDiagnostics } from '../lazyChunks';
 import type { PreviewCloudHandle, PreviewCloudViewer } from './previewCloud';
 import type { PreviewChunk } from '../io/loadLas';
 import { PREVIEW_MAX_POINTS } from '../render/previewLimits';
+import { onNextDraw } from '../render/drawSignal';
 
 /**
  * The Layers chip names the FILE, so it shows the file total (the same count
@@ -558,7 +559,12 @@ export async function attachStaticCloud(
   // A freshly opened scan starts in the orbit overview, then glides in.
   viewer.setMode('orbit');
   if (!source.preview) viewer.frameAll();
-  const firstRenderMs = performance.now() - renderStartedAt;
+  // Framing is synchronous and draws nothing; the first drawn frame is
+  // measured separately, one animation frame after the loop next renders.
+  const framingMs = performance.now() - renderStartedAt;
+  const firstDraw = deps.debug || deps.benchmark
+    ? new Promise<number>((done) => onNextDraw(() => requestAnimationFrame(() => done(performance.now() - renderStartedAt))))
+    : undefined;
 
   // Colour the fresh scan by the mode its attributes best support (RGB →
   // classification → intensity → elevation), gated so it never picks a mode
@@ -744,9 +750,9 @@ export async function attachStaticCloud(
   // block, the performance overlay, and (under ?benchmark=1) a benchmark.
   // The formatters ride their own chunk; a normal session never loads them.
   if ((deps.debug || deps.benchmark) && result.telemetry) {
-    const telemetry = { ...result.telemetry, gpuUploadMs, firstRenderMs };
+    const telemetry = { ...result.telemetry, gpuUploadMs, framingMs };
     const cloud = result.cloud;
-    void loadLoadDiagnostics().then((m) => m.reportLoadDiagnostics(deps, cloud, telemetry));
+    void loadLoadDiagnostics().then((m) => m.reportLoadDiagnostics(deps, cloud, telemetry, firstDraw));
   }
   deps.dropZone.setCancelHandler(null);
   deps.dropZone.setProgress(null);

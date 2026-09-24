@@ -23,6 +23,7 @@
 
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { shouldRunProbePick } from './hoverPickGate';
+import { noteDrawn } from './drawSignal';
 import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
@@ -210,6 +211,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
     if (wantEdl) host.renderEdl();
     else host.renderScene();
     host.setEdlPaintedAtRest(wantEdl);
+    noteDrawn();
   } else if (wantEdl && !host.edlPaintedAtRest() && host.sweepState() !== 'converging') {
     // Motion just settled and the last paint had EDL off — force one EDL
     // repaint so the depth cue snaps back, then resume idle throttling. A
@@ -218,6 +220,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
     host.noteRendered();
     host.renderEdl();
     host.setEdlPaintedAtRest(true);
+    noteDrawn();
   } else {
     host.noteSkipped();
   }

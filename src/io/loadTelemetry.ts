@@ -26,8 +26,16 @@ export interface LoadTelemetry {
   downsampleMs?: number;
   /** GPU buffer upload — `addCloud` (main thread). */
   gpuUploadMs?: number;
-  /** Framing and the first render pass (main thread). */
-  firstRenderMs?: number;
+  /**
+   * Switching to the orbit overview and framing the cloud (main thread). No
+   * frame has drawn yet. Named `firstRenderMs` before v0.7.
+   */
+  framingMs?: number;
+  /**
+   * Framing start to the first animation frame after the renderer drew the
+   * new cloud (main thread). Absent when no frame drew within the timeout.
+   */
+  firstDrawMs?: number;
   /** The whole load, from drop to resolved (main thread). */
   totalLoadMs?: number;
   /** Name of the file the row was measured on (local LAZ path). */
@@ -78,7 +86,8 @@ const TELEMETRY_ROWS: [string, keyof LoadTelemetry][] = [
   ['decode', 'decodeMs'],
   ['downsample', 'downsampleMs'],
   ['gpu upload', 'gpuUploadMs'],
-  ['first render', 'firstRenderMs'],
+  ['framing', 'framingMs'],
+  ['first draw', 'firstDrawMs'],
   // Wall-clock end-to-end (drop → resolved). It is LESS than the sum of the
   // stages above because the worker stages (decode / downsample) overlap the
   // main-thread stages — so the "(wall)" tag flags it as elapsed time, not an
