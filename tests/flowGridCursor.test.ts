@@ -135,9 +135,9 @@ describe('describeCell / cellAnnouncement', () => {
     expect(cellAnnouncement(report)).toBe('Column 0, row 0, elevation unknown, routed, 1 cell(s) upstream.');
   });
 
-  // ── Defect A: the grid-local z must never be printed as if it were a real
-  // elevation. With a resolved origin/unit the report adds the origin back
-  // and labels the unit; the fixture mirrors a real USGS 3DEP tile — a local
+  // The grid-local z must never be printed as if it were a real elevation.
+  // With a resolved origin/unit the report adds the origin back and labels
+  // the unit; the fixture mirrors a real USGS 3DEP tile — a local
   // z of ~2 rebased against a ~1232 m NAVD88 origin reads ~1234 m, not "2.00".
   it('reports a real elevation with unit when the origin and vertical unit resolve', () => {
     const report = describeCell(grid, routed, accumulation, areaM2, { col: 1, row: 0 }, {

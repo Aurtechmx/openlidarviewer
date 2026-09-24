@@ -133,9 +133,9 @@ describe('the package carries every required file', () => {
     expect(geojson.features).toHaveLength(1);
   });
 
-  // ── Defect D: the ASCII rasters must carry the REAL lower-left corner in
-  // the dataset CRS, not a fixed (0, 0), and a `.prj` sidecar when the CRS
-  // resolves. Origin picked in the ~400000, 3600000 range to match a real
+  // The ASCII rasters must carry the REAL lower-left corner in the dataset
+  // CRS, not a fixed (0, 0), and a `.prj` sidecar when the CRS resolves.
+  // Origin picked in the ~400000, 3600000 range to match a real
   // far-mount UTM placement (see tests/contourWorldOrigin.test.ts).
   it('writes the real lower-left corner when a world origin is supplied', () => {
     const zip = buildFlowPulsePackage(runOf(), {
@@ -166,9 +166,9 @@ describe('the package carries every required file', () => {
     expect(textOf(zip, 'flow-README.txt')).toContain('flow.prj');
   });
 
-  // ── Defect B: every fill-depth/elevation figure in the summary/depression
-  // CSVs is a raw number with no unit; the README must state which unit
-  // applies, failing closed when the caller has not resolved one.
+  // Every fill-depth/elevation figure in the summary/depression CSVs is a
+  // raw number with no unit; the README must state which unit applies,
+  // failing closed when the caller has not resolved one.
   it('states the vertical unit is unresolved, fail-closed, with no caller-supplied unit', () => {
     const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow' }), 'flow-README.txt');
     expect(readme).toMatch(/Vertical unit\s+unresolved.*source units/);

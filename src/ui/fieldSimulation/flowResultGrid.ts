@@ -44,9 +44,9 @@ export interface FlowResultGridOptions {
   /** The keyboard/pointer cursor moved to a new cell (no activation). */
   readonly onMove: (cell: GridCell, report: CellReport) => void;
   /**
-   * How to recover a real-world elevation from the grid's local z (§ defect
-   * A). Optional and defaults to null — a caller with no resolved origin or
-   * vertical unit still gets reports, honestly labelled 'unknown'.
+   * How to recover a real-world elevation from the grid's local z. Optional
+   * and defaults to null — a caller with no resolved origin or vertical
+   * unit still gets reports, honestly labelled 'unknown'.
    */
   readonly elevationRef?: ElevationReference | null;
 }

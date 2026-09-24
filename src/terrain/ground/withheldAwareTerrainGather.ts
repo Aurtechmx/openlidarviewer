@@ -233,10 +233,10 @@ export async function gatherWithheldAwareTerrainCore(
     withheldExcluded: sample.withheldExcluded,
     withheldExcludedCount: sample.withheldExcludedCount,
     // The re-decode strided the full-resolution source down to `maxPoints`
-    // (§ defect E) whenever the source held more than that; `sample.sampled`
-    // is exactly that fact and must override `coreParams.sampled`, not
-    // merge under it, since a caller building `coreParams` from the
-    // (unsampled) display gather cannot know what THIS re-decode did.
+    // whenever the source held more than that; `sample.sampled` is exactly
+    // that fact and must override `coreParams.sampled`, not merge under it,
+    // since a caller building `coreParams` from the (unsampled) display
+    // gather cannot know what THIS re-decode did.
     sampled: sample.sampled,
   });
   return { core, sample, totalPoints };

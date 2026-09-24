@@ -973,8 +973,8 @@ export class AnalysePanel {
       isGeographic: ctx.isGeographic ?? false,
       worldOriginY: ctx.worldOrigin?.y ?? null,
       // Same `worldOrigin` the DEM package and map sheet already use — the X
-      // and Z components the export's real corner (§ defect D) and the
-      // result grid's real elevation (§ defect A) need.
+      // and Z components the export's real corner and the result grid's real
+      // elevation readout need.
       worldOriginX: ctx.worldOrigin?.x ?? null,
       worldOriginZ: ctx.worldOrigin?.z ?? null,
       wkt: ctx.wkt ?? null,

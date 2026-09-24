@@ -126,9 +126,9 @@ describe('a fresh, non-stale result', () => {
     expect(extractEntry(out.bytes, 'site-catchment.asc')).not.toBeNull();
   });
 
-  // ── Defect D: `buildFlowPulseExport` must forward the caller's real
-  // world origin / CRS through to the package builder, rather than dropping
-  // it on the floor and letting every raster land at a fixed (0, 0).
+  // `buildFlowPulseExport` must forward the caller's real world origin /
+  // CRS through to the package builder, rather than dropping it on the
+  // floor and letting every raster land at a fixed (0, 0).
   it('forwards the georef to the package, writing the real corner and a .prj', () => {
     const out = buildFlowPulseExport(
       runOf(), false, null, null, 'site', 'layer-a', buildFlowPulsePackage,

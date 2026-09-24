@@ -1201,10 +1201,9 @@ export function computeTerrainCore(
   // budget, or `gatherWithheldAwareTerrainCore`'s own full-resolution
   // re-decode) is a sample of the WHOLE dataset — `rasterizeDtm` has no
   // notion of stride and always reports 'full', so that fact is stamped here
-  // instead, once, before every reader of `dtm.coverageMode` (§ defect E:
-  // this is what let the sealed run record claim `coverage: 'full'`,
-  // `complete: true` for the exact gather Contour Studio already read as a
-  // sample).
+  // instead, once, before every reader of `dtm.coverageMode`. Without this,
+  // the sealed run record could claim `coverage: 'full'`, `complete: true`
+  // for the exact gather Contour Studio already read as a sample.
   if (params.sampled && dtm.coverageMode === 'full') {
     dtm = { ...dtm, coverageMode: 'sampled' };
   }

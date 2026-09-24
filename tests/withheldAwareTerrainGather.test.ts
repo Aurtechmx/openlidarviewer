@@ -200,8 +200,8 @@ describe('Flow Pulse reads the recovered outcome as excluded, not not-recorded',
   });
 });
 
-// ── Defect E: when the re-decode strides the source down (`maxPoints` below
-// the source's point count), the recovered DTM must state `coverageMode:
+// When the re-decode strides the source down (`maxPoints` below the
+// source's point count), the recovered DTM must state `coverageMode:
 // 'sampled'`, not the `rasterizeDtm` default of `'full'` — the exact
 // disagreement a real run showed between the run record (`coverage: 'full',
 // complete: true`) and the Analyse/Contour Studio panel's own "only a sample

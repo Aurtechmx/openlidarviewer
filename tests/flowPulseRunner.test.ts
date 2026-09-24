@@ -294,9 +294,9 @@ describe('conditioning is declared, and leaves the DTM alone', () => {
     expect([...dtm.z]).toEqual([...before]);
   });
 
-  // ── Defect B: "N cell(s) were raised, the deepest by 1.240." has no unit —
-  // fail closed to "in source units" when the vertical scale is unresolved,
-  // and use the resolved unit label when the caller supplies one.
+  // "N cell(s) were raised, the deepest by 1.240." must carry a unit: fail
+  // closed to "in source units" when the vertical scale is unresolved, and
+  // use the resolved unit label when the caller supplies one.
   it('fails closed to "in source units" when no vertical unit is supplied', () => {
     const r = runFlowPulse(notchedBowl(), projected, params({ conditioning: 'priority-flood' }), identity);
     expect(r.ok).toBe(true);

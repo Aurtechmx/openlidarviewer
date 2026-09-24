@@ -74,8 +74,8 @@ export interface FlowPulseLabInput {
   readonly worldOriginY: number | null;
   /**
    * World X and Z of the same load-time recentring origin, for the export
-   * package's real corner (§ defect D) and the result grid's real elevation
-   * readout (§ defect A). Null under the same conditions `worldOriginY` is.
+   * package's real corner and the result grid's real elevation readout.
+   * Null under the same conditions `worldOriginY` is.
    */
   readonly worldOriginX?: number | null;
   readonly worldOriginZ?: number | null;
@@ -137,12 +137,12 @@ export function flowScaleOf(input: FlowPulseLabInput): HorizontalScale {
 }
 
 /**
- * How to recover a real elevation from the routed grid's local z (§ defect
- * A), the same rule `demPackage.ts` uses for the DTM/DSM rasters: the DTM's
- * own claimed vertical factor, gated on the result's own statement that the
- * vertical scale actually resolved — never the geometry placeholder a
- * CRS-less scan pins to 1, which would print "metres" for a frame whose own
- * provenance says the vertical unit is unverified.
+ * How to recover a real elevation from the routed grid's local z, the same
+ * rule `demPackage.ts` uses for the DTM/DSM rasters: the DTM's own claimed
+ * vertical factor, gated on the result's own statement that the vertical
+ * scale actually resolved — never the geometry placeholder a CRS-less scan
+ * pins to 1, which would print "metres" for a frame whose own provenance
+ * says the vertical unit is unverified.
  */
 export function flowElevationReference(input: FlowPulseLabInput): ElevationReference {
   const zFactor = input.result.verticalScaleResolved === false
@@ -202,16 +202,16 @@ export type FlowPulseExportOutcome =
 
 /**
  * The real-world placement facts the export package needs to georeference
- * its rasters (§ defect D) — the same `worldOrigin`/`wkt`/`crsName` the DEM
- * package already reads off `getMapContext()`. All null when the scene has
- * no single resolved origin or CRS, in which case the package writes a
- * local (0, 0) origin and no .prj, and says so in its README.
+ * its rasters — the same `worldOrigin`/`wkt`/`crsName` the DEM package
+ * already reads off `getMapContext()`. All null when the scene has no
+ * single resolved origin or CRS, in which case the package writes a local
+ * (0, 0) origin and no .prj, and says so in its README.
  */
 export interface FlowPulseGeoref {
   readonly worldOrigin: { readonly x: number; readonly y: number } | null;
   readonly crsName: string | null;
   readonly wkt: string | null;
-  /** See {@link runFlowPulse}'s parameter of the same name (§ defect B). Defaults to `'units'`. */
+  /** See {@link runFlowPulse}'s parameter of the same name. Defaults to `'units'`. */
   readonly verticalUnitLabel?: 'm' | 'ft' | 'units';
 }
 
@@ -356,10 +356,10 @@ function refusalSentence(kind: 'path' | 'catchment', refusal: FlowClickRefusal):
 
 /**
  * The 3D accumulation overlay (and the traced path/catchment beside it)
- * outlives the modal that built it (§ defect C): the Lab's own scene layer
- * is the only place a user can SEE flow accumulation, and disposing it the
- * instant the modal — which covers the scene — closes meant nobody ever
- * saw it. `derivedLayerHost()` returns a fresh object literal on every call
+ * outlives the modal that built it: the Lab's own scene layer is the only
+ * place a user can SEE flow accumulation, and disposing it the instant the
+ * modal — which covers the scene — closes meant nobody ever saw it.
+ * `derivedLayerHost()` returns a fresh object literal on every call
  * (it closes over the one Viewer scene, not a per-call state), so identity
  * cannot key this; the one Viewer in this application has exactly one
  * scene, so a single module-level session — kept until the user turns the
@@ -426,9 +426,9 @@ function mountFlowPulseInteractive(
 
   const overlayHost = input.overlayHost ?? null;
   const flowOverlay = acquireFlowOverlay(overlayHost, input.isStale ?? null);
-  // Reflects whatever the persisted overlay is already showing (§ defect C):
-  // reopening the Lab after leaving the overlay on picks the toggle back up
-  // in the "on" state rather than forgetting it was ever shown.
+  // Reflects whatever the persisted overlay is already showing: reopening
+  // the Lab after leaving the overlay on picks the toggle back up in the
+  // "on" state rather than forgetting it was ever shown.
   let overlayOn = persistentFlowOverlay?.overlayOn ?? false;
 
   const grid = new FlowResultGrid({
@@ -704,8 +704,8 @@ function mountFlowPulseInteractive(
 
   return {
     element: root,
-    // § defect C: an overlay the user left ON stays attached to the scene —
-    // only an overlay left OFF (nothing visible to keep) is torn down here,
+    // An overlay the user left ON stays attached to the scene — only an
+    // overlay left OFF (nothing visible to keep) is torn down here,
     // matching the disposal-registry contract for the "off" case exactly as
     // before. `persistentFlowOverlay` itself is not cleared in the "on"
     // case: the next Lab open reclaims the SAME instance via

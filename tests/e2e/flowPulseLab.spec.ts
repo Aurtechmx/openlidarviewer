@@ -136,8 +136,8 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   await expect(live).toHaveAttribute('aria-live', 'polite');
   await expect(live).not.toHaveText('');
 
-  // § defect C: the overlay was left ON. Closing the modal — which covers
-  // the scene, the only place a user could otherwise see it — must not tear
+  // The overlay was left ON. Closing the modal — which covers the scene,
+  // the only place a user could otherwise see it — must not tear
   // it down; the toggle in the reopened Lab reads back "on" because the
   // SAME persisted overlay is still attached to the scan, not a fresh one
   // reset to off. (Before the fix this always came back "false": the modal
