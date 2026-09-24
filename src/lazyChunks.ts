@@ -666,7 +666,7 @@ export const loadFlowPulseLab = () => import('./ui/fieldSimulation/flowPulseLab'
  * after the Lab modal closes, so a user who left it on can still see it.
  * That overlay must be torn down the moment the terrain/CRS it was built
  * from goes stale (a different scan loads, the scan closes, the CRS
- * changes, or a classification edit invalidates the terrain core) — the
+ * changes, or a classification edit invalidates the terrain core), the
  * same events that already clear the cached terrain core in
  * `terrainAnalysisRunner.ts`'s `abortAndClearCache()`. That module cannot
  * import the Lab (a lazy chunk) to reach it directly, and the Lab's chunk
