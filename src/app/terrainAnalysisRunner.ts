@@ -66,6 +66,7 @@ import {
   loadDerivedLayersList,
   loadDerivedLayerReceipt,
   loadWithheldAwareTerrainGather,
+  invalidateFlowOverlay,
 } from '../lazyChunks';
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
@@ -1031,6 +1032,11 @@ export function createTerrainAnalysisRunner(
     // remembered core must be dropped explicitly, or an export after the
     // edit would reuse a core built from the pre-edit classes.
     lastCommittedCore = null;
+    // Every caller of this function (scan close, a different scan loading,
+    // a CRS change, a classification edit) is exactly the set of events that
+    // also invalidate the Flow Pulse Lab's persisted 3D overlay, if one is
+    // showing — a no-op when the Lab's chunk was never loaded this session.
+    invalidateFlowOverlay();
   }
 
   function getLastSourceUpAxis(): 'z' | 'y' {

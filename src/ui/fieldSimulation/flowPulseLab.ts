@@ -62,7 +62,7 @@ import {
 import { FlowOverlay, type FlowOverlayHost } from '../../render/FlowOverlay';
 import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
-import { loadFlowPulsePackage } from '../../lazyChunks';
+import { loadFlowPulsePackage, registerFlowOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
 import type { buildFlowPulsePackage } from '../../export/flowPulsePackage';
 
@@ -380,7 +380,7 @@ let persistentFlowOverlay: {
  * overlay is disposed here rather than left attached to a scene whose
  * frame it no longer describes.
  */
-function acquireFlowOverlay(
+export function acquireFlowOverlay(
   host: FlowOverlayHost | null,
   isStale: (() => boolean) | null,
 ): FlowOverlay | null {
@@ -396,6 +396,30 @@ function acquireFlowOverlay(
   }
   return persistentFlowOverlay.overlay;
 }
+
+/**
+ * Unconditionally dispose the persisted overlay, when one exists. Exported
+ * so `registerFlowOverlayInvalidator` (see `lazyChunks.ts`) can hand this to
+ * every eager caller that clears the cached terrain core — a scan closing,
+ * a different scan loading, a CRS change, or a classification edit — none
+ * of which reopens the Lab to trigger the `isStale()` check `acquireFlowOverlay`
+ * makes on its own. The event itself IS the staleness signal here, so no
+ * predicate is re-checked; the caller already knows the terrain core it was
+ * drawn from is gone. Idempotent: a second call with nothing to dispose is a
+ * no-op.
+ */
+export function disposePersistentFlowOverlay(): void {
+  if (!persistentFlowOverlay) return;
+  persistentFlowOverlay.overlay.dispose();
+  persistentFlowOverlay = null;
+}
+
+// Registered once, at module load (i.e. the first time this chunk actually
+// loads — opening the Lab, or its export action). `registerFlowOverlayInvalidator`
+// stores this closure in the tiny eager module `lazyChunks.ts`, which
+// `terrainAnalysisRunner.ts` already calls on every terrain-cache-clearing
+// event, without importing this (lazy) module itself.
+registerFlowOverlayInvalidator(disposePersistentFlowOverlay);
 
 /**
  * The interactive Flow Pulse view: the static summary card plus every control
