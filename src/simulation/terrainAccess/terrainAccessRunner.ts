@@ -122,6 +122,10 @@ export interface TerrainAccessRunIdentity {
   readonly filename: string | null;
   readonly sourceDigest: string | null;
   readonly analysisInputDigest: string;
+  /** Digest of the terrain-core method that built the input; see `SimulationSource`.
+   * Optional and defaults to null — most callers have no terrain-core descriptor
+   * to report and null is the honest default, never a fabricated one. */
+  readonly terrainCoreDigest?: string | null;
   readonly build: string;
   readonly id: string;
   readonly generatedAt: string;
@@ -265,6 +269,7 @@ export function runTerrainAccess(
       filename: identity.filename,
       sourceDigest: identity.sourceDigest,
       analysisInputDigest: identity.analysisInputDigest,
+      terrainCoreDigest: identity.terrainCoreDigest ?? null,
       basis,
     },
     model: { id: 'olv.simulation.terrain-access.astar', version: 1 },
