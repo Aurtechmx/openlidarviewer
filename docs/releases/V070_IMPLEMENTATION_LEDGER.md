@@ -4766,3 +4766,54 @@ clears the Analyse panel's separate "Contours in 3D" toggle row
 (`setContourLayerControls(null)`), which tracked the same stale layer through
 its own DOM. Covered by the extended `tests/contourLayerService.test.ts` and
 `tests/e2e/contourLayerLifetime.spec.ts`.
+
+### L153 · BUILT · SCIENTIFIC
+
+Terrain Access (Field Simulation Lab, §12/§21) is built on
+`feat/terrain-access-lab-v070`, on top of the five pure-core commits
+cherry-picked from `feat/terrain-access-core-v070` (eligibility, cost, A*,
+route diagnostics, run record, an independent Python oracle over TA-1..TA-10).
+
+`terrainAccessGridCursor.ts`, `terrainAccessPreview.ts` (everything a run
+needs up to, but not including, the A* search, so start/goal selection can
+read a traversability map before two endpoints exist) and
+`terrainAccessProfileForm.ts` (the pure parse/validate for the
+mobility-profile form: every field blank, degrees converted to tangents
+once, no vehicle preset) round out the core. The Lab itself
+(`src/ui/fieldSimulation/terrainAccessLab.ts`) mirrors `flowPulseLab.ts`'s
+shape: a blank profile form, a traversability-map preview with keyboard- and
+pointer-accessible start/goal selection and a why-not inspector, then the
+completed run with route diagnostics and export, with a Lab-detected
+`STALE_INPUT` refusal at both the selection and the run gate. The 3D
+overlay (`TerrainAccessOverlay.ts`, `terrainAccessOverlayGeometry.ts`)
+mirrors `FlowOverlay.ts`'s split between pure geometry and three.js binding.
+`src/export/terrainAccessPackage.ts` mirrors `flowPulsePackage.ts`: route
+GeoJSON, a traversability raster, a diagnostics table, the sealed run
+record, a reproducible config, a processing manifest, README and passport.
+
+Wired from the command palette (`analyse.terrainAccess`) next to Flow
+Pulse, behind its own lazy chunk (`loadTerrainAccessLab`,
+`loadTerrainAccessPackage`); `AnalysePanel.terrainAccessInput()` mirrors
+`flowPulseInput()` exactly, reading the same provenance accessor and
+staleness check. The `TERRAIN-ACCESS` claim registers at E3 (internal
+Python oracle ceiling); the eleven pure-core modules registered unreachable
+under §U2 graduate, now that the Lab wiring reaches them. One pre-existing
+integration gap in the cherry-picked core was fixed in the process:
+`terrainAccessRunner.ts`'s sealed record was missing `terrainCoreDigest` on
+`SimulationSource`, added as an optional field on `TerrainAccessRunIdentity`
+defaulting to null.
+
+A browser review of Flow Pulse on a real UTM tile (findings A-E, see
+`fix/flow-pulse-findings-v070`) found local-frame elevation without a real
+CRS/datum. It also found an overlay disposed on modal close. Separately, it
+found ungeoreferenced ASC/GeoJSON exports and a basis that can overstate
+coverage. Terrain Access shares Flow Pulse's DTM frame, overlay lifecycle,
+export pattern and basis source, so it inherits four of the five (A, C, D,
+E), disclosed in
+`docs/terrain-access.md` and `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`
+rather than silently shipped, and tracked as shared fixes across both
+features rather than solved twice.
+
+Covered by `tests/terrainAccessProfileForm.test.ts`,
+`tests/terrainAccessLabExport.test.ts`, `tests/terrainAccessPackage.test.ts`
+and `tests/e2e/terrainAccessLab.spec.ts`.

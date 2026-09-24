@@ -1,0 +1,175 @@
+# Terrain Access
+
+Terrain Access screens a candidate route between two chosen cells over an
+OLV DTM against a mobility profile the reader declares themselves. Given a
+terrain surface, a profile and a start/goal pair, it answers whether a route
+exists under the declared limits, where that route is, and what conditions
+along it were the worst. The code lives under `src/simulation/terrainAccess/`;
+the shared simulation record and input-basis types live in `src/simulation/`.
+
+Every result is a geometry-based screening.
+
+It describes the declared mobility limits applied to the declared terrain
+product. It is never a safety assessment, a guaranteed-passable route, or a
+vehicle dynamics simulation. Soil strength, traction, tire/track-soil
+interaction, rollover, weather and vegetation compliance are not modelled.
+See `docs/validation/claim-register.yaml` for the `TERRAIN-ACCESS` claim,
+which states the exact approved and prohibited claim language.
+
+## What this is not
+
+Terrain Access never states or implies that a route is "safe", "drivable"
+or "passable". It is not a vehicle dynamics simulation, not a soil-mechanics
+or traction model, not a rollover or weather-compliance assessment, and not
+a substitute for a site visit or a qualified assessment of a specific
+vehicle on specific ground. A found route is a geometric candidate under
+limits the reader themselves typed in. Nothing about finding one asserts
+those limits were the right ones for any real vehicle.
+
+## Mobility profile
+
+`terrainAccessTypes.ts` defines `TerrainAccessProfile`. Every limit a run
+enforces is a value the caller declares explicitly, with no hidden default
+and no vehicle preset presented as validated. The Lab's own form
+(`terrainAccessProfileForm.ts`) ships with every field blank. There is no
+"load a preset" control, because a preset would smuggle unreviewed numbers
+into a run and imply they were checked against the reader's actual
+platform.
+
+The profile's grade fields are entered in the Lab as degrees, the unit a
+person reasons in, and converted once, in `parseTerrainAccessProfileForm`,
+to the rise/run tangents the model compares internally. That is the same
+unit `hornSlopeAspect`'s own slope field uses, so the A* hot path never
+repeats that trigonometry.
+
+## DTM basis and units
+
+`dtmTerrainAccessGrid.ts` converts the analysed `DtmGrid` (and, optionally,
+an aligned DSM/nDSM) into a `TerrainAccessGrid`: elevation, a valid mask,
+per-cell terrain confidence (0-100, `DtmGrid.confidence` unchanged), the
+DTM's coverage code, an optional above-ground height layer, and an optional
+ROI mask.
+
+A run refuses outright (`UNITS_UNRESOLVED`) rather than guess when the
+horizontal scale is unresolved, when a geographic frame's latitude is
+unknown, or when the vertical unit-to-metres factor is unresolved. Every
+grade, cross-slope and step-height comparison depends on those being real
+metric quantities, unlike Flow Pulse's own routing direction, which survives
+an unresolved scale.
+
+## Eligibility and cost
+
+`traversabilityCost.ts` separates direction-independent hard blocks (NoData,
+outside ROI, low terrain confidence, ruggedness, above-ground obstruction)
+from direction-dependent edge limits (longitudinal grade, cross slope, step
+height). A cell can be fine to stand on yet unreachable from one heading and
+reachable from another.
+
+Eligible cells are then dilated by half the declared vehicle width
+(`footprintClearance.ts`), so a passage narrower than the vehicle is
+excluded even where its centre cells are individually clear. Every eligible
+edge carries a declared, bounded soft cost, `distance * (1 + sum of weight *
+utilization)`, that rises linearly with how much of a limit a move actually
+uses.
+
+## Search
+
+`aStarTerrain.ts` runs a deterministic 8-connected A* with a written-down,
+total tie-break: lower f, then lower h, then lower cell index. It is
+admissible and consistent because every edge multiplier is at least 1. The
+same grid, profile and endpoints always produce the same route.
+
+## Route diagnostics, traversability map, why-not inspector
+
+A found route's `RouteDiagnostics` (`routeDiagnostics.ts`) report the worst
+conditions actually crossed, rather than a single opaque cost number:
+maximum and p95 grade and cross-slope, maximum local step, minimum terrain
+confidence, and which cost term dominated.
+
+The traversability map (`buildTraversabilityMap`) classifies every readable
+cell into a declared bucket (blocked, unknown, or low/moderate/high cost)
+for the Lab's grid and 3D overlay. The why-not inspector (`whyNotEligible`)
+answers, for any single cell, exactly which declared limit blocks it, or
+that no in-bounds neighbour offers a viable move. It never returns a vague
+"not reachable".
+
+## Refusals
+
+A run refuses by name rather than guessing: `NO_DTM`, `UNITS_UNRESOLVED`,
+`INVALID_PROFILE`, `START_BLOCKED`, `END_BLOCKED`, `NO_ROUTE`,
+`INSUFFICIENT_EVIDENCE`, `TOO_LARGE`.
+
+The Lab also refuses a stale preview or run (`STALE_INPUT`) the moment the
+terrain behind it may have changed since the profile was applied. That is a
+Lab-detected precondition, not one `runTerrainAccess` itself can observe,
+since the core is a synchronous pure function with no notion of "since this
+preview was built".
+
+## The field simulation lab
+
+`src/ui/fieldSimulation/terrainAccessLab.ts` is opened from the command
+palette next to Flow Pulse. It has three stages: the blank mobility-profile
+form; the traversability-map preview, where start and goal are chosen on a
+keyboard- and pointer-accessible 2D result grid (arrow keys move, Enter or
+Space activates) and any cell can be inspected with "Why not?" without a
+route existing; and the completed run, with diagnostics, the route drawn on
+the grid and, where scene membership is supplied, in the 3D scene through
+`TerrainAccessOverlay`.
+
+## Exports
+
+`src/export/terrainAccessPackage.ts` builds a ZIP: the found route as
+GeoJSON, the traversability map as an Esri ASCII Grid raster, a diagnostics
+table, the sealed run record, a reproducible `*.olv-field-sim.json` config,
+a processing manifest, a scientific artifact passport bound to the raster,
+and a README that repeats this document's own "never safe, drivable or
+passable" wording rather than paraphrasing it. Re-running the config over
+the same terrain reproduces the same `resultDigest`.
+
+## Known limitations
+
+Local-frame elevation in the readout. The Lab's cell readout and the
+export's diagnostics report the DTM's own `z` values and metric distances in
+the analysed grid's working frame. Where that frame is not the dataset's
+true vertical datum or unit, for example a recentred local origin, the
+displayed number is not the real-world elevation. A browser review of Flow
+Pulse on a real UTM tile found the identical gap in that feature
+(`fix/flow-pulse-findings-v070`). Terrain Access inherits the same DTM frame
+and the same gap. Resolving a real-world CRS/vertical-datum origin for the
+analysed grid is a shared, cross-simulation fix, tracked for integration
+into both features together rather than solved twice, independently, in the
+meantime.
+
+The 3D overlay is only visible while the Lab modal is open, and its GPU
+resources are released when the modal closes. This is the same lifecycle
+Flow Pulse's overlay currently has, and the same finding raised against it
+in the browser review above. A fix that keeps a derived layer visible after
+the Lab closes belongs to the shared overlay-lifecycle pattern both features
+use, not to Terrain Access alone.
+
+Exported rasters use a local (0, 0) origin and carry no `.prj` unless the
+caller supplies a world origin and a CRS name, matching the same export gap
+found in Flow Pulse rather than the DEM package's own real-CRS
+georeferencing. The route GeoJSON is local planar metres for the same
+reason, stated explicitly in its own `coordinateFrame` field and the README.
+Georeferencing every export in the dataset's real CRS is planned as one
+shared fix across the DEM, Flow Pulse and Terrain Access export packages,
+not three separate ones.
+
+The run record's basis is inherited from the DTM's own `coverageMode` via
+`simulationInputBasis()`, the same function Flow Pulse uses. A reported
+basis of "full" reflects what that field already states for the terrain
+behind the run. A mismatch between that field and how the terrain was
+actually analysed, also raised against Flow Pulse in the same review, is a
+DTM/analysis-runner-level question shared by every simulation reading
+`DtmGrid.coverageMode`, not something Terrain Access derives independently.
+
+Vehicle length is recorded, not enforced. Eligibility is width-only
+morphological dilation. A full swept-body orientation check would need a
+heading-aware collision test this release does not implement.
+
+No field or vehicle trial exists. The independent Python oracle
+(`validation/terrain-access/oracle/terrain_access_oracle.py`) is a
+cross-implementation check written inside this project, not an externally
+maintained routing tool. See the `TERRAIN-ACCESS` claim's
+`requiredEvidenceNote` for why E3 is this release's ceiling.

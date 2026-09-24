@@ -1285,3 +1285,34 @@ claims:
         - "Arbitrary terrain. Only one notched-bowl fixture and one constructed multi-depression grid have hand-derived expected values today; the TF-1..TF-8 fixture set this claim's parent routing claim already validates against has not yet been extended to depression figures."
         - "A raw-mode single-cell sink read as a measured depression extent. Raw mode reports a candidate location only — see the module's own doc on why filling, not the raw pass, is what measures an extent."
         - "Fill-volume accuracy. The reported area figure is `cells x cell area`, a proxy under the assumption each filled cell's rise is uniform across it, never a surveyed or integrated volume."
+
+  - claimId: TERRAIN-ACCESS
+    product: Terrain Access (mobility traversability screening)
+    algorithm: Direction-independent hard eligibility (NoData/ROI/support/ruggedness/obstruction) plus direction-dependent edge limits (grade/cross-slope/step), deterministic 8-connected A* (Hart, Nilsson & Raphael 1968) over eligible cells, with a declared multi-term utilization cost
+    methodId: olv.simulation.terrain-access.astar
+    algorithmVersion: v0.7.0-alpha.1
+    claim: "Screens a route between two chosen cells over an OLV DTM against a user-declared mobility profile (grade, cross slope, step height, ruggedness, vehicle width, terrain-confidence and obstruction limits), returning a least-cost path, a traversability map and route diagnostics, or a named refusal."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidenceNote: "E3 is the ceiling declared for this release: the second implementation (validation/terrain-access/oracle/terrain_access_oracle.py) is an independent-language check written inside this project, not an externally maintained routing tool, so it cannot carry the claim past cross-implementation-within-project. No field or vehicle trial exists."
+    supportingTests: [tests/terrainAccessLocalStep.test.ts, tests/terrainAccessDirectionalGrade.test.ts, tests/terrainAccessFootprintClearance.test.ts, tests/terrainAccessTraversabilityCost.test.ts, tests/terrainAccessAStar.test.ts, tests/terrainAccessRunner.test.ts, tests/terrainAccessOracleAgreement.test.ts, tests/terrainAccessAdversarial.test.ts, tests/terrainAccessIsolation.test.ts, tests/terrainAccessProfileForm.test.ts, tests/terrainAccessLabExport.test.ts, tests/terrainAccessPackage.test.ts]
+    supportingDatasets: [hand-built analytic fixtures TA-1 through TA-10 (validation/terrain-access/fixtures/), expected outputs cross-checked against an independent Python oracle (validation/terrain-access/oracle/terrain_access_oracle.py)]
+    units: [tangent-grade, metres, dimensionless-VRM, dimensionless-confidence]
+    crsDatum: "Refuses outright (UNITS_UNRESOLVED) on an unresolved horizontal scale, an unresolved geographic latitude, or an unresolved vertical unit — grade/step constraints are never interpreted under a guessed unit."
+    assumptions: ["8-connected deterministic A*, fixed tie-break (lower f, then lower h, then lower cell index)", "vehicle width is enforced as isotropic morphological dilation, not swept-body collision", "vehicle length is recorded but not enforced", "an unset DSM leaves above-ground obstruction inactive rather than assumed-clear"]
+    failureModes: ["a cell eligible in isolation but unreachable from any neighbour under the declared limits reads as blocked on the traversability map (§12.10)", "a route through low-confidence cells under the 'penalize' policy is disclosed as a limitation, never silently absorbed into the cost"]
+    exportAllowed: true
+    userLabel: "Terrain access route screening (simulated, not a safety or passability guarantee)"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: none
+    approvedClaim: "Deterministic A* traversability screening against a user-declared mobility profile, cross-checked field by field against a second, independently written implementation on ten hand-built analytic fixtures covering flat/tilted/cross-slope/step/width/NoData/low-confidence/ruggedness/obstruction/anisotropic-grid cases; not field-validated, not vehicle-dynamics validated, and never a safety, drivability or passability guarantee."
+    prohibitedClaim: ["a route is safe", "a route is drivable", "a route is passable", "vehicle dynamics simulation", "soil strength or traction modelling", "rollover or weather-compliance guarantee", "field-validated mobility accuracy", "externally validated routing"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any safety, drivability or passability guarantee. This is a geometry-based screening under a declared, user-authored profile — soil strength, traction, tire/track-soil interaction, rollover, weather and vegetation compliance are not modelled, and the run record and every export state this explicitly (§22)."
+        - "Field validation or external validation. The second implementation (validation/terrain-access/oracle/terrain_access_oracle.py) is cross-implementation WITHIN this project, in a different language, to catch transcription and axis-scaling mistakes a shared implementation could not — it is not an independently maintained routing tool, and a misreading of the declared cost model shared by both would survive the comparison undetected."
+        - "Full swept-body vehicle collision. Width is enforced as isotropic dilation of hard-blocked cells; a declared vehicle length is recorded in the run record and diagnostics but not enforced as orientation-dependent collision."
+        - "Above-ground obstruction where no DSM/nDSM was supplied — the constraint is inactive, not assumed clear, and the run record states this."
+        - "Terrain built from a resident-only or sampled source, where the claim describes only the part of the source that was walked; the run's own limitations state which applied."

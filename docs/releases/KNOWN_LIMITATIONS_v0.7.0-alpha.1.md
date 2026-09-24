@@ -112,26 +112,44 @@ re-checked the next time the lab is reopened, not the moment the change
 happens, so a dataset swapped while the lab stays closed can leave a stale
 overlay on screen until it is reopened once.
 
-## Registration is not exposed
+## Terrain Access is a geometry screening, never a safety guarantee
 
-Six modules implement alignment. No user path reaches them.
+Terrain Access opens from the command palette next to Flow Pulse. It screens
+a route between two chosen cells against a mobility profile the reader
+declares themselves, with no preset presented as validated. It is not a
+safety assessment, a guaranteed-passable route, or a vehicle dynamics
+simulation; soil strength, traction, tire/track-soil interaction, rollover,
+weather and vegetation compliance are not modelled, and no string in the
+Lab, the run record or the export calls a route safe, drivable or passable.
 
-A half-wired alignment tool is worse than none, and the workflow it would need
-is not built.
+A browser check of the sibling Flow Pulse feature on a real UTM tile found
+five defects. Terrain Access shares the same architecture and inherits four
+of them, disclosed here rather than left for a reader to discover:
 
-## The browser matrix is advisory
+The cell readout and the export diagnostics report elevation and distance in
+the DTM's own working frame, which is not necessarily the dataset's true
+vertical datum and unit; a recentred local origin would print a small local
+number instead of the real-world elevation.
 
-Chromium blocks a release; Firefox, WebKit and Windows do not, and no ruleset
-requires the cross-browser smoke workflow. Touch gestures run end to end on all
-three engines, and in the iPhone-shaped WebKit project, as synthesized pointer
-events. Multi-touch on a real device is unverified. An advisory iOS simulator
-check drives real Mobile Safari and has not yet passed end to end. No matrix is
-recorded for this development cut: that evidence comes from the engines
-themselves.
+The 3D traversability overlay is only visible while the Lab modal is open
+and its GPU resources are released when the modal closes, so it is never
+seen alongside the rest of the scene.
 
-## The two monoliths are still monoliths
+Exported rasters carry a local (0, 0) origin and no `.prj` unless a world
+origin and CRS name are supplied, and the route GeoJSON is local planar
+metres rather than the dataset's real coordinates.
 
-`src/main.ts` is 4,966 lines and `src/render/Viewer.ts` is 6,153, seventy lines
+The run record's basis is read from the DTM's own `coverageMode`, the same
+field Flow Pulse reads, so a mismatch between that field and how the
+terrain was actually analysed would read the same way in both features.
+
+These four are tracked as shared, cross-simulation fixes on
+`fix/flow-pulse-findings-v070` and its Terrain Access follow-on, not as four
+independent problems to solve twice. Fixing the frame/CRS gap for one
+simulation and not the other would leave them disagreeing about the same
+terrain.
+
+`src/main.ts` is 4,965 lines and `src/render/Viewer.ts` is 6,153, seventy lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -145,28 +163,19 @@ diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 109 for the shell, 76 for the renderer and 23 for the Analyse panel,
 across 912 modules with no dependency cycles.
 
-## The shell has little headroom
+The lab has three stages: the blank mobility-profile form; a
+traversability-map preview where start and goal are chosen on a keyboard-
+and pointer-accessible 2D result grid, with a "why not?" inspector for any
+cell; and the completed run, with route diagnostics, the route drawn on the
+grid and, where scene membership is supplied, in the 3D scene. A run refuses
+by name (`NO_DTM`, `UNITS_UNRESOLVED`, `INVALID_PROFILE`, `START_BLOCKED`,
+`END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE`, `TOO_LARGE`), and the
+lab separately refuses a stale preview or run the moment the terrain behind
+it may have changed since the profile was applied.
 
-The eager bundle measures about 799 KiB against an 812 KiB ceiling. New work
-goes behind a lazy seam rather than being paid for by a raise.
-
-## Multi-layer mounting is enabled, with a precision refinement outstanding
-
-Physical multi-layer mounting ships enabled, unchanged from v0.6.9. Two
-georeferenced layers declaring the same projected CRS mount into one shared
-project frame at their real separation, non-destructively, and each boundary
-recovers the world coordinate in the frame it names. One item remains a
-precision refinement rather than a correctness defect: for far-apart mounts the
-renderer does not fold `renderOrigin` out on the CPU per mesh, so the Float32
-residual on the GPU is larger than it needs to be. The mount-precision gate
-refuses a placement whose Float32 step would pass 1 mm, which on a metre grid
-is a placed reach of 16,384 m or more. The display is slightly worse than that
-bound at its edge: a layer placed just under 16.4 km out draws with a worst-case
-error of about 1.5 mm. Analysis paths that store placed coordinates in Float32
-stay under 1 mm inside the gate. Picking and distance are computed in Float64
-and are exact, as are exports.
-
-## No cross-CRS reprojection
-
-Unchanged from prior releases. Scans must share a coordinate reference system to
-be compared, and the viewer refuses rather than approximating.
+Vehicle length is recorded in the profile and the diagnostics but not
+enforced; eligibility uses width-only clearance, not full swept-body
+collision. The independent Python oracle that cross-checks the routing core
+is a check written inside this project, not an externally maintained
+routing tool, which is why the `TERRAIN-ACCESS` claim sits at E3 rather than
+a cross-implementation level against an outside tool.
