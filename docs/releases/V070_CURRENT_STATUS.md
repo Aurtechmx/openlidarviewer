@@ -15,13 +15,13 @@ Entries: 154. Revisited at least once: 18.
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 51 |
+| FIXED | 53 |
 | PARTIAL | 32 |
 | BUILT | 31 |
 | MEASURED | 14 |
 | NOT REPRODUCIBLE | 10 |
 | DEFERRED | 6 |
-| OPEN | 6 |
+| OPEN | 4 |
 | REFUSED | 3 |
 | SUPERSEDED | 1 |
 
@@ -30,8 +30,8 @@ Entries: 154. Revisited at least once: 18.
 | ID | Status | Area | Accounts |
 | --- | --- | --- | --- |
 | L01 | FIXED | EXPORT | 2 |
-| L02 | OPEN | EXPORT | 1 |
-| L03 | OPEN | EXPORT | 1 |
+| L02 | FIXED | EXPORT | 1 |
+| L03 | FIXED | EXPORT | 1 |
 | L04 | FIXED | STANDARDS | 1 |
 | L05 | PARTIAL | SCIENTIFIC | 2 |
 | L06 | PARTIAL | SCIENTIFIC | 2 |
