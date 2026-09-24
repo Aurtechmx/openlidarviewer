@@ -11,13 +11,20 @@
 
 type Handler = (e: unknown) => void;
 
-/** A recording node covering only the surface MeasurePanel touches. */
+/** A recording node covering the surface MeasurePanel and the annotation
+ * editor/panel views touch. */
 export class FakeEl {
   readonly tagName: string;
   private _classes = new Set<string>();
-  textContent = '';
+  private _text = '';
   title = '';
   value = '';
+  type = '';
+  placeholder = '';
+  rows = 0;
+  maxLength = 0;
+  checked = false;
+  tabIndex = -1;
   innerHTML = '';
   open = false;
   disabled = false;
@@ -32,6 +39,16 @@ export class FakeEl {
 
   constructor(tag: string) {
     this.tagName = tag.toLowerCase();
+  }
+
+  set textContent(v: string) {
+    this._text = v;
+  }
+  /** Aggregated over children, so a strip built from nested spans (the
+   * annotation views' pattern) reads as one string. A leaf node with no
+   * children behaves exactly like the old flat field. */
+  get textContent(): string {
+    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
   }
 
   set className(v: string) {
@@ -82,6 +99,10 @@ export class FakeEl {
   append(...kids: unknown[]): void {
     for (const k of kids) this.children.push(this._adopt(k));
   }
+  appendChild(kid: unknown): unknown {
+    this.children.push(this._adopt(kid));
+    return kid;
+  }
   /** DOM's `insertBefore`: `ref === null` inserts at the end, matching the spec. */
   insertBefore(kid: unknown, ref: FakeEl | null): FakeEl {
     const node = this._adopt(kid);
@@ -93,6 +114,13 @@ export class FakeEl {
   replaceChildren(...kids: unknown[]): void {
     this.children.length = 0;
     for (const k of kids) this.children.push(this._adopt(k));
+  }
+  /** DOM's `Element.remove`: detach this node from its parent, if any. */
+  remove(): void {
+    if (!this.parent) return;
+    const i = this.parent.children.indexOf(this);
+    if (i >= 0) this.parent.children.splice(i, 1);
+    this.parent = null;
   }
 
   setAttribute(n: string, v: string): void {
@@ -123,9 +151,19 @@ export class FakeEl {
   }
   focus(): void {}
   blur(): void {}
-  /** Fire the registered click handlers — how DOM tests activate a control. */
+  select(): void {}
+  /** Fire the registered click handlers — how DOM tests activate a control.
+   * Carries no-op stopPropagation/preventDefault so a handler that calls
+   * either (the annotation editor's collapse toggle does) does not throw. */
   click(): void {
-    for (const fn of this.handlers.get('click') ?? []) fn({ type: 'click' });
+    for (const fn of this.handlers.get('click') ?? [])
+      fn({
+        type: 'click',
+        clientX: 0,
+        clientY: 0,
+        stopPropagation: () => {},
+        preventDefault: () => {},
+      });
   }
 
   /** `tag`, `.class`, or `tag.class` — the only selector shapes this panel uses. */

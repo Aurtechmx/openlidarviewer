@@ -24,7 +24,7 @@
 
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { withSuppressed, noteEdit, _resetUndoRouter } from '../src/ui/undoRouter';
-import { FakeEl } from './helpers/annotationDomFake';
+import { FakeEl } from './support/measurePanelDom';
 
 type ConfirmOpts = { returnFocusTo?: unknown };
 

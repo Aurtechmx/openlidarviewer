@@ -68,6 +68,30 @@ function makeSet(): OrganizedRangeSet {
   return { kind: 'organized-range', frames: [frame], organization: 'organized-grid' };
 }
 
+/**
+ * A RangeWorkbench over `makeSet()`, recording every `onHighlightRecord` call.
+ * Shared by the Enter/click-outcome cases below, which differ only in the
+ * keys they press and what they expect back.
+ */
+async function makeWorkbenchWithHighlight(): Promise<{
+  canvas: FakeEl;
+  readout: FakeEl;
+  hover: FakeEl;
+  highlighted: (number | null)[];
+}> {
+  const { RangeWorkbench } = await import('../src/ui/RangeWorkbench');
+  const highlighted: (number | null)[] = [];
+  const wb = new RangeWorkbench({
+    set: makeSet(),
+    layerId: 'L1',
+    onHighlightRecord: (r) => highlighted.push(r),
+  });
+  const canvas = (wb as unknown as { _canvas: FakeEl })._canvas;
+  const readout = (wb as unknown as { _readout: FakeEl })._readout;
+  const hover = (wb as unknown as { _hover: FakeEl })._hover;
+  return { canvas, readout, hover, highlighted };
+}
+
 describe('RangeWorkbench keyboard cell inspection', () => {
   it('makes the canvas a focusable, labelled widget', async () => {
     const { RangeWorkbench } = await import('../src/ui/RangeWorkbench');
@@ -105,15 +129,7 @@ describe('RangeWorkbench keyboard cell inspection', () => {
   });
 
   it('Enter samples the cursor cell through the same resolveCellLink a click uses', async () => {
-    const { RangeWorkbench } = await import('../src/ui/RangeWorkbench');
-    const highlighted: (number | null)[] = [];
-    const wb = new RangeWorkbench({
-      set: makeSet(),
-      layerId: 'L1',
-      onHighlightRecord: (r) => highlighted.push(r),
-    });
-    const canvas = (wb as unknown as { _canvas: FakeEl })._canvas;
-    const readout = (wb as unknown as { _readout: FakeEl })._readout;
+    const { canvas, readout, highlighted } = await makeWorkbenchWithHighlight();
 
     canvas.dispatchEvent({ type: 'keydown', key: 'ArrowRight', preventDefault() {} } as never);
     canvas.dispatchEvent({ type: 'keydown', key: 'ArrowRight', preventDefault() {} } as never);
@@ -126,15 +142,7 @@ describe('RangeWorkbench keyboard cell inspection', () => {
   });
 
   it('Enter on a NO_RETURN cell refuses, same as a click, and clears the highlight', async () => {
-    const { RangeWorkbench } = await import('../src/ui/RangeWorkbench');
-    const highlighted: (number | null)[] = [];
-    const wb = new RangeWorkbench({
-      set: makeSet(),
-      layerId: 'L1',
-      onHighlightRecord: (r) => highlighted.push(r),
-    });
-    const canvas = (wb as unknown as { _canvas: FakeEl })._canvas;
-    const readout = (wb as unknown as { _readout: FakeEl })._readout;
+    const { canvas, readout, highlighted } = await makeWorkbenchWithHighlight();
 
     // Row 1, column 0 — reachable with a single ArrowDown from the origin.
     canvas.dispatchEvent({ type: 'keydown', key: 'ArrowDown', preventDefault() {} } as never);
@@ -155,16 +163,7 @@ describe('RangeWorkbench keyboard cell inspection', () => {
   });
 
   it('leaves mouse hover and click behaviour unchanged', async () => {
-    const { RangeWorkbench } = await import('../src/ui/RangeWorkbench');
-    const highlighted: (number | null)[] = [];
-    const wb = new RangeWorkbench({
-      set: makeSet(),
-      layerId: 'L1',
-      onHighlightRecord: (r) => highlighted.push(r),
-    });
-    const canvas = (wb as unknown as { _canvas: FakeEl })._canvas;
-    const hover = (wb as unknown as { _hover: FakeEl })._hover;
-    const readout = (wb as unknown as { _readout: FakeEl })._readout;
+    const { canvas, hover, readout, highlighted } = await makeWorkbenchWithHighlight();
 
     // The stub's getBoundingClientRect is 4x2 — the display raster's own
     // size for this small grid — so a client point maps 1:1 onto a cell.

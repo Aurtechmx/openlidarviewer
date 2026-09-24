@@ -16,51 +16,20 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { makeFakeClassList } from './helpers/fakeClassList';
+import { FakeEl as BaseFakeEl } from './helpers/exportPanelPillDomFake';
 
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  href = '';
-  value = '';
-  placeholder = '';
-  inputMode = '';
-  checked = false;
-  disabled = false;
-  readonly style: Record<string, string> = {};
-  private _text = '';
-  readonly attrs: Record<string, string> = {};
-  readonly children: FakeEl[] = [];
+/**
+ * The base stub's `addEventListener` is a no-op — most ExportPanel tests
+ * only read the rendered tree — but this suite drives a pill click and
+ * observes the re-render, so it needs a real listener/`click()` pair.
+ */
+class FakeEl extends BaseFakeEl {
   private readonly _listeners: Record<string, (() => void)[]> = {};
-  readonly classList = makeFakeClassList();
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  set innerHTML(_v: string) { /* unused */ }
-  setAttribute(k: string, v: string): void { this.attrs[k] = v; }
-  append(...kids: FakeEl[]): void { this.children.push(...kids); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
-  addEventListener(type: string, handler: () => void): void {
+  override addEventListener(type: string, handler: () => void): void {
     (this._listeners[type] ??= []).push(handler);
   }
-  click(): void { for (const h of this._listeners.click ?? []) h(); }
-  /** Every descendant with the given class. */
-  findByClass(cls: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this.className.split(/\s+/).includes(cls)) out.push(this);
-    for (const c of this.children) out.push(...c.findByClass(cls));
-    return out;
-  }
-  /** Every descendant whose own (direct) text equals `label`. */
-  findOwnText(label: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this._text === label) out.push(this);
-    for (const c of this.children) out.push(...c.findOwnText(label));
-    return out;
+  click(): void {
+    for (const h of this._listeners.click ?? []) h();
   }
 }
 
@@ -96,7 +65,7 @@ describe('ExportPanel — format pills expose aria-pressed (OUTPUT-F3)', () => {
 
   it('clicking XYZ flips aria-pressed on both the newly active and newly inactive pills', async () => {
     const { root } = await makePanel();
-    root.findOwnText('XYZ')[0].click();
+    (root.findOwnText('XYZ')[0] as FakeEl).click();
     const xyz = root.findOwnText('XYZ')[0];
     const las14 = root.findOwnText('LAS 1.4')[0];
     expect(xyz.attrs['aria-pressed']).toBe('true');
@@ -122,7 +91,7 @@ describe('ExportPanel — CRS pills expose aria-pressed (OUTPUT-F3)', () => {
 
   it('clicking Reproject flips aria-pressed on both the newly active and newly inactive pills', async () => {
     const { root } = await makePanel();
-    root.findOwnText('Reproject')[0].click();
+    (root.findOwnText('Reproject')[0] as FakeEl).click();
     const reproject = root.findOwnText('Reproject')[0];
     const keep = root.findOwnText('Keep')[0];
     expect(reproject.attrs['aria-pressed']).toBe('true');

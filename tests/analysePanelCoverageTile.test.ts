@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { analyseContours } from '../src/terrain/contour/analyseContours';
 import { COVERAGE_CAPTION } from '../src/terrain/surface/coverageHeatmap';
-import type { TerrainPoint } from '../src/terrain/TerrainContracts';
+import { hillScene } from './helpers/hillSceneFixture';
 
 class FakeEl {
   className = '';
@@ -75,18 +75,6 @@ beforeAll(() => {
   (globalThis as unknown as { requestAnimationFrame?: unknown }).requestAnimationFrame = undefined;
 });
 
-/** A small hill so the analysis yields measured + interpolated cells. */
-function hillScene(): TerrainPoint[] {
-  const pts: TerrainPoint[] = [];
-  for (let x = 0; x <= 30; x++) {
-    for (let y = 0; y <= 30; y++) {
-      const dx = x - 15;
-      const dy = y - 15;
-      pts.push({ x, y, z: 6 * Math.exp(-(dx * dx + dy * dy) / 200) });
-    }
-  }
-  return pts;
-}
 
 describe('AnalysePanel — coverage tile', () => {
   it('renders the Coverage (trust) tile with caption, legend and Export PNG', async () => {

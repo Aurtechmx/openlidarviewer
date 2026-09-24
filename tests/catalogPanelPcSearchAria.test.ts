@@ -16,56 +16,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { makeFakeClassList } from './helpers/fakeClassList';
-
-type Listener = (event: unknown) => void;
-
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  href = '';
-  value = '';
-  disabled = false;
-  selected = false;
-  readonly style: Record<string, string> = {};
-  readonly dataset: Record<string, string> = {};
-  readonly attrs: Record<string, string> = {};
-  readonly children: FakeEl[] = [];
-  private _text = '';
-  private readonly _listeners = new Map<string, Listener[]>();
-  readonly tagName: string;
-  readonly classList = makeFakeClassList();
-
-  constructor(tagName: string) { this.tagName = tagName; }
-
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  get ownText(): string { return this._text; }
-  set innerHTML(_v: string) { /* unused */ }
-  setAttribute(k: string, v: string): void { this.attrs[k] = v; }
-  append(...kids: (FakeEl | string)[]): void {
-    for (const k of kids) if (typeof k !== 'string') this.children.push(k);
-  }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
-  remove(): void { /* detach no-op */ }
-  addEventListener(type: string, cb: Listener): void {
-    if (!this._listeners.has(type)) this._listeners.set(type, []);
-    this._listeners.get(type)!.push(cb);
-  }
-  fire(type: string, event: unknown = { preventDefault(): void {} }): void {
-    this._listeners.get(type)?.forEach((cb) => cb(event));
-  }
-  /** Every descendant (incl. self) carrying `cls`, in tree order. */
-  allByClass(cls: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this.className.split(/\s+/).includes(cls)) out.push(this);
-    for (const c of this.children) out.push(...c.allByClass(cls));
-    return out;
-  }
-}
+import { FakeEl } from './helpers/catalogPanelDomFake';
 
 beforeAll(() => {
   (globalThis as unknown as { document: unknown }).document = {

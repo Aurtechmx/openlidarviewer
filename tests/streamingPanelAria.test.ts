@@ -18,9 +18,10 @@
  * here.
  */
 
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import type { ColorMode } from '../src/render/colorModes';
 import { makeFakeClassList } from './helpers/fakeClassList';
+import { installStreamingPanelDom, streamingPanelCallbacks } from './helpers/streamingPanelFixture';
 
 class FakeEl {
   className = '';
@@ -73,28 +74,12 @@ class FakeEl {
 }
 
 beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-  };
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.HTMLInputElement ??= class {};
-  g.HTMLAnchorElement ??= class {};
+  installStreamingPanelDom((tag: string) => new FakeEl(tag));
 });
-
-function callbacks() {
-  return {
-    onColorMode: vi.fn(),
-    onQuality: vi.fn(),
-    onPauseToggle: vi.fn(),
-    onClearCache: vi.fn(),
-    onGradeFullCloud: vi.fn(),
-    onCancelGrade: vi.fn(),
-  };
-}
 
 async function panel() {
   const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-  const p = new StreamingPanel(callbacks());
+  const p = new StreamingPanel(streamingPanelCallbacks());
   const root = p.element as unknown as FakeEl;
   return { panel: p, root };
 }
@@ -145,7 +130,7 @@ describe('StreamingPanel — colour-mode chips expose aria-pressed (INTAKE-F4)',
     // Re-fetch panel since the outer `panel` name is shadowed above; use a
     // fresh instance here for clarity.
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-    const p = new StreamingPanel(callbacks());
+    const p = new StreamingPanel(streamingPanelCallbacks());
     const r = p.element as unknown as FakeEl;
     p.setColorModes(WITH_COLOUR, 'rgb');
     const heightChip = r.chips().find((c) => c.ownText === 'Height')!;

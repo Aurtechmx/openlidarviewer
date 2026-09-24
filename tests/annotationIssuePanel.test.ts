@@ -23,7 +23,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import type { AnnotationSummary } from '../src/render/annotate/AnnotationController';
 import type { IssueDetails, IssueSeverity } from '../src/render/annotate/issueWorkflow';
-import { FakeEl } from './helpers/annotationDomFake';
+import { FakeEl } from './support/measurePanelDom';
 
 beforeAll(() => {
   const g = globalThis as unknown as Record<string, unknown>;

@@ -19,8 +19,8 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { analyseContours } from '../src/terrain/contour/analyseContours';
-import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 import { FakeEl } from './helpers/canvasKeyboardDomFake';
+import { hillScene } from './helpers/hillSceneFixture';
 
 beforeAll(() => {
   (globalThis as unknown as { document: unknown }).document = {
@@ -31,19 +31,6 @@ beforeAll(() => {
   // path, same as tests/analysePanelCoverageTile.test.ts.
   (globalThis as unknown as { requestAnimationFrame?: unknown }).requestAnimationFrame = undefined;
 });
-
-/** A small hill so the analysis yields both covered and interpolated cells. */
-function hillScene(): TerrainPoint[] {
-  const pts: TerrainPoint[] = [];
-  for (let x = 0; x <= 30; x++) {
-    for (let y = 0; y <= 30; y++) {
-      const dx = x - 15;
-      const dy = y - 15;
-      pts.push({ x, y, z: 6 * Math.exp(-(dx * dx + dy * dy) / 200) });
-    }
-  }
-  return pts;
-}
 
 /** First canvas in a subtree, depth-first. */
 function firstCanvas(root: FakeEl): FakeEl | null {
