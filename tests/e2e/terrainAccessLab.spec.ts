@@ -1,6 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropDenseGridPly, dropTerrainAccessUtmLas, showWorkspaceMode } from './helpers';
+import {
+  dropDenseGridPly, dropTerrainAccessUtmLas, firePaletteAction,
+  openAnalysePanel as openAnalyse,
+} from './helpers';
 
 /**
  * Terrain Access (Field Simulation Lab) — the mobility-profile form, its own
@@ -13,24 +16,6 @@ import { dropDenseGridPly, dropTerrainAccessUtmLas, showWorkspaceMode } from './
  * Runs against the dev server (see playwright.config.ts); the scan-loading
  * specs need a real WebGL/WebGPU context.
  */
-
-async function openAnalyse(page: Page): Promise<void> {
-  await showWorkspaceMode(page, 'analyse');
-  const panel = page.locator('.olv-analyse-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
-}
-
-async function firePaletteAction(page: Page, query: string, rowText: string): Promise<void> {
-  await page.keyboard.press('ControlOrMeta+KeyK');
-  await expect(page.locator('.olv-palette')).toBeVisible();
-  await page.locator('.olv-palette-input').fill(query);
-  await expect(page.locator('.olv-palette-row', { hasText: rowText })).toBeVisible();
-  await page.locator('.olv-palette-input').press('Enter');
-  await expect(page.locator('.olv-palette')).toBeHidden();
-}
 
 async function openTerrainAccess(page: Page): Promise<void> {
   await firePaletteAction(page, 'Terrain Access', 'Terrain Access (Field Simulation Lab)');

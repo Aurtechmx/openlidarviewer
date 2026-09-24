@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, firePaletteAction, openAnalysePanel as openAnalyse } from './helpers';
 
 /**
  * Flow Pulse (Field Simulation Lab) — run, switch conditioning, click-to-pulse
@@ -11,24 +11,6 @@ import { dropDenseGridPly, showWorkspaceMode } from './helpers';
  * Runs against the dev server (see playwright.config.ts); the scan-loading
  * specs need a real WebGL/WebGPU context.
  */
-
-async function openAnalyse(page: Page): Promise<void> {
-  await showWorkspaceMode(page, 'analyse');
-  const panel = page.locator('.olv-analyse-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
-}
-
-async function firePaletteAction(page: Page, query: string, rowText: string): Promise<void> {
-  await page.keyboard.press('ControlOrMeta+KeyK');
-  await expect(page.locator('.olv-palette')).toBeVisible();
-  await page.locator('.olv-palette-input').fill(query);
-  await expect(page.locator('.olv-palette-row', { hasText: rowText })).toBeVisible();
-  await page.locator('.olv-palette-input').press('Enter');
-  await expect(page.locator('.olv-palette')).toBeHidden();
-}
 
 async function openFlowPulse(page: Page): Promise<void> {
   await firePaletteAction(page, 'Flow Pulse', 'Flow Pulse (Field Simulation Lab)');
