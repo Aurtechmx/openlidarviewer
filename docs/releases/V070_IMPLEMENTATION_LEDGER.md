@@ -4699,3 +4699,52 @@ reads the same terrain core. Voxel downsampling at load still drops the flags
 for display (L28, unchanged); the re-decode never touches the displayed
 cloud. Covered by `tests/withheldAwareTerrainGather.test.ts` and
 `tests/terrainRunnerWithheldRecovery.test.ts`.
+
+### L151 · BUILT · SCIENTIFIC
+
+Five defects found by hand against a real USGS 3DEP tile
+(`USGS_LPC_NM_WhiteSandsNM_2020_D20_w3597n3635.laz`) on the L150 merge.
+
+The result grid's selected-cell readout (`flowGridCursor.ts`) printed the
+grid-local z as "elevation" with no unit. `describeCell` now takes an
+`ElevationReference` (a world Z origin plus the resolved vertical unit,
+following `demPackage.ts`'s own origin-restore convention) and reports a real
+elevation with its unit, or "unknown" when either did not resolve.
+`flowElevationReference` in `flowPulseLab.ts` builds it from the analysed
+DTM's claimed vertical factor, gated on `verticalScaleResolved`. Covered by
+the extended `tests/flowGridCursor.test.ts`.
+
+The conditioning limitation ("N cell(s) were raised, the deepest by
+1.240.") had no unit. `modelLimitations` and `runFlowPulse` take the same
+resolved vertical-unit label, appending it or failing closed to "in source
+units". The export package's README states which unit its own
+fill-depth/elevation figures use. Covered by the extended
+`tests/flowPulseRunner.test.ts` and `tests/flowPulsePackage.test.ts`.
+
+The exported ASCII rasters (`flowPulsePackage.ts` via `demAsciiGrid.ts`)
+always wrote `xllcorner`/`yllcorner 0`, with no CRS sidecar:
+`buildFlowPulseExport` never threaded a world origin or CRS through to the
+package builder at all. It now carries a `FlowPulseGeoref`
+(worldOrigin/crsName/wkt, read off the same `getMapContext()` fields
+`demPackage.ts` already uses) and `buildFlowPulsePackage` writes the real
+corner and a `.prj` when the CRS resolves. Covered by the extended
+`tests/flowPulsePackage.test.ts` and `tests/flowPulseLabExport.test.ts`.
+
+The sealed run record's basis claimed `coverage: 'full'`, `complete: true`
+for a DTM built by `gatherWithheldAwareTerrainCore`'s full-resolution
+re-decode, while Contour Studio's own coverage check read the identical
+gather as a sample, because `rasterizeDtm` always reports `'full'` and
+nothing downstream stamped the fact that `sampleStridedTerrain` strided the
+re-decoded source down to a point budget. `computeTerrainCore` gained a
+`sampled` param, set from `StridedTerrainSample.sampled`, that overrides
+`coverageMode` to `'sampled'` the same way `residentOnly` already overrides
+it to `'resident-only'`. Covered by the extended
+`tests/withheldAwareTerrainGather.test.ts`.
+
+The accumulation overlay (`FlowOverlay.ts`) was disposed unconditionally
+when the Lab's modal closed, so a user who turned it on and closed the
+modal (which covers the scene) never actually saw it. The overlay (and
+the traced path/catchment beside it) now lives in a module-level session
+kept across Lab opens, disposed only when the user turns it off or the
+terrain/CRS it was built from goes stale; the toggle reads the persisted
+state back on reopen. Covered by the extended `tests/e2e/flowPulseLab.spec.ts`.

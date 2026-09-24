@@ -100,6 +100,18 @@ manifest with a README and an artifact passport, plus the traced path and
 catchment when the lab has drawn them. Export refuses on a stale result rather
 than naming a terrain that changed under it.
 
+The result grid's selected-cell readout states a real elevation with its
+resolved unit, or "unknown" rather than a bare number, and a raised cell's
+fill depth in the conditioning limitation carries the same unit, failing
+closed to "in source units" when it did not resolve. The exported ASCII
+rasters carry the real lower-left corner and a `.prj` sidecar when the CRS
+resolves, rather than a fixed local (0, 0) origin. The accumulation overlay
+now stays drawn on the scan after the lab closes, until the user turns it
+off or the terrain/CRS it was built from goes stale; that staleness is only
+re-checked the next time the lab is reopened, not the moment the change
+happens, so a dataset swapped while the lab stays closed can leave a stale
+overlay on screen until it is reopened once.
+
 ## Registration is not exposed
 
 Six modules implement alignment. No user path reaches them.
