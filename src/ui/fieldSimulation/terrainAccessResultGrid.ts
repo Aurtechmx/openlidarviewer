@@ -23,6 +23,7 @@ import {
   pixelToCell,
   describeTerrainAccessCell,
   terrainAccessCellAnnouncement,
+  type ElevationReference,
   type GridCell,
   type TerrainAccessCellReport,
 } from '../../simulation/terrainAccess/terrainAccessGridCursor';
@@ -37,6 +38,9 @@ export interface TerrainAccessResultGridOptions {
   readonly onActivate: (cell: GridCell) => void;
   /** The keyboard/pointer cursor moved to a new cell (no activation). */
   readonly onMove: (cell: GridCell, report: TerrainAccessCellReport) => void;
+  /** How to recover a real elevation from the grid's local z; see `flowResultGrid.ts`'s
+   * option of the same name. Absent/null: every cell reports elevation 'unknown'. */
+  readonly elevationRef?: ElevationReference | null;
 }
 
 /** Flat, colourblind-legible bucket colours — a glance-level classification, not data. */
@@ -58,6 +62,7 @@ export class TerrainAccessResultGrid {
   private readonly _status: HTMLElement;
   private readonly _onActivate: TerrainAccessResultGridOptions['onActivate'];
   private readonly _onMove: TerrainAccessResultGridOptions['onMove'];
+  private readonly _elevationRef: ElevationReference | null;
 
   private _grid: TerrainAccessGrid | null = null;
   private _map: readonly TraversabilityMapCell[] | null = null;
@@ -69,6 +74,7 @@ export class TerrainAccessResultGrid {
   constructor(opts: TerrainAccessResultGridOptions) {
     this._onActivate = opts.onActivate;
     this._onMove = opts.onMove;
+    this._elevationRef = opts.elevationRef ?? null;
 
     this._canvas = document.createElement('canvas');
     this._canvas.className = 'olv-ta-grid-canvas';
@@ -163,7 +169,7 @@ export class TerrainAccessResultGrid {
 
   private _updateStatus(): void {
     if (!this._grid || !this._map) return;
-    const report = describeTerrainAccessCell(this._grid, this._map, this._cursor);
+    const report = describeTerrainAccessCell(this._grid, this._map, this._cursor, this._elevationRef);
     this._status.textContent = terrainAccessCellAnnouncement(report);
     this._onMove(this._cursor, report);
   }
