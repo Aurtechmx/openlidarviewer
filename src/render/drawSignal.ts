@@ -19,3 +19,12 @@ export function noteDrawn(): void {
   pending = [];
   for (const cb of run) cb();
 }
+
+/**
+ * Milliseconds from `startedAt` to the first frame the browser shows after
+ * the next draw: one animation frame after {@link noteDrawn}, so the drawn
+ * frame has been presented.
+ */
+export function timeToNextDraw(startedAt: number): Promise<number> {
+  return new Promise((done) => onNextDraw(() => requestAnimationFrame(() => done(performance.now() - startedAt))));
+}

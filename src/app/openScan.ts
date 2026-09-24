@@ -54,7 +54,7 @@ import { loadPreviewCloud, loadLoadDiagnostics } from '../lazyChunks';
 import type { PreviewCloudHandle, PreviewCloudViewer } from './previewCloud';
 import type { PreviewChunk } from '../io/loadLas';
 import { PREVIEW_MAX_POINTS } from '../render/previewLimits';
-import { onNextDraw } from '../render/drawSignal';
+import { timeToNextDraw } from '../render/drawSignal';
 
 /**
  * The Layers chip names the FILE, so it shows the file total (the same count
@@ -562,9 +562,7 @@ export async function attachStaticCloud(
   // Framing is synchronous and draws nothing; the first drawn frame is
   // measured separately, one animation frame after the loop next renders.
   const framingMs = performance.now() - renderStartedAt;
-  const firstDraw = deps.debug || deps.benchmark
-    ? new Promise<number>((done) => onNextDraw(() => requestAnimationFrame(() => done(performance.now() - renderStartedAt))))
-    : undefined;
+  const firstDraw = deps.debug || deps.benchmark ? timeToNextDraw(renderStartedAt) : undefined;
 
   // Colour the fresh scan by the mode its attributes best support (RGB →
   // classification → intensity → elevation), gated so it never picks a mode
