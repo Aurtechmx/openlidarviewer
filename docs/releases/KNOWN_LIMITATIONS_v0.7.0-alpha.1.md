@@ -116,41 +116,67 @@ overlay on screen until it is reopened once.
 
 Terrain Access opens from the command palette next to Flow Pulse. It screens
 a route between two chosen cells against a mobility profile the reader
-declares themselves, with no preset presented as validated. It is not a
-safety assessment, a guaranteed-passable route, or a vehicle dynamics
-simulation; soil strength, traction, tire/track-soil interaction, rollover,
-weather and vegetation compliance are not modelled, and no string in the
-Lab, the run record or the export calls a route safe, drivable or passable.
+declares, with no preset presented as validated. It is not a safety
+assessment, a guaranteed-passable route or a vehicle dynamics simulation:
+soil strength, traction, track or tyre interaction with the ground, rollover,
+weather and vegetation are not modelled, and no text in the Lab, the run
+record or the export calls a route safe, drivable or passable.
 
-A browser check of the sibling Flow Pulse feature on a real UTM tile found
-five defects (L151); Terrain Access shared the same architecture and
-inherited four of them. All four are now fixed, sharing Flow Pulse's own
-helpers rather than duplicating them:
+The Lab has three stages: the mobility-profile form; a traversability-map
+preview where start and goal are chosen on a keyboard- and pointer-accessible
+result grid, with a "why not?" inspector for any cell; and the completed run,
+with route diagnostics and the route drawn on the grid and on the scan. Cell
+readouts give elevation in the dataset's vertical datum and unit, or say it is
+unknown. Lengths, slopes and steps are in metres; a run refuses by name
+(`UNITS_UNRESOLVED`) when the horizontal scale or the vertical unit does not
+resolve. Other named refusals are `NO_DTM`, `INVALID_PROFILE`, `START_BLOCKED`,
+`END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE` and `TOO_LARGE`, and the Lab
+refuses a preview or run whose terrain may have changed since the profile was
+applied.
 
 The cell readout states a real elevation with its resolved unit, or
 "unknown" rather than the DTM's grid-local `z` printed bare, using the same
 `ElevationReference` gate `flowGridCursor.ts` uses for Flow Pulse. Every
 length/slope/step figure is always metric: `UNITS_UNRESOLVED` refuses before
 a result can exist if the horizontal scale or vertical unit-to-metres factor
-does not resolve.
+does not resolve. The route and traversability overlay stays on the scan
+after the Lab closes and is removed when the scan closes, the CRS changes or
+the classes are edited, through the same disposal-registry seam
+(`registerTerrainAccessOverlayInvalidator`/`invalidateTerrainAccessOverlay`
+in `lazyChunks.ts`) Flow Pulse's overlay already uses. Exported rasters and
+the route GeoJSON carry the real world corner in the dataset CRS, with a
+`.prj` when a world origin and CRS/WKT are supplied, rather than always a
+local (0, 0) origin. The run record states whether the terrain was built
+from every point or from a sample, read from the DTM's own `coverageMode`
+(`computeTerrainCore`'s own fix, shared by every reader of that field), so
+Terrain Access states the same honest basis without a change of its own.
 
-The 3D traversability-map/route overlay now persists on the scan after the
-Lab modal closes, disposed only when the user turns it off or the
-terrain/CRS it was built from goes stale, through the same disposal-registry
-seam (`registerTerrainAccessOverlayInvalidator`/`invalidateTerrainAccessOverlay`
-in `lazyChunks.ts`) Flow Pulse's overlay already uses.
+Vehicle length is recorded in the profile and the diagnostics but not
+enforced: eligibility uses width-only clearance, not full swept-body
+collision. The independent Python oracle that cross-checks the routing core
+was written inside this project, not taken from an external routing tool, so
+the `TERRAIN-ACCESS` claim sits at E3.
 
-Exported rasters and the route GeoJSON carry the real world corner in the
-dataset CRS and a `.prj` sidecar when a world origin and CRS/WKT are
-supplied, rather than always a local (0, 0) origin.
+## Registration is not exposed
 
-The run record's basis is read from the DTM's own `coverageMode`; a
-full-resolution re-decode strided down to a point budget is stamped
-`'sampled'` there (`computeTerrainCore`'s own fix, shared by every reader of
-that field), so Terrain Access states the same honest basis without a
-change of its own.
+Six modules implement alignment. No user path reaches them.
 
-`src/main.ts` is 4,965 lines and `src/render/Viewer.ts` is 6,153, seventy lines
+A half-wired alignment tool is worse than none, and the workflow it would need
+is not built.
+
+## The browser matrix is advisory
+
+Chromium blocks a release; Firefox, WebKit and Windows do not, and no ruleset
+requires the cross-browser smoke workflow. Touch gestures run end to end on all
+three engines, and in the iPhone-shaped WebKit project, as synthesized pointer
+events. Multi-touch on a real device is unverified. An advisory iOS simulator
+check drives real Mobile Safari and has not yet passed end to end. No matrix is
+recorded for this development cut: that evidence comes from the engines
+themselves.
+
+## The two monoliths are still monoliths
+
+`src/main.ts` is 4,970 lines and `src/render/Viewer.ts` is 6,153, seventy lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -164,19 +190,28 @@ diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 109 for the shell, 76 for the renderer and 23 for the Analyse panel,
 across 912 modules with no dependency cycles.
 
-The lab has three stages: the blank mobility-profile form; a
-traversability-map preview where start and goal are chosen on a keyboard-
-and pointer-accessible 2D result grid, with a "why not?" inspector for any
-cell; and the completed run, with route diagnostics, the route drawn on the
-grid and, where scene membership is supplied, in the 3D scene. A run refuses
-by name (`NO_DTM`, `UNITS_UNRESOLVED`, `INVALID_PROFILE`, `START_BLOCKED`,
-`END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE`, `TOO_LARGE`), and the
-lab separately refuses a stale preview or run the moment the terrain behind
-it may have changed since the profile was applied.
+## The shell has little headroom
 
-Vehicle length is recorded in the profile and the diagnostics but not
-enforced; eligibility uses width-only clearance, not full swept-body
-collision. The independent Python oracle that cross-checks the routing core
-is a check written inside this project, not an externally maintained
-routing tool, which is why the `TERRAIN-ACCESS` claim sits at E3 rather than
-a cross-implementation level against an outside tool.
+The eager bundle measures about 799 KiB against an 812 KiB ceiling. New work
+goes behind a lazy seam rather than being paid for by a raise.
+
+## Multi-layer mounting is enabled, with a precision refinement outstanding
+
+Physical multi-layer mounting ships enabled, unchanged from v0.6.9. Two
+georeferenced layers declaring the same projected CRS mount into one shared
+project frame at their real separation, non-destructively, and each boundary
+recovers the world coordinate in the frame it names. One item remains a
+precision refinement rather than a correctness defect: for far-apart mounts the
+renderer does not fold `renderOrigin` out on the CPU per mesh, so the Float32
+residual on the GPU is larger than it needs to be. The mount-precision gate
+refuses a placement whose Float32 step would pass 1 mm, which on a metre grid
+is a placed reach of 16,384 m or more. The display is slightly worse than that
+bound at its edge: a layer placed just under 16.4 km out draws with a worst-case
+error of about 1.5 mm. Analysis paths that store placed coordinates in Float32
+stay under 1 mm inside the gate. Picking and distance are computed in Float64
+and are exact, as are exports.
+
+## No cross-CRS reprojection
+
+Unchanged from prior releases. Scans must share a coordinate reference system to
+be compared, and the viewer refuses rather than approximating.
