@@ -992,6 +992,7 @@ export class Inspector {
       className: 'olv-sheet-close',
       text: '×',
       ariaLabel: 'Close scan info',
+      tip: 'Close scan info.',
     });
     sheetClose.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -1012,7 +1013,10 @@ export class Inspector {
       text: '▾',
     });
     sheetChevron.setAttribute('aria-hidden', 'true');
-    const head = el('div', { className: 'olv-panel-head' }, [
+    const head = el('div', {
+      className: 'olv-panel-head',
+      tip: 'Tap to expand or collapse the scan info panel.',
+    }, [
       el('div', { className: 'olv-panel-title', text: 'Scan Intelligence' }),
       sheetChevron,
       sheetClose,

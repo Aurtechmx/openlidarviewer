@@ -183,6 +183,7 @@ export class MobileSheet {
       className: 'olv-msheet-handle',
       type: 'button',
       ariaLabel: 'Collapse panel',
+      tip: 'Drag or tap to resize this panel.',
     });
     handle.setAttribute('aria-expanded', 'true');
     handle.addEventListener('click', () => {

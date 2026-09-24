@@ -102,6 +102,7 @@ export function showReportVerification(result: VerifyReportResult): void {
   const close = document.createElement('button');
   close.type = 'button';
   close.textContent = 'Close';
+  close.title = 'Close this verification report.';
   close.setAttribute('data-testid', 'report-verify-close');
   close.style.cssText =
     'align-self:flex-end;margin-top:6px;padding:6px 14px;border:0;border-radius:8px;cursor:pointer;' +

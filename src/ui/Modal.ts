@@ -168,6 +168,7 @@ export function openModal(opts: ModalOptions): ModalHandle {
     className: 'olv-modal-x',
     text: '×', // ×
     ariaLabel: 'Close dialog',
+    tip: 'Close this dialog.',
     type: 'button',
   });
 

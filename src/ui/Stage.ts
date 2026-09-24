@@ -1042,6 +1042,7 @@ export class Stage {
       type: 'button',
       text: '×',
       ariaLabel: 'Dismiss',
+      tip: 'Dismiss this notice.',
     });
     dismiss.addEventListener('click', () => this._hideStatusBanner());
     this._statusBanner.append(label, retry, dismiss);

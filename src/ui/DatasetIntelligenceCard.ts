@@ -260,6 +260,7 @@ export class DatasetIntelligenceCard {
         className: 'olv-di-story-link',
         text: 'Dataset overview',
         ariaLabel: 'Open Dataset Story',
+        tip: 'Open the full Dataset Story report for this scan.',
       }) as HTMLButtonElement;
       storyBtn.type = 'button';
       storyBtn.addEventListener('click', () => onOpenStory());

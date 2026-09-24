@@ -96,7 +96,7 @@ export class BatchConverter {
     head.append(
       titleEl,
       (() => {
-        const x = el('button', { className: 'olv-bc-close', text: '✕', ariaLabel: 'Close' });
+        const x = el('button', { className: 'olv-bc-close', text: '✕', tip: 'Close batch convert.' });
         x.addEventListener('click', () => this.close());
         return x;
       })(),
@@ -242,7 +242,7 @@ export class BatchConverter {
     if (this._files.length === 0) return;
     this._files.forEach((f, i) => {
       const row = el('div', { className: 'olv-bc-file-row' });
-      const remove = el('button', { className: 'olv-bc-file-del', text: '✕', ariaLabel: `Remove ${f.name}` });
+      const remove = el('button', { className: 'olv-bc-file-del', text: '✕', tip: `Remove ${f.name} from this batch.` });
       remove.addEventListener('click', () => {
         this._files.splice(i, 1);
         this._renderFileList();
