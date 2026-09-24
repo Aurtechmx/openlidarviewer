@@ -142,14 +142,27 @@ export function describeCell(
 ): CellReport {
   const i = cellIndex(grid.cols, cell);
   const readable = grid.valid[i] === 1;
-  const resolved = readable && elevationRef != null
-    && elevationRef.originZ != null && elevationRef.unitLabel !== 'units';
+  const originZ = elevationRef?.originZ ?? null;
+  const unitLabel = elevationRef?.unitLabel ?? 'units';
+  const resolved = readable && originZ != null && unitLabel !== 'units';
+
+  let elevation: number | null = null;
+  let elevationUnit: 'm' | 'ft' | 'unknown' | null = null;
+  if (readable) {
+    if (resolved) {
+      elevation = grid.z[i] + originZ!;
+      elevationUnit = unitLabel as 'm' | 'ft';
+    } else {
+      elevationUnit = 'unknown';
+    }
+  }
+
   return {
     col: cell.col,
     row: cell.row,
     readable,
-    elevation: resolved ? grid.z[i] + elevationRef!.originZ! : null,
-    elevationUnit: readable ? (resolved ? (elevationRef!.unitLabel as 'm' | 'ft') : 'unknown') : null,
+    elevation,
+    elevationUnit,
     status: statusLabel(routed.status[i]),
     upstreamCells: readable ? accumulation.upstreamCells[i] : null,
     contributingAreaM2: readable && areaM2 ? areaM2[i] : null,

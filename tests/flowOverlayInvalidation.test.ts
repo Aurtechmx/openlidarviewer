@@ -80,7 +80,7 @@ describe('invalidateFlowOverlay tears down the persisted overlay without reopeni
     // that fires, exactly as `abortAndClearCache()` calls it.
     invalidateFlowOverlay();
 
-    expect(host.objects.length).toBe(0);
+    expect(host.objects).toHaveLength(0);
   });
 
   it('is a no-op when nothing is persisted (e.g. the Lab was never opened)', () => {
@@ -92,7 +92,7 @@ describe('invalidateFlowOverlay tears down the persisted overlay without reopeni
     const host = fakeHost();
     paintAccumulation(host);
     invalidateFlowOverlay();
-    expect(host.objects.length).toBe(0);
+    expect(host.objects).toHaveLength(0);
 
     // Reopening the Lab afterwards must still work: a fresh overlay, drawable.
     paintAccumulation(host);

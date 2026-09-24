@@ -35,6 +35,20 @@ async function openFlowPulse(page: Page): Promise<void> {
   await expect(page.locator('.olv-modal-title')).toHaveText('Field Simulation Lab: Flow Pulse');
 }
 
+/** Drop the fixture scan and run terrain analysis to readiness. */
+async function loadScanAndAnalyse(page: Page): Promise<void> {
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  // The dock's Analyse tool enables once the scan is loaded and ready for
+  // analysis actions — the actual app signal, in place of a fixed wait.
+  await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
+  await openAnalyse(page);
+  await page.locator('.olv-analyse-run').click();
+  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
+    timeout: 20_000,
+  });
+}
+
 test('refuses honestly, with no interactive controls, before any terrain analysis has run', async ({ page }) => {
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
@@ -52,14 +66,7 @@ test('refuses honestly, with no interactive controls, before any terrain analysi
 
 test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overlay toggle', async ({ page }) => {
   await page.goto('/?test=1');
-  await dropDenseGridPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(1500);
-  await openAnalyse(page);
-  await page.locator('.olv-analyse-run').click();
-  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
-    timeout: 20_000,
-  });
+  await loadScanAndAnalyse(page);
 
   await openFlowPulse(page);
   const modal = page.locator('.olv-modal');
@@ -167,14 +174,7 @@ test('closing the scan tears down the persisted overlay without reopening the La
   // an "on" toggle it never turned on itself, which it would if the old
   // overlay's persisted session had survived the close.
   await page.goto('/?test=1');
-  await dropDenseGridPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(1500);
-  await openAnalyse(page);
-  await page.locator('.olv-analyse-run').click();
-  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
-    timeout: 20_000,
-  });
+  await loadScanAndAnalyse(page);
 
   await openFlowPulse(page);
   const modal = page.locator('.olv-modal');
@@ -194,14 +194,7 @@ test('closing the scan tears down the persisted overlay without reopening the La
   // Load a fresh scan and re-run analysis; the new Lab session's overlay
   // toggle must start OFF, proving the previous scan's persisted overlay was
   // torn down by the close, not merely hidden behind a stale "on" record.
-  await dropDenseGridPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(1500);
-  await openAnalyse(page);
-  await page.locator('.olv-analyse-run').click();
-  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
-    timeout: 20_000,
-  });
+  await loadScanAndAnalyse(page);
   await openFlowPulse(page);
   await expect(page.locator('.olv-modal .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
   await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'false');
