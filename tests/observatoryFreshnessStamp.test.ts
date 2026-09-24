@@ -3,38 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   observationFreshnessBreach,
   OBSERVATION_FRESHNESS_REFUSALS,
-  type ObservationFreshnessStamp,
 } from '../src/science/analysisFreshness';
+import { now, sameTarget, stamp } from './helpers/observatoryFixtures';
 
 /** OB-INT-03 / OB-INV-09: the extended stamp refuses on any of its own four extra facts, naming which one moved. */
-
-const sameTarget = (a: string | null, b: string | null): boolean => a !== null && a === b;
-
-const stamp = (over: Partial<ObservationFreshnessStamp> = {}): ObservationFreshnessStamp => ({
-  targetId: 'scan_1',
-  classificationEpoch: 3,
-  crsRevision: 7,
-  coverageMode: 'full',
-  sourceDigest: 'sha256:source',
-  basis: 'full',
-  roiDigest: 'sha256:roi',
-  stationSetDigest: 'sha256:stations',
-  parameterDigest: 'sha256:params',
-  methodTags: [],
-  metresPerUnit: 1,
-  ...over,
-});
-
-const now = (over: Partial<Pick<ObservationFreshnessStamp, 'targetId' | 'classificationEpoch' | 'crsRevision' | 'sourceDigest' | 'roiDigest' | 'stationSetDigest' | 'parameterDigest'>> = {}) => ({
-  targetId: 'scan_1',
-  classificationEpoch: 3,
-  crsRevision: 7,
-  sourceDigest: 'sha256:source',
-  roiDigest: 'sha256:roi',
-  stationSetDigest: 'sha256:stations',
-  parameterDigest: 'sha256:params',
-  ...over,
-});
 
 describe('OB-INT-03 observationFreshnessBreach', () => {
   it('passes when every fact still matches', () => {

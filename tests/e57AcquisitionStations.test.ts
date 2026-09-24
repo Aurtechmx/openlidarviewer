@@ -11,55 +11,16 @@
  * ever asserting the pose or the record range survive it.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { E57ScanData, E57ParseResult } from '../src/io/e57/parseE57';
+import type { E57ScanData } from '../src/io/e57/parseE57';
 import { parseE57 } from '../src/io/e57/parseE57';
 import { loadE57 } from '../src/io/loadE57';
-import type { E57DecodePlan } from '../src/io/loadPlan';
+import { READ_EVERY_RECORD, parseResult, scan } from './helpers/e57ScanFixtures';
 
 vi.mock('../src/io/e57/parseE57', () => ({
   parseE57: vi.fn(),
 }));
 
 const mockedParse = vi.mocked(parseE57);
-
-const READ_EVERY_RECORD: E57DecodePlan = {
-  mode: 'all',
-  stride: 1,
-  sourceCount: 0,
-  decodedCount: 0,
-  memoryEstimateBytes: 0,
-  fullDecodeEstimateBytes: 0,
-  ceilingBytes: 0,
-  fits: true,
-};
-
-function scan(
-  name: string,
-  recordCount: number,
-  columns: Record<string, Float64Array>,
-  pose: E57ScanData['pose'] = null,
-): E57ScanData {
-  return {
-    name,
-    guid: `guid-${name}`,
-    recordCount,
-    declaredRecordCount: recordCount,
-    columns,
-    fields: [],
-    pose,
-    colorMax: null,
-    intensityMax: null,
-  };
-}
-
-function parseResult(scans: E57ScanData[]): E57ParseResult {
-  return {
-    scans,
-    metadata: { formatName: 'ASTM E57 3D Imaging Data File', guid: 'g', library: 'test-lib', creationDateTime: null },
-    sourceMetadata: null,
-    warnings: [],
-  };
-}
 
 beforeEach(() => {
   mockedParse.mockReset();

@@ -9,7 +9,6 @@
  * paragraph: no Web Worker exists yet.
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import type { AcquisitionStation } from '../src/model/AcquisitionStations';
@@ -35,22 +34,7 @@ import {
   type RayPartitionChunkEntry,
   type RayPartitionInput,
 } from '../src/observation/ledger';
-
-const ROOT = join(__dirname, '..');
-const F8_EXPECTED_PATH = join(ROOT, 'validation', 'observatory', 'expected', 'f8-dda-cases.expected.json');
-
-interface F8ExpectedRecord {
-  readonly caseId: string;
-  readonly input: {
-    readonly origin: readonly number[];
-    readonly direction: readonly number[];
-    readonly tMax: number;
-    readonly domain: { readonly minCorner: readonly number[]; readonly maxCorner: readonly number[] };
-    readonly voxelEdge: number;
-  };
-  readonly clip: readonly [string, string] | null;
-  readonly voxels: readonly (readonly number[])[];
-}
+import { F8_EXPECTED_PATH, type F8ExpectedRecord, originStation } from './helpers/observatoryFixtures';
 
 // ---------------------------------------------------------------------------
 // domain / grid / key-packing unit checks
@@ -391,13 +375,7 @@ describe('SPEC §2.4 rule 1 — a not-read ray adds presence and notDecoded but 
   // (floor((0 - (-1)) / 1) = 1 on both axes), ix = 0..9.
   const domain: ObservationDomain = { min: [0, -1, -1], max: [10, 1, 1] };
   const voxelEdge = 1;
-  const station: AcquisitionStation = {
-    id: 'not-read-station',
-    source: 'ptx-block',
-    pose: { worldTranslation: [0, 0, 0], localPositionSource: 'not-applicable' },
-    recordRange: { start: 0, end: 0 },
-    originStatus: 'DECLARED',
-  };
+  const station: AcquisitionStation = originStation('not-read-station');
 
   it('every touched voxel gets presence + notDecoded and all-zero counters, for both the aggregate row and the per-source entry', () => {
     const chunk: ObservationRayChunk = {
@@ -433,13 +411,7 @@ describe('SPEC §2.4 rule 1 — a not-read ray adds presence and notDecoded but 
 describe('OB-RAY-03 — multi-return hit/pass/behind/gap classification (returnTable, three returns)', () => {
   const domain: ObservationDomain = { min: [0, -1, -1], max: [10, 1, 1] };
   const voxelEdge = 1;
-  const station: AcquisitionStation = {
-    id: 'multi-return-station',
-    source: 'ptx-block',
-    pose: { worldTranslation: [0, 0, 0], localPositionSource: 'not-applicable' },
-    recordRange: { start: 0, end: 0 },
-    originStatus: 'DECLARED',
-  };
+  const station: AcquisitionStation = originStation('multi-return-station');
 
   it('classifies each of the ten crossed voxels correctly, including the two gap voxels between windows', () => {
     // Three returns at r = 2, 5, 8 with tauAbs = 0.4, tauRel = 0 (a fixed
@@ -490,13 +462,7 @@ describe('OB-RAY-03 — multi-return hit/pass/behind/gap classification (returnT
 describe('OB-LED-02 — rejection-ratio telemetry', () => {
   const domain: ObservationDomain = { min: [0, -1, -1], max: [10, 1, 1] };
   const voxelEdge = 1;
-  const station: AcquisitionStation = {
-    id: 'telemetry-station',
-    source: 'ptx-block',
-    pose: { worldTranslation: [0, 0, 0], localPositionSource: 'not-applicable' },
-    recordRange: { start: 0, end: 0 },
-    originStatus: 'DECLARED',
-  };
+  const station: AcquisitionStation = originStation('telemetry-station');
   // ray 0: a valid direction, crosses the domain (processed). ray 1: a
   // degenerate (zero-length) direction, rejected before any voxel step.
   const chunk: ObservationRayChunk = {
@@ -702,13 +668,7 @@ describe('OB-LED-03 — a large domain: refused under the retired Map-era budget
 describe('RayPartitionChunkEntry.maxRange bounds a no-return ray\'s own traversal (SPEC §2.1: "up to the declared maximum range")', () => {
   const domain: ObservationDomain = { min: [0, -1, -1], max: [20, 1, 1] };
   const voxelEdge = 1;
-  const station: AcquisitionStation = {
-    id: 'range-capped-station',
-    source: 'ptx-block',
-    pose: { worldTranslation: [0, 0, 0], localPositionSource: 'not-applicable' },
-    recordRange: { start: 0, end: 0 },
-    originStatus: 'DECLARED',
-  };
+  const station: AcquisitionStation = originStation('range-capped-station');
   const chunk: ObservationRayChunk = {
     originIndex: new Uint16Array([0]),
     direction: new Float32Array([1, 0, 0]),

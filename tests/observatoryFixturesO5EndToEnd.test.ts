@@ -27,8 +27,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AcquisitionStation } from '../src/model/AcquisitionStations';
-import { CellState, NO_RECORD, tallyCellStates, type OrganizedRangeFrame } from '../src/model/OrganizedRange';
-import { buildGriddedSourceRays, type GriddedRayCoverage } from '../src/observation/rays';
+import { buildGriddedSourceRays } from '../src/observation/rays';
 import {
   clipRayToDomain,
   computeFieldDigest,
@@ -45,6 +44,7 @@ import {
 import type { ObservationRayChunk } from '../src/observation/rays';
 import { classifyObservationField, type ObservationFieldStation } from '../src/observation/observationField';
 import type { ObservationParameters } from '../src/observation/types';
+import { RAYS_PER_PROBE, type Vec3, azimuthPolarOf, buildRepeatedRayCells, normalize, station, subtract, f1WallRay } from './helpers/observatoryRayFixtures';
 
 const PARAMS: Pick<ObservationParameters, 'p_solid' | 'p_empty' | 'n_min'> = { p_solid: 0.9, p_empty: 0.1, n_min: 5 };
 // OB-ST-THRESHOLDS: tau_abs = h/2. tau_rel = 0 here (no fitted angular step
@@ -52,66 +52,14 @@ const PARAMS: Pick<ObservationParameters, 'p_solid' | 'p_empty' | 'n_min'> = { p
 // this file tests the ledger/classifier, not that derivation).
 const tauAbsFor = (voxelEdge: number): number => voxelEdge / 2;
 
-type Vec3 = readonly [number, number, number];
-
-function normalize(v: Vec3): Vec3 {
-  const len = Math.hypot(v[0], v[1], v[2]);
-  return [v[0] / len, v[1] / len, v[2] / len];
-}
-function subtract(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-}
 function pointAt(origin: Vec3, direction: Vec3, t: number): Vec3 {
   return [origin[0] + direction[0] * t, origin[1] + direction[1] * t, origin[2] + direction[2] * t];
-}
-/** rays.ts's `writeDirectionFromAngles` (upAxis 'z'), inverted: azimuth/polar (radians) that reproduce `direction` exactly under that same formula. */
-function azimuthPolarOf(direction: Vec3): { readonly azimuth: number; readonly polar: number } {
-  return { azimuth: Math.atan2(direction[1], direction[0]), polar: Math.acos(direction[2]) };
 }
 function voxelKeyOf(point: Vec3, domain: ObservationDomain, voxelEdge: number, grid: { readonly nx: number; readonly ny: number }): number {
   const ix = Math.floor((point[0] - domain.min[0]) / voxelEdge);
   const iy = Math.floor((point[1] - domain.min[1]) / voxelEdge);
   const iz = Math.floor((point[2] - domain.min[2]) / voxelEdge);
   return packVoxelKey(ix, iy, iz, grid.nx, grid.ny);
-}
-
-function station(id: string, origin: Vec3): AcquisitionStation {
-  return { id, source: 'ptx-block', pose: { worldTranslation: origin, localPositionSource: 'not-applicable' }, recordRange: { start: 0, end: 0 }, originStatus: 'DECLARED' };
-}
-
-const RAYS_PER_PROBE = 5; // == n_min
-
-/**
- * A real `OrganizedRangeFrame` of `RAYS_PER_PROBE` identical grid cells, all
- * `VALID_RETURN` at `range` (a finite returned ray) or all `NO_RETURN` (a
- * no-return ray) when `range` is omitted — repeated cells to reach `n_min`
- * rays through ONE real grid, not `n_min` separately declared facts. Fed
- * through the actual `buildGriddedSourceRays` (OB-RAY-01), not constructed
- * by hand.
- */
-function buildRepeatedRayCells(range: number | null): { readonly frame: OrganizedRangeFrame; readonly coverage: GriddedRayCoverage } {
-  const width = RAYS_PER_PROBE;
-  const height = 1;
-  const cells = width * height;
-  const isNoReturn = range === null;
-  const cellState = new Uint8Array(cells).fill(isNoReturn ? CellState.NO_RETURN : CellState.VALID_RETURN);
-  const cellToRecord = new Int32Array(cells).fill(isNoReturn ? NO_RECORD : 0);
-  const geometricRange = new Float32Array(cells).fill(isNoReturn ? Number.NaN : (range as number));
-  if (!isNoReturn) for (let i = 0; i < cells; i++) cellToRecord[i] = i;
-  const frame: OrganizedRangeFrame = {
-    id: 'probe',
-    sourceKind: 'ptx-grid',
-    width,
-    height,
-    cellState,
-    cellToRecord,
-    geometricRange,
-    linkage: { kind: 'exact' },
-    diagnostics: tallyCellStates(cellState),
-  };
-  // Every cell shares one direction (azimuthStep/polarStep 0): the coverage
-  // itself is filled in by each call site from its own chosen direction.
-  return { frame, coverage: { azimuth0: 0, azimuthStep: 0, polar0: 0, polarStep: 0 } };
 }
 
 function chunkEntryFor(sourceIndex: number, origin: Vec3, direction: Vec3, range: number | null, voxelEdge: number, maxRange?: number): RayPartitionChunkEntry {
@@ -157,16 +105,7 @@ function assertFieldDigestInvariantToPartitionCount(domain: ObservationDomain, v
 // ---------------------------------------------------------------------------
 
 describe('F1 end-to-end — real ray builder + real ledger, then classifyObservationField', () => {
-  const domain: ObservationDomain = { min: [-1, -6, -1], max: [16, 6, 6] };
-  const voxelEdge = 0.5;
-  const wallDomain: ObservationDomain = { min: [5, -2, 0], max: [5.2, 2, 3] };
-  const origin: Vec3 = [0, 0, 0];
-  // Toward (5.1, 0, 1.5) — inside the wall's own box, well inside the
-  // declared elevation band [-30, 45] (its elevation is ~16.4 deg).
-  const direction = normalize(subtract([5.1, 0, 1.5], origin));
-  const wallClip = clipRayToDomain(origin, direction, 0, Infinity, wallDomain);
-  if (wallClip === null) throw new Error('test setup: the chosen direction must hit the wall');
-  const wallEntryRange = wallClip.tEntry; // the real near-face intersection distance
+  const { domain, voxelEdge, origin, direction, wallEntryRange } = f1WallRay();
 
   const stationS1: AcquisitionStation = station('station-1', origin);
   const entry = chunkEntryFor(0, origin, direction, wallEntryRange, voxelEdge) as RayPartitionChunkEntry;
@@ -204,13 +143,8 @@ describe('F1 end-to-end — real ray builder + real ledger, then classifyObserva
 // ---------------------------------------------------------------------------
 
 describe('F2 end-to-end — a second station resolves the former shadow in aggregate, not in isolation', () => {
-  const domain: ObservationDomain = { min: [-1, -6, -1], max: [16, 6, 6] };
-  const voxelEdge = 0.5;
-  const wallDomain: ObservationDomain = { min: [5, -2, 0], max: [5.2, 2, 3] };
-  const origin1: Vec3 = [0, 0, 0];
-  const direction1 = normalize(subtract([5.1, 0, 1.5], origin1));
-  const wallClip = clipRayToDomain(origin1, direction1, 0, Infinity, wallDomain)!;
-  const behindPoint = pointAt(origin1, direction1, wallClip.tEntry + 2);
+  const { domain, voxelEdge, origin: origin1, direction: direction1, wallEntryRange } = f1WallRay();
+  const behindPoint = pointAt(origin1, direction1, wallEntryRange + 2);
 
   const origin2: Vec3 = [10, 0, 1];
   const direction2 = normalize(subtract(behindPoint, origin2));
@@ -218,7 +152,7 @@ describe('F2 end-to-end — a second station resolves the former shadow in aggre
 
   const station1 = station('station-1', origin1);
   const station2 = station('station-2', origin2);
-  const entry1 = chunkEntryFor(0, origin1, direction1, wallClip.tEntry, voxelEdge) as RayPartitionChunkEntry;
+  const entry1 = chunkEntryFor(0, origin1, direction1, wallEntryRange, voxelEdge) as RayPartitionChunkEntry;
   const entry2 = chunkEntryFor(1, origin2, direction2, range2, voxelEdge) as RayPartitionChunkEntry;
   const input: RayPartitionInput = { domain, voxelEdge, stations: [station1, station2], returnedChunks: [entry1, entry2], notReadChunks: [] };
   const result = runObservationLedger(input, { declaredStepBudget: 1_000_000 });

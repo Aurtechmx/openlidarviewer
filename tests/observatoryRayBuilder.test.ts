@@ -320,32 +320,34 @@ describe('OB-RAY-05 — hash-threshold subsampling', () => {
   });
 });
 
+/** One VALID_RETURN cell whose CSR span holds two returns: the first at `firstRange` (null = none declared), the second at 9. */
+function twoReturnCellFrame(firstRange: number | null): OrganizedRangeFrame {
+  const entries: CellReturnInput[] = [
+    { row: 0, column: 0, record: 0, returnIndex: 0, returnCount: 2, sourceRange: firstRange },
+    { row: 0, column: 0, record: 1, returnIndex: 1, returnCount: 2, sourceRange: 9 },
+  ];
+  const built = buildCellReturns(1, 1, entries);
+  const cellState = new Uint8Array([CellState.VALID_RETURN]);
+  return {
+    id: 'scan-1',
+    sourceKind: 'e57-structured',
+    width: 1,
+    height: 1,
+    cellState,
+    cellToRecord: new Int32Array([0]),
+    returnCellStart: built.returnCellStart,
+    returnRecord: built.returnRecord,
+    returnIndex: built.returnIndex,
+    returnCountDeclared: built.returnCountDeclared,
+    returnSourceRange: built.returnSourceRange,
+    linkage: { kind: 'exact' },
+    diagnostics: tallyCellStates(cellState),
+  };
+}
+
 describe('OB-RAY-03 — multi-return ray/return-table shape (unit-level, ahead of F16)', () => {
   it('one VALID_RETURN cell with a two-return CSR span contributes one ray and a two-entry return table group', () => {
-    const width = 1;
-    const height = 1;
-    const entries: CellReturnInput[] = [
-      { row: 0, column: 0, record: 0, returnIndex: 0, returnCount: 2, sourceRange: 8 },
-      { row: 0, column: 0, record: 1, returnIndex: 1, returnCount: 2, sourceRange: 9 },
-    ];
-    const built = buildCellReturns(width, height, entries);
-    const cellState = new Uint8Array([CellState.VALID_RETURN]);
-    const cellToRecord = new Int32Array([0]);
-    const frame: OrganizedRangeFrame = {
-      id: 'scan-1',
-      sourceKind: 'e57-structured',
-      width,
-      height,
-      cellState,
-      cellToRecord,
-      returnCellStart: built.returnCellStart,
-      returnRecord: built.returnRecord,
-      returnIndex: built.returnIndex,
-      returnCountDeclared: built.returnCountDeclared,
-      returnSourceRange: built.returnSourceRange,
-      linkage: { kind: 'exact' },
-      diagnostics: tallyCellStates(cellState),
-    };
+    const frame = twoReturnCellFrame(8);
     const build = buildGriddedSourceRays(frame, station(), 0, COVERAGE, { kind: 'none' });
     expect(build.returnedChunks[0]!.originIndex.length).toBe(1);
     expect(build.returnTable).toBeDefined();
@@ -356,30 +358,7 @@ describe('OB-RAY-03 — multi-return ray/return-table shape (unit-level, ahead o
   });
 
   it('excludes a multi-return cell whose primary (start-entry) range is degenerate, and leaves the return table untouched for it', () => {
-    const width = 1;
-    const height = 1;
-    const entries: CellReturnInput[] = [
-      { row: 0, column: 0, record: 0, returnIndex: 0, returnCount: 2, sourceRange: null },
-      { row: 0, column: 0, record: 1, returnIndex: 1, returnCount: 2, sourceRange: 9 },
-    ];
-    const built = buildCellReturns(width, height, entries);
-    const cellState = new Uint8Array([CellState.VALID_RETURN]);
-    const cellToRecord = new Int32Array([0]);
-    const frame: OrganizedRangeFrame = {
-      id: 'scan-1',
-      sourceKind: 'e57-structured',
-      width,
-      height,
-      cellState,
-      cellToRecord,
-      returnCellStart: built.returnCellStart,
-      returnRecord: built.returnRecord,
-      returnIndex: built.returnIndex,
-      returnCountDeclared: built.returnCountDeclared,
-      returnSourceRange: built.returnSourceRange,
-      linkage: { kind: 'exact' },
-      diagnostics: tallyCellStates(cellState),
-    };
+    const frame = twoReturnCellFrame(null);
     const cloudSourceOrigin: readonly [number, number, number] = [0, 0, 0];
     const stationWorld = STATION_ORIGIN;
     // Record 0 (the start entry, no declared sourceRange) sits exactly at the

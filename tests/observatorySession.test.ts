@@ -1,39 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { commitObservationSession, verifyObservationRerun, type ObservationSessionRecord } from '../src/observation/session';
-import type { ObservationFreshnessStamp } from '../src/science/analysisFreshness';
 import type { ObservationDomain } from '../src/observation/ledger';
 import type { ObservationParameters } from '../src/observation/types';
+import { now, sameTarget, stamp } from './helpers/observatoryFixtures';
 
 /** OB-SES-01 + F14: the session commit gate, and the rerun-digest check. */
-
-const sameTarget = (a: string | null, b: string | null): boolean => a !== null && a === b;
-
-const stamp = (over: Partial<ObservationFreshnessStamp> = {}): ObservationFreshnessStamp => ({
-  targetId: 'scan_1',
-  classificationEpoch: 3,
-  crsRevision: 7,
-  coverageMode: 'full',
-  sourceDigest: 'sha256:source',
-  basis: 'full',
-  roiDigest: 'sha256:roi',
-  stationSetDigest: 'sha256:stations',
-  parameterDigest: 'sha256:params',
-  methodTags: [],
-  metresPerUnit: 1,
-  ...over,
-});
-
-const now = (over: Partial<Pick<ObservationFreshnessStamp, 'targetId' | 'classificationEpoch' | 'crsRevision' | 'sourceDigest' | 'roiDigest' | 'stationSetDigest' | 'parameterDigest'>> = {}) => ({
-  targetId: 'scan_1',
-  classificationEpoch: 3,
-  crsRevision: 7,
-  sourceDigest: 'sha256:source',
-  roiDigest: 'sha256:roi',
-  stationSetDigest: 'sha256:stations',
-  parameterDigest: 'sha256:params',
-  ...over,
-});
 
 const domain: ObservationDomain = { min: [0, 0, 0], max: [10, 10, 10] };
 const parameters: ObservationParameters = { p_solid: 0.9, p_empty: 0.1, n_min: 5, tau_abs: 0.1, tau_rel: 0 };

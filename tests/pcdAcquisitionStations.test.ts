@@ -13,41 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { loadPcd } from '../src/io/loadPcd';
 import { loadLas } from '../src/io/loadLas';
-
-interface HeaderOptions {
-  readonly width: number;
-  readonly height: number;
-  readonly points?: number;
-  readonly viewpoint?: string | null;
-}
-
-/** An ascii PCD with x y z fields, the same builder pcdOrganizedRange.test.ts uses. */
-function asciiPcd(options: HeaderOptions, rows: readonly string[]): ArrayBuffer {
-  const { width, height, points = width * height, viewpoint = '0 0 0 1 0 0 0' } = options;
-  const lines = [
-    '# .PCD v0.7',
-    'VERSION 0.7',
-    'FIELDS x y z',
-    'SIZE 8 8 8',
-    'TYPE F F F',
-    'COUNT 1 1 1',
-    `WIDTH ${width}`,
-    `HEIGHT ${height}`,
-    ...(viewpoint === null ? [] : [`VIEWPOINT ${viewpoint}`]),
-    `POINTS ${points}`,
-    'DATA ascii',
-    ...rows,
-    '',
-  ];
-  return new TextEncoder().encode(lines.join('\n')).buffer as ArrayBuffer;
-}
-
-const GRID_ROWS: string[] = [];
-for (let row = 0; row < 3; row++) {
-  for (let column = 0; column < 4; column++) {
-    GRID_ROWS.push(`${column} ${row} 0`);
-  }
-}
+import { GRID_ROWS, asciiPcd } from './helpers/asciiPcd';
 
 describe('an organized PCD with a declared viewpoint', () => {
   it('records one station covering the whole cloud, byte-identical positions', async () => {

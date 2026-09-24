@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { buildF1Scene, buildF8Cases, type ObservatoryF8Case } from '../scripts/generate-observatory-fixtures.mjs';
+import { F8_EXPECTED_PATH, type F8ExpectedRecord } from './helpers/observatoryFixtures';
 
 /**
  * F8 (SPEC §9.1, O1's exit evidence): the DDA cases' traversal lists are
@@ -17,21 +18,7 @@ import { buildF1Scene, buildF8Cases, type ObservatoryF8Case } from '../scripts/g
 
 const ROOT = join(__dirname, '..');
 const F8_FIXTURE_PATH = join(ROOT, 'validation', 'observatory', 'fixtures', 'f8-dda-cases.json');
-const F8_EXPECTED_PATH = join(ROOT, 'validation', 'observatory', 'expected', 'f8-dda-cases.expected.json');
 const F1_FIXTURE_PATH = join(ROOT, 'validation', 'observatory', 'fixtures', 'f1-wall-room.json');
-
-interface F8ExpectedRecord {
-  readonly caseId: string;
-  readonly input: {
-    readonly origin: readonly number[];
-    readonly direction: readonly number[];
-    readonly tMax: number;
-    readonly domain: { readonly minCorner: readonly number[]; readonly maxCorner: readonly number[] };
-    readonly voxelEdge: number;
-  };
-  readonly clip: readonly [string, string] | null;
-  readonly voxels: readonly (readonly number[])[];
-}
 
 describe('F8 — fixture generator matches the committed fixture (no drift)', () => {
   it('buildF8Cases() reproduces validation/observatory/fixtures/f8-dda-cases.json exactly', () => {

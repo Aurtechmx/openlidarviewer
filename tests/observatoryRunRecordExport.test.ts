@@ -14,9 +14,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import type { AcquisitionStation } from '../src/model/AcquisitionStations';
-import { CellState, NO_RECORD, tallyCellStates, type OrganizedRangeFrame } from '../src/model/OrganizedRange';
-import { buildGriddedSourceRays, type GriddedRayCoverage } from '../src/observation/rays';
+import { buildGriddedSourceRays } from '../src/observation/rays';
 import {
   clipRayToDomain,
   domainGrid,
@@ -36,42 +34,9 @@ import {
   recomputeFieldDigestFromExport,
   writeObservationFieldBinary,
 } from '../src/export/observatoryPackage';
-
-type Vec3 = readonly [number, number, number];
+import { type Vec3, azimuthPolarOf, buildRepeatedRayCells, normalize, station, subtract } from './helpers/observatoryRayFixtures';
 
 const PARAMS: ObservationParameters = { p_solid: 0.9, p_empty: 0.1, n_min: 5, tau_abs: 0.25, tau_rel: 0 };
-
-function normalize(v: Vec3): Vec3 {
-  const len = Math.hypot(v[0], v[1], v[2]);
-  return [v[0] / len, v[1] / len, v[2] / len];
-}
-function subtract(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-}
-function azimuthPolarOf(direction: Vec3): { readonly azimuth: number; readonly polar: number } {
-  return { azimuth: Math.atan2(direction[1], direction[0]), polar: Math.acos(direction[2]) };
-}
-function station(id: string, origin: Vec3): AcquisitionStation {
-  return { id, source: 'ptx-block', pose: { worldTranslation: origin, localPositionSource: 'not-applicable' }, recordRange: { start: 0, end: 0 }, originStatus: 'DECLARED' };
-}
-
-const RAYS_PER_PROBE = 5; // == n_min
-
-function buildRepeatedRayCells(range: number | null): { readonly frame: OrganizedRangeFrame; readonly coverage: GriddedRayCoverage } {
-  const width = RAYS_PER_PROBE;
-  const height = 1;
-  const cells = width * height;
-  const isNoReturn = range === null;
-  const cellState = new Uint8Array(cells).fill(isNoReturn ? CellState.NO_RETURN : CellState.VALID_RETURN);
-  const cellToRecord = new Int32Array(cells).fill(isNoReturn ? NO_RECORD : 0);
-  const geometricRange = new Float32Array(cells).fill(isNoReturn ? Number.NaN : (range as number));
-  if (!isNoReturn) for (let i = 0; i < cells; i++) cellToRecord[i] = i;
-  const frame: OrganizedRangeFrame = {
-    id: 'probe', sourceKind: 'ptx-grid', width, height, cellState, cellToRecord, geometricRange,
-    linkage: { kind: 'exact' }, diagnostics: tallyCellStates(cellState),
-  };
-  return { frame, coverage: { azimuth0: 0, azimuthStep: 0, polar0: 0, polarStep: 0 } };
-}
 
 function chunkEntryFor(sourceIndex: number, origin: Vec3, direction: Vec3, range: number): RayPartitionChunkEntry {
   const { azimuth, polar } = azimuthPolarOf(direction);

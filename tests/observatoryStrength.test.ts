@@ -24,7 +24,6 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { AcquisitionStation } from '../src/model/AcquisitionStations';
 import {
   CellState,
   buildCellReturns,
@@ -34,7 +33,7 @@ import {
   type OrganizedRangeFrame,
 } from '../src/model/OrganizedRange';
 import { buildGriddedSourceRays, type GriddedRayCoverage } from '../src/observation/rays';
-import { clipRayToDomain, domainGrid, packVoxelKey, runObservationLedger, type ObservationDomain, type RayPartitionChunkEntry, type RayPartitionInput } from '../src/observation/ledger';
+import { domainGrid, packVoxelKey, runObservationLedger, type ObservationDomain, type RayPartitionChunkEntry, type RayPartitionInput } from '../src/observation/ledger';
 import {
   accumulateStrengthHitSamples,
   computeConsistency,
@@ -48,8 +47,7 @@ import {
   type StrengthHitSample,
   type StrengthRangeBand,
 } from '../src/observation/strength';
-
-type Vec3 = readonly [number, number, number];
+import { RAYS_PER_PROBE, type Vec3, azimuthPolarOf, buildRepeatedRayCells, f1WallRay, station } from './helpers/observatoryRayFixtures';
 
 // ---------------------------------------------------------------------------
 // component oracle: strength-lattice.json vs strength.py's frozen expectations
@@ -201,54 +199,8 @@ describe('fitNormalFromResidentPoints — symEig3 over a mean-centred covariance
 // end-to-end: F1's wall through the real ray builder + real ledger
 // ---------------------------------------------------------------------------
 
-function normalize(v: Vec3): Vec3 {
-  const len = Math.hypot(v[0], v[1], v[2]);
-  return [v[0] / len, v[1] / len, v[2] / len];
-}
-function subtract(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-}
-function station(id: string, origin: Vec3): AcquisitionStation {
-  return { id, source: 'ptx-block', pose: { worldTranslation: origin, localPositionSource: 'not-applicable' }, recordRange: { start: 0, end: 0 }, originStatus: 'DECLARED' };
-}
-
-const RAYS_PER_PROBE = 5; // matches OB-ST-THRESHOLDS n_min
-
-function buildRepeatedRayCells(range: number): { readonly frame: OrganizedRangeFrame } {
-  const width = RAYS_PER_PROBE;
-  const height = 1;
-  const cells = width * height;
-  const cellState = new Uint8Array(cells).fill(CellState.VALID_RETURN);
-  const cellToRecord = new Int32Array(cells);
-  const geometricRange = new Float32Array(cells).fill(range);
-  for (let i = 0; i < cells; i++) cellToRecord[i] = i;
-  const frame: OrganizedRangeFrame = {
-    id: 'probe',
-    sourceKind: 'ptx-grid',
-    width,
-    height,
-    cellState,
-    cellToRecord,
-    geometricRange,
-    linkage: { kind: 'exact' },
-    diagnostics: tallyCellStates(cellState),
-  };
-  return { frame };
-}
-
-function azimuthPolarOf(direction: Vec3): { readonly azimuth: number; readonly polar: number } {
-  return { azimuth: Math.atan2(direction[1], direction[0]), polar: Math.acos(direction[2]) };
-}
-
 describe('F1 end-to-end — real ray builder + real ledger feed real strength components', () => {
-  const domain: ObservationDomain = { min: [-1, -6, -1], max: [16, 6, 6] };
-  const voxelEdge = 0.5;
-  const wallDomain: ObservationDomain = { min: [5, -2, 0], max: [5.2, 2, 3] };
-  const origin: Vec3 = [0, 0, 0];
-  const direction = normalize(subtract([5.1, 0, 1.5], origin));
-  const wallClip = clipRayToDomain(origin, direction, 0, Infinity, wallDomain);
-  if (wallClip === null) throw new Error('test setup: the chosen direction must hit the wall');
-  const wallEntryRange = wallClip.tEntry;
+  const { domain, voxelEdge, origin, direction, wallEntryRange } = f1WallRay();
 
   const { azimuth, polar } = azimuthPolarOf(direction);
   const { frame } = buildRepeatedRayCells(wallEntryRange);
@@ -465,15 +417,22 @@ function assertSampleCountMatchesLedgerHits(
   }
 }
 
+/** A three-returns-per-pulse ray along +x through a 16-voxel run, traversed by the real ledger. */
+function multiReturnLedger() {
+  const domain: ObservationDomain = { min: [-1, -2, -2], max: [15, 2, 2] };
+  const voxelEdge = 1;
+  const origin: Vec3 = [0, 0, 0];
+  const direction: Vec3 = [1, 0, 0];
+  const { entry, chunk } = buildMultiReturnEntry(0, origin, direction, [3, 6, 9], voxelEdge);
+  const input: RayPartitionInput = { domain, voxelEdge, stations: [station('multi-return-station', origin)], returnedChunks: [entry], notReadChunks: [] };
+  const result = runObservationLedger(input, { declaredStepBudget: 1_000_000 });
+  if (result.status !== 'ok') throw new Error(`test setup: runObservationLedger refused (${result.reason})`);
+  return { domain, voxelEdge, origin, entry, chunk, result, grid: domainGrid(domain, voxelEdge) };
+}
+
 describe('OB-INV-style: strength hit-sample count equals the ledger hit counter, per voxel', () => {
   it('holds for F1 (single-return)', () => {
-    const domain: ObservationDomain = { min: [-1, -6, -1], max: [16, 6, 6] };
-    const voxelEdge = 0.5;
-    const wallDomain: ObservationDomain = { min: [5, -2, 0], max: [5.2, 2, 3] };
-    const origin: Vec3 = [0, 0, 0];
-    const direction = normalize(subtract([5.1, 0, 1.5], origin));
-    const wallClip = clipRayToDomain(origin, direction, 0, Infinity, wallDomain)!;
-    const wallEntryRange = wallClip.tEntry;
+    const { domain, voxelEdge, origin, direction, wallEntryRange } = f1WallRay();
     const { azimuth, polar } = azimuthPolarOf(direction);
     const { frame } = buildRepeatedRayCells(wallEntryRange);
     const build = buildGriddedSourceRays(frame, station('station-1', origin), 0, { azimuth0: azimuth, azimuthStep: 0, polar0: polar, polarStep: 0 }, { kind: 'none' });
@@ -491,32 +450,14 @@ describe('OB-INV-style: strength hit-sample count equals the ledger hit counter,
   });
 
   it('holds for a real multi-return fixture (3 returns/pulse)', () => {
-    const domain: ObservationDomain = { min: [-1, -2, -2], max: [15, 2, 2] };
-    const voxelEdge = 1;
-    const origin: Vec3 = [0, 0, 0];
-    const direction: Vec3 = [1, 0, 0];
-    const { entry, chunk } = buildMultiReturnEntry(0, origin, direction, [3, 6, 9], voxelEdge);
-    const input: RayPartitionInput = { domain, voxelEdge, stations: [station('multi-return-station', origin)], returnedChunks: [entry], notReadChunks: [] };
-    const result = runObservationLedger(input, { declaredStepBudget: 1_000_000 });
-    if (result.status !== 'ok') throw new Error(`test setup: runObservationLedger refused (${result.reason})`);
-
-    const grid = domainGrid(domain, voxelEdge);
+    const { domain, voxelEdge, origin, entry, chunk, result, grid } = multiReturnLedger();
     const raw = accumulateStrengthHitSamples(chunk, 0, origin, domain, voxelEdge, entry.tauAbs, entry.tauRel, grid.nx, grid.ny, entry.returnTable, entry.returnCounts);
     const byVoxel = mergeStrengthHitSamples([raw]);
     assertSampleCountMatchesLedgerHits(result.rows, byVoxel);
   });
 
   it('the invariant is partition-invariant too: splitting the multi-return chunk in two still matches the (unpartitioned) ledger per voxel', () => {
-    const domain: ObservationDomain = { min: [-1, -2, -2], max: [15, 2, 2] };
-    const voxelEdge = 1;
-    const origin: Vec3 = [0, 0, 0];
-    const direction: Vec3 = [1, 0, 0];
-    const { entry, chunk } = buildMultiReturnEntry(0, origin, direction, [3, 6, 9], voxelEdge);
-    const input: RayPartitionInput = { domain, voxelEdge, stations: [station('multi-return-station', origin)], returnedChunks: [entry], notReadChunks: [] };
-    const result = runObservationLedger(input, { declaredStepBudget: 1_000_000 });
-    if (result.status !== 'ok') throw new Error(`test setup: runObservationLedger refused (${result.reason})`);
-
-    const grid = domainGrid(domain, voxelEdge);
+    const { domain, voxelEdge, origin, entry, chunk, result, grid } = multiReturnLedger();
     const n = chunk.originIndex.length;
     const half = Math.ceil(n / 2);
     const returnTable = entry.returnTable!;
