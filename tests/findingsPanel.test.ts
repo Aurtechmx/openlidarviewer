@@ -72,6 +72,44 @@ describe('buildFindingsPanel', () => {
     expect(q(element, '.olv-findings-status').textContent).toMatch(/no placed measurements/i);
   });
 
+  // ANALYSIS-F7: the status line is the only feedback surface for add/remove/
+  // export/clear, so it must be an accessible live region, and a rejecting
+  // collectMeasurements() must report something instead of vanishing as an
+  // unhandled rejection with the button silently re-enabling.
+  it('wires the status line as an accessible live region', () => {
+    const findings = new SessionFindings();
+    const { element } = buildFindingsPanel({
+      findings,
+      collectMeasurements: () => Promise.resolve([]),
+      exportReport: () => {},
+    });
+    const status = q(element, '.olv-findings-status');
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('reports a failure and re-enables the button when collectMeasurements rejects', async () => {
+    const findings = new SessionFindings();
+    const { element } = buildFindingsPanel({
+      findings,
+      collectMeasurements: () => Promise.reject(new Error('chunk load failed')),
+      exportReport: () => {},
+    });
+    const addBtn = q(element, '.olv-findings-add');
+    addBtn.click();
+    expect(addBtn.disabled).toBe(true);
+    // Flush the rejected promise chain.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(findings.count).toBe(0);
+    expect(
+      q(element, '.olv-findings-status').textContent,
+      'a rejection must not leave the status line silently blank',
+    ).toMatch(/could not read the current measurements/i);
+    expect(addBtn.disabled).toBe(false);
+  });
+
   it('remove drops exactly that finding', () => {
     const findings = new SessionFindings();
     findings.add(finding('A', 1));

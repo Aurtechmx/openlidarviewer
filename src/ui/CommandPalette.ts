@@ -1,4 +1,5 @@
 import { el } from './dom';
+import { wireDialogA11y, wireBackdropDismiss, type DialogA11yHandle } from './Modal';
 import {
   groupBySection,
   rankActions,
@@ -47,6 +48,8 @@ export class CommandPalette {
   private _selected = -1;
   /** Whether the palette is open. */
   private _open = false;
+  /** Escape-anywhere + Tab-trap + focus-restore, wired for the life of one open(). */
+  private _a11y: DialogA11yHandle | null = null;
 
   constructor() {
     this._input = el('input', {
@@ -70,7 +73,7 @@ export class CommandPalette {
     this._input.setAttribute('aria-expanded', 'false');
     this._empty = el('div', {
       className: 'olv-palette-empty olv-hidden',
-      text: 'No matching commands.',
+      text: 'No matching commands. Try a shorter search, or press ? to browse every shortcut.',
     });
 
     const hint = el('div', { className: 'olv-palette-hint' }, [
@@ -88,6 +91,9 @@ export class CommandPalette {
       this._empty,
       hint,
     ]);
+    this._card.setAttribute('role', 'dialog');
+    this._card.setAttribute('aria-modal', 'true');
+    this._card.setAttribute('aria-label', 'Command palette');
     this._backdrop = el('div', { className: 'olv-palette-backdrop' });
     this.element = el('div', { className: 'olv-palette olv-hidden' }, [
       this._backdrop,
@@ -97,9 +103,7 @@ export class CommandPalette {
     // ── interactions ──────────────────────────────────────────────
     this._input.addEventListener('input', () => this._refresh());
     this._input.addEventListener('keydown', (e) => this._handleKey(e));
-    this._backdrop.addEventListener('click', () => this.close());
-    // Clicks inside the card should not bubble to the backdrop.
-    this._card.addEventListener('click', (e) => e.stopPropagation());
+    wireBackdropDismiss(this._backdrop, this._card, () => this.close());
   }
 
   /** Replace the action registry. Safe to call while the palette is closed. */
@@ -121,6 +125,9 @@ export class CommandPalette {
     this._input.setAttribute('aria-expanded', 'true');
     this._input.value = '';
     this._refresh();
+    // Wired before the deferred focus below, so it captures the trigger
+    // (not the search input) as the element to restore focus to on close.
+    this._a11y = wireDialogA11y(this._card, { onEscape: () => this.close() });
     // Defer focus to the next tick so the show transition starts
     // before the input demands attention.
     queueMicrotask(() => this._input.focus());
@@ -133,7 +140,9 @@ export class CommandPalette {
     this.element.classList.add('olv-hidden');
     this._input.setAttribute('aria-expanded', 'false');
     this._input.removeAttribute('aria-activedescendant');
-    this._input.blur();
+    // Restores focus to whatever triggered the palette (Tab-trap teardown).
+    this._a11y?.teardown();
+    this._a11y = null;
   }
 
   /** Open if closed; close if open. */
@@ -252,13 +261,10 @@ export class CommandPalette {
     }
   }
 
-  /** Keyboard handler for the search input. */
+  /** Keyboard handler for the search input. Escape is handled by the
+   * window-level dialog wiring (see `open()`) so it works even once Tab has
+   * moved focus off the input; ArrowUp/Down/Enter stay local. */
   private _handleKey(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      this.close();
-      return;
-    }
     if (e.key === 'Enter') {
       e.preventDefault();
       if (this._selected >= 0) this._fire(this._selected);

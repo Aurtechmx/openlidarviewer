@@ -15,7 +15,7 @@
 
 import { clamp } from '../numeric';
 import * as THREE from 'three/webgpu';
-import { el } from '../ui/dom';
+import { el, announcePolite } from '../ui/dom';
 import {
   type PointInfo,
   classificationText,
@@ -129,6 +129,18 @@ const WGS84_GEOGRAPHIC: ResolvedCrs = {
 };
 
 /**
+ * Route a message to the app's single polite live region (see
+ * politeAnnounce.ts). A no-op where `document.querySelector` doesn't exist —
+ * the recording DOM stubs this module's unit tests build cover only the
+ * element surface InspectTool touches, not a full document.
+ */
+function announce(message: string): void {
+  if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+    announcePolite(message);
+  }
+}
+
+/**
  * Copy text to the clipboard. Uses the async Clipboard API, falling back to a
  * hidden-textarea `execCommand` for older or non-secure contexts.
  */
@@ -232,10 +244,9 @@ export class InspectTool {
 
     // ── Floating info card ────────────────────────────────────────────────
     this._cardBody = el('div', { className: 'olv-inspect-rows' });
-    this._copyNote = el('span', {
-      className: 'olv-inspect-copied olv-hidden',
-      text: 'Point info copied',
-    });
+    // Text is set per-copy in `_copy()` (success and failure read differently
+    // and both are announced), so none is fixed at construction.
+    this._copyNote = el('span', { className: 'olv-inspect-copied olv-hidden' });
     this._copyBtn = el('button', { className: 'olv-inspect-copy', text: 'Copy' });
     this._copyBtn.addEventListener('click', () => {
       this._copyBtn.blur();
@@ -631,17 +642,25 @@ export class InspectTool {
     return details;
   }
 
-  /** Copy the selected point's data to the clipboard, then confirm briefly. */
+  /**
+   * Copy the selected point's data to the clipboard, then confirm briefly —
+   * both visually and, for a screen-reader user who cannot see the button's
+   * text or the fading note, through the shared live region.
+   */
   private async _copy(): Promise<void> {
     if (!this._selected) return;
     const ok = await copyToClipboard(
       pointInfoCopyText(this._selected.info, this._classScopeStamp),
     );
-    if (!ok) return;
+    const message = ok ? 'Point info copied' : 'Copy failed — try again';
+    this._copyNote.textContent = message;
     this._copyNote.classList.remove('olv-hidden');
+    this._copyBtn.textContent = ok ? 'Copied' : 'Copy';
+    announce(message);
     if (this._copyTimer !== null) clearTimeout(this._copyTimer);
     this._copyTimer = window.setTimeout(() => {
       this._copyNote.classList.add('olv-hidden');
+      this._copyBtn.textContent = 'Copy';
       this._copyTimer = null;
     }, 1800);
   }

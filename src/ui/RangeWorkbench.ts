@@ -109,6 +109,8 @@ export class RangeWorkbench {
   private readonly _canvas: HTMLCanvasElement;
   private readonly _marker: HTMLElement;
   private readonly _hover: HTMLElement;
+  /** The keyboard cursor's source cell, independent of the pointer. Reset on refresh(). */
+  private _cursor: { row: number; column: number } | null = null;
   private readonly _readout: HTMLElement;
   private readonly _readoutDetail: HTMLElement;
   private readonly _legend: HTMLElement;
@@ -173,6 +175,15 @@ export class RangeWorkbench {
     const stage = el('div', { className: 'olv-range-stage' });
     this._canvas = document.createElement('canvas');
     this._canvas.className = 'olv-range-canvas';
+    // Keyboard path onto the same cell inspection the mouse gets: a focusable,
+    // labelled widget whose arrow keys move a cursor cell and whose Enter/Space
+    // samples it — the identical `resolveCellLink` result a click produces.
+    this._canvas.tabIndex = 0;
+    this._canvas.setAttribute('role', 'application');
+    this._canvas.setAttribute(
+      'aria-label',
+      'Acquisition grid. Arrow keys move the cell cursor, Enter samples the cursor cell.',
+    );
     this._marker = el('div', { className: 'olv-range-marker olv-hidden' });
     stage.append(this._canvas, this._marker);
 
@@ -182,6 +193,7 @@ export class RangeWorkbench {
       this._hover.textContent = '';
     });
     this._canvas.addEventListener('click', (e) => this._onClick(e));
+    this._canvas.addEventListener('keydown', (e) => this._onKeyDown(e));
 
     this._readout = el('div', { className: 'olv-range-readout-head' });
     this._readoutDetail = el('p', { className: 'olv-range-readout-detail' });
@@ -237,6 +249,10 @@ export class RangeWorkbench {
     this._renderLegend(frame);
     this._renderStats(summariseRangeFrame(frame));
     this._marker.classList.add('olv-hidden');
+    // The previous cursor's row/column may be out of bounds for a different
+    // frame or a replanned raster; drop it rather than clamp into a cell it
+    // never pointed at.
+    this._cursor = null;
   }
 
   /**
@@ -301,19 +317,7 @@ export class RangeWorkbench {
       this._hover.textContent = '';
       return;
     }
-    const frame = this.frame;
-    const idx = cell.row * frame.width + cell.column;
-    const state = frame.cellState[idx] as CellStateValue;
-    const parts = [cellText(cell.row, cell.column), CELL_STATE_LABEL[state] ?? 'Unknown cell state'];
-    const range = frame.geometricRange ? frame.geometricRange[idx] : undefined;
-    if (range !== undefined) {
-      parts.push(
-        Number.isFinite(range)
-          ? `geometric range ${range.toFixed(3)}`
-          : 'geometric range not available for this cell',
-      );
-    }
-    this._hover.textContent = parts.join(' · ');
+    this._hover.textContent = this._cellHoverText(cell.row, cell.column);
   }
 
   private _onClick(e: MouseEvent): void {
@@ -322,7 +326,82 @@ export class RangeWorkbench {
     if (!cell) return;
     const pixel = at ? { x: Math.floor(at.x), y: Math.floor(at.y) } : null;
     if (pixel) this._placeMarker(pixel.x, pixel.y);
-    const resolution = resolveCellLink(this.frame, cell.row, cell.column);
+    this._sampleCell(cell.row, cell.column);
+  }
+
+  /**
+   * Arrow keys move a visible cursor cell over the same grid the mouse
+   * hovers; Enter/Space samples it through the identical `resolveCellLink`
+   * path a click uses, so the keyboard reaches every outcome the pointer does.
+   */
+  private _onKeyDown(e: KeyboardEvent): void {
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        this._moveCursor(-1, 0);
+        return;
+      case 'ArrowDown':
+        e.preventDefault();
+        this._moveCursor(1, 0);
+        return;
+      case 'ArrowLeft':
+        e.preventDefault();
+        this._moveCursor(0, -1);
+        return;
+      case 'ArrowRight':
+        e.preventDefault();
+        this._moveCursor(0, 1);
+        return;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        this._sampleCursor();
+        return;
+      default:
+        return;
+    }
+  }
+
+  /** Step the keyboard cursor by one cell, clamped to the current frame's grid. */
+  private _moveCursor(dRow: number, dColumn: number): void {
+    const frame = this.frame;
+    if (frame.width <= 0 || frame.height <= 0) return;
+    const base = this._cursor ?? { row: 0, column: 0 };
+    const row = Math.min(frame.height - 1, Math.max(0, base.row + dRow));
+    const column = Math.min(frame.width - 1, Math.max(0, base.column + dColumn));
+    this._cursor = { row, column };
+    const at = displayPixelOf(this._plan, row, column);
+    if (at) this._placeMarker(at.x, at.y);
+    this._hover.textContent = this._cellHoverText(row, column);
+  }
+
+  /** Sample the cell the keyboard cursor currently sits on (seeding it first if unmoved). */
+  private _sampleCursor(): void {
+    if (!this._cursor) this._moveCursor(0, 0);
+    if (!this._cursor) return; // an empty grid: nothing to sample.
+    this._sampleCell(this._cursor.row, this._cursor.column);
+  }
+
+  /** Describe a cell the way the mouse hover readout does. */
+  private _cellHoverText(row: number, column: number): string {
+    const frame = this.frame;
+    const idx = row * frame.width + column;
+    const state = frame.cellState[idx] as CellStateValue;
+    const parts = [cellText(row, column), CELL_STATE_LABEL[state] ?? 'Unknown cell state'];
+    const range = frame.geometricRange ? frame.geometricRange[idx] : undefined;
+    if (range !== undefined) {
+      parts.push(
+        Number.isFinite(range)
+          ? `geometric range ${range.toFixed(3)}`
+          : 'geometric range not available for this cell',
+      );
+    }
+    return parts.join(' · ');
+  }
+
+  /** Resolve + announce a cell, shared by the click and Enter/Space paths. */
+  private _sampleCell(row: number, column: number): void {
+    const resolution = resolveCellLink(this.frame, row, column);
     this._setReadout(resolution.headline, resolution.detail);
     // A refusal clears any previous mark rather than leaving the last successful
     // one on screen, where it would read as this cell's answer.

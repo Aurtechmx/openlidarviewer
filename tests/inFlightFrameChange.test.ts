@@ -58,9 +58,15 @@ describe('the runner stakes its own frame', () => {
 describe('derived classification stakes its frame too', () => {
   it('both derive paths capture and re-check the revision', async () => {
     const src = await import('node:fs').then((fs) => fs.readFileSync('src/main.ts', 'utf8'));
-    // Two derive sites: Classify and Fill Unclassified.
-    expect((src.match(/const deriveCrsRevision = crsService\.crsRevision\(\)/g) ?? [])).toHaveLength(2);
-    expect((src.match(/crsService\.crsRevision\(\) !== deriveCrsRevision/g) ?? [])).toHaveLength(2);
+    // Classify and Fill Unclassified both run through one shared derive,
+    // which captures the revision before the await and re-checks it after.
+    const fn = src.slice(src.indexOf('async function performClassificationDerive('));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/const deriveCrsRevision = crsService\.crsRevision\(\)/);
+    expect(body).toMatch(/crsService\.crsRevision\(\) !== deriveCrsRevision/);
+    expect(body.indexOf('const deriveCrsRevision')).toBeLessThan(body.indexOf('await deriveClassificationAsync'));
+    expect(body.indexOf('!== deriveCrsRevision')).toBeGreaterThan(body.indexOf('await deriveClassificationAsync'));
+    expect((src.match(/await performClassificationDerive\(/g) ?? [])).toHaveLength(2);
   });
 });
 

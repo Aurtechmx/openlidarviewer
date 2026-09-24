@@ -181,6 +181,23 @@ export class Stage {
 
   constructor(mount: HTMLElement, options: StageOptions = {}) {
     this.canvas = el('canvas', { className: 'olv-canvas' });
+    // A Tab stop, and a keyboard equivalent for the pointer's right-click:
+    // Shift+F10 / the ContextMenu key are the platform-standard chords for
+    // "open the context menu here" — without a tabindex the canvas could
+    // never hold focus, so neither chord had anything to fire from.
+    this.canvas.tabIndex = 0;
+    this.canvas.addEventListener('keydown', (e) => {
+      const isMenuChord = e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey);
+      if (!isMenuChord) return;
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+      this.canvas.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+      }));
+    });
     this.overlay = el('div', { className: 'olv-overlay' });
     this.root = el('div', { className: 'olv-stage' }, [this.canvas, this.overlay]);
 

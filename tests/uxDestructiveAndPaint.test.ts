@@ -47,8 +47,11 @@ describe('removing a layer only warns when it closes the scan', () => {
   });
 
   it('routes the row button through the rule and through the styled confirm', () => {
+    // Since INSP-8 (the shared iconButton() helper), the remove button's
+    // click handler is the `onClick` passed to `iconButton({...})` rather
+    // than a standalone `remove.addEventListener('click', ...)`.
     const handler = inspectorSrc.slice(
-      inspectorSrc.indexOf("remove.addEventListener('click'"),
+      inspectorSrc.indexOf('const remove = iconButton({'),
       inspectorSrc.indexOf("const crs = el('span'"),
     );
     expect(handler).not.toBe('');
@@ -61,8 +64,12 @@ describe('removing a layer only warns when it closes the scan', () => {
   });
 
   it('never calls onRemove straight from the listener without passing the rule', () => {
-    // The pre-fix listener was `() => this._cb.onRemove(id)` on one line.
+    // The pre-fix listener was `() => this._cb.onRemove(id)` on one line,
+    // and post-INSP-8 that shape would show up as `onClick: () =>
+    // this._cb.onRemove(id)` — neither exists in the real handler, which
+    // always checks removalClosesScan first.
     expect(inspectorSrc).not.toContain("remove.addEventListener('click', () => this._cb.onRemove(id));");
+    expect(inspectorSrc).not.toContain('onClick: () => this._cb.onRemove(id)');
   });
 });
 

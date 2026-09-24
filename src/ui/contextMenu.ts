@@ -97,12 +97,41 @@ export function showContextMenu(clientX: number, clientY: number, items: Context
   menu.style.left = `${Math.max(8, x)}px`;
   menu.style.top = `${Math.max(8, y)}px`;
 
+  // Restore focus to whatever triggered the menu (typically the canvas) once
+  // it closes, and move focus onto the first enabled row now — role="menu"
+  // implies both, and neither happened before this fix.
+  const restoreTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const rows = Array.from(menu.querySelectorAll<HTMLButtonElement>('.olv-ctxmenu-item:not(:disabled)'));
+  rows[0]?.focus();
+
   const onPointerDown = (e: PointerEvent): void => {
     if (!menu.contains(e.target as Node)) closeContextMenu();
   };
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
       e.stopPropagation();
+      closeContextMenu();
+      return;
+    }
+    // Roving focus between rows, matching the ARIA menu pattern the roles
+    // above already declare. Skips disabled rows entirely.
+    if (rows.length === 0) return;
+    const active = rows.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      rows[active < 0 ? 0 : (active + 1) % rows.length].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      rows[active < 0 ? rows.length - 1 : (active - 1 + rows.length) % rows.length].focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      rows[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      rows[rows.length - 1].focus();
+    } else if (e.key === 'Tab') {
+      // A transient menu shouldn't hand Tab off into the background page.
+      e.preventDefault();
       closeContextMenu();
     }
   };
@@ -116,15 +145,21 @@ export function showContextMenu(clientX: number, clientY: number, items: Context
     window.removeEventListener('keydown', onKey, true);
     window.removeEventListener('blur', onScrollOrBlur);
     window.removeEventListener('wheel', onScrollOrBlur, true);
+    if (restoreTo && document.contains(restoreTo)) restoreTo.focus();
   };
 
+  // Escape/roving-focus/blur/wheel are safe to arm immediately — nothing
+  // about opening the menu (mouse OR keyboard) also fires one of those.
+  // Only the outside-pointerdown dismiss needs the deferral below: a real
+  // right-click's own pointerdown/contextmenu pair would otherwise be read
+  // as "clicked outside" and close the menu it just opened.
+  window.addEventListener('keydown', onKey, true);
+  window.addEventListener('blur', onScrollOrBlur);
+  window.addEventListener('wheel', onScrollOrBlur, true);
   // `true` capture so the first outside click both dismisses and is not
   // swallowed by other handlers; deferred a tick so the opening click that
   // triggered this menu doesn't immediately close it.
   setTimeout(() => {
     window.addEventListener('pointerdown', onPointerDown, true);
-    window.addEventListener('keydown', onKey, true);
-    window.addEventListener('blur', onScrollOrBlur);
-    window.addEventListener('wheel', onScrollOrBlur, true);
   }, 0);
 }

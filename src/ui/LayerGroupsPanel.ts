@@ -29,7 +29,7 @@
  * ungrouped path is a plain list of rows and not a degraded version of this one.
  */
 
-import { el } from './dom';
+import { el, iconButton } from './dom';
 import {
   LayerGroupStore,
   groupVisibilityIntent,
@@ -398,15 +398,13 @@ class GroupHeader {
     this._actions = actions;
     this._label = group.name;
 
-    this._fold = el('button', {
+    this._fold = iconButton({
       className: 'olv-group-fold',
-      type: 'button',
       text: group.collapsed ? '▸' : '▾',
       ariaLabel: `Expand or collapse ${group.name}`,
-    }) as HTMLButtonElement;
-    this._fold.type = 'button';
-    this._fold.addEventListener('click', () => {
-      this._actions.onFold(this._fold.getAttribute('aria-expanded') === 'true');
+      onClick: () => {
+        this._actions.onFold(this._fold.getAttribute('aria-expanded') === 'true');
+      },
     });
 
     this._visible = el('input', { type: 'checkbox', title: 'Show or hide every layer in this group' }) as HTMLInputElement;
@@ -425,45 +423,37 @@ class GroupHeader {
 
     this._count = el('span', { className: 'olv-group-count' });
 
-    const rename = el('button', {
+    const rename = iconButton({
       className: 'olv-group-rename',
-      type: 'button',
       text: '✎',
       title: `Rename ${group.name}`,
       ariaLabel: `Rename ${group.name}`,
-    }) as HTMLButtonElement;
-    rename.type = 'button';
-    rename.addEventListener('click', () => this.beginRename());
+      onClick: () => this.beginRename(),
+    });
 
-    this._solo = el('button', {
+    this._solo = iconButton({
       className: 'olv-group-solo',
-      type: 'button',
       text: '◉',
       title: `Show only ${group.name}`,
       ariaLabel: `Show only ${group.name}`,
-    }) as HTMLButtonElement;
-    this._solo.type = 'button';
-    this._solo.addEventListener('click', () => this._actions.onSolo());
+      onClick: () => this._actions.onSolo(),
+    });
 
-    const pick = el('button', {
+    const pick = iconButton({
       className: 'olv-group-add',
-      type: 'button',
       text: '⊞',
       title: `Choose which layers are in ${group.name}`,
       ariaLabel: `Choose which layers are in ${group.name}`,
-    }) as HTMLButtonElement;
-    pick.type = 'button';
-    pick.addEventListener('click', () => this._actions.onTogglePicker());
+      onClick: () => this._actions.onTogglePicker(),
+    });
 
-    const remove = el('button', {
+    const remove = iconButton({
       className: 'olv-layer-x olv-group-x',
-      type: 'button',
       text: '×',
       title: `Delete ${group.name} — its layers stay loaded`,
       ariaLabel: `Delete the group ${group.name}`,
-    }) as HTMLButtonElement;
-    remove.type = 'button';
-    remove.addEventListener('click', () => this._actions.onDelete());
+      onClick: () => this._actions.onDelete(),
+    });
 
     this.element = el('div', { className: 'olv-group-head' }, [
       this._fold,

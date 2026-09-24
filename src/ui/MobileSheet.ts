@@ -37,6 +37,7 @@
  */
 
 import { el } from './dom';
+import { buildTablist, type Tablist } from './tablist';
 
 /** The three mobile tabs, in display order. */
 export type MobileTab = 'view' | 'analyse' | 'layers';
@@ -139,7 +140,7 @@ export class MobileSheet {
   readonly element: HTMLElement;
 
   private readonly _slots = new Map<MobileTab, HTMLElement>();
-  private readonly _tabs = new Map<MobileTab, HTMLButtonElement>();
+  private readonly _tablist: Tablist<MobileTab>;
   private readonly _onTabChange?: (tab: MobileTab) => void;
   private readonly _onExpandedChange?: (expanded: boolean) => void;
   private readonly _onDetentChange?: (detent: SheetDetent) => void;
@@ -166,20 +167,16 @@ export class MobileSheet {
     this._detent = opts.initialDetent ?? (opts.initialExpanded ? 'full' : 'peek');
 
     // ── tablist (the segmented control) ────────────────────────────────────
-    const tablist = el('div', { className: 'olv-msheet-tabs' });
-    tablist.setAttribute('role', 'tablist');
-    tablist.setAttribute('aria-label', 'Panel group');
-    for (const { id, label, title } of TABS) {
-      const tab = el('button', { className: 'olv-msheet-tab', text: label, type: 'button', title });
-      tab.setAttribute('role', 'tab');
-      tab.dataset.tab = id;
-      tab.id = `olv-msheet-tab-${id}`;
-      tab.setAttribute('aria-controls', `olv-msheet-panel-${id}`);
-      tab.addEventListener('click', () => this.setActive(id));
-      tab.addEventListener('keydown', (ev) => this._onTabKey(ev as KeyboardEvent, id));
-      this._tabs.set(id, tab);
-      tablist.append(tab);
-    }
+    this._tablist = buildTablist<MobileTab>({
+      items: TABS,
+      tablistClassName: 'olv-msheet-tabs',
+      tablistLabel: 'Panel group',
+      tabClassName: 'olv-msheet-tab',
+      tabId: (id) => `olv-msheet-tab-${id}`,
+      panelId: (id) => `olv-msheet-panel-${id}`,
+      setDataset: (tab, id) => { tab.dataset.tab = id; },
+      activate: (id) => this.setActive(id),
+    });
 
     // ── drag / collapse handle ─────────────────────────────────────────────
     const handle = el('button', {
@@ -194,7 +191,7 @@ export class MobileSheet {
     });
     this._handle = handle;
 
-    const head = el('div', { className: 'olv-msheet-head' }, [tablist, handle]);
+    const head = el('div', { className: 'olv-msheet-head' }, [this._tablist.element, handle]);
     // The whole head/grip is tappable to toggle the sheet — EXCEPT taps on a
     // tab (which select a tab) and taps on the handle (which has its own
     // listener above, so we skip here to avoid a double-toggle).
@@ -330,20 +327,6 @@ export class MobileSheet {
 
   // ── internals ────────────────────────────────────────────────────────────
 
-  private _onTabKey(ev: KeyboardEvent, id: MobileTab): void {
-    const idx = TABS.findIndex((t) => t.id === id);
-    let next = -1;
-    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') next = (idx + 1) % TABS.length;
-    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') next = (idx - 1 + TABS.length) % TABS.length;
-    else if (ev.key === 'Home') next = 0;
-    else if (ev.key === 'End') next = TABS.length - 1;
-    if (next < 0) return;
-    ev.preventDefault();
-    const target = TABS[next].id;
-    this.setActive(target);
-    this._tabs.get(target)?.focus();
-  }
-
   // ── pointer drag ──────────────────────────────────────────────────────────
 
   /** Pixel heights of each detent for the current viewport (drag geometry). */
@@ -432,17 +415,10 @@ export class MobileSheet {
   }
 
   private _syncTabs(): void {
+    this._tablist.sync(this._active);
     for (const { id } of TABS) {
-      const isActive = id === this._active;
-      const tab = this._tabs.get(id);
-      if (tab) {
-        tab.classList.toggle('is-active', isActive);
-        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
-        // Roving tabindex: only the active tab is in the tab order.
-        tab.setAttribute('tabindex', isActive ? '0' : '-1');
-      }
       const slot = this._slots.get(id);
-      if (slot) slot.classList.toggle('is-active', isActive);
+      if (slot) slot.classList.toggle('is-active', id === this._active);
     }
   }
 

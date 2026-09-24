@@ -20,16 +20,7 @@
  */
 
 import type { ContourStudioLaunchState } from '../terrain/contourStudio/contourStudioLaunchState';
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  opts: { className?: string; text?: string } = {},
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (opts.className) node.className = opts.className;
-  if (opts.text) node.textContent = opts.text;
-  return node;
-}
+import { el } from './dom';
 
 /** Options for the launcher. `onLaunch` fires only for enabled states. */
 export interface ContourStudioLauncherOptions {

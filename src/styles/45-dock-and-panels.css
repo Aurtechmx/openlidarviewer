@@ -56,6 +56,16 @@
     color: var(--accent);
   }
 }
+/* The low end of the laptop tier: at 768px the nine buttons left after the
+   fold above still ran 15-20px past the viewport, clipping Close. Commands
+   already has a keyboard duplicate (Cmd/Ctrl-K, same as Snapshot/Copy view
+   link fold into the command palette above), so it is the fourth tool to fold
+   in this narrow sub-range only; from 830px up the laptop tier above is
+   already wide enough and this block does nothing. */
+@media (max-width: 830px) and (min-width: 768px) {
+  .olv-dock .olv-tool-command { display: none; }
+  .olv-dock.olv-dock-more-open .olv-tool-command { display: inline-flex; }
+}
 /* Close is destructive, so it carries a rose-tinted resting
    state to set it apart from neutral tools and a brighter rose on hover.
    Subtle at rest (still readable at 11px on dark background), unmissable on
@@ -293,8 +303,15 @@
 }
 .olv-toast-row { display: flex; align-items: center; gap: var(--space-md); }
 .olv-toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
-/* `pre-line` lets the multi-line preload summary break on its newlines. */
-.olv-toast-text { font-size: var(--text-sm); color: var(--text); white-space: pre-line; line-height: 1.5; flex: 1; }
+/* `pre-line` lets the multi-line preload summary break on its newlines;
+ * `overflow-wrap: anywhere` + `min-width: 0` matches every other long
+ * user-supplied string surface in the app (inspector, terrain-verdict,
+ * dataset-intel) so an unbroken filename wraps inside the card instead of
+ * pushing Cancel out past the toast's own edge. */
+.olv-toast-text {
+  font-size: var(--text-sm); color: var(--text); white-space: pre-line; line-height: 1.5;
+  flex: 1; min-width: 0; overflow-wrap: anywhere;
+}
 .olv-toast-cancel {
   flex: none; font-size: var(--text-xs); color: var(--text); opacity: 0.7;
   background: transparent; border: 0.5px solid var(--hairline);

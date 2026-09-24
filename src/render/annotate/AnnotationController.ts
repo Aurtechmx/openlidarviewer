@@ -92,6 +92,17 @@ export class AnnotationController {
   private _undoStack: Annotation[][] = [];
   /** Snapshots undone but available to redo — cleared by any fresh edit. */
   private _redoStack: Annotation[][] = [];
+  /**
+   * Wraps a deferred undo/redo run so it can be suppressed the same way
+   * `main.ts`'s global undo/redo handler already suppresses a synchronous one
+   * (`ui/undoRouter.ts`'s `withSuppressed`) — see `_guardedRestore`. Injected
+   * rather than imported directly: `render/annotate` stays free of a `ui/`
+   * dependency (the layer-boundary and module-graph lints hold the line on
+   * that), so the app wires the real suppressor in; the identity default just
+   * means an app that never wires one gets exactly the pre-existing
+   * behaviour — a deferred restore still runs, just unsuppressed.
+   */
+  private _suppress: <T>(fn: () => T) => T = (fn) => fn();
 
   constructor() {
     this.overlay = this._draw.element;
@@ -113,15 +124,21 @@ export class AnnotationController {
     return this._selectedId;
   }
 
-  /** Enter or leave annotation mode. Markers stay drawn either way. */
+  /**
+   * Enter or leave annotation mode. Markers stay drawn either way.
+   *
+   * Leaving the tool abandons a draft in progress, unless it holds real
+   * unsaved work — see `_guardedClose`. The mode switch itself (`_active`,
+   * the hint) still happens on this same tick regardless; only whether the
+   * editor card closes with it is gated.
+   */
   setActive(on: boolean): void {
     this._active = on;
     this._hint.classList.toggle('olv-hidden', !on);
     if (on) {
       this._setHint('Click a point on the scan to annotate it');
     } else {
-      // Leaving the tool abandons any draft in progress — no stale annotation.
-      this._editor.close();
+      this._guardedClose();
     }
   }
 
@@ -161,6 +178,18 @@ export class AnnotationController {
     screenY: number,
     cameraState?: SavedCameraState,
     georef?: AnnotationGeoref,
+  ): void {
+    this._guardReopen(() =>
+      this._openDraftEditor(local, screenX, screenY, cameraState, georef),
+    );
+  }
+
+  private _openDraftEditor(
+    local: Vec3Object,
+    screenX: number,
+    screenY: number,
+    cameraState: SavedCameraState | undefined,
+    georef: AnnotationGeoref | undefined,
   ): void {
     this._setHint('Fill in the annotation, then Save');
     this._editor.open({
@@ -204,6 +233,17 @@ export class AnnotationController {
   }
 
   /**
+   * Inject the wrapper that keeps a DEFERRED undo/redo (one that had to wait
+   * on a dirty-draft discard confirm) suppressed the same way the app's
+   * global undo/redo shortcut already suppresses a synchronous one. Pass
+   * `ui/undoRouter.ts`'s `withSuppressed`. See `_suppress`'s doc comment for
+   * why this is injected rather than imported.
+   */
+  setEditSuppressor(suppress: <T>(fn: () => T) => T): void {
+    this._suppress = suppress;
+  }
+
+  /**
    * Inject the owner provider consulted when an annotation is created. The app
    * sets it once identity is wired; passing `null` restores the unowned default.
    */
@@ -218,6 +258,12 @@ export class AnnotationController {
 
   /** Open the editor for an existing annotation; saving applies the edit. */
   beginEdit(id: string, screenX: number, screenY: number): void {
+    const a = this.get(id);
+    if (!a) return;
+    this._guardReopen(() => this._openEditEditor(id, screenX, screenY));
+  }
+
+  private _openEditEditor(id: string, screenX: number, screenY: number): void {
     const a = this.get(id);
     if (!a) return;
     this._editor.open({
@@ -246,6 +292,90 @@ export class AnnotationController {
       onCancel: () => {
         /* editing cancelled — the annotation is left unchanged */
       },
+    });
+  }
+
+  /**
+   * Run `open` (a beginDraft/beginEdit body) directly, unless it would
+   * silently blow away real work already typed into an open editor.
+   *
+   * The common case — no editor open, or one open but untouched — resolves
+   * synchronously via `AnnotationEditor.reopenIfPossible`, so an ordinary
+   * `beginDraft`/`beginEdit` call still opens the card on the same tick it
+   * always has. Only a genuinely dirty draft falls through to the async
+   * confirm, which is unavoidable there: the app has to wait on the user's
+   * choice before deciding whether to discard real work.
+   *
+   * If a discard confirm raised by an EARLIER guarded call (this one, a
+   * `_guardedClose`, or a `_guardedRestore`) is still awaiting an answer,
+   * this call is dropped rather than piling a second `.then` onto the same
+   * pending promise: `reopenIfPossible` cannot yet say the card is safe, and
+   * awaiting the shared promise again would re-run `open()` a second time —
+   * for what the user experienced as one keypress or click — once it
+   * resolves. A user who genuinely wants that second action can simply
+   * repeat it after answering the confirm in front of them.
+   */
+  private _guardReopen(open: () => void): void {
+    if (this._editor.reopenIfPossible()) {
+      open();
+      return;
+    }
+    if (this._editor.isConfirmPending) return;
+    void this._editor.confirmDiscard().then((discard) => {
+      if (discard) open();
+    });
+  }
+
+  /**
+   * Close the editor on leaving the tool, unless doing so would silently
+   * discard real, unsaved work. A closed or untouched card closes right
+   * away — exactly the prior behaviour. A dirty one is asked about first and,
+   * until answered, stays open: it has no backdrop (see AnnotationEditor's
+   * own doc comment) and does not block navigation or the rest of the page,
+   * so leaving it open with the tool now inactive costs nothing.
+   *
+   * A confirm already pending from another guarded call is left alone —
+   * see `_guardReopen`'s re-entrancy note.
+   */
+  private _guardedClose(): void {
+    if (this._editor.reopenIfPossible()) return;
+    if (this._editor.isConfirmPending) return;
+    void this._editor.confirmDiscard();
+  }
+
+  /**
+   * Run an undo/redo step unless the open editor is holding unsaved work: a
+   * pristine or closed card is no loss, so `run` fires synchronously, exactly
+   * as undo/redo always have. A dirty one is asked about first, through the
+   * same confirm every reopen path uses, and `run` fires only if the user
+   * chooses to discard it — the history stacks are untouched until then, so a
+   * declined confirm leaves undo/redo exactly where they were.
+   *
+   * A confirm already pending from another guarded call is left alone — see
+   * `_guardReopen`'s re-entrancy note; a second undo/redo press while one is
+   * open must not fire `run` twice once it resolves.
+   *
+   * `run` itself is wrapped in `_suppress` (the injected `withSuppressed`; see
+   * `setEditSuppressor`), not just left inside whatever suppression window
+   * the caller (main.ts's global undo/redo handler) already opened. When the
+   * card is dirty, `run` only executes later, inside the confirm's
+   * resolution — well after that outer `withSuppressed` call has already
+   * returned and lifted its suppression. Opening a fresh suppression window
+   * here, around the actual `_restore`/`_emit` call, keeps the resulting
+   * `onChange` from calling `noteEdit('annotation')` unsuppressed in that
+   * deferred case, which would otherwise corrupt which stack the next global
+   * Undo/Redo targets. For the synchronous (pristine-card) path this nests
+   * harmlessly inside the caller's own `withSuppressed`.
+   */
+  private _guardedRestore(run: () => void): void {
+    const guarded = (): void => this._suppress(run);
+    if (this._editor.reopenIfPossible()) {
+      guarded();
+      return;
+    }
+    if (this._editor.isConfirmPending) return;
+    void this._editor.confirmDiscard().then((discard) => {
+      if (discard) guarded();
     });
   }
 
@@ -283,20 +413,30 @@ export class AnnotationController {
     return this._redoStack.length > 0;
   }
 
-  /** Step back to the previous annotation state. */
+  /**
+   * Step back to the previous annotation state.
+   *
+   * Deferred, rather than run in place, when the open editor holds real
+   * unsaved work — see `_guardedRestore`. A plain undo with nothing open (or
+   * an untouched card) still runs on the same tick as before.
+   */
   undo(): void {
-    const prev = this._undoStack.pop();
-    if (prev === undefined) return;
-    this._redoStack.push(this._annotations.slice());
-    this._restore(prev);
+    this._guardedRestore(() => {
+      const prev = this._undoStack.pop();
+      if (prev === undefined) return;
+      this._redoStack.push(this._annotations.slice());
+      this._restore(prev);
+    });
   }
 
-  /** Re-apply a state that was just undone. */
+  /** Re-apply a state that was just undone. See `undo`'s guarding note. */
   redo(): void {
-    const next = this._redoStack.pop();
-    if (next === undefined) return;
-    this._undoStack.push(this._annotations.slice());
-    this._restore(next);
+    this._guardedRestore(() => {
+      const next = this._redoStack.pop();
+      if (next === undefined) return;
+      this._undoStack.push(this._annotations.slice());
+      this._restore(next);
+    });
   }
 
   /** Compact per-annotation summaries for the Annotations panel. */
@@ -420,8 +560,7 @@ export class AnnotationController {
 
   /** Free DOM references. */
   dispose(): void {
-    this._editor.close();
-    this._editor.element.remove();
+    this._editor.dispose();
     this._hint.remove();
     this._draw.dispose();
   }

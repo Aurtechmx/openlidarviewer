@@ -133,6 +133,10 @@ export class AnnotationPanel {
   private _query = '';
   private _clearArmed = false;
   private _clearTimer: number | undefined;
+  /** Landmark focus lands on when the control the user just acted on (e.g. a
+   * deleted row) no longer exists after a rebuild — programmatically
+   * focusable (`tabindex="-1"`) without joining the page's normal Tab order. */
+  private readonly _head: HTMLElement;
 
   constructor(callbacks: AnnotationPanelCallbacks) {
     this._cb = callbacks;
@@ -166,8 +170,14 @@ export class AnnotationPanel {
         title: view === 'all' ? 'Show every annotation' : 'Show the tracked issues',
       });
       btn.type = 'button';
+      // WebKit/Safari's default "Full Keyboard Access" leaves plain buttons
+      // out of the native Tab order (see AnnotationEditor.ts's chip loop for
+      // the same fix applied there) — this panel's row buttons rely on Tab
+      // reachability for the focus-restore and hover-highlight behaviour
+      // below, so every interactive button here gets the same explicit
+      // tabindex.
+      btn.tabIndex = 0;
       btn.addEventListener('click', () => {
-        btn.blur();
         this._view = view;
         this._render();
       });
@@ -197,6 +207,8 @@ export class AnnotationPanel {
       text: 'Clear all',
       title: 'Delete every annotation',
     });
+    this._clearBtn.type = 'button';
+    this._clearBtn.tabIndex = 0; // see the view-button loop above for why
     this._clearBtn.addEventListener('click', () => this._handleClear());
 
     // v0.3.6 mobile collapse — chevron toggle inside the existing head.
@@ -208,6 +220,8 @@ export class AnnotationPanel {
       ariaLabel: 'Collapse panel',
       title: 'Collapse this panel',
     });
+    collapseBtn.tabIndex = 0; // see the view-button loop above for why
+    collapseBtn.setAttribute('aria-expanded', 'true');
     collapseBtn.append(el('span', { className: 'olv-chevron', text: '▾' }));
     const title = el('span', { className: 'olv-ap-title', text: 'Annotations' });
     const head = el('div', { className: 'olv-ap-head olv-panel-head' }, [
@@ -215,8 +229,17 @@ export class AnnotationPanel {
       sortSelect,
       collapseBtn,
     ]);
+    // Programmatically focusable only — a landmark `_render()` can send focus
+    // to when the row the user acted on no longer exists after a rebuild, not
+    // a new stop in the page's normal Tab order.
+    head.tabIndex = -1;
+    this._head = head;
     const toggleCollapsed = () => {
-      this.element.classList.toggle('olv-collapsed');
+      const collapsed = this.element.classList.toggle('olv-collapsed');
+      collapseBtn.setAttribute('aria-expanded', String(!collapsed));
+      const label = collapsed ? 'Expand panel' : 'Collapse panel';
+      collapseBtn.setAttribute('aria-label', label);
+      collapseBtn.title = label;
     };
     collapseBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -248,7 +271,53 @@ export class AnnotationPanel {
     this._render();
   }
 
+  /**
+   * Rebuild the list, restoring keyboard focus across it.
+   *
+   * Every row action (delete, resolve/reopen, activate) routes back through
+   * `update()` → `_render()`, which tears the list down with
+   * `replaceChildren` and rebuilds it. That would otherwise always strand
+   * focus on `<body>` — the just-acted-on control is gone, and the DOM
+   * removal itself unfocuses it well before anything else runs. Capturing
+   * which control was focused before the rebuild and re-focusing its
+   * equivalent afterward (falling back to the panel's own landmark when the
+   * row itself is gone, e.g. after a delete) keeps a keyboard user at the
+   * position they were just at instead of losing their place in the page.
+   */
   private _render(): void {
+    const focusKey = this._captureListFocus();
+    this._renderList();
+    this._restoreListFocus(focusKey);
+  }
+
+  /** The `data-focus-key` of the currently focused control inside the list,
+   * or `null` if focus is elsewhere (nothing to restore). The `typeof` guard
+   * (rather than a bare `instanceof HTMLElement`) matters here: the unit
+   * suite drives this class against a DOM-free stub with no `HTMLElement`
+   * global at all, and `_render()` runs on every `update()` call in that
+   * suite too, so this has to stay a safe no-op there, not a thrown
+   * ReferenceError. */
+  private _captureListFocus(): string | null {
+    const active = document.activeElement;
+    if (typeof HTMLElement === 'undefined' || !(active instanceof HTMLElement)) return null;
+    if (!this._list.contains(active)) return null;
+    return active.dataset.focusKey ?? null;
+  }
+
+  /** Refocus the control the given key names, or the panel landmark if it no
+   * longer exists after the rebuild (e.g. its row was just deleted). */
+  private _restoreListFocus(key: string | null): void {
+    if (key === null) return;
+    for (const node of this._list.querySelectorAll<HTMLElement>('[data-focus-key]')) {
+      if (node.dataset.focusKey === key) {
+        node.focus();
+        return;
+      }
+    }
+    this._head.focus();
+  }
+
+  private _renderList(): void {
     const total = this._summaries.length;
     this._clearBtn.disabled = total === 0;
     // The search box is only meaningful once there is something to filter.
@@ -392,9 +461,10 @@ export class AnnotationPanel {
       title: RESOLVED_TIP,
     });
     btn.type = 'button';
+    btn.tabIndex = 0; // see the view-button loop above for why
+    btn.dataset.focusKey = 'resolved-toggle';
     btn.setAttribute('aria-expanded', String(this._showResolved));
     btn.addEventListener('click', () => {
-      btn.blur();
       this._showResolved = !this._showResolved;
       this._render();
     });
@@ -488,6 +558,9 @@ export class AnnotationPanel {
       text: s.title,
       title: s.note ? s.note : 'Jump to this annotation',
     });
+    title.type = 'button';
+    title.tabIndex = 0; // see the view-button loop above for why
+    title.dataset.focusKey = `row:${s.id}:activate`;
     title.addEventListener('click', () => this._cb.onActivate(s.id));
 
     const time = el('span', { className: 'olv-ap-time', text: relativeTime(s.updatedAt) });
@@ -498,6 +571,9 @@ export class AnnotationPanel {
       title: `Edit ${s.title}`,
       ariaLabel: `Edit ${s.title}`,
     });
+    edit.type = 'button';
+    edit.tabIndex = 0; // see the view-button loop above for why
+    edit.dataset.focusKey = `row:${s.id}:edit`;
     edit.addEventListener('click', (e) => this._cb.onEdit(s.id, e.clientX, e.clientY));
 
     const del = el('button', {
@@ -506,6 +582,9 @@ export class AnnotationPanel {
       title: `Delete ${s.title}`,
       ariaLabel: `Delete ${s.title}`,
     });
+    del.type = 'button';
+    del.tabIndex = 0; // see the view-button loop above for why
+    del.dataset.focusKey = `row:${s.id}:delete`;
     del.addEventListener('click', () => this._cb.onDelete(s.id));
 
     const cells: HTMLElement[] = [badge, title];
@@ -537,10 +616,22 @@ export class AnnotationPanel {
     cells.push(edit, del);
 
     const row = el('div', { className: 'olv-ap-row' }, cells);
+    row.dataset.id = s.id;
     if (s.selected) row.classList.add('olv-ap-row-selected');
     // Hovering a row highlights its marker in the scene, and vice-versa.
     row.addEventListener('mouseenter', () => this._cb.onHover(s.id));
     row.addEventListener('mouseleave', () => this._cb.onHover(null));
+    // A keyboard user tabbing through the row's buttons gets the same marker
+    // preview a mouse user gets from hovering — `focusin`/`focusout` bubble
+    // (unlike `focus`/`blur`), so one pair on the row covers every button in
+    // it. `relatedTarget` tells the two apart: moving focus from one button
+    // to the next inside the SAME row must not flicker the highlight off and
+    // back on between them.
+    row.addEventListener('focusin', () => this._cb.onHover(s.id));
+    row.addEventListener('focusout', (e) => {
+      if (e.relatedTarget instanceof Node && row.contains(e.relatedTarget)) return;
+      this._cb.onHover(null);
+    });
     return row;
   }
 
@@ -563,8 +654,9 @@ export class AnnotationPanel {
       ariaLabel: open ? `Mark ${title} resolved` : `Reopen ${title}`,
     });
     btn.type = 'button';
+    btn.tabIndex = 0; // see the view-button loop above for why
+    btn.dataset.focusKey = `row:${id}:status`;
     btn.addEventListener('click', () => {
-      btn.blur();
       this._cb.onSetIssueStatus(id, next);
       announcePolite(open ? `${title} marked resolved.` : `${title} reopened.`);
     });
@@ -573,7 +665,6 @@ export class AnnotationPanel {
 
   /** Two-click confirmation for clear-all. */
   private _handleClear(): void {
-    this._clearBtn.blur();
     if (this._clearArmed) {
       this._disarmClear();
       this._cb.onClearAll();

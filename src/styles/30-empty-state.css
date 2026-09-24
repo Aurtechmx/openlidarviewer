@@ -51,6 +51,13 @@ body.olv-theme-light .olv-empty::before {
    * laptop screen reach the bottom of the empty state. */
   justify-content: safe center;
   overflow-y: auto;
+  /* The depth-wash pseudo-element above is deliberately wider than narrow
+   * viewports (140vw, so it fades out before its edge); without this the
+   * browser pairs overflow-x to auto because overflow-y is non-visible,
+   * turning that decorative bleed into a real horizontal scrollbar on
+   * phone widths. The wash is pointer-events:none and purely visual, so
+   * clipping it here costs nothing. */
+  overflow-x: hidden;
   /* v0.3.6 desktop-audit fix: tighter vertical rhythm so the title reads
    * as a direct caption to the hero, and the CTA sits as the obvious
    * answer to the question the title poses. */

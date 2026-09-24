@@ -247,24 +247,17 @@
     },
     {
       "file": "src/main.ts",
+      "symbol": "performClassificationDerive",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The heuristic ground classifier scores a single layer against itself, so it works in that layer own frame. Shared by the derive and fill-unclassified paths."
+    },
+    {
+      "file": "src/main.ts",
       "symbol": "revealAnalysePanel",
       "frame": "source-local",
       "reads": 1,
       "why": "The measure snap index is built from the active STATIC layer own buffer. Identity placement makes this equal to the project frame today; it is one of the consumers the fold must reach before multi-layer mounting is enabled."
-    },
-    {
-      "file": "src/main.ts",
-      "symbol": "runDeriveClassification",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "The heuristic ground classifier scores a single layer against itself, so it works in that layer own frame."
-    },
-    {
-      "file": "src/main.ts",
-      "symbol": "runFillUnclassified",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "Same single-layer classifier input as the derive path."
     },
     {
       "file": "src/main.ts",
@@ -563,7 +556,7 @@
         "render-local",
         "project-local"
       ],
-      "reads": 13,
+      "reads": 12,
       "why": "The gather is the frame boundary itself: static layer buffers (source-local) and resident streaming node buffers (render-local) go IN with their placements, and sampleStridedTerrain folds each placement while striding, so the sample buffer that comes back out and is up-axis normalised is project-local."
     },
     {
@@ -595,11 +588,11 @@
       "why": "The grid must span both epochs, so each buffer bounds are taken in world coordinates rather than in its own local frame."
     },
     {
-      "file": "src/terrain/worker/terrainCoreWorker.ts",
-      "symbol": "ctx.onmessage",
-      "frame": "project-local",
+      "file": "src/terrain/ground/withheldAwareTerrainGather.ts",
+      "symbol": "gatherWithheldAwareTerrainCore",
+      "frame": "source-local",
       "reads": 1,
-      "why": "Rebuilds a view over the transferred gather buffer, which the gather assembler already placed into the project frame."
+      "why": "The recovered sample's positions, returned by gatherWithheldAwareTerrainSource in the same source-local frame, passed straight to computeTerrainCore."
     },
     {
       "file": "src/terrain/ground/withheldAwareTerrainGather.ts",
@@ -609,11 +602,11 @@
       "why": "Reads `.positions` off a freshly-decoded PointCloud (decodeFull over the original bytes, no placement/mounting applied), the same frame Viewer._meshForCloud reads before any placement fold — handed straight into sampleStridedTerrain as a single unplaced static buffer."
     },
     {
-      "file": "src/terrain/ground/withheldAwareTerrainGather.ts",
-      "symbol": "gatherWithheldAwareTerrainCore",
-      "frame": "source-local",
+      "file": "src/terrain/worker/terrainCoreWorker.ts",
+      "symbol": "ctx.onmessage",
+      "frame": "project-local",
       "reads": 1,
-      "why": "The recovered sample's positions, returned by gatherWithheldAwareTerrainSource in the same source-local frame, passed straight to computeTerrainCore."
+      "why": "Rebuilds a view over the transferred gather buffer, which the gather assembler already placed into the project frame."
     }
   ]
 }

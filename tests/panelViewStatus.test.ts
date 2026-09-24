@@ -15,7 +15,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type { StreamingViewStatus } from '../src/ui/streamingViewStatus';
 import { installFakeDom, byClass, findContaining, type FakeEl } from './support/measurePanelDom';
 
-beforeAll(installFakeDom);
+beforeAll(() => installFakeDom());
 
 function noopCallbacks() {
   return {

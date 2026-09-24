@@ -23,145 +23,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import type { AnnotationSummary } from '../src/render/annotate/AnnotationController';
 import type { IssueDetails, IssueSeverity } from '../src/render/annotate/issueWorkflow';
-
-type Handler = (e: unknown) => void;
-
-/** A recording DOM node covering only the surface these views touch. */
-class FakeEl {
-  readonly tagName: string;
-  private _classes = new Set<string>();
-  private _text = '';
-  title = '';
-  value = '';
-  type = '';
-  placeholder = '';
-  rows = 0;
-  maxLength = 0;
-  checked = false;
-  disabled = false;
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
-  readonly children: FakeEl[] = [];
-  parent: FakeEl | null = null;
-  private readonly attrs = new Map<string, string>();
-  private readonly handlers = new Map<string, Handler[]>();
-
-  constructor(tag: string) {
-    this.tagName = tag.toLowerCase();
-  }
-
-  set className(v: string) {
-    this._classes = new Set(String(v).split(/\s+/).filter(Boolean));
-  }
-  get className(): string {
-    return [...this._classes].join(' ');
-  }
-  get classList() {
-    const classes = this._classes;
-    return {
-      add: (...c: string[]): void => void c.forEach((x) => classes.add(x)),
-      remove: (...c: string[]): void => void c.forEach((x) => classes.delete(x)),
-      contains: (c: string): boolean => classes.has(c),
-      toggle: (c: string, force?: boolean): boolean => {
-        const want = force === undefined ? !classes.has(c) : force;
-        if (want) classes.add(c);
-        else classes.delete(c);
-        return want;
-      },
-    };
-  }
-  set textContent(v: string) {
-    this._text = v;
-  }
-  /** Aggregated, so a strip built from spans can be read as one string. */
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  set innerHTML(_v: string) {
-    /* icon markup — not parsed by this stub */
-  }
-
-  private _adopt(kid: unknown): FakeEl {
-    if (kid instanceof FakeEl) {
-      kid.parent = this;
-      return kid;
-    }
-    const t = new FakeEl('#text');
-    t.textContent = String(kid);
-    t.parent = this;
-    return t;
-  }
-  append(...kids: unknown[]): void {
-    for (const k of kids) this.children.push(this._adopt(k));
-  }
-  appendChild(kid: unknown): unknown {
-    this.children.push(this._adopt(kid));
-    return kid;
-  }
-  replaceChildren(...kids: unknown[]): void {
-    this.children.length = 0;
-    for (const k of kids) this.children.push(this._adopt(k));
-  }
-  remove(): void {
-    if (!this.parent) return;
-    const i = this.parent.children.indexOf(this);
-    if (i >= 0) this.parent.children.splice(i, 1);
-    this.parent = null;
-  }
-
-  setAttribute(n: string, v: string): void {
-    this.attrs.set(n, v);
-  }
-  getAttribute(n: string): string | null {
-    return this.attrs.get(n) ?? null;
-  }
-  removeAttribute(n: string): void {
-    this.attrs.delete(n);
-  }
-
-  addEventListener(type: string, fn: Handler): void {
-    const a = this.handlers.get(type) ?? [];
-    a.push(fn);
-    this.handlers.set(type, a);
-  }
-  removeEventListener(): void {
-    /* not exercised */
-  }
-  /** Fire a listener the view registered — how these tests click. */
-  click(): void {
-    for (const fn of this.handlers.get('click') ?? []) fn({ type: 'click', clientX: 0, clientY: 0 });
-  }
-  focus(): void {}
-  blur(): void {}
-  select(): void {}
-
-  private _matches(sel: string): boolean {
-    const parts = sel.split('.');
-    const tag = parts[0];
-    if (tag && this.tagName !== tag.toLowerCase()) return false;
-    for (const c of parts.slice(1)) if (!this._classes.has(c)) return false;
-    return true;
-  }
-  querySelector(sel: string): FakeEl | null {
-    for (const c of this.children) {
-      if (c._matches(sel)) return c;
-      const deep = c.querySelector(sel);
-      if (deep) return deep;
-    }
-    return null;
-  }
-  querySelectorAll(sel: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    const walk = (n: FakeEl): void => {
-      for (const c of n.children) {
-        if (c._matches(sel)) out.push(c);
-        walk(c);
-      }
-    };
-    walk(this);
-    return out;
-  }
-}
+import { FakeEl } from './support/measurePanelDom';
 
 beforeAll(() => {
   const g = globalThis as unknown as Record<string, unknown>;
@@ -503,5 +365,65 @@ describe('the controller routes issue writes through the model', () => {
     expect(a.issue).toBeUndefined();
     h.c.setIssueStatus(a.id, 'resolved');
     expect(h.c.getAnnotations()[0]).toBe(a);
+  });
+});
+
+describe('AnnotationEditor.reopenIfPossible() resolves synchronously unless real work would be lost', () => {
+  it('needs no confirmation when the card is already closed', async () => {
+    const e = await editor();
+    expect(e.card.reopenIfPossible()).toBe(true);
+  });
+
+  it('cancels and reopens synchronously when the open card is untouched', async () => {
+    const e = await editor();
+    const onCancel = vi.fn();
+    e.card.open({ x: 0, y: 0, onSave: e.onSave, onCancel });
+    expect(e.card.isOpen).toBe(true);
+    expect(e.card.reopenIfPossible()).toBe(true);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(e.card.isOpen).toBe(false);
+  });
+
+  it('reports it cannot reopen, without touching the card, once real work is typed', async () => {
+    const e = await editor();
+    const onCancel = vi.fn();
+    e.card.open({ x: 0, y: 0, onSave: e.onSave, onCancel });
+    // A real click (not a programmatic field write) is what the card treats
+    // as work worth protecting — see the type-chip click handler.
+    e.pick('.olv-anno-chip-warning');
+    expect(e.card.reopenIfPossible()).toBe(false);
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(e.card.isOpen).toBe(true);
+  });
+});
+
+describe('the editor exposes aria-pressed on its type chips', () => {
+  it('marks exactly the active type chip pressed, and follows a click', async () => {
+    const e = await editor();
+    e.card.open({ x: 0, y: 0, onSave: e.onSave, onCancel: () => {} });
+    const note = e.el.querySelectorAll('.olv-anno-chip-note')[0];
+    const warning = e.el.querySelectorAll('.olv-anno-chip-warning')[0];
+    expect(note.getAttribute('aria-pressed')).toBe('true');
+    expect(warning.getAttribute('aria-pressed')).toBe('false');
+    warning.click();
+    expect(warning.getAttribute('aria-pressed')).toBe('true');
+    expect(note.getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
+describe("the panel's mobile collapse toggle announces its expanded state", () => {
+  it('flips aria-expanded and the label with the collapsed state', async () => {
+    const panel = await mount([summary('a')]);
+    const toggle = panel.el.querySelectorAll('.olv-collapse-toggle')[0];
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Collapse panel');
+
+    toggle.click();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Expand panel');
+
+    toggle.click();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Collapse panel');
   });
 });

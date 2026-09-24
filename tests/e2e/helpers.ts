@@ -43,6 +43,31 @@ export async function showWorkspaceMode(
   if (await tab.count()) await tab.click();
 }
 
+/**
+ * Drop the dense-grid fixture, switch to `mode`, and return `selector`'s
+ * panel expanded — clicking its header if it opened collapsed. The setup
+ * several a11y specs need before asserting on a panel's controls (ARIA
+ * toggle state, keyboard focus order, …), so one change to how a panel
+ * shows/collapses doesn't need to ripple through each of them.
+ */
+export async function openExpandedPanel(
+  page: Page,
+  mode: 'data' | 'work' | 'analyse' | 'output',
+  selector: string,
+): Promise<Locator> {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await showWorkspaceMode(page, mode);
+
+  const panel = page.locator(selector);
+  await expect(panel).toBeVisible({ timeout: 20_000 });
+  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
+    await panel.locator('.olv-panel-head').click();
+  }
+  return panel;
+}
+
 export async function suppressOnboardingTour(page: Page): Promise<void> {
   await page.addInitScript(() => {
     try {
@@ -278,4 +303,43 @@ export async function activate(locator: Locator): Promise<void> {
     return;
   }
   await locator.click();
+}
+
+/** The `?test=1` seam (`window.__OLV_TEST_API__`) profile placement drives,
+ * shared by profileWorkbench.spec.ts and keyboardInspection.spec.ts. */
+export interface MeasureTestApi {
+  setMeasureKind: (k: string) => void;
+  placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
+  finishMeasurement?: () => void;
+}
+
+/** Wide enough that the docked workbench (not the narrow focus view) opens. */
+export const WORKBENCH_WIDE = { width: 1440, height: 900 };
+
+/**
+ * Load the dense fixture, arm Measure, and place one profile across it via
+ * `__OLV_TEST_API__` — placement this way does not depend on a raycast
+ * landing on a particular pixel. The dense grid fixture spans about
+ * [-5, +5] on each axis, so a run along X sits inside it with points either
+ * side of the corridor.
+ */
+export async function placeProfile(page: Page): Promise<void> {
+  await page.setViewportSize(WORKBENCH_WIDE);
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await page.waitForTimeout(500); // the test API mounts on viewerLoaded
+  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await expect(page.locator('.olv-measure-bar')).toBeVisible();
+
+  await page.evaluate(() => {
+    const api = (window as unknown as { __OLV_TEST_API__?: MeasureTestApi }).__OLV_TEST_API__;
+    if (!api) throw new Error('__OLV_TEST_API__ not mounted — was ?test=1 set?');
+    api.setMeasureKind('profile');
+    api.placeMeasurementPoint({ x: -4, y: 0, z: 0 });
+    api.placeMeasurementPoint({ x: 4, y: 0, z: 0 });
+    api.finishMeasurement?.();
+  });
+
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
 }

@@ -16,30 +16,15 @@
  */
 
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { FakeEl } from './support/measurePanelDom';
+import type { FakeEl } from './support/measurePanelDom';
+import { installManualTimerDom } from './helpers/manualTimerDom';
 
 /** Timers the test drives by hand, so the seven-second wait costs nothing. */
-const pending = new Map<number, () => void>();
-let nextTimer = 1;
+let runTimers: () => void;
 
 beforeAll(() => {
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.document = { createElement: (tag: string) => new FakeEl(tag) };
-  g.HTMLInputElement = class {};
-  g.HTMLAnchorElement = class {};
-  g.window = {
-    setTimeout: (fn: () => void) => { pending.set(nextTimer, fn); return nextTimer++; },
-    clearTimeout: (id: number) => { pending.delete(id); },
-  };
-  g.clearTimeout = (id: number) => { pending.delete(id); };
+  ({ runTimers } = installManualTimerDom());
 });
-
-/** Run the card's dismissal timer as if its full delay had passed. */
-function runTimers(): void {
-  const due = [...pending.values()];
-  pending.clear();
-  for (const fn of due) fn();
-}
 
 const INFO = {
   name: 'scan.laz',

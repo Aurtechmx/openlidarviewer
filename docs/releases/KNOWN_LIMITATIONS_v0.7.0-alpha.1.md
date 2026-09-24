@@ -131,7 +131,7 @@ themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,970 lines and `src/render/Viewer.ts` is 6,153, seventy lines
+`src/main.ts` is 4,966 lines and `src/render/Viewer.ts` is 6,153, seventy lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -143,7 +143,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 109 for the shell, 76 for the renderer and 23 for the Analyse panel,
-across 907 modules with no dependency cycles.
+across 909 modules with no dependency cycles.
 
 ## The shell has little headroom
 

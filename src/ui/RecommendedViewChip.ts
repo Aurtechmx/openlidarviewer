@@ -22,6 +22,20 @@ export class RecommendedViewChip {
   private readonly _label: HTMLElement;
   private _onApply: (() => void) | null = null;
   private _timer: number | null = null;
+  /**
+   * Tracked separately, not as one combined flag: a mouse hover and a
+   * keyboard focus can both be active on the chip at once (the user tabs to
+   * Apply, then also happens to move the mouse over it), and only the LAST
+   * one to end may resume the timer. A single flag cleared by either
+   * `mouseleave` or `focusout` would resume it while the other was still
+   * true — hiding the chip out from under a still-focused button.
+   */
+  private _hovered = false;
+  private _focusedInside = false;
+  /** The element focused right before `show()`, restored to on hide if the
+   *  chip held focus at that point — the same opener-restore idea Modal.ts's
+   *  `openModal` uses for dialogs, applied here without a focus trap. */
+  private _returnFocusTo: HTMLElement | null = null;
 
   constructor() {
     this._label = el('span', { className: 'olv-rvc-label' });
@@ -43,6 +57,34 @@ export class RecommendedViewChip {
 
     this.element = el('div', { className: 'olv-rvc olv-hidden' }, [apply, dismiss]);
     this.element.setAttribute('role', 'status');
+
+    // Pause the auto-hide timer while hovered or focused (WCAG 2.2.1
+    // timing-adjustable): a keyboard user reading the reason tooltip or just
+    // deciding must not have the chip vanish, and drop their focus, under
+    // them. `mouseenter`/`mouseleave` fire on the element they are bound to
+    // for the whole hit region including its children, so one listener each
+    // covers both buttons without needing per-button wiring; `focusin` /
+    // `focusout` bubble, so the same is true for keyboard focus.
+    this.element.addEventListener('mouseenter', () => {
+      this._hovered = true;
+      this._syncTimer();
+    });
+    this.element.addEventListener('mouseleave', () => {
+      this._hovered = false;
+      this._syncTimer();
+    });
+    this.element.addEventListener('focusin', () => {
+      this._focusedInside = true;
+      this._syncTimer();
+    });
+    this.element.addEventListener('focusout', (e) => {
+      const next = (e as FocusEvent).relatedTarget;
+      // Moving focus between the chip's own Apply/Dismiss buttons is not
+      // leaving the chip — only resume once focus is actually outside it.
+      if (next instanceof Node && this.element.contains(next)) return;
+      this._focusedInside = false;
+      this._syncTimer();
+    });
   }
 
   /** Show the chip for a recommendation; `onApply` fires when the user accepts. */
@@ -50,19 +92,48 @@ export class RecommendedViewChip {
     this._onApply = onApply;
     this._label.textContent = `Recommended: ${CAMERA_PRESET_LABEL[rec.preset]} view`;
     this.element.title = rec.reason;
+    this._returnFocusTo =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.element.classList.remove('olv-hidden');
     this._arm();
   }
 
-  /** Hide the chip and cancel the auto-hide timer. */
+  /**
+   * Hide the chip and cancel the auto-hide timer. If focus is currently
+   * inside the chip (its buttons are about to leave the accessibility tree),
+   * move it back to whatever held focus before the chip appeared rather than
+   * letting it silently fall to `<body>` with no relocation.
+   */
   hide(): void {
     this._clearTimer();
+    this._hovered = false;
+    this._focusedInside = false;
+    const hadFocus = this.element.contains(document.activeElement);
     this.element.classList.add('olv-hidden');
+    if (hadFocus) {
+      const target = this._returnFocusTo;
+      if (target && document.contains(target)) target.focus();
+    }
+    this._returnFocusTo = null;
   }
 
   private _apply(): void {
     this._onApply?.();
     this.hide();
+  }
+
+  /**
+   * Re-decide the timer from the current hover/focus state: cleared while
+   * either holds it up, armed fresh once both are false (and the chip is
+   * still showing).
+   */
+  private _syncTimer(): void {
+    if (this._hovered || this._focusedInside) {
+      this._clearTimer();
+      return;
+    }
+    if (this.element.classList.contains('olv-hidden')) return;
+    this._arm();
   }
 
   private _arm(): void {

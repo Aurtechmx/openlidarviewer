@@ -244,12 +244,9 @@ export class SurfaceTiles {
     readout: HTMLElement,
   ): void {
     canvas.classList.add('is-samplable');
-    canvas.addEventListener('click', (e) => {
+    const sampleCell = (fx: number, fy: number, col: number, row: number): void => {
       const r = this.host.getResult();
       if (!r) return;
-      const hit = cellAtClick(canvas, e, cols, rows);
-      if (!hit) return;
-      const { fx, fy, col, row } = hit;
       const i = row * cols + col;
       const covered = r.dtm.coverage[i] !== 0;
       if (!covered) {
@@ -271,7 +268,13 @@ export class SurfaceTiles {
         readout.classList.remove('is-empty');
       }
       placeCrosshair(crosshair, fx, fy);
+    };
+    canvas.addEventListener('click', (e) => {
+      const hit = cellAtClick(canvas, e, cols, rows);
+      if (!hit) return;
+      sampleCell(hit.fx, hit.fy, hit.col, hit.row);
     });
+    this._attachKeyboardCursor(canvas, crosshair, cols, rows, sampleCell);
   }
 
   /**
@@ -634,17 +637,88 @@ export class SurfaceTiles {
     readout: HTMLElement,
   ): void {
     canvas.classList.add('is-samplable');
-    canvas.addEventListener('click', (e) => {
+    const sampleCell = (fx: number, fy: number, col: number, row: number): void => {
       const r = this.host.getResult();
       if (!r) return;
-      const hit = cellAtClick(canvas, e, cols, rows);
-      if (!hit) return;
-      const { fx, fy, col, row } = hit;
       const sample = sampleTerrain(r, col, row);
       readout.textContent = this._sampleReadoutText(sample);
       readout.classList.toggle('is-empty', !sample?.covered);
-      // Drop the crosshair at the click point, percentages survive resize.
+      // Drop the crosshair at the sampled point, percentages survive resize.
       placeCrosshair(crosshair, fx, fy);
+    };
+    canvas.addEventListener('click', (e) => {
+      const hit = cellAtClick(canvas, e, cols, rows);
+      if (!hit) return;
+      sampleCell(hit.fx, hit.fy, hit.col, hit.row);
+    });
+    this._attachKeyboardCursor(canvas, crosshair, cols, rows, sampleCell);
+  }
+
+  /**
+   * The keyboard path onto a sampled raster: focusable, labelled, arrow keys
+   * move a visible cursor cell (shown via the same crosshair the mouse
+   * drops), Enter/Space samples the cursor cell through `onSample` — the
+   * identical per-cell read a click produces. Mouse behaviour is unchanged;
+   * this only adds a second way to reach it.
+   */
+  private _attachKeyboardCursor(
+    canvas: HTMLCanvasElement,
+    crosshair: HTMLElement,
+    cols: number,
+    rows: number,
+    onSample: (fx: number, fy: number, col: number, row: number) => void,
+  ): void {
+    if (!(cols > 0 && rows > 0)) return;
+    canvas.tabIndex = 0;
+    canvas.setAttribute('role', 'application');
+    canvas.setAttribute(
+      'aria-label',
+      'Sampled raster. Arrow keys move the cell cursor, Enter samples the cursor cell.',
+    );
+    // Display-space cursor (north-up, as drawn) — converted to the source
+    // row via the same flip `cellAtClick` undoes, so a keyboard sample lands
+    // on the identical cell a click at that screen position would.
+    let displayCol = 0;
+    let displayRow = 0;
+    const showCursor = (): void => {
+      placeCrosshair(crosshair, (displayCol + 0.5) / cols, (displayRow + 0.5) / rows);
+    };
+    canvas.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          displayRow = Math.max(0, displayRow - 1);
+          showCursor();
+          return;
+        case 'ArrowDown':
+          e.preventDefault();
+          displayRow = Math.min(rows - 1, displayRow + 1);
+          showCursor();
+          return;
+        case 'ArrowLeft':
+          e.preventDefault();
+          displayCol = Math.max(0, displayCol - 1);
+          showCursor();
+          return;
+        case 'ArrowRight':
+          e.preventDefault();
+          displayCol = Math.min(cols - 1, displayCol + 1);
+          showCursor();
+          return;
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          showCursor();
+          onSample(
+            (displayCol + 0.5) / cols,
+            (displayRow + 0.5) / rows,
+            displayCol,
+            rows - 1 - displayRow,
+          );
+          return;
+        default:
+          return;
+      }
     });
   }
 

@@ -2050,6 +2050,10 @@ export class AnalysePanel {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: contour export failed.', err);
+      // Rethrow (R3 fix): the real UI path is ContourExportAdapter._busy,
+      // which flashes a visible "Export failed" state on the Studio button the
+      // user actually pressed. Swallowing here left every failure silent.
+      throw err;
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -2076,7 +2080,9 @@ export class AnalysePanel {
         className: 'olv-analyse-dl', text: LABEL[fmt],
         title: `Download the contour lines as ${LABEL[fmt]}, at the interval the run used.`,
       });
-      btn.addEventListener('click', () => void this._exportContourFormat(fmt, btn));
+      // Detached backing target (see class doc) — no Studio caller to flash a
+      // failure on, so swallow here; `_exportContourFormat` already logs.
+      btn.addEventListener('click', () => { void this._exportContourFormat(fmt, btn).catch(() => {}); });
       this._exportButtons.push(btn);
       this._studioExportBtns.set(fmt, btn);
       row.append(btn);
@@ -2101,7 +2107,9 @@ export class AnalysePanel {
     // primary "take the data with you" action.
     this._demButton = el('button', { className: 'olv-analyse-dl is-primary', text: 'DEM (ZIP)' });
     this._demButton.title = 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet';
-    this._demButton.addEventListener('click', () => void this._exportDemPackage(this._demButton));
+    // Detached backing target (see class doc) — no Studio caller to flash a
+    // failure on, so swallow here; `_exportDemPackage` already logs.
+    this._demButton.addEventListener('click', () => { void this._exportDemPackage(this._demButton).catch(() => {}); });
     this._studioExportBtns.set('package', this._demButton);
     row.append(this._demButton);
 
@@ -2116,7 +2124,9 @@ export class AnalysePanel {
       text: 'Intelligence report (PDF)',
     });
     this._reportButton.title = REPORT_BUTTON_TITLE;
-    this._reportButton.addEventListener('click', () => void this._exportTerrainReport(this._reportButton));
+    // Detached backing target (see class doc) — no Studio caller to flash a
+    // failure on, so swallow here; `_exportTerrainReport` already logs.
+    this._reportButton.addEventListener('click', () => { void this._exportTerrainReport(this._reportButton).catch(() => {}); });
     this._studioExportBtns.set('report', this._reportButton);
     row.append(this._reportButton);
 
@@ -2174,6 +2184,8 @@ export class AnalysePanel {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: DEM export failed.', err);
+      // Rethrow (R3 fix) — see `_exportContourFormat` for why.
+      throw err;
     } finally {
       btn.disabled = false;
       btn.textContent = label;
@@ -2247,6 +2259,10 @@ export class AnalysePanel {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: complete deliverable export failed.', err);
+      // Rethrow (R3 fix) — see `_exportContourFormat` for why. No local `btn`
+      // here; ContourExportAdapter._busy owns the restore + failure flash on
+      // the Studio button, exactly as it does for the other three products.
+      throw err;
     }
   }
 
@@ -2308,6 +2324,8 @@ export class AnalysePanel {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: terrain report export failed.', err);
+      // Rethrow (R3 fix) — see `_exportContourFormat` for why.
+      throw err;
     } finally {
       btn.disabled = false;
       btn.textContent = label;

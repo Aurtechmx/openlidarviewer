@@ -26,6 +26,7 @@ import {
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
 import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
+import { announcePolite } from './politeAnnounce';
 
 /** The vector contour formats the adapter dispatches to the host. */
 export type ContourVectorFormat = Extract<ContourStudioExportProduct, 'geojson' | 'dxf' | 'svg'>;
@@ -82,6 +83,9 @@ export interface ContourExportHost {
 
 /** Milliseconds the "Blocked" flash sits on a button before restoring. */
 const BLOCKED_FLASH_MS = 1500;
+
+/** Milliseconds the "Export failed" flash sits on a button before restoring. */
+const EXPORT_FAILED_FLASH_MS = 1800;
 
 export class ContourExportAdapter {
   private readonly host: ContourExportHost;
@@ -177,17 +181,40 @@ export class ContourExportAdapter {
     );
   }
 
-  /** Toggle the clicked button's busy state around an async export. */
+  /**
+   * Toggle the clicked button's busy state around an async export. Every
+   * `ContourExportHost` method now rethrows after logging (R3 fix), so a
+   * chunk-load or write failure lands here instead of vanishing behind a
+   * silent revert: flash a visible "Export failed" state on the SAME button
+   * the user pressed, matching the "Blocked" flash below and the sibling
+   * export controls (ProfileWorkbench, MeasurePanel), announce it through the
+   * app's one polite live region (a sighted-only button flash reaches nobody
+   * not looking at that button), then restore it.
+   */
   private async _busy(btn: HTMLButtonElement, run: () => Promise<void>): Promise<void> {
     const label = btn.textContent ?? '';
     btn.disabled = true;
     btn.textContent = '…';
     try {
       await run();
-    } finally {
-      btn.disabled = false;
-      btn.textContent = label;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('OpenLiDARViewer: contour export failed.', err);
+      btn.textContent = 'Export failed';
+      // Read the region off the pressed button's own document rather than the
+      // global — keeps this testable with a fake button in a non-DOM
+      // environment (no `document` global exists there) without changing what
+      // ships in the browser, where `srcBtn` is always mounted.
+      const doc = (btn as unknown as { ownerDocument?: Document }).ownerDocument;
+      if (doc) announcePolite('Contour export failed. Try again.', doc);
+      setTimeout(() => {
+        btn.textContent = label;
+        btn.disabled = false;
+      }, EXPORT_FAILED_FLASH_MS);
+      return;
     }
+    btn.disabled = false;
+    btn.textContent = label;
   }
 
   /**

@@ -29,56 +29,10 @@ vi.mock('../src/io/download', () => ({
   downloadBytes: (filename: string) => { hoisted.downloads.push(filename); },
 }));
 
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  width = 0;
-  height = 0;
-  href = '';
-  download = '';
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
-  readonly classList = {
-    add(): void { /* no-op */ },
-    remove(): void { /* no-op */ },
-    toggle(): void { /* no-op */ },
-  };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  getContext(): null { return null; }
-  getBoundingClientRect(): { width: number; height: number; left: number; top: number } {
-    return { width: 0, height: 0, left: 0, top: 0 };
-  }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
-  addEventListener(): void { /* no-op */ }
-  blur(): void { /* no-op */ }
-  click(): void { /* no-op */ }
-  /** Every descendant carrying `cls` in its own className. */
-  findByClass(cls: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this.className.split(/\s+/).includes(cls)) out.push(this);
-    for (const c of this.children) out.push(...c.findByClass(cls));
-    return out;
-  }
-}
+import { FakeEl, installAnalysePanelDom } from './helpers/analysePanelDom';
 
 beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-    createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
-  };
-  (globalThis as unknown as { requestAnimationFrame?: unknown }).requestAnimationFrame = undefined;
+  installAnalysePanelDom({ ns: true });
 });
 
 beforeEach(() => { hoisted.downloads.length = 0; });

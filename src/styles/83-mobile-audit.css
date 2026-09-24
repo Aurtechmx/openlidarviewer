@@ -415,7 +415,7 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   /* Nothing in the header may push past the viewport edge. */
   .olv-topbar { flex-wrap: nowrap; }
   .olv-topbar-right { gap: var(--space-md); min-width: 0; }
-  .olv-url-input { width: 100%; max-width: none; flex: 1 1 100%; }
+  .olv-url-input { width: 100%; max-width: none; flex: 0 0 auto; }
   .olv-url-btn { width: 100%; }
   .olv-url-controls { flex-direction: column; gap: var(--space-md); }
   .olv-url-rules { width: min(100%, 320px); }

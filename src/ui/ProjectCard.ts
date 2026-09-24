@@ -1,4 +1,17 @@
 import { el, formatCount } from './dom';
+import { announcePolite } from './politeAnnounce';
+
+/**
+ * Route a message to the app's single polite live region (see
+ * politeAnnounce.ts). A no-op where `document.querySelector` doesn't
+ * exist, which the DOM stub `tests/projectCardLane.test.ts` builds does
+ * not provide.
+ */
+function announce(message: string): void {
+  if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+    announcePolite(message);
+  }
+}
 
 /** The facts a freshly-opened scan presents in its summary card. */
 export interface ProjectInfo {
@@ -122,6 +135,11 @@ export class ProjectCard {
     );
 
     this.element.classList.add('olv-visible');
+    // The card is the only place this summary appears, and it self-dismisses
+    // in a few seconds — a screen-reader user gets one chance to hear it, so
+    // announce it through the app's shared live region (see politeAnnounce.ts)
+    // rather than minting a second one on the card root.
+    announce(`Project ready: ${info.name}, ${points} points.`);
     if (this._timer !== null) clearTimeout(this._timer);
     this._onDismiss = info.onDismiss ?? null;
     this._timer = window.setTimeout(() => this._dismiss(), DISMISS_MS);

@@ -32,6 +32,28 @@ import {
 
 const EMPTY_TEXT = 'Terrain Intelligence unavailable for this dataset.';
 
+/** Unique `aria-describedby` targets across every card instance on a page. */
+let tooltipSeq = 0;
+
+/**
+ * Wire a term (`<dt>`) so its explanation is reachable by keyboard and by
+ * screen reader, not only by mouse hover: the term becomes a Tab stop and
+ * `aria-describedby` points at a real (visually hidden, but always in the
+ * accessibility tree) element carrying the tooltip text, instead of the
+ * `title`-only hover lookup this card used to rely on alone.
+ *
+ * Returns the description node — the caller mounts it as a sibling of `dt`.
+ */
+function attachTooltip(dt: HTMLElement, tooltip: string): HTMLElement {
+  dt.title = tooltip;
+  dt.style.cursor = 'help';
+  dt.setAttribute('tabindex', '0');
+  const desc = el('span', { className: 'olv-visually-hidden', text: tooltip });
+  desc.id = `olv-di-desc-${++tooltipSeq}`;
+  dt.setAttribute('aria-describedby', desc.id);
+  return desc;
+}
+
 /**
  * The density row's term + tooltip, one per measure the tier can come from.
  *
@@ -98,6 +120,9 @@ export class DatasetIntelligenceCard {
 
   private readonly _densityValue: HTMLElement;
   private readonly _densityName: HTMLElement;
+  /** Hidden description `aria-describedby` points at; kept updated alongside
+   *  `_densityName.title` when the density basis flips volumetric/areal. */
+  private readonly _densityDesc: HTMLElement;
   private readonly _complexityValue: HTMLElement;
   private readonly _groundValue: HTMLElement;
   private readonly _coverageValue: HTMLElement;
@@ -124,9 +149,7 @@ export class DatasetIntelligenceCard {
       className: 'olv-di-row-name',
       text: DENSITY_ROW.volumetric.label,
     });
-    this._densityName.title = DENSITY_ROW.volumetric.tooltip;
-    this._densityName.style.cursor = 'help';
-    this._densityName.setAttribute('aria-describedby', '');
+    this._densityDesc = attachTooltip(this._densityName, DENSITY_ROW.volumetric.tooltip);
     this._complexityValue = el('dd', { className: 'olv-di-row-value' });
     this._groundValue = el('dd', { className: 'olv-di-row-value' });
     this._coverageValue = el('dd', { className: 'olv-di-row-value' });
@@ -189,7 +212,7 @@ export class DatasetIntelligenceCard {
       text: 'Terrain signals appear after a terrain analysis run.',
     });
     this._rows = el('dl', { className: 'olv-di-rows' }, [
-      el('div', { className: 'olv-di-row' }, [this._densityName, this._densityValue]),
+      el('div', { className: 'olv-di-row' }, [this._densityName, this._densityDesc, this._densityValue]),
       this._complexityRow,
       this._groundRow,
       this._row(
@@ -295,6 +318,7 @@ export class DatasetIntelligenceCard {
     const copy = basis === 'areal' ? DENSITY_ROW.areal : DENSITY_ROW.volumetric;
     this._densityName.textContent = copy.label;
     this._densityName.title = copy.tooltip;
+    this._densityDesc.textContent = copy.tooltip;
     this._densityName.dataset.basis = basis;
   }
 
@@ -317,12 +341,9 @@ export class DatasetIntelligenceCard {
     tooltip?: string,
   ): HTMLElement {
     const dt = el('dt', { className: 'olv-di-row-name', text: label });
-    if (tooltip) {
-      dt.title = tooltip;
-      dt.style.cursor = 'help';
-      dt.setAttribute('aria-describedby', '');
-    }
-    return el('div', { className: 'olv-di-row' }, [dt, value]);
+    if (!tooltip) return el('div', { className: 'olv-di-row' }, [dt, value]);
+    const desc = attachTooltip(dt, tooltip);
+    return el('div', { className: 'olv-di-row' }, [dt, desc, value]);
   }
 
   /** Apply a fresh summary to the DOM. */

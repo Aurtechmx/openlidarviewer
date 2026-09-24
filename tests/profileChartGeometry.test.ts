@@ -29,7 +29,7 @@ import { MeasurePanel } from '../src/ui/MeasurePanel';
 import type { MeasurementSummary } from '../src/render/measure/MeasureController';
 import type { ProfileChartSample } from '../src/render/measure/types';
 
-beforeAll(installFakeDom);
+beforeAll(() => installFakeDom());
 
 /** Four samples at 10 m spacing: a low end, a two-station plateau, a low end. */
 const PLATEAU_HEIGHTS = [0, 1, 1, 0] as const;

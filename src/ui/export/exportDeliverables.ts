@@ -29,6 +29,61 @@ import type { ReportTemplateId } from '../../report/types';
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
 
 /**
+ * Milliseconds a duplicate-trigger guard holds its controls disabled when the
+ * callback gives back nothing to await. `onExport`/`onExportReport` are typed
+ * `void` — the host (main.ts) fires its real async work and forgets — so this
+ * module has no promise of its own to await; the fixed window instead covers
+ * the literal rapid-double-click case (R1: two clicks before the first run
+ * even starts reacting). A callback that DOES return a thenable is awaited
+ * for real instead of waiting out the timer — see {@link guardDuplicateClicks}.
+ */
+const DUPLICATE_CLICK_GUARD_MS = 1500;
+
+/**
+ * Disable `controls` for the duration of `run`'s own promise, when `run`
+ * hands one back, so a second click on an in-flight export is dropped
+ * instead of firing a duplicate, concurrent export. A click while already
+ * disabled is a no-op.
+ *
+ * Today, `run` never hands one back: `cb.onExport`/`cb.onExportReport` are
+ * void arrow functions in main.ts that start their async work with `void
+ * ....then(...)` / call `.then().catch()` without a `return`, so `run()`
+ * always evaluates to `undefined` here and this always falls through to the
+ * fixed {@link DUPLICATE_CLICK_GUARD_MS} window below, whatever the real
+ * work's own duration turns out to be — the promise branch is reachable code
+ * with no current production caller. That is a real gap for the report
+ * button specifically: a cold-chunk pdf-lib load plus multi-page render can
+ * outlast the window, so a second click after it re-enables can start a
+ * genuine concurrent report build. Closing it needs main.ts's two callbacks
+ * to `return` their promise chains instead of discarding them; this module
+ * cannot make that change on its own.
+ */
+function guardDuplicateClicks(
+  controls: ReadonlyArray<HTMLButtonElement | HTMLSelectElement>,
+  run: () => unknown,
+): void {
+  if (controls.some((c) => c.disabled)) return;
+  for (const c of controls) c.disabled = true;
+  const release = (): void => {
+    for (const c of controls) c.disabled = false;
+  };
+  let result: unknown;
+  try {
+    result = run();
+  } catch (err) {
+    release();
+    throw err;
+  }
+  if (result != null && typeof (result as PromiseLike<unknown>).then === 'function') {
+    void (result as PromiseLike<unknown>).then(release, release);
+  } else {
+    // Global setTimeout (not window.*) so this stays unit-testable in a
+    // non-DOM environment, matching ContourExportAdapter's own convention.
+    setTimeout(release, DUPLICATE_CLICK_GUARD_MS);
+  }
+}
+
+/**
  * Visual Export Studio — the PNG export modes. Each entry is `mode / label /
  * title`; the title doubles as the disabled-state hover hint. The specific
  * colour-mode buttons come first because they reliably produce distinct images;
@@ -125,7 +180,7 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
     });
     button.addEventListener('click', () => {
       button.blur();
-      cb.onExport(format);
+      guardDuplicateClicks([button], () => cb.onExport(format));
     });
     return button;
   });
@@ -186,7 +241,7 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
       }, 1500);
       return;
     }
-    cb.onExportReport(templateId);
+    guardDuplicateClicks([reportButton, reportSelect], () => cb.onExportReport(templateId));
   });
   const reportRow = el('div', { className: 'olv-report-row' }, [reportSelect, reportButton]);
 

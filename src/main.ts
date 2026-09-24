@@ -37,7 +37,6 @@ import {
   writePersistedTheme,
   type ThemeName,
 } from './ui/themes';
-import type { CommandPalette } from './ui/CommandPalette';
 import type { ShortcutSheet } from './ui/ShortcutSheet';
 import type { TourHandle } from './ui/onboarding/bootTour';
 import { createTourLauncher } from './app/tourLauncher';
@@ -135,7 +134,7 @@ import type { ClipBox } from './render/clip/clipBox';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
-import { createHelpOverlayLazy } from './app/helpOverlayLazy';
+import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger } from './app/helpOverlayLazy';
 import {
   buildViewerKeyBindings,
   installKeyDispatch,
@@ -767,7 +766,12 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   const v = viewer;
-  void loadContextMenu().then(({ showContextMenu }) => {
+  // Reading `.showContextMenu` off the awaited module (not passing
+  // `loadContextMenu` straight through) is what makes a stale-chunk resolve
+  // to `undefined` throw here and reach the toast, instead of silently
+  // succeeding with nothing to call.
+  void createLazySurfaceLoader({ show: showLassoToast })(async () => (await loadContextMenu()).showContextMenu, 'context menu').then((showContextMenu) => {
+    if (!showContextMenu) return; // already reported; right-click again to retry.
     showContextMenu(e.clientX, e.clientY, [
       {
         label: 'Focus here',
@@ -1306,16 +1310,16 @@ function toggleWorkflowRecord(): void {
 // registry so every action stays close to the handler that powers
 // the corresponding tool dock / Inspector / keyboard surface — no
 // duplicate truth.
-// The command palette opens on Cmd/Ctrl-K only: lazy, with the lazy registry it lists.
-let commandPalette: CommandPalette | null = null;
-async function openCommandPalette(): Promise<void> {
-  if (!commandPalette) {
-    const { CommandPalette } = await loadCommandPalette();
-    commandPalette = new CommandPalette();
-    stage.overlay.append(commandPalette.element);
-    commandPalette.setActions(await ensureActionRegistry());
-  }
-  commandPalette.toggle();
+// The command palette opens on Cmd/Ctrl-K only: lazy, with the lazy registry it lists; a chunk-load failure reports through the toast instead of an unhandled rejection (LAZY-1).
+const commandPaletteSingleton = createLazySingleton(async () => {
+  const { CommandPalette } = await loadCommandPalette();
+  const palette = new CommandPalette();
+  stage.overlay.append(palette.element);
+  palette.setActions(await ensureActionRegistry());
+  return palette;
+}, 'command palette', { show: showLassoToast }, buttonLazyTrigger(() => dock.dock.querySelector<HTMLButtonElement>('.olv-tool-command')));
+function openCommandPalette(): void {
+  void commandPaletteSingleton.ensure((p) => p.toggle());
 }
 
 // A dismissible "recommended view" chip surfaced after a scan loads.
@@ -1325,24 +1329,19 @@ stage.overlay.append(recommendedViewChip.element);
 // v0.3.9 — keyboard shortcut sheet (open via `?`). Reads the same
 // action registry as the palette so adding a new action makes it
 // discoverable in both surfaces without a second touch.
-// The shortcut sheet is only ever shown on a `?` press (or the "Show keyboard
-// shortcuts" action), so it is lazy-loaded on first use to keep its ~250 lines
-// out of the startup shell. Same direct-dynamic-import pattern as the command
-// palette below.
-let shortcutSheet: ShortcutSheet | null = null;
-let shortcutSheetLoading: Promise<ShortcutSheet> | null = null;
-function ensureShortcutSheet(): Promise<ShortcutSheet> {
-  if (shortcutSheet) return Promise.resolve(shortcutSheet);
-  if (!shortcutSheetLoading) {
-    shortcutSheetLoading = Promise.all([loadShortcutSheet(), ensureActionRegistry()]).then(([{ ShortcutSheet }, actions]) => {
-      const sheet = new ShortcutSheet();
-      stage.overlay.append(sheet.element);
-      sheet.setActions(actions);
-      shortcutSheet = sheet;
-      return sheet;
-    });
-  }
-  return shortcutSheetLoading;
+// The shortcut sheet is only ever shown on a `?` press (or the "Show keyboard shortcuts" action), lazy-loaded on first use. Same lazy-singleton pattern as the command palette above; `ensureShortcutSheet` keeps its non-optional return type for `helpActions.ts`, so a failed load rejects (after already reporting via the toast) rather than resolving to nothing. `onReady` is threaded through to `.ensure()` so a successful "Try again" retry actually opens/toggles the sheet, not just pre-warms the cache.
+const shortcutSheetSingleton = createLazySingleton(async () => {
+  const [{ ShortcutSheet }, actions] = await Promise.all([loadShortcutSheet(), ensureActionRegistry()]);
+  const sheet = new ShortcutSheet();
+  stage.overlay.append(sheet.element);
+  sheet.setActions(actions);
+  return sheet;
+}, 'shortcut sheet', { show: showLassoToast });
+function ensureShortcutSheet(onReady?: (sheet: ShortcutSheet) => void): Promise<ShortcutSheet> {
+  return shortcutSheetSingleton.ensure(onReady).then((sheet) => {
+    if (sheet) return sheet;
+    throw new Error('Could not load the shortcut sheet.');
+  });
 }
 
 /**
@@ -1389,6 +1388,43 @@ let classifyRunning = false;
 /** Confidence (0..1) of the most recent derive, for the Dataset Story / Export
  *  Health synthesis. Null when the active scan carries no derived classification. */
 let lastDerivedConfidence: number | null = null;
+/**
+ * Shared inner loop for {@link runDeriveClassification} and
+ * {@link runFillUnclassified}: run the (possibly off-thread) derive, bail if
+ * the active scan/frame changed underneath it, then apply the result and
+ * refresh the classes legend. Callers stay responsible for their own
+ * before/after toast copy and post-apply refreshes, since those differ.
+ */
+async function performClassificationDerive(
+  cloud: NonNullable<ReturnType<typeof viewer.getCloud>>,
+  activeId: string,
+  deriveOptions: DeriveClassificationOptions,
+  label: string,
+): Promise<{ result: Awaited<ReturnType<typeof deriveClassificationAsync>>; confPct: number | null } | null> {
+  const deriveCrsRevision = crsService.crsRevision();
+  const result = await deriveClassificationAsync(
+    cloud.positions,
+    cloud.pointCount,
+    deriveOptions,
+    undefined,
+    undefined,
+    // Live phase in the toast so a multi-second derive reads as progress,
+    // not a hang. (Off-thread, so the UI repaints between phases.)
+    (phase) => showLassoToast(`${label} · ${phase}…`),
+  );
+  if (activeId !== scans.activeId || viewer.getCloud(activeId) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return null;
+  viewer.applyDerivedClassification(activeId, result.codes);
+  noteEdit('classification');
+  lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
+  classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
+  // Surface the run's honest confidence + caveats in the legend caption, not
+  // just a flat "derived" tag — so the user sees WHEN to trust it.
+  const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
+  classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
+  classLegendPanel.show();
+  return { result, confPct };
+}
+
 async function runDeriveClassification(): Promise<void> {
   if (classifyRunning) return;
   if (!scans.activeId) {
@@ -1418,38 +1454,14 @@ async function runDeriveClassification(): Promise<void> {
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
   const deriveOptions = classifierOptions(cloud, crsService.context());
-    // The frame is baked into these thresholds (physical metres → source units).
-    const deriveCrsRevision = crsService.crsRevision();
 
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
   try {
     const id = scans.activeId;
-    const result = await deriveClassificationAsync(
-      cloud.positions,
-      cloud.pointCount,
-      deriveOptions,
-      undefined,
-      undefined,
-      // Live phase in the toast so a multi-second derive reads as progress,
-      // not a hang. (Off-thread, so the UI repaints between phases.)
-      (phase) => showLassoToast(`Classify · ${phase}…`),
-    );
-    if (id !== scans.activeId || viewer.getCloud(id) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return;
-    viewer.applyDerivedClassification(id, result.codes);
-    noteEdit('classification');
-    lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
-    // Surface the run's honest confidence + caveats in the legend caption, not
-    // just a flat "derived" tag — so the user sees WHEN to trust it.
-    const confPct = Number.isFinite(result.confidence)
-      ? Math.round(result.confidence * 100)
-      : null;
-    classLegendPanel.setDerivedProvenance(true, {
-      confidencePct: confPct,
-      warnings: result.warnings,
-    });
-    classLegendPanel.show();
+    const outcome = await performClassificationDerive(cloud, id, deriveOptions, 'Classify');
+    if (!outcome) return;
+    const { result, confPct } = outcome;
     processStudio.refresh(); // new classes change what's producible — re-evaluate the plan
     void showReclassifyUi();
     // Honest one-line breakdown of the top classes derived.
@@ -1506,29 +1518,13 @@ async function runFillUnclassified(): Promise<void> {
     existingClassification: cloud.classification,
     ...classifierOptions(cloud, crsService.context()),
   };
-  // See the Classify path: the frame is baked into these thresholds.
-  const deriveCrsRevision = crsService.crsRevision();
-
   classifyRunning = true;
   showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
   try {
     const id = scans.activeId;
-    const result = await deriveClassificationAsync(
-      cloud.positions,
-      cloud.pointCount,
-      deriveOptions,
-      undefined,
-      undefined,
-      (phase) => showLassoToast(`Fill unclassified · ${phase}…`),
-    );
-    if (id !== scans.activeId || viewer.getCloud(id) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return;
-    viewer.applyDerivedClassification(id, result.codes);
-    noteEdit('classification');
-    lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-    classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
-    const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
-    classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
-    classLegendPanel.show();
+    const outcome = await performClassificationDerive(cloud, id, deriveOptions, 'Fill unclassified');
+    if (!outcome) return;
+    const { confPct } = outcome;
     processStudio.refresh(); // filled classes can enable ground/building products
     void showReclassifyUi();
     const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';
@@ -1641,7 +1637,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   startWorkflowRecording,
   dispatchWorkflowEvent,
   ensureWorkflowConfigPanel,
-  ensureShortcutSheet,
+  ensureShortcutSheet: () => ensureShortcutSheet((sheet) => sheet.open()), // wrapped so a "Try again" retry opens the sheet too
   hasScan,
   saveSnapshot,
   copyShareLink,
@@ -1742,8 +1738,8 @@ const keyBindingDeps: KeyBindingDeps = {
     },
     setCameraPreset: (preset) => viewer?.setCameraPreset(preset),
     toast: (message) => showLassoToast(message),
-    openCommandPalette: () => void openCommandPalette(),
-    toggleShortcutSheet: () => void ensureShortcutSheet().then((sheet) => sheet.toggle()),
+    openCommandPalette: () => openCommandPalette(),
+    toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
     workflowRecorderEnabled: WORKFLOW_RECORDER_ENABLED,
     matchesWorkflowShortcut: (e) => matchesShortcut(e, workflowController.config.shortcut),
     toggleWorkflowRecord: () => toggleWorkflowRecord(),
@@ -1754,7 +1750,7 @@ stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), key
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
 
 
-const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry() }); // lazy chunk, see helpOverlayLazy.ts
+const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry(), toast: { show: showLassoToast }, trigger: buttonLazyTrigger(() => dock.dock.querySelector<HTMLButtonElement>('.olv-tool-help')) }); // lazy chunk, see helpOverlayLazy.ts
 
 const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
@@ -1786,7 +1782,7 @@ const dock = new ToolDock({
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
-  onCommandPalette: () => void openCommandPalette(),
+  onCommandPalette: () => openCommandPalette(),
   onClose: () => closeScan(),
 });
 // Start the dock hidden — the empty state shows no scan-dependent tools.
@@ -3055,7 +3051,7 @@ void viewerLoaded.then(() => {
   });
   // Persist the unit choice whenever it changes.
   viewer.measure.setOnUnitChange(persistPrefs);
-  viewer.annotate.setOnChange(() => {
+  viewer.annotate.setEditSuppressor(withSuppressed); viewer.annotate.setOnChange(() => {
     refreshAnnotationPanel();
     // Mark the annotation stack as most-recently-edited so a global Undo
     // targets it (suppressed while the router itself replays an undo/redo).

@@ -16,6 +16,7 @@ import type { MeasurementRef } from '../render/annotate/AnnotationController';
 import type { IssueInput, IssueSeverity, IssueStatus } from '../render/annotate/issueWorkflow';
 import { ISSUE_SEVERITIES } from '../render/annotate/issueWorkflow';
 import { severityText } from './issueSeverityStyle';
+import { openConfirm, trapTab } from './Modal';
 
 /** The fields the editor collects. */
 export interface AnnotationDraftFields {
@@ -74,9 +75,16 @@ const STATUS_CHOICES: { status: IssueStatus; label: string }[] = [
   { status: 'resolved', label: 'Resolved' },
 ];
 
-/** Approximate card size, for clamping it inside the viewport. */
+/** Approximate card size — a fallback only, used before the card has ever
+ * been laid out. Once open, `_reposition` clamps against the real measured
+ * size instead, so a later content-height change (e.g. the status row
+ * appearing) never leaves the card hanging off the viewport. */
 const CARD_W = 264;
 const CARD_H = 420;
+
+/** Heading ids are unique per instance so `aria-labelledby` never collides
+ * if more than one editor is ever mounted at once. */
+let editorSeq = 0;
 
 export class AnnotationEditor {
   /** The card element — mount into the stage overlay. */
@@ -112,12 +120,41 @@ export class AnnotationEditor {
   private _initialLink: string | null = null;
   private _onSave: ((f: AnnotationDraftFields) => void) | null = null;
   private _onCancel: (() => void) | null = null;
+  /** Whether the user has typed or clicked anything since `open()`. Reset on
+   * every open; a beginEdit/beginDraft reopening a dirty card asks first
+   * rather than discarding the work silently. */
+  private _dirty = false;
+  /** The point the card is anchored near, re-clamped on every reposition so
+   * a later size change (severity row appearing, a short viewport) re-fits
+   * against the card's real height rather than the CARD_H guess. */
+  private _anchorX = 0;
+  private _anchorY = 0;
+  /** The element to restore focus to on close — the trigger, or whatever was
+   * focused when `open()` ran. */
+  private _returnFocusTo: HTMLElement | null = null;
+  /** The observer that keeps the card clamped in-viewport as its content
+   * grows/shrinks — stored so `dispose()` can disconnect it; see the
+   * constructor and the `dispose()` doc comment below. */
+  private _resizeObserver: ResizeObserver | null = null;
+  /** The most recently focused element inside the card, so a "Keep editing"
+   * answer from `confirmDiscard` can send focus back into the draft rather
+   * than wherever the interrupting action's confirm happened to open from. */
+  private _lastFocusedInCard: HTMLElement | null = null;
+  /**
+   * The in-flight discard confirm, if one is open. Reused by a second
+   * `confirmDiscard()` call that arrives before the first resolves, so a
+   * reopen/close/undo call racing an already-open confirm never stacks a
+   * second dialog on top of it. See `AnnotationController`'s guarded methods,
+   * which also check this via `isConfirmPending` before calling in at all.
+   */
+  private _discardPromise: Promise<boolean> | null = null;
 
   constructor() {
     this._heading = el('span', {
       className: 'olv-anno-editor-heading',
       text: 'New annotation',
     });
+    this._heading.id = `olv-anno-editor-heading-${++editorSeq}`;
 
     this._title = el('input', { className: 'olv-anno-editor-title' });
     this._title.type = 'text';
@@ -132,8 +169,15 @@ export class AnnotationEditor {
         title: `Mark this annotation as ${TYPE_LABEL[t].toLowerCase()}`,
       });
       chip.type = 'button';
+      // WebKit/Safari's default "Full Keyboard Access" leaves plain buttons
+      // out of the native Tab order; an explicit tabindex is the standard
+      // cross-browser fix and is what lets `trapTab` below actually trap —
+      // without it Tab silently skips every chip in Safari and walks
+      // straight out of the card.
+      chip.tabIndex = 0;
       chip.addEventListener('click', () => {
         chip.blur();
+        this._dirty = true;
         this._setType(t);
       });
       this._typeChips.set(t, chip);
@@ -143,6 +187,8 @@ export class AnnotationEditor {
     this._note = el('textarea', { className: 'olv-anno-editor-note' });
     this._note.placeholder = 'Note (optional)';
     this._note.rows = 3;
+    this._title.addEventListener('input', () => { this._dirty = true; });
+    this._note.addEventListener('input', () => { this._dirty = true; });
 
     // Inspection workflow. Picking a severity is what marks the annotation as a
     // tracked issue, so there is one control for two decisions and no separate
@@ -157,8 +203,10 @@ export class AnnotationEditor {
         title: `Track this annotation as a ${s} issue`,
       });
       chip.type = 'button';
+      chip.tabIndex = 0; // see the type-chip loop above for why
       chip.addEventListener('click', () => {
         chip.blur();
+        this._dirty = true;
         this._setSeverity(s);
       });
       this._severityChips.set(s, chip);
@@ -176,8 +224,10 @@ export class AnnotationEditor {
             : 'Keep this issue open',
       });
       chip.type = 'button';
+      chip.tabIndex = 0; // see the type-chip loop above for why
       chip.addEventListener('click', () => {
         chip.blur();
+        this._dirty = true;
         this._setStatus(c.status);
       });
       this._statusChips.set(c.status, chip);
@@ -201,6 +251,7 @@ export class AnnotationEditor {
     this._cameraCheck = el('input', { className: 'olv-anno-editor-camera-box' });
     this._cameraCheck.type = 'checkbox';
     this._cameraCheck.checked = true;
+    this._cameraCheck.addEventListener('change', () => { this._dirty = true; });
     this._cameraRow = el('label', { className: 'olv-anno-editor-camera' }, [
       this._cameraCheck,
       el('span', { text: 'Save current camera view' }),
@@ -212,6 +263,7 @@ export class AnnotationEditor {
       className: 'olv-anno-editor-link-select',
       title: 'Link this annotation to a measurement',
     });
+    this._linkSelect.addEventListener('change', () => { this._dirty = true; });
     this._linkRow = el('label', { className: 'olv-anno-editor-link' }, [
       el('span', { className: 'olv-anno-editor-link-label', text: 'Linked measurement' }),
       this._linkSelect,
@@ -219,6 +271,7 @@ export class AnnotationEditor {
 
     const cancelBtn = el('button', { className: 'olv-anno-editor-cancel', text: 'Cancel' });
     cancelBtn.type = 'button';
+    cancelBtn.tabIndex = 0; // see the type-chip loop above for why
     cancelBtn.addEventListener('click', () => {
       cancelBtn.blur();
       this._cancel();
@@ -226,6 +279,7 @@ export class AnnotationEditor {
 
     this._saveBtn = el('button', { className: 'olv-anno-editor-save', text: 'Save' });
     this._saveBtn.type = 'button';
+    this._saveBtn.tabIndex = 0; // see the type-chip loop above for why
     this._saveBtn.addEventListener('click', () => {
       this._saveBtn.blur();
       this._save();
@@ -241,18 +295,52 @@ export class AnnotationEditor {
       this._cameraRow,
       el('div', { className: 'olv-anno-editor-actions' }, [cancelBtn, this._saveBtn]),
     ]);
+    // A hand-rolled dialog: no backdrop (it floats beside the click that
+    // opened it) and, unlike every dialog built through Modal.ts's
+    // `openModal`, it does not block pointer interaction with the rest of
+    // the page. `aria-modal="true"` would tell assistive tech the background
+    // is inert when it functionally is not, so this card carries `role` and
+    // `aria-labelledby` — the same naming contract every other dialog in this
+    // app gives — but deliberately no `aria-modal`; the ARIA default
+    // (absent = not modal) is the honest one here. Tab/Escape still route
+    // through the same keyboard contract via `trapTab` below.
+    this.element.setAttribute('role', 'dialog');
+    this.element.setAttribute('aria-labelledby', this._heading.id);
 
     // Escape cancels the editor (not the whole tool — the propagation stops
-    // here); Enter in the title field saves.
+    // here, so Viewer's window-level Escape handler never sees it); Enter in
+    // the title field saves; Tab/Shift+Tab stay trapped inside the card via
+    // Modal.ts's shared `trapTab`, so a stray Tab off the end can no longer
+    // hand Escape to the window listener and exit the whole annotate tool.
     this.element.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         this._cancel();
-      } else if (e.key === 'Enter' && e.target === this._title) {
+        return;
+      }
+      if (e.key === 'Enter' && e.target === this._title) {
         e.preventDefault();
         this._save();
+        return;
       }
+      trapTab(this.element, e);
     });
+
+    this.element.addEventListener('focusin', (e) => {
+      if (e.target instanceof HTMLElement) this._lastFocusedInCard = e.target;
+    });
+
+    if (typeof ResizeObserver !== 'undefined') {
+      try {
+        const ro = new ResizeObserver(() => {
+          if (this.isOpen) this._reposition();
+        });
+        ro.observe(this.element);
+        this._resizeObserver = ro;
+      } catch {
+        /* Static single clamp on open only — ancient engines. */
+      }
+    }
   }
 
   /** Whether the editor is currently open. */
@@ -260,8 +348,38 @@ export class AnnotationEditor {
     return !this.element.classList.contains('olv-hidden');
   }
 
+  /** Whether a discard confirm raised by {@link confirmDiscard} is still
+   * awaiting an answer. Callers that guard a reopen/close/undo against a
+   * dirty draft check this first, so a second guarded call arriving while
+   * the user is still looking at the first confirm is a no-op rather than
+   * stacking a second dialog or re-running the deferred action twice. */
+  get isConfirmPending(): boolean {
+    return this._discardPromise !== null;
+  }
+
+  /**
+   * Free DOM references and the resize observer — call once the editor (and
+   * its owning controller) is going away for good, not on every close.
+   */
+  dispose(): void {
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = null;
+    this.close();
+    this.element.remove();
+  }
+
   /** Open the editor near a screen point, with optional pre-filled values. */
   open(opts: AnnotationEditorOpen): void {
+    this._dirty = false;
+    this._lastFocusedInCard = null;
+    // `typeof` (not a bare `instanceof HTMLElement`) because `beginDraft`
+    // runs against this class through a DOM-free unit stub with no
+    // `HTMLElement` global at all (tests/annotationIssuePanel.test.ts) as
+    // well as through a real DOM — this has to be a safe no-op in the former.
+    this._returnFocusTo =
+      typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     this._onSave = opts.onSave;
     this._onCancel = opts.onCancel;
     this._heading.textContent = opts.heading ?? 'New annotation';
@@ -307,26 +425,118 @@ export class AnnotationEditor {
     // reduced-motion overrides hit this card the same way they hit everything
     // else (Gestalt similarity across visibility logic).
     this.element.classList.remove('olv-hidden');
-    const left = Math.min(Math.max(8, opts.x + 14), window.innerWidth - CARD_W - 8);
-    const top = Math.min(Math.max(8, opts.y - 24), window.innerHeight - CARD_H - 8);
-    this.element.style.left = `${left}px`;
-    this.element.style.top = `${top}px`;
+    this._anchorX = opts.x;
+    this._anchorY = opts.y;
+    // Reposition against the card's REAL rendered size (the ResizeObserver
+    // above keeps this true as content later grows/shrinks); CARD_W/CARD_H
+    // only seed the very first layout if the browser hands back a 0 rect.
+    this._reposition();
 
     this._title.focus();
     this._title.select();
   }
 
-  /** Close the editor without firing either callback. */
+  /**
+   * Re-clamp the card inside the current viewport from its real measured
+   * size and the point it opened near. Called on open and again whenever the
+   * card's content changes its height (severity/status/link rows toggling),
+   * so a card that grows after opening near the bottom of a short viewport
+   * re-fits instead of running off-screen with no scroll to recover it.
+   */
+  private _reposition(): void {
+    // The unit stub's DOM-free elements don't implement layout geometry at
+    // all; fall back to the guessed constants there, exactly as this method
+    // behaved before it started measuring the real card.
+    const rect =
+      typeof this.element.getBoundingClientRect === 'function'
+        ? this.element.getBoundingClientRect()
+        : null;
+    const w = rect?.width || CARD_W;
+    const h = rect?.height || CARD_H;
+    const left = Math.min(Math.max(8, this._anchorX + 14), window.innerWidth - w - 8);
+    const top = Math.min(Math.max(8, this._anchorY - 24), window.innerHeight - h - 8);
+    this.element.style.left = `${left}px`;
+    this.element.style.top = `${top}px`;
+  }
+
+  /** Close the editor without firing either callback, restoring focus to
+   * whatever triggered it (the panel's Edit button, or nothing for a
+   * scene-click draft with no prior focus target). */
   close(): void {
     this.element.classList.add('olv-hidden');
     this._onSave = null;
     this._onCancel = null;
+    const restore = this._returnFocusTo;
+    this._returnFocusTo = null;
+    if (restore && typeof document.contains === 'function' && document.contains(restore)) {
+      restore.focus();
+    }
+  }
+
+  /**
+   * The synchronous half of reopening this card for something else — a
+   * beginDraft/beginEdit call arriving while it is still open. True (having
+   * cancelled the stale card here, so its `onCancel` still runs) means the
+   * caller may go ahead and open the new one immediately: either this card
+   * was already closed, or it was untouched, and a pristine reopen has
+   * nothing to lose. False means it is open AND dirty — the caller must ask
+   * through {@link confirmDiscard} instead of opening over real work.
+   *
+   * Split from the confirm step (rather than one `async` method) so the
+   * overwhelmingly common case — no conflicting draft — stays fully
+   * synchronous, exactly as `beginDraft`/`beginEdit` always have: a click
+   * opens the card on the same tick, with no microtask hop even a single
+   * ordinary `beginDraft()` call would otherwise take on.
+   */
+  reopenIfPossible(): boolean {
+    if (!this.isOpen) return true;
+    if (!this._dirty) {
+      this._cancel();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Ask, through the same styled confirm every other destructive choice in
+   * this app uses, whether to discard the dirty open card. Only meaningful
+   * right after {@link reopenIfPossible} returned false. Resolves true (and
+   * cancels the card here) on "discard changes"; false (leaving it open,
+   * untouched) on "keep editing" or any other dismissal.
+   */
+  confirmDiscard(): Promise<boolean> {
+    // Reuse the in-flight confirm rather than opening a second one — see
+    // `isConfirmPending`'s doc comment.
+    if (this._discardPromise) return this._discardPromise;
+    const p = (async () => {
+      const discard = await openConfirm({
+        title: 'Discard unsaved annotation?',
+        message:
+          'The annotation you were editing has unsaved changes. Opening another one discards them.',
+        confirmLabel: 'Discard changes',
+        cancelLabel: 'Keep editing',
+        // "Keep editing" (or Escape / backdrop dismiss) should land the user
+        // back in the still-open draft, not on whatever triggered the
+        // interrupted reopen — that control may belong to a different row
+        // entirely.
+        returnFocusTo: this._lastFocusedInCard ?? this._title,
+      });
+      if (discard) this._cancel();
+      return discard;
+    })();
+    this._discardPromise = p;
+    void p.finally(() => {
+      this._discardPromise = null;
+    });
+    return p;
   }
 
   private _setType(t: AnnotationType): void {
     this._type = t;
     for (const [k, chip] of this._typeChips) {
-      chip.classList.toggle('olv-anno-chip-active', k === t);
+      const on = k === t;
+      chip.classList.toggle('olv-anno-chip-active', on);
+      chip.setAttribute('aria-pressed', String(on));
     }
   }
 

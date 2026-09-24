@@ -12,6 +12,7 @@
  */
 
 import { el } from './dom';
+import { wireDialogA11y, focusableIn, type DialogA11yHandle } from './Modal';
 import {
   DEFAULT_WORKFLOW_CONFIG,
   WORKFLOW_REPLAY_SPEEDS,
@@ -35,6 +36,7 @@ export class WorkflowConfigPanel {
   readonly element: HTMLElement;
   private readonly _card: HTMLElement;
   private readonly _backdrop: HTMLElement;
+  private _a11y: DialogA11yHandle | null = null;
 
   /** A working copy of the config; edits mutate this then emit. */
   private _config: WorkflowRecorderConfig = DEFAULT_WORKFLOW_CONFIG;
@@ -56,9 +58,11 @@ export class WorkflowConfigPanel {
     });
     dismiss.addEventListener('click', () => this.close());
 
+    const titleEl = el('div', { className: 'olv-wfc-title', text: 'Workflow recorder' });
+    titleEl.id = 'olv-wfc-title';
     const header = el('div', { className: 'olv-wfc-header' }, [
       el('div', { className: 'olv-wfc-header-titles' }, [
-        el('div', { className: 'olv-wfc-title', text: 'Workflow recorder' }),
+        titleEl,
         el('div', {
           className: 'olv-wfc-subtitle',
           text: 'Records camera moves and tool actions — never scan data.',
@@ -101,19 +105,14 @@ export class WorkflowConfigPanel {
     ]);
 
     this._card = el('div', { className: 'olv-wfc-card' }, [header, body, footer]);
+    this._card.setAttribute('role', 'dialog');
+    this._card.setAttribute('aria-modal', 'true');
+    this._card.setAttribute('aria-labelledby', titleEl.id);
     this._backdrop = el('div', { className: 'olv-wfc-backdrop' });
     this.element = el('div', { className: 'olv-wfc olv-hidden' }, [this._backdrop, this._card]);
 
     this._backdrop.addEventListener('click', () => this.close());
     this._card.addEventListener('click', (e) => e.stopPropagation());
-    this.element.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        if (this._capturingShortcut) this._endShortcutCapture();
-        else this.close();
-      }
-    });
   }
 
   /** Register the change callback — fired on every edit with the full config. */
@@ -129,15 +128,31 @@ export class WorkflowConfigPanel {
 
   /** Show the panel. */
   open(): void {
+    if (this._open) return;
     this._open = true;
     this.element.classList.remove('olv-hidden');
+    this._a11y = wireDialogA11y(this._card, {
+      onEscape: () => {
+        // While capturing a shortcut combo, Escape cancels the capture
+        // rather than closing the whole panel.
+        if (this._capturingShortcut) this._endShortcutCapture();
+        else this.close();
+      },
+    });
+    // Move focus into the dialog: the first field, else the dialog itself.
+    const initial = focusableIn(this._card)[0] ?? this._card;
+    initial.focus();
   }
 
   /** Hide the panel. */
   close(): void {
+    if (!this._open) return;
     this._endShortcutCapture();
     this._open = false;
     this.element.classList.add('olv-hidden');
+    // Restores focus to whatever triggered the panel (Tab-trap teardown).
+    this._a11y?.teardown();
+    this._a11y = null;
   }
 
   /** Whether the panel is currently open. */

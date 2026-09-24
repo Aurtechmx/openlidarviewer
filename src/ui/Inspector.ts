@@ -1,4 +1,4 @@
-import { el, formatCount } from './dom';
+import { el, iconButton, formatCount } from './dom';
 import {
   renderStreamingDetail,
   clearStreamingDetail,
@@ -13,6 +13,7 @@ import {
   type LayerCompatibility,
 } from '../model/layerCompatibility';
 import { openConfirm } from './Modal';
+import { announcePolite } from './politeAnnounce';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
 import { loadLayerHealthCard, loadLayerGroupsPanel } from '../lazyChunks';
 import type { LayerHealthCard } from './LayerHealthCard';
@@ -288,6 +289,18 @@ const VISUALS_SPLAT_CHIPS: ReadonlyArray<{
       'Gaussian-shaped point rendering. This smooths ordinary point samples and is not a trained 3D Gaussian Splat scene.',
   },
 ];
+
+/**
+ * Route a message to the app's single polite live region (see
+ * politeAnnounce.ts). A no-op where `document.querySelector` doesn't exist —
+ * this file's unit-test DOM stubs cover only the element surface the panel
+ * touches, not a full document.
+ */
+function announce(message: string): void {
+  if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+    announcePolite(message);
+  }
+}
 
 function section(label: string, body: HTMLElement): HTMLElement {
   return el('div', { className: 'olv-section' }, [
@@ -647,8 +660,15 @@ export class Inspector {
   private _groups: LayerGroupsPanel | null = null;
   /** The "New group" control — eager, so grouping is discoverable at first paint. */
   private readonly _groupBar: HTMLElement;
+  /** Visible "couldn't load groups" caption — hidden except right after a
+   *  failed chunk load, so the failure is not only a console.warn. */
+  private readonly _groupLoadError: HTMLElement;
   /** An arrangement restored before the chunk landed, applied when it does. */
   private _groupsPending: readonly SessionLayerGroup[] | null = null;
+
+  /** The in-flight `_ensureGroups()` promise, so a second click before it
+   *  resolves reuses it instead of starting a second dynamic import. */
+  private _groupsPromise: Promise<LayerGroupsPanel | null> | null = null;
   /** Lazily-created one-line CRS-mismatch note under the layer list. */
   private _layerNote: HTMLElement | null = null;
   /** Lazily-created two-epoch compare button + result, shown with exactly 2 layers. */
@@ -684,8 +704,41 @@ export class Inspector {
       text: '+ New group',
       title: 'Collect layers into a named, collapsible group',
     });
+    this._groupLoadError = el('p', { className: 'olv-group-load-error olv-hidden' });
+    let creatingGroup = false;
     newGroup.addEventListener('click', () => {
-      void this._ensureGroups().then((groups) => groups?.createGroup());
+      // `creatingGroup` guards a fast double-click from reaching this twice
+      // before the first import settles: a real browser also stops firing
+      // click on a disabled button, but this flag makes the guard explicit
+      // rather than resting on that. Reusing one instance for both clicks
+      // used to create two groups from one action (both `.then` callbacks
+      // running createGroup() once the shared import resolved).
+      if (creatingGroup) return;
+      creatingGroup = true;
+      newGroup.disabled = true;
+      newGroup.setAttribute('aria-busy', 'true');
+      const label = newGroup.textContent;
+      newGroup.textContent = 'Adding group…';
+      this._groupLoadError.classList.add('olv-hidden');
+      void this._ensureGroups()
+        .then((groups) => {
+          if (groups) {
+            groups.createGroup();
+            return;
+          }
+          // The chunk failed to load — _ensureGroups already logged it;
+          // surface it here too so the click was not silently a no-op.
+          this._groupLoadError.textContent =
+            'Could not load layer groups. Click "+ New group" to try again.';
+          this._groupLoadError.classList.remove('olv-hidden');
+          announce('Could not load layer groups.');
+        })
+        .finally(() => {
+          creatingGroup = false;
+          newGroup.disabled = false;
+          newGroup.removeAttribute('aria-busy');
+          newGroup.textContent = label;
+        });
     });
     // "+ Add dataset" belongs to Layers, which is what it adds to. It used to
     // float over the canvas at bottom-left, where the tool dock sits one pixel
@@ -996,6 +1049,7 @@ export class Inspector {
     // The group control sits above the rows, so "New group" is reachable
     // whether or not any group exists yet.
     this._layersSection.insertBefore(this._groupBar, this._layers);
+    this._layersSection.insertBefore(this._groupLoadError, this._layers);
     // Height percentile-trim row, mounted inside "Color by" beneath the chip
     // rail and shown only while colouring BY elevation. It clips the top/bottom
     // N% of heights from the COLOUR RAMP so tall outliers (a bird, a mast) don't
@@ -1350,60 +1404,67 @@ export class Inspector {
     });
 
     // Isolate (solo): show only this layer. A second click clears isolate.
-    const solo = el('button', {
+    const solo = iconButton({
       className: 'olv-layer-solo',
       text: '◉',
       title: `Isolate ${name} — hide the other layers`,
       ariaLabel: `Isolate ${name}`,
+      onClick: () => this._cb.onToggleSolo?.(id),
     });
-    solo.addEventListener('click', () => this._cb.onToggleSolo?.(id));
 
     // Lock: keep the layer drawn but exclude it from picking / measuring.
-    const lock = el('button', {
+    // aria-pressed mirrors the class so the locked state is announced, not
+    // just shown by the glyph/title flip — the same pattern the workflow
+    // preset and scanType chips already use elsewhere in this file.
+    let locked = false;
+    const lock = iconButton({
       className: 'olv-layer-lock',
       text: '○',
       title: `Lock ${name} out of picking and measuring`,
       ariaLabel: `Lock ${name} out of picking`,
-    });
-    let locked = false;
-    lock.addEventListener('click', () => {
-      locked = !locked;
-      lock.classList.toggle('is-active', locked);
-      lock.textContent = locked ? '●' : '○';
-      lock.title = locked
-        ? `${name} is locked — unlock to pick / measure it`
-        : `Lock ${name} out of picking and measuring`;
-      this._cb.onToggleLock?.(id, locked);
+      ariaPressed: false,
+      onClick: () => {
+        locked = !locked;
+        lock.classList.toggle('is-active', locked);
+        lock.textContent = locked ? '●' : '○';
+        lock.title = locked
+          ? `${name} is locked — unlock to pick / measure it`
+          : `Lock ${name} out of picking and measuring`;
+        lock.setAttribute('aria-label', locked ? `${name} is locked — unlock to pick or measure it` : `Lock ${name} out of picking`);
+        lock.setAttribute('aria-pressed', String(locked));
+        this._cb.onToggleLock?.(id, locked);
+      },
     });
 
-    const remove = el('button', {
+    const remove = iconButton({
       className: 'olv-layer-x',
       text: '×',
       title: `Remove ${name} from the scene`,
       ariaLabel: `Remove ${name}`,
-    });
-    remove.addEventListener('click', () => {
-      // Removing the LAST layer does more than remove a layer: `removeCloud` in
-      // main.ts falls through to `resetToEmptyState`, which clears placed
-      // measurements, saved views and annotations. Measurements do not survive
-      // that — `MeasureController.clear()` takes no snapshot, so there is no
-      // undo, unlike the annotation clear beside it. The tooltip promises only
-      // a removal from the scene, so the confirm states the rest. A removal
-      // that leaves another layer behind is not destructive and stays one click.
-      if (!removalClosesScan(this._layerRows.size)) {
-        this._cb.onRemove(id);
-        return;
-      }
-      void openConfirm({
-        title: 'Close this scan?',
-        message:
-          `Removing ${name} closes the scan.\n` +
-          'Placed measurements, saved views and annotations are cleared. Measurements cannot be restored.',
-        confirmLabel: 'Remove and close',
-        returnFocusTo: remove,
-      }).then((ok) => {
-        if (ok) this._cb.onRemove(id);
-      });
+      onClick: () => {
+        // Removing the LAST layer does more than remove a layer: `removeCloud`
+        // in main.ts falls through to `resetToEmptyState`, which clears placed
+        // measurements, saved views and annotations. Measurements do not
+        // survive that — `MeasureController.clear()` takes no snapshot, so
+        // there is no undo, unlike the annotation clear beside it. The
+        // tooltip promises only a removal from the scene, so the confirm
+        // states the rest. A removal that leaves another layer behind is not
+        // destructive and stays one click.
+        if (!removalClosesScan(this._layerRows.size)) {
+          this._cb.onRemove(id);
+          return;
+        }
+        void openConfirm({
+          title: 'Close this scan?',
+          message:
+            `Removing ${name} closes the scan.\n` +
+            'Placed measurements, saved views and annotations are cleared. Measurements cannot be restored.',
+          confirmLabel: 'Remove and close',
+          returnFocusTo: remove,
+        }).then((ok) => {
+          if (ok) this._cb.onRemove(id);
+        });
+      },
     });
 
     const crs = el('span', {
@@ -1438,7 +1499,12 @@ export class Inspector {
    */
   private _ensureGroups(): Promise<LayerGroupsPanel | null> {
     if (this._groups) return Promise.resolve(this._groups);
-    return loadLayerGroupsPanel()
+    // Reuse the in-flight import rather than starting a second one: a
+    // fast double-click used to reach this before the first `then` had
+    // constructed `_groups`, so both callers' `.then` ran createGroup()
+    // against the one instance the second resolution found already built.
+    if (this._groupsPromise) return this._groupsPromise;
+    this._groupsPromise = loadLayerGroupsPanel()
       .then(({ LayerGroupsPanel }) => {
         if (!this._groups) {
           // Every group action is written through `onToggleVisible` — the one
@@ -1466,7 +1532,14 @@ export class Inspector {
       .catch((err) => {
         console.warn('[inspector] layer-groups chunk failed to load', err);
         return null;
+      })
+      .finally(() => {
+        // Cleared on both outcomes: once `_groups` exists the guard above
+        // short-circuits future calls anyway, and clearing it on failure is
+        // what lets a retry actually re-attempt the import.
+        this._groupsPromise = null;
       });
+    return this._groupsPromise;
   }
 
   /** Re-lay the layer rows: through the group panel when it exists, else flat. */
