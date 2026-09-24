@@ -123,31 +123,32 @@ weather and vegetation compliance are not modelled, and no string in the
 Lab, the run record or the export calls a route safe, drivable or passable.
 
 A browser check of the sibling Flow Pulse feature on a real UTM tile found
-five defects. Terrain Access shares the same architecture and inherits four
-of them, disclosed here rather than left for a reader to discover:
+five defects (L151); Terrain Access shared the same architecture and
+inherited four of them. All four are now fixed, sharing Flow Pulse's own
+helpers rather than duplicating them:
 
-The cell readout and the export diagnostics report elevation and distance in
-the DTM's own working frame, which is not necessarily the dataset's true
-vertical datum and unit; a recentred local origin would print a small local
-number instead of the real-world elevation.
+The cell readout states a real elevation with its resolved unit, or
+"unknown" rather than the DTM's grid-local `z` printed bare, using the same
+`ElevationReference` gate `flowGridCursor.ts` uses for Flow Pulse. Every
+length/slope/step figure is always metric: `UNITS_UNRESOLVED` refuses before
+a result can exist if the horizontal scale or vertical unit-to-metres factor
+does not resolve.
 
-The 3D traversability overlay is only visible while the Lab modal is open
-and its GPU resources are released when the modal closes, so it is never
-seen alongside the rest of the scene.
+The 3D traversability-map/route overlay now persists on the scan after the
+Lab modal closes, disposed only when the user turns it off or the
+terrain/CRS it was built from goes stale, through the same disposal-registry
+seam (`registerTerrainAccessOverlayInvalidator`/`invalidateTerrainAccessOverlay`
+in `lazyChunks.ts`) Flow Pulse's overlay already uses.
 
-Exported rasters carry a local (0, 0) origin and no `.prj` unless a world
-origin and CRS name are supplied, and the route GeoJSON is local planar
-metres rather than the dataset's real coordinates.
+Exported rasters and the route GeoJSON carry the real world corner in the
+dataset CRS and a `.prj` sidecar when a world origin and CRS/WKT are
+supplied, rather than always a local (0, 0) origin.
 
-The run record's basis is read from the DTM's own `coverageMode`, the same
-field Flow Pulse reads, so a mismatch between that field and how the
-terrain was actually analysed would read the same way in both features.
-
-These four are tracked as shared, cross-simulation fixes on
-`fix/flow-pulse-findings-v070` and its Terrain Access follow-on, not as four
-independent problems to solve twice. Fixing the frame/CRS gap for one
-simulation and not the other would leave them disagreeing about the same
-terrain.
+The run record's basis is read from the DTM's own `coverageMode`; a
+full-resolution re-decode strided down to a point budget is stamped
+`'sampled'` there (`computeTerrainCore`'s own fix, shared by every reader of
+that field), so Terrain Access states the same honest basis without a
+change of its own.
 
 `src/main.ts` is 4,965 lines and `src/render/Viewer.ts` is 6,153, seventy lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory

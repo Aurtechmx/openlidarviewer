@@ -128,41 +128,33 @@ the same terrain reproduces the same `resultDigest`.
 
 ## Known limitations
 
-Local-frame elevation in the readout. The Lab's cell readout and the
-export's diagnostics report the DTM's own `z` values and metric distances in
-the analysed grid's working frame. Where that frame is not the dataset's
-true vertical datum or unit, for example a recentred local origin, the
-displayed number is not the real-world elevation. A browser review of Flow
-Pulse on a real UTM tile found the identical gap in that feature
-(`fix/flow-pulse-findings-v070`). Terrain Access inherits the same DTM frame
-and the same gap. Resolving a real-world CRS/vertical-datum origin for the
-analysed grid is a shared, cross-simulation fix, tracked for integration
-into both features together rather than solved twice, independently, in the
-meantime.
+The cell readout reports a real elevation with its unit when the terrain's
+load-time recentring origin and vertical scale both resolve, and an honest
+"unknown" otherwise, using the same `ElevationReference` gate
+`flowGridCursor.ts` uses for Flow Pulse, applied here too. Horizontal length
+is always metric, and so is every grade/step figure: the runner refuses
+`UNITS_UNRESOLVED` before a result can exist if the horizontal scale or the
+vertical unit-to-metres factor does not resolve.
 
-The 3D overlay is only visible while the Lab modal is open, and its GPU
-resources are released when the modal closes. This is the same lifecycle
-Flow Pulse's overlay currently has, and the same finding raised against it
-in the browser review above. A fix that keeps a derived layer visible after
-the Lab closes belongs to the shared overlay-lifecycle pattern both features
-use, not to Terrain Access alone.
+The 3D traversability-map/route overlay persists on the scan after the Lab
+modal closes, mirroring Flow Pulse's `FlowOverlay` lifecycle: it is disposed
+only when the user turns it off, or when the terrain/CRS it was built from
+goes stale (a different scan loading, a scan closing, a CRS change, or a
+classification edit), through the same disposal-registry seam
+(`registerTerrainAccessOverlayInvalidator`/`invalidateTerrainAccessOverlay`
+in `lazyChunks.ts`) `terrainAnalysisRunner.ts` already calls for Flow Pulse.
 
-Exported rasters use a local (0, 0) origin and carry no `.prj` unless the
-caller supplies a world origin and a CRS name, matching the same export gap
-found in Flow Pulse rather than the DEM package's own real-CRS
-georeferencing. The route GeoJSON is local planar metres for the same
-reason, stated explicitly in its own `coordinateFrame` field and the README.
-Georeferencing every export in the dataset's real CRS is planned as one
-shared fix across the DEM, Flow Pulse and Terrain Access export packages,
-not three separate ones.
+Exported rasters and the route GeoJSON carry the real world corner in the
+dataset CRS, and a `.prj` sidecar when the CRS resolves, when the caller
+supplies a world origin and CRS/WKT; otherwise the raster is written at a
+local (0, 0) origin and the README says so, exactly as the DEM package and
+Flow Pulse's own export already behave.
 
-The run record's basis is inherited from the DTM's own `coverageMode` via
-`simulationInputBasis()`, the same function Flow Pulse uses. A reported
-basis of "full" reflects what that field already states for the terrain
-behind the run. A mismatch between that field and how the terrain was
-actually analysed, also raised against Flow Pulse in the same review, is a
-DTM/analysis-runner-level question shared by every simulation reading
-`DtmGrid.coverageMode`, not something Terrain Access derives independently.
+The run record's basis is read from the DTM's own `coverageMode` via
+`simulationInputBasis()`, the same field Flow Pulse reads; a full-resolution
+re-decode that strides down to a point budget is now stamped `'sampled'`
+there (`computeTerrainCore`'s own fix), so Terrain Access states the same
+sampled-vs-full basis honestly without any change of its own.
 
 Vehicle length is recorded, not enforced. Eligibility is width-only
 morphological dilation. A full swept-body orientation check would need a

@@ -4817,3 +4817,69 @@ features rather than solved twice.
 Covered by `tests/terrainAccessProfileForm.test.ts`,
 `tests/terrainAccessLabExport.test.ts`, `tests/terrainAccessPackage.test.ts`
 and `tests/e2e/terrainAccessLab.spec.ts`.
+
+### L154 · BUILT · SCIENTIFIC
+
+The four findings L153 disclosed as inherited from Flow Pulse's L151 fixes
+(A, C, D, E) are now fixed, reusing L151's own helpers rather than
+duplicating them.
+
+`terrainAccessGridCursor.ts`'s `describeTerrainAccessCell` takes the same
+`ElevationReference` (`flowGridCursor.ts`) `flowResultGrid.ts` already uses:
+a real elevation with its resolved unit, or an honest "unknown" rather than
+the grid-local `z` printed bare. `terrainAccessLab.ts`'s
+`terrainAccessElevationReference` builds it from the DTM's claimed vertical
+factor, gated on a caller-supplied `verticalScaleResolved`, exactly mirroring
+`flowElevationReference`. Every length/slope/step figure was already
+guaranteed metric by the runner's own `UNITS_UNRESOLVED` refusal gate, so
+only the elevation readout needed this. Covered by the extended
+`tests/terrainAccessGridCursor.test.ts`.
+
+The traversability-map/route overlay now persists on the scan after the Lab
+modal closes, mirroring `flowPulseLab.ts`'s `persistentFlowOverlay` exactly:
+`acquireTerrainAccessOverlay`/`disposePersistentTerrainAccessOverlay` in
+`terrainAccessLab.ts`, registered through a new
+`registerTerrainAccessOverlayInvalidator`/`invalidateTerrainAccessOverlay`
+pair in `lazyChunks.ts` that `terrainAnalysisRunner.ts`'s
+`abortAndClearCache()` now calls alongside its existing
+`invalidateFlowOverlay()` call; the same events (scan close, a different
+scan loading, a CRS change, a classification edit) invalidate both Labs'
+persisted overlays. Covered by the extended
+`tests/terrainAccessOverlayInvalidation.test.ts`.
+
+`terrainAccessPackage.ts` takes a `wkt` option and writes a `.prj` sidecar
+when supplied, mirroring `flowPulsePackage.ts`'s own `.prj` handling exactly;
+`terrainAccessLab.ts`'s `buildTerrainAccessExport` now threads a
+`TerrainAccessGeoref` (world origin, CRS name, WKT) through to it, which it
+never did before; the raster/GeoJSON world-origin offset already existed in
+the package builder but nothing supplied one. `AnalysePanel.terrainAccessInput()`
+gained the `worldOriginX/Y/Z`/`wkt`/`crsName`/`verticalScaleResolved` fields
+`flowPulseInput()` already reads off `getMapContext()`. Covered by the
+extended `tests/terrainAccessPackage.test.ts` and
+`tests/terrainAccessLabExport.test.ts`, including a far-UTM-origin case.
+
+The run record's basis needed no change: `computeTerrainCore`'s L151 fix
+(stamping `coverageMode: 'sampled'` for a strided re-decode) already applies
+to every reader of `AnalyseContoursResult.dtm`, Terrain Access included,
+because both simulations read the identical analysed surface.
+
+The Playwright happy path in `tests/e2e/terrainAccessLab.spec.ts` never
+exercised the preview/selection/run/export surface: its drag-and-drop
+fixture (`dropDenseGridPly`, a local/unreferenced PLY) has no CRS, so
+`runTerrainAccess` always refused `UNITS_UNRESOLVED` before any of it
+rendered, and the spec accepted either outcome. A new georeferenced fixture
+(`tests/fixtures/terrain-access-utm.las`, a 30x30/900-point grid with a
+GeoKeys VLR for WGS 84 / UTM zone 13N, built with the app's own LAS writer
+via `scripts/gen-terrain-access-fixture.ts`) resolves a horizontal scale, so
+the spec now drives profile -> preview -> why-not -> start/goal (click and
+keyboard) -> run -> route drawn -> overlay toggle -> export, and reads the
+exported ZIP's README/raster to confirm the real UTM corner rather than a
+local (0, 0) origin, deterministically across all three Playwright projects.
+
+`docs/terrain-access.md` and `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`
+are updated to state these as fixed rather than inherited/disclosed.
+
+Covered by `tests/terrainAccessGridCursor.test.ts`,
+`tests/terrainAccessOverlayInvalidation.test.ts`,
+`tests/terrainAccessPackage.test.ts`, `tests/terrainAccessLabExport.test.ts`
+and `tests/e2e/terrainAccessLab.spec.ts`.
