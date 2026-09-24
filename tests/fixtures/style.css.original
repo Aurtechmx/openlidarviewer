@@ -9367,6 +9367,89 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   font-size: var(--text-xs); color: var(--muted, #8a8f98); text-wrap: pretty;
 }
 
+/* ── Terrain Access Lab — profile form, traversability grid, why-not inspector ── */
+.olv-ta-lab { display: flex; flex-direction: column; gap: var(--space-lg); }
+.olv-ta-body { display: flex; flex-direction: column; gap: var(--space-lg); }
+
+.olv-ta-form { display: flex; flex-direction: column; gap: var(--space-lg); }
+.olv-ta-field { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-ta-field-label {
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim);
+}
+.olv-ta-field-input {
+  font: inherit; font-size: var(--text-xs); color: var(--text);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-md);
+  width: 100%; box-sizing: border-box;
+  transition: border-color var(--dur-fast) var(--ease-standard);
+}
+.olv-ta-field-input:focus { outline: none; border-color: var(--accent); }
+.olv-ta-field-input:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.olv-ta-field-hint { font-size: var(--text-2xs); font-weight: 400; letter-spacing: normal; color: var(--text-faint); }
+
+.olv-ta-toggle-row { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-ta-toggle-row > label { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-xs); color: var(--text-dim); }
+.olv-ta-toggle-row input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+
+.olv-ta-segmented {
+  display: inline-flex; flex-wrap: wrap; gap: 2px;
+  background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 2px;
+}
+.olv-ta-segmented-btn {
+  font: inherit; font-size: var(--text-xs); color: var(--text-dim);
+  background: none; border: none; border-radius: 6px;
+  padding: 4px 9px; cursor: pointer; transition: color 120ms ease, background 120ms ease;
+}
+.olv-ta-segmented-btn[aria-pressed="true"] { color: var(--text); background: var(--accent-soft); }
+.olv-ta-segmented-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+
+.olv-ta-form-problems { font-size: var(--text-xs); color: var(--state-review); text-wrap: pretty; }
+.olv-ta-form-problems-list { margin: var(--space-2xs) 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+
+.olv-ta-form-submit, .olv-ta-run, .olv-ta-export, .olv-ta-retry, .olv-ta-overlay-toggle {
+  font: inherit; font-size: var(--text-xs); color: var(--text);
+  border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px; padding: 4px 9px; cursor: pointer;
+  align-self: flex-start; transition: border-color 120ms ease, background 120ms ease;
+}
+.olv-ta-overlay-toggle[aria-pressed="true"] { color: var(--text); background: var(--accent-soft); border-color: var(--accent); }
+.olv-ta-form-submit:disabled, .olv-ta-run:disabled, .olv-ta-export:disabled { opacity: 0.5; cursor: not-allowed; }
+.olv-ta-form-submit:focus-visible, .olv-ta-run:focus-visible, .olv-ta-export:focus-visible,
+.olv-ta-retry:focus-visible, .olv-ta-overlay-toggle:focus-visible {
+  outline: var(--focus-ring); outline-offset: var(--focus-ring-offset);
+}
+/* A tap fires :hover and it sticks until the next tap elsewhere, so these are
+   gated behind a hover-capable query rather than applying to a touch tap. */
+@media (hover: hover) {
+  .olv-ta-segmented-btn:hover, .olv-ta-overlay-toggle:hover { color: var(--text); }
+  .olv-ta-form-submit:hover, .olv-ta-run:hover, .olv-ta-export:hover, .olv-ta-retry:hover { border-color: var(--accent); }
+}
+
+.olv-ta-grid { display: flex; flex-direction: column; gap: var(--space-sm); align-items: flex-start; }
+.olv-ta-grid-canvas {
+  max-width: 100%; border-radius: var(--radius-sm);
+  border: 0.5px solid var(--hairline); cursor: pointer;
+  image-rendering: pixelated;
+}
+.olv-ta-grid-canvas:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.olv-ta-grid-status { font-size: var(--text-xs); color: var(--muted, #8a8f98); font-variant-numeric: tabular-nums; }
+
+.olv-ta-selection { font-size: var(--text-sm); display: flex; flex-direction: column; gap: 4px; }
+
+.olv-ta-inspector {
+  font-size: var(--text-xs); color: var(--text-dim); text-wrap: pretty;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  padding: var(--space-sm); background: rgba(255, 255, 255, 0.03);
+}
+.olv-ta-inspector:empty { display: none; }
+.olv-ta-inspector-text { color: var(--text); }
+
+.olv-ta-run-card { display: flex; flex-direction: column; }
+
+.olv-ta-overlay-section { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.olv-ta-overlay-unavailable { font-size: var(--text-xs); color: var(--muted, #8a8f98); text-wrap: pretty; }
+
 /* ─────────────────────────────────────────────────────────────────────────
    Contour Studio (v0.5.9) — launcher + workspace
    Premium terrain-deliverable surface. Built on the app's design tokens so it
