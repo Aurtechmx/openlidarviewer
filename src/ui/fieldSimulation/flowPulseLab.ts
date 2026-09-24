@@ -355,11 +355,56 @@ function refusalSentence(kind: 'path' | 'catchment', refusal: FlowClickRefusal):
 }
 
 /**
+ * The 3D accumulation overlay (and the traced path/catchment beside it)
+ * outlives the modal that built it (§ defect C): the Lab's own scene layer
+ * is the only place a user can SEE flow accumulation, and disposing it the
+ * instant the modal — which covers the scene — closes meant nobody ever
+ * saw it. `derivedLayerHost()` returns a fresh object literal on every call
+ * (it closes over the one Viewer scene, not a per-call state), so identity
+ * cannot key this; the one Viewer in this application has exactly one
+ * scene, so a single module-level session — kept until the user turns the
+ * overlay off, or the terrain/CRS it was built from goes stale — is the
+ * smallest correct home for it, matching the "one Lab, one scan" scope
+ * `§17`'s fieldDigest isolation already assumes.
+ */
+let persistentFlowOverlay: {
+  readonly overlay: FlowOverlay;
+  /** Re-pointed to the CURRENT mount's staleness check on every open. */
+  isStale: (() => boolean) | null;
+  overlayOn: boolean;
+} | null = null;
+
+/**
+ * The overlay for this mount: the persisted one, when it exists and its
+ * terrain/CRS have not gone stale, else a fresh one. A stale persisted
+ * overlay is disposed here rather than left attached to a scene whose
+ * frame it no longer describes.
+ */
+function acquireFlowOverlay(
+  host: FlowOverlayHost | null,
+  isStale: (() => boolean) | null,
+): FlowOverlay | null {
+  if (!host) return null;
+  if (persistentFlowOverlay && persistentFlowOverlay.isStale?.() === true) {
+    persistentFlowOverlay.overlay.dispose();
+    persistentFlowOverlay = null;
+  }
+  if (!persistentFlowOverlay) {
+    persistentFlowOverlay = { overlay: new FlowOverlay(host), isStale, overlayOn: false };
+  } else {
+    persistentFlowOverlay.isStale = isStale;
+  }
+  return persistentFlowOverlay.overlay;
+}
+
+/**
  * The interactive Flow Pulse view: the static summary card plus every control
- * that reads or re-runs it. Owns one `FlowResultGrid` and one (optional)
- * `FlowOverlay` for the whole modal lifetime; `dispose()` releases the
- * overlay's GPU resources, called when the modal closes so a Flow Pulse run
- * never leaves scene objects behind it.
+ * that reads or re-runs it. Owns one `FlowResultGrid` for the modal's own
+ * lifetime and shares the persisted `FlowOverlay` (see {@link acquireFlowOverlay}).
+ * `dispose()` releases the grid's resources unconditionally, and the overlay's
+ * only when the user left it OFF — an overlay the user turned on stays drawn
+ * on the scan after the modal closes, with the toggle itself the visible way
+ * to turn it back off (reopening the Lab shows it already pressed).
  */
 function mountFlowPulseInteractive(
   input: FlowPulseLabInput,
@@ -374,14 +419,17 @@ function mountFlowPulseInteractive(
   let conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning;
   let outcome = initialOutcome;
   let mode: ClickMode = 'pulse';
-  let overlayOn = false;
   let busy = false;
   let overlayFrame: FlowOverlayFrame | null = null;
   let lastTrace: FlowPathTrace | FlowClickRefusal | null = null;
   let lastCatchment: FlowCatchmentTrace | FlowClickRefusal | null = null;
 
   const overlayHost = input.overlayHost ?? null;
-  const flowOverlay = overlayHost ? new FlowOverlay(overlayHost) : null;
+  const flowOverlay = acquireFlowOverlay(overlayHost, input.isStale ?? null);
+  // Reflects whatever the persisted overlay is already showing (§ defect C):
+  // reopening the Lab after leaving the overlay on picks the toggle back up
+  // in the "on" state rather than forgetting it was ever shown.
+  let overlayOn = persistentFlowOverlay?.overlayOn ?? false;
 
   const grid = new FlowResultGrid({
     ariaLabel: 'Routed terrain grid — arrow keys move, Enter or Space acts on the selected cell',
@@ -415,9 +463,10 @@ function mountFlowPulseInteractive(
   );
 
   const overlayToggle = button('Show flow accumulation', 'olv-flow-overlay-toggle');
-  overlayToggle.setAttribute('aria-pressed', 'false');
+  overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
   overlayToggle.addEventListener('click', () => {
     overlayOn = !overlayOn;
+    if (persistentFlowOverlay) persistentFlowOverlay.overlayOn = overlayOn;
     overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
     applyOverlayVisibility();
     announce(overlayOn ? 'Flow accumulation overlay on.' : 'Flow accumulation overlay off.');
@@ -655,7 +704,19 @@ function mountFlowPulseInteractive(
 
   return {
     element: root,
-    dispose: () => { flowOverlay?.dispose(); },
+    // § defect C: an overlay the user left ON stays attached to the scene —
+    // only an overlay left OFF (nothing visible to keep) is torn down here,
+    // matching the disposal-registry contract for the "off" case exactly as
+    // before. `persistentFlowOverlay` itself is not cleared in the "on"
+    // case: the next Lab open reclaims the SAME instance via
+    // `acquireFlowOverlay`, rather than constructing a second one that would
+    // leave the first orphaned in the scene.
+    dispose: () => {
+      if (!overlayOn && persistentFlowOverlay) {
+        persistentFlowOverlay.overlay.dispose();
+        persistentFlowOverlay = null;
+      }
+    },
   };
 }
 

@@ -130,18 +130,29 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   await expect(overlayToggle).toHaveAttribute('aria-pressed', 'false');
   await overlayToggle.click();
   await expect(overlayToggle).toHaveAttribute('aria-pressed', 'true');
-  await overlayToggle.click();
-  await expect(overlayToggle).toHaveAttribute('aria-pressed', 'false');
 
   // LIVE REGION: present, and carries a status announcement (not empty).
   const live = modal.locator('.olv-flow-live');
   await expect(live).toHaveAttribute('aria-live', 'polite');
   await expect(live).not.toHaveText('');
 
-  // Closing the modal must not leave the 3D overlay's objects behind or crash
-  // the app — reopening still works.
+  // § defect C: the overlay was left ON. Closing the modal — which covers
+  // the scene, the only place a user could otherwise see it — must not tear
+  // it down; the toggle in the reopened Lab reads back "on" because the
+  // SAME persisted overlay is still attached to the scan, not a fresh one
+  // reset to off. (Before the fix this always came back "false": the modal
+  // disposed the overlay unconditionally on close.)
   await page.locator('.olv-modal-x').click();
   await expect(page.locator('.olv-modal')).toHaveCount(0);
   await openFlowPulse(page);
   await expect(page.locator('.olv-modal .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
+  await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'true');
+
+  // Turning it off is the visible way out, and it stays off across a close/reopen.
+  await page.locator('.olv-flow-overlay-toggle').click();
+  await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('.olv-modal-x').click();
+  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await openFlowPulse(page);
+  await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'false');
 });
