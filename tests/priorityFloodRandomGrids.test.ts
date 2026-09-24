@@ -59,10 +59,40 @@ function randomGrid(rand: () => number, cols: number, rows: number, minGap: numb
 }
 
 /**
+ * A frontier cell waiting to be resolved: its grid index, the elevation it
+ * was queued at, and the order it joined in (the tie-break).
+ */
+interface PendingCell { at: number; elevation: number; joinedAt: number }
+
+/**
+ * Priority order for the frontier below: lowest elevation first, and among
+ * equal elevations whichever joined earliest. Deliberately NOT a binary
+ * heap — a plain "scan for the best candidate" queue, so this stands as its
+ * own implementation rather than a relabelled copy of the module under test.
+ */
+function isBetterCandidate(a: PendingCell, b: PendingCell): boolean {
+  if (a.elevation !== b.elevation) return a.elevation < b.elevation;
+  return a.joinedAt < b.joinedAt;
+}
+
+/** Pull the best-ranked entry out of `frontier` and return it. */
+function takeBestCandidate(frontier: PendingCell[]): PendingCell {
+  let bestIndex = 0;
+  for (let i = 1; i < frontier.length; i++) {
+    if (isBetterCandidate(frontier[i], frontier[bestIndex])) bestIndex = i;
+  }
+  const [best] = frontier.splice(bestIndex, 1);
+  return best;
+}
+
+/**
  * The seeding `priorityFlood` used before this branch: every boundary cell
  * and every cell touching NoData is a seed, unconditionally. Reimplemented
  * standalone, from the pre-fix source, rather than imported, so this check
  * does not exercise the same `noData` branch it is meant to verify against.
+ * The resolution order (lowest elevation first, ties broken by join order)
+ * matches the module under test, but is reached here via a scanned frontier
+ * list rather than its binary heap — an independent walk to the same order.
  */
 function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
   z: Float32Array;
@@ -72,11 +102,11 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
   epsilonAbsorbed: number;
 } {
   const { z: source, valid, cols, rows } = grid;
-  const n = cols * rows;
+  const total = cols * rows;
   const z = new Float32Array(source);
-  const closed = new Uint8Array(n);
+  const resolved = new Uint8Array(total);
 
-  const isEdgeSeed = (col: number, row: number): boolean => {
+  const touchesGapOrEdge = (col: number, row: number): boolean => {
     if (col === 0 || row === 0 || col === cols - 1 || row === rows - 1) return true;
     for (const [dx, dy] of D8_NEIGHBOURS) {
       const nc = col + dx;
@@ -87,54 +117,15 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
     return false;
   };
 
-  // A binary heap ordered by (elevation, insertion order), matching the one
-  // `priorityFlood` uses, so tie-breaking cannot be the source of a mismatch.
-  const cell = new Int32Array(n);
-  const key = new Float64Array(n);
-  const seq = new Int32Array(n);
-  let size = 0;
-  let counter = 0;
-  const less = (a: number, b: number): boolean =>
-    key[a] !== key[b] ? key[a] < key[b] : seq[a] < seq[b];
-  const swap = (a: number, b: number): void => {
-    [cell[a], cell[b]] = [cell[b], cell[a]];
-    [key[a], key[b]] = [key[b], key[a]];
-    [seq[a], seq[b]] = [seq[b], seq[a]];
-  };
-  const push = (c: number, k: number): void => {
-    let i = size++;
-    cell[i] = c; key[i] = k; seq[i] = counter++;
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if (!less(i, parent)) break;
-      swap(i, parent);
-      i = parent;
-    }
-  };
-  const pop = (): number => {
-    const top = cell[0];
-    const last = --size;
-    cell[0] = cell[last]; key[0] = key[last]; seq[0] = seq[last];
-    let i = 0;
-    for (;;) {
-      const l = 2 * i + 1;
-      const r = l + 1;
-      let small = i;
-      if (l < size && less(l, small)) small = l;
-      if (r < size && less(r, small)) small = r;
-      if (small === i) break;
-      swap(i, small);
-      i = small;
-    }
-    return top;
-  };
+  const frontier: PendingCell[] = [];
+  let joinCounter = 0;
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      const i = row * cols + col;
-      if (valid[i] !== 1 || !isEdgeSeed(col, row)) continue;
-      closed[i] = 1;
-      push(i, z[i]);
+      const at = row * cols + col;
+      if (valid[at] !== 1 || !touchesGapOrEdge(col, row)) continue;
+      resolved[at] = 1;
+      frontier.push({ at, elevation: z[at], joinedAt: joinCounter++ });
     }
   }
 
@@ -143,31 +134,31 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
   let fillDepthSum = 0;
   let epsilonAbsorbed = 0;
 
-  while (size > 0) {
-    const c = pop();
-    const zc = z[c];
-    const col = c % cols;
-    const row = (c - col) / cols;
+  while (frontier.length > 0) {
+    const current = takeBestCandidate(frontier);
+    const fromElevation = z[current.at];
+    const col = current.at % cols;
+    const row = (current.at - col) / cols;
     for (const [dx, dy] of D8_NEIGHBOURS) {
       const nc = col + dx;
       const nr = row + dy;
       if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
-      const nb = nr * cols + nc;
-      if (valid[nb] !== 1 || closed[nb] === 1) continue;
-      closed[nb] = 1;
-      const original = z[nb];
-      if (original <= zc) {
-        const target = zc + epsilon;
-        z[nb] = target;
-        const rise = z[nb] - original;
+      const neighbourAt = nr * cols + nc;
+      if (valid[neighbourAt] !== 1 || resolved[neighbourAt] === 1) continue;
+      resolved[neighbourAt] = 1;
+      const before = z[neighbourAt];
+      if (before <= fromElevation) {
+        const raisedTo = fromElevation + epsilon;
+        z[neighbourAt] = raisedTo;
+        const rise = z[neighbourAt] - before;
         if (rise > 0) {
           cellsRaised++;
           fillDepthSum += rise;
           if (rise > maxFillDepth) maxFillDepth = rise;
         }
-        if (epsilon > 0 && z[nb] <= zc) epsilonAbsorbed++;
+        if (epsilon > 0 && z[neighbourAt] <= fromElevation) epsilonAbsorbed++;
       }
-      push(nb, z[nb]);
+      frontier.push({ at: neighbourAt, elevation: z[neighbourAt], joinedAt: joinCounter++ });
     }
   }
 

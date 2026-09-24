@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
@@ -7,19 +7,27 @@ import { dropDenseGridPly, showWorkspaceMode } from './helpers';
  * format. Needs a loaded scan (WebGL), so it runs where a GPU context exists.
  */
 
-test('after a scan loads, the Export panel offers formats and exports a file', async ({ page }) => {
+/**
+ * Load a scan via `drop`, switch to the Output workspace mode, and return the
+ * Export panel expanded (panels mount collapsed).
+ */
+async function openExportPanel(page: Page, drop: (page: Page) => Promise<void>): Promise<Locator> {
   await page.goto('/?test=1');
-  await dropDenseGridPly(page);
+  await drop(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   // The Export panel lives in the Output workspace mode.
   await showWorkspaceMode(page, 'output');
 
   const panel = page.locator('.olv-export-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });
-  // Expand it (panels mount collapsed).
   if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
     await panel.locator('.olv-panel-head').click();
   }
+  return panel;
+}
+
+test('after a scan loads, the Export panel offers formats and exports a file', async ({ page }) => {
+  const panel = await openExportPanel(page, dropDenseGridPly);
 
   // LAS active by default; LAZ honestly disabled.
   await expect(panel.locator('.olv-bc-pill.is-active', { hasText: 'LAS' })).toBeVisible();
@@ -113,16 +121,7 @@ test('Export panel: LAS 1.2 class-wrap opt-in previews, refuses, then writes wra
     classification: Uint8Array.from(classes),
   });
 
-  await page.goto('/?test=1');
-  await dropLasBytes(page, las, 'high-classes.las');
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await showWorkspaceMode(page, 'output');
-
-  const panel = page.locator('.olv-export-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
+  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'high-classes.las'));
   // Wait for the classification to actually be attached — a scan-independent
   // row that shows whenever the cloud carries a classification, regardless of
   // format — before touching the format pills, so a slower engine's decode
@@ -184,16 +183,7 @@ test('Export panel: a scan whose classes stay at or below 31 exports unchanged, 
     classification: Uint8Array.from([0, 2, 6, 31]),
   });
 
-  await page.goto('/?test=1');
-  await dropLasBytes(page, las, 'low-classes.las');
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await showWorkspaceMode(page, 'output');
-
-  const panel = page.locator('.olv-export-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
+  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'low-classes.las'));
   await expect(panel.getByRole('checkbox', { name: 'Include classification' })).toBeVisible({ timeout: 20_000 });
 
   await panel.locator('.olv-bc-pill', { hasText: 'LAS 1.2' }).click();
@@ -218,16 +208,8 @@ test('Export panel: a scan whose classes stay at or below 31 exports unchanged, 
  * the case above, this holds even before LAS 1.2 is picked.
  */
 test('Export panel: a scan with no classification shows no wrap checkbox for any format', async ({ page }) => {
-  await page.goto('/?test=1');
-  await dropDenseGridPly(page); // dropDenseGridPly carries RGB only, no classification channel
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await showWorkspaceMode(page, 'output');
-
-  const panel = page.locator('.olv-export-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
+  // dropDenseGridPly carries RGB only, no classification channel
+  const panel = await openExportPanel(page, dropDenseGridPly);
   await expect(panel.getByRole('checkbox', { name: 'Include classification' })).toHaveCount(0);
 
   const optIn = panel.locator('.olv-export-fullres', { hasText: 'Allow classes above 31 to wrap' });
