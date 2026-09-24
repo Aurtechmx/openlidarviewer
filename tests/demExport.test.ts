@@ -1,4 +1,5 @@
 import { DTM_CLAIMS, validatedDecision } from './helpers/exportDecisions';
+import { extractEntry } from './helpers/zipReader';
 import { describe, it, expect } from 'vitest';
 import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from '../src/terrain/export/demGeoTiff';
@@ -276,26 +277,6 @@ describe('buildDemPackage', () => {
     return false;
   }
 
-  /** Extract a stored (uncompressed) entry's bytes from a store-only ZIP. */
-  function extractEntry(zip: Uint8Array, name: string): Uint8Array | null {
-    const dv = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
-    const wantName = new TextEncoder().encode(name);
-    let p = 0;
-    while (p + 30 <= zip.length && dv.getUint32(p, true) === 0x04034b50) {
-      const compSize = dv.getUint32(p + 18, true);
-      const nameLen = dv.getUint16(p + 26, true);
-      const extraLen = dv.getUint16(p + 28, true);
-      const nameBytes = zip.subarray(p + 30, p + 30 + nameLen);
-      const dataStart = p + 30 + nameLen + extraLen;
-      let match = nameBytes.length === wantName.length;
-      for (let j = 0; match && j < wantName.length; j++) {
-        if (nameBytes[j] !== wantName[j]) match = false;
-      }
-      if (match) return zip.subarray(dataStart, dataStart + compSize);
-      p = dataStart + compSize;
-    }
-    return null;
-  }
 
   it('bundles DTM/DSM/CHM as .asc + .tif, a .prj, and a README', () => {
     const zip = buildDemPackage(fixtureResult(), {
