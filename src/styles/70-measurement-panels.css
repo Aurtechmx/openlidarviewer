@@ -331,6 +331,23 @@ body.olv-tip-escaped [data-tip]:focus-visible::before { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   [data-tip]::after, [data-tip]::before { transition: none; }
 }
+/* The theme toggle sits at the header's right edge, where a centered glass
+ * tooltip can spill past a narrow (320px) viewport — invisible (opacity 0)
+ * but still occupying layout, which inflates document.scrollWidth and trips
+ * the no-horizontal-overflow check. Anchor its tooltip to the control's own
+ * right edge instead of centering it. */
+.olv-theme-toggle[data-tip]::after {
+  left: auto; right: 0;
+  transform: translateY(-4px);
+}
+.olv-theme-toggle[data-tip]:hover::after,
+.olv-theme-toggle[data-tip]:focus-visible::after {
+  transform: translateY(0);
+}
+.olv-theme-toggle[data-tip]::before {
+  left: auto; right: 10px;
+  transform: rotate(45deg);
+}
 .olv-measure-finish:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }

@@ -10,11 +10,16 @@
  */
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import { suppressOnboardingTour } from './helpers';
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
 test.describe('control explanations', () => {
   test('the theme toggle (data-tip) explains itself on hover, on focus, and hides on Escape', async ({ page }) => {
+    // Without this, the onboarding tour's full-screen overlay can pop over
+    // the toggle mid-test and steal :hover from underneath it (real cursor
+    // position is over the overlay's topmost box, not the button beneath).
+    await suppressOnboardingTour(page);
     await page.goto('/');
     const toggle = page.locator('.olv-theme-toggle');
     await expect(toggle).toBeVisible();
@@ -26,9 +31,13 @@ test.describe('control explanations', () => {
     const desc = page.locator(`#${describedBy}`);
     await expect(desc).toHaveText(tip ?? '');
 
-    // Hover shows the CSS tooltip (::after, content: attr(data-tip)).
-    await toggle.hover();
+    // Hover shows the CSS tooltip (::after, content: attr(data-tip)). Layout
+    // can still be settling right after a fresh load (banner/icon
+    // transitions), which can nudge the toggle out from under the cursor a
+    // moment after the first `hover()` — re-issuing it inside the retry
+    // loop recovers instead of failing on that one race.
     await expect(async () => {
+      await toggle.hover();
       const opacity = await toggle.evaluate((el) => getComputedStyle(el, '::after').opacity);
       expect(opacity).toBe('1');
     }).toPass();

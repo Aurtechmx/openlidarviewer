@@ -43,6 +43,10 @@ let tipIdCounter = 0;
  */
 function wireTip(node: HTMLElement, tip: string, hasVisibleLabel: boolean): void {
   node.dataset.tip = tip;
+  // The visible label already says exactly this — appending a duplicate
+  // hidden description would double the announced (and `textContent`-read)
+  // text for no accessibility gain.
+  if (hasVisibleLabel && (node.textContent ?? '').trim() === tip.trim()) return;
   const descId = `olv-tip-${++tipIdCounter}`;
   const desc = document.createElement('span');
   desc.id = descId;
