@@ -39,24 +39,21 @@
  * Pure: no DOM, no three.js, no I/O.
  */
 
-import { terrainDtmToAccessGrid, type HorizontalScale, type InterpolatedPolicy } from './dtmTerrainAccessGrid';
+import type { HorizontalScale, InterpolatedPolicy } from './dtmTerrainAccessGrid';
 import {
-  DEFAULT_COST_WEIGHTS,
-  applyWidthClearance,
   buildTraversabilityMap,
-  nodeEligibility,
-  prepareTerrainAccessFeatures,
   type CostWeights,
   type NodeEligibility,
   type TerrainAccessFeatures,
   type TraversabilityMapCell,
 } from './traversabilityCost';
+import { prepareTerrainAccessRun } from './terrainAccessPrepare';
 import { aStarTerrain, type AStarOutcome } from './aStarTerrain';
 import { computeRouteDiagnostics, type RouteDiagnostics } from './routeDiagnostics';
 import { terrainAccessResultDigest } from './terrainAccessDigest';
 import { basisLimitations } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
-import { validateProfile, type TerrainAccessGrid, type TerrainAccessProfile } from './terrainAccessTypes';
+import type { TerrainAccessGrid, TerrainAccessProfile } from './terrainAccessTypes';
 import type { SimulationInputBasis } from '../simulationInputBasis';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
@@ -155,84 +152,10 @@ export function runTerrainAccess(
   params: TerrainAccessParams,
   identity: TerrainAccessRunIdentity,
 ): TerrainAccessResult | TerrainAccessRefusal {
-  if (!dtm) {
-    return {
-      ok: false, code: 'NO_DTM',
-      reason: 'No terrain surface is available. Run terrain analysis on a loaded scan first.',
-    };
-  }
+  const prepared = prepareTerrainAccessRun(dtm, scale, profile, params);
+  if (!prepared.ok) return prepared;
+  const { grid, features, eligibility, basis, gridWarnings, weights } = prepared;
 
-  if (!scale.resolved) {
-    return {
-      ok: false, code: 'UNITS_UNRESOLVED',
-      reason: 'The horizontal scale is unresolved, so longitudinal grade, cross slope and step '
-        + 'height cannot be interpreted safely. Assign a CRS that resolves the horizontal scale.',
-    };
-  }
-  if (scale.isGeographic && !Number.isFinite(scale.latitudeDeg ?? Number.NaN)) {
-    return {
-      ok: false, code: 'UNITS_UNRESOLVED',
-      reason: 'The terrain is in geographic degrees and its latitude is unknown, so the '
-        + 'east–west length of a cell cannot be derived. Assign a CRS that resolves the latitude.',
-    };
-  }
-  const verticalUnitToMetres = dtm.verticalUnitToMetres;
-  if (verticalUnitToMetres == null || !(verticalUnitToMetres > 0)) {
-    return {
-      ok: false, code: 'UNITS_UNRESOLVED',
-      reason: 'The vertical unit is unresolved, so an elevation difference cannot be interpreted '
-        + 'in metres and grade/step constraints cannot be interpreted safely.',
-    };
-  }
-
-  const profileProblems = validateProfile(profile);
-  if (profileProblems.length > 0) {
-    return {
-      ok: false, code: 'INVALID_PROFILE',
-      reason: `The mobility profile is not usable: ${profileProblems.map((p) => `${p.field} ${p.reason}`).join('; ')}.`,
-    };
-  }
-
-  const cells = dtm.cols * dtm.rows;
-  if (cells > params.maxCells) {
-    return {
-      ok: false, code: 'TOO_LARGE',
-      reason: `The terrain grid holds ${cells} cells, above the ${params.maxCells} this run allows. `
-        + 'Analyse a smaller extent or a coarser cell size.',
-    };
-  }
-
-  const { grid, basis, warnings: gridWarnings } = terrainDtmToAccessGrid(dtm, scale, {
-    interpolated: params.interpolated,
-    withheldExcluded: params.withheldExcluded,
-    dsm: params.dsm,
-    roi: params.roi,
-  });
-
-  if (basis.measuredCells === 0) {
-    return {
-      ok: false, code: 'INSUFFICIENT_EVIDENCE',
-      reason: params.interpolated === 'block'
-        ? 'No cell carries a measured elevation. Allow interpolated cells, or analyse terrain with more ground returns.'
-        : 'No cell in the terrain grid carries an elevation.',
-    };
-  }
-
-  const features = prepareTerrainAccessFeatures(grid, profile);
-  const eligibilityBeforeWidth = nodeEligibility(grid, features, profile);
-  const eligibility = applyWidthClearance(grid, eligibilityBeforeWidth, profile);
-
-  let eligibleCount = 0;
-  for (const b of eligibility.blocked) if (b === 0) eligibleCount++;
-  if (eligibleCount === 0) {
-    return {
-      ok: false, code: 'INSUFFICIENT_EVIDENCE',
-      reason: 'No cell in the terrain grid is eligible under the declared mobility profile. '
-        + 'Relax the profile\'s limits, or analyse terrain with better support.',
-    };
-  }
-
-  const weights = params.weights ?? DEFAULT_COST_WEIGHTS;
   const search = aStarTerrain(grid, features, eligibility, profile, startIndex, endIndex, weights);
 
   if (search.outcome !== 'FOUND') {
