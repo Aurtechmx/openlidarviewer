@@ -50,6 +50,7 @@ import heapq
 import json
 import math
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -78,6 +79,93 @@ def is_finite(v):
 
 # ── Horn slope/aspect, ported field-for-field from terrainDerivatives.ts ────
 
+def _clamp_r(r, rows):
+    if r < 0:
+        return 0
+    if r >= rows:
+        return rows - 1
+    return r
+
+
+def _clamp_c(c, cols):
+    if c < 0:
+        return 0
+    if c >= cols:
+        return cols - 1
+    return c
+
+
+def _raw(z, cols, rows, r, c):
+    return z[_clamp_r(r, rows) * cols + _clamp_c(c, cols)]
+
+
+def _at(z, cols, rows, r, c, fallback):
+    v = _raw(z, cols, rows, r, c)
+    return v if is_finite(v) else fallback
+
+
+def _virt(a, b, centre):
+    if not is_finite(a):
+        return centre
+    return (2 * a - b) if is_finite(b) else a
+
+
+def _fill_window_row_edge(z, cols, rows, row, col, e):
+    """The window for a cell on the top/bottom border (row 0 or rows-1)."""
+    w = [0.0] * 9
+    inner = 1 if row == 0 else rows - 2
+    outward = -1 if row == 0 else 1
+    for dc in (-1, 0, 1):
+        cc = _clamp_c(col + dc, cols)
+        w[(outward + 1) * 3 + (dc + 1)] = _virt(_raw(z, cols, rows, row, cc), _raw(z, cols, rows, inner, cc), e)
+        w[1 * 3 + (dc + 1)] = _at(z, cols, rows, row, cc, e)
+        w[(1 - outward) * 3 + (dc + 1)] = _at(z, cols, rows, inner, cc, e)
+    return w
+
+
+def _fill_window_col_edge(z, cols, rows, row, col, e):
+    """The window for a cell on the left/right border (col 0 or cols-1)."""
+    w = [0.0] * 9
+    inner = 1 if col == 0 else cols - 2
+    outward = -1 if col == 0 else 1
+    for dr in (-1, 0, 1):
+        rr = _clamp_r(row + dr, rows)
+        w[(dr + 1) * 3 + (outward + 1)] = _virt(_raw(z, cols, rows, rr, col), _raw(z, cols, rows, rr, inner), e)
+        w[(dr + 1) * 3 + 1] = _at(z, cols, rows, rr, col, e)
+        w[(dr + 1) * 3 + (1 - outward)] = _at(z, cols, rows, rr, inner, e)
+    return w
+
+
+def _fill_window_interior(z, cols, rows, row, col, e):
+    w = [0.0] * 9
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            w[(dr + 1) * 3 + (dc + 1)] = _at(z, cols, rows, row + dr, col + dc, e)
+    return w
+
+
+def fill_window(z, cols, rows, row, col, e):
+    if rows >= 2 and (row == 0 or row == rows - 1):
+        return _fill_window_row_edge(z, cols, rows, row, col, e)
+    if cols >= 2 and (col == 0 or col == cols - 1):
+        return _fill_window_col_edge(z, cols, rows, row, col, e)
+    return _fill_window_interior(z, cols, rows, row, col, e)
+
+
+def _slope_aspect_at(z, cols, rows, mx, my, row, col):
+    i = row * cols + col
+    e = z[i]
+    if not is_finite(e):
+        return 0.0, 0.0
+    w = fill_window(z, cols, rows, row, col, e)
+    a, b, c, d, _e2, f, g, h, ii = w
+    dzdx = (c + 2 * f + ii - (a + 2 * d + g)) / (8 * mx)
+    dzdy = (g + 2 * h + ii - (a + 2 * b + c)) / (8 * my)
+    slope = math.hypot(dzdx, dzdy)
+    aspect = 0.0 if (dzdx == 0 and dzdy == 0) else math.atan2(-dzdy, -dzdx)
+    return slope, aspect
+
+
 def horn_slope_aspect(z, cols, rows, mx, my):
     """Return (slope, aspect) lists, length cols*rows.
 
@@ -88,75 +176,16 @@ def horn_slope_aspect(z, cols, rows, mx, my):
     n = cols * rows
     slope = [0.0] * n
     aspect = [0.0] * n
-
-    def clamp_r(r):
-        return 0 if r < 0 else (rows - 1 if r >= rows else r)
-
-    def clamp_c(c):
-        return 0 if c < 0 else (cols - 1 if c >= cols else c)
-
-    def raw(r, c):
-        return z[clamp_r(r) * cols + clamp_c(c)]
-
-    def at(r, c, fallback):
-        v = raw(r, c)
-        return v if is_finite(v) else fallback
-
-    def virt(a, b, centre):
-        if not is_finite(a):
-            return centre
-        return (2 * a - b) if is_finite(b) else a
-
-    def fill_window(row, col, e):
-        w = [0.0] * 9
-        if rows >= 2 and (row == 0 or row == rows - 1):
-            inner = 1 if row == 0 else rows - 2
-            outward = -1 if row == 0 else 1
-            for dc in (-1, 0, 1):
-                cc = clamp_c(col + dc)
-                w[(outward + 1) * 3 + (dc + 1)] = virt(raw(row, cc), raw(inner, cc), e)
-                w[1 * 3 + (dc + 1)] = at(row, cc, e)
-                w[(1 - outward) * 3 + (dc + 1)] = at(inner, cc, e)
-            return w
-        if cols >= 2 and (col == 0 or col == cols - 1):
-            inner = 1 if col == 0 else cols - 2
-            outward = -1 if col == 0 else 1
-            for dr in (-1, 0, 1):
-                rr = clamp_r(row + dr)
-                w[(dr + 1) * 3 + (outward + 1)] = virt(raw(rr, col), raw(rr, inner), e)
-                w[(dr + 1) * 3 + 1] = at(rr, col, e)
-                w[(dr + 1) * 3 + (1 - outward)] = at(rr, inner, e)
-            return w
-        for dr in (-1, 0, 1):
-            for dc in (-1, 0, 1):
-                w[(dr + 1) * 3 + (dc + 1)] = at(row + dr, col + dc, e)
-        return w
-
     for row in range(rows):
         for col in range(cols):
             i = row * cols + col
-            e = z[i]
-            if not is_finite(e):
-                slope[i] = 0.0
-                aspect[i] = 0.0
-                continue
-            w = fill_window(row, col, e)
-            a, b, c, d, _e2, f, g, h, ii = w
-            dzdx = (c + 2 * f + ii - (a + 2 * d + g)) / (8 * mx)
-            dzdy = (g + 2 * h + ii - (a + 2 * b + c)) / (8 * my)
-            slope[i] = math.hypot(dzdx, dzdy)
-            aspect[i] = 0.0 if (dzdx == 0 and dzdy == 0) else math.atan2(-dzdy, -dzdx)
-
+            slope[i], aspect[i] = _slope_aspect_at(z, cols, rows, mx, my, row, col)
     return slope, aspect
 
 
 # ── Vector Ruggedness Measure (Sappington, Longshore & Thompson 2007) ───────
 
-def compute_vrm(slope, aspect, valid, cols, rows, window=3):
-    n = cols * rows
-    vrm = [NAN] * n
-    half = (window - 1) // 2
-
+def _unit_normals(slope, aspect, valid, n):
     nx = [0.0] * n
     ny = [0.0] * n
     nz = [0.0] * n
@@ -172,26 +201,37 @@ def compute_vrm(slope, aspect, valid, cols, rows, window=3):
         ny[i] = sin_t * math.sin(a)
         nz[i] = inv
         ok[i] = True
+    return nx, ny, nz, ok
 
+
+def _vrm_at(nx, ny, nz, ok, cols, rows, row, col, half):
+    sx = sy = sz = 0.0
+    count = 0
+    for r in range(max(0, row - half), min(rows - 1, row + half) + 1):
+        for c in range(max(0, col - half), min(cols - 1, col + half) + 1):
+            j = r * cols + c
+            if not ok[j]:
+                continue
+            sx += nx[j]
+            sy += ny[j]
+            sz += nz[j]
+            count += 1
+    resultant = math.sqrt(sx * sx + sy * sy + sz * sz)
+    v = 1 - resultant / count
+    return min(1.0, max(0.0, v))
+
+
+def compute_vrm(slope, aspect, valid, cols, rows, window=3):
+    n = cols * rows
+    vrm = [NAN] * n
+    half = (window - 1) // 2
+    nx, ny, nz, ok = _unit_normals(slope, aspect, valid, n)
     for row in range(rows):
         for col in range(cols):
             i = row * cols + col
             if not ok[i]:
                 continue
-            sx = sy = sz = 0.0
-            count = 0
-            for r in range(max(0, row - half), min(rows - 1, row + half) + 1):
-                for c in range(max(0, col - half), min(cols - 1, col + half) + 1):
-                    j = r * cols + c
-                    if not ok[j]:
-                        continue
-                    sx += nx[j]
-                    sy += ny[j]
-                    sz += nz[j]
-                    count += 1
-            resultant = math.sqrt(sx * sx + sy * sy + sz * sz)
-            v = 1 - resultant / count
-            vrm[i] = min(1.0, max(0.0, v))
+            vrm[i] = _vrm_at(nx, ny, nz, ok, cols, rows, row, col, half)
     return vrm
 
 
@@ -215,7 +255,7 @@ def heading_unit(dx, dy, mx, my):
     east = dx * mx
     north = dy * my
     length = math.hypot(east, north)
-    if not (length > 0):
+    if length <= 0:
         return 0.0, 0.0
     return east / length, north / length
 
@@ -252,10 +292,14 @@ DEFAULT_WEIGHTS = {"longitudinal": 1.0, "cross": 1.0, "ruggedness": 0.5, "step":
 
 
 def utilization(value, limit):
-    if not (limit > 0) or not is_finite(value):
+    if limit <= 0 or not is_finite(value):
         return 0.0
     x = value / limit
-    return 0.0 if x < 0 else (1.0 if x > 1 else x)
+    if x < 0:
+        return 0.0
+    if x > 1:
+        return 1.0
+    return x
 
 
 def node_eligibility(valid, confidence, allowed, vrm, obstruction, cols, rows, profile):
@@ -283,8 +327,25 @@ def node_eligibility(valid, confidence, allowed, vrm, obstruction, cols, rows, p
         if obstruction is not None and obstruction[i] == "obstructed":
             blocked[i] = True
             reason[i] = "obstruction"
-            continue
     return blocked, reason
+
+
+def _dilate_from_seed(out, blocked, cols, rows, mx, my, seed, rcx, rcy, radius_m):
+    out[seed] = True
+    sr, sc = divmod(seed, cols)
+    for dr in range(-rcy, rcy + 1):
+        r = sr + dr
+        if r < 0 or r >= rows:
+            continue
+        for dc in range(-rcx, rcx + 1):
+            c = sc + dc
+            if c < 0 or c >= cols:
+                continue
+            j = r * cols + c
+            if out[j]:
+                continue
+            if math.hypot(dc * mx, dr * my) <= radius_m:
+                out[j] = True
 
 
 def dilate_blocked(blocked, cols, rows, mx, my, width):
@@ -297,34 +358,36 @@ def dilate_blocked(blocked, cols, rows, mx, my, width):
     rcy = math.ceil(radius_m / my) if my > 0 else 0
     seeds = [i for i in range(n) if blocked[i]]
     for seed in seeds:
-        out[seed] = True
-        sr, sc = divmod(seed, cols)
-        for dr in range(-rcy, rcy + 1):
-            r = sr + dr
-            if r < 0 or r >= rows:
-                continue
-            for dc in range(-rcx, rcx + 1):
-                c = sc + dc
-                if c < 0 or c >= cols:
-                    continue
-                j = r * cols + c
-                if out[j]:
-                    continue
-                if math.hypot(dc * mx, dr * my) <= radius_m:
-                    out[j] = True
+        _dilate_from_seed(out, blocked, cols, rows, mx, my, seed, rcx, rcy, radius_m)
     return out
 
 
-def edge_geometry(z, valid, grad_e, grad_n, cols, mx, my, a, b, dx, dy):
-    h_e, h_n = heading_unit(dx, dy, mx, my)
-    longitudinal, cross = directional_slope(grad_e[a], grad_n[a], h_e, h_n)
-    step = edge_step(z, valid, a, b)
-    distance = math.hypot(dx * mx, dy * my)
+@dataclass
+class Terrain:
+    """Every per-cell array the edge cost / search need, grouped so
+    `edge_cost`/`dijkstra` take one object instead of ten positional arrays."""
+    z: list
+    valid: list
+    confidence: list
+    vrm: list
+    grad_e: list
+    grad_n: list
+    cols: int
+    rows: int
+    mx: float
+    my: float
+
+
+def edge_geometry(terrain, a, b, dx, dy):
+    h_e, h_n = heading_unit(dx, dy, terrain.mx, terrain.my)
+    longitudinal, cross = directional_slope(terrain.grad_e[a], terrain.grad_n[a], h_e, h_n)
+    step = edge_step(terrain.z, terrain.valid, a, b)
+    distance = math.hypot(dx * terrain.mx, dy * terrain.my)
     return distance, longitudinal, cross, step
 
 
-def evaluate_edge(z, valid, grad_e, grad_n, cols, mx, my, profile, a, b, dx, dy):
-    distance, longitudinal, cross, step = edge_geometry(z, valid, grad_e, grad_n, cols, mx, my, a, b, dx, dy)
+def evaluate_edge(terrain, profile, a, b, dx, dy):
+    distance, longitudinal, cross, step = edge_geometry(terrain, a, b, dx, dy)
     reason = None
     if is_finite(step) and step > profile["maxStepHeight"]:
         reason = "step-height"
@@ -338,12 +401,14 @@ def evaluate_edge(z, valid, grad_e, grad_n, cols, mx, my, profile, a, b, dx, dy)
     }
 
 
-def edge_cost(z, valid, confidence, vrm, grad_e, grad_n, cols, mx, my, profile, a, b, dx, dy, weights):
-    ev = evaluate_edge(z, valid, grad_e, grad_n, cols, mx, my, profile, a, b, dx, dy)
+def edge_cost(terrain, profile, weights, a, b, dx, dy):
+    ev = evaluate_edge(terrain, profile, a, b, dx, dy)
     if ev["blocked"]:
         return None
     max_rugged = profile.get("maxRuggedness")
+    vrm = terrain.vrm
     ruggedness = utilization(max(vrm[a] or 0, vrm[b] or 0), max_rugged) if max_rugged is not None else 0.0
+    confidence = terrain.confidence
     confidence01 = min(confidence[a], confidence[b]) / 100.0
     multiplier = (
         1
@@ -358,8 +423,40 @@ def edge_cost(z, valid, confidence, vrm, grad_e, grad_n, cols, mx, my, profile, 
 
 # ── Dijkstra (the viewer runs A*) ────────────────────────────────────────────
 
-def dijkstra(z, valid, confidence, vrm, grad_e, grad_n, blocked, cols, rows, mx, my, profile, start, end, weights):
-    n = cols * rows
+def _relax_neighbours(terrain, blocked, profile, weights, i, dist, prev, closed, heap, counter):
+    row, col = divmod(i, terrain.cols)
+    for dx, dy in NEIGHBOURS:
+        c = col + dx
+        r = row + dy
+        if c < 0 or c >= terrain.cols or r < 0 or r >= terrain.rows:
+            continue
+        j = r * terrain.cols + c
+        if closed[j] or blocked[j]:
+            continue
+        cost = edge_cost(terrain, profile, weights, i, j, dx, dy)
+        if cost is None:
+            continue
+        nd = dist[i] + cost
+        if nd < dist[j]:
+            dist[j] = nd
+            prev[j] = i
+            counter += 1
+            heapq.heappush(heap, (nd, counter, j))
+    return counter
+
+
+def _reconstruct_path(prev, end):
+    path = []
+    at = end
+    while at != -1:
+        path.append(at)
+        at = prev[at]
+    path.reverse()
+    return path
+
+
+def dijkstra(terrain, blocked, profile, weights, start, end):
+    n = terrain.cols * terrain.rows
     if not (0 <= start < n) or blocked[start]:
         return "START_BLOCKED", [], None, 0
     if not (0 <= end < n) or blocked[end]:
@@ -379,38 +476,14 @@ def dijkstra(z, valid, confidence, vrm, grad_e, grad_n, blocked, cols, rows, mx,
     explored = 0
 
     while heap:
-        d, _, i = heapq.heappop(heap)
+        _dist, _order, i = heapq.heappop(heap)
         if closed[i]:
             continue
         closed[i] = True
         explored += 1
         if i == end:
-            path = []
-            at = end
-            while at != -1:
-                path.append(at)
-                at = prev[at]
-            path.reverse()
-            return "FOUND", path, dist[end], explored
-
-        row, col = divmod(i, cols)
-        for dx, dy in NEIGHBOURS:
-            c = col + dx
-            r = row + dy
-            if c < 0 or c >= cols or r < 0 or r >= rows:
-                continue
-            j = r * cols + c
-            if closed[j] or blocked[j]:
-                continue
-            cost = edge_cost(z, valid, confidence, vrm, grad_e, grad_n, cols, mx, my, profile, i, j, dx, dy, weights)
-            if cost is None:
-                continue
-            nd = dist[i] + cost
-            if nd < dist[j]:
-                dist[j] = nd
-                prev[j] = i
-                counter += 1
-                heapq.heappush(heap, (nd, counter, j))
+            return "FOUND", _reconstruct_path(prev, end), dist[end], explored
+        counter = _relax_neighbours(terrain, blocked, profile, weights, i, dist, prev, closed, heap, counter)
 
     return "NO_ROUTE", [], None, explored
 
@@ -445,6 +518,18 @@ def load_fixture(path):
     return spec, z, valid, flat_conf, flat_allowed, flat_hag, cols, rows
 
 
+def _reason_counts_with_dilation(blocked, reason, dilated):
+    """A cell the ORIGINAL pass left eligible but dilation newly excludes is
+    not blocked for any of the declared node reasons — it is too close to
+    one that is. Re-tag it 'vehicle-width', matching applyWidthClearance in
+    traversabilityCost.ts, so the reason tally describes the same thing on
+    both sides rather than the Python side silently keeping "None"."""
+    for i in range(len(dilated)):
+        if dilated[i] and not blocked[i]:
+            reason[i] = "vehicle-width"
+    return reason
+
+
 def compute(path):
     spec, z, valid, confidence, allowed, height_above_ground, cols, rows = load_fixture(path)
     mx = float(spec.get("cellMetresX", 1))
@@ -462,21 +547,13 @@ def compute(path):
     obstruction = classify_obstruction(valid, height_above_ground, profile.get("obstacleHeightThreshold"), cols * rows)
     blocked, reason = node_eligibility(valid, confidence, allowed, vrm, obstruction, cols, rows, profile)
     dilated = dilate_blocked(blocked, cols, rows, mx, my, profile["vehicleWidth"])
-    # A cell the ORIGINAL pass left eligible but dilation newly excludes is
-    # not blocked for any of the declared node reasons — it is too close to
-    # one that is. Re-tag it 'vehicle-width', matching applyWidthClearance in
-    # traversabilityCost.ts, so the reason tally describes the same thing on
-    # both sides rather than the Python side silently keeping "None".
-    for i in range(len(dilated)):
-        if dilated[i] and not blocked[i]:
-            reason[i] = "vehicle-width"
+    reason = _reason_counts_with_dilation(blocked, reason, dilated)
     blocked = dilated
 
+    terrain = Terrain(z, valid, confidence, vrm, grad_e, grad_n, cols, rows, mx, my)
     start = spec["start"][0] * cols + spec["start"][1]
     end = spec["end"][0] * cols + spec["end"][1]
-    outcome, path_cells, cost, explored = dijkstra(
-        z, valid, confidence, vrm, grad_e, grad_n, blocked, cols, rows, mx, my, profile, start, end, weights,
-    )
+    outcome, path_cells, cost, _explored = dijkstra(terrain, blocked, profile, weights, start, end)
 
     eligible_count = sum(1 for b in blocked if not b)
 
@@ -500,6 +577,25 @@ def _tally(reasons):
     return out
 
 
+def _run_one_fixture(path, write):
+    """Compute one fixture and either write or compare it. Returns a list of
+    problem strings (empty means the fixture matched, or was written)."""
+    got = compute(path)
+    out = EXPECTED / path.name
+    if write:
+        out.write_text(json.dumps(got, indent=2) + "\n")
+        print(f"wrote {out.relative_to(HERE.parent.parent.parent)}")
+        return []
+    if not out.exists():
+        return [f"{path.name}: no frozen expectation; run --write"]
+    want = json.loads(out.read_text())
+    problems = []
+    for key in ("outcome", "path", "cost", "eligibleCount", "blockedReasonCounts"):
+        if got[key] != want.get(key):
+            problems.append(f"{path.name}: {key} differs from the frozen record (got {got[key]!r}, want {want.get(key)!r})")
+    return problems
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--write", action="store_true", help="regenerate expectations")
@@ -516,19 +612,7 @@ def main():
     EXPECTED.mkdir(parents=True, exist_ok=True)
     problems = []
     for path in fixtures:
-        got = compute(path)
-        out = EXPECTED / path.name
-        if args.write:
-            out.write_text(json.dumps(got, indent=2) + "\n")
-            print(f"wrote {out.relative_to(HERE.parent.parent.parent)}")
-            continue
-        if not out.exists():
-            problems.append(f"{path.name}: no frozen expectation; run --write")
-            continue
-        want = json.loads(out.read_text())
-        for key in ("outcome", "path", "cost", "eligibleCount", "blockedReasonCounts"):
-            if got[key] != want.get(key):
-                problems.append(f"{path.name}: {key} differs from the frozen record (got {got[key]!r}, want {want.get(key)!r})")
+        problems.extend(_run_one_fixture(path, args.write))
 
     if problems:
         print("terrain_access_oracle FAILED", file=sys.stderr)
