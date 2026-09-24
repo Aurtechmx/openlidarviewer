@@ -792,7 +792,7 @@ describe.runIf(WORKFLOW_RECORDER_ENABLED)('buildActionRegistry — workflow reco
     appended[0].fire('change');
     await flush();
     expect(h.replay).not.toHaveBeenCalled();
-    expect(h.toast).toHaveBeenCalledWith("Workflow · couldn't load file: not a workflow");
+    expect(h.toast).toHaveBeenCalledWith("Workflow · couldn't load file: not a workflow. Nothing was changed. Choose another workflow file and try again.");
   });
 
   it('reports a non-Error load failure as an unknown error', async () => {
@@ -802,7 +802,7 @@ describe.runIf(WORKFLOW_RECORDER_ENABLED)('buildActionRegistry — workflow reco
     appended[0].files = [{ name: 'broken.olvworkflow' }];
     appended[0].fire('change');
     await flush();
-    expect(h.toast).toHaveBeenCalledWith("Workflow · couldn't load file: unknown error");
+    expect(h.toast).toHaveBeenCalledWith("Workflow · couldn't load file: unknown error. Nothing was changed. Choose another workflow file and try again.");
   });
 
   it('does nothing when the replay picker is cancelled', async () => {

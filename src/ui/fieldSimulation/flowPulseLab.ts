@@ -657,12 +657,13 @@ function mountFlowPulseInteractive(
 
   function showError(err: unknown): void {
     const msg = err instanceof Error ? err.message : String(err);
+    const text = `Flow simulation failed: ${msg.replace(/[.\s]+$/, '')}. Your scan and measurements are unchanged. Adjust the inputs and run it again.`;
     const panel = el('div', { className: 'olv-flow-error' }, [
-      el('div', { className: 'olv-flow-error-text', text: `Something went wrong: ${msg}` }),
+      el('div', { className: 'olv-flow-error-text', text }),
       makeRetryButton(() => void rerun(conditioning)),
     ]);
     body.replaceChildren(panel);
-    announce(`Something went wrong: ${msg}`);
+    announce(text);
   }
 
   function renderReady(): void {

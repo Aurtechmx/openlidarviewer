@@ -86,7 +86,7 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
               );
             } catch (err) {
               const msg = err instanceof Error ? err.message : 'unknown error';
-              deps.showLassoToast(`Workflow · couldn't load file: ${msg}`);
+              deps.showLassoToast(`Workflow · couldn't load file: ${msg}. Nothing was changed. Choose another workflow file and try again.`);
             }
           })();
         });
