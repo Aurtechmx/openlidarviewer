@@ -290,7 +290,7 @@ def node_eligibility(valid, confidence, allowed, vrm, obstruction, cols, rows, p
 def dilate_blocked(blocked, cols, rows, mx, my, width):
     n = cols * rows
     out = [False] * n
-    radius_m = width / 2 if (width == width and width > 0) else 0  # NaN-safe
+    radius_m = width / 2 if (not math.isnan(width) and width > 0) else 0
     if radius_m <= 0:
         return list(blocked)
     rcx = math.ceil(radius_m / mx) if mx > 0 else 0
