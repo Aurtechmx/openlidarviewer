@@ -108,6 +108,38 @@ export interface ElevationReference {
   readonly unitLabel: 'm' | 'ft' | 'units';
 }
 
+/** A resolved real-world elevation, or an honest "unknown" pair. */
+export interface ResolvedElevation {
+  readonly elevation: number | null;
+  readonly elevationUnit: 'm' | 'ft' | 'unknown' | null;
+}
+
+/**
+ * Recover a real elevation from a cell's grid-local `z`, or report 'unknown'
+ * — the one gate every cell-description function in this codebase applies
+ * before printing an elevation (`describeCell` here, `describeTerrainAccessCell`
+ * in `terrainAccess/terrainAccessGridCursor.ts`; Sonar flagged the two as
+ * duplicating this block verbatim).
+ *
+ * `readable` is the caller's own "does this cell have a z at all" flag —
+ * kept separate from `elevationRef` because an unreadable cell reports
+ * `elevationUnit: null` (nothing to say), not `'unknown'` (something to say
+ * and can't).
+ */
+export function resolveElevation(
+  readable: boolean,
+  z: number,
+  elevationRef: ElevationReference | null,
+): ResolvedElevation {
+  if (!readable) return { elevation: null, elevationUnit: null };
+  const originZ = elevationRef?.originZ ?? null;
+  const unitLabel = elevationRef?.unitLabel ?? 'units';
+  if (originZ != null && unitLabel !== 'units') {
+    return { elevation: z + originZ, elevationUnit: unitLabel };
+  }
+  return { elevation: null, elevationUnit: 'unknown' };
+}
+
 /** A readable summary of one cell, for the live region and the status row. */
 export interface CellReport {
   readonly col: number;
@@ -142,20 +174,7 @@ export function describeCell(
 ): CellReport {
   const i = cellIndex(grid.cols, cell);
   const readable = grid.valid[i] === 1;
-  const originZ = elevationRef?.originZ ?? null;
-  const unitLabel = elevationRef?.unitLabel ?? 'units';
-  const resolved = readable && originZ != null && unitLabel !== 'units';
-
-  let elevation: number | null = null;
-  let elevationUnit: 'm' | 'ft' | 'unknown' | null = null;
-  if (readable) {
-    if (resolved) {
-      elevation = grid.z[i] + originZ!;
-      elevationUnit = unitLabel as 'm' | 'ft';
-    } else {
-      elevationUnit = 'unknown';
-    }
-  }
+  const { elevation, elevationUnit } = resolveElevation(readable, grid.z[i], elevationRef);
 
   return {
     col: cell.col,

@@ -1,0 +1,27 @@
+{
+  "name": "TA-9-dsm-disabled-nolayer",
+  "why": "The other control for TA-9: the identical flat terrain and obstacleHeightThreshold (2 m), but no heightAboveGround layer supplied at all — no DSM was ever aligned to this DTM. §12 requires the layer AND the threshold both enabled before obstruction can block or penalize anything; with no DSM, obstruction must be inactive everywhere regardless of the threshold, and the route must go straight through.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ],
+  "profile": {
+    "name": "obstruction-no-dsm",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": 2
+  },
+  "start": [2, 0],
+  "end": [2, 4]
+}

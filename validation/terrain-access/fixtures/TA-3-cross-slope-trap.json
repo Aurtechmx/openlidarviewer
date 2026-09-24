@@ -1,0 +1,27 @@
+{
+  "name": "TA-3-cross-slope-trap",
+  "why": "A uniform plane tilted so downslope is due east (tangent 1, ~45°). The direct row is blocked by NoData at (2,2), and the only geometric detours require a north/south move: a tight maxCrossSlope (0.5) rejects every such move, even though the SAME move's total slope (1.0, from the plane's uniform tangent) would pass either limit read as a scalar. Only pure east/west moves stay eligible (their cross slope is ~0), so the corridor cannot be walked around and the outcome is NO_ROUTE — pinning that the search is rejected by directional cross slope specifically, not by an accidental total-slope reading.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, -1, -2, -3, -4],
+    [0, -1, -2, -3, -4],
+    [0, -1, null, -3, -4],
+    [0, -1, -2, -3, -4],
+    [0, -1, -2, -3, -4]
+  ],
+  "profile": {
+    "name": "cross-slope-trap",
+    "maxLongitudinalGrade": 1.5,
+    "maxCrossSlope": 0.5,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [2, 0],
+  "end": [2, 4]
+}

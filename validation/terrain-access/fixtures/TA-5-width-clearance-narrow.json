@@ -1,0 +1,30 @@
+{
+  "name": "TA-5-width-clearance-narrow",
+  "why": "A point-footprint (vehicleWidth 0) route exists through a 1-cell gap between two ROI-excluded wall segments at column 2, rows 0 and 2. Start/end sit 2 m from the gap so dilation in the paired -wide fixture cannot also reach them.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0]
+  ],
+  "allowed": [
+    [1, 1, 0, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1],
+    [1, 1, 0, 1, 1, 1]
+  ],
+  "profile": {
+    "name": "point-footprint",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 0,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [0, 0],
+  "end": [0, 5]
+}

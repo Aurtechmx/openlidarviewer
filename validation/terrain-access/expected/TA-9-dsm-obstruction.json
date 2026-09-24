@@ -1,0 +1,18 @@
+{
+  "fixture": "TA-9-dsm-obstruction.json",
+  "cols": 5,
+  "rows": 5,
+  "outcome": "FOUND",
+  "path": [
+    10,
+    11,
+    17,
+    18,
+    14
+  ],
+  "cost": 4.828427125,
+  "eligibleCount": 23,
+  "blockedReasonCounts": {
+    "obstruction": 2
+  }
+}

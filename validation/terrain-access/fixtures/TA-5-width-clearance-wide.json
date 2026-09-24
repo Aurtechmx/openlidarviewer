@@ -1,0 +1,30 @@
+{
+  "name": "TA-5-width-clearance-wide",
+  "why": "The same layout as TA-5-width-clearance-narrow, but a 2.5 m vehicle width cannot clear the 1-cell gap once the wall segments are dilated by half the width, and start/end (2 m from the gap) are far enough away that dilation does not reach them: the outcome is a genuine NO_ROUTE, not a START/END block.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0]
+  ],
+  "allowed": [
+    [1, 1, 0, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1],
+    [1, 1, 0, 1, 1, 1]
+  ],
+  "profile": {
+    "name": "wide-vehicle",
+    "maxLongitudinalGrade": 10,
+    "maxCrossSlope": 10,
+    "maxStepHeight": 10,
+    "maxRuggedness": null,
+    "vehicleWidth": 2.5,
+    "vehicleLength": null,
+    "minimumTerrainConfidence": 0,
+    "unknownPolicy": "block",
+    "obstacleHeightThreshold": null
+  },
+  "start": [0, 0],
+  "end": [0, 5]
+}

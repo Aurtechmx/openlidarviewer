@@ -31,6 +31,8 @@ import {
   type GridCell,
 } from '../../simulation/flowPulse/flowGridCursor';
 import { CELL_NODATA, CELL_OUTLET, CELL_SINK } from '../../simulation/flowPulse/flowTypes';
+import { buildResultGridDom } from './resultGridDom';
+import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
 import type { AccumulationResult } from '../../simulation/flowPulse/flowAccumulation';
 import type { D8Result } from '../../simulation/flowPulse/d8Flow';
 import type { FlowGrid } from '../../simulation/flowPulse/flowTypes';
@@ -81,21 +83,17 @@ export class FlowResultGrid {
     this._onMove = opts.onMove;
     this._elevationRef = opts.elevationRef ?? null;
 
-    this._canvas = document.createElement('canvas');
-    this._canvas.className = 'olv-flow-grid-canvas';
-    this._canvas.tabIndex = 0;
-    this._canvas.setAttribute('role', 'application');
-    this._canvas.setAttribute('aria-label', opts.ariaLabel);
-
-    this._status = document.createElement('div');
-    this._status.className = 'olv-flow-grid-status';
-
-    this.element = document.createElement('div');
-    this.element.className = 'olv-flow-grid';
-    this.element.append(this._canvas, this._status);
-
-    this._canvas.addEventListener('click', (e) => this._handleClick(e));
-    this._canvas.addEventListener('keydown', (e) => this._handleKey(e));
+    const dom = buildResultGridDom({
+      ariaLabel: opts.ariaLabel,
+      wrapClassName: 'olv-flow-grid',
+      canvasClassName: 'olv-flow-grid-canvas',
+      statusClassName: 'olv-flow-grid-status',
+      onClick: (e) => this._handleClick(e),
+      onKeyDown: (e) => this._handleKey(e),
+    });
+    this.element = dom.element;
+    this._canvas = dom.canvas;
+    this._status = dom.status;
   }
 
   focus(): void {
@@ -234,13 +232,6 @@ export class FlowResultGrid {
 }
 
 /** Build a 1-bit mask from a cell-index array, for {@link FlowResultGrid.setPathMask}. */
-export function maskFromIndices(n: number, indices: ArrayLike<number>): Uint8Array {
-  const mask = new Uint8Array(n);
-  for (let k = 0; k < indices.length; k++) {
-    const i = indices[k];
-    if (i >= 0 && i < n) mask[i] = 1;
-  }
-  return mask;
-}
+export const maskFromIndices = sharedMaskFromIndices;
 
 export { cellIndex };

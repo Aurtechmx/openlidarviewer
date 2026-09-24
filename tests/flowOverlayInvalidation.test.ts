@@ -16,28 +16,14 @@
  * `invalidateFlowOverlay` pair, exercised directly.
  */
 import { describe, expect, it } from 'vitest';
-import * as THREE from 'three/webgpu';
 
 import { acquireFlowOverlay, disposePersistentFlowOverlay } from '../src/ui/fieldSimulation/flowPulseLab';
 import { invalidateFlowOverlay } from '../src/lazyChunks';
 import { buildFlowAccumulationBuffers, flowOverlayFrame } from '../src/render/flowOverlayGeometry';
 import { runFlowPulse, FLOW_PULSE_DEFAULTS, type FlowRunIdentity } from '../src/simulation/flowPulse/flowPulseRunner';
+import { fakeHost } from './helpers/sceneOverlayHost';
 import type { HorizontalScale } from '../src/simulation/flowPulse/dtmFlowGrid';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
-
-/** A host that records what the overlay attaches and detaches. */
-function fakeHost() {
-  const objects: THREE.Object3D[] = [];
-  return {
-    add: (o: THREE.Object3D) => { objects.push(o); },
-    remove: (o: THREE.Object3D) => {
-      const i = objects.indexOf(o);
-      if (i >= 0) objects.splice(i, 1);
-    },
-    requestFrame: () => {},
-    objects,
-  };
-}
 
 const projected: HorizontalScale = { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true };
 

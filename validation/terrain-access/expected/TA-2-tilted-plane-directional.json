@@ -1,0 +1,18 @@
+{
+  "fixture": "TA-2-tilted-plane-directional.json",
+  "cols": 7,
+  "rows": 7,
+  "outcome": "FOUND",
+  "path": [
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27
+  ],
+  "cost": 9.6,
+  "eligibleCount": 49,
+  "blockedReasonCounts": {}
+}

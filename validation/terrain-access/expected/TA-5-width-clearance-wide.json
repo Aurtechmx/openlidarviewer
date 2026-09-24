@@ -1,0 +1,13 @@
+{
+  "fixture": "TA-5-width-clearance-wide.json",
+  "cols": 6,
+  "rows": 3,
+  "outcome": "NO_ROUTE",
+  "path": [],
+  "cost": null,
+  "eligibleCount": 11,
+  "blockedReasonCounts": {
+    "vehicle-width": 5,
+    "outside-roi": 2
+  }
+}

@@ -68,6 +68,34 @@ export async function openExpandedPanel(
   return panel;
 }
 
+/**
+ * Open the Analyse panel (desktop workspace tab), expanding it if the
+ * panel-head toggle left it collapsed. Shared by `flowPulseLab.spec.ts` and
+ * `terrainAccessLab.spec.ts` (Sonar-flagged as a verbatim duplicate).
+ */
+export async function openAnalysePanel(page: Page): Promise<void> {
+  await showWorkspaceMode(page, 'analyse');
+  const panel = page.locator('.olv-analyse-panel');
+  await expect(panel).toBeVisible({ timeout: 20_000 });
+  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
+    await panel.locator('.olv-panel-head').click();
+  }
+}
+
+/**
+ * Open the command palette, type `query`, wait for a row containing
+ * `rowText`, then press Enter to run it. Shared by `flowPulseLab.spec.ts`
+ * and `terrainAccessLab.spec.ts` (Sonar-flagged as a verbatim duplicate).
+ */
+export async function firePaletteAction(page: Page, query: string, rowText: string): Promise<void> {
+  await page.keyboard.press('ControlOrMeta+KeyK');
+  await expect(page.locator('.olv-palette')).toBeVisible();
+  await page.locator('.olv-palette-input').fill(query);
+  await expect(page.locator('.olv-palette-row', { hasText: rowText })).toBeVisible();
+  await page.locator('.olv-palette-input').press('Enter');
+  await expect(page.locator('.olv-palette')).toBeHidden();
+}
+
 export async function suppressOnboardingTour(page: Page): Promise<void> {
   await page.addInitScript(() => {
     try {
@@ -109,6 +137,28 @@ export async function dropTinyLas(page: Page): Promise<void> {
   const dataTransfer = await page.evaluateHandle((b) => {
     const dt = new DataTransfer();
     dt.items.add(new File([new Uint8Array(b)], 'tiny.las'));
+    return dt;
+  }, [...bytes]);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+}
+
+/**
+ * Drop the bundled `terrain-access-utm.las` fixture — a 30×30 grid (900
+ * points) georeferenced to WGS 84 / UTM zone 13N via a GeoKeys VLR (see
+ * `scripts/gen-terrain-access-fixture.ts`, which regenerates it). Terrain
+ * Access refuses outright on an unresolved horizontal scale
+ * (UNITS_UNRESOLVED), so the drag-and-drop fixture used elsewhere in this
+ * suite (`dropDenseGridPly`, a local/unreferenced PLY) can never reach the
+ * routing/export happy path — this fixture exists so that path actually
+ * runs in CI instead of only being unit-tested against a hand-built grid.
+ */
+export async function dropTerrainAccessUtmLas(page: Page): Promise<void> {
+  const bytes = readFileSync(
+    fileURLToPath(new URL('../fixtures/terrain-access-utm.las', import.meta.url)),
+  );
+  const dataTransfer = await page.evaluateHandle((b) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(b)], 'terrain-access-utm.las'));
     return dt;
   }, [...bytes]);
   await page.dispatchEvent('body', 'drop', { dataTransfer });

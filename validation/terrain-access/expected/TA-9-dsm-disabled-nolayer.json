@@ -1,0 +1,16 @@
+{
+  "fixture": "TA-9-dsm-disabled-nolayer.json",
+  "cols": 5,
+  "rows": 5,
+  "outcome": "FOUND",
+  "path": [
+    10,
+    11,
+    12,
+    13,
+    14
+  ],
+  "cost": 4.0,
+  "eligibleCount": 25,
+  "blockedReasonCounts": {}
+}

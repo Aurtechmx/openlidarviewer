@@ -63,6 +63,24 @@ export interface MethodEntry extends MethodRef {
 }
 
 /**
+ * Builds a `version: 1`, `category: 'simulation'` entry — the shape every
+ * Terrain Access method shares. Factored out (Sonar flagged the four
+ * hand-written entries as duplicated scaffolding) so the four call sites
+ * below differ only in the fields that actually differ; `lint-method-
+ * literals.mjs` recognises this call form and records `version: 1` for each
+ * id it constructs, the same as it does for a literal entry.
+ */
+function terrainAccessMethod(
+  id: string,
+  name: string,
+  summary: string,
+  citation: string,
+  implementation: readonly string[],
+): MethodEntry {
+  return { id, version: 1, name, summary, citation, category: 'simulation', implementation };
+}
+
+/**
  * The catalogue. Keys ARE the ids (kept in sync by {@link METHOD_REGISTRY}'s
  * own shape and the registry test). Ids are namespaced `olv.<area>.<method>`.
  */
@@ -467,6 +485,48 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/depressionInventory.ts'],
   },
+  'olv.simulation.terrain-access.local-step': terrainAccessMethod(
+    'olv.simulation.terrain-access.local-step',
+    'Local step-height metric',
+    'Maximum absolute elevation discontinuity between a cell and its valid '
+      + 'neighbours within a 3×3 footprint, plus the pairwise edge form used to '
+      + 'gate one directed move. A geometric discontinuity measure, not a '
+      + 'classification of what caused it.',
+    'Internal composition (footprint-maximum finite difference); no single source method.',
+    ['src/simulation/terrainAccess/localStep.ts'],
+  ),
+  'olv.simulation.terrain-access.directional-grade': terrainAccessMethod(
+    'olv.simulation.terrain-access.directional-grade',
+    'Directional longitudinal grade and cross slope',
+    'Decomposes the Horn elevation gradient into the component along a '
+      + 'declared physical heading (longitudinal grade) and the component '
+      + 'perpendicular to it (cross slope), so a route experiences a cell\'s '
+      + 'slope differently depending on the direction it crosses it in, rather '
+      + 'than being screened against total slope regardless of heading.',
+    'Vector decomposition of Horn (1981) slope/aspect; internal implementation.',
+    ['src/simulation/terrainAccess/directionalGrade.ts'],
+  ),
+  'olv.simulation.terrain-access.cost-map': terrainAccessMethod(
+    'olv.simulation.terrain-access.cost-map',
+    'Terrain access hard eligibility and soft traversability cost',
+    'Separates direction-independent hard blocks (NoData, ROI, minimum '
+      + 'terrain support, ruggedness, above-ground obstruction evidence, '
+      + 'vehicle-width clearance) from direction-dependent ones (longitudinal '
+      + 'grade, cross slope, step height), and assigns eligible edges a '
+      + 'distance-scaled cost from declared, bounded utilization weights.',
+    'Internal composition (declared multi-term utilization cost); no single source method.',
+    ['src/simulation/terrainAccess/traversabilityCost.ts'],
+  ),
+  'olv.simulation.terrain-access.astar': terrainAccessMethod(
+    'olv.simulation.terrain-access.astar',
+    'Deterministic 8-connected A* over eligible terrain cells',
+    'Least-cost route search with a planimetric-distance admissible '
+      + 'heuristic and a fixed, documented tie-break (lower f, then lower h, '
+      + 'then lower cell index), over cells the cost-map hard-eligibility pass '
+      + 'accepted. Never expands a hard-blocked cell or a hard-blocked edge.',
+    'Hart, Nilsson & Raphael (1968), doi:10.1109/TSSC.1968.300136 (A*)',
+    ['src/simulation/terrainAccess/aStarTerrain.ts'],
+  ),
 };
 
 /**

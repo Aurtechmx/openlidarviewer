@@ -1,0 +1,15 @@
+{
+  "fixture": "TA-10-anisotropic-grid.json",
+  "cols": 4,
+  "rows": 4,
+  "outcome": "FOUND",
+  "path": [
+    0,
+    5,
+    10,
+    15
+  ],
+  "cost": 18.999549541,
+  "eligibleCount": 16,
+  "blockedReasonCounts": {}
+}

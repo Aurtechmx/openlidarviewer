@@ -1,0 +1,18 @@
+{
+  "fixture": "TA-4-step-barrier.json",
+  "cols": 5,
+  "rows": 5,
+  "outcome": "FOUND",
+  "path": [
+    10,
+    16,
+    17,
+    18,
+    14
+  ],
+  "cost": 4.903427125,
+  "eligibleCount": 24,
+  "blockedReasonCounts": {
+    "no-data": 1
+  }
+}

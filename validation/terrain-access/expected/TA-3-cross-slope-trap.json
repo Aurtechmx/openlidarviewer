@@ -1,0 +1,12 @@
+{
+  "fixture": "TA-3-cross-slope-trap.json",
+  "cols": 5,
+  "rows": 5,
+  "outcome": "NO_ROUTE",
+  "path": [],
+  "cost": null,
+  "eligibleCount": 24,
+  "blockedReasonCounts": {
+    "no-data": 1
+  }
+}

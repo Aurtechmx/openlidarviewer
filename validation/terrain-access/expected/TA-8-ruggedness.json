@@ -1,0 +1,24 @@
+{
+  "fixture": "TA-8-ruggedness.json",
+  "cols": 7,
+  "rows": 7,
+  "outcome": "FOUND",
+  "path": [
+    21,
+    14,
+    7,
+    1,
+    2,
+    3,
+    4,
+    5,
+    13,
+    20,
+    27
+  ],
+  "cost": 12.448983628,
+  "eligibleCount": 24,
+  "blockedReasonCounts": {
+    "ruggedness": 25
+  }
+}

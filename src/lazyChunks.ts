@@ -722,6 +722,42 @@ export function invalidateFlowOverlay(): void {
 export const loadFlowPulsePackage = () => import('./export/flowPulsePackage');
 
 /**
+ * The Field Simulation Lab's Terrain Access view and the routing core behind
+ * it. Opened only from the command palette, so neither rides the startup shell.
+ */
+export const loadTerrainAccessLab = () => import('./ui/fieldSimulation/terrainAccessLab');
+
+/**
+ * The Terrain Access export package builder (ASCII Grid writer + ZIP store +
+ * passport/manifest assembly). Only reached from an export action on the
+ * Field Simulation Lab's Terrain Access view, mirroring `loadFlowPulsePackage`
+ * above: a session that opens Terrain Access but never exports never
+ * downloads the raster/passport assembly code.
+ */
+export const loadTerrainAccessPackage = () => import('./export/terrainAccessPackage');
+
+/**
+ * The Terrain Access Lab keeps its 3D traversability-map/route overlay
+ * attached to the scene after the Lab modal closes, mirroring
+ * `registerFlowOverlayInvalidator`/`invalidateFlowOverlay` above exactly —
+ * same reasoning, same events (a different scan loading, a scan closing, a
+ * CRS change, a classification edit), same near-zero-cost seam so
+ * `terrainAnalysisRunner.ts` (eager) can tear down the Lab's (lazy)
+ * persisted overlay without importing its chunk.
+ */
+let terrainAccessOverlayInvalidator: (() => void) | null = null;
+
+/** Called by the Terrain Access Lab chunk itself, once, when it first loads. */
+export function registerTerrainAccessOverlayInvalidator(fn: (() => void) | null): void {
+  terrainAccessOverlayInvalidator = fn;
+}
+
+/** Tear down the Lab's persisted overlay, if the chunk ever loaded one. */
+export function invalidateTerrainAccessOverlay(): void {
+  terrainAccessOverlayInvalidator?.();
+}
+
+/**
  * The Withheld-aware terrain recovery gather: a full-resolution re-decode
  * (through the shared parse worker) of a static file the display path
  * voxel-downsampled at load, rasterised into a fresh `TerrainCore`. Only

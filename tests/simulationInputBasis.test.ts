@@ -106,3 +106,31 @@ describe('cells with no elevation are counted and disclosed', () => {
     expect(basisLimitations(clean)).toEqual([]);
   });
 });
+
+describe('the "flow" wording never leaks into a tool that is not Flow Pulse', () => {
+  it('defaults to the Flow Pulse wording unchanged', () => {
+    const basis = simulationInputBasis({ ...full, measuredCells: 90, interpolatedCells: 10, totalCells: 100 });
+    const limits = basisLimitations(basis).join(' ');
+    expect(limits).toMatch(/Flow routes over them, so a path may cross ground no return landed on\./);
+  });
+
+  it('says the same about no-elevation cells for Flow Pulse unchanged', () => {
+    const basis = simulationInputBasis({ ...full, measuredCells: 70 });
+    const limits = basisLimitations(basis).join(' ');
+    expect(limits).toMatch(/Flow neither enters nor leaves them, so routes stop at their edge\./);
+  });
+
+  it('never says "Flow" for Terrain Access, for interpolated cells', () => {
+    const basis = simulationInputBasis({ ...full, measuredCells: 90, interpolatedCells: 10, totalCells: 100 });
+    const limits = basisLimitations(basis, 'terrain-access').join(' ');
+    expect(limits).not.toMatch(/\bFlow\b/);
+    expect(limits).toMatch(/interpolated elevation/);
+  });
+
+  it('never says "Flow" for Terrain Access, for no-elevation cells', () => {
+    const basis = simulationInputBasis({ ...full, measuredCells: 70 });
+    const limits = basisLimitations(basis, 'terrain-access').join(' ');
+    expect(limits).not.toMatch(/\bFlow\b/);
+    expect(limits).toMatch(/30 of 100 cells carry no elevation/);
+  });
+});

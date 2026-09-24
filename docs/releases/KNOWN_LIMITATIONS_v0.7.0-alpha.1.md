@@ -112,6 +112,51 @@ re-checked the next time the lab is reopened, not the moment the change
 happens, so a dataset swapped while the lab stays closed can leave a stale
 overlay on screen until it is reopened once.
 
+## Terrain Access is a geometry screening, never a safety guarantee
+
+Terrain Access opens from the command palette next to Flow Pulse. It screens
+a route between two chosen cells against a mobility profile the reader
+declares, with no preset presented as validated. It is not a safety
+assessment, a guaranteed-passable route or a vehicle dynamics simulation:
+soil strength, traction, track or tyre interaction with the ground, rollover,
+weather and vegetation are not modelled, and no text in the Lab, the run
+record or the export calls a route safe, drivable or passable.
+
+The Lab has three stages: the mobility-profile form; a traversability-map
+preview where start and goal are chosen on a keyboard- and pointer-accessible
+result grid, with a "why not?" inspector for any cell; and the completed run,
+with route diagnostics and the route drawn on the grid and on the scan. Cell
+readouts give elevation in the dataset's vertical datum and unit, or say it is
+unknown. Lengths, slopes and steps are in metres; a run refuses by name
+(`UNITS_UNRESOLVED`) when the horizontal scale or the vertical unit does not
+resolve. Other named refusals are `NO_DTM`, `INVALID_PROFILE`, `START_BLOCKED`,
+`END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE` and `TOO_LARGE`, and the Lab
+refuses a preview or run whose terrain may have changed since the profile was
+applied.
+
+The cell readout states a real elevation with its resolved unit, or
+"unknown" rather than the DTM's grid-local `z` printed bare, using the same
+`ElevationReference` gate `flowGridCursor.ts` uses for Flow Pulse. Every
+length/slope/step figure is always metric: `UNITS_UNRESOLVED` refuses before
+a result can exist if the horizontal scale or vertical unit-to-metres factor
+does not resolve. The route and traversability overlay stays on the scan
+after the Lab closes and is removed when the scan closes, the CRS changes or
+the classes are edited, through the same disposal-registry seam
+(`registerTerrainAccessOverlayInvalidator`/`invalidateTerrainAccessOverlay`
+in `lazyChunks.ts`) Flow Pulse's overlay already uses. Exported rasters and
+the route GeoJSON carry the real world corner in the dataset CRS, with a
+`.prj` when a world origin and CRS/WKT are supplied, rather than always a
+local (0, 0) origin. The run record states whether the terrain was built
+from every point or from a sample, read from the DTM's own `coverageMode`
+(`computeTerrainCore`'s own fix, shared by every reader of that field), so
+Terrain Access states the same honest basis without a change of its own.
+
+Vehicle length is recorded in the profile and the diagnostics but not
+enforced: eligibility uses width-only clearance, not full swept-body
+collision. The independent Python oracle that cross-checks the routing core
+was written inside this project, not taken from an external routing tool, so
+the `TERRAIN-ACCESS` claim sits at E3.
+
 ## Registration is not exposed
 
 Six modules implement alignment. No user path reaches them.
@@ -143,7 +188,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 109 for the shell, 76 for the renderer and 23 for the Analyse panel,
-across 912 modules with no dependency cycles.
+across 935 modules with no dependency cycles.
 
 ## The shell has little headroom
 
