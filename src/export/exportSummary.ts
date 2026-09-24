@@ -25,6 +25,7 @@ import {
   fullResWouldDropClassEdits,
   FULL_RES_CLASS_EDITS_REFUSAL,
 } from './fullResClassGuard';
+import type { LegacyClassWrapNote } from '../convert/legacyClassGuard';
 
 /** Where the active classification came from. */
 export type ClassificationProvenance = 'none' | 'source' | 'derived';
@@ -61,6 +62,16 @@ export interface ExportSummaryInput {
   readonly hasClassEdits?: boolean;
   /** User ticked "Compress (.gz)" — gzip the LAS output (LAS formats only). */
   readonly gzip?: boolean;
+  /**
+   * What the LAS 1.2 write gate says about the classes above 31 this cloud
+   * carries, from `previewLegacyClassWrap`. The gate's own sentences are passed
+   * in because the class tables that name the codes stay out of the eager
+   * shell. Null or absent when no class wraps, or when the classes are not
+   * resident (a streaming scan), in which case the write gate still decides.
+   */
+  readonly legacyClassWrap?: LegacyClassWrapNote | null;
+  /** User ticked the LAS 1.2 opt-in that writes such classes wrapped. */
+  readonly allowLegacyClassWrap?: boolean;
 }
 
 export interface ExportWarning {
@@ -220,13 +231,16 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
     // cautioned. Same wording as the enforcement.
     warnings.push({ level: 'error', message: FULL_RES_CLASS_EDITS_REFUSAL });
   }
-  if (includeClass && provenance !== 'none' && input.format === 'las') {
-    warnings.push({
-      level: 'info',
-      message:
-        'LAS 1.2 clamps classification to 5 bits (classes above 31 are lost). ' +
-        'Choose LAS 1.4 to keep the full 8-bit classification.',
-    });
+  // The LAS 1.2 write gate (convertCloud) refuses classes above 31 unless the
+  // user opts in, so the preview reads as blocked, or as the wrap warning once
+  // opted in. Nothing is said when no class wraps: there is no loss to report.
+  const wrap = input.legacyClassWrap;
+  if (includeClass && input.format === 'las' && wrap) {
+    warnings.push(
+      input.allowLegacyClassWrap
+        ? { level: 'warn', message: wrap.warning }
+        : { level: 'error', message: wrap.refusal },
+    );
   }
   if (input.format === 'las14' && input.crsMode === 'keep' && input.crsLabel && input.hasWkt === false) {
     warnings.push({

@@ -272,7 +272,7 @@ describe('what production raises', () => {
     return { reasons, finishedCalls };
   };
 
-  it('raises six of the reasons it declares, and the rest stay a design note', () => {
+  it('raises nine of the reasons it declares, and the rest stay a design note', () => {
     // It was one. `input()` and `cameraMoved()` recorded 'camera-input' and
     // every other reason was declared and never raised, which two separate
     // readers took for live wiring. Giving the visual setters reason ownership
@@ -285,9 +285,25 @@ describe('what production raises', () => {
     // holdover, so a frame the browser delayed past it skipped the paint and
     // nothing raised the change again. Toggling a class left the picture stale.
     //
-    // `viewport` and `screenshot` remain unraised. The `while` reasons are a
-    // separate matter, below.
-    expect([...scan().reasons].sort()).toEqual(['camera-input', 'clip', 'filter', 'scene-geometry', 'style', 'tool-overlay']);
+    // Every other visual mutation that used it had the same defect, and three
+    // more reasons carry them: `viewport` for a resize, the backend coming up
+    // and the canvas returning from an export render; `streaming-schedule` for
+    // a budget or resume the next tick acts on; and `redraw-request` for the
+    // public `requestFrame`. `input()` is left to the gesture listeners.
+    //
+    // `screenshot` remains unraised. The `while` reasons are a separate
+    // matter, below.
+    expect([...scan().reasons].sort()).toEqual([
+      'camera-input',
+      'clip',
+      'filter',
+      'redraw-request',
+      'scene-geometry',
+      'streaming-schedule',
+      'style',
+      'tool-overlay',
+      'viewport',
+    ]);
   });
 
   it('never releases a while-reason, which is why none is ever acquired', () => {

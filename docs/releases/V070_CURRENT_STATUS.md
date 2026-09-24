@@ -9,17 +9,17 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 147. Revisited at least once: 15.
+Entries: 149. Revisited at least once: 18.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 46 |
+| FIXED | 50 |
 | PARTIAL | 33 |
-| BUILT | 27 |
+| BUILT | 26 |
 | MEASURED | 14 |
-| NOT REPRODUCIBLE | 11 |
+| NOT REPRODUCIBLE | 10 |
 | DEFERRED | 6 |
 | OPEN | 6 |
 | REFUSED | 3 |
@@ -29,7 +29,7 @@ Entries: 147. Revisited at least once: 15.
 
 | ID | Status | Area | Accounts |
 | --- | --- | --- | --- |
-| L01 | PARTIAL | EXPORT | 1 |
+| L01 | FIXED | EXPORT | 2 |
 | L02 | OPEN | EXPORT | 1 |
 | L03 | OPEN | EXPORT | 1 |
 | L04 | FIXED | STANDARDS | 1 |
@@ -75,7 +75,7 @@ Entries: 147. Revisited at least once: 15.
 | L44 | FIXED | LIFECYCLE | 1 |
 | L45 | FIXED | ARCHITECTURE | 1 |
 | L46 | PARTIAL | PERFORMANCE | 2 |
-| L47 | NOT REPRODUCIBLE | UI | 2 |
+| L47 | PARTIAL | UI | 4 |
 | L48 | FIXED | PERFORMANCE | 1 |
 | L49 | MEASURED | PERFORMANCE | 1 |
 | L50 | FIXED | CORRECTNESS | 1 |
@@ -153,7 +153,7 @@ Entries: 147. Revisited at least once: 15.
 | L122 | FIXED | ARCHITECTURE | 1 |
 | L123 | BUILT | ARCHITECTURE | 1 |
 | L124 | BUILT | ARCHITECTURE | 1 |
-| L125 | BUILT | ARCHITECTURE | 1 |
+| L125 | FIXED | ARCHITECTURE | 3 |
 | L126 | FIXED | ARCHITECTURE | 1 |
 | L127 | BUILT | ARCHITECTURE | 1 |
 | L128 | BUILT | ARCHITECTURE | 1 |
@@ -176,3 +176,5 @@ Entries: 147. Revisited at least once: 15.
 | L145 | FIXED | ARCHITECTURE | 1 |
 | L146 | FIXED | EVIDENCE | 1 |
 | L147 | MEASURED | PERFORMANCE | 1 |
+| L148 | FIXED | SCIENTIFIC | 2 |
+| L149 | FIXED | SCIENTIFIC | 1 |

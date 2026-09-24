@@ -8,6 +8,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildExportSummary, type ExportSummaryInput } from '../src/export/exportSummary';
+import { previewLegacyClassWrap } from '../src/convert/legacyClassGuard';
+import { convertCloud } from '../src/convert/convertCloud';
+import { PointCloud } from '../src/model/PointCloud';
 
 const base: ExportSummaryInput = { pointCount: 1_000_000, format: 'las14', crsMode: 'keep' };
 
@@ -106,10 +109,10 @@ describe('buildExportSummary — warnings', () => {
     );
   });
 
-  it('LAS 1.2 with classification warns about the 5-bit clamp', () => {
-    expect(warns({ ...base, format: 'las', classification: 'source' })).toEqual(
-      expect.arrayContaining([expect.stringMatching(/info:.*5 bits/i)]),
-    );
+  it('LAS 1.2 whose classes all fit says nothing about wrapping', () => {
+    // No class above 31 means no loss, so there is nothing to warn about.
+    const lines = warns({ ...base, format: 'las', classification: 'source' });
+    expect(lines.filter((l) => /5 bits|5-bit|wrap|clamp|above 31/i.test(l))).toEqual([]);
   });
 
   it('LAS 1.4 keep without WKT notes the GeoTIFF-keys fallback', () => {
@@ -190,5 +193,50 @@ describe('buildExportSummary — full-res drops in-session class edits', () => {
     expect(
       warns({ ...base, fullRes: true, hasClassEdits: true, includeClassification: false }),
     ).not.toEqual(expect.arrayContaining([expect.stringMatching(dropRe)]));
+  });
+});
+
+describe('buildExportSummary — LAS 1.2 classes above 31', () => {
+  // The note is the write gate's own sentence (legacyClassGuard), so the
+  // preview and the refusal cannot say different things.
+  const classes = Uint8Array.from([2, 33, 64, 255, 64]);
+  const note = previewLegacyClassWrap(classes)!;
+  const las12 = { ...base, format: 'las' as const, classification: 'source' as const };
+  const refusal = convertCloud(
+    new PointCloud({
+      positions: new Float32Array(classes.length * 3),
+      origin: [0, 0, 0],
+      classification: classes,
+      sourceFormat: 'las',
+      name: 'hi.las',
+    }),
+    { format: 'las' },
+  ).report.log.find((l) => l.level === 'error')!.message;
+
+  it('shows the refusal as an error, in the same words as the write gate', () => {
+    const w = buildExportSummary({ ...las12, legacyClassWrap: note }).warnings;
+    expect(w).toContainEqual({ level: 'error', message: refusal });
+  });
+
+  it('downgrades to the wrap warning once the user opts in', () => {
+    const w = buildExportSummary({ ...las12, legacyClassWrap: note, allowLegacyClassWrap: true }).warnings;
+    expect(w).toContainEqual({ level: 'warn', message: note.warning });
+    expect(w.some((x) => x.level === 'error')).toBe(false);
+  });
+
+  it('says nothing when no class is above 31', () => {
+    expect(previewLegacyClassWrap(Uint8Array.from([0, 2, 31]))).toBeNull();
+    const w = buildExportSummary({ ...las12, legacyClassWrap: null }).warnings;
+    expect(w.filter((x) => /wrap|above 31|5-bit/i.test(x.message))).toEqual([]);
+  });
+
+  it('says nothing for LAS 1.4, which keeps the full byte', () => {
+    const w = buildExportSummary({ ...las12, format: 'las14', legacyClassWrap: note }).warnings;
+    expect(w.filter((x) => x.message === note.refusal || x.message === note.warning)).toEqual([]);
+  });
+
+  it('says nothing when the classification is omitted (written as class 0)', () => {
+    const w = buildExportSummary({ ...las12, includeClassification: false, legacyClassWrap: note }).warnings;
+    expect(w.filter((x) => x.message === note.refusal || x.message === note.warning)).toEqual([]);
   });
 });

@@ -12,9 +12,10 @@
  *
  * `writeLas14` writes LAS 1.4 with the extended point record formats —
  * format 6 (no colour) or 7 (RGB). The extended records carry the FULL
- * 8-bit classification, where the legacy formats clamp it to 5 bits; this
- * is also the record family COPC requires, so the 1.4 writer is the
- * foundation for future COPC output.
+ * 8-bit classification, where the legacy formats keep only its low 5 bits
+ * (`class & 0x1f`, so 64 wraps to 0 rather than stopping at 31); this is
+ * also the record family COPC requires, so the 1.4 writer is the foundation
+ * for future COPC output.
  *
  * Both writers quantise coordinates as
  * `int32 = round((global - offset) / scale)`. The offset is the per-axis
@@ -477,8 +478,8 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
     view.setUint8(rp + 14, (rn & 0x07) | ((rc & 0x07) << 3));
     // The legacy class byte is the class in bits 0 to 4 with Synthetic,
     // Key-Point and Withheld above it, so writing `class & 0x1f` alone erased
-    // all three. Classes above 31 still cannot be represented here; the caller
-    // counts them and warns before choosing this format.
+    // all three. Classes above 31 cannot be represented here and wrap; the
+    // caller refuses such a write unless it was opted in (legacyClassGuard.ts).
     const cls = g.classification ? g.classification[i] & 0x1f : 0;
     const f = g.classificationFlags ? g.classificationFlags[i] : 0;
     view.setUint8(
@@ -624,7 +625,7 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
     // edge of flight line (7). The model carries the flags; the rest stay zero.
     view.setUint8(rp + 15, g.classificationFlags ? g.classificationFlags[i] & 0x0f : 0);
     // FULL 8-bit classification — the extended record's whole reason to
-    // exist here: LAS 1.2's 5-bit field clamps class 64/200 to garbage.
+    // exist here: LAS 1.2's 5-bit field wraps class 64/200 to 0/8.
     view.setUint8(rp + 16, g.classification ? g.classification[i] : 0);
     view.setUint8(rp + 17, 0); // user data — not in the model
     // Scan angle is an int16 in 0.006° units in the extended record; the

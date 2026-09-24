@@ -19,7 +19,10 @@ An item reads FIXED only where a test or another reproducible proof exists, and
 the test is named. Code changing is not sufficient.
 
 Entries keep their original identifier from the register this ledger grew out
-of, so a finding can be traced to where it was first written down.
+of, so a finding can be traced to where it was first written down. L148 and
+L149 were recorded as L146 and L147 on the branch that wrote them; both
+numbers collided with an L146 and an L147 assigned independently on main, so
+the two entries were renumbered when the branches were integrated.
 
 ## Ledger
 
@@ -4010,7 +4013,7 @@ the five pass on Chromium, WebKit, Firefox and iPhone WebKit.
 Still synthesized `PointerEvent`s, which is what Playwright exposes on every
 engine. Real hardware multi-touch on a physical device remains unverified.
 
-### L47 · NOT REPRODUCIBLE · UI
+### L47 · FIXED · UI
 
 The entry describes a grid keyed by x and y. `localDensitySize.ts` keys on the
 cloud's two widest axes: `dominantPlane` measures all three extents, drops the
@@ -4020,10 +4023,30 @@ than edge-on. `localDensitySizes` reads those axes rather than assuming x and y.
 The orientation case the entry warns about is covered: a surface laid flat and
 the same surface upright produce identical scales, over five noise levels.
 
-What remains is narrower than the entry claims and is not the same defect. The
-plane is chosen once for the whole cloud from its overall bounding box, so in a
-scene mixing orientations the minority surface is still binned edge-on. No test
-covers a mixed-orientation cloud and the size of that residual is unmeasured.
+A narrower defect sat behind it. The plane was chosen once for the whole cloud
+from its overall bounding box, so in a scene mixing orientations the minority
+surface was binned edge-on. Measured on a 100 m x 100 m ground plane with a
+40 m x 20 m facade standing on it (200,000 points), each facade point's size
+divided by the size the same grid gives the facade alone, keyed across its own
+face with the same cell and reference density:
+
+| Facade share | Noise | Whole-cloud plane: median, p90 | Per-voxel plane: median, p90, min |
+| --- | --- | --- | --- |
+| 5% | 0 and 5 cm | 0.40, 0.43 | 1.00, 1.00, 0.38 |
+| 20% | 0 and 5 cm | 0.79, 0.83 | 1.00, 1.00, 0.41 |
+| 50% | 0 and 5 cm | 1.00, 1.00 | 1.00, 1.00, 0.51 |
+
+The 50% row reads 1.00 under the whole-cloud plane only because both sides sit
+on the 0.5 floor. With `localPlanes`, which `autoDensitySizeParams` turns on,
+each cubic voxel of the cell size is classed by the axis its points spread least
+along, and its points are counted across the other two. A voxel with fewer than
+6 points, or no axis at most half as wide as the next, keeps the whole-cloud
+plane, so a single-orientation cloud bins as before and the flat and upright
+cases stay identical. The remaining low ratios are points in voxels straddling
+the seam between ground and facade. Cell keys became numbers rather than
+strings, so on a 1,000,000-point ground and facade scene the pass takes 150 to
+160 ms against 210 to 225 ms for the previous code. A test pins the median and
+p90 within 1% of the facade-alone size for all six mixes.
 
 The value is a display attribute throughout. It reaches an instanced `aSize`
 attribute and the size graph, nothing else: no export, no report, no claim in
@@ -4298,3 +4321,321 @@ unblocks it is a runner with a real Apple GPU: a self-hosted Apple Silicon
 runner, or a future GitHub-hosted image whose paravirtual driver handles this
 rendering path. Until one exists, the leg stops at the same point and stays
 advisory.
+
+### L01 · FIXED · EXPORT
+
+A LAS 1.2 write whose classes go above 31 is refused by default rather than
+warned about and written. `convertCloud.ts` counts the wrapping points and
+codes and, without `allowLegacyClassWrap`, returns a null file and an error
+naming both counts, the codes, and the two ways forward: LAS 1.4, which keeps
+the full byte, or the opt-in, which writes each class as its low 5 bits with a
+warning. `convert/legacyClassGuard.ts` holds the refusal and warning text so
+the write gate, the batch runner, and the Export panel's live preview all say
+the same thing, and `lasSemantics.ts` states which of the two legacy losses
+refuses and which only warns: a wrapped class refuses, because the file reads
+back as another valid class with no error; a dropped overlap flag warns,
+because the base class written beside it stays correct. `writeLas.ts` keeps
+masking as its only job. Covered by `tests/las12ClassWrapRefusal.test.ts`,
+`tests/exportPanelLegacyClassWrap.test.ts`, and the LAS 1.2 case in
+`tests/e2e/batchConverter.spec.ts`.
+
+### L125 · FIXED · ARCHITECTURE
+
+Every Viewer mutation that changes what is drawn records a `once` reason, and
+`input()` is left to the gesture listeners.
+
+`input()` records `camera-input`, a holdover reason, and extends the 350 ms
+activity window. A frame the browser runs after that window finds nothing
+asking and skips the paint, and nothing raises the change again because it
+has already happened. The class and elevation filters owned reasons, as did
+the coverage grid and the clip. Eleven other sites used `input()`: the colour
+mode, intensity filter and derived classification setters, four streaming
+controls (colour, quality, resume, cache), the public `requestFrame`, the
+resize handler, the canvas restore after an export render, and the backend
+coming up.
+
+Each site was classified by what it changes and who calls it:
+
+| site | what changes | reason |
+|---|---|---|
+| `setColorMode`, `setStreamingColorMode` | colours | `style` |
+| `setIntensityFilter`, `applyDerivedClassification` | which points show | `filter` |
+| `setStreamingQuality`, `resumeStreaming` | what the next tick keeps resident | `streaming-schedule` |
+| `requestFrame` | overlays, preview layers, projection, placement, quality, fade starts | `redraw-request` |
+| `_onResize`, export restore, backend ready | the drawing surface | `viewport` |
+| `clearStreamingCache` | compressed bytes only, nothing drawn | none |
+| pointer move, pointer down, key, tab visible | input | `input()` |
+
+`streaming-schedule` and `redraw-request` are new `once` reasons. The
+scheduler ticks from the loop body, so a budget change or a resume acts only
+once a frame runs. Every caller of `requestFrame` changes something the
+Viewer cannot name, so its reason says only that a paint was asked for.
+
+Escape leaves a tool through `_setToolMode`, which clears the measurement
+draft and cursor that the overlay shows until a frame repaints. The key stays
+input and the tool switch records `tool-overlay`, which also covers the public
+tool toggles that pass through it.
+
+`tests/invalidationDrawsFrame.test.ts` reads each converted site's demand
+calls out of `Viewer.ts` and replays them against the real scheduler with the
+frame run 50 ms after the holdover expires. The ten that used `input()` fail
+with it and paint with their reason, and `_setToolMode` is replayed the same
+way. `tests/visualMutationOwnership.test.ts` accepts only a
+`once` reason as an owner, fails any public method that calls `input()`, and
+counts every `input()` in the file against the four gesture listeners.
+Reverting `setColorMode` to `input()` turns four cases red across the two
+files.
+
+What remains: a pointer move in the measure or probe tool picks inside the
+frame and repaints the overlay only on a drawn frame, so a hover whose frame
+arrives after the holdover shows its cursor at the next heartbeat. Lasso
+reclassify and classification undo and redo rewrite classification colours
+without recording any reason of their own.
+
+### L125 · FIXED · ARCHITECTURE
+
+The two gaps the prior account left open are closed.
+
+`reclassifyLasso`, `undoClassification` and `redoClassification` rewrite the
+classification buffer and reupload its colours through
+`refreshClassificationColours`, and none of the three recorded a reason for
+it. The recolour is pulled out of `Viewer.ts` into `colorModes.ts`, which
+`Viewer.ts` already imports for `colorForMode`, as a plain function over the
+three fields it reads (`cloud`, `colorAttr` and `mode`) rather than a private
+method keyed by cloud id, since a private method cannot leave the class that
+owns the id-to-entry map and a new file would raise the fan-out baseline
+`lint:module-graph` holds on `Viewer.ts`. Each of the three callers then
+records `filter`,
+the reason the colour mode and intensity filter setters already own, so a
+late frame still shows the recoloured buffer rather than the one before the
+edit. `swapClassification` and `reclassifyInPolygon` rewrite the same buffer
+through the same helper but have no live caller yet, so they stay outside
+this fix and outside the owner inventory in
+`tests/visualMutationOwnership.test.ts`.
+
+The measure cursor's host callback, `setMeasureCursor`, records
+`tool-overlay` after it sets the cursor. The overlay only re-projects on a
+frame that draws, and a hover had no owner of its own: once the pointer
+stops moving, nothing asks for a frame again, and the position had already
+changed by the time the callback returned. The probe readout is plain DOM
+pushed straight from client coordinates rather than a re-projected overlay,
+so it carried no matching gap and needed no change.
+
+`tests/invalidationDrawsFrame.test.ts` replays the three classification
+callers and the cursor callback the same way it replays every other site in
+this entry: each site's demand calls, read out of `Viewer.ts`, against the
+real scheduler with the frame run 50 ms after the holdover expires.
+`tests/visualMutationOwnership.test.ts` adds `reclassifyLasso`,
+`undoClassification` and `redoClassification` to the owner inventory, each
+against `filter`.
+
+### L148 · FIXED · SCIENTIFIC
+
+Priority-Flood conditioning and D8 routing disagreed about what NoData means.
+D8 treats a cell with no elevation as a wall: flow neither enters nor leaves
+it, and only the grid boundary is an outlet. The conditioning seeded its flood
+at the grid boundary and also at every valid cell touching NoData, so a survey
+hole became a drainage exit. A depression beside a hole stayed unfilled because
+it spilled into the hole, and D8 on the conditioned surface, which routes
+nothing into the hole, then found a sink on the rim that the conditioning had
+counted as resolved.
+
+The flood seeds at the grid boundary only. A region that NoData encloses has no
+route to the boundary, so it keeps its heights, is counted as
+`cellsUnreachable`, and the run states the count among its limitations. The
+other reading, a gap as a drainage exit, is right where gaps are open water. It
+is available as `fillNoData: 'outlet'` on the run and `noData` on
+`priorityFlood`, and a run that uses it records the parameter, names the method
+`olv.simulation.terrain-flow.priority-flood.gap-outlet` and states the reading
+among its limitations. The default method moves to version 2, since its figures
+change on any grid with an interior gap. The panel routes raw by default, so
+what it shows before a user chooses conditioning is unchanged.
+
+`tests/priorityFlood.test.ts` builds a surface falling east with a one-cell
+hole beside a two-cell depression. With the wall the depression fills to its
+spill level of 7, past the hole, and D8 on the conditioned surface routes every
+cell on the rim. Reverting the seeding turns seven tests red, that one among
+them: the depression stays at 3 and its lowest cell is a sink. An island inside
+a ring of NoData reports 9 unreachable cells. `tests/flowPulseRunner.test.ts`
+checks the parameter, the method id, the limitation and a distinct record
+digest for each reading.
+
+On the five oracle fixtures nothing changes. Every valid cell there reaches the
+boundary, so both readings return the surface the earlier seeding returned, and
+the raw D8 records under `validation/field-simulation/expected` are untouched.
+On the two new grids, with an epsilon of 0.001:
+
+| grid | reading | raised | max fill | sinks | flats | unreachable |
+|---|---|---|---|---|---|---|
+| hole beside depression | earlier seeding | 0 | 0 | 1 | 0 | not counted |
+| hole beside depression | wall | 2 | 4.001 | 0 | 0 | 0 |
+| hole beside depression | outlet | 0 | 0 | 1 | 0 | 0 |
+| island in NoData | earlier seeding | 1 | 4.001 | 0 | 8 | not counted |
+| island in NoData | wall | 0 | 0 | 1 | 0 | 9 |
+| island in NoData | outlet | 1 | 4.001 | 0 | 8 | 0 |
+
+In the island the earlier seeding filled the pit and left the eight cells
+around it flat, with no route out. Over 3,000 random grids with 30 to 75
+percent NoData, the outlet reading reproduces the earlier seeding bit for bit,
+`cellsUnreachable` matches an independent breadth-first search from the
+boundary, and the wall leaves no sink or flat on any cell it reached. Every
+sink or flat that remains lies inside a counted unreachable region.
+
+### L148 · FIXED · SCIENTIFIC
+
+The entry above claims a run of "over 3,000 random grids" that was never
+committed: no property test, fuzz script, or random-grid fixture backed that
+sentence anywhere in the repository at the time it was written.
+
+`tests/priorityFloodRandomGrids.test.ts` runs it: 3,000 seeded random grids
+per property, each checked against a reimplementation independent of the
+code path it verifies. A standalone copy of the earlier seeding stands in
+for the outlet reading, a plain queue flood-fill stands in for
+`cellsUnreachable`, and D8 restricted to that flood-fill's reachable set
+stands in for the sink and flat claim. All three hold. Covered by
+`tests/priorityFloodRandomGrids.test.ts`.
+
+### L149 · FIXED · SCIENTIFIC
+
+Flow Pulse's run record hashed the summary of a run, not the field. `result`
+held cell counts and a couple of maxima, and two receiver or accumulation
+arrays that differ everywhere can share every one of those figures. A square
+grid ramping east and the same grid turned to ramp south instead have
+identical cells, readable cells, sink count, flat count, outlet count and
+maximum upstream count, yet route to opposite edges of the grid. Both sealed
+to the same record digest.
+
+`result.fieldDigest` now covers the field itself: a SHA-256 over a documented,
+versioned byte encoding (`src/simulation/flowPulse/flowFieldDigest.ts`) of the
+receiver array, the direction and status arrays, the upstream count, and the
+conditioned elevations when conditioning ran, all row-major, hashed as bytes
+rather than JSON of the arrays. The comment that had claimed a digest over
+arrays "would change with any reordering of an array that carries the same
+field" is replaced. The arrays are fixed row-major and are never reordered,
+so that was never the risk; the risk was leaving them out of the digest
+altogether.
+
+`tests/flowPulseFieldDigest.test.ts` pins the encoding against an
+independently computed SHA-256 for a tiny fixture and checks that two
+synthetic fields sharing every summary figure (sink count, flat count,
+outlet count, maximum upstream count) still seal to different digests.
+`tests/flowPulseRunner.test.ts` reproduces the
+defect on a real run: reverting `result.fieldDigest` turns the east/south ramp
+test red with an identical record digest for two grids that route to opposite
+edges, and reapplying it turns the test green. A raw run and a conditioned run
+over the same terrain seal to different digests, and re-running one terrain
+reproduces its digest exactly.
+
+At 1,000,000 cells (1000x1000, five runs, median), routing (D8 plus
+accumulation) took 229.9 ms and hashing the routed field took 167.9 ms, about
+0.7 times the routing cost. `tests/flowPulseFieldDigestPerf.test.ts` records
+both.
+
+`FieldSimulationRunRecord` is produced by `runFlowPulse` and read only by
+`src/ui/fieldSimulation/flowPulseLab.ts`, which renders the summary in a modal
+and never serializes the record; no session save, export or report path in the
+repository persists one today. `schemaVersion` stays 1 on that evidence: there
+is nothing yet that would read an old record and misread the new
+`fieldDigest` field, and the check is worth repeating before any such path
+starts writing one.
+
+### L47 · PARTIAL · UI
+
+A follow-up review of the per-voxel local-plane fix measured three gaps against
+the whole-cloud-plane baseline and the facade-alone reference.
+
+The orientation limit stands. `localPlanes` only classes a voxel thin within
+about 26.6 degrees of an axis (`THIN_RATIO` 0.5, the min/max spread test's
+own cutoff); a facade at 27 to 63 degrees keeps the whole-cloud plane exactly
+as before this option existed, pinned at 45 degrees (median 0.40). Loosening
+that cutoff would let more of a scattered cloud pass the same test by chance,
+which is the second gap below, so it stays.
+
+Parallel walls sharing a voxel's 2D cell is fixed. The bin key now also
+carries the voxel's rounded position along its own normal, so two walls at
+different offsets bin apart instead of merging their point counts: one 5%
+wall alone reads median 1.00 of its own size; two read 1.00 against the
+previous 0.71; four read 1.00 against 0.51. Rounding rather than flooring
+that position matters on its own: at 26 degrees to an axis, a single
+non-axis-aligned wall floored into layers as its position along the normal
+drifted across a voxel boundary, reading p90 1.47 of its alone size against
+1.03 unlayered and identical to the whole-cloud plane at every angle and at
+0, 0.25 and 0.5 cell offsets on the wall it was tested against.
+
+The 6-point minimum let scattered, non-planar voxels pass the same spread
+test by chance: a uniform 3D voxel of 6 points classes as thin 5.7% of the
+time (Monte Carlo), 1.7% at 8 points, 0.5% at 10, 0.2% at 12. Raising
+`MIN_VOXEL_POINTS` from 6 to 10 cuts the misclassified share of
+`tests/localDensitySize.test.ts`'s ground-plus-30%-vegetation scene (lcg seed
+12345, 100,000 points, vegetation at `r() * 8`, ground noise `g() * 0.05`)
+from 2.968% to 0.281% of its points, and a uniform random cube (50,000
+points on [0, 10]^3, lcg seed 12345) from 2.078% to 0%, with no effect on any
+flat or single-orientation scene. The cost lands on the facade-edge minima
+the first L47 entry already
+flagged: more x-end and top-edge voxels of a 5% facade share now hold fewer
+than 10 points and fall back to the ground plane, so that mix's worst 10% of
+facade points reads 0.66 of its alone size where it read 0.99 before (min
+0.10 against 0.12); the 20% and 50% shares are unaffected (min 0.21 and
+0.77/0.51, both unchanged).
+
+The first entry attributed the low minima to the ground/facade seam. Measured
+per region, the seam (the facade's own bottom row) is the dominant
+contributor by point count in every share and noise combination: 873 seam
+points against 81 x-end plus 108 top at a 5% share, 3542 against 9 to 22 at
+20%, 149 against 0 or 103 at 50%. The facade's x-end and top-edge voxels,
+which see fewer points near their own boundary and fall back to the ground
+plane below `MIN_VOXEL_POINTS`, typically produce the single lowest ratio in
+a row instead of the seam (the table's 5%, 20% and 50%-with-noise minima all
+trace to an x-end voxel), though not always. The 50%-no-noise row's own
+minimum, 0.77, traces to the seam.
+
+| Facade share | Noise | p10, min against its alone size |
+| --- | --- | --- |
+| 5% | 0 and 5 cm | 0.66, 0.10 |
+| 20% | 0 and 5 cm | 1.00, 0.21 |
+| 50% | 0 and 5 cm | 1.00, 0.77 / 0.51 |
+
+A 1,000,000-point ground-and-facade pass runs 150 to 155 ms median (ten
+warmed runs, repeated across separate process invocations), the same band
+the first L47 entry measured; neither the layer term nor the higher point
+minimum moved it. Also fixed: the module header, which
+still described a single whole-cloud grid with no mention of `localPlanes`;
+and `binKeys`, which computed voxel normals ahead of the unindexable-extent
+early return rather than after it.
+
+### L47 · PARTIAL · UI
+
+The entry above puts the ground/facade seam's share of the 50% facade row at
+149 points. Measured the same way as the other two rows (the seam is the
+facade's bottom voxel layer, `Math.floor(z / cellSize) === 0`), the count is
+8864 for both noise levels, not 149. The corrected row reads 8864 against 0 or
+103 at 50%, alongside the unchanged 873 against 189 combined at 5% and 3542
+against 9 to 22 at 20%; the seam stays the dominant contributor by point count
+in every share, more so than the entry above stated.
+
+The entry above also gives 0.2% as the 12-point Monte Carlo misclassification
+rate. The same test (uniform 3D voxel, min/max spread, `THIN_RATIO` 0.5), run
+at 15,000,000 trials across three seeds, gives 0.14% to 0.15% at 12 points,
+which rounds to 0.1%; the 6-point and 8-point rates still match the entry's
+5.7% and 1.7%, and the 10-point rate still matches its 0.5%, so only the
+12-point figure was wrong.
+
+That Monte Carlo test measures an idealized uniform voxel, not the scenes
+`tests/localDensitySize.test.ts` uses for the 6-to-10 comparison, and a
+12-point minimum was never run against those scenes, so nothing backed the
+choice of 10 over 12. Run the same way: the ground-plus-30%-vegetation scene's
+misclassified share drops from 0.281% at 10 points to 0.151% at 12 (the
+uniform cube stays at 0% either way), and the facade-edge cost grows with it.
+The 5% facade share's worst 10% of points reads 0.63 of its alone size at 12
+points (min 0.09) against 10's 0.66 (min 0.10); the 50% share's unclamped
+minimum, unaffected going from 6 to 10, drops from 0.77 to 0.32 with no noise
+and from 0.51 to 0.23 at 5 cm noise; the 20% share is unaffected either way
+(1.00, min 0.21). Halving an already-small misclassified share does not offset
+more than doubling the facade-edge cost at the share most exposed to it, so
+`MIN_VOXEL_POINTS` stays at 10.
+
+| Facade share | Noise | p10, min at 10 points | p10, min at 12 points |
+| --- | --- | --- | --- |
+| 5% | 0 and 5 cm | 0.66, 0.10 | 0.63, 0.09 |
+| 20% | 0 and 5 cm | 1.00, 0.21 | 1.00, 0.21 |
+| 50% | 0 and 5 cm | 1.00, 0.77 / 0.51 | 1.00, 0.32 / 0.23 |

@@ -178,6 +178,7 @@ function runOnce(dtm: DtmGrid, conditioning: FlowConditioning): RunOutcome {
   let cellsRaised: number | null = null;
   let maxFillDepth: number | null = null;
   let epsilonAbsorbed: number | null = null;
+  let cellsUnreachable: number | null = null;
   if (conditioning === 'priority-flood') {
     t0 = performance.now();
     const conditioned = priorityFlood(grid, { epsilon: params.fillEpsilon });
@@ -187,6 +188,7 @@ function runOnce(dtm: DtmGrid, conditioning: FlowConditioning): RunOutcome {
     cellsRaised = conditioned.cellsRaised;
     maxFillDepth = conditioned.maxFillDepth;
     epsilonAbsorbed = conditioned.epsilonAbsorbed;
+    cellsUnreachable = conditioned.cellsUnreachable;
   }
 
   t0 = performance.now();
@@ -210,7 +212,7 @@ function runOnce(dtm: DtmGrid, conditioning: FlowConditioning): RunOutcome {
     outletCount: routed.outletCount,
     maxUpstreamCells: maxUpstream,
     maxContributingAreaM2: area ? maxUpstream * routingGrid.cellMetresX * routingGrid.cellMetresY : null,
-    cellsRaised, maxFillDepth, epsilonAbsorbed,
+    cellsRaised, maxFillDepth, epsilonAbsorbed, cellsUnreachable,
   };
   const limitations = [...basisLimitations(basis), ...modelLimitations(params, summary)];
 

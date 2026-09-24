@@ -12,12 +12,16 @@
  * hand-cranked clock and frame queue, so what is measured is the actual
  * wake-serve-draw-sleep path rather than a description of it.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { FrameDemand, type SchedulerFactory } from '../src/render/frameDemand';
 import { RENDER_HOLDOVER_MS } from '../src/render/renderActivityGate';
 import { FrameScheduler } from '../src/render/frameScheduler';
-import { ALL_INVALIDATION_REASONS, KIND } from '../src/render/renderInvalidation';
+import { ALL_INVALIDATION_REASONS, KIND, type RenderInvalidationReason } from '../src/render/renderInvalidation';
 
 /** A scheduler whose frames and timers only advance when the test says so. */
 class Crank {
@@ -182,5 +186,80 @@ describe('a delayed frame still paints what asked for it', () => {
     crank.now += LATE_MS;
     expect(crank.tick()).toBe(true);
     expect(draws, `${reason} lost its paint to a late frame`).toHaveLength(1);
+  });
+});
+
+/**
+ * The Viewer's own mutations, replayed against the real loop.
+ *
+ * Constructing a Viewer wants a GPU, so each case reads the demand calls a
+ * mutation makes out of Viewer.ts and makes the same calls on a driven demand.
+ * A mutation that reaches for `input()` replays as `input()` and loses its
+ * paint to the late frame, exactly as the contrast case above does; one that
+ * records a once reason keeps it. Reading the source rather than restating it
+ * is what lets this notice a setter drifting back.
+ */
+describe('a late frame still paints every Viewer mutation that changed the picture', () => {
+  const LATE_MS = RENDER_HOLDOVER_MS + 50;
+  const source = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'render', 'Viewer.ts'),
+    'utf8',
+  );
+
+  /** A method's text, from its signature to its closing brace. */
+  const method = (name: string) => (): string => {
+    const at = source.search(new RegExp(`\\n  (?:private )?(?:async )?${name}\\s*\\(`));
+    expect(at, `${name} is not a method on Viewer`).toBeGreaterThan(-1);
+    return source.slice(at, source.indexOf('\n  }\n', at));
+  };
+
+  /** The callback that runs once the GPU backend is up, inside the constructor. */
+  const backendReady = (): string => {
+    const at = source.indexOf('this.ready = this._renderer.init().then(');
+    expect(at, 'the backend-ready callback moved').toBeGreaterThan(-1);
+    return source.slice(at, source.indexOf('this._startLoop();', at));
+  };
+
+  /** The render-loop host's cursor callback, which fires on every hover. */
+  const measureCursorCallback = (): string => {
+    const at = source.indexOf('setMeasureCursor: (point) => {');
+    expect(at, 'the setMeasureCursor host callback moved').toBeGreaterThan(-1);
+    return source.slice(at, source.indexOf('},\n', at));
+  };
+
+  const MUTATIONS: ReadonlyArray<readonly [string, () => string]> = [
+    ['setColorMode', method('setColorMode')],
+    ['setIntensityFilter', method('setIntensityFilter')],
+    ['applyDerivedClassification', method('applyDerivedClassification')],
+    ['setStreamingColorMode', method('setStreamingColorMode')],
+    ['setStreamingQuality', method('setStreamingQuality')],
+    ['resumeStreaming', method('resumeStreaming')],
+    ['requestFrame', method('requestFrame')],
+    ['reclassifyLasso', method('reclassifyLasso')],
+    ['undoClassification', method('undoClassification')],
+    ['redoClassification', method('redoClassification')],
+    ['_setToolMode', method('_setToolMode')],
+    ['_onResize', method('_onResize')],
+    ['_renderAtSize', method('_renderAtSize')],
+    ['the backend-ready callback', backendReady],
+    ['the setMeasureCursor host callback', measureCursorCallback],
+  ];
+
+  it.each(MUTATIONS)('%s', (name, text) => {
+    const calls = [...text().matchAll(/_demand\.(input|changed)\((?:'([a-z-]+)')?\)/g)];
+    expect(calls.length, `${name} asks the demand for nothing`).toBeGreaterThan(0);
+
+    const { crank, draws, d } = driven();
+    while (crank.tick());
+    expect(crank.sleeping).toBe(true);
+    draws.length = 0;
+
+    for (const [, verb, reason] of calls) {
+      if (verb === 'input') d.input();
+      else d.changed(reason as RenderInvalidationReason);
+    }
+    crank.now += LATE_MS;
+    expect(crank.tick()).toBe(true);
+    expect(draws, `${name} lost its paint to a late frame`).toHaveLength(1);
   });
 });

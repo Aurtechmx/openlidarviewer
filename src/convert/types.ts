@@ -22,7 +22,8 @@ export const CONVERT_FORMATS: Record<
   // LAS 1.4 (point formats 6/7) leads because it is the converter's default:
   // modern consumers all read 1.4 and the extended records keep the full
   // 8-bit classification. LAS 1.2 stays as an explicit legacy-tool choice —
-  // its 5-bit classification field clamps classes above 31.
+  // its 5-bit classification field wraps classes above 31 (class & 31), so
+  // such a write is refused unless `allowLegacyClassWrap` opts in.
   las14: { label: 'LAS 1.4', ext: 'las', binary: true, available: true },
   las: { label: 'LAS 1.2', ext: 'las', binary: true, available: true },
   // LAZ *encoding* is not yet possible client-side — the bundled laz-perf
@@ -79,7 +80,22 @@ export interface ConvertOptions {
    * user does not want to ship as if it were authoritative.
    */
   readonly omitClassification?: boolean;
+  /**
+   * Write LAS 1.2 even when classes above 31 wrap into its 5-bit field. Off by
+   * default, and such a write is refused: each wrapped class lands on another
+   * valid class (33 reads back as 1, 64 as 0), so the file reads back with no
+   * error. LAS 1.4 keeps the full byte and needs no opt-in.
+   */
+  readonly allowLegacyClassWrap?: boolean;
 }
+
+/**
+ * The label of the control that sets `allowLegacyClassWrap`. The LAS 1.2
+ * refusal names the control by this text, so the two cannot drift apart. It
+ * lives here rather than beside the refusal because the Export panel is in the
+ * eager shell and the refusal's class tables are not.
+ */
+export const LEGACY_CLASS_WRAP_OPT_IN = 'Allow classes above 31 to wrap';
 
 /** A single produced output file, ready to download. */
 export interface ConvertedFile {

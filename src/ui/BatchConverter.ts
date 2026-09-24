@@ -20,7 +20,13 @@ import { decodeFull } from '../convert/decodeFull';
 import { runBatch, summariseBatch, guardedBatchInput, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
 import { memoryCeilingBytes } from '../io/loadPlan';
 import { buildZip, assessZipDownload } from '../convert/zipStore';
-import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
+import {
+  CONVERT_FORMATS,
+  LEGACY_CLASS_WRAP_OPT_IN,
+  type ConvertFormat,
+  type CrsMode,
+  type ConvertOptions,
+} from '../convert/types';
 
 const ACCEPT = '.las,.laz,.xyz,.asc,.txt,.csv,.pts,.ptx,.ply,.pcd,.e57';
 
@@ -52,13 +58,20 @@ export class BatchConverter {
    * explanation at all. This line restates it in the flow.
    */
   private readonly _formatNote: HTMLElement;
+  /**
+   * The LAS 1.2 opt-in that writes classes above 31 wrapped. Unticked, a file
+   * carrying such classes is refused and its result row says why.
+   */
+  private readonly _wrapRow: HTMLElement;
   private readonly _crsRow: HTMLElement;
 
   private readonly _files: BatchInput[] = [];
   // LAS 1.4 is the default: modern consumers all read it, and its extended
-  // point formats keep the full 8-bit classification (1.2 clamps to 5 bits).
-  // LAS 1.2 stays selectable for legacy-tool compatibility.
+  // point formats keep the full 8-bit classification (1.2 has 5 bits, so a
+  // class above 31 wraps and is refused unless opted in). LAS 1.2 stays
+  // selectable for legacy-tool compatibility.
   private _format: ConvertFormat = 'las14';
+  private _allowClassWrap = false;
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';
@@ -88,6 +101,16 @@ export class BatchConverter {
     this._fileList = el('div', { className: 'olv-bc-files' });
     this._formatRow = el('div', { className: 'olv-bc-pills' });
     this._formatNote = el('p', { className: 'olv-bc-format-note olv-bc-hidden' });
+    // The Export panel's checkbox row, reused as is; shown for LAS 1.2 only.
+    this._wrapRow = el('div', { className: 'olv-export-fullres' });
+    const wrapLabel = el('label', { className: 'olv-export-fullres-label' });
+    const wrapBox = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
+    wrapBox.addEventListener('change', () => { this._allowClassWrap = wrapBox.checked; });
+    wrapLabel.append(wrapBox, el('span', { text: LEGACY_CLASS_WRAP_OPT_IN }));
+    this._wrapRow.append(wrapLabel, el('span', {
+      className: 'olv-export-fullres-hint',
+      text: 'LAS 1.2 keeps 5 bits of class, so 33 is written as 1 and 64 as 0. Unticked, a file with such classes is refused.',
+    }));
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._hint = el('p', { className: 'olv-bc-hint' });
@@ -106,7 +129,7 @@ export class BatchConverter {
       this._section('Files', this._buildFilesSection()),
       this._section('Output format', (() => {
         const wrap = el('div');
-        wrap.append(this._formatRow, this._formatNote);
+        wrap.append(this._formatRow, this._formatNote, this._wrapRow);
         return wrap;
       })()),
       this._section('Coordinate system', (() => {
@@ -245,6 +268,9 @@ export class BatchConverter {
     // Restate the gate reason visibly when a format is greyed out.
     this._formatNote.textContent = anyUnavailable ? unavailableReason : '';
     this._formatNote.classList.toggle('olv-bc-hidden', !anyUnavailable);
+    // `olv-hidden`, not `olv-bc-hidden`: the reused row's own display rule
+    // comes later in the stylesheet and would win over the latter.
+    this._wrapRow.classList.toggle('olv-hidden', this._format !== 'las');
   }
 
   private _renderCrsPills(): void {
@@ -345,6 +371,7 @@ export class BatchConverter {
       crsMode: this._crsMode,
       targetEpsg: parseEpsg(this._targetEpsg),
       sourceEpsg: parseEpsg(this._sourceEpsg),
+      allowLegacyClassWrap: this._allowClassWrap,
     };
 
     this._abort = new AbortController();

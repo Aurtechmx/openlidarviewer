@@ -82,7 +82,7 @@ import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
 import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
-import { colorForMode, defaultMode } from './colorModes';
+import { colorForMode, defaultMode, refreshClassificationColours } from './colorModes';
 import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
@@ -1424,10 +1424,9 @@ export class Viewer {
         // scan has decoded + attached) becomes a visible error instead of a
         // blank canvas with no signal. No-op on the WebGL 2 fallback.
         this._installGpuErrorListener();
-        // Force the first window of frames to render at full rate so
-        // the empty state, hero animation, and any pending tween land
-        // smoothly before the idle-render throttle kicks in.
-        this._demand.input();
+        // The backend has a drawing surface with nothing on it yet, and the
+        // first frame must paint it however late the browser runs it.
+        this._demand.changed('viewport');
         this._startLoop();
       },
       (err: unknown) => {
@@ -1926,14 +1925,14 @@ export class Viewer {
   /** Switch the streaming cloud's colour mode. */
   setStreamingColorMode(mode: ColorMode): void {
     this._streaming?.renderer.setColorMode(mode);
-    // The legend follows the streaming mode too (both colour paths must
-    // drive the same overlay). `input()` wakes what a panel click cannot.
-    if (this._streaming) { this._notifyColorContextChanged(); this._demand.input(); }
+    // The legend follows the streaming mode too: both colour paths drive the
+    // same overlay.
+    if (this._streaming) { this._notifyColorContextChanged(); this._demand.changed('style'); }
   }
 
   /** Apply a new streaming quality preset (point/concurrency budgets). */
   setStreamingQuality(quality: StreamingQuality, isMobile: boolean): void {
-    if (this._streaming) { this._streaming.scheduler.setBudgets(streamingBudgets(quality, isMobile)); this._demand.input(); }
+    if (this._streaming) { this._streaming.scheduler.setBudgets(streamingBudgets(quality, isMobile)); this._demand.changed('streaming-schedule'); }
   }
 
   /** Pause streaming — no new nodes load. */
@@ -1943,12 +1942,12 @@ export class Viewer {
 
   /** Resume streaming. */
   resumeStreaming(): void {
-    if (this._streaming) { this._streaming.scheduler.resume(); this._demand.input(); }
+    if (this._streaming) { this._streaming.scheduler.resume(); this._demand.changed('streaming-schedule'); }
   }
 
-  /** Drop the streaming compressed-chunk cache. */
+  /** Drop the streaming compressed-chunk cache. No drawn node lives there, so no frame is asked for. */
   clearStreamingCache(): void {
-    if (this._streaming) { this._streaming.scheduler.clearCache(); this._demand.input(); }
+    this._streaming?.scheduler.clearCache();
   }
 
   /** Configure navigation and clip planes for a streaming cloud's extent. */
@@ -2764,27 +2763,26 @@ export class Viewer {
     writeFloatColorsInto(arr, raw);
     entry.colorAttr.needsUpdate = true;
     entry.mode = mode;
-    // Color buffer just changed — make sure the idle-render throttle
-    // doesn't swallow the next frame so the user sees the new colours.
-    this._demand.input();
+    // The colour buffer changed. A once reason holds until a frame shows it,
+    // however late the browser runs that frame.
+    this._demand.changed('style');
     // The legend describes the active mode's ramp — refresh it.
     this._notifyColorContextChanged();
   }
 
   /**
-   * Public hook for callers outside the Viewer that change scene
-   * state without going through a pointer/keyboard path (preset
-   * application, theme swap, embed-bridge command, etc.). Bumps the
-   * idle-render throttle so the next few frames render at full rate
-   * without the caller having to know about the throttle.
+   * Public hook for callers outside the Viewer that change what is drawn
+   * without going through a pointer or keyboard path: overlays, preview
+   * layers, quality presets, a projection or placement switch. Records a once
+   * reason, so the next frame paints the change however late it runs.
    *
    * Also how the streaming renderer's fades reach the loop. They are stepped
-   * from the frame now rather than from an animation frame of their own, so a
-   * fade beginning while the loop sleeps has to ask for one; the holdover
-   * covers its first window and `FrameDemand`'s fade signal the rest.
+   * from the frame rather than from an animation frame of their own, so a
+   * fade beginning while the loop sleeps has to ask for one; the reason
+   * covers its first frame and `FrameDemand`'s fade signal the rest.
    */
   requestFrame(): void {
-    this._demand.input();
+    this._demand.changed('redraw-request');
   }
 
   /** Run `listener` after every drawn frame; returns the unsubscribe. */
@@ -2885,7 +2883,7 @@ export class Viewer {
       result = applyClassSwap(buf, fromClass, toClass);
     });
     if (result.changedCount > 0) {
-      this._refreshClassificationColours(id);
+      refreshClassificationColours(entry);
       this._markClassificationEdited(id);
     }
     return result;
@@ -2933,7 +2931,7 @@ export class Viewer {
       });
     });
     if (result.changedCount > 0) {
-      this._refreshClassificationColours(id);
+      refreshClassificationColours(entry);
       this._markClassificationEdited(id);
     }
     return result;
@@ -2993,7 +2991,11 @@ export class Viewer {
       result = applyIndexReclassify(buf, indices, newClass);
     });
     if (result.changedCount > 0) {
-      this._refreshClassificationColours(id);
+      refreshClassificationColours(entry);
+      // A recolour is a `once` reason of its own: the edit already happened
+      // by the time this returns, so `input()`'s 350 ms holdover cannot be
+      // trusted to still be open when the next frame runs.
+      this._demand.changed('filter');
       this._markClassificationEdited(id);
     }
     return { ...result, hiddenByFilters: inside - indices.length, selectedCount: inside };
@@ -3009,7 +3011,8 @@ export class Viewer {
     const h = this._classHistory.get(id);
     if (!entry?.cloud.classification || !h?.canUndo) return false;
     h.undo(entry.cloud.classification);
-    this._refreshClassificationColours(id);
+    refreshClassificationColours(entry);
+    this._demand.changed('filter');
     this._markClassificationEdited(id);
     return true;
   }
@@ -3024,7 +3027,8 @@ export class Viewer {
     const h = this._classHistory.get(id);
     if (!entry?.cloud.classification || !h?.canRedo) return false;
     h.redo(entry.cloud.classification);
-    this._refreshClassificationColours(id);
+    refreshClassificationColours(entry);
+    this._demand.changed('filter');
     this._markClassificationEdited(id);
     return true;
   }
@@ -3061,11 +3065,11 @@ export class Viewer {
     // class-mask multiply folded into the size node. Without this the legend
     // could colour the derived classes but not hide them.
     this._attachClassAttribute(entry, codes);
-    // The class-filter wiring above hides classes without recolouring, so the
-    // colour mode only needs refreshing when class colours are already shown.
-    if (entry.mode === 'classification') this._refreshClassificationColours(id);
+    // The class-filter wiring above hides classes without recolouring; the
+    // recolour itself is a no-op unless class colours are already shown.
+    refreshClassificationColours(entry);
     this._markClassificationEdited(id); // a derive replaces the classification
-    this._demand.input();
+    this._demand.changed('filter');
     return true;
   }
 
@@ -3099,28 +3103,6 @@ export class Viewer {
     this._materialsWithClass.add(entry.material);
     this._applySizeMode(entry.material);
     entry.material.needsUpdate = true;
-  }
-
-  /**
-   * Recompute and re-upload the colour attribute for a cloud whose
-   * classification just changed. Cheap when the cloud isn't currently
-   * showing classification colours — `setColorMode` short-circuits when
-   * the mode is unchanged, so we force a recompute by toggling to the
-   * current mode after a no-op detour.
-   */
-  private _refreshClassificationColours(id: string): void {
-    const entry = this._clouds.get(id);
-    if (!entry) return;
-    // Only the classification mode reads from the mutated buffer; other
-    // modes don't need a refresh. The chassification mode itself does — so
-    // re-derive its colours and re-upload.
-    if (entry.mode === 'classification') {
-      const raw = colorForMode('classification', entry.cloud);
-      const arr = entry.colorAttr.array as Float32Array;
-      // sRGB → linear via the shared EOTF seam (see colorEncode.ts).
-      writeFloatColorsInto(arr, raw);
-      entry.colorAttr.needsUpdate = true;
-    }
   }
 
   /**
@@ -3375,7 +3357,7 @@ export class Viewer {
     // affected pipelines on that transition only. Narrowing an already-active
     // window is a uniform-only change.
     if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
-    this._demand.input();
+    this._demand.changed('filter');
   }
 
   /**
@@ -4047,6 +4029,9 @@ export class Viewer {
     this._inspect.setActive(mode === 'inspect');
     this._annotate.setActive(mode === 'annotate');
     this._probe.setActive(mode === 'probe');
+    // Leaving a tool drops its draft and cursor, which the overlay keeps
+    // showing until a frame repaints it.
+    this._demand.changed('tool-overlay');
     // Inspect manages its own cursor; the measure, annotate and probe cursors
     // are owned here — a crosshair while picking, cleared when no tool is active.
     if (mode === 'measure' || mode === 'annotate' || mode === 'probe') {
@@ -4724,8 +4709,8 @@ export class Viewer {
     } finally {
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);
-      // Repaint the live view at the restored size on the next frames.
-      this._demand.input();
+      // Resizing the canvas cleared it; repaint the live view at the restored size.
+      this._demand.changed('viewport');
     }
   }
 
@@ -6095,7 +6080,12 @@ export class Viewer {
       pointerNdc: () => ({ x: this._pointerNdcX, y: this._pointerNdcY }),
       pointerClient: () => ({ x: this._pointerClientX, y: this._pointerClientY }),
       pickPoint: (ndcX, ndcY) => this._pickPoint(ndcX, ndcY),
-      setMeasureCursor: (point) => this._measure.setCursor(point),
+      setMeasureCursor: (point) => {
+        this._measure.setCursor(point);
+        // The overlay re-projects only on a frame that draws, and a hover has
+        // no other owner: nothing else asks again once this returns.
+        this._demand.changed('tool-overlay');
+      },
       userInteracting: () => this._userInteracting || this._nav.isDriving,
       probePickStatic: (ndcX, ndcY) => {
         const hit = this._pickDetailed(ndcX, ndcY);
@@ -6129,10 +6119,9 @@ export class Viewer {
   }
 
   private _onResize(canvas: HTMLCanvasElement): void {
-    // A canvas resize invalidates the rendered frame, so make sure
-    // the idle-render throttle holds at full rate for the resize
-    // settle window.
-    this._demand.input();
+    // A canvas resize clears the drawn frame and changes the aspect, so the
+    // next frame must paint.
+    this._demand.changed('viewport');
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return;

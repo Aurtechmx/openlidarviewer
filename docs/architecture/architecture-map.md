@@ -28,11 +28,11 @@ from the tree and fails when a cell drifts.
 | Geo | `src/geo` | ~5.2k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~46k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. **UI-free by lint.** |
 | I/O | `src/io` | ~36k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~71k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Render | `src/render` | ~72k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~13k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~17k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~32k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,972 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 4,970 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (4,972)** — the largest blocks, which are the extraction
+**`src/main.ts` (4,970)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -161,11 +161,14 @@ pre-warm on a capable connection and from every scan-open path, so the
 existing Save-Data guard on the pre-warm decides, and the key dispatcher's
 teardown is registered with the stage instead of discarded.
 
-Done: `importSession` (~208 lines) now lives in `src/app/sessionIo.ts`, called with a
-`SessionIoDeps` object of ~16 accessors the shell binds to its own state. The pure
-cloud→fingerprint adapter (`scanFactsFromStreaming` / `scanFactsFromStatic`) is
-exported and Node-tested, and the parse/verify/rebase halves it leans on already
-lived in `src/io/session.ts`; `main.ts` keeps a thin caller (`tests/sessionIo.test.ts`).
+Done: `importSession` (~208 lines) lives in `src/app/sessionIo.ts`, called with a
+`SessionIoDeps` object of ~16 accessors the shell binds to its own state, and
+lazy-loaded from `main.ts` on the first `.olvsession` file (v0.7 shell headroom).
+The pure cloud→fingerprint adapter (`scanFactsFromStreaming` / `scanFactsFromStatic`)
+moved to `src/app/sessionScanFacts.ts` — re-exported unchanged off `sessionIo.ts` — because
+`openScan.ts` calls it synchronously on every scan load and must stay eager; the
+parse/verify/rebase halves it leans on already lived in `src/io/session.ts`
+(`tests/sessionIo.test.ts`).
 
 Done: `handleFile` (~336 lines) — the open/load pipeline — now lives in
 `src/app/openScan.ts` as `openScan(file, deps)`, driven through an `OpenScanDeps`
@@ -247,7 +250,7 @@ that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,164)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,153)** — the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by

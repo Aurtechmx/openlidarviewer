@@ -134,10 +134,13 @@ export class FrameDemand {
   }
 
   /**
-   * Input that does not move the camera: a hover, a key, a panel.
+   * A gesture that does not move the camera: a hover, a pointer press, a key.
    *
    * Full-rate frames for the holdover window, with the motion-gated effects
-   * left alone.
+   * left alone. Only for input, which arrives in a stream: a frame the browser
+   * runs after the window finds nothing asking and skips the paint. A change
+   * to what is drawn records a `once` reason through {@link changed} instead,
+   * which a frame has to serve before it clears.
    */
   input(): void {
     this._gate.bump(this._signals.nowMs());

@@ -15,8 +15,15 @@ import type { ExportHealth } from '../intelligence/scanStory';
 import { renderExportHealthPanel } from './scanStoryViews';
 import { el } from './dom';
 import { downloadBytes } from '../io/download';
-import { loadConvertEngine, loadFindingsPanel, loadSessionFindings } from '../lazyChunks';
-import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
+import { loadConvertEngine, loadFindingsPanel, loadLegacyClassGuard, loadSessionFindings } from '../lazyChunks';
+import {
+  CONVERT_FORMATS,
+  LEGACY_CLASS_WRAP_OPT_IN,
+  type ConvertFormat,
+  type CrsMode,
+  type ConvertOptions,
+} from '../convert/types';
+import type { LegacyClassWrapNote } from '../convert/legacyClassGuard';
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { PointCloud } from '../model/PointCloud';
@@ -40,12 +47,21 @@ import type { MountedFindingsPanel } from './findingsPanel';
 const NO_MEASUREMENTS_HINT = 'Place measurements, then export them as open vector formats.';
 
 /**
+ * Shown once, in place of the LAS 1.2 class-wrap preview, when the chunk that
+ * carries it fails to load. Exported so the unit test can assert the exact
+ * wording rather than a substring.
+ */
+export const WRAP_PREVIEW_LOAD_FAILED =
+  'Couldn’t load the class-wrap preview — retrying. Export still checks your classes either way.';
+
+/**
  * Lightweight, allocation-free description of the exportable cloud, used to
  * render the live summary/enablement WITHOUT materializing the point buffers.
  * For a streaming scan, building the actual export cloud snapshots every
  * resident node into a fresh PointCloud (~150 MB at 5M points with common
- * attributes) — far too heavy to run on every option toggle. This carries only
- * the scalar facts the summary needs; the full cloud is built once, on Export.
+ * attributes) — far too heavy to run on every option toggle. This carries the
+ * scalar facts the summary needs, plus a static cloud's class buffer by
+ * reference; the full cloud is built once, on Export.
  */
 export interface ExportCloudSummary {
   /** Points that WILL export (resident count for streaming; full count static). */
@@ -59,12 +75,22 @@ export interface ExportCloudSummary {
    * without materializing a streaming snapshot to inspect a `PointCloud`.
    */
   classProvenance: 'none' | 'source' | 'derived';
+  /**
+   * The resident class buffer, by reference and never copied, so the LAS 1.2
+   * preview can find classes above 31. Absent for a streaming scan, whose
+   * classes are not resident; the write gate still judges those.
+   */
+  classification?: Uint8Array | null;
 }
 
-/** Fallback: derive a summary from an already-materialized cloud (no host summaryInfo). */
-function cloudToSummary(cloud: PointCloud | null): ExportCloudSummary | null {
-  if (!cloud) return null;
-  const crs = cloud.metadata?.crs ?? null;
+/**
+ * A materialized cloud's classification facts for {@link ExportCloudSummary}:
+ * where the classes came from, and the buffer itself by reference. Shared with
+ * the host's `summaryInfo` so both describe a static cloud the same way.
+ */
+export function exportClassFacts(
+  cloud: PointCloud,
+): Pick<ExportCloudSummary, 'classProvenance' | 'classification'> {
   let classProvenance: ExportCloudSummary['classProvenance'];
   if (cloud.classificationIsDerived) {
     classProvenance = 'derived';
@@ -73,13 +99,20 @@ function cloudToSummary(cloud: PointCloud | null): ExportCloudSummary | null {
   } else {
     classProvenance = 'none';
   }
+  return { classProvenance, classification: cloud.classification };
+}
+
+/** Fallback: derive a summary from an already-materialized cloud (no host summaryInfo). */
+function cloudToSummary(cloud: PointCloud | null): ExportCloudSummary | null {
+  if (!cloud) return null;
+  const crs = cloud.metadata?.crs ?? null;
   return {
     pointCount: cloud.pointCount,
     hasRgb: cloud.colors != null,
     hasGpsTime: cloud.gpsTime != null,
     crsName: crs?.name ?? null,
     hasWkt: crs?.wkt != null,
-    classProvenance,
+    ...exportClassFacts(cloud),
   };
 }
 
@@ -206,6 +239,8 @@ export class ExportPanel {
   private readonly _fullResRow: HTMLElement;
   private readonly _gzipRow: HTMLElement;
   private readonly _classRow: HTMLElement;
+  /** The LAS 1.2 opt-in that writes classes above 31 wrapped. */
+  private readonly _wrapRow: HTMLElement;
   private readonly _summary: HTMLElement;
   private readonly _summaryNote: HTMLElement;
   private readonly _products: HTMLElement;
@@ -234,6 +269,16 @@ export class ExportPanel {
   private _gzip = false;
   /** Write the classification channel (false ⇒ omitted as class 0). */
   private _includeClass = true;
+  /** Write LAS 1.2 even when classes above 31 wrap (see `allowLegacyClassWrap`). */
+  private _allowClassWrap = false;
+  /**
+   * The LAS 1.2 class-wrap preview, fetched on first use because it names
+   * classes from tables kept out of the eager shell. Null until it arrives.
+   */
+  private _wrapPreview: ((c: Uint8Array | null | undefined) => LegacyClassWrapNote | null) | null = null;
+  private _wrapPreviewRequested = false;
+  /** The last fetch attempt failed — surfaced once, then cleared on retry. */
+  private _wrapPreviewFailed = false;
   private _busy = false;
   /**
    * Whether the active scan carries a real-world CRS (projected / geographic).
@@ -293,6 +338,16 @@ export class ExportPanel {
     this._fullResRow = el('div', { className: 'olv-export-fullres' });
     this._gzipRow = el('div', { className: 'olv-export-fullres' });
     this._classRow = el('div', { className: 'olv-export-fullres' });
+    // Shown only while LAS 1.2 would write a classification (_renderSummary).
+    this._wrapRow = el('div', { className: 'olv-export-fullres' });
+    const wrapLabel = el('label', { className: 'olv-export-fullres-label' });
+    const wrapBox = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
+    wrapBox.addEventListener('change', () => { this._allowClassWrap = wrapBox.checked; this._renderSummary(); });
+    wrapLabel.append(wrapBox, el('span', { text: LEGACY_CLASS_WRAP_OPT_IN }));
+    this._wrapRow.append(wrapLabel, el('span', {
+      className: 'olv-export-fullres-hint',
+      text: 'LAS 1.2 keeps 5 bits of class, so 33 is written as 1 and 64 as 0. Unticked, such a file is refused.',
+    }));
     // The live "what you'll get" line — size, CRS, classification, before any write.
     this._summary = el('p', { className: 'olv-export-summary', text: '' });
     // The note is a sibling, not a tail on the summary line: the neutral
@@ -323,6 +378,7 @@ export class ExportPanel {
       this._crsLocalNote,
       this._fullResRow,
       this._classRow,
+      this._wrapRow,
       this._summary,
       this._summaryNote,
       this._exportBtn,
@@ -539,6 +595,16 @@ export class ExportPanel {
     const info: ExportCloudSummary | null = this._cb.summaryInfo
       ? this._cb.summaryInfo()
       : cloudToSummary(this._cb.getCloud());
+    // The LAS 1.2 opt-in means something only while that format would write a
+    // classification the cloud has.
+    const legacyClasses =
+      info != null && this._format === 'las' && this._includeClass && info.classProvenance !== 'none';
+    this._wrapRow.classList.toggle('olv-hidden', !legacyClasses);
+    // Snapshot BEFORE `_legacyClassWrap` runs below: a fresh attempt clears
+    // this flag as part of starting itself, so reading it afterwards would
+    // only ever see that fresh (unset) state, never the failure that made
+    // THIS render happen.
+    const wrapPreviewLoadFailed = legacyClasses && this._wrapPreviewFailed;
     if (!info) {
       this._summary.textContent = '';
       this._summaryNote.textContent = '';
@@ -560,18 +626,54 @@ export class ExportPanel {
       fullRes: this._fullRes,
       hasClassEdits: this._cb.hasClassEdits?.() ?? false,
       gzip: this._gzip,
+      legacyClassWrap: legacyClasses ? this._legacyClassWrap(info.classification) : null,
+      allowLegacyClassWrap: this._allowClassWrap,
     };
     const s = buildExportSummary(input);
-    const note =
-      s.warnings.find((w) => w.level === 'error') ??
-      s.warnings.find((w) => w.level === 'warn') ??
-      s.warnings.find((w) => w.level === 'info');
+    const note = wrapPreviewLoadFailed
+      ? { level: 'warn' as const, message: WRAP_PREVIEW_LOAD_FAILED }
+      : s.warnings.find((w) => w.level === 'error') ??
+        s.warnings.find((w) => w.level === 'warn') ??
+        s.warnings.find((w) => w.level === 'info');
     this._summary.textContent = s.line;
     this._summary.className = 'olv-export-summary';
     this._summaryNote.textContent = note ? note.message : '';
     this._summaryNote.className = note
       ? `olv-export-summary-note is-${note.level}`
       : 'olv-export-summary-note olv-hidden';
+  }
+
+  /**
+   * What the LAS 1.2 write gate will say about the resident classes. The first
+   * call fetches the guard and renders again once it arrives; until then, and
+   * for a scan whose classes are not resident, the preview says nothing and
+   * the write gate still decides.
+   *
+   * A failed fetch re-renders too, showing the honest "could not load" state
+   * `_renderSummary` reads from `_wrapPreviewFailed` (snapshotted there before
+   * this method runs). The request flag stays SET through that one render —
+   * the render this method's own catch triggers — and is only cleared once it
+   * returns, so a chunk that keeps failing cannot retry itself in a tight
+   * synchronous loop; a LATER, separately-triggered render is what retries.
+   */
+  private _legacyClassWrap(classification: Uint8Array | null | undefined): LegacyClassWrapNote | null {
+    if (!classification) return null;
+    if (this._wrapPreview) return this._wrapPreview(classification);
+    if (!this._wrapPreviewRequested) {
+      this._wrapPreviewRequested = true;
+      this._wrapPreviewFailed = false;
+      loadLegacyClassGuard()
+        .then((m) => {
+          this._wrapPreview = m.previewLegacyClassWrap;
+          this._renderSummary();
+        })
+        .catch(() => {
+          this._wrapPreviewFailed = true;
+          this._renderSummary();
+          this._wrapPreviewRequested = false;
+        });
+    }
+    return null;
   }
 
   /**
@@ -974,6 +1076,7 @@ export class ExportPanel {
     const crsMode = this._crsMode;
     const sourceEpsg = parseEpsg(this._sourceEpsg);
     const includeClass = this._includeClass;
+    const allowClassWrap = this._allowClassWrap;
     const gzip = this._gzip;
 
     this._busy = true;
@@ -1038,6 +1141,7 @@ export class ExportPanel {
         // on one frame.
         resolvedSourceCrs,
         omitClassification: !includeClass,
+        allowLegacyClassWrap: allowClassWrap,
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {

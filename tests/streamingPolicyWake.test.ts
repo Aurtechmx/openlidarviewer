@@ -14,9 +14,10 @@
  * has to clear the gate, which takes six skips first. A colour change could
  * therefore sit unpainted for over a second.
  *
- * These call sites use `input()`, which both wakes the scheduler and arms the
- * gate on its own. A reason raised through `changed()` now draws as well, but
- * only once the loop serves it: `_served` is set inside the frame, so a demand
+ * These call sites record a once reason through `changed()`. `input()` would
+ * wake the loop too, but it asks only for the 350 ms activity window, and a
+ * frame the browser runs after that window skips the paint. A once reason is
+ * held until a frame serves it. `_served` is set inside the frame, so a demand
  * that was never started reports no served reason and the gate sees nothing.
  * That is why the assertions below pin the wake and leave the paint to
  * `tests/invalidationDrawsFrame.test.ts`, which drives the real loop.
@@ -53,7 +54,7 @@ describe('a settled viewer is asleep until something asks', () => {
     expect(d.shouldRender()).toBe(false);
   });
 
-  it('is woken and armed by input(), which is what the setters call', () => {
+  it('is woken and armed by input(), which is what a gesture calls', () => {
     const d = sleepingDemand();
     d.input();
     expect(d.needsFrame(0)).toBe(true);
@@ -89,14 +90,22 @@ describe('the streaming policy surface tells the demand', () => {
     return source.slice(at, end);
   };
 
-  it.each(['setStreamingColorMode', 'setStreamingQuality', 'resumeStreaming', 'clearStreamingCache'])(
-    '%s wakes the loop',
-    (name) => {
-      expect(bodyOf(name)).toContain('_demand.input()');
-    },
-  );
+  // The colour mode recolours resident nodes. A new budget or a resume changes
+  // what the scheduler's next tick keeps resident, and that tick runs from the
+  // loop body, so the loop has to run for either to act.
+  it.each([
+    ['setStreamingColorMode', 'style'],
+    ['setStreamingQuality', 'streaming-schedule'],
+    ['resumeStreaming', 'streaming-schedule'],
+  ])('%s wakes the loop with %s', (name, reason) => {
+    expect(bodyOf(name)).toContain(`_demand.changed('${reason}')`);
+  });
 
   it('pauseStreaming does not, because stopping work needs no frame', () => {
-    expect(bodyOf('pauseStreaming')).not.toContain('_demand.input()');
+    expect(bodyOf('pauseStreaming')).not.toContain('_demand.');
+  });
+
+  it('clearStreamingCache does not, because no drawn node lives in the cache', () => {
+    expect(bodyOf('clearStreamingCache')).not.toContain('_demand.');
   });
 });

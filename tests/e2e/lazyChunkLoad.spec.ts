@@ -120,3 +120,69 @@ test.describe('runtime lazy chunks resolve on the served build', () => {
     ).toEqual([]);
   });
 });
+
+test.describe('session import survives a failed chunk load', () => {
+  /**
+   * A failed dynamic import doesn't reach the app as a plain rejection: Vite's
+   * own `__vitePreload` wrapper dispatches a `vite:preloadError` event first,
+   * and `installStaleChunkRecovery` (src/app/staleChunkReload.ts) answers every
+   * such event by calling `preventDefault()` and reloading the page once — so
+   * the very first failure just navigates away before any in-page assertion
+   * could see it. A second failure inside that recovery's 20 s cooldown takes
+   * the "already tried, don't loop" branch instead: no reload, but the event
+   * is still defaulted-out, so the awaited import resolves to `undefined`
+   * rather than rejecting. That is the case this test isolates — pre-seeding
+   * the cooldown marker `installStaleChunkRecovery` reads (mirroring
+   * `STALE_RELOAD_MARKER_KEY` in staleChunkReload.ts) so the very first
+   * failure in this test already takes the no-reload path, and main.ts's
+   * `importSession` wrapper is the only thing left standing between an
+   * `undefined` module and the drop toast.
+   */
+  test('a chunk load that resolves to undefined reports an error instead of an unhandled rejection', async ({
+    page,
+  }) => {
+    const failures = watchForImportFailures(page);
+    await suppressOnboardingTour(page);
+    await page.addInitScript((key: string) => {
+      try {
+        sessionStorage.setItem(key, String(Date.now()));
+      } catch {
+        // Storage may be blocked; the test still exercises the failure path,
+        // just via a real (harmless) reload instead of the no-reload branch.
+      }
+    }, 'olv:stale-reload-at');
+
+    // Force the session-import chunk to fail exactly like a stale deploy or a
+    // blocked request would. Content is irrelevant to this test — `isSessionFile`
+    // routes on the `.olvsession` extension before any bytes are parsed, so the
+    // chunk-load failure fires before the (never-reached) parser would matter.
+    await page.route('**/sessionIo-*.js', (route) => route.abort());
+
+    await page.goto('/');
+    await expect(page.locator('.olv-empty')).toBeVisible();
+
+    const dataTransfer = await page.evaluateHandle(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['{}'], 'test.olvsession'));
+      return dt;
+    });
+    await page.dispatchEvent('body', 'drop', { dataTransfer });
+
+    // main.ts's `importSession` wrapper must catch this and report it through
+    // the drop toast — the same contract every other failed load honours —
+    // rather than leaving the toast stuck on "Opening…" or letting the
+    // rejection escape uncaught. The resolved-to-`undefined` module makes
+    // `mod.importSession` throw "Cannot read properties of undefined" if
+    // nothing catches it first; `loadSessionIo` (lazyChunks.ts) does, so the
+    // toast reads the same friendly sentence a network failure gets, not that
+    // internal TypeError.
+    const toast = page.locator('.olv-toast');
+    await expect(toast).toHaveClass(/olv-toast-error/, { timeout: 10_000 });
+    await expect(page.locator('.olv-toast-text')).toHaveText('Could not load the session importer.');
+
+    expect(
+      failures,
+      `session-import chunk failure leaked as an unhandled rejection:\n${failures.join('\n')}`,
+    ).toEqual([]);
+  });
+});

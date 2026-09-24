@@ -68,4 +68,10 @@ describe('the wrap is silent, which is the danger', () => {
     expect(text).toContain('User Definable');
     expect(text).toContain('overlap flag');
   });
+
+  it('names each code once, beside the name its range gives it', () => {
+    const text = describeLoss(inspectLegacyConversion([33, 64, 255]), 6);
+    expect(text).toContain('classes 33 (Reserved), 64 (User Definable), 255 (User Definable)');
+    expect(text).not.toMatch(/\(\w[\w ]*\(\d+\)\)/); // never "64 (User Definable (64))"
+  });
 });

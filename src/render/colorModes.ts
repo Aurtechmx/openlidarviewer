@@ -2,9 +2,14 @@
  * colorModes.ts
  *
  * Pure functions that derive a flat Uint8Array of interleaved RGB colours
- * (3 bytes per point) from a PointCloud for a given colour mode.
+ * (3 bytes per point) from a PointCloud for a given colour mode, plus
+ * `refreshClassificationColours`, the one caller that both derives a colour
+ * and uploads it — kept here rather than beside `writeFloatColorsInto`
+ * because what a caller needs re-run is `colorForMode`, not the EOTF seam.
  *
- * No three.js dependency — safe to import in Node/Vitest tests.
+ * No three.js dependency — safe to import in Node/Vitest tests. A GPU colour
+ * attribute is accepted structurally (`array` + `needsUpdate`) rather than by
+ * its three.js type, so that stays true of the whole file.
  */
 
 import { clamp, clamp01 } from '../numeric';
@@ -12,6 +17,7 @@ import type { PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { densityForChunk, densityCellSizeFor } from './densityColors';
 import { computeElevationRange, computeScalarRange } from './elevationRange';
+import { writeFloatColorsInto } from './colorEncode';
 import {
   coverageColorForConfidence,
   COVERAGE_NONE,
@@ -995,4 +1001,24 @@ export function availableModes(cloud: PointCloud): ColorMode[] {
  */
 export function defaultMode(cloud: PointCloud): ColorMode {
   return cloud.colors ? 'rgb' : 'elevation';
+}
+
+/** The fields a classification recolor reads or writes, out of a Viewer cloud entry. */
+export interface RecolorableEntry {
+  readonly cloud: PointCloud;
+  /** Structural, not `THREE.InstancedBufferAttribute`, so this file stays three.js-free. */
+  readonly colorAttr: { array: unknown; needsUpdate: boolean };
+  readonly mode: ColorMode;
+}
+
+/**
+ * Re-derive and re-upload `entry`'s colour attribute from its classification
+ * buffer. A no-op unless the cloud is showing classification colours right
+ * now — every other mode's attribute is untouched by a classification edit.
+ */
+export function refreshClassificationColours(entry: RecolorableEntry): void {
+  if (entry.mode !== 'classification') return;
+  const raw = colorForMode('classification', entry.cloud);
+  writeFloatColorsInto(entry.colorAttr.array as Float32Array, raw);
+  entry.colorAttr.needsUpdate = true;
 }

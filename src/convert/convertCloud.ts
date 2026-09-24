@@ -16,6 +16,7 @@ import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
 import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
+import { countLegacyClassWrap, legacyClassWrapRefusal, legacyClassWrapWarning } from './legacyClassGuard';
 
 /**
  * The extended classification-flags bit that carries overlap (LAS 1.4 Table 8),
@@ -286,32 +287,23 @@ export function convertCloud(
         description: datumNote,
       });
     } else {
-      // LAS 1.2 stores the classification in 5 bits — count what the mask
-      // will destroy and say so, instead of silently zeroing class 64 etc.
-      // The writer masks (`& 0x1f`), so a class above 31 WRAPS: it is not
-      // pinned to 31. The message states the wrap, because a reader told
-      // "clamped" would expect 64 to arrive as 31 when it arrives as 0.
-      if (g.classification) {
-        let wrapped = 0;
-        for (let i = 0; i < g.count; i++) {
-          if (g.classification[i] > 31) wrapped++;
-        }
-        if (wrapped > 0) {
-          log.push({
-            level: 'warn',
-            message: `LAS 1.2 stores 5-bit classes — ${wrapped.toLocaleString()} points with classes > 31 wrap to their low 5 bits (class & 31), so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.`,
-          });
-        }
+      // LAS 1.2 stores the classification in 5 bits and the writer masks
+      // (`& 0x1f`), so a class above 31 WRAPS onto another valid class: 33
+      // reads back as 1 and 64 as 0, and the file opens without an error.
+      // That is refused unless the request opts in; opted in, the write goes
+      // ahead and the wrap is logged with its arithmetic. Only the `count`
+      // records the writer emits are judged.
+      const wrap = countLegacyClassWrap(g.classification?.subarray(0, g.count));
+      if (wrap.points > 0) {
+        if (!opts.allowLegacyClassWrap) return fail(legacyClassWrapRefusal(wrap), crsNote);
+        log.push({ level: 'warn', message: legacyClassWrapWarning(wrap.points) });
       }
-      // The OTHER thing a legacy write drops, which went out silently. The
-      // extended encoding carries overlap as a flag bit beside a real base
-      // class; the legacy byte has nowhere to put it, so `writeLas` composes
-      // only the synthetic/key-point/withheld bits and the overlap mark
-      // disappears. `lasSemantics` has described this loss precisely since it
-      // was written — `inspectLegacyConversion` / `describeLoss` — and had no
-      // caller anywhere in `src/`, so the sentence existed and never reached a
-      // user. The class-wrap warning above is the same shape; this is its
-      // missing half.
+      // The other thing a legacy write drops. The extended encoding carries
+      // overlap as a flag bit beside a real base class; the legacy byte has
+      // nowhere to put it, so `writeLas` composes only the
+      // synthetic/key-point/withheld bits and the overlap mark disappears.
+      // This one warns rather than refuses, because the base class written
+      // beside it is still correct (see `inspectLegacyConversion`).
       if (g.classificationFlags) {
         let overlapped = 0;
         for (let i = 0; i < g.count; i++) {

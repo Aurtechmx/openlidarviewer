@@ -322,6 +322,14 @@ export const loadBatchConverter = () => import('./ui/BatchConverter');
 export const loadConvertEngine = () => import('./convert/convertCloud');
 
 /**
+ * Load the LAS 1.2 class-wrap guard for the Export panel's live preview. It
+ * names classes from the LAS class tables, which stay out of the eager shell,
+ * so the panel fetches it the first time LAS 1.2 would write a resident
+ * classification rather than at startup.
+ */
+export const loadLegacyClassGuard = () => import('./convert/legacyClassGuard');
+
+/**
  * Load the streaming benchmark collector — used by both the overlay's live
  * readout and the `?benchmark=1` post-session report.
  */
@@ -430,6 +438,40 @@ export const loadFloorPlanConfidence = () =>
 export const loadFullCloudGradeAction = () =>
   import('./render/streaming/runFullCloudGradeAction');
 export const loadSession = () => import('./io/session');
+
+/**
+ * Load the session-restore orchestration (`importSession` — parse, verify,
+ * rebase, apply) on the first `.olvsession` file the shell actually sees
+ * (drop, Open picker, or "Apply anyway"), never in the initial shell (v0.7
+ * shell-headroom). The `ScanFacts` adapter it used to carry inline is now
+ * `./app/sessionScanFacts`, imported eagerly by `openScan.ts`'s hot scan-open path;
+ * this module is everything else — the apply step and its own further-lazy
+ * chunks (`loadSessionOwnership`, `loadVerifySessionManifest`) — and no scan
+ * needs any of it before a session file is actually offered. `main.ts` binds
+ * its running state through `SessionIoDeps` once this resolves.
+ *
+ * Wrapped rather than a bare re-export: Vite's `__vitePreload` swallows a
+ * preload failure that lands inside `installStaleChunkRecovery`'s cooldown
+ * (staleChunkReload.ts) and resolves to `undefined` instead of rejecting.
+ * Left bare, `main.ts`'s caller would then read `mod.importSession` off
+ * `undefined` and report the resulting TypeError verbatim — "Cannot read
+ * properties of undefined" — instead of the same honest chunk-load message a
+ * network failure already gets there.
+ *
+ * The `.then` guard has to live on a SEPARATE statement from the `import()`
+ * literal, not chained onto it directly: the live source transform wraps the
+ * whole `() => import(...)` expression it finds — including a `.then` chained
+ * straight onto that same import — inside `__vitePreload`, so a guard written
+ * that way runs only when the import itself fulfils. The swallow this guards
+ * against happens one layer further out, inside `__vitePreload`'s own catch,
+ * which a guard inside its wrapped loader can never see.
+ */
+const importSessionIoChunk = () => import('./app/sessionIo');
+export const loadSessionIo = () =>
+  importSessionIoChunk().then((mod) => {
+    if (!mod) throw new Error('Could not load the session importer.');
+    return mod;
+  });
 export const loadCompareEpochs = () => import('./terrain/change/compareEpochs');
 export const loadAlignEpochs = () => import('./terrain/change/alignEpochs');
 export const loadCompareDtms = () => import('./terrain/change/compareDtms');
