@@ -2150,6 +2150,7 @@ export class Inspector {
       className: 'olv-inline-retry',
       type: 'button',
       text: 'Try again',
+      tip: 'Retry loading the scan report.',
     }) as HTMLButtonElement;
     retry.addEventListener('click', () => {
       if (this._pendingReportRows) this.setReport(this._pendingReportRows);
@@ -2302,6 +2303,7 @@ export class Inspector {
       className: 'olv-inline-retry',
       type: 'button',
       text: 'Try again',
+      tip: 'Retry loading provenance.',
     }) as HTMLButtonElement;
     retry.addEventListener('click', () => {
       if (this._pendingProvenanceForChunk) this.setProvenance(this._pendingProvenanceForChunk);
@@ -2461,6 +2463,7 @@ export class Inspector {
       className: 'olv-inline-retry',
       type: 'button',
       text: 'Try again',
+      tip: 'Retry loading the coordinate system.',
     }) as HTMLButtonElement;
     retry.addEventListener('click', () => {
       if (this._pendingCrs) this.setCrs(this._pendingCrs);
