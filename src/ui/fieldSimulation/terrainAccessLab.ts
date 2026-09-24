@@ -44,11 +44,12 @@ import {
   prepareTerrainAccessPreview,
   type TerrainAccessPreview,
 } from '../../simulation/terrainAccess/terrainAccessPreview';
-import { whyNotSentence, type GridCell } from '../../simulation/terrainAccess/terrainAccessGridCursor';
+import { whyNotSentence, type ElevationReference, type GridCell } from '../../simulation/terrainAccess/terrainAccessGridCursor';
 import type { HorizontalScale } from '../../simulation/terrainAccess/dtmTerrainAccessGrid';
 import type { TerrainAccessProfile } from '../../simulation/terrainAccess/terrainAccessTypes';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
+import { verticalUnitLabel } from '../../units/units';
 import { TerrainAccessResultGrid, maskFromIndices } from './terrainAccessResultGrid';
 import {
   buildTerrainAccessMapBuffers,
@@ -62,7 +63,7 @@ import {
   parseTerrainAccessProfileForm,
   type TerrainAccessProfileFormValues,
 } from './terrainAccessProfileForm';
-import { loadTerrainAccessPackage } from '../../lazyChunks';
+import { loadTerrainAccessPackage, registerTerrainAccessOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
 import type { buildTerrainAccessPackage } from '../../export/terrainAccessPackage';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
@@ -79,6 +80,40 @@ export interface TerrainAccessLabInput {
   readonly sceneUpAxis?: 'z' | 'y' | null;
   readonly overlayHost?: TerrainAccessOverlayHost | null;
   readonly isStale?: () => boolean;
+  /**
+   * Whether the DTM's own claimed vertical factor actually resolved — the
+   * same fact `AnalyseContoursResult.verticalScaleResolved` carries for Flow
+   * Pulse. Absent/undefined is treated as unresolved, never as resolved by
+   * default: an elevation reading is withheld unless this says otherwise.
+   */
+  readonly verticalScaleResolved?: boolean;
+  /**
+   * The load-time recentring origin and CRS/georeferencing facts the result
+   * grid's real-elevation readout and the export package's real corner need
+   * — the same `worldOrigin`/`wkt`/`crsName` `flowPulseLab.ts` reads off
+   * `getMapContext()`. All null when the scene has no single resolved
+   * origin or CRS.
+   */
+  readonly worldOriginX?: number | null;
+  readonly worldOriginY?: number | null;
+  readonly worldOriginZ?: number | null;
+  readonly wkt?: string | null;
+  readonly crsName?: string | null;
+}
+
+/**
+ * How to recover a real elevation from the routed grid's local z — the same
+ * rule `flowPulseLab.ts`'s `flowElevationReference` uses: the DTM's own
+ * claimed vertical factor, gated on the caller's own statement that the
+ * vertical scale actually resolved, never the geometry placeholder a
+ * CRS-less scan pins to 1.
+ */
+export function terrainAccessElevationReference(input: TerrainAccessLabInput): ElevationReference {
+  const zFactor = input.verticalScaleResolved === false
+    ? null
+    : (input.dtm.verticalUnitToMetres ?? null);
+  const unitLabel = zFactor == null ? 'units' : verticalUnitLabel(zFactor);
+  return { originZ: input.worldOriginZ ?? null, unitLabel };
 }
 
 const NO_IDENTITY = {
@@ -175,6 +210,19 @@ export type TerrainAccessExportOutcome =
   | { readonly ok: true; readonly bytes: Uint8Array; readonly filename: string }
   | { readonly ok: false; readonly reason: string };
 
+/**
+ * The real-world placement facts the export package needs to georeference
+ * its raster/GeoJSON — see `FlowPulseGeoref`, which this mirrors exactly.
+ * All null when the scene has no single resolved origin or CRS, in which
+ * case the package writes a local (0, 0) origin and no .prj, and says so in
+ * its README.
+ */
+export interface TerrainAccessGeoref {
+  readonly worldOrigin: { readonly x: number; readonly y: number } | null;
+  readonly crsName: string | null;
+  readonly wkt: string | null;
+}
+
 /** Build the export package from the CURRENT run, refusing on a stale result. Pure and DOM-free. */
 export function buildTerrainAccessExport(
   outcome: TerrainAccessLabOutcome | null,
@@ -182,6 +230,7 @@ export function buildTerrainAccessExport(
   filename: string | null,
   layerId: string | null,
   build: typeof buildTerrainAccessPackage,
+  georef: TerrainAccessGeoref | null = null,
 ): TerrainAccessExportOutcome {
   if (!outcome || !outcome.ok) {
     return { ok: false, reason: 'Terrain Access has not produced a run to export.' };
@@ -190,7 +239,12 @@ export function buildTerrainAccessExport(
     return { ok: false, reason: 'the result is stale; rerun Terrain Access before exporting.' };
   }
   const basename = filename ?? layerId ?? 'terrain-access';
-  const bytes = build(outcome, { basename });
+  const bytes = build(outcome, {
+    basename,
+    worldOrigin: georef?.worldOrigin ?? null,
+    crsName: georef?.crsName ?? null,
+    wkt: georef?.wkt ?? null,
+  });
   return { ok: true, bytes, filename: `${basename}-terrain-access.zip` };
 }
 
@@ -392,10 +446,73 @@ function buildProfileForm(onSubmit: () => void): {
 }
 
 /**
+ * The 3D traversability-map/route overlay (see `TerrainAccessOverlay.ts`)
+ * outlives the modal that built it, mirroring `flowPulseLab.ts`'s
+ * `persistentFlowOverlay` exactly and for the same reason: the Lab's modal
+ * covers the scene while open, so disposing the overlay unconditionally on
+ * close meant a user who turned it on never actually saw it. A single
+ * module-level session, kept until the user turns it off or the terrain/CRS
+ * it was built from goes stale, is the smallest correct home for it — the
+ * one Viewer in this application has exactly one scene.
+ */
+let persistentTerrainAccessOverlay: {
+  readonly overlay: TerrainAccessOverlay;
+  /** Re-pointed to the CURRENT mount's staleness check on every open. */
+  isStale: (() => boolean) | null;
+  overlayOn: boolean;
+} | null = null;
+
+/**
+ * The overlay for this mount: the persisted one, when it exists and its
+ * terrain/CRS have not gone stale, else a fresh one. A stale persisted
+ * overlay is disposed here rather than left attached to a scene whose frame
+ * it no longer describes. Exported for `terrainAccessOverlayInvalidation.test.ts`
+ * to exercise the disposal-registry path directly.
+ */
+export function acquireTerrainAccessOverlay(
+  host: TerrainAccessOverlayHost | null,
+  isStale: (() => boolean) | null,
+): TerrainAccessOverlay | null {
+  if (!host) return null;
+  if (persistentTerrainAccessOverlay && persistentTerrainAccessOverlay.isStale?.() === true) {
+    persistentTerrainAccessOverlay.overlay.dispose();
+    persistentTerrainAccessOverlay = null;
+  }
+  if (!persistentTerrainAccessOverlay) {
+    persistentTerrainAccessOverlay = { overlay: new TerrainAccessOverlay(host), isStale, overlayOn: false };
+  } else {
+    persistentTerrainAccessOverlay.isStale = isStale;
+  }
+  return persistentTerrainAccessOverlay.overlay;
+}
+
+/**
+ * Unconditionally dispose the persisted overlay, when one exists. Reached
+ * through `registerTerrainAccessOverlayInvalidator`/`invalidateTerrainAccessOverlay`
+ * (see `lazyChunks.ts`) by every eager caller that clears the cached terrain
+ * core — a scan closing, a different scan loading, a CRS change, or a
+ * classification edit — none of which reopens the Lab to trigger the
+ * `isStale()` check `acquireTerrainAccessOverlay` makes on its own.
+ * Idempotent: a second call with nothing to dispose is a no-op.
+ */
+export function disposePersistentTerrainAccessOverlay(): void {
+  if (!persistentTerrainAccessOverlay) return;
+  persistentTerrainAccessOverlay.overlay.dispose();
+  persistentTerrainAccessOverlay = null;
+}
+
+// Registered once, at module load (the first time this lazy chunk actually
+// loads — opening the Lab, or its export action).
+registerTerrainAccessOverlayInvalidator(disposePersistentTerrainAccessOverlay);
+
+/**
  * The interactive Terrain Access view: profile form → preview/selection →
- * run → export. Owns one `TerrainAccessResultGrid` and one (optional)
- * `TerrainAccessOverlay` for the modal's lifetime; `dispose()` releases the
- * overlay's GPU resources when the modal closes.
+ * run → export. Owns one `TerrainAccessResultGrid` for the modal's own
+ * lifetime and shares the persisted `TerrainAccessOverlay` (see
+ * {@link acquireTerrainAccessOverlay}). `dispose()` releases the overlay's
+ * GPU resources only when the user left it OFF — an overlay the user turned
+ * on stays drawn on the scan after the modal closes, mirroring
+ * `flowPulseLab.ts`'s `mountFlowPulseInteractive` exactly.
  */
 function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { element: HTMLElement; dispose: () => void } {
   const root = el('div', { className: 'olv-ta-lab' });
@@ -410,18 +527,22 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
   let mode: SelectMode = 'start';
   let startCell: GridCell | null = null;
   let goalCell: GridCell | null = null;
-  let overlayOn = false;
   let overlayFrame: TerrainAccessOverlayFrame | null = null;
   let busy = false;
   let exportBusy = false;
 
   const overlayHost = input?.overlayHost ?? null;
-  const overlay = overlayHost ? new TerrainAccessOverlay(overlayHost) : null;
+  const overlay = acquireTerrainAccessOverlay(overlayHost, input?.isStale ?? null);
+  // Reflects whatever the persisted overlay is already showing: reopening
+  // the Lab after leaving the overlay on picks the toggle back up in the
+  // "on" state rather than forgetting it was ever shown.
+  let overlayOn = persistentTerrainAccessOverlay?.overlayOn ?? false;
 
   const grid = new TerrainAccessResultGrid({
     ariaLabel: 'Terrain access traversability grid — arrow keys move, Enter or Space acts on the selected cell',
     onMove: () => {},
     onActivate: (cell) => handleActivate(cell),
+    elevationRef: input ? terrainAccessElevationReference(input) : null,
   });
 
   const inspectorPanel = el('div', { className: 'olv-ta-inspector' });
@@ -453,9 +574,10 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
   }
 
   const overlayToggle = button('Show traversability map', 'olv-ta-overlay-toggle');
-  overlayToggle.setAttribute('aria-pressed', 'false');
+  overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
   overlayToggle.addEventListener('click', () => {
     overlayOn = !overlayOn;
+    if (persistentTerrainAccessOverlay) persistentTerrainAccessOverlay.overlayOn = overlayOn;
     overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
     applyOverlayVisibility();
     announce(overlayOn ? 'Traversability map overlay on.' : 'Traversability map overlay off.');
@@ -503,6 +625,13 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
       const { buildTerrainAccessPackage } = await loadTerrainAccessPackage();
       const built = buildTerrainAccessExport(
         outcome, input?.isStale?.() ?? false, input?.filename ?? null, input?.layerId ?? null, buildTerrainAccessPackage,
+        input ? {
+          worldOrigin: input.worldOriginX != null && input.worldOriginY != null
+            ? { x: input.worldOriginX, y: input.worldOriginY }
+            : null,
+          crsName: input.crsName ?? null,
+          wkt: input.wkt ?? null,
+        } : null,
       );
       if (!built.ok) {
         announce(`Export refused — ${built.reason}`);
@@ -616,7 +745,17 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
 
   return {
     element: root,
-    dispose: () => { overlay?.dispose(); },
+    // An overlay the user left ON stays attached to the scene — only an
+    // overlay left OFF (nothing visible to keep) is torn down here. The
+    // "on" case leaves `persistentTerrainAccessOverlay` untouched: the next
+    // Lab open reclaims the SAME instance via `acquireTerrainAccessOverlay`
+    // rather than constructing a second one that would orphan the first.
+    dispose: () => {
+      if (!overlayOn && persistentTerrainAccessOverlay) {
+        persistentTerrainAccessOverlay.overlay.dispose();
+        persistentTerrainAccessOverlay = null;
+      }
+    },
   };
 }
 

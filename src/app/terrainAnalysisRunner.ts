@@ -67,6 +67,7 @@ import {
   loadDerivedLayerReceipt,
   loadWithheldAwareTerrainGather,
   invalidateFlowOverlay,
+  invalidateTerrainAccessOverlay,
 } from '../lazyChunks';
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
@@ -1037,6 +1038,9 @@ export function createTerrainAnalysisRunner(
     // also invalidate the Flow Pulse Lab's persisted 3D overlay, if one is
     // showing — a no-op when the Lab's chunk was never loaded this session.
     invalidateFlowOverlay();
+    // Same events, same reasoning, for the Terrain Access Lab's persisted
+    // traversability-map/route overlay.
+    invalidateTerrainAccessOverlay();
     // Same set of events end the relevance of any on-screen contour layer:
     // its scan closed, another scan took the viewer, its CRS changed, or its
     // classification was edited. `contourLayers` lives in this closure (it is

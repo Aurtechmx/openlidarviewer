@@ -737,6 +737,27 @@ export const loadTerrainAccessLab = () => import('./ui/fieldSimulation/terrainAc
 export const loadTerrainAccessPackage = () => import('./export/terrainAccessPackage');
 
 /**
+ * The Terrain Access Lab keeps its 3D traversability-map/route overlay
+ * attached to the scene after the Lab modal closes, mirroring
+ * `registerFlowOverlayInvalidator`/`invalidateFlowOverlay` above exactly —
+ * same reasoning, same events (a different scan loading, a scan closing, a
+ * CRS change, a classification edit), same near-zero-cost seam so
+ * `terrainAnalysisRunner.ts` (eager) can tear down the Lab's (lazy)
+ * persisted overlay without importing its chunk.
+ */
+let terrainAccessOverlayInvalidator: (() => void) | null = null;
+
+/** Called by the Terrain Access Lab chunk itself, once, when it first loads. */
+export function registerTerrainAccessOverlayInvalidator(fn: (() => void) | null): void {
+  terrainAccessOverlayInvalidator = fn;
+}
+
+/** Tear down the Lab's persisted overlay, if the chunk ever loaded one. */
+export function invalidateTerrainAccessOverlay(): void {
+  terrainAccessOverlayInvalidator?.();
+}
+
+/**
  * The Withheld-aware terrain recovery gather: a full-resolution re-decode
  * (through the shared parse worker) of a static file the display path
  * voxel-downsampled at load, rasterised into a fresh `TerrainCore`. Only
