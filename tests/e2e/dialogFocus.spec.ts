@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { suppressOnboardingTour, dropTinyPly } from './helpers';
+import { suppressOnboardingTour, dropTinyPly, railChromeSettled } from './helpers';
 
 /**
  * dialogFocus.spec.ts
@@ -22,6 +22,16 @@ function isInside(page: Page, selector: string): Promise<boolean> {
   );
 }
 
+/** Six Shift+Tabs never escape the open dialog to a background control, and
+ * Escape still closes it — the shape shared by the palette's and the
+ * shortcut sheet's focus-containment test. */
+async function assertShiftTabContained(page: Page, cardSel: string, dialogSel: string): Promise<void> {
+  for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+Tab');
+  expect(await isInside(page, cardSel)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.locator(dialogSel)).toBeHidden();
+}
+
 test.describe('command palette — focus containment', () => {
   async function open(page: Page): Promise<void> {
     await suppressOnboardingTour(page);
@@ -39,10 +49,7 @@ test.describe('command palette — focus containment', () => {
 
   test('Shift+Tab never escapes to a background control, and Escape still closes it', async ({ page }) => {
     await open(page);
-    for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+Tab');
-    expect(await isInside(page, '.olv-palette-card')).toBe(true);
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.olv-palette')).toBeHidden();
+    await assertShiftTabContained(page, '.olv-palette-card', '.olv-palette');
   });
 
   test('the no-match empty state offers a next action, not just a dead-end label', async ({ page }) => {
@@ -74,10 +81,7 @@ test.describe('shortcut sheet — focus containment', () => {
 
   test('Shift+Tab twice never escapes to a background control, and Escape still closes it', async ({ page }) => {
     await open(page);
-    for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+Tab');
-    expect(await isInside(page, '.olv-shortcuts-card')).toBe(true);
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.olv-shortcuts')).toBeHidden();
+    await assertShiftTabContained(page, '.olv-shortcuts-card', '.olv-shortcuts');
   });
 
   test('the no-match empty state offers a next action', async ({ page }) => {
@@ -96,7 +100,7 @@ test.describe('help overlay — focus containment', () => {
     await page.goto('/');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(500);
+    await railChromeSettled(page);
     await page.getByRole('button', { name: /^Help$/ }).first().click();
     await expect(page.locator('.olv-help-backdrop')).toBeVisible();
   }
@@ -235,7 +239,7 @@ test.describe('canvas context menu — keyboard operability', () => {
     await page.goto('/');
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(800);
+    await railChromeSettled(page);
   }
 
   test('Shift+F10 on the focused canvas opens the menu with the first row focused', async ({ page }) => {

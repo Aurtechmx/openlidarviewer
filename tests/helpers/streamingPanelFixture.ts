@@ -15,8 +15,10 @@ export function installStreamingPanelDom(makeEl: (tag: string) => unknown): void
     createElement: makeEl,
   };
   const g = globalThis as unknown as Record<string, unknown>;
-  g.HTMLInputElement ??= class {};
-  g.HTMLAnchorElement ??= class {};
+  // Empty on purpose: `el()` in dom.ts only needs these as constructors for
+  // an `instanceof` guard on `props.type`/`props.href`, never as real inputs.
+  g.HTMLInputElement ??= class HTMLInputElement {};
+  g.HTMLAnchorElement ??= class HTMLAnchorElement {};
 }
 
 export function streamingPanelCallbacks() {

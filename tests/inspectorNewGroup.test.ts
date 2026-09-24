@@ -124,7 +124,7 @@ describe('Inspector — "+ New group"', () => {
     const groups = (inspector as unknown as { _groups: { groupsForSession(): unknown[] } })
       ._groups;
     expect(groups).toBeTruthy();
-    expect(groups.groupsForSession().length).toBe(1);
+    expect(groups.groupsForSession()).toHaveLength(1);
   });
 
   it('shows a pending state on the button while the chunk loads, and clears it after', async () => {

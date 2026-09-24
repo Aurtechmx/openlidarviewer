@@ -130,7 +130,7 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
     await page.goto('/?test=1');
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toBeVisible({ timeout: 20_000 });
     await openAnalyseDetails(page);
 
     const canvas = chmTile(page).locator('canvas.olv-analyse-raster');
@@ -144,7 +144,7 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
     await page.goto('/?test=1');
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toBeVisible({ timeout: 20_000 });
     await openAnalyseDetails(page);
 
     const tile = chmTile(page);
@@ -171,7 +171,7 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
     await page.goto('/?test=1');
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await page.waitForTimeout(1500);
+    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toBeVisible({ timeout: 20_000 });
     await openAnalyseDetails(page);
 
     const tile = chmTile(page);

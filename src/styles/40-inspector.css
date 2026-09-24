@@ -282,8 +282,16 @@
   z-index: var(--z-float);
   display: inline-flex; align-items: center; gap: var(--space-xs);
   padding: 4px 6px 4px 10px;
+  /* No backdrop-filter here (unlike this lane's other surfaces): at 92%
+     background opacity the blur bought only a sliver of visual softening,
+     and that filter forces this layer's composite to depend on a fresh
+     capture of whatever is behind it each frame. Under a busy WebGL main
+     thread that capture can starve indefinitely — observed in headless
+     Chromium as the entrance animation's Web Animation stuck at
+     currentTime 0 (opacity permanently 0, unhoverable) for as long as the
+     render loop kept the thread saturated. A plain background has no such
+     dependency. */
   background: rgba(11, 17, 33, 0.92);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid var(--accent);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-floating);

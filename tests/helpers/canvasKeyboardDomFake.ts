@@ -11,7 +11,7 @@
 export type Handler = (e: unknown) => void;
 
 export class FakeEl {
-  tagName: string;
+  readonly tagName: string;
   className = '';
   title = '';
   tabIndex = -1;
@@ -38,8 +38,12 @@ export class FakeEl {
   get classList() {
     const classes = this._classes;
     return {
-      add: (c: string): void => void classes.add(c),
-      remove: (c: string): void => void classes.delete(c),
+      add: (c: string): void => {
+        classes.add(c);
+      },
+      remove: (c: string): void => {
+        classes.delete(c);
+      },
       contains: (c: string): boolean => classes.has(c),
       toggle: (c: string, force?: boolean): boolean => {
         const want = force === undefined ? !classes.has(c) : force;
@@ -85,7 +89,10 @@ export class FakeEl {
     return null;
   }
   getBoundingClientRect(): { width: number; height: number; left: number; top: number } {
-    const r = this.boundingRect ?? { width: this.width || 1, height: this.height || 1 };
+    const r = this.boundingRect ?? {
+      width: this.width === 0 ? 1 : this.width,
+      height: this.height === 0 ? 1 : this.height,
+    };
     return { ...r, left: 0, top: 0 };
   }
 }

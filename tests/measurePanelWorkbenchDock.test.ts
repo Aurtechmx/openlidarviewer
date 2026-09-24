@@ -27,173 +27,15 @@ import type { MeasurementSummary } from '../src/render/measure/MeasureController
 import type { ProfileChartSample } from '../src/render/measure/types';
 import type { ProfileSectionResult } from '../src/render/measure/profileSectionSeam';
 
-type Handler = (e: unknown) => void;
-
-/** A recording DOM node covering only the surface these modules touch. */
-class FakeEl {
-  readonly tagName: string;
-  private _classes = new Set<string>();
-  textContent = '';
-  title = '';
-  value = '';
-  innerHTML = '';
-  open = false;
-  tabIndex = 0;
-  width = 0;
-  height = 0;
-  clientWidth = 0;
-  clientHeight = 0;
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> & { height: string } = { height: '' };
-  readonly children: FakeEl[] = [];
-  parent: FakeEl | null = null;
-  private readonly attrs = new Map<string, string>();
-  private readonly handlers = new Map<string, Handler[]>();
-
-  constructor(tag: string) {
-    this.tagName = tag.toLowerCase();
-  }
-
-  get parentElement(): FakeEl | null {
-    return this.parent;
-  }
-
-  set className(v: string) {
-    this._classes = new Set(String(v).split(/\s+/).filter(Boolean));
-  }
-  get className(): string {
-    return [...this._classes].join(' ');
-  }
-  get classList() {
-    const classes = this._classes;
-    return {
-      add: (...c: string[]): void => void c.forEach((n) => classes.add(n)),
-      remove: (...c: string[]): void => void c.forEach((n) => classes.delete(n)),
-      contains: (c: string): boolean => classes.has(c),
-      toggle: (c: string, force?: boolean): boolean => {
-        const want = force === undefined ? !classes.has(c) : force;
-        if (want) classes.add(c);
-        else classes.delete(c);
-        return want;
-      },
-    };
-  }
-
-  get lastElementChild(): FakeEl | null {
-    for (let i = this.children.length - 1; i >= 0; i--) {
-      if (this.children[i]!.tagName !== '#text') return this.children[i]!;
-    }
-    return null;
-  }
-
-  private _adopt(kid: unknown): FakeEl {
-    if (kid instanceof FakeEl) {
-      kid.parent = this;
-      return kid;
-    }
-    const t = new FakeEl('#text');
-    t.textContent = String(kid);
-    t.parent = this;
-    return t;
-  }
-  append(...kids: unknown[]): void {
-    for (const k of kids) this.children.push(this._adopt(k));
-  }
-  replaceChildren(...kids: unknown[]): void {
-    this.children.length = 0;
-    for (const k of kids) this.children.push(this._adopt(k));
-  }
-  remove(): void {
-    if (!this.parent) return;
-    const at = this.parent.children.indexOf(this);
-    if (at >= 0) this.parent.children.splice(at, 1);
-    this.parent = null;
-  }
-  contains(node: FakeEl | null): boolean {
-    if (!node) return false;
-    if (node === this) return true;
-    return this.children.some((c) => c.contains(node));
-  }
-
-  setAttribute(n: string, v: string): void {
-    this.attrs.set(n, v);
-  }
-  removeAttribute(n: string): void {
-    this.attrs.delete(n);
-  }
-  getAttribute(n: string): string | null {
-    return this.attrs.get(n) ?? null;
-  }
-
-  addEventListener(type: string, fn: Handler): void {
-    const a = this.handlers.get(type) ?? [];
-    a.push(fn);
-    this.handlers.set(type, a);
-  }
-  removeEventListener(type: string, fn: Handler): void {
-    const a = this.handlers.get(type) ?? [];
-    const at = a.indexOf(fn);
-    if (at >= 0) a.splice(at, 1);
-  }
-  dispatchEvent(evt: { type: string; stopPropagation?: () => void }): boolean {
-    for (const fn of [...(this.handlers.get(evt.type) ?? [])]) fn(evt);
-    return true;
-  }
-  focus(): void {}
-  blur(): void {}
-  setPointerCapture(): void {}
-  releasePointerCapture(): void {}
-  getContext(): null {
-    return null;
-  }
-
-  private _matches(sel: string): boolean {
-    const parts = sel.split('.');
-    const tag = parts[0];
-    if (tag && this.tagName !== tag.toLowerCase()) return false;
-    for (const c of parts.slice(1)) if (!this._classes.has(c)) return false;
-    return true;
-  }
-  querySelector(sel: string): FakeEl | null {
-    for (const c of this.children) {
-      if (c._matches(sel)) return c;
-      const deep = c.querySelector(sel);
-      if (deep) return deep;
-    }
-    return null;
-  }
-  querySelectorAll(sel: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    const walk = (n: FakeEl): void => {
-      for (const c of n.children) {
-        if (c._matches(sel)) out.push(c);
-        walk(c);
-      }
-    };
-    walk(this);
-    return out;
-  }
-}
+import { FakeEl, installFakeDom, uninstallFakeDom } from './support/measurePanelDom';
 
 /** Frames the presenter asked for, run only when a test says so. */
 let frames: (() => void)[] = [];
 
 beforeEach(() => {
   frames = [];
+  installFakeDom({ ns: true, docListeners: true });
   const g = globalThis as unknown as Record<string, unknown>;
-  g.document = {
-    createElement: (tag: string) => new FakeEl(tag),
-    createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
-    addEventListener: (): void => {},
-    removeEventListener: (): void => {},
-  };
-  g.HTMLInputElement = class {};
-  g.HTMLAnchorElement = class {};
-  g.ResizeObserver = class {
-    observe(): void {}
-    unobserve(): void {}
-    disconnect(): void {}
-  };
   g.requestAnimationFrame = (fn: () => void): number => frames.push(fn);
   g.window = {
     innerWidth: 1440,
@@ -204,17 +46,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  uninstallFakeDom();
   const g = globalThis as unknown as Record<string, unknown>;
-  for (const key of [
-    'document',
-    'HTMLInputElement',
-    'HTMLAnchorElement',
-    'ResizeObserver',
-    'requestAnimationFrame',
-    'window',
-  ]) {
-    delete g[key];
-  }
+  delete g.requestAnimationFrame;
+  delete g.window;
 });
 
 /** A section over a handful of returns, enough to describe and draw. */

@@ -68,23 +68,35 @@ async function gotoWithScan(page: Page): Promise<void> {
   await goto(page);
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(800);
+  await expect(page.locator('.olv-dock')).toBeVisible({ timeout: 10_000 });
+}
+
+/** Wire the "click, chunk fetches slowly, aria-busy clears on success" test
+ * every dock entry point in this file needs — palette and help overlay only
+ * differ in the chunk glob, button selector and the panel it opens. */
+async function assertBusyThenOpens(
+  page: Page,
+  chunkGlob: string,
+  buttonSel: string,
+  panelSel: string,
+): Promise<void> {
+  await gotoWithScan(page);
+  await page.route(chunkGlob, async (route) => {
+    await new Promise((r) => setTimeout(r, 600));
+    await route.continue();
+  });
+  const button = page.locator(buttonSel);
+  await button.click();
+  await expect(button).toBeDisabled();
+  await expect(button).toHaveAttribute('aria-busy', 'true');
+  await expect(page.locator(panelSel)).toBeVisible({ timeout: 10_000 });
+  await expect(button).toBeEnabled();
+  await expect(button).toHaveAttribute('aria-busy', 'false');
 }
 
 test.describe('command palette — busy + failure states', () => {
   test('the dock button is disabled and aria-busy while the chunk fetches, and clears on success', async ({ page }) => {
-    await gotoWithScan(page);
-    await page.route('**/CommandPalette-*.js', async (route) => {
-      await new Promise((r) => setTimeout(r, 600));
-      await route.continue();
-    });
-    const button = page.locator('.olv-tool-command');
-    await button.click();
-    await expect(button).toBeDisabled();
-    await expect(button).toHaveAttribute('aria-busy', 'true');
-    await expect(page.locator('.olv-palette')).toBeVisible({ timeout: 10_000 });
-    await expect(button).toBeEnabled();
-    await expect(button).toHaveAttribute('aria-busy', 'false');
+    await assertBusyThenOpens(page, '**/CommandPalette-*.js', '.olv-tool-command', '.olv-palette');
   });
 
   test('a failed chunk reports through the toast with a Try again action', async ({ page }) => {
@@ -104,18 +116,7 @@ test.describe('command palette — busy + failure states', () => {
 
 test.describe('help overlay — busy + failure states', () => {
   test('the Help button is disabled and aria-busy while the chunk fetches, and clears on success', async ({ page }) => {
-    await gotoWithScan(page);
-    await page.route('**/HelpOverlay-*.js', async (route) => {
-      await new Promise((r) => setTimeout(r, 600));
-      await route.continue();
-    });
-    const button = page.locator('.olv-tool-help');
-    await button.click();
-    await expect(button).toBeDisabled();
-    await expect(button).toHaveAttribute('aria-busy', 'true');
-    await expect(page.locator('.olv-help-backdrop')).toBeVisible({ timeout: 10_000 });
-    await expect(button).toBeEnabled();
-    await expect(button).toHaveAttribute('aria-busy', 'false');
+    await assertBusyThenOpens(page, '**/HelpOverlay-*.js', '.olv-tool-help', '.olv-help-backdrop');
   });
 
   test('a failed chunk reports through the toast with a Try again action', async ({ page }) => {
@@ -224,7 +225,15 @@ test.describe('shortcut sheet — command palette entry point', () => {
     await page.locator('.olv-palette-input').fill('keyboard shortcuts');
     await page.locator('.olv-palette-row', { hasText: 'Show keyboard shortcuts' }).click();
     await expect(page.locator(TOAST_ACTION)).toHaveText('Try again', { timeout: 10_000 });
-    await page.waitForTimeout(300);
+    // An unhandled rejection from the aborted import would already have fired
+    // its `pageerror` by the time the toast settled two paints later — a
+    // frame boundary, not a duration (same idiom as helpers.railChromeSettled).
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
     expect(pageErrors).toEqual([]);
   });
 });

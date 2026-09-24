@@ -41,8 +41,10 @@ async function loadSampleAndAnnotate(page: Page): Promise<void> {
   await page.goto('/');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  // Let the framing tween settle so canvas clicks land on the cloud.
-  await page.waitForTimeout(1500);
+  // No fixed settle wait here: `openEditorNear` below already retries the
+  // canvas click across several candidate points, each with its own real
+  // wait for the editor to open, which absorbs an still-settling framing
+  // tween without depending on its duration.
   await page.locator('.olv-tool', { hasText: 'Annotate' }).click();
   await showWorkspaceMode(page, 'work');
 }
@@ -403,12 +405,14 @@ test.describe('AnnotationEditor — repositions inside a short viewport', () => 
 
     // Marking it a critical issue reveals the status row — a real height
     // change the card has to stay clamped through, not just on first open.
-    // Forced: at this deliberately short viewport the (unrelated) elevation
-    // colorbar legend can overlap the card's screen position, which is a
-    // pre-existing layout fact of this narrow window, not something this
-    // click needs to actually be reachable by a pointer to exercise the
-    // severity toggle and its resulting reflow.
-    await page.locator('.olv-anno-sev-critical').click({ force: true });
+    // At this deliberately short viewport the (unrelated) elevation colorbar
+    // legend can overlap the card's screen position — a pre-existing layout
+    // fact of this narrow window, nothing to do with the clamp under test —
+    // so it's dismissed via its own real close button rather than forcing a
+    // click through it.
+    const legendClose = page.getByRole('button', { name: 'Hide colour legend' });
+    if (await legendClose.isVisible()) await legendClose.click();
+    await page.locator('.olv-anno-sev-critical').click();
     const grown = await editor.boundingBox();
     expect(grown).not.toBeNull();
     expect(grown!.y).toBeGreaterThanOrEqual(0);

@@ -1738,7 +1738,7 @@ const keyBindingDeps: KeyBindingDeps = {
     },
     setCameraPreset: (preset) => viewer?.setCameraPreset(preset),
     toast: (message) => showLassoToast(message),
-    openCommandPalette: () => void openCommandPalette(),
+    openCommandPalette: () => openCommandPalette(),
     toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
     workflowRecorderEnabled: WORKFLOW_RECORDER_ENABLED,
     matchesWorkflowShortcut: (e) => matchesShortcut(e, workflowController.config.shortcut),
@@ -1782,7 +1782,7 @@ const dock = new ToolDock({
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
-  onCommandPalette: () => void openCommandPalette(),
+  onCommandPalette: () => openCommandPalette(),
   onClose: () => closeScan(),
 });
 // Start the dock hidden — the empty state shows no scan-dependent tools.

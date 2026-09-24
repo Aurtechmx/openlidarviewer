@@ -121,6 +121,29 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
 
   test('stays visible past its 9s timer while genuinely hovered', async ({ page }) => {
     const fixture = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
+    // Root-caused a CI failure where this hover timed out for the full 90s
+    // with the button resolving but reported "not visible": the chip's
+    // `.olv-rvc` carried a `backdrop-filter`, which ties that layer's
+    // composite to a fresh capture of whatever sits behind it every frame.
+    // Under a busy WebGL main thread that capture can starve indefinitely —
+    // confirmed via `document.getAnimations()` on a real page that the entrance
+    // Web Animation was stuck at `currentTime: 0` (opacity permanently 0,
+    // genuinely unhoverable) for as long as the render loop kept the thread
+    // saturated, in headless Chromium specifically. Fixed by dropping the
+    // filter (`src/styles/40-inspector.css`) — the chip's background is
+    // already 92% opaque, so the blur bought little. The elementFromPoint
+    // check below stays as a regression guard: a stacking/paint bug here
+    // would again show something else answering for the button's own point.
+    //
+    // `page.clock` was also tried for the 9s window below, to remove real
+    // wall-clock time from the test entirely. Rejected: this Playwright's
+    // Chromium clock raced ahead of a `Date.now()` read unpredictably
+    // (`pauseAt` rejecting an already-past target) and, once paused, left
+    // an app-internal rAF-gated render never completing (an empty
+    // `.olv-rvc` className) on repeat runs — a second, clock-specific
+    // instability independent of the backdrop-filter bug above. The waits
+    // below stay real, but only ever start once the hover itself is
+    // confirmed to have landed.
     await page.goto('/');
     await expect(page.locator('.olv-empty-title')).toBeVisible();
     await page.locator('.olv-file-input').first().setInputFiles(fixture);
@@ -131,9 +154,19 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
     const chip = page.locator('.olv-rvc');
     await expect(chip).not.toHaveClass(/olv-hidden/, { timeout: 30_000 });
 
+    const apply = chip.locator('.olv-rvc-apply');
+    await expect
+      .poll(() =>
+        apply.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+        }),
+      )
+      .toBe(true);
+
     // A real mouse hover — mouseenter/mouseleave, not a scripted class
     // toggle — over the chip's Apply button.
-    await chip.locator('.olv-rvc-apply').hover();
+    await apply.hover();
     await page.waitForTimeout(9_500); // past the 9s auto-hide the chip would otherwise honour
     await expect(chip).not.toHaveClass(/olv-hidden/);
 
@@ -149,15 +182,24 @@ test('the Inspect tool announces its Copy outcome through the shared live region
   await page.goto('/');
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(1500); // let the framing tween settle before picking
   await page.locator('.olv-tool', { hasText: 'Inspect' }).click();
   const canvas = page.locator('canvas').first();
   const box = await canvas.boundingBox();
   if (!box) throw new Error('canvas has no bounding box');
-  await canvas.click({ position: { x: box.width * 0.5, y: box.height * 0.5 } });
 
   const copyBtn = page.locator('.olv-inspect-copy');
-  await expect(copyBtn).toBeVisible({ timeout: 10_000 });
+  // Waits on the click actually landing rather than on the framing tween's
+  // duration — early on the tween is still settling, so the first click at
+  // dead centre can legitimately miss (same idiom as tilesetOpen.spec.ts).
+  const offsets = [0.5, 0.46, 0.54, 0.42, 0.58];
+  let attempt = 0;
+  await expect
+    .poll(async () => {
+      const f = offsets[attempt++ % offsets.length];
+      await canvas.click({ position: { x: box.width * f, y: box.height * f } });
+      return copyBtn.isVisible();
+    }, { timeout: 10_000 })
+    .toBe(true);
   await expect(copyBtn).toHaveText('Copy');
 
   await copyBtn.click();

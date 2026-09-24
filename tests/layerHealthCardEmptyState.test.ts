@@ -31,13 +31,13 @@ describe('LayerHealthCard — empty state', () => {
   it('mounts no "olv-layerhealth-empty" placeholder at all', () => {
     const card = new LayerHealthCard();
     const root = card.root as unknown as FakeEl;
-    expect(root.querySelectorAll('.olv-layerhealth-empty').length).toBe(0);
+    expect(root.querySelectorAll('.olv-layerhealth-empty')).toHaveLength(0);
 
     card.update([{ name: 'campus.laz', rows: [ROW] }], null);
-    expect(root.querySelectorAll('.olv-layerhealth-empty').length).toBe(0);
+    expect(root.querySelectorAll('.olv-layerhealth-empty')).toHaveLength(0);
 
     card.clear();
-    expect(root.querySelectorAll('.olv-layerhealth-empty').length).toBe(0);
+    expect(root.querySelectorAll('.olv-layerhealth-empty')).toHaveLength(0);
   });
 
   it('hides the whole card when there are no layers, and shows it once there are', () => {

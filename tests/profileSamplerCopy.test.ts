@@ -27,7 +27,7 @@ import { MeasurePanel } from '../src/ui/MeasurePanel';
 import type { MeasurementSummary } from '../src/render/measure/MeasureController';
 import type { ProfileChartSample } from '../src/render/measure/types';
 
-beforeAll(installFakeDom);
+beforeAll(() => installFakeDom());
 
 function profileRow(): MeasurementSummary {
   const profileChart: ProfileChartSample[] = [0, 1, 2, 3, 4, 5].map((i) => ({

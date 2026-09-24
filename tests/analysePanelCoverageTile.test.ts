@@ -15,64 +15,10 @@ import { analyseContours } from '../src/terrain/contour/analyseContours';
 import { COVERAGE_CAPTION } from '../src/terrain/surface/coverageHeatmap';
 import { hillScene } from './helpers/hillSceneFixture';
 
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  width = 0;
-  height = 0;
-  href = '';
-  download = '';
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
-  readonly classList = {
-    add(): void { /* no-op */ },
-    remove(): void { /* no-op */ },
-    toggle(): void { /* no-op */ },
-  };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  /** Canvas 2D context is unavailable in the stub — the tile path is null-safe. */
-  getContext(): null { return null; }
-  getBoundingClientRect(): { width: number; height: number; left: number; top: number } {
-    return { width: 0, height: 0, left: 0, top: 0 };
-  }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
-  addEventListener(): void { /* no-op */ }
-  blur(): void { /* no-op */ }
-  click(): void { /* no-op */ }
-  /** Recursively collect every descendant whose own text equals `label`. */
-  findByText(label: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this._text === label) out.push(this);
-    for (const c of this.children) out.push(...c.findByText(label));
-    return out;
-  }
-  /** Recursively collect every descendant whose own text CONTAINS `sub`. */
-  findContaining(sub: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this._text.includes(sub)) out.push(this);
-    for (const c of this.children) out.push(...c.findContaining(sub));
-    return out;
-  }
-}
+import { FakeEl, installAnalysePanelDom } from './helpers/analysePanelDom';
 
 beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-    createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
-  };
-  (globalThis as unknown as { requestAnimationFrame?: unknown }).requestAnimationFrame = undefined;
+  installAnalysePanelDom({ ns: true });
 });
 
 

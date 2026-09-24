@@ -24,65 +24,10 @@ import { analyseContours } from '../src/terrain/contour/analyseContours';
 import { NOT_SURVEY_GRADE_NOTE } from '../src/terrain/export/exportNotes';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  width = 0;
-  height = 0;
-  href = '';
-  download = '';
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
-  readonly classList = {
-    add(): void { /* no-op */ },
-    remove(): void { /* no-op */ },
-    toggle(): void { /* no-op */ },
-  };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  getContext(): null { return null; }
-  getBoundingClientRect(): { width: number; height: number; left: number; top: number } {
-    return { width: 0, height: 0, left: 0, top: 0 };
-  }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  /** Own text only — no descendant concatenation. */
-  get ownText(): string { return this._text; }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
-  addEventListener(): void { /* no-op */ }
-  blur(): void { /* no-op */ }
-  click(): void { /* no-op */ }
-  /** Every descendant (incl. self) whose OWN text contains `sub`. */
-  findContaining(sub: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this._text.includes(sub)) out.push(this);
-    for (const c of this.children) out.push(...c.findContaining(sub));
-    return out;
-  }
-  /** Every descendant (incl. self) whose className contains `cls`. */
-  findByClass(cls: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this.className.includes(cls)) out.push(this);
-    for (const c of this.children) out.push(...c.findByClass(cls));
-    return out;
-  }
-}
+import { FakeEl, installAnalysePanelDom } from './helpers/analysePanelDom';
 
 beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-    createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
-  };
-  (globalThis as unknown as { requestAnimationFrame?: unknown }).requestAnimationFrame = undefined;
+  installAnalysePanelDom({ ns: true, noRaf: true });
 });
 
 /** A small hill so the analysis yields real contours + coverage. */
@@ -171,12 +116,12 @@ describe('AnalysePanel — compact per-tile footers', () => {
     panel.update(result);
     const root = panel.element as unknown as FakeEl;
 
-    const footers = root.findByClass('olv-analyse-tile-footer');
+    const footers = root.findByClassSubstring('olv-analyse-tile-footer');
     // Coverage + relief tiles at minimum (canopy joins when the CHM renders).
     expect(footers.length).toBeGreaterThanOrEqual(2);
     for (const footer of footers) {
       // The hint readout and the export action share the single footer line.
-      expect(footer.findByClass('olv-analyse-sample')).toHaveLength(1);
+      expect(footer.findByClassSubstring('olv-analyse-sample')).toHaveLength(1);
       expect(footer.findContaining('Export PNG')).toHaveLength(1);
     }
 
@@ -185,7 +130,7 @@ describe('AnalysePanel — compact per-tile footers', () => {
     const hints = root.findContaining('Click the map to sample a point.');
     expect(hints).toHaveLength(footers.length);
     for (const hint of hints) {
-      expect(footers.some((f) => f.findByClass('olv-analyse-sample').includes(hint))).toBe(true);
+      expect(footers.some((f) => f.findByClassSubstring('olv-analyse-sample').includes(hint))).toBe(true);
     }
   });
 });

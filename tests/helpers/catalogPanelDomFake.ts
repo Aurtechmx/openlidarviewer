@@ -65,8 +65,9 @@ export class FakeEl {
     this._listeners.get(type)!.push(cb);
   }
   /** Invoke listeners registered for `type`. */
-  fire(type: string, event: unknown = { preventDefault(): void {} }): void {
-    this._listeners.get(type)?.forEach((cb) => cb(event));
+  fire(type: string, event?: unknown): void {
+    const evt = event ?? { preventDefault(): void {} };
+    this._listeners.get(type)?.forEach((cb) => cb(evt));
   }
   /** First descendant (incl. self) carrying `cls`. */
   byClass(cls: string): FakeEl | undefined {
