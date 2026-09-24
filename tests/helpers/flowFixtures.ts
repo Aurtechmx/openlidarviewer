@@ -49,3 +49,22 @@ export function flowDtmOf(
     ...over,
   } as DtmGrid;
 }
+
+/**
+ * A fully-measured `DtmGrid` (no NoData cells, non-nullable rows) that also
+ * declares the point-count/confidence fields some fixtures state explicitly.
+ * Used by specs that build a Lab input directly from `DtmGrid`, rather than
+ * through a `runFlowPulse` result.
+ */
+export function flowDtmOfCounted(rows: readonly (readonly number[])[]): DtmGrid {
+  const h = rows.length, w = rows[0].length, n = w * h;
+  const z = new Float32Array(n);
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) z[r * w + c] = rows[r][c];
+  return {
+    z, coverage: new Uint8Array(n).fill(2), confidence: new Float32Array(n),
+    counts: new Uint32Array(n), interpDistanceCells: new Float32Array(n),
+    cols: w, rows: h, cellSizeM: 1, originH1: 0, originH2: 0, crs: null,
+    verticalDatum: null, coverageMode: 'full', sourcePointCount: n,
+    analyzedPointCount: n, meanConfidence: 1, warnings: [],
+  } as DtmGrid;
+}

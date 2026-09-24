@@ -20,8 +20,8 @@ import {
 } from '../src/simulation/flowPulse/flowPulseRunner';
 import { traceClick, catchmentClick } from '../src/simulation/flowPulse/flowClickGuard';
 import type { HorizontalScale } from '../src/simulation/flowPulse/dtmFlowGrid';
-import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 import { extractEntry } from './helpers/zipReader';
+import { flowDtmOfCounted as dtmOf } from './helpers/flowFixtures';
 
 const projected: HorizontalScale = {
   isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true,
@@ -32,19 +32,6 @@ const identity: FlowRunIdentity = {
   analysisInputDigest: 'bbbb', build: '0.7.0-alpha.1', id: 'run-1',
   generatedAt: '2026-09-22T00:00:00.000Z', processingManifestHead: null,
 };
-
-function dtmOf(rows: readonly (readonly number[])[]): DtmGrid {
-  const h = rows.length, w = rows[0].length, n = w * h;
-  const z = new Float32Array(n);
-  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) z[r * w + c] = rows[r][c];
-  return {
-    z, coverage: new Uint8Array(n).fill(2), confidence: new Float32Array(n),
-    counts: new Uint32Array(n), interpDistanceCells: new Float32Array(n),
-    cols: w, rows: h, cellSizeM: 1, originH1: 0, originH2: 0, crs: null,
-    verticalDatum: null, coverageMode: 'full', sourcePointCount: n,
-    analyzedPointCount: n, meanConfidence: 1, warnings: [],
-  } as DtmGrid;
-}
 
 const bowl = () => dtmOf([
   [5, 5, 3, 5, 5],

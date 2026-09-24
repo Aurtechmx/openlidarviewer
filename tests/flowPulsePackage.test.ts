@@ -157,6 +157,19 @@ describe('the package carries every required file', () => {
   });
 });
 
+/** Re-run `bowlDtm()` under a `.olv-field-sim.json` config's own parameters. */
+function reRunFromConfig(config: Record<string, unknown>, withheldExcluded: boolean | null) {
+  return runFlowPulse(bowlDtm(), projected, {
+    conditioning: config.conditioning as FlowPulseParams['conditioning'],
+    routing: config.routing as FlowPulseParams['routing'],
+    interpolated: config.interpolated as FlowPulseParams['interpolated'],
+    fillEpsilon: config.fillEpsilon as number,
+    fillNoData: config.fillNoData as FlowPulseParams['fillNoData'],
+    maxCells: config.maxCells as number,
+    withheldExcluded,
+  }, identity);
+}
+
 describe('the config reproduces the field digest', () => {
   it('re-running the exported config over the same terrain gives the same fieldDigest (raw)', () => {
     const original = runOf({ conditioning: 'raw' });
@@ -164,15 +177,7 @@ describe('the config reproduces the field digest', () => {
     const config = jsonOf<Record<string, unknown>>(zip, 'flow.olv-field-sim.json');
 
     expect(config.kind).toBe('terrain-flow');
-    const reRun = runFlowPulse(bowlDtm(), projected, {
-      conditioning: config.conditioning as FlowPulseParams['conditioning'],
-      routing: config.routing as FlowPulseParams['routing'],
-      interpolated: config.interpolated as FlowPulseParams['interpolated'],
-      fillEpsilon: config.fillEpsilon as number,
-      fillNoData: config.fillNoData as FlowPulseParams['fillNoData'],
-      maxCells: config.maxCells as number,
-      withheldExcluded: original.basis.withheldExcluded,
-    }, identity);
+    const reRun = reRunFromConfig(config, original.basis.withheldExcluded);
     expect(reRun.ok).toBe(true);
     if (!reRun.ok) return;
     expect(reRun.record.result.fieldDigest).toBe(original.record.result.fieldDigest);
@@ -181,15 +186,7 @@ describe('the config reproduces the field digest', () => {
   it('reproduces the field digest for a conditioned run too', () => {
     const original = runOf({ conditioning: 'priority-flood', fillEpsilon: 0.01 });
     const config = buildFlowPulseConfig(original);
-    const reRun = runFlowPulse(bowlDtm(), projected, {
-      conditioning: config.conditioning as FlowPulseParams['conditioning'],
-      routing: config.routing as FlowPulseParams['routing'],
-      interpolated: config.interpolated as FlowPulseParams['interpolated'],
-      fillEpsilon: config.fillEpsilon as number,
-      fillNoData: config.fillNoData as FlowPulseParams['fillNoData'],
-      maxCells: config.maxCells as number,
-      withheldExcluded: original.basis.withheldExcluded,
-    }, identity);
+    const reRun = reRunFromConfig(config, original.basis.withheldExcluded);
     expect(reRun.ok).toBe(true);
     if (!reRun.ok) return;
     expect(reRun.record.result.fieldDigest).toBe(original.record.result.fieldDigest);
