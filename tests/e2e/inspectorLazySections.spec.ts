@@ -95,10 +95,7 @@ test.describe('Inspector lazy sections — blocked chunk', () => {
     page,
     browserName,
   }) => {
-    test.skip(
-      browserName !== 'firefox',
-      'Chromium/WebKit cannot re-fetch a failed specifier without a full navigation.',
-    );
+    test.skip(browserName !== 'firefox', 'Chromium/WebKit cannot re-fetch a failed specifier without a full navigation.');
     await seedStaleReloadCooldown(page);
     await suppressOnboardingTour(page);
     await page.goto('/');

@@ -8,8 +8,9 @@
  */
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { Inspector, type InspectorCallbacks } from '../src/ui/Inspector';
-import { FakeEl, installFakeDom, byClass, findContaining } from './support/measurePanelDom';
+import { Inspector } from '../src/ui/Inspector';
+import { FakeEl, byClass, findContaining } from './support/measurePanelDom';
+import { installInspectorFakeDom, fakeCallbacks, tick } from './helpers/inspectorLazyHarness';
 import type { AnalysisRow } from '../src/analysis/ModuleApi';
 
 const state = vi.hoisted(() => ({
@@ -34,48 +35,8 @@ vi.mock('../src/lazyChunks', () => ({
 }));
 
 beforeAll(() => {
-  installFakeDom();
-  const g = globalThis as unknown as Record<string, unknown>;
-  (g.document as Record<string, unknown>).createElementNS = (_ns: string, tag: string): FakeEl =>
-    new FakeEl(tag);
-  (g.document as Record<string, unknown>).createDocumentFragment = (): FakeEl =>
-    new FakeEl('#fragment');
-  g.window = { setTimeout, clearTimeout, localStorage: undefined, confirm: () => true };
-  g.HTMLSelectElement = class {};
-  g.HTMLTextAreaElement = class {};
+  installInspectorFakeDom();
 });
-
-function fakeCallbacks(): InspectorCallbacks {
-  const noop = (): void => {};
-  return {
-    onColorMode: noop,
-    onHeightPercentileTrim: noop,
-    onPointSize: noop,
-    onToggleVisible: noop,
-    onRemove: noop,
-    onSaveView: noop,
-    onApplyView: noop,
-    onRenameView: noop,
-    onDeleteView: noop,
-    onEdlToggle: noop,
-    onEdlStrength: noop,
-    onPointSizeMode: noop,
-    onAntialiasing: noop,
-    onTwoFingerTwist: noop,
-    onNavigationPrefsChange: noop,
-    onRgbAppearancePreset: noop,
-    onEdlPreset: noop,
-    onSkyPreset: noop,
-    onWhiteBalance: noop,
-    onAutoBalance: noop,
-    onSplatMode: noop,
-    onTerrainWorkflowPreset: noop,
-  };
-}
-
-async function tick(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
 
 function rows(label: string): AnalysisRow[] {
   return [{ label, value: '1,234', status: 'pass' }];
