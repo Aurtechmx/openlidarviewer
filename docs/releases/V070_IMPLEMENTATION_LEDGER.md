@@ -4748,3 +4748,21 @@ the traced path/catchment beside it) now lives in a module-level session
 kept across Lab opens, disposed only when the user turns it off or the
 terrain/CRS it was built from goes stale; the toggle reads the persisted
 state back on reopen. Covered by the extended `tests/e2e/flowPulseLab.spec.ts`.
+
+### L152 · FIXED · ARCHITECTURE
+
+`contourLayerService.ts` owned `clearForScan`/`dispose` for the contour
+derived layer, but nothing outside that file ever called them: closing a
+scan left its contour `LineSegments` attached and visible over the empty
+state, and opening a different scan left the old contours drawn over it with
+no "Derived layers" / "Contours in 3D" control to hide them. The service
+gained `clearAll()`, a caller-agnostic teardown that drops every contour
+record from the shared `DerivedLayerStore` and disposes the drawn overlay
+without needing the closing scan's id. `terrainAnalysisRunner.ts`'s
+`abortAndClearCache()` now calls it alongside the existing
+`invalidateFlowOverlay()` call, on the same event set (scan close, a
+different scan loading, a CRS change, a classification edit), and also
+clears the Analyse panel's separate "Contours in 3D" toggle row
+(`setContourLayerControls(null)`), which tracked the same stale layer through
+its own DOM. Covered by the extended `tests/contourLayerService.test.ts` and
+`tests/e2e/contourLayerLifetime.spec.ts`.

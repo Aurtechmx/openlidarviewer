@@ -85,6 +85,16 @@ export interface ContourLayerService {
   setIndexEmphasis(scanId: string, on: boolean): DerivedLayer | undefined;
   /** Drop every derived layer owned by a scan, and stop drawing it. */
   clearForScan(scanId: string): void;
+  /**
+   * Drop every contour layer this service owns, whichever scan drew it, and
+   * stop drawing — without releasing the overlay factory the service was
+   * built with, so a later `show()` still works. Used for events that end
+   * the CURRENT scan's relevance (its own close, a different scan taking the
+   * viewer, a CRS resolve/override change, a classification edit) where the
+   * caller does not know — or does not need to know — which scan id the
+   * on-screen contours came from.
+   */
+  clearAll(): void;
   /** Release the overlay and its GPU resources. */
   dispose(): void;
 }
@@ -187,6 +197,17 @@ export function createContourLayerService(deps: ContourLayerServiceDeps): Contou
       // Stop drawing only if the overlay belonged to THIS scan — closing a
       // background scan must not blank the contours of the one on screen.
       if (drawnScanId === scanId && overlay) {
+        overlay.dispose();
+        overlay = null;
+        drawnScanId = null;
+      }
+    },
+
+    clearAll() {
+      for (const layer of deps.store.list()) {
+        if (layer.type === 'contours') deps.store.remove(layer.id);
+      }
+      if (overlay) {
         overlay.dispose();
         overlay = null;
         drawnScanId = null;
