@@ -155,12 +155,17 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
     await expect(chip).not.toHaveClass(/olv-hidden/, { timeout: 30_000 });
 
     const apply = chip.locator('.olv-rvc-apply');
+    // Each poll round-trips evaluate() through the page, which queues behind
+    // fixture decode/render work that can hold the main thread for seconds.
+    // The longer budget waits for the answer; an occluded button still fails.
     await expect
-      .poll(() =>
-        apply.evaluate((el) => {
-          const r = el.getBoundingClientRect();
-          return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
-        }),
+      .poll(
+        () =>
+          apply.evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+          }),
+        { timeout: 20_000 },
       )
       .toBe(true);
 
