@@ -106,7 +106,7 @@ export function nodeEligibility(grid: TerrainAccessGrid, features: TerrainAccess
 
   for (let i = 0; i < n; i++) {
     if (grid.valid[i] === 0) { blocked[i] = 1; reason[i] = 'no-data'; continue; }
-    if (grid.allowed && grid.allowed[i] === 0) { blocked[i] = 1; reason[i] = 'outside-roi'; continue; }
+    if (grid.allowed?.[i] === 0) { blocked[i] = 1; reason[i] = 'outside-roi'; continue; }
     if (grid.confidence[i] < profile.minimumTerrainConfidence && profile.unknownPolicy === 'block') {
       blocked[i] = 1; reason[i] = 'low-confidence'; continue;
     }
@@ -114,7 +114,7 @@ export function nodeEligibility(grid: TerrainAccessGrid, features: TerrainAccess
       const v = features.vrm[i];
       if (Number.isFinite(v) && v > profile.maxRuggedness) { blocked[i] = 1; reason[i] = 'ruggedness'; continue; }
     }
-    if (features.obstruction[i] === 'obstructed') { blocked[i] = 1; reason[i] = 'obstruction'; continue; }
+    if (features.obstruction[i] === 'obstructed') { blocked[i] = 1; reason[i] = 'obstruction'; }
   }
   return { blocked, reason };
 }
@@ -221,9 +221,11 @@ export const DEFAULT_COST_WEIGHTS: CostWeights = Object.freeze({
  * Exported so `routeDiagnostics.ts` reports the same ratio the cost model
  * itself used, rather than a second, silently-divergent computation. */
 export function utilization(value: number, limit: number): number {
-  if (!(limit > 0) || !Number.isFinite(value)) return 0;
+  if (limit <= 0 || !Number.isFinite(value)) return 0;
   const x = value / limit;
-  return x < 0 ? 0 : x > 1 ? 1 : x;
+  if (x < 0) return 0;
+  if (x > 1) return 1;
+  return x;
 }
 
 /**
@@ -313,8 +315,10 @@ export function buildTraversabilityMap(
       }
 
       if (!Number.isFinite(best)) { out[i] = { state: 'blocked', bestMultiplier: null }; continue; }
-      const state: MapCellState =
-        best <= MAP_COST_BUCKETS.low ? 'low-cost' : best <= MAP_COST_BUCKETS.moderate ? 'moderate-cost' : 'high-cost';
+      let state: MapCellState;
+      if (best <= MAP_COST_BUCKETS.low) state = 'low-cost';
+      else if (best <= MAP_COST_BUCKETS.moderate) state = 'moderate-cost';
+      else state = 'high-cost';
       out[i] = { state, bestMultiplier: best };
     }
   }

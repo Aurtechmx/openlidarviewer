@@ -33,7 +33,7 @@
 
 import { writeAsciiGrid } from '../terrain/export/demAsciiGrid';
 import { buildZip, type ZipEntry } from '../convert/zipStore';
-import { buildSha256Manifest, sha256Hex } from '../terrain/export/sha256';
+import { buildSha256Manifest } from '../terrain/export/sha256';
 import { buildProcessingManifest, type ManifestParamValue, type ProcessingOpInput } from '../science/processingManifest';
 import { buildScientificAnalysisRecord } from '../science/scientificAnalysisRecord';
 import {
@@ -288,15 +288,16 @@ export function buildTerrainAccessPackage(
     })),
   });
 
-  entries.push({
-    name: `${basename}-diagnostics.csv`,
-    bytes: new TextEncoder().encode(diagnosticsCsv(result)),
-  });
-
-  entries.push({
-    name: `${basename}-simulation-run.json`,
-    bytes: new TextEncoder().encode(`${JSON.stringify(result.record, null, 2)}\n`),
-  });
+  entries.push(
+    {
+      name: `${basename}-diagnostics.csv`,
+      bytes: new TextEncoder().encode(diagnosticsCsv(result)),
+    },
+    {
+      name: `${basename}-simulation-run.json`,
+      bytes: new TextEncoder().encode(`${JSON.stringify(result.record, null, 2)}\n`),
+    },
+  );
 
   const config = buildTerrainAccessConfig(result);
   entries.push({
@@ -384,4 +385,4 @@ export function buildTerrainAccessPackage(
   return buildZip(entries);
 }
 
-export { sha256Hex };
+export { sha256Hex } from '../terrain/export/sha256';

@@ -17,7 +17,6 @@
  */
 
 import {
-  cellIndex,
   clampCell,
   moveCursor,
   pixelToCell,
@@ -227,4 +226,4 @@ export class TerrainAccessResultGrid {
 /** Build a 1-bit mask from a cell-index array, for {@link TerrainAccessResultGrid.setRouteMask}. */
 export const maskFromIndices = sharedMaskFromIndices;
 
-export { cellIndex };
+export { cellIndex } from '../../simulation/terrainAccess/terrainAccessGridCursor';

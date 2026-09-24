@@ -95,9 +95,10 @@ export function prepareTerrainAccessRun(
 
   const profileProblems = validateProfile(profile);
   if (profileProblems.length > 0) {
+    const problemList = profileProblems.map((p) => `${p.field} ${p.reason}`).join('; ');
     return {
       ok: false, code: 'INVALID_PROFILE',
-      reason: `The mobility profile is not usable: ${profileProblems.map((p) => `${p.field} ${p.reason}`).join('; ')}.`,
+      reason: `The mobility profile is not usable: ${problemList}.`,
     };
   }
 

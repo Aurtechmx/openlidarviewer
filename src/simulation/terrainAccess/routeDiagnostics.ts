@@ -24,7 +24,7 @@
 
 import { EVIDENCE_THRESHOLDS } from '../../terrain/ground/cellConfidence';
 import { quantile } from '../../terrain/quantile';
-import type { TerrainAccessFeatures } from './traversabilityCost';
+import { edgeGeometry, utilization, type CostWeights, type TerrainAccessFeatures } from './traversabilityCost';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
 const MEASURED = 2;
@@ -72,8 +72,6 @@ export interface RouteDiagnostics {
   /** Ordered, largest contributor first. */
   readonly dominantCostContributors: readonly CostContributor[];
 }
-
-import { edgeGeometry, utilization, type CostWeights } from './traversabilityCost';
 
 /** Compute {@link RouteDiagnostics} for a found path (start..goal inclusive). */
 export function computeRouteDiagnostics(

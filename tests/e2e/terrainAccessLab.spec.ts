@@ -26,7 +26,7 @@ test('refuses honestly, with no interactive controls, before any terrain analysi
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(500);
+  await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
 
   await openTerrainAccess(page);
   const modal = page.locator('.olv-modal');
@@ -49,7 +49,7 @@ test('blank profile refuses with named field problems, per field', async ({ page
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(500);
+  await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
 
   await openTerrainAccess(page);
   const modal = page.locator('.olv-modal');
@@ -70,7 +70,7 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   // UNITS_UNRESOLVED before any of it renders.
   await dropTerrainAccessUtmLas(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.waitForTimeout(1500);
+  await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
   await openAnalyse(page);
   await page.locator('.olv-analyse-run').click();
   await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {

@@ -191,7 +191,7 @@ describe.each(names)('%s', (name) => {
     });
   } else {
     it('agrees on the path length, even though a genuine tie means the specific cells may differ', () => {
-      expect(result.path.length).toBe(want.path.length);
+      expect(result.path).toHaveLength(want.path.length);
     });
   }
 
