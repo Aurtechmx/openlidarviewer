@@ -4076,13 +4076,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-micon-btn svg { width: 16px; height: 16px; display: block; }
 .olv-micon-btn .olv-mlabel { font-size: var(--text-2xs); }
 
-/* ── hover tooltip (custom, replaces the native title bubble) ────
- * A glass readout that slides out to the RIGHT of each rail control, with a
- * cyan hairline, mono type, a faint glow and a small diamond connector. Shown
- * on hover and keyboard focus; hidden from touch (no hover) and from reduced-
- * motion users' transitions. The accessible name still rides on aria-label. */
-.olv-mkind, .olv-micon-btn { position: relative; }
-.olv-measure-bar [data-tip]::after {
+/* ── control-explanation tooltip (custom, app-wide) ───────────────
+ * A glass readout below the control, with a cyan hairline, mono type, a
+ * faint glow and a small diamond connector. Shown on hover and keyboard
+ * focus (`:focus-visible`) for ANY element carrying `data-tip` (set via
+ * `el({ tip })` in src/ui/dom.ts, which also wires an `aria-describedby`
+ * text node so assistive tech announces the same explanation). Hidden from
+ * touch (no hover), from reduced-motion users' transitions, and briefly
+ * after Escape (`body.olv-tip-escaped`, installed in dom.ts). Originally
+ * scoped to the measure toolbar; generalised so every control area can
+ * reuse the same mechanism instead of growing a second one. */
+[data-tip] { position: relative; }
+[data-tip]::after {
   content: attr(data-tip);
   position: absolute; top: calc(100% + 8px); left: 50%;
   transform: translateX(-50%) translateY(-4px);
@@ -4091,12 +4096,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);
   color: var(--text); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em; white-space: nowrap; line-height: 1.2;
+  letter-spacing: 0.02em; white-space: normal; max-width: 260px; width: max-content;
+  line-height: 1.2;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
   opacity: 0; pointer-events: none; z-index: var(--z-popover);
   transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
 }
-.olv-measure-bar [data-tip]::before {
+[data-tip]::before {
   content: ''; position: absolute; top: calc(100% + 3px); left: 50%;
   width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg);
   background: rgba(8, 13, 26, 0.94);
@@ -4105,16 +4111,24 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   opacity: 0; pointer-events: none; z-index: var(--z-popover);
   transition: opacity 140ms var(--ease-standard);
 }
-.olv-measure-bar [data-tip]:hover::after,
-.olv-measure-bar [data-tip]:focus-visible::after {
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
   opacity: 1; transform: translateX(-50%) translateY(0);
 }
-.olv-measure-bar [data-tip]:hover::before,
-.olv-measure-bar [data-tip]:focus-visible::before { opacity: 1; }
+[data-tip]:hover::before,
+[data-tip]:focus-visible::before { opacity: 1; }
+body.olv-tip-escaped [data-tip]:hover::after,
+body.olv-tip-escaped [data-tip]:focus-visible::after,
+body.olv-tip-escaped [data-tip]:hover::before,
+body.olv-tip-escaped [data-tip]:focus-visible::before { opacity: 0; }
 @media (hover: none) {
-  /* Touch devices: no hover, so suppress the tooltip entirely. */
-  .olv-measure-bar [data-tip]::after,
-  .olv-measure-bar [data-tip]::before { display: none; }
+  /* Touch devices: no hover, so suppress the tooltip entirely (avoids
+   * colliding with touch gestures like long-press). */
+  [data-tip]::after,
+  [data-tip]::before { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-tip]::after, [data-tip]::before { transition: none; }
 }
 .olv-measure-finish:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;

@@ -269,7 +269,11 @@ export class AnnotationEditor {
       this._linkSelect,
     ]);
 
-    const cancelBtn = el('button', { className: 'olv-anno-editor-cancel', text: 'Cancel' });
+    const cancelBtn = el('button', {
+      className: 'olv-anno-editor-cancel',
+      text: 'Cancel',
+      tip: 'Discard changes to this annotation and close the editor.',
+    });
     cancelBtn.type = 'button';
     cancelBtn.tabIndex = 0; // see the type-chip loop above for why
     cancelBtn.addEventListener('click', () => {
@@ -277,7 +281,11 @@ export class AnnotationEditor {
       this._cancel();
     });
 
-    this._saveBtn = el('button', { className: 'olv-anno-editor-save', text: 'Save' });
+    this._saveBtn = el('button', {
+      className: 'olv-anno-editor-save',
+      text: 'Save',
+      tip: 'Save the title, note and any linked measurement to this annotation.',
+    });
     this._saveBtn.type = 'button';
     this._saveBtn.tabIndex = 0; // see the type-chip loop above for why
     this._saveBtn.addEventListener('click', () => {

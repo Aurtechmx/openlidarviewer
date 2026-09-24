@@ -121,7 +121,11 @@ export class BatchConverter {
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._hint = el('p', { className: 'olv-bc-hint' });
-    this._convertBtn = el('button', { className: 'olv-bc-convert', type: 'button' }) as HTMLButtonElement;
+    this._convertBtn = el('button', {
+      className: 'olv-bc-convert',
+      type: 'button',
+      tip: 'Convert the queued files, or stop a run in progress without losing the queue.',
+    }) as HTMLButtonElement;
     // While a batch runs the same button is its stop control — clicking it aborts
     // rather than starting a second run, so a long conversion can be abandoned
     // without dismissing the modal and losing the queued files.

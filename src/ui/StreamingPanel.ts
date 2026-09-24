@@ -132,6 +132,19 @@ const MODE_LABEL: Record<ColorMode, string> = {
   confidence: 'Confidence',
 };
 
+const MODE_TIP: Record<ColorMode, string> = {
+  rgb: 'Color points using their captured RGB values.',
+  intensity: 'Color points by the strength of the returned laser pulse.',
+  elevation: 'Color points by height, low to high.',
+  classification: 'Color points by their assigned class (ground, vegetation, building, …).',
+  normal: 'Color points by surface-normal direction.',
+  density: 'Color points by local point density.',
+  gpsTime: 'Color points by the GPS timestamp of capture.',
+  returnNumber: 'Color points by which laser return (1st, 2nd, …) they are.',
+  coverage: 'Color cells by whether the scan reached them at all.',
+  confidence: 'Color cells by how confident the derived value at that cell is.',
+};
+
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];
 
 /** Grade button labels — it toggles between starting and cancelling a run. */
@@ -637,7 +650,7 @@ export class StreamingPanel {
     this._modeRow.replaceChildren();
     this._modeButtons = new Map();
     for (const mode of modes) {
-      const chip = el('button', { className: 'olv-chip', text: MODE_LABEL[mode] });
+      const chip = el('button', { className: 'olv-chip', text: MODE_LABEL[mode], tip: MODE_TIP[mode] });
       chip.setAttribute('aria-pressed', 'false');
       chip.addEventListener('click', () => {
         this._selectMode(mode);

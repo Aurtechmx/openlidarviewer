@@ -64,11 +64,13 @@ export function renderContourStudioLauncher(
 
   if (state.status === 'unavailable') {
     button.textContent = 'Create Contour Deliverable';
+    button.title = 'Blocked — see the reasons listed above.';
     button.disabled = true;
     button.setAttribute('aria-disabled', 'true');
   } else {
     // exploratory | available both carry an actionLabel + enabled action.
     button.textContent = state.actionLabel;
+    button.title = 'Open Contour Studio to generate contour lines for this terrain.';
     button.disabled = false;
     if (opts.onLaunch) {
       button.addEventListener('click', () => opts.onLaunch?.());

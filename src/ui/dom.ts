@@ -32,6 +32,27 @@ interface ElProps {
   ariaLabel?: string;
 }
 
+let tipIdCounter = 0;
+
+/**
+ * Wire a `data-tip` explanation onto a node: the visible glass tooltip
+ * (CSS, `[data-tip]::after`) plus a hidden description node the control
+ * points to via `aria-describedby`, so assistive tech gets the same text a
+ * sighted hovering/keyboard user sees. Icon-only controls (no visible text,
+ * no explicit aria-label) also get the tip as their accessible name.
+ */
+function wireTip(node: HTMLElement, tip: string, hasVisibleLabel: boolean): void {
+  node.dataset.tip = tip;
+  const descId = `olv-tip-${++tipIdCounter}`;
+  const desc = document.createElement('span');
+  desc.id = descId;
+  desc.className = 'olv-visually-hidden';
+  desc.textContent = tip;
+  node.append(desc);
+  node.setAttribute('aria-describedby', descId);
+  if (!hasVisibleLabel && !node.getAttribute('aria-label')) node.setAttribute('aria-label', tip);
+}
+
 /** Create an element with optional props and children. */
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -43,7 +64,6 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   if (props.text !== undefined) node.textContent = props.text;
   if (props.unsafeHtml !== undefined) node.innerHTML = props.unsafeHtml;
   if (props.title) node.title = props.title;
-  if (props.tip) node.dataset.tip = props.tip;
   if (props.ariaLabel) node.setAttribute('aria-label', props.ariaLabel);
   if (props.href && node instanceof HTMLAnchorElement) node.href = props.href;
   // `node.tagName === 'BUTTON'` rather than `instanceof HTMLButtonElement`: the
@@ -53,6 +73,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   if (props.type && (node instanceof HTMLInputElement || node.tagName === 'BUTTON'))
     (node as HTMLInputElement).type = props.type;
   for (const child of children) node.append(child);
+  if (props.tip) wireTip(node, props.tip, Boolean(props.text) || children.length > 0);
   return node;
 }
 
@@ -120,4 +141,34 @@ export function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+/**
+ * Escape dismisses a `[data-tip]` control explanation: blurs a
+ * keyboard-focused control (hides its tooltip) and briefly suppresses hover
+ * tooltips via a body class, so a still-hovered pointer doesn't bring the
+ * bubble straight back. Installed once, from this module: every UI builder
+ * already imports `el()`, so no separate wiring is needed in main.ts.
+ */
+export function installControlTipDismissal(root: Document): void {
+  if (typeof root.addEventListener !== 'function') return; // minimal test DOM shim
+  root.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    // Duck-typed rather than `instanceof HTMLElement`: the unit-test DOM shim
+    // (no jsdom in this repo) has no HTMLElement global, and `dataset` +
+    // `blur` are all this needs from the active element.
+    const active = root.activeElement as { dataset?: DOMStringMap; blur?: () => void } | null;
+    if (active?.dataset?.tip && typeof active.blur === 'function') active.blur();
+    root.body?.classList.add('olv-tip-escaped');
+    setTimeout(() => root.body?.classList.remove('olv-tip-escaped'), 600);
+  });
+}
+
+if (
+  typeof document !== 'undefined' &&
+  typeof document.addEventListener === 'function' &&
+  !(document as { __olvTipDismissalInstalled?: boolean }).__olvTipDismissalInstalled
+) {
+  (document as { __olvTipDismissalInstalled?: boolean }).__olvTipDismissalInstalled = true;
+  installControlTipDismissal(document);
 }

@@ -158,11 +158,15 @@ export class RangeWorkbench {
     const modes = el('div', { className: 'olv-range-modes' });
     modes.setAttribute('role', 'group');
     modes.setAttribute('aria-label', 'View mode');
+    const modeTips: Record<string, string> = {
+      validity: 'Show which grid cells have a real acquisition reading versus none.',
+      range: 'Show the measured geometric range value at each grid cell.',
+    };
     for (const [mode, text] of [
       ['validity', 'Validity'],
       ['range', 'Geometric range'],
     ] as ReadonlyArray<readonly [RangeRasterMode, string]>) {
-      const btn = el('button', { className: 'olv-range-mode', text });
+      const btn = el('button', { className: 'olv-range-mode', text, tip: modeTips[mode] });
       btn.type = 'button';
       btn.addEventListener('click', () => this.setMode(mode));
       this._modeButtons.set(mode, btn);

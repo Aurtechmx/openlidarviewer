@@ -1031,6 +1031,7 @@ export class Stage {
       className: 'olv-empty-status-action',
       type: 'button',
       text: 'Retry',
+      tip: 'Try loading the same URL again.',
     });
     retry.addEventListener('click', () => {
       this._hideStatusBanner();

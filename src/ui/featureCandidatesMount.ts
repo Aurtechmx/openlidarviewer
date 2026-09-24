@@ -235,7 +235,13 @@ function statusChips(
       ['rejected', 'Reject'],
     ] as ReadonlyArray<readonly [CandidateStatus, string]>
   ).map(([value, label]) => {
-    const btn = el('button', { className: 'olv-feature-chip', text: label });
+    const tip =
+      value === 'accepted'
+        ? 'Mark this candidate as accepted.'
+        : value === 'rejected'
+          ? 'Mark this candidate as rejected.'
+          : 'Reset this candidate to pending — no decision recorded yet.';
+    const btn = el('button', { className: 'olv-feature-chip', text: label, tip });
     btn.type = 'button';
     btn.addEventListener('click', () => {
       if (value === 'accepted') review.accept(id);

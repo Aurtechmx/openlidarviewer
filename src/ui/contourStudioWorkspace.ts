@@ -274,7 +274,11 @@ function renderExportBar(
     group.append(el('div', { className: 'olv-cs-export-group-label', text: g.label }));
     const btns = el('div', { className: 'olv-cs-export-btns' });
     for (const it of g.items) {
-      const b = el('button', { className: 'olv-cs-export-btn', text: it.label });
+      const b = el('button', {
+        className: 'olv-cs-export-btn',
+        text: it.label,
+        title: `Export the contour lines as ${it.label} in the "${g.label}" group.`,
+      });
       b.type = 'button';
       b.disabled = blocked;
       if (!blocked && onExport) b.addEventListener('click', () => onExport(it.id, b));

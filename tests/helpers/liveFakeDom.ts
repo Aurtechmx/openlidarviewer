@@ -89,6 +89,7 @@ export class FakeEl {
     for (const fn of this._listeners.get(type) ?? []) fn(ev);
   }
   focus(): void { this.focused = true; }
+  blur(): void { this.focused = false; }
   /** The first node in the subtree (this one included) matching `pred`. */
   find(pred: (e: FakeEl) => boolean): FakeEl | undefined {
     if (pred(this)) return this;
