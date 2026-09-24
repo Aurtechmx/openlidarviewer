@@ -115,6 +115,28 @@ export async function dropTinyLas(page: Page): Promise<void> {
 }
 
 /**
+ * Drop the bundled `terrain-access-utm.las` fixture — a 30×30 grid (900
+ * points) georeferenced to WGS 84 / UTM zone 13N via a GeoKeys VLR (see
+ * `scripts/gen-terrain-access-fixture.ts`, which regenerates it). Terrain
+ * Access refuses outright on an unresolved horizontal scale
+ * (UNITS_UNRESOLVED), so the drag-and-drop fixture used elsewhere in this
+ * suite (`dropDenseGridPly`, a local/unreferenced PLY) can never reach the
+ * routing/export happy path — this fixture exists so that path actually
+ * runs in CI instead of only being unit-tested against a hand-built grid.
+ */
+export async function dropTerrainAccessUtmLas(page: Page): Promise<void> {
+  const bytes = readFileSync(
+    fileURLToPath(new URL('../fixtures/terrain-access-utm.las', import.meta.url)),
+  );
+  const dataTransfer = await page.evaluateHandle((b) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(b)], 'terrain-access-utm.las'));
+    return dt;
+  }, [...bytes]);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+}
+
+/**
  * Drop a synthesised PTX — a scanner file that carries its ACQUISITION GRID.
  *
  * PTX is one of the two formats whose loader builds an `OrganizedRangeFrame`,
