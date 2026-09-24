@@ -53,7 +53,7 @@ function tipDescriptionId(tip: string): string | null {
   const existing = tipDescIds.get(tip);
   if (existing) return existing;
   const body = typeof document === 'undefined' ? null : document.body;
-  if (!body || typeof body.append !== 'function') return null; // minimal test DOM shim
+  if (!body || typeof body.append !== 'function' || typeof document.getElementById !== 'function') return null; // minimal test DOM shim
   let host = document.getElementById('olv-tip-descriptions');
   if (!host) {
     host = document.createElement('div');
