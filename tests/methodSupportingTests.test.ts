@@ -48,6 +48,19 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.simulation.terrain-flow.depression-inventory': [
     'tests/depressionInventory.test.ts',
   ],
+  'olv.simulation.terrain-access.local-step': [
+    'tests/terrainAccessLocalStep.test.ts',
+  ],
+  'olv.simulation.terrain-access.directional-grade': [
+    'tests/terrainAccessDirectionalGrade.test.ts',
+  ],
+  'olv.simulation.terrain-access.cost-map': [
+    'tests/terrainAccessTraversabilityCost.test.ts',
+  ],
+  'olv.simulation.terrain-access.astar': [
+    'tests/terrainAccessAStar.test.ts',
+    'tests/terrainAccessOracleAgreement.test.ts',
+  ],
   'olv.ground.smrf': [
     'tests/groundFilterValidation.test.ts',
     'tests/groundFilterPdalAgreement.test.ts',
