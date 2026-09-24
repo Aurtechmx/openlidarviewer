@@ -225,7 +225,7 @@ function runOnce(dtm: DtmGrid, conditioning: FlowConditioning): RunOutcome {
     kind: 'terrain-flow',
     source: {
       layerId: null, filename: null, sourceDigest: null,
-      analysisInputDigest: dtmProductDigest(dtm), basis,
+      analysisInputDigest: dtmProductDigest(dtm), terrainCoreDigest: null, basis,
     },
     model: { id: 'olv.simulation.terrain-flow.d8', version: 1 },
     methods: methodsFor(params),

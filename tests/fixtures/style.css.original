@@ -9235,6 +9235,57 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-health-blockers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .olv-health-blockers li { font-size: var(--text-xs); opacity: 0.9; }
 
+/* ── Flow Pulse Lab — conditioning, the result grid, click-to-pulse ───────── */
+.olv-flow-lab { display: flex; flex-direction: column; gap: var(--space-lg); }
+.olv-flow-body { display: flex; flex-direction: column; gap: var(--space-lg); }
+.olv-flow-busy, .olv-flow-refused { font-size: var(--text-sm); color: var(--text-dim); text-wrap: pretty; }
+.olv-flow-error { display: flex; flex-direction: column; gap: var(--space-sm); align-items: flex-start; }
+.olv-flow-error-text { font-size: var(--text-sm); color: var(--state-blocked); text-wrap: pretty; }
+
+.olv-flow-cond, .olv-flow-mode {
+  display: inline-flex; flex-wrap: wrap; gap: 2px;
+  background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 2px;
+}
+.olv-flow-cond-btn, .olv-flow-mode-btn, .olv-flow-overlay-toggle, .olv-flow-retry {
+  font: inherit; font-size: var(--text-xs); color: var(--text-dim);
+  background: none; border: none; border-radius: 6px;
+  padding: 4px 9px; cursor: pointer; transition: color 120ms ease, background 120ms ease;
+}
+.olv-flow-cond-btn[aria-pressed="true"], .olv-flow-mode-btn[aria-pressed="true"] {
+  color: var(--text); background: var(--accent-soft);
+}
+.olv-flow-overlay-toggle {
+  border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.04);
+}
+.olv-flow-overlay-toggle[aria-pressed="true"] { color: var(--text); background: var(--accent-soft); border-color: var(--accent); }
+.olv-flow-retry {
+  border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.04); color: var(--text);
+}
+/* A tap fires :hover and it sticks until the next tap elsewhere, so these are
+   gated behind a hover-capable query rather than applying to a touch tap. */
+@media (hover: hover) {
+  .olv-flow-cond-btn:hover, .olv-flow-mode-btn:hover, .olv-flow-overlay-toggle:hover { color: var(--text); }
+  .olv-flow-retry:hover { border-color: var(--accent); }
+}
+
+.olv-flow-grid { display: flex; flex-direction: column; gap: var(--space-sm); align-items: flex-start; }
+.olv-flow-grid-canvas {
+  max-width: 100%; border-radius: var(--radius-sm);
+  border: 0.5px solid var(--hairline); cursor: pointer;
+  image-rendering: pixelated;
+}
+.olv-flow-grid-canvas:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.olv-flow-grid-status { font-size: var(--text-xs); color: var(--muted, #8a8f98); font-variant-numeric: tabular-nums; }
+
+.olv-flow-selection { font-size: var(--text-sm); display: flex; flex-direction: column; gap: 4px; }
+.olv-flow-selection-empty, .olv-flow-selection-error { font-size: var(--text-xs); color: var(--text-dim); text-wrap: pretty; }
+.olv-flow-selection-error { color: var(--state-review); }
+
+.olv-flow-overlay-section { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.olv-flow-overlay-legend, .olv-flow-overlay-unavailable {
+  font-size: var(--text-xs); color: var(--muted, #8a8f98); text-wrap: pretty;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Contour Studio (v0.5.9) — launcher + workspace
    Premium terrain-deliverable surface. Built on the app's design tokens so it

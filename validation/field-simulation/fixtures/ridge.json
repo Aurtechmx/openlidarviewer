@@ -1,0 +1,7 @@
+{
+  "name": "ridge",
+  "why": "A north-south ridge crest with ground falling away on both sides. Cells west of the crest must route west and cells east of it must route east; the crest cells themselves tie on gradient in both directions and must all break the tie the same way, toward the neighbour listed first.",
+  "cellMetresX": 1,
+  "cellMetresY": 1,
+  "z": [[2, 3, 4, 3, 2], [2, 3, 4, 3, 2], [2, 3, 4, 3, 2]]
+}

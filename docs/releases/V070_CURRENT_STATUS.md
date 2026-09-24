@@ -9,15 +9,15 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 149. Revisited at least once: 18.
+Entries: 150. Revisited at least once: 18.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
 | FIXED | 50 |
-| PARTIAL | 33 |
-| BUILT | 26 |
+| PARTIAL | 32 |
+| BUILT | 28 |
 | MEASURED | 14 |
 | NOT REPRODUCIBLE | 10 |
 | DEFERRED | 6 |
@@ -54,7 +54,7 @@ Entries: 149. Revisited at least once: 18.
 | L23 | FIXED | SEMANTICS | 1 |
 | L24 | NOT REPRODUCIBLE | EXPORT | 1 |
 | L25 | SUPERSEDED | EVIDENCE | 1 |
-| L26 | PARTIAL | SCIENTIFIC | 3 |
+| L26 | BUILT | SCIENTIFIC | 4 |
 | L27 | NOT REPRODUCIBLE | EVIDENCE | 1 |
 | L28 | PARTIAL | SEMANTICS | 2 |
 | L29 | FIXED | STATE | 1 |
@@ -178,3 +178,4 @@ Entries: 149. Revisited at least once: 18.
 | L147 | MEASURED | PERFORMANCE | 1 |
 | L148 | FIXED | SCIENTIFIC | 2 |
 | L149 | FIXED | SCIENTIFIC | 1 |
+| L150 | BUILT | SCIENTIFIC | 1 |

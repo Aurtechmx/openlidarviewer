@@ -70,11 +70,19 @@ with D8. It builds a routing graph over that surface. It is not rainfall,
 runoff, infiltration or flood modelling, and accumulation counts cells rather
 than water.
 
-The lab runs raw routing. A cell with no lower neighbour keeps its flow as a
-sink, and a cell level with a neighbour is reported unresolved rather than given
-a direction. Priority-Flood depression filling is implemented, and the lab
-offers no control for it. Interpolated cells are routed over, so a path may
-cross ground no return landed on, and routes stop at cells with no elevation.
+The lab offers a conditioning control: raw routing, or the same surface run
+through Priority-Flood depression filling first. Either way, a cell with no
+lower neighbour keeps its flow as a sink, and a cell level with a neighbour is
+reported unresolved rather than given a direction. Interpolated cells are
+routed over, so a path may cross ground no return landed on, and routes stop
+at cells with no elevation.
+
+There is no click-to-pulse on the live scan; `Viewer.ts` has no picking seam
+this feature reaches without growing the monolith. Instead a keyboard- and
+pointer-accessible 2D result grid stands in for that click, with a
+downstream-path trace, an upstream-catchment trace, and a log-scaled
+accumulation overlay (cell counts, not water) drawn on the grid and, when the
+caller supplies scene membership, in the 3D scene as well.
 
 Each run lists its limitations beside its figures. Whether Withheld points were
 excluded is not recorded for the terrain behind it, so no run can state it
@@ -85,8 +93,12 @@ unknown is refused, including a scene whose contributing layers do not share
 one origin, since the latitude is read from that origin. A grid above 4,000,000
 cells is refused.
 
-The result is a summary card. The flow field is not drawn on the scan, and the
-run record it seals is not written to any export.
+The result is a summary card plus the interactive grid. An export package (ZIP)
+is available from the lab: accumulation and direction rasters, a depression
+table, the sealed run record and its reproducible config, and a processing
+manifest with a README and an artifact passport, plus the traced path and
+catchment when the lab has drawn them. Export refuses on a stale result rather
+than naming a terrain that changed under it.
 
 ## Registration is not exposed
 
@@ -119,7 +131,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 109 for the shell, 76 for the renderer and 23 for the Analyse panel,
-across 899 modules with no dependency cycles.
+across 907 modules with no dependency cycles.
 
 ## The shell has little headroom
 

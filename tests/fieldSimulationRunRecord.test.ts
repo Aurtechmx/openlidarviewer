@@ -45,6 +45,7 @@ const base: Omit<FieldSimulationRunRecord, 'digest'> = {
     filename: 'site.laz',
     sourceDigest: 'aaaa',
     analysisInputDigest: 'bbbb',
+    terrainCoreDigest: 'gggg',
     basis,
   },
   model: { id: 'olv.simulation.terrain-flow.d8', version: 1 },
@@ -89,6 +90,7 @@ describe('the digest covers everything that is the computation', () => {
       ...base, source: { ...base.source, analysisInputDigest: 'dddd' },
     }],
     ['source digest', { ...base, source: { ...base.source, sourceDigest: 'eeee' } }],
+    ['terrain-core digest', { ...base, source: { ...base.source, terrainCoreDigest: 'hhhh' } }],
     ['manifest head', { ...base, processingManifestHead: 'ffff' }],
     ['basis coverage', {
       ...base,

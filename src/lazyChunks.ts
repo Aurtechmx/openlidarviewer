@@ -660,3 +660,23 @@ export const loadToolLauncher = () => import('./ui/toolLauncher');
  * Opened only from the command palette, so neither rides the startup shell.
  */
 export const loadFlowPulseLab = () => import('./ui/fieldSimulation/flowPulseLab');
+
+/**
+ * The Flow Pulse export package builder (ASCII Grid writers + ZIP store +
+ * passport/manifest assembly). Only reached from an export action on the
+ * Field Simulation Lab's Flow Pulse view, so it rides its own lazy chunk
+ * rather than the Lab's own — a session that opens Flow Pulse but never
+ * exports never downloads the raster/passport assembly code.
+ */
+export const loadFlowPulsePackage = () => import('./export/flowPulsePackage');
+
+/**
+ * The Withheld-aware terrain recovery gather: a full-resolution re-decode
+ * (through the shared parse worker) of a static file the display path
+ * voxel-downsampled at load, rasterised into a fresh `TerrainCore`. Only
+ * reached from `terrainAnalysisRunner.ts`'s export/report path, and only
+ * when the display gather could not already say "excluded" — most runs never
+ * touch this, so it stays out of the eager shell rather than pulling the
+ * full-resolution decode path (`decodeFull` / `loadFile`) into `index`.
+ */
+export const loadWithheldAwareTerrainGather = () => import('./terrain/ground/withheldAwareTerrainGather');

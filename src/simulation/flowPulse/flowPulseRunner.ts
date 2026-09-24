@@ -50,6 +50,7 @@ import {
   type PriorityFloodResult,
 } from './priorityFlood';
 import { flowFieldDigest } from './flowFieldDigest';
+import { depressionInventory, type DepressionInventoryResult } from './depressionInventory';
 import { terrainDtmToFlowGrid, type HorizontalScale, type InterpolatedPolicy } from './dtmFlowGrid';
 import { basisLimitations, mayReportMetricArea } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
@@ -94,6 +95,8 @@ export interface FlowPulseResult {
   readonly conditioned: PriorityFloodResult | null;
   /** Cells the conditioning raised, or null in raw mode. */
   readonly filled: Uint8Array | null;
+  /** Sinks and filled depressions, catalogued individually. See §10.10. */
+  readonly depressions: DepressionInventoryResult;
   readonly basis: SimulationInputBasis;
   readonly limitations: readonly string[];
   readonly record: FieldSimulationRunRecord;
@@ -165,7 +168,11 @@ export function methodsFor(params: FlowPulseParams): readonly string[] {
       ? 'olv.simulation.terrain-flow.priority-flood.gap-outlet'
       : 'olv.simulation.terrain-flow.priority-flood');
   }
-  out.push('olv.simulation.terrain-flow.d8', 'olv.simulation.terrain-flow.accumulation');
+  out.push(
+    'olv.simulation.terrain-flow.d8',
+    'olv.simulation.terrain-flow.accumulation',
+    'olv.simulation.terrain-flow.depression-inventory',
+  );
   return out;
 }
 
@@ -176,6 +183,14 @@ export interface FlowRunIdentity {
   readonly sourceDigest: string | null;
   /** Digest of the exact terrain product read. */
   readonly analysisInputDigest: string;
+  /**
+   * Digest of the terrain-core METHOD that built the DTM (algorithm and
+   * version), see {@link SimulationSource.terrainCoreDigest}. Optional and
+   * defaults to null: a caller that has not resolved one (e.g. it holds only
+   * the DTM product, not the descriptor that built it) still produces a
+   * valid, honestly-incomplete record rather than being forced to invent one.
+   */
+  readonly terrainCoreDigest?: string | null;
   readonly build: string;
   readonly id: string;
   readonly generatedAt: string;
@@ -243,7 +258,12 @@ export function runFlowPulse(
 
   const routed = d8Flow(routingGrid);
   const accumulation = flowAccumulation(routingGrid, routed);
-  const area = contributingAreaM2(accumulation, routingGrid, mayReportMetricArea(basis));
+  const areaResolved = mayReportMetricArea(basis);
+  const area = contributingAreaM2(accumulation, routingGrid, areaResolved);
+  // Always over the UNCONDITIONED grid: see depressionInventory.ts on why the
+  // sink count and depression catalogue describe the raw terrain regardless
+  // of which surface this run routed over.
+  const depressions = depressionInventory(grid, conditioned, filled, areaResolved);
 
   let maxUpstream = 0;
   for (const upstream of accumulation.upstreamCells) {
@@ -277,6 +297,7 @@ export function runFlowPulse(
       filename: identity.filename,
       sourceDigest: identity.sourceDigest,
       analysisInputDigest: identity.analysisInputDigest,
+      terrainCoreDigest: identity.terrainCoreDigest ?? null,
       basis,
     },
     model: { id: 'olv.simulation.terrain-flow.d8', version: 1 },
@@ -295,14 +316,28 @@ export function runFlowPulse(
     // not mean equal receivers, so a digest over the summary alone cannot rule
     // out a grid that routed differently. fieldDigest hashes the routed arrays
     // themselves, byte for byte, and only agrees when they do.
-    result: { ...summary, fieldDigest: flowFieldDigest(routingGrid, routed, accumulation, conditioned) },
+    result: {
+      ...summary,
+      fieldDigest: flowFieldDigest(routingGrid, routed, accumulation, conditioned),
+      // The §10.10 minimum output not already covered by `summary`: how many
+      // distinct depressions were found, and the size/depth/outlet of the
+      // largest one. The full per-depression list travels on the result
+      // object returned below, not in the sealed record — it can be large on
+      // a broken-up terrain, and every figure in it is a pure function of the
+      // arrays `fieldDigest` already covers.
+      depressionCount: depressions.depressions.length,
+      largestDepressionCells: depressions.largestCells,
+      largestDepressionAreaM2: depressions.largestAreaM2,
+      largestDepressionMaxFillDepth: depressions.largestMaxFillDepth,
+      largestDepressionOutletElevation: depressions.largestOutletElevation,
+    },
     limitations,
     processingManifestHead: identity.processingManifestHead,
   });
 
   return {
     ok: true, grid: routingGrid, routed, accumulation, contributingAreaM2: area,
-    conditioned, filled, basis, limitations, record, summary,
+    conditioned, filled, depressions, basis, limitations, record, summary,
   };
 }
 

@@ -600,6 +600,20 @@
       "frame": "project-local",
       "reads": 1,
       "why": "Rebuilds a view over the transferred gather buffer, which the gather assembler already placed into the project frame."
+    },
+    {
+      "file": "src/terrain/ground/withheldAwareTerrainGather.ts",
+      "symbol": "gatherWithheldAwareTerrainSource",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Reads `.positions` off a freshly-decoded PointCloud (decodeFull over the original bytes, no placement/mounting applied), the same frame Viewer._meshForCloud reads before any placement fold — handed straight into sampleStridedTerrain as a single unplaced static buffer."
+    },
+    {
+      "file": "src/terrain/ground/withheldAwareTerrainGather.ts",
+      "symbol": "gatherWithheldAwareTerrainCore",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The recovered sample's positions, returned by gatherWithheldAwareTerrainSource in the same source-local frame, passed straight to computeTerrainCore."
     }
   ]
 }

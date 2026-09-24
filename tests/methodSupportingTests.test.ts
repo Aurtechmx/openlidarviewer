@@ -45,6 +45,9 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.simulation.terrain-flow.catchment': [
     'tests/flowAccumulation.test.ts',
   ],
+  'olv.simulation.terrain-flow.depression-inventory': [
+    'tests/depressionInventory.test.ts',
+  ],
   'olv.ground.smrf': [
     'tests/groundFilterValidation.test.ts',
     'tests/groundFilterPdalAgreement.test.ts',

@@ -1949,7 +1949,7 @@ function newAnalysePanel(
     // Same cached-core rebuild, generalised with the contour shape-style picker so
     // an export reflects the user's chosen interval AND line shape.
     buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null, activeClassificationEpoch: () => { const id = scans.activeId; return id ? viewer.classificationEpoch(id) : 0; }, crsRevision: () => crsService.crsRevision(),
+    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null, activeClassificationEpoch: () => { const id = scans.activeId; return id ? viewer.classificationEpoch(id) : 0; }, crsRevision: () => crsService.crsRevision(), getDerivedLayerHost: () => viewer.derivedLayerHost(),
     // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
     // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
     // are the card's own strings (null when the card is empty — the report
@@ -2478,7 +2478,7 @@ const terrainRunner = createTerrainAnalysisRunner({
   // fires only after the panel has mounted, so this always resolves non-null.
   getAnalysePanel: () => analysePanel,
   getActiveId: () => scans.activeExportTargetId(), // streaming leaves activeId null
-  crsService, buildStoryInputs: buildCurrentStoryInputs,
+  crsService, buildStoryInputs: buildCurrentStoryInputs, getRecoverySource: (id) => (reducedById.get(id) === true ? (sourceFileById.get(id) ?? null) : null),
   // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
   // so the 3D "Coverage" colour mode (and its colourblind-safe "Confidence"
   // twin) can tint the cloud by trust, and enable the (until-now disabled)

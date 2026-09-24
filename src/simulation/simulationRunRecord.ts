@@ -45,6 +45,15 @@ export interface SimulationSource {
   readonly sourceDigest: string | null;
   /** Digest of the exact input the model read, which is what reproduces. */
   readonly analysisInputDigest: string;
+  /**
+   * Digest of the terrain-core METHOD that built the input (algorithm +
+   * version), distinct from {@link analysisInputDigest}'s digest of the
+   * surface itself. Two different terrain-core versions can emit the same
+   * surface over trivial input and two runs would then wrongly look
+   * identical without this; null when the caller has none to report, which
+   * a reader distinguishes from "unchanged" only by the null.
+   */
+  readonly terrainCoreDigest: string | null;
   /** How much of the source stood behind that input. */
   readonly basis: SimulationInputBasis;
 }
@@ -93,6 +102,7 @@ export function digestibleFields(
       filename: record.source.filename,
       sourceDigest: record.source.sourceDigest,
       analysisInputDigest: record.source.analysisInputDigest,
+      terrainCoreDigest: record.source.terrainCoreDigest,
       basis: record.source.basis,
     },
     model: record.model,
