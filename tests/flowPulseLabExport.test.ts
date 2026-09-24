@@ -125,4 +125,29 @@ describe('a fresh, non-stale result', () => {
     expect(extractEntry(out.bytes, 'site-flow-path.geojson')).not.toBeNull();
     expect(extractEntry(out.bytes, 'site-catchment.asc')).not.toBeNull();
   });
+
+  // ── Defect D: `buildFlowPulseExport` must forward the caller's real
+  // world origin / CRS through to the package builder, rather than dropping
+  // it on the floor and letting every raster land at a fixed (0, 0).
+  it('forwards the georef to the package, writing the real corner and a .prj', () => {
+    const out = buildFlowPulseExport(
+      runOf(), false, null, null, 'site', 'layer-a', buildFlowPulsePackage,
+      { worldOrigin: { x: 400123.5, y: 3600456.25 }, crsName: 'EPSG:6342', wkt: 'PROJCS["fixture",...]' },
+    );
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const asc = new TextDecoder().decode(extractEntry(out.bytes, 'site-accumulation.asc')!);
+    expect(asc).toMatch(/xllcorner 400123\.5/);
+    expect(asc).toMatch(/yllcorner 3600456\.25/);
+    expect(extractEntry(out.bytes, 'site.prj')).not.toBeNull();
+  });
+
+  it('writes a local (0, 0) origin and no .prj when no georef is supplied', () => {
+    const out = buildFlowPulseExport(runOf(), false, null, null, 'site', 'layer-a', buildFlowPulsePackage);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const asc = new TextDecoder().decode(extractEntry(out.bytes, 'site-accumulation.asc')!);
+    expect(asc).toMatch(/xllcorner 0\n/);
+    expect(extractEntry(out.bytes, 'site.prj')).toBeNull();
+  });
 });

@@ -40,7 +40,13 @@ import {
   type FlowRefusal,
 } from '../../simulation/flowPulse/flowPulseRunner';
 import { catchmentClick, traceClick, type FlowCatchmentTrace, type FlowClickRefusal, type FlowPathTrace } from '../../simulation/flowPulse/flowClickGuard';
-import { cellAnnouncement, statusLabel, type GridCell } from '../../simulation/flowPulse/flowGridCursor';
+import {
+  cellAnnouncement,
+  statusLabel,
+  type ElevationReference,
+  type GridCell,
+} from '../../simulation/flowPulse/flowGridCursor';
+import { verticalUnitLabel } from '../../units/units';
 import { mayReportMetricArea } from '../../simulation/simulationInputBasis';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { dtmMethodDigest, resolveLiveDtmDescriptor } from '../../science/liveDtmDescriptor';
@@ -66,6 +72,17 @@ export interface FlowPulseLabInput {
   readonly isGeographic: boolean;
   /** World Y of the load-time recentring origin; null when the scene has no single one. */
   readonly worldOriginY: number | null;
+  /**
+   * World X and Z of the same load-time recentring origin, for the export
+   * package's real corner (§ defect D) and the result grid's real elevation
+   * readout (§ defect A). Null under the same conditions `worldOriginY` is.
+   */
+  readonly worldOriginX?: number | null;
+  readonly worldOriginZ?: number | null;
+  /** The active CRS's WKT, for the export package's .prj sidecar; null when unresolved. */
+  readonly wkt?: string | null;
+  /** A human-readable CRS label for the export README/passport; null when unresolved. */
+  readonly crsName?: string | null;
   /** Metres per source unit from the resolved frame; null when unknown. */
   readonly resolvedUnitToMetres: number | null;
   readonly layerId: string | null;
@@ -119,6 +136,22 @@ export function flowScaleOf(input: FlowPulseLabInput): HorizontalScale {
   };
 }
 
+/**
+ * How to recover a real elevation from the routed grid's local z (§ defect
+ * A), the same rule `demPackage.ts` uses for the DTM/DSM rasters: the DTM's
+ * own claimed vertical factor, gated on the result's own statement that the
+ * vertical scale actually resolved — never the geometry placeholder a
+ * CRS-less scan pins to 1, which would print "metres" for a frame whose own
+ * provenance says the vertical unit is unverified.
+ */
+export function flowElevationReference(input: FlowPulseLabInput): ElevationReference {
+  const zFactor = input.result.verticalScaleResolved === false
+    ? null
+    : (input.result.dtm.verticalUnitToMetres ?? null);
+  const unitLabel = zFactor == null ? 'units' : verticalUnitLabel(zFactor);
+  return { originZ: input.worldOriginZ ?? null, unitLabel };
+}
+
 /** Stand-ins for a run that refuses before it reads a frame or an identity. */
 const NO_FRAME: HorizontalScale = {
   isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: false,
@@ -168,6 +201,19 @@ export type FlowPulseExportOutcome =
   | { readonly ok: false; readonly reason: string };
 
 /**
+ * The real-world placement facts the export package needs to georeference
+ * its rasters (§ defect D) — the same `worldOrigin`/`wkt`/`crsName` the DEM
+ * package already reads off `getMapContext()`. All null when the scene has
+ * no single resolved origin or CRS, in which case the package writes a
+ * local (0, 0) origin and no .prj, and says so in its README.
+ */
+export interface FlowPulseGeoref {
+  readonly worldOrigin: { readonly x: number; readonly y: number } | null;
+  readonly crsName: string | null;
+  readonly wkt: string | null;
+}
+
+/**
  * Build the export package from the CURRENT run, refusing on a stale result
  * or a run that never completed. Pure and DOM-free so it is unit-testable
  * without loading the (lazy) package-builder chunk it is handed by the
@@ -182,6 +228,7 @@ export function buildFlowPulseExport(
   filename: string | null,
   layerId: string | null,
   build: typeof buildFlowPulsePackage,
+  georef: FlowPulseGeoref | null = null,
 ): FlowPulseExportOutcome {
   if (!outcome.ok) {
     return { ok: false, reason: 'Flow Pulse has not produced a run to export.' };
@@ -194,7 +241,14 @@ export function buildFlowPulseExport(
     ? { mask: catchment.mask, outletCell: catchment.cell.row * outcome.grid.cols + catchment.cell.col }
     : null;
   const basename = filename ?? layerId ?? 'flow-pulse';
-  const bytes = build(outcome, { basename, path: pathInput, catchment: catchmentInput });
+  const bytes = build(outcome, {
+    basename,
+    path: pathInput,
+    catchment: catchmentInput,
+    worldOrigin: georef?.worldOrigin ?? null,
+    crsName: georef?.crsName ?? null,
+    wkt: georef?.wkt ?? null,
+  });
   return { ok: true, bytes, filename: `${basename}-flow-pulse.zip` };
 }
 
@@ -330,6 +384,7 @@ function mountFlowPulseInteractive(
     ariaLabel: 'Routed terrain grid — arrow keys move, Enter or Space acts on the selected cell',
     onMove: (_cell: GridCell, report) => announce(cellAnnouncement(report)),
     onActivate: (cell: GridCell) => handleActivate(cell),
+    elevationRef: flowElevationReference(input),
   });
 
   const conditioningCtl = segmentedControl<FlowConditioning>(
@@ -492,6 +547,13 @@ function mountFlowPulseInteractive(
         input.filename,
         input.layerId,
         buildFlowPulsePackage,
+        {
+          worldOrigin: input.worldOriginX != null && input.worldOriginY != null
+            ? { x: input.worldOriginX, y: input.worldOriginY }
+            : null,
+          crsName: input.crsName ?? null,
+          wkt: input.wkt ?? null,
+        },
       );
       if (!built.ok) {
         announce(`Export refused — ${built.reason}`);

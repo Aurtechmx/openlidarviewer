@@ -27,6 +27,7 @@ import {
   moveCursor,
   pixelToCell,
   type CellReport,
+  type ElevationReference,
   type GridCell,
 } from '../../simulation/flowPulse/flowGridCursor';
 import { CELL_NODATA, CELL_OUTLET, CELL_SINK } from '../../simulation/flowPulse/flowTypes';
@@ -42,6 +43,12 @@ export interface FlowResultGridOptions {
   readonly onActivate: (cell: GridCell) => void;
   /** The keyboard/pointer cursor moved to a new cell (no activation). */
   readonly onMove: (cell: GridCell, report: CellReport) => void;
+  /**
+   * How to recover a real-world elevation from the grid's local z (§ defect
+   * A). Optional and defaults to null — a caller with no resolved origin or
+   * vertical unit still gets reports, honestly labelled 'unknown'.
+   */
+  readonly elevationRef?: ElevationReference | null;
 }
 
 /** Flat status colours — legible at a glance, no gradient to misread as data. */
@@ -59,6 +66,7 @@ export class FlowResultGrid {
   private readonly _status: HTMLElement;
   private readonly _onActivate: FlowResultGridOptions['onActivate'];
   private readonly _onMove: FlowResultGridOptions['onMove'];
+  private readonly _elevationRef: ElevationReference | null;
 
   private _grid: FlowGrid | null = null;
   private _routed: D8Result | null = null;
@@ -71,6 +79,7 @@ export class FlowResultGrid {
   constructor(opts: FlowResultGridOptions) {
     this._onActivate = opts.onActivate;
     this._onMove = opts.onMove;
+    this._elevationRef = opts.elevationRef ?? null;
 
     this._canvas = document.createElement('canvas');
     this._canvas.className = 'olv-flow-grid-canvas';
@@ -163,7 +172,9 @@ export class FlowResultGrid {
 
   private _updateStatus(activated: boolean): void {
     if (!this._grid || !this._routed || !this._accumulation) return;
-    const report = describeCell(this._grid, this._routed, this._accumulation, this._areaM2, this._cursor);
+    const report = describeCell(
+      this._grid, this._routed, this._accumulation, this._areaM2, this._cursor, this._elevationRef,
+    );
     this._status.textContent = `${activated ? 'Selected — ' : ''}${cellAnnouncement(report)}`;
     this._onMove(this._cursor, report);
   }

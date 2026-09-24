@@ -81,6 +81,12 @@ export interface FlowPulsePackageOptions {
   readonly worldOrigin?: { readonly x: number; readonly y: number } | null;
   /** A CRS name for the README/passport, when the caller can supply one. Never invented here. */
   readonly crsName?: string | null;
+  /**
+   * CRS WKT for a `.prj` sidecar, when the caller can resolve one — same
+   * seam `demPackage.ts` reads for its own `.prj`. Omitted or null writes no
+   * `.prj` at all, rather than one with an empty or guessed CRS.
+   */
+  readonly wkt?: string | null;
   /** SHA-256 of the source scan, when the loader verified one. */
   readonly sourceSha256?: string | null;
   /** Build identity. Default the stamped {@link BUILD_IDENTITY}. */
@@ -203,6 +209,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly softwareVersion: string;
   readonly build: BuildIdentity;
   readonly crsName: string | null;
+  readonly hasWkt: boolean;
   readonly hasPath: boolean;
   readonly hasCatchment: boolean;
 }): string {
@@ -221,6 +228,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  ${opts.basename}-sinks-depressions.csv   Depression inventory (§10.10), largest first`,
     opts.hasPath ? `  ${opts.basename}-flow-path.geojson   Downstream path from a click-to-pulse` : null,
     opts.hasCatchment ? `  ${opts.basename}-catchment.asc      Upstream catchment mask (1 = contributing)` : null,
+    opts.hasWkt ? `  ${opts.basename}.prj                 Coordinate reference system (WKT)` : null,
     `  ${opts.basename}-summary.csv         The figures above, flat`,
     `  ${opts.basename}-simulation-run.json The sealed run record`,
     `  ${opts.basename}.olv-field-sim.json  Reproducible config: re-run it, get the same fieldDigest`,
@@ -420,9 +428,13 @@ export function buildFlowPulsePackage(
     bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`),
   });
 
+  if (options.wkt) {
+    entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
+  }
+
   const readme = buildFlowReadme(result, {
     basename, generationDateIso, softwareName, softwareVersion, build,
-    crsName: options.crsName ?? null, hasPath, hasCatchment,
+    crsName: options.crsName ?? null, hasWkt: !!options.wkt, hasPath, hasCatchment,
   });
   entries.push({
     name: `${basename}-README.txt`,

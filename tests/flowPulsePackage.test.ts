@@ -133,6 +133,39 @@ describe('the package carries every required file', () => {
     expect(geojson.features).toHaveLength(1);
   });
 
+  // ── Defect D: the ASCII rasters must carry the REAL lower-left corner in
+  // the dataset CRS, not a fixed (0, 0), and a `.prj` sidecar when the CRS
+  // resolves. Origin picked in the ~400000, 3600000 range to match a real
+  // far-mount UTM placement (see tests/contourWorldOrigin.test.ts).
+  it('writes the real lower-left corner when a world origin is supplied', () => {
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow',
+      worldOrigin: { x: 400123.5, y: 3600456.25 },
+    });
+    const asc = textOf(zip, 'flow-accumulation.asc');
+    expect(asc).toMatch(/xllcorner 400123\.5/);
+    expect(asc).toMatch(/yllcorner 3600456\.25/);
+  });
+
+  it('writes a local (0, 0) origin and no .prj when no world origin/CRS is supplied', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow' });
+    const asc = textOf(zip, 'flow-accumulation.asc');
+    expect(asc).toMatch(/xllcorner 0\n/);
+    expect(asc).toMatch(/yllcorner 0\n/);
+    expect(extractEntry(zip, 'flow.prj')).toBeNull();
+  });
+
+  it('writes a .prj sidecar with the supplied WKT when the CRS resolves', () => {
+    const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow',
+      worldOrigin: { x: 400123.5, y: 3600456.25 },
+      wkt,
+    });
+    expect(textOf(zip, 'flow.prj')).toBe(wkt);
+    expect(textOf(zip, 'flow-README.txt')).toContain('flow.prj');
+  });
+
   it('every listed file hashes to what SHA256SUMS.txt records', () => {
     const zip = buildFlowPulsePackage(runOf(), { basename: 'flow' });
     const manifest = textOf(zip, 'SHA256SUMS.txt');

@@ -109,14 +109,14 @@ describe('describeCell / cellAnnouncement', () => {
   };
   const areaM2 = Float64Array.from([1, 2, 1, 0]);
 
-  it('reports elevation, status, upstream cells and area for a readable cell', () => {
+  it('reports status, upstream cells and area for a readable cell, withholding elevation with no reference', () => {
     const report = describeCell(grid, routed, accumulation, areaM2, { col: 1, row: 0 });
     expect(report).toEqual({
-      col: 1, row: 0, readable: true, elevation: 2, status: 'outlet',
+      col: 1, row: 0, readable: true, elevation: null, elevationUnit: 'unknown', status: 'outlet',
       upstreamCells: 2, contributingAreaM2: 2,
     });
     expect(cellAnnouncement(report)).toBe(
-      'Column 1, row 0, elevation 2.00, outlet, 2 cell(s) upstream, 2.0 square metres contributing.',
+      'Column 1, row 0, elevation unknown, outlet, 2 cell(s) upstream, 2.0 square metres contributing.',
     );
   });
 
@@ -124,6 +124,7 @@ describe('describeCell / cellAnnouncement', () => {
     const report = describeCell(grid, routed, accumulation, areaM2, { col: 1, row: 1 });
     expect(report.readable).toBe(false);
     expect(report.elevation).toBeNull();
+    expect(report.elevationUnit).toBeNull();
     expect(report.upstreamCells).toBeNull();
     expect(report.contributingAreaM2).toBeNull();
     expect(cellAnnouncement(report)).toBe('Column 1, row 1, no elevation.');
@@ -131,6 +132,37 @@ describe('describeCell / cellAnnouncement', () => {
 
   it('drops the area clause entirely when area is withheld (null scale)', () => {
     const report = describeCell(grid, routed, accumulation, null, { col: 0, row: 0 });
-    expect(cellAnnouncement(report)).toBe('Column 0, row 0, elevation 3.00, routed, 1 cell(s) upstream.');
+    expect(cellAnnouncement(report)).toBe('Column 0, row 0, elevation unknown, routed, 1 cell(s) upstream.');
+  });
+
+  // ── Defect A: the grid-local z must never be printed as if it were a real
+  // elevation. With a resolved origin/unit the report adds the origin back
+  // and labels the unit; the fixture mirrors a real USGS 3DEP tile — a local
+  // z of ~2 rebased against a ~1232 m NAVD88 origin reads ~1234 m, not "2.00".
+  it('reports a real elevation with unit when the origin and vertical unit resolve', () => {
+    const report = describeCell(grid, routed, accumulation, areaM2, { col: 1, row: 0 }, {
+      originZ: 1232, unitLabel: 'm',
+    });
+    expect(report.elevation).toBeCloseTo(1234, 6);
+    expect(report.elevationUnit).toBe('m');
+    expect(cellAnnouncement(report)).toBe(
+      'Column 1, row 0, elevation 1234.00 m, outlet, 2 cell(s) upstream, 2.0 square metres contributing.',
+    );
+  });
+
+  it('reports elevation unknown when the origin resolved but the vertical unit did not', () => {
+    const report = describeCell(grid, routed, accumulation, areaM2, { col: 1, row: 0 }, {
+      originZ: 1232, unitLabel: 'units',
+    });
+    expect(report.elevation).toBeNull();
+    expect(report.elevationUnit).toBe('unknown');
+  });
+
+  it('reports elevation unknown when the vertical unit resolved but the origin did not', () => {
+    const report = describeCell(grid, routed, accumulation, areaM2, { col: 1, row: 0 }, {
+      originZ: null, unitLabel: 'm',
+    });
+    expect(report.elevation).toBeNull();
+    expect(report.elevationUnit).toBe('unknown');
   });
 });
