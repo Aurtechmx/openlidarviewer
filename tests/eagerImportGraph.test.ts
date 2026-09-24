@@ -27,6 +27,12 @@ export const LAZY_ONLY = [
   'src/render/deviceNotice.ts',
 ];
 
+/** A path with POSIX separators, so the checks read the same on Windows. */
+export const toPosix = (p: string): string => p.replace(/\\/g, '/');
+
+/** Repo-relative POSIX path of an absolute source file. */
+const rel = (f: string): string => toPosix(relative(ROOT, f));
+
 const STATIC_IMPORT = /(?:^|\n)[ \t]*(?:import|export)\s+(type\s+)?(?:[^'";]*?\sfrom\s+)?['"]([^'"]+)['"]/g;
 
 function resolveSpecifier(fromFile: string, spec: string): string | null {
@@ -58,13 +64,18 @@ export function eagerGraph(entry: string): Map<string, string | null> {
 
 function chain(graph: Map<string, string | null>, file: string): string {
   const parts: string[] = [];
-  for (let f: string | null | undefined = file; f; f = graph.get(f)) parts.unshift(relative(ROOT, f));
+  for (let f: string | null | undefined = file; f; f = graph.get(f)) parts.unshift(rel(f));
   return parts.join(' -> ');
 }
 
 describe('eager entry import graph', () => {
   const graph = eagerGraph(ENTRY);
-  const files = [...graph.keys()].map((f) => relative(ROOT, f));
+  const files = [...graph.keys()].map(rel);
+
+  it('normalises backslash paths to POSIX separators', () => {
+    expect(toPosix('src\\app\\staleChunkReload.ts')).toBe('src/app/staleChunkReload.ts');
+    expect(toPosix('src/lazyChunks.ts')).toBe('src/lazyChunks.ts');
+  });
 
   it('walks a real graph, so the check below is not vacuous', () => {
     expect(files.length).toBeGreaterThan(100);
@@ -72,8 +83,13 @@ describe('eager entry import graph', () => {
     expect(files).toContain('src/lazyChunks.ts');
   });
 
+  it('matches every forbidden prefix against the same path form it reports', () => {
+    for (const prefix of LAZY_ONLY) expect(prefix).toBe(toPosix(prefix));
+    expect(files.some((f) => f.startsWith('src/app/'))).toBe(true);
+  });
+
   it.each(LAZY_ONLY)('does not statically reach %s', (prefix) => {
-    const hits = [...graph.keys()].filter((f) => relative(ROOT, f).startsWith(prefix));
+    const hits = [...graph.keys()].filter((f) => rel(f).startsWith(prefix));
     expect(hits.map((f) => chain(graph, f))).toEqual([]);
   });
 });
