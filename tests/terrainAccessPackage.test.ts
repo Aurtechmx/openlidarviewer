@@ -71,6 +71,21 @@ function runOf(overrides: Partial<TerrainAccessParams> = {}) {
   return result;
 }
 
+/** Re-run a parsed/rebuilt `*.olv-field-sim.json` config over the same terrain and basis. */
+function reRunFromConfig(original: ReturnType<typeof runOf>, config: Record<string, unknown>) {
+  return runTerrainAccess(
+    bowlDtm(), RESOLVED, config.profile as TerrainAccessProfile,
+    config.startIndex as number, config.endIndex as number,
+    {
+      interpolated: config.interpolated as TerrainAccessParams['interpolated'],
+      maxCells: config.maxCells as number,
+      withheldExcluded: original.basis.withheldExcluded,
+      weights: config.weights as TerrainAccessParams['weights'],
+    },
+    identity,
+  );
+}
+
 /** Extract a stored entry's bytes from the store-only ZIP. */
 function extractEntry(zip: Uint8Array, name: string): Uint8Array {
   const dv = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
@@ -134,17 +149,7 @@ describe('the config reproduces the result digest', () => {
     const config = jsonOf<Record<string, unknown>>(zip, 'ta.olv-field-sim.json');
 
     expect(config.kind).toBe('terrain-access');
-    const reRun = runTerrainAccess(
-      bowlDtm(), RESOLVED, config.profile as TerrainAccessProfile,
-      config.startIndex as number, config.endIndex as number,
-      {
-        interpolated: config.interpolated as TerrainAccessParams['interpolated'],
-        maxCells: config.maxCells as number,
-        withheldExcluded: original.basis.withheldExcluded,
-        weights: config.weights as TerrainAccessParams['weights'],
-      },
-      identity,
-    );
+    const reRun = reRunFromConfig(original, config);
     expect(reRun.ok).toBe(true);
     if (!reRun.ok) return;
     expect(reRun.record.result.resultDigest).toBe(original.record.result.resultDigest);
@@ -153,17 +158,7 @@ describe('the config reproduces the result digest', () => {
   it('using buildTerrainAccessConfig directly reproduces the digest too', () => {
     const original = runOf();
     const config = buildTerrainAccessConfig(original);
-    const reRun = runTerrainAccess(
-      bowlDtm(), RESOLVED, config.profile as TerrainAccessProfile,
-      config.startIndex as number, config.endIndex as number,
-      {
-        interpolated: config.interpolated as TerrainAccessParams['interpolated'],
-        maxCells: config.maxCells as number,
-        withheldExcluded: original.basis.withheldExcluded,
-        weights: config.weights as TerrainAccessParams['weights'],
-      },
-      identity,
-    );
+    const reRun = reRunFromConfig(original, config);
     expect(reRun.ok).toBe(true);
     if (!reRun.ok) return;
     expect(reRun.record.result.resultDigest).toBe(original.record.result.resultDigest);

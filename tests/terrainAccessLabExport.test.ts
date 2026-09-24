@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { buildTerrainAccessExport } from '../src/ui/fieldSimulation/terrainAccessLab';
 import { buildTerrainAccessPackage } from '../src/export/terrainAccessPackage';
 import { runTerrainAccess, TERRAIN_ACCESS_DEFAULTS } from '../src/simulation/terrainAccess/terrainAccessRunner';
+import { extractEntry } from './helpers/zipReader';
 import type { HorizontalScale } from '../src/simulation/terrainAccess/dtmTerrainAccessGrid';
 import type { TerrainAccessProfile } from '../src/simulation/terrainAccess/terrainAccessTypes';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
@@ -59,27 +60,6 @@ function runOf() {
   const result = runTerrainAccess(flat(), RESOLVED, PERMISSIVE, 0, 11, TERRAIN_ACCESS_DEFAULTS, identity);
   if (!result.ok) throw new Error(`fixture run refused: ${result.code}`);
   return result;
-}
-
-/** Extract a stored entry's bytes from the store-only ZIP. */
-function extractEntry(zip: Uint8Array, name: string): Uint8Array | null {
-  const dv = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
-  const wantName = new TextEncoder().encode(name);
-  let p = 0;
-  while (p + 30 <= zip.length && dv.getUint32(p, true) === 0x04034b50) {
-    const compSize = dv.getUint32(p + 18, true);
-    const nameLen = dv.getUint16(p + 26, true);
-    const extraLen = dv.getUint16(p + 28, true);
-    const nameBytes = zip.subarray(p + 30, p + 30 + nameLen);
-    const dataStart = p + 30 + nameLen + extraLen;
-    let match = nameBytes.length === wantName.length;
-    for (let j = 0; match && j < wantName.length; j++) {
-      if (nameBytes[j] !== wantName[j]) match = false;
-    }
-    if (match) return zip.subarray(dataStart, dataStart + compSize);
-    p = dataStart + compSize;
-  }
-  return null;
 }
 
 describe('a stale result (§18)', () => {
