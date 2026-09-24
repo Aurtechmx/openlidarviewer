@@ -1,0 +1,49 @@
+{
+  "id": "F7",
+  "description": "A pocket beyond the declared maximum range: UNADDRESSED, not SHADOWED (no behind-evidence at all).",
+  "station": {
+    "id": "station-1",
+    "origin": [
+      0,
+      0,
+      1
+    ],
+    "status": "DECLARED",
+    "angularExtent": {
+      "azimuthDeg": [
+        0,
+        360
+      ],
+      "elevationDeg": [
+        -10,
+        10
+      ]
+    },
+    "maxRange": 5
+  },
+  "pocket": {
+    "minCorner": [
+      8,
+      -1,
+      0
+    ],
+    "maxCorner": [
+      10,
+      1,
+      2
+    ]
+  },
+  "domain": {
+    "minCorner": [
+      -1,
+      -4,
+      -1
+    ],
+    "maxCorner": [
+      11,
+      4,
+      4
+    ]
+  },
+  "voxelEdge": 0.5
+}

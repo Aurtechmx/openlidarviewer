@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "caseCount": 7,
+  "results": [
+    {
+      "id": "single-source-single-direction",
+      "expected": {
+        "sources": 1,
+        "angularSpread": 0.0,
+        "incidence": 1.0,
+        "rangeFit": 1.0,
+        "consistency": 1.0
+      }
+    },
+    {
+      "id": "two-sources-opposing-directions",
+      "expected": {
+        "sources": 2,
+        "angularSpread": 1.0,
+        "incidence": 1.0,
+        "rangeFit": 1.0,
+        "consistency": 1.0
+      }
+    },
+    {
+      "id": "diagonal-spread-one-out-of-band",
+      "expected": {
+        "sources": 1,
+        "angularSpread": 0.06735578268939546,
+        "incidence": 0.0,
+        "rangeFit": 0.6666666666666666,
+        "consistency": 0.8
+      }
+    },
+    {
+      "id": "no-normal-supplied",
+      "expected": {
+        "sources": 1,
+        "angularSpread": 0.0,
+        "incidence": null,
+        "rangeFit": 1.0,
+        "consistency": 1.0
+      }
+    },
+    {
+      "id": "no-samples-at-all",
+      "expected": {
+        "sources": 0,
+        "angularSpread": null,
+        "incidence": null,
+        "rangeFit": null,
+        "consistency": 0.0
+      }
+    },
+    {
+      "id": "no-hit-pass-evidence",
+      "expected": {
+        "sources": 0,
+        "angularSpread": null,
+        "incidence": null,
+        "rangeFit": null,
+        "consistency": null
+      }
+    },
+    {
+      "id": "multi-return-second-return-only-voxel",
+      "expected": {
+        "sources": 1,
+        "angularSpread": 0.0,
+        "incidence": 1.0,
+        "rangeFit": 1.0,
+        "consistency": 1.0
+      }
+    }
+  ]
+}

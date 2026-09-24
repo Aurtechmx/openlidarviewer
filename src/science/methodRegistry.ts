@@ -32,7 +32,9 @@ export type MethodCategory =
   | 'feature'
   | 'provenance'
   /** A declared model applied to a measured product, producing a simulated result. */
-  | 'simulation';
+  | 'simulation'
+  /** Ray-and-voxel scanner-visibility evidence (Observatory, docs/observatory/SPEC.md). */
+  | 'observation';
 
 /** A lightweight reference to a registered method at its current version. */
 export interface MethodRef {
@@ -527,6 +529,117 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     'Hart, Nilsson & Raphael (1968), doi:10.1109/TSSC.1968.300136 (A*)',
     ['src/simulation/terrainAccess/aStarTerrain.ts'],
   ),
+  // The seven ids below are registered EARLY, before their methods exist,
+  // under the maintainer's Observatory decision-rule approval
+  // (docs/observatory/SPEC.md §4 OB-INT-04; validation/protocols/v070-decision-rules.md).
+  // Reserving the id and version-1 now means a later phase's first commit
+  // cannot collide with a name or number someone already used informally.
+  // Every summary below says plainly whether the method has code behind it
+  // yet; none may be read as an implementation claim. Full narrative status,
+  // assumptions and the phase that will implement each one are in
+  // docs/observatory/methods.md, one section per id (the OB-INT-04 test in
+  // tests/observatoryMethodDocs.test.ts checks every id below has one).
+  'olv.observation.rays': {
+    id: 'olv.observation.rays',
+    version: 1,
+    name: 'Observation ray builder',
+    summary:
+      'The ray builder (buildGriddedSourceRays, buildUnstructuredSourceRays) is implemented and tested: one ' +
+      'ray per grid cell for a gridded source, direction from the fitted angular parameterisation ' +
+      '(acquisitionCoverage.ts), and one ray per posed unstructured record, direction normalize(hit - origin) ' +
+      'in Float64 before recentring (phase O3). It is not yet reachable from a live scene: nothing in the ' +
+      'production graph builds a ledger to traverse these rays with, which is traversal (O4).',
+    citation: 'Internal composition (grid and posed-ray parameterisation); no single source method.',
+    category: 'observation',
+    implementation: ['src/observation/rays.ts'],
+  },
+  'olv.observation.ledger': {
+    id: 'olv.observation.ledger',
+    version: 1,
+    name: 'Voxel evidence ledger and traversal',
+    summary:
+      'The 3D DDA traversal (Amanatides & Woo), the domain/voxel key packing, the declared voxel- and ' +
+      'work-step budget refusals, and the chunk-partition/merge accumulation (traverseRayChunks, ' +
+      'mergePartialLedgers, checkVoxelDomainBudget, estimateTraversalBudget, runObservationLedger, all in ' +
+      'src/observation/ledger.ts) are implemented and tested against F8 (the frozen Python DDA oracle), F9 ' +
+      '(fieldDigest identical under permuted chunk order and 1/2/5 in-process partitions) and a dedicated ' +
+      'budget-refusal test (phase O4). It is not yet reachable from a live scene: nothing in the production ' +
+      'graph wires the ray builder (O3) to this traversal, which is a coordinator (O9), and states/conflict/ ' +
+      'shadow (O5) are not built.',
+    citation: 'Amanatides & Woo (1987), 3-D DDA traversal (no DOI listed for this Eurographics paper).',
+    category: 'observation',
+    implementation: ['src/observation/ledger.ts'],
+  },
+  'olv.observation.states': {
+    id: 'olv.observation.states',
+    version: 1,
+    name: 'Observation state table',
+    summary:
+      'The pure per-voxel decision function (deriveObservationState) mapping counters to one of nine ' +
+      'observation states is implemented and tested against an independent oracle over 7,504 preregistered ' +
+      'lattice rows (phase O1). It is not yet reachable from a live scene: nothing in the production graph ' +
+      'builds an evidence ledger to call it with, which needs the ray builder and traversal (O3/O4).',
+    citation: 'Internal composition of the state-transition rules (docs/observatory/SPEC.md §2.2-§2.4); no single source method.',
+    category: 'observation',
+    implementation: ['src/observation/stateTable.ts'],
+  },
+  'olv.observation.strength': {
+    id: 'olv.observation.strength',
+    version: 1,
+    name: 'Observation strength components',
+    summary:
+      "Phase O6: computes sources, angularSpread, incidence, rangeFit and consistency per SURFACE voxel, each " +
+      "independently bounded and shown only as separate components (never a hidden composite without its " +
+      "weights, OB-STR-02). sources and consistency read straight off an ObservationLedgerRow; angularSpread, " +
+      "incidence and rangeFit come from accumulateStrengthHitSamples, which re-walks a chunk's rays with the " +
+      "same clip/DDA/hit-window primitives the O4 ledger traversal uses. incidence's normal is fit via symEig3 " +
+      "over resident points (fitNormalFromResidentPoints) or supplied directly. Not yet wired into a run record " +
+      "or any presentation surface (O7/O9).",
+    citation: 'Internal composition of the strength components (docs/observatory/SPEC.md §2.5); no single source method.',
+    category: 'observation',
+    implementation: ['src/observation/strength.ts'],
+  },
+  'olv.observation.shadow-frontier': {
+    id: 'olv.observation.shadow-frontier',
+    version: 1,
+    name: 'Shadow frontier',
+    summary:
+      'Phase O5: computeShadowFrontier walks the 6-adjacency of a classified field, over the aggregate field or ' +
+      'any isolated source, finding SURFACE/OBSERVED_EMPTY voxels next to a SHADOWED, UNADDRESSED or ' +
+      'NO_RETURN_PATH voxel. Scored against an independent Python oracle. Not yet reachable from a live scan; ' +
+      'wiring to a real ledger and scene is a coordinator (O9).',
+    citation: 'Curless & Levoy (1996), doi:10.1145/237170.237269 (line-of-sight carving; empty-vs-unseen framing).',
+    category: 'observation',
+    implementation: ['src/observation/shadowFrontier.ts'],
+  },
+  'olv.observation.coverage-gain': {
+    id: 'olv.observation.coverage-gain',
+    version: 1,
+    name: 'Coverage Gain (not implemented)',
+    summary:
+      'Not implemented in v0.7. Reserves the id and version ahead of phase O10, which will generate ' +
+      'candidate stations on a declared grid and score each against the evidence ledger by the declared ' +
+      'per-state weights, incidence and redundancy terms. src/observation/coverageGain.ts holds the declared ' +
+      'instrument-model and per-candidate term shapes only; no candidate generation or scoring exists yet. ' +
+      'Not an information-theoretic quantity, and never named as one.',
+    citation: 'Scott, Roth & Rivest (2003), doi:10.1145/641865.641868 (view-planning framing).',
+    category: 'observation',
+    implementation: ['src/observation/coverageGain.ts'],
+  },
+  'olv.observation.station-suggestion': {
+    id: 'olv.observation.station-suggestion',
+    version: 1,
+    name: 'Next-station suggestion (not implemented)',
+    summary:
+      'Not implemented in v0.7. Reserves the id and version ahead of phase O10, which will run greedy ' +
+      'sequential selection over Coverage Gain candidates against a hypothetical copy of the ledger, never ' +
+      'the canonical one. src/observation/stationSuggestion.ts holds the declared result shape and the ' +
+      'ReachabilityProvider interface OB-GAIN-06 defines for v0.7 (no implementation of it exists, and the ' +
+      'panel offers no "reachable" mode until one is registered with evidence).',
+    citation: 'Scott, Roth & Rivest (2003), doi:10.1145/641865.641868 (view-planning framing; greedy sequential selection).',
+    category: 'observation',
+    implementation: ['src/observation/stationSuggestion.ts'],
+  },
 };
 
 /**

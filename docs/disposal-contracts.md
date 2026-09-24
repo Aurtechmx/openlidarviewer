@@ -50,6 +50,9 @@ long-session spec — see the checklist at the bottom.
 | Continuity history colour surface | `HistoryTargets` | From `resize` at one backing-store size and device generation until either changes, or `dispose` | `HistoryTargets.dispose()`, and `resize` to a different size or device generation, which frees before allocating |
 | Continuity history depth surface | `HistoryTargets` | Allocated and freed with the colour surface; a partial set is never held | `HistoryTargets.dispose()`, and `resize` to a different size |
 | Continuity history support surface | `HistoryTargets` | Allocated and freed with the colour surface | `HistoryTargets.dispose()`, and `resize` to a different size |
+| Observatory shadow-voxel overlay (`THREE.LineSegments` via `ObservatoryOverlay`) | `observatoryPanel.ts` module state (built only once a run commits) | Until the scan it was drawn from closes, a different scan loads, the CRS changes, or a classification edit invalidates the field | `terrainAnalysisRunner.ts`'s `abortAndClearCache()` calls `invalidateObservatoryOverlay()` (`lazyChunks.ts`), which the runner registered on construction — same seam as `invalidateFlowOverlay()`; a no-op before the Observatory chunk ever loads |
+| Observatory runner state + committed result | `observatoryRunner.ts`'s module-level closure | Until the same event set above fires | `runner.abortAndClearCache()` resets to `{ phase: 'idle' }` |
+| Observatory Modal DOM + its `subscribe()` listener | `observatoryPanel.ts`'s `openObservatoryPanel` | While the modal is open | `Modal.close()` (Escape, backdrop click, or a later `openObservatoryPanel` call) calls the returned `unsubscribe()` in its `onClose` |
 
 ## Disposal triggers — when each fires
 

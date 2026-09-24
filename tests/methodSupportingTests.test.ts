@@ -112,6 +112,18 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.contour.generalize': ['tests/contourGeometryProduct.test.ts', 'tests/contourAdaptiveGeneralize.test.ts'],
   'olv.contour.generalize.dp': ['tests/contourGeometryProduct.test.ts'],
   'olv.contour.generalize.terrain-adaptive': ['tests/contourAdaptiveGeneralize.test.ts'],
+  // The six not-yet-implemented ids: registered early (OB-INT-04), so their
+  // "supporting test" is the one that checks the declared type contract
+  // src/observation/*.ts holds today, not an implementation that does not
+  // exist yet. `olv.observation.states` differs: deriveObservationState is
+  // real code, and observatoryStateTable.test.ts is its genuine test.
+  'olv.observation.rays': ['tests/observatoryPlannedContracts.test.ts'],
+  'olv.observation.ledger': ['tests/observatoryPlannedContracts.test.ts'],
+  'olv.observation.states': ['tests/observatoryStateTable.test.ts'],
+  'olv.observation.strength': ['tests/observatoryPlannedContracts.test.ts'],
+  'olv.observation.shadow-frontier': ['tests/observatoryPlannedContracts.test.ts'],
+  'olv.observation.coverage-gain': ['tests/observatoryPlannedContracts.test.ts'],
+  'olv.observation.station-suggestion': ['tests/observatoryPlannedContracts.test.ts'],
 };
 
 describe('method → supporting-test binding', () => {

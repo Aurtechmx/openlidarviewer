@@ -226,6 +226,49 @@ describe('acquisition ray coverage', () => {
     expect(index?.unfittedFrames).toBe(1);
     expect(coverageAtWorldPoint(index, 1, 2, 3)).toBe('indeterminate');
   });
+
+  it('stays null without poseForFrame, exactly as before the option existed', () => {
+    const fixture = makeFixture('a', ORIGIN, MIXED_STATES);
+    const poseless: OrganizedRangeFrame = { ...fixture.frame, acquisitionPose: undefined };
+    const index = buildAcquisitionCoverage(setOf(poseless), {
+      recordPosition: (r) => fixture.positions[r] ?? null,
+    });
+    expect(index?.setups).toHaveLength(0);
+    expect(index?.unfittedFrames).toBe(1);
+  });
+
+  it('fitFrame falls back to options.poseForFrame when frame.acquisitionPose is absent', () => {
+    const fixture = makeFixture('a', ORIGIN, MIXED_STATES);
+    const poseless: OrganizedRangeFrame = { ...fixture.frame, acquisitionPose: undefined };
+    let calls = 0;
+    const index = buildAcquisitionCoverage(setOf(poseless), {
+      recordPosition: (r) => fixture.positions[r] ?? null,
+      poseForFrame: (frame) => {
+        calls++;
+        expect(frame).toBe(poseless);
+        return { worldTranslation: ORIGIN, localPositionSource: 'not-applicable' };
+      },
+    });
+    expect(calls).toBe(1);
+    expect(index?.setups).toHaveLength(1);
+    expect(index?.unfittedFrames).toBe(0);
+    const target = pointOf(ORIGIN, 2, 2, 12);
+    expect(coverageAtWorldPoint(index, target[0], target[1], target[2])).toBe('interrogated');
+  });
+
+  it('never calls poseForFrame when the frame already declares its own pose', () => {
+    const fixture = makeFixture('a', ORIGIN, MIXED_STATES);
+    let calls = 0;
+    const index = buildAcquisitionCoverage(setOf(fixture.frame), {
+      recordPosition: (r) => fixture.positions[r] ?? null,
+      poseForFrame: () => {
+        calls++;
+        return undefined;
+      },
+    });
+    expect(calls).toBe(0);
+    expect(index?.setups).toHaveLength(1);
+  });
 });
 
 describe('ordinary clouds pay nothing', () => {

@@ -55,6 +55,26 @@ the paper that specifies it.
 | `olv.simulation.terrain-access.cost-map` | 1 | Terrain access hard eligibility (node/edge split) and soft traversability cost | internal (declared multi-term utilization cost) |
 | `olv.simulation.terrain-access.astar` | 1 | Deterministic 8-connected A* over eligible terrain cells | Hart, Nilsson & Raphael (1968) |
 
+### Observatory (reserved v0.7, docs/observatory/SPEC.md)
+
+Registered early, ahead of the code, under the maintainer's decision-rule
+approval (`docs/observatory/SPEC.md` §4 OB-INT-04). Every row below except
+`olv.observation.states` names a method with no implementation in the tree;
+the id and version are reserved so a later phase's first commit cannot
+collide with a name someone already used informally. Full status,
+assumptions and the implementing phase are in `docs/observatory/methods.md`,
+one section per id.
+
+| Id | Ver | Method | Citation |
+|---|---|---|---|
+| `olv.observation.rays` | 1 | Observation ray builder, not implemented, planned for phase O3 | internal (grid and posed-ray parameterisation) |
+| `olv.observation.ledger` | 1 | Voxel evidence ledger and traversal, not implemented, planned for phase O4 | Amanatides & Woo (1987) |
+| `olv.observation.states` | 1 | Observation state table; the pure decision function is implemented and tested (O1), not yet wired to a live ledger | internal (state-transition rules, SPEC §2.2-§2.4) |
+| `olv.observation.strength` | 1 | Observation strength components, not implemented, planned for phase O6 | internal (strength components, SPEC §2.5) |
+| `olv.observation.shadow-frontier` | 1 | Shadow frontier, not implemented, planned for phase O5 | Curless & Levoy (1996) |
+| `olv.observation.coverage-gain` | 1 | Coverage Gain, not implemented, planned for phase O10 | Scott, Roth & Rivest (2003) |
+| `olv.observation.station-suggestion` | 1 | Next-station suggestion, not implemented, planned for phase O10 | Scott, Roth & Rivest (2003) |
+
 ## Honesty boundary
 
 Registering a method names the algorithm; it does not upgrade the evidence

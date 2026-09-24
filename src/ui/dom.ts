@@ -168,6 +168,31 @@ export function iconButton(props: IconButtonProps): HTMLButtonElement {
   return btn;
 }
 
+export interface ChipProps {
+  /** Small symbol shown before the word (e.g. a glyph character, never an icon font). */
+  glyph: string;
+  /** The badge's word(s), exactly as the caller's own vocabulary declares them (e.g. Observatory's `stateChip`, `docs/observatory/SPEC.md` OB-UI-02). */
+  word: string;
+  className: string;
+  /** `data-tip` explanation of what the badge means, required so every chip carries one. */
+  tip: string;
+}
+
+/**
+ * A small glyph+word status badge — `<span class="chip-class"><glyph/><word/></span>`
+ * with a `data-tip` explanation. Generic on purpose: `AnalysePanel`'s coverage
+ * badges and Observatory's `stateChip` (`src/ui/observatory/stateChip.ts`)
+ * both want "one glyph, one fixed word, one tooltip", so this lives here
+ * (`dom.ts`, the shared UI primitive module) rather than as a second,
+ * near-identical helper next to each caller.
+ */
+export function chip(props: ChipProps): HTMLSpanElement {
+  const span = el('span', { className: props.className, tip: props.tip });
+  span.append(el('span', { className: `${props.className}-glyph`, text: props.glyph }));
+  span.append(el('span', { className: `${props.className}-word`, text: props.word }));
+  return span;
+}
+
 /** Format a point count compactly: 4_200_000 → "4.2M", 1_100 → "1.1K". */
 export function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;

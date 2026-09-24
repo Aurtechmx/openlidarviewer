@@ -1,0 +1,39 @@
+{
+  "id": "F5",
+  "description": "PTX grid with declared 0 0 0 sky cells: NO_RETURN rays, never OBSERVED_EMPTY.",
+  "sourceKind": "ptx-grid",
+  "width": 4,
+  "height": 3,
+  "station": {
+    "id": "block-1",
+    "origin": [
+      0,
+      0,
+      0
+    ]
+  },
+  "coverage": {
+    "azimuth0": 0,
+    "azimuthStep": 0.2,
+    "polar0": 0.3,
+    "polarStep": 0.25
+  },
+  "noReturnCells": [
+    [
+      0,
+      0
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      2
+    ],
+    [
+      0,
+      3
+    ]
+  ]
+}

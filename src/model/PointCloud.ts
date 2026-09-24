@@ -2,6 +2,7 @@ import type { SourceFormat } from '../io/sniffFormat';
 import type { CrsInfo } from '../io/crs';
 import type { CloudFrameProvenance } from '../geo/frame/frameProvenance';
 import type { OrganizedRangeSet } from './OrganizedRange';
+import type { AcquisitionStationSet } from './AcquisitionStations';
 
 /**
  * One source-metadata field exactly as the file declared it. `value` is
@@ -180,6 +181,20 @@ export interface PointCloudOptions {
    * has to name it to carry it.
    */
   organizedRange?: OrganizedRangeSet;
+  /**
+   * Scanner-setup sidecar (docs/observatory/SPEC.md §4 OB-INT-02): which
+   * record range of this cloud came from which declared station.
+   *
+   * A DEDICATED field, sibling to {@link organizedRange} and for the same
+   * reason: `voxelDownsample` and `clipCloud` both forward `metadata`
+   * wholesale, so a station's record RANGE living inside `metadata` would
+   * arrive at a reindexed cloud still claiming its old range. Standing alone,
+   * a reindexing path has to name this field to carry it — and every one that
+   * reindexes or subsets points (voxel downsample, clip) instead drops it
+   * explicitly, since a station range answers "which of THESE positions", and
+   * neither path preserves a station's records as one contiguous block.
+   */
+  acquisitionStations?: AcquisitionStationSet;
   /** The integer world-space origin that was subtracted from the positions. */
   origin: [number, number, number];
   /** Which file format this cloud was loaded from. */
@@ -245,6 +260,8 @@ export class PointCloud {
   readonly gpsTime?: Float64Array;
   /** Source acquisition topology. See {@link PointCloudOptions.organizedRange}. */
   readonly organizedRange?: OrganizedRangeSet;
+  /** Scanner-setup sidecar. See {@link PointCloudOptions.acquisitionStations}. */
+  readonly acquisitionStations?: AcquisitionStationSet;
   /**
    * The world-space origin subtracted from the positions at load time.
    *
@@ -347,6 +364,7 @@ export class PointCloud {
     this.pointSourceId = options.pointSourceId;
     this.gpsTime = options.gpsTime;
     this.organizedRange = options.organizedRange;
+    this.acquisitionStations = options.acquisitionStations;
     this.origin = options.origin;
     // A COPY, deliberately. Nothing in this class writes either origin any
     // more, but the caller still holds a reference to its own array — a copy

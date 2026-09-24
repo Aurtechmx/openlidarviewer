@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "purpose": "OB-ST-01/OB-ST-02 exhaustive-lattice config, consumed only by state_table.py. tests/observatoryStateTable.test.ts does not read this file: it replays the fully-explicit rows state_table.py freezes into expected/state-table-lattice.expected.json, so the two implementations cannot disagree over enumeration order, only over the state a given input produces.",
+  "params": { "p_solid": 0.9, "p_empty": 0.1, "n_min": 5 },
+  "sharedHitPassPairs": [
+    [0, 0],
+    [5, 0],
+    [4, 0],
+    [9, 1],
+    [8, 1],
+    [0, 5],
+    [0, 4],
+    [1, 9],
+    [2, 8],
+    [5, 5]
+  ],
+  "notes": [
+    "n_min=5, p_solid=0.9, p_empty=0.1: the record's own preregistered production values (validation/protocols/observatory/OB-ST-THRESHOLDS.protocol.json), not test-local substitutes, so this lattice checks the function the way it actually ships.",
+    "(0,0) exercises the n=0 (no read-ray-evidence) branch: SHADOWED/NO_RETURN_PATH/UNADDRESSED.",
+    "(5,0) is the SURFACE boundary: n = n_min exactly, f = 1.0.",
+    "(4,0) is n_min minus one with f = 1.0: PARTIAL, because n < n_min blocks SURFACE despite a perfect fraction.",
+    "(9,1)/(8,1) straddle the p_solid=0.9 boundary at n=10 (f = 0.9 exactly, then 8/9 ~= 0.889).",
+    "(0,5) is the OBSERVED_EMPTY boundary: n = n_min exactly, hit = 0.",
+    "(0,4) is the boundary-rule gap case (see OB-ST-THRESHOLDS.protocol.json, 'PARTIAL-is-the-total-complement'): hit = 0 but pass < n_min, so PARTIAL, not OBSERVED_EMPTY.",
+    "(1,9) is the p_empty=0.1 boundary at n=10 (f = 0.1 exactly), and the source used on the 'empty' side of every CONFLICT case in the multi-source tiers.",
+    "(2,8) and (5,5) are generic interior PARTIAL points, away from every boundary."
+  ],
+  "tiers": [
+    {
+      "sourceCount": 1,
+      "note": "Full richness: cheap at n=1.",
+      "behind": [0, 1, 2],
+      "noReturn": [0, 1, 2],
+      "addressed": [true, false],
+      "notDecoded": [true, false],
+      "insideDomain": [true, false]
+    },
+    {
+      "sourceCount": 2,
+      "note": "Main 2-source grid: the five pairs that carry a SURFACE, OBSERVED_EMPTY or CONFLICT-eligible reading, so CONFLICT is exercised across distinct source pairs.",
+      "hitPassPairs": [[0, 0], [5, 0], [0, 5], [1, 9], [2, 8]],
+      "behind": [0, 1],
+      "noReturn": [0, 1],
+      "addressed": [true, false],
+      "notDecoded": [false],
+      "insideDomain": [true]
+    },
+    {
+      "sourceCount": 2,
+      "note": "notDecoded variation, held out of the main grid to bound its size: NOT_READ depends only on notDecoded and the aggregate hit/pass, which the main grid already varies, so this axis is tested with the counter/behind/noReturn axes pinned.",
+      "hitPassPairs": [[0, 0], [5, 0]],
+      "behind": [0],
+      "noReturn": [0],
+      "addressed": [true, false],
+      "notDecoded": [true, false],
+      "insideDomain": [true]
+    },
+    {
+      "sourceCount": 3,
+      "note": "Main 3-source grid.",
+      "hitPassPairs": [[0, 0], [5, 0], [0, 5], [1, 9]],
+      "behind": [0, 1],
+      "noReturn": [0, 1],
+      "addressed": [true],
+      "notDecoded": [false],
+      "insideDomain": [true]
+    },
+    {
+      "sourceCount": 3,
+      "note": "addressed variation across 3 sources, held out of the main grid.",
+      "hitPassPairs": [[0, 0], [5, 0]],
+      "behind": [0, 1],
+      "noReturn": [0],
+      "addressed": [true, false],
+      "notDecoded": [false],
+      "insideDomain": [true]
+    },
+    {
+      "sourceCount": 3,
+      "note": "notDecoded variation across 3 sources, held out of the main grid.",
+      "hitPassPairs": [[0, 0], [5, 0]],
+      "behind": [0],
+      "noReturn": [0],
+      "addressed": [true, false],
+      "notDecoded": [true, false],
+      "insideDomain": [true]
+    }
+  ]
+}

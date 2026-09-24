@@ -203,3 +203,32 @@ test('downsampleToBudget names the argument the caller passed', () => {
   expect(() => downsampleToBudget(cloud, Number.NaN)).toThrow(/got NaN/);
   expect(() => downsampleToBudget(cloud, Number.NaN)).not.toThrow(/voxelSize/);
 });
+
+// OB-INT-02: a voxel collapses points from ANY station touching that cell
+// into one centroid, so a station's pre-downsample record range no longer
+// names a contiguous block of the output. emitVoxelCloud drops the sidecar
+// explicitly rather than carrying a range that would silently misattribute
+// centroids to the wrong station.
+test('voxel downsampling drops the acquisition-stations sidecar (no range describes a scatter)', () => {
+  const cloud = new PointCloud({
+    positions: new Float32Array([0.1, 0.1, 0.1, 0.9, 0.9, 0.9]),
+    origin: [0, 0, 0],
+    sourceFormat: 'ptx',
+    name: 'test',
+    acquisitionStations: {
+      kind: 'acquisition-stations',
+      stations: [
+        {
+          id: 'block-1',
+          source: 'ptx-block',
+          pose: { worldTranslation: [0, 0, 0], localPositionSource: 'not-applicable' },
+          recordRange: { start: 0, end: 2 },
+          originStatus: 'DECLARED',
+        },
+      ],
+    },
+  });
+  const out = voxelDownsample(cloud, 1.0);
+  expect(out.pointCount).toBe(1); // both points collapse to one voxel
+  expect(out.acquisitionStations).toBeUndefined();
+});

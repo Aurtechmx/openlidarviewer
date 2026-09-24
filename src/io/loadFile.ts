@@ -29,6 +29,7 @@ import { buildPreloadSummary } from './preloadSummary';
 import { LoadError } from './loadErrors';
 import type { LoadErrorCategory } from './loadErrors';
 import type { OrganizedRangeSet } from '../model/OrganizedRange';
+import type { AcquisitionStationSet } from '../model/AcquisitionStations';
 import type { PreviewChunk } from './loadLas';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
@@ -122,6 +123,12 @@ interface CloudPayload {
   pointSourceId?: Uint16Array;
   gpsTime?: Float64Array;
   organizedRange?: OrganizedRangeSet;
+  /**
+   * Scanner-setup sidecar (OB-INT-02). Plain data, no typed arrays — it
+   * crosses this boundary by structured clone, same as `metadata`, never by
+   * transfer.
+   */
+  acquisitionStations?: AcquisitionStationSet;
   origin: [number, number, number];
   sourceFormat: SourceFormat;
   name: string;

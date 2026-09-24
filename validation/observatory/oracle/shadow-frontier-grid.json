@@ -1,0 +1,23 @@
+{
+  "description": "OB-SH-01/02 fixture: a 5x3x1 grid exercising all three adjacency kinds (SHADOWED, UNADDRESSED, NO_RETURN_PATH) separately and together, plus non-adjacent neighbours (PARTIAL, CONFLICT) and domain-edge voxels that must not wrap.",
+  "nx": 5,
+  "ny": 3,
+  "nz": 1,
+  "cells": [
+    { "ix": 0, "iy": 0, "iz": 0, "state": "SURFACE" },
+    { "ix": 1, "iy": 0, "iz": 0, "state": "SHADOWED" },
+    { "ix": 2, "iy": 0, "iz": 0, "state": "SURFACE" },
+    { "ix": 3, "iy": 0, "iz": 0, "state": "UNADDRESSED" },
+    { "ix": 4, "iy": 0, "iz": 0, "state": "SURFACE" },
+    { "ix": 0, "iy": 1, "iz": 0, "state": "OBSERVED_EMPTY" },
+    { "ix": 1, "iy": 1, "iz": 0, "state": "SURFACE" },
+    { "ix": 2, "iy": 1, "iz": 0, "state": "NO_RETURN_PATH" },
+    { "ix": 3, "iy": 1, "iz": 0, "state": "SURFACE" },
+    { "ix": 4, "iy": 1, "iz": 0, "state": "PARTIAL" },
+    { "ix": 0, "iy": 2, "iz": 0, "state": "SURFACE" },
+    { "ix": 1, "iy": 2, "iz": 0, "state": "SURFACE" },
+    { "ix": 2, "iy": 2, "iz": 0, "state": "SURFACE" },
+    { "ix": 3, "iy": 2, "iz": 0, "state": "SURFACE" },
+    { "ix": 4, "iy": 2, "iz": 0, "state": "CONFLICT" }
+  ]
+}

@@ -758,6 +758,50 @@ export function invalidateTerrainAccessOverlay(): void {
 }
 
 /**
+ * The Observatory panel (Sources/Evidence/Shadow/Planning/Record, SPEC
+ * docs/observatory/SPEC.md OB-UI-01) and its runner. Opened only from the
+ * command palette, so it stays out of the startup shell (O9's exit evidence
+ * names one lazy chunk).
+ */
+export const loadObservatoryPanel = () => import('./ui/observatory/observatoryPanel');
+
+/**
+ * The Observatory's own coordinator (`openObservatoryRun`/`observatoryRunner`).
+ * Loaded dynamically from the action itself, exactly like `loadFlowPulseLab`
+ * above — `analysisActions.ts` must never import this at module scope, or
+ * the whole O1-O8 kernel it pulls in rides the action-registry chunk eagerly
+ * instead of staying behind the command.
+ */
+export const loadObservatoryRun = () => import('./app/openObservatoryRun');
+
+/** The Observatory's shadow-voxel overlay, drawn once a run commits. */
+export const loadObservatoryOverlay = () => import('./render/ObservatoryOverlay');
+
+/** The Observatory export package builder, reached only from its Export action. */
+export const loadObservatoryPackage = () => import('./export/observatoryPackage');
+
+/**
+ * The Observatory's own shadow-voxel overlay must not outlive the scan it was
+ * built from, exactly the seam `registerFlowOverlayInvalidator` above already
+ * documents for the Flow Pulse Lab: `terrainAnalysisRunner.ts`'s
+ * `abortAndClearCache()` cannot import a lazy panel chunk directly, and the
+ * chunk should not be force-loaded just to tear down an overlay most
+ * sessions never create. The runner (`src/app/observatoryRunner.ts`)
+ * registers its own disposer here the one time it is constructed.
+ */
+let observatoryOverlayInvalidator: (() => void) | null = null;
+
+/** Called by the Observatory runner itself, once, on construction. */
+export function registerObservatoryOverlayInvalidator(fn: (() => void) | null): void {
+  observatoryOverlayInvalidator = fn;
+}
+
+/** Tear down the Observatory's overlay and reset its runner, if either ever loaded. */
+export function invalidateObservatoryOverlay(): void {
+  observatoryOverlayInvalidator?.();
+}
+
+/**
  * The Withheld-aware terrain recovery gather: a full-resolution re-decode
  * (through the shared parse worker) of a static file the display path
  * voxel-downsampled at load, rasterised into a fresh `TerrainCore`. Only

@@ -4881,3 +4881,1346 @@ Covered by `tests/terrainAccessGridCursor.test.ts`,
 `tests/terrainAccessOverlayInvalidation.test.ts`,
 `tests/terrainAccessPackage.test.ts`, `tests/terrainAccessLabExport.test.ts`
 and `tests/e2e/terrainAccessLab.spec.ts`.
+### L160 · MEASURED · EVIDENCE
+
+Observatory phase O0, opened and closed in one entry. Baseline `affffa41`,
+matching both the SPEC's stated archive commit and the tip of this branch, so
+no archive comparison was needed. `docs/observatory/SPEC.md` is committed
+verbatim from the supplied specification, byte for byte.
+
+Every SPEC §1.1, §1.2 and §1.3 row is checked against the working tree and
+recorded in `docs/observatory/O0-report.md`, with source-line evidence for
+each. All but two read TRUE. The `measured | preview | withheld` authority
+row is PARTIAL: it exists once, as `StockpileAuthority`
+(`src/render/measure/stockpilePresenter.ts:172`), scoped to the stockpile
+feature, not as a shared type Observatory can import yet. The E57 structured
+origin row is PARTIAL: the per-scan pose is decoded and applied to points, but
+`E57GridBuilder.frame()` never sets `acquisitionPose` on the resulting
+`OrganizedRangeFrame`, unlike PTX and PCD, which both set it.
+
+Three verifications close open questions in SPEC §1.3 and OB-INT-02.
+E57 record ranges stay contiguous through sanitation: the merge loop appends
+scans in strict order and `sanitizeCloud.ts`'s `compactValidRecords` is a
+single ascending pass that only drops, never reorders, so a scan's survivors
+stay one contiguous block end to end. The station sidecar in a later phase
+can use a `[start, end)` range per station at no per-point memory cost; the
+`Uint16` per-record fallback, at roughly 2 bytes per point, is not needed.
+Structured E57 never produces `NO_RETURN`: every invalid record reads
+`SOURCE_INVALID` (`structuredFrames.ts:159-167`), because the loader treats
+`cartesianInvalidState` as a plain nonzero test and does not read the finer
+ASTM E2807 codes the format can carry. Organized PCD gives an origin only
+when the header's `VIEWPOINT` line is present and fully numeric
+(`loadPcd.ts:178-188`); a missing or malformed line leaves it undeclared
+rather than defaulted.
+
+OB-INT-08: `tests/frameDemand.test.ts` and `tests/invalidationDrawsFrame.test.ts`
+pass, 39 tests across both files. The burst-end case, a final committed node
+painted on its own merit rather than waiting for the 250 ms idle heartbeat,
+is covered directly by the `'pending GPU commits keep the loop awake'` suite,
+which drains a three-entry commit queue well inside the heartbeat window and
+asserts the one remaining paint is owed and discharged before the loop is
+allowed to sleep. No ledger entry before this one names the finding: grepping
+this file for `commitPending`, `commitWork` and `final paint` returns nothing.
+The mechanism was built in commit `888724f0` (#1007, "The loop paints what
+woke it"), which reached `main` without a ledger entry of its own. This entry
+is the first ledger record of that closure. No render-loop change was made in
+O0.
+
+`src/observation` is added to `LAYERS` in `scripts/lint-layer-boundaries.mjs`
+as a pure layer, one array entry. The directory carries only
+`src/observation/README.md`, prose describing the layer's future contents; a
+`.ts` placeholder was avoided because an unimported module would need its own
+entry in `docs/validation/unreachable-modules.json` for no functional gain.
+`lint:layer-boundaries`, `lint:unreachable-modules` and `lint:module-graph`
+all pass unchanged in every other respect.
+
+Two findings outside O0's six steps surfaced while verifying SPEC §1 and are
+left open rather than fixed here. `lint:doc-narration` fails on
+`docs/observatory/SPEC.md:409`, where OB-UI-05's permitted-wording list quotes
+a phrase built from "not read" and a clause naming the current session; the
+lint matches that clause anywhere in a document, including inside a quoted UI
+string, and its own header states it carries no allowlist by design. The SPEC
+is not edited to route around it, per this phase's binding rule; the red
+stands, documented here and in `docs/observatory/O0-report.md` as an open ASK
+item. Separately, `docs/validation/claim-register.yaml:1133` states that no
+E57 file produces a frame with identity, which `structuredFrames.ts`
+contradicts directly: `E57GridBuilder` decodes row and column indices and
+produces a frame with real `cellToRecord` identity, exercised by
+`tests/e57StructuredRange.test.ts`. The claim-register line predates
+structured-E57 grid support; correcting it is left to a session scoped to
+claim-register maintenance.
+
+`npm run typecheck` and `test:buckets:verify` pass. The layer and module-graph
+lints pass: `lint:layer-boundaries`, `lint:unreachable-modules`,
+`lint:module-graph`. The doc lints pass except one: `lint:doc-links`,
+`lint:architecture-truth`, `lint:v070-status`, `lint:claims-language` and
+`lint:editorial-language` pass; `lint:doc-narration` fails on the one SPEC
+line above and on no other file. `gen:v070-status` is regenerated after this
+entry.
+
+### L161 · BUILT · SCIENCE
+
+Observatory phase O1: types, the state-table function, the freshness-stamp
+extension, a fixture generator, and oracles for F8 and the state table.
+Baseline `728b3b3a`, one commit ahead of L160's `affffa41` on this branch,
+carrying only a SPEC wording fix (OB-UI-05's "not read in this load") the O1
+gate run below already reflects.
+
+`src/observation/types.ts` and `src/observation/stateTable.ts` are the
+layer's first two modules: `ObservationState`, the per-source and aggregate
+counter shapes, the Uint32-word presence bitmask (32 sources per word, tested
+past the 32-source boundary for F17), `ObservationOrigin` with the five
+statuses SPEC §4 OB-INT-06 and the sibling SensorPrint spec's origin-handoff
+vocabulary between them name, and the five declared parameters with units.
+`deriveObservationState` (OB-ST-01) is one pure function serving both the
+per-source and the aggregate case, a single-source call structurally unable to
+reach `CONFLICT` rather than being guarded by a branch. It resolves two gaps
+SPEC §2.2-§2.4's prose leaves open: `OUTSIDE_DOMAIN` is evaluated before every
+other rule despite being numbered last (the SPEC text says so in the same
+sentence it numbers it 9); and `PARTIAL` is the total complement of `SURFACE`
+and `OBSERVED_EMPTY`, closing a combination the three literal band
+definitions jointly miss (zero hits with a pass count under `n_min`, which
+satisfies none of the three as written). Both resolutions, the CONFLICT/
+OBSERVED_EMPTY definitional asymmetry the SPEC states directly, and the
+preregistered `p_solid` (0.9), `p_empty` (0.1) and `n_min` (5) are recorded in
+`validation/protocols/observatory/OB-ST-THRESHOLDS.protocol.json`, written
+before any fixture was scored against them (OB-ST-02). `tau_abs` and
+`tau_rel` are declared as formulas (half the voxel edge; the half-angle of one
+angular step) rather than numbers, since SPEC states they are per-run
+derivations and no O1 code path evaluates them yet.
+
+`src/science/analysisFreshness.ts` gains `ObservationFreshnessStamp`
+(extending `AnalysisFreshnessStamp`, not duplicating it) and
+`observationFreshnessBreach`, adding `sourceDigest`, `basis`, `roiDigest`,
+`stationSetDigest`, `parameterDigest`, `methodTags` and `metresPerUnit` and
+naming which one moved, in a fixed order, on top of the three facts the
+terrain check already names (OB-INT-03, OB-INV-09). No SensorPrint stamp
+exists in this tree to reuse instead.
+
+The state table is checked against `validation/observatory/oracle/
+state_table.py`, an independent restatement of SPEC §2.2-§2.4 and the
+protocol's boundary rules, over a bounded, explicitly enumerated lattice
+(`state-table-lattice.json`): 7,504 rows at the preregistered thresholds,
+covering all nine states, frozen as fully-explicit input-and-expected records
+so the TypeScript test replays recorded inputs rather than re-deriving the
+lattice itself. `--check` also asserts OB-INV-02 (no single-source row reads
+`CONFLICT`) and OB-INV-01 (`OBSERVED_EMPTY` never carries nonzero aggregate
+hit) directly. F8's four DDA cases (axis-aligned, along a face, grazing a
+corner, zero-length) are generated by `scripts/generate-observatory-fixtures.
+mjs` on exactly representable coordinates and traversed by `validation/
+observatory/oracle/ray_aabb_traversal.py` in exact rational arithmetic
+(`fractions.Fraction`), against a written tie rule: a coordinate on a voxel
+boundary belongs to the voxel on the positive side of it, per axis, applied
+simultaneously on however many axes a ray grazes at once. The along-face and
+axis-aligned cases resolve to the same four-voxel row, confirming the rule
+treats a boundary value the same as a value just past it; the grazing-corner
+case advances two axes in one step, adding one voxel per corner rather than
+two. The TypeScript DDA itself is O4; this phase's TypeScript test checks
+that the fixture generator's inputs and the frozen records agree with each
+other, not that a TypeScript traversal agrees with the oracle. `buildF1Scene`
+also lands, the wall-and-room geometry for F1, scored from O5 onward. Both
+oracles are registered in `validation/external-oracles/oracle-registry.json`
+under a new lineage (`olv-observatory-analytic-oracle`), roles
+`analytic-truth` and `generator-truth` only, cited by neither an existing
+protocol nor a study manifest yet.
+
+`docs/validation/unreachable-modules.json` registers both new `src/
+observation/` modules staged, wired starting O3 (rays) and O4/O5 (ledger,
+states). `MethodCategory` gains no `'observation'` member: nothing in O1's
+types needed it, so the addition SPEC allows conditionally was not made.
+
+One pre-existing red surfaces under a gate O0 did not run:
+`lint:method-literals` fails on `docs/observatory/SPEC.md:404` (quoting the
+finding, method-literal-ok), OB-UI-03's example voxel-probe panel text naming
+a method id that is not registered (OB-INT-04 registers it in O7). The line
+was committed verbatim in O0 and is unrelated to any O1 change; it is left as
+an open, documented red rather than edited, for the same reason O0 left its
+own `lint:doc-narration` finding on the same file unedited.
+`docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`'s module count (896)
+is corrected to 898, the true count `lint:module-graph` reports once the two
+new files exist, per `lint:architecture-truth`'s own instruction to correct
+the doc.
+
+`npm run typecheck`, `test:buckets:verify` (1337/1337, the four new
+`tests/observatory*.test.ts` files routed to `unit`), `lint:layer-boundaries`,
+`lint:module-graph`, `lint:unreachable-modules`, `lint:oracle-registry`,
+`lint:python-version`, `lint:architecture-truth`, `lint:doc-narration` and
+`lint:no-host-paths` all pass. `lint:method-literals` fails on the one
+inherited line above and on no other. `gen:v070-status` is regenerated after
+this entry.
+
+### L162 · BUILT · SCIENCE
+
+Observatory phase O2, opened and closed in one entry: the `AcquisitionStations`
+sidecar (OB-INT-02, approved under decision rule D1 as amended by its
+Amendment 2, which lets a declared single station carry a one-entry sidecar)
+and the early
+registration of all seven Observatory method ids (OB-INT-04, maintainer
+approval). Baseline `62c7a835`, one commit ahead of L161's `728b3b3a`.
+
+`src/model/AcquisitionStations.ts` defines the sidecar type: an id, a declared
+Float64 pose, a source tag (`e57-scan`, `ptx-block` or `pcd-viewpoint`), a
+`[start, end)` record range and `originStatus: 'DECLARED'`, following SPEC's
+own instruction to take `OrganizedRange`'s PATTERN rather than its literal
+"on `CloudMetadata`" wording: `PointCloudOptions.acquisitionStations` is a
+dedicated field, sibling to `organizedRange`, because both `voxelDownsample`
+and `clipCloud` forward `metadata` wholesale, and a record range living inside
+that bag would arrive at a reindexed cloud still claiming its old range with
+nothing to notice. `src/io/acquisitionStationsRemap.ts` carries ranges through
+sanitation's compaction by prefix-counting survivors once, so every station's
+boundary becomes an O(1) lookup; a station whose records all drop keeps an
+empty range rather than being removed, and a witness that cannot answer for a
+station's boundary drops the whole sidecar (there is no partial degrade for a
+station the way `unavailable` linkage serves the grid).
+
+`loadPtx.ts` records one station per block, before the block's declared grid
+is checked against the file, so a contradicted grid is not a reason to lose a
+pose or a range OB-INT-02 tracks independently of grid topology. `loadE57.ts`
+records one station per merged scan, structured and unstructured alike; a
+scan with no `<pose>` element is recorded as the file's own declared identity
+placement (`localPositionSource: 'not-applicable'`), never inferred, and
+distinct from an explicit identity pose because `rotation` stays absent rather
+than filled with an identity quaternion. `loadPcd.ts` records one station for
+the whole file, only when the header declares a `VIEWPOINT`, reading the pose
+straight off the already-built organized-grid frame so the two can never
+disagree; its final range uses `count - clean.excludedCount` rather than a
+second `.positions` read, keeping `lint:position-access` at its recorded
+baseline. `voxelDownsample.ts` and `clipCloud.ts` both drop the sidecar
+explicitly and say why in a comment: a voxel merges records from any station
+that touches its cell, and a clip's kept-index list can remove points from the
+middle of a station's range, so neither output subset is the contiguous block
+a station's range describes. The sidecar crosses the parse-worker boundary as
+plain data (`parseWorker.ts`'s payload, `loadFile.ts`'s `CloudPayload`),
+structurally cloned rather than transferred, since it holds no `ArrayBuffer`
+of its own.
+
+Memory: the sidecar's cost scales with station count, not point count. One
+station serialises to roughly 150 to 250 bytes (a Float64 pose is the largest
+part, 24 to 56 bytes of numbers, plus three short string fields). A
+1,000,000-point multi-scan cloud from a realistic 10 stations costs on the
+order of 2 KB; a 50,000,000-point cloud from up to 200 PTX blocks or E57 scans
+costs on the order of 40 KB. The rejected `Uint16`-per-record fallback O0
+costed at 2 bytes per point would have cost 2 MB and 100 MB at the same two
+sizes; the `[start, end)` range this phase ships costs neither, at any point
+count, because O0 (§2.1) already proved the ranges stay contiguous through
+sanitation.
+
+Method registry: `MethodCategory` gains `'observation'`. `methodRegistry.ts`
+registers `olv.observation.rays`, `.ledger`, `.states`, `.strength`,
+`.shadow-frontier`, `.coverage-gain` and `.station-suggestion` at version 1,
+under the maintainer's approval to reserve the seven ids before most of their
+code exists. Six of the seven summaries say plainly "not implemented in v0.7"
+and name the phase that will build them (O3 for rays, O4 for the ledger, O5
+for shadow frontier, O6 for strength, O10 for Coverage Gain and station
+suggestion); `olv.observation.states` names the true, partial status instead,
+since `deriveObservationState` is real, tested code from O1 that is simply not
+yet reachable from a live ledger. Each of the six not-yet-built methods gets a
+small `src/observation/*.ts` module holding only the type-level contract SPEC
+already fixes for it (ray storage, ledger row and budget-estimate shapes,
+strength components, the frontier result, the Coverage Gain instrument model
+and term shapes, and the `ReachabilityProvider` interface SPEC itself says has
+no v0.7 implementation) so `methodRegistry.test.ts`'s pre-existing invariant,
+that every entry's `implementation` path exists in the tree, holds without any
+entry claiming code that is not there. All six are registered `staged` in
+`docs/validation/unreachable-modules.json`, since nothing yet imports them.
+`docs/observatory/methods.md` is new: one section per id, each carrying a
+`**Phase:**` line, checked by the new OB-INT-04 test
+(`tests/observatoryMethodDocs.test.ts`) that every registered `observation`
+id has a section and that a "not implemented" summary and its section agree.
+`docs/science/METHOD_REGISTRY.md` gains a matching table under an "Observatory
+(reserved v0.7)" heading, for the pre-existing doc-registry parity test.
+Registering the ids resolves the `lint:method-literals` red L161 left open on
+`docs/observatory/SPEC.md:404` (OB-UI-03's example line, quoting
+`olv.observation.states@1`): the id now exists at the version quoted.
+
+Two documents needed a factual correction this phase's own additions caused,
+per `lint:architecture-truth`, which the task's own binding rule does not
+except (that exception is scoped to the monolith-size baseline only, not
+touched here). `docs/architecture/architecture-map.md`'s Model row moved from
+"~3.4k" to "~3.5k": `AcquisitionStations.ts` pushed `src/model` past the
+rounding boundary. `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`'s
+module count moved from 898 to 906: the sidecar's own two production modules
+plus the six staged method-contract stubs.
+
+Tests: `tests/ptxAcquisitionStations.test.ts` (inherited from the session this
+phase resumed, verified sound and unmodified) covers multi-block PTX exact
+ranges and poses, a sanitation drop inside one station, a block whose declared
+grid the records contradict, and a block that contributes no points.
+`tests/e57AcquisitionStations.test.ts` is new: two posed scans with exact
+ranges and poses, a scan with no pose element declaring identity rather than
+an inference, single-scan byte identity against `loadE57Merge.test.ts`'s own
+pinned fixture, a sanitation drop inside one station, a station whose records
+all drop, and a strided merge (parser mocked, as `loadE57Merge.test.ts`
+already does; this checks the merge loop's own station bookkeeping over
+unequal per-scan post-stride counts, not the sampling itself, which
+`e57StrideDecode.test.ts` covers separately against a real fixture).
+`tests/pcdAcquisitionStations.test.ts` is new: organized PCD with and without
+a declared viewpoint, an unorganized PCD with a viewpoint (still no station,
+since there is no per-scan boundary to name), a sanitation drop, and the
+non-station case (`tiny.las`, asserting `acquisitionStations` stays
+`undefined` and every other field matches `loadLas.test.ts`'s own pinned
+values). `tests/acquisitionStationsRemap.test.ts` (inherited, verified sound)
+pins the compaction arithmetic directly. `tests/voxelDownsample.test.ts` and
+`tests/clipCloud.test.ts` each gain a case asserting the sidecar is dropped,
+not carried stale. `tests/workerPayloadParity.test.ts` gains a section
+covering `organizedRange` and `acquisitionStations`, which the file's own
+pre-existing checks cannot see (they match only the eight typed-array kinds):
+both are declared on `PointCloudOptions`, posted by the worker payload
+literal, and declared on `CloudPayload`, and `acquisitionStations` is
+confirmed absent from the transfer list. The streaming path
+(`src/render/streaming/residentSnapshot.ts`) was checked, not given a test: it
+builds every `PointCloud` field by field, never spreads a source cloud's
+option bag, and never names `organizedRange` or `acquisitionStations` at all,
+so a streamed tile cannot carry either sidecar stale by construction; nothing
+there can regress without a future edit that itself would need a spread this
+review would flag.
+
+A full, untargeted `npx vitest run` (not one of the phase's named commands,
+run anyway to check for a blast radius the targeted selection could miss)
+surfaced one real failure outside the targeted files:
+`tests/methodSupportingTests.test.ts`'s pre-existing invariant, that every
+registered method names a supporting test, had nothing to say about the seven
+new `olv.observation.*` ids. `tests/observatoryPlannedContracts.test.ts` is
+new to close it: for each of the six not-yet-built methods it exercises the
+declared type contract itself rather than an implementation that does not
+exist, for example pinning `DEFAULT_GAIN_STATE_WEIGHTS` against SPEC §5.6's
+literal numbers, checking `ObservationRayChunk`'s array-length relationship
+on a two-ray fixture, and calling a hand-written `ReachabilityProvider` to
+confirm the interface is actually usable; `olv.observation.states` is bound
+to `tests/observatoryStateTable.test.ts` instead, its real, pre-existing test.
+
+`npm run typecheck`, `test:buckets:verify` (1343/1343), the full `e57|ptx|pcd|
+loader|sanitize|worker|payload|organized|station|methodRegistry|observatory`
+test selection (760 passed, 13 pre-existing skips, 0 failures),
+`tests/methodSupportingTests.test.ts` and
+`tests/observatoryPlannedContracts.test.ts` on their own, and a full
+`npx vitest run` (17,291 tests, 17,242 passed, 48 pre-existing skips, one
+pre-existing todo, 0 failures after the fix above), all pass.
+`lint:layer-boundaries`, `lint:module-graph`, `lint:unreachable-modules`,
+`lint:method-literals`, `lint:claim-register`, `lint:claims-language`,
+`lint:architecture-truth`, `lint:position-access`, `lint:monolith-size` (no
+net change: `main.ts` and `Viewer.ts` were not touched) and `lint:no-host-paths`
+all pass. `src/observation` still imports no DOM, `three` or `ui/` module, and
+no file under it reads a raw `.positions` array. `gen:v070-status` is
+regenerated after this entry.
+
+### L163 · BUILT · SCIENCE
+
+Observatory phase O3: the ray builder (OB-RAY-01..05), scored ray-level
+against F5, F6, F16. Baseline `e4767c93`, one commit ahead of L162's
+`62c7a835`.
+
+`buildGriddedSourceRays` (`src/observation/rays.ts`) walks a gridded frame's
+`cellState` row-major. `VALID_RETURN` gives a returned ray whose direction
+comes from the setup's fitted angular parameterisation
+(`acquisitionCoverage.ts`) and whose range is `geometricRange` where the
+format declares one (PTX), or, where it does not (structured E57, organized
+PCD), a range derived in Float64 from the record's own position and the
+station's origin, the same recipe OB-RAY-02 uses for a posed unstructured
+point. `NO_RETURN` gives a returned ray with `NaN` range. `NOT_DECODED` gives
+a not-read ray. `SOURCE_INVALID` and `SOURCE_RECORD_MISSING` give no ray,
+counted by walking the same cells rather than copied from the frame's whole
+`stateCounts`, so a `grid-stride`-subsampled build never counts a skipped
+cell either way. A multi-return cell (`frame.returnCellStart` present)
+contributes exactly one ray; its range is the first (smallest-`returnIndex`)
+declared return, and every return of the cell is appended to a shared
+`ObservationReturnTable` the ray's own `returnOffset` indexes into, in the
+CSR order `buildCellReturns` already sorts. `buildUnstructuredSourceRays`
+gives one ray per record in a station's range, direction
+`normalize(hit - origin)` and range `‖hit - origin‖`, both computed in
+Float64 by subtracting the station's own local position (itself a single
+Float64 subtraction of two world-frame values) from the record's source-local
+position, narrowed to Float32 only when written into the chunk; it never
+produces a not-read ray. `RaySubsampling`'s `grid-stride` skips a cell before
+either ray pool or the exclusion count sees it; `hash-threshold` keeps a
+record when a fixed 32-bit finalizer mix of its index falls under the
+threshold, which two runs over the same records reproduce byte-identically.
+Rays accumulate into `RAY_CHUNK_SIZE`-bounded (65536) typed-array chunks, no
+per-ray object.
+
+`ObservationRayChunk`'s four columns are unchanged; the pinned literal in
+`tests/observatoryPlannedContracts.test.ts` still passes untouched.
+`SourceRayBuild`, `ObservationReturnTable`, `GriddedRayCoverage` and
+`GriddedRayPositions` are the phase's new exported shapes, all additive.
+
+Structured E57's own pose gap, confirmed this session by `grep -n
+acquisitionPose src/io/e57/structuredFrames.ts src/io/loadE57.ts` returning
+nothing (PTX and PCD both set `OrganizedRangeFrame.acquisitionPose`;
+`E57GridBuilder.frame()` never does), is resolved without touching loader
+output. `acquisitionCoverage.ts`'s `AcquisitionCoverageOptions` gained one
+optional field, `poseForFrame?: (frame) => AcquisitionPose | undefined`;
+`fitFrame` reads `frame.acquisitionPose ?? options.poseForFrame?.(frame)`.
+Every existing caller, which omits the option, is unaffected:
+`tests/acquisitionCoverage.test.ts`'s existing poseless-frame case stays
+green unmodified, and two new cases cover the callback resolving a pose and
+never being called when the frame already has one. `AcquisitionStations.ts`
+gained `stationForRecord`, a linear `[start, end)` containment lookup, rather
+than joining a frame's `scan-N` id against a station's `scan-N` id: L162
+already established these are two different counters (`frames.length + 1`,
+counting only scans that earned a grid, against `scanOrdinal`, counting
+every merged scan), which desync as soon as any scan fails structured
+eligibility.
+
+F5 (a PTX-shaped grid with declared `0 0 0` sky cells), F6 (a structured-E57-
+shaped grid decoded at a stride) and F16 (a structured-E57-shaped canopy with
+one to three ordered returns per cell, on dyadic-rational ranges) are new
+generator functions in `scripts/generate-observatory-fixtures.mjs`, following
+F1/F8's own pattern: a pure function, drift-checked in
+`tests/observatoryFixtureF5F6F16.test.ts` against a committed JSON fixture
+under `validation/observatory/fixtures/`. Each scene is declarative (grid
+dimensions, station origin, fitted-coverage numbers, and either a no-return
+cell list, a stride, or per-cell declared returns); the ray-level assertions
+in the same file build the actual `OrganizedRangeFrame` from that scene and
+run it through the ray builder. Registering these under
+`validation/external-oracles/oracle-registry.json` was considered and
+rejected: F1's own generator carries no entry there, and
+`validation/observatory/README.md` already states why (no Python oracle
+backs it, "generator-truth" is a role the file's other two entries already
+use for their own domains). F5/F6/F16 are the same kind of fixture as F1, so
+the file is unchanged, matching that precedent rather than the plan's initial
+assumption. The ray-kind-per-cell-state mapping under test is a direct,
+closed-form transcription of OB-RAY-01's rule table, not a numeric algorithm,
+which is why no oracle is owed one.
+
+`docs/validation/unreachable-modules.json`: `rays.ts` and `types.ts` stay
+`status: "staged"` (this register tracks production-graph reachability, not
+test coverage, the same footing `stateTable.ts` has held since O1). Their
+`why` text is updated: it no longer says the ray builder does not exist, and
+now says traversal (O4) is what remains before either module is reachable.
+`docs/architecture/architecture-map.md`'s Model row moved from "~3.5k" to
+"~3.6k": `AcquisitionStations.ts`'s new `stationForRecord` pushed `src/model`
+past the rounding boundary, the same drift class L162 corrected for the same
+file.
+
+Method registry: `olv.observation.rays`'s summary drops "not implemented"
+and states the true, partial status, mirroring `olv.observation.states`'
+existing template. `docs/observatory/methods.md`'s `olv.observation.rays`
+section gets a matching Status update and a new paragraph on the pose-gap
+resolution; this keeps `tests/observatoryMethodDocs.test.ts` passing without
+editing that test, since the section no longer matches its "not implemented"
+check.
+
+Tests: `tests/observatoryRayBuilder.test.ts` is new (OB-RAY-01 valid-return,
+fallback range, missing-range refusal; SOURCE_INVALID/SOURCE_RECORD_MISSING
+exclusion; OB-RAY-02 direction/range and the no-not-read-ray guarantee;
+OB-RAY-04 chunk bounding; OB-RAY-05 grid-stride and hash-threshold
+determinism; a unit-level multi-return/return-table check ahead of F16).
+`tests/observatoryFixtureF5F6F16.test.ts` is new (the three drift checks,
+plus F5/F6/F16's own ray-level assertions). `tests/acquisitionCoverage.test.ts`
+gains the `poseForFrame` fallback and no-callback-regression cases.
+`tests/acquisitionStationsRemap.test.ts` gains `stationForRecord` coverage
+(containment, a gap, an empty set). `tests/observatoryPlannedContracts.test.ts`
+and `tests/methodSupportingTests.test.ts` pass unmodified.
+
+`npm run typecheck`, `test:buckets:verify` (1345/1345, two files added over
+L162's 1343), the `observatory*|acquisitionCoverage|acquisitionStationsRemap|
+ptxAcquisitionStations|e57AcquisitionStations|pcdAcquisitionStations|
+methodSupportingTests` selection (134 passed, 0 failures), and
+`tests/observatoryRayBuilder.test.ts` / `tests/observatoryFixtureF5F6F16.test.ts`
+on their own (19 passed at the phase's close, 22 with the three cases the
+precision pass added), all pass. `lint:layer-boundaries` (`src/observation`
+already in `LAYERS`, not `POPULATED_LAYERS`; no change needed there),
+`lint:position-access` (171 reads, one fewer than the pre-existing baseline;
+a stale allowlist entry the lint reports pre-dates this session and is left
+alone as out of scope), `lint:monolith-size`, `lint:unreachable-modules`,
+`lint:method-literals`, `lint:worker-registry`, `lint:disposal-registry`,
+`lint:oracle-registry`, `lint:architecture-truth` (after the Model row fix
+above), `lint:release-truth`, `lint:module-graph`, `lint:claim-register`,
+`lint:doc-links` and `lint:doc-narration` all pass. `gen:v070-status` is
+regenerated after this entry.
+
+`buildGriddedSourceRays`'s return table now fills two buffers sized once
+from the frame's own CSR endpoint (`returnCellStart`'s last entry, an exact
+upper bound on the walk's total returns) and written by index, in place of a
+`number[]` pair copied into a `Float32Array`/`Uint16Array` per station. It
+was the one structure in the module whose size scaled with return count
+rather than ray count, previously neither chunked nor bounded.
+`writeDirectionFromAngles` replaces `directionFromAngles`, mutating a
+scratch object `RayChunkBuilder.push` now takes as three scalars instead of
+returning a fresh array per cell; `buildUnstructuredSourceRays`'s own
+per-record division drops the matching array literal. A `VALID_RETURN` cell
+whose resolved range is non-positive or non-finite (a degenerate station
+pose, or a record position coincident with it) is now excluded rather than
+emitted as a ray whose `NaN` range would read as `NO_RETURN`;
+`buildUnstructuredSourceRays` already carried this guard on its own hypot,
+unchanged here.
+
+`tests/observatoryRayBuilder.test.ts` gains a coincident-position exclusion
+case, a multi-return cell excluded on its start entry with the return table
+left untouched, and a mixed NO_RETURN/excluded/multi-return walk confirming
+the return-table buffers stay correctly indexed. The seven-file selection
+above now runs 137 tests (134 plus these three), 0 failures. `npm run
+typecheck` and `test:buckets:verify` (1345/1345, unchanged) both pass;
+`lint:position-access` (171 reads, unchanged), `lint:layer-boundaries` and
+`lint:monolith-size` (`main.ts` and `Viewer.ts` untouched) all pass.
+
+### L164 · BUILT · SCIENCE
+
+Observatory phase O4: the ledger and traversal (OB-LED-01..05), scored
+against F8 (the frozen Python DDA oracle) and F9 (chunk order and partition
+count), plus a dedicated budget-refusal test. Baseline `a613a25b`, matching
+L163's own HEAD; no commit landed between L163 and this phase's own work.
+
+F9's worker-count axis is read as in-process PARTITION count, per the
+maintainer's 2026-09-23 chat decision: partitions of the same deterministic
+ray-chunk list at a count of 1, 2 or 5, merged by the same order-independent
+integer merge, with no Web Worker and no `WORKER_REGISTRY` entry. `methods.md`
+records this reading in the `olv.observation.ledger` Determinism paragraph.
+
+`src/observation/ledger.ts` gains `ObservationDomain`, `domainGrid` and
+`packVoxelKey` (OB-LED-03): a plain row-major flat index over the domain's
+own grid, safe because every voxel `traverseVoxelSteps` ever visits is
+clipped inside the domain first, so no key can exceed the domain's own cell
+count. `checkVoxelDomainBudget` is a pure function of the domain and voxel
+edge alone, checkable before any ray exists, mirroring
+`terrain/quality/gridBudget.ts`'s `ready | coarsen | blocked` verdict as a 3D
+variant. `clipRayToDomain` (the slab method) and `traverseVoxelSteps` (3D DDA,
+Amanatides and Woo 1987) are Float64, and the DDA's tie rule advances every
+axis whose distance to its next boundary equals the current step's minimum
+simultaneously, matching `validation/observatory/fixtures/f8-dda-cases.json`'s
+own `tieRule` field. `accumulateReturnedRay` classifies each traversed
+voxel's parametric span against a returned ray's hit window
+`[r - tau(r), r + tau(r)]`: `pass` when the span ends at or before the
+window opens, `behind` when it starts at or after the window closes, `hit`
+when it overlaps the window. A multi-return ray's `hit` fires per voxel
+overlapping any individual return's own window; `pass` runs only to the
+first return's window start and `behind` only from the last return's window
+end, leaving a voxel strictly between two returns' windows both uncounted and
+untouched: no row is created for it at all, a deliberate reading of
+`ObservationLedgerRow.presence`'s own "touched" definition (hit, pass,
+behind, noReturn or notDecoded), which a strictly-between-windows gap voxel
+matches none of. A no-return ray increments
+`noReturn` for every voxel from the domain clip's entry to its exit, which is
+this implementation's reading of SPEC's undeclared "declared maximum range":
+no source in O1-O3's types carries a range cap, so the domain bound and that
+phrase are read as the same quantity.
+
+`ObservationLedgerRow` is extended, not replaced: O2's `{key, counters}`
+stays byte-compatible in meaning, and `presence` (a `SourcePresenceMask`) and
+`perSource` (`ObservationLedgerSourceCounters[]`, `SourceObservationRecord`
+minus `addressed`, which needs O5's angular-domain test) are new required
+fields. `tests/observatoryPlannedContracts.test.ts`'s pinned literal is
+updated to the four-field shape; every other pinned literal in that file is
+untouched. The internal accumulator (`LedgerBuilder`) is `Map`-keyed, not
+the typed-array-column table `voxelDownsample.ts`'s `VoxelAccumulator` uses,
+which OB-LED-03 names as the storage style to follow. This is a considered,
+documented scope reduction (recorded in `ledger.ts`'s own header and in
+`methods.md`): `Map`'s numeric-key iteration is insertion-ordered, so
+accumulation stays exactly as deterministic as a typed-array table would be,
+and neither F9 nor the budget check depends on the memory layout. What
+OB-LED-03's citation actually buys, a fixed-width pre-sized layout, is not
+yet built; `checkVoxelDomainBudget`'s `estimatedBytes` is grounded in this
+builder's own measured per-voxel cost instead (a direct heap measurement puts
+it at roughly 650-990 bytes depending on per-voxel source overlap), and
+`DEFAULT_SOFT_MAX_CELLS`/`DEFAULT_HARD_MAX_CELLS` (187,500 / 3,000,000) are
+scaled down from the original 4,000,000 / 64,000,000 so the same real-memory
+ceiling those constants always intended still holds at the corrected
+per-voxel figure. Both facts are stated plainly in the code rather than left
+for a reader to discover.
+
+`RayPartitionInput`/`PartialLedger`/`traverseRayChunks`/`mergePartialLedgers`
+are the worker-shaped partition contract SPEC's F9 and the maintainer's
+decision both name: `traverseRayChunks` traverses one partition's chunks
+against a fresh table with no shared mutable state across calls, and
+`mergePartialLedgers` folds every partition's rows with a saturating-sum-
+and-flag rule per counter, a bitwise OR per presence word, and the same
+saturating rule per per-source entry, all three commutative and associative.
+It runs once per partition count, including 1
+(`mergePartialLedgers([onePartial])` is then a no-op merge), so p=1/2/5
+exercise the same merge
+code, not three different paths. `RayPartitionChunkEntry` adds one field over
+the plan's own sketch, `returnCounts`, a per-ray return count parallel to a
+chunk's own columns: `ObservationReturnTable.countByRay` is a running index
+across a source's ENTIRE ray-push order, not per chunk, so a ray at a chunk's
+own end cannot recover its return count from `countByRay` alone once
+partitioning has split its neighbour into a different chunk or partition.
+`returnCounts` is computed once, before partitioning, and is itself a plain
+typed array, so the contract stays worker-transfer-shaped throughout. This
+field is implemented and typechecked but not exercised by a new fixture in
+this phase: SPEC's own O4 phase-table row names F8 and F9 plus the budget
+refusal only, not F16-level ledger accumulation, and F9's synthetic scene (built from
+F1's own wall box, single-return) does not touch it.
+
+`computeFieldDigest` hashes with `canonicalHash` (`src/canonicalHash.ts`)
+exclusively, never `render/measure/auditLog.ts`. Two implementation traps in
+`canonicalJson`, confirmed by reading its source rather than assumed: it sorts
+object keys but not array elements, so `rows` is sorted by `key` ascending
+before hashing (different partition/merge orders populate the input array in
+different orders even though the per-key VALUES are identical, which is
+exactly what F9 stresses); and a `Uint32Array` (`presence`) is
+`typeof === 'object'` and not an array, so it would otherwise serialize
+through `Object.keys().sort()`, sorting numeric-string indices
+lexicographically past nine elements; `Array.from` first avoids this. Each
+row's `perSource` is likewise copied and sorted by `sourceIndex` before
+hashing. The payload deliberately excludes `p_solid`/`p_empty`/`n_min` (O5's
+parameters, not O4's) and carries a per-source `tauAbs`/`tauRel` list rather
+than one global pair, since `tau_rel` is fitted per source.
+
+`estimateTraversalBudget` sums `(clip.tExit - clip.tEntry)` over every ray
+surviving cheap rejection, divided by the voxel edge (OB-LED-04).
+`runObservationLedger` checks the voxel budget first (pure, no ray cost),
+then the step budget, returning a typed `'refused'` value with a reason and
+suggestions before any table is allocated, never a thrown exception
+(OB-INV-08). A `'coarsen'` voxel verdict and an over-estimate step budget
+both refuse by default; only an explicit `allowOverBudget: true` proceeds
+past either, and a `'blocked'` voxel verdict is never overridable. The
+station range-sphere skip (OB-LED-02's second cheap-rejection step) is not
+implemented: it is a pure performance optimisation over what is already
+implemented (a station whose range sphere misses the domain can only ever
+produce an empty clip for each of its own rays, which `clipRayToDomain`
+already skips correctly on its own), so its absence changes no test result
+and is recorded at the clip site in `ledger.ts` itself, not only here.
+OB-LED-02's rejection ratio IS implemented: `traverseRayChunks` returns
+`totalRays`/`rejectedRays` on `PartialLedger.telemetry`, `mergeRejection
+Telemetry` sums them across partitions, and `runObservationLedger`'s `'ok'`
+result carries the ratio as `rejectionRatio`, excluded from `fieldDigest`
+since it is telemetry about the run rather than per-voxel evidence.
+
+`bump`, the saturating counter increment shared by every accumulation path,
+sets `saturated` only on the branch that refuses an increment (a counter
+already at `COUNTER_SATURATION_MAX`), matching `mergeCountersInto`'s
+identical boundary and types.ts's own contract: a counter that lands exactly
+on the ceiling through a normal, lossless increment is not saturated.
+
+Tests: `tests/observatoryLedgerTraversal.test.ts` is new: `domainGrid`/
+`packVoxelKey` unit checks; F8 (four cases, each checked against
+`validation/observatory/expected/f8-dda-cases.expected.json`'s own clip
+bounds and voxel list, exactly, no tolerance, since every F8 coordinate is a
+dyadic rational Float64 represents exactly); F9 (a 24-ray synthetic scene
+built from F1's wall box, chunked into five bounded `ObservationRayChunk`s:
+chunk-order permutation at a fixed partition count of 2, and partition count
+1/2/5 over the same chunk list, both asserting an identical `fieldDigest`,
+plus a sanity check that the scene actually produces both a hit and a
+no-return voxel so the merge exercises real, distinguishable evidence); and
+the budget-refusal suite (`checkVoxelDomainBudget`'s three verdicts,
+`runObservationLedger`'s voxel-budget refusal, coarsen-with-override, and
+step-budget refusal, and a within-budget run producing rows and a digest).
+Three further groups close the gaps a review pass found: a not-read ray
+driven through `traverseRayChunks`, asserting all-zero counters against a
+set presence bit and `notDecoded`; a three-return ray driven through
+`traverseRayChunks` with a populated `returnTable`/`returnCounts`, asserting
+hit/pass/behind across the first, a middle and the last return's window and
+confirming the two gap voxels between windows get no row; and the
+rejection-ratio telemetry, both at the `traverseRayChunks`/`mergeRejection
+Telemetry` level and on `runObservationLedger`'s own result; and the exact
+`COUNTER_SATURATION_MAX` boundary (65,535 identical rays into one voxel
+stays exact and unsaturated, 65,536 refuses the last increment and sets
+`saturated`). 27 tests, 0 failures, on the current tree. The existing
+15-file `observatory*|
+acquisitionCoverage|acquisitionStationsRemap|ptxAcquisitionStations|
+e57AcquisitionStations|pcdAcquisitionStations|methodSupportingTests`
+selection (L163's 137, now 164 with this phase's new file and
+`observatoryPlannedContracts.test.ts`'s updated literal) all pass.
+Tests were developed alongside the implementation rather than strictly
+test-first in this phase: every new function these tests exercise did not
+exist before this phase's own commits, so an import of any of them against
+the pre-phase tree fails to resolve, which is this phase's version of "red
+for the right reason", but it was not captured as a separate recorded run.
+
+Method registry: `olv.observation.ledger`'s summary drops "not implemented"
+and states the true, partial status, in the same template
+`olv.observation.rays` and `.states` already use. `docs/observatory/
+methods.md`'s `olv.observation.ledger` section gets a matching Status update
+and new Assumptions, Parameters, Failure modes and Determinism paragraphs;
+`docs/validation/unreachable-modules.json`'s `why` text for `ledger.ts`,
+`rays.ts` and `types.ts` is updated to no longer say traversal does not
+exist, following L163's own precedent for the same kind of update. All
+three stay `status: "staged"`, since nothing in the production graph wires
+any of them to a real scan yet (a coordinator, O9).
+
+`npm run typecheck`, `test:buckets:verify` (1346/1346, one file added over
+L163's 1345), the 15-file observatory selection above (164 passed, 0
+failures), `lint:layer-boundaries`, `lint:position-access` (171 reads,
+unchanged), `lint:monolith-size` (`main.ts` and `Viewer.ts` untouched),
+`lint:unreachable-modules`, `lint:method-literals`, `lint:worker-registry`,
+`lint:disposal-registry`, `lint:oracle-registry`, `lint:architecture-truth`,
+`lint:release-truth`, `lint:module-graph`, `lint:claim-register`,
+`lint:doc-links` and `lint:doc-narration` all pass; `check-ai-writing.mjs`
+against this entry and `methods.md` finds zero em dashes and no regression
+on this file's own 21 pre-existing triads. `gen:v070-status` is regenerated
+after this entry.
+
+**Corrected account (phase O4b):** the paragraph above describes O4's `Map`-
+keyed `LedgerBuilder` as a deliberate scope reduction against OB-LED-03's own
+cited precedent (`voxelDownsample.ts`'s typed-array `VoxelAccumulator`). That
+storage choice is now replaced: `LedgerBuilder` is a typed-array
+open-addressing table over the packed voxel key, in the same style, linear
+probing, capacity doubling that rehashes keys but never renumbers a slot, row
+and per-source counters in flat `Uint16Array`/`Uint8Array` columns indexed by
+slot (per-source columns by `slot*sourceCount + sourceIndex`). `finish()`
+walks slots in first-touched order, the same order the retired `Map`'s
+insertion-ordered iteration gave.
+
+`measureLedgerBuilderBytesPerVoxel` sums every column array's own
+`byteLength` (exact, no `--expose-gc` needed) at 1.5 million occupied voxels:
+roughly 77 bytes/voxel at one source per occupied voxel, 119 at four, an
+order of magnitude below the retired builder's measured 650-990 B/voxel.
+`DEFAULT_BYTES_PER_VOXEL` is now 160 (headroom over the four-source figure),
+and `DEFAULT_SOFT_MAX_CELLS`/`DEFAULT_HARD_MAX_CELLS` are 1,200,000 /
+19,200,000, derived from that constant to land on OB-LED-03's own intended
+real-memory envelope (183.1 MiB soft, 2.861 GiB hard, the same one the
+original 48-byte-assumed 4,000,000 / 64,000,000 pair meant to express).
+`methods.md`'s `olv.observation.ledger` section and this module's own header
+comment are updated to match; the prior scope-reduction note is removed.
+
+F8/F9 invariants, the saturation-boundary tests and budget-refusal-before-
+allocation all hold unchanged: `fieldDigest` values were captured for five
+scenarios (the F9 24-ray scene at partition count 1, a two-station overlap
+variant, a not-read-ray run, a three-return `returnTable` run, and both
+sides of the `COUNTER_SATURATION_MAX` boundary) before this change and
+compared byte-for-byte after; all five are identical. `tests/
+observatoryLedgerTraversal.test.ts` gains three new `describe` blocks: a
+bytes/voxel ceiling test (one-source and four-source cases, plus a direct
+comparison against the retired builder's own measured range), and a
+large-domain test (80x80x80 = 512,000 cells) showing the retired builder's
+own scaled-down defaults would have refused it (`coarsen`) while the
+restored, measured-cost defaults accept it (`ready`) and run it to
+completion end to end. 33 tests in this file, 0 failures (27 prior plus 6
+new, across the two added groups).
+
+`npm run typecheck`, the full `vitest run tests/` suite (17,303 passed, 48
+skipped, 1 pre-existing todo, 0 failures), and `lint:layer-boundaries`,
+`lint:module-graph`, `lint:unreachable-modules`, `lint:method-literals`,
+`lint:oracle-registry` and `lint:doc-narration` all pass.
+
+**Second correction (phase O4b, follow-up):** the previous correction's
+77/119 B/voxel figures were a single sample at 1.5 million occupied voxels,
+deep into a capacity-doubling cycle where every column is amortized over a
+near-full table. Sweeping `measureLedgerBuilderBytesPerVoxel` across
+occupancies straddling several doubling boundaries (1024, 2048, 4096, ...)
+shows the true worst case sits right AFTER a doubling, when only
+`capacity/2 + 1` of the new, twice-as-large columns are occupied: 110
+B/voxel at one source, 170 at four, both roughly double the earlier sample.
+Per-source columns also scale linearly with station count, so a fixed
+"headroom over four sources" constant undercounts a domain with more.
+
+`ledgerBuilderWorstCaseBytesPerVoxel(sourceCount)` replaces
+`DEFAULT_BYTES_PER_VOXEL`: an analytic formula over the column byte widths
+and that ~50% just-after-growth load factor (`2 x (17 + 4x presenceWords +
+10x sourceCount + 24)`), not a sampled constant. `checkVoxelDomainBudget`
+gains an optional `sourceCount` option feeding this formula (defaulting to 1
+so the check stays a pure function of `domain`/`voxelEdge` alone when no
+station count is available); `runObservationLedger` passes its own
+`input.stations.length`. `SOFT_MAX_BUDGET_BYTES`/`HARD_MAX_BUDGET_BYTES`
+now fix the same 183 MiB / 2.86 GiB envelope directly in bytes, and the cell
+ceiling is derived per call as `envelopeBytes / worstCase(sourceCount)`, so
+the byte envelope can never be exceeded at any occupancy or source count:
+1,744,449 soft / 27,917,287 hard cells at one source, 1,128,761 / 18,064,127
+at four, 468,022 / 7,490,003 at sixteen, 262,862 / 4,206,714 at
+thirty-two. `methods.md` gains the formula and this table.
+
+`tests/observatoryLedgerTraversal.test.ts`'s bytes/voxel group is replaced
+with a sweep across six occupancies (spanning two doubling boundaries) at
+three source counts (1, 4, 16), asserting the measured value never exceeds
+the analytic one; the large-domain group gains a case showing the same
+80x80x80 domain reads `ready` at one source but `coarsen` at sixteen. 52
+tests in this file, 0 failures. `fieldDigest` was re-verified byte-identical
+across the same five scenarios before and after this follow-up. `npm run
+typecheck`, the full `vitest run tests/` suite (17,322 passed, 48 skipped, 1
+pre-existing todo, 0 failures), and `lint:layer-boundaries`,
+`lint:module-graph`, `lint:unreachable-modules`, `lint:method-literals`,
+`lint:oracle-registry` and `lint:doc-narration` all pass.
+
+### L165 · BUILT · SCIENCE
+
+Observatory phase O5: states and conflict, plus shadow and frontier, wired to a real
+ledger (SPEC §5.3-§5.4, F1-F7, F17). Baseline matches L164's own HEAD; no
+commit landed between L164 and this phase's own work.
+
+`deriveObservationState` (`stateTable.ts`) was built and exhaustively scored
+against a lattice oracle at O1; nothing changes there. This phase's new code
+is the layer around it that `ledger.ts`'s own O4 header named as O5's job:
+`src/observation/observationField.ts` adds `isVoxelAddressed`, a closed-form
+spherical-coordinate test of a voxel centre against a station's declared
+azimuth/elevation band and optional `[minRange, maxRange]`, and
+`classifyObservationField`, which assembles `deriveObservationState`'s
+`SourceObservationRecord[]` input per voxel by combining an
+`ObservationLedgerRow`'s per-source counters (when a row exists) with this
+addressed test (always), over every cell of the ledger's own domain grid,
+not only touched rows: an untouched but addressed voxel still resolves
+through the "addressed, no ray happened to land here" branch `types.ts`
+documents, and a voxel no station addresses resolves `UNADDRESSED` by the
+residual-default rule O1 already implements. Every voxel this function
+classifies lies inside the declared domain by construction, so
+`insideDomain` is always `true` and `OUTSIDE_DOMAIN` is never produced here.
+
+`shadowFrontier.ts` gains its first real implementation:
+`computeShadowFrontier` walks the 6-neighbourhood of every `SURFACE`/
+`OBSERVED_EMPTY` voxel in a classified `stateByKey` map, testing each
+in-bounds neighbour against `SHADOWED`/`UNADDRESSED`/`NO_RETURN_PATH` and
+keeping the three adjacency counts separate (OB-SH-02), plus
+`exposedFaceCount` (a face, not a voxel, per qualifying neighbour) and
+`areaSquareMetres = exposedFaceCount * (h * metresPerUnit)^2`, withheld to
+`null` when the unit is unknown (OB-INV-10). A neighbour outside the grid's
+own bounds is simply absent: no wraparound, no assumed state. `ledger.ts`
+gains `unpackVoxelKey`, `packVoxelKey`'s inverse, which the frontier walk
+needs to recover a voxel's grid coordinates from its packed key.
+
+Exit evidence: `scripts/generate-observatory-fixtures.mjs` gains
+`buildF2Scene` (F1 plus a second station inside the room), `buildF3Scene`
+(a conflict box, geometry only) and `buildF7Scene` (a pocket beyond a
+declared `maxRange`), each documenting the ray outcome its own declared
+geometry implies. `tests/observatoryFixturesO5.test.ts` scores F1 (wall
+`SURFACE`, room behind it `SHADOWED`, open space `OBSERVED_EMPTY`, above the
+elevation band `UNADDRESSED`, checked both via `isVoxelAddressed` directly
+and through `classifyObservationField`), F2 (the aggregate view resolves the
+former shadow to `SURFACE`; station 1's own isolated view still shows
+`SHADOWED` at the same voxel), F3 (`CONFLICT` with both source indices and
+counts recorded), F4 (a hand-built two-source porous voxel, neither source
+individually solid or empty, resolves `PARTIAL` not `CONFLICT`), F7 (a
+voxel past `maxRange` is not addressed and resolves `UNADDRESSED`, never
+`SHADOWED`, since `isShadowedSource` requires `addressed`), and F17 (a NaN
+station origin throws; an empty-ROI domain throws via `domainGrid`; a single
+source never reaches `CONFLICT`; a source index in the presence mask's
+second word, 32, classifies correctly with no crash at the boundary).
+F1-F4 and F7 feed `classifyObservationField` with per-voxel counters chosen
+to match each fixture's own declared geometry at specific probe points,
+rather than driving the full ray-builder-and-DDA pipeline a second time:
+that pipeline is O3/O4's own exit evidence (F5, F6, F8, F9, F16), already
+scored against a frozen Python oracle. Each probe's hit/pass/behind/range/
+elevation arithmetic is derived in a comment beside it, not asserted blind.
+
+The frontier walk itself is scored directly: `validation/observatory/oracle/
+shadow_frontier.py`, a second implementation of SPEC §2.4/§5.4's adjacency
+rule written from the prose alone, over an explicit 5x3x1 grid
+(`shadow-frontier-grid.json`) built to exercise all three adjacency kinds
+separately, a voxel touching more than one kind at once, non-adjacent
+neighbour states (`PARTIAL`, `CONFLICT`) that must not count, and a
+domain-edge voxel that must not wrap. Registered in `oracle-registry.json`
+as `olv-observatory-shadow-frontier-py`, sharing the `olv-observatory-
+analytic-oracle` lineage group with the state-table and ray-AABB oracles.
+`computeShadowFrontier`'s TypeScript result matches the frozen Python
+output exactly on the frontier voxel set and every adjacency count; a
+second test confirms the area figure is `null` when the unit is unknown and
+`exposedFaceCount * h^2` when it is known.
+
+Method registry: `olv.observation.shadow-frontier`'s summary drops "not
+implemented" and states its true, partial status (implemented, not yet
+reachable from a live scan), matching `olv.observation.states` and
+`.ledger`'s own template. `docs/observatory/methods.md` gets matching
+updates to both sections' Status, Assumptions, Parameters, Failure modes and
+Determinism paragraphs. `docs/validation/unreachable-modules.json` gains an
+entry for the new `observationField.ts` and updates the `stateTable.ts` and
+`shadowFrontier.ts` entries to say what O5 actually wired, both still
+`status: "staged"` since no coordinator (O9) reads a classified field from a
+live scene yet.
+
+`npm run typecheck`, the full `vitest run tests/` suite (17,338 passed, 48
+skipped, 1 pre-existing todo, 0 failures; 1,347 files, one more than L164's
+1,346), `test:buckets:verify` (1347/1347), and `lint:layer-boundaries`,
+`lint:module-graph`, `lint:unreachable-modules`, `lint:method-literals`,
+`lint:oracle-registry`, `lint:doc-narration`, `lint:claim-register`,
+`lint:architecture-truth`, `lint:release-truth`, `lint:doc-links`,
+`lint:worker-registry` and `lint:disposal-registry` all pass.
+`docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`'s stated module count
+(906) is corrected to 907 to match the new file, which `lint:architecture-
+truth` catches on its own. `check-ai-writing.mjs` against this entry finds
+zero em dashes and no new triads; `methods.md` is unchanged from its own
+4 pre-existing em dashes and 4 pre-existing triads after this phase's edits
+(one added triad in a first draft was rewritten out). `gen:v070-status` is
+regenerated after this entry.
+
+### L166 · BUILT · SCIENCE
+
+Observatory phase O5 follow-up: F1 and F2, plus F3 and F7, through the real pipeline
+(rays + ledger + classifier together), per reviewer request after L165.
+Baseline matches L165's own HEAD; no commit landed between L165 and this
+follow-up's own work.
+
+L165's own exit evidence fed `classifyObservationField` hand-supplied
+per-voxel counters chosen to match each fixture's declared geometry, proving
+the CLASSIFIER (O5's own new code) correct given some ledger, but not that
+the ray builder (O3) and the ledger/DDA traversal (O4) actually PRODUCE that
+ledger from the declared geometry. This follow-up closes that gap:
+`tests/observatoryFixturesO5EndToEnd.test.ts` builds a real
+`OrganizedRangeFrame` per station, runs it through the real
+`buildGriddedSourceRays`, accumulates the result with the real
+`runObservationLedger`, and only then classifies it, for F1 (wall `SURFACE`,
+room `SHADOWED`, open space `OBSERVED_EMPTY`, above the band `UNADDRESSED`,
+all four read off ONE physical ray's own hit/pass/behind windowing, not four
+separately declared facts), F2 (a second station's real ray resolves the
+aggregate to `SURFACE`; station 1's isolated view still shows `SHADOWED`),
+F3 (`CONFLICT` with both source indices, from two real, opposing rays
+through the same box voxel) and F7 (see below). Every probe voxel is found
+by walking the same direction and range a real ray produced, using
+`clipRayToDomain` to get the real wall/box intersection distance rather than
+an assumed one.
+
+Running F7 end to end surfaced a genuine discrepancy, not a test-authoring
+mistake: SPEC §2.1/§5.2 both say a no-return ray traverses "up to the
+declared maximum range", and O5 just introduced `maxRange` as a first-class,
+per-station concept (`StationAngularDomain.maxRange`, L165), but O4's own
+traversal (`accumulateReturnedRay`) had never consumed one, since `ledger.
+ts`'s own header recorded, correctly at the time, that "no source in O1-O3's
+types carries a range cap" and read the domain bound as standing in for it.
+F7's own declared domain deliberately extends past its station's declared 5m
+`maxRange`, so a real no-return ray fired at the pocket's own direction
+would, under O4's pre-existing reading, keep accumulating `noReturn`
+evidence past `maxRange`, landing on `NO_RETURN_PATH`, not the `UNADDRESSED`
+SPEC's own F7 pass condition names. This is a real O4 gap the fixture
+exposed, not a wrong expectation: fixed by adding an optional
+`RayPartitionChunkEntry.maxRange`, consumed only inside `accumulateReturnedRay`'s
+no-return branch, clipping that ray's own traversal to
+`min(domain exit, maxRange)` instead of the domain bound. A returned ray
+needs no equivalent change: its own finite range already bounds its hit and
+behind windows, independent of any station-level cap. The field is optional
+and every prior call site omits it, so F8's, F9's and every other O4 test's exact pre-existing domain-bound
+reading is unaffected; a dedicated regression group in
+`tests/observatoryLedgerTraversal.test.ts` covers the new behaviour
+directly: unbounded traversal is unchanged when `maxRange` is omitted,
+`maxRange` stops a no-return ray's own touched-voxel set exactly at that
+range while still covering everything up to it, a `maxRange` that closes
+before the ray even enters the domain yields zero rows without being
+misread as a rejected ray, and `maxRange` is per-entry, never global. F7's
+own end-to-end test then asserts the corrected behaviour directly: the
+pocket voxel gets no row at all, an in-range voxel on the same ray still
+gets `noReturn`, and the classifier reads the pocket `UNADDRESSED`, never
+`SHADOWED`.
+
+Each end-to-end fixture's own `fieldDigest` is also checked for partition
+invariance (F9's own reading, 1/2/5 in-process partitions of the same
+deterministic chunk list), on F1's real run: identical across all three
+partition counts.
+
+`docs/observatory/methods.md`'s `olv.observation.ledger` section gets a
+Status/Phase update and a corrected Assumptions paragraph replacing the
+now-superseded "declared maximum range is read as the domain bound" claim
+with the actual, narrower one (unchanged unless a caller supplies `maxRange`).
+
+`npm run typecheck`, the full `vitest run tests/` suite (17,351 passed, 48
+skipped, 1 pre-existing todo, 0 failures over 1,348 files, one more than
+L165's 1,347), `test:buckets:verify` (1348/1348), and `lint:layer-boundaries`,
+`lint:module-graph`, `lint:unreachable-modules`, `lint:method-literals`,
+`lint:oracle-registry`, `lint:doc-narration`, `lint:claim-register`,
+`lint:architecture-truth`, `lint:release-truth`, `lint:doc-links`,
+`lint:worker-registry` and `lint:disposal-registry` all pass. `check-ai-
+writing.mjs` against this entry and `methods.md` finds no regression against
+each file's own pre-existing em-dash and triad counts. `gen:v070-status` is
+regenerated after this entry.
+
+### L167 · BUILT · SCIENCE
+
+Observatory phase O6: strength components (SPEC §2.5, §5.5, OB-STR-01/02).
+Baseline matches L166's own HEAD; no commit landed between L166 and this
+phase's own work.
+
+`src/observation/strength.ts` computes the five §2.5 components for one
+`SURFACE` voxel: `sources` and `consistency` read straight off an
+`ObservationLedgerRow`'s own counters (`countStrengthSources`,
+`computeConsistency`), needing no per-ray geometry. `angularSpread`,
+`incidence` and `rangeFit` need per-hitting-ray direction and range, which
+the ledger's counters do not retain. `accumulateStrengthHitSamples`
+re-walks a chunk's rays with the same clip/DDA/hit-window primitives O4's
+`accumulateReturnedRay` uses, rather than re-deriving the hit rule a second
+time: `computeHitWindows` and `stepOverlapsAnyWindow` are extracted out of
+`ledger.ts`'s own `accumulateReturnedRay` (a behaviour-preserving
+extraction: `accumulateReturnedRay` now calls them too, and every
+pre-existing O4/O5 ledger test still passes unchanged) so both consumers
+share one hit-window rule. `fitNormalFromResidentPoints` fits `incidence`'s
+local surface normal via `symEig3` over a voxel's resident points'
+mean-centred covariance (the smallest-eigenvalue eigenvector), reimplemented
+locally rather than imported from `src/classification/geometryDescriptors.
+ts`'s equivalent, keeping `src/observation`'s own dependency surface to
+`src/math` alone; it returns `null` (never a fabricated normal) for fewer
+than 3 points or a collinear/coincident neighbourhood, detected by checking
+the second eigenvalue against the largest, not an absolute threshold.
+`rangeFit`'s "declared useful range band" reuses `StationAngularDomain`'s own
+pre-existing `minRange`/`maxRange` concept (`observationField.ts`, phase O5)
+rather than inventing a new declared parameter. `computeStrengthComposite`
+implements OB-STR-02: the weighted mean of the bounded components plus
+`saturatedSources`, always returned bundled with its own weights and the raw
+components (the falsification checklist's "show a composite without its
+weights" is unrepresentable in the return type), and excludes a `NaN`
+component (no evidence to form it) from both the weighted sum and the weight
+total rather than treating it as zero.
+
+`tests/observatoryStrength.test.ts` has two groups. The component-oracle
+group replays `validation/observatory/oracle/strength-lattice.json` (six
+hand-picked cases exercising every NaN/degenerate branch: no samples, no
+hit/pass evidence, no normal supplied, an out-of-band range) through
+`computeStrengthComponents` and compares against `strength.py`'s frozen,
+independently-derived expectations (registered as
+`olv-observatory-strength-py` in `oracle-registry.json`, role
+analytic-truth, lineage `olv-observatory-analytic-oracle`), this phase's
+own SPEC §10 exit evidence. The end-to-end group builds F1's wall through
+the REAL ray builder (`buildGriddedSourceRays`) and ledger traversal
+(`runObservationLedger`), then runs `accumulateStrengthHitSamples` off the
+SAME `ObservationRayChunk` the ledger consumed, confirming real hit samples
+land at the real wall voxel with the right direction and range, that the
+resulting components read as expected for one physical, near-head-on,
+single-direction hit (angularSpread ~0, incidence high, rangeFit 1,
+consistency matching the voxel's own SURFACE classification), and that
+splitting that same chunk into two partitions before accumulating yields
+identical components (OB-INV-07's fixed-merge-order reading, since
+`mergeStrengthHitSamples` concatenates partitions in the caller's own
+order and every reduction in `computeStrengthComponents` walks that merged
+array once, in that order).
+
+`docs/observatory/methods.md`'s `olv.observation.strength` section and
+`src/science/methodRegistry.ts`'s summary for the same id are updated from
+"not implemented" to describe the shipped computation (`tests/
+observatoryMethodDocs.test.ts` enforces the two staying in agreement about
+which methods run).
+
+`npm run typecheck`, the full `vitest run tests/` suite (17,371 passed, 48
+skipped, 1 pre-existing todo, 0 failures over 1,349 files, one more than
+L166's 1,348), `test:buckets:verify` (1349/1349), and `lint:layer-boundaries`,
+`lint:module-graph`, `lint:unreachable-modules`, `lint:method-literals`,
+`lint:oracle-registry`, `lint:doc-narration`, `lint:claim-register`,
+`lint:architecture-truth`, `lint:release-truth`, `lint:doc-links`,
+`lint:worker-registry` and `lint:disposal-registry` all pass. `gen:v070-status`
+is regenerated after this entry.
+
+### L167 · BUILT · SCIENCE
+
+Correction to this phase's own first account, above: reviewer verification of
+`f50164fa` (190/190 observatory tests) found that first account's own
+"multi-return ray's later returns are not sampled" limitation contradicts
+SPEC §2.5 directly, not a scoping choice this phase was free to make.
+`angularSpread`, `incidence` and `rangeFit` are defined over "the hitting
+rays" and "the hits", and the ledger already counts a hit from ANY return's
+own window (`computeHitWindows`, every return in `ranges`, not only the
+first). A voxel hit only by a pulse's 2nd (or later) return, ground under
+vegetation, got `sources > 0` and `consistency > 0` from the ledger's own
+counters while `accumulateStrengthHitSamples` recorded zero samples for it,
+so one voxel's own components disagreed with each other about whether it had
+evidence at all. This is fixed on this same branch, not carried into a later
+phase.
+
+`resolveRayReturnRanges` is extracted out of `traverseRayChunks`'s own
+per-ray CSR lookup (`ledger.ts`, the same behaviour-preserving-extraction
+pattern this phase already used once for `computeHitWindows`/
+`stepOverlapsAnyWindow`), so both the ledger's own hit counting and
+`accumulateStrengthHitSamples` resolve one ray's return set (`[NaN]` for a
+no-return ray, every `returnTable` entry for a multi-return ray, or the
+chunk's single `range[k]` otherwise) through the identical function.
+`accumulateStrengthHitSamples` now takes the chunk's own optional
+`returnTable`/`returnCounts` (mirroring `RayPartitionChunkEntry`'s own
+fields) and records exactly ONE sample per voxel step that overlaps ANY of a
+ray's return windows, matching `accumulateReturnedRay`'s own one-hit-per-step
+rule: a step overlapping more than one return's window samples the FIRST
+(lowest `returnIndex`) overlapping return, the same left-to-right order
+`stepOverlapsAnyWindow` itself evaluates in, not an arbitrary pick.
+
+`tests/observatoryStrength.test.ts` gained three groups. A dedicated
+multi-return group builds a real 3-return-per-pulse chunk (`buildCellReturns`
+plus `buildGriddedSourceRays`, the same CSR path
+`observatoryFixtureF5F6F16.test.ts`'s F16 group drives) with returns at
+ranges 3 m, 6 m and 9 m, confirms the ledger itself counts a real hit at the
+2nd return's own voxel, confirms `accumulateStrengthHitSamples` (given the
+`returnTable`) samples that voxel with finite `angularSpread`/`incidence`/
+`rangeFit`, and confirms the SAME call without the `returnTable` finds no
+sample there at all, the exact regression this correction closes. An
+invariant group asserts, for every voxel of a real ledger run, that the
+merged strength hit-sample count equals `row.counters.hit` exactly, checked
+over both F1 (single-return) and the new multi-return fixture, plus a
+partition-split variant of the multi-return case (splitting the chunk in two
+before accumulating still matches the unpartitioned ledger per voxel,
+`RayPartitionChunkEntry.returnCounts` sliced alongside each sub-chunk since
+both index into the same shared `returnTable`).
+
+`validation/observatory/oracle/strength-lattice.json` gained a seventh case,
+`multi-return-second-return-only-voxel`: five samples all carrying range 6.0
+(the return that actually overlapped the voxel), not the ray's own primary
+range of 3.0, exercising the component formulas over a sample set shaped
+like a real 2nd-return-only hit. `strength.py --write`/`--check` regenerated
+and confirmed; `oracle-registry.json`'s `olv-observatory-strength-py` entry's
+`limitations` updated to name the case and to state plainly that the oracle
+itself does not drive a real multi-return traversal, that responsibility
+staying with `accumulateStrengthHitSamples` and its own TypeScript-side
+tests.
+
+`docs/observatory/methods.md`'s `olv.observation.strength` section is
+corrected: the "multi-return ray's later returns are not sampled" paragraph
+is replaced with an accurate account of the fix (every return sampled via
+`resolveRayReturnRanges`, the sample-count-equals-hit-counter invariant, the
+first-overlapping-return tie rule).
+
+`npm run typecheck`, the full `vitest run tests/` suite (17,379 passed, 48
+skipped, 1 pre-existing todo, 0 failures over 1,349 files, same file count as
+this phase's first account since no test file was added or removed, only
+extended), `test:buckets:verify` (1349/1349), and `lint:layer-boundaries`,
+`lint:module-graph`, `lint:unreachable-modules`, `lint:method-literals`,
+`lint:oracle-registry`, `lint:doc-narration`, `lint:claim-register`,
+`lint:architecture-truth`, `lint:release-truth`, `lint:doc-links`,
+`lint:worker-registry` and `lint:disposal-registry` all pass.
+`gen:v070-status` is regenerated after this entry.
+
+### L168 · BUILT · SCIENCE
+
+Observatory phase O7: run record, export bundle and session (SPEC §4
+OB-INT-05, §8 OB-EXP-01/02/OB-SES-01, F10, F14). Baseline matches L167's own
+HEAD; no commit landed between L167 and this phase's own work.
+
+`src/observation/runRecord.ts` follows `simulationRunRecord.ts`'s own pattern
+(source, basis, model id and version, input digest, SHA-256 over canonical
+JSON) as a sibling type rather than a cast into `FieldSimulationKind`, which
+has no member naming an evidence-ledger run. `ObservationRunRecord` folds
+`ledger.ts`'s own `fieldDigest` in as one field alongside the classification
+parameters, the state counts and the frontier summary, so its own `digest`
+(via `sealObservationRunRecord`) agrees between two runs exactly when every
+canonical fact agrees, never only the sub-digest. `id`/`generatedAt` are
+excluded from the digest, matching `simulationRunRecord.ts`'s own reasoning.
+
+`src/observation/session.ts` implements OB-SES-01: `commitObservationSession`
+is the first caller to wire the already-implemented `observationFreshnessBreach`
+(`analysisFreshness.ts`, an earlier phase) into an actual commit path, refusing
+before a session record is ever built and naming the fact that moved
+(OB-INV-09); `verifyObservationRerun` is the bare fieldDigest comparison
+OB-SES-01 names for a reload's rerun.
+
+`src/export/observatoryPackage.ts` builds the OB-EXP-01 bundle
+(`observation-record.json`, `stations.json`, `field.bin`+`field.json`,
+`state-summary.csv`, `frontier.csv`, a header-only `candidates.csv` since
+Coverage Gain (O10) is not implemented, `processing-manifest.json` and
+`scientific-passport.json` via the existing `buildProcessingManifest`/
+`buildScientificAnalysisRecord`/`buildScientificArtifactPassport` (extended,
+not paralleled, per OB-INT-05) and a `README.md`), following
+`flowPulsePackage.ts`'s own pattern. `field.bin`'s columnar layout carries the
+WHOLE `ObservationLedgerRow[]` (key, aggregate counters, `presence`,
+`perSource`), not only the four aggregate counters: `computeFieldDigest`
+folds `presence`/`perSource` in, so a `field.bin` missing them could never
+satisfy OB-EXP-02's "re-hashes to `fieldDigest`". Every multi-byte value is
+written through an explicit `littleEndian: true` `DataView`, never a typed-
+array cast, so the bytes are endian-portable. `parseObservationFieldBinary`
+and `recomputeFieldDigestFromExport` (rebuilding the minimal `RayPartitionInput`
+shape `computeFieldDigest` needs from a run record's own stations, which carry
+`tauAbs`/`tauRel`) close the round trip without needing the original ray
+chunks.
+
+Coordinates are never recentred: unlike Flow Pulse's local-grid `FlowGrid`,
+`ObservationDomain` and `AcquisitionStation.pose.worldTranslation` are already
+Float64 values in the dataset's own declared world/CRS frame, so nothing in
+this phase subtracts or narrows an origin. `tests/observatoryRunRecordExport.
+test.ts` builds one real F1-shaped run (station, wall, room) through the
+actual ray builder and ledger traversal at a far UTM-scale origin (easting
+400000, northing 3,600,000) and asserts the domain and station position
+survive to the metre through both the sealed record and a JSON round trip,
+that `field.bin` re-derives the declared `fieldDigest` and, separately, that
+reclassifying from the parsed counters reproduces the exported state summary
+(OB-EXP-02), and (F10) that two exports differing only in `basename`/
+`generationDateIso` produce byte-identical `field.bin` columns and carry the
+identical run-record digest. `tests/observatorySession.test.ts` exercises F14
+directly: a mid-run ROI change refuses `commitObservationSession` with reason
+`roi` and produces no session record, and a station-set change refuses with
+`stationSet` instead, confirming the refusal names the fact that actually
+moved.
+
+`docs/validation/unreachable-modules.json` registers `runRecord.ts`,
+`session.ts` and `observatoryPackage.ts` as staged (OB-INT-01): none is called
+from the production graph yet, since wiring a live run through them is a
+coordinator (O9). `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`'s stated
+module count is corrected from 907 to 910 to match `lint:module-graph`'s live
+figure after the three new files (`lint:architecture-truth` catches this
+class of drift directly).
+
+`npm run typecheck`, the full `vitest run tests/` suite (17,395 passed, 48
+skipped, 1 pre-existing todo, 0 failures over 1,351 files (1,349 from
+L167 plus this phase's own `observatorySession.test.ts` and
+`observatoryRunRecordExport.test.ts`), `test:buckets:verify` (1351/1351), and
+`lint:layer-boundaries`, `lint:module-graph`,
+`lint:unreachable-modules`, `lint:method-literals`, `lint:oracle-registry`,
+`lint:doc-narration`, `lint:claim-register`, `lint:architecture-truth` and
+`lint:digest-manifests` all pass. `gen:v070-status` is regenerated after this
+entry.
+
+
+### L169 · BUILT · SCIENCE
+
+Observatory phase O8: presentation colour modes, legend, ranges and voxel
+probe (SPEC section 6 OB-PR-01/04/05, section 8 OB-UI-03). Baseline
+`323e681b`, one commit ahead of L168's own HEAD (this phase's own commit).
+
+`src/observation/presentationLegend.ts` is the pure vocabulary: a glyph,
+label and RGB triple for every `ObservationState` (`observationStateLegend`
+lists all nine, including states with zero voxels in the current field, per
+OB-PR-01), a fixed `[0, 1]` range for `observationStrength` and
+`observationHitFraction` and no range at all for the categorical
+`observationState` mode (OB-PR-05), and `formatProbeText` (OB-UI-03),
+matching the state/rule/per-source-line/method/basis order the spec's worked
+example shows. Every glyph is distinct, tested directly, so colour is never
+the only carrier (OB-PR-04); this module cannot import `ui/stateChip.ts`
+(DOM-adjacent) so its glyph set is its own, independent of that unrelated
+measured/preview/... vocabulary.
+
+`src/render/observation/observationColorModes.ts` is the render-layer
+adapter OB-INT-01 places outside `src/observation/`: `buildObservationPointColors`
+walks a cloud's own positions, resolves each point's voxel key against the
+same `domainGrid`/`packVoxelKey` the ledger uses, and looks the key up in a
+sparse `stateByKey`/`strengthByKey`/`hitFractionByKey` map, returning one
+interleaved RGB byte triple per point, matching `render/colorModes.ts`'s own
+convention. It never reads or writes a canonical field; a dedicated
+OB-INV-06 test builds a real ledger row set, takes its `fieldDigest`, runs
+the colour builder across all three modes and every strength component, and
+confirms the digest, computed from the same input, is unchanged.
+
+`src/render/observation/ObservationPointOverlay.ts` is the three.js binding:
+a standalone `THREE.Points` object, never the scan's own render mesh, so
+nothing needs the loader/PointCloud ASK. `attach()` builds the `position`
+attribute once from the cloud's own array; `setColors()`, called once per
+resident cloud per field version, replaces only the `color` attribute.
+`tests/observatoryPointOverlay.test.ts` asserts the `position` attribute
+keeps its object identity across repeated `setColors()` calls with different
+byte arrays, the no-geometry-rebuild guarantee OB-PR-01 requires, plus the
+attach-on-first-colour, dispose and post-dispose no-op paths.
+
+OB-PR-02 (the empty-space slice/instanced overlay) is explicitly deferred by
+the spec itself until an O11 benchmark chooses between instancing and
+slicing; nothing in this phase implements it.
+
+OB-PR-06 does not apply here. Every colour mode this phase ships is a
+bounded quantity under OB-PR-05, so no unbounded scalar needed the
+adaptive-range function this phase would otherwise have had to add.
+
+All three new modules are staged in `docs/validation/unreachable-modules.json`:
+no coordinator exists yet to hold a resident cloud paired with a live
+classified field, mount the overlay on a real scene, or wire the panel's
+colour-mode picker and probe, which is O9. A `lazyChunks.ts` loader for
+`ObservationPointOverlay.ts` was attempted and reverted during this phase: an
+exported loader with no caller is dead code that Rolldown drops before
+emitting a chunk, which trips `olv-chunk-emission-guard` at build time
+(`npm run build:live` failed with "missing required code-split chunks:
+ObservationPointOverlay" until the loader was removed). The registry entry
+for that module records this so O9 adds the loader together with its first
+real call, not before. The eager `index` chunk is unchanged at 811/812 KiB,
+confirmed by comparing `npm run check:bundle` before and after this phase's
+changes byte-for-byte.
+
+`docs/architecture/architecture-map.md`'s render-layer size is corrected
+from "~71k" to "~72k" and `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`'s
+stated module count is corrected from 910 to 913, matching
+`lint:module-graph`'s live figure after the three new files
+(`lint:architecture-truth` catches this class of drift directly).
+
+`npm run typecheck`, the full `vitest run tests/` suite (17,412 passed, 48
+skipped, 1 pre-existing todo, 0 failures over 1,357 files, three more than
+L168's 1,354 for this phase's own `observatoryPresentationLegend.test.ts`,
+`observatoryColorModes.test.ts` and `observatoryPointOverlay.test.ts`),
+`test:buckets:verify` (1357/1357), `npm run build:live` and `npm run
+check:bundle`, and `lint:layer-boundaries`, `lint:module-graph`,
+`lint:unreachable-modules`, `lint:monolith-size`, `lint:disposal-registry`,
+`lint:doc-narration` and `lint:architecture-truth` all pass. `gen:v070-status`
+is regenerated after this entry.
+
+### L170 · BUILT · SCIENCE
+
+Observatory phase O9: panel via coordinator, lazy chunk, badges, wording test
+(SPEC section 8 OB-UI-01/02/05, section 10 O9). Baseline `0f3ed6cc`, several
+commits ahead of L169's own HEAD.
+
+`src/app/observatoryFromCloud.ts` is the coordinator's own glue between a
+loaded `PointCloud` and the pure O1-O8 kernel: `runObservatoryOverCloud`
+reads `cloud.acquisitionStations` (OB-INT-02), builds one ray per resident
+point per station with `buildUnstructuredSourceRays`, runs the real
+`runObservationLedger`/`classifyObservationField`/`computeShadowFrontier`,
+and seals an `ObservationRunRecord`. Basis is `resident-only` always here
+(each station's angular domain is declared unbounded, since an unstructured
+build carries no narrower one to test against), never `full` or
+`measured`, an honest limitation recorded in the run record itself, not a
+placeholder. `observatoryEligibility` refuses (`no-stations` /
+`empty-domain`) rather than inventing a station. `src/app/observatoryRunner.ts`
+is the state machine ASK O9-1 (option 3) puts beside it: Snapshot ->
+Await -> Revalidate -> Commit, comparing dataset id and CRS revision before
+and after `compute()` so a scan/CRS change mid-run lands as `stale`, never
+silently committed; `abortAndClearCache()` supersedes the in-flight token,
+resets to idle, and clears the registered overlay through
+`lazyChunks.ts`'s `registerObservatoryOverlayInvalidator`/
+`invalidateObservatoryOverlay`, the same near-zero-cost seam
+`registerFlowOverlayInvalidator` already established, now also called from
+`terrainAnalysisRunner.ts`'s `abortAndClearCache()` alongside
+`invalidateFlowOverlay()`. `src/app/openObservatoryRun.ts` is the thin
+coordinator (mirrors `openTerrainAnalysis.ts`): builds the session's one
+runner lazily, shows the panel, runs when nothing is committed yet.
+
+`src/ui/observatory/observatoryPanel.ts` renders OB-UI-01's five sections
+(Sources, Evidence, Shadow, Planning, Record) inside one Modal (ASK O9-2,
+option 1: one panel, one lazy chunk). Planning states plainly that station
+suggestion (O10) is not implemented in this release rather than showing an
+empty control. `src/ui/observatory/stateChip.ts` supplies OB-UI-02's seven
+badge glyph/word/tip triples (`DECLARED ORIGIN`, `ASSUMED ORIGIN`,
+`RECONSTRUCTED ORIGIN`, `SOURCE COMPLETE`, `RESIDENT ONLY`, `SAMPLED`,
+`SUGGESTED STATION`), built on a new `chip()` primitive added to
+`src/ui/dom.ts` (ASK O9-3: no chip/badge helper existed there before this
+phase, so one was added, generic, rather than a parallel Observatory-only
+implementation). `src/render/ObservatoryOverlay.ts` +
+`observatoryOverlayGeometry.ts` draw a capped wireframe box per `SHADOWED`
+voxel through `Viewer.derivedLayerHost()` (visible in the scene, not only
+inside the modal, per SPEC's own requirement), reusing the `SceneLineOverlay`
+base `ProfileLinkOverlay`/`FlowOverlay` already stand on.
+
+Wired into the command palette as `analyse.observatory`, next to
+`analyse.flowPulse` in `src/app/actions/analysisActions.ts` and
+`helpCatalog.ts`'s Analyse group. The coordinator (and therefore the whole
+O1-O8 kernel it pulls in) is reached only through `loadObservatoryRun()`
+(`lazyChunks.ts`), never imported at module scope from the action
+contributor. An earlier draft of this phase statically imported it and
+measured the action-registry chunk at 47 KiB; splitting it into
+`loadObservatoryRun`/`loadObservatoryPanel` dropped that chunk to 27.5 KiB
+and moved the kernel into its own lazy chunks (`openObservatoryRun` ~20 KiB,
+`observatoryPanel` ~10 KiB, `observatoryPackage` ~13 KiB), confirmed by
+`grep`ing the built, obfuscated `index-*.js` for every Observatory-specific
+string/identifier and finding none. `main.ts`'s own `observatoryEntry`
+wiring is the one eager cost O9 cannot avoid (it needs the shell's
+`scans`/`viewer`/`crsService` closures): kept to primitive accessors only.
+`worldToLocal`'s frame conversion was moved into the lazy coordinator itself
+rather than threaded in as a second eager closure, once measurement showed
+it was not free. `index` measures 808/812 KiB live-obfuscated (827,670
+bytes), against 807 KiB before this phase; the whole net eager cost is the
+few hundred bytes of that one object literal.
+
+`docs/disposal-contracts.md` gains three rows: the shadow-voxel overlay
+(cleared by the same `abortAndClearCache` seam as Flow Pulse and contours),
+the runner's own state, and the Modal's `subscribe()` listener (cleared by
+`Modal.close()`'s `onClose`). `src/styles/98e-observatory.css` is a new
+partition file (section layout, the `.olv-observatory-chip` pill) registered
+in `src/styles/index.ts`; `tests/fixtures/style.css.original` regenerated to
+match.
+
+Tests: `tests/observatoryRunner.test.ts` (11, state machine: idle/running/
+committed/stale, cancellation, the lazyChunks invalidator seam, all against
+an injected `compute` so this file never touches the real kernel),
+`tests/observatoryFromCloud.test.ts` (7, eligibility plus a real small
+end-to-end run through the actual O1-O8 pipeline over a fake cloud, digest
+determinism), `tests/observatoryPanelWording.test.ts` (4, OB-UI-05's banned
+words absent from every panel state), `tests/observatoryStateChip.test.ts`
+(8, each badge word matches SPEC exactly, origin/basis read from the
+kernel's own value), `tests/observatoryOverlayGeometry.test.ts` (4, pure
+wireframe buffer builder), `tests/observatoryPanelSections.test.ts` (1, all
+five sections present on a committed run), 35 new tests. `tests/e2e/observatoryPanel.spec.ts`
+runs against a real single-station PTX fixture (`dropTinyPtx`): opens the
+panel, asserts all five sections and a `DECLARED ORIGIN` badge, then closes
+the scan and reopens the Observatory on the empty state, asserting no stale
+station or state count survives: 6/6 passing across deterministic,
+firefox and webkit. Manually verified in a real browser at desktop and
+phone (375px) widths: the panel renders every section and badge legibly,
+scrolls cleanly at phone width with no horizontal overflow.
+
+`src/observation/types.ts`, `stateTable.ts`, `observationField.ts`,
+`rays.ts`, `ledger.ts`, `shadowFrontier.ts`, `runRecord.ts` and
+`src/export/observatoryPackage.ts` graduate out of
+`docs/validation/unreachable-modules.json` (production now reaches all
+eight through this phase's coordinator); `strength.ts` (O6, not wired to a
+presentation consumer this phase), `session.ts` (OB-SES-01, no live
+freshness stamp to commit against yet) and `coverageGain.ts`/
+`stationSuggestion.ts` (O10) remain staged, correctly. Three direct
+`.positions` reads in `observatoryFromCloud.ts` (`runObservatoryOverCloud`)
+are classified `source-local` in `docs/validation/position-frames.json` and
+`position-access-baseline.json` regenerated (172 -> 175).
+
+`docs/architecture/architecture-map.md`'s render/app-layer sizes are
+corrected ("~72k"/"~17k" to "~73k"/"~18k"),
+`docs/architecture/float64-frame-migration-plan.md`'s position-read counts
+(153/52 to 156/53), and `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`'s
+module count (929 to 936), all matching `lint:architecture-truth`'s live
+figures after this phase's new files.
+
+`npm run typecheck`, the full `vitest run` suite (17,864 passed, 49 skipped,
+1 pre-existing todo, 0 failures over 1,394 files), `npm run build:live` and
+`npm run check:bundle`, and all 16 requested lints (`layer-boundaries`,
+`module-graph`, `unreachable-modules`, `method-literals`, `oracle-registry`,
+`claim-register`, `architecture-truth`, `release-truth`, `doc-narration`,
+`disposal-registry`, `monolith-size`, `main-deferral`, `position-access`,
+`v070-status`, `pr-hygiene`, `claims-language`) all pass. Station suggestion
+(O10, coverage gain and next-station scoring) is not implemented; the
+Planning section says so. `gen:v070-status` is regenerated after this
+entry.

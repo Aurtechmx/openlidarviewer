@@ -1,0 +1,14 @@
+{
+  "frontierVoxelKeys": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    12
+  ],
+  "exposedFaceCount": 10,
+  "adjacentToShadowed": 3,
+  "adjacentToUnaddressed": 3,
+  "adjacentToNoReturnPath": 4
+}

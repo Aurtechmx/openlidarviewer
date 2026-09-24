@@ -27,7 +27,9 @@ import { remapFrames } from './organizedRangeRemap';
 import { E57GridBuilder } from './e57/structuredFrames';
 import { e57StructuredRequestsForScan } from './e57/structuredSink';
 import { withLinkageUnavailable } from '../model/OrganizedRange';
-import type { OrganizedRangeFrame, OrganizedRangeSet } from '../model/OrganizedRange';
+import type { AcquisitionPose, OrganizedRangeFrame, OrganizedRangeSet } from '../model/OrganizedRange';
+import { remapAcquisitionStations } from './acquisitionStationsRemap';
+import type { AcquisitionStation, AcquisitionStationSet } from '../model/AcquisitionStations';
 
 /** Clamp a value into the 0–255 byte range. */
 function clampByte(v: number): number {
@@ -84,6 +86,34 @@ function rotate(
     py + w * ty + (z * tx - x * tz),
     pz + w * tz + (x * ty - y * tx),
   ];
+}
+
+/**
+ * The declared pose (OB-INT-02) for one scan's station, as the file gives it.
+ *
+ * A scan with no `<pose>` element is not thereby ASSUMED: E57 defines a
+ * missing pose as the scan already sitting in the file's own single global
+ * coordinate system, i.e. an identity placement the file itself declares by
+ * omission — the same status a legitimately-identity PTX registration matrix
+ * carries (`loadPtx.ts`). `rotation`/`rotationSource` are left absent rather
+ * than filled with an identity quaternion, so a reader can still tell "no
+ * pose element" apart from "an explicit identity pose", which a merged
+ * identity value alone could not.
+ */
+function stationPoseForScan(pose: E57Pose | null): AcquisitionPose {
+  if (!pose) {
+    return { worldTranslation: [0, 0, 0], localPositionSource: 'not-applicable' };
+  }
+  const [w, x, y, z] = pose.rotation;
+  return {
+    worldTranslation: [pose.translation[0], pose.translation[1], pose.translation[2]],
+    // E57 declares one pose and no second, scanner-frame position — there is
+    // no `localPosition` here to be readable or malformed, matching the PCD
+    // viewpoint's own `not-applicable` (loadPcd.ts).
+    localPositionSource: 'not-applicable',
+    rotation: { w, x, y, z },
+    rotationSource: 'source-declared',
+  };
 }
 
 /**
@@ -352,7 +382,16 @@ export async function loadE57(
   }
 
   let w = 0; // running point index across all merged scans
+  // One station per merged scan, structured or unstructured alike (OB-INT-02
+  // populates both — the unstructured path is exactly where pose and
+  // membership are otherwise discarded after being applied, once per scan).
+  // Pre-sanitation ranges: `w` only ever increments here, so a scan's
+  // survivors are already contiguous before sanitation runs (O0 §2.1).
+  const preStations: AcquisitionStation[] = [];
+  let scanOrdinal = 0;
   for (const scan of scans) {
+    scanOrdinal++;
+    const scanStart = w;
     const grid = builders.get(scan);
     const col = scan.columns;
     // The partition above guarantees these columns exist on every merged scan.
@@ -423,6 +462,13 @@ export async function loadE57(
       }
       w++;
     }
+    preStations.push({
+      id: `scan-${scanOrdinal}`,
+      source: 'e57-scan',
+      pose: stationPoseForScan(pose),
+      recordRange: { start: scanStart, end: w },
+      originStatus: 'DECLARED',
+    });
   }
 
   // Defence in depth: the merge must write EXACTLY the count it declared.
@@ -458,9 +504,12 @@ export async function loadE57(
   const clean = sanitizeAndRecenter(
     global,
     { colors, intensity, classification, normals },
-    // Asked for only when a grid depends on the answer, so a file with no
-    // acquisition grid allocates exactly what it allocated before.
-    { witness: frames.length > 0 },
+    // Asked for whenever a grid OR the station sidecar depends on the answer.
+    // `preStations` is non-empty whenever `scans` is (one station per merged
+    // scan), which is always true here (an earlier check throws on `total ===
+    // 0`), so this is effectively always-on for E57 now — the station sidecar
+    // is exactly the case that previously needed no witness at all.
+    { witness: frames.length > 0 || preStations.length > 0 },
   );
   if (clean.warning) warnings.push(clean.warning);
 
@@ -508,9 +557,22 @@ export async function loadE57(
       ? built
       : withLinkageUnavailable(built, 'source-record-identity-unavailable');
 
+  // Stations map through the same compaction. No partial/unavailable degrade
+  // exists for a station the way it does for the grid — a station's whole
+  // content is its record range, so a witness that cannot answer for it drops
+  // the sidecar outright rather than reporting a guessed range.
+  const acquisitionStations: AcquisitionStationSet | undefined =
+    preStations.length === 0 || !clean.witness || clean.witness.sourceCount !== total
+      ? undefined
+      : (remapAcquisitionStations(
+          { kind: 'acquisition-stations', stations: preStations },
+          clean.witness,
+        ) ?? undefined);
+
   return new PointCloud({
     positions: clean.positions,
     organizedRange,
+    acquisitionStations,
     colors: clean.attributes.colors,
     intensity: clean.attributes.intensity,
     classification: clean.attributes.classification,

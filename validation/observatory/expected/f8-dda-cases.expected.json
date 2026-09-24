@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "caseId": "F8-axis-aligned",
+      "input": {
+        "origin": [
+          0.5,
+          1.5,
+          2.5
+        ],
+        "direction": [
+          1,
+          0,
+          0
+        ],
+        "tMax": 3,
+        "domain": {
+          "minCorner": [
+            0,
+            0,
+            0
+          ],
+          "maxCorner": [
+            4,
+            4,
+            4
+          ]
+        },
+        "voxelEdge": 1
+      },
+      "clip": [
+        "0",
+        "3"
+      ],
+      "voxels": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2
+        ],
+        [
+          2,
+          1,
+          2
+        ],
+        [
+          3,
+          1,
+          2
+        ]
+      ]
+    },
+    {
+      "caseId": "F8-along-face",
+      "input": {
+        "origin": [
+          0.5,
+          1,
+          2.5
+        ],
+        "direction": [
+          1,
+          0,
+          0
+        ],
+        "tMax": 3,
+        "domain": {
+          "minCorner": [
+            0,
+            0,
+            0
+          ],
+          "maxCorner": [
+            4,
+            4,
+            4
+          ]
+        },
+        "voxelEdge": 1
+      },
+      "clip": [
+        "0",
+        "3"
+      ],
+      "voxels": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2
+        ],
+        [
+          2,
+          1,
+          2
+        ],
+        [
+          3,
+          1,
+          2
+        ]
+      ]
+    },
+    {
+      "caseId": "F8-grazing-corner",
+      "input": {
+        "origin": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "direction": [
+          1,
+          1,
+          0
+        ],
+        "tMax": 2.5,
+        "domain": {
+          "minCorner": [
+            0,
+            0,
+            0
+          ],
+          "maxCorner": [
+            4,
+            4,
+            4
+          ]
+        },
+        "voxelEdge": 1
+      },
+      "clip": [
+        "0",
+        "5/2"
+      ],
+      "voxels": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          2,
+          0
+        ]
+      ]
+    },
+    {
+      "caseId": "F8-zero-length",
+      "input": {
+        "origin": [
+          1.5,
+          1.5,
+          1.5
+        ],
+        "direction": [
+          1,
+          0,
+          0
+        ],
+        "tMax": 0,
+        "domain": {
+          "minCorner": [
+            0,
+            0,
+            0
+          ],
+          "maxCorner": [
+            4,
+            4,
+            4
+          ]
+        },
+        "voxelEdge": 1
+      },
+      "clip": [
+        "0",
+        "0"
+      ],
+      "voxels": [
+        [
+          1,
+          1,
+          1
+        ]
+      ]
+    }
+  ]
+}

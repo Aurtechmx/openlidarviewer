@@ -18,6 +18,8 @@ import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 import { remapFrames } from './organizedRangeRemap';
+import { remapAcquisitionStations } from './acquisitionStationsRemap';
+import type { AcquisitionStation, AcquisitionStationSet } from '../model/AcquisitionStations';
 import {
   CellState,
   NO_RECORD,
@@ -151,6 +153,10 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   // Flattening them into one grid would merge two instruments' views of
   // different directions into a raster that means nothing.
   const frames: OrganizedRangeFrame[] = [];
+  // One station per block, pre-sanitation ranges (OB-INT-02). Independent of
+  // `frames`: a station is recorded whether or not that block's grid is
+  // backed by the file.
+  const preStations: AcquisitionStation[] = [];
 
   let i = 0;
   while (i < lines.length) {
@@ -236,6 +242,10 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     const cellState = new Uint8Array(cells).fill(CellState.SOURCE_RECORD_MISSING);
     const cellToRecord = new Int32Array(cells).fill(NO_RECORD);
     const geometricRange = new Float32Array(cells).fill(Number.NaN);
+    // Pre-sanitation station boundary. `xs` accumulates every merged block's
+    // points end to end, so this block's slice is contiguous by construction
+    // — the same fact the acquisition-grid remap already relies on.
+    const blockStart = xs.length;
     let p = 0;
     for (; p < total && i < lines.length; p++, i++) {
       // The ordinal advances on every path below, including the skips, so the
@@ -313,6 +323,20 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
           `of the scan was read.`,
       );
     }
+
+    // A station is recorded for every block whose header parsed, whether or
+    // not its declared grid is backed by the file (OB-INT-02 tracks record
+    // membership, not grid topology, so a contradicted grid is no reason to
+    // lose the pose or the range). Points are pushed to `xs`/`ys`/`zs` above
+    // regardless of `gridIsBacked`, so `blockEnd - blockStart` is exactly this
+    // block's contribution to the merged cloud, empty when none survived.
+    preStations.push({
+      id: `block-${blockIndex}`,
+      source: 'ptx-block',
+      pose,
+      recordRange: { start: blockStart, end: xs.length },
+      originStatus: 'DECLARED',
+    });
 
     if (!gridIsBacked) continue;
     frames.push({
@@ -407,11 +431,25 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       ? built
       : withLinkageUnavailable(built, 'source-record-identity-unavailable');
 
+  // Stations map through the same compaction the grid does. Unlike the grid,
+  // there is no partial/unavailable degrade to fall back on: a station's
+  // whole content is its record range, so a witness that cannot answer for it
+  // drops the sidecar rather than reporting a mix of trusted and guessed
+  // ranges (the caller cannot tell them apart afterwards).
+  const acquisitionStations: AcquisitionStationSet | undefined =
+    preStations.length === 0 || !clean.witness || clean.witness.sourceCount !== count
+      ? undefined
+      : (remapAcquisitionStations(
+          { kind: 'acquisition-stations', stations: preStations },
+          clean.witness,
+        ) ?? undefined);
+
   return new PointCloud({
     positions: clean.positions,
     colors: clean.attributes.colors,
     intensity: clean.attributes.intensity,
     organizedRange,
+    acquisitionStations,
     origin: clean.origin,
     sourceFormat: 'ptx',
     name,

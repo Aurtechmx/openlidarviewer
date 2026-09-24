@@ -70,8 +70,8 @@ describe('action contributors', () => {
   });
 
   it('analysis and export contributors take two deps each', () => {
-    const analysis = contributeAnalysisActions({ terrainAnalysisEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never });
-    expect(analysis.map((a) => a.id)).toEqual(['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'analyse.terrainAccess', 'story.dataset']);
+    const analysis = contributeAnalysisActions({ terrainAnalysisEntry: {} as never, observatoryEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never });
+    expect(analysis.map((a) => a.id)).toEqual(['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'analyse.terrainAccess', 'analyse.observatory', 'story.dataset']);
     const exp = contributeExportActions({ saveSnapshot: vi.fn(), copyShareLink: vi.fn(), buildCurrentStoryInputs: () => ({}) as never });
     expect(exp.map((a) => a.id)).toEqual(['tool.snapshot', 'tool.share', 'export.health', 'report.verify']);
   });
@@ -90,12 +90,12 @@ describe('action contributors', () => {
       ...contributeCameraActions({ getViewer: () => ({}) as never, planView: { togglePlanView() {}, notePlanViewPreset() {} }, capture: vi.fn(), showLassoToast: toast }),
       ...contributeViewActions({ setTheme: vi.fn(), capture: vi.fn(), compass: {} as never, bookmarks: {} as never, toggleOrbitInvert: vi.fn(), resetNavigation: vi.fn(), showTouchGestures: vi.fn(), hasScan: () => false, saveCurrentView: vi.fn(), applyView: vi.fn(), showLassoToast: toast }),
       ...contributeToolActions({ getViewer: () => ({}) as never, workflowController: {} as never, lassoVolumeTool: {} as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(), runFillUnclassified: vi.fn(), showLassoToast: toast, toggleClip: vi.fn() }),
-      ...contributeAnalysisActions({ terrainAnalysisEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never }),
+      ...contributeAnalysisActions({ terrainAnalysisEntry: {} as never, observatoryEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never }),
       ...contributeExportActions({ saveSnapshot: vi.fn(), copyShareLink: vi.fn(), buildCurrentStoryInputs: () => ({}) as never }),
       ...contributeWorkflowActions({ workflowController: {} as never, startWorkflowRecording: vi.fn(), dispatchWorkflowEvent: vi.fn(), ensureWorkflowConfigPanel: vi.fn(), showLassoToast: toast }),
       ...contributeHelpActions({ getTour: () => null, ensureShortcutSheet: vi.fn() }),
     ];
     expect(findDuplicateIds(all)).toEqual([]);
-    expect(all.length).toBeGreaterThanOrEqual(35);
+    expect(all.length).toBeGreaterThanOrEqual(36);
   });
 });

@@ -38,6 +38,7 @@ import {
   type OrganizedRangeFrame,
   type OrganizedRangeSet,
 } from '../model/OrganizedRange';
+import type { AcquisitionStationSet } from '../model/AcquisitionStations';
 
 /** Round and clamp a value into the 0–255 byte range. */
 function clampByte(v: number): number {
@@ -602,6 +603,33 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
     };
   }
 
+  // One station for the whole file, only when the header declares a viewpoint
+  // (OB-INT-02, SPEC §1.3: "Organized PCD... only if the file declares a
+  // viewpoint"). A PCD has no per-scan boundary to track — one file is one
+  // station — so unlike E57/PTX its range needs no witness-based remap: the
+  // survivor COUNT alone gives `[0, end)`, whatever records sanitation drops.
+  // `count - clean.excludedCount` reaches that count without a second direct
+  // `.positions` read (`count` is the decoded record count above; sanitation
+  // dropped exactly `excludedCount` of them) — `lint:position-access` counts
+  // every one textually, so this is the accessor-shaped way to ask "how many
+  // survived", not just a style preference.
+  // Reads the pose straight off `frame` rather than rebuilding it, so this can
+  // never disagree with what `buildPcdFrame` declared for the same file.
+  const acquisitionStations: AcquisitionStationSet | undefined = frame?.acquisitionPose
+    ? {
+        kind: 'acquisition-stations',
+        stations: [
+          {
+            id: 'pcd-viewpoint',
+            source: 'pcd-viewpoint',
+            pose: frame.acquisitionPose,
+            recordRange: { start: 0, end: count - clean.excludedCount },
+            originStatus: 'DECLARED',
+          },
+        ],
+      }
+    : undefined;
+
   return new PointCloud({
     positions: clean.positions,
     colors: clean.attributes.colors,
@@ -609,6 +637,7 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
     classification: clean.attributes.classification,
     normals: clean.attributes.normals,
     organizedRange,
+    acquisitionStations,
     origin: clean.origin,
     sourceFormat: 'pcd',
     name,

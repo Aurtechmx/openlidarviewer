@@ -109,3 +109,35 @@ describe('every attribute survives the worker boundary', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * The sidecars (OB-INT-02's `acquisitionStations`, and its sibling
+ * `organizedRange`) are plain data, not typed arrays, so `pointCloudAttributes`
+ * above never sees them — its regex matches only the eight typed-array kinds.
+ * A field this shape could still be written into the worker payload literal
+ * and left out of `CloudPayload`, or the reverse, with no test catching it:
+ * that gap is exactly what let `classificationFlags` (a typed array) vanish
+ * before this file existed, and a non-typed-array sidecar crosses the same
+ * boundary the same way — structurally cloned, never transferred, since it
+ * holds no `ArrayBuffer` of its own (`AcquisitionStation.pose` is plain
+ * numbers, `AcquisitionPose.rotation` a plain object).
+ */
+describe('the non-typed-array sidecars also survive the worker boundary', () => {
+  it.each(['organizedRange', 'acquisitionStations'])(
+    '%s is declared on PointCloudOptions, posted by the worker, and declared on CloudPayload',
+    (field) => {
+      expect(read('model/PointCloud.ts'), 'PointCloudOptions').toMatch(
+        new RegExp(`${field}\\?:\\s*\\w+`),
+      );
+      expect(read('io/parseWorker.ts'), 'the worker payload literal').toMatch(
+        new RegExp(`${field}:\\s*cloud\\.${field}`),
+      );
+      expect(read('io/loadFile.ts'), 'CloudPayload').toMatch(new RegExp(`${field}\\?:\\s*\\w+`));
+    },
+  );
+
+  it('acquisitionStations is not pushed to the transfer list (it carries no ArrayBuffer)', () => {
+    const src = read('io/parseWorker.ts');
+    expect(src).not.toMatch(/transfer\.push\(cloud\.acquisitionStations/);
+  });
+});
