@@ -254,17 +254,10 @@
     },
     {
       "file": "src/main.ts",
-      "symbol": "runDeriveClassification",
+      "symbol": "performClassificationDerive",
       "frame": "source-local",
       "reads": 1,
-      "why": "The heuristic ground classifier scores a single layer against itself, so it works in that layer own frame."
-    },
-    {
-      "file": "src/main.ts",
-      "symbol": "runFillUnclassified",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "Same single-layer classifier input as the derive path."
+      "why": "The heuristic ground classifier scores a single layer against itself, so it works in that layer own frame. Shared by the derive and fill-unclassified paths."
     },
     {
       "file": "src/main.ts",
