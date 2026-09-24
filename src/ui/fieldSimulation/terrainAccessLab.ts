@@ -293,16 +293,12 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
 
 type SelectMode = 'start' | 'goal' | 'inspect';
 
-function button(text: string, className: string): HTMLButtonElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = className;
-  b.textContent = text;
-  return b;
+function button(text: string, className: string, tip: string): HTMLButtonElement {
+  return el('button', { className, text, type: 'button', tip }) as HTMLButtonElement;
 }
 
 function makeRetryButton(onRetry: () => void): HTMLButtonElement {
-  const b = button('Retry', 'olv-ta-retry');
+  const b = button('Retry', 'olv-ta-retry', 'Retry loading the terrain surface.');
   b.addEventListener('click', onRetry);
   return b;
 }
@@ -329,14 +325,14 @@ function labeledInput(labelText: string, hint: string | null): { wrap: HTMLEleme
 
 function segmentedControl<T extends string>(
   ariaLabel: string,
-  options: ReadonlyArray<{ value: T; label: string }>,
+  options: ReadonlyArray<{ value: T; label: string; tip: string }>,
   current: () => T,
   onSelect: (value: T) => void,
 ): { element: HTMLElement; sync: () => void } {
   const group = el('div', { className: 'olv-ta-segmented', ariaLabel });
   group.setAttribute('role', 'group');
   const buttons = options.map((opt) => {
-    const b = button(opt.label, 'olv-ta-segmented-btn');
+    const b = button(opt.label, 'olv-ta-segmented-btn', opt.tip);
     b.dataset.value = opt.value;
     b.addEventListener('click', () => onSelect(opt.value));
     return b;
@@ -386,15 +382,15 @@ function buildProfileForm(onSubmit: () => void): {
   const unknownPolicyCtl = segmentedControl<'block' | 'penalize'>(
     'Weak-evidence policy',
     [
-      { value: 'block', label: 'Block weak-evidence cells' },
-      { value: 'penalize', label: 'Allow, cost-penalize' },
+      { value: 'block', label: 'Block weak-evidence cells', tip: 'Treat a cell with no confidence value as impassable.' },
+      { value: 'penalize', label: 'Allow, cost-penalize', tip: 'Allow a cell with no confidence value, at an extra route cost.' },
     ],
     () => state.unknownPolicy,
     (value) => { state.unknownPolicy = value; unknownPolicyCtl.sync(); },
   );
 
   const problemsBox = el('div', { className: 'olv-ta-form-problems' });
-  const submitBtn = button('Apply profile', 'olv-ta-form-submit');
+  const submitBtn = button('Apply profile', 'olv-ta-form-submit', 'Apply this traversability profile to the current run.');
   submitBtn.addEventListener('click', () => {
     state.name = name.input.value;
     state.maxLongitudinalGradeDeg = longGrade.input.value;
@@ -553,16 +549,16 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
   const modeCtl = segmentedControl<SelectMode>(
     'What a selected cell does',
     [
-      { value: 'start', label: 'Set start' },
-      { value: 'goal', label: 'Set goal' },
-      { value: 'inspect', label: "Why not? (inspect)" },
+      { value: 'start', label: 'Set start', tip: "Click a cell on the map to set the route's starting point." },
+      { value: 'goal', label: 'Set goal', tip: "Click a cell on the map to set the route's destination." },
+      { value: 'inspect', label: "Why not? (inspect)", tip: 'Click a cell to see why it can or cannot be reached.' },
     ],
     () => mode,
     (value) => { mode = value; modeCtl.sync(); },
   );
 
-  const runButton = button('Run Terrain Access', 'olv-ta-run');
-  const exportButton = button('Export package (ZIP)', 'olv-ta-export');
+  const runButton = button('Run Terrain Access', 'olv-ta-run', 'Run the least-cost route search between the start and goal cells.');
+  const exportButton = button('Export package (ZIP)', 'olv-ta-export', 'Export the run as a ZIP package: route, grid, and report.');
 
   function applyOverlayVisibility(): void {
     if (!overlay || !preview || !preview.ok || !overlayFrame) return;
@@ -574,7 +570,7 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
     }
   }
 
-  const overlayToggle = button('Show traversability map', 'olv-ta-overlay-toggle');
+  const overlayToggle = button('Show traversability map', 'olv-ta-overlay-toggle', 'Toggle the traversability map overlay on the 3D view.');
   overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
   overlayToggle.addEventListener('click', () => {
     overlayOn = !overlayOn;
