@@ -4803,13 +4803,11 @@ integration gap in the cherry-picked core was fixed in the process:
 `SimulationSource`, added as an optional field on `TerrainAccessRunIdentity`
 defaulting to null.
 
-A browser review of Flow Pulse on a real UTM tile (findings A-E, see
-`fix/flow-pulse-findings-v070`) found local-frame elevation without a real
+A browser review of Flow Pulse on a real UTM tile found local-frame elevation without a real
 CRS/datum. It also found an overlay disposed on modal close. Separately, it
 found ungeoreferenced ASC/GeoJSON exports and a basis that can overstate
 coverage. Terrain Access shares Flow Pulse's DTM frame, overlay lifecycle,
-export pattern and basis source, so it inherits four of the five (A, C, D,
-E), disclosed in
+export pattern and basis source, so it inherits four of the five, disclosed in
 `docs/terrain-access.md` and `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`
 rather than silently shipped, and tracked as shared fixes across both
 features rather than solved twice.
@@ -4821,7 +4819,7 @@ and `tests/e2e/terrainAccessLab.spec.ts`.
 ### L154 · BUILT · SCIENTIFIC
 
 The four findings L153 disclosed as inherited from Flow Pulse's L151 fixes
-(A, C, D, E) are now fixed, reusing L151's own helpers rather than
+are now fixed, reusing L151's own helpers rather than
 duplicating them.
 
 `terrainAccessGridCursor.ts`'s `describeTerrainAccessCell` takes the same
