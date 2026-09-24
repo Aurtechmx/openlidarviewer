@@ -6,6 +6,14 @@
 // second one, which lint:module-graph's shrink-only ratchet would refuse.
 export { announcePolite } from './politeAnnounce';
 
+// Side-effect import: installs the single top-level `[data-tip]` glass
+// tooltip layer (see tipLayer.ts for why it has to be one shared layer,
+// appended to `document.body`, rather than a per-control pseudo-element).
+// Every module that builds a `data-tip` control already imports `el` from
+// this file, so importing it here — rather than wiring it from main.ts —
+// guarantees the layer exists before any control can be hovered/focused.
+import './tipLayer';
+
 interface ElProps {
   className?: string;
   text?: string;
